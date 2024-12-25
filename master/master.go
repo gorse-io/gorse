@@ -37,6 +37,7 @@ import (
 	"github.com/zhenghaoz/gorse/base/sizeof"
 	"github.com/zhenghaoz/gorse/base/task"
 	"github.com/zhenghaoz/gorse/config"
+	"github.com/zhenghaoz/gorse/logics"
 	"github.com/zhenghaoz/gorse/model"
 	"github.com/zhenghaoz/gorse/model/click"
 	"github.com/zhenghaoz/gorse/model/ranking"
@@ -73,6 +74,9 @@ type Master struct {
 
 	// cluster meta cache
 	metaStore meta.Database
+
+	itemToItemMutex        sync.RWMutex
+	itemToItemRecommenders []*logics.ItemToItem
 
 	// ranking dataset
 	rankingTrainSet  *ranking.DataSet

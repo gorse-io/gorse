@@ -17,7 +17,6 @@ package master
 import (
 	"context"
 	"fmt"
-	"github.com/zhenghaoz/gorse/logics"
 	"sort"
 	"strings"
 	"sync"
@@ -37,6 +36,7 @@ import (
 	"github.com/zhenghaoz/gorse/base/sizeof"
 	"github.com/zhenghaoz/gorse/base/task"
 	"github.com/zhenghaoz/gorse/config"
+	"github.com/zhenghaoz/gorse/logics"
 	"github.com/zhenghaoz/gorse/model/click"
 	"github.com/zhenghaoz/gorse/model/ranking"
 	"github.com/zhenghaoz/gorse/storage/cache"
@@ -87,6 +87,16 @@ func (m *Master) runLoadDatasetTask() error {
 		nonPersonalizedRecommenders = append(nonPersonalizedRecommenders, recommender)
 	}
 
+	// Build item to item recommenders
+	itemToItemRecommenders := make([]*logics.ItemToItem, 0, len(m.Config.Recommend.ItemToItem))
+	for _, cfg := range m.Config.Recommend.ItemToItem {
+		recommender, err := logics.NewItemToItem(cfg, m.Config.Recommend.CacheSize, initialStartTime)
+		if err != nil {
+			return errors.Trace(err)
+		}
+		itemToItemRecommenders = append(itemToItemRecommenders, recommender)
+	}
+
 	log.Logger().Info("load dataset",
 		zap.Strings("positive_feedback_types", m.Config.Recommend.DataSource.PositiveFeedbackTypes),
 		zap.Strings("read_feedback_types", m.Config.Recommend.DataSource.ReadFeedbackTypes),
@@ -98,7 +108,9 @@ func (m *Master) runLoadDatasetTask() error {
 		m.Config.Recommend.DataSource.ReadFeedbackTypes,
 		m.Config.Recommend.DataSource.ItemTTL,
 		m.Config.Recommend.DataSource.PositiveFeedbackTTL,
-		evaluator, nonPersonalizedRecommenders)
+		evaluator,
+		nonPersonalizedRecommenders,
+		itemToItemRecommenders)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -180,6 +192,10 @@ func (m *Master) runLoadDatasetTask() error {
 	if err = m.CacheClient.SetSet(ctx, cache.ItemCategories, rankingDataset.CategorySet.ToSlice()...); err != nil {
 		log.Logger().Error("failed to write categories to cache", zap.Error(err))
 	}
+
+	m.itemToItemMutex.Lock()
+	m.itemToItemRecommenders = itemToItemRecommenders
+	m.itemToItemMutex.Unlock()
 
 	// split ranking dataset
 	startTime := time.Now()
@@ -1407,6 +1423,7 @@ func (m *Master) LoadDataFromDatabase(
 	itemTTL, positiveFeedbackTTL uint,
 	evaluator *OnlineEvaluator,
 	nonPersonalizedRecommenders []*logics.NonPersonalized,
+	itemToItemRecommenders []*logics.ItemToItem,
 ) (rankingDataset *ranking.DataSet, clickDataset *click.Dataset, err error) {
 	newCtx, span := progress.Start(ctx, "LoadDataFromDatabase", 4)
 	defer span.End()
