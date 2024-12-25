@@ -353,7 +353,8 @@ func (d *SQLDatabase) BatchGetItems(ctx context.Context, itemIds []string) ([]It
 	if len(itemIds) == 0 {
 		return nil, nil
 	}
-	result, err := d.gormDB.WithContext(ctx).Table(d.ItemsTable()).
+	result, err := d.gormDB.WithContext(ctx).
+		Table(d.ItemsTable()).
 		Select("item_id, is_hidden, categories, time_stamp, labels, comment").
 		Where("item_id IN ?", itemIds).Rows()
 	if err != nil {
@@ -394,7 +395,10 @@ func (d *SQLDatabase) DeleteItem(ctx context.Context, itemId string) error {
 func (d *SQLDatabase) GetItem(ctx context.Context, itemId string) (Item, error) {
 	var result *sql.Rows
 	var err error
-	result, err = d.gormDB.WithContext(ctx).Table(d.ItemsTable()).Select("item_id, is_hidden, categories, time_stamp, labels, comment").Where("item_id = ?", itemId).Rows()
+	result, err = d.gormDB.WithContext(ctx).
+		Table(d.ItemsTable()).
+		Select("item_id, is_hidden, categories, time_stamp, labels, comment").
+		Where("item_id = ?", itemId).Rows()
 	if err != nil {
 		return Item{}, errors.Trace(err)
 	}
@@ -454,7 +458,9 @@ func (d *SQLDatabase) GetItems(ctx context.Context, cursor string, n int, timeLi
 		return "", nil, errors.Trace(err)
 	}
 	cursorItem := string(buf)
-	tx := d.gormDB.WithContext(ctx).Table(d.ItemsTable()).Select("item_id, is_hidden, categories, time_stamp, labels, comment")
+	tx := d.gormDB.WithContext(ctx).
+		Table(d.ItemsTable()).
+		Select("item_id, is_hidden, categories, time_stamp, labels, comment")
 	if cursorItem != "" {
 		tx.Where("item_id >= ?", cursorItem)
 	}
@@ -488,7 +494,9 @@ func (d *SQLDatabase) GetItemStream(ctx context.Context, batchSize int, timeLimi
 		defer close(itemChan)
 		defer close(errChan)
 		// send query
-		tx := d.gormDB.WithContext(ctx).Table(d.ItemsTable()).Select("item_id, is_hidden, categories, time_stamp, labels, comment")
+		tx := d.gormDB.WithContext(ctx).
+			Table(d.ItemsTable()).
+			Select("item_id, is_hidden, categories, time_stamp, labels, comment")
 		if timeLimit != nil {
 			tx.Where("time_stamp >= ?", *timeLimit)
 		}
@@ -528,15 +536,16 @@ func (d *SQLDatabase) GetItemFeedback(ctx context.Context, itemId string, feedba
 	} else {
 		tx = tx.Table(d.FeedbackTable())
 	}
-	tx = tx.Select("user_id, item_id, feedback_type, time_stamp")
+	tx.Select("user_id, item_id, feedback_type, time_stamp")
 	switch d.driver {
 	case SQLite:
-		tx.Where("time_stamp <= DATETIME() AND item_id = ?", itemId)
+		tx.Where("time_stamp <= DATETIME()")
 	case ClickHouse:
-		tx.Where("time_stamp <= NOW('UTC') AND item_id = ?", itemId)
+		tx.Where("time_stamp <= NOW('UTC')")
 	default:
-		tx.Where("time_stamp <= NOW() AND item_id = ?", itemId)
+		tx.Where("time_stamp <= NOW()")
 	}
+	tx.Where("item_id = ?", itemId)
 	if len(feedbackTypes) > 0 {
 		tx.Where("feedback_type IN ?", feedbackTypes)
 	}
@@ -659,7 +668,9 @@ func (d *SQLDatabase) GetUsers(ctx context.Context, cursor string, n int) (strin
 		return "", nil, errors.Trace(err)
 	}
 	cursorUser := string(buf)
-	tx := d.gormDB.WithContext(ctx).Table(d.UsersTable()).Select("user_id, labels, subscribe, comment")
+	tx := d.gormDB.WithContext(ctx).
+		Table(d.UsersTable()).
+		Select("user_id, labels, subscribe, comment")
 	if cursorUser != "" {
 		tx.Where("user_id >= ?", cursorUser)
 	}
@@ -726,7 +737,7 @@ func (d *SQLDatabase) GetUserFeedback(ctx context.Context, userId string, endTim
 	} else {
 		tx = tx.Table(d.FeedbackTable())
 	}
-	tx = tx.Select("feedback_type, user_id, item_id, time_stamp, comment").
+	tx.Select("feedback_type, user_id, item_id, time_stamp, comment").
 		Where("user_id = ?", userId)
 	if endTime != nil {
 		tx.Where("time_stamp <= ?", d.convertTimeZone(endTime))
@@ -1023,7 +1034,7 @@ func (d *SQLDatabase) GetUserItemFeedback(ctx context.Context, userId, itemId st
 	} else {
 		tx = tx.Table(d.FeedbackTable())
 	}
-	tx = tx.Select("feedback_type, user_id, item_id, time_stamp, comment").
+	tx.Select("feedback_type, user_id, item_id, time_stamp, comment").
 		Where("user_id = ? AND item_id = ?", userId, itemId)
 	if len(feedbackTypes) > 0 {
 		tx.Where("feedback_type IN ?", feedbackTypes)
