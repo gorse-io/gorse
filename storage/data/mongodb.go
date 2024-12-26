@@ -809,3 +809,18 @@ func (db *MongoDB) DeleteUserItemFeedback(ctx context.Context, userId, itemId st
 	}
 	return int(r.DeletedCount), nil
 }
+
+func (db *MongoDB) CountUsers(ctx context.Context) (int, error) {
+	n, err := db.client.Database(db.dbName).Collection(db.UsersTable()).CountDocuments(ctx, bson.M{})
+	return int(n), err
+}
+
+func (db *MongoDB) CountItems(ctx context.Context) (int, error) {
+	n, err := db.client.Database(db.dbName).Collection(db.ItemsTable()).CountDocuments(ctx, bson.M{})
+	return int(n), err
+}
+
+func (db *MongoDB) CountFeedback(ctx context.Context) (int, error) {
+	n, err := db.client.Database(db.dbName).Collection(db.FeedbackTable()).CountDocuments(ctx, bson.M{})
+	return int(n), err
+}

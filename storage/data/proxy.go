@@ -462,6 +462,21 @@ func (p *ProxyServer) GetFeedbackStream(in *protocol.GetFeedbackStreamRequest, s
 	return <-errChan
 }
 
+func (p *ProxyServer) CountUsers(ctx context.Context, in *protocol.CountUsersRequest) (*protocol.CountUsersResponse, error) {
+	count, err := p.database.CountUsers(ctx)
+	return &protocol.CountUsersResponse{Count: int32(count)}, err
+}
+
+func (p *ProxyServer) CountItems(ctx context.Context, in *protocol.CountItemsRequest) (*protocol.CountItemsResponse, error) {
+	count, err := p.database.CountItems(ctx)
+	return &protocol.CountItemsResponse{Count: int32(count)}, err
+}
+
+func (p *ProxyServer) CountFeedback(ctx context.Context, in *protocol.CountFeedbackRequest) (*protocol.CountFeedbackResponse, error) {
+	count, err := p.database.CountFeedback(ctx)
+	return &protocol.CountFeedbackResponse{Count: int32(count)}, err
+}
+
 type ProxyClient struct {
 	protocol.DataStoreClient
 }
@@ -935,7 +950,7 @@ func (p ProxyClient) GetFeedbackStream(ctx context.Context, batchSize int, optio
 		BeginItemId:   o.BeginItemId,
 		EndItemId:     o.EndItemId,
 		FeedbackTypes: o.FeedbackTypes,
-		OrderByItemId:  o.OrderByItemId,
+		OrderByItemId: o.OrderByItemId,
 	}
 	if o.BeginTime != nil {
 		pbOptions.BeginTime = timestamppb.New(*o.BeginTime)
@@ -984,4 +999,28 @@ func (p ProxyClient) GetFeedbackStream(ctx context.Context, batchSize int, optio
 		}
 	}()
 	return feedbackChan, errChan
+}
+
+func (p ProxyClient) CountUsers(ctx context.Context) (int, error) {
+	resp, err := p.DataStoreClient.CountUsers(ctx, &protocol.CountUsersRequest{})
+	if err != nil {
+		return 0, err
+	}
+	return int(resp.Count), nil
+}
+
+func (p ProxyClient) CountItems(ctx context.Context) (int, error) {
+	resp, err := p.DataStoreClient.CountItems(ctx, &protocol.CountItemsRequest{})
+	if err != nil {
+		return 0, err
+	}
+	return int(resp.Count), nil
+}
+
+func (p ProxyClient) CountFeedback(ctx context.Context) (int, error) {
+	resp, err := p.DataStoreClient.CountFeedback(ctx, &protocol.CountFeedbackRequest{})
+	if err != nil {
+		return 0, err
+	}
+	return int(resp.Count), nil
 }

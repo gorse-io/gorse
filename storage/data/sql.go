@@ -1093,3 +1093,21 @@ func (d *SQLDatabase) convertTimeZone(timestamp *time.Time) time.Time {
 		return *timestamp
 	}
 }
+
+func (d *SQLDatabase) CountUsers(ctx context.Context) (int, error) {
+	var count int64
+	err := d.gormDB.WithContext(ctx).Table(d.UsersTable()).Count(&count).Error
+	return int(count), errors.Trace(err)
+}
+
+func (d *SQLDatabase) CountItems(ctx context.Context) (int, error) {
+	var count int64
+	err := d.gormDB.WithContext(ctx).Table(d.ItemsTable()).Count(&count).Error
+	return int(count), errors.Trace(err)
+}
+
+func (d *SQLDatabase) CountFeedback(ctx context.Context) (int, error) {
+	var count int64
+	err := d.gormDB.WithContext(ctx).Table(d.FeedbackTable()).Count(&count).Error
+	return int(count), errors.Trace(err)
+}
