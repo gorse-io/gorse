@@ -171,6 +171,10 @@ func (suite *baseTestSuite) TestUsers() {
 	}
 	err := suite.Database.BatchInsertUsers(ctx, insertedUsers)
 	suite.NoError(err)
+	// Count users
+	count, err := suite.Database.CountUsers(ctx)
+	suite.NoError(err)
+	suite.Equal(10, count)
 	// Get users
 	users := suite.getUsers(ctx, 3)
 	suite.Equal(10, len(users))
@@ -255,6 +259,10 @@ func (suite *baseTestSuite) TestFeedback() {
 	}
 	err = suite.Database.BatchInsertFeedback(ctx, futureFeedback, true, true, true)
 	suite.NoError(err)
+	// Count feedback
+	count, err := suite.Database.CountFeedback(ctx)
+	suite.NoError(err)
+	suite.Equal(12, count)
 	// Get feedback
 	ret := suite.getFeedback(ctx, 3, nil, lo.ToPtr(time.Now()), positiveFeedbackType)
 	suite.Equal(feedback, ret)
@@ -438,6 +446,10 @@ func (suite *baseTestSuite) TestItems() {
 	// Insert item
 	err := suite.Database.BatchInsertItems(ctx, items)
 	suite.NoError(err)
+	// Count items
+	count, err := suite.Database.CountItems(ctx)
+	suite.NoError(err)
+	suite.Equal(5, count)
 	// Get items
 	totalItems := suite.getItems(ctx, 3)
 	suite.Equal(items, totalItems)
