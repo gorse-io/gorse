@@ -1093,3 +1093,75 @@ func (d *SQLDatabase) convertTimeZone(timestamp *time.Time) time.Time {
 		return *timestamp
 	}
 }
+
+func (d *SQLDatabase) CountUsers(ctx context.Context) (int, error) {
+	var (
+		count int64
+		err   error
+	)
+	switch d.driver {
+	case MySQL:
+		var tableStatus struct {
+			Rows int64
+		}
+		err = d.gormDB.WithContext(ctx).
+			Raw(fmt.Sprintf("show table status like '%s'", d.UsersTable())).
+			Scan(&tableStatus).Error
+		count = tableStatus.Rows
+	case Postgres:
+		err = d.gormDB.WithContext(ctx).
+			Raw(fmt.Sprintf("SELECT reltuples AS estimate FROM pg_class where relname = '%s'", d.UsersTable())).
+			Scan(&count).Error
+	default:
+		err = d.gormDB.WithContext(ctx).Table(d.UsersTable()).Count(&count).Error
+	}
+	return int(count), errors.Trace(err)
+}
+
+func (d *SQLDatabase) CountItems(ctx context.Context) (int, error) {
+	var (
+		count int64
+		err   error
+	)
+	switch d.driver {
+	case MySQL:
+		var tableStatus struct {
+			Rows int64
+		}
+		err = d.gormDB.WithContext(ctx).
+			Raw(fmt.Sprintf("show table status like '%s'", d.ItemsTable())).
+			Scan(&tableStatus).Error
+		count = tableStatus.Rows
+	case Postgres:
+		err = d.gormDB.WithContext(ctx).
+			Raw(fmt.Sprintf("SELECT reltuples AS estimate FROM pg_class where relname = '%s'", d.ItemsTable())).
+			Scan(&count).Error
+	default:
+		err = d.gormDB.WithContext(ctx).Table(d.ItemsTable()).Count(&count).Error
+	}
+	return int(count), errors.Trace(err)
+}
+
+func (d *SQLDatabase) CountFeedback(ctx context.Context) (int, error) {
+	var (
+		count int64
+		err   error
+	)
+	switch d.driver {
+	case MySQL:
+		var tableStatus struct {
+			Rows int64
+		}
+		err = d.gormDB.WithContext(ctx).
+			Raw(fmt.Sprintf("show table status like '%s'", d.FeedbackTable())).
+			Scan(&tableStatus).Error
+		count = tableStatus.Rows
+	case Postgres:
+		err = d.gormDB.WithContext(ctx).
+			Raw(fmt.Sprintf("SELECT reltuples AS estimate FROM pg_class where relname = '%s'", d.FeedbackTable())).
+			Scan(&count).Error
+	default:
+		err = d.gormDB.WithContext(ctx).Table(d.FeedbackTable()).Count(&count).Error
+	}
+	return int(count), errors.Trace(err)
+}

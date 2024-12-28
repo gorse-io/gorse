@@ -54,6 +54,9 @@ const (
 	DataStore_GetUserStream_FullMethodName          = "/protocol.DataStore/GetUserStream"
 	DataStore_GetItemStream_FullMethodName          = "/protocol.DataStore/GetItemStream"
 	DataStore_GetFeedbackStream_FullMethodName      = "/protocol.DataStore/GetFeedbackStream"
+	DataStore_CountUsers_FullMethodName             = "/protocol.DataStore/CountUsers"
+	DataStore_CountItems_FullMethodName             = "/protocol.DataStore/CountItems"
+	DataStore_CountFeedback_FullMethodName          = "/protocol.DataStore/CountFeedback"
 )
 
 // DataStoreClient is the client API for DataStore service.
@@ -81,6 +84,9 @@ type DataStoreClient interface {
 	GetUserStream(ctx context.Context, in *GetUserStreamRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[GetUserStreamResponse], error)
 	GetItemStream(ctx context.Context, in *GetItemStreamRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[GetItemStreamResponse], error)
 	GetFeedbackStream(ctx context.Context, in *GetFeedbackStreamRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[GetFeedbackStreamResponse], error)
+	CountUsers(ctx context.Context, in *CountUsersRequest, opts ...grpc.CallOption) (*CountUsersResponse, error)
+	CountItems(ctx context.Context, in *CountItemsRequest, opts ...grpc.CallOption) (*CountItemsResponse, error)
+	CountFeedback(ctx context.Context, in *CountFeedbackRequest, opts ...grpc.CallOption) (*CountFeedbackResponse, error)
 }
 
 type dataStoreClient struct {
@@ -328,6 +334,36 @@ func (c *dataStoreClient) GetFeedbackStream(ctx context.Context, in *GetFeedback
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type DataStore_GetFeedbackStreamClient = grpc.ServerStreamingClient[GetFeedbackStreamResponse]
 
+func (c *dataStoreClient) CountUsers(ctx context.Context, in *CountUsersRequest, opts ...grpc.CallOption) (*CountUsersResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CountUsersResponse)
+	err := c.cc.Invoke(ctx, DataStore_CountUsers_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *dataStoreClient) CountItems(ctx context.Context, in *CountItemsRequest, opts ...grpc.CallOption) (*CountItemsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CountItemsResponse)
+	err := c.cc.Invoke(ctx, DataStore_CountItems_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *dataStoreClient) CountFeedback(ctx context.Context, in *CountFeedbackRequest, opts ...grpc.CallOption) (*CountFeedbackResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CountFeedbackResponse)
+	err := c.cc.Invoke(ctx, DataStore_CountFeedback_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // DataStoreServer is the server API for DataStore service.
 // All implementations must embed UnimplementedDataStoreServer
 // for forward compatibility.
@@ -353,6 +389,9 @@ type DataStoreServer interface {
 	GetUserStream(*GetUserStreamRequest, grpc.ServerStreamingServer[GetUserStreamResponse]) error
 	GetItemStream(*GetItemStreamRequest, grpc.ServerStreamingServer[GetItemStreamResponse]) error
 	GetFeedbackStream(*GetFeedbackStreamRequest, grpc.ServerStreamingServer[GetFeedbackStreamResponse]) error
+	CountUsers(context.Context, *CountUsersRequest) (*CountUsersResponse, error)
+	CountItems(context.Context, *CountItemsRequest) (*CountItemsResponse, error)
+	CountFeedback(context.Context, *CountFeedbackRequest) (*CountFeedbackResponse, error)
 	mustEmbedUnimplementedDataStoreServer()
 }
 
@@ -425,6 +464,15 @@ func (UnimplementedDataStoreServer) GetItemStream(*GetItemStreamRequest, grpc.Se
 }
 func (UnimplementedDataStoreServer) GetFeedbackStream(*GetFeedbackStreamRequest, grpc.ServerStreamingServer[GetFeedbackStreamResponse]) error {
 	return status.Errorf(codes.Unimplemented, "method GetFeedbackStream not implemented")
+}
+func (UnimplementedDataStoreServer) CountUsers(context.Context, *CountUsersRequest) (*CountUsersResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CountUsers not implemented")
+}
+func (UnimplementedDataStoreServer) CountItems(context.Context, *CountItemsRequest) (*CountItemsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CountItems not implemented")
+}
+func (UnimplementedDataStoreServer) CountFeedback(context.Context, *CountFeedbackRequest) (*CountFeedbackResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CountFeedback not implemented")
 }
 func (UnimplementedDataStoreServer) mustEmbedUnimplementedDataStoreServer() {}
 func (UnimplementedDataStoreServer) testEmbeddedByValue()                   {}
@@ -804,6 +852,60 @@ func _DataStore_GetFeedbackStream_Handler(srv interface{}, stream grpc.ServerStr
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type DataStore_GetFeedbackStreamServer = grpc.ServerStreamingServer[GetFeedbackStreamResponse]
 
+func _DataStore_CountUsers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CountUsersRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DataStoreServer).CountUsers(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DataStore_CountUsers_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DataStoreServer).CountUsers(ctx, req.(*CountUsersRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DataStore_CountItems_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CountItemsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DataStoreServer).CountItems(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DataStore_CountItems_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DataStoreServer).CountItems(ctx, req.(*CountItemsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DataStore_CountFeedback_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CountFeedbackRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DataStoreServer).CountFeedback(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DataStore_CountFeedback_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DataStoreServer).CountFeedback(ctx, req.(*CountFeedbackRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // DataStore_ServiceDesc is the grpc.ServiceDesc for DataStore service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -882,6 +984,18 @@ var DataStore_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetFeedback",
 			Handler:    _DataStore_GetFeedback_Handler,
+		},
+		{
+			MethodName: "CountUsers",
+			Handler:    _DataStore_CountUsers_Handler,
+		},
+		{
+			MethodName: "CountItems",
+			Handler:    _DataStore_CountItems_Handler,
+		},
+		{
+			MethodName: "CountFeedback",
+			Handler:    _DataStore_CountFeedback_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

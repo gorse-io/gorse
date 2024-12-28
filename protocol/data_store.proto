@@ -204,6 +204,24 @@ message GetFeedbackStreamResponse {
   repeated Feedback feedback = 1;
 }
 
+message CountUsersRequest {}
+
+message CountUsersResponse {
+  int32 count = 1;
+}
+
+message CountItemsRequest {}
+
+message CountItemsResponse {
+  int32 count = 1;
+}
+
+message CountFeedbackRequest {}
+
+message CountFeedbackResponse {
+  int32 count = 1;
+}
+
 service DataStore {
   rpc Ping(PingRequest) returns (PingResponse) {}
   rpc BatchInsertItems(BatchInsertItemsRequest) returns (BatchInsertItemsResponse) {}
@@ -226,4 +244,7 @@ service DataStore {
   rpc GetUserStream(GetUserStreamRequest) returns (stream GetUserStreamResponse) {}
   rpc GetItemStream(GetItemStreamRequest) returns (stream GetItemStreamResponse) {}
   rpc GetFeedbackStream(GetFeedbackStreamRequest) returns (stream GetFeedbackStreamResponse) {}
+  rpc CountUsers(CountUsersRequest) returns (CountUsersResponse) {}
+  rpc CountItems(CountItemsRequest) returns (CountItemsResponse) {}
+  rpc CountFeedback(CountFeedbackRequest) returns (CountFeedbackResponse) {}
 }

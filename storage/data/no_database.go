@@ -163,3 +163,15 @@ func (d NoDatabase) ModifyItem(_ context.Context, _ string, _ ItemPatch) error {
 func (d NoDatabase) ModifyUser(_ context.Context, _ string, _ UserPatch) error {
 	return ErrNoDatabase
 }
+
+func (d NoDatabase) CountUsers(_ context.Context) (int, error) {
+	return 0, ErrNoDatabase
+}
+
+func (d NoDatabase) CountItems(_ context.Context) (int, error) {
+	return 0, ErrNoDatabase
+}
+
+func (d NoDatabase) CountFeedback(_ context.Context) (int, error) {
+	return 0, ErrNoDatabase
+}

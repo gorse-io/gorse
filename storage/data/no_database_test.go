@@ -16,10 +16,11 @@ package data
 
 import (
 	"context"
-	"github.com/samber/lo"
-	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
+
+	"github.com/samber/lo"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestNoDatabase(t *testing.T) {
@@ -81,4 +82,11 @@ func TestNoDatabase(t *testing.T) {
 	assert.ErrorIs(t, err, ErrNoDatabase)
 	_, c = database.GetFeedbackStream(ctx, 0)
 	assert.ErrorIs(t, <-c, ErrNoDatabase)
+
+	_, err = database.CountUsers(ctx)
+	assert.ErrorIs(t, err, ErrNoDatabase)
+	_, err = database.CountItems(ctx)
+	assert.ErrorIs(t, err, ErrNoDatabase)
+	_, err = database.CountFeedback(ctx)
+	assert.ErrorIs(t, err, ErrNoDatabase)
 }

@@ -18,6 +18,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -71,4 +72,28 @@ func (suite *MongoTestSuite) getMongoDB() *MongoDB {
 
 func TestMongo(t *testing.T) {
 	suite.Run(t, new(MongoTestSuite))
+}
+
+func BenchmarkMongo_CountItems(b *testing.B) {
+	ctx := context.Background()
+	var err error
+
+	// create database
+	database, err := Open(mongoUri, "gorse_")
+	require.NoError(b, err)
+	dbName := "gorse_data_test"
+	databaseComm := database.(*MongoDB)
+	err = databaseComm.client.Database(dbName).Drop(ctx)
+	require.NoError(b, err)
+	database, err = Open(mongoUri+dbName+"?authSource=admin&connect=direct", "gorse_")
+	require.NoError(b, err)
+	err = database.Init()
+	require.NoError(b, err)
+
+	// benchmark
+	benchmarkCountItems(b, database)
+
+	// close database
+	err = database.Close()
+	require.NoError(b, err)
 }
