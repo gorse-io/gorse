@@ -136,6 +136,19 @@ func (suite *baseTestSuite) isClickHouse() bool {
 	}
 }
 
+func (suite *baseTestSuite) analyzeTables() {
+	sqlDatabase, ok := suite.Database.(*SQLDatabase)
+	if ok && sqlDatabase.driver == Postgres {
+		sqlDatabase := suite.Database.(*SQLDatabase)
+		err := sqlDatabase.gormDB.Exec(fmt.Sprintf("ANALYZE %s", sqlDatabase.ItemsTable())).Error
+		suite.NoError(err)
+		err = sqlDatabase.gormDB.Exec(fmt.Sprintf("ANALYZE %s", sqlDatabase.UsersTable())).Error
+		suite.NoError(err)
+		err = sqlDatabase.gormDB.Exec(fmt.Sprintf("ANALYZE %s", sqlDatabase.FeedbackTable())).Error
+		suite.NoError(err)
+	}
+}
+
 func (suite *baseTestSuite) TearDownSuite() {
 	err := suite.Database.Close()
 	suite.NoError(err)
@@ -173,6 +186,7 @@ func (suite *baseTestSuite) TestUsers() {
 	err := suite.Database.BatchInsertUsers(ctx, insertedUsers)
 	suite.NoError(err)
 	// Count users
+	suite.analyzeTables()
 	count, err := suite.Database.CountUsers(ctx)
 	suite.NoError(err)
 	suite.Equal(10, count)
@@ -261,6 +275,7 @@ func (suite *baseTestSuite) TestFeedback() {
 	err = suite.Database.BatchInsertFeedback(ctx, futureFeedback, true, true, true)
 	suite.NoError(err)
 	// Count feedback
+	suite.analyzeTables()
 	count, err := suite.Database.CountFeedback(ctx)
 	suite.NoError(err)
 	suite.Equal(12, count)
@@ -448,6 +463,7 @@ func (suite *baseTestSuite) TestItems() {
 	err := suite.Database.BatchInsertItems(ctx, items)
 	suite.NoError(err)
 	// Count items
+	suite.analyzeTables()
 	count, err := suite.Database.CountItems(ctx)
 	suite.NoError(err)
 	suite.Equal(5, count)
@@ -825,7 +841,7 @@ func TestValidateLabels(t *testing.T) {
 func benchmarkCountItems(b *testing.B, db Database) {
 	ctx := context.Background()
 	// Insert 10,000 items
-	items := make([]Item, 10000)
+	items := make([]Item, 100000)
 	for i := range items {
 		items[i] = Item{ItemId: strconv.Itoa(i)}
 	}
@@ -836,6 +852,6 @@ func benchmarkCountItems(b *testing.B, db Database) {
 	for i := 0; i < b.N; i++ {
 		n, err := db.CountItems(ctx)
 		require.NoError(b, err)
-		require.Equal(b, 10000, n)
+		require.Equal(b, 100000, n)
 	}
 }
