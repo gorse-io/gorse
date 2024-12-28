@@ -88,6 +88,22 @@ func (r *reluLayer) Forward(x *Tensor) *Tensor {
 	return ReLu(x)
 }
 
+type softmaxLayer struct {
+	axis int
+}
+
+func NewSoftmax(axis int) Layer {
+	return &softmaxLayer{axis: axis}
+}
+
+func (s *softmaxLayer) Parameters() []*Tensor {
+	return nil
+}
+
+func (s *softmaxLayer) Forward(x *Tensor) *Tensor {
+	return Softmax(x, s.axis)
+}
+
 type Sequential struct {
 	layers []Layer
 }
