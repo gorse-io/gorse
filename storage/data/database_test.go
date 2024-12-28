@@ -27,6 +27,7 @@ import (
 	"github.com/juju/errors"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	"google.golang.org/protobuf/proto"
 )
@@ -819,4 +820,22 @@ func TestValidateLabels(t *testing.T) {
 	assert.Error(t, ValidateLabels(map[string]any{"price": 100, "tags": []any{json.Number("1"), "2", "3"}}))
 	assert.Error(t, ValidateLabels(map[string]any{"city": "wenzhou", "tags": []any{"1", json.Number("2"), "3"}}))
 	assert.Error(t, ValidateLabels(map[string]any{"city": "wenzhou", "tags": []any{"1", "2", json.Number("3")}}))
+}
+
+func benchmarkCountItems(b *testing.B, db Database) {
+	ctx := context.Background()
+	// Insert 10,000 items
+	items := make([]Item, 10000)
+	for i := range items {
+		items[i] = Item{ItemId: strconv.Itoa(i)}
+	}
+	err := db.BatchInsertItems(ctx, items)
+	require.NoError(b, err)
+	// Benchmark count items
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		n, err := db.CountItems(ctx)
+		require.NoError(b, err)
+		require.Equal(b, 10000, n)
+	}
 }

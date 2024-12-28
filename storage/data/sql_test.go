@@ -168,3 +168,63 @@ func assertQuery(t *testing.T, connection *sql.DB, sql string, expected string) 
 	assert.NoError(t, err)
 	assert.Equal(t, expected, result)
 }
+
+func BenchmarkMySQL_CountItems(b *testing.B) {
+	// create database
+	database, err := Open(mySqlDSN, "gorse_")
+	assert.NoError(b, err)
+	dbName := "gorse_data_test"
+	databaseComm := database.(*SQLDatabase)
+	_, err = databaseComm.client.Exec("DROP DATABASE IF EXISTS " + dbName)
+	assert.NoError(b, err)
+	_, err = databaseComm.client.Exec("CREATE DATABASE " + dbName)
+	assert.NoError(b, err)
+	database, err = Open(mySqlDSN+dbName, "gorse_")
+	assert.NoError(b, err)
+	err = database.Init()
+	assert.NoError(b, err)
+	// benchmark
+	benchmarkCountItems(b, database)
+	// close database
+	err = database.Close()
+	assert.NoError(b, err)
+}
+
+func BenchmarkPostgres_CountItems(b *testing.B) {
+	// create database
+	database, err := Open(postgresDSN+"gorse_data_test?sslmode=disable", "gorse_")
+	assert.NoError(b, err)
+	err = database.Init()
+	assert.NoError(b, err)
+	// benchmark
+	benchmarkCountItems(b, database)
+	// close database
+	err = database.Close()
+	assert.NoError(b, err)
+}
+
+func BenchmarkClickHouse_CountItems(b *testing.B) {
+	// create database
+	database, err := Open(clickhouseDSN+"gorse_data_test?mutations_sync=2", "gorse_")
+	assert.NoError(b, err)
+	err = database.Init()
+	assert.NoError(b, err)
+	// benchmark
+	benchmarkCountItems(b, database)
+	// close database
+	err = database.Close()
+	assert.NoError(b, err)
+}
+
+func BenchmarkSQLite_CountItems(b *testing.B) {
+	// create database
+	database, err := Open("sqlite://"+os.TempDir()+"/sqlite.db", "gorse_")
+	assert.NoError(b, err)
+	err = database.Init()
+	assert.NoError(b, err)
+	// benchmark
+	benchmarkCountItems(b, database)
+	// close database
+	err = database.Close()
+	assert.NoError(b, err)
+}
