@@ -16,10 +16,8 @@ package dataset
 
 import (
 	"archive/zip"
-	"encoding/csv"
 	"fmt"
 	"github.com/zhenghaoz/gorse/base/log"
-	"github.com/zhenghaoz/gorse/common/util"
 	"go.uber.org/zap"
 	"io"
 	"net/http"
@@ -41,43 +39,6 @@ func init() {
 	}
 	datasetDir = filepath.Join(usr.HomeDir, ".gorse", "dataset")
 	tempDir = filepath.Join(usr.HomeDir, ".gorse", "temp")
-}
-
-func LoadIris() ([][]float32, []int, error) {
-	// Download dataset
-	path, err := DownloadAndUnzip("iris")
-	if err != nil {
-		return nil, nil, err
-	}
-	dataFile := filepath.Join(path, "iris.data")
-	// Load data
-	f, err := os.Open(dataFile)
-	if err != nil {
-		return nil, nil, err
-	}
-	reader := csv.NewReader(f)
-	rows, err := reader.ReadAll()
-	if err != nil {
-		return nil, nil, err
-	}
-	// Parse data
-	data := make([][]float32, len(rows))
-	target := make([]int, len(rows))
-	types := make(map[string]int)
-	for i, row := range rows {
-		data[i] = make([]float32, 4)
-		for j, cell := range row[:4] {
-			data[i][j], err = util.ParseFloat32(cell)
-			if err != nil {
-				return nil, nil, err
-			}
-		}
-		if _, exist := types[row[4]]; !exist {
-			types[row[4]] = len(types)
-		}
-		target[i] = types[row[4]]
-	}
-	return data, target, nil
 }
 
 func DownloadAndUnzip(name string) (string, error) {

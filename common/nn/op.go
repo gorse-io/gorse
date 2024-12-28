@@ -724,3 +724,29 @@ func (s *softmax) backward(dy *Tensor) []*Tensor {
 	gx.sub(y)
 	return []*Tensor{gx}
 }
+
+type softmaxCrossEntropy struct {
+	base
+	axis int
+}
+
+func (c *softmaxCrossEntropy) String() string {
+	return "SoftmaxCrossEntropy"
+}
+
+func (c *softmaxCrossEntropy) forward(inputs ...*Tensor) *Tensor {
+	x, t := inputs[0], inputs[1]
+	m := x.max(c.axis, true)
+	y := x.clone().sub(m)
+	y = y.exp()
+	s := y.sum(c.axis, true)
+	s.log()
+	m.add(s)
+	logP := x.clone().sub(m)
+	_ = t
+	return logP
+}
+
+func (c *softmaxCrossEntropy) backward(dy *Tensor) []*Tensor {
+	return nil
+}
