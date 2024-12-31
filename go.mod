@@ -23,7 +23,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/securecookie v1.1.1
 	github.com/gorse-io/dashboard v0.0.0-20241220180536-6acaf5256606
-	github.com/gorse-io/gorse-go v0.0.0-20240619081055-1027d429c9fd
+	github.com/gorse-io/gorse-go v0.5.0-alpha.1
 	github.com/haxii/go-swagger-ui v0.0.0-20210203093335-a63a6bbde946
 	github.com/jaswdr/faker v1.16.0
 	github.com/jellydator/ttlcache/v3 v3.3.0

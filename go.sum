@@ -315,8 +315,8 @@ github.com/gorse-io/dashboard v0.0.0-20241220180536-6acaf5256606 h1:5Vh8xik8c905
 github.com/gorse-io/dashboard v0.0.0-20241220180536-6acaf5256606/go.mod h1:6h/3EYChEyiynyCMMDsCsDEVBSOPLSo1L/+aHqj9kdc=
 github.com/gorse-io/gorgonia v0.0.0-20230817132253-6dd1dbf95849 h1:Hwywr6NxzYeZYn35KwOsw7j8ZiMT60TBzpbn1MbEido=
 github.com/gorse-io/gorgonia v0.0.0-20230817132253-6dd1dbf95849/go.mod h1:TtVGAt7ENNmgBnC0JA68CAjIDCEtcqaRHvnkAWJ/Fu0=
-github.com/gorse-io/gorse-go v0.0.0-20240619081055-1027d429c9fd h1:ZATJ4b3h6XNaPZ5pWMyBvc6EJtXhlyH5K2R5cGQJ/wg=
-github.com/gorse-io/gorse-go v0.0.0-20240619081055-1027d429c9fd/go.mod h1:IHd4zTSOQFbgKr28GThVgRJRJirI6NqMpiKCUz8X5Ng=
+github.com/gorse-io/gorse-go v0.5.0-alpha.1 h1:QBWKGAbSKNAWnieXVIdQiE0lLGvKXfFFAFPOQEkPW/E=
+github.com/gorse-io/gorse-go v0.5.0-alpha.1/go.mod h1:rNZ9RCZDAiJjpfoOabZicLkgSsfy0fu1TDvriL2JqkE=
 github.com/gorse-io/sqlite v1.3.3-0.20220713123255-c322aec4e59e h1:uPQtYQzG1QcC3Qbv+tuEe8Q2l++V4KEcqYSSwB9qobg=
 github.com/gorse-io/sqlite v1.3.3-0.20220713123255-c322aec4e59e/go.mod h1:PmIOwYnI+F1lRKd6F/PdLXGgI8GZ5H8x8z1yx0+0bmQ=
 github.com/gorse-io/tensor v0.0.0-20230617102451-4c006ddc5162 h1:W4aIbIvkE9/9PLuGJ7OcWuEtTeUaXgTd2enX440+e7Q=
