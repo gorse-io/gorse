@@ -81,6 +81,8 @@ const (
 	Latest          = "latest"
 	Popular         = "popular"
 
+	ItemToItem = "item-to-item"
+
 	// ItemCategories is the set of item categories. The format of key:
 	//	Global item categories - item_categories
 	ItemCategories = "item_categories"
@@ -110,7 +112,12 @@ const (
 	MatchingIndexRecall        = "matching_index_recall"
 )
 
-var ItemCache = []string{NonPersonalized, ItemNeighbors, OfflineRecommend}
+var ItemCache = []string{
+	NonPersonalized,
+	ItemToItem,
+	ItemNeighbors,
+	OfflineRecommend,
+}
 
 var (
 	ErrObjectNotExist = errors.NotFoundf("object")
