@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	"github.com/zhenghaoz/gorse/storage"
 )
@@ -167,4 +168,73 @@ func assertQuery(t *testing.T, connection *sql.DB, sql string, expected string) 
 	err = rows.Scan(&result)
 	assert.NoError(t, err)
 	assert.Equal(t, expected, result)
+}
+
+func BenchmarkMySQL_CountItems(b *testing.B) {
+	// create database
+	database, err := Open(mySqlDSN, "gorse_")
+	require.NoError(b, err)
+	dbName := "gorse_data_test"
+	databaseComm := database.(*SQLDatabase)
+	_, err = databaseComm.client.Exec("DROP DATABASE IF EXISTS " + dbName)
+	require.NoError(b, err)
+	_, err = databaseComm.client.Exec("CREATE DATABASE " + dbName)
+	require.NoError(b, err)
+	database, err = Open(mySqlDSN+dbName, "gorse_")
+	require.NoError(b, err)
+	err = database.Init()
+	require.NoError(b, err)
+	// benchmark
+	benchmarkCountItems(b, database)
+	// close database
+	err = database.Close()
+	require.NoError(b, err)
+}
+
+func BenchmarkPostgres_CountItems(b *testing.B) {
+	// create database
+	database, err := Open(postgresDSN+"gorse_data_test?sslmode=disable", "gorse_")
+	require.NoError(b, err)
+	err = database.Init()
+	require.NoError(b, err)
+	// benchmark
+	benchmarkCountItems(b, database)
+	// close database
+	err = database.Close()
+	require.NoError(b, err)
+}
+
+func BenchmarkClickHouse_CountItems(b *testing.B) {
+	// create database
+	databaseComm, err := sql.Open("chhttp", "http://"+clickhouseDSN[len(storage.ClickhousePrefix):])
+	require.NoError(b, err)
+	const dbName = "gorse_data_test"
+	_, err = databaseComm.Exec("DROP DATABASE IF EXISTS " + dbName)
+	require.NoError(b, err)
+	_, err = databaseComm.Exec("CREATE DATABASE " + dbName)
+	require.NoError(b, err)
+	err = databaseComm.Close()
+	require.NoError(b, err)
+	database, err := Open(clickhouseDSN+"gorse_data_test?mutations_sync=2", "gorse_")
+	require.NoError(b, err)
+	err = database.Init()
+	require.NoError(b, err)
+	// benchmark
+	benchmarkCountItems(b, database)
+	// close database
+	err = database.Close()
+	require.NoError(b, err)
+}
+
+func BenchmarkSQLite_CountItems(b *testing.B) {
+	// create database
+	database, err := Open("sqlite://"+os.TempDir()+"/sqlite.db", "gorse_")
+	require.NoError(b, err)
+	err = database.Init()
+	require.NoError(b, err)
+	// benchmark
+	benchmarkCountItems(b, database)
+	// close database
+	err = database.Close()
+	require.NoError(b, err)
 }
