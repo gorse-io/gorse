@@ -22,13 +22,12 @@ require (
 	github.com/go-viper/mapstructure/v2 v2.2.1
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/securecookie v1.1.1
-	github.com/gorse-io/dashboard v0.0.0-20241220180536-6acaf5256606
+	github.com/gorse-io/dashboard v0.0.0-20250101053324-8d40fd3b3a1c
 	github.com/haxii/go-swagger-ui v0.0.0-20210203093335-a63a6bbde946
 	github.com/jaswdr/faker v1.16.0
 	github.com/jellydator/ttlcache/v3 v3.3.0
 	github.com/json-iterator/go v1.1.12
 	github.com/juju/errors v1.0.0
-	github.com/klauspost/asmfmt v1.3.2
 	github.com/klauspost/cpuid/v2 v2.2.3
 	github.com/lafikl/consistent v0.0.0-20220512074542-bdd3606bfc3e
 	github.com/lib/pq v1.10.6
@@ -76,7 +75,6 @@ require (
 	gorm.io/driver/postgres v1.3.5
 	gorm.io/driver/sqlite v1.3.4
 	gorm.io/gorm v1.23.6
-	modernc.org/cc/v3 v3.40.0
 	modernc.org/mathutil v1.5.0
 	modernc.org/sortutil v1.1.0
 	modernc.org/sqlite v1.21.1
@@ -180,6 +178,7 @@ require (
 	gorgonia.org/vecf32 v0.9.0 // indirect
 	gorgonia.org/vecf64 v0.9.0 // indirect
 	lukechampine.com/uint128 v1.2.0 // indirect
+	modernc.org/cc/v3 v3.40.0 // indirect
 	modernc.org/ccgo/v3 v3.16.13 // indirect
 	modernc.org/libc v1.22.3 // indirect
 	modernc.org/memory v1.5.0 // indirect
