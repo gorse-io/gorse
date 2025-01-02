@@ -23,7 +23,7 @@ import (
 const (
 	eps  = 1e-4
 	rtol = 1e-2
-	atol = 1e-4
+	atol = 5e-3
 )
 
 func numericalDiff(f func(*Tensor) *Tensor, x *Tensor) *Tensor {

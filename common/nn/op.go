@@ -31,7 +31,7 @@ type op interface {
 
 type base struct {
 	inputs []*Tensor
-	output *Tensor
+	output *Tensor // TODO: Use weak pointer
 	gen    int
 }
 
