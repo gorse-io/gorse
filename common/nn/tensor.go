@@ -17,6 +17,7 @@ package nn
 import (
 	"fmt"
 	"github.com/chewxy/math32"
+	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/google/uuid"
 	"github.com/zhenghaoz/gorse/base/floats"
 	"golang.org/x/exp/slices"
@@ -209,6 +210,7 @@ func (t *Tensor) String() string {
 func (t *Tensor) Backward() {
 	t.grad = Ones(t.shape...)
 	ops := []op{t.op}
+	seen := mapset.NewSet[op](t.op)
 	for len(ops) > 0 {
 		op := ops[0]
 		ops = ops[1:]
@@ -225,8 +227,9 @@ func (t *Tensor) Backward() {
 			} else {
 				inputs[i].grad.add(grads[i])
 			}
-			if inputs[i].op != nil {
+			if inputs[i].op != nil && !seen.Contains(inputs[i].op) {
 				ops = append(ops, inputs[i].op)
+				seen.Add(inputs[i].op)
 			} else if !inputs[i].requireGrad {
 				// Clear gradient if the leaf tensor does not require gradient
 				//inputs[i].grad = nil
