@@ -19,16 +19,20 @@ func Neg(x *Tensor) *Tensor {
 }
 
 // Add returns the element-wise sum of two tensors. The shape of the second tensor must be a suffix sequence of the shape of the first tensor.
-func Add(x0, x1 *Tensor) *Tensor {
-	if len(x0.shape) < len(x1.shape) {
-		x0, x1 = x1, x0
-	}
-	for i := 0; i < len(x1.shape); i++ {
-		if x0.shape[len(x0.shape)-len(x1.shape)+i] != x1.shape[i] {
-			panic("the shape of the second tensor must be a suffix sequence of the shape of the first tensor")
+func Add(x0 *Tensor, x ...*Tensor) *Tensor {
+	output := x0
+	for _, x1 := range x {
+		if len(x0.shape) < len(x1.shape) {
+			x0, x1 = x1, x0
 		}
+		for i := 0; i < len(x1.shape); i++ {
+			if x0.shape[len(x0.shape)-len(x1.shape)+i] != x1.shape[i] {
+				panic("the shape of the second tensor must be a suffix sequence of the shape of the first tensor")
+			}
+		}
+		output = apply(&add{}, output, x1)
 	}
-	return apply(&add{}, x0, x1)
+	return output
 }
 
 // Sub returns the element-wise difference of two tensors. The shape of the second tensor must be a suffix sequence of the shape of the first tensor.
