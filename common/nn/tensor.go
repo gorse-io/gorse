@@ -15,6 +15,7 @@
 package nn
 
 import (
+	"container/heap"
 	"fmt"
 	"github.com/chewxy/math32"
 	mapset "github.com/deckarep/golang-set/v2"
@@ -120,6 +121,13 @@ func Zeros(shape ...int) *Tensor {
 	}
 }
 
+func (t *Tensor) generation() int {
+	if t.op != nil {
+		return t.op.generation()
+	}
+	return 0
+}
+
 func (t *Tensor) IsScalar() bool {
 	return len(t.shape) == 0
 }
@@ -209,11 +217,10 @@ func (t *Tensor) String() string {
 
 func (t *Tensor) Backward() {
 	t.grad = Ones(t.shape...)
-	ops := []op{t.op}
+	ops := &opHeap{t.op}
 	seen := mapset.NewSet[op](t.op)
-	for len(ops) > 0 {
-		op := ops[0]
-		ops = ops[1:]
+	for ops.Len() > 0 {
+		op := heap.Pop(ops).(op)
 		inputs, output := op.inputsAndOutput()
 		grads := op.backward(output.grad)
 		// Clear gradient of non-leaf tensor
@@ -228,7 +235,7 @@ func (t *Tensor) Backward() {
 				inputs[i].grad.add(grads[i])
 			}
 			if inputs[i].op != nil && !seen.Contains(inputs[i].op) {
-				ops = append(ops, inputs[i].op)
+				heap.Push(ops, inputs[i].op)
 				seen.Add(inputs[i].op)
 			} else if !inputs[i].requireGrad {
 				// Clear gradient if the leaf tensor does not require gradient
