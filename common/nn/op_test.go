@@ -561,6 +561,22 @@ func TestReuseNode(t *testing.T) {
 	allClose(t, x.grad, dx)
 }
 
+func TestDependency(t *testing.T) {
+	// x^2 + 2x^2
+	x := NewVariable([]float32{1, 2, 3, 4, 5, 6}, 2, 3)
+	temp := Pow(x, NewVariable([]float32{2}))
+	y := Add(temp, Mul(NewVariable([]float32{2}), temp))
+	assert.Equal(t, []float32{3, 12, 27, 48, 75, 108}, y.data)
+
+	// Test gradient
+	y.Backward()
+	dx := numericalDiff(func(x *Tensor) *Tensor {
+		temp := Pow(x, NewVariable([]float32{2}))
+		return Add(temp, Mul(NewVariable([]float32{2}), temp))
+	}, x)
+	allClose(t, x.grad, dx)
+}
+
 func TestSphere(t *testing.T) {
 	// x^2 + y^2
 	x := NewScalar(1)

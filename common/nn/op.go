@@ -25,11 +25,14 @@ type op interface {
 	inputsAndOutput() ([]*Tensor, *Tensor)
 	setInputs(inputs ...*Tensor)
 	setOutput(y *Tensor)
+	generation() int
+	setGeneration(gen int)
 }
 
 type base struct {
 	inputs []*Tensor
 	output *Tensor
+	gen    int
 }
 
 func (b *base) inputsAndOutput() ([]*Tensor, *Tensor) {
@@ -44,11 +47,26 @@ func (b *base) setOutput(y *Tensor) {
 	b.output = y
 }
 
+func (b *base) generation() int {
+	return b.gen
+}
+
+func (b *base) setGeneration(gen int) {
+	b.gen = gen
+}
+
 func apply[T op](f T, inputs ...*Tensor) *Tensor {
 	y := f.forward(inputs...)
 	f.setInputs(inputs...)
 	f.setOutput(y)
 	y.op = f
+
+	// Set generation
+	gen := 0
+	for _, x := range inputs {
+		gen = max(gen, x.generation())
+	}
+	f.setGeneration(gen + 1)
 	return y
 }
 
@@ -695,4 +713,30 @@ func (r *relu) backward(dy *Tensor) []*Tensor {
 	dx := dy.clone()
 	dx.maximum(NewScalar(0))
 	return []*Tensor{dx}
+}
+
+type opHeap []op
+
+func (h opHeap) Len() int {
+	return len(h)
+}
+
+func (h opHeap) Less(i, j int) bool {
+	return h[i].generation() > h[j].generation()
+}
+
+func (h opHeap) Swap(i, j int) {
+	h[i], h[j] = h[j], h[i]
+}
+
+func (h *opHeap) Push(o any) {
+	*h = append(*h, o.(op))
+}
+
+func (h *opHeap) Pop() any {
+	old := *h
+	n := len(old)
+	x := old[n-1]
+	*h = old[0 : n-1]
+	return x
 }
