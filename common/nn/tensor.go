@@ -77,7 +77,7 @@ func LinSpace(start, end float32, shape ...int) *Tensor {
 	}
 }
 
-func RandN(shape ...int) *Tensor {
+func Rand(shape ...int) *Tensor {
 	n := 1
 	for _, s := range shape {
 		n *= s
@@ -132,7 +132,7 @@ func (t *Tensor) IsScalar() bool {
 	return len(t.shape) == 0
 }
 
-// NoGrad creates a tensor does not require gradient.
+// NoGrad convert a node tensor to a leaf tensor.
 func (t *Tensor) NoGrad() *Tensor {
 	if t.op != nil {
 		t.op = nil
@@ -571,5 +571,11 @@ func (t *Tensor) transpose() *Tensor {
 	return &Tensor{
 		data:  data,
 		shape: shape,
+	}
+}
+
+func NormalInit(t *Tensor, mean, std float32) {
+	for i := range t.data {
+		t.data[i] = float32(rand.NormFloat64())*(std) + (mean)
 	}
 }

@@ -15,18 +15,20 @@
 package nn
 
 import (
+	"github.com/chewxy/math32"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
 func TestLinearRegression(t *testing.T) {
-	x := RandN(100, 1)
-	y := Add(RandN(100, 1), NewScalar(5), Mul(NewScalar(2), x))
+	x := Rand(100, 1)
+	y := Add(Rand(100, 1), NewScalar(5), Mul(NewScalar(2), x))
 
 	w := Zeros(1, 1)
 	b := Zeros(1)
 	predict := func(x *Tensor) *Tensor { return Add(MatMul(x, w), b) }
 
+	lr := float32(0.1)
 	for i := 0; i < 100; i++ {
 		yPred := predict(x)
 		loss := MeanSquareError(y, yPred)
@@ -35,12 +37,39 @@ func TestLinearRegression(t *testing.T) {
 		b.grad = nil
 		loss.Backward()
 
-		w.sub(w.grad.mul(NewScalar(0.01)))
-		b.sub(b.grad.mul(NewScalar(0.01)))
+		w.sub(w.grad.mul(NewScalar(lr)))
+		b.sub(b.grad.mul(NewScalar(lr)))
 	}
 
 	assert.Equal(t, []int{1, 1}, w.shape)
-	assert.InDelta(t, float64(2), w.data[0], 0.7)
+	assert.InDelta(t, float64(2), w.data[0], 0.5)
 	assert.Equal(t, []int{1}, b.shape)
-	assert.InDelta(t, float64(5), b.data[0], 0.7)
+	assert.InDelta(t, float64(5), b.data[0], 0.5)
+}
+
+func TestNeuralNetwork(t *testing.T) {
+	x := Rand(100, 1)
+	y := Add(Rand(100, 1), Sin(Mul(x, NewScalar(2*math32.Pi))))
+
+	model := NewSequential(
+		NewLinear(1, 10),
+		NewSigmoid(),
+		NewLinear(10, 1),
+	)
+	NormalInit(model.(*Sequential).layers[0].(*linearLayer).w, 0, 0.01)
+	NormalInit(model.(*Sequential).layers[2].(*linearLayer).w, 0, 0.01)
+	optimizer := NewSGD(model.Parameters(), 0.2)
+
+	var l float32
+	for i := 0; i < 10000; i++ {
+		yPred := model.Forward(x)
+		loss := MeanSquareError(y, yPred)
+
+		optimizer.ZeroGrad()
+		loss.Backward()
+
+		optimizer.Step()
+		l = loss.data[0]
+	}
+	assert.InDelta(t, float64(0), l, 0.1)
 }

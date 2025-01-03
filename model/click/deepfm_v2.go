@@ -245,7 +245,7 @@ func (fm *DeepFMV2) Init(trainSet *Dataset) {
 		_, x, _ := trainSet.Get(i)
 		fm.numDimension = mathutil.MaxVal(fm.numDimension, len(x))
 	}
-	fm.bias = nn.RandN()
+	fm.bias = nn.Rand()
 	fm.embeddingW = nn.NewEmbedding(fm.numFeatures, 1)
 	fm.embeddingV = nn.NewEmbedding(fm.numFeatures, fm.nFactors)
 	fm.linear = []nn.Layer{nn.NewLinear(fm.numDimension*fm.nFactors, fm.hiddenLayers[0])}

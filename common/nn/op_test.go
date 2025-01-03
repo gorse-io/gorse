@@ -55,8 +55,8 @@ func TestAdd(t *testing.T) {
 	assert.Equal(t, []float32{3, 5, 7, 9, 11, 13}, z.data)
 
 	// Test gradient
-	x = RandN(2, 3).RequireGrad()
-	y = RandN(2, 3).RequireGrad()
+	x = Rand(2, 3).RequireGrad()
+	y = Rand(2, 3).RequireGrad()
 	z = Add(x, y)
 	z.Backward()
 	dx := numericalDiff(func(x *Tensor) *Tensor { return Add(x, y) }, x)
@@ -95,8 +95,8 @@ func TestSub(t *testing.T) {
 	assert.Equal(t, []float32{-1, -1, -1, -1, -1, -1}, z.data)
 
 	// Test gradient
-	x = RandN(2, 3).RequireGrad()
-	y = RandN(2, 3).RequireGrad()
+	x = Rand(2, 3).RequireGrad()
+	y = Rand(2, 3).RequireGrad()
 	z = Sub(x, y)
 	z.Backward()
 	dx := numericalDiff(func(x *Tensor) *Tensor { return Sub(x, y) }, x)
@@ -135,8 +135,8 @@ func TestMul(t *testing.T) {
 	assert.Equal(t, []float32{2, 6, 12, 20, 30, 42}, z.data)
 
 	// Test gradient
-	x = RandN(2, 3).RequireGrad()
-	y = RandN(2, 3).RequireGrad()
+	x = Rand(2, 3).RequireGrad()
+	y = Rand(2, 3).RequireGrad()
 	z = Mul(x, y)
 	z.Backward()
 	dx := numericalDiff(func(x *Tensor) *Tensor { return Mul(x, y) }, x)
@@ -175,8 +175,8 @@ func TestDiv(t *testing.T) {
 	assert.InDeltaSlice(t, []float32{0.5, 2.0 / 3.0, 0.75, 4.0 / 5.0, 5.0 / 6.0, 6.0 / 7.0}, z.data, 1e-6)
 
 	// Test gradient
-	x = RandN(2, 3).RequireGrad()
-	y = RandN(2, 3).RequireGrad()
+	x = Rand(2, 3).RequireGrad()
+	y = Rand(2, 3).RequireGrad()
 	z = Div(x, y)
 	z.Backward()
 	dx := numericalDiff(func(x *Tensor) *Tensor { return Div(x, y) }, x)
@@ -214,7 +214,7 @@ func TestSquare(t *testing.T) {
 	assert.Equal(t, []float32{1, 4, 9, 16, 25, 36}, y.data)
 
 	// Test gradient
-	x = RandN(2, 3).RequireGrad()
+	x = Rand(2, 3).RequireGrad()
 	y = Square(x)
 	y.Backward()
 	dx := numericalDiff(Square, x)
@@ -229,8 +229,8 @@ func TestPow(t *testing.T) {
 	assert.InDeltaSlice(t, []float32{1, 8, 81, 1024, 15625, 279936}, z.data, 1e-6)
 
 	// Test gradient
-	x = RandN(2, 3).RequireGrad()
-	y = RandN(2, 3).RequireGrad()
+	x = Rand(2, 3).RequireGrad()
+	y = Rand(2, 3).RequireGrad()
 	z = Pow(x, y)
 	z.Backward()
 	dx := numericalDiff(func(x *Tensor) *Tensor { return Pow(x, y) }, x)
@@ -264,7 +264,7 @@ func TestExp(t *testing.T) {
 	assert.InDeltaSlice(t, []float32{1, math32.Exp(1), math32.Exp(2), math32.Exp(3), math32.Exp(4), math32.Exp(5)}, y.data, 1e-6)
 
 	// Test gradient
-	x = RandN(2, 3).RequireGrad()
+	x = Rand(2, 3).RequireGrad()
 	y = Exp(x)
 	y.Backward()
 	dx := numericalDiff(Exp, x)
@@ -278,7 +278,7 @@ func TestLog(t *testing.T) {
 	assert.InDeltaSlice(t, []float32{0, math32.Log(2), math32.Log(3), math32.Log(4), math32.Log(5), math32.Log(6)}, y.data, 1e-6)
 
 	// Test gradient
-	x = RandN(2, 3).RequireGrad()
+	x = Rand(2, 3).RequireGrad()
 	y = Log(x)
 	y.Backward()
 	dx := numericalDiff(Log, x)
@@ -292,7 +292,7 @@ func TestSum(t *testing.T) {
 	assert.Equal(t, []float32{21}, y.data)
 
 	// Test gradient
-	x = RandN(2, 3).RequireGrad()
+	x = Rand(2, 3).RequireGrad()
 	y = Sum(x)
 	y.Backward()
 	assert.Equal(t, []float32{1, 1, 1, 1, 1, 1}, x.grad.data)
@@ -304,7 +304,7 @@ func TestSum(t *testing.T) {
 	assert.Equal(t, []float32{9, 12, 9, 12}, y.data)
 
 	// Test gradient
-	x = RandN(2, 3, 2).RequireGrad()
+	x = Rand(2, 3, 2).RequireGrad()
 	y = Sum(x, 1)
 	y.Backward()
 	assert.Equal(t, []int{2, 3, 2}, x.grad.shape)
@@ -318,7 +318,7 @@ func TestMean(t *testing.T) {
 	assert.Equal(t, []float32{3.5}, y.data)
 
 	// Test gradient
-	x = RandN(2, 3).RequireGrad()
+	x = Rand(2, 3).RequireGrad()
 	y = Mean(x)
 	y.Backward()
 	assert.Equal(t, []float32{1.0 / 6, 1.0 / 6, 1.0 / 6, 1.0 / 6, 1.0 / 6, 1.0 / 6}, x.grad.data)
@@ -331,7 +331,7 @@ func TestCos(t *testing.T) {
 	assert.InDeltaSlice(t, []float32{1, 0.9950041652780258, 0.9800665778412416, 0.955336489125606, 0.9210609940028851, 0.8775825618903728}, y.data, 1e-6)
 
 	// Test gradient
-	x = RandN(2, 3).RequireGrad()
+	x = Rand(2, 3).RequireGrad()
 	y = Cos(x)
 	y.Backward()
 	dx := numericalDiff(Cos, x)
@@ -345,7 +345,7 @@ func TestSin(t *testing.T) {
 	assert.InDeltaSlice(t, []float32{0, 0.8414709848078965, 0.9092974268256817, 0.1411200080598672, -0.7568024953079282, -0.9589242746631385}, y.data, 1e-6)
 
 	// Test gradient
-	x = RandN(2, 3).RequireGrad()
+	x = Rand(2, 3).RequireGrad()
 	y = Sin(x)
 	y.Backward()
 	dx := numericalDiff(Sin, x)
@@ -368,8 +368,8 @@ func TestMatMul(t *testing.T) {
 	assert.Equal(t, []float32{5, 5, 5, 5, 7, 7, 7, 7, 9, 9, 9, 9}, y.grad.data)
 
 	// (3,2).T * (3,4) -> (2,4)
-	x = RandN(3, 2).RequireGrad()
-	y = RandN(3, 4).RequireGrad()
+	x = Rand(3, 2).RequireGrad()
+	y = Rand(3, 4).RequireGrad()
 	z = MatMul(x, y, true, false)
 	assert.Equal(t, []int{2, 4}, z.shape)
 	z.Backward()
@@ -377,8 +377,8 @@ func TestMatMul(t *testing.T) {
 	assert.Equal(t, []int{3, 4}, y.grad.shape)
 
 	// (2,3) * (4,3).T -> (2,4)
-	x = RandN(2, 3).RequireGrad()
-	y = RandN(4, 3).RequireGrad()
+	x = Rand(2, 3).RequireGrad()
+	y = Rand(4, 3).RequireGrad()
 	z = MatMul(x, y, false, true)
 	assert.Equal(t, []int{2, 4}, z.shape)
 	z.Backward()
@@ -386,8 +386,8 @@ func TestMatMul(t *testing.T) {
 	assert.Equal(t, []int{4, 3}, y.grad.shape)
 
 	// (3,2).T * (4,3).T -> (2,4)
-	x = RandN(3, 2).RequireGrad()
-	y = RandN(4, 3).RequireGrad()
+	x = Rand(3, 2).RequireGrad()
+	y = Rand(4, 3).RequireGrad()
 	z = MatMul(x, y, true, true)
 	assert.Equal(t, []int{2, 4}, z.shape)
 	z.Backward()
@@ -422,24 +422,24 @@ func TestBMM(t *testing.T) {
 	}, y.grad.data)
 
 	// (2,3,2).T * (2,3,4) -> (2,2,4)
-	x = RandN(2, 3, 2).RequireGrad()
-	y = RandN(2, 3, 4).RequireGrad()
+	x = Rand(2, 3, 2).RequireGrad()
+	y = Rand(2, 3, 4).RequireGrad()
 	z = BMM(x, y, true, false)
 	assert.Equal(t, []int{2, 2, 4}, z.shape)
 	z.Backward()
 	assert.Equal(t, []int{2, 3, 2}, x.grad.shape)
 
 	// (2,2,3) * (2,4,3).T -> (2,2,4)
-	x = RandN(2, 2, 3).RequireGrad()
-	y = RandN(2, 4, 3).RequireGrad()
+	x = Rand(2, 2, 3).RequireGrad()
+	y = Rand(2, 4, 3).RequireGrad()
 	z = BMM(x, y, false, true)
 	assert.Equal(t, []int{2, 2, 4}, z.shape)
 	z.Backward()
 	assert.Equal(t, []int{2, 2, 3}, x.grad.shape)
 
 	// (2,3,2).T * (2,43).T -> (2,2,4)
-	x = RandN(2, 3, 2).RequireGrad()
-	y = RandN(2, 4, 3).RequireGrad()
+	x = Rand(2, 3, 2).RequireGrad()
+	y = Rand(2, 4, 3).RequireGrad()
 	z = BMM(x, y, true, true)
 	assert.Equal(t, []int{2, 2, 4}, z.shape)
 	z.Backward()
@@ -490,7 +490,7 @@ func TestSigmoid(t *testing.T) {
 	assert.InDeltaSlice(t, []float32{0.5, 0.7310585786300049, 0.8807970779778823, 0.9525741268224334, 0.9820137900379085, 0.9933071490757153}, y.data, 1e-6)
 
 	// Test gradient
-	x = RandN(2, 3).RequireGrad()
+	x = Rand(2, 3).RequireGrad()
 	y = Sigmoid(x)
 	y.Backward()
 	dx := numericalDiff(Sigmoid, x)
@@ -504,7 +504,7 @@ func TestReLu(t *testing.T) {
 	assert.Equal(t, []float32{0, 0, 1, 2, 3, 4}, y.data)
 
 	// Test gradient
-	x = RandN(2, 3).RequireGrad()
+	x = Rand(2, 3).RequireGrad()
 	y = ReLu(x)
 	y.Backward()
 	dx := numericalDiff(ReLu, x)
