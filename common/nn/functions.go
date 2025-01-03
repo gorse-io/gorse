@@ -189,7 +189,7 @@ func ReLu(x *Tensor) *Tensor {
 	return apply(&relu{}, x)
 }
 
-func MSE(x, y *Tensor) *Tensor {
+func MeanSquareError(x, y *Tensor) *Tensor {
 	return Mean(Square(Sub(x, y)))
 }
 
