@@ -223,8 +223,6 @@ func (t *Tensor) Backward() {
 		op := heap.Pop(ops).(op)
 		inputs, output := op.inputsAndOutput()
 		grads := op.backward(output.grad)
-		// Clear gradient of non-leaf tensor
-		//output.grad = nil
 		for i := range grads {
 			if !slices.Equal(inputs[i].shape, grads[i].shape) {
 				panic(fmt.Sprintf("%s: shape %v does not match shape %v", op.String(), inputs[i].shape, grads[i].shape))
@@ -237,11 +235,9 @@ func (t *Tensor) Backward() {
 			if inputs[i].op != nil && !seen.Contains(inputs[i].op) {
 				heap.Push(ops, inputs[i].op)
 				seen.Add(inputs[i].op)
-			} else if !inputs[i].requireGrad {
-				// Clear gradient if the leaf tensor does not require gradient
-				//inputs[i].grad = nil
 			}
 		}
+		output.grad = nil
 	}
 }
 
