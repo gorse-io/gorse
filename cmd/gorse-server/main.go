@@ -21,7 +21,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/cmd/version"
-	"github.com/zhenghaoz/gorse/protocol"
+	"github.com/zhenghaoz/gorse/common/util"
 	"github.com/zhenghaoz/gorse/server"
 	"go.uber.org/zap"
 )
@@ -50,9 +50,9 @@ var serverCommand = &cobra.Command{
 		caFile, _ := cmd.PersistentFlags().GetString("ssl-ca")
 		certFile, _ := cmd.PersistentFlags().GetString("ssl-cert")
 		keyFile, _ := cmd.PersistentFlags().GetString("ssl-key")
-		var tlsConfig *protocol.TLSConfig
+		var tlsConfig *util.TLSConfig
 		if caFile != "" && certFile != "" && keyFile != "" {
-			tlsConfig = &protocol.TLSConfig{
+			tlsConfig = &util.TLSConfig{
 				SSLCA:   caFile,
 				SSLCert: certFile,
 				SSLKey:  keyFile,

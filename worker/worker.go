@@ -43,6 +43,8 @@ import (
 	"github.com/zhenghaoz/gorse/base/search"
 	"github.com/zhenghaoz/gorse/base/sizeof"
 	"github.com/zhenghaoz/gorse/cmd/version"
+	encoding2 "github.com/zhenghaoz/gorse/common/encoding"
+	"github.com/zhenghaoz/gorse/common/util"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model/click"
 	"github.com/zhenghaoz/gorse/model/ranking"
@@ -85,7 +87,7 @@ type Worker struct {
 	httpPort   int
 	masterHost string
 	masterPort int
-	tlsConfig  *protocol.TLSConfig
+	tlsConfig  *util.TLSConfig
 	cacheFile  string
 
 	// database connection path
@@ -127,7 +129,7 @@ func NewWorker(
 	jobs int,
 	cacheFile string,
 	managedMode bool,
-	tlsConfig *protocol.TLSConfig,
+	tlsConfig *util.TLSConfig,
 ) *Worker {
 	return &Worker{
 		rankers:       make([]click.FactorizationMachine, jobs),
@@ -267,7 +269,7 @@ func (w *Worker) Pull() {
 				log.Logger().Error("failed to pull ranking model", zap.Error(err))
 			} else {
 				var rankingModel ranking.MatrixFactorization
-				rankingModel, err = protocol.UnmarshalRankingModel(rankingModelReceiver)
+				rankingModel, err = encoding2.UnmarshalRankingModel(rankingModelReceiver)
 				if err != nil {
 					log.Logger().Error("failed to unmarshal ranking model", zap.Error(err))
 				} else {
@@ -291,7 +293,7 @@ func (w *Worker) Pull() {
 				log.Logger().Error("failed to pull click model", zap.Error(err))
 			} else {
 				var clickModel click.FactorizationMachine
-				clickModel, err = protocol.UnmarshalClickModel(clickModelReceiver)
+				clickModel, err = encoding2.UnmarshalClickModel(clickModelReceiver)
 				if err != nil {
 					log.Logger().Error("failed to unmarshal click model", zap.Error(err))
 				} else {
@@ -416,7 +418,7 @@ func (w *Worker) Serve() {
 	// connect to master
 	var opts []grpc.DialOption
 	if w.tlsConfig != nil {
-		c, err := protocol.NewClientCreds(w.tlsConfig)
+		c, err := util.NewClientCreds(w.tlsConfig)
 		if err != nil {
 			log.Logger().Fatal("failed to create credentials", zap.Error(err))
 		}

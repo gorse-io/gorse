@@ -27,6 +27,8 @@ import (
 	"github.com/madflojo/testcerts"
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/base/progress"
+	"github.com/zhenghaoz/gorse/common/encoding"
+	"github.com/zhenghaoz/gorse/common/util"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model"
 	"github.com/zhenghaoz/gorse/model/click"
@@ -91,11 +93,11 @@ func (m *mockMasterRPC) Start(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func (m *mockMasterRPC) StartTLS(t *testing.T, o *protocol.TLSConfig) {
+func (m *mockMasterRPC) StartTLS(t *testing.T, o *util.TLSConfig) {
 	listen, err := net.Listen("tcp", ":0")
 	assert.NoError(t, err)
 	m.addr <- listen.Addr().String()
-	creds, err := protocol.NewServerCreds(&protocol.TLSConfig{
+	creds, err := util.NewServerCreds(&util.TLSConfig{
 		SSLCA:   o.SSLCA,
 		SSLCert: o.SSLCert,
 		SSLKey:  o.SSLKey,
@@ -141,14 +143,14 @@ func TestRPC(t *testing.T) {
 	// test get click model
 	clickModelReceiver, err := client.GetClickModel(ctx, &protocol.VersionInfo{Version: 456})
 	assert.NoError(t, err)
-	clickModel, err := protocol.UnmarshalClickModel(clickModelReceiver)
+	clickModel, err := encoding.UnmarshalClickModel(clickModelReceiver)
 	assert.NoError(t, err)
 	assert.Equal(t, rpcServer.ClickModel, clickModel)
 
 	// test get ranking model
 	rankingModelReceiver, err := client.GetRankingModel(ctx, &protocol.VersionInfo{Version: 123})
 	assert.NoError(t, err)
-	rankingModel, err := protocol.UnmarshalRankingModel(rankingModelReceiver)
+	rankingModel, err := encoding.UnmarshalRankingModel(rankingModelReceiver)
 	assert.NoError(t, err)
 	rpcServer.RankingModel.SetParams(rpcServer.RankingModel.GetParams())
 	assert.Equal(t, rpcServer.RankingModel, rankingModel)
@@ -199,7 +201,7 @@ func generateToTempFile(t *testing.T) (string, string, string) {
 
 func TestSSL(t *testing.T) {
 	caFile, certFile, keyFile := generateToTempFile(t)
-	o := &protocol.TLSConfig{
+	o := &util.TLSConfig{
 		SSLCA:   caFile,
 		SSLCert: certFile,
 		SSLKey:  keyFile,
@@ -210,7 +212,7 @@ func TestSSL(t *testing.T) {
 	address := <-rpcServer.addr
 
 	// success
-	c, err := protocol.NewClientCreds(o)
+	c, err := util.NewClientCreds(o)
 	assert.NoError(t, err)
 	conn, err := grpc.Dial(address, grpc.WithTransportCredentials(c))
 	assert.NoError(t, err)
@@ -227,12 +229,12 @@ func TestSSL(t *testing.T) {
 
 	// certificate mismatch
 	caFile2, certFile2, keyFile2 := generateToTempFile(t)
-	o2 := &protocol.TLSConfig{
+	o2 := &util.TLSConfig{
 		SSLCA:   caFile2,
 		SSLCert: certFile2,
 		SSLKey:  keyFile2,
 	}
-	c, err = protocol.NewClientCreds(o2)
+	c, err = util.NewClientCreds(o2)
 	assert.NoError(t, err)
 	conn, err = grpc.Dial(address, grpc.WithTransportCredentials(c))
 	assert.NoError(t, err)
