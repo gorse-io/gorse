@@ -23,7 +23,7 @@ func Add(x0 *Tensor, x ...*Tensor) *Tensor {
 	output := x0
 	for _, x1 := range x {
 		if len(x0.shape) < len(x1.shape) {
-			x0, x1 = x1, x0
+			output, x1 = x1, output
 		}
 		for i := 0; i < len(x1.shape); i++ {
 			if x0.shape[len(x0.shape)-len(x1.shape)+i] != x1.shape[i] {
@@ -214,7 +214,7 @@ func SoftmaxCrossEntropy(x, y *Tensor) *Tensor {
 //
 //	(1 + target) * math32.Log(1+math32.Exp(-prediction)) / 2 + (1 - target) * math32.Log(1+math32.Exp(prediction)) / 2
 func BCEWithLogits(target, prediction *Tensor) *Tensor {
-	return Add(
+	return Mean(Add(
 		Div(
 			Mul(
 				Add(NewScalar(1), target),
@@ -224,5 +224,5 @@ func BCEWithLogits(target, prediction *Tensor) *Tensor {
 			Mul(
 				Sub(NewScalar(1), target),
 				Log(Add(NewScalar(1), Exp(prediction)))),
-			NewScalar(2)))
+			NewScalar(2))))
 }

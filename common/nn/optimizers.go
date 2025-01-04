@@ -16,7 +16,6 @@ package nn
 
 import (
 	"github.com/chewxy/math32"
-	"github.com/google/uuid"
 )
 
 type Optimizer interface {
@@ -60,8 +59,8 @@ type Adam struct {
 	beta1 float32
 	beta2 float32
 	eps   float32
-	ms    map[uuid.UUID]*Tensor
-	vs    map[uuid.UUID]*Tensor
+	ms    map[*Tensor]*Tensor
+	vs    map[*Tensor]*Tensor
 }
 
 func NewAdam(params []*Tensor, alpha float32) Optimizer {
@@ -71,19 +70,19 @@ func NewAdam(params []*Tensor, alpha float32) Optimizer {
 		beta1:         0.9,
 		beta2:         0.999,
 		eps:           1e-8,
-		ms:            make(map[uuid.UUID]*Tensor),
-		vs:            make(map[uuid.UUID]*Tensor),
+		ms:            make(map[*Tensor]*Tensor),
+		vs:            make(map[*Tensor]*Tensor),
 	}
 }
 
 func (a *Adam) Step() {
 	for _, p := range a.params {
-		if _, ok := a.ms[p.id]; !ok {
-			a.ms[p.id] = Zeros(p.shape...)
-			a.vs[p.id] = Zeros(p.shape...)
+		if _, ok := a.ms[p]; !ok {
+			a.ms[p] = Zeros(p.shape...)
+			a.vs[p] = Zeros(p.shape...)
 		}
 
-		m, v := a.ms[p.id], a.vs[p.id]
+		m, v := a.ms[p], a.vs[p]
 		grad := p.grad.data
 
 		for i := range m.data {
