@@ -15,8 +15,14 @@
 package nn
 
 import (
+	"encoding/csv"
+	"fmt"
 	"github.com/chewxy/math32"
 	"github.com/stretchr/testify/assert"
+	"github.com/zhenghaoz/gorse/common/dataset"
+	"github.com/zhenghaoz/gorse/common/util"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -72,4 +78,66 @@ func TestNeuralNetwork(t *testing.T) {
 		l = loss.data[0]
 	}
 	assert.InDelta(t, float64(0), l, 0.1)
+}
+
+func iris() (*Tensor, *Tensor, error) {
+	// Download dataset
+	path, err := dataset.DownloadAndUnzip("iris")
+	if err != nil {
+		return nil, nil, err
+	}
+	dataFile := filepath.Join(path, "iris.data")
+	// Load data
+	f, err := os.Open(dataFile)
+	if err != nil {
+		return nil, nil, err
+	}
+	reader := csv.NewReader(f)
+	rows, err := reader.ReadAll()
+	if err != nil {
+		return nil, nil, err
+	}
+	// Parse data
+	data := make([]float32, len(rows)*4)
+	target := make([]float32, len(rows))
+	types := make(map[string]int)
+	for i, row := range rows {
+		for j, cell := range row[:4] {
+			data[i*4+j], err = util.ParseFloat[float32](cell)
+			if err != nil {
+				return nil, nil, err
+			}
+		}
+		if _, exist := types[row[4]]; !exist {
+			types[row[4]] = len(types)
+		}
+		target[i] = float32(types[row[4]])
+	}
+	return NewTensor(data, len(rows), 4), NewTensor(target, len(rows)), nil
+}
+
+func TestIris(t *testing.T) {
+	x, y, err := iris()
+	assert.NoError(t, err)
+
+	model := NewSequential(
+		NewLinear(4, 100),
+		NewLinear(100, 100),
+		NewLinear(100, 3),
+	)
+	optimizer := NewSGD(model.Parameters(), 0.0001)
+
+	var l float32
+	for i := 0; i < 100; i++ {
+		yPred := model.Forward(x)
+		loss := SoftmaxCrossEntropy(yPred, y)
+		l = loss.data[0]
+		fmt.Println(l)
+
+		optimizer.ZeroGrad()
+		loss.Backward()
+
+		optimizer.Step()
+	}
+	fmt.Println(l)
 }

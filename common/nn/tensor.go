@@ -23,6 +23,7 @@ import (
 	"github.com/samber/lo"
 	"github.com/zhenghaoz/gorse/base/floats"
 	"golang.org/x/exp/slices"
+	"math"
 	"math/rand"
 	"strings"
 )
@@ -275,12 +276,16 @@ func (t *Tensor) add(other *Tensor) *Tensor {
 }
 
 func (t *Tensor) sub(other *Tensor) *Tensor {
-	wSize := 1
+	// We assume that the shape of the second tensor is a suffix sequence of the shape of the first tensor.
+	bSize := 1
+	for i := range t.shape {
+		bSize *= t.shape[i]
+	}
 	for i := range other.shape {
-		wSize *= other.shape[i]
+		bSize /= other.shape[i]
 	}
 	for i := range t.data {
-		t.data[i] -= other.data[i%wSize]
+		t.data[i] -= other.data[i/bSize]
 	}
 	return t
 }
@@ -327,7 +332,7 @@ func (t *Tensor) pow(other *Tensor) *Tensor {
 
 func (t *Tensor) exp() *Tensor {
 	for i := range t.data {
-		t.data[i] = math32.Exp(t.data[i])
+		t.data[i] = float32(math.Exp(float64(t.data[i])))
 	}
 	return t
 }
@@ -651,6 +656,22 @@ func (t *Tensor) sum(axis int, keepDim bool) *Tensor {
 		data:  data,
 		shape: shape,
 	}
+}
+
+func (t *Tensor) hasNaN() bool {
+	for i := range t.data {
+		if math32.IsNaN(t.data[i]) {
+			return true
+		}
+	}
+	return false
+}
+
+func (t *Tensor) clip(lo, hi float32) *Tensor {
+	for i := range t.data {
+		t.data[i] = max(lo, min(hi, t.data[i]))
+	}
+	return t
 }
 
 func NormalInit(t *Tensor, mean, std float32) {

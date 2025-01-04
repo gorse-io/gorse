@@ -197,6 +197,19 @@ func MeanSquareError(x, y *Tensor) *Tensor {
 	return Mean(Square(Sub(x, y)))
 }
 
+func SoftmaxCrossEntropy(x, y *Tensor) *Tensor {
+	if len(x.shape) != 2 {
+		panic("the shape of the first tensor must be 2-D")
+	}
+	if len(y.shape) != 1 {
+		panic("the shape of the second tensor must be 1-D")
+	}
+	if x.shape[0] != y.shape[0] {
+		panic("the size of the first tensor must be equal to the size of the second tensor")
+	}
+	return apply(&softmaxCrossEntropy{}, x, y)
+}
+
 // BCEWithLogits is equivalent to:
 //
 //	(1 + target) * math32.Log(1+math32.Exp(-prediction)) / 2 + (1 - target) * math32.Log(1+math32.Exp(prediction)) / 2

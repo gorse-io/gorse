@@ -743,6 +743,50 @@ func (s *softmax) backward(dy *Tensor) []*Tensor {
 	return []*Tensor{gx}
 }
 
+type softmaxCrossEntropy struct {
+	base
+}
+
+func (c *softmaxCrossEntropy) String() string {
+	return "SoftmaxCrossEntropy"
+}
+
+func (c *softmaxCrossEntropy) forward(inputs ...*Tensor) *Tensor {
+	x, t := inputs[0], inputs[1]
+	m := x.max(1, true)
+	s := x.clone().sub(m)    // x - m
+	s = s.exp()              // exp(x - m)
+	s = s.sum(1, true)       // sum(exp(x - m))
+	s.log()                  // log(sum(exp(x - m)))
+	m.add(s)                 // m + log(sum(exp(x - m)))
+	logP := x.clone().sub(m) // x - (m + log(sum(exp(x - m))))
+	var crossEntropy float32
+	for i := 0; i < len(t.data); i++ {
+		crossEntropy -= logP.Get(i, int(t.data[i]))
+	}
+	crossEntropy /= float32(len(t.data))
+	return NewScalar(crossEntropy)
+}
+
+func (c *softmaxCrossEntropy) backward(dy *Tensor) []*Tensor {
+	x, t := c.inputs[0], c.inputs[1]
+	// gy *= 1/N
+	gy := dy.clone().mul(NewScalar(1 / float32(len(t.data))))
+	// y = softmax(x)
+	y := x.clone()
+	y.sub(x.max(1, true))
+	y.exp()
+	y.div(y.sum(1, true))
+	// convert to one-hot
+	oneHot := Zeros(x.shape...)
+	for i := 0; i < len(t.data); i++ {
+		oneHot.data[i*x.shape[1]+int(t.data[i])] = 1
+	}
+	// y = (y - t_onehot) * gy
+	y = y.sub(oneHot).mul(gy)
+	return []*Tensor{y, Zeros(t.shape...)}
+}
+
 type opHeap []op
 
 func (h opHeap) Len() int {

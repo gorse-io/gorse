@@ -546,6 +546,15 @@ func TestReshape(t *testing.T) {
 	assert.Equal(t, []float32{1, 1, 1, 1, 1, 1}, x.grad.data)
 }
 
+func TestSoftmaxCrossEntropy(t *testing.T) {
+	// (2,3) -> (2,3)
+	x := NewVariable([]float32{0.3, 2.9, 4.0, 0.2, 1.0, 3.0}, 3, 2)
+	y := NewVariable([]float32{1, 0, 1}, 3)
+	z := SoftmaxCrossEntropy(x, y)
+	assert.Empty(t, z.shape)
+	assert.InDelta(t, float32(0.07356563982184072), z.data[0], 1e-4)
+}
+
 func TestReuseLeaf(t *testing.T) {
 	// x + x
 	x := NewVariable([]float32{1, 2, 3, 4, 5, 6}, 2, 3)
