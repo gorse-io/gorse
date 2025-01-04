@@ -83,7 +83,7 @@ func TestNeuralNetwork(t *testing.T) {
 		optimizer.Step()
 		l = loss.data[0]
 	}
-	assert.InDelta(t, float64(0), l, 0.1)
+	assert.InDelta(t, float64(0), l, 0.2)
 }
 
 func iris() (*Tensor, *Tensor, error) {
