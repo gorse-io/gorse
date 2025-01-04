@@ -26,6 +26,7 @@ import (
 
 	"github.com/chewxy/math32"
 	"github.com/samber/lo"
+	"github.com/schollz/progressbar/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/common/dataset"
 	"github.com/zhenghaoz/gorse/common/util"
@@ -209,34 +210,47 @@ func openMNISTFile(path string) (*Tensor, *Tensor, error) {
 func TestMNIST(t *testing.T) {
 	train, test, err := mnist()
 	assert.NoError(t, err)
-	test = train
 
 	model := NewSequential(
 		NewLinear(784, 1000),
 		NewReLU(),
 		NewLinear(1000, 10),
 	)
-	optimizer := NewAdam(model.Parameters(), 0.01)
-	var l float32
-	for i := 0; i < 100; i++ {
-		yPred := model.Forward(train.A)
-		loss := SoftmaxCrossEntropy(yPred, train.B)
+	optimizer := NewAdam(model.Parameters(), 0.001)
 
-		optimizer.ZeroGrad()
-		loss.Backward()
+	var (
+		sumLoss   float32
+		batchSize = 1000
+	)
+	for i := 0; i < 3; i++ {
+		sumLoss = 0
+		bar := progressbar.Default(int64(train.A.shape[0]), fmt.Sprintf("Epoch %v/%v", i+1, 3))
+		for j := 0; j < train.A.shape[0]; j += batchSize {
+			xBatch := train.A.Slice(j, j+batchSize)
+			yBatch := train.B.Slice(j, j+batchSize)
 
-		optimizer.Step()
-		l = loss.data[0]
-		fmt.Println(l)
+			yPred := model.Forward(xBatch)
+			loss := SoftmaxCrossEntropy(yPred, yBatch)
 
-		testPred := model.Forward(test.A)
-		var precision float32
-		for i, gt := range test.B.data {
-			if testPred.Slice(i, i+1).argmax()[1] == int(gt) {
-				precision += 1
-			}
+			optimizer.ZeroGrad()
+			loss.Backward()
+
+			optimizer.Step()
+			sumLoss += loss.data[0]
+			bar.Add(batchSize)
 		}
-		precision /= float32(len(test.B.data))
-		fmt.Println(precision)
+		sumLoss /= float32(train.A.shape[0] / batchSize)
+		bar.Finish()
 	}
+	assert.Less(t, sumLoss, float32(0.4))
+
+	testPred := model.Forward(test.A)
+	var precision float32
+	for i, gt := range test.B.data {
+		if testPred.Slice(i, i+1).argmax()[1] == int(gt) {
+			precision += 1
+		}
+	}
+	precision /= float32(len(test.B.data))
+	assert.Greater(t, float64(precision), 0.92)
 }

@@ -710,8 +710,8 @@ func (r *relu) forward(inputs ...*Tensor) *Tensor {
 }
 
 func (r *relu) backward(dy *Tensor) []*Tensor {
-	dx := dy.clone()
-	dx.maximum(NewScalar(0))
+	x := r.inputs[0]
+	dx := x.clone().gt(NewScalar(0)).mul(dy)
 	return []*Tensor{dx}
 }
 

@@ -606,6 +606,27 @@ func (t *Tensor) maximum(other *Tensor) {
 	}
 }
 
+func (t *Tensor) gt(other *Tensor) *Tensor {
+	if other.IsScalar() {
+		for i := range t.data {
+			if t.data[i] > other.data[0] {
+				t.data[i] = 1
+			} else {
+				t.data[i] = 0
+			}
+		}
+	} else {
+		for i := range t.data {
+			if t.data[i] > other.data[i] {
+				t.data[i] = 1
+			} else {
+				t.data[i] = 0
+			}
+		}
+	}
+	return t
+}
+
 func (t *Tensor) transpose() *Tensor {
 	if len(t.shape) < 2 {
 		panic("transpose requires at least 2-D tensor")
