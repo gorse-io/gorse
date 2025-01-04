@@ -18,6 +18,7 @@ import (
 	"bufio"
 	"encoding/csv"
 	"fmt"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -253,4 +254,66 @@ func TestMNIST(t *testing.T) {
 	}
 	precision /= float32(len(test.B.data))
 	assert.Greater(t, float64(precision), 0.92)
+}
+
+func spiral() (*Tensor, *Tensor, error) {
+	numData, numClass, inputDim := 100, 3, 2
+	dataSize := numClass * numData
+	x := Zeros(dataSize, inputDim)
+	t := Zeros(dataSize)
+
+	for j := 0; j < numClass; j++ {
+		for i := 0; i < numData; i++ {
+			rate := float32(i) / float32(numData)
+			radius := 1.0 * rate
+			theta := float32(j)*4.0 + 4.0*rate + float32(rand.NormFloat64())*0.2
+			ix := numData*j + i
+			x.data[ix*inputDim] = radius * math32.Sin(theta)
+			x.data[ix*inputDim+1] = radius * math32.Cos(theta)
+			t.data[ix] = float32(j)
+		}
+	}
+
+	indices := rand.Perm(dataSize)
+	x = x.SliceIndices(indices...)
+	t = t.SliceIndices(indices...)
+	return x, t, nil
+}
+
+func TestSaveAndLoad(t *testing.T) {
+	x, y, err := spiral()
+	assert.NoError(t, err)
+
+	model := NewSequential(
+		NewLinear(2, 10),
+		NewSigmoid(),
+		NewLinear(10, 3),
+	)
+	optimizer := NewAdam(model.Parameters(), 0.01)
+
+	var expected float32
+	for i := 0; i < 300; i++ {
+		yPred := model.Forward(x)
+		loss := SoftmaxCrossEntropy(yPred, y)
+
+		optimizer.ZeroGrad()
+		loss.Backward()
+
+		optimizer.Step()
+		expected = loss.data[0]
+	}
+
+	modelPath := filepath.Join(os.TempDir(), "spiral.nn")
+	err = Save(model, modelPath)
+	assert.NoError(t, err)
+	modelLoaded := NewSequential(
+		NewLinear(2, 10),
+		NewSigmoid(),
+		NewLinear(10, 3),
+	)
+	err = Load(modelLoaded, modelPath)
+	assert.NoError(t, err)
+	yPred := modelLoaded.Forward(x)
+	loss := SoftmaxCrossEntropy(yPred, y)
+	assert.InDelta(t, float64(expected), float64(loss.data[0]), 0.01)
 }

@@ -33,6 +33,13 @@ func TestTensor_Slice(t *testing.T) {
 	}
 }
 
+func TestTensor_SliceIndices(t *testing.T) {
+	x := NewTensor([]float32{1, 2, 3, 4, 5, 6}, 3, 2)
+	y := x.SliceIndices(2, 0)
+	assert.Equal(t, []int{2, 2}, y.Shape())
+	assert.Equal(t, []float32{5, 6, 1, 2}, y.Data())
+}
+
 func TestTensor_Max(t *testing.T) {
 	x := NewVariable([]float32{3, 2, 5, 6, 0, 0}, 6)
 	y := x.max(0, false)
