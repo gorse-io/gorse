@@ -715,6 +715,34 @@ func (r *relu) backward(dy *Tensor) []*Tensor {
 	return []*Tensor{dx}
 }
 
+type softmax struct {
+	base
+	axis int
+}
+
+func (s *softmax) String() string {
+	return "Softmax"
+}
+
+func (s *softmax) forward(inputs ...*Tensor) *Tensor {
+	x := inputs[0]
+	y := x.clone()
+	y.sub(x.max(s.axis, true))
+	y.exp()
+	y.div(y.sum(s.axis, true))
+	return y
+}
+
+func (s *softmax) backward(dy *Tensor) []*Tensor {
+	y := s.output
+	gx := y.clone()
+	gx.mul(dy)
+	sumdx := gx.sum(s.axis, true)
+	y.mul(sumdx)
+	gx.sub(y)
+	return []*Tensor{gx}
+}
+
 type opHeap []op
 
 func (h opHeap) Len() int {

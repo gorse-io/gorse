@@ -20,6 +20,7 @@ import (
 	"github.com/chewxy/math32"
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/google/uuid"
+	"github.com/samber/lo"
 	"github.com/zhenghaoz/gorse/base/floats"
 	"golang.org/x/exp/slices"
 	"math/rand"
@@ -566,6 +567,84 @@ func (t *Tensor) transpose() *Tensor {
 			for j := 0; j < n; j++ {
 				data[b*m*n+j*m+i] = t.data[b*m*n+i*n+j]
 			}
+		}
+	}
+	return &Tensor{
+		data:  data,
+		shape: shape,
+	}
+}
+
+func (t *Tensor) max(axis int, keepDim bool) *Tensor {
+	if axis < 0 || axis >= len(t.shape) {
+		panic("axis out of range")
+	}
+	if len(t.shape) == 1 {
+		return NewScalar(lo.Max(t.data))
+	}
+	shape := make([]int, 0, len(t.shape)-1)
+	a, b, c := 1, 1, 1
+	for i := 0; i < len(t.shape); i++ {
+		if i < axis {
+			shape = append(shape, t.shape[i])
+			a *= t.shape[i]
+		} else if i == axis {
+			if keepDim {
+				shape = append(shape, 1)
+			}
+			b = t.shape[i]
+		} else {
+			shape = append(shape, t.shape[i])
+			c *= t.shape[i]
+		}
+	}
+	data := make([]float32, a*c)
+	for i := 0; i < a; i++ {
+		for j := 0; j < c; j++ {
+			maxValue := t.data[i*b*c+j]
+			for k := 1; k < b; k++ {
+				maxValue = max(maxValue, t.data[i*b*c+j+k*c])
+			}
+			data[i*c+j] = maxValue
+		}
+	}
+	return &Tensor{
+		data:  data,
+		shape: shape,
+	}
+}
+
+func (t *Tensor) sum(axis int, keepDim bool) *Tensor {
+	if axis < 0 || axis >= len(t.shape) {
+		panic("axis out of range")
+	}
+	if len(t.shape) == 1 {
+		return NewScalar(lo.Sum(t.data))
+	}
+	shape := make([]int, 0, len(t.shape)-1)
+	a, b, c := 1, 1, 1
+	for i := 0; i < len(t.shape); i++ {
+		if i < axis {
+			shape = append(shape, t.shape[i])
+			a *= t.shape[i]
+		} else if i == axis {
+			if keepDim {
+				shape = append(shape, 1)
+			}
+			b = t.shape[i]
+		} else {
+			shape = append(shape, t.shape[i])
+			c *= t.shape[i]
+		}
+	}
+	data := make([]float32, a*c)
+	for i := 0; i < a; i++ {
+		for j := 0; j < c; j++ {
+			sumValue := t.data[i*b*c+j]
+			for k := 1; k < b; k++ {
+				sumValue += t.data[i*b*c+j+k*c]
+			}
+			data[i*c+j] = sumValue
 		}
 	}
 	return &Tensor{

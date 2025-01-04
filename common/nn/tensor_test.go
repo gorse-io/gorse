@@ -33,6 +33,42 @@ func TestTensor_Slice(t *testing.T) {
 	}
 }
 
+func TestTensor_Max(t *testing.T) {
+	x := NewVariable([]float32{3, 2, 5, 6, 0, 0}, 6)
+	y := x.max(0, false)
+	assert.Len(t, y.shape, 0)
+	assert.Equal(t, []float32{6}, y.data)
+
+	assert.Panics(t, func() { x.max(-1, false) })
+	assert.Panics(t, func() { x.max(2, false) })
+
+	x = NewVariable([]float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}, 3, 2, 2)
+	y = x.max(1, false)
+	assert.Equal(t, []int{3, 2}, y.shape)
+	assert.Equal(t, []float32{3, 4, 7, 8, 11, 12}, y.data)
+	y = x.max(1, true)
+	assert.Equal(t, []int{3, 1, 2}, y.shape)
+	assert.Equal(t, []float32{3, 4, 7, 8, 11, 12}, y.data)
+}
+
+func TestTensor_Sum(t *testing.T) {
+	x := NewVariable([]float32{1, 2, 3, 4, 5, 6}, 6)
+	y := x.sum(0, false)
+	assert.Len(t, y.shape, 0)
+	assert.Equal(t, []float32{21}, y.data)
+
+	assert.Panics(t, func() { x.sum(-1, false) })
+	assert.Panics(t, func() { x.sum(2, false) })
+
+	x = NewVariable([]float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}, 3, 2, 2)
+	y = x.sum(1, false)
+	assert.Equal(t, []int{3, 2}, y.shape)
+	assert.Equal(t, []float32{4, 6, 12, 14, 20, 22}, y.data)
+	y = x.sum(1, true)
+	assert.Equal(t, []int{3, 1, 2}, y.shape)
+	assert.Equal(t, []float32{4, 6, 12, 14, 20, 22}, y.data)
+}
+
 func (t *Tensor) matMulLegacy(other *Tensor, transpose1, transpose2 bool) *Tensor {
 	if !transpose1 && !transpose2 {
 		if len(t.shape) != 2 || len(other.shape) != 2 {

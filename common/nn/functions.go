@@ -189,6 +189,10 @@ func ReLu(x *Tensor) *Tensor {
 	return apply(&relu{}, x)
 }
 
+func Softmax(x *Tensor, axis int) *Tensor {
+	return apply(&softmax{axis: axis}, x)
+}
+
 func MeanSquareError(x, y *Tensor) *Tensor {
 	return Mean(Square(Sub(x, y)))
 }

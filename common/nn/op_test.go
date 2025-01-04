@@ -511,6 +511,19 @@ func TestReLu(t *testing.T) {
 	allClose(t, x.grad, dx)
 }
 
+func TestSoftmax(t *testing.T) {
+	// (1,3) -> (1,3)
+	x := NewVariable([]float32{3.0, 1.0, 0.2}, 1, 3)
+	y := Softmax(x, 1)
+	assert.Equal(t, []int{1, 3}, y.shape)
+	assert.InDeltaSlice(t, []float32{0.8360188027814407, 0.11314284146556013, 0.05083835575299916}, y.data, 1e-6)
+
+	// Test gradient
+	y.Backward()
+	dx := numericalDiff(func(x *Tensor) *Tensor { return Softmax(x, 1) }, x)
+	allClose(t, x.grad, dx)
+}
+
 func TestFlatten(t *testing.T) {
 	// (2,3) -> (6)
 	x := NewVariable([]float32{1, 2, 3, 4, 5, 6}, 2, 3)

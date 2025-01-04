@@ -1,13 +1,16 @@
 package util
 
-import "strconv"
+import (
+	"golang.org/x/exp/constraints"
+	"strconv"
+)
 
-func ParseFloat32(s string) (float32, error) {
+func ParseFloat[T constraints.Float](s string) (T, error) {
 	v, err := strconv.ParseFloat(s, 32)
-	return float32(v), err
+	return T(v), err
 }
 
-func ParseUInt8(s string) (uint8, error) {
+func ParseUInt[T constraints.Unsigned](s string) (T, error) {
 	v, err := strconv.ParseUint(s, 10, 8)
-	return uint8(v), err
+	return T(v), err
 }
