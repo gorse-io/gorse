@@ -91,7 +91,7 @@ func (m *MNIST) openFile(path string) ([][]float32, []uint8, error) {
 		line := scanner.Text()
 		splits := strings.Split(line, " ")
 		// Parse label
-		label, err := util.ParseUInt8(splits[0])
+		label, err := util.ParseUInt[uint8](splits[0])
 		if err != nil {
 			return nil, nil, err
 		}
@@ -104,7 +104,7 @@ func (m *MNIST) openFile(path string) ([][]float32, []uint8, error) {
 			if err != nil {
 				return nil, nil, err
 			}
-			value, err := util.ParseFloat32(kv[1])
+			value, err := util.ParseFloat[float32](kv[1])
 			if err != nil {
 				return nil, nil, err
 			}
