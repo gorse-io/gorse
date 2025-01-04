@@ -68,8 +68,8 @@ func TestNeuralNetwork(t *testing.T) {
 		NewSigmoid(),
 		NewLinear(10, 1),
 	)
-	NormalInit(model.(*Sequential).layers[0].(*linearLayer).w, 0, 0.01)
-	NormalInit(model.(*Sequential).layers[2].(*linearLayer).w, 0, 0.01)
+	NormalInit(model.(*Sequential).Layers[0].(*LinearLayer).W, 0, 0.01)
+	NormalInit(model.(*Sequential).Layers[2].(*LinearLayer).W, 0, 0.01)
 	optimizer := NewSGD(model.Parameters(), 0.2)
 
 	var l float32

@@ -23,24 +23,24 @@ type Layer interface {
 
 type Model Layer
 
-type linearLayer struct {
-	w *Tensor
-	b *Tensor
+type LinearLayer struct {
+	W *Tensor
+	B *Tensor
 }
 
 func NewLinear(in, out int) Layer {
-	return &linearLayer{
-		w: Normal(0, 1.0/math32.Sqrt(float32(in)), in, out).RequireGrad(),
-		b: Zeros(out).RequireGrad(),
+	return &LinearLayer{
+		W: Normal(0, 1.0/math32.Sqrt(float32(in)), in, out).RequireGrad(),
+		B: Zeros(out).RequireGrad(),
 	}
 }
 
-func (l *linearLayer) Forward(x *Tensor) *Tensor {
-	return Add(MatMul(x, l.w), l.b)
+func (l *LinearLayer) Forward(x *Tensor) *Tensor {
+	return Add(MatMul(x, l.W), l.B)
 }
 
-func (l *linearLayer) Parameters() []*Tensor {
-	return []*Tensor{l.w, l.b}
+func (l *LinearLayer) Parameters() []*Tensor {
+	return []*Tensor{l.W, l.B}
 }
 
 type flattenLayer struct{}
@@ -57,23 +57,23 @@ func (f *flattenLayer) Forward(x *Tensor) *Tensor {
 	return Flatten(x)
 }
 
-type embeddingLayer struct {
-	w *Tensor
+type EmbeddingLayer struct {
+	W *Tensor
 }
 
 func NewEmbedding(n int, shape ...int) Layer {
 	wShape := append([]int{n}, shape...)
-	return &embeddingLayer{
-		w: Rand(wShape...),
+	return &EmbeddingLayer{
+		W: Rand(wShape...),
 	}
 }
 
-func (e *embeddingLayer) Parameters() []*Tensor {
-	return []*Tensor{e.w}
+func (e *EmbeddingLayer) Parameters() []*Tensor {
+	return []*Tensor{e.W}
 }
 
-func (e *embeddingLayer) Forward(x *Tensor) *Tensor {
-	return Embedding(e.w, x)
+func (e *EmbeddingLayer) Forward(x *Tensor) *Tensor {
+	return Embedding(e.W, x)
 }
 
 type sigmoidLayer struct{}
@@ -105,23 +105,23 @@ func (r *reluLayer) Forward(x *Tensor) *Tensor {
 }
 
 type Sequential struct {
-	layers []Layer
+	Layers []Layer
 }
 
 func NewSequential(layers ...Layer) Model {
-	return &Sequential{layers: layers}
+	return &Sequential{Layers: layers}
 }
 
 func (s *Sequential) Parameters() []*Tensor {
 	var params []*Tensor
-	for _, l := range s.layers {
+	for _, l := range s.Layers {
 		params = append(params, l.Parameters()...)
 	}
 	return params
 }
 
 func (s *Sequential) Forward(x *Tensor) *Tensor {
-	for _, l := range s.layers {
+	for _, l := range s.Layers {
 		x = l.Forward(x)
 	}
 	return x
