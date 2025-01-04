@@ -189,8 +189,25 @@ func ReLu(x *Tensor) *Tensor {
 	return apply(&relu{}, x)
 }
 
-func MSE(x, y *Tensor) *Tensor {
+func Softmax(x *Tensor, axis int) *Tensor {
+	return apply(&softmax{axis: axis}, x)
+}
+
+func MeanSquareError(x, y *Tensor) *Tensor {
 	return Mean(Square(Sub(x, y)))
+}
+
+func SoftmaxCrossEntropy(x, y *Tensor) *Tensor {
+	if len(x.shape) != 2 {
+		panic("the shape of the first tensor must be 2-D")
+	}
+	if len(y.shape) != 1 {
+		panic("the shape of the second tensor must be 1-D")
+	}
+	if x.shape[0] != y.shape[0] {
+		panic("the size of the first tensor must be equal to the size of the second tensor")
+	}
+	return apply(&softmaxCrossEntropy{}, x, y)
 }
 
 // BCEWithLogits is equivalent to:

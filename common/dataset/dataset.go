@@ -67,7 +67,7 @@ func LoadIris() ([][]float32, []int, error) {
 	for i, row := range rows {
 		data[i] = make([]float32, 4)
 		for j, cell := range row[:4] {
-			data[i][j], err = util.ParseFloat32(cell)
+			data[i][j], err = util.ParseFloat[float32](cell)
 			if err != nil {
 				return nil, nil, err
 			}

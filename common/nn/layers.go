@@ -28,8 +28,8 @@ type linearLayer struct {
 
 func NewLinear(in, out int) Layer {
 	return &linearLayer{
-		w: RandN(in, out).RequireGrad(),
-		b: RandN(out).RequireGrad(),
+		w: Rand(in, out).RequireGrad(),
+		b: Zeros(out).RequireGrad(),
 	}
 }
 
@@ -62,7 +62,7 @@ type embeddingLayer struct {
 func NewEmbedding(n int, shape ...int) Layer {
 	wShape := append([]int{n}, shape...)
 	return &embeddingLayer{
-		w: RandN(wShape...),
+		w: Rand(wShape...),
 	}
 }
 
@@ -72,6 +72,20 @@ func (e *embeddingLayer) Parameters() []*Tensor {
 
 func (e *embeddingLayer) Forward(x *Tensor) *Tensor {
 	return Embedding(e.w, x)
+}
+
+type sigmoidLayer struct{}
+
+func NewSigmoid() Layer {
+	return &sigmoidLayer{}
+}
+
+func (s *sigmoidLayer) Parameters() []*Tensor {
+	return nil
+}
+
+func (s *sigmoidLayer) Forward(x *Tensor) *Tensor {
+	return Sigmoid(x)
 }
 
 type reluLayer struct{}
