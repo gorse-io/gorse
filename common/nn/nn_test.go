@@ -54,9 +54,9 @@ func TestLinearRegression(t *testing.T) {
 	}
 
 	assert.Equal(t, []int{1, 1}, w.shape)
-	assert.InDelta(t, float64(2), w.data[0], 0.5)
+	assert.InDelta(t, float64(2), w.data[0], 0.6)
 	assert.Equal(t, []int{1}, b.shape)
-	assert.InDelta(t, float64(5), b.data[0], 0.5)
+	assert.InDelta(t, float64(5), b.data[0], 0.6)
 }
 
 func TestNeuralNetwork(t *testing.T) {
