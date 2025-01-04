@@ -28,7 +28,7 @@ type linearLayer struct {
 
 func NewLinear(in, out int) Layer {
 	return &linearLayer{
-		w: Rand(in, out).RequireGrad(),
+		w: Normal(0, 0.1, in, out).RequireGrad(),
 		b: Zeros(out).RequireGrad(),
 	}
 }
