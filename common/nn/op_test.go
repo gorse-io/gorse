@@ -183,9 +183,6 @@ func TestDiv(t *testing.T) {
 	assert.InDeltaSlice(t, []float32{0.5, 2.0 / 3.0, 0.75, 4.0 / 5.0, 5.0 / 6.0, 6.0 / 7.0}, z.data, 1e-6)
 
 	// Test gradient
-	x = Rand(2, 3).RequireGrad()
-	y = Rand(2, 3).RequireGrad()
-	z = Div(x, y)
 	z.Backward()
 	dx := numericalDiff(func(x *Tensor) *Tensor { return Div(x, y) }, x)
 	allClose(t, x.grad, dx)

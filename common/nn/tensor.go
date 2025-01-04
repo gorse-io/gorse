@@ -17,15 +17,16 @@ package nn
 import (
 	"container/heap"
 	"fmt"
+	"math"
+	"math/rand"
+	"strings"
+
 	"github.com/chewxy/math32"
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
 	"github.com/zhenghaoz/gorse/base/floats"
 	"golang.org/x/exp/slices"
-	"math"
-	"math/rand"
-	"strings"
 )
 
 type Tensor struct {
@@ -87,6 +88,21 @@ func Rand(shape ...int) *Tensor {
 	data := make([]float32, n)
 	for i := range data {
 		data[i] = rand.Float32()
+	}
+	return &Tensor{
+		data:  data,
+		shape: shape,
+	}
+}
+
+func Normal(mean, std float32, shape ...int) *Tensor {
+	n := 1
+	for _, s := range shape {
+		n *= s
+	}
+	data := make([]float32, n)
+	for i := range data {
+		data[i] = float32(rand.NormFloat64())*std + mean
 	}
 	return &Tensor{
 		data:  data,
@@ -590,6 +606,27 @@ func (t *Tensor) maximum(other *Tensor) {
 	}
 }
 
+func (t *Tensor) gt(other *Tensor) *Tensor {
+	if other.IsScalar() {
+		for i := range t.data {
+			if t.data[i] > other.data[0] {
+				t.data[i] = 1
+			} else {
+				t.data[i] = 0
+			}
+		}
+	} else {
+		for i := range t.data {
+			if t.data[i] > other.data[i] {
+				t.data[i] = 1
+			} else {
+				t.data[i] = 0
+			}
+		}
+	}
+	return t
+}
+
 func (t *Tensor) transpose() *Tensor {
 	if len(t.shape) < 2 {
 		panic("transpose requires at least 2-D tensor")
@@ -694,13 +731,24 @@ func (t *Tensor) sum(axis int, keepDim bool) *Tensor {
 	}
 }
 
-func (t *Tensor) hasNaN() bool {
-	for i := range t.data {
-		if math32.IsNaN(t.data[i]) {
-			return true
+func (t *Tensor) argmax() []int {
+	if len(t.data) == 0 {
+		return nil
+	}
+	maxValue := t.data[0]
+	maxIndex := 0
+	for i := 1; i < len(t.data); i++ {
+		if t.data[i] > maxValue {
+			maxValue = t.data[i]
+			maxIndex = i
 		}
 	}
-	return false
+	indices := make([]int, len(t.shape))
+	for i := len(t.shape) - 1; i >= 0; i-- {
+		indices[i] = maxIndex % t.shape[i]
+		maxIndex /= t.shape[i]
+	}
+	return indices
 }
 
 func NormalInit(t *Tensor, mean, std float32) {

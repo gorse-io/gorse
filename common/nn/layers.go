@@ -14,6 +14,8 @@
 
 package nn
 
+import "github.com/chewxy/math32"
+
 type Layer interface {
 	Parameters() []*Tensor
 	Forward(x *Tensor) *Tensor
@@ -28,7 +30,7 @@ type linearLayer struct {
 
 func NewLinear(in, out int) Layer {
 	return &linearLayer{
-		w: Rand(in, out).RequireGrad(),
+		w: Normal(0, 1.0/math32.Sqrt(float32(in)), in, out).RequireGrad(),
 		b: Zeros(out).RequireGrad(),
 	}
 }
