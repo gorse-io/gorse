@@ -275,8 +275,24 @@ func (t *Tensor) add(other *Tensor) *Tensor {
 	return t
 }
 
+// sub returns the element-wise addition of two tensors. The shape
+// of the second tensor must be a suffix sequence of the shape of
+// the first tensor: (...,m,n) - (m,n) = (...,m,n).
 func (t *Tensor) sub(other *Tensor) *Tensor {
-	// We assume that the shape of the second tensor is a suffix sequence of the shape of the first tensor.
+	wSize := 1
+	for i := range other.shape {
+		wSize *= other.shape[i]
+	}
+	for i := range t.data {
+		t.data[i] -= other.data[i%wSize]
+	}
+	return t
+}
+
+// bSub returns the element-wise addition of two tensors. The shape
+// of the second tensor must be a prefix sequence of the shape of
+// the first tensor: (m,n,...) - (m,n) = (m,n,...).
+func (t *Tensor) bSub(other *Tensor) *Tensor {
 	bSize := 1
 	for i := range t.shape {
 		bSize *= t.shape[i]
@@ -301,6 +317,9 @@ func (t *Tensor) mul(other *Tensor) *Tensor {
 	return t
 }
 
+// div returns the element-wise division of two tensors. The shape
+// of the second tensor must be a suffix sequence of the shape of
+// the first tensor: (...,m,n) / (m,n) = (...,m,n).
 func (t *Tensor) div(other *Tensor) *Tensor {
 	wSize := 1
 	for i := range other.shape {
@@ -308,6 +327,23 @@ func (t *Tensor) div(other *Tensor) *Tensor {
 	}
 	for i := range t.data {
 		t.data[i] /= other.data[i%wSize]
+	}
+	return t
+}
+
+// bDiv returns the element-wise division of two tensors. The shape
+// of the second tensor must be a prefix sequence of the shape of
+// the first tensor: (m,n,...) / (m,n) = (m,n,...).
+func (t *Tensor) bDiv(other *Tensor) *Tensor {
+	bSize := 1
+	for i := range t.shape {
+		bSize *= t.shape[i]
+	}
+	for i := range other.shape {
+		bSize /= other.shape[i]
+	}
+	for i := range t.data {
+		t.data[i] /= other.data[i/bSize]
 	}
 	return t
 }
@@ -665,13 +701,6 @@ func (t *Tensor) hasNaN() bool {
 		}
 	}
 	return false
-}
-
-func (t *Tensor) clip(lo, hi float32) *Tensor {
-	for i := range t.data {
-		t.data[i] = max(lo, min(hi, t.data[i]))
-	}
-	return t
 }
 
 func NormalInit(t *Tensor, mean, std float32) {

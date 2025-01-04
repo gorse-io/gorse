@@ -16,7 +16,6 @@ package nn
 
 import (
 	"encoding/csv"
-	"fmt"
 	"github.com/chewxy/math32"
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/common/dataset"
@@ -125,19 +124,18 @@ func TestIris(t *testing.T) {
 		NewLinear(100, 100),
 		NewLinear(100, 3),
 	)
-	optimizer := NewSGD(model.Parameters(), 0.0001)
+	optimizer := NewAdam(model.Parameters(), 0.01)
 
 	var l float32
-	for i := 0; i < 100; i++ {
+	for i := 0; i < 1000; i++ {
 		yPred := model.Forward(x)
 		loss := SoftmaxCrossEntropy(yPred, y)
-		l = loss.data[0]
-		fmt.Println(l)
 
 		optimizer.ZeroGrad()
 		loss.Backward()
 
 		optimizer.Step()
+		l = loss.data[0]
 	}
-	fmt.Println(l)
+	assert.InDelta(t, float32(0), l, 0.1)
 }

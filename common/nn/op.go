@@ -754,12 +754,12 @@ func (c *softmaxCrossEntropy) String() string {
 func (c *softmaxCrossEntropy) forward(inputs ...*Tensor) *Tensor {
 	x, t := inputs[0], inputs[1]
 	m := x.max(1, true)
-	s := x.clone().sub(m)    // x - m
-	s = s.exp()              // exp(x - m)
-	s = s.sum(1, true)       // sum(exp(x - m))
-	s.log()                  // log(sum(exp(x - m)))
-	m.add(s)                 // m + log(sum(exp(x - m)))
-	logP := x.clone().sub(m) // x - (m + log(sum(exp(x - m))))
+	s := x.clone().bSub(m)    // x - m
+	s = s.exp()               // exp(x - m)
+	s = s.sum(1, true)        // sum(exp(x - m))
+	s.log()                   // log(sum(exp(x - m)))
+	m.add(s)                  // m + log(sum(exp(x - m)))
+	logP := x.clone().bSub(m) // x - (m + log(sum(exp(x - m))))
 	var crossEntropy float32
 	for i := 0; i < len(t.data); i++ {
 		crossEntropy -= logP.Get(i, int(t.data[i]))
@@ -774,9 +774,9 @@ func (c *softmaxCrossEntropy) backward(dy *Tensor) []*Tensor {
 	gy := dy.clone().mul(NewScalar(1 / float32(len(t.data))))
 	// y = softmax(x)
 	y := x.clone()
-	y.sub(x.max(1, true))
+	y.bSub(x.max(1, true))
 	y.exp()
-	y.div(y.sum(1, true))
+	y.bDiv(y.sum(1, true))
 	// convert to one-hot
 	oneHot := Zeros(x.shape...)
 	for i := 0; i < len(t.data); i++ {

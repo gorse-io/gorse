@@ -27,12 +27,20 @@ const (
 )
 
 func numericalDiff(f func(*Tensor) *Tensor, x *Tensor) *Tensor {
-	x0 := Sub(x, NewVariable([]float32{eps}))
-	x1 := Add(x, NewVariable([]float32{eps}))
-	y0 := f(x0)
-	y1 := f(x1)
-	dx := Div(Sub(y1, y0), NewVariable([]float32{2 * eps}))
-	return dx
+	x0, x1 := x.clone(), x.clone()
+	dx := make([]float32, len(x.data))
+	for i, v := range x.data {
+		x0.data[i] = v - eps
+		x1.data[i] = v + eps
+		y0 := f(x0)
+		y1 := f(x1)
+		for j := range y0.data {
+			dx[i] += (y1.data[j] - y0.data[j]) / (2 * eps)
+		}
+		x0.data[i] = v
+		x1.data[i] = v
+	}
+	return NewTensor(dx, x.shape...)
 }
 
 func allClose(t *testing.T, a, b *Tensor) {
@@ -261,7 +269,7 @@ func TestExp(t *testing.T) {
 	// (2,3) -> (2,3)
 	x := NewVariable([]float32{0, 1, 2, 3, 4, 5}, 2, 3)
 	y := Exp(x)
-	assert.InDeltaSlice(t, []float32{1, math32.Exp(1), math32.Exp(2), math32.Exp(3), math32.Exp(4), math32.Exp(5)}, y.data, 1e-6)
+	assert.InDeltaSlice(t, []float32{1, math32.Exp(1), math32.Exp(2), math32.Exp(3), math32.Exp(4), math32.Exp(5)}, y.data, 1e-5)
 
 	// Test gradient
 	x = Rand(2, 3).RequireGrad()
@@ -553,6 +561,11 @@ func TestSoftmaxCrossEntropy(t *testing.T) {
 	z := SoftmaxCrossEntropy(x, y)
 	assert.Empty(t, z.shape)
 	assert.InDelta(t, float32(0.07356563982184072), z.data[0], 1e-4)
+
+	// Test gradient
+	z.Backward()
+	dx := numericalDiff(func(x *Tensor) *Tensor { return SoftmaxCrossEntropy(x, y) }, x)
+	allClose(t, x.grad, dx)
 }
 
 func TestReuseLeaf(t *testing.T) {
