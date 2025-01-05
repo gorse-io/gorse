@@ -14,7 +14,16 @@
 
 package nn
 
-import "github.com/chewxy/math32"
+import (
+	"github.com/chewxy/math32"
+	"github.com/juju/errors"
+	"github.com/matttproud/golang_protobuf_extensions/pbutil"
+	"github.com/zhenghaoz/gorse/protocol"
+	"io"
+	"os"
+	"reflect"
+	"strconv"
+)
 
 type Layer interface {
 	Parameters() []*Tensor
@@ -23,24 +32,24 @@ type Layer interface {
 
 type Model Layer
 
-type linearLayer struct {
-	w *Tensor
-	b *Tensor
+type LinearLayer struct {
+	W *Tensor
+	B *Tensor
 }
 
 func NewLinear(in, out int) Layer {
-	return &linearLayer{
-		w: Normal(0, 1.0/math32.Sqrt(float32(in)), in, out).RequireGrad(),
-		b: Zeros(out).RequireGrad(),
+	return &LinearLayer{
+		W: Normal(0, 1.0/math32.Sqrt(float32(in)), in, out).RequireGrad(),
+		B: Zeros(out).RequireGrad(),
 	}
 }
 
-func (l *linearLayer) Forward(x *Tensor) *Tensor {
-	return Add(MatMul(x, l.w), l.b)
+func (l *LinearLayer) Forward(x *Tensor) *Tensor {
+	return Add(MatMul(x, l.W), l.B)
 }
 
-func (l *linearLayer) Parameters() []*Tensor {
-	return []*Tensor{l.w, l.b}
+func (l *LinearLayer) Parameters() []*Tensor {
+	return []*Tensor{l.W, l.B}
 }
 
 type flattenLayer struct{}
@@ -57,23 +66,23 @@ func (f *flattenLayer) Forward(x *Tensor) *Tensor {
 	return Flatten(x)
 }
 
-type embeddingLayer struct {
-	w *Tensor
+type EmbeddingLayer struct {
+	W *Tensor
 }
 
 func NewEmbedding(n int, shape ...int) Layer {
 	wShape := append([]int{n}, shape...)
-	return &embeddingLayer{
-		w: Rand(wShape...),
+	return &EmbeddingLayer{
+		W: Rand(wShape...),
 	}
 }
 
-func (e *embeddingLayer) Parameters() []*Tensor {
-	return []*Tensor{e.w}
+func (e *EmbeddingLayer) Parameters() []*Tensor {
+	return []*Tensor{e.W}
 }
 
-func (e *embeddingLayer) Forward(x *Tensor) *Tensor {
-	return Embedding(e.w, x)
+func (e *EmbeddingLayer) Forward(x *Tensor) *Tensor {
+	return Embedding(e.W, x)
 }
 
 type sigmoidLayer struct{}
@@ -105,24 +114,133 @@ func (r *reluLayer) Forward(x *Tensor) *Tensor {
 }
 
 type Sequential struct {
-	layers []Layer
+	Layers []Layer
 }
 
 func NewSequential(layers ...Layer) Model {
-	return &Sequential{layers: layers}
+	return &Sequential{Layers: layers}
 }
 
 func (s *Sequential) Parameters() []*Tensor {
 	var params []*Tensor
-	for _, l := range s.layers {
+	for _, l := range s.Layers {
 		params = append(params, l.Parameters()...)
 	}
 	return params
 }
 
 func (s *Sequential) Forward(x *Tensor) *Tensor {
-	for _, l := range s.layers {
+	for _, l := range s.Layers {
 		x = l.Forward(x)
 	}
 	return x
+}
+
+func Save[T Model](o T, path string) error {
+	// Open file
+	file, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	// Save function
+	var save func(o any, key []string) error
+	save = func(o any, key []string) error {
+		switch typed := o.(type) {
+		case *Tensor:
+			pb := typed.toPB()
+			pb.Key = key
+			_, err = pbutil.WriteDelimited(file, pb)
+			if err != nil {
+				return err
+			}
+		default:
+			tp := reflect.TypeOf(o)
+			if tp.Kind() == reflect.Ptr {
+				return save(reflect.ValueOf(o).Elem().Interface(), key)
+			} else if tp.Kind() == reflect.Struct {
+				for i := 0; i < tp.NumField(); i++ {
+					field := tp.Field(i)
+					newKey := make([]string, len(key))
+					copy(newKey, key)
+					newKey = append(newKey, field.Name)
+					if err = save(reflect.ValueOf(o).Field(i).Interface(), append(key, field.Name)); err != nil {
+						return err
+					}
+				}
+			} else if tp.Kind() == reflect.Slice {
+				for i := 0; i < reflect.ValueOf(o).Len(); i++ {
+					newKey := make([]string, len(key))
+					copy(newKey, key)
+					newKey = append(newKey, strconv.Itoa(i))
+					if err = save(reflect.ValueOf(o).Index(i).Interface(), newKey); err != nil {
+						return err
+					}
+				}
+			} else {
+				return errors.New("unexpected type")
+			}
+		}
+		return nil
+	}
+	return save(o, nil)
+}
+
+func Load[T Model](o T, path string) error {
+	// Open file
+	file, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+
+	// Place function
+	var place func(o any, key []string, pb *protocol.Tensor) error
+	place = func(o any, key []string, pb *protocol.Tensor) error {
+		switch typed := o.(type) {
+		case *Tensor:
+			typed.fromPB(pb)
+		default:
+			tp := reflect.TypeOf(o)
+			if tp.Kind() == reflect.Ptr {
+				return place(reflect.ValueOf(o).Elem().Interface(), key, pb)
+			} else if tp.Kind() == reflect.Struct {
+				field := reflect.ValueOf(o).FieldByName(key[0])
+				if field.IsValid() {
+					if err := place(field.Interface(), key[1:], pb); err != nil {
+						return err
+					}
+				}
+			} else if tp.Kind() == reflect.Slice {
+				index, err := strconv.Atoi(key[0])
+				if err != nil {
+					return err
+				}
+				elem := reflect.ValueOf(o).Index(index)
+				if elem.IsValid() {
+					if err := place(elem.Interface(), key[1:], pb); err != nil {
+						return err
+					}
+				}
+			} else {
+				return errors.New("unexpected type")
+			}
+		}
+		return nil
+	}
+
+	// Read data
+	for {
+		pb := new(protocol.Tensor)
+		if _, err = pbutil.ReadDelimited(file, pb); err != nil {
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			return err
+		}
+		if err = place(o, pb.Key, pb); err != nil {
+			return err
+		}
+	}
+	return nil
 }

@@ -36,6 +36,7 @@ import (
 	"github.com/zhenghaoz/gorse/base/progress"
 	"github.com/zhenghaoz/gorse/base/sizeof"
 	"github.com/zhenghaoz/gorse/base/task"
+	"github.com/zhenghaoz/gorse/common/util"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model"
 	"github.com/zhenghaoz/gorse/model/click"
@@ -267,7 +268,7 @@ func (m *Master) Serve() {
 			zap.String("ssl_key", m.Config.Master.SSLKey))
 		opts := []grpc.ServerOption{grpc.MaxSendMsgSize(math.MaxInt)}
 		if m.Config.Master.SSLMode {
-			c, err := protocol.NewServerCreds(&protocol.TLSConfig{
+			c, err := util.NewServerCreds(&util.TLSConfig{
 				SSLCA:   m.Config.Master.SSLCA,
 				SSLCert: m.Config.Master.SSLCert,
 				SSLKey:  m.Config.Master.SSLKey,
