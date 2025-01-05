@@ -87,6 +87,21 @@ func Rand(shape ...int) *Tensor {
 	}
 }
 
+func Uniform(low, high float32, shape ...int) *Tensor {
+	n := 1
+	for _, s := range shape {
+		n *= s
+	}
+	data := make([]float32, n)
+	for i := range data {
+		data[i] = rand.Float32()*(high-low) + low
+	}
+	return &Tensor{
+		data:  data,
+		shape: shape,
+	}
+}
+
 func Normal(mean, std float32, shape ...int) *Tensor {
 	n := 1
 	for _, s := range shape {

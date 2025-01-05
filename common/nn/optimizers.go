@@ -61,6 +61,7 @@ type Adam struct {
 	eps   float32
 	ms    map[*Tensor]*Tensor
 	vs    map[*Tensor]*Tensor
+	t     float32
 }
 
 func NewAdam(params []*Tensor, alpha float32) Optimizer {
@@ -76,6 +77,7 @@ func NewAdam(params []*Tensor, alpha float32) Optimizer {
 }
 
 func (a *Adam) Step() {
+	a.t++
 	for _, p := range a.params {
 		if _, ok := a.ms[p]; !ok {
 			a.ms[p] = Zeros(p.shape...)
@@ -86,12 +88,16 @@ func (a *Adam) Step() {
 		grad := p.grad.data
 
 		for i := range m.data {
-			// m += (1 - beta1) * (grad - m)
-			m.data[i] += (1 - a.beta1) * (grad[i] - m.data[i])
-			// v += (1 - beta2) * (grad * grad - v)
-			v.data[i] += (1 - a.beta2) * (grad[i]*grad[i] - v.data[i])
-			// param.data -= self.lr * m / (xp.sqrt(v) + eps)
-			p.data[i] -= a.alpha * m.data[i] / (math32.Sqrt(v.data[i]) + a.eps)
+			// m_t = beta1 * m + (1 - beta1) * grad
+			m.data[i] = a.beta1*m.data[i] + (1-a.beta1)*grad[i]
+			// v_t = beta2 * v + (1 - beta2) * grad^2
+			v.data[i] = a.beta2*v.data[i] + (1-a.beta2)*grad[i]*grad[i]
+			// \hat{m} = m / (1 - beta1^t)
+			hatM := m.data[i] / (1 - math32.Pow(a.beta1, a.t))
+			// \hat{v} = v / (1 - beta2^t)
+			hatV := v.data[i] / (1 - math32.Pow(a.beta2, a.t))
+			// p_t = p - alpha * \hat{m} / (\sqrt{\hat{v}} + eps)
+			p.data[i] -= a.alpha * hatM / (math32.Sqrt(hatV) + a.eps)
 		}
 	}
 }

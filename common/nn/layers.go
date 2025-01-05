@@ -29,8 +29,9 @@ type linearLayer struct {
 }
 
 func NewLinear(in, out int) Layer {
+	bound := 1.0 / math32.Sqrt(float32(in))
 	return &linearLayer{
-		w: Normal(0, 1.0/math32.Sqrt(float32(in)), in, out),
+		w: Uniform(-bound, bound, in, out),
 		b: Zeros(out),
 	}
 }
