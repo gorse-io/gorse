@@ -25,6 +25,7 @@ import (
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/samber/lo"
 	"github.com/zhenghaoz/gorse/base/floats"
+	"github.com/zhenghaoz/gorse/protocol"
 	"golang.org/x/exp/slices"
 )
 
@@ -184,6 +185,23 @@ func (t *Tensor) Slice(start, end int) *Tensor {
 	return &Tensor{
 		data:  t.data[start*subSize : end*subSize],
 		shape: append([]int{end - start}, t.shape[1:]...),
+	}
+}
+
+func (t *Tensor) SliceIndices(indices ...int) *Tensor {
+	shape := []int{len(indices)}
+	subSize := 1
+	for i := range t.shape[1:] {
+		shape = append(shape, t.shape[i+1])
+		subSize *= t.shape[i+1]
+	}
+	data := make([]float32, len(indices)*subSize)
+	for i, index := range indices {
+		copy(data[i*subSize:(i+1)*subSize], t.data[index*subSize:(index+1)*subSize])
+	}
+	return &Tensor{
+		data:  data,
+		shape: shape,
 	}
 }
 
@@ -750,6 +768,21 @@ func (t *Tensor) argmax() []int {
 		maxIndex /= t.shape[i]
 	}
 	return indices
+}
+
+func (t *Tensor) toPB() *protocol.Tensor {
+	return &protocol.Tensor{
+		Shape: lo.Map(t.shape, func(i, _ int) int32 { return int32(i) }),
+		Data:  t.data,
+	}
+}
+
+func (t *Tensor) fromPB(pb *protocol.Tensor) {
+	t.shape = make([]int, len(pb.Shape))
+	for i := range t.shape {
+		t.shape[i] = int(pb.Shape[i])
+	}
+	t.data = pb.Data
 }
 
 func NormalInit(t *Tensor, mean, std float32) {

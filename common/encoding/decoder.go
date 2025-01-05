@@ -12,18 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package protocol
+package encoding
 
 import (
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/model/click"
 	"github.com/zhenghaoz/gorse/model/ranking"
+	"github.com/zhenghaoz/gorse/protocol"
 	"go.uber.org/zap"
 	"io"
 )
 
 // UnmarshalClickModel unmarshal click model from gRPC.
-func UnmarshalClickModel(receiver Master_GetClickModelClient) (click.FactorizationMachine, error) {
+func UnmarshalClickModel(receiver protocol.Master_GetClickModelClient) (click.FactorizationMachine, error) {
 	// receive model
 	reader, writer := io.Pipe()
 	var finalError error
@@ -66,7 +67,7 @@ func UnmarshalClickModel(receiver Master_GetClickModelClient) (click.Factorizati
 }
 
 // UnmarshalRankingModel unmarshal ranking model from gRPC.
-func UnmarshalRankingModel(receiver Master_GetRankingModelClient) (ranking.MatrixFactorization, error) {
+func UnmarshalRankingModel(receiver protocol.Master_GetRankingModelClient) (ranking.MatrixFactorization, error) {
 	// receive model
 	reader, writer := io.Pipe()
 	var receiverError error
