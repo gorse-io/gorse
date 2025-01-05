@@ -87,17 +87,17 @@ func (a *Adam) Step() {
 		m, v := a.ms[p], a.vs[p]
 		grad := p.grad.data
 
+		fix1 := 1 - math32.Pow(a.beta1, a.t)
+		fix2 := 1 - math32.Pow(a.beta2, a.t)
+		lr := a.alpha * math32.Sqrt(fix2) / fix1
+
 		for i := range m.data {
-			// m_t = beta1 * m + (1 - beta1) * grad
-			m.data[i] = a.beta1*m.data[i] + (1-a.beta1)*grad[i]
-			// v_t = beta2 * v + (1 - beta2) * grad^2
-			v.data[i] = a.beta2*v.data[i] + (1-a.beta2)*grad[i]*grad[i]
-			// \hat{m} = m / (1 - beta1^t)
-			hatM := m.data[i] / (1 - math32.Pow(a.beta1, a.t))
-			// \hat{v} = v / (1 - beta2^t)
-			hatV := v.data[i] / (1 - math32.Pow(a.beta2, a.t))
-			// p_t = p - alpha * \hat{m} / (\sqrt{\hat{v}} + eps)
-			p.data[i] -= a.alpha * hatM / (math32.Sqrt(hatV) + a.eps)
+			// m += (1 - beta1) * (grad - m)
+			m.data[i] += (1 - a.beta1) * (grad[i] - m.data[i])
+			// v += (1 - beta2) * (grad * grad - v)
+			v.data[i] += (1 - a.beta2) * (grad[i]*grad[i] - v.data[i])
+			// param.data -= self.lr * m / (xp.sqrt(v) + eps)
+			p.data[i] -= lr * m.data[i] / (math32.Sqrt(v.data[i]) + a.eps)
 		}
 	}
 }

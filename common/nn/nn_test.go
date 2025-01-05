@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/chewxy/math32"
+	"github.com/klauspost/cpuid/v2"
 	"github.com/samber/lo"
 	"github.com/schollz/progressbar/v3"
 	"github.com/stretchr/testify/assert"
@@ -220,6 +221,13 @@ func accuracy(prediction, target *Tensor) float32 {
 }
 
 func TestMNIST(t *testing.T) {
+	if cpuid.CPU.VendorString != "Apple" && !cpuid.CPU.Supports(cpuid.AVX512F, cpuid.AVX512DQ) {
+		// Since the test takes a long time, we run the test only in development environment.
+		// 1. Mac with Apple Silicon.
+		// 2. x86 CPU with AVX512 support.
+		t.Skip("Skip test on non-development environment.")
+	}
+
 	train, test, err := mnist()
 	assert.NoError(t, err)
 
@@ -232,7 +240,7 @@ func TestMNIST(t *testing.T) {
 
 	const (
 		batchSize = 1000
-		numEpoch  = 10
+		numEpoch  = 5
 	)
 	for i := 0; i < numEpoch; i++ {
 		startTime := time.Now()
@@ -261,5 +269,5 @@ func TestMNIST(t *testing.T) {
 
 	testAcc := accuracy(model.Forward(test.A), test.B)
 	fmt.Println("Test Accuracy:", testAcc)
-	assert.Greater(t, float64(testAcc), 0.92)
+	assert.Greater(t, float64(testAcc), 0.96)
 }
