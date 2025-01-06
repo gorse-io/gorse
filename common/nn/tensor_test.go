@@ -76,6 +76,13 @@ func TestTensor_Sum(t *testing.T) {
 	assert.Equal(t, []float32{4, 6, 12, 14, 20, 22}, y.data)
 }
 
+func TestTensor_Transpose(t *testing.T) {
+	x := NewTensor([]float32{1, 2, 3, 4, 5, 6}, 3, 2)
+	y := x.transpose()
+	assert.Equal(t, []int{2, 3}, y.Shape())
+	assert.Equal(t, []float32{1, 3, 5, 2, 4, 6}, y.Data())
+}
+
 func (t *Tensor) matMulLegacy(other *Tensor, transpose1, transpose2 bool) *Tensor {
 	if !transpose1 && !transpose2 {
 		if len(t.shape) != 2 || len(other.shape) != 2 {
