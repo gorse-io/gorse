@@ -166,7 +166,7 @@ func Save[T Model](o T, path string) error {
 					newKey := make([]string, len(key))
 					copy(newKey, key)
 					newKey = append(newKey, field.Name)
-					if err = save(reflect.ValueOf(o).Field(i).Interface(), append(key, field.Name)); err != nil {
+					if err = save(reflect.ValueOf(o).Field(i).Interface(), newKey); err != nil {
 						return err
 					}
 				}

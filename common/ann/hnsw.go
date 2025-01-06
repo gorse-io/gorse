@@ -214,8 +214,7 @@ func (h *HNSW[T]) getNeighbourhood(e int32, currentLayer int) *heap.PriorityQueu
 	if currentLayer == 0 {
 		return h.bottomNeighbors[e]
 	} else {
-		temp, _ := h.upperNeighbors[currentLayer-1][e]
-		return temp
+		return h.upperNeighbors[currentLayer-1][e]
 	}
 }
 

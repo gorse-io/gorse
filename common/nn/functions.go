@@ -68,7 +68,7 @@ func Mul(x0, x1 *Tensor) *Tensor {
 // Div returns the element-wise division of two tensors. The shape of the second tensor must be a suffix sequence of the shape of the first tensor.
 func Div(x0, x1 *Tensor) *Tensor {
 	if len(x0.shape) < len(x1.shape) {
-		x0, x1 = x1, x0
+		panic(fmt.Sprintf("the shape of the second tensor %v must be a suffix sequence of the shape of the first tensor %v", x1.shape, x0.shape))
 	}
 	for i := 0; i < len(x1.shape); i++ {
 		if x0.shape[len(x0.shape)-len(x1.shape)+i] != x1.shape[i] {
@@ -89,7 +89,7 @@ func Pow(x *Tensor, n *Tensor) *Tensor {
 		panic("the shape of the second tensor must be a suffix sequence of the shape of the first tensor")
 	}
 	for i := 0; i < len(n.shape); i++ {
-		if n.shape[len(n.shape)-len(n.shape)+i] != x.shape[i] {
+		if n.shape[len(n.shape)-len(x.shape)+i] != x.shape[i] {
 			panic("the shape of the second tensor must be a suffix sequence of the shape of the first tensor")
 		}
 	}

@@ -63,20 +63,6 @@ type DeepFMV2 struct {
 	embeddingV nn.Layer
 	linear     []nn.Layer
 
-	// Adam optimizer variables
-	m_v  [][]float32
-	m_w  []float32
-	m_w0 [][]float32
-	v_v  [][]float32
-	v_w  []float32
-	v_w0 [][]float32
-	t    int
-
-	// preallocated arrays
-	dataV  []float32
-	dataW  []float32
-	dataW0 []float32
-
 	// Hyper parameters
 	batchSize    int
 	nFactors     int
@@ -245,7 +231,7 @@ func (fm *DeepFMV2) Init(trainSet *Dataset) {
 		_, x, _ := trainSet.Get(i)
 		fm.numDimension = mathutil.MaxVal(fm.numDimension, len(x))
 	}
-	fm.bias = nn.Rand()
+	fm.bias = nn.Zeros()
 	fm.embeddingW = nn.NewEmbedding(fm.numFeatures, 1)
 	fm.embeddingV = nn.NewEmbedding(fm.numFeatures, fm.nFactors)
 	fm.linear = []nn.Layer{nn.NewLinear(fm.numDimension*fm.nFactors, fm.hiddenLayers[0])}
@@ -310,7 +296,7 @@ func (fm *DeepFMV2) Forward(indices, values *nn.Tensor) *nn.Tensor {
 	sum = nn.Mul(sum, nn.NewScalar(0.5))
 	w := fm.embeddingW.Forward(indices)
 	linear := nn.BMM(w, x, true)
-	fmOutput := nn.Add(linear, fm.bias)
+	fmOutput := nn.Add(nn.Reshape(linear, fm.batchSize), nn.Reshape(sum, fm.batchSize), fm.bias)
 	fmOutput = nn.Flatten(fmOutput)
 
 	// deep network
