@@ -651,9 +651,9 @@ func (t *Tensor) transpose() *Tensor {
 		panic("transpose requires at least 2-D tensor")
 	}
 	shape := make([]int, 0, len(t.shape))
-	batchSize := 0
+	batchSize := 1
 	for i := 0; i < len(t.shape)-2; i++ {
-		batchSize += t.shape[i]
+		batchSize *= t.shape[i]
 		shape = append(shape, t.shape[i])
 	}
 	m, n := t.shape[len(t.shape)-2], t.shape[len(t.shape)-1]

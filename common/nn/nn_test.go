@@ -260,11 +260,11 @@ func TestMNIST(t *testing.T) {
 			optimizer.Step()
 			sumLoss += loss.data[0]
 			sumAcc += accuracy(yPred, yBatch)
-			bar.Add(batchSize)
+			assert.NoError(t, bar.Add(batchSize))
 		}
 		sumLoss /= float32(train.A.shape[0] / batchSize)
 		sumAcc /= float32(train.A.shape[0] / batchSize)
-		bar.Finish()
+		assert.NoError(t, bar.Finish())
 		fmt.Println("Duration:", time.Since(startTime), "Loss:", sumLoss, "Accuracy:", sumAcc)
 	}
 
