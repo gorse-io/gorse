@@ -38,9 +38,10 @@ type LinearLayer struct {
 }
 
 func NewLinear(in, out int) Layer {
+	bound := 1.0 / math32.Sqrt(float32(in))
 	return &LinearLayer{
-		W: Normal(0, 1.0/math32.Sqrt(float32(in)), in, out).RequireGrad(),
-		B: Zeros(out).RequireGrad(),
+		W: Uniform(-bound, bound, in, out),
+		B: Zeros(out),
 	}
 }
 
@@ -73,7 +74,7 @@ type EmbeddingLayer struct {
 func NewEmbedding(n int, shape ...int) Layer {
 	wShape := append([]int{n}, shape...)
 	return &EmbeddingLayer{
-		W: Rand(wShape...),
+		W: Normal(0, 0.01, wShape...),
 	}
 }
 

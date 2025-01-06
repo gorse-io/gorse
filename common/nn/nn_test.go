@@ -24,8 +24,10 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/chewxy/math32"
+	"github.com/klauspost/cpuid/v2"
 	"github.com/samber/lo"
 	"github.com/schollz/progressbar/v3"
 	"github.com/stretchr/testify/assert"
@@ -208,7 +210,25 @@ func openMNISTFile(path string) (*Tensor, *Tensor, error) {
 	return NewTensor(images, len(labels), 784), NewTensor(labels, len(labels)), nil
 }
 
+func accuracy(prediction, target *Tensor) float32 {
+	var precision float32
+	for i, gt := range target.data {
+		if prediction.Slice(i, i+1).argmax()[1] == int(gt) {
+			precision += 1
+		}
+	}
+	precision /= float32(len(target.data))
+	return precision
+}
+
 func TestMNIST(t *testing.T) {
+	if cpuid.CPU.VendorString != "Apple" && !cpuid.CPU.Supports(cpuid.AVX512F, cpuid.AVX512DQ) {
+		// Since the test takes a long time, we run the test only in development environment.
+		// 1. Mac with Apple Silicon.
+		// 2. x86 CPU with AVX512 support.
+		t.Skip("Skip test on non-development environment.")
+	}
+
 	train, test, err := mnist()
 	assert.NoError(t, err)
 
@@ -219,13 +239,14 @@ func TestMNIST(t *testing.T) {
 	)
 	optimizer := NewAdam(model.Parameters(), 0.001)
 
-	var (
-		sumLoss   float32
+	const (
 		batchSize = 1000
+		numEpoch  = 5
 	)
-	for i := 0; i < 3; i++ {
-		sumLoss = 0
-		bar := progressbar.Default(int64(train.A.shape[0]), fmt.Sprintf("Epoch %v/%v", i+1, 3))
+	for i := 0; i < numEpoch; i++ {
+		startTime := time.Now()
+		sumLoss, sumAcc := float32(0), float32(0)
+		bar := progressbar.Default(int64(train.A.shape[0]), fmt.Sprintf("Epoch %v/%v", i+1, numEpoch))
 		for j := 0; j < train.A.shape[0]; j += batchSize {
 			xBatch := train.A.Slice(j, j+batchSize)
 			yBatch := train.B.Slice(j, j+batchSize)
@@ -238,22 +259,18 @@ func TestMNIST(t *testing.T) {
 
 			optimizer.Step()
 			sumLoss += loss.data[0]
+			sumAcc += accuracy(yPred, yBatch)
 			bar.Add(batchSize)
 		}
 		sumLoss /= float32(train.A.shape[0] / batchSize)
+		sumAcc /= float32(train.A.shape[0] / batchSize)
 		bar.Finish()
+		fmt.Println("Duration:", time.Since(startTime), "Loss:", sumLoss, "Accuracy:", sumAcc)
 	}
-	assert.Less(t, sumLoss, float32(0.4))
 
-	testPred := model.Forward(test.A)
-	var precision float32
-	for i, gt := range test.B.data {
-		if testPred.Slice(i, i+1).argmax()[1] == int(gt) {
-			precision += 1
-		}
-	}
-	precision /= float32(len(test.B.data))
-	assert.Greater(t, float64(precision), 0.92)
+	testAcc := accuracy(model.Forward(test.A), test.B)
+	fmt.Println("Test Accuracy:", testAcc)
+	assert.Greater(t, float64(testAcc), 0.96)
 }
 
 func spiral() (*Tensor, *Tensor, error) {

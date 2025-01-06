@@ -23,7 +23,6 @@ import (
 
 	"github.com/chewxy/math32"
 	mapset "github.com/deckarep/golang-set/v2"
-	"github.com/google/uuid"
 	"github.com/samber/lo"
 	"github.com/zhenghaoz/gorse/base/floats"
 	"github.com/zhenghaoz/gorse/protocol"
@@ -35,9 +34,6 @@ type Tensor struct {
 	shape []int
 	grad  *Tensor
 	op    op
-
-	requireGrad bool
-	id          uuid.UUID // Only assigned if requireGrad is true
 }
 
 func NewTensor(data []float32, shape ...int) *Tensor {
@@ -52,10 +48,6 @@ func NewTensor(data []float32, shape ...int) *Tensor {
 		data:  data,
 		shape: shape,
 	}
-}
-
-func NewVariable(data []float32, shape ...int) *Tensor {
-	return NewTensor(data, shape...).RequireGrad()
 }
 
 func NewScalar(data float32) *Tensor {
@@ -89,6 +81,21 @@ func Rand(shape ...int) *Tensor {
 	data := make([]float32, n)
 	for i := range data {
 		data[i] = rand.Float32()
+	}
+	return &Tensor{
+		data:  data,
+		shape: shape,
+	}
+}
+
+func Uniform(low, high float32, shape ...int) *Tensor {
+	n := 1
+	for _, s := range shape {
+		n *= s
+	}
+	data := make([]float32, n)
+	for i := range data {
+		data[i] = rand.Float32()*(high-low) + low
 	}
 	return &Tensor{
 		data:  data,
@@ -156,12 +163,6 @@ func (t *Tensor) NoGrad() *Tensor {
 	if t.op != nil {
 		t.op = nil
 	}
-	return t
-}
-
-func (t *Tensor) RequireGrad() *Tensor {
-	t.requireGrad = true
-	t.id = uuid.New()
 	return t
 }
 
