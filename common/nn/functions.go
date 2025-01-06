@@ -14,6 +14,10 @@
 
 package nn
 
+import (
+	"fmt"
+)
+
 func Neg(x *Tensor) *Tensor {
 	return apply(&neg{}, x)
 }
@@ -27,7 +31,7 @@ func Add(x0 *Tensor, x ...*Tensor) *Tensor {
 		}
 		for i := 0; i < len(x1.shape); i++ {
 			if x0.shape[len(x0.shape)-len(x1.shape)+i] != x1.shape[i] {
-				panic("the shape of the second tensor must be a suffix sequence of the shape of the first tensor")
+				panic(fmt.Sprintf("the shape of one tensor %v must be a suffix sequence of the shape of the other tensor %v", x0.shape, x1.shape))
 			}
 		}
 		output = apply(&add{}, output, x1)
@@ -38,7 +42,7 @@ func Add(x0 *Tensor, x ...*Tensor) *Tensor {
 // Sub returns the element-wise difference of two tensors. The shape of the second tensor must be a suffix sequence of the shape of the first tensor.
 func Sub(x0, x1 *Tensor) *Tensor {
 	if len(x0.shape) < len(x1.shape) {
-		x0, x1 = x1, x0
+		panic(fmt.Sprintf("the shape of the second tensor %v must be a suffix sequence of the shape of the first tensor %v", x1.shape, x0.shape))
 	}
 	for i := 0; i < len(x1.shape); i++ {
 		if x0.shape[len(x0.shape)-len(x1.shape)+i] != x1.shape[i] {
@@ -55,7 +59,7 @@ func Mul(x0, x1 *Tensor) *Tensor {
 	}
 	for i := 0; i < len(x1.shape); i++ {
 		if x0.shape[len(x0.shape)-len(x1.shape)+i] != x1.shape[i] {
-			panic("the shape of the second tensor must be a suffix sequence of the shape of the first tensor")
+			panic(fmt.Sprintf("the shape of the second tensor %v must be a suffix sequence of the shape of the first tensor %v", x1.shape, x0.shape))
 		}
 	}
 	return apply(&mul{}, x0, x1)
@@ -81,11 +85,11 @@ func Square(x *Tensor) *Tensor {
 
 // Pow returns the element-wise power of a tensor. The shape of the second tensor must be a suffix sequence of the shape of the first tensor.
 func Pow(x *Tensor, n *Tensor) *Tensor {
-	if len(x.shape) < len(x.shape) {
+	if len(x.shape) < len(n.shape) {
 		panic("the shape of the second tensor must be a suffix sequence of the shape of the first tensor")
 	}
-	for i := 0; i < len(x.shape); i++ {
-		if x.shape[len(x.shape)-len(x.shape)+i] != x.shape[i] {
+	for i := 0; i < len(n.shape); i++ {
+		if n.shape[len(n.shape)-len(n.shape)+i] != x.shape[i] {
 			panic("the shape of the second tensor must be a suffix sequence of the shape of the first tensor")
 		}
 	}
@@ -222,7 +226,7 @@ func BCEWithLogits(target, prediction *Tensor) *Tensor {
 			NewScalar(2)),
 		Div(
 			Mul(
-				Sub(NewScalar(1), target),
+				Sub(Ones(target.shape...), target),
 				Log(Add(NewScalar(1), Exp(prediction)))),
 			NewScalar(2))))
 }
