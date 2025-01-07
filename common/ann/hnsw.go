@@ -206,8 +206,7 @@ func (h *HNSW[T]) getNeighbourhood(e int32, currentLayer int) *heap.PriorityQueu
 	if currentLayer == 0 {
 		return h.bottomNeighbors[e]
 	} else {
-		temp, _ := h.upperNeighbors[currentLayer-1][e]
-		return temp
+		return h.upperNeighbors[currentLayer-1][e]
 	}
 }
 
@@ -225,21 +224,6 @@ func (h *HNSW[T]) distance(q []T, points []int32) *heap.PriorityQueue {
 		pq.Push(point, h.distanceFunc(h.vectors[point], q))
 	}
 	return pq
-}
-
-func (h *HNSW[T]) efSearch(q []T, ef int) *heap.PriorityQueue {
-	var (
-		w           *heap.PriorityQueue                    // set for the current the nearest element
-		enterPoints = h.distance(q, []int32{h.enterPoint}) // get enter point for hnsw
-		topLayer    = len(h.upperNeighbors)                // top layer for hnsw
-	)
-	for currentLayer := topLayer; currentLayer > 0; currentLayer-- {
-		w = h.searchLayer(q, enterPoints, 1, currentLayer)
-		enterPoints = heap.NewPriorityQueue(false)
-		enterPoints.Push(w.Peek())
-	}
-	w = h.searchLayer(q, enterPoints, ef, 0)
-	return w
 }
 
 // efSearchValue returns the efSearch value to use, given the current number of elements desired.

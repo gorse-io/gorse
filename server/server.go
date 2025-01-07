@@ -30,6 +30,7 @@ import (
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/cmd/version"
+	"github.com/zhenghaoz/gorse/common/util"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/protocol"
 	"github.com/zhenghaoz/gorse/storage"
@@ -55,7 +56,7 @@ type Server struct {
 	serverName   string
 	masterHost   string
 	masterPort   int
-	tlsConfig    *protocol.TLSConfig
+	tlsConfig    *util.TLSConfig
 	testMode     bool
 	cacheFile    string
 }
@@ -67,7 +68,7 @@ func NewServer(
 	serverHost string,
 	serverPort int,
 	cacheFile string,
-	tlsConfig *protocol.TLSConfig,
+	tlsConfig *util.TLSConfig,
 ) *Server {
 	s := &Server{
 		masterHost: masterHost,
@@ -115,7 +116,7 @@ func (s *Server) Serve() {
 	// connect to master
 	var opts []grpc.DialOption
 	if s.tlsConfig != nil {
-		c, err := protocol.NewClientCreds(s.tlsConfig)
+		c, err := util.NewClientCreds(s.tlsConfig)
 		if err != nil {
 			log.Logger().Fatal("failed to create credentials", zap.Error(err))
 		}

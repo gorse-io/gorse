@@ -15,13 +15,18 @@
 package nn
 
 import (
+	"container/heap"
 	"fmt"
-	"github.com/chewxy/math32"
-	"github.com/google/uuid"
-	"github.com/zhenghaoz/gorse/base/floats"
-	"golang.org/x/exp/slices"
+	"math"
 	"math/rand"
 	"strings"
+
+	"github.com/chewxy/math32"
+	mapset "github.com/deckarep/golang-set/v2"
+	"github.com/samber/lo"
+	"github.com/zhenghaoz/gorse/base/floats"
+	"github.com/zhenghaoz/gorse/protocol"
+	"golang.org/x/exp/slices"
 )
 
 type Tensor struct {
@@ -29,9 +34,6 @@ type Tensor struct {
 	shape []int
 	grad  *Tensor
 	op    op
-
-	requireGrad bool
-	id          uuid.UUID // Only assigned if requireGrad is true
 }
 
 func NewTensor(data []float32, shape ...int) *Tensor {
@@ -46,10 +48,6 @@ func NewTensor(data []float32, shape ...int) *Tensor {
 		data:  data,
 		shape: shape,
 	}
-}
-
-func NewVariable(data []float32, shape ...int) *Tensor {
-	return NewTensor(data, shape...).RequireGrad()
 }
 
 func NewScalar(data float32) *Tensor {
@@ -75,7 +73,7 @@ func LinSpace(start, end float32, shape ...int) *Tensor {
 	}
 }
 
-func RandN(shape ...int) *Tensor {
+func Rand(shape ...int) *Tensor {
 	n := 1
 	for _, s := range shape {
 		n *= s
@@ -83,6 +81,36 @@ func RandN(shape ...int) *Tensor {
 	data := make([]float32, n)
 	for i := range data {
 		data[i] = rand.Float32()
+	}
+	return &Tensor{
+		data:  data,
+		shape: shape,
+	}
+}
+
+func Uniform(low, high float32, shape ...int) *Tensor {
+	n := 1
+	for _, s := range shape {
+		n *= s
+	}
+	data := make([]float32, n)
+	for i := range data {
+		data[i] = rand.Float32()*(high-low) + low
+	}
+	return &Tensor{
+		data:  data,
+		shape: shape,
+	}
+}
+
+func Normal(mean, std float32, shape ...int) *Tensor {
+	n := 1
+	for _, s := range shape {
+		n *= s
+	}
+	data := make([]float32, n)
+	for i := range data {
+		data[i] = float32(rand.NormFloat64())*std + mean
 	}
 	return &Tensor{
 		data:  data,
@@ -119,21 +147,22 @@ func Zeros(shape ...int) *Tensor {
 	}
 }
 
+func (t *Tensor) generation() int {
+	if t.op != nil {
+		return t.op.generation()
+	}
+	return 0
+}
+
 func (t *Tensor) IsScalar() bool {
 	return len(t.shape) == 0
 }
 
-// NoGrad creates a tensor does not require gradient.
+// NoGrad convert a node tensor to a leaf tensor.
 func (t *Tensor) NoGrad() *Tensor {
 	if t.op != nil {
 		t.op = nil
 	}
-	return t
-}
-
-func (t *Tensor) RequireGrad() *Tensor {
-	t.requireGrad = true
-	t.id = uuid.New()
 	return t
 }
 
@@ -156,6 +185,23 @@ func (t *Tensor) Slice(start, end int) *Tensor {
 	return &Tensor{
 		data:  t.data[start*subSize : end*subSize],
 		shape: append([]int{end - start}, t.shape[1:]...),
+	}
+}
+
+func (t *Tensor) SliceIndices(indices ...int) *Tensor {
+	shape := []int{len(indices)}
+	subSize := 1
+	for i := range t.shape[1:] {
+		shape = append(shape, t.shape[i+1])
+		subSize *= t.shape[i+1]
+	}
+	data := make([]float32, len(indices)*subSize)
+	for i, index := range indices {
+		copy(data[i*subSize:(i+1)*subSize], t.data[index*subSize:(index+1)*subSize])
+	}
+	return &Tensor{
+		data:  data,
+		shape: shape,
 	}
 }
 
@@ -208,14 +254,12 @@ func (t *Tensor) String() string {
 
 func (t *Tensor) Backward() {
 	t.grad = Ones(t.shape...)
-	ops := []op{t.op}
-	for len(ops) > 0 {
-		op := ops[0]
-		ops = ops[1:]
+	ops := &opHeap{t.op}
+	seen := mapset.NewSet[op](t.op)
+	for ops.Len() > 0 {
+		op := heap.Pop(ops).(op)
 		inputs, output := op.inputsAndOutput()
 		grads := op.backward(output.grad)
-		// Clear gradient of non-leaf tensor
-		//output.grad = nil
 		for i := range grads {
 			if !slices.Equal(inputs[i].shape, grads[i].shape) {
 				panic(fmt.Sprintf("%s: shape %v does not match shape %v", op.String(), inputs[i].shape, grads[i].shape))
@@ -225,13 +269,12 @@ func (t *Tensor) Backward() {
 			} else {
 				inputs[i].grad.add(grads[i])
 			}
-			if inputs[i].op != nil {
-				ops = append(ops, inputs[i].op)
-			} else if !inputs[i].requireGrad {
-				// Clear gradient if the leaf tensor does not require gradient
-				//inputs[i].grad = nil
+			if inputs[i].op != nil && !seen.Contains(inputs[i].op) {
+				heap.Push(ops, inputs[i].op)
+				seen.Add(inputs[i].op)
 			}
 		}
+		output.grad = nil
 	}
 }
 
@@ -267,6 +310,9 @@ func (t *Tensor) add(other *Tensor) *Tensor {
 	return t
 }
 
+// sub returns the element-wise addition of two tensors. The shape
+// of the second tensor must be a suffix sequence of the shape of
+// the first tensor: (...,m,n) - (m,n) = (...,m,n).
 func (t *Tensor) sub(other *Tensor) *Tensor {
 	wSize := 1
 	for i := range other.shape {
@@ -274,6 +320,23 @@ func (t *Tensor) sub(other *Tensor) *Tensor {
 	}
 	for i := range t.data {
 		t.data[i] -= other.data[i%wSize]
+	}
+	return t
+}
+
+// bSub returns the element-wise addition of two tensors. The shape
+// of the second tensor must be a prefix sequence of the shape of
+// the first tensor: (m,n,...) - (m,n) = (m,n,...).
+func (t *Tensor) bSub(other *Tensor) *Tensor {
+	bSize := 1
+	for i := range t.shape {
+		bSize *= t.shape[i]
+	}
+	for i := range other.shape {
+		bSize /= other.shape[i]
+	}
+	for i := range t.data {
+		t.data[i] -= other.data[i/bSize]
 	}
 	return t
 }
@@ -289,6 +352,9 @@ func (t *Tensor) mul(other *Tensor) *Tensor {
 	return t
 }
 
+// div returns the element-wise division of two tensors. The shape
+// of the second tensor must be a suffix sequence of the shape of
+// the first tensor: (...,m,n) / (m,n) = (...,m,n).
 func (t *Tensor) div(other *Tensor) *Tensor {
 	wSize := 1
 	for i := range other.shape {
@@ -296,6 +362,23 @@ func (t *Tensor) div(other *Tensor) *Tensor {
 	}
 	for i := range t.data {
 		t.data[i] /= other.data[i%wSize]
+	}
+	return t
+}
+
+// bDiv returns the element-wise division of two tensors. The shape
+// of the second tensor must be a prefix sequence of the shape of
+// the first tensor: (m,n,...) / (m,n) = (m,n,...).
+func (t *Tensor) bDiv(other *Tensor) *Tensor {
+	bSize := 1
+	for i := range t.shape {
+		bSize *= t.shape[i]
+	}
+	for i := range other.shape {
+		bSize /= other.shape[i]
+	}
+	for i := range t.data {
+		t.data[i] /= other.data[i/bSize]
 	}
 	return t
 }
@@ -320,7 +403,7 @@ func (t *Tensor) pow(other *Tensor) *Tensor {
 
 func (t *Tensor) exp() *Tensor {
 	for i := range t.data {
-		t.data[i] = math32.Exp(t.data[i])
+		t.data[i] = float32(math.Exp(float64(t.data[i])))
 	}
 	return t
 }
@@ -542,14 +625,35 @@ func (t *Tensor) maximum(other *Tensor) {
 	}
 }
 
+func (t *Tensor) gt(other *Tensor) *Tensor {
+	if other.IsScalar() {
+		for i := range t.data {
+			if t.data[i] > other.data[0] {
+				t.data[i] = 1
+			} else {
+				t.data[i] = 0
+			}
+		}
+	} else {
+		for i := range t.data {
+			if t.data[i] > other.data[i] {
+				t.data[i] = 1
+			} else {
+				t.data[i] = 0
+			}
+		}
+	}
+	return t
+}
+
 func (t *Tensor) transpose() *Tensor {
 	if len(t.shape) < 2 {
 		panic("transpose requires at least 2-D tensor")
 	}
 	shape := make([]int, 0, len(t.shape))
-	batchSize := 0
+	batchSize := 1
 	for i := 0; i < len(t.shape)-2; i++ {
-		batchSize += t.shape[i]
+		batchSize *= t.shape[i]
 		shape = append(shape, t.shape[i])
 	}
 	m, n := t.shape[len(t.shape)-2], t.shape[len(t.shape)-1]
@@ -565,5 +669,124 @@ func (t *Tensor) transpose() *Tensor {
 	return &Tensor{
 		data:  data,
 		shape: shape,
+	}
+}
+
+func (t *Tensor) max(axis int, keepDim bool) *Tensor {
+	if axis < 0 || axis >= len(t.shape) {
+		panic("axis out of range")
+	}
+	if len(t.shape) == 1 {
+		return NewScalar(lo.Max(t.data))
+	}
+	shape := make([]int, 0, len(t.shape)-1)
+	a, b, c := 1, 1, 1
+	for i := 0; i < len(t.shape); i++ {
+		if i < axis {
+			shape = append(shape, t.shape[i])
+			a *= t.shape[i]
+		} else if i == axis {
+			if keepDim {
+				shape = append(shape, 1)
+			}
+			b = t.shape[i]
+		} else {
+			shape = append(shape, t.shape[i])
+			c *= t.shape[i]
+		}
+	}
+	data := make([]float32, a*c)
+	for i := 0; i < a; i++ {
+		for j := 0; j < c; j++ {
+			maxValue := t.data[i*b*c+j]
+			for k := 1; k < b; k++ {
+				maxValue = max(maxValue, t.data[i*b*c+j+k*c])
+			}
+			data[i*c+j] = maxValue
+		}
+	}
+	return &Tensor{
+		data:  data,
+		shape: shape,
+	}
+}
+
+func (t *Tensor) sum(axis int, keepDim bool) *Tensor {
+	if axis < 0 || axis >= len(t.shape) {
+		panic("axis out of range")
+	}
+	if len(t.shape) == 1 {
+		return NewScalar(lo.Sum(t.data))
+	}
+	shape := make([]int, 0, len(t.shape)-1)
+	a, b, c := 1, 1, 1
+	for i := 0; i < len(t.shape); i++ {
+		if i < axis {
+			shape = append(shape, t.shape[i])
+			a *= t.shape[i]
+		} else if i == axis {
+			if keepDim {
+				shape = append(shape, 1)
+			}
+			b = t.shape[i]
+		} else {
+			shape = append(shape, t.shape[i])
+			c *= t.shape[i]
+		}
+	}
+	data := make([]float32, a*c)
+	for i := 0; i < a; i++ {
+		for j := 0; j < c; j++ {
+			sumValue := t.data[i*b*c+j]
+			for k := 1; k < b; k++ {
+				sumValue += t.data[i*b*c+j+k*c]
+			}
+			data[i*c+j] = sumValue
+		}
+	}
+	return &Tensor{
+		data:  data,
+		shape: shape,
+	}
+}
+
+func (t *Tensor) argmax() []int {
+	if len(t.data) == 0 {
+		return nil
+	}
+	maxValue := t.data[0]
+	maxIndex := 0
+	for i := 1; i < len(t.data); i++ {
+		if t.data[i] > maxValue {
+			maxValue = t.data[i]
+			maxIndex = i
+		}
+	}
+	indices := make([]int, len(t.shape))
+	for i := len(t.shape) - 1; i >= 0; i-- {
+		indices[i] = maxIndex % t.shape[i]
+		maxIndex /= t.shape[i]
+	}
+	return indices
+}
+
+func (t *Tensor) toPB() *protocol.Tensor {
+	return &protocol.Tensor{
+		Shape: lo.Map(t.shape, func(i, _ int) int32 { return int32(i) }),
+		Data:  t.data,
+	}
+}
+
+func (t *Tensor) fromPB(pb *protocol.Tensor) {
+	t.shape = make([]int, len(pb.Shape))
+	for i := range t.shape {
+		t.shape[i] = int(pb.Shape[i])
+	}
+	t.data = pb.Data
+}
+
+func NormalInit(t *Tensor, mean, std float32) {
+	for i := range t.data {
+		t.data[i] = float32(rand.NormFloat64())*(std) + (mean)
 	}
 }

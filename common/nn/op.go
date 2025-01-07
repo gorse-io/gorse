@@ -25,11 +25,14 @@ type op interface {
 	inputsAndOutput() ([]*Tensor, *Tensor)
 	setInputs(inputs ...*Tensor)
 	setOutput(y *Tensor)
+	generation() int
+	setGeneration(gen int)
 }
 
 type base struct {
 	inputs []*Tensor
-	output *Tensor
+	output *Tensor // TODO: Use weak pointer
+	gen    int
 }
 
 func (b *base) inputsAndOutput() ([]*Tensor, *Tensor) {
@@ -44,11 +47,26 @@ func (b *base) setOutput(y *Tensor) {
 	b.output = y
 }
 
+func (b *base) generation() int {
+	return b.gen
+}
+
+func (b *base) setGeneration(gen int) {
+	b.gen = gen
+}
+
 func apply[T op](f T, inputs ...*Tensor) *Tensor {
 	y := f.forward(inputs...)
 	f.setInputs(inputs...)
 	f.setOutput(y)
 	y.op = f
+
+	// Set generation
+	gen := 0
+	for _, x := range inputs {
+		gen = max(gen, x.generation())
+	}
+	f.setGeneration(gen + 1)
 	return y
 }
 
@@ -692,7 +710,105 @@ func (r *relu) forward(inputs ...*Tensor) *Tensor {
 }
 
 func (r *relu) backward(dy *Tensor) []*Tensor {
-	dx := dy.clone()
-	dx.maximum(NewScalar(0))
+	x := r.inputs[0]
+	dx := x.clone().gt(NewScalar(0)).mul(dy)
 	return []*Tensor{dx}
+}
+
+type softmax struct {
+	base
+	axis int
+}
+
+func (s *softmax) String() string {
+	return "Softmax"
+}
+
+func (s *softmax) forward(inputs ...*Tensor) *Tensor {
+	x := inputs[0]
+	y := x.clone()
+	y.sub(x.max(s.axis, true))
+	y.exp()
+	y.div(y.sum(s.axis, true))
+	return y
+}
+
+func (s *softmax) backward(dy *Tensor) []*Tensor {
+	y := s.output
+	gx := y.clone()
+	gx.mul(dy)
+	sumdx := gx.sum(s.axis, true)
+	y.mul(sumdx)
+	gx.sub(y)
+	return []*Tensor{gx}
+}
+
+type softmaxCrossEntropy struct {
+	base
+}
+
+func (c *softmaxCrossEntropy) String() string {
+	return "SoftmaxCrossEntropy"
+}
+
+func (c *softmaxCrossEntropy) forward(inputs ...*Tensor) *Tensor {
+	x, t := inputs[0], inputs[1]
+	m := x.max(1, true)
+	s := x.clone().bSub(m)    // x - m
+	s = s.exp()               // exp(x - m)
+	s = s.sum(1, true)        // sum(exp(x - m))
+	s.log()                   // log(sum(exp(x - m)))
+	m.add(s)                  // m + log(sum(exp(x - m)))
+	logP := x.clone().bSub(m) // x - (m + log(sum(exp(x - m))))
+	var crossEntropy float32
+	for i := 0; i < len(t.data); i++ {
+		crossEntropy -= logP.Get(i, int(t.data[i]))
+	}
+	crossEntropy /= float32(len(t.data))
+	return NewScalar(crossEntropy)
+}
+
+func (c *softmaxCrossEntropy) backward(dy *Tensor) []*Tensor {
+	x, t := c.inputs[0], c.inputs[1]
+	// gy *= 1/N
+	gy := dy.clone().mul(NewScalar(1 / float32(len(t.data))))
+	// y = softmax(x)
+	y := x.clone()
+	y.bSub(x.max(1, true))
+	y.exp()
+	y.bDiv(y.sum(1, true))
+	// convert to one-hot
+	oneHot := Zeros(x.shape...)
+	for i := 0; i < len(t.data); i++ {
+		oneHot.data[i*x.shape[1]+int(t.data[i])] = 1
+	}
+	// y = (y - t_onehot) * gy
+	y = y.sub(oneHot).mul(gy)
+	return []*Tensor{y, Zeros(t.shape...)}
+}
+
+type opHeap []op
+
+func (h opHeap) Len() int {
+	return len(h)
+}
+
+func (h opHeap) Less(i, j int) bool {
+	return h[i].generation() > h[j].generation()
+}
+
+func (h opHeap) Swap(i, j int) {
+	h[i], h[j] = h[j], h[i]
+}
+
+func (h *opHeap) Push(o any) {
+	*h = append(*h, o.(op))
+}
+
+func (h *opHeap) Pop() any {
+	old := *h
+	n := len(old)
+	x := old[n-1]
+	*h = old[0 : n-1]
+	return x
 }

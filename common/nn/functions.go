@@ -14,27 +14,35 @@
 
 package nn
 
+import (
+	"fmt"
+)
+
 func Neg(x *Tensor) *Tensor {
 	return apply(&neg{}, x)
 }
 
 // Add returns the element-wise sum of two tensors. The shape of the second tensor must be a suffix sequence of the shape of the first tensor.
-func Add(x0, x1 *Tensor) *Tensor {
-	if len(x0.shape) < len(x1.shape) {
-		x0, x1 = x1, x0
-	}
-	for i := 0; i < len(x1.shape); i++ {
-		if x0.shape[len(x0.shape)-len(x1.shape)+i] != x1.shape[i] {
-			panic("the shape of the second tensor must be a suffix sequence of the shape of the first tensor")
+func Add(x0 *Tensor, x ...*Tensor) *Tensor {
+	output := x0
+	for _, x1 := range x {
+		if len(x0.shape) < len(x1.shape) {
+			output, x1 = x1, output
 		}
+		for i := 0; i < len(x1.shape); i++ {
+			if x0.shape[len(x0.shape)-len(x1.shape)+i] != x1.shape[i] {
+				panic(fmt.Sprintf("the shape of one tensor %v must be a suffix sequence of the shape of the other tensor %v", x0.shape, x1.shape))
+			}
+		}
+		output = apply(&add{}, output, x1)
 	}
-	return apply(&add{}, x0, x1)
+	return output
 }
 
 // Sub returns the element-wise difference of two tensors. The shape of the second tensor must be a suffix sequence of the shape of the first tensor.
 func Sub(x0, x1 *Tensor) *Tensor {
 	if len(x0.shape) < len(x1.shape) {
-		x0, x1 = x1, x0
+		panic(fmt.Sprintf("the shape of the second tensor %v must be a suffix sequence of the shape of the first tensor %v", x1.shape, x0.shape))
 	}
 	for i := 0; i < len(x1.shape); i++ {
 		if x0.shape[len(x0.shape)-len(x1.shape)+i] != x1.shape[i] {
@@ -51,7 +59,7 @@ func Mul(x0, x1 *Tensor) *Tensor {
 	}
 	for i := 0; i < len(x1.shape); i++ {
 		if x0.shape[len(x0.shape)-len(x1.shape)+i] != x1.shape[i] {
-			panic("the shape of the second tensor must be a suffix sequence of the shape of the first tensor")
+			panic(fmt.Sprintf("the shape of the second tensor %v must be a suffix sequence of the shape of the first tensor %v", x1.shape, x0.shape))
 		}
 	}
 	return apply(&mul{}, x0, x1)
@@ -60,7 +68,7 @@ func Mul(x0, x1 *Tensor) *Tensor {
 // Div returns the element-wise division of two tensors. The shape of the second tensor must be a suffix sequence of the shape of the first tensor.
 func Div(x0, x1 *Tensor) *Tensor {
 	if len(x0.shape) < len(x1.shape) {
-		x0, x1 = x1, x0
+		panic(fmt.Sprintf("the shape of the second tensor %v must be a suffix sequence of the shape of the first tensor %v", x1.shape, x0.shape))
 	}
 	for i := 0; i < len(x1.shape); i++ {
 		if x0.shape[len(x0.shape)-len(x1.shape)+i] != x1.shape[i] {
@@ -77,11 +85,11 @@ func Square(x *Tensor) *Tensor {
 
 // Pow returns the element-wise power of a tensor. The shape of the second tensor must be a suffix sequence of the shape of the first tensor.
 func Pow(x *Tensor, n *Tensor) *Tensor {
-	if len(x.shape) < len(x.shape) {
+	if len(x.shape) < len(n.shape) {
 		panic("the shape of the second tensor must be a suffix sequence of the shape of the first tensor")
 	}
-	for i := 0; i < len(x.shape); i++ {
-		if x.shape[len(x.shape)-len(x.shape)+i] != x.shape[i] {
+	for i := 0; i < len(n.shape); i++ {
+		if n.shape[len(n.shape)-len(x.shape)+i] != x.shape[i] {
 			panic("the shape of the second tensor must be a suffix sequence of the shape of the first tensor")
 		}
 	}
@@ -185,15 +193,32 @@ func ReLu(x *Tensor) *Tensor {
 	return apply(&relu{}, x)
 }
 
-func MSE(x, y *Tensor) *Tensor {
+func Softmax(x *Tensor, axis int) *Tensor {
+	return apply(&softmax{axis: axis}, x)
+}
+
+func MeanSquareError(x, y *Tensor) *Tensor {
 	return Mean(Square(Sub(x, y)))
+}
+
+func SoftmaxCrossEntropy(x, y *Tensor) *Tensor {
+	if len(x.shape) != 2 {
+		panic("the shape of the first tensor must be 2-D")
+	}
+	if len(y.shape) != 1 {
+		panic("the shape of the second tensor must be 1-D")
+	}
+	if x.shape[0] != y.shape[0] {
+		panic("the size of the first tensor must be equal to the size of the second tensor")
+	}
+	return apply(&softmaxCrossEntropy{}, x, y)
 }
 
 // BCEWithLogits is equivalent to:
 //
 //	(1 + target) * math32.Log(1+math32.Exp(-prediction)) / 2 + (1 - target) * math32.Log(1+math32.Exp(prediction)) / 2
 func BCEWithLogits(target, prediction *Tensor) *Tensor {
-	return Add(
+	return Mean(Add(
 		Div(
 			Mul(
 				Add(NewScalar(1), target),
@@ -201,7 +226,7 @@ func BCEWithLogits(target, prediction *Tensor) *Tensor {
 			NewScalar(2)),
 		Div(
 			Mul(
-				Sub(NewScalar(1), target),
+				Sub(Ones(target.shape...), target),
 				Log(Add(NewScalar(1), Exp(prediction)))),
-			NewScalar(2)))
+			NewScalar(2))))
 }

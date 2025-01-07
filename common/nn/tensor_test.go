@@ -21,7 +21,7 @@ import (
 )
 
 func TestTensor_Slice(t *testing.T) {
-	x := RandN(3, 4, 5)
+	x := Rand(3, 4, 5)
 	y := x.Slice(1, 3)
 	assert.Equal(t, []int{2, 4, 5}, y.Shape())
 	for i := 0; i < 2; i++ {
@@ -31,6 +31,56 @@ func TestTensor_Slice(t *testing.T) {
 			}
 		}
 	}
+}
+
+func TestTensor_SliceIndices(t *testing.T) {
+	x := NewTensor([]float32{1, 2, 3, 4, 5, 6}, 3, 2)
+	y := x.SliceIndices(2, 0)
+	assert.Equal(t, []int{2, 2}, y.Shape())
+	assert.Equal(t, []float32{5, 6, 1, 2}, y.Data())
+}
+
+func TestTensor_Max(t *testing.T) {
+	x := NewTensor([]float32{3, 2, 5, 6, 0, 0}, 6)
+	y := x.max(0, false)
+	assert.Len(t, y.shape, 0)
+	assert.Equal(t, []float32{6}, y.data)
+
+	assert.Panics(t, func() { x.max(-1, false) })
+	assert.Panics(t, func() { x.max(2, false) })
+
+	x = NewTensor([]float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}, 3, 2, 2)
+	y = x.max(1, false)
+	assert.Equal(t, []int{3, 2}, y.shape)
+	assert.Equal(t, []float32{3, 4, 7, 8, 11, 12}, y.data)
+	y = x.max(1, true)
+	assert.Equal(t, []int{3, 1, 2}, y.shape)
+	assert.Equal(t, []float32{3, 4, 7, 8, 11, 12}, y.data)
+}
+
+func TestTensor_Sum(t *testing.T) {
+	x := NewTensor([]float32{1, 2, 3, 4, 5, 6}, 6)
+	y := x.sum(0, false)
+	assert.Len(t, y.shape, 0)
+	assert.Equal(t, []float32{21}, y.data)
+
+	assert.Panics(t, func() { x.sum(-1, false) })
+	assert.Panics(t, func() { x.sum(2, false) })
+
+	x = NewTensor([]float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}, 3, 2, 2)
+	y = x.sum(1, false)
+	assert.Equal(t, []int{3, 2}, y.shape)
+	assert.Equal(t, []float32{4, 6, 12, 14, 20, 22}, y.data)
+	y = x.sum(1, true)
+	assert.Equal(t, []int{3, 1, 2}, y.shape)
+	assert.Equal(t, []float32{4, 6, 12, 14, 20, 22}, y.data)
+}
+
+func TestTensor_Transpose(t *testing.T) {
+	x := NewTensor([]float32{1, 2, 3, 4, 5, 6}, 3, 2)
+	y := x.transpose()
+	assert.Equal(t, []int{2, 3}, y.Shape())
+	assert.Equal(t, []float32{1, 3, 5, 2, 4, 6}, y.Data())
 }
 
 func (t *Tensor) matMulLegacy(other *Tensor, transpose1, transpose2 bool) *Tensor {
@@ -210,8 +260,8 @@ func (t *Tensor) batchMatMulLegacy(other *Tensor, transpose1, transpose2 bool) *
 }
 
 func BenchmarkMatMulLegacy64(b *testing.B) {
-	x := RandN(64, 64)
-	y := RandN(64, 64)
+	x := Rand(64, 64)
+	y := Rand(64, 64)
 	for t1 := 0; t1 < 2; t1++ {
 		for t2 := 0; t2 < 2; t2++ {
 			b.Run(fmt.Sprintf("(%d,%d)", t1, t2), func(b *testing.B) {
@@ -224,8 +274,8 @@ func BenchmarkMatMulLegacy64(b *testing.B) {
 }
 
 func BenchmarkMatMul64(b *testing.B) {
-	x := RandN(64, 64)
-	y := RandN(64, 64)
+	x := Rand(64, 64)
+	y := Rand(64, 64)
 	for t1 := 0; t1 < 2; t1++ {
 		for t2 := 0; t2 < 2; t2++ {
 			b.Run(fmt.Sprintf("(%d,%d)", t1, t2), func(b *testing.B) {
@@ -238,8 +288,8 @@ func BenchmarkMatMul64(b *testing.B) {
 }
 
 func BenchmarkBatchMatMulLegacy64(b *testing.B) {
-	x := RandN(64, 64, 64)
-	y := RandN(64, 64, 64)
+	x := Rand(64, 64, 64)
+	y := Rand(64, 64, 64)
 	for t1 := 0; t1 < 2; t1++ {
 		for t2 := 0; t2 < 2; t2++ {
 			b.Run(fmt.Sprintf("(%d,%d)", t1, t2), func(b *testing.B) {
@@ -252,8 +302,8 @@ func BenchmarkBatchMatMulLegacy64(b *testing.B) {
 }
 
 func BenchmarkBatchMatMul64(b *testing.B) {
-	x := RandN(64, 64, 64)
-	y := RandN(64, 64, 64)
+	x := Rand(64, 64, 64)
+	y := Rand(64, 64, 64)
 	for t1 := 0; t1 < 2; t1++ {
 		for t2 := 0; t2 < 2; t2++ {
 			b.Run(fmt.Sprintf("(%d,%d)", t1, t2), func(b *testing.B) {
