@@ -65,11 +65,11 @@ func (i *ItemToItem) Push(item data.Item) {
 		"item": item,
 	})
 	if err != nil {
-		log.Logger().Error("evaluate filter function", zap.Error(err))
+		log.Logger().Error("evaluate filter function", zap.Any("item", item), zap.Error(err))
 		return
 	}
 	// Check column type
-	v, ok := result.([]float32)
+	v, ok := castToFloats(result)
 	if !ok {
 		log.Logger().Error("invalid column type", zap.Any("column", result))
 		return
@@ -104,5 +104,25 @@ func (i *ItemToItem) PopAll(callback func(itemId string, score []cache.Score)) {
 				Timestamp: i.timestamp,
 			}
 		}))
+	}
+}
+
+func castToFloats(v any) ([]float32, bool) {
+	if v == nil {
+		return nil, false
+	}
+	switch typed := v.(type) {
+	case []any:
+		result := make([]float32, len(typed))
+		for i, value := range typed {
+			if typedValue, ok := value.(float64); ok {
+				result[i] = float32(typedValue)
+			} else {
+				return nil, false
+			}
+		}
+		return result, true
+	default:
+		return nil, false
 	}
 }

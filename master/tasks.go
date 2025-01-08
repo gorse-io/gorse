@@ -1558,6 +1558,10 @@ func (m *Master) LoadDataFromDatabase(
 			}
 			if item.IsHidden { // set hidden flag
 				rankingDataset.HiddenItems[itemIndex] = true
+			} else {
+				for _, recommender := range itemToItemRecommenders {
+					recommender.Push(item)
+				}
 			}
 		}
 		span.Add(len(batchItems))

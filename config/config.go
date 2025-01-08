@@ -116,7 +116,7 @@ type RecommendConfig struct {
 	DataSource      DataSourceConfig        `mapstructure:"data_source"`
 	NonPersonalized []NonPersonalizedConfig `mapstructure:"non-personalized" validate:"dive"`
 	Popular         PopularConfig           `mapstructure:"popular"`
-	ItemToItem      []ItemToItemConfig      `mapstructure:"item-to-item"`
+	ItemToItem      []ItemToItemConfig      `mapstructure:"item-to-item" validate:"dive"`
 	UserNeighbors   NeighborsConfig         `mapstructure:"user_neighbors"`
 	ItemNeighbors   NeighborsConfig         `mapstructure:"item_neighbors"`
 	Collaborative   CollaborativeConfig     `mapstructure:"collaborative"`
