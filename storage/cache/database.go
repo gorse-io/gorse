@@ -316,6 +316,7 @@ func Open(path, tablePrefix string, opts ...storage.Option) (Database, error) {
 		if err != nil {
 			return nil, err
 		}
+		opt.Protocol = 2
 		database := new(Redis)
 		database.client = redis.NewClusterClient(opt)
 		database.TablePrefix = storage.TablePrefix(tablePrefix)
