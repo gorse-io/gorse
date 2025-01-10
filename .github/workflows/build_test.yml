@@ -263,7 +263,7 @@ jobs:
         run: |
           git clone https://github.com/gorse-cloud/redis-stack.git
           pushd redis-stack
-          docker-compose up -d
+          docker compose up -d
           popd
           go test ./storage/cache -run ^TestRedis
         env:
