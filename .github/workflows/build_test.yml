@@ -259,6 +259,16 @@ jobs:
         env:
           MYSQL_URI: mysql://root:password@tcp(localhost:${{ job.services.mariadb.ports[3306] }})/
 
+      - name: Test Redis cluster
+        run: |
+          git clone https://github.com/gorse-cloud/redis-stack.git
+          pushd redis-stack
+          docker-compose up -d
+          popd
+          go test ./storage/cache -run ^TestRedis
+        env:
+          REDIS_URI: redis+cluster://localhost:7000
+
   golangci:
     name: lint
     runs-on: ubuntu-latest
