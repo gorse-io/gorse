@@ -245,23 +245,16 @@ jobs:
           MYSQL_ROOT_PASSWORD: password
 
     steps:
+      - name: Install pre-requisites
+        uses: awalsh128/cache-apt-pkgs-action@latest
+        with:
+          packages: redis-tools
+
       - name: Set up Go 1.23.x
         uses: actions/setup-go@v4
         with:
           go-version: 1.23.x
         id: go
-
-      - name: Setup Redis cluster
-        run: |
-          git clone https://github.com/gorse-cloud/redis-stack.git
-          cd redis-stack
-          docker compose up -d
-          # sudo apt update
-          # sudo apt install -y redis-tools
-          # while true; do
-          #   redis-cli -p 7005 ping | grep PONG && break
-          #   sleep 1
-          # done
 
       - name: Check out code into the Go module directory
         uses: actions/checkout@v2
@@ -272,7 +265,14 @@ jobs:
           MYSQL_URI: mysql://root:password@tcp(localhost:${{ job.services.mariadb.ports[3306] }})/
 
       - name: Test Redis cluster
-        run: go test ./storage/cache -run ^TestRedis
+        run: |
+          git clone https://github.com/gorse-cloud/redis-stack.git
+          docker compse -f redis-stack/docker-compose.yml --project-directory redis-stack up -d
+          for i in {1..5}; do
+            redis-cli -p 7005 ping | grep PONG && break
+            sleep 10
+          done
+          go test ./storage/cache -run ^TestRedis
         env:
           REDIS_URI: redis+cluster://localhost:7005
 
