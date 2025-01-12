@@ -251,6 +251,12 @@ jobs:
           go-version: 1.23.x
         id: go
 
+      - name: Setup Redis cluster
+        run: |
+          git clone https://github.com/gorse-cloud/redis-stack.git
+          cd redis-stack
+          docker compose up -d
+
       - name: Check out code into the Go module directory
         uses: actions/checkout@v2
 
@@ -260,12 +266,7 @@ jobs:
           MYSQL_URI: mysql://root:password@tcp(localhost:${{ job.services.mariadb.ports[3306] }})/
 
       - name: Test Redis cluster
-        run: |
-          git clone https://github.com/gorse-cloud/redis-stack.git
-          pushd redis-stack
-          docker compose up -d
-          popd
-          go test ./storage/cache -run ^TestRedis
+        run: go test ./storage/cache -run ^TestRedis
         env:
           REDIS_URI: redis+cluster://localhost:7000
 
