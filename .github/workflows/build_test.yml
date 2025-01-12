@@ -267,7 +267,7 @@ jobs:
       - name: Test Redis cluster
         run: |
           git clone https://github.com/gorse-cloud/redis-stack.git
-          docker compse -f redis-stack/docker-compose.yml --project-directory redis-stack up -d
+          docker compose -f redis-stack/docker-compose.yml --project-directory redis-stack up -d
           for i in {1..5}; do
             redis-cli -p 7005 ping | grep PONG && break
             sleep 10
