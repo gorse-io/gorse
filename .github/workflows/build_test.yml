@@ -276,7 +276,7 @@ jobs:
       - name: Test Redis cluster
         run: go test ./storage/cache -run ^TestRedis
         env:
-          REDIS_URI: redis+cluster://localhost:7005
+          REDIS_URI: redis://localhost:7005
 
   golangci:
     name: lint
