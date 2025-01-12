@@ -257,7 +257,7 @@ jobs:
           cd redis-stack
           docker compose up -d
           while true; do
-            docker compose exec redis-1 redis-cli -p 7005 ping | grep PONG && break
+            docker compose exec redis-node-5 redis-cli -p 7005 ping | grep PONG && break
             sleep 1
           done
 
