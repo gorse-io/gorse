@@ -3,6 +3,7 @@
 # The database for caching, support Redis, MySQL, Postgres and MongoDB:
 #   redis://<user>:<password>@<host>:<port>/<db_number>
 #   rediss://<user>:<password>@<host>:<port>/<db_number>
+#   redis+cluster://<user>:<password>@<host1>:<port1>,<host2>:<port2>,...,<hostN>:<portN>
 #   mysql://[username[:password]@][protocol[(address)]]/dbname[?param1=value1&...&paramN=valueN]
 #   postgres://bob:secret@1.2.3.4:5432/mydb?sslmode=verify-full
 #   postgresql://bob:secret@1.2.3.4:5432/mydb?sslmode=verify-full
