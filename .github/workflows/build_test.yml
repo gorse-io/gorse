@@ -256,6 +256,8 @@ jobs:
           git clone https://github.com/gorse-cloud/redis-stack.git
           cd redis-stack
           docker compose up -d
+          apt update
+          apt install -y redis-tools
           while true; do
             redis-cli -p 7005 ping | grep PONG && break
             sleep 1
