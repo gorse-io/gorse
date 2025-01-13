@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 	"github.com/zhenghaoz/gorse/base/log"
@@ -52,8 +53,17 @@ func (suite *RedisTestSuite) SetupSuite() {
 	suite.Database, err = Open(redisDSN, "gorse_")
 	suite.NoError(err)
 	// flush db
-	err = suite.Database.(*Redis).client.FlushDB(context.TODO()).Err()
-	suite.NoError(err)
+	redisClient, ok := suite.Database.(*Redis)
+	suite.True(ok)
+	if clusterClient, ok := redisClient.client.(*redis.ClusterClient); ok {
+		err = clusterClient.ForEachMaster(context.Background(), func(ctx context.Context, client *redis.Client) error {
+			return client.FlushDB(ctx).Err()
+		})
+		suite.NoError(err)
+	} else {
+		err = redisClient.client.FlushDB(context.TODO()).Err()
+		suite.NoError(err)
+	}
 	// create schema
 	err = suite.Database.Init()
 	suite.NoError(err)
@@ -113,28 +123,4 @@ func BenchmarkRedis(b *testing.B) {
 	assert.NoError(b, err)
 	// benchmark
 	benchmark(b, database)
-}
-
-func TestParseRedisClusterURL(t *testing.T) {
-	options, err := ParseRedisClusterURL("redis+cluster://username:password@127.0.0.1:6379,127.0.0.1:6380,127.0.0.1:6381/?" +
-		"max_retries=1000&dial_timeout=1h&pool_fifo=true")
-	if assert.NoError(t, err) {
-		assert.Equal(t, "username", options.Username)
-		assert.Equal(t, "password", options.Password)
-		assert.Equal(t, []string{"127.0.0.1:6379", "127.0.0.1:6380", "127.0.0.1:6381"}, options.Addrs)
-		assert.Equal(t, 1000, options.MaxRetries)
-		assert.Equal(t, time.Hour, options.DialTimeout)
-		assert.True(t, options.PoolFIFO)
-	}
-
-	_, err = ParseRedisClusterURL("redis://")
-	assert.Error(t, err)
-	_, err = ParseRedisClusterURL("redis+cluster://username:password@127.0.0.1:6379/?max_retries=a")
-	assert.Error(t, err)
-	_, err = ParseRedisClusterURL("redis+cluster://username:password@127.0.0.1:6379/?dial_timeout=a")
-	assert.Error(t, err)
-	_, err = ParseRedisClusterURL("redis+cluster://username:password@127.0.0.1:6379/?pool_fifo=a")
-	assert.Error(t, err)
-	_, err = ParseRedisClusterURL("redis+cluster://username:password@127.0.0.1:6379/?a=1")
-	assert.Error(t, err)
 }

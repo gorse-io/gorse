@@ -311,8 +311,14 @@ func Open(path, tablePrefix string, opts ...storage.Option) (Database, error) {
 			return nil, errors.Trace(err)
 		}
 		return database, nil
-	} else if strings.HasPrefix(path, storage.RedisClusterPrefix) {
-		opt, err := ParseRedisClusterURL(path)
+	} else if strings.HasPrefix(path, storage.RedisClusterPrefix) || strings.HasPrefix(path, storage.RedissClusterPrefix) {
+		var newURL string
+		if strings.HasPrefix(path, storage.RedisClusterPrefix) {
+			newURL = strings.Replace(path, storage.RedisClusterPrefix, storage.RedisPrefix, 1)
+		} else if strings.HasPrefix(path, storage.RedissClusterPrefix) {
+			newURL = strings.Replace(path, storage.RedissClusterPrefix, storage.RedissPrefix, 1)
+		}
+		opt, err := redis.ParseClusterURL(newURL)
 		if err != nil {
 			return nil, err
 		}

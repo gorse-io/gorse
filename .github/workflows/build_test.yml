@@ -273,10 +273,15 @@ jobs:
         env:
           MYSQL_URI: mysql://root:password@tcp(localhost:${{ job.services.mariadb.ports[3306] }})/
 
-      - name: Test Redis cluster
+      - name: Test Redis cluster (1 address)
         run: go test ./storage/cache -run ^TestRedis
         env:
-          REDIS_URI: redis+cluster://localhost:7005
+          REDIS_URI: redis+cluster://localhost:7000
+      
+      - name: Test Redis cluster (6 addresses)
+        run: go test ./storage/cache -run ^TestRedis
+        env:
+          REDIS_URI: redis+cluster://localhost:7000?addr=localhost:7001&addr=localhost:7002&addr=localhost:7003&addr=localhost:7004&addr=localhost:7005
 
   golangci:
     name: lint
