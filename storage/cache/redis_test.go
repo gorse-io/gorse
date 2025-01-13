@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 	"github.com/zhenghaoz/gorse/base/log"
@@ -52,8 +53,17 @@ func (suite *RedisTestSuite) SetupSuite() {
 	suite.Database, err = Open(redisDSN, "gorse_")
 	suite.NoError(err)
 	// flush db
-	err = suite.Database.(*Redis).client.FlushDB(context.TODO()).Err()
-	suite.NoError(err)
+	redisClient, ok := suite.Database.(*Redis)
+	suite.True(ok)
+	if clusterClient, ok := redisClient.client.(*redis.ClusterClient); ok {
+		err = clusterClient.ForEachMaster(context.Background(), func(ctx context.Context, client *redis.Client) error {
+			return client.FlushDB(ctx).Err()
+		})
+		suite.NoError(err)
+	} else {
+		err = redisClient.client.FlushDB(context.TODO()).Err()
+		suite.NoError(err)
+	}
 	// create schema
 	err = suite.Database.Init()
 	suite.NoError(err)
