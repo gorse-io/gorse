@@ -20,7 +20,7 @@ import (
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/base/floats"
-	"github.com/zhenghaoz/gorse/common/dataset"
+	"github.com/zhenghaoz/gorse/common/datautil"
 	"github.com/zhenghaoz/gorse/common/util"
 	"os"
 	"path/filepath"
@@ -57,7 +57,7 @@ type MNIST struct {
 
 func mnist() (*MNIST, error) {
 	// Download and unzip dataset
-	path, err := dataset.DownloadAndUnzip("mnist")
+	path, err := datautil.DownloadAndUnzip("mnist")
 	if err != nil {
 		return nil, err
 	}
@@ -148,7 +148,7 @@ func TestMNIST(t *testing.T) {
 
 func movieLens() ([][]int, error) {
 	// Download and unzip dataset
-	path, err := dataset.DownloadAndUnzip("ml-1m")
+	path, err := datautil.DownloadAndUnzip("ml-1m")
 	if err != nil {
 		return nil, err
 	}
