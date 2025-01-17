@@ -492,3 +492,21 @@ func TestConfig_OfflineRecommendDigest(t *testing.T) {
 	cfg2.Recommend.Replacement.PositiveReplacementDecay = 0.2
 	assert.Equal(t, cfg1.OfflineRecommendDigest(), cfg2.OfflineRecommendDigest())
 }
+
+func TestItemToItemConfig_Hash(t *testing.T) {
+	a := ItemToItemConfig{}
+	b := ItemToItemConfig{}
+	assert.Equal(t, a.Hash(), b.Hash())
+
+	a = ItemToItemConfig{Name: "a"}
+	b = ItemToItemConfig{Name: "b"}
+	assert.NotEqual(t, a.Hash(), b.Hash())
+
+	a = ItemToItemConfig{Type: "a"}
+	b = ItemToItemConfig{Type: "b"}
+	assert.NotEqual(t, a.Hash(), b.Hash())
+
+	a = ItemToItemConfig{Column: "a"}
+	b = ItemToItemConfig{Column: "b"}
+	assert.NotEqual(t, a.Hash(), b.Hash())
+}

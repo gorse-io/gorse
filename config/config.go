@@ -155,6 +155,14 @@ type ItemToItemConfig struct {
 	Column string `mapstructure:"column" json:"column" validate:"item_expr"`
 }
 
+func (config *ItemToItemConfig) Hash() string {
+	hash := md5.New()
+	hash.Write([]byte(config.Name))
+	hash.Write([]byte(config.Type))
+	hash.Write([]byte(config.Column))
+	return string(hash.Sum(nil))
+}
+
 type CollaborativeConfig struct {
 	ModelFitPeriod        time.Duration `mapstructure:"model_fit_period" validate:"gt=0"`
 	ModelSearchPeriod     time.Duration `mapstructure:"model_search_period" validate:"gt=0"`
