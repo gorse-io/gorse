@@ -93,7 +93,7 @@ func (i *ItemToItem) Push(item data.Item) {
 
 func (i *ItemToItem) PopAll(callback func(itemId string, score []cache.Score)) {
 	for index, item := range i.items {
-		scores, err := i.index.SearchIndex(index, i.n, true)
+		scores, err := i.index.SearchIndex(index, i.n+1, true)
 		if err != nil {
 			log.Logger().Error("failed to search index", zap.Error(err))
 			return

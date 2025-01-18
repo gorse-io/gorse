@@ -77,11 +77,11 @@ const (
 	//	Recommendation digest      - offline_recommend_digest/{user_id}
 	OfflineRecommendDigest = "offline_recommend_digest"
 
-	NonPersonalized = "non-personalized"
-	Latest          = "latest"
-	Popular         = "popular"
-
-	ItemToItem = "item-to-item"
+	NonPersonalized  = "non-personalized"
+	Latest           = "latest"
+	Popular          = "popular"
+	ItemToItem       = "item-to-item"
+	ItemToItemDigest = "item-to-item_digest"
 
 	// ItemCategories is the set of item categories. The format of key:
 	//	Global item categories - item_categories
@@ -92,6 +92,7 @@ const (
 	LastUpdateUserRecommendTime = "last_update_user_recommend_time" // the latest timestamp that a user's recommendation was updated
 	LastUpdateUserNeighborsTime = "last_update_user_neighbors_time" // the latest timestamp that a user's neighbors item was updated
 	LastUpdateItemNeighborsTime = "last_update_item_neighbors_time" // the latest timestamp that an item's neighbors was updated
+	LastUpdateItemToItemTime    = "last_update_item_to_item_time"   // the latest timestamp that an item-to-item model was updated
 
 	// GlobalMeta is global meta information
 	GlobalMeta                 = "global_meta"

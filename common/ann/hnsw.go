@@ -63,7 +63,7 @@ func (h *HNSW[T]) SearchIndex(q, k int, prune0 bool) ([]lo.Tuple2[int, float32],
 	scores := make([]lo.Tuple2[int, float32], 0)
 	for w.Len() > 0 {
 		value, score := w.Pop()
-		if !prune0 || score < 0 {
+		if !prune0 || score > 0 {
 			scores = append(scores, lo.Tuple2[int, float32]{A: int(value), B: score})
 		}
 	}
@@ -75,7 +75,7 @@ func (h *HNSW[T]) SearchVector(q []T, k int, prune0 bool) []lo.Tuple2[int, float
 	scores := make([]lo.Tuple2[int, float32], 0)
 	for w.Len() > 0 {
 		value, score := w.Pop()
-		if !prune0 || score < 0 {
+		if !prune0 || score > 0 {
 			scores = append(scores, lo.Tuple2[int, float32]{A: int(value), B: score})
 		}
 	}

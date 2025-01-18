@@ -55,7 +55,7 @@ func (b *Bruteforce[T]) SearchIndex(q, k int, prune0 bool) ([]lo.Tuple2[int, flo
 	scores := make([]lo.Tuple2[int, float32], 0)
 	for pq.Len() > 0 {
 		value, score := pq.Pop()
-		if !prune0 || score < 0 {
+		if !prune0 || score > 0 {
 			scores = append(scores, lo.Tuple2[int, float32]{A: int(value), B: score})
 		}
 	}
@@ -75,7 +75,7 @@ func (b *Bruteforce[T]) SearchVector(q []T, k int, prune0 bool) []lo.Tuple2[int,
 	scores := make([]lo.Tuple2[int, float32], 0)
 	for pq.Len() > 0 {
 		value, score := pq.Pop()
-		if !prune0 || score < 0 {
+		if !prune0 || score > 0 {
 			scores = append(scores, lo.Tuple2[int, float32]{A: int(value), B: score})
 		}
 	}
