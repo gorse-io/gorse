@@ -1768,7 +1768,7 @@ func (m *Master) updateItemToItem(dataset *dataset.Dataset) error {
 	defer span.End()
 
 	// Build item-to-item recommenders
-	itemToItemRecommenders := make([]*logics.ItemToItem, 0, len(m.Config.Recommend.ItemToItem))
+	itemToItemRecommenders := make([]logics.ItemToItem, 0, len(m.Config.Recommend.ItemToItem))
 	for _, cfg := range m.Config.Recommend.ItemToItem {
 		recommender, err := logics.NewItemToItem(cfg, m.Config.Recommend.CacheSize, dataset.GetTimestamp())
 		if err != nil {

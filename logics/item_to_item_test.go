@@ -26,6 +26,7 @@ import (
 
 func TestColumnFunc(t *testing.T) {
 	item2item, err := NewItemToItem(config.ItemToItemConfig{
+		Type:   "embedding",
 		Column: "item.Labels.description",
 	}, 10, time.Now())
 	assert.NoError(t, err)
@@ -37,7 +38,7 @@ func TestColumnFunc(t *testing.T) {
 			"description": []float32{0.1, 0.2, 0.3},
 		},
 	})
-	assert.Len(t, item2item.items, 1)
+	assert.Len(t, item2item.Items(), 1)
 
 	// Hidden
 	item2item.Push(data.Item{
@@ -47,7 +48,7 @@ func TestColumnFunc(t *testing.T) {
 			"description": []float32{0.1, 0.2, 0.3},
 		},
 	})
-	assert.Len(t, item2item.items, 1)
+	assert.Len(t, item2item.Items(), 1)
 
 	// Dimension does not match
 	item2item.Push(data.Item{
@@ -56,7 +57,7 @@ func TestColumnFunc(t *testing.T) {
 			"description": []float32{0.1, 0.2},
 		},
 	})
-	assert.Len(t, item2item.items, 1)
+	assert.Len(t, item2item.Items(), 1)
 
 	// Type does not match
 	item2item.Push(data.Item{
@@ -65,19 +66,20 @@ func TestColumnFunc(t *testing.T) {
 			"description": "hello",
 		},
 	})
-	assert.Len(t, item2item.items, 1)
+	assert.Len(t, item2item.Items(), 1)
 
 	// Column does not exist
 	item2item.Push(data.Item{
 		ItemId: "2",
 		Labels: []float32{0.1, 0.2, 0.3},
 	})
-	assert.Len(t, item2item.items, 1)
+	assert.Len(t, item2item.Items(), 1)
 }
 
 func TestEmbedding(t *testing.T) {
 	timestamp := time.Now()
 	item2item, err := NewItemToItem(config.ItemToItemConfig{
+		Type:   "embedding",
 		Column: "item.Labels.description",
 	}, 10, timestamp)
 	assert.NoError(t, err)
