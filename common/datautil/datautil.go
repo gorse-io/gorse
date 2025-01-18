@@ -85,7 +85,7 @@ func DownloadAndUnzip(name string) (string, error) {
 	path := filepath.Join(datasetDir, name)
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		zipFileName, _ := downloadFromUrl(url, tempDir)
-		if _, err := unzip(zipFileName, path); err != nil {
+		if _, err := unzip(zipFileName, datasetDir); err != nil {
 			return "", err
 		}
 	}

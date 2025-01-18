@@ -153,7 +153,7 @@ func movieLens() ([][]int, error) {
 		return nil, err
 	}
 	// Open file
-	f, err := os.Open(filepath.Join(path, "ml-1m/train.txt"))
+	f, err := os.Open(filepath.Join(path, "train.txt"))
 	if err != nil {
 		return nil, err
 	}
