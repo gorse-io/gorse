@@ -15,6 +15,7 @@
 package dataset
 
 import (
+	"github.com/chewxy/math32"
 	"github.com/samber/lo"
 	"github.com/zhenghaoz/gorse/storage/data"
 	"modernc.org/strutil"
@@ -25,18 +26,18 @@ import (
 type ID int
 
 type Dataset struct {
-	timestamp time.Time
-	items     []data.Item
-	fields    *strutil.Pool
-	dict      *strutil.Dict
+	timestamp    time.Time
+	items        []data.Item
+	columnNames  *strutil.Pool
+	columnValues *FreqDict
 }
 
 func NewDataset(timestamp time.Time, itemCount int) *Dataset {
 	return &Dataset{
-		timestamp: timestamp,
-		items:     make([]data.Item, 0, itemCount),
-		fields:    strutil.NewPool(),
-		dict:      strutil.NewDict(),
+		timestamp:    timestamp,
+		items:        make([]data.Item, 0, itemCount),
+		columnNames:  strutil.NewPool(),
+		columnValues: NewFreqDict(),
 	}
 }
 
@@ -46,6 +47,15 @@ func (d *Dataset) GetTimestamp() time.Time {
 
 func (d *Dataset) GetItems() []data.Item {
 	return d.items
+}
+
+func (d *Dataset) GetItemColumnValuesIDF() []float32 {
+	idf := make([]float32, d.columnValues.Count())
+	for i := 0; i < d.columnValues.Count(); i++ {
+		// Since zero IDF will cause NaN in the future, we set the minimum value to 1e-3.
+		idf[i] = max(math32.Log(float32(len(d.items)/(d.columnValues.Freq(i)))), 1e-3)
+	}
+	return idf
 }
 
 func (d *Dataset) AddItem(item data.Item) {
@@ -64,7 +74,7 @@ func (d *Dataset) processLabels(labels any, parent string) any {
 	case map[string]any:
 		o := make(map[string]any)
 		for k, v := range typed {
-			o[d.fields.Align(k)] = d.processLabels(v, parent+"."+k)
+			o[d.columnNames.Align(k)] = d.processLabels(v, parent+"."+k)
 		}
 		return o
 	case []any:
@@ -74,7 +84,7 @@ func (d *Dataset) processLabels(labels any, parent string) any {
 			})
 		} else if isSliceOf[string](typed) {
 			ids := lo.Map(typed, func(e any, _ int) ID {
-				return ID(d.dict.Id(parent + "." + e.(string)))
+				return ID(d.columnValues.Id(parent + "." + e.(string)))
 			})
 			sort.Slice(ids, func(i, j int) bool {
 				return ids[i] < ids[j]
