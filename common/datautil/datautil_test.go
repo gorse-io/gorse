@@ -1,4 +1,4 @@
-// Copyright 2024 gorse Project Authors
+// Copyright 2025 gorse Project Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,14 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package ann
+package datautil
 
 import (
-	"github.com/samber/lo"
+	"github.com/stretchr/testify/assert"
+	"testing"
 )
 
-type Index interface {
-	Add(v []float32) (int, error)
-	SearchIndex(q, k int, prune0 bool) ([]lo.Tuple2[int, float32], error)
-	SearchVector(q []float32, k int, prune0 bool) []lo.Tuple2[int, float32]
+func TestLoadIris(t *testing.T) {
+	data, target, err := LoadIris()
+	assert.NoError(t, err)
+	assert.Len(t, data, 150)
+	assert.Len(t, data[0], 4)
+	assert.Len(t, target, 150)
 }

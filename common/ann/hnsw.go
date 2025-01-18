@@ -12,10 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package search
+package ann
 
 import (
-	"errors"
 	"github.com/chewxy/math32"
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/samber/lo"
@@ -28,7 +27,6 @@ import (
 // HNSW is a vector index based on Hierarchical Navigable Small Worlds.
 type HNSW[T any] struct {
 	distanceFunc    func(a, b []T) float32
-	dimension       int
 	vectors         [][]T
 	bottomNeighbors []*heap.PriorityQueue
 	upperNeighbors  []map[int32]*heap.PriorityQueue
@@ -53,12 +51,6 @@ func NewHNSW[T any](distanceFunc func(a, b []T) float32) *HNSW[T] {
 }
 
 func (h *HNSW[T]) Add(v []T) (int, error) {
-	// Check dimension
-	if h.dimension == 0 {
-		h.dimension = len(v)
-	} else if h.dimension != len(v) {
-		return 0, errors.New("dimension mismatch")
-	}
 	// Add vector
 	h.vectors = append(h.vectors, v)
 	h.bottomNeighbors = append(h.bottomNeighbors, heap.NewPriorityQueue(false))
@@ -66,28 +58,28 @@ func (h *HNSW[T]) Add(v []T) (int, error) {
 	return len(h.vectors) - 1, nil
 }
 
-func (h *HNSW[T]) Search(q, k int, prune0 bool) ([]lo.Tuple2[int, float32], error) {
+func (h *HNSW[T]) SearchIndex(q, k int, prune0 bool) ([]lo.Tuple2[int, float32], error) {
 	w := h.knnSearch(h.vectors[q], k, h.efSearchValue(k))
 	scores := make([]lo.Tuple2[int, float32], 0)
 	for w.Len() > 0 {
 		value, score := w.Pop()
-		if !prune0 || score < 0 {
+		if !prune0 || score > 0 {
 			scores = append(scores, lo.Tuple2[int, float32]{A: int(value), B: score})
 		}
 	}
 	return scores, nil
 }
 
-func (h *HNSW[T]) SearchVector(q []T, k int, prune0 bool) ([]lo.Tuple2[int, float32], error) {
+func (h *HNSW[T]) SearchVector(q []T, k int, prune0 bool) []lo.Tuple2[int, float32] {
 	w := h.knnSearch(q, k, h.efSearchValue(k))
 	scores := make([]lo.Tuple2[int, float32], 0)
 	for w.Len() > 0 {
 		value, score := w.Pop()
-		if !prune0 || score < 0 {
+		if !prune0 || score > 0 {
 			scores = append(scores, lo.Tuple2[int, float32]{A: int(value), B: score})
 		}
 	}
-	return scores, nil
+	return scores
 }
 
 func (h *HNSW[T]) knnSearch(q []T, k, ef int) *heap.PriorityQueue {

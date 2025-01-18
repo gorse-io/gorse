@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package search
+package ann
 
 import (
 	"github.com/juju/errors"
@@ -23,7 +23,6 @@ import (
 // Bruteforce is a naive implementation of vector index.
 type Bruteforce[T any] struct {
 	distanceFunc func(a, b []T) float32
-	dimension    int
 	vectors      [][]T
 }
 
@@ -32,15 +31,9 @@ func NewBruteforce[T any](distanceFunc func(a, b []T) float32) *Bruteforce[T] {
 }
 
 func (b *Bruteforce[T]) Add(v []T) (int, error) {
-	// Check dimension
-	if b.dimension == 0 {
-		b.dimension = len(v)
-	} else if b.dimension != len(v) {
-		return 0, errors.Errorf("dimension mismatch: %v != %v", b.dimension, len(v))
-	}
 	// Add vector
 	b.vectors = append(b.vectors, v)
-	return len(b.vectors) - 1, nil
+	return len(b.vectors), nil
 }
 
 func (b *Bruteforce[T]) SearchIndex(q, k int, prune0 bool) ([]lo.Tuple2[int, float32], error) {
@@ -62,14 +55,14 @@ func (b *Bruteforce[T]) SearchIndex(q, k int, prune0 bool) ([]lo.Tuple2[int, flo
 	scores := make([]lo.Tuple2[int, float32], 0)
 	for pq.Len() > 0 {
 		value, score := pq.Pop()
-		if !prune0 || score < 0 {
+		if !prune0 || score > 0 {
 			scores = append(scores, lo.Tuple2[int, float32]{A: int(value), B: score})
 		}
 	}
 	return scores, nil
 }
 
-func (b *Bruteforce[T]) SearchVector(q []T, k int, prune0 bool) ([]lo.Tuple2[int, float32], error) {
+func (b *Bruteforce[T]) SearchVector(q []T, k int, prune0 bool) []lo.Tuple2[int, float32] {
 	// Search
 	pq := heap.NewPriorityQueue(true)
 	for i, vec := range b.vectors {
@@ -82,9 +75,9 @@ func (b *Bruteforce[T]) SearchVector(q []T, k int, prune0 bool) ([]lo.Tuple2[int
 	scores := make([]lo.Tuple2[int, float32], 0)
 	for pq.Len() > 0 {
 		value, score := pq.Pop()
-		if !prune0 || score < 0 {
+		if !prune0 || score > 0 {
 			scores = append(scores, lo.Tuple2[int, float32]{A: int(value), B: score})
 		}
 	}
-	return scores, nil
+	return scores
 }

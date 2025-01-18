@@ -17,7 +17,6 @@ package master
 import (
 	"context"
 	"fmt"
-	"github.com/zhenghaoz/gorse/logics"
 	"sort"
 	"strings"
 	"sync"
@@ -37,6 +36,8 @@ import (
 	"github.com/zhenghaoz/gorse/base/sizeof"
 	"github.com/zhenghaoz/gorse/base/task"
 	"github.com/zhenghaoz/gorse/config"
+	"github.com/zhenghaoz/gorse/dataset"
+	"github.com/zhenghaoz/gorse/logics"
 	"github.com/zhenghaoz/gorse/model/click"
 	"github.com/zhenghaoz/gorse/model/ranking"
 	"github.com/zhenghaoz/gorse/storage/cache"
@@ -93,12 +94,13 @@ func (m *Master) runLoadDatasetTask() error {
 		zap.Uint("item_ttl", m.Config.Recommend.DataSource.ItemTTL),
 		zap.Uint("feedback_ttl", m.Config.Recommend.DataSource.PositiveFeedbackTTL))
 	evaluator := NewOnlineEvaluator()
-	rankingDataset, clickDataset, err := m.LoadDataFromDatabase(ctx, m.DataClient,
+	rankingDataset, clickDataset, dataSet, err := m.LoadDataFromDatabase(ctx, m.DataClient,
 		m.Config.Recommend.DataSource.PositiveFeedbackTypes,
 		m.Config.Recommend.DataSource.ReadFeedbackTypes,
 		m.Config.Recommend.DataSource.ItemTTL,
 		m.Config.Recommend.DataSource.PositiveFeedbackTTL,
-		evaluator, nonPersonalizedRecommenders)
+		evaluator,
+		nonPersonalizedRecommenders)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -200,6 +202,10 @@ func (m *Master) runLoadDatasetTask() error {
 	LoadDatasetStepSecondsVec.WithLabelValues("split_click_dataset").Set(time.Since(startTime).Seconds())
 	MemoryInUseBytesVec.WithLabelValues("ranking_train_set").Set(float64(sizeof.DeepSize(m.clickTrainSet)))
 	MemoryInUseBytesVec.WithLabelValues("ranking_test_set").Set(float64(sizeof.DeepSize(m.clickTestSet)))
+
+	if err = m.updateItemToItem(dataSet); err != nil {
+		log.Logger().Error("failed to update item-to-item recommendation", zap.Error(err))
+	}
 
 	LoadDatasetTotalSeconds.Set(time.Since(initialStartTime).Seconds())
 	return nil
@@ -1407,20 +1413,22 @@ func (m *Master) LoadDataFromDatabase(
 	itemTTL, positiveFeedbackTTL uint,
 	evaluator *OnlineEvaluator,
 	nonPersonalizedRecommenders []*logics.NonPersonalized,
-) (rankingDataset *ranking.DataSet, clickDataset *click.Dataset, err error) {
+) (rankingDataset *ranking.DataSet, clickDataset *click.Dataset, dataSet *dataset.Dataset, err error) {
 	// Estimate the number of users, items, and feedbacks
 	estimatedNumUsers, err := m.DataClient.CountUsers(context.Background())
 	if err != nil {
-		return nil, nil, errors.Trace(err)
+		return nil, nil, nil, errors.Trace(err)
 	}
 	estimatedNumItems, err := m.DataClient.CountItems(context.Background())
 	if err != nil {
-		return nil, nil, errors.Trace(err)
+		return nil, nil, nil, errors.Trace(err)
 	}
 	estimatedNumFeedbacks, err := m.DataClient.CountFeedback(context.Background())
 	if err != nil {
-		return nil, nil, errors.Trace(err)
+		return nil, nil, nil, errors.Trace(err)
 	}
+
+	dataSet = dataset.NewDataset(time.Now(), estimatedNumItems)
 
 	newCtx, span := progress.Start(ctx, "LoadDataFromDatabase",
 		estimatedNumUsers+estimatedNumItems+estimatedNumFeedbacks)
@@ -1486,7 +1494,7 @@ func (m *Master) LoadDataFromDatabase(
 		span.Add(len(users))
 	}
 	if err = <-errChan; err != nil {
-		return nil, nil, errors.Trace(err)
+		return nil, nil, nil, errors.Trace(err)
 	}
 	rankingDataset.NumUserLabels = userLabelIndex.Len()
 	log.Logger().Debug("pulled users from database",
@@ -1542,11 +1550,12 @@ func (m *Master) LoadDataFromDatabase(
 			if item.IsHidden { // set hidden flag
 				rankingDataset.HiddenItems[itemIndex] = true
 			}
+			dataSet.AddItem(item)
 		}
 		span.Add(len(batchItems))
 	}
 	if err = <-errChan; err != nil {
-		return nil, nil, errors.Trace(err)
+		return nil, nil, nil, errors.Trace(err)
 	}
 	rankingDataset.NumItemLabels = itemLabelIndex.Len()
 	log.Logger().Debug("pulled items from database",
@@ -1651,7 +1660,7 @@ func (m *Master) LoadDataFromDatabase(
 		return nil
 	})
 	if err != nil {
-		return nil, nil, errors.Trace(err)
+		return nil, nil, nil, errors.Trace(err)
 	}
 	log.Logger().Debug("pulled positive feedback from database",
 		zap.Int("n_positive_feedback", posFeedbackCount),
@@ -1701,7 +1710,7 @@ func (m *Master) LoadDataFromDatabase(
 		return nil
 	})
 	if err != nil {
-		return nil, nil, errors.Trace(err)
+		return nil, nil, nil, errors.Trace(err)
 	}
 	log.Logger().Debug("pulled negative feedback from database",
 		zap.Int("n_negative_feedback", int(negativeFeedbackCount)),
@@ -1750,5 +1759,101 @@ func (m *Master) LoadDataFromDatabase(
 		zap.Int("n_valid_negative", clickDataset.NegativeCount),
 		zap.Duration("used_time", time.Since(start)))
 	LoadDatasetStepSecondsVec.WithLabelValues("create_ranking_dataset").Set(time.Since(start).Seconds())
-	return rankingDataset, clickDataset, nil
+	return rankingDataset, clickDataset, dataSet, nil
+}
+
+func (m *Master) updateItemToItem(dataset *dataset.Dataset) error {
+	ctx, span := m.tracer.Start(context.Background(), "Generate item-to-item recommendation",
+		len(dataset.GetItems())*len(m.Config.Recommend.ItemToItem)*2)
+	defer span.End()
+
+	// Build item-to-item recommenders
+	itemToItemRecommenders := make([]*logics.ItemToItem, 0, len(m.Config.Recommend.ItemToItem))
+	for _, cfg := range m.Config.Recommend.ItemToItem {
+		recommender, err := logics.NewItemToItem(cfg, m.Config.Recommend.CacheSize, dataset.GetTimestamp())
+		if err != nil {
+			return errors.Trace(err)
+		}
+		itemToItemRecommenders = append(itemToItemRecommenders, recommender)
+	}
+
+	// Push items to item-to-item recommenders
+	for _, item := range dataset.GetItems() {
+		if !item.IsHidden {
+			for _, recommender := range itemToItemRecommenders {
+				recommender.Push(item)
+				span.Add(1)
+			}
+		}
+	}
+
+	// Save item-to-item recommendations to cache
+	for i, recommender := range itemToItemRecommenders {
+		recommender.PopAll(func(itemId string, score []cache.Score) {
+			itemToItemConfig := m.Config.Recommend.ItemToItem[i]
+			if m.needUpdateItemToItem(itemId, m.Config.Recommend.ItemToItem[i]) {
+				log.Logger().Debug("update item-to-item recommendation",
+					zap.String("item_id", itemId),
+					zap.String("name", itemToItemConfig.Name),
+					zap.Int("n_recommendations", len(score)))
+				// Save item-to-item recommendation to cache
+				if err := m.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key(itemToItemConfig.Name, itemId), score); err != nil {
+					log.Logger().Error("failed to save item-to-item recommendation to cache",
+						zap.String("item_id", itemId), zap.Error(err))
+					return
+				}
+				// Save item-to-item digest and last update time to cache
+				if err := m.CacheClient.Set(ctx,
+					cache.String(cache.Key(cache.ItemToItemDigest, itemToItemConfig.Name, itemId), itemToItemConfig.Hash()),
+					cache.Time(cache.Key(cache.LastUpdateItemToItemTime, itemToItemConfig.Name, itemId), time.Now()),
+				); err != nil {
+					log.Logger().Error("failed to save item-to-item digest to cache",
+						zap.String("item_id", itemId), zap.Error(err))
+					return
+				}
+			}
+			span.Add(1)
+		})
+	}
+	return nil
+}
+
+// needUpdateItemToItem checks if item-to-item recommendation needs to be updated.
+// 1. The cache is empty.
+// 2. The modified time is newer than the last update time.
+func (m *Master) needUpdateItemToItem(itemId string, itemToItemConfig config.ItemToItemConfig) bool {
+	ctx := context.Background()
+
+	// check cache
+	items, err := m.CacheClient.SearchScores(ctx, cache.ItemToItem,
+		cache.Key(itemToItemConfig.Name, itemId), nil, 0, -1)
+	if err != nil {
+		log.Logger().Error("failed to fetch item-to-item recommendation",
+			zap.String("item_id", itemId), zap.Error(err))
+		return true
+	} else if len(items) == 0 {
+		return true
+	}
+
+	// check digest
+	digest, err := m.CacheClient.Get(ctx, cache.Key(cache.ItemToItemDigest, itemToItemConfig.Name, itemId)).String()
+	if err != nil {
+		if !errors.Is(err, errors.NotFound) {
+			log.Logger().Error("failed to read item-to-item digest", zap.Error(err))
+		}
+		return true
+	}
+	if digest != itemToItemConfig.Hash() {
+		return true
+	}
+
+	// check update time
+	updateTime, err := m.CacheClient.Get(ctx, cache.Key(cache.LastUpdateItemToItemTime, itemToItemConfig.Name, itemId)).Time()
+	if err != nil {
+		if !errors.Is(err, errors.NotFound) {
+			log.Logger().Error("failed to read last update item neighbors time", zap.Error(err))
+		}
+		return true
+	}
+	return updateTime.Before(time.Now().Add(-m.Config.Recommend.CacheExpire))
 }

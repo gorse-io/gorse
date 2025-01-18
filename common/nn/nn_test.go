@@ -31,7 +31,7 @@ import (
 	"github.com/samber/lo"
 	"github.com/schollz/progressbar/v3"
 	"github.com/stretchr/testify/assert"
-	"github.com/zhenghaoz/gorse/common/dataset"
+	"github.com/zhenghaoz/gorse/common/datautil"
 	"github.com/zhenghaoz/gorse/common/util"
 )
 
@@ -91,7 +91,7 @@ func TestNeuralNetwork(t *testing.T) {
 
 func iris() (*Tensor, *Tensor, error) {
 	// Download dataset
-	path, err := dataset.DownloadAndUnzip("iris")
+	path, err := datautil.DownloadAndUnzip("iris")
 	if err != nil {
 		return nil, nil, err
 	}
@@ -153,7 +153,7 @@ func TestIris(t *testing.T) {
 func mnist() (lo.Tuple2[*Tensor, *Tensor], lo.Tuple2[*Tensor, *Tensor], error) {
 	var train, test lo.Tuple2[*Tensor, *Tensor]
 	// Download and unzip dataset
-	path, err := dataset.DownloadAndUnzip("mnist")
+	path, err := datautil.DownloadAndUnzip("mnist")
 	if err != nil {
 		return train, test, err
 	}

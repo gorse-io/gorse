@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package search
+package ann
 
 import (
 	"bufio"
@@ -20,7 +20,7 @@ import (
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/base/floats"
-	"github.com/zhenghaoz/gorse/common/dataset"
+	"github.com/zhenghaoz/gorse/common/datautil"
 	"github.com/zhenghaoz/gorse/common/util"
 	"os"
 	"path/filepath"
@@ -57,7 +57,7 @@ type MNIST struct {
 
 func mnist() (*MNIST, error) {
 	// Download and unzip dataset
-	path, err := dataset.DownloadAndUnzip("mnist")
+	path, err := datautil.DownloadAndUnzip("mnist")
 	if err != nil {
 		return nil, err
 	}
@@ -136,13 +136,96 @@ func TestMNIST(t *testing.T) {
 	// Test search
 	r := 0.0
 	for _, image := range dat.TestImages[:testSize] {
-		gt, err := bf.SearchVector(image, 100, false)
-		assert.NoError(t, err)
+		gt := bf.SearchVector(image, 100, false)
 		assert.Len(t, gt, 100)
-		scores, err := hnsw.SearchVector(image, 100, false)
-		assert.NoError(t, err)
+		scores := hnsw.SearchVector(image, 100, false)
 		assert.Len(t, scores, 100)
 		r += recall(gt, scores)
 	}
+	r /= float64(testSize)
 	assert.Greater(t, r, 0.99)
+}
+
+func movieLens() ([][]int, error) {
+	// Download and unzip dataset
+	path, err := datautil.DownloadAndUnzip("ml-1m")
+	if err != nil {
+		return nil, err
+	}
+	// Open file
+	f, err := os.Open(filepath.Join(path, "train.txt"))
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	// Read data line by line
+	movies := make([][]int, 0)
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := scanner.Text()
+		splits := strings.Split(line, "\t")
+		userId, err := strconv.Atoi(splits[0])
+		if err != nil {
+			return nil, err
+		}
+		movieId, err := strconv.Atoi(splits[1])
+		if err != nil {
+			return nil, err
+		}
+		for movieId >= len(movies) {
+			movies = append(movies, make([]int, 0))
+		}
+		movies[movieId] = append(movies[movieId], userId)
+	}
+	return movies, nil
+}
+
+func jaccard(a, b []int) float32 {
+	var i, j, intersection int
+	for i < len(a) && j < len(b) {
+		if a[i] == b[j] {
+			intersection++
+			i++
+			j++
+		} else if a[i] < b[j] {
+			i++
+		} else {
+			j++
+		}
+	}
+	if len(a)+len(b)-intersection == 0 {
+		return 1
+	}
+	return 1 - float32(intersection)/float32(len(a)+len(b)-intersection)
+}
+
+func TestMovieLens(t *testing.T) {
+	movies, err := movieLens()
+	assert.NoError(t, err)
+
+	// Create brute-force index
+	bf := NewBruteforce(jaccard)
+	for _, movie := range movies {
+		_, err := bf.Add(movie)
+		assert.NoError(t, err)
+	}
+
+	// Create HNSW index
+	hnsw := NewHNSW(jaccard)
+	for _, movie := range movies {
+		_, err := hnsw.Add(movie)
+		assert.NoError(t, err)
+	}
+
+	// Test search
+	r := 0.0
+	for i := range movies[:testSize] {
+		gt, err := bf.SearchIndex(i, 100, false)
+		assert.NoError(t, err)
+		scores, err := hnsw.SearchIndex(i, 100, false)
+		assert.NoError(t, err)
+		r += recall(gt, scores)
+	}
+	r /= float64(testSize)
+	assert.Greater(t, r, 0.98)
 }

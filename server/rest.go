@@ -484,6 +484,17 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.QueryParameter("user-id", "Remove read items of a user").DataType("string")).
 		Returns(http.StatusOK, "OK", []cache.Score{}).
 		Writes([]cache.Score{}))
+	// Get item-to-item recommendation
+	ws.Route(ws.GET("/item-to-item/{name}/{item-id}").To(s.getItemToItem).
+		Doc("Get item-to-item recommendation.").
+		Metadata(restfulspec.KeyOpenAPITags, []string{RecommendationAPITag}).
+		Param(ws.HeaderParameter("X-API-Key", "API key").DataType("string")).
+		Param(ws.PathParameter("name", "Name of the item-to-item recommendation").DataType("string")).
+		Param(ws.PathParameter("item-id", "ID of the item to get neighbors").DataType("string")).
+		Param(ws.QueryParameter("n", "Number of returned items").DataType("integer")).
+		Param(ws.QueryParameter("offset", "Offset of returned items").DataType("integer")).
+		Returns(http.StatusOK, "OK", []cache.Score{}).
+		Writes([]cache.Score{}))
 	// Get neighbors
 	ws.Route(ws.GET("/item/{item-id}/neighbors/").To(s.getItemNeighbors).
 		Doc("Get neighbors of a item").
@@ -682,6 +693,12 @@ func (s *RestServer) getNonPersonalized(request *restful.Request, response *rest
 	categories := ReadCategories(request)
 	log.ResponseLogger(response).Debug("get leaderboard", zap.String("name", name))
 	s.SearchDocuments(cache.NonPersonalized, name, categories, nil, request, response)
+}
+
+func (s *RestServer) getItemToItem(request *restful.Request, response *restful.Response) {
+	name := request.PathParameter("name")
+	itemId := request.PathParameter("item-id")
+	s.SearchDocuments(cache.ItemToItem, cache.Key(name, itemId), nil, nil, request, response)
 }
 
 // get feedback by item-id with feedback type
@@ -1979,6 +1996,7 @@ func withWildCard(categories []string) []string {
 	return result
 }
 
+// ReadCategories tries to read categories from the request. If the category is not found, it returns an empty string.
 func ReadCategories(request *restful.Request) []string {
 	if pathValue := request.PathParameter("category"); pathValue != "" {
 		return []string{pathValue}
