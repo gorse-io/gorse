@@ -21,7 +21,7 @@ import (
 	"time"
 )
 
-func TestDataset_AddItem(t *testing.T) {
+func TestDataset_AddItem_Embedding(t *testing.T) {
 	dataSet := NewDataset(time.Now(), 1)
 	dataSet.AddItem(data.Item{
 		ItemId:     "1",
@@ -46,4 +46,55 @@ func TestDataset_AddItem(t *testing.T) {
 		},
 		Comment: "comment",
 	}, dataSet.GetItems()[0])
+}
+
+func TestDataset_AddItem_Tags(t *testing.T) {
+	dataSet := NewDataset(time.Now(), 1)
+	dataSet.AddItem(data.Item{
+		ItemId:     "1",
+		IsHidden:   false,
+		Categories: []string{"a", "b"},
+		Timestamp:  time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
+		Labels: map[string]any{
+			"a":    1,
+			"tags": []any{"a", "b", "c"},
+		},
+		Comment: "comment",
+	})
+	dataSet.AddItem(data.Item{
+		ItemId:     "2",
+		IsHidden:   true,
+		Categories: []string{"a", "b"},
+		Timestamp:  time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
+		Labels: map[string]any{
+			"a":      1,
+			"tags":   []any{"b", "c", "a"},
+			"topics": []any{"a", "b", "c"},
+		},
+		Comment: "comment",
+	})
+	assert.Len(t, dataSet.GetItems(), 2)
+	assert.Equal(t, data.Item{
+		ItemId:     "1",
+		IsHidden:   false,
+		Categories: []string{"a", "b"},
+		Timestamp:  time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
+		Labels: map[string]any{
+			"a":    1,
+			"tags": []ID{1, 2, 3},
+		},
+		Comment: "comment",
+	}, dataSet.GetItems()[0])
+	assert.Equal(t, data.Item{
+		ItemId:     "2",
+		IsHidden:   true,
+		Categories: []string{"a", "b"},
+		Timestamp:  time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
+		Labels: map[string]any{
+			"a":      1,
+			"tags":   []ID{1, 2, 3},
+			"topics": []ID{4, 5, 6},
+		},
+		Comment: "comment",
+	}, dataSet.GetItems()[1])
 }

@@ -17,18 +17,26 @@ package dataset
 import (
 	"github.com/samber/lo"
 	"github.com/zhenghaoz/gorse/storage/data"
+	"modernc.org/strutil"
+	"sort"
 	"time"
 )
+
+type ID int
 
 type Dataset struct {
 	timestamp time.Time
 	items     []data.Item
+	fields    *strutil.Pool
+	dict      *strutil.Dict
 }
 
 func NewDataset(timestamp time.Time, itemCount int) *Dataset {
 	return &Dataset{
 		timestamp: timestamp,
 		items:     make([]data.Item, 0, itemCount),
+		fields:    strutil.NewPool(),
+		dict:      strutil.NewDict(),
 	}
 }
 
@@ -46,17 +54,17 @@ func (d *Dataset) AddItem(item data.Item) {
 		IsHidden:   item.IsHidden,
 		Categories: item.Categories,
 		Timestamp:  item.Timestamp,
-		Labels:     d.processLabels(item.Labels),
+		Labels:     d.processLabels(item.Labels, ""),
 		Comment:    item.Comment,
 	})
 }
 
-func (d *Dataset) processLabels(labels any) any {
+func (d *Dataset) processLabels(labels any, parent string) any {
 	switch typed := labels.(type) {
 	case map[string]any:
 		o := make(map[string]any)
 		for k, v := range typed {
-			o[k] = d.processLabels(v)
+			o[d.fields.Align(k)] = d.processLabels(v, parent+"."+k)
 		}
 		return o
 	case []any:
@@ -64,6 +72,14 @@ func (d *Dataset) processLabels(labels any) any {
 			return lo.Map(typed, func(e any, _ int) float32 {
 				return float32(e.(float64))
 			})
+		} else if isSliceOf[string](typed) {
+			ids := lo.Map(typed, func(e any, _ int) ID {
+				return ID(d.dict.Id(parent + "." + e.(string)))
+			})
+			sort.Slice(ids, func(i, j int) bool {
+				return ids[i] < ids[j]
+			})
+			return ids
 		}
 		return typed
 	default:
