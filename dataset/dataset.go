@@ -19,7 +19,6 @@ import (
 	"github.com/samber/lo"
 	"github.com/zhenghaoz/gorse/storage/data"
 	"modernc.org/strutil"
-	"sort"
 	"time"
 )
 
@@ -83,15 +82,13 @@ func (d *Dataset) processLabels(labels any, parent string) any {
 				return float32(e.(float64))
 			})
 		} else if isSliceOf[string](typed) {
-			ids := lo.Map(typed, func(e any, _ int) ID {
-				return ID(d.columnValues.Id(parent + "." + e.(string)))
+			return lo.Map(typed, func(e any, _ int) ID {
+				return ID(d.columnValues.Id(parent + ":" + e.(string)))
 			})
-			sort.Slice(ids, func(i, j int) bool {
-				return ids[i] < ids[j]
-			})
-			return ids
 		}
 		return typed
+	case string:
+		return ID(d.columnValues.Id(parent + ":" + typed))
 	default:
 		return labels
 	}

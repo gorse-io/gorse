@@ -70,7 +70,7 @@ func TestDataset_AddItem(t *testing.T) {
 		Labels: map[string]any{
 			"a":        1,
 			"embedded": []float32{1.1, 2.2, 3.3},
-			"tags":     []ID{1, 2, 3},
+			"tags":     []ID{2, 3, 1},
 			"topics":   []ID{4, 5, 6},
 		},
 		Comment: "comment",

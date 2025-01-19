@@ -17,6 +17,7 @@ package logics
 import (
 	"errors"
 	"github.com/chewxy/math32"
+	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/expr-lang/expr"
 	"github.com/expr-lang/expr/vm"
 	"github.com/samber/lo"
@@ -28,6 +29,7 @@ import (
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
 	"go.uber.org/zap"
+	"sort"
 	"time"
 )
 
@@ -37,12 +39,12 @@ type ItemToItem interface {
 	PopAll(callback func(itemId string, score []cache.Score))
 }
 
-func NewItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time) (ItemToItem, error) {
+func NewItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time, idf []float32) (ItemToItem, error) {
 	switch cfg.Type {
 	case "embedding":
 		return newEmbeddingItemToItem(cfg, n, timestamp)
 	case "tags":
-		return newTagsItemToItem(cfg, n, timestamp)
+		return newTagsItemToItem(cfg, n, timestamp, idf)
 	default:
 		return nil, errors.New("invalid item-to-item type")
 	}
@@ -141,7 +143,7 @@ type tagsItemToItem struct {
 	idf []float32
 }
 
-func newTagsItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time) (ItemToItem, error) {
+func newTagsItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time, idf []float32) (ItemToItem, error) {
 	// Compile column expression
 	columnFunc, err := expr.Compile(cfg.Column, expr.Env(map[string]any{
 		"item": data.Item{},
@@ -158,6 +160,7 @@ func newTagsItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time) 
 		index:      ann.NewHNSW[dataset.ID](t.distance),
 	}
 	t.baseItemToItem = b
+	t.idf = idf
 	return t, nil
 }
 
@@ -175,12 +178,13 @@ func (t *tagsItemToItem) Push(item data.Item) {
 			zap.Any("item", item), zap.Error(err))
 		return
 	}
-	// Check column type
-	v, ok := result.([]dataset.ID)
-	if !ok {
-		log.Logger().Error("invalid column type", zap.Any("column", result))
-		return
-	}
+	// Extract tags
+	tSet := mapset.NewSet[dataset.ID]()
+	t.flatten(result, tSet)
+	v := tSet.ToSlice()
+	sort.Slice(v, func(i, j int) bool {
+		return v[i] < v[j]
+	})
 	// Push item
 	t.items = append(t.items, item.ItemId)
 	_, err = t.index.Add(v)
@@ -192,14 +196,18 @@ func (t *tagsItemToItem) Push(item data.Item) {
 
 func (t *tagsItemToItem) distance(a, b []dataset.ID) float32 {
 	commonSum, commonCount := t.weightedSumCommonElements(a, b)
-	if commonCount > 0 {
-		// Add shrinkage to avoid division by zero
-		return commonSum * commonCount /
-			math32.Sqrt(t.weightedSum(a)) /
-			math32.Sqrt(t.weightedSum(b)) /
-			(commonCount + 100)
-	} else {
+	if len(a) == len(b) && commonCount == float32(len(a)) {
+		// If two items have the same tags, its distance is zero.
 		return 0
+	} else if commonCount > 0 {
+		// Add shrinkage to avoid division by zero
+		return 1 - commonSum*commonCount/
+			math32.Sqrt(t.weightedSum(a))/
+			math32.Sqrt(t.weightedSum(b))/
+			(commonCount+100)
+	} else {
+		// If two items have no common tags, its distance is one.
+		return 1
 	}
 }
 
@@ -230,4 +238,19 @@ func (t *tagsItemToItem) weightedSum(a []dataset.ID) float32 {
 		}
 	}
 	return sum
+}
+
+func (t *tagsItemToItem) flatten(o any, tSet mapset.Set[dataset.ID]) {
+	switch typed := o.(type) {
+	case dataset.ID:
+		tSet.Add(typed)
+		return
+	case []dataset.ID:
+		tSet.Append(typed...)
+		return
+	case map[string]any:
+		for _, v := range typed {
+			t.flatten(v, tSet)
+		}
+	}
 }
