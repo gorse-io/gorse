@@ -958,7 +958,7 @@ func BenchmarkRecommendFromItemBased(b *testing.B) {
 
 			// insert user neighbors
 			for i := 0; i < s.Config.Recommend.Online.NumFeedbackFallbackItemBased; i++ {
-				err := s.CacheClient.AddScores(ctx, cache.ItemNeighbors, fmt.Sprintf("init_item_%d", i), documents)
+				err := s.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key(cache.Neighbors, fmt.Sprintf("init_item_%d", i)), documents)
 				require.NoError(b, err)
 			}
 

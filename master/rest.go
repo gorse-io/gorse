@@ -877,13 +877,13 @@ func (m *Master) getNonPersonalized(request *restful.Request, response *restful.
 func (m *Master) getItemNeighbors(request *restful.Request, response *restful.Response) {
 	itemId := request.PathParameter("item-id")
 	categories := server.ReadCategories(request)
-	m.SearchDocuments(cache.ItemNeighbors, itemId, categories, m.GetItem, request, response)
+	m.SearchDocuments(cache.ItemToItem, cache.Key(cache.Neighbors, itemId), categories, m.GetItem, request, response)
 }
 
 func (m *Master) getItemCategorizedNeighbors(request *restful.Request, response *restful.Response) {
 	itemId := request.PathParameter("item-id")
 	categories := server.ReadCategories(request)
-	m.SearchDocuments(cache.ItemNeighbors, itemId, categories, m.GetItem, request, response)
+	m.SearchDocuments(cache.ItemToItem, cache.Key(cache.Neighbors, itemId), categories, m.GetItem, request, response)
 }
 
 func (m *Master) getUserNeighbors(request *restful.Request, response *restful.Response) {
