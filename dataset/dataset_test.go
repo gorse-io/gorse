@@ -15,6 +15,7 @@
 package dataset
 
 import (
+	"github.com/chewxy/math32"
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/storage/data"
 	"testing"
@@ -31,10 +32,24 @@ func TestDataset_AddItem(t *testing.T) {
 		Labels: map[string]any{
 			"a":        1,
 			"embedded": []any{1.1, 2.2, 3.3},
+			"tags":     []any{"a", "b", "c"},
 		},
 		Comment: "comment",
 	})
-	assert.Len(t, dataSet.GetItems(), 1)
+	dataSet.AddItem(data.Item{
+		ItemId:     "2",
+		IsHidden:   true,
+		Categories: []string{"a", "b"},
+		Timestamp:  time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
+		Labels: map[string]any{
+			"a":        1,
+			"embedded": []any{1.1, 2.2, 3.3},
+			"tags":     []any{"b", "c", "a"},
+			"topics":   []any{"a", "b", "c"},
+		},
+		Comment: "comment",
+	})
+	assert.Len(t, dataSet.GetItems(), 2)
 	assert.Equal(t, data.Item{
 		ItemId:     "1",
 		IsHidden:   false,
@@ -43,7 +58,49 @@ func TestDataset_AddItem(t *testing.T) {
 		Labels: map[string]any{
 			"a":        1,
 			"embedded": []float32{1.1, 2.2, 3.3},
+			"tags":     []ID{1, 2, 3},
 		},
 		Comment: "comment",
 	}, dataSet.GetItems()[0])
+	assert.Equal(t, data.Item{
+		ItemId:     "2",
+		IsHidden:   true,
+		Categories: []string{"a", "b"},
+		Timestamp:  time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
+		Labels: map[string]any{
+			"a":        1,
+			"embedded": []float32{1.1, 2.2, 3.3},
+			"tags":     []ID{2, 3, 1},
+			"topics":   []ID{4, 5, 6},
+		},
+		Comment: "comment",
+	}, dataSet.GetItems()[1])
+}
+
+func TestDataset_GetItemColumnValuesIDF(t *testing.T) {
+	dataSet := NewDataset(time.Now(), 1)
+	dataSet.AddItem(data.Item{
+		ItemId:     "1",
+		IsHidden:   false,
+		Categories: []string{"a", "b"},
+		Timestamp:  time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
+		Labels: map[string]any{
+			"tags": []any{"a", "b", "c"},
+		},
+		Comment: "comment",
+	})
+	dataSet.AddItem(data.Item{
+		ItemId:     "2",
+		IsHidden:   false,
+		Categories: []string{"a", "b"},
+		Timestamp:  time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
+		Labels: map[string]any{
+			"tags": []any{"a", "e"},
+		},
+		Comment: "comment",
+	})
+	idf := dataSet.GetItemColumnValuesIDF()
+	assert.Len(t, idf, 5)
+	assert.InDelta(t, 1e-3, idf[1], 1e-6)
+	assert.InDelta(t, math32.Log(2), idf[2], 1e-6)
 }
