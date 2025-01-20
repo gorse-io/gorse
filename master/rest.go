@@ -172,20 +172,10 @@ func (m *Master) CreateWebService() {
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
 		Returns(http.StatusOK, "OK", []data.Item{}).
 		Writes([]data.Item{}))
-	ws.Route(ws.GET("/dashboard/item/{item-id}/neighbors").To(m.getItemNeighbors).
+	ws.Route(ws.GET("/dashboard/item-to-item/{name}/{item-id}").To(m.getItemToItem).
 		Doc("get neighbors of a item").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"recommendation"}).
 		Param(ws.PathParameter("item-id", "identifier of the item").DataType("string")).
-		Param(ws.QueryParameter("category", "category of items").DataType("string")).
-		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
-		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
-		Returns(http.StatusOK, "OK", []ScoredItem{}).
-		Writes([]ScoredItem{}))
-	ws.Route(ws.GET("/dashboard/item/{item-id}/neighbors/{category}").To(m.getItemCategorizedNeighbors).
-		Doc("get neighbors of a item").
-		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
-		Param(ws.PathParameter("item-id", "identifier of the item").DataType("string")).
-		Param(ws.PathParameter("category", "category of items").DataType("string")).
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
 		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
 		Returns(http.StatusOK, "OK", []ScoredItem{}).
@@ -874,16 +864,9 @@ func (m *Master) getNonPersonalized(request *restful.Request, response *restful.
 	m.SearchDocuments(cache.NonPersonalized, name, categories, m.GetItem, request, response)
 }
 
-func (m *Master) getItemNeighbors(request *restful.Request, response *restful.Response) {
+func (m *Master) getItemToItem(request *restful.Request, response *restful.Response) {
 	itemId := request.PathParameter("item-id")
-	categories := server.ReadCategories(request)
-	m.SearchDocuments(cache.ItemNeighbors, itemId, categories, m.GetItem, request, response)
-}
-
-func (m *Master) getItemCategorizedNeighbors(request *restful.Request, response *restful.Response) {
-	itemId := request.PathParameter("item-id")
-	categories := server.ReadCategories(request)
-	m.SearchDocuments(cache.ItemNeighbors, itemId, categories, m.GetItem, request, response)
+	m.SearchDocuments(cache.ItemToItem, cache.Key(cache.Neighbors, itemId), nil, m.GetItem, request, response)
 }
 
 func (m *Master) getUserNeighbors(request *restful.Request, response *restful.Response) {

@@ -316,20 +316,20 @@ func (suite *WorkerTestSuite) TestRecommendItemBased() {
 	suite.NoError(err)
 
 	// insert similar items
-	err = suite.CacheClient.AddScores(ctx, cache.ItemNeighbors, "21", []cache.Score{
+	err = suite.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key(cache.Neighbors, "21"), []cache.Score{
 		{Id: "22", Score: 100000, Categories: []string{"", "*"}},
 		{Id: "25", Score: 1000000, Categories: []string{""}},
 		{Id: "29", Score: 1, Categories: []string{""}},
 	})
 	suite.NoError(err)
-	err = suite.CacheClient.AddScores(ctx, cache.ItemNeighbors, "22", []cache.Score{
+	err = suite.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key(cache.Neighbors, "22"), []cache.Score{
 		{Id: "23", Score: 100000, Categories: []string{"", "*"}},
 		{Id: "25", Score: 1000000, Categories: []string{""}},
 		{Id: "28", Score: 1, Categories: []string{"", "*"}},
 		{Id: "29", Score: 1, Categories: []string{""}},
 	})
 	suite.NoError(err)
-	err = suite.CacheClient.AddScores(ctx, cache.ItemNeighbors, "23", []cache.Score{
+	err = suite.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key(cache.Neighbors, "23"), []cache.Score{
 		{Id: "24", Score: 100000, Categories: []string{"", "*"}},
 		{Id: "25", Score: 1000000, Categories: []string{""}},
 		{Id: "27", Score: 1, Categories: []string{""}},
@@ -337,7 +337,7 @@ func (suite *WorkerTestSuite) TestRecommendItemBased() {
 		{Id: "29", Score: 1, Categories: []string{""}},
 	})
 	suite.NoError(err)
-	err = suite.CacheClient.AddScores(ctx, cache.ItemNeighbors, "24", []cache.Score{
+	err = suite.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key(cache.Neighbors, "24"), []cache.Score{
 		{Id: "21", Score: 100000, Categories: []string{""}},
 		{Id: "25", Score: 1000000, Categories: []string{""}},
 		{Id: "26", Score: 1, Categories: []string{"", "*"}},
