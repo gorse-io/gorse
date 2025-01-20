@@ -159,15 +159,6 @@ filter = "(now() - item.Timestamp).Hours() < 168"
 # The default value is "auto".
 neighbor_type = "similar"
 
-# Enable approximate user neighbor searching using vector index. The default value is true.
-enable_index = true
-
-# Minimal recall for approximate user neighbor searching. The default value is 0.8.
-index_recall = 0.8
-
-# Maximal number of fit epochs for approximate user neighbor searching vector index. The default value is 3.
-index_fit_epoch = 3
-
 [recommend.item_neighbors]
 
 # The type of neighbors for items. There are three types:
@@ -177,15 +168,6 @@ index_fit_epoch = 3
 #         If this item have no labels, neighbors are found by number of common users.
 # The default value is "auto".
 neighbor_type = "similar"
-
-# Enable approximate item neighbor searching using vector index. The default value is true.
-enable_index = true
-
-# Minimal recall for approximate item neighbor searching. The default value is 0.8.
-index_recall = 0.8
-
-# Maximal number of fit epochs for approximate item neighbor searching vector index. The default value is 3.
-index_fit_epoch = 3
 
 [recommend.collaborative]
 
