@@ -578,24 +578,8 @@ func (m *Master) getStats(request *restful.Request, response *restful.Response) 
 	if status.RankingModelFitTime, err = m.CacheClient.Get(ctx, cache.Key(cache.GlobalMeta, cache.LastFitRankingModelTime)).Time(); err != nil {
 		log.ResponseLogger(response).Warn("failed to get last fit ranking model time", zap.Error(err))
 	}
-	// read user neighbor index recall
-	var temp string
-	if m.Config.Recommend.UserNeighbors.EnableIndex {
-		if temp, err = m.CacheClient.Get(ctx, cache.Key(cache.GlobalMeta, cache.UserNeighborIndexRecall)).String(); err != nil {
-			log.ResponseLogger(response).Warn("failed to get user neighbor index recall", zap.Error(err))
-		} else {
-			status.UserNeighborIndexRecall = encoding.ParseFloat32(temp)
-		}
-	}
-	// read item neighbor index recall
-	if m.Config.Recommend.ItemNeighbors.EnableIndex {
-		if temp, err = m.CacheClient.Get(ctx, cache.Key(cache.GlobalMeta, cache.ItemNeighborIndexRecall)).String(); err != nil {
-			log.ResponseLogger(response).Warn("failed to get item neighbor index recall", zap.Error(err))
-		} else {
-			status.ItemNeighborIndexRecall = encoding.ParseFloat32(temp)
-		}
-	}
 	// read matching index recall
+	var temp string
 	if m.Config.Recommend.Collaborative.EnableIndex {
 		if temp, err = m.CacheClient.Get(ctx, cache.Key(cache.GlobalMeta, cache.MatchingIndexRecall)).String(); err != nil {
 			log.ResponseLogger(response).Warn("failed to get matching index recall", zap.Error(err))
