@@ -513,8 +513,7 @@ func TestServer_SearchDocumentsOfItems(t *testing.T) {
 	}
 	ctx := context.Background()
 	operators := []ListOperator{
-		{"Item Neighbors", cache.ItemToItem, cache.Key(cache.Neighbors, "0"), "", "/api/dashboard/item/0/neighbors"},
-		{"Item Neighbors in Category", cache.ItemToItem, cache.Key(cache.Neighbors, "0"), "*", "/api/dashboard/item/0/neighbors/*"},
+		{"Item Neighbors", cache.ItemToItem, cache.Key(cache.Neighbors, "0"), "", "/api/dashboard/item-to-item/neighbors/0"},
 		{"Latest Items", cache.NonPersonalized, cache.Latest, "", "/api/dashboard/non-personalized/latest/"},
 		{"Popular Items", cache.NonPersonalized, cache.Popular, "", "/api/dashboard/non-personalized/popular/"},
 		{"Latest Items in Category", cache.NonPersonalized, cache.Latest, "*", "/api/dashboard/non-personalized/latest/"},
