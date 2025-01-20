@@ -495,6 +495,17 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.QueryParameter("offset", "Offset of returned items").DataType("integer")).
 		Returns(http.StatusOK, "OK", []cache.Score{}).
 		Writes([]cache.Score{}))
+	// Get user-to-user recommendation
+	ws.Route(ws.GET("/user-to-user/neighbors/{user-id}").To(s.getUserNeighbors).
+		Doc("Get user-to-user recommendation.").
+		Metadata(restfulspec.KeyOpenAPITags, []string{RecommendationAPITag}).
+		Param(ws.HeaderParameter("X-API-Key", "API key").DataType("string")).
+		Param(ws.PathParameter("name", "Name of the user-to-user recommendation").DataType("string")).
+		Param(ws.PathParameter("user-id", "ID of the user to get neighbors").DataType("string")).
+		Param(ws.QueryParameter("n", "Number of returned users").DataType("integer")).
+		Param(ws.QueryParameter("offset", "Offset of returned users").DataType("integer")).
+		Returns(http.StatusOK, "OK", []cache.Score{}).
+		Writes([]cache.Score{}))
 	// Get neighbors
 	ws.Route(ws.GET("/item/{item-id}/neighbors/").To(s.getItemNeighbors).
 		Doc("Get neighbors of a item").
@@ -744,7 +755,7 @@ func (s *RestServer) getItemNeighbors(request *restful.Request, response *restfu
 func (s *RestServer) getUserNeighbors(request *restful.Request, response *restful.Response) {
 	// Get item id
 	userId := request.PathParameter("user-id")
-	s.SearchDocuments(cache.UserNeighbors, userId, []string{""}, nil, request, response)
+	s.SearchDocuments(cache.UserToUser, cache.Key(cache.Neighbors, userId), []string{""}, nil, request, response)
 }
 
 // getCollaborative gets cached recommended items from database.
@@ -894,7 +905,7 @@ func (s *RestServer) RecommendUserBased(ctx *recommendContext) error {
 		start := time.Now()
 		candidates := make(map[string]float64)
 		// load similar users
-		similarUsers, err := s.CacheClient.SearchScores(ctx.context, cache.UserNeighbors, ctx.userId, []string{""}, 0, s.Config.Recommend.CacheSize)
+		similarUsers, err := s.CacheClient.SearchScores(ctx.context, cache.UserToUser, cache.Key(cache.Neighbors, ctx.userId), []string{""}, 0, s.Config.Recommend.CacheSize)
 		if err != nil {
 			return errors.Trace(err)
 		}

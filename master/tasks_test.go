@@ -326,7 +326,7 @@ func (s *MasterTestSuite) TestFindUserNeighborsBruteForce() {
 	s.Config.Recommend.UserNeighbors.NeighborType = config.NeighborTypeRelated
 	neighborTask := NewFindUserNeighborsTask(&s.Master)
 	s.NoError(neighborTask.run(context.Background(), nil))
-	similar, err := s.CacheClient.SearchScores(ctx, cache.UserNeighbors, "9", []string{""}, 0, 100)
+	similar, err := s.CacheClient.SearchScores(ctx, cache.UserToUser, cache.Key(cache.Neighbors, "9"), []string{""}, 0, 100)
 	s.NoError(err)
 	s.Equal([]string{"7", "5", "3"}, cache.ConvertDocumentsToValues(similar))
 
@@ -336,7 +336,7 @@ func (s *MasterTestSuite) TestFindUserNeighborsBruteForce() {
 	s.Config.Recommend.UserNeighbors.NeighborType = config.NeighborTypeSimilar
 	neighborTask = NewFindUserNeighborsTask(&s.Master)
 	s.NoError(neighborTask.run(context.Background(), nil))
-	similar, err = s.CacheClient.SearchScores(ctx, cache.UserNeighbors, "8", []string{""}, 0, 100)
+	similar, err = s.CacheClient.SearchScores(ctx, cache.UserToUser, cache.Key(cache.Neighbors, "8"), []string{""}, 0, 100)
 	s.NoError(err)
 	s.Equal([]string{"0", "2", "4"}, cache.ConvertDocumentsToValues(similar))
 
@@ -348,10 +348,10 @@ func (s *MasterTestSuite) TestFindUserNeighborsBruteForce() {
 	s.Config.Recommend.UserNeighbors.NeighborType = config.NeighborTypeAuto
 	neighborTask = NewFindUserNeighborsTask(&s.Master)
 	s.NoError(neighborTask.run(context.Background(), nil))
-	similar, err = s.CacheClient.SearchScores(ctx, cache.UserNeighbors, "8", []string{""}, 0, 100)
+	similar, err = s.CacheClient.SearchScores(ctx, cache.UserToUser, cache.Key(cache.Neighbors, "8"), []string{""}, 0, 100)
 	s.NoError(err)
 	s.Equal([]string{"0", "2", "4"}, cache.ConvertDocumentsToValues(similar))
-	similar, err = s.CacheClient.SearchScores(ctx, cache.UserNeighbors, "9", []string{""}, 0, 100)
+	similar, err = s.CacheClient.SearchScores(ctx, cache.UserToUser, cache.Key(cache.Neighbors, "9"), []string{""}, 0, 100)
 	s.NoError(err)
 	s.Equal([]string{"7", "5", "3"}, cache.ConvertDocumentsToValues(similar))
 }
@@ -742,7 +742,7 @@ func (s *MasterTestSuite) TestCheckUserNeighborCacheTimeout() {
 
 	// empty cache
 	s.True(s.checkUserNeighborCacheTimeout("1"))
-	err := s.CacheClient.AddScores(ctx, cache.UserNeighbors, "1", []cache.Score{
+	err := s.CacheClient.AddScores(ctx, cache.UserToUser, cache.Key(cache.Neighbors, "1"), []cache.Score{
 		{Id: "1", Score: 1, Categories: []string{""}},
 		{Id: "2", Score: 2, Categories: []string{""}},
 		{Id: "3", Score: 3, Categories: []string{""}},
@@ -750,23 +750,23 @@ func (s *MasterTestSuite) TestCheckUserNeighborCacheTimeout() {
 	s.NoError(err)
 
 	// digest mismatch
-	err = s.CacheClient.Set(ctx, cache.String(cache.Key(cache.UserNeighborsDigest, "1"), "digest"))
+	err = s.CacheClient.Set(ctx, cache.String(cache.Key(cache.UserToUserDigest, cache.Key(cache.Neighbors, "1")), "digest"))
 	s.NoError(err)
 	s.True(s.checkUserNeighborCacheTimeout("1"))
 
 	// staled cache
-	err = s.CacheClient.Set(ctx, cache.String(cache.Key(cache.UserNeighborsDigest, "1"), s.Config.UserNeighborDigest()))
+	err = s.CacheClient.Set(ctx, cache.String(cache.Key(cache.UserToUserDigest, cache.Key(cache.Neighbors, "1")), s.Config.UserNeighborDigest()))
 	s.NoError(err)
 	s.True(s.checkUserNeighborCacheTimeout("1"))
 	err = s.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastModifyUserTime, "1"), time.Now().Add(-time.Minute)))
 	s.NoError(err)
 	s.True(s.checkUserNeighborCacheTimeout("1"))
-	err = s.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastUpdateUserNeighborsTime, "1"), time.Now().Add(-time.Hour)))
+	err = s.CacheClient.Set(ctx, cache.Time(cache.Key(cache.UserToUserUpdateTime, cache.Key(cache.Neighbors, "1")), time.Now().Add(-time.Hour)))
 	s.NoError(err)
 	s.True(s.checkUserNeighborCacheTimeout("1"))
 
 	// not staled cache
-	err = s.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastUpdateUserNeighborsTime, "1"), time.Now()))
+	err = s.CacheClient.Set(ctx, cache.Time(cache.Key(cache.UserToUserUpdateTime, cache.Key(cache.Neighbors, "1")), time.Now()))
 	s.NoError(err)
 	s.False(s.checkUserNeighborCacheTimeout("1"))
 }

@@ -544,7 +544,7 @@ func (t *FindUserNeighborsTask) run(ctx context.Context, j *task.JobsAllocator) 
 		progress.Fail(newCtx, err)
 		FindUserNeighborsTotalSeconds.Set(0)
 	} else {
-		if err := t.CacheClient.Set(ctx, cache.Time(cache.Key(cache.GlobalMeta, cache.LastUpdateUserNeighborsTime), time.Now())); err != nil {
+		if err := t.CacheClient.Set(ctx, cache.Time(cache.Key(cache.GlobalMeta, cache.UserToUserUpdateTime, cache.Neighbors), time.Now())); err != nil {
 			log.Logger().Error("failed to set neighbors of users update time", zap.Error(err))
 		}
 		log.Logger().Info("complete searching neighbors of users",
@@ -613,19 +613,19 @@ func (m *Master) findUserNeighborsBruteForce(ctx context.Context, dataset *ranki
 		}
 		aggregator := cache.NewDocumentAggregator(startSearchTime)
 		aggregator.Add("", recommends, scores)
-		if err := m.CacheClient.AddScores(ctx, cache.UserNeighbors, userId, aggregator.ToSlice()); err != nil {
+		if err := m.CacheClient.AddScores(ctx, cache.UserToUser, cache.Key(cache.Neighbors, userId), aggregator.ToSlice()); err != nil {
 			return errors.Trace(err)
 		}
-		if err := m.CacheClient.DeleteScores(ctx, []string{cache.UserNeighbors}, cache.ScoreCondition{
-			Subset: proto.String(userId),
+		if err := m.CacheClient.DeleteScores(ctx, []string{cache.UserToUser}, cache.ScoreCondition{
+			Subset: proto.String(cache.Key(cache.Neighbors, userId)),
 			Before: &aggregator.Timestamp,
 		}); err != nil {
 			return errors.Trace(err)
 		}
 		if err := m.CacheClient.Set(
 			ctx,
-			cache.Time(cache.Key(cache.LastUpdateUserNeighborsTime, userId), time.Now()),
-			cache.String(cache.Key(cache.UserNeighborsDigest, userId), m.Config.UserNeighborDigest())); err != nil {
+			cache.Time(cache.Key(cache.UserToUserUpdateTime, cache.Key(cache.Neighbors, userId)), time.Now()),
+			cache.String(cache.Key(cache.UserToUserDigest, cache.Key(cache.Neighbors, userId)), m.Config.UserNeighborDigest())); err != nil {
 			return errors.Trace(err)
 		}
 		findNeighborSeconds.Add(time.Since(startTime).Seconds())
@@ -678,14 +678,14 @@ func (m *Master) checkUserNeighborCacheTimeout(userId string) bool {
 	)
 	ctx := context.Background()
 	// check cache
-	if items, err := m.CacheClient.SearchScores(ctx, cache.UserNeighbors, userId, []string{""}, 0, -1); err != nil {
+	if items, err := m.CacheClient.SearchScores(ctx, cache.UserToUser, cache.Key(cache.Neighbors, userId), []string{""}, 0, -1); err != nil {
 		log.Logger().Error("failed to load user neighbors", zap.String("user_id", userId), zap.Error(err))
 		return true
 	} else if len(items) == 0 {
 		return true
 	}
 	// read digest
-	cacheDigest, err = m.CacheClient.Get(ctx, cache.Key(cache.UserNeighborsDigest, userId)).String()
+	cacheDigest, err = m.CacheClient.Get(ctx, cache.Key(cache.UserToUserDigest, cache.Key(cache.Neighbors, userId))).String()
 	if err != nil {
 		if !errors.Is(err, errors.NotFound) {
 			log.Logger().Error("failed to read user neighbors digest", zap.Error(err))
@@ -704,7 +704,7 @@ func (m *Master) checkUserNeighborCacheTimeout(userId string) bool {
 		return true
 	}
 	// read update time
-	updateTime, err = m.CacheClient.Get(ctx, cache.Key(cache.LastUpdateUserNeighborsTime, userId)).Time()
+	updateTime, err = m.CacheClient.Get(ctx, cache.Key(cache.UserToUserUpdateTime, cache.Key(cache.Neighbors, userId))).Time()
 	if err != nil {
 		if !errors.Is(err, errors.NotFound) {
 			log.Logger().Error("failed to read last update user neighbors time", zap.Error(err))
@@ -1141,9 +1141,9 @@ func (t *CacheGarbageCollectionTask) run(ctx context.Context, j *task.JobsAlloca
 		}
 		scanCount++
 		switch splits[0] {
-		case cache.UserNeighbors, cache.UserNeighborsDigest,
+		case cache.UserToUser, cache.UserToUserDigest,
 			cache.OfflineRecommend, cache.OfflineRecommendDigest, cache.CollaborativeRecommend,
-			cache.LastModifyUserTime, cache.LastUpdateUserNeighborsTime, cache.LastUpdateUserRecommendTime:
+			cache.LastModifyUserTime, cache.UserToUserUpdateTime, cache.LastUpdateUserRecommendTime:
 			userId := splits[1]
 			// check user in dataset
 			if t.rankingTrainSet != nil && t.rankingTrainSet.UserIndex.ToNumber(userId) != base.NotId {
@@ -1159,8 +1159,8 @@ func (t *CacheGarbageCollectionTask) run(ctx context.Context, j *task.JobsAlloca
 			}
 			// delete user cache
 			switch splits[0] {
-			case cache.UserNeighborsDigest, cache.OfflineRecommendDigest,
-				cache.LastModifyUserTime, cache.LastUpdateUserNeighborsTime, cache.LastUpdateUserRecommendTime:
+			case cache.UserToUserDigest, cache.OfflineRecommendDigest,
+				cache.LastModifyUserTime, cache.UserToUserUpdateTime, cache.LastUpdateUserRecommendTime:
 				err = t.CacheClient.Delete(ctx, s)
 			}
 			if err != nil {
