@@ -46,15 +46,6 @@ import (
 )
 
 const (
-	// ItemNeighbors is sorted set of neighbors for each item.
-	//  Global item neighbors      - item_neighbors/{item_id}
-	//  Categorized item neighbors - item_neighbors/{item_id}/{category}
-	ItemNeighbors = "item_neighbors"
-
-	// ItemNeighborsDigest is digest of item neighbors configuration
-	//	Item neighbors digest      - item_neighbors_digest/{item_id}
-	ItemNeighborsDigest = "item_neighbors_digest"
-
 	// UserNeighbors is sorted set of neighbors for each user.
 	//  User neighbors      - user_neighbors/{user_id}
 	UserNeighbors = "user_neighbors"
@@ -77,11 +68,14 @@ const (
 	//	Recommendation digest      - offline_recommend_digest/{user_id}
 	OfflineRecommendDigest = "offline_recommend_digest"
 
-	NonPersonalized  = "non-personalized"
-	Latest           = "latest"
-	Popular          = "popular"
-	ItemToItem       = "item-to-item"
-	ItemToItemDigest = "item-to-item_digest"
+	NonPersonalized = "non-personalized"
+	Latest          = "latest"
+	Popular         = "popular"
+
+	ItemToItem           = "item-to-item"
+	ItemToItemDigest     = "item-to-item_digest"
+	ItemToItemUpdateTime = "item-to-time_update_time"
+	Neighbors            = "neighbors"
 
 	// ItemCategories is the set of item categories. The format of key:
 	//	Global item categories - item_categories
@@ -91,8 +85,6 @@ const (
 	LastModifyUserTime          = "last_modify_user_time"           // the latest timestamp that an item related data was modified
 	LastUpdateUserRecommendTime = "last_update_user_recommend_time" // the latest timestamp that a user's recommendation was updated
 	LastUpdateUserNeighborsTime = "last_update_user_neighbors_time" // the latest timestamp that a user's neighbors item was updated
-	LastUpdateItemNeighborsTime = "last_update_item_neighbors_time" // the latest timestamp that an item's neighbors was updated
-	LastUpdateItemToItemTime    = "last_update_item_to_item_time"   // the latest timestamp that an item-to-item model was updated
 
 	// GlobalMeta is global meta information
 	GlobalMeta                 = "global_meta"
@@ -116,7 +108,6 @@ const (
 var ItemCache = []string{
 	NonPersonalized,
 	ItemToItem,
-	ItemNeighbors,
 	OfflineRecommend,
 }
 

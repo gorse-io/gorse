@@ -329,7 +329,7 @@ func (t *FindItemNeighborsTask) run(ctx context.Context, j *task.JobsAllocator) 
 		progress.Fail(newCtx, err)
 		FindItemNeighborsTotalSeconds.Set(0)
 	} else {
-		if err := t.CacheClient.Set(ctx, cache.Time(cache.Key(cache.GlobalMeta, cache.LastUpdateItemNeighborsTime), time.Now())); err != nil {
+		if err := t.CacheClient.Set(ctx, cache.Time(cache.Key(cache.GlobalMeta, cache.ItemToItemUpdateTime, cache.Neighbors), time.Now())); err != nil {
 			log.Logger().Error("failed to set neighbors of items update time", zap.Error(err))
 		}
 		log.Logger().Info("complete searching neighbors of items",
@@ -409,19 +409,19 @@ func (m *Master) findItemNeighborsBruteForce(dataset *ranking.DataSet, labeledIt
 			}
 			aggregator.Add(category, recommends, scores)
 		}
-		if err := m.CacheClient.AddScores(ctx, cache.ItemNeighbors, itemId, aggregator.ToSlice()); err != nil {
+		if err := m.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key(cache.Neighbors, itemId), aggregator.ToSlice()); err != nil {
 			return errors.Trace(err)
 		}
-		if err := m.CacheClient.DeleteScores(ctx, []string{cache.ItemNeighbors}, cache.ScoreCondition{
-			Subset: proto.String(itemId),
+		if err := m.CacheClient.DeleteScores(ctx, []string{cache.ItemToItem}, cache.ScoreCondition{
+			Subset: proto.String(cache.Key(cache.Neighbors, itemId)),
 			Before: &aggregator.Timestamp,
 		}); err != nil {
 			return errors.Trace(err)
 		}
 		if err := m.CacheClient.Set(
 			ctx,
-			cache.Time(cache.Key(cache.LastUpdateItemNeighborsTime, itemId), time.Now()),
-			cache.String(cache.Key(cache.ItemNeighborsDigest, itemId), m.Config.ItemNeighborDigest())); err != nil {
+			cache.Time(cache.Key(cache.ItemToItemUpdateTime, cache.Key(cache.Neighbors, itemId)), time.Now()),
+			cache.String(cache.Key(cache.ItemToItemDigest, cache.Key(cache.Neighbors, itemId)), m.Config.ItemNeighborDigest())); err != nil {
 			return errors.Trace(err)
 		}
 		findNeighborSeconds.Add(time.Since(startTime).Seconds())
@@ -514,19 +514,19 @@ func (m *Master) findItemNeighborsIVF(dataset *ranking.DataSet, labelIDF, userID
 				aggregator.Add(category, resultValues, resultScores)
 			}
 		}
-		if err := m.CacheClient.AddScores(ctx, cache.ItemNeighbors, itemId, aggregator.ToSlice()); err != nil {
+		if err := m.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key(cache.Neighbors, itemId), aggregator.ToSlice()); err != nil {
 			return errors.Trace(err)
 		}
-		if err := m.CacheClient.DeleteScores(ctx, []string{cache.ItemNeighbors}, cache.ScoreCondition{
-			Subset: proto.String(itemId),
+		if err := m.CacheClient.DeleteScores(ctx, []string{cache.ItemToItem}, cache.ScoreCondition{
+			Subset: proto.String(cache.Key(cache.Neighbors, itemId)),
 			Before: &aggregator.Timestamp,
 		}); err != nil {
 			return errors.Trace(err)
 		}
 		if err := m.CacheClient.Set(
 			ctx,
-			cache.Time(cache.Key(cache.LastUpdateItemNeighborsTime, itemId), time.Now()),
-			cache.String(cache.Key(cache.ItemNeighborsDigest, itemId), m.Config.ItemNeighborDigest())); err != nil {
+			cache.Time(cache.Key(cache.ItemToItemUpdateTime, cache.Key(cache.Neighbors, itemId)), time.Now()),
+			cache.String(cache.Key(cache.ItemToItemDigest, cache.Key(cache.Neighbors, itemId)), m.Config.ItemNeighborDigest())); err != nil {
 			return errors.Trace(err)
 		}
 		findNeighborSeconds.Add(time.Since(startTime).Seconds())
@@ -939,7 +939,7 @@ func (m *Master) checkItemNeighborCacheTimeout(itemId string, categories []strin
 
 	// check cache
 	for _, category := range append([]string{""}, categories...) {
-		items, err := m.CacheClient.SearchScores(ctx, cache.ItemNeighbors, itemId, []string{category}, 0, -1)
+		items, err := m.CacheClient.SearchScores(ctx, cache.ItemToItem, cache.Key(cache.Neighbors, itemId), []string{category}, 0, -1)
 		if err != nil {
 			log.Logger().Error("failed to load item neighbors", zap.String("item_id", itemId), zap.Error(err))
 			return true
@@ -948,7 +948,7 @@ func (m *Master) checkItemNeighborCacheTimeout(itemId string, categories []strin
 		}
 	}
 	// read digest
-	cacheDigest, err = m.CacheClient.Get(ctx, cache.Key(cache.ItemNeighborsDigest, itemId)).String()
+	cacheDigest, err = m.CacheClient.Get(ctx, cache.Key(cache.ItemToItemDigest, cache.Key(cache.Neighbors, itemId))).String()
 	if err != nil {
 		if !errors.Is(err, errors.NotFound) {
 			log.Logger().Error("failed to read item neighbors digest", zap.Error(err))
@@ -967,7 +967,7 @@ func (m *Master) checkItemNeighborCacheTimeout(itemId string, categories []strin
 		return true
 	}
 	// read update time
-	updateTime, err = m.CacheClient.Get(ctx, cache.Key(cache.LastUpdateItemNeighborsTime, itemId)).Time()
+	updateTime, err = m.CacheClient.Get(ctx, cache.Key(cache.ItemToItemUpdateTime, cache.Key(cache.Neighbors, itemId))).Time()
 	if err != nil {
 		if !errors.Is(err, errors.NotFound) {
 			log.Logger().Error("failed to read last update item neighbors time", zap.Error(err))
@@ -1373,7 +1373,7 @@ func (t *CacheGarbageCollectionTask) run(ctx context.Context, j *task.JobsAlloca
 				return errors.Trace(err)
 			}
 			reclaimCount++
-		case cache.ItemNeighbors, cache.ItemNeighborsDigest, cache.LastModifyItemTime, cache.LastUpdateItemNeighborsTime:
+		case cache.ItemToItem, cache.ItemToItemDigest, cache.ItemToItemUpdateTime, cache.LastModifyItemTime:
 			itemId := splits[1]
 			// check item in dataset
 			if t.rankingTrainSet != nil && t.rankingTrainSet.ItemIndex.ToNumber(itemId) != base.NotId {
@@ -1389,7 +1389,7 @@ func (t *CacheGarbageCollectionTask) run(ctx context.Context, j *task.JobsAlloca
 			}
 			// delete item cache
 			switch splits[0] {
-			case cache.ItemNeighborsDigest, cache.LastModifyItemTime, cache.LastUpdateItemNeighborsTime:
+			case cache.ItemToItemDigest, cache.ItemToItemUpdateTime, cache.LastModifyItemTime:
 				err = t.CacheClient.Delete(ctx, s)
 			}
 			if err != nil {
@@ -1805,7 +1805,7 @@ func (m *Master) updateItemToItem(dataset *dataset.Dataset) error {
 				// Save item-to-item digest and last update time to cache
 				if err := m.CacheClient.Set(ctx,
 					cache.String(cache.Key(cache.ItemToItemDigest, itemToItemConfig.Name, itemId), itemToItemConfig.Hash()),
-					cache.Time(cache.Key(cache.LastUpdateItemToItemTime, itemToItemConfig.Name, itemId), time.Now()),
+					cache.Time(cache.Key(cache.ItemToItemUpdateTime, itemToItemConfig.Name, itemId), time.Now()),
 				); err != nil {
 					log.Logger().Error("failed to save item-to-item digest to cache",
 						zap.String("item_id", itemId), zap.Error(err))
@@ -1848,7 +1848,7 @@ func (m *Master) needUpdateItemToItem(itemId string, itemToItemConfig config.Ite
 	}
 
 	// check update time
-	updateTime, err := m.CacheClient.Get(ctx, cache.Key(cache.LastUpdateItemToItemTime, itemToItemConfig.Name, itemId)).Time()
+	updateTime, err := m.CacheClient.Get(ctx, cache.Key(cache.ItemToItemUpdateTime, itemToItemConfig.Name, itemId)).Time()
 	if err != nil {
 		if !errors.Is(err, errors.NotFound) {
 			log.Logger().Error("failed to read last update item neighbors time", zap.Error(err))

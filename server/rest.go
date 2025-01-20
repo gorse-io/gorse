@@ -737,7 +737,7 @@ func (s *RestServer) getItemNeighbors(request *restful.Request, response *restfu
 	// Get item id
 	itemId := request.PathParameter("item-id")
 	categories := ReadCategories(request)
-	s.SearchDocuments(cache.ItemNeighbors, itemId, categories, nil, request, response)
+	s.SearchDocuments(cache.ItemToItem, cache.Key(cache.Neighbors, itemId), categories, nil, request, response)
 }
 
 // getUserNeighbors gets neighbors of a user from database.
@@ -951,7 +951,7 @@ func (s *RestServer) RecommendItemBased(ctx *recommendContext) error {
 		candidates := make(map[string]float64)
 		for _, feedback := range userFeedback {
 			// load similar items
-			similarItems, err := s.CacheClient.SearchScores(ctx.context, cache.ItemNeighbors, feedback.ItemId, ctx.categories, 0, s.Config.Recommend.CacheSize)
+			similarItems, err := s.CacheClient.SearchScores(ctx.context, cache.ItemToItem, cache.Key(cache.Neighbors, feedback.ItemId), ctx.categories, 0, s.Config.Recommend.CacheSize)
 			if err != nil {
 				return errors.Trace(err)
 			}
@@ -1140,7 +1140,7 @@ func (s *RestServer) sessionRecommend(request *restful.Request, response *restfu
 	usedFeedbackCount := 0
 	for _, feedback := range userFeedback {
 		// load similar items
-		similarItems, err := s.CacheClient.SearchScores(ctx, cache.ItemNeighbors, feedback.ItemId, []string{category}, 0, s.Config.Recommend.CacheSize)
+		similarItems, err := s.CacheClient.SearchScores(ctx, cache.ItemToItem, cache.Key(cache.Neighbors, feedback.ItemId), []string{category}, 0, s.Config.Recommend.CacheSize)
 		if err != nil {
 			BadRequest(response, err)
 			return
