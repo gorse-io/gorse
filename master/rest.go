@@ -869,12 +869,6 @@ func (m *Master) getItemToItem(request *restful.Request, response *restful.Respo
 	m.SearchDocuments(cache.ItemToItem, cache.Key(cache.Neighbors, itemId), nil, m.GetItem, request, response)
 }
 
-func (m *Master) getItemCategorizedNeighbors(request *restful.Request, response *restful.Response) {
-	itemId := request.PathParameter("item-id")
-	categories := server.ReadCategories(request)
-	m.SearchDocuments(cache.ItemToItem, cache.Key(cache.Neighbors, itemId), categories, m.GetItem, request, response)
-}
-
 func (m *Master) getUserNeighbors(request *restful.Request, response *restful.Response) {
 	userId := request.PathParameter("user-id")
 	m.SearchDocuments(cache.UserNeighbors, userId, []string{""}, m.GetUser, request, response)
