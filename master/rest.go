@@ -180,7 +180,7 @@ func (m *Master) CreateWebService() {
 		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
 		Returns(http.StatusOK, "OK", []ScoredItem{}).
 		Writes([]ScoredItem{}))
-	ws.Route(ws.GET("/dashboard/user/{user-id}/neighbors").To(m.getUserNeighbors).
+	ws.Route(ws.GET("/dashboard/user-to-user/neighbors/{user-id}").To(m.getUserToUser).
 		Doc("get neighbors of a user").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
 		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
@@ -853,9 +853,9 @@ func (m *Master) getItemToItem(request *restful.Request, response *restful.Respo
 	m.SearchDocuments(cache.ItemToItem, cache.Key(cache.Neighbors, itemId), nil, m.GetItem, request, response)
 }
 
-func (m *Master) getUserNeighbors(request *restful.Request, response *restful.Response) {
+func (m *Master) getUserToUser(request *restful.Request, response *restful.Response) {
 	userId := request.PathParameter("user-id")
-	m.SearchDocuments(cache.UserNeighbors, userId, []string{""}, m.GetUser, request, response)
+	m.SearchDocuments(cache.UserToUser, cache.Key(cache.Neighbors, userId), nil, m.GetUser, request, response)
 }
 
 func (m *Master) importExportUsers(response http.ResponseWriter, request *http.Request) {

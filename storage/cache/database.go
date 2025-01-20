@@ -46,14 +46,6 @@ import (
 )
 
 const (
-	// UserNeighbors is sorted set of neighbors for each user.
-	//  User neighbors      - user_neighbors/{user_id}
-	UserNeighbors = "user_neighbors"
-
-	// UserNeighborsDigest is digest of user neighbors configuration
-	//  User neighbors digest      - user_neighbors_digest/{user_id}
-	UserNeighborsDigest = "user_neighbors_digest"
-
 	// CollaborativeRecommend is sorted set of collaborative filtering recommendations for each user.
 	//  Global recommendation      - collaborative_recommend/{user_id}
 	//  Categorized recommendation - collaborative_recommend/{user_id}/{category}
@@ -75,6 +67,9 @@ const (
 	ItemToItem           = "item-to-item"
 	ItemToItemDigest     = "item-to-item_digest"
 	ItemToItemUpdateTime = "item-to-time_update_time"
+	UserToUser           = "user-to-user"
+	UserToUserDigest     = "user-to-user_digest"
+	UserToUserUpdateTime = "user-to-user_update_time"
 	Neighbors            = "neighbors"
 
 	// ItemCategories is the set of item categories. The format of key:
@@ -84,7 +79,6 @@ const (
 	LastModifyItemTime          = "last_modify_item_time"           // the latest timestamp that a user related data was modified
 	LastModifyUserTime          = "last_modify_user_time"           // the latest timestamp that an item related data was modified
 	LastUpdateUserRecommendTime = "last_update_user_recommend_time" // the latest timestamp that a user's recommendation was updated
-	LastUpdateUserNeighborsTime = "last_update_user_neighbors_time" // the latest timestamp that a user's neighbors item was updated
 
 	// GlobalMeta is global meta information
 	GlobalMeta                 = "global_meta"
@@ -100,8 +94,6 @@ const (
 	LastFitRankingModelTime    = "last_fit_ranking_model_time"
 	LastUpdateLatestItemsTime  = "last_update_latest_items_time"  // the latest timestamp that latest items were updated
 	LastUpdatePopularItemsTime = "last_update_popular_items_time" // the latest timestamp that popular items were updated
-	UserNeighborIndexRecall    = "user_neighbor_index_recall"
-	ItemNeighborIndexRecall    = "item_neighbor_index_recall"
 	MatchingIndexRecall        = "matching_index_recall"
 )
 

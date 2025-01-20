@@ -569,7 +569,7 @@ func TestServer_SearchDocumentsOfUsers(t *testing.T) {
 	}
 	ctx := context.Background()
 	operators := []ListOperator{
-		{cache.UserNeighbors, "0", "/api/dashboard/user/0/neighbors"},
+		{cache.UserToUser, cache.Key(cache.Neighbors, "0"), "/api/dashboard/user-to-user/neighbors/0/"},
 	}
 	for _, operator := range operators {
 		t.Logf("test RESTful API: %v", operator.Get)
