@@ -56,28 +56,3 @@ func TestHNSW_InnerProduct(t *testing.T) {
 	recall = builder.evaluateTermSearch(idx, true, "prime")
 	assert.Greater(t, recall, float32(0.8))
 }
-
-func TestIVF_Cosine(t *testing.T) {
-	// load dataset
-	trainSet, _, err := ranking.LoadDataFromBuiltIn("ml-100k")
-	assert.NoError(t, err)
-	values := make([]float32, trainSet.UserCount())
-	for i := range values {
-		values[i] = 1
-	}
-	var vectors []Vector
-	for i, feedback := range trainSet.ItemFeedback {
-		var terms []string
-		if big.NewInt(int64(i)).ProbablyPrime(0) {
-			terms = append(terms, "prime")
-		}
-		vectors = append(vectors, NewDictionaryVector(feedback, values, terms, false))
-	}
-
-	// build vector index
-	builder := NewIVFBuilder(vectors, 10)
-	idx, recall := builder.Build(0.9, 5, true)
-	assert.Greater(t, recall, float32(0.9))
-	recall = builder.evaluateTermSearch(idx, true, "prime")
-	assert.Greater(t, recall, float32(0.8))
-}

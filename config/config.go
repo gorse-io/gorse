@@ -143,10 +143,7 @@ type PopularConfig struct {
 }
 
 type NeighborsConfig struct {
-	NeighborType  string  `mapstructure:"neighbor_type" validate:"oneof=auto similar related ''"`
-	EnableIndex   bool    `mapstructure:"enable_index"`
-	IndexRecall   float32 `mapstructure:"index_recall" validate:"gt=0"`
-	IndexFitEpoch int     `mapstructure:"index_fit_epoch" validate:"gt=0"`
+	NeighborType string `mapstructure:"neighbor_type" validate:"oneof=auto similar related ''"`
 }
 
 type ItemToItemConfig struct {
@@ -250,16 +247,10 @@ func GetDefaultConfig() *Config {
 				PopularWindow: 180 * 24 * time.Hour,
 			},
 			UserNeighbors: NeighborsConfig{
-				NeighborType:  "auto",
-				EnableIndex:   true,
-				IndexRecall:   0.8,
-				IndexFitEpoch: 3,
+				NeighborType: "auto",
 			},
 			ItemNeighbors: NeighborsConfig{
-				NeighborType:  "auto",
-				EnableIndex:   true,
-				IndexRecall:   0.8,
-				IndexFitEpoch: 3,
+				NeighborType: "auto",
 			},
 			Collaborative: CollaborativeConfig{
 				ModelFitPeriod:    60 * time.Minute,
@@ -305,43 +296,25 @@ func (config *Config) Now() *time.Time {
 }
 
 func (config *Config) UserNeighborDigest() string {
-	var builder strings.Builder
-	builder.WriteString(fmt.Sprintf("%v-%v", config.Recommend.UserNeighbors.NeighborType, config.Recommend.UserNeighbors.EnableIndex))
-	// feedback option
+	hash := md5.New()
+	hash.Write([]byte(config.Recommend.UserNeighbors.NeighborType))
 	if lo.Contains([]string{"auto", "related"}, config.Recommend.UserNeighbors.NeighborType) {
-		builder.WriteString(fmt.Sprintf("-%s", strings.Join(config.Recommend.DataSource.PositiveFeedbackTypes, "-")))
+		hash.Write([]byte(fmt.Sprintf("-%s", strings.Join(config.Recommend.DataSource.PositiveFeedbackTypes, "-"))))
 	} else {
-		builder.WriteString("-")
+		hash.Write([]byte("-"))
 	}
-	// index option
-	if config.Recommend.UserNeighbors.EnableIndex {
-		builder.WriteString(fmt.Sprintf("-%v-%v", config.Recommend.UserNeighbors.IndexRecall, config.Recommend.UserNeighbors.IndexFitEpoch))
-	} else {
-		builder.WriteString("--")
-	}
-
-	digest := md5.Sum([]byte(builder.String()))
-	return hex.EncodeToString(digest[:])
+	return string(hash.Sum(nil))
 }
 
 func (config *Config) ItemNeighborDigest() string {
-	var builder strings.Builder
-	builder.WriteString(fmt.Sprintf("%v-%v", config.Recommend.ItemNeighbors.NeighborType, config.Recommend.ItemNeighbors.EnableIndex))
-	// feedback option
+	hash := md5.New()
+	hash.Write([]byte(config.Recommend.ItemNeighbors.NeighborType))
 	if lo.Contains([]string{"auto", "related"}, config.Recommend.ItemNeighbors.NeighborType) {
-		builder.WriteString(fmt.Sprintf("-%s", strings.Join(config.Recommend.DataSource.PositiveFeedbackTypes, "-")))
+		hash.Write([]byte(fmt.Sprintf("-%s", strings.Join(config.Recommend.DataSource.PositiveFeedbackTypes, "-"))))
 	} else {
-		builder.WriteString("-")
+		hash.Write([]byte("-"))
 	}
-	// index option
-	if config.Recommend.ItemNeighbors.EnableIndex {
-		builder.WriteString(fmt.Sprintf("-%v-%v", config.Recommend.ItemNeighbors.IndexRecall, config.Recommend.ItemNeighbors.IndexFitEpoch))
-	} else {
-		builder.WriteString("--")
-	}
-
-	digest := md5.Sum([]byte(builder.String()))
-	return hex.EncodeToString(digest[:])
+	return string(hash.Sum(nil))
 }
 
 type digestOptions struct {
@@ -538,14 +511,8 @@ func setDefault() {
 	viper.SetDefault("recommend.popular.popular_window", defaultConfig.Recommend.Popular.PopularWindow)
 	// [recommend.user_neighbors]
 	viper.SetDefault("recommend.user_neighbors.neighbor_type", defaultConfig.Recommend.UserNeighbors.NeighborType)
-	viper.SetDefault("recommend.user_neighbors.enable_index", defaultConfig.Recommend.UserNeighbors.EnableIndex)
-	viper.SetDefault("recommend.user_neighbors.index_recall", defaultConfig.Recommend.UserNeighbors.IndexRecall)
-	viper.SetDefault("recommend.user_neighbors.index_fit_epoch", defaultConfig.Recommend.UserNeighbors.IndexFitEpoch)
 	// [recommend.item_neighbors]
 	viper.SetDefault("recommend.item_neighbors.neighbor_type", defaultConfig.Recommend.ItemNeighbors.NeighborType)
-	viper.SetDefault("recommend.item_neighbors.enable_index", defaultConfig.Recommend.ItemNeighbors.EnableIndex)
-	viper.SetDefault("recommend.item_neighbors.index_recall", defaultConfig.Recommend.ItemNeighbors.IndexRecall)
-	viper.SetDefault("recommend.item_neighbors.index_fit_epoch", defaultConfig.Recommend.ItemNeighbors.IndexFitEpoch)
 	// [recommend.collaborative]
 	viper.SetDefault("recommend.collaborative.model_fit_period", defaultConfig.Recommend.Collaborative.ModelFitPeriod)
 	viper.SetDefault("recommend.collaborative.model_search_period", defaultConfig.Recommend.Collaborative.ModelSearchPeriod)

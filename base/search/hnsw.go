@@ -32,6 +32,10 @@ import (
 	"modernc.org/mathutil"
 )
 
+const (
+	DefaultTestSize = 1000
+)
+
 var _ VectorIndex = &HNSW{}
 
 // HNSW is a vector index based on Hierarchical Navigable Small Worlds.
@@ -467,13 +471,4 @@ func (h *HNSW) efSearchValue(n int) int {
 		return mathutil.Max(h.ef, n)
 	}
 	return mathutil.Max(h.efConstruction, n)
-}
-
-func EstimateHNSWBuilderComplexity(dataSize, trials int) int {
-	// build index
-	complexity := dataSize * dataSize
-	// evaluate
-	complexity += DefaultTestSize * dataSize
-	// with trials
-	return complexity * trials
 }
