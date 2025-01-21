@@ -37,7 +37,7 @@ func TestColumnFunc(t *testing.T) {
 		Labels: map[string]any{
 			"description": []float32{0.1, 0.2, 0.3},
 		},
-	})
+	}, nil)
 	assert.Len(t, item2item.Items(), 1)
 
 	// Hidden
@@ -47,7 +47,7 @@ func TestColumnFunc(t *testing.T) {
 		Labels: map[string]any{
 			"description": []float32{0.1, 0.2, 0.3},
 		},
-	})
+	}, nil)
 	assert.Len(t, item2item.Items(), 1)
 
 	// Dimension does not match
@@ -56,7 +56,7 @@ func TestColumnFunc(t *testing.T) {
 		Labels: map[string]any{
 			"description": []float32{0.1, 0.2},
 		},
-	})
+	}, nil)
 	assert.Len(t, item2item.Items(), 1)
 
 	// Type does not match
@@ -65,14 +65,14 @@ func TestColumnFunc(t *testing.T) {
 		Labels: map[string]any{
 			"description": "hello",
 		},
-	})
+	}, nil)
 	assert.Len(t, item2item.Items(), 1)
 
 	// Column does not exist
 	item2item.Push(data.Item{
 		ItemId: "2",
 		Labels: []float32{0.1, 0.2, 0.3},
-	})
+	}, nil)
 	assert.Len(t, item2item.Items(), 1)
 }
 
@@ -89,7 +89,7 @@ func TestEmbedding(t *testing.T) {
 			Labels: map[string]any{
 				"description": []float32{0.1 * float32(i), 0.2 * float32(i), 0.3 * float32(i)},
 			},
-		})
+		}, nil)
 	}
 
 	var scores []cache.Score
@@ -123,7 +123,7 @@ func TestTags(t *testing.T) {
 		item2item.Push(data.Item{
 			ItemId: strconv.Itoa(i),
 			Labels: labels,
-		})
+		}, nil)
 	}
 
 	var scores []cache.Score
@@ -139,5 +139,30 @@ func TestTags(t *testing.T) {
 }
 
 func TestUsers(t *testing.T) {
+	timestamp := time.Now()
+	idf := make([]float32, 101)
+	for i := range idf {
+		idf[i] = 1
+	}
+	item2item, err := newUsersItemToItem(config.ItemToItemConfig{}, 10, timestamp, idf)
+	assert.NoError(t, err)
 
+	for i := 0; i < 100; i++ {
+		feedback := make([]dataset.ID, 0, 100-i)
+		for j := 1; j <= 100-i; j++ {
+			feedback = append(feedback, dataset.ID(j))
+		}
+		item2item.Push(data.Item{ItemId: strconv.Itoa(i)}, feedback)
+	}
+
+	var scores []cache.Score
+	item2item.PopAll(func(itemId string, score []cache.Score) {
+		if itemId == "0" {
+			scores = score
+		}
+	})
+	assert.Len(t, scores, 10)
+	for i := 1; i <= 10; i++ {
+		assert.Equal(t, strconv.Itoa(i), scores[i-1].Id)
+	}
 }

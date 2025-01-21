@@ -40,7 +40,7 @@ type ItemToItemOptions struct {
 
 type ItemToItem interface {
 	Items() []string
-	Push(item data.Item)
+	Push(item data.Item, feedback []dataset.ID)
 	PopAll(callback func(itemId string, score []cache.Score))
 }
 
@@ -115,7 +115,7 @@ func newEmbeddingItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.T
 	}}, nil
 }
 
-func (e *embeddingItemToItem) Push(item data.Item) {
+func (e *embeddingItemToItem) Push(item data.Item, _ []dataset.ID) {
 	// Check if hidden
 	if item.IsHidden {
 		return
@@ -177,7 +177,7 @@ func newTagsItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time, 
 	return t, nil
 }
 
-func (t *tagsItemToItem) Push(item data.Item) {
+func (t *tagsItemToItem) Push(item data.Item, _ []dataset.ID) {
 	// Check if hidden
 	if item.IsHidden {
 		return
@@ -274,28 +274,33 @@ type usersItemToItem struct {
 }
 
 func newUsersItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time, idf []float32) (ItemToItem, error) {
-	// Compile column expression
-	columnFunc, err := expr.Compile(cfg.Column, expr.Env(map[string]any{
-		"item": data.Item{},
-	}))
-	if err != nil {
-		return nil, err
+	if cfg.Column != "" {
+		return nil, errors.New("column is not supported in users item-to-item")
 	}
 	u := &usersItemToItem{}
 	b := baseItemToItem[dataset.ID]{
-		name:       cfg.Name,
-		n:          n,
-		timestamp:  timestamp,
-		columnFunc: columnFunc,
-		index:      ann.NewHNSW[dataset.ID](u.distance),
+		name:      cfg.Name,
+		n:         n,
+		timestamp: timestamp,
+		index:     ann.NewHNSW[dataset.ID](u.distance),
 	}
 	u.baseItemToItem = b
 	u.idf = idf
 	return u, nil
 }
 
-func (u *usersItemToItem) Push(item data.Item) {
-
+func (u *usersItemToItem) Push(item data.Item, feedback []dataset.ID) {
+	// Check if hidden
+	if item.IsHidden {
+		return
+	}
+	// Push item
+	u.items = append(u.items, item.ItemId)
+	_, err := u.index.Add(feedback)
+	if err != nil {
+		log.Logger().Error("failed to add item to index", zap.Error(err))
+		return
+	}
 }
 
 func (u *usersItemToItem) distance(a, b []dataset.ID) float32 {
