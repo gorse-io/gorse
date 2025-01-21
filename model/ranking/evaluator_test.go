@@ -165,21 +165,3 @@ func TestEvaluate(t *testing.T) {
 	assert.Equal(t, 1, len(s))
 	assert.Equal(t, float32(0.625), s[0])
 }
-
-func TestSnapshotManger_AddSnapshot(t *testing.T) {
-	a := []int{0}
-	b := [][]int{{0}}
-	snapshots := SnapshotManger{}
-	a[0] = 1
-	b[0][0] = 1
-	snapshots.AddSnapshot(Score{NDCG: 1}, a, b)
-	a[0] = 3
-	b[0][0] = 3
-	snapshots.AddSnapshot(Score{NDCG: 3}, a, b)
-	a[0] = 2
-	b[0][0] = 2
-	snapshots.AddSnapshot(Score{NDCG: 2}, a, b)
-	assert.Equal(t, float32(3), snapshots.BestScore.NDCG)
-	assert.Equal(t, []int{3}, snapshots.BestWeights[0])
-	assert.Equal(t, [][]int{{3}}, snapshots.BestWeights[1])
-}

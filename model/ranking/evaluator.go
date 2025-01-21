@@ -18,7 +18,6 @@ import (
 	"github.com/chewxy/math32"
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/thoas/go-funk"
-	"github.com/zhenghaoz/gorse/base/copier"
 	"github.com/zhenghaoz/gorse/base/floats"
 	"github.com/zhenghaoz/gorse/base/heap"
 	"github.com/zhenghaoz/gorse/base/parallel"
@@ -169,30 +168,4 @@ func Rank(model MatrixFactorization, userId int32, candidates []int32, topN int)
 		recommends[i] = elem[i]
 	}
 	return recommends, scores
-}
-
-// SnapshotManger manages the best snapshot.
-type SnapshotManger struct {
-	BestWeights []interface{}
-	BestScore   Score
-}
-
-// AddSnapshot adds a copied snapshot.
-func (sm *SnapshotManger) AddSnapshot(score Score, weights ...interface{}) {
-	if sm.BestWeights == nil || score.NDCG > sm.BestScore.NDCG {
-		sm.BestScore = score
-		if err := copier.Copy(&sm.BestWeights, weights); err != nil {
-			panic(err)
-		}
-	}
-}
-
-// AddSnapshotNoCopy adds a snapshot without copy.
-func (sm *SnapshotManger) AddSnapshotNoCopy(score Score, weights ...interface{}) {
-	if sm.BestWeights == nil || score.NDCG > sm.BestScore.NDCG {
-		sm.BestScore = score
-		if err := copier.Copy(&sm.BestWeights, weights); err != nil {
-			panic(err)
-		}
-	}
 }

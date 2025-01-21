@@ -409,7 +409,6 @@ func (bpr *BPR) Fit(ctx context.Context, trainSet, valSet *DataSet, config *FitC
 			userFeedback[u].Add(i)
 		}
 	}
-	snapshots := SnapshotManger{}
 	evalStart := time.Now()
 	scores := Evaluate(bpr, valSet, trainSet, config.TopK, config.Candidates, config.AvailableJobs(), NDCG, Precision, Recall)
 	evalTime := time.Since(evalStart)
@@ -418,7 +417,6 @@ func (bpr *BPR) Fit(ctx context.Context, trainSet, valSet *DataSet, config *FitC
 		zap.Float32(fmt.Sprintf("NDCG@%v", config.TopK), scores[0]),
 		zap.Float32(fmt.Sprintf("Precision@%v", config.TopK), scores[1]),
 		zap.Float32(fmt.Sprintf("Recall@%v", config.TopK), scores[2]))
-	snapshots.AddSnapshot(Score{NDCG: scores[0], Precision: scores[1], Recall: scores[2]}, bpr.UserFactor, bpr.ItemFactor)
 	// Training
 	_, span := progress.Start(ctx, "BPR.Fit", bpr.nEpochs)
 	for epoch := 1; epoch <= bpr.nEpochs; epoch++ {
@@ -481,19 +479,19 @@ func (bpr *BPR) Fit(ctx context.Context, trainSet, valSet *DataSet, config *FitC
 				zap.Float32(fmt.Sprintf("NDCG@%v", config.TopK), scores[0]),
 				zap.Float32(fmt.Sprintf("Precision@%v", config.TopK), scores[1]),
 				zap.Float32(fmt.Sprintf("Recall@%v", config.TopK), scores[2]))
-			snapshots.AddSnapshot(Score{NDCG: scores[0], Precision: scores[1], Recall: scores[2]}, bpr.UserFactor, bpr.ItemFactor)
 		}
 		span.Add(1)
 	}
 	span.End()
-	// restore best snapshot
-	bpr.UserFactor = snapshots.BestWeights[0].([][]float32)
-	bpr.ItemFactor = snapshots.BestWeights[1].([][]float32)
 	log.Logger().Info("fit bpr complete",
-		zap.Float32(fmt.Sprintf("NDCG@%v", config.TopK), snapshots.BestScore.NDCG),
-		zap.Float32(fmt.Sprintf("Precision@%v", config.TopK), snapshots.BestScore.Precision),
-		zap.Float32(fmt.Sprintf("Recall@%v", config.TopK), snapshots.BestScore.Recall))
-	return snapshots.BestScore
+		zap.Float32(fmt.Sprintf("NDCG@%v", config.TopK), scores[0]),
+		zap.Float32(fmt.Sprintf("Precision@%v", config.TopK), scores[1]),
+		zap.Float32(fmt.Sprintf("Recall@%v", config.TopK), scores[2]))
+	return Score{
+		NDCG:      scores[0],
+		Precision: scores[1],
+		Recall:    scores[2],
+	}
 }
 
 func (bpr *BPR) Clear() {
@@ -725,7 +723,6 @@ func (ccd *CCD) Fit(ctx context.Context, trainSet, valSet *DataSet, config *FitC
 		itemRes[i] = make([]float32, trainSet.UserCount())
 	}
 	// evaluate initial model
-	snapshots := SnapshotManger{}
 	evalStart := time.Now()
 	scores := Evaluate(ccd, valSet, trainSet, config.TopK, config.Candidates, config.AvailableJobs(), NDCG, Precision, Recall)
 	evalTime := time.Since(evalStart)
@@ -734,7 +731,6 @@ func (ccd *CCD) Fit(ctx context.Context, trainSet, valSet *DataSet, config *FitC
 		zap.Float32(fmt.Sprintf("NDCG@%v", config.TopK), scores[0]),
 		zap.Float32(fmt.Sprintf("Precision@%v", config.TopK), scores[1]),
 		zap.Float32(fmt.Sprintf("Recall@%v", config.TopK), scores[2]))
-	snapshots.AddSnapshot(Score{NDCG: scores[0], Precision: scores[1], Recall: scores[2]}, ccd.UserFactor, ccd.ItemFactor)
 
 	_, span := progress.Start(ctx, "CCD.Fit", ccd.nEpochs)
 	for ep := 1; ep <= ccd.nEpochs; ep++ {
@@ -833,20 +829,20 @@ func (ccd *CCD) Fit(ctx context.Context, trainSet, valSet *DataSet, config *FitC
 				zap.Float32(fmt.Sprintf("NDCG@%v", config.TopK), scores[0]),
 				zap.Float32(fmt.Sprintf("Precision@%v", config.TopK), scores[1]),
 				zap.Float32(fmt.Sprintf("Recall@%v", config.TopK), scores[2]))
-			snapshots.AddSnapshot(Score{NDCG: scores[0], Precision: scores[1], Recall: scores[2]}, ccd.UserFactor, ccd.ItemFactor)
 		}
 		span.Add(1)
 	}
 	span.End()
 
-	// restore best snapshot
-	ccd.UserFactor = snapshots.BestWeights[0].([][]float32)
-	ccd.ItemFactor = snapshots.BestWeights[1].([][]float32)
 	log.Logger().Info("fit ccd complete",
-		zap.Float32(fmt.Sprintf("NDCG@%v", config.TopK), snapshots.BestScore.NDCG),
-		zap.Float32(fmt.Sprintf("Precision@%v", config.TopK), snapshots.BestScore.Precision),
-		zap.Float32(fmt.Sprintf("Recall@%v", config.TopK), snapshots.BestScore.Recall))
-	return snapshots.BestScore
+		zap.Float32(fmt.Sprintf("NDCG@%v", config.TopK), scores[0]),
+		zap.Float32(fmt.Sprintf("Precision@%v", config.TopK), scores[1]),
+		zap.Float32(fmt.Sprintf("Recall@%v", config.TopK), scores[2]))
+	return Score{
+		NDCG:      scores[0],
+		Precision: scores[1],
+		Recall:    scores[2],
+	}
 }
 
 // Marshal model into byte stream.
