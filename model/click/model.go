@@ -300,7 +300,6 @@ func (fm *FM) Fit(ctx context.Context, trainSet, testSet *Dataset, config *FitCo
 	mVHat := base.NewMatrix32(maxJobs, fm.nFactors)
 	vVHat := base.NewMatrix32(maxJobs, fm.nFactors)
 
-	snapshots := SnapshotManger{}
 	evalStart := time.Now()
 	var score Score
 	switch fm.Task {
@@ -314,7 +313,6 @@ func (fm *FM) Fit(ctx context.Context, trainSet, testSet *Dataset, config *FitCo
 	evalTime := time.Since(evalStart)
 	fields := append([]zap.Field{zap.String("eval_time", evalTime.String())}, score.ZapFields()...)
 	log.Logger().Debug(fmt.Sprintf("fit fm %v/%v", 0, fm.nEpochs), fields...)
-	snapshots.AddSnapshot(score, fm.V, fm.W, fm.B)
 
 	_, span := progress.Start(ctx, "FM.Fit", fm.nEpochs)
 	for epoch := 1; epoch <= fm.nEpochs; epoch++ {
@@ -445,17 +443,13 @@ func (fm *FM) Fit(ctx context.Context, trainSet, testSet *Dataset, config *FitCo
 				span.Fail(errors.New("model diverged"))
 				break
 			}
-			snapshots.AddSnapshot(score, fm.V, fm.W, fm.B)
 		}
 		span.Add(1)
 	}
 	span.End()
 	// restore best snapshot
-	fm.V = snapshots.BestWeights[0].([][]float32)
-	fm.W = snapshots.BestWeights[1].([]float32)
-	fm.B = snapshots.BestWeights[2].(float32)
-	log.Logger().Info("fit fm complete", snapshots.BestScore.ZapFields()...)
-	return snapshots.BestScore
+	log.Logger().Info("fit fm complete", score.ZapFields()...)
+	return score
 }
 
 func (fm *FM) Clear() {

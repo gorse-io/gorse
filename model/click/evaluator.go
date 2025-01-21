@@ -19,7 +19,6 @@ import (
 
 	"github.com/chewxy/math32"
 	"github.com/samber/lo"
-	"github.com/zhenghaoz/gorse/base/copier"
 	"modernc.org/sortutil"
 )
 
@@ -151,20 +150,4 @@ func AUC(posPrediction, negPrediction []float32) float32 {
 		return 0
 	}
 	return sum / float32(len(posPrediction)*len(negPrediction))
-}
-
-// SnapshotManger manages the best snapshot.
-type SnapshotManger struct {
-	BestWeights []interface{}
-	BestScore   Score
-}
-
-// AddSnapshot adds a copied snapshot.
-func (sm *SnapshotManger) AddSnapshot(score Score, weights ...interface{}) {
-	if sm.BestWeights == nil || score.BetterThan(sm.BestScore) {
-		sm.BestScore = score
-		if err := copier.Copy(&sm.BestWeights, weights); err != nil {
-			panic(err)
-		}
-	}
 }

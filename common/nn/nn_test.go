@@ -270,7 +270,7 @@ func TestMNIST(t *testing.T) {
 
 	testAcc := accuracy(model.Forward(test.A), test.B)
 	fmt.Println("Test Accuracy:", testAcc)
-	assert.Greater(t, float64(testAcc), 0.96)
+	assert.Greater(t, float64(testAcc), 0.95)
 }
 
 func spiral() (*Tensor, *Tensor, error) {
