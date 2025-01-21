@@ -1564,7 +1564,9 @@ func (m *Master) updateItemToItem(dataset *dataset.Dataset) error {
 	// Build item-to-item recommenders
 	itemToItemRecommenders := make([]logics.ItemToItem, 0, len(m.Config.Recommend.ItemToItem))
 	for _, cfg := range m.Config.Recommend.ItemToItem {
-		recommender, err := logics.NewItemToItem(cfg, m.Config.Recommend.CacheSize, dataset.GetTimestamp(), dataset.GetItemColumnValuesIDF())
+		recommender, err := logics.NewItemToItem(cfg, m.Config.Recommend.CacheSize, dataset.GetTimestamp(), &logics.ItemToItemOptions{
+			TagsIDF: dataset.GetItemColumnValuesIDF(),
+		})
 		if err != nil {
 			return errors.Trace(err)
 		}

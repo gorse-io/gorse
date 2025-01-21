@@ -137,3 +137,7 @@ func TestTags(t *testing.T) {
 		assert.Equal(t, strconv.Itoa(i), scores[i-1].Id)
 	}
 }
+
+func TestUsers(t *testing.T) {
+
+}
