@@ -436,7 +436,7 @@ func (fm *FM) Fit(ctx context.Context, trainSet, testSet *Dataset, config *FitCo
 				zap.String("eval_time", evalTime.String()),
 				zap.Float32("loss", cost),
 			}, score.ZapFields()...)
-			log.Logger().Info(fmt.Sprintf("fit fm %v/%v", epoch, fm.nEpochs), fields...)
+			log.Logger().Debug(fmt.Sprintf("fit fm %v/%v", epoch, fm.nEpochs), fields...)
 			// check NaN
 			if math32.IsNaN(cost) || math32.IsNaN(score.GetValue()) {
 				log.Logger().Warn("model diverged", zap.Float32("lr", fm.lr))
