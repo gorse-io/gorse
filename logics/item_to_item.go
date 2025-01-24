@@ -86,7 +86,7 @@ func (b *baseItemToItem[T]) PopAll(callback func(itemId string, score []cache.Sc
 		callback(item, lo.Map(scores, func(v lo.Tuple2[int, float32], _ int) cache.Score {
 			return cache.Score{
 				Id:        b.items[v.A],
-				Score:     float64(v.B),
+				Score:     -float64(v.B),
 				Timestamp: b.timestamp,
 			}
 		}))
