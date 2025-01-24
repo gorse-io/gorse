@@ -39,8 +39,8 @@ type ItemToItemOptions struct {
 }
 
 type ItemToItem interface {
-	Items() []string
-	Push(item data.Item, feedback []dataset.ID)
+	Items() []*data.Item
+	Push(item *data.Item, feedback []dataset.ID)
 	PopAll(callback func(itemId string, score []cache.Score))
 }
 
@@ -69,10 +69,10 @@ type baseItemToItem[T any] struct {
 	timestamp  time.Time
 	columnFunc *vm.Program
 	index      *ann.HNSW[T]
-	items      []string
+	items      []*data.Item
 }
 
-func (b *baseItemToItem[T]) Items() []string {
+func (b *baseItemToItem[T]) Items() []*data.Item {
 	return b.items
 }
 
@@ -83,11 +83,12 @@ func (b *baseItemToItem[T]) PopAll(callback func(itemId string, score []cache.Sc
 			log.Logger().Error("failed to search index", zap.Error(err))
 			return
 		}
-		callback(item, lo.Map(scores, func(v lo.Tuple2[int, float32], _ int) cache.Score {
+		callback(item.ItemId, lo.Map(scores, func(v lo.Tuple2[int, float32], _ int) cache.Score {
 			return cache.Score{
-				Id:        b.items[v.A],
-				Score:     -float64(v.B),
-				Timestamp: b.timestamp,
+				Id:         b.items[v.A].ItemId,
+				Categories: b.items[v.A].Categories,
+				Score:      -float64(v.B),
+				Timestamp:  b.timestamp,
 			}
 		}))
 	}
@@ -115,7 +116,7 @@ func newEmbeddingItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.T
 	}}, nil
 }
 
-func (e *embeddingItemToItem) Push(item data.Item, _ []dataset.ID) {
+func (e *embeddingItemToItem) Push(item *data.Item, _ []dataset.ID) {
 	// Check if hidden
 	if item.IsHidden {
 		return
@@ -143,7 +144,7 @@ func (e *embeddingItemToItem) Push(item data.Item, _ []dataset.ID) {
 		return
 	}
 	// Push item
-	e.items = append(e.items, item.ItemId)
+	e.items = append(e.items, item)
 	_, err = e.index.Add(v)
 	if err != nil {
 		log.Logger().Error("failed to add item to index", zap.Error(err))
@@ -177,7 +178,7 @@ func newTagsItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time, 
 	return t, nil
 }
 
-func (t *tagsItemToItem) Push(item data.Item, _ []dataset.ID) {
+func (t *tagsItemToItem) Push(item *data.Item, _ []dataset.ID) {
 	// Check if hidden
 	if item.IsHidden {
 		return
@@ -199,7 +200,7 @@ func (t *tagsItemToItem) Push(item data.Item, _ []dataset.ID) {
 		return v[i] < v[j]
 	})
 	// Push item
-	t.items = append(t.items, item.ItemId)
+	t.items = append(t.items, item)
 	_, err = t.index.Add(v)
 	if err != nil {
 		log.Logger().Error("failed to add item to index", zap.Error(err))
@@ -289,13 +290,13 @@ func newUsersItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time,
 	return u, nil
 }
 
-func (u *usersItemToItem) Push(item data.Item, feedback []dataset.ID) {
+func (u *usersItemToItem) Push(item *data.Item, feedback []dataset.ID) {
 	// Check if hidden
 	if item.IsHidden {
 		return
 	}
 	// Push item
-	u.items = append(u.items, item.ItemId)
+	u.items = append(u.items, item)
 	_, err := u.index.Add(feedback)
 	if err != nil {
 		log.Logger().Error("failed to add item to index", zap.Error(err))

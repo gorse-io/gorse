@@ -513,11 +513,12 @@ func TestServer_SearchDocumentsOfItems(t *testing.T) {
 	}
 	ctx := context.Background()
 	operators := []ListOperator{
-		{"Item Neighbors", cache.ItemToItem, cache.Key(cache.Neighbors, "0"), "", "/api/dashboard/item-to-item/neighbors/0"},
-		{"Latest Items", cache.NonPersonalized, cache.Latest, "", "/api/dashboard/non-personalized/latest/"},
-		{"Popular Items", cache.NonPersonalized, cache.Popular, "", "/api/dashboard/non-personalized/popular/"},
-		{"Latest Items in Category", cache.NonPersonalized, cache.Latest, "*", "/api/dashboard/non-personalized/latest/"},
-		{"Popular Items in Category", cache.NonPersonalized, cache.Popular, "*", "/api/dashboard/non-personalized/popular/"},
+		{"ItemToItem", cache.ItemToItem, cache.Key(cache.Neighbors, "0"), "", "/api/dashboard/item-to-item/neighbors/0"},
+		{"ItemToItemCategory", cache.ItemToItem, cache.Key(cache.Neighbors, "0"), "*", "/api/dashboard/item-to-item/neighbors/0"},
+		{"LatestItems", cache.NonPersonalized, cache.Latest, "", "/api/dashboard/non-personalized/latest/"},
+		{"PopularItems", cache.NonPersonalized, cache.Popular, "", "/api/dashboard/non-personalized/popular/"},
+		{"LatestItemsCategory", cache.NonPersonalized, cache.Latest, "*", "/api/dashboard/non-personalized/latest/"},
+		{"PopularItemsCategory", cache.NonPersonalized, cache.Popular, "*", "/api/dashboard/non-personalized/popular/"},
 	}
 	for i, operator := range operators {
 		t.Run(operator.Name, func(t *testing.T) {

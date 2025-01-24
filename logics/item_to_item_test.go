@@ -32,7 +32,7 @@ func TestColumnFunc(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Push success
-	item2item.Push(data.Item{
+	item2item.Push(&data.Item{
 		ItemId: "1",
 		Labels: map[string]any{
 			"description": []float32{0.1, 0.2, 0.3},
@@ -41,7 +41,7 @@ func TestColumnFunc(t *testing.T) {
 	assert.Len(t, item2item.Items(), 1)
 
 	// Hidden
-	item2item.Push(data.Item{
+	item2item.Push(&data.Item{
 		ItemId:   "2",
 		IsHidden: true,
 		Labels: map[string]any{
@@ -51,7 +51,7 @@ func TestColumnFunc(t *testing.T) {
 	assert.Len(t, item2item.Items(), 1)
 
 	// Dimension does not match
-	item2item.Push(data.Item{
+	item2item.Push(&data.Item{
 		ItemId: "1",
 		Labels: map[string]any{
 			"description": []float32{0.1, 0.2},
@@ -60,7 +60,7 @@ func TestColumnFunc(t *testing.T) {
 	assert.Len(t, item2item.Items(), 1)
 
 	// Type does not match
-	item2item.Push(data.Item{
+	item2item.Push(&data.Item{
 		ItemId: "1",
 		Labels: map[string]any{
 			"description": "hello",
@@ -69,7 +69,7 @@ func TestColumnFunc(t *testing.T) {
 	assert.Len(t, item2item.Items(), 1)
 
 	// Column does not exist
-	item2item.Push(data.Item{
+	item2item.Push(&data.Item{
 		ItemId: "2",
 		Labels: []float32{0.1, 0.2, 0.3},
 	}, nil)
@@ -84,7 +84,7 @@ func TestEmbedding(t *testing.T) {
 	assert.NoError(t, err)
 
 	for i := 0; i < 100; i++ {
-		item2item.Push(data.Item{
+		item2item.Push(&data.Item{
 			ItemId: strconv.Itoa(i),
 			Labels: map[string]any{
 				"description": []float32{0.1 * float32(i), 0.2 * float32(i), 0.3 * float32(i)},
@@ -120,7 +120,7 @@ func TestTags(t *testing.T) {
 		for j := 1; j <= 100-i; j++ {
 			labels[strconv.Itoa(j)] = []dataset.ID{dataset.ID(j)}
 		}
-		item2item.Push(data.Item{
+		item2item.Push(&data.Item{
 			ItemId: strconv.Itoa(i),
 			Labels: labels,
 		}, nil)
@@ -152,7 +152,7 @@ func TestUsers(t *testing.T) {
 		for j := 1; j <= 100-i; j++ {
 			feedback = append(feedback, dataset.ID(j))
 		}
-		item2item.Push(data.Item{ItemId: strconv.Itoa(i)}, feedback)
+		item2item.Push(&data.Item{ItemId: strconv.Itoa(i)}, feedback)
 	}
 
 	var scores []cache.Score

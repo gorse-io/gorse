@@ -1577,7 +1577,7 @@ func (m *Master) updateItemToItem(dataset *dataset.Dataset) error {
 	for _, item := range dataset.GetItems() {
 		if !item.IsHidden {
 			for _, recommender := range itemToItemRecommenders {
-				recommender.Push(item, nil)
+				recommender.Push(&item, nil)
 				span.Add(1)
 			}
 		}

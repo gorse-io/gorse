@@ -851,7 +851,8 @@ func (m *Master) getNonPersonalized(request *restful.Request, response *restful.
 func (m *Master) getItemToItem(request *restful.Request, response *restful.Response) {
 	name := request.PathParameter("name")
 	itemId := request.PathParameter("item-id")
-	m.SearchDocuments(cache.ItemToItem, cache.Key(name, itemId), nil, m.GetItem, request, response)
+	categories := request.QueryParameters("category")
+	m.SearchDocuments(cache.ItemToItem, cache.Key(name, itemId), categories, m.GetItem, request, response)
 }
 
 func (m *Master) getUserToUser(request *restful.Request, response *restful.Response) {

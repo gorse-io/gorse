@@ -829,6 +829,7 @@ func (suite *ServerTestSuite) TestNonPersonalizedRecommend() {
 		{"NonPersonalized", cache.NonPersonalized, "trending", "", "/api/non-personalized/trending"},
 		{"NonPersonalizedCategory", cache.NonPersonalized, "trending", "0", "/api/non-personalized/trending"},
 		{"ItemToItem", cache.ItemToItem, cache.Key("lookalike", "0"), "", "/api/item-to-item/lookalike/0"},
+		{"ItemToItemCategory", cache.ItemToItem, cache.Key("lookalike", "0"), "0", "/api/item-to-item/lookalike/0"},
 		{"Offline Recommend", cache.OfflineRecommend, "0", "", "/api/intermediate/recommend/0"},
 		{"Offline Recommend in Category", cache.OfflineRecommend, "0", "0", "/api/intermediate/recommend/0/0"},
 	}
