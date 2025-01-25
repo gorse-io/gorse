@@ -16,10 +16,11 @@ package base
 
 import (
 	"encoding/binary"
-	"github.com/juju/errors"
-	"github.com/zhenghaoz/gorse/base/encoding"
 	"io"
 	"strconv"
+
+	"github.com/juju/errors"
+	"github.com/zhenghaoz/gorse/base/encoding"
 )
 
 // Index keeps the mapping between names (string) and indices (integer).
@@ -87,9 +88,8 @@ func UnmarshalIndex(r io.Reader) (Index, error) {
 // a user ID or item ID. The dense index is the internal user index or item index
 // optimized for faster parameter access and less memory usage.
 type MapIndex struct {
-	Numbers    map[string]int32 // sparse ID -> dense index
-	Names      []string         // dense index -> sparse ID
-	Characters int
+	Numbers map[string]int32 // sparse ID -> dense index
+	Names   []string         // dense index -> sparse ID
 }
 
 // NotId represents an ID doesn't exist.
@@ -116,7 +116,6 @@ func (idx *MapIndex) Add(name string) {
 	if _, exist := idx.Numbers[name]; !exist {
 		idx.Numbers[name] = int32(len(idx.Names))
 		idx.Names = append(idx.Names, name)
-		idx.Characters += len(name)
 	}
 }
 

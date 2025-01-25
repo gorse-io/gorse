@@ -22,7 +22,6 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
-	"reflect"
 	"strings"
 	"time"
 
@@ -504,7 +503,7 @@ func (w *Worker) Recommend(users []data.User) {
 		log.Logger().Error("failed to pull items", zap.Error(err))
 		return
 	}
-	MemoryInuseBytesVec.WithLabelValues("item_cache").Set(float64(itemCache.Bytes()))
+	MemoryInuseBytesVec.WithLabelValues("item_cache").Set(float64(sizeof.DeepSize(itemCache)))
 	defer MemoryInuseBytesVec.WithLabelValues("item_cache").Set(0)
 
 	// progress tracker
@@ -1356,8 +1355,7 @@ func (w *Worker) checkLive(writer http.ResponseWriter, _ *http.Request) {
 
 // ItemCache is alias of map[string]data.Item.
 type ItemCache struct {
-	Data      map[string]*data.Item
-	ByteCount uintptr
+	Data map[string]*data.Item
 }
 
 func NewItemCache() *ItemCache {
@@ -1371,11 +1369,6 @@ func (c *ItemCache) Len() int {
 func (c *ItemCache) Set(itemId string, item data.Item) {
 	if _, exist := c.Data[itemId]; !exist {
 		c.Data[itemId] = &item
-		c.ByteCount += reflect.TypeOf(rune(0)).Size() * uintptr(len(itemId))
-		c.ByteCount += reflect.TypeOf(item.ItemId).Size() * uintptr(len(itemId))
-		c.ByteCount += reflect.TypeOf(item.Comment).Size() * uintptr(len(itemId))
-		c.ByteCount += uintptr(sizeof.DeepSize(item.Categories))
-		c.ByteCount += reflect.TypeOf(item).Size()
 	}
 }
 
@@ -1401,17 +1394,12 @@ func (c *ItemCache) IsAvailable(itemId string) bool {
 	}
 }
 
-func (c *ItemCache) Bytes() int {
-	return int(c.ByteCount)
-}
-
 // FeedbackCache is the cache for user feedbacks.
 type FeedbackCache struct {
 	*config.Config
-	Client    data.Database
-	Types     []string
-	Cache     cmap.ConcurrentMap
-	ByteCount uintptr
+	Client data.Database
+	Types  []string
+	Cache  cmap.ConcurrentMap
 }
 
 // NewFeedbackCache creates a new FeedbackCache.
@@ -1436,14 +1424,8 @@ func (c *FeedbackCache) GetUserFeedback(ctx context.Context, userId string) ([]s
 		}
 		for _, feedback := range feedbacks {
 			items = append(items, feedback.ItemId)
-			c.ByteCount += reflect.TypeOf(rune(0)).Size() * uintptr(len(feedback.FeedbackType))
-			c.ByteCount += reflect.TypeOf(rune(0)).Size() * uintptr(len(feedback.UserId))
-			c.ByteCount += reflect.TypeOf(rune(0)).Size() * uintptr(len(feedback.ItemId))
-			c.ByteCount += reflect.TypeOf(rune(0)).Size() * uintptr(len(feedback.Comment))
 		}
 		c.Cache.Set(userId, items)
-		c.ByteCount += reflect.TypeOf(feedbacks).Elem().Size() * uintptr(len(feedbacks))
-		c.ByteCount += reflect.TypeOf(rune(0)).Size() * uintptr(len(userId))
 		return items, nil
 	}
 }
