@@ -19,7 +19,6 @@ import (
 	"github.com/juju/errors"
 	"github.com/zhenghaoz/gorse/base/encoding"
 	"io"
-	"reflect"
 	"strconv"
 )
 
@@ -32,7 +31,6 @@ type Index interface {
 	GetNames() []string
 	Marshal(w io.Writer) error
 	Unmarshal(r io.Reader) error
-	Bytes() int
 }
 
 const (
@@ -178,24 +176,6 @@ func (idx *MapIndex) Unmarshal(r io.Reader) error {
 	return nil
 }
 
-func (idx *MapIndex) Bytes() int {
-	// The memory usage of MapIndex consists of:
-	// 1. struct
-	// 2. string in idx.Names
-	// 3. int32 (value) in idx.Numbers
-	// 4. string (key) in idx.Numbers
-	// 5. rune in string
-	// The cost of map is omitted.
-	bytes := reflect.TypeOf(idx).Elem().Size()
-	if idx.Len() > 0 {
-		bytes += reflect.TypeOf(idx.Names).Elem().Size() * uintptr(cap(idx.Names))
-		bytes += reflect.TypeOf(idx.Numbers).Elem().Size() * uintptr(len(idx.Numbers))
-		bytes += reflect.TypeOf(idx.Numbers).Key().Size() * uintptr(len(idx.Numbers))
-		bytes += reflect.TypeOf(rune(0)).Size() * uintptr(idx.Characters)
-	}
-	return int(bytes)
-}
-
 // DirectIndex means that the name and its index is the same. For example,
 // the index of "1" is 1, vice versa.
 type DirectIndex struct {
@@ -260,8 +240,4 @@ func (idx *DirectIndex) Marshal(w io.Writer) error {
 // Unmarshal direct index from byte stream.
 func (idx *DirectIndex) Unmarshal(r io.Reader) error {
 	return binary.Read(r, binary.LittleEndian, &idx.Limit)
-}
-
-func (idx *DirectIndex) Bytes() int {
-	return int(reflect.TypeOf(idx).Elem().Size())
 }

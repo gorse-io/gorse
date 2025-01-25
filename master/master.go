@@ -201,7 +201,7 @@ func (m *Master) Serve() {
 		CollaborativeFilteringPrecision10.Set(float64(m.rankingScore.Precision))
 		CollaborativeFilteringRecall10.Set(float64(m.rankingScore.Recall))
 		CollaborativeFilteringNDCG10.Set(float64(m.rankingScore.NDCG))
-		MemoryInUseBytesVec.WithLabelValues("collaborative_filtering_model").Set(float64(m.RankingModel.Bytes()))
+		MemoryInUseBytesVec.WithLabelValues("collaborative_filtering_model").Set(float64(sizeof.DeepSize(m.RankingModel)))
 	}
 	if m.localCache.ClickModel != nil {
 		log.Logger().Info("load cached click model",

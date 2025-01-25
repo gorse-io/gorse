@@ -34,7 +34,6 @@ import (
 	"github.com/zhenghaoz/gorse/base/parallel"
 	"github.com/zhenghaoz/gorse/base/progress"
 	"github.com/zhenghaoz/gorse/base/task"
-	"github.com/zhenghaoz/gorse/common/sizeof"
 	"github.com/zhenghaoz/gorse/model"
 	"go.uber.org/zap"
 )
@@ -111,8 +110,6 @@ type MatrixFactorization interface {
 	Marshal(w io.Writer) error
 	// Unmarshal model from byte stream.
 	Unmarshal(r io.Reader) error
-	// Bytes returns used memory.
-	Bytes() int
 }
 
 type BaseMatrixFactorization struct {
@@ -124,15 +121,6 @@ type BaseMatrixFactorization struct {
 	// Model parameters
 	UserFactor [][]float32 // p_u
 	ItemFactor [][]float32 // q_i
-}
-
-func (baseModel *BaseMatrixFactorization) Bytes() int {
-	bytes := reflect.TypeOf(baseModel).Elem().Size()
-	bytes += uintptr(sizeof.DeepSize(baseModel.UserPredictable.Bytes()))
-	bytes += uintptr(sizeof.DeepSize(baseModel.ItemPredictable.Bytes()))
-	bytes += uintptr(sizeof.DeepSize(baseModel.UserFactor))
-	bytes += uintptr(sizeof.DeepSize(baseModel.ItemFactor))
-	return int(bytes) + baseModel.UserIndex.Bytes() + baseModel.ItemIndex.Bytes()
 }
 
 func (baseModel *BaseMatrixFactorization) Init(trainSet *DataSet) {

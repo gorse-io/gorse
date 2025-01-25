@@ -41,9 +41,9 @@ import (
 	"github.com/zhenghaoz/gorse/base/parallel"
 	"github.com/zhenghaoz/gorse/base/progress"
 	"github.com/zhenghaoz/gorse/base/search"
-	"github.com/zhenghaoz/gorse/base/sizeof"
 	"github.com/zhenghaoz/gorse/cmd/version"
 	encoding2 "github.com/zhenghaoz/gorse/common/encoding"
+	"github.com/zhenghaoz/gorse/common/sizeof"
 	"github.com/zhenghaoz/gorse/common/util"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model/click"
@@ -278,7 +278,7 @@ func (w *Worker) Pull() {
 					w.RankingModelVersion = w.latestRankingModelVersion
 					log.Logger().Info("synced ranking model",
 						zap.String("version", encoding.Hex(w.RankingModelVersion)))
-					MemoryInuseBytesVec.WithLabelValues("collaborative_filtering_model").Set(float64(w.RankingModel.Bytes()))
+					MemoryInuseBytesVec.WithLabelValues("collaborative_filtering_model").Set(float64(sizeof.DeepSize(w.RankingModel)))
 					pulled = true
 				}
 			}
@@ -615,7 +615,7 @@ func (w *Worker) Recommend(users []data.User) {
 					zap.String("user_id", userId), zap.Error(err))
 				return errors.Trace(err)
 			}
-			MemoryInuseBytesVec.WithLabelValues("user_feedback_cache").Set(float64(userFeedbackCache.Bytes()))
+			MemoryInuseBytesVec.WithLabelValues("user_feedback_cache").Set(float64(sizeof.DeepSize(userFeedbackCache)))
 		}
 
 		// create candidates container
@@ -713,7 +713,7 @@ func (w *Worker) Recommend(users []data.User) {
 						zap.String("user_id", userId), zap.Error(err))
 					return errors.Trace(err)
 				}
-				MemoryInuseBytesVec.WithLabelValues("user_feedback_cache").Set(float64(userFeedbackCache.Bytes()))
+				MemoryInuseBytesVec.WithLabelValues("user_feedback_cache").Set(float64(sizeof.DeepSize(userFeedbackCache)))
 				// add unseen items
 				for _, itemId := range similarUserPositiveItems {
 					if !excludeSet.Contains(itemId) && itemCache.IsAvailable(itemId) {
@@ -1446,8 +1446,4 @@ func (c *FeedbackCache) GetUserFeedback(ctx context.Context, userId string) ([]s
 		c.ByteCount += reflect.TypeOf(rune(0)).Size() * uintptr(len(userId))
 		return items, nil
 	}
-}
-
-func (c *FeedbackCache) Bytes() int {
-	return int(c.ByteCount)
 }

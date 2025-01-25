@@ -14,8 +14,6 @@
 
 package base
 
-import "reflect"
-
 const batchSize = 1024 * 1024
 
 type Array[T any] struct {
@@ -38,17 +36,4 @@ func (a *Array[T]) Append(val T) {
 		a.Data = append(a.Data, make([]T, 0, batchSize))
 	}
 	a.Data[len(a.Data)-1] = append(a.Data[len(a.Data)-1], val)
-}
-
-func (a *Array[T]) Bytes() int {
-	// The memory usage of Array[T] consists of:
-	// 1. struct
-	// 2. slices in s.Data[*]
-	// 3. elements in s.Data[*][*]
-	bytes := reflect.TypeOf(a).Elem().Size()
-	if len(a.Data) > 0 {
-		bytes += reflect.TypeOf(a.Data).Elem().Size() * uintptr(cap(a.Data))
-		bytes += reflect.TypeOf(a.Data).Elem().Elem().Size() * uintptr(len(a.Data)) * batchSize
-	}
-	return int(bytes)
 }
