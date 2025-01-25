@@ -50,14 +50,19 @@ func NewItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time, opts
 		return newEmbeddingItemToItem(cfg, n, timestamp)
 	case "tags":
 		if opts == nil || opts.TagsIDF == nil {
-			return nil, errors.New("item IDF is required for tags item-to-item")
+			return nil, errors.New("tags IDF is required for tags item-to-item")
 		}
 		return newTagsItemToItem(cfg, n, timestamp, opts.TagsIDF)
 	case "users":
 		if opts == nil || opts.UsersIDF == nil {
-			return nil, errors.New("user IDF is required for users item-to-item")
+			return nil, errors.New("users IDF is required for users item-to-item")
 		}
 		return newUsersItemToItem(cfg, n, timestamp, opts.UsersIDF)
+	case "auto":
+		if opts == nil || opts.TagsIDF == nil || opts.UsersIDF == nil {
+			return nil, errors.New("tags and users IDF are required for auto item-to-item")
+		}
+		return newAutoItemToItem(cfg, n, timestamp, opts.TagsIDF, opts.UsersIDF)
 	default:
 		return nil, errors.New("invalid item-to-item type")
 	}
