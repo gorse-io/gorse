@@ -109,7 +109,7 @@ func TestUnmarshal(t *testing.T) {
 			assert.Equal(t, "count(feedback, .FeedbackType == 'star')", config.Recommend.NonPersonalized[0].Score)
 			assert.Equal(t, "(now() - item.Timestamp).Hours() < 168", config.Recommend.NonPersonalized[0].Filter)
 			// [recommend.user_neighbors]
-			assert.Equal(t, "similar", config.Recommend.UserNeighbors.NeighborType)
+			assert.Equal(t, "related", config.Recommend.UserNeighbors.NeighborType)
 			// [recommend.item_neighbors]
 			assert.Equal(t, "similar", config.Recommend.ItemNeighbors.NeighborType)
 			// [recommend.collaborative]
