@@ -166,9 +166,6 @@ type CollaborativeConfig struct {
 	ModelSearchEpoch      int           `mapstructure:"model_search_epoch" validate:"gt=0"`
 	ModelSearchTrials     int           `mapstructure:"model_search_trials" validate:"gt=0"`
 	EnableModelSizeSearch bool          `mapstructure:"enable_model_size_search"`
-	EnableIndex           bool          `mapstructure:"enable_index"`
-	IndexRecall           float32       `mapstructure:"index_recall" validate:"gt=0"`
-	IndexFitEpoch         int           `mapstructure:"index_fit_epoch" validate:"gt=0"`
 }
 
 type ReplacementConfig struct {
@@ -257,9 +254,6 @@ func GetDefaultConfig() *Config {
 				ModelSearchPeriod: 180 * time.Minute,
 				ModelSearchEpoch:  100,
 				ModelSearchTrials: 10,
-				EnableIndex:       true,
-				IndexRecall:       0.9,
-				IndexFitEpoch:     3,
 			},
 			Replacement: ReplacementConfig{
 				EnableReplacement:        false,
@@ -382,13 +376,6 @@ func (config *Config) OfflineRecommendDigest(option ...DigestOption) string {
 	}
 	if config.Recommend.Offline.EnableItemBasedRecommend {
 		builder.WriteString(fmt.Sprintf("-%v", options.itemNeighborDigest))
-	}
-	if options.enableCollaborative {
-		builder.WriteString(fmt.Sprintf("-%v", config.Recommend.Collaborative.EnableIndex))
-		if config.Recommend.Collaborative.EnableIndex {
-			builder.WriteString(fmt.Sprintf("-%v-%v",
-				config.Recommend.Collaborative.IndexRecall, config.Recommend.Collaborative.IndexFitEpoch))
-		}
 	}
 	if config.Recommend.Replacement.EnableReplacement {
 		builder.WriteString(fmt.Sprintf("-%v-%v",
@@ -518,9 +505,6 @@ func setDefault() {
 	viper.SetDefault("recommend.collaborative.model_search_period", defaultConfig.Recommend.Collaborative.ModelSearchPeriod)
 	viper.SetDefault("recommend.collaborative.model_search_epoch", defaultConfig.Recommend.Collaborative.ModelSearchEpoch)
 	viper.SetDefault("recommend.collaborative.model_search_trials", defaultConfig.Recommend.Collaborative.ModelSearchTrials)
-	viper.SetDefault("recommend.collaborative.enable_index", defaultConfig.Recommend.Collaborative.EnableIndex)
-	viper.SetDefault("recommend.collaborative.index_recall", defaultConfig.Recommend.Collaborative.IndexRecall)
-	viper.SetDefault("recommend.collaborative.index_fit_epoch", defaultConfig.Recommend.Collaborative.IndexFitEpoch)
 	// [recommend.replacement]
 	viper.SetDefault("recommend.replacement.enable_replacement", defaultConfig.Recommend.Replacement.EnableReplacement)
 	viper.SetDefault("recommend.replacement.positive_replacement_decay", defaultConfig.Recommend.Replacement.PositiveReplacementDecay)
