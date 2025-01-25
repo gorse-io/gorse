@@ -990,14 +990,30 @@ func (m *Master) LoadDataFromDatabase(
 
 func (m *Master) updateItemToItem(dataset *dataset.Dataset) error {
 	ctx, span := m.tracer.Start(context.Background(), "Generate item-to-item recommendation",
-		len(dataset.GetItems())*len(m.Config.Recommend.ItemToItem)*2)
+		len(dataset.GetItems())*(len(m.Config.Recommend.ItemToItem)+1)*2)
 	defer span.End()
 
+	// Add built-in item-to-item recommenders
+	itemToItemConfigs := m.Config.Recommend.ItemToItem
+	builtInConfig := config.ItemToItemConfig{}
+	builtInConfig.Name = cache.Neighbors
+	switch m.Config.Recommend.ItemNeighbors.NeighborType {
+	case config.NeighborTypeSimilar:
+		builtInConfig.Type = "tags"
+		builtInConfig.Column = "item.Labels"
+	case config.NeighborTypeRelated:
+		builtInConfig.Type = "users"
+	case config.NeighborTypeAuto:
+		builtInConfig.Type = "auto"
+	}
+	itemToItemConfigs = append(itemToItemConfigs, builtInConfig)
+
 	// Build item-to-item recommenders
-	itemToItemRecommenders := make([]logics.ItemToItem, 0, len(m.Config.Recommend.ItemToItem))
-	for _, cfg := range m.Config.Recommend.ItemToItem {
+	itemToItemRecommenders := make([]logics.ItemToItem, 0, len(itemToItemConfigs))
+	for _, cfg := range itemToItemConfigs {
 		recommender, err := logics.NewItemToItem(cfg, m.Config.Recommend.CacheSize, dataset.GetTimestamp(), &logics.ItemToItemOptions{
-			TagsIDF: dataset.GetItemColumnValuesIDF(),
+			TagsIDF:  dataset.GetItemColumnValuesIDF(),
+			UsersIDF: dataset.GetUserIDF(),
 		})
 		if err != nil {
 			return errors.Trace(err)
@@ -1006,10 +1022,10 @@ func (m *Master) updateItemToItem(dataset *dataset.Dataset) error {
 	}
 
 	// Push items to item-to-item recommenders
-	for _, item := range dataset.GetItems() {
+	for i, item := range dataset.GetItems() {
 		if !item.IsHidden {
 			for _, recommender := range itemToItemRecommenders {
-				recommender.Push(&item, nil)
+				recommender.Push(&item, dataset.GetItemFeedback()[i])
 				span.Add(1)
 			}
 		}
@@ -1018,8 +1034,8 @@ func (m *Master) updateItemToItem(dataset *dataset.Dataset) error {
 	// Save item-to-item recommendations to cache
 	for i, recommender := range itemToItemRecommenders {
 		recommender.PopAll(func(itemId string, score []cache.Score) {
-			itemToItemConfig := m.Config.Recommend.ItemToItem[i]
-			if m.needUpdateItemToItem(itemId, m.Config.Recommend.ItemToItem[i]) {
+			itemToItemConfig := itemToItemConfigs[i]
+			if m.needUpdateItemToItem(itemId, itemToItemConfigs[i]) {
 				log.Logger().Debug("update item-to-item recommendation",
 					zap.String("item_id", itemId),
 					zap.String("name", itemToItemConfig.Name),
@@ -1097,27 +1113,30 @@ func (m *Master) updateUserToUser(dataset *dataset.Dataset) error {
 		cfg.Type = "tags"
 		cfg.Column = "user.Labels"
 	case config.NeighborTypeRelated:
-		cfg.Type = "users"
+		cfg.Type = "items"
 	case config.NeighborTypeAuto:
 		cfg.Type = "auto"
 	}
 	userToUserRecommender, err := logics.NewUserToUser(cfg, m.Config.Recommend.CacheSize, dataset.GetTimestamp(), &logics.UserToUserOptions{
-		TagsIDF: dataset.GetUserColumnValuesIDF(),
+		TagsIDF:  dataset.GetUserColumnValuesIDF(),
+		ItemsIDF: dataset.GetItemIDF(),
 	})
 	if err != nil {
 		return errors.Trace(err)
 	}
 
 	// Push users to user-to-user recommender
-	for _, user := range dataset.GetUsers() {
-		userToUserRecommender.Push(&user, nil)
+	for i, user := range dataset.GetUsers() {
+		userToUserRecommender.Push(&user, dataset.GetUserFeedback()[i])
 		span.Add(1)
 	}
 
 	// Save user-to-user recommendations to cache
 	userToUserRecommender.PopAll(func(userId string, score []cache.Score) {
 		if m.needUpdateUserToUser(userId) {
-			log.Logger().Debug("update user neighbors", zap.String("user_id", userId))
+			log.Logger().Debug("update user neighbors",
+				zap.String("user_id", userId),
+				zap.Int("n_recommendations", len(score)))
 			// Save user-to-user recommendations to cache
 			if err := m.CacheClient.AddScores(ctx, cache.UserToUser, cache.Key(cache.Neighbors, userId), score); err != nil {
 				log.Logger().Error("failed to save user neighbors to cache", zap.String("user_id", userId), zap.Error(err))
@@ -1141,7 +1160,7 @@ func (m *Master) needUpdateUserToUser(userId string) bool {
 	ctx := context.Background()
 
 	// check cache
-	if items, err := m.CacheClient.SearchScores(ctx, cache.UserToUser, cache.Key(cache.Neighbors, userId), []string{""}, 0, -1); err != nil {
+	if items, err := m.CacheClient.SearchScores(ctx, cache.UserToUser, cache.Key(cache.Neighbors, userId), nil, 0, -1); err != nil {
 		log.Logger().Error("failed to load user neighbors", zap.String("user_id", userId), zap.Error(err))
 		return true
 	} else if len(items) == 0 {

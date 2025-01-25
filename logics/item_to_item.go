@@ -16,6 +16,9 @@ package logics
 
 import (
 	"errors"
+	"sort"
+	"time"
+
 	"github.com/chewxy/math32"
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/expr-lang/expr"
@@ -29,8 +32,6 @@ import (
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
 	"go.uber.org/zap"
-	"sort"
-	"time"
 )
 
 type ItemToItemOptions struct {
@@ -304,7 +305,7 @@ func (idf IDF) distance(a, b []dataset.ID) float32 {
 	if len(a) == len(b) && commonCount == float32(len(a)) {
 		// If two items have the same tags, its distance is zero.
 		return 0
-	} else if commonCount > 0 {
+	} else if commonCount > 0 && len(a) > 0 && len(b) > 0 {
 		// Add shrinkage to avoid division by zero
 		return 1 - commonSum*commonCount/
 			math32.Sqrt(idf.weightedSum(a))/
@@ -320,9 +321,7 @@ func (idf IDF) weightedSumCommonElements(a, b []dataset.ID) (float32, float32) {
 	i, j, sum, count := 0, 0, float32(0), float32(0)
 	for i < len(a) && j < len(b) {
 		if a[i] == b[j] {
-			if a[i] >= 0 && int(a[i]) < len(idf) {
-				sum += idf[a[i]]
-			}
+			sum += idf[a[i]]
 			count++
 			i++
 			j++
@@ -338,9 +337,7 @@ func (idf IDF) weightedSumCommonElements(a, b []dataset.ID) (float32, float32) {
 func (idf IDF) weightedSum(a []dataset.ID) float32 {
 	var sum float32
 	for _, i := range a {
-		if i >= 0 && int(i) < len(idf) {
-			sum += idf[i]
-		}
+		sum += idf[i]
 	}
 	return sum
 }
