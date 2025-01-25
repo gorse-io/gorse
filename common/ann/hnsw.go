@@ -26,8 +26,8 @@ import (
 
 // HNSW is a vector index based on Hierarchical Navigable Small Worlds.
 type HNSW[T any] struct {
-	distanceFunc    func(a, b []T) float32
-	vectors         [][]T
+	distanceFunc    func(a, b T) float32
+	vectors         []T
 	bottomNeighbors []*heap.PriorityQueue
 	upperNeighbors  []map[int32]*heap.PriorityQueue
 	enterPoint      int32
@@ -40,7 +40,7 @@ type HNSW[T any] struct {
 	efConstruction int
 }
 
-func NewHNSW[T any](distanceFunc func(a, b []T) float32) *HNSW[T] {
+func NewHNSW[T any](distanceFunc func(a, b T) float32) *HNSW[T] {
 	return &HNSW[T]{
 		distanceFunc:   distanceFunc,
 		levelFactor:    1.0 / math32.Log(48),
@@ -50,7 +50,7 @@ func NewHNSW[T any](distanceFunc func(a, b []T) float32) *HNSW[T] {
 	}
 }
 
-func (h *HNSW[T]) Add(v []T) (int, error) {
+func (h *HNSW[T]) Add(v T) (int, error) {
 	// Add vector
 	h.vectors = append(h.vectors, v)
 	h.bottomNeighbors = append(h.bottomNeighbors, heap.NewPriorityQueue(false))
@@ -70,7 +70,7 @@ func (h *HNSW[T]) SearchIndex(q, k int, prune0 bool) ([]lo.Tuple2[int, float32],
 	return scores, nil
 }
 
-func (h *HNSW[T]) SearchVector(q []T, k int, prune0 bool) []lo.Tuple2[int, float32] {
+func (h *HNSW[T]) SearchVector(q T, k int, prune0 bool) []lo.Tuple2[int, float32] {
 	w := h.knnSearch(q, k, h.efSearchValue(k))
 	scores := make([]lo.Tuple2[int, float32], 0)
 	for w.Len() > 0 {
@@ -82,7 +82,7 @@ func (h *HNSW[T]) SearchVector(q []T, k int, prune0 bool) []lo.Tuple2[int, float
 	return scores
 }
 
-func (h *HNSW[T]) knnSearch(q []T, k, ef int) *heap.PriorityQueue {
+func (h *HNSW[T]) knnSearch(q T, k, ef int) *heap.PriorityQueue {
 	var (
 		w           *heap.PriorityQueue                    // set for the current the nearest element
 		enterPoints = h.distance(q, []int32{h.enterPoint}) // get enter point for hnsw
@@ -157,7 +157,7 @@ func (h *HNSW[T]) insert(q int32) {
 	}
 }
 
-func (h *HNSW[T]) searchLayer(q []T, enterPoints *heap.PriorityQueue, ef, currentLayer int) *heap.PriorityQueue {
+func (h *HNSW[T]) searchLayer(q T, enterPoints *heap.PriorityQueue, ef, currentLayer int) *heap.PriorityQueue {
 	var (
 		v          = mapset.NewSet(enterPoints.Values()...) // set of visited elements
 		candidates = enterPoints.Clone()                    // set of candidates
@@ -210,7 +210,7 @@ func (h *HNSW[T]) getNeighbourhood(e int32, currentLayer int) *heap.PriorityQueu
 	}
 }
 
-func (h *HNSW[T]) selectNeighbors(_ []T, candidates *heap.PriorityQueue, m int) *heap.PriorityQueue {
+func (h *HNSW[T]) selectNeighbors(_ T, candidates *heap.PriorityQueue, m int) *heap.PriorityQueue {
 	pq := candidates.Reverse()
 	for pq.Len() > m {
 		pq.Pop()
@@ -218,7 +218,7 @@ func (h *HNSW[T]) selectNeighbors(_ []T, candidates *heap.PriorityQueue, m int) 
 	return pq.Reverse()
 }
 
-func (h *HNSW[T]) distance(q []T, points []int32) *heap.PriorityQueue {
+func (h *HNSW[T]) distance(q T, points []int32) *heap.PriorityQueue {
 	pq := heap.NewPriorityQueue(false)
 	for _, point := range points {
 		pq.Push(point, h.distanceFunc(h.vectors[point], q))

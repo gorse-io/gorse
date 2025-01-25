@@ -22,13 +22,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chewxy/math32"
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/juju/errors"
 	"github.com/samber/lo"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/encoding"
-	"github.com/zhenghaoz/gorse/base/heap"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/base/parallel"
 	"github.com/zhenghaoz/gorse/base/progress"
@@ -41,25 +39,20 @@ import (
 	"github.com/zhenghaoz/gorse/model/ranking"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
-	"go.uber.org/atomic"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
-	"modernc.org/sortutil"
 )
 
 const (
 	PositiveFeedbackRate = "PositiveFeedbackRate"
 
-	TaskFindItemNeighbors      = "Find neighbors of items"
-	TaskFindUserNeighbors      = "Find neighbors of users"
 	TaskFitRankingModel        = "Fit collaborative filtering model"
 	TaskFitClickModel          = "Fit click-through rate prediction model"
 	TaskSearchRankingModel     = "Search collaborative filtering  model"
 	TaskSearchClickModel       = "Search click-through rate prediction model"
 	TaskCacheGarbageCollection = "Collect garbage in cache"
 
-	batchSize        = 10000
-	similarityShrink = 100
+	batchSize = 10000
 )
 
 type Task interface {
@@ -202,578 +195,15 @@ func (m *Master) runLoadDatasetTask() error {
 	MemoryInUseBytesVec.WithLabelValues("ranking_train_set").Set(float64(sizeof.DeepSize(m.clickTrainSet)))
 	MemoryInUseBytesVec.WithLabelValues("ranking_test_set").Set(float64(sizeof.DeepSize(m.clickTestSet)))
 
+	if err = m.updateUserToUser(dataSet); err != nil {
+		log.Logger().Error("failed to update user-to-user recommendation", zap.Error(err))
+	}
 	if err = m.updateItemToItem(dataSet); err != nil {
 		log.Logger().Error("failed to update item-to-item recommendation", zap.Error(err))
 	}
 
 	LoadDatasetTotalSeconds.Set(time.Since(initialStartTime).Seconds())
 	return nil
-}
-
-// FindItemNeighborsTask updates neighbors of items.
-type FindItemNeighborsTask struct {
-	*Master
-	lastNumItems    int
-	lastNumFeedback int
-}
-
-func NewFindItemNeighborsTask(m *Master) *FindItemNeighborsTask {
-	return &FindItemNeighborsTask{Master: m}
-}
-
-func (t *FindItemNeighborsTask) name() string {
-	return TaskFindItemNeighbors
-}
-
-func (t *FindItemNeighborsTask) priority() int {
-	return -t.rankingTrainSet.ItemCount() * t.rankingTrainSet.ItemCount()
-}
-
-func (t *FindItemNeighborsTask) run(ctx context.Context, j *task.JobsAllocator) error {
-	t.rankingDataMutex.RLock()
-	defer t.rankingDataMutex.RUnlock()
-	dataset := t.rankingTrainSet
-	numItems := dataset.ItemCount()
-	numFeedback := dataset.Count()
-
-	newCtx, span := t.tracer.Start(ctx, "Find Item Neighbors", dataset.ItemCount())
-	defer span.End()
-
-	if numItems == 0 {
-		return nil
-	} else if numItems == t.lastNumItems && numFeedback == t.lastNumFeedback {
-		log.Logger().Info("No item neighbors need to be updated.")
-		return nil
-	}
-
-	startTaskTime := time.Now()
-	log.Logger().Info("start searching neighbors of items",
-		zap.Int("n_cache", t.Config.Recommend.CacheSize))
-	// create progress tracker
-	completed := make(chan struct{}, 1000)
-	go func() {
-		completedCount, previousCount := 0, 0
-		ticker := time.NewTicker(time.Second * 10)
-		for {
-			select {
-			case _, ok := <-completed:
-				if !ok {
-					return
-				}
-				completedCount++
-			case <-ticker.C:
-				throughput := completedCount - previousCount
-				previousCount = completedCount
-				if throughput > 0 {
-					log.Logger().Debug("searching neighbors of items",
-						zap.Int("n_complete_items", completedCount),
-						zap.Int("n_items", dataset.ItemCount()),
-						zap.Int("throughput", throughput/10))
-					span.Add(throughput)
-				}
-			}
-		}
-	}()
-
-	userIDF := make([]float32, dataset.UserCount())
-	if t.Config.Recommend.ItemNeighbors.NeighborType == config.NeighborTypeRelated ||
-		t.Config.Recommend.ItemNeighbors.NeighborType == config.NeighborTypeAuto {
-		for _, feedbacks := range dataset.ItemFeedback {
-			sort.Sort(sortutil.Int32Slice(feedbacks))
-		}
-		// inverse document frequency of users
-		for i := range dataset.UserFeedback {
-			if dataset.ItemCount() == len(dataset.UserFeedback[i]) {
-				userIDF[i] = 1
-			} else {
-				userIDF[i] = math32.Log(float32(dataset.ItemCount()) / float32(len(dataset.UserFeedback[i])))
-			}
-		}
-	}
-	labeledItems := make([][]int32, dataset.NumItemLabels)
-	labelIDF := make([]float32, dataset.NumItemLabels)
-	if t.Config.Recommend.ItemNeighbors.NeighborType == config.NeighborTypeSimilar ||
-		t.Config.Recommend.ItemNeighbors.NeighborType == config.NeighborTypeAuto {
-		for i, itemLabels := range dataset.ItemFeatures {
-			sort.Slice(itemLabels, func(i, j int) bool {
-				return itemLabels[i].A < itemLabels[j].A
-			})
-			for _, label := range itemLabels {
-				labeledItems[label.A] = append(labeledItems[label.A], int32(i))
-			}
-		}
-		// inverse document frequency of labels
-		for i := range labeledItems {
-			labeledItems[i] = lo.Uniq(labeledItems[i])
-			if dataset.ItemCount() == len(labeledItems[i]) {
-				labelIDF[i] = 1
-			} else {
-				labelIDF[i] = math32.Log(float32(dataset.ItemCount()) / float32(len(labeledItems[i])))
-			}
-		}
-	}
-
-	start := time.Now()
-	err := t.findItemNeighborsBruteForce(dataset, labeledItems, labelIDF, userIDF, completed, j)
-	searchTime := time.Since(start)
-
-	close(completed)
-	if err != nil {
-		log.Logger().Error("failed to searching neighbors of items", zap.Error(err))
-		progress.Fail(newCtx, err)
-		FindItemNeighborsTotalSeconds.Set(0)
-	} else {
-		if err := t.CacheClient.Set(ctx, cache.Time(cache.Key(cache.GlobalMeta, cache.ItemToItemUpdateTime, cache.Neighbors), time.Now())); err != nil {
-			log.Logger().Error("failed to set neighbors of items update time", zap.Error(err))
-		}
-		log.Logger().Info("complete searching neighbors of items",
-			zap.String("search_time", searchTime.String()))
-		FindItemNeighborsTotalSeconds.Set(time.Since(startTaskTime).Seconds())
-	}
-
-	t.lastNumItems = numItems
-	t.lastNumFeedback = numFeedback
-	return nil
-}
-
-func (m *Master) findItemNeighborsBruteForce(dataset *ranking.DataSet, labeledItems [][]int32,
-	labelIDF, userIDF []float32, completed chan struct{}, j *task.JobsAllocator) error {
-	ctx := context.Background()
-	var (
-		updateItemCount     atomic.Float64
-		findNeighborSeconds atomic.Float64
-	)
-
-	var vector VectorsInterface
-	switch m.Config.Recommend.ItemNeighbors.NeighborType {
-	case config.NeighborTypeSimilar:
-		vector = NewVectors(lo.Map(dataset.ItemFeatures, func(features []lo.Tuple2[int32, float32], _ int) []int32 {
-			indices, _ := lo.Unzip2(features)
-			return indices
-		}), labeledItems, labelIDF)
-	case config.NeighborTypeRelated:
-		vector = NewVectors(dataset.ItemFeedback, dataset.UserFeedback, userIDF)
-	case config.NeighborTypeAuto:
-		vector = NewDualVectors(
-			NewVectors(lo.Map(dataset.ItemFeatures, func(features []lo.Tuple2[int32, float32], _ int) []int32 {
-				indices, _ := lo.Unzip2(features)
-				return indices
-			}), labeledItems, labelIDF),
-			NewVectors(dataset.ItemFeedback, dataset.UserFeedback, userIDF))
-	default:
-		return errors.NotImplementedf("item neighbor type `%v`", m.Config.Recommend.ItemNeighbors.NeighborType)
-	}
-
-	err := parallel.DynamicParallel(dataset.ItemCount(), j, func(workerId, itemIndex int) error {
-		defer func() {
-			completed <- struct{}{}
-		}()
-		startSearchTime := time.Now()
-		itemId := dataset.ItemIndex.ToName(int32(itemIndex))
-		if !m.checkItemNeighborCacheTimeout(itemId, dataset.CategorySet.ToSlice()) {
-			return nil
-		}
-		updateItemCount.Add(1)
-		startTime := time.Now()
-		nearItemsFilters := make(map[string]*heap.TopKFilter[int32, float64])
-		nearItemsFilters[""] = heap.NewTopKFilter[int32, float64](m.Config.Recommend.CacheSize)
-		for _, category := range dataset.CategorySet.ToSlice() {
-			nearItemsFilters[category] = heap.NewTopKFilter[int32, float64](m.Config.Recommend.CacheSize)
-		}
-
-		adjacencyItems := vector.Neighbors(itemIndex)
-		for _, j := range adjacencyItems {
-			if j != int32(itemIndex) && !dataset.HiddenItems[j] {
-				score := vector.Distance(itemIndex, int(j))
-				if score > 0 {
-					nearItemsFilters[""].Push(j, float64(score))
-					for _, category := range dataset.ItemCategories[j] {
-						nearItemsFilters[category].Push(j, float64(score))
-					}
-				}
-			}
-		}
-
-		aggregator := cache.NewDocumentAggregator(startSearchTime)
-		for category, nearItemsFilter := range nearItemsFilters {
-			elem, scores := nearItemsFilter.PopAll()
-			recommends := make([]string, len(elem))
-			for i := range recommends {
-				recommends[i] = dataset.ItemIndex.ToName(elem[i])
-			}
-			aggregator.Add(category, recommends, scores)
-		}
-		if err := m.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key(cache.Neighbors, itemId), aggregator.ToSlice()); err != nil {
-			return errors.Trace(err)
-		}
-		if err := m.CacheClient.DeleteScores(ctx, []string{cache.ItemToItem}, cache.ScoreCondition{
-			Subset: proto.String(cache.Key(cache.Neighbors, itemId)),
-			Before: &aggregator.Timestamp,
-		}); err != nil {
-			return errors.Trace(err)
-		}
-		if err := m.CacheClient.Set(
-			ctx,
-			cache.Time(cache.Key(cache.ItemToItemUpdateTime, cache.Key(cache.Neighbors, itemId)), time.Now()),
-			cache.String(cache.Key(cache.ItemToItemDigest, cache.Key(cache.Neighbors, itemId)), m.Config.ItemNeighborDigest())); err != nil {
-			return errors.Trace(err)
-		}
-		findNeighborSeconds.Add(time.Since(startTime).Seconds())
-		return nil
-	})
-	if err != nil {
-		return errors.Trace(err)
-	}
-	UpdateItemNeighborsTotal.Set(updateItemCount.Load())
-	FindItemNeighborsSecondsVec.WithLabelValues("find_item_neighbors").Set(findNeighborSeconds.Load())
-	FindItemNeighborsSecondsVec.WithLabelValues("build_index").Set(0)
-	ItemNeighborIndexRecall.Set(1)
-	return nil
-}
-
-// FindUserNeighborsTask updates neighbors of users.
-type FindUserNeighborsTask struct {
-	*Master
-	lastNumUsers    int
-	lastNumFeedback int
-}
-
-func NewFindUserNeighborsTask(m *Master) *FindUserNeighborsTask {
-	return &FindUserNeighborsTask{Master: m}
-}
-
-func (t *FindUserNeighborsTask) name() string {
-	return TaskFindUserNeighbors
-}
-
-func (t *FindUserNeighborsTask) priority() int {
-	return -t.rankingTrainSet.UserCount() * t.rankingTrainSet.UserCount()
-}
-
-func (t *FindUserNeighborsTask) run(ctx context.Context, j *task.JobsAllocator) error {
-	t.rankingDataMutex.RLock()
-	defer t.rankingDataMutex.RUnlock()
-	dataset := t.rankingTrainSet
-	numUsers := dataset.UserCount()
-	numFeedback := dataset.Count()
-
-	newCtx, span := t.tracer.Start(ctx, "Find User Neighbors", dataset.UserCount())
-	defer span.End()
-
-	if numUsers == 0 {
-		return nil
-	} else if numUsers == t.lastNumUsers && numFeedback == t.lastNumFeedback {
-		log.Logger().Info("No update of user neighbors needed.")
-		return nil
-	}
-
-	startTaskTime := time.Now()
-	log.Logger().Info("start searching neighbors of users",
-		zap.Int("n_cache", t.Config.Recommend.CacheSize))
-	// create progress tracker
-	completed := make(chan struct{}, 1000)
-	go func() {
-		completedCount, previousCount := 0, 0
-		ticker := time.NewTicker(time.Second)
-		for {
-			select {
-			case _, ok := <-completed:
-				if !ok {
-					return
-				}
-				completedCount++
-			case <-ticker.C:
-				throughput := completedCount - previousCount
-				previousCount = completedCount
-				if throughput > 0 {
-					log.Logger().Debug("searching neighbors of users",
-						zap.Int("n_complete_users", completedCount),
-						zap.Int("n_users", dataset.UserCount()),
-						zap.Int("throughput", throughput))
-					span.Add(throughput)
-				}
-			}
-		}
-	}()
-
-	itemIDF := make([]float32, dataset.ItemCount())
-	if t.Config.Recommend.UserNeighbors.NeighborType == config.NeighborTypeRelated ||
-		t.Config.Recommend.UserNeighbors.NeighborType == config.NeighborTypeAuto {
-		for _, feedbacks := range dataset.UserFeedback {
-			sort.Sort(sortutil.Int32Slice(feedbacks))
-		}
-		// inverse document frequency of items
-		for i := range dataset.ItemFeedback {
-			if dataset.UserCount() == len(dataset.ItemFeedback[i]) {
-				itemIDF[i] = 1
-			} else {
-				itemIDF[i] = math32.Log(float32(dataset.UserCount()) / float32(len(dataset.ItemFeedback[i])))
-			}
-		}
-	}
-	labeledUsers := make([][]int32, dataset.NumUserLabels)
-	labelIDF := make([]float32, dataset.NumUserLabels)
-	if t.Config.Recommend.UserNeighbors.NeighborType == config.NeighborTypeSimilar ||
-		t.Config.Recommend.UserNeighbors.NeighborType == config.NeighborTypeAuto {
-		for i, userLabels := range dataset.UserFeatures {
-			sort.Slice(userLabels, func(i, j int) bool {
-				return userLabels[i].A < userLabels[j].A
-			})
-			for _, label := range userLabels {
-				labeledUsers[label.A] = append(labeledUsers[label.A], int32(i))
-			}
-		}
-		// inverse document frequency of labels
-		for i := range labeledUsers {
-			labeledUsers[i] = lo.Uniq(labeledUsers[i])
-			if dataset.UserCount() == len(labeledUsers[i]) {
-				labelIDF[i] = 1
-			} else {
-				labelIDF[i] = math32.Log(float32(dataset.UserCount()) / float32(len(labeledUsers[i])))
-			}
-		}
-	}
-
-	start := time.Now()
-	err := t.findUserNeighborsBruteForce(newCtx, dataset, labeledUsers, labelIDF, itemIDF, completed, j)
-	searchTime := time.Since(start)
-
-	close(completed)
-	if err != nil {
-		log.Logger().Error("failed to searching neighbors of users", zap.Error(err))
-		progress.Fail(newCtx, err)
-		FindUserNeighborsTotalSeconds.Set(0)
-	} else {
-		if err := t.CacheClient.Set(ctx, cache.Time(cache.Key(cache.GlobalMeta, cache.UserToUserUpdateTime, cache.Neighbors), time.Now())); err != nil {
-			log.Logger().Error("failed to set neighbors of users update time", zap.Error(err))
-		}
-		log.Logger().Info("complete searching neighbors of users",
-			zap.String("search_time", searchTime.String()))
-		FindUserNeighborsTotalSeconds.Set(time.Since(startTaskTime).Seconds())
-	}
-
-	t.lastNumUsers = numUsers
-	t.lastNumFeedback = numFeedback
-	return nil
-}
-
-func (m *Master) findUserNeighborsBruteForce(ctx context.Context, dataset *ranking.DataSet, labeledUsers [][]int32, labelIDF, itemIDF []float32, completed chan struct{}, j *task.JobsAllocator) error {
-	var (
-		updateUserCount     atomic.Float64
-		findNeighborSeconds atomic.Float64
-	)
-
-	var vectors VectorsInterface
-	switch m.Config.Recommend.UserNeighbors.NeighborType {
-	case config.NeighborTypeSimilar:
-		vectors = NewVectors(lo.Map(dataset.UserFeatures, func(features []lo.Tuple2[int32, float32], _ int) []int32 {
-			indices, _ := lo.Unzip2(features)
-			return indices
-		}), labeledUsers, labelIDF)
-	case config.NeighborTypeRelated:
-		vectors = NewVectors(dataset.UserFeedback, dataset.ItemFeedback, itemIDF)
-	case config.NeighborTypeAuto:
-		vectors = NewDualVectors(
-			NewVectors(lo.Map(dataset.UserFeatures, func(features []lo.Tuple2[int32, float32], _ int) []int32 {
-				indices, _ := lo.Unzip2(features)
-				return indices
-			}), labeledUsers, labelIDF),
-			NewVectors(dataset.UserFeedback, dataset.ItemFeedback, itemIDF))
-	default:
-		return errors.NotImplementedf("user neighbor type `%v`", m.Config.Recommend.UserNeighbors.NeighborType)
-	}
-
-	err := parallel.DynamicParallel(dataset.UserCount(), j, func(workerId, userIndex int) error {
-		defer func() {
-			completed <- struct{}{}
-		}()
-		startSearchTime := time.Now()
-		userId := dataset.UserIndex.ToName(int32(userIndex))
-		if !m.checkUserNeighborCacheTimeout(userId) {
-			return nil
-		}
-		updateUserCount.Add(1)
-		startTime := time.Now()
-		nearUsers := heap.NewTopKFilter[int32, float64](m.Config.Recommend.CacheSize)
-
-		adjacencyUsers := vectors.Neighbors(userIndex)
-		for _, j := range adjacencyUsers {
-			if j != int32(userIndex) {
-				score := vectors.Distance(userIndex, int(j))
-				if score > 0 {
-					nearUsers.Push(j, float64(score))
-				}
-			}
-		}
-
-		elem, scores := nearUsers.PopAll()
-		recommends := make([]string, len(elem))
-		for i := range recommends {
-			recommends[i] = dataset.UserIndex.ToName(elem[i])
-		}
-		aggregator := cache.NewDocumentAggregator(startSearchTime)
-		aggregator.Add("", recommends, scores)
-		if err := m.CacheClient.AddScores(ctx, cache.UserToUser, cache.Key(cache.Neighbors, userId), aggregator.ToSlice()); err != nil {
-			return errors.Trace(err)
-		}
-		if err := m.CacheClient.DeleteScores(ctx, []string{cache.UserToUser}, cache.ScoreCondition{
-			Subset: proto.String(cache.Key(cache.Neighbors, userId)),
-			Before: &aggregator.Timestamp,
-		}); err != nil {
-			return errors.Trace(err)
-		}
-		if err := m.CacheClient.Set(
-			ctx,
-			cache.Time(cache.Key(cache.UserToUserUpdateTime, cache.Key(cache.Neighbors, userId)), time.Now()),
-			cache.String(cache.Key(cache.UserToUserDigest, cache.Key(cache.Neighbors, userId)), m.Config.UserNeighborDigest())); err != nil {
-			return errors.Trace(err)
-		}
-		findNeighborSeconds.Add(time.Since(startTime).Seconds())
-		return nil
-	})
-	if err != nil {
-		return errors.Trace(err)
-	}
-	UpdateUserNeighborsTotal.Set(updateUserCount.Load())
-	FindUserNeighborsSecondsVec.WithLabelValues("find_item_neighbors").Set(findNeighborSeconds.Load())
-	FindUserNeighborsSecondsVec.WithLabelValues("build_index").Set(0)
-	UserNeighborIndexRecall.Set(1)
-	return nil
-}
-
-func commonElements(a, b []int32, weights []float32) (float32, float32) {
-	i, j, sum, count := 0, 0, float32(0), float32(0)
-	for i < len(a) && j < len(b) {
-		if a[i] == b[j] {
-			sum += weights[a[i]]
-			count++
-			i++
-			j++
-		} else if a[i] < b[j] {
-			i++
-		} else if a[i] > b[j] {
-			j++
-		}
-	}
-	return sum, count
-}
-
-func weightedSum(a []int32, weights []float32) float32 {
-	var sum float32
-	for _, i := range a {
-		sum += weights[i]
-	}
-	return sum
-}
-
-// checkUserNeighborCacheTimeout checks if user neighbor cache stale.
-// 1. if cache is empty, stale.
-// 2. if modified time > update time, stale.
-func (m *Master) checkUserNeighborCacheTimeout(userId string) bool {
-	var (
-		modifiedTime time.Time
-		updateTime   time.Time
-		cacheDigest  string
-		err          error
-	)
-	ctx := context.Background()
-	// check cache
-	if items, err := m.CacheClient.SearchScores(ctx, cache.UserToUser, cache.Key(cache.Neighbors, userId), []string{""}, 0, -1); err != nil {
-		log.Logger().Error("failed to load user neighbors", zap.String("user_id", userId), zap.Error(err))
-		return true
-	} else if len(items) == 0 {
-		return true
-	}
-	// read digest
-	cacheDigest, err = m.CacheClient.Get(ctx, cache.Key(cache.UserToUserDigest, cache.Key(cache.Neighbors, userId))).String()
-	if err != nil {
-		if !errors.Is(err, errors.NotFound) {
-			log.Logger().Error("failed to read user neighbors digest", zap.Error(err))
-		}
-		return true
-	}
-	if cacheDigest != m.Config.UserNeighborDigest() {
-		return true
-	}
-	// read modified time
-	modifiedTime, err = m.CacheClient.Get(ctx, cache.Key(cache.LastModifyUserTime, userId)).Time()
-	if err != nil {
-		if !errors.Is(err, errors.NotFound) {
-			log.Logger().Error("failed to read last modify user time", zap.Error(err))
-		}
-		return true
-	}
-	// read update time
-	updateTime, err = m.CacheClient.Get(ctx, cache.Key(cache.UserToUserUpdateTime, cache.Key(cache.Neighbors, userId))).Time()
-	if err != nil {
-		if !errors.Is(err, errors.NotFound) {
-			log.Logger().Error("failed to read last update user neighbors time", zap.Error(err))
-		}
-		return true
-	}
-	// check cache expire
-	if updateTime.Before(time.Now().Add(-m.Config.Recommend.CacheExpire)) {
-		return true
-	}
-	// check time
-	return updateTime.Unix() <= modifiedTime.Unix()
-}
-
-// checkItemNeighborCacheTimeout checks if item neighbor cache stale.
-// 1. if cache is empty, stale.
-// 2. if modified time > update time, stale.
-func (m *Master) checkItemNeighborCacheTimeout(itemId string, categories []string) bool {
-	var (
-		modifiedTime time.Time
-		updateTime   time.Time
-		cacheDigest  string
-		err          error
-	)
-	ctx := context.Background()
-
-	// check cache
-	for _, category := range append([]string{""}, categories...) {
-		items, err := m.CacheClient.SearchScores(ctx, cache.ItemToItem, cache.Key(cache.Neighbors, itemId), []string{category}, 0, -1)
-		if err != nil {
-			log.Logger().Error("failed to load item neighbors", zap.String("item_id", itemId), zap.Error(err))
-			return true
-		} else if len(items) == 0 {
-			return true
-		}
-	}
-	// read digest
-	cacheDigest, err = m.CacheClient.Get(ctx, cache.Key(cache.ItemToItemDigest, cache.Key(cache.Neighbors, itemId))).String()
-	if err != nil {
-		if !errors.Is(err, errors.NotFound) {
-			log.Logger().Error("failed to read item neighbors digest", zap.Error(err))
-		}
-		return true
-	}
-	if cacheDigest != m.Config.ItemNeighborDigest() {
-		return true
-	}
-	// read modified time
-	modifiedTime, err = m.CacheClient.Get(ctx, cache.Key(cache.LastModifyItemTime, itemId)).Time()
-	if err != nil {
-		if !errors.Is(err, errors.NotFound) {
-			log.Logger().Error("failed to read last modify item time", zap.Error(err))
-		}
-		return true
-	}
-	// read update time
-	updateTime, err = m.CacheClient.Get(ctx, cache.Key(cache.ItemToItemUpdateTime, cache.Key(cache.Neighbors, itemId))).Time()
-	if err != nil {
-		if !errors.Is(err, errors.NotFound) {
-			log.Logger().Error("failed to read last update item neighbors time", zap.Error(err))
-		}
-		return true
-	}
-	// check cache expire
-	if updateTime.Before(time.Now().Add(-m.Config.Recommend.CacheExpire)) {
-		return true
-	}
-	// check time
-	return updateTime.Unix() <= modifiedTime.Unix()
 }
 
 type FitRankingModelTask struct {
@@ -1222,7 +652,7 @@ func (m *Master) LoadDataFromDatabase(
 		return nil, nil, nil, errors.Trace(err)
 	}
 
-	dataSet = dataset.NewDataset(time.Now(), estimatedNumItems)
+	dataSet = dataset.NewDataset(time.Now(), estimatedNumUsers, estimatedNumItems)
 
 	newCtx, span := progress.Start(ctx, "LoadDataFromDatabase",
 		estimatedNumUsers+estimatedNumItems+estimatedNumFeedbacks)
@@ -1284,6 +714,7 @@ func (m *Master) LoadDataFromDatabase(
 					})
 				}
 			}
+			dataSet.AddUser(user)
 		}
 		span.Add(len(users))
 	}
@@ -1430,6 +861,7 @@ func (m *Master) LoadDataFromDatabase(
 						break
 					}
 				}
+				dataSet.AddFeedback(f.UserId, f.ItemId)
 			}
 			span.Add(len(feedback))
 		}
@@ -1558,13 +990,31 @@ func (m *Master) LoadDataFromDatabase(
 
 func (m *Master) updateItemToItem(dataset *dataset.Dataset) error {
 	ctx, span := m.tracer.Start(context.Background(), "Generate item-to-item recommendation",
-		len(dataset.GetItems())*len(m.Config.Recommend.ItemToItem)*2)
+		len(dataset.GetItems())*(len(m.Config.Recommend.ItemToItem)+1)*2)
 	defer span.End()
 
+	// Add built-in item-to-item recommenders
+	itemToItemConfigs := m.Config.Recommend.ItemToItem
+	builtInConfig := config.ItemToItemConfig{}
+	builtInConfig.Name = cache.Neighbors
+	switch m.Config.Recommend.ItemNeighbors.NeighborType {
+	case config.NeighborTypeSimilar:
+		builtInConfig.Type = "tags"
+		builtInConfig.Column = "item.Labels"
+	case config.NeighborTypeRelated:
+		builtInConfig.Type = "users"
+	case config.NeighborTypeAuto:
+		builtInConfig.Type = "auto"
+	}
+	itemToItemConfigs = append(itemToItemConfigs, builtInConfig)
+
 	// Build item-to-item recommenders
-	itemToItemRecommenders := make([]logics.ItemToItem, 0, len(m.Config.Recommend.ItemToItem))
-	for _, cfg := range m.Config.Recommend.ItemToItem {
-		recommender, err := logics.NewItemToItem(cfg, m.Config.Recommend.CacheSize, dataset.GetTimestamp(), dataset.GetItemColumnValuesIDF())
+	itemToItemRecommenders := make([]logics.ItemToItem, 0, len(itemToItemConfigs))
+	for _, cfg := range itemToItemConfigs {
+		recommender, err := logics.NewItemToItem(cfg, m.Config.Recommend.CacheSize, dataset.GetTimestamp(), &logics.ItemToItemOptions{
+			TagsIDF:  dataset.GetItemColumnValuesIDF(),
+			UsersIDF: dataset.GetUserIDF(),
+		})
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -1572,10 +1022,10 @@ func (m *Master) updateItemToItem(dataset *dataset.Dataset) error {
 	}
 
 	// Push items to item-to-item recommenders
-	for _, item := range dataset.GetItems() {
+	for i, item := range dataset.GetItems() {
 		if !item.IsHidden {
 			for _, recommender := range itemToItemRecommenders {
-				recommender.Push(item)
+				recommender.Push(&item, dataset.GetItemFeedback()[i])
 				span.Add(1)
 			}
 		}
@@ -1584,8 +1034,8 @@ func (m *Master) updateItemToItem(dataset *dataset.Dataset) error {
 	// Save item-to-item recommendations to cache
 	for i, recommender := range itemToItemRecommenders {
 		recommender.PopAll(func(itemId string, score []cache.Score) {
-			itemToItemConfig := m.Config.Recommend.ItemToItem[i]
-			if m.needUpdateItemToItem(itemId, m.Config.Recommend.ItemToItem[i]) {
+			itemToItemConfig := itemToItemConfigs[i]
+			if m.needUpdateItemToItem(itemId, itemToItemConfigs[i]) {
 				log.Logger().Debug("update item-to-item recommendation",
 					zap.String("item_id", itemId),
 					zap.String("name", itemToItemConfig.Name),
@@ -1613,8 +1063,6 @@ func (m *Master) updateItemToItem(dataset *dataset.Dataset) error {
 }
 
 // needUpdateItemToItem checks if item-to-item recommendation needs to be updated.
-// 1. The cache is empty.
-// 2. The modified time is newer than the last update time.
 func (m *Master) needUpdateItemToItem(itemId string, itemToItemConfig config.ItemToItemConfig) bool {
 	ctx := context.Background()
 
@@ -1646,6 +1094,96 @@ func (m *Master) needUpdateItemToItem(itemId string, itemToItemConfig config.Ite
 	if err != nil {
 		if !errors.Is(err, errors.NotFound) {
 			log.Logger().Error("failed to read last update item neighbors time", zap.Error(err))
+		}
+		return true
+	}
+	return updateTime.Before(time.Now().Add(-m.Config.Recommend.CacheExpire))
+}
+
+func (m *Master) updateUserToUser(dataset *dataset.Dataset) error {
+	ctx, span := m.tracer.Start(context.Background(), "Generate user-to-user recommendation",
+		len(dataset.GetUsers())*2)
+	defer span.End()
+
+	// Build user-to-user recommenders
+	var cfg logics.UserToUserConfig
+	cfg.Name = cache.Neighbors
+	switch m.Config.Recommend.UserNeighbors.NeighborType {
+	case config.NeighborTypeSimilar:
+		cfg.Type = "tags"
+		cfg.Column = "user.Labels"
+	case config.NeighborTypeRelated:
+		cfg.Type = "items"
+	case config.NeighborTypeAuto:
+		cfg.Type = "auto"
+	}
+	userToUserRecommender, err := logics.NewUserToUser(cfg, m.Config.Recommend.CacheSize, dataset.GetTimestamp(), &logics.UserToUserOptions{
+		TagsIDF:  dataset.GetUserColumnValuesIDF(),
+		ItemsIDF: dataset.GetItemIDF(),
+	})
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	// Push users to user-to-user recommender
+	for i, user := range dataset.GetUsers() {
+		userToUserRecommender.Push(&user, dataset.GetUserFeedback()[i])
+		span.Add(1)
+	}
+
+	// Save user-to-user recommendations to cache
+	userToUserRecommender.PopAll(func(userId string, score []cache.Score) {
+		if m.needUpdateUserToUser(userId) {
+			log.Logger().Debug("update user neighbors",
+				zap.String("user_id", userId),
+				zap.Int("n_recommendations", len(score)))
+			// Save user-to-user recommendations to cache
+			if err := m.CacheClient.AddScores(ctx, cache.UserToUser, cache.Key(cache.Neighbors, userId), score); err != nil {
+				log.Logger().Error("failed to save user neighbors to cache", zap.String("user_id", userId), zap.Error(err))
+				return
+			}
+			// Save user-to-user digest and last update time to cache
+			if err := m.CacheClient.Set(ctx,
+				cache.String(cache.Key(cache.UserToUserDigest, cache.Key(cache.Neighbors, userId)), m.Config.UserNeighborDigest()),
+				cache.Time(cache.Key(cache.UserToUserUpdateTime, cache.Key(cache.Neighbors, userId)), time.Now()),
+			); err != nil {
+				log.Logger().Error("failed to save user neighbors digest to cache", zap.String("user_id", userId), zap.Error(err))
+				return
+			}
+		}
+	})
+	return nil
+}
+
+// needUpdateUserToUser checks if user-to-user recommendation needs to be updated.
+func (m *Master) needUpdateUserToUser(userId string) bool {
+	ctx := context.Background()
+
+	// check cache
+	if items, err := m.CacheClient.SearchScores(ctx, cache.UserToUser, cache.Key(cache.Neighbors, userId), nil, 0, -1); err != nil {
+		log.Logger().Error("failed to load user neighbors", zap.String("user_id", userId), zap.Error(err))
+		return true
+	} else if len(items) == 0 {
+		return true
+	}
+
+	// read digest
+	cacheDigest, err := m.CacheClient.Get(ctx, cache.Key(cache.UserToUserDigest, cache.Key(cache.Neighbors, userId))).String()
+	if err != nil {
+		if !errors.Is(err, errors.NotFound) {
+			log.Logger().Error("failed to read user neighbors digest", zap.Error(err))
+		}
+		return true
+	}
+	if cacheDigest != m.Config.UserNeighborDigest() {
+		return true
+	}
+
+	// check update time
+	updateTime, err := m.CacheClient.Get(ctx, cache.Key(cache.UserToUserUpdateTime, cache.Key(cache.Neighbors, userId))).Time()
+	if err != nil {
+		if !errors.Is(err, errors.NotFound) {
+			log.Logger().Error("failed to read last update user neighbors time", zap.Error(err))
 		}
 		return true
 	}

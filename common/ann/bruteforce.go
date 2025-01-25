@@ -22,15 +22,15 @@ import (
 
 // Bruteforce is a naive implementation of vector index.
 type Bruteforce[T any] struct {
-	distanceFunc func(a, b []T) float32
-	vectors      [][]T
+	distanceFunc func(a, b T) float32
+	vectors      []T
 }
 
-func NewBruteforce[T any](distanceFunc func(a, b []T) float32) *Bruteforce[T] {
+func NewBruteforce[T any](distanceFunc func(a, b T) float32) *Bruteforce[T] {
 	return &Bruteforce[T]{distanceFunc: distanceFunc}
 }
 
-func (b *Bruteforce[T]) Add(v []T) (int, error) {
+func (b *Bruteforce[T]) Add(v T) (int, error) {
 	// Add vector
 	b.vectors = append(b.vectors, v)
 	return len(b.vectors), nil
@@ -62,7 +62,7 @@ func (b *Bruteforce[T]) SearchIndex(q, k int, prune0 bool) ([]lo.Tuple2[int, flo
 	return scores, nil
 }
 
-func (b *Bruteforce[T]) SearchVector(q []T, k int, prune0 bool) []lo.Tuple2[int, float32] {
+func (b *Bruteforce[T]) SearchVector(q T, k int, prune0 bool) []lo.Tuple2[int, float32] {
 	// Search
 	pq := heap.NewPriorityQueue(true)
 	for i, vec := range b.vectors {

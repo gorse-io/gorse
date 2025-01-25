@@ -709,7 +709,8 @@ func (s *RestServer) getNonPersonalized(request *restful.Request, response *rest
 func (s *RestServer) getItemToItem(request *restful.Request, response *restful.Response) {
 	name := request.PathParameter("name")
 	itemId := request.PathParameter("item-id")
-	s.SearchDocuments(cache.ItemToItem, cache.Key(name, itemId), nil, nil, request, response)
+	categories := request.QueryParameters("category")
+	s.SearchDocuments(cache.ItemToItem, cache.Key(name, itemId), categories, nil, request, response)
 }
 
 // get feedback by item-id with feedback type

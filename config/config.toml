@@ -149,6 +149,20 @@ score = "count(feedback, .FeedbackType == 'star')"
 # The filter for items in the leaderboard.
 filter = "(now() - item.Timestamp).Hours() < 168"
 
+# [[recommend.item-to-item]]
+
+# # The name of the item-to-item recommender.
+# name = "similar_embedding"
+
+# # The type of the item-to-item recommender. There are three types:
+# #   embedding: recommend by Euclidean distance of embeddings.
+# #   tags: recommend by number of common tags.
+# #   users: recommend by number of common users.
+# type = "embedding"
+
+# # The column of the item embeddings. Leave blank if type is "users".
+# column = "item.Labels.embedding"
+
 [recommend.user_neighbors]
 
 # The type of neighbors for users. There are three types:
@@ -157,7 +171,7 @@ filter = "(now() - item.Timestamp).Hours() < 168"
 #   auto: If a user have labels, neighbors are found by number of common labels.
 #         If this user have no labels, neighbors are found by number of common liked items.
 # The default value is "auto".
-neighbor_type = "similar"
+neighbor_type = "related"
 
 [recommend.item_neighbors]
 

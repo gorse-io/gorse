@@ -148,7 +148,7 @@ type NeighborsConfig struct {
 
 type ItemToItemConfig struct {
 	Name   string `mapstructure:"name" json:"name"`
-	Type   string `mapstructure:"type" json:"type" validate:"oneof=embedding tags"`
+	Type   string `mapstructure:"type" json:"type" validate:"oneof=embedding tags users"`
 	Column string `mapstructure:"column" json:"column" validate:"item_expr"`
 }
 

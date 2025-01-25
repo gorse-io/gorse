@@ -16,6 +16,9 @@ package logics
 
 import (
 	"errors"
+	"sort"
+	"time"
+
 	"github.com/chewxy/math32"
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/expr-lang/expr"
@@ -29,22 +32,38 @@ import (
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
 	"go.uber.org/zap"
-	"sort"
-	"time"
 )
 
+type ItemToItemOptions struct {
+	TagsIDF  []float32
+	UsersIDF []float32
+}
+
 type ItemToItem interface {
-	Items() []string
-	Push(item data.Item)
+	Items() []*data.Item
+	Push(item *data.Item, feedback []dataset.ID)
 	PopAll(callback func(itemId string, score []cache.Score))
 }
 
-func NewItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time, idf []float32) (ItemToItem, error) {
+func NewItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time, opts *ItemToItemOptions) (ItemToItem, error) {
 	switch cfg.Type {
 	case "embedding":
 		return newEmbeddingItemToItem(cfg, n, timestamp)
 	case "tags":
-		return newTagsItemToItem(cfg, n, timestamp, idf)
+		if opts == nil || opts.TagsIDF == nil {
+			return nil, errors.New("tags IDF is required for tags item-to-item")
+		}
+		return newTagsItemToItem(cfg, n, timestamp, opts.TagsIDF)
+	case "users":
+		if opts == nil || opts.UsersIDF == nil {
+			return nil, errors.New("users IDF is required for users item-to-item")
+		}
+		return newUsersItemToItem(cfg, n, timestamp, opts.UsersIDF)
+	case "auto":
+		if opts == nil || opts.TagsIDF == nil || opts.UsersIDF == nil {
+			return nil, errors.New("tags and users IDF are required for auto item-to-item")
+		}
+		return newAutoItemToItem(cfg, n, timestamp, opts.TagsIDF, opts.UsersIDF)
 	default:
 		return nil, errors.New("invalid item-to-item type")
 	}
@@ -56,10 +75,10 @@ type baseItemToItem[T any] struct {
 	timestamp  time.Time
 	columnFunc *vm.Program
 	index      *ann.HNSW[T]
-	items      []string
+	items      []*data.Item
 }
 
-func (b *baseItemToItem[T]) Items() []string {
+func (b *baseItemToItem[T]) Items() []*data.Item {
 	return b.items
 }
 
@@ -70,18 +89,19 @@ func (b *baseItemToItem[T]) PopAll(callback func(itemId string, score []cache.Sc
 			log.Logger().Error("failed to search index", zap.Error(err))
 			return
 		}
-		callback(item, lo.Map(scores, func(v lo.Tuple2[int, float32], _ int) cache.Score {
+		callback(item.ItemId, lo.Map(scores, func(v lo.Tuple2[int, float32], _ int) cache.Score {
 			return cache.Score{
-				Id:        b.items[v.A],
-				Score:     float64(v.B),
-				Timestamp: b.timestamp,
+				Id:         b.items[v.A].ItemId,
+				Categories: b.items[v.A].Categories,
+				Score:      -float64(v.B),
+				Timestamp:  b.timestamp,
 			}
 		}))
 	}
 }
 
 type embeddingItemToItem struct {
-	baseItemToItem[float32]
+	baseItemToItem[[]float32]
 	dimension int
 }
 
@@ -93,16 +113,16 @@ func newEmbeddingItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.T
 	if err != nil {
 		return nil, err
 	}
-	return &embeddingItemToItem{baseItemToItem: baseItemToItem[float32]{
+	return &embeddingItemToItem{baseItemToItem: baseItemToItem[[]float32]{
 		name:       cfg.Name,
 		n:          n,
 		timestamp:  timestamp,
 		columnFunc: columnFunc,
-		index:      ann.NewHNSW[float32](floats.Euclidean),
+		index:      ann.NewHNSW[[]float32](floats.Euclidean),
 	}}, nil
 }
 
-func (e *embeddingItemToItem) Push(item data.Item) {
+func (e *embeddingItemToItem) Push(item *data.Item, _ []dataset.ID) {
 	// Check if hidden
 	if item.IsHidden {
 		return
@@ -130,7 +150,7 @@ func (e *embeddingItemToItem) Push(item data.Item) {
 		return
 	}
 	// Push item
-	e.items = append(e.items, item.ItemId)
+	e.items = append(e.items, item)
 	_, err = e.index.Add(v)
 	if err != nil {
 		log.Logger().Error("failed to add item to index", zap.Error(err))
@@ -139,8 +159,8 @@ func (e *embeddingItemToItem) Push(item data.Item) {
 }
 
 type tagsItemToItem struct {
-	baseItemToItem[dataset.ID]
-	idf []float32
+	baseItemToItem[[]dataset.ID]
+	IDF
 }
 
 func newTagsItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time, idf []float32) (ItemToItem, error) {
@@ -151,20 +171,18 @@ func newTagsItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time, 
 	if err != nil {
 		return nil, err
 	}
-	t := &tagsItemToItem{}
-	b := baseItemToItem[dataset.ID]{
+	t := &tagsItemToItem{IDF: idf}
+	t.baseItemToItem = baseItemToItem[[]dataset.ID]{
 		name:       cfg.Name,
 		n:          n,
 		timestamp:  timestamp,
 		columnFunc: columnFunc,
-		index:      ann.NewHNSW[dataset.ID](t.distance),
+		index:      ann.NewHNSW[[]dataset.ID](t.distance),
 	}
-	t.baseItemToItem = b
-	t.idf = idf
 	return t, nil
 }
 
-func (t *tagsItemToItem) Push(item data.Item) {
+func (t *tagsItemToItem) Push(item *data.Item, _ []dataset.ID) {
 	// Check if hidden
 	if item.IsHidden {
 		return
@@ -180,13 +198,13 @@ func (t *tagsItemToItem) Push(item data.Item) {
 	}
 	// Extract tags
 	tSet := mapset.NewSet[dataset.ID]()
-	t.flatten(result, tSet)
+	flatten(result, tSet)
 	v := tSet.ToSlice()
 	sort.Slice(v, func(i, j int) bool {
 		return v[i] < v[j]
 	})
 	// Push item
-	t.items = append(t.items, item.ItemId)
+	t.items = append(t.items, item)
 	_, err = t.index.Add(v)
 	if err != nil {
 		log.Logger().Error("failed to add item to index", zap.Error(err))
@@ -194,16 +212,104 @@ func (t *tagsItemToItem) Push(item data.Item) {
 	}
 }
 
-func (t *tagsItemToItem) distance(a, b []dataset.ID) float32 {
-	commonSum, commonCount := t.weightedSumCommonElements(a, b)
+type usersItemToItem struct {
+	baseItemToItem[[]dataset.ID]
+	IDF
+}
+
+func newUsersItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time, idf []float32) (ItemToItem, error) {
+	if cfg.Column != "" {
+		return nil, errors.New("column is not supported in users item-to-item")
+	}
+	u := &usersItemToItem{IDF: idf}
+	u.baseItemToItem = baseItemToItem[[]dataset.ID]{
+		name:      cfg.Name,
+		n:         n,
+		timestamp: timestamp,
+		index:     ann.NewHNSW[[]dataset.ID](u.distance),
+	}
+	return u, nil
+}
+
+func (u *usersItemToItem) Push(item *data.Item, feedback []dataset.ID) {
+	// Check if hidden
+	if item.IsHidden {
+		return
+	}
+	// Sort feedback
+	sort.Slice(feedback, func(i, j int) bool {
+		return feedback[i] < feedback[j]
+	})
+	// Push item
+	u.items = append(u.items, item)
+	_, err := u.index.Add(feedback)
+	if err != nil {
+		log.Logger().Error("failed to add item to index", zap.Error(err))
+		return
+	}
+}
+
+type autoItemToItem struct {
+	baseItemToItem[lo.Tuple2[[]dataset.ID, []dataset.ID]]
+	tIDF IDF
+	uIDF IDF
+}
+
+func newAutoItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time, tIDF, uIDF []float32) (ItemToItem, error) {
+	a := &autoItemToItem{
+		tIDF: tIDF,
+		uIDF: uIDF,
+	}
+	a.baseItemToItem = baseItemToItem[lo.Tuple2[[]dataset.ID, []dataset.ID]]{
+		name:      cfg.Name,
+		n:         n,
+		timestamp: timestamp,
+		index:     ann.NewHNSW[lo.Tuple2[[]dataset.ID, []dataset.ID]](a.distance),
+	}
+	return a, nil
+}
+
+func (a *autoItemToItem) Push(item *data.Item, feedback []dataset.ID) {
+	// Check if hidden
+	if item.IsHidden {
+		return
+	}
+	// Extract tags
+	tSet := mapset.NewSet[dataset.ID]()
+	flatten(item.Labels, tSet)
+	v := tSet.ToSlice()
+	sort.Slice(v, func(i, j int) bool {
+		return v[i] < v[j]
+	})
+	// Sort feedback
+	sort.Slice(feedback, func(i, j int) bool {
+		return feedback[i] < feedback[j]
+	})
+	// Push item
+	a.items = append(a.items, item)
+	_, err := a.index.Add(lo.Tuple2[[]dataset.ID, []dataset.ID]{A: v, B: feedback})
+	if err != nil {
+		log.Logger().Error("failed to add item to index", zap.Error(err))
+		return
+	}
+}
+
+func (a *autoItemToItem) distance(u, v lo.Tuple2[[]dataset.ID, []dataset.ID]) float32 {
+	return (a.tIDF.distance(u.A, v.A) + a.uIDF.distance(u.B, v.B)) / 2
+}
+
+type IDF []float32
+
+func (idf IDF) distance(a, b []dataset.ID) float32 {
+	commonSum, commonCount := idf.weightedSumCommonElements(a, b)
 	if len(a) == len(b) && commonCount == float32(len(a)) {
 		// If two items have the same tags, its distance is zero.
 		return 0
-	} else if commonCount > 0 {
+	} else if commonCount > 0 && len(a) > 0 && len(b) > 0 {
 		// Add shrinkage to avoid division by zero
 		return 1 - commonSum*commonCount/
-			math32.Sqrt(t.weightedSum(a))/
-			math32.Sqrt(t.weightedSum(b))/
+			math32.Sqrt(idf.weightedSum(a))/
+			math32.Sqrt(idf.weightedSum(b))/
 			(commonCount+100)
 	} else {
 		// If two items have no common tags, its distance is one.
@@ -211,13 +317,11 @@ func (t *tagsItemToItem) distance(a, b []dataset.ID) float32 {
 	}
 }
 
-func (t *tagsItemToItem) weightedSumCommonElements(a, b []dataset.ID) (float32, float32) {
+func (idf IDF) weightedSumCommonElements(a, b []dataset.ID) (float32, float32) {
 	i, j, sum, count := 0, 0, float32(0), float32(0)
 	for i < len(a) && j < len(b) {
 		if a[i] == b[j] {
-			if a[i] >= 0 && int(a[i]) < len(t.idf) {
-				sum += t.idf[a[i]]
-			}
+			sum += idf[a[i]]
 			count++
 			i++
 			j++
@@ -230,17 +334,15 @@ func (t *tagsItemToItem) weightedSumCommonElements(a, b []dataset.ID) (float32, 
 	return sum, count
 }
 
-func (t *tagsItemToItem) weightedSum(a []dataset.ID) float32 {
+func (idf IDF) weightedSum(a []dataset.ID) float32 {
 	var sum float32
 	for _, i := range a {
-		if i >= 0 && int(i) < len(t.idf) {
-			sum += t.idf[i]
-		}
+		sum += idf[i]
 	}
 	return sum
 }
 
-func (t *tagsItemToItem) flatten(o any, tSet mapset.Set[dataset.ID]) {
+func flatten(o any, tSet mapset.Set[dataset.ID]) {
 	switch typed := o.(type) {
 	case dataset.ID:
 		tSet.Add(typed)
@@ -250,7 +352,7 @@ func (t *tagsItemToItem) flatten(o any, tSet mapset.Set[dataset.ID]) {
 		return
 	case map[string]any:
 		for _, v := range typed {
-			t.flatten(v, tSet)
+			flatten(v, tSet)
 		}
 	}
 }

@@ -1,4 +1,4 @@
-// Copyright 2024 gorse Project Authors
+// Copyright 2025 gorse Project Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -20,77 +20,25 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/suite"
-	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/dataset"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
 )
 
-type ItemToItemTestSuite struct {
+type UserToUserTestSuite struct {
 	suite.Suite
 }
 
-func (suite *ItemToItemTestSuite) TestColumnFunc() {
-	item2item, err := newEmbeddingItemToItem(config.ItemToItemConfig{
-		Column: "item.Labels.description",
-	}, 10, time.Now())
-	suite.NoError(err)
-
-	// Push success
-	item2item.Push(&data.Item{
-		ItemId: "1",
-		Labels: map[string]any{
-			"description": []float32{0.1, 0.2, 0.3},
-		},
-	}, nil)
-	suite.Len(item2item.Items(), 1)
-
-	// Hidden
-	item2item.Push(&data.Item{
-		ItemId:   "2",
-		IsHidden: true,
-		Labels: map[string]any{
-			"description": []float32{0.1, 0.2, 0.3},
-		},
-	}, nil)
-	suite.Len(item2item.Items(), 1)
-
-	// Dimension does not match
-	item2item.Push(&data.Item{
-		ItemId: "1",
-		Labels: map[string]any{
-			"description": []float32{0.1, 0.2},
-		},
-	}, nil)
-	suite.Len(item2item.Items(), 1)
-
-	// Type does not match
-	item2item.Push(&data.Item{
-		ItemId: "1",
-		Labels: map[string]any{
-			"description": "hello",
-		},
-	}, nil)
-	suite.Len(item2item.Items(), 1)
-
-	// Column does not exist
-	item2item.Push(&data.Item{
-		ItemId: "2",
-		Labels: []float32{0.1, 0.2, 0.3},
-	}, nil)
-	suite.Len(item2item.Items(), 1)
-}
-
-func (suite *ItemToItemTestSuite) TestEmbedding() {
+func (suite *UserToUserTestSuite) TestEmbedding() {
 	timestamp := time.Now()
-	item2item, err := newEmbeddingItemToItem(config.ItemToItemConfig{
-		Column: "item.Labels.description",
+	user2user, err := newEmbeddingUserToUser(UserToUserConfig{
+		Column: "user.Labels.description",
 	}, 10, timestamp)
 	suite.NoError(err)
 
 	for i := 0; i < 100; i++ {
-		item2item.Push(&data.Item{
-			ItemId: strconv.Itoa(i),
+		user2user.Push(&data.User{
+			UserId: strconv.Itoa(i),
 			Labels: map[string]any{
 				"description": []float32{0.1 * float32(i), 0.2 * float32(i), 0.3 * float32(i)},
 			},
@@ -98,8 +46,8 @@ func (suite *ItemToItemTestSuite) TestEmbedding() {
 	}
 
 	var scores []cache.Score
-	item2item.PopAll(func(itemId string, score []cache.Score) {
-		if itemId == "0" {
+	user2user.PopAll(func(userId string, score []cache.Score) {
+		if userId == "0" {
 			scores = score
 		}
 	})
@@ -109,14 +57,14 @@ func (suite *ItemToItemTestSuite) TestEmbedding() {
 	}
 }
 
-func (suite *ItemToItemTestSuite) TestTags() {
+func (suite *UserToUserTestSuite) TestTags() {
 	timestamp := time.Now()
 	idf := make([]float32, 101)
 	for i := range idf {
 		idf[i] = 1
 	}
-	item2item, err := newTagsItemToItem(config.ItemToItemConfig{
-		Column: "item.Labels",
+	user2user, err := newTagsUserToUser(UserToUserConfig{
+		Column: "user.Labels",
 	}, 10, timestamp, idf)
 	suite.NoError(err)
 
@@ -125,15 +73,15 @@ func (suite *ItemToItemTestSuite) TestTags() {
 		for j := 1; j <= 100-i; j++ {
 			labels[strconv.Itoa(j)] = []dataset.ID{dataset.ID(j)}
 		}
-		item2item.Push(&data.Item{
-			ItemId: strconv.Itoa(i),
+		user2user.Push(&data.User{
+			UserId: strconv.Itoa(i),
 			Labels: labels,
 		}, nil)
 	}
 
 	var scores []cache.Score
-	item2item.PopAll(func(itemId string, score []cache.Score) {
-		if itemId == "0" {
+	user2user.PopAll(func(userId string, score []cache.Score) {
+		if userId == "0" {
 			scores = score
 		}
 	})
@@ -143,13 +91,13 @@ func (suite *ItemToItemTestSuite) TestTags() {
 	}
 }
 
-func (suite *ItemToItemTestSuite) TestUsers() {
+func (suite *UserToUserTestSuite) TestItems() {
 	timestamp := time.Now()
 	idf := make([]float32, 101)
 	for i := range idf {
 		idf[i] = 1
 	}
-	item2item, err := newUsersItemToItem(config.ItemToItemConfig{}, 10, timestamp, idf)
+	user2user, err := newItemsUserToUser(UserToUserConfig{}, 10, timestamp, idf)
 	suite.NoError(err)
 
 	for i := 0; i < 100; i++ {
@@ -157,12 +105,12 @@ func (suite *ItemToItemTestSuite) TestUsers() {
 		for j := 1; j <= 100-i; j++ {
 			feedback = append(feedback, dataset.ID(j))
 		}
-		item2item.Push(&data.Item{ItemId: strconv.Itoa(i)}, feedback)
+		user2user.Push(&data.User{UserId: strconv.Itoa(i)}, feedback)
 	}
 
 	var scores []cache.Score
-	item2item.PopAll(func(itemId string, score []cache.Score) {
-		if itemId == "0" {
+	user2user.PopAll(func(userId string, score []cache.Score) {
+		if userId == "0" {
 			scores = score
 		}
 	})
@@ -172,50 +120,44 @@ func (suite *ItemToItemTestSuite) TestUsers() {
 	}
 }
 
-func (suite *ItemToItemTestSuite) TestAuto() {
+func (suite *UserToUserTestSuite) TestAuto() {
 	timestamp := time.Now()
 	idf := make([]float32, 101)
 	for i := range idf {
 		idf[i] = 1
 	}
-	item2item, err := newAutoItemToItem(config.ItemToItemConfig{}, 10, timestamp, idf, idf)
+	user2user, err := newAutoUserToUser(UserToUserConfig{}, 10, timestamp, idf, idf)
 	suite.NoError(err)
 
 	for i := 0; i < 100; i++ {
-		item := &data.Item{ItemId: strconv.Itoa(i)}
+		user := &data.User{UserId: strconv.Itoa(i)}
 		feedback := make([]dataset.ID, 0, 100-i)
 		if i%2 == 0 {
 			labels := make(map[string]any)
 			for j := 1; j <= 100-i; j++ {
 				labels[strconv.Itoa(j)] = []dataset.ID{dataset.ID(j)}
 			}
-			item.Labels = labels
+			user.Labels = labels
 		} else {
 			for j := 1; j <= 100-i; j++ {
 				feedback = append(feedback, dataset.ID(j))
 			}
 		}
-		item2item.Push(item, feedback)
+		user2user.Push(user, feedback)
 	}
 
 	var scores0, scores1 []cache.Score
-	item2item.PopAll(func(itemId string, score []cache.Score) {
-		if itemId == "0" {
+	user2user.PopAll(func(userId string, score []cache.Score) {
+		if userId == "0" {
 			scores0 = score
-		} else if itemId == "1" {
+		} else if userId == "1" {
 			scores1 = score
 		}
 	})
 	suite.Len(scores0, 10)
-	for i := 1; i <= 10; i++ {
-		suite.Equal(strconv.Itoa(i*2), scores0[i-1].Id)
-	}
 	suite.Len(scores1, 10)
-	for i := 1; i <= 10; i++ {
-		suite.Equal(strconv.Itoa(i*2+1), scores1[i-1].Id)
-	}
 }
 
-func TestItemToItem(t *testing.T) {
-	suite.Run(t, new(ItemToItemTestSuite))
+func TestUserToUser(t *testing.T) {
+	suite.Run(t, new(UserToUserTestSuite))
 }
