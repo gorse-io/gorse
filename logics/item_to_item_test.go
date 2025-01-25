@@ -166,3 +166,47 @@ func TestUsers(t *testing.T) {
 		assert.Equal(t, strconv.Itoa(i), scores[i-1].Id)
 	}
 }
+
+func TestAuto(t *testing.T) {
+	timestamp := time.Now()
+	idf := make([]float32, 101)
+	for i := range idf {
+		idf[i] = 1
+	}
+	item2item, err := newAutoItemToItem(config.ItemToItemConfig{}, 10, timestamp, idf, idf)
+	assert.NoError(t, err)
+
+	for i := 0; i < 100; i++ {
+		item := &data.Item{ItemId: strconv.Itoa(i)}
+		feedback := make([]dataset.ID, 0, 100-i)
+		if i%2 == 0 {
+			labels := make(map[string]any)
+			for j := 1; j <= 100-i; j++ {
+				labels[strconv.Itoa(j)] = []dataset.ID{dataset.ID(j)}
+			}
+			item.Labels = labels
+		} else {
+			for j := 1; j <= 100-i; j++ {
+				feedback = append(feedback, dataset.ID(j))
+			}
+		}
+		item2item.Push(item, feedback)
+	}
+
+	var scores0, scores1 []cache.Score
+	item2item.PopAll(func(itemId string, score []cache.Score) {
+		if itemId == "0" {
+			scores0 = score
+		} else if itemId == "1" {
+			scores1 = score
+		}
+	})
+	assert.Len(t, scores0, 10)
+	for i := 1; i <= 10; i++ {
+		assert.Equal(t, strconv.Itoa(i*2), scores0[i-1].Id)
+	}
+	assert.Len(t, scores1, 10)
+	for i := 1; i <= 10; i++ {
+		assert.Equal(t, strconv.Itoa(i*2+1), scores1[i-1].Id)
+	}
+}
