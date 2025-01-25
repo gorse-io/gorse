@@ -2,9 +2,10 @@ package base
 
 import (
 	"bytes"
-	"github.com/stretchr/testify/assert"
 	"strconv"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestMapIndex(t *testing.T) {
@@ -38,8 +39,6 @@ func TestMapIndex(t *testing.T) {
 	indexCopy, err := UnmarshalIndex(buf)
 	assert.NoError(t, err)
 	assert.Equal(t, index, indexCopy)
-	// Index size
-	assert.Equal(t, 200, index.Bytes())
 }
 
 func TestDirectIndex(t *testing.T) {
@@ -77,6 +76,4 @@ func TestDirectIndex(t *testing.T) {
 	indexCopy, err := UnmarshalIndex(buf)
 	assert.NoError(t, err)
 	assert.Equal(t, index, indexCopy)
-	// Byte size
-	assert.Equal(t, 4, index.Bytes())
 }

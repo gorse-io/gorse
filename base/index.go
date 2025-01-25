@@ -16,11 +16,11 @@ package base
 
 import (
 	"encoding/binary"
+	"io"
+	"strconv"
+
 	"github.com/juju/errors"
 	"github.com/zhenghaoz/gorse/base/encoding"
-	"io"
-	"reflect"
-	"strconv"
 )
 
 // Index keeps the mapping between names (string) and indices (integer).
@@ -32,7 +32,6 @@ type Index interface {
 	GetNames() []string
 	Marshal(w io.Writer) error
 	Unmarshal(r io.Reader) error
-	Bytes() int
 }
 
 const (
@@ -89,9 +88,8 @@ func UnmarshalIndex(r io.Reader) (Index, error) {
 // a user ID or item ID. The dense index is the internal user index or item index
 // optimized for faster parameter access and less memory usage.
 type MapIndex struct {
-	Numbers    map[string]int32 // sparse ID -> dense index
-	Names      []string         // dense index -> sparse ID
-	Characters int
+	Numbers map[string]int32 // sparse ID -> dense index
+	Names   []string         // dense index -> sparse ID
 }
 
 // NotId represents an ID doesn't exist.
@@ -118,7 +116,6 @@ func (idx *MapIndex) Add(name string) {
 	if _, exist := idx.Numbers[name]; !exist {
 		idx.Numbers[name] = int32(len(idx.Names))
 		idx.Names = append(idx.Names, name)
-		idx.Characters += len(name)
 	}
 }
 
@@ -176,24 +173,6 @@ func (idx *MapIndex) Unmarshal(r io.Reader) error {
 		idx.Add(name)
 	}
 	return nil
-}
-
-func (idx *MapIndex) Bytes() int {
-	// The memory usage of MapIndex consists of:
-	// 1. struct
-	// 2. string in idx.Names
-	// 3. int32 (value) in idx.Numbers
-	// 4. string (key) in idx.Numbers
-	// 5. rune in string
-	// The cost of map is omitted.
-	bytes := reflect.TypeOf(idx).Elem().Size()
-	if idx.Len() > 0 {
-		bytes += reflect.TypeOf(idx.Names).Elem().Size() * uintptr(cap(idx.Names))
-		bytes += reflect.TypeOf(idx.Numbers).Elem().Size() * uintptr(len(idx.Numbers))
-		bytes += reflect.TypeOf(idx.Numbers).Key().Size() * uintptr(len(idx.Numbers))
-		bytes += reflect.TypeOf(rune(0)).Size() * uintptr(idx.Characters)
-	}
-	return int(bytes)
 }
 
 // DirectIndex means that the name and its index is the same. For example,
@@ -260,8 +239,4 @@ func (idx *DirectIndex) Marshal(w io.Writer) error {
 // Unmarshal direct index from byte stream.
 func (idx *DirectIndex) Unmarshal(r io.Reader) error {
 	return binary.Read(r, binary.LittleEndian, &idx.Limit)
-}
-
-func (idx *DirectIndex) Bytes() int {
-	return int(reflect.TypeOf(idx).Elem().Size())
 }

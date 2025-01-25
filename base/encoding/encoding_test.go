@@ -17,8 +17,9 @@ package encoding
 import (
 	"bytes"
 	"fmt"
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestHex(t *testing.T) {
@@ -56,38 +57,4 @@ func TestWriteGob(t *testing.T) {
 	err = ReadGob(buf, &b)
 	assert.NoError(t, err)
 	assert.Equal(t, a, b)
-}
-
-func TestFloat32(t *testing.T) {
-	a := FormatFloat32(1.23)
-	assert.Equal(t, "1.23", a)
-	b := ParseFloat32("1.23")
-	assert.Equal(t, float32(1.23), b)
-}
-
-func TestArrayBytes(t *testing.T) {
-	a := []int64{1, 2, 3, 4}
-	assert.Equal(t, 7*8, int(ArrayBytes(a)))
-	b := []int32{1, 2, 3, 4}
-	assert.Equal(t, 3*8+4*4, int(ArrayBytes(b)))
-	c := []int16{1, 2, 3, 4}
-	assert.Equal(t, 3*8+2*4, int(ArrayBytes(c)))
-	d := []int8{1, 2, 3, 4}
-	assert.Equal(t, 3*8+4, int(ArrayBytes(d)))
-}
-
-func TestMatrixBytes(t *testing.T) {
-	a := [][]int64{{1}, {2}, {3}, {4}}
-	assert.Equal(t, 5*24+4*8, int(MatrixBytes(a)))
-	b := [][]int32{{1}, {2}, {3}, {4}}
-	assert.Equal(t, 5*24+4*4, int(MatrixBytes(b)))
-	c := [][]int16{{1}, {2}, {3}, {4}}
-	assert.Equal(t, 5*24+4*2, int(MatrixBytes(c)))
-	d := [][]int8{{1}, {2}, {3}, {4}}
-	assert.Equal(t, 5*24+4, int(MatrixBytes(d)))
-}
-
-func TestStringsBytes(t *testing.T) {
-	a := []string{"abc", "de", "f"}
-	assert.Equal(t, 24+16*3+12, int(StringsBytes(a)))
 }

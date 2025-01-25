@@ -110,8 +110,6 @@ type MatrixFactorization interface {
 	Marshal(w io.Writer) error
 	// Unmarshal model from byte stream.
 	Unmarshal(r io.Reader) error
-	// Bytes returns used memory.
-	Bytes() int
 }
 
 type BaseMatrixFactorization struct {
@@ -123,15 +121,6 @@ type BaseMatrixFactorization struct {
 	// Model parameters
 	UserFactor [][]float32 // p_u
 	ItemFactor [][]float32 // q_i
-}
-
-func (baseModel *BaseMatrixFactorization) Bytes() int {
-	bytes := reflect.TypeOf(baseModel).Elem().Size()
-	bytes += encoding.ArrayBytes(baseModel.UserPredictable.Bytes())
-	bytes += encoding.ArrayBytes(baseModel.ItemPredictable.Bytes())
-	bytes += encoding.MatrixBytes(baseModel.UserFactor)
-	bytes += encoding.MatrixBytes(baseModel.ItemFactor)
-	return int(bytes) + baseModel.UserIndex.Bytes() + baseModel.ItemIndex.Bytes()
 }
 
 func (baseModel *BaseMatrixFactorization) Init(trainSet *DataSet) {

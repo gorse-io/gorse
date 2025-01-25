@@ -32,10 +32,6 @@ func newMockMatrixFactorizationForSearch(numEpoch int) *mockMatrixFactorizationF
 	return &mockMatrixFactorizationForSearch{model.BaseModel{Params: model.Params{model.NEpochs: numEpoch}}}
 }
 
-func (m *mockMatrixFactorizationForSearch) Bytes() int {
-	panic("implement me")
-}
-
 func (m *mockMatrixFactorizationForSearch) GetUserFactor(_ int32) []float32 {
 	panic("implement me")
 }

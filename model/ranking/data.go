@@ -18,14 +18,12 @@ import (
 	"bufio"
 	"fmt"
 	"os"
-	"reflect"
 	"strings"
 
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/juju/errors"
 	"github.com/samber/lo"
 	"github.com/zhenghaoz/gorse/base"
-	"github.com/zhenghaoz/gorse/base/encoding"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/model"
 	"go.uber.org/zap"
@@ -75,27 +73,6 @@ func NewDirectIndexDataset() *DataSet {
 	dataset.ItemFeedback = make([][]int32, 0)
 	dataset.Negatives = make([][]int32, 0)
 	return dataset
-}
-
-func (dataset *DataSet) Bytes() int {
-	var bytes uintptr
-	bytes += uintptr(dataset.UserIndex.Bytes())
-	bytes += uintptr(dataset.ItemIndex.Bytes())
-	bytes += uintptr(dataset.FeedbackUsers.Bytes())
-	bytes += uintptr(dataset.FeedbackItems.Bytes())
-
-	// UserFeedback + ItemFeedback + Negatives
-	bytes += reflect.TypeOf(dataset.UserFeedback).Elem().Size() * uintptr(len(dataset.UserFeedback)+len(dataset.ItemFeedback))
-	bytes += reflect.TypeOf(dataset.UserFeedback).Elem().Elem().Size() * uintptr(dataset.Count()*2)
-	bytes += encoding.MatrixBytes(dataset.Negatives)
-
-	// ItemLabels + UserLabels
-	bytes += reflect.TypeOf(dataset.ItemFeatures).Elem().Size() * uintptr(len(dataset.ItemFeatures)+len(dataset.UserFeatures))
-	bytes += reflect.TypeOf(dataset.ItemFeatures).Elem().Elem().Size() * uintptr(dataset.NumItemLabelUsed+dataset.NumUserLabelUsed)
-
-	bytes += encoding.ArrayBytes(dataset.HiddenItems)
-	bytes += encoding.ArrayBytes(dataset.ItemCategories)
-	return int(bytes)
 }
 
 func (dataset *DataSet) AddUser(userId string) {

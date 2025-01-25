@@ -34,8 +34,8 @@ import (
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/base/parallel"
 	"github.com/zhenghaoz/gorse/base/progress"
-	"github.com/zhenghaoz/gorse/base/sizeof"
 	"github.com/zhenghaoz/gorse/base/task"
+	"github.com/zhenghaoz/gorse/common/sizeof"
 	"github.com/zhenghaoz/gorse/common/util"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model"
@@ -201,7 +201,7 @@ func (m *Master) Serve() {
 		CollaborativeFilteringPrecision10.Set(float64(m.rankingScore.Precision))
 		CollaborativeFilteringRecall10.Set(float64(m.rankingScore.Recall))
 		CollaborativeFilteringNDCG10.Set(float64(m.rankingScore.NDCG))
-		MemoryInUseBytesVec.WithLabelValues("collaborative_filtering_model").Set(float64(m.RankingModel.Bytes()))
+		MemoryInUseBytesVec.WithLabelValues("collaborative_filtering_model").Set(float64(sizeof.DeepSize(m.RankingModel)))
 	}
 	if m.localCache.ClickModel != nil {
 		log.Logger().Info("load cached click model",
