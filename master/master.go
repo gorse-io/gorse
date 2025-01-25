@@ -330,8 +330,6 @@ func (m *Master) RunPrivilegedTasksLoop() {
 		tasks = []Task{
 			NewFitClickModelTask(m),
 			NewFitRankingModelTask(m),
-			NewFindUserNeighborsTask(m),
-			NewFindItemNeighborsTask(m),
 		}
 		firstLoop = true
 	)
@@ -430,8 +428,6 @@ func (m *Master) RunManagedTasksLoop() {
 		privilegedTasks = []Task{
 			NewFitClickModelTask(m),
 			NewFitRankingModelTask(m),
-			NewFindUserNeighborsTask(m),
-			NewFindItemNeighborsTask(m),
 		}
 		ragtagTasks = []Task{
 			NewCacheGarbageCollectionTask(m),

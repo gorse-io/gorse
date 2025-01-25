@@ -15,21 +15,21 @@
 package dataset
 
 import (
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestFreqDict(t *testing.T) {
 	dict := NewFreqDict()
-	assert.Equal(t, 0, dict.Id(""))
-	assert.Equal(t, 1, dict.Id("a"))
-	assert.Equal(t, 2, dict.Id("b"))
-	assert.Equal(t, 2, dict.Id("b"))
-	assert.Equal(t, 3, dict.Id("c"))
-	assert.Equal(t, 3, dict.Id("c"))
-	assert.Equal(t, 3, dict.Id("c"))
-	assert.Equal(t, 4, dict.Count())
-	assert.Equal(t, 1, dict.Freq(1))
-	assert.Equal(t, 2, dict.Freq(2))
-	assert.Equal(t, 3, dict.Freq(3))
+	assert.Equal(t, 0, dict.Id("a"))
+	assert.Equal(t, 1, dict.Id("b"))
+	assert.Equal(t, 1, dict.Id("b"))
+	assert.Equal(t, 2, dict.Id("c"))
+	assert.Equal(t, 2, dict.Id("c"))
+	assert.Equal(t, 2, dict.Id("c"))
+	assert.Equal(t, 3, dict.Count())
+	assert.Equal(t, 1, dict.Freq(0))
+	assert.Equal(t, 2, dict.Freq(1))
+	assert.Equal(t, 3, dict.Freq(2))
 }

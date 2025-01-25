@@ -15,15 +15,17 @@
 package dataset
 
 import (
+	"strconv"
+	"testing"
+	"time"
+
 	"github.com/chewxy/math32"
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/storage/data"
-	"testing"
-	"time"
 )
 
 func TestDataset_AddItem(t *testing.T) {
-	dataSet := NewDataset(time.Now(), 1)
+	dataSet := NewDataset(time.Now(), 0, 1)
 	dataSet.AddItem(data.Item{
 		ItemId:     "1",
 		IsHidden:   false,
@@ -58,7 +60,7 @@ func TestDataset_AddItem(t *testing.T) {
 		Labels: map[string]any{
 			"a":        1,
 			"embedded": []float32{1.1, 2.2, 3.3},
-			"tags":     []ID{1, 2, 3},
+			"tags":     []ID{0, 1, 2},
 		},
 		Comment: "comment",
 	}, dataSet.GetItems()[0])
@@ -70,15 +72,15 @@ func TestDataset_AddItem(t *testing.T) {
 		Labels: map[string]any{
 			"a":        1,
 			"embedded": []float32{1.1, 2.2, 3.3},
-			"tags":     []ID{2, 3, 1},
-			"topics":   []ID{4, 5, 6},
+			"tags":     []ID{1, 2, 0},
+			"topics":   []ID{3, 4, 5},
 		},
 		Comment: "comment",
 	}, dataSet.GetItems()[1])
 }
 
 func TestDataset_GetItemColumnValuesIDF(t *testing.T) {
-	dataSet := NewDataset(time.Now(), 1)
+	dataSet := NewDataset(time.Now(), 0, 1)
 	dataSet.AddItem(data.Item{
 		ItemId:     "1",
 		IsHidden:   false,
@@ -100,7 +102,71 @@ func TestDataset_GetItemColumnValuesIDF(t *testing.T) {
 		Comment: "comment",
 	})
 	idf := dataSet.GetItemColumnValuesIDF()
-	assert.Len(t, idf, 5)
-	assert.InDelta(t, 1e-3, idf[1], 1e-6)
-	assert.InDelta(t, math32.Log(2), idf[2], 1e-6)
+	assert.Len(t, idf, 4)
+	assert.InDelta(t, 1e-3, idf[0], 1e-6)
+	assert.InDelta(t, math32.Log(2), idf[1], 1e-6)
+}
+
+func TestDataset_AddUser(t *testing.T) {
+	dataSet := NewDataset(time.Now(), 1, 0)
+	dataSet.AddUser(data.User{
+		UserId:  "1",
+		Labels:  map[string]any{"a": 1, "b": "a"},
+		Comment: "comment",
+	})
+	assert.Len(t, dataSet.users, 1)
+	assert.Equal(t, data.User{
+		UserId:  "1",
+		Labels:  map[string]any{"a": 1, "b": ID(0)},
+		Comment: "comment",
+	}, dataSet.users[0])
+}
+
+func TestDataset_GetUserColumnValuesIDF(t *testing.T) {
+	dataSet := NewDataset(time.Now(), 1, 0)
+	dataSet.AddUser(data.User{
+		UserId: "1",
+		Labels: map[string]any{
+			"tags": []any{"a", "b", "c"},
+		},
+		Comment: "comment",
+	})
+	dataSet.AddUser(data.User{
+		UserId: "2",
+		Labels: map[string]any{
+			"tags": []any{"a", "e"},
+		},
+		Comment: "comment",
+	})
+	idf := dataSet.GetUserColumnValuesIDF()
+	assert.Len(t, idf, 4)
+	assert.InDelta(t, 1e-3, idf[0], 1e-6)
+	assert.InDelta(t, math32.Log(2), idf[1], 1e-6)
+}
+
+func TestDataset_AddFeedback(t *testing.T) {
+	dataSet := NewDataset(time.Now(), 10, 10)
+	for i := 0; i < 10; i++ {
+		dataSet.AddUser(data.User{
+			UserId: strconv.Itoa(i),
+		})
+	}
+	for i := 0; i < 10; i++ {
+		dataSet.AddItem(data.Item{
+			ItemId: strconv.Itoa(i),
+		})
+	}
+	for i := 0; i < 10; i++ {
+		for j := i; j < 10; j++ {
+			dataSet.AddFeedback(strconv.Itoa(i), strconv.Itoa(j))
+		}
+	}
+	userIDF := dataSet.GetUserIDF()
+	itemIDF := dataSet.GetItemIDF()
+	for i := 0; i < 10; i++ {
+		assert.Len(t, dataSet.GetUserFeedback()[i], 10-i)
+		assert.Len(t, dataSet.GetItemFeedback()[i], i+1)
+		assert.InDelta(t, math32.Log(float32(10)/float32(10-i)), userIDF[i], 1e-2)
+		assert.InDelta(t, math32.Log(float32(10)/float32(i+1)), itemIDF[i], 1e-2)
+	}
 }

@@ -22,7 +22,6 @@ type FreqDict struct {
 
 func NewFreqDict() (d *FreqDict) {
 	d = &FreqDict{map[string]int{}, []string{}, []int{}}
-	d.Id("")
 	return
 }
 
@@ -40,6 +39,18 @@ func (d *FreqDict) Id(s string) (y int) {
 	d.si[s] = y
 	d.is = append(d.is, s)
 	d.cnt = append(d.cnt, 1)
+	return
+}
+
+func (d *FreqDict) NotCount(s string) (y int) {
+	if y, ok := d.si[s]; ok {
+		return y
+	}
+
+	y = len(d.is)
+	d.si[s] = y
+	d.is = append(d.is, s)
+	d.cnt = append(d.cnt, 0)
 	return
 }
 
