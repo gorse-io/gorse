@@ -1374,7 +1374,7 @@ func (c *ItemCache) Set(itemId string, item data.Item) {
 		c.ByteCount += reflect.TypeOf(rune(0)).Size() * uintptr(len(itemId))
 		c.ByteCount += reflect.TypeOf(item.ItemId).Size() * uintptr(len(itemId))
 		c.ByteCount += reflect.TypeOf(item.Comment).Size() * uintptr(len(itemId))
-		c.ByteCount += encoding.StringsBytes(item.Categories)
+		c.ByteCount += uintptr(sizeof.DeepSize(item.Categories))
 		c.ByteCount += reflect.TypeOf(item).Size()
 	}
 }

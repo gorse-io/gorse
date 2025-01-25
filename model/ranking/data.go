@@ -25,8 +25,8 @@ import (
 	"github.com/juju/errors"
 	"github.com/samber/lo"
 	"github.com/zhenghaoz/gorse/base"
-	"github.com/zhenghaoz/gorse/base/encoding"
 	"github.com/zhenghaoz/gorse/base/log"
+	"github.com/zhenghaoz/gorse/base/sizeof"
 	"github.com/zhenghaoz/gorse/model"
 	"go.uber.org/zap"
 )
@@ -87,14 +87,14 @@ func (dataset *DataSet) Bytes() int {
 	// UserFeedback + ItemFeedback + Negatives
 	bytes += reflect.TypeOf(dataset.UserFeedback).Elem().Size() * uintptr(len(dataset.UserFeedback)+len(dataset.ItemFeedback))
 	bytes += reflect.TypeOf(dataset.UserFeedback).Elem().Elem().Size() * uintptr(dataset.Count()*2)
-	bytes += encoding.MatrixBytes(dataset.Negatives)
+	bytes += uintptr(sizeof.DeepSize(dataset.Negatives))
 
 	// ItemLabels + UserLabels
 	bytes += reflect.TypeOf(dataset.ItemFeatures).Elem().Size() * uintptr(len(dataset.ItemFeatures)+len(dataset.UserFeatures))
 	bytes += reflect.TypeOf(dataset.ItemFeatures).Elem().Elem().Size() * uintptr(dataset.NumItemLabelUsed+dataset.NumUserLabelUsed)
 
-	bytes += encoding.ArrayBytes(dataset.HiddenItems)
-	bytes += encoding.ArrayBytes(dataset.ItemCategories)
+	bytes += uintptr(sizeof.DeepSize(dataset.HiddenItems))
+	bytes += uintptr(sizeof.DeepSize(dataset.ItemCategories))
 	return int(bytes)
 }
 

@@ -33,6 +33,7 @@ import (
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/base/parallel"
 	"github.com/zhenghaoz/gorse/base/progress"
+	"github.com/zhenghaoz/gorse/base/sizeof"
 	"github.com/zhenghaoz/gorse/base/task"
 	"github.com/zhenghaoz/gorse/model"
 	"go.uber.org/zap"
@@ -127,10 +128,10 @@ type BaseMatrixFactorization struct {
 
 func (baseModel *BaseMatrixFactorization) Bytes() int {
 	bytes := reflect.TypeOf(baseModel).Elem().Size()
-	bytes += encoding.ArrayBytes(baseModel.UserPredictable.Bytes())
-	bytes += encoding.ArrayBytes(baseModel.ItemPredictable.Bytes())
-	bytes += encoding.MatrixBytes(baseModel.UserFactor)
-	bytes += encoding.MatrixBytes(baseModel.ItemFactor)
+	bytes += uintptr(sizeof.DeepSize(baseModel.UserPredictable.Bytes()))
+	bytes += uintptr(sizeof.DeepSize(baseModel.ItemPredictable.Bytes()))
+	bytes += uintptr(sizeof.DeepSize(baseModel.UserFactor))
+	bytes += uintptr(sizeof.DeepSize(baseModel.ItemFactor))
 	return int(bytes) + baseModel.UserIndex.Bytes() + baseModel.ItemIndex.Bytes()
 }
 
