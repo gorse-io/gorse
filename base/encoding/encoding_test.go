@@ -58,10 +58,3 @@ func TestWriteGob(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, a, b)
 }
-
-func TestFloat32(t *testing.T) {
-	a := FormatFloat32(1.23)
-	assert.Equal(t, "1.23", a)
-	b := ParseFloat32("1.23")
-	assert.Equal(t, float32(1.23), b)
-}

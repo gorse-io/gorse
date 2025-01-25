@@ -22,7 +22,6 @@ import (
 	"io"
 	"strconv"
 
-	"github.com/chewxy/math32"
 	"github.com/juju/errors"
 )
 
@@ -126,12 +125,4 @@ func ReadGob(r io.Reader, v interface{}) error {
 
 func FormatFloat32(val float32) string {
 	return strconv.FormatFloat(float64(val), 'f', -1, 32)
-}
-
-func ParseFloat32(val string) float32 {
-	f, err := strconv.ParseFloat(val, 32)
-	if err != nil {
-		return math32.NaN()
-	}
-	return float32(f)
 }
