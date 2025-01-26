@@ -88,7 +88,7 @@ func (suite *WorkerTestSuite) SetupTest() {
 	// reset random generator
 	suite.randGenerator = rand.New(rand.NewSource(0))
 	// reset index
-	suite.rankingIndex = nil
+	suite.matrixFactorization = nil
 }
 
 func (suite *WorkerTestSuite) TestPullUsers() {
@@ -202,63 +202,9 @@ func (m *mockMatrixFactorizationForRecommend) GetParamsGrid(_ bool) model.Params
 	panic("don't call me")
 }
 
-func (suite *WorkerTestSuite) TestRecommendMatrixFactorizationBruteForce() {
-	ctx := context.Background()
-	suite.Config.Recommend.Offline.EnableColRecommend = true
-	suite.Config.Recommend.Collaborative.EnableIndex = false
-	// insert feedbacks
-	now := time.Now()
-	err := suite.DataClient.BatchInsertFeedback(ctx, []data.Feedback{
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "9"}, Timestamp: now.Add(-time.Hour)},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "8"}, Timestamp: now.Add(-time.Hour)},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "7"}, Timestamp: now.Add(-time.Hour)},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "6"}, Timestamp: now.Add(-time.Hour)},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "5"}, Timestamp: now.Add(-time.Hour)},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "4"}, Timestamp: now.Add(-time.Hour)},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "3"}, Timestamp: now.Add(time.Hour)},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "2"}, Timestamp: now.Add(time.Hour)},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "1"}, Timestamp: now.Add(time.Hour)},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "0"}, Timestamp: now.Add(time.Hour)},
-	}, true, true, true)
-	suite.NoError(err)
-
-	// insert hidden items and categorized items
-	err = suite.DataClient.BatchInsertItems(ctx, []data.Item{
-		{ItemId: "10", IsHidden: true},
-		{ItemId: "11", IsHidden: true},
-		{ItemId: "3", Categories: []string{"*"}},
-		{ItemId: "1", Categories: []string{"*"}},
-	})
-	suite.NoError(err)
-
-	// create mock model
-	suite.RankingModel = newMockMatrixFactorizationForRecommend(1, 12)
-	suite.Recommend([]data.User{{UserId: "0"}})
-
-	// read recommend time
-	recommendTime, err := suite.CacheClient.Get(ctx, cache.Key(cache.LastUpdateUserRecommendTime, "0")).Time()
-	suite.NoError(err)
-
-	recommends, err := suite.CacheClient.SearchScores(ctx, cache.OfflineRecommend, "0", []string{""}, 0, -1)
-	suite.NoError(err)
-	suite.Equal([]cache.Score{
-		{Id: "3", Score: 3, Categories: []string{"", "*"}, Timestamp: recommendTime},
-		{Id: "2", Score: 2, Categories: []string{""}, Timestamp: recommendTime},
-		{Id: "1", Score: 1, Categories: []string{"", "*"}, Timestamp: recommendTime},
-		{Id: "0", Score: 0, Categories: []string{""}, Timestamp: recommendTime},
-	}, recommends)
-	recommends, err = suite.CacheClient.SearchScores(ctx, cache.OfflineRecommend, "0", []string{"*"}, 0, -1)
-	suite.NoError(err)
-	suite.Equal([]cache.Score{
-		{Id: "3", Score: 3, Categories: []string{"", "*"}, Timestamp: recommendTime},
-		{Id: "1", Score: 1, Categories: []string{"", "*"}, Timestamp: recommendTime},
-	}, recommends)
-}
-
 func (suite *WorkerTestSuite) TestRecommendMatrixFactorizationHNSW() {
 	ctx := context.Background()
 	suite.Config.Recommend.Offline.EnableColRecommend = true
-	suite.Config.Recommend.Collaborative.EnableIndex = true
 	// insert feedbacks
 	now := time.Now()
 	err := suite.DataClient.BatchInsertFeedback(ctx, []data.Feedback{

@@ -15,17 +15,55 @@
 package logics
 
 import (
+	"time"
+
+	"github.com/samber/lo"
+	"github.com/zhenghaoz/gorse/base/floats"
+	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/common/ann"
+	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
+	"go.uber.org/zap"
 )
 
 type MatrixFactorization struct {
-	users          []string
-	items          []data.Item
-	userEmbeddings [][]float32
-	itemEmbeddings *ann.HNSW[[]float32]
+	n         int
+	timestamp time.Time
+	items     []*data.Item
+	index     *ann.HNSW[[]float32]
+	dimension int
 }
 
-func (mf *MatrixFactorization) Fit() {
-	// Fit model
+func NewMatrixFactorization(n int, timestamp time.Time) *MatrixFactorization {
+	return &MatrixFactorization{
+		n:         n,
+		timestamp: timestamp,
+		items:     make([]*data.Item, 0),
+		index:     ann.NewHNSW[[]float32](floats.Dot),
+	}
+}
+
+func (mf *MatrixFactorization) Add(item *data.Item, v []float32) {
+	// Check dimension
+	if mf.dimension == 0 {
+		mf.dimension = len(v)
+	} else if mf.dimension != len(v) {
+		log.Logger().Error("dimension mismatch", zap.Int("dimension", len(v)))
+		return
+	}
+	// Push item
+	mf.items = append(mf.items, item)
+	_ = mf.index.Add(v)
+}
+
+func (mf *MatrixFactorization) Search(v []float32) []cache.Score {
+	scores := mf.index.SearchVector(v, mf.n, false)
+	return lo.Map(scores, func(v lo.Tuple2[int, float32], _ int) cache.Score {
+		return cache.Score{
+			Id:         mf.items[v.A].ItemId,
+			Score:      -float64(v.B),
+			Categories: mf.items[v.A].Categories,
+			Timestamp:  mf.timestamp,
+		}
+	})
 }
