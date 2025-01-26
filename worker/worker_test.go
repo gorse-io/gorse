@@ -263,33 +263,33 @@ func (suite *WorkerTestSuite) TestRecommendItemBased() {
 
 	// insert similar items
 	err = suite.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key(cache.Neighbors, "21"), []cache.Score{
-		{Id: "22", Score: 100000, Categories: []string{"", "*"}},
-		{Id: "25", Score: 1000000, Categories: []string{""}},
-		{Id: "29", Score: 1, Categories: []string{""}},
+		{Id: "22", Score: 100000, Categories: []string{"*"}},
+		{Id: "25", Score: 1000000},
+		{Id: "29", Score: 1},
 	})
 	suite.NoError(err)
 	err = suite.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key(cache.Neighbors, "22"), []cache.Score{
-		{Id: "23", Score: 100000, Categories: []string{"", "*"}},
-		{Id: "25", Score: 1000000, Categories: []string{""}},
-		{Id: "28", Score: 1, Categories: []string{"", "*"}},
-		{Id: "29", Score: 1, Categories: []string{""}},
+		{Id: "23", Score: 100000, Categories: []string{"*"}},
+		{Id: "25", Score: 1000000},
+		{Id: "28", Score: 1, Categories: []string{"*"}},
+		{Id: "29", Score: 1},
 	})
 	suite.NoError(err)
 	err = suite.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key(cache.Neighbors, "23"), []cache.Score{
-		{Id: "24", Score: 100000, Categories: []string{"", "*"}},
-		{Id: "25", Score: 1000000, Categories: []string{""}},
-		{Id: "27", Score: 1, Categories: []string{""}},
-		{Id: "28", Score: 1, Categories: []string{"", "*"}},
-		{Id: "29", Score: 1, Categories: []string{""}},
+		{Id: "24", Score: 100000, Categories: []string{"*"}},
+		{Id: "25", Score: 1000000},
+		{Id: "27", Score: 1},
+		{Id: "28", Score: 1, Categories: []string{"*"}},
+		{Id: "29", Score: 1},
 	})
 	suite.NoError(err)
 	err = suite.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key(cache.Neighbors, "24"), []cache.Score{
-		{Id: "21", Score: 100000, Categories: []string{""}},
-		{Id: "25", Score: 1000000, Categories: []string{""}},
-		{Id: "26", Score: 1, Categories: []string{"", "*"}},
-		{Id: "27", Score: 1, Categories: []string{""}},
-		{Id: "28", Score: 1, Categories: []string{"", "*"}},
-		{Id: "29", Score: 1, Categories: []string{""}},
+		{Id: "21", Score: 100000},
+		{Id: "25", Score: 1000000},
+		{Id: "26", Score: 1, Categories: []string{"*"}},
+		{Id: "27", Score: 1},
+		{Id: "28", Score: 1, Categories: []string{"*"}},
+		{Id: "29", Score: 1},
 	})
 	suite.NoError(err)
 
@@ -330,9 +330,9 @@ func (suite *WorkerTestSuite) TestRecommendUserBased() {
 	suite.Config.Recommend.Offline.EnableUserBasedRecommend = true
 	// insert similar users
 	err := suite.CacheClient.AddScores(ctx, cache.UserToUser, cache.Key(cache.Neighbors, "0"), []cache.Score{
-		{Id: "1", Score: 2, Categories: []string{""}},
-		{Id: "2", Score: 1.5, Categories: []string{""}},
-		{Id: "3", Score: 1, Categories: []string{""}},
+		{Id: "1", Score: 2},
+		{Id: "2", Score: 1.5},
+		{Id: "3", Score: 1},
 	})
 	suite.NoError(err)
 	// insert feedback

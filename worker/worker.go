@@ -640,39 +640,46 @@ func (w *Worker) Recommend(users []data.User) {
 		itemNeighborDigests := mapset.NewSet[string]()
 		if w.Config.Recommend.Offline.EnableItemBasedRecommend {
 			localStartTime := time.Now()
-			for _, category := range append([]string{""}, itemCategories...) {
-				// collect candidates
-				scores := make(map[string]float64)
-				for _, itemId := range positiveItems {
-					// load similar items
-					similarItems, err := w.CacheClient.SearchScores(ctx, cache.ItemToItem, cache.Key(cache.Neighbors, itemId), []string{category}, 0, w.Config.Recommend.CacheSize)
-					if err != nil {
-						log.Logger().Error("failed to load similar items", zap.Error(err))
+			// collect candidates
+			scores := make(map[string]float64)
+			for _, itemId := range positiveItems {
+				// load similar items
+				similarItems, err := w.CacheClient.SearchScores(ctx, cache.ItemToItem, cache.Key(cache.Neighbors, itemId), nil, 0, w.Config.Recommend.CacheSize)
+				if err != nil {
+					log.Logger().Error("failed to load similar items", zap.Error(err))
+					return errors.Trace(err)
+				}
+				// add unseen items
+				for _, item := range similarItems {
+					if !excludeSet.Contains(item.Id) && itemCache.IsAvailable(item.Id) {
+						scores[item.Id] += item.Score
+					}
+				}
+				// load item neighbors digest
+				digest, err := w.CacheClient.Get(ctx, cache.Key(cache.ItemToItemDigest, cache.Neighbors, itemId)).String()
+				if err != nil {
+					if !errors.Is(err, errors.NotFound) {
+						log.Logger().Error("failed to load item neighbors digest", zap.Error(err))
 						return errors.Trace(err)
 					}
-					// add unseen items
-					for _, item := range similarItems {
-						if !excludeSet.Contains(item.Id) && itemCache.IsAvailable(item.Id) {
-							scores[item.Id] += item.Score
-						}
-					}
-					// load item neighbors digest
-					digest, err := w.CacheClient.Get(ctx, cache.Key(cache.ItemToItemDigest, cache.Key(cache.Neighbors, itemId))).String()
-					if err != nil {
-						if !errors.Is(err, errors.NotFound) {
-							log.Logger().Error("failed to load item neighbors digest", zap.Error(err))
-							return errors.Trace(err)
-						}
-					}
-					itemNeighborDigests.Add(digest)
 				}
-				// collect top k
-				filter := heap.NewTopKFilter[string, float64](w.Config.Recommend.CacheSize)
-				for id, score := range scores {
-					filter.Push(id, score)
+				itemNeighborDigests.Add(digest)
+			}
+			// collect top k
+			filter := heap.NewTopKFilter[string, float64](w.Config.Recommend.CacheSize)
+			for id, score := range scores {
+				filter.Push(id, score)
+			}
+			ids, _ := filter.PopAll()
+			recommend := make(map[string][]string)
+			for _, id := range ids {
+				recommend[""] = append(recommend[""], id)
+				for _, category := range itemCache.GetCategory(id) {
+					recommend[category] = append(recommend[category], id)
 				}
-				ids, _ := filter.PopAll()
-				candidates[category] = append(candidates[category], ids)
+			}
+			for category, items := range recommend {
+				candidates[category] = append(candidates[category], items)
 			}
 			itemBasedRecommendSeconds.Add(time.Since(localStartTime).Seconds())
 		}
@@ -683,7 +690,7 @@ func (w *Worker) Recommend(users []data.User) {
 			localStartTime := time.Now()
 			scores := make(map[string]float64)
 			// load similar users
-			similarUsers, err := w.CacheClient.SearchScores(ctx, cache.UserToUser, cache.Key(cache.Neighbors, userId), []string{""}, 0, w.Config.Recommend.CacheSize)
+			similarUsers, err := w.CacheClient.SearchScores(ctx, cache.UserToUser, cache.Key(cache.Neighbors, userId), nil, 0, w.Config.Recommend.CacheSize)
 			if err != nil {
 				log.Logger().Error("failed to load similar users", zap.Error(err))
 				return errors.Trace(err)
@@ -704,7 +711,7 @@ func (w *Worker) Recommend(users []data.User) {
 					}
 				}
 				// load user neighbors digest
-				digest, err := w.CacheClient.Get(ctx, cache.Key(cache.UserToUserDigest, cache.Key(cache.Neighbors, user.Id))).String()
+				digest, err := w.CacheClient.Get(ctx, cache.Key(cache.UserToUserDigest, cache.Neighbors, user.Id)).String()
 				if err != nil {
 					if !errors.Is(err, errors.NotFound) {
 						log.Logger().Error("failed to load user neighbors digest", zap.Error(err))

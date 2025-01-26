@@ -36,6 +36,7 @@ require (
 	github.com/mailru/go-clickhouse/v2 v2.0.1-0.20221121001540-b259988ad8e5
 	github.com/matttproud/golang_protobuf_extensions v1.0.1
 	github.com/orcaman/concurrent-map v1.0.0
+	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.13.0
 	github.com/rakyll/statik v0.1.7
 	github.com/redis/go-redis/extra/redisotel/v9 v9.5.3
@@ -138,7 +139,6 @@ require (
 	github.com/openzipkin/zipkin-go v0.4.1 // indirect
 	github.com/pelletier/go-toml v1.9.5 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.2 // indirect
-	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/prometheus/client_model v0.2.0 // indirect
 	github.com/prometheus/common v0.37.0 // indirect

@@ -387,16 +387,6 @@ func TestConfig_OfflineRecommendDigest(t *testing.T) {
 	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
 	cfg1.Recommend.Offline.EnableColRecommend = true
 	cfg2.Recommend.Offline.EnableColRecommend = true
-	assert.NotEqual(t, cfg1.OfflineRecommendDigest(), cfg2.OfflineRecommendDigest())
-
-	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
-	cfg1.Recommend.Offline.EnableColRecommend = true
-	cfg2.Recommend.Offline.EnableColRecommend = true
-	assert.NotEqual(t, cfg1.OfflineRecommendDigest(), cfg2.OfflineRecommendDigest())
-
-	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
-	cfg1.Recommend.Offline.EnableColRecommend = true
-	cfg2.Recommend.Offline.EnableColRecommend = true
 	assert.Equal(t, cfg1.OfflineRecommendDigest(), cfg2.OfflineRecommendDigest())
 
 	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
