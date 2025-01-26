@@ -822,10 +822,6 @@ func (m mockFactorizationMachine) Complexity() int {
 	panic("implement me")
 }
 
-func (m mockFactorizationMachine) Bytes() int {
-	panic("implement me")
-}
-
 func (m mockFactorizationMachine) GetParamsGrid(_ bool) model.ParamsGrid {
 	panic("implement me")
 }

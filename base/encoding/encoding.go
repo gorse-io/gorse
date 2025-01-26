@@ -20,10 +20,8 @@ import (
 	"encoding/gob"
 	"fmt"
 	"io"
-	"reflect"
 	"strconv"
 
-	"github.com/chewxy/math32"
 	"github.com/juju/errors"
 )
 
@@ -127,39 +125,4 @@ func ReadGob(r io.Reader, v interface{}) error {
 
 func FormatFloat32(val float32) string {
 	return strconv.FormatFloat(float64(val), 'f', -1, 32)
-}
-
-func ParseFloat32(val string) float32 {
-	f, err := strconv.ParseFloat(val, 32)
-	if err != nil {
-		return math32.NaN()
-	}
-	return float32(f)
-}
-
-func ArrayBytes[T any](val []T) uintptr {
-	byteCount := reflect.TypeOf(val).Size()
-	if len(val) > 0 {
-		byteCount += reflect.TypeOf(val).Elem().Size() * uintptr(len(val))
-	}
-	return byteCount
-}
-
-func MatrixBytes[T any](val [][]T) uintptr {
-	byteCount := reflect.TypeOf(val).Size()
-	if len(val) > 0 {
-		rowSize := len(val[0])
-		byteCount += reflect.TypeOf(val).Elem().Size() * uintptr(len(val))
-		byteCount += reflect.TypeOf(val).Elem().Elem().Size() * uintptr(len(val)*rowSize)
-	}
-	return byteCount
-}
-
-func StringsBytes(val []string) uintptr {
-	byteCount := reflect.TypeOf(val).Size()
-	byteCount += reflect.TypeOf(val).Elem().Size() * uintptr(len(val))
-	for _, s := range val {
-		byteCount += 2 * uintptr(len(s))
-	}
-	return byteCount
 }

@@ -38,10 +38,10 @@ import (
 	"github.com/rakyll/statik/fs"
 	"github.com/samber/lo"
 	"github.com/zhenghaoz/gorse/base"
-	"github.com/zhenghaoz/gorse/base/encoding"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/base/progress"
 	"github.com/zhenghaoz/gorse/cmd/version"
+	"github.com/zhenghaoz/gorse/common/util"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model/click"
 	"github.com/zhenghaoz/gorse/model/ranking"
@@ -584,7 +584,10 @@ func (m *Master) getStats(request *restful.Request, response *restful.Response) 
 		if temp, err = m.CacheClient.Get(ctx, cache.Key(cache.GlobalMeta, cache.MatchingIndexRecall)).String(); err != nil {
 			log.ResponseLogger(response).Warn("failed to get matching index recall", zap.Error(err))
 		} else {
-			status.MatchingIndexRecall = encoding.ParseFloat32(temp)
+			status.MatchingIndexRecall, err = util.ParseFloat[float32](temp)
+			if err != nil {
+				log.ResponseLogger(response).Warn("failed to parse matching index recall", zap.Error(err))
+			}
 		}
 	}
 	server.Ok(response, status)
