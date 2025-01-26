@@ -546,7 +546,7 @@ func (w *Worker) Recommend(users []data.User) {
 		startTime := time.Now()
 		log.Logger().Info("start building ranking index")
 		itemIndex := w.RankingModel.GetItemIndex()
-		matrixFactorization := logics.NewMatrixFactorization(w.Config.Recommend.CacheSize, time.Now())
+		matrixFactorization := logics.NewMatrixFactorization(time.Now())
 		for i := int32(0); i < itemIndex.Len(); i++ {
 			itemId := itemIndex.ToName(i)
 			if itemCache.IsAvailable(itemId) {
@@ -554,6 +554,7 @@ func (w *Worker) Recommend(users []data.User) {
 				matrixFactorization.Add(item, w.RankingModel.GetItemFactor(i))
 			}
 		}
+		w.matrixFactorization = matrixFactorization
 		log.Logger().Info("complete building ranking index",
 			zap.Duration("build_time", time.Since(startTime)))
 	}
@@ -617,7 +618,7 @@ func (w *Worker) Recommend(users []data.User) {
 			if userIndex := w.RankingModel.GetUserIndex().ToNumber(userId); w.RankingModel.IsUserPredictable(userIndex) {
 				var recommend map[string][]string
 				var usedTime time.Duration
-				recommend, usedTime, err = w.collaborativeRecommendHNSW(w.matrixFactorization, userId, itemCategories, excludeSet, itemCache)
+				recommend, usedTime, err = w.collaborativeRecommendHNSW(w.matrixFactorization, userId, excludeSet, itemCache)
 				if err != nil {
 					log.Logger().Error("failed to recommend by collaborative filtering",
 						zap.String("user_id", userId), zap.Error(err))
@@ -853,25 +854,23 @@ func (w *Worker) Recommend(users []data.User) {
 	OfflineRecommendStepSecondsVec.WithLabelValues("popular_recommend").Set(popularRecommendSeconds.Load())
 }
 
-func (w *Worker) collaborativeRecommendHNSW(rankingIndex *logics.MatrixFactorization, userId string, itemCategories []string, excludeSet mapset.Set[string], itemCache *ItemCache) (map[string][]string, time.Duration, error) {
+func (w *Worker) collaborativeRecommendHNSW(rankingIndex *logics.MatrixFactorization, userId string, excludeSet mapset.Set[string], itemCache *ItemCache) (map[string][]string, time.Duration, error) {
 	ctx := context.Background()
 	userIndex := w.RankingModel.GetUserIndex().ToNumber(userId)
 	localStartTime := time.Now()
-	scores := rankingIndex.Search(w.RankingModel.GetUserFactor(userIndex))
+	scores := rankingIndex.Search(w.RankingModel.GetUserFactor(userIndex), w.Config.Recommend.CacheSize+excludeSet.Cardinality())
 	// save result
 	recommend := make(map[string][]string)
-	for category, catValues := range values {
-		recommendItems := make([]string, 0, len(catValues))
-		recommendScores := make([]float64, 0, len(catValues))
-		for i := range catValues {
-			itemId := w.RankingModel.GetItemIndex().ToName(catValues[i])
-			if !excludeSet.Contains(itemId) && itemCache.IsAvailable(itemId) {
-				recommendItems = append(recommendItems, itemId)
-				recommendScores = append(recommendScores, float64(scores[category][i]))
+	for _, score := range scores {
+		if !excludeSet.Contains(score.Id) && itemCache.IsAvailable(score.Id) {
+			for _, category := range score.Categories {
+				recommend[category] = append(recommend[category], score.Id)
 			}
 		}
-		recommend[category] = recommendItems
 	}
+	recommend[""] = lo.Map(scores, func(score cache.Score, _ int) string {
+		return score.Id
+	})
 	if err := w.CacheClient.AddScores(ctx, cache.CollaborativeRecommend, userId, scores); err != nil {
 		log.Logger().Error("failed to cache collaborative filtering recommendation result", zap.String("user_id", userId), zap.Error(err))
 		return nil, 0, errors.Trace(err)

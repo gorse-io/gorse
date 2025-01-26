@@ -27,16 +27,14 @@ import (
 )
 
 type MatrixFactorization struct {
-	n         int
 	timestamp time.Time
 	items     []*data.Item
 	index     *ann.HNSW[[]float32]
 	dimension int
 }
 
-func NewMatrixFactorization(n int, timestamp time.Time) *MatrixFactorization {
+func NewMatrixFactorization(timestamp time.Time) *MatrixFactorization {
 	return &MatrixFactorization{
-		n:         n,
 		timestamp: timestamp,
 		items:     make([]*data.Item, 0),
 		index:     ann.NewHNSW[[]float32](floats.Dot),
@@ -56,8 +54,8 @@ func (mf *MatrixFactorization) Add(item *data.Item, v []float32) {
 	_ = mf.index.Add(v)
 }
 
-func (mf *MatrixFactorization) Search(v []float32) []cache.Score {
-	scores := mf.index.SearchVector(v, mf.n, false)
+func (mf *MatrixFactorization) Search(v []float32, n int) []cache.Score {
+	scores := mf.index.SearchVector(v, n, false)
 	return lo.Map(scores, func(v lo.Tuple2[int, float32], _ int) cache.Score {
 		return cache.Score{
 			Id:         mf.items[v.A].ItemId,
