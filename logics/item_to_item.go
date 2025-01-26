@@ -151,11 +151,7 @@ func (e *embeddingItemToItem) Push(item *data.Item, _ []dataset.ID) {
 	}
 	// Push item
 	e.items = append(e.items, item)
-	_, err = e.index.Add(v)
-	if err != nil {
-		log.Logger().Error("failed to add item to index", zap.Error(err))
-		return
-	}
+	_ = e.index.Add(v)
 }
 
 type tagsItemToItem struct {
@@ -205,11 +201,7 @@ func (t *tagsItemToItem) Push(item *data.Item, _ []dataset.ID) {
 	})
 	// Push item
 	t.items = append(t.items, item)
-	_, err = t.index.Add(v)
-	if err != nil {
-		log.Logger().Error("failed to add item to index", zap.Error(err))
-		return
-	}
+	_ = t.index.Add(v)
 }
 
 type usersItemToItem struct {
@@ -242,11 +234,7 @@ func (u *usersItemToItem) Push(item *data.Item, feedback []dataset.ID) {
 	})
 	// Push item
 	u.items = append(u.items, item)
-	_, err := u.index.Add(feedback)
-	if err != nil {
-		log.Logger().Error("failed to add item to index", zap.Error(err))
-		return
-	}
+	_ = u.index.Add(feedback)
 }
 
 type autoItemToItem struct {
@@ -287,11 +275,7 @@ func (a *autoItemToItem) Push(item *data.Item, feedback []dataset.ID) {
 	})
 	// Push item
 	a.items = append(a.items, item)
-	_, err := a.index.Add(lo.Tuple2[[]dataset.ID, []dataset.ID]{A: v, B: feedback})
-	if err != nil {
-		log.Logger().Error("failed to add item to index", zap.Error(err))
-		return
-	}
+	_ = a.index.Add(lo.Tuple2[[]dataset.ID, []dataset.ID]{A: v, B: feedback})
 }
 
 func (a *autoItemToItem) distance(u, v lo.Tuple2[[]dataset.ID, []dataset.ID]) float32 {

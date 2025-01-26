@@ -146,10 +146,7 @@ func (e *embeddingUserToUser) Push(user *data.User, feedback []dataset.ID) {
 	}
 	// Push user
 	e.users = append(e.users, user)
-	_, err = e.index.Add(v)
-	if err != nil {
-		log.Logger().Error("failed to add user to index", zap.Error(err))
-	}
+	_ = e.index.Add(v)
 }
 
 type tagsUserToUser struct {
@@ -194,10 +191,7 @@ func (t *tagsUserToUser) Push(user *data.User, feedback []dataset.ID) {
 	})
 	// Push user
 	t.users = append(t.users, user)
-	_, err = t.index.Add(v)
-	if err != nil {
-		log.Logger().Error("failed to add user to index", zap.Error(err))
-	}
+	_ = t.index.Add(v)
 }
 
 type itemsUserToUser struct {
@@ -226,10 +220,7 @@ func (i *itemsUserToUser) Push(user *data.User, feedback []dataset.ID) {
 	})
 	// Push user
 	i.users = append(i.users, user)
-	_, err := i.index.Add(feedback)
-	if err != nil {
-		log.Logger().Error("failed to add user to index", zap.Error(err))
-	}
+	_ = i.index.Add(feedback)
 }
 
 type autoUserToUser struct {
@@ -266,10 +257,7 @@ func (a *autoUserToUser) Push(user *data.User, feedback []dataset.ID) {
 	})
 	// Push user
 	a.users = append(a.users, user)
-	_, err := a.index.Add(lo.Tuple2[[]dataset.ID, []dataset.ID]{A: t, B: feedback})
-	if err != nil {
-		log.Logger().Error("failed to add user to index", zap.Error(err))
-	}
+	_ = a.index.Add(lo.Tuple2[[]dataset.ID, []dataset.ID]{A: t, B: feedback})
 }
 
 func (a *autoUserToUser) distance(u, v lo.Tuple2[[]dataset.ID, []dataset.ID]) float32 {
