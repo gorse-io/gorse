@@ -30,10 +30,10 @@ func NewBruteforce[T any](distanceFunc func(a, b T) float32) *Bruteforce[T] {
 	return &Bruteforce[T]{distanceFunc: distanceFunc}
 }
 
-func (b *Bruteforce[T]) Add(v T) (int, error) {
+func (b *Bruteforce[T]) Add(v T) int {
 	// Add vector
 	b.vectors = append(b.vectors, v)
-	return len(b.vectors), nil
+	return len(b.vectors)
 }
 
 func (b *Bruteforce[T]) SearchIndex(q, k int, prune0 bool) ([]lo.Tuple2[int, float32], error) {

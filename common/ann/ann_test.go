@@ -122,15 +122,13 @@ func TestMNIST(t *testing.T) {
 	// Create brute-force index
 	bf := NewBruteforce(floats.Euclidean)
 	for _, image := range dat.TrainImages[:trainSize] {
-		_, err := bf.Add(image)
-		assert.NoError(t, err)
+		_ = bf.Add(image)
 	}
 
 	// Create HNSW index
 	hnsw := NewHNSW(floats.Euclidean)
 	for _, image := range dat.TrainImages[:trainSize] {
-		_, err := hnsw.Add(image)
-		assert.NoError(t, err)
+		_ = hnsw.Add(image)
 	}
 
 	// Test search
@@ -206,15 +204,13 @@ func TestMovieLens(t *testing.T) {
 	// Create brute-force index
 	bf := NewBruteforce(jaccard)
 	for _, movie := range movies {
-		_, err := bf.Add(movie)
-		assert.NoError(t, err)
+		_ = bf.Add(movie)
 	}
 
 	// Create HNSW index
 	hnsw := NewHNSW(jaccard)
 	for _, movie := range movies {
-		_, err := hnsw.Add(movie)
-		assert.NoError(t, err)
+		_ = hnsw.Add(movie)
 	}
 
 	// Test search

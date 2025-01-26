@@ -15,6 +15,9 @@
 package base
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/zhenghaoz/gorse/base/log"
 	"go.uber.org/zap"
 )
@@ -69,4 +72,15 @@ func CheckPanic() {
 	if r := recover(); r != nil {
 		log.Logger().Error("panic recovered", zap.Any("panic", r))
 	}
+}
+
+// ValidateId validates user/item id. Id cannot be empty and contain [/,].
+func ValidateId(text string) error {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return fmt.Errorf("id cannot be empty")
+	} else if strings.Contains(text, "/") {
+		return fmt.Errorf("id cannot contain `/`")
+	}
+	return nil
 }

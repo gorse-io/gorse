@@ -17,6 +17,7 @@ package ann
 import (
 	"github.com/chewxy/math32"
 	mapset "github.com/deckarep/golang-set/v2"
+	"github.com/pkg/errors"
 	"github.com/samber/lo"
 	"github.com/zhenghaoz/gorse/base/heap"
 	"math/rand"
@@ -50,15 +51,19 @@ func NewHNSW[T any](distanceFunc func(a, b T) float32) *HNSW[T] {
 	}
 }
 
-func (h *HNSW[T]) Add(v T) (int, error) {
+func (h *HNSW[T]) Add(v T) int {
 	// Add vector
 	h.vectors = append(h.vectors, v)
 	h.bottomNeighbors = append(h.bottomNeighbors, heap.NewPriorityQueue(false))
 	h.insert(int32(len(h.vectors) - 1))
-	return len(h.vectors) - 1, nil
+	return len(h.vectors) - 1
 }
 
 func (h *HNSW[T]) SearchIndex(q, k int, prune0 bool) ([]lo.Tuple2[int, float32], error) {
+	// Check index
+	if q < 0 || q >= len(h.vectors) {
+		return nil, errors.Errorf("index out of range: %v", q)
+	}
 	w := h.knnSearch(h.vectors[q], k, h.efSearchValue(k))
 	scores := make([]lo.Tuple2[int, float32], 0)
 	for w.Len() > 0 {

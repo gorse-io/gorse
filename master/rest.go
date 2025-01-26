@@ -580,14 +580,12 @@ func (m *Master) getStats(request *restful.Request, response *restful.Response) 
 	}
 	// read matching index recall
 	var temp string
-	if m.Config.Recommend.Collaborative.EnableIndex {
-		if temp, err = m.CacheClient.Get(ctx, cache.Key(cache.GlobalMeta, cache.MatchingIndexRecall)).String(); err != nil {
-			log.ResponseLogger(response).Warn("failed to get matching index recall", zap.Error(err))
-		} else {
-			status.MatchingIndexRecall, err = util.ParseFloat[float32](temp)
-			if err != nil {
-				log.ResponseLogger(response).Warn("failed to parse matching index recall", zap.Error(err))
-			}
+	if temp, err = m.CacheClient.Get(ctx, cache.Key(cache.GlobalMeta, cache.MatchingIndexRecall)).String(); err != nil {
+		log.ResponseLogger(response).Warn("failed to get matching index recall", zap.Error(err))
+	} else {
+		status.MatchingIndexRecall, err = util.ParseFloat[float32](temp)
+		if err != nil {
+			log.ResponseLogger(response).Warn("failed to parse matching index recall", zap.Error(err))
 		}
 	}
 	server.Ok(response, status)

@@ -55,3 +55,9 @@ func TestNewTensor32(t *testing.T) {
 	assert.Equal(t, 4, len(a[0]))
 	assert.Equal(t, 5, len(a[0][0]))
 }
+
+func TestValidateId(t *testing.T) {
+	assert.NotNil(t, ValidateId(""))
+	assert.NotNil(t, ValidateId("/"))
+	assert.Nil(t, ValidateId("abc"))
+}

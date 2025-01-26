@@ -113,9 +113,6 @@ func TestUnmarshal(t *testing.T) {
 			// [recommend.item_neighbors]
 			assert.Equal(t, "similar", config.Recommend.ItemNeighbors.NeighborType)
 			// [recommend.collaborative]
-			assert.True(t, config.Recommend.Collaborative.EnableIndex)
-			assert.Equal(t, float32(0.9), config.Recommend.Collaborative.IndexRecall)
-			assert.Equal(t, 3, config.Recommend.Collaborative.IndexFitEpoch)
 			assert.Equal(t, 60*time.Minute, config.Recommend.Collaborative.ModelFitPeriod)
 			assert.Equal(t, 360*time.Minute, config.Recommend.Collaborative.ModelSearchPeriod)
 			assert.Equal(t, 100, config.Recommend.Collaborative.ModelSearchEpoch)
@@ -390,26 +387,6 @@ func TestConfig_OfflineRecommendDigest(t *testing.T) {
 	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
 	cfg1.Recommend.Offline.EnableColRecommend = true
 	cfg2.Recommend.Offline.EnableColRecommend = true
-	cfg1.Recommend.Collaborative.EnableIndex = true
-	cfg2.Recommend.Collaborative.EnableIndex = false
-	assert.NotEqual(t, cfg1.OfflineRecommendDigest(), cfg2.OfflineRecommendDigest())
-
-	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
-	cfg1.Recommend.Offline.EnableColRecommend = true
-	cfg2.Recommend.Offline.EnableColRecommend = true
-	cfg1.Recommend.Collaborative.EnableIndex = true
-	cfg2.Recommend.Collaborative.EnableIndex = true
-	cfg1.Recommend.Collaborative.IndexRecall = 0.4
-	cfg2.Recommend.Collaborative.IndexRecall = 0.5
-	assert.NotEqual(t, cfg1.OfflineRecommendDigest(), cfg2.OfflineRecommendDigest())
-
-	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
-	cfg1.Recommend.Offline.EnableColRecommend = true
-	cfg2.Recommend.Offline.EnableColRecommend = true
-	cfg1.Recommend.Collaborative.EnableIndex = false
-	cfg2.Recommend.Collaborative.EnableIndex = false
-	cfg1.Recommend.Collaborative.IndexRecall = 0.4
-	cfg2.Recommend.Collaborative.IndexRecall = 0.5
 	assert.Equal(t, cfg1.OfflineRecommendDigest(), cfg2.OfflineRecommendDigest())
 
 	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()

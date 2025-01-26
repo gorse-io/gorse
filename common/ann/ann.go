@@ -19,7 +19,7 @@ import (
 )
 
 type Index interface {
-	Add(v []float32) (int, error)
+	Add(v []float32) int
 	SearchIndex(q, k int, prune0 bool) ([]lo.Tuple2[int, float32], error)
 	SearchVector(q []float32, k int, prune0 bool) []lo.Tuple2[int, float32]
 }
