@@ -42,6 +42,7 @@ require (
 	github.com/redis/go-redis/extra/redisotel/v9 v9.5.3
 	github.com/redis/go-redis/v9 v9.7.0
 	github.com/samber/lo v1.38.1
+	github.com/sashabaranov/go-openai v1.36.1
 	github.com/schollz/progressbar/v3 v3.17.1
 	github.com/sclevine/yj v0.0.0-20210612025309-737bdf40a5d1
 	github.com/spf13/cobra v1.8.1
