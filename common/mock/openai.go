@@ -29,6 +29,7 @@ type OpenAIServer struct {
 	ready      chan struct{}
 
 	mockChatCompletion string
+	mockEmbeddings     []float32
 }
 
 func NewOpenAIServer() *OpenAIServer {
@@ -41,6 +42,10 @@ func NewOpenAIServer() *OpenAIServer {
 		Reads(openai.ChatCompletionRequest{}).
 		Writes(openai.ChatCompletionResponse{}).
 		To(s.chatCompletion))
+	ws.Route(ws.POST("embeddings").
+		Reads(openai.EmbeddingRequest{}).
+		Writes(openai.EmbeddingResponse{}).
+		To(s.embeddings))
 	container := restful.NewContainer()
 	container.Add(ws)
 	s.httpServer = &http.Server{Handler: container}
@@ -79,6 +84,10 @@ func (s *OpenAIServer) ChatCompletion(mock string) {
 	s.mockChatCompletion = mock
 }
 
+func (s *OpenAIServer) Embeddings(embeddings []float32) {
+	s.mockEmbeddings = embeddings
+}
+
 func (s *OpenAIServer) chatCompletion(req *restful.Request, resp *restful.Response) {
 	var r openai.ChatCompletionRequest
 	err := req.ReadEntity(&r)
@@ -91,6 +100,20 @@ func (s *OpenAIServer) chatCompletion(req *restful.Request, resp *restful.Respon
 			Message: openai.ChatCompletionMessage{
 				Content: s.mockChatCompletion,
 			},
+		}},
+	})
+}
+
+func (s *OpenAIServer) embeddings(req *restful.Request, resp *restful.Response) {
+	var r openai.EmbeddingRequest
+	err := req.ReadEntity(&r)
+	if err != nil {
+		_ = resp.WriteError(http.StatusBadRequest, err)
+		return
+	}
+	_ = resp.WriteEntity(openai.EmbeddingResponse{
+		Data: []openai.Embedding{{
+			Embedding: s.mockEmbeddings,
 		}},
 	})
 }

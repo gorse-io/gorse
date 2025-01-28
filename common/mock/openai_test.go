@@ -62,6 +62,19 @@ func (suite *OpenAITestSuite) TestChatCompletion() {
 	suite.Equal("World", resp.Choices[0].Message.Content)
 }
 
+func (suite *OpenAITestSuite) TestEmbeddings() {
+	suite.server.Embeddings([]float32{1, 2, 3})
+	resp, err := suite.client.CreateEmbeddings(
+		context.Background(),
+		openai.EmbeddingRequest{
+			Input: "Hello",
+			Model: "mxbai-embed-large",
+		},
+	)
+	suite.NoError(err)
+	suite.Equal([]float32{1, 2, 3}, resp.Data[0].Embedding)
+}
+
 func TestOpenAITestSuite(t *testing.T) {
 	suite.Run(t, new(OpenAITestSuite))
 }
