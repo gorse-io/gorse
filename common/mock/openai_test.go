@@ -33,6 +33,7 @@ func (suite *OpenAITestSuite) SetupSuite() {
 	go func() {
 		_ = suite.server.Start()
 	}()
+	suite.server.Ready()
 	// Create client
 	clientConfig := openai.DefaultConfig(suite.server.AuthToken())
 	clientConfig.BaseURL = suite.server.BaseURL()

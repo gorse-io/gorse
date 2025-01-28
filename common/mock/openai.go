@@ -18,12 +18,15 @@ import (
 	"fmt"
 	"github.com/emicklei/go-restful/v3"
 	"github.com/sashabaranov/go-openai"
+	"net"
 	"net/http"
 )
 
 type OpenAIServer struct {
+	listener   net.Listener
 	httpServer *http.Server
 	authToken  string
+	ready      chan struct{}
 
 	mockChatCompletion string
 }
@@ -40,21 +43,32 @@ func NewOpenAIServer() *OpenAIServer {
 		To(s.chatCompletion))
 	container := restful.NewContainer()
 	container.Add(ws)
-	s.httpServer = &http.Server{Addr: "localhost:8080", Handler: container}
+	s.httpServer = &http.Server{Handler: container}
 	s.authToken = "ollama"
+	s.ready = make(chan struct{})
 	return s
 }
 
 func (s *OpenAIServer) Start() error {
-	return s.httpServer.ListenAndServe()
+	var err error
+	s.listener, err = net.Listen("tcp", "")
+	if err != nil {
+		return err
+	}
+	close(s.ready)
+	return s.httpServer.Serve(s.listener)
 }
 
 func (s *OpenAIServer) BaseURL() string {
-	return fmt.Sprintf("http://%s/v1", s.httpServer.Addr)
+	return fmt.Sprintf("http://%s/v1", s.listener.Addr().String())
 }
 
 func (s *OpenAIServer) AuthToken() string {
 	return s.authToken
+}
+
+func (s *OpenAIServer) Ready() {
+	<-s.ready
 }
 
 func (s *OpenAIServer) Close() error {
