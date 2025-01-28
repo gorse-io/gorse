@@ -309,3 +309,17 @@ client_secret = ""
 # Gorse dashboard URL and "/callback/oauth2". For example, if the Gorse dashboard URL is 
 # http://localhost:8088, the redirect URL should be: http://localhost:8088/callback/oauth2
 redirect_url = ""
+
+[openai]
+
+# Base URL of OpenAI API.
+base_url = "http://localhost:11434/v1"
+
+# API key of OpenAI API.
+auth_token = "ollama"
+
+# Name of chat completion model.
+chat_completion_model = "qwen2.5"
+
+# Name of embeddings model.
+embeddings_model = "mxbai-embed-large"
