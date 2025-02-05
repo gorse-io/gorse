@@ -72,7 +72,7 @@ var oneCommand = &cobra.Command{
 			conf.Database.CacheStore = "sqlite://cache.db"
 			conf.Recommend.DataSource.PositiveFeedbackTypes = []string{"star", "like"}
 			conf.Recommend.DataSource.ReadFeedbackTypes = []string{"read"}
-			if err := conf.Validate(true); err != nil {
+			if err := conf.Validate(); err != nil {
 				log.Logger().Fatal("invalid config", zap.Error(err))
 			}
 
