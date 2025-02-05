@@ -25,6 +25,7 @@ import (
 	"sync"
 	"time"
 
+	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/expr-lang/expr/parser"
 	"github.com/go-playground/locales/en"
 	ut "github.com/go-playground/universal-translator"
@@ -591,7 +592,7 @@ func LoadConfig(path string, oneModel bool) (*Config, error) {
 	}
 
 	// validate config file
-	if err := conf.Validate(oneModel); err != nil {
+	if err := conf.Validate(); err != nil {
 		return nil, errors.Trace(err)
 	}
 
@@ -605,7 +606,25 @@ func LoadConfig(path string, oneModel bool) (*Config, error) {
 	return &conf, nil
 }
 
-func (config *Config) Validate(oneModel bool) error {
+func (config *Config) Validate() error {
+	// Check non-personalized recommenders
+	nonPersonalizedNames := mapset.NewSet[string]()
+	for _, nonPersonalized := range config.Recommend.NonPersonalized {
+		if nonPersonalizedNames.Contains(nonPersonalized.Name) {
+			return errors.Errorf("non-personalized recommender %v is duplicated", nonPersonalized.Name)
+		}
+		nonPersonalizedNames.Add(nonPersonalized.Name)
+	}
+
+	// Check item-to-item recommenders
+	itemToItemNames := mapset.NewSet[string]()
+	for _, itemToItem := range config.Recommend.ItemToItem {
+		if itemToItemNames.Contains(itemToItem.Name) {
+			return errors.Errorf("item-to-item recommender %v is duplicated", itemToItem.Name)
+		}
+		itemToItemNames.Add(itemToItem.Name)
+	}
+
 	validate := validator.New()
 	if err := validate.RegisterValidation("data_store", func(fl validator.FieldLevel) bool {
 		prefixes := []string{
@@ -649,6 +668,10 @@ func (config *Config) Validate(oneModel bool) error {
 		return errors.Trace(err)
 	}
 	if err := validate.RegisterValidation("item_expr", func(fl validator.FieldLevel) bool {
+		if fl.Field().String() == "" {
+			// Empty expression is legal.
+			return true
+		}
 		_, err := parser.Parse(fl.Field().String())
 		return err == nil
 	}); err != nil {

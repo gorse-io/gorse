@@ -26,6 +26,7 @@ import (
 	"github.com/sclevine/yj/convert"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/suite"
 )
 
 func TestUnmarshal(t *testing.T) {
@@ -442,4 +443,41 @@ func TestItemToItemConfig_Hash(t *testing.T) {
 	a = ItemToItemConfig{Column: "a"}
 	b = ItemToItemConfig{Column: "b"}
 	assert.NotEqual(t, a.Hash(), b.Hash())
+}
+
+type ValidateTestSuite struct {
+	suite.Suite
+	*Config
+}
+
+func (s *ValidateTestSuite) SetupTest() {
+	s.Config = GetDefaultConfig()
+	s.Database.CacheStore = "redis://localhost:6379/0"
+	s.Database.DataStore = "mysql://gorse:gorse_pass@tcp(localhost:3306)/gorse"
+}
+
+func (s *ValidateTestSuite) TestDuplicateNonPersonalized() {
+	s.Recommend.NonPersonalized = []NonPersonalizedConfig{{
+		Name:  "most_starred_weekly",
+		Score: "count(feedback, .FeedbackType == 'star')",
+	}, {
+		Name:  "most_starred_weekly",
+		Score: "count(feedback, .FeedbackType == 'star')",
+	}}
+	s.Error(s.Validate())
+}
+
+func (s *ValidateTestSuite) TestDuplicateItemToItem() {
+	s.Recommend.ItemToItem = []ItemToItemConfig{{
+		Name: "item_to_item",
+		Type: "users",
+	}, {
+		Name: "item_to_item",
+		Type: "users",
+	}}
+	s.Error(s.Validate())
+}
+
+func TestValidate(t *testing.T) {
+	suite.Run(t, new(ValidateTestSuite))
 }
