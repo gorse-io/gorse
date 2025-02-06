@@ -1,6 +1,8 @@
 module github.com/zhenghaoz/gorse
 
-go 1.23.4
+go 1.23.5
+
+toolchain go1.23.6
 
 require (
 	github.com/XSAM/otelsql v0.35.0
@@ -22,7 +24,7 @@ require (
 	github.com/go-viper/mapstructure/v2 v2.2.1
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/securecookie v1.1.1
-	github.com/gorse-io/dashboard v0.0.0-20250125070654-fba9eb31ccea
+	github.com/gorse-io/dashboard v0.0.0-20250206135652-01a4864452d9
 	github.com/gorse-io/gorse-go v0.5.0-alpha.1
 	github.com/haxii/go-swagger-ui v0.0.0-20210203093335-a63a6bbde946
 	github.com/jaswdr/faker v1.16.0
