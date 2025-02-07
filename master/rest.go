@@ -15,6 +15,7 @@
 package master
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"encoding/json"
@@ -25,6 +26,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"text/template"
 	"time"
 
 	"github.com/araddon/dateparse"
@@ -37,6 +39,7 @@ import (
 	"github.com/juju/errors"
 	"github.com/rakyll/statik/fs"
 	"github.com/samber/lo"
+	"github.com/sashabaranov/go-openai"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/base/progress"
@@ -221,6 +224,7 @@ func (m *Master) StartHttpServer() {
 	container.Handle("/api/bulk/feedback", http.HandlerFunc(m.importExportFeedback))
 	container.Handle("/api/dump", http.HandlerFunc(m.dump))
 	container.Handle("/api/restore", http.HandlerFunc(m.restore))
+	container.Handle("/api/chat", http.HandlerFunc(m.chat))
 	if m.workerScheduleHandler == nil {
 		container.Handle("/api/admin/schedule", http.HandlerFunc(m.scheduleAPIHandler))
 	} else {
@@ -1627,5 +1631,86 @@ func (m *Master) handleOAuth2Callback(w http.ResponseWriter, r *http.Request) {
 		log.Logger().Info("login success via OIDC",
 			zap.String("name", claims.Name),
 			zap.String("email", claims.Email))
+	}
+}
+
+func (m *Master) chat(response http.ResponseWriter, request *http.Request) {
+	clientConfig := openai.DefaultConfig(m.Config.OpenAI.AuthToken)
+	clientConfig.BaseURL = m.Config.OpenAI.BaseURL
+	var (
+		client = openai.NewClientWithConfig(clientConfig)
+		itemId = request.URL.Query().Get("item_id")
+		userId = request.URL.Query().Get("user_id")
+	)
+
+	// parse prompt template
+	b, err := io.ReadAll(request.Body)
+	if err != nil {
+		writeError(response, http.StatusInternalServerError, err.Error())
+		return
+	}
+	prompt, err := template.New("").Parse(string(b))
+	if err != nil {
+		writeError(response, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	if itemId != "" {
+		// get item
+		item, err := m.DataClient.GetItem(request.Context(), itemId)
+		if err != nil {
+			writeError(response, http.StatusInternalServerError, err.Error())
+			return
+		}
+		// render prompt
+		var buf bytes.Buffer
+		err = prompt.Execute(&buf, item)
+		if err != nil {
+			writeError(response, http.StatusInternalServerError, err.Error())
+			return
+		}
+		// create chat completion stream
+		stream, err := client.CreateChatCompletionStream(
+			request.Context(),
+			openai.ChatCompletionRequest{
+				Model: m.Config.OpenAI.ChatCompletionModel,
+				Messages: []openai.ChatCompletionMessage{
+					{
+						Role:    openai.ChatMessageRoleUser,
+						Content: buf.String(),
+					},
+				},
+				Stream: true,
+			},
+		)
+		if err != nil {
+			writeError(response, http.StatusInternalServerError, err.Error())
+			return
+		}
+		// read response
+		defer stream.Close()
+		for {
+			var resp openai.ChatCompletionStreamResponse
+			resp, err = stream.Recv()
+			if errors.Is(err, io.EOF) {
+				return
+			}
+			if err != nil {
+				writeError(response, http.StatusInternalServerError, err.Error())
+				return
+			}
+			if _, err = response.Write([]byte(resp.Choices[0].Delta.Content)); err != nil {
+				log.Logger().Error("failed to write response", zap.Error(err))
+				return
+			}
+			// flush response
+			if f, ok := response.(http.Flusher); ok {
+				f.Flush()
+			}
+		}
+	} else if userId != "" {
+		writeError(response, http.StatusNotImplemented, "chat with user is not implemented")
+	} else {
+		writeError(response, http.StatusBadRequest, "missing item_id or user_id")
 	}
 }

@@ -17,6 +17,7 @@ package logics
 import (
 	"errors"
 	"sort"
+	"text/template"
 	"time"
 
 	"github.com/chewxy/math32"
@@ -105,7 +106,7 @@ type embeddingItemToItem struct {
 	dimension int
 }
 
-func newEmbeddingItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time) (ItemToItem, error) {
+func newEmbeddingItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time) (*embeddingItemToItem, error) {
 	// Compile column expression
 	columnFunc, err := expr.Compile(cfg.Column, expr.Env(map[string]any{
 		"item": data.Item{},
@@ -152,6 +153,28 @@ func (e *embeddingItemToItem) Push(item *data.Item, _ []dataset.ID) {
 	// Push item
 	e.items = append(e.items, item)
 	_ = e.index.Add(v)
+}
+
+type generativeItemToItem struct {
+	embeddingItemToItem
+	prompt *template.Template
+}
+
+func newGenerativeItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time) (ItemToItem, error) {
+	// create embedding item-to-item
+	embedding, err := newEmbeddingItemToItem(cfg, n, timestamp)
+	if err != nil {
+		return nil, err
+	}
+	// parse prompt template
+	prompt, err := template.New("").Parse(cfg.Prompt)
+	if err != nil {
+		return nil, err
+	}
+	return &generativeItemToItem{
+		embeddingItemToItem: *embedding,
+		prompt:              prompt,
+	}, nil
 }
 
 type tagsItemToItem struct {
