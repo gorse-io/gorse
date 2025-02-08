@@ -26,7 +26,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"text/template"
 	"time"
 
 	"github.com/araddon/dateparse"
@@ -37,6 +36,8 @@ import (
 	"github.com/gorilla/securecookie"
 	_ "github.com/gorse-io/dashboard"
 	"github.com/juju/errors"
+	"github.com/nikolalohinski/gonja/v2"
+	"github.com/nikolalohinski/gonja/v2/exec"
 	"github.com/rakyll/statik/fs"
 	"github.com/samber/lo"
 	"github.com/sashabaranov/go-openai"
@@ -1635,10 +1636,12 @@ func (m *Master) handleOAuth2Callback(w http.ResponseWriter, r *http.Request) {
 }
 
 func (m *Master) chat(response http.ResponseWriter, request *http.Request) {
-	clientConfig := openai.DefaultConfig(m.Config.OpenAI.AuthToken)
-	clientConfig.BaseURL = m.Config.OpenAI.BaseURL
+	if !m.checkAdmin(request) {
+		writeError(response, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
 	var (
-		client = openai.NewClientWithConfig(clientConfig)
 		itemId = request.URL.Query().Get("item_id")
 		userId = request.URL.Query().Get("user_id")
 	)
@@ -1649,7 +1652,7 @@ func (m *Master) chat(response http.ResponseWriter, request *http.Request) {
 		writeError(response, http.StatusInternalServerError, err.Error())
 		return
 	}
-	prompt, err := template.New("").Parse(string(b))
+	prompt, err := gonja.FromString(string(b))
 	if err != nil {
 		writeError(response, http.StatusBadRequest, err.Error())
 		return
@@ -1664,13 +1667,15 @@ func (m *Master) chat(response http.ResponseWriter, request *http.Request) {
 		}
 		// render prompt
 		var buf bytes.Buffer
-		err = prompt.Execute(&buf, item)
+		err = prompt.Execute(&buf, exec.NewContext(map[string]any{
+			"item": item,
+		}))
 		if err != nil {
 			writeError(response, http.StatusInternalServerError, err.Error())
 			return
 		}
 		// create chat completion stream
-		stream, err := client.CreateChatCompletionStream(
+		stream, err := m.openAIClient.CreateChatCompletionStream(
 			request.Context(),
 			openai.ChatCompletionRequest{
 				Model: m.Config.OpenAI.ChatCompletionModel,

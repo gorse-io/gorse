@@ -19,6 +19,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/sashabaranov/go-openai"
+	"github.com/zhenghaoz/gorse/common/mock"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -76,8 +78,9 @@ func convertToMapStructure(t *testing.T, v interface{}) map[string]interface{} {
 type MasterAPITestSuite struct {
 	suite.Suite
 	Master
-	handler *restful.Container
-	cookie  string
+	handler      *restful.Container
+	openAIServer *mock.OpenAIServer
+	cookie       string
 }
 
 func (suite *MasterAPITestSuite) SetupTest() {
@@ -107,6 +110,15 @@ func (suite *MasterAPITestSuite) SetupTest() {
 	// create handler
 	suite.handler = restful.NewContainer()
 	suite.handler.Add(suite.WebService)
+	// creat mock AI server
+	suite.openAIServer = mock.NewOpenAIServer()
+	go func() {
+		_ = suite.openAIServer.Start()
+	}()
+	suite.openAIServer.Ready()
+	clientConfig := openai.DefaultConfig(suite.openAIServer.AuthToken())
+	clientConfig.BaseURL = suite.openAIServer.BaseURL()
+	suite.openAIClient = openai.NewClientWithConfig(clientConfig)
 	// login
 	req, err := http.NewRequest("POST", "/login",
 		strings.NewReader(fmt.Sprintf("user_name=%s&password=%s", mockMasterUsername, mockMasterPassword)))
@@ -124,6 +136,8 @@ func (suite *MasterAPITestSuite) TearDownTest() {
 	err = suite.DataClient.Close()
 	suite.NoError(err)
 	err = suite.CacheClient.Close()
+	suite.NoError(err)
+	err = suite.openAIServer.Close()
 	suite.NoError(err)
 }
 
@@ -942,6 +956,29 @@ func (suite *MasterAPITestSuite) TestExportAndImport() {
 	if suite.Equal(len(feedback), len(returnFeedback)) {
 		suite.Equal(feedback, returnFeedback)
 	}
+}
+
+func (suite *MasterAPITestSuite) TestChatItem() {
+	// insert item
+	ctx := context.Background()
+	err := suite.DataClient.BatchInsertItems(ctx, []data.Item{{
+		ItemId:  "0",
+		Labels:  map[string]any{"author": "F. Scott Fitzgerald"},
+		Comment: "The Great Gatsby",
+	}})
+	suite.NoError(err)
+
+	// chat item
+	buf := strings.NewReader("{{ item.Labels.author }}'s {{ item.Comment }}")
+	req := httptest.NewRequest("POST", "https://example.com/", buf)
+	q := req.URL.Query()
+	q.Add("item_id", "0")
+	req.URL.RawQuery = q.Encode()
+	req.Header.Set("Cookie", suite.cookie)
+	w := httptest.NewRecorder()
+	suite.chat(w, req)
+	suite.Equal(http.StatusOK, w.Code, w.Body.String())
+	suite.Equal("F. Scott Fitzgerald's The Great Gatsby", w.Body.String())
 }
 
 func TestMasterAPI(t *testing.T) {
