@@ -29,6 +29,7 @@ import (
 	"github.com/emicklei/go-restful/v3"
 	"github.com/jellydator/ttlcache/v3"
 	"github.com/juju/errors"
+	"github.com/sashabaranov/go-openai"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/encoding"
 	"github.com/zhenghaoz/gorse/base/log"
@@ -71,6 +72,7 @@ type Master struct {
 	jobsScheduler  *task.JobsScheduler
 	cacheFile      string
 	managedMode    bool
+	openAIClient   *openai.Client
 
 	// cluster meta cache
 	metaStore meta.Database
@@ -116,6 +118,7 @@ type Master struct {
 // NewMaster creates a master node.
 func NewMaster(cfg *config.Config, cacheFile string, managedMode bool) *Master {
 	rand.Seed(time.Now().UnixNano())
+
 	// setup trace provider
 	tp, err := cfg.Tracing.NewTracerProvider()
 	if err != nil {
@@ -124,12 +127,18 @@ func NewMaster(cfg *config.Config, cacheFile string, managedMode bool) *Master {
 	otel.SetTracerProvider(tp)
 	otel.SetErrorHandler(log.GetErrorHandler())
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}))
+
+	// setup OpenAI client
+	clientConfig := openai.DefaultConfig(cfg.OpenAI.AuthToken)
+	clientConfig.BaseURL = cfg.OpenAI.BaseURL
+
 	m := &Master{
 		// create task monitor
 		cacheFile:     cacheFile,
 		managedMode:   managedMode,
 		jobsScheduler: task.NewJobsScheduler(cfg.Master.NumJobs),
 		tracer:        progress.NewTracer("master"),
+		openAIClient:  openai.NewClientWithConfig(clientConfig),
 		// default ranking model
 		rankingModelName: "bpr",
 		rankingModelSearcher: ranking.NewModelSearcher(

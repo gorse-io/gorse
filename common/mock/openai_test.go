@@ -16,8 +16,11 @@ package mock
 
 import (
 	"context"
+	"github.com/juju/errors"
 	"github.com/sashabaranov/go-openai"
 	"github.com/stretchr/testify/suite"
+	"io"
+	"strings"
 	"testing"
 )
 
@@ -45,7 +48,6 @@ func (suite *OpenAITestSuite) TearDownSuite() {
 }
 
 func (suite *OpenAITestSuite) TestChatCompletion() {
-	suite.server.ChatCompletion("World")
 	resp, err := suite.client.CreateChatCompletion(
 		context.Background(),
 		openai.ChatCompletionRequest{
@@ -59,7 +61,39 @@ func (suite *OpenAITestSuite) TestChatCompletion() {
 		},
 	)
 	suite.NoError(err)
-	suite.Equal("World", resp.Choices[0].Message.Content)
+	suite.Equal("Hello", resp.Choices[0].Message.Content)
+}
+
+func (suite *OpenAITestSuite) TestChatCompletionStream() {
+	content := "In my younger and more vulnerable years my father gave me some advice that I've been turning over in" +
+		" my mind ever since. Whenever you feel like criticizing anyone, he told me, just remember that all the " +
+		"people in this world haven't had the advantages that you've had."
+	stream, err := suite.client.CreateChatCompletionStream(
+		context.Background(),
+		openai.ChatCompletionRequest{
+			Model: "qwen2.5",
+			Messages: []openai.ChatCompletionMessage{
+				{
+					Role:    openai.ChatMessageRoleUser,
+					Content: content,
+				},
+			},
+			Stream: true,
+		},
+	)
+	suite.NoError(err)
+	defer stream.Close()
+	var buffer strings.Builder
+	for {
+		var resp openai.ChatCompletionStreamResponse
+		resp, err = stream.Recv()
+		if errors.Is(err, io.EOF) {
+			suite.Equal(content, buffer.String())
+			return
+		}
+		suite.NoError(err)
+		buffer.WriteString(resp.Choices[0].Delta.Content)
+	}
 }
 
 func (suite *OpenAITestSuite) TestEmbeddings() {
