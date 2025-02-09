@@ -310,6 +310,8 @@ github.com/gorse-io/clickhouse v0.3.3-0.20220715124633-688011a495bb h1:z/oOWE+Vy
 github.com/gorse-io/clickhouse v0.3.3-0.20220715124633-688011a495bb/go.mod h1:iILWzbul8U+gsf4kqbheF2QzBmdvVp63mloGGK8emDI=
 github.com/gorse-io/dashboard v0.0.0-20250125070654-fba9eb31ccea h1:ZJkKE4ZSfJOGbbmqsRwgwPYwOPUMNL3lixBpfqRffpc=
 github.com/gorse-io/dashboard v0.0.0-20250125070654-fba9eb31ccea/go.mod h1:6h/3EYChEyiynyCMMDsCsDEVBSOPLSo1L/+aHqj9kdc=
+github.com/gorse-io/dashboard v0.0.0-20250209091713-a70341e78d48 h1:kfCK07ae/+NvxlcPqh0SpaXxkDlceqSmamsX7t/E4+w=
+github.com/gorse-io/dashboard v0.0.0-20250209091713-a70341e78d48/go.mod h1:lv2bu311bjIJeRfY+6hiIaw20M6fLxT4ma9Ye+bpwGY=
 github.com/gorse-io/gorgonia v0.0.0-20230817132253-6dd1dbf95849 h1:Hwywr6NxzYeZYn35KwOsw7j8ZiMT60TBzpbn1MbEido=
 github.com/gorse-io/gorgonia v0.0.0-20230817132253-6dd1dbf95849/go.mod h1:TtVGAt7ENNmgBnC0JA68CAjIDCEtcqaRHvnkAWJ/Fu0=
 github.com/gorse-io/gorse-go v0.5.0-alpha.1 h1:QBWKGAbSKNAWnieXVIdQiE0lLGvKXfFFAFPOQEkPW/E=
