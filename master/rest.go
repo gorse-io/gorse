@@ -15,7 +15,6 @@
 package master
 
 import (
-	"bytes"
 	"context"
 	"encoding/binary"
 	"encoding/json"
@@ -36,8 +35,6 @@ import (
 	"github.com/gorilla/securecookie"
 	_ "github.com/gorse-io/dashboard"
 	"github.com/juju/errors"
-	"github.com/nikolalohinski/gonja/v2"
-	"github.com/nikolalohinski/gonja/v2/exec"
 	"github.com/rakyll/statik/fs"
 	"github.com/samber/lo"
 	"github.com/sashabaranov/go-openai"
@@ -1640,82 +1637,47 @@ func (m *Master) chat(response http.ResponseWriter, request *http.Request) {
 		writeError(response, http.StatusUnauthorized, "unauthorized")
 		return
 	}
-
-	var (
-		itemId = request.URL.Query().Get("item_id")
-		userId = request.URL.Query().Get("user_id")
-	)
-
-	// parse prompt template
-	b, err := io.ReadAll(request.Body)
+	content, err := io.ReadAll(request.Body)
 	if err != nil {
 		writeError(response, http.StatusInternalServerError, err.Error())
 		return
 	}
-	prompt, err := gonja.FromString(string(b))
+	stream, err := m.openAIClient.CreateChatCompletionStream(
+		request.Context(),
+		openai.ChatCompletionRequest{
+			Model: m.Config.OpenAI.ChatCompletionModel,
+			Messages: []openai.ChatCompletionMessage{
+				{
+					Role:    openai.ChatMessageRoleUser,
+					Content: string(content),
+				},
+			},
+			Stream: true,
+		},
+	)
 	if err != nil {
-		writeError(response, http.StatusBadRequest, err.Error())
+		writeError(response, http.StatusInternalServerError, err.Error())
 		return
 	}
-
-	if itemId != "" {
-		// get item
-		item, err := m.DataClient.GetItem(request.Context(), itemId)
+	// read response
+	defer stream.Close()
+	for {
+		var resp openai.ChatCompletionStreamResponse
+		resp, err = stream.Recv()
+		if errors.Is(err, io.EOF) {
+			return
+		}
 		if err != nil {
 			writeError(response, http.StatusInternalServerError, err.Error())
 			return
 		}
-		// render prompt
-		var buf bytes.Buffer
-		err = prompt.Execute(&buf, exec.NewContext(map[string]any{
-			"item": item,
-		}))
-		if err != nil {
-			writeError(response, http.StatusInternalServerError, err.Error())
+		if _, err = response.Write([]byte(resp.Choices[0].Delta.Content)); err != nil {
+			log.Logger().Error("failed to write response", zap.Error(err))
 			return
 		}
-		// create chat completion stream
-		stream, err := m.openAIClient.CreateChatCompletionStream(
-			request.Context(),
-			openai.ChatCompletionRequest{
-				Model: m.Config.OpenAI.ChatCompletionModel,
-				Messages: []openai.ChatCompletionMessage{
-					{
-						Role:    openai.ChatMessageRoleUser,
-						Content: buf.String(),
-					},
-				},
-				Stream: true,
-			},
-		)
-		if err != nil {
-			writeError(response, http.StatusInternalServerError, err.Error())
-			return
+		// flush response
+		if f, ok := response.(http.Flusher); ok {
+			f.Flush()
 		}
-		// read response
-		defer stream.Close()
-		for {
-			var resp openai.ChatCompletionStreamResponse
-			resp, err = stream.Recv()
-			if errors.Is(err, io.EOF) {
-				return
-			}
-			if err != nil {
-				writeError(response, http.StatusInternalServerError, err.Error())
-				return
-			}
-			if _, err = response.Write([]byte(resp.Choices[0].Delta.Content)); err != nil {
-				log.Logger().Error("failed to write response", zap.Error(err))
-				return
-			}
-			// flush response
-			if f, ok := response.(http.Flusher); ok {
-				f.Flush()
-			}
-		}
-	} else if userId != "" {
-		writeError(response, http.StatusNotImplemented, "chat with user is not implemented")
-	} else {
-		writeError(response, http.StatusBadRequest, "missing item_id or user_id")
 	}
 }

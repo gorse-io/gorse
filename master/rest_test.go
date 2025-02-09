@@ -958,27 +958,17 @@ func (suite *MasterAPITestSuite) TestExportAndImport() {
 	}
 }
 
-func (suite *MasterAPITestSuite) TestChatItem() {
-	// insert item
-	ctx := context.Background()
-	err := suite.DataClient.BatchInsertItems(ctx, []data.Item{{
-		ItemId:  "0",
-		Labels:  map[string]any{"author": "F. Scott Fitzgerald"},
-		Comment: "The Great Gatsby",
-	}})
-	suite.NoError(err)
-
-	// chat item
-	buf := strings.NewReader("{{ item.Labels.author }}'s {{ item.Comment }}")
+func (suite *MasterAPITestSuite) TestChat() {
+	content := "In my younger and more vulnerable years my father gave me some advice that I've been turning over in" +
+		" my mind ever since. \"Whenever you feel like criticizing any one,\" he told me, \" just remember that all " +
+		"the people in this world haven't had the advantages that you've had.\""
+	buf := strings.NewReader(content)
 	req := httptest.NewRequest("POST", "https://example.com/", buf)
-	q := req.URL.Query()
-	q.Add("item_id", "0")
-	req.URL.RawQuery = q.Encode()
 	req.Header.Set("Cookie", suite.cookie)
 	w := httptest.NewRecorder()
 	suite.chat(w, req)
 	suite.Equal(http.StatusOK, w.Code, w.Body.String())
-	suite.Equal("F. Scott Fitzgerald's The Great Gatsby", w.Body.String())
+	suite.Equal(content, w.Body.String())
 }
 
 func TestMasterAPI(t *testing.T) {
