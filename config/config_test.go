@@ -157,6 +157,11 @@ func TestUnmarshal(t *testing.T) {
 			assert.Equal(t, "client_id", config.OIDC.ClientID)
 			assert.Equal(t, "client_secret", config.OIDC.ClientSecret)
 			assert.Equal(t, "http://localhost:8088/callback/oauth2", config.OIDC.RedirectURL)
+			// [openai]
+			assert.Equal(t, "http://localhost:11434/v1", config.OpenAI.BaseURL)
+			assert.Equal(t, "ollama", config.OpenAI.AuthToken)
+			assert.Equal(t, "qwen2.5", config.OpenAI.ChatCompletionModel)
+			assert.Equal(t, "mxbai-embed-large", config.OpenAI.EmbeddingsModel)
 		})
 	}
 }

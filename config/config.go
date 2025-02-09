@@ -63,6 +63,7 @@ type Config struct {
 	Tracing      TracingConfig      `mapstructure:"tracing"`
 	Experimental ExperimentalConfig `mapstructure:"experimental"`
 	OIDC         OIDCConfig         `mapstructure:"oidc"`
+	OpenAI       OpenAIConfig       `mapstructure:"openai"`
 }
 
 // DatabaseConfig is the configuration for the database.
@@ -149,8 +150,9 @@ type NeighborsConfig struct {
 
 type ItemToItemConfig struct {
 	Name   string `mapstructure:"name" json:"name"`
-	Type   string `mapstructure:"type" json:"type" validate:"oneof=embedding tags users"`
+	Type   string `mapstructure:"type" json:"type" validate:"oneof=embedding tags users llm"`
 	Column string `mapstructure:"column" json:"column" validate:"item_expr"`
+	Prompt string `mapstructure:"prompt" json:"prompt"`
 }
 
 func (config *ItemToItemConfig) Hash() string {
@@ -212,6 +214,13 @@ type OIDCConfig struct {
 	ClientID     string `mapstructure:"client_id"`
 	ClientSecret string `mapstructure:"client_secret"`
 	RedirectURL  string `mapstructure:"redirect_url" validate:"omitempty,endswith=/callback/oauth2"`
+}
+
+type OpenAIConfig struct {
+	BaseURL             string `mapstructure:"base_url"`
+	AuthToken           string `mapstructure:"auth_token"`
+	ChatCompletionModel string `mapstructure:"chat_completion_model"`
+	EmbeddingsModel     string `mapstructure:"embeddings_model"`
 }
 
 func GetDefaultConfig() *Config {

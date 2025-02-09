@@ -31,8 +31,11 @@ import (
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/juju/errors"
 	"github.com/samber/lo"
+	"github.com/sashabaranov/go-openai"
 	"github.com/steinfletcher/apitest"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/suite"
+	"github.com/zhenghaoz/gorse/common/mock"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model/click"
 	"github.com/zhenghaoz/gorse/model/ranking"
@@ -48,59 +51,6 @@ const (
 	mockMasterUsername = "admin"
 	mockMasterPassword = "pass"
 )
-
-type mockServer struct {
-	handler *restful.Container
-	Master
-}
-
-func newMockServer(t *testing.T) (*mockServer, string) {
-	s := new(mockServer)
-	// open database
-	var err error
-	s.Settings = config.NewSettings()
-	s.metaStore, err = meta.Open(fmt.Sprintf("sqlite://%s/meta.db", t.TempDir()), s.Config.Master.MetaTimeout)
-	assert.NoError(t, err)
-	s.DataClient, err = data.Open(fmt.Sprintf("sqlite://%s/data.db", t.TempDir()), "")
-	assert.NoError(t, err)
-	s.CacheClient, err = cache.Open(fmt.Sprintf("sqlite://%s/cache.db", t.TempDir()), "")
-	assert.NoError(t, err)
-	// init database
-	err = s.metaStore.Init()
-	assert.NoError(t, err)
-	err = s.DataClient.Init()
-	assert.NoError(t, err)
-	err = s.CacheClient.Init()
-	assert.NoError(t, err)
-	// create server
-	s.Config = config.GetDefaultConfig()
-	s.Config.Master.DashboardUserName = mockMasterUsername
-	s.Config.Master.DashboardPassword = mockMasterPassword
-	s.WebService = new(restful.WebService)
-	s.CreateWebService()
-	s.RestServer.CreateWebService()
-	// create handler
-	s.handler = restful.NewContainer()
-	s.handler.Add(s.WebService)
-	// login
-	req, err := http.NewRequest("POST", "/login",
-		strings.NewReader(fmt.Sprintf("user_name=%s&password=%s", mockMasterUsername, mockMasterPassword)))
-	assert.NoError(t, err)
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	resp := httptest.NewRecorder()
-	s.login(resp, req)
-	assert.Equal(t, http.StatusFound, resp.Code)
-	return s, resp.Header().Get("Set-Cookie")
-}
-
-func (s *mockServer) Close(t *testing.T) {
-	err := s.metaStore.Close()
-	assert.NoError(t, err)
-	err = s.DataClient.Close()
-	assert.NoError(t, err)
-	err = s.CacheClient.Close()
-	assert.NoError(t, err)
-}
 
 func marshal(t *testing.T, v interface{}) string {
 	s, err := json.Marshal(v)
@@ -125,9 +75,73 @@ func convertToMapStructure(t *testing.T, v interface{}) map[string]interface{} {
 	return m
 }
 
-func TestMaster_ExportUsers(t *testing.T) {
-	s, cookie := newMockServer(t)
-	defer s.Close(t)
+type MasterAPITestSuite struct {
+	suite.Suite
+	Master
+	handler      *restful.Container
+	openAIServer *mock.OpenAIServer
+	cookie       string
+}
+
+func (suite *MasterAPITestSuite) SetupTest() {
+	// open database
+	var err error
+	suite.Settings = config.NewSettings()
+	suite.metaStore, err = meta.Open(fmt.Sprintf("sqlite://%s/meta.db", suite.T().TempDir()), suite.Config.Master.MetaTimeout)
+	suite.NoError(err)
+	suite.DataClient, err = data.Open(fmt.Sprintf("sqlite://%s/data.db", suite.T().TempDir()), "")
+	suite.NoError(err)
+	suite.CacheClient, err = cache.Open(fmt.Sprintf("sqlite://%s/cache.db", suite.T().TempDir()), "")
+	suite.NoError(err)
+	// init database
+	err = suite.metaStore.Init()
+	suite.NoError(err)
+	err = suite.DataClient.Init()
+	suite.NoError(err)
+	err = suite.CacheClient.Init()
+	suite.NoError(err)
+	// create server
+	suite.Config = config.GetDefaultConfig()
+	suite.Config.Master.DashboardUserName = mockMasterUsername
+	suite.Config.Master.DashboardPassword = mockMasterPassword
+	suite.WebService = new(restful.WebService)
+	suite.CreateWebService()
+	suite.RestServer.CreateWebService()
+	// create handler
+	suite.handler = restful.NewContainer()
+	suite.handler.Add(suite.WebService)
+	// creat mock AI server
+	suite.openAIServer = mock.NewOpenAIServer()
+	go func() {
+		_ = suite.openAIServer.Start()
+	}()
+	suite.openAIServer.Ready()
+	clientConfig := openai.DefaultConfig(suite.openAIServer.AuthToken())
+	clientConfig.BaseURL = suite.openAIServer.BaseURL()
+	suite.openAIClient = openai.NewClientWithConfig(clientConfig)
+	// login
+	req, err := http.NewRequest("POST", "/login",
+		strings.NewReader(fmt.Sprintf("user_name=%s&password=%s", mockMasterUsername, mockMasterPassword)))
+	suite.NoError(err)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	resp := httptest.NewRecorder()
+	suite.login(resp, req)
+	suite.Equal(http.StatusFound, resp.Code)
+	suite.cookie = resp.Header().Get("Set-Cookie")
+}
+
+func (suite *MasterAPITestSuite) TearDownTest() {
+	err := suite.metaStore.Close()
+	suite.NoError(err)
+	err = suite.DataClient.Close()
+	suite.NoError(err)
+	err = suite.CacheClient.Close()
+	suite.NoError(err)
+	err = suite.openAIServer.Close()
+	suite.NoError(err)
+}
+
+func (suite *MasterAPITestSuite) TestExportUsers() {
 	ctx := context.Background()
 	// insert users
 	users := []data.User{
@@ -135,22 +149,20 @@ func TestMaster_ExportUsers(t *testing.T) {
 		{UserId: "2", Labels: map[string]any{"gender": "male", "job": "lawyer"}},
 		{UserId: "3", Labels: map[string]any{"gender": "female", "job": "teacher"}},
 	}
-	err := s.DataClient.BatchInsertUsers(ctx, users)
-	assert.NoError(t, err)
+	err := suite.DataClient.BatchInsertUsers(ctx, users)
+	suite.NoError(err)
 	// send request
 	req := httptest.NewRequest("GET", "https://example.com/", nil)
-	req.Header.Set("Cookie", cookie)
+	req.Header.Set("Cookie", suite.cookie)
 	w := httptest.NewRecorder()
-	s.importExportUsers(w, req)
-	assert.Equal(t, http.StatusOK, w.Result().StatusCode)
-	assert.Equal(t, "application/jsonl", w.Header().Get("Content-Type"))
-	assert.Equal(t, "attachment;filename=users.jsonl", w.Header().Get("Content-Disposition"))
-	assert.Equal(t, marshalJSONLines(t, users), w.Body.String())
+	suite.importExportUsers(w, req)
+	suite.Equal(http.StatusOK, w.Result().StatusCode)
+	suite.Equal("application/jsonl", w.Header().Get("Content-Type"))
+	suite.Equal("attachment;filename=users.jsonl", w.Header().Get("Content-Disposition"))
+	suite.Equal(marshalJSONLines(suite.T(), users), w.Body.String())
 }
 
-func TestMaster_ExportItems(t *testing.T) {
-	s, cookie := newMockServer(t)
-	defer s.Close(t)
+func (suite *MasterAPITestSuite) TestExportItems() {
 	ctx := context.Background()
 	// insert items
 	items := []data.Item{
@@ -179,23 +191,20 @@ func TestMaster_ExportItems(t *testing.T) {
 			Comment:    "\"three\"",
 		},
 	}
-	err := s.DataClient.BatchInsertItems(ctx, items)
-	assert.NoError(t, err)
+	err := suite.DataClient.BatchInsertItems(ctx, items)
+	suite.NoError(err)
 	// send request
 	req := httptest.NewRequest("GET", "https://example.com/", nil)
-	req.Header.Set("Cookie", cookie)
+	req.Header.Set("Cookie", suite.cookie)
 	w := httptest.NewRecorder()
-	s.importExportItems(w, req)
-	assert.Equal(t, http.StatusOK, w.Result().StatusCode)
-	assert.Equal(t, "application/jsonl", w.Header().Get("Content-Type"))
-	assert.Equal(t, "attachment;filename=items.jsonl", w.Header().Get("Content-Disposition"))
-	assert.Equal(t, marshalJSONLines(t, items), w.Body.String())
+	suite.importExportItems(w, req)
+	suite.Equal(http.StatusOK, w.Result().StatusCode)
+	suite.Equal("application/jsonl", w.Header().Get("Content-Type"))
+	suite.Equal("attachment;filename=items.jsonl", w.Header().Get("Content-Disposition"))
+	suite.Equal(marshalJSONLines(suite.T(), items), w.Body.String())
 }
 
-func TestMaster_ExportFeedback(t *testing.T) {
-	s, cookie := newMockServer(t)
-	defer s.Close(t)
-
+func (suite *MasterAPITestSuite) TestExportFeedback() {
 	ctx := context.Background()
 	// insert feedback
 	feedbacks := []data.Feedback{
@@ -203,77 +212,73 @@ func TestMaster_ExportFeedback(t *testing.T) {
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "read", UserId: "2", ItemId: "6"}},
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "share", UserId: "1", ItemId: "4"}},
 	}
-	err := s.DataClient.BatchInsertFeedback(ctx, feedbacks, true, true, true)
-	assert.NoError(t, err)
+	err := suite.DataClient.BatchInsertFeedback(ctx, feedbacks, true, true, true)
+	suite.NoError(err)
 	// send request
 	req := httptest.NewRequest("GET", "https://example.com/", nil)
-	req.Header.Set("Cookie", cookie)
+	req.Header.Set("Cookie", suite.cookie)
 	w := httptest.NewRecorder()
-	s.importExportFeedback(w, req)
-	assert.Equal(t, http.StatusOK, w.Result().StatusCode)
-	assert.Equal(t, "application/jsonl", w.Header().Get("Content-Type"))
-	assert.Equal(t, "attachment;filename=feedback.jsonl", w.Header().Get("Content-Disposition"))
-	assert.Equal(t, marshalJSONLines(t, feedbacks), w.Body.String())
+	suite.importExportFeedback(w, req)
+	suite.Equal(http.StatusOK, w.Result().StatusCode)
+	suite.Equal("application/jsonl", w.Header().Get("Content-Type"))
+	suite.Equal("attachment;filename=feedback.jsonl", w.Header().Get("Content-Disposition"))
+	suite.Equal(marshalJSONLines(suite.T(), feedbacks), w.Body.String())
 }
 
-func TestMaster_ImportUsers(t *testing.T) {
-	s, cookie := newMockServer(t)
-	defer s.Close(t)
+func (suite *MasterAPITestSuite) TestImportUsers() {
 	ctx := context.Background()
 	// send request
 	buf := bytes.NewBuffer(nil)
 	writer := multipart.NewWriter(buf)
 	file, err := writer.CreateFormFile("file", "users.jsonl")
-	assert.NoError(t, err)
+	suite.NoError(err)
 	_, err = file.Write([]byte(`{"UserId":"1","Labels":{"性别":"男","职业":"工程师"}}
 {"UserId":"2","Labels":{"性别":"男","职业":"律师"}}
 {"UserId":"3","Labels":{"性别":"女","职业":"教师"}}`))
-	assert.NoError(t, err)
+	suite.NoError(err)
 	err = writer.Close()
-	assert.NoError(t, err)
+	suite.NoError(err)
 	req := httptest.NewRequest("POST", "https://example.com/", buf)
-	req.Header.Set("Cookie", cookie)
+	req.Header.Set("Cookie", suite.cookie)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	w := httptest.NewRecorder()
-	s.importExportUsers(w, req)
+	suite.importExportUsers(w, req)
 	// check
-	assert.Equal(t, http.StatusOK, w.Result().StatusCode)
-	assert.JSONEq(t, marshal(t, server.Success{RowAffected: 3}), w.Body.String())
-	_, items, err := s.DataClient.GetUsers(ctx, "", 100)
-	assert.NoError(t, err)
-	assert.Equal(t, []data.User{
+	suite.Equal(http.StatusOK, w.Result().StatusCode)
+	suite.JSONEq(marshal(suite.T(), server.Success{RowAffected: 3}), w.Body.String())
+	_, items, err := suite.DataClient.GetUsers(ctx, "", 100)
+	suite.NoError(err)
+	suite.Equal([]data.User{
 		{UserId: "1", Labels: map[string]any{"性别": "男", "职业": "工程师"}},
 		{UserId: "2", Labels: map[string]any{"性别": "男", "职业": "律师"}},
 		{UserId: "3", Labels: map[string]any{"性别": "女", "职业": "教师"}},
 	}, items)
 }
 
-func TestMaster_ImportItems(t *testing.T) {
-	s, cookie := newMockServer(t)
-	defer s.Close(t)
+func (suite *MasterAPITestSuite) TestImportItems() {
 	ctx := context.Background()
 	// send request
 	buf := bytes.NewBuffer(nil)
 	writer := multipart.NewWriter(buf)
 	file, err := writer.CreateFormFile("file", "items.jsonl")
-	assert.NoError(t, err)
+	suite.NoError(err)
 	_, err = file.Write([]byte(`{"ItemId":"1","IsHidden":false,"Categories":["x"],"Timestamp":"2020-01-01 01:01:01.000000001 +0000 UTC","Labels":{"类型":["喜剧","科幻"]},"Comment":"one"}
 {"ItemId":"2","IsHidden":false,"Categories":["x","y"],"Timestamp":"2021-01-01 01:01:01.000000001 +0000 UTC","Labels":{"类型":["卡通","科幻"]},"Comment":"two"}
 {"ItemId":"3","IsHidden":true,"Timestamp":"2022-01-01 01:01:01.000000001 +0000 UTC","Comment":"three"}`))
-	assert.NoError(t, err)
+	suite.NoError(err)
 	err = writer.Close()
-	assert.NoError(t, err)
+	suite.NoError(err)
 	req := httptest.NewRequest("POST", "https://example.com/", buf)
-	req.Header.Set("Cookie", cookie)
+	req.Header.Set("Cookie", suite.cookie)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	w := httptest.NewRecorder()
-	s.importExportItems(w, req)
+	suite.importExportItems(w, req)
 	// check
-	assert.Equal(t, http.StatusOK, w.Result().StatusCode)
-	assert.JSONEq(t, marshal(t, server.Success{RowAffected: 3}), w.Body.String())
-	_, items, err := s.DataClient.GetItems(ctx, "", 100, nil)
-	assert.NoError(t, err)
-	assert.Equal(t, []data.Item{
+	suite.Equal(http.StatusOK, w.Result().StatusCode)
+	suite.JSONEq(marshal(suite.T(), server.Success{RowAffected: 3}), w.Body.String())
+	_, items, err := suite.DataClient.GetItems(ctx, "", 100, nil)
+	suite.NoError(err)
+	suite.Equal([]data.Item{
 		{
 			ItemId:     "1",
 			IsHidden:   false,
@@ -300,41 +305,37 @@ func TestMaster_ImportItems(t *testing.T) {
 	}, items)
 }
 
-func TestMaster_ImportFeedback(t *testing.T) {
-	s, cookie := newMockServer(t)
-	defer s.Close(t)
+func (suite *MasterAPITestSuite) TestImportFeedback() {
 	// send request
 	ctx := context.Background()
 	buf := bytes.NewBuffer(nil)
 	writer := multipart.NewWriter(buf)
 	file, err := writer.CreateFormFile("file", "feedback.jsonl")
-	assert.NoError(t, err)
+	suite.NoError(err)
 	_, err = file.Write([]byte(`{"FeedbackType":"click","UserId":"0","ItemId":"2","Timestamp":"0001-01-01 00:00:00 +0000 UTC"}
 {"FeedbackType":"read","UserId":"2","ItemId":"6","Timestamp":"0001-01-01 00:00:00 +0000 UTC"}
 {"FeedbackType":"share","UserId":"1","ItemId":"4","Timestamp":"0001-01-01 00:00:00 +0000 UTC"}`))
-	assert.NoError(t, err)
+	suite.NoError(err)
 	err = writer.Close()
-	assert.NoError(t, err)
+	suite.NoError(err)
 	req := httptest.NewRequest("POST", "https://example.com/", buf)
-	req.Header.Set("Cookie", cookie)
+	req.Header.Set("Cookie", suite.cookie)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	w := httptest.NewRecorder()
-	s.importExportFeedback(w, req)
+	suite.importExportFeedback(w, req)
 	// check
-	assert.Equal(t, http.StatusOK, w.Result().StatusCode)
-	assert.JSONEq(t, marshal(t, server.Success{RowAffected: 3}), w.Body.String())
-	_, feedback, err := s.DataClient.GetFeedback(ctx, "", 100, nil, lo.ToPtr(time.Now()))
-	assert.NoError(t, err)
-	assert.Equal(t, []data.Feedback{
+	suite.Equal(http.StatusOK, w.Result().StatusCode)
+	suite.JSONEq(marshal(suite.T(), server.Success{RowAffected: 3}), w.Body.String())
+	_, feedback, err := suite.DataClient.GetFeedback(ctx, "", 100, nil, lo.ToPtr(time.Now()))
+	suite.NoError(err)
+	suite.Equal([]data.Feedback{
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "2"}},
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "read", UserId: "2", ItemId: "6"}},
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "share", UserId: "1", ItemId: "4"}},
 	}, feedback)
 }
 
-func TestMaster_GetCluster(t *testing.T) {
-	s, cookie := newMockServer(t)
-	defer s.Close(t)
+func (suite *MasterAPITestSuite) TestGetCluster() {
 	// add nodes
 	serverNode := &meta.Node{
 		UUID:       "alan turnin",
@@ -350,45 +351,42 @@ func TestMaster_GetCluster(t *testing.T) {
 		Version:    "worker_version",
 		UpdateTime: time.Now().UTC(),
 	}
-	err := s.metaStore.UpdateNode(serverNode)
-	assert.NoError(t, err)
-	err = s.metaStore.UpdateNode(workerNode)
-	assert.NoError(t, err)
+	err := suite.metaStore.UpdateNode(serverNode)
+	suite.NoError(err)
+	err = suite.metaStore.UpdateNode(workerNode)
+	suite.NoError(err)
 	// get nodes
 	apitest.New().
-		Handler(s.handler).
+		Handler(suite.handler).
 		Get("/api/dashboard/cluster").
-		Header("Cookie", cookie).
-		Expect(t).
+		Header("Cookie", suite.cookie).
+		Expect(suite.T()).
 		Status(http.StatusOK).
-		Body(marshal(t, []*meta.Node{serverNode, workerNode})).
+		Body(marshal(suite.T(), []*meta.Node{serverNode, workerNode})).
 		End()
 }
 
-func TestMaster_GetStats(t *testing.T) {
-	s, cookie := newMockServer(t)
-	defer s.Close(t)
-
+func (suite *MasterAPITestSuite) TestGetStats() {
 	ctx := context.Background()
 	// set stats
-	s.rankingScore = ranking.Score{Precision: 0.1}
-	s.clickScore = click.Score{Precision: 0.2}
-	err := s.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.NumUsers), 123))
-	assert.NoError(t, err)
-	err = s.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.NumItems), 234))
-	assert.NoError(t, err)
-	err = s.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.NumValidPosFeedbacks), 345))
-	assert.NoError(t, err)
-	err = s.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.NumValidNegFeedbacks), 456))
-	assert.NoError(t, err)
+	suite.rankingScore = ranking.Score{Precision: 0.1}
+	suite.clickScore = click.Score{Precision: 0.2}
+	err := suite.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.NumUsers), 123))
+	suite.NoError(err)
+	err = suite.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.NumItems), 234))
+	suite.NoError(err)
+	err = suite.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.NumValidPosFeedbacks), 345))
+	suite.NoError(err)
+	err = suite.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.NumValidNegFeedbacks), 456))
+	suite.NoError(err)
 	// get stats
 	apitest.New().
-		Handler(s.handler).
+		Handler(suite.handler).
 		Get("/api/dashboard/stats").
-		Header("Cookie", cookie).
-		Expect(t).
+		Header("Cookie", suite.cookie).
+		Expect(suite.T()).
 		Status(http.StatusOK).
-		Body(marshal(t, Status{
+		Body(marshal(suite.T(), Status{
 			NumUsers:            123,
 			NumItems:            234,
 			NumValidPosFeedback: 345,
@@ -400,16 +398,13 @@ func TestMaster_GetStats(t *testing.T) {
 		End()
 }
 
-func TestMaster_GetRates(t *testing.T) {
-	s, cookie := newMockServer(t)
-	defer s.Close(t)
-
+func (suite *MasterAPITestSuite) TestGetRates() {
 	ctx := context.Background()
 	// write rates
-	s.Config.Recommend.DataSource.PositiveFeedbackTypes = []string{"a", "b"}
+	suite.Config.Recommend.DataSource.PositiveFeedbackTypes = []string{"a", "b"}
 	// This first measurement should be overwritten.
 	baseTimestamp := time.Now()
-	err := s.CacheClient.AddTimeSeriesPoints(ctx, []cache.TimeSeriesPoint{
+	err := suite.CacheClient.AddTimeSeriesPoints(ctx, []cache.TimeSeriesPoint{
 		{Name: cache.Key(PositiveFeedbackRate, "a"), Value: 100.0, Timestamp: baseTimestamp.Add(-2 * 24 * time.Hour)},
 		{Name: cache.Key(PositiveFeedbackRate, "a"), Value: 2.0, Timestamp: baseTimestamp.Add(-2 * 24 * time.Hour)},
 		{Name: cache.Key(PositiveFeedbackRate, "a"), Value: 2.0, Timestamp: baseTimestamp.Add(-1 * 24 * time.Hour)},
@@ -418,16 +413,16 @@ func TestMaster_GetRates(t *testing.T) {
 		{Name: cache.Key(PositiveFeedbackRate, "b"), Value: 20.0, Timestamp: baseTimestamp.Add(-1 * 24 * time.Hour)},
 		{Name: cache.Key(PositiveFeedbackRate, "b"), Value: 30.0, Timestamp: baseTimestamp.Add(-0 * 24 * time.Hour)},
 	})
-	assert.NoError(t, err)
+	suite.NoError(err)
 
 	// get rates
 	apitest.New().
-		Handler(s.handler).
+		Handler(suite.handler).
 		Get("/api/dashboard/rates").
-		Header("Cookie", cookie).
-		Expect(t).
+		Header("Cookie", suite.cookie).
+		Expect(suite.T()).
 		Status(http.StatusOK).
-		Body(marshal(t, map[string][]cache.TimeSeriesPoint{
+		Body(marshal(suite.T(), map[string][]cache.TimeSeriesPoint{
 			"a": {
 				{Name: cache.Key(PositiveFeedbackRate, "a"), Value: 2.0, Timestamp: baseTimestamp.Add(-2 * 24 * time.Hour)},
 				{Name: cache.Key(PositiveFeedbackRate, "a"), Value: 2.0, Timestamp: baseTimestamp.Add(-1 * 24 * time.Hour)},
@@ -442,27 +437,23 @@ func TestMaster_GetRates(t *testing.T) {
 		End()
 }
 
-func TestMaster_GetCategories(t *testing.T) {
-	s, cookie := newMockServer(t)
-	defer s.Close(t)
+func (suite *MasterAPITestSuite) TestGetCategories() {
 	ctx := context.Background()
 	// insert categories
-	err := s.CacheClient.SetSet(ctx, cache.ItemCategories, "a", "b", "c")
-	assert.NoError(t, err)
+	err := suite.CacheClient.SetSet(ctx, cache.ItemCategories, "a", "b", "c")
+	suite.NoError(err)
 	// get categories
 	apitest.New().
-		Handler(s.handler).
+		Handler(suite.handler).
 		Get("/api/dashboard/categories").
-		Header("Cookie", cookie).
-		Expect(t).
+		Header("Cookie", suite.cookie).
+		Expect(suite.T()).
 		Status(http.StatusOK).
-		Body(marshal(t, []string{"a", "b", "c"})).
+		Body(marshal(suite.T(), []string{"a", "b", "c"})).
 		End()
 }
 
-func TestMaster_GetUsers(t *testing.T) {
-	s, cookie := newMockServer(t)
-	defer s.Close(t)
+func (suite *MasterAPITestSuite) TestGetUsers() {
 	ctx := context.Background()
 	// add users
 	users := []User{
@@ -471,39 +462,37 @@ func TestMaster_GetUsers(t *testing.T) {
 		{data.User{UserId: "2"}, time.Date(2002, 1, 1, 1, 1, 1, 1, time.UTC), time.Date(2022, 1, 1, 1, 1, 1, 1, time.UTC)},
 	}
 	for _, user := range users {
-		err := s.DataClient.BatchInsertUsers(ctx, []data.User{user.User})
-		assert.NoError(t, err)
-		err = s.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastModifyUserTime, user.UserId), user.LastActiveTime))
-		assert.NoError(t, err)
-		err = s.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastUpdateUserRecommendTime, user.UserId), user.LastUpdateTime))
-		assert.NoError(t, err)
+		err := suite.DataClient.BatchInsertUsers(ctx, []data.User{user.User})
+		suite.NoError(err)
+		err = suite.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastModifyUserTime, user.UserId), user.LastActiveTime))
+		suite.NoError(err)
+		err = suite.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastUpdateUserRecommendTime, user.UserId), user.LastUpdateTime))
+		suite.NoError(err)
 	}
 	// get users
 	apitest.New().
-		Handler(s.handler).
+		Handler(suite.handler).
 		Get("/api/dashboard/users").
-		Header("Cookie", cookie).
-		Expect(t).
+		Header("Cookie", suite.cookie).
+		Expect(suite.T()).
 		Status(http.StatusOK).
-		Body(marshal(t, UserIterator{
+		Body(marshal(suite.T(), UserIterator{
 			Cursor: "",
 			Users:  users,
 		})).
 		End()
 	// get a user
 	apitest.New().
-		Handler(s.handler).
+		Handler(suite.handler).
 		Get("/api/dashboard/user/1").
-		Header("Cookie", cookie).
-		Expect(t).
+		Header("Cookie", suite.cookie).
+		Expect(suite.T()).
 		Status(http.StatusOK).
-		Body(marshal(t, users[1])).
+		Body(marshal(suite.T(), users[1])).
 		End()
 }
 
-func TestServer_SearchDocumentsOfItems(t *testing.T) {
-	s, cookie := newMockServer(t)
-	defer s.Close(t)
+func (suite *MasterAPITestSuite) TestSearchDocumentsOfItems() {
 	type ListOperator struct {
 		Name       string
 		Collection string
@@ -521,7 +510,7 @@ func TestServer_SearchDocumentsOfItems(t *testing.T) {
 		{"PopularItemsCategory", cache.NonPersonalized, cache.Popular, "*", "/api/dashboard/non-personalized/popular/"},
 	}
 	for i, operator := range operators {
-		t.Run(operator.Name, func(t *testing.T) {
+		suite.T().Run(operator.Name, func(t *testing.T) {
 			// Put scores
 			scores := []cache.Score{
 				{Id: strconv.Itoa(i) + "0", Score: 100, Categories: []string{operator.Category}},
@@ -530,27 +519,27 @@ func TestServer_SearchDocumentsOfItems(t *testing.T) {
 				{Id: strconv.Itoa(i) + "3", Score: 97, Categories: []string{operator.Category}},
 				{Id: strconv.Itoa(i) + "4", Score: 96, Categories: []string{operator.Category}},
 			}
-			err := s.CacheClient.AddScores(ctx, operator.Collection, operator.Subset, scores)
-			assert.NoError(t, err)
+			err := suite.CacheClient.AddScores(ctx, operator.Collection, operator.Subset, scores)
+			suite.NoError(err)
 			items := make([]ScoredItem, 0)
 			for _, score := range scores {
 				items = append(items, ScoredItem{Item: data.Item{ItemId: score.Id}, Score: score.Score})
-				err = s.DataClient.BatchInsertItems(ctx, []data.Item{{ItemId: score.Id}})
-				assert.NoError(t, err)
+				err = suite.DataClient.BatchInsertItems(ctx, []data.Item{{ItemId: score.Id}})
+				suite.NoError(err)
 			}
 			// hide item
 			apitest.New().
-				Handler(s.handler).
+				Handler(suite.handler).
 				Patch("/api/item/"+strconv.Itoa(i)+"3").
-				Header("Cookie", cookie).
+				Header("Cookie", suite.cookie).
 				JSON(data.ItemPatch{IsHidden: proto.Bool(true)}).
 				Expect(t).
 				Status(http.StatusOK).
 				End()
 			apitest.New().
-				Handler(s.handler).
+				Handler(suite.handler).
 				Get(operator.Get).
-				Header("Cookie", cookie).
+				Header("Cookie", suite.cookie).
 				Query("category", operator.Category).
 				Expect(t).
 				Status(http.StatusOK).
@@ -560,9 +549,7 @@ func TestServer_SearchDocumentsOfItems(t *testing.T) {
 	}
 }
 
-func TestServer_SearchDocumentsOfUsers(t *testing.T) {
-	s, cookie := newMockServer(t)
-	defer s.Close(t)
+func (suite *MasterAPITestSuite) TestSearchDocumentsOfUsers() {
 	type ListOperator struct {
 		Prefix string
 		Label  string
@@ -573,7 +560,7 @@ func TestServer_SearchDocumentsOfUsers(t *testing.T) {
 		{cache.UserToUser, cache.Key(cache.Neighbors, "0"), "/api/dashboard/user-to-user/neighbors/0/"},
 	}
 	for _, operator := range operators {
-		t.Logf("test RESTful API: %v", operator.Get)
+		suite.T().Logf("test RESTful API: %v", operator.Get)
 		// Put scores
 		scores := []cache.Score{
 			{Id: "0", Score: 100, Categories: []string{""}},
@@ -582,28 +569,26 @@ func TestServer_SearchDocumentsOfUsers(t *testing.T) {
 			{Id: "3", Score: 97, Categories: []string{""}},
 			{Id: "4", Score: 96, Categories: []string{""}},
 		}
-		err := s.CacheClient.AddScores(ctx, operator.Prefix, operator.Label, scores)
-		assert.NoError(t, err)
+		err := suite.CacheClient.AddScores(ctx, operator.Prefix, operator.Label, scores)
+		suite.NoError(err)
 		users := make([]ScoreUser, 0)
 		for _, score := range scores {
 			users = append(users, ScoreUser{User: data.User{UserId: score.Id}, Score: score.Score})
-			err = s.DataClient.BatchInsertUsers(ctx, []data.User{{UserId: score.Id}})
-			assert.NoError(t, err)
+			err = suite.DataClient.BatchInsertUsers(ctx, []data.User{{UserId: score.Id}})
+			suite.NoError(err)
 		}
 		apitest.New().
-			Handler(s.handler).
+			Handler(suite.handler).
 			Get(operator.Get).
-			Header("Cookie", cookie).
-			Expect(t).
+			Header("Cookie", suite.cookie).
+			Expect(suite.T()).
 			Status(http.StatusOK).
-			Body(marshal(t, users)).
+			Body(marshal(suite.T(), users)).
 			End()
 	}
 }
 
-func TestServer_Feedback(t *testing.T) {
-	s, cookie := newMockServer(t)
-	defer s.Close(t)
+func (suite *MasterAPITestSuite) TestFeedback() {
 	ctx := context.Background()
 	// insert feedback
 	feedback := []Feedback{
@@ -614,25 +599,23 @@ func TestServer_Feedback(t *testing.T) {
 		{FeedbackType: "click", UserId: "0", Item: data.Item{ItemId: "8"}},
 	}
 	for _, v := range feedback {
-		err := s.DataClient.BatchInsertFeedback(ctx, []data.Feedback{{
+		err := suite.DataClient.BatchInsertFeedback(ctx, []data.Feedback{{
 			FeedbackKey: data.FeedbackKey{FeedbackType: v.FeedbackType, UserId: v.UserId, ItemId: v.Item.ItemId},
 		}}, true, true, true)
-		assert.NoError(t, err)
+		suite.NoError(err)
 	}
 	// get feedback
 	apitest.New().
-		Handler(s.handler).
+		Handler(suite.handler).
 		Get("/api/dashboard/user/0/feedback/click").
-		Header("Cookie", cookie).
-		Expect(t).
+		Header("Cookie", suite.cookie).
+		Expect(suite.T()).
 		Status(http.StatusOK).
-		Body(marshal(t, feedback)).
+		Body(marshal(suite.T(), feedback)).
 		End()
 }
 
-func TestServer_GetRecommends(t *testing.T) {
-	s, cookie := newMockServer(t)
-	defer s.Close(t)
+func (suite *MasterAPITestSuite) TestGetRecommends() {
 	// inset recommendation
 	itemIds := []cache.Score{
 		{Id: "1", Score: 99, Categories: []string{""}},
@@ -645,150 +628,142 @@ func TestServer_GetRecommends(t *testing.T) {
 		{Id: "8", Score: 92, Categories: []string{""}},
 	}
 	ctx := context.Background()
-	err := s.CacheClient.AddScores(ctx, cache.OfflineRecommend, "0", itemIds)
-	assert.NoError(t, err)
+	err := suite.CacheClient.AddScores(ctx, cache.OfflineRecommend, "0", itemIds)
+	suite.NoError(err)
 	// insert feedback
 	feedback := []data.Feedback{
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "2"}},
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "4"}},
 	}
-	err = s.DataClient.BatchInsertFeedback(ctx, feedback, true, true, true)
-	assert.NoError(t, err)
+	err = suite.DataClient.BatchInsertFeedback(ctx, feedback, true, true, true)
+	suite.NoError(err)
 	// insert items
 	for _, item := range itemIds {
-		err = s.DataClient.BatchInsertItems(ctx, []data.Item{{ItemId: item.Id}})
-		assert.NoError(t, err)
+		err = suite.DataClient.BatchInsertItems(ctx, []data.Item{{ItemId: item.Id}})
+		suite.NoError(err)
 	}
 	apitest.New().
-		Handler(s.handler).
+		Handler(suite.handler).
 		Get("/api/dashboard/recommend/0/offline").
-		Header("Cookie", cookie).
-		Expect(t).
+		Header("Cookie", suite.cookie).
+		Expect(suite.T()).
 		Status(http.StatusOK).
-		Body(marshal(t, []data.Item{
+		Body(marshal(suite.T(), []data.Item{
 			{ItemId: "1"}, {ItemId: "3"}, {ItemId: "5"}, {ItemId: "6"}, {ItemId: "7"}, {ItemId: "8"},
 		})).
 		End()
 
-	s.Config.Recommend.Online.FallbackRecommend = []string{"collaborative", "item_based", "user_based", "latest", "popular"}
+	suite.Config.Recommend.Online.FallbackRecommend = []string{"collaborative", "item_based", "user_based", "latest", "popular"}
 	apitest.New().
-		Handler(s.handler).
+		Handler(suite.handler).
 		Get("/api/dashboard/recommend/0/_").
-		Header("Cookie", cookie).
-		Expect(t).
+		Header("Cookie", suite.cookie).
+		Expect(suite.T()).
 		Status(http.StatusOK).
-		Body(marshal(t, []data.Item{
+		Body(marshal(suite.T(), []data.Item{
 			{ItemId: "1"}, {ItemId: "3"}, {ItemId: "5"}, {ItemId: "6"}, {ItemId: "7"}, {ItemId: "8"},
 		})).
 		End()
 }
 
-func TestMaster_Purge(t *testing.T) {
-	s, cookie := newMockServer(t)
-	defer s.Close(t)
-
+func (suite *MasterAPITestSuite) TestPurge() {
 	ctx := context.Background()
 	// insert data
-	err := s.CacheClient.Set(ctx, cache.String("key", "value"))
-	assert.NoError(t, err)
-	ret, err := s.CacheClient.Get(ctx, "key").String()
-	assert.NoError(t, err)
-	assert.Equal(t, "value", ret)
+	err := suite.CacheClient.Set(ctx, cache.String("key", "value"))
+	suite.NoError(err)
+	ret, err := suite.CacheClient.Get(ctx, "key").String()
+	suite.NoError(err)
+	suite.Equal("value", ret)
 
-	err = s.CacheClient.AddSet(ctx, "set", "a", "b", "c")
-	assert.NoError(t, err)
-	set, err := s.CacheClient.GetSet(ctx, "set")
-	assert.NoError(t, err)
-	assert.ElementsMatch(t, []string{"a", "b", "c"}, set)
+	err = suite.CacheClient.AddSet(ctx, "set", "a", "b", "c")
+	suite.NoError(err)
+	set, err := suite.CacheClient.GetSet(ctx, "set")
+	suite.NoError(err)
+	suite.ElementsMatch([]string{"a", "b", "c"}, set)
 
-	err = s.CacheClient.AddScores(ctx, "sorted", "", []cache.Score{
+	err = suite.CacheClient.AddScores(ctx, "sorted", "", []cache.Score{
 		{Id: "a", Score: 1, Categories: []string{""}},
 		{Id: "b", Score: 2, Categories: []string{""}},
 		{Id: "c", Score: 3, Categories: []string{""}}})
-	assert.NoError(t, err)
-	z, err := s.CacheClient.SearchScores(ctx, "sorted", "", []string{""}, 0, -1)
-	assert.NoError(t, err)
-	assert.ElementsMatch(t, []cache.Score{
+	suite.NoError(err)
+	z, err := suite.CacheClient.SearchScores(ctx, "sorted", "", []string{""}, 0, -1)
+	suite.NoError(err)
+	suite.ElementsMatch([]cache.Score{
 		{Id: "a", Score: 1, Categories: []string{""}},
 		{Id: "b", Score: 2, Categories: []string{""}},
 		{Id: "c", Score: 3, Categories: []string{""}}}, z)
 
-	err = s.DataClient.BatchInsertFeedback(ctx, lo.Map(lo.Range(100), func(t int, i int) data.Feedback {
+	err = suite.DataClient.BatchInsertFeedback(ctx, lo.Map(lo.Range(100), func(t int, i int) data.Feedback {
 		return data.Feedback{FeedbackKey: data.FeedbackKey{
 			FeedbackType: "click",
 			UserId:       strconv.Itoa(t),
 			ItemId:       strconv.Itoa(t),
 		}}
 	}), true, true, true)
-	assert.NoError(t, err)
-	_, users, err := s.DataClient.GetUsers(ctx, "", 100)
-	assert.NoError(t, err)
-	assert.Equal(t, 100, len(users))
-	_, items, err := s.DataClient.GetItems(ctx, "", 100, nil)
-	assert.NoError(t, err)
-	assert.Equal(t, 100, len(items))
-	_, feedbacks, err := s.DataClient.GetFeedback(ctx, "", 100, nil, lo.ToPtr(time.Now()))
-	assert.NoError(t, err)
-	assert.Equal(t, 100, len(feedbacks))
+	suite.NoError(err)
+	_, users, err := suite.DataClient.GetUsers(ctx, "", 100)
+	suite.NoError(err)
+	suite.Equal(100, len(users))
+	_, items, err := suite.DataClient.GetItems(ctx, "", 100, nil)
+	suite.NoError(err)
+	suite.Equal(100, len(items))
+	_, feedbacks, err := suite.DataClient.GetFeedback(ctx, "", 100, nil, lo.ToPtr(time.Now()))
+	suite.NoError(err)
+	suite.Equal(100, len(feedbacks))
 
 	// purge data
 	req := httptest.NewRequest("POST", "https://example.com/",
 		strings.NewReader("check_list=delete_users,delete_items,delete_feedback,delete_cache"))
-	req.Header.Set("Cookie", cookie)
+	req.Header.Set("Cookie", suite.cookie)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	w := httptest.NewRecorder()
-	s.purge(w, req)
-	assert.Equal(t, http.StatusOK, w.Code)
+	suite.purge(w, req)
+	suite.Equal(http.StatusOK, w.Code)
 
-	_, err = s.CacheClient.Get(ctx, "key").String()
-	assert.ErrorIs(t, err, errors.NotFound)
-	set, err = s.CacheClient.GetSet(ctx, "set")
-	assert.NoError(t, err)
-	assert.Empty(t, set)
-	z, err = s.CacheClient.SearchScores(ctx, "sorted", "", []string{""}, 0, -1)
-	assert.NoError(t, err)
-	assert.Empty(t, z)
+	_, err = suite.CacheClient.Get(ctx, "key").String()
+	suite.ErrorIs(err, errors.NotFound)
+	set, err = suite.CacheClient.GetSet(ctx, "set")
+	suite.NoError(err)
+	suite.Empty(set)
+	z, err = suite.CacheClient.SearchScores(ctx, "sorted", "", []string{""}, 0, -1)
+	suite.NoError(err)
+	suite.Empty(z)
 
-	_, users, err = s.DataClient.GetUsers(ctx, "", 100)
-	assert.NoError(t, err)
-	assert.Empty(t, users)
-	_, items, err = s.DataClient.GetItems(ctx, "", 100, nil)
-	assert.NoError(t, err)
-	assert.Empty(t, items)
-	_, feedbacks, err = s.DataClient.GetFeedback(ctx, "", 100, nil, lo.ToPtr(time.Now()))
-	assert.NoError(t, err)
-	assert.Empty(t, feedbacks)
+	_, users, err = suite.DataClient.GetUsers(ctx, "", 100)
+	suite.NoError(err)
+	suite.Empty(users)
+	_, items, err = suite.DataClient.GetItems(ctx, "", 100, nil)
+	suite.NoError(err)
+	suite.Empty(items)
+	_, feedbacks, err = suite.DataClient.GetFeedback(ctx, "", 100, nil, lo.ToPtr(time.Now()))
+	suite.NoError(err)
+	suite.Empty(feedbacks)
 }
 
-func TestMaster_GetConfig(t *testing.T) {
-	s, cookie := newMockServer(t)
-	defer s.Close(t)
-
+func (suite *MasterAPITestSuite) TestGetConfig() {
 	apitest.New().
-		Handler(s.handler).
+		Handler(suite.handler).
 		Get("/api/dashboard/config").
-		Header("Cookie", cookie).
-		Expect(t).
+		Header("Cookie", suite.cookie).
+		Expect(suite.T()).
 		Status(http.StatusOK).
-		Body(marshal(t, formatConfig(convertToMapStructure(t, s.Config)))).
+		Body(marshal(suite.T(), formatConfig(convertToMapStructure(suite.T(), suite.Config)))).
 		End()
 
-	s.Config.Master.DashboardRedacted = true
-	redactedConfig := formatConfig(convertToMapStructure(t, s.Config))
+	suite.Config.Master.DashboardRedacted = true
+	redactedConfig := formatConfig(convertToMapStructure(suite.T(), suite.Config))
 	delete(redactedConfig, "database")
 	apitest.New().
-		Handler(s.handler).
+		Handler(suite.handler).
 		Get("/api/dashboard/config").
-		Header("Cookie", cookie).
-		Expect(t).
+		Header("Cookie", suite.cookie).
+		Expect(suite.T()).
 		Status(http.StatusOK).
-		Body(marshal(t, redactedConfig)).
+		Body(marshal(suite.T(), redactedConfig)).
 		End()
 }
 
-func TestDumpAndRestore(t *testing.T) {
-	s, cookie := newMockServer(t)
-	defer s.Close(t)
+func (suite *MasterAPITestSuite) TestDumpAndRestore() {
 	ctx := context.Background()
 	// insert users
 	users := make([]data.User, batchSize+1)
@@ -798,8 +773,8 @@ func TestDumpAndRestore(t *testing.T) {
 			Labels: map[string]any{"a": fmt.Sprintf("%d", 2*i+1), "b": fmt.Sprintf("%d", 2*i+2)},
 		}
 	}
-	err := s.DataClient.BatchInsertUsers(ctx, users)
-	assert.NoError(t, err)
+	err := suite.DataClient.BatchInsertUsers(ctx, users)
+	suite.NoError(err)
 	// insert items
 	items := make([]data.Item, batchSize+1)
 	for i := range items {
@@ -808,8 +783,8 @@ func TestDumpAndRestore(t *testing.T) {
 			Labels: map[string]any{"a": fmt.Sprintf("%d", 2*i+1), "b": fmt.Sprintf("%d", 2*i+2)},
 		}
 	}
-	err = s.DataClient.BatchInsertItems(ctx, items)
-	assert.NoError(t, err)
+	err = suite.DataClient.BatchInsertItems(ctx, items)
+	suite.NoError(err)
 	// insert feedback
 	feedback := make([]data.Feedback, batchSize+1)
 	for i := range feedback {
@@ -821,47 +796,45 @@ func TestDumpAndRestore(t *testing.T) {
 			},
 		}
 	}
-	err = s.DataClient.BatchInsertFeedback(ctx, feedback, true, true, true)
-	assert.NoError(t, err)
+	err = suite.DataClient.BatchInsertFeedback(ctx, feedback, true, true, true)
+	suite.NoError(err)
 
 	// dump data
 	req := httptest.NewRequest("GET", "https://example.com/", nil)
-	req.Header.Set("Cookie", cookie)
+	req.Header.Set("Cookie", suite.cookie)
 	w := httptest.NewRecorder()
-	s.dump(w, req)
-	assert.Equal(t, http.StatusOK, w.Code)
+	suite.dump(w, req)
+	suite.Equal(http.StatusOK, w.Code)
 
 	// restore data
-	err = s.DataClient.Purge()
-	assert.NoError(t, err)
+	err = suite.DataClient.Purge()
+	suite.NoError(err)
 	req = httptest.NewRequest("POST", "https://example.com/", bytes.NewReader(w.Body.Bytes()))
-	req.Header.Set("Cookie", cookie)
+	req.Header.Set("Cookie", suite.cookie)
 	req.Header.Set("Content-Type", "application/octet-stream")
 	w = httptest.NewRecorder()
-	s.restore(w, req)
-	assert.Equal(t, http.StatusOK, w.Code)
+	suite.restore(w, req)
+	suite.Equal(http.StatusOK, w.Code)
 
 	// check data
-	_, returnUsers, err := s.DataClient.GetUsers(ctx, "", len(users))
-	assert.NoError(t, err)
-	if assert.Equal(t, len(users), len(returnUsers)) {
-		assert.Equal(t, users, returnUsers)
+	_, returnUsers, err := suite.DataClient.GetUsers(ctx, "", len(users))
+	suite.NoError(err)
+	if suite.Equal(len(users), len(returnUsers)) {
+		suite.Equal(users, returnUsers)
 	}
-	_, returnItems, err := s.DataClient.GetItems(ctx, "", len(items), nil)
-	assert.NoError(t, err)
-	if assert.Equal(t, len(items), len(returnItems)) {
-		assert.Equal(t, items, returnItems)
+	_, returnItems, err := suite.DataClient.GetItems(ctx, "", len(items), nil)
+	suite.NoError(err)
+	if suite.Equal(len(items), len(returnItems)) {
+		suite.Equal(items, returnItems)
 	}
-	_, returnFeedback, err := s.DataClient.GetFeedback(ctx, "", len(feedback), nil, lo.ToPtr(time.Now()))
-	assert.NoError(t, err)
-	if assert.Equal(t, len(feedback), len(returnFeedback)) {
-		assert.Equal(t, feedback, returnFeedback)
+	_, returnFeedback, err := suite.DataClient.GetFeedback(ctx, "", len(feedback), nil, lo.ToPtr(time.Now()))
+	suite.NoError(err)
+	if suite.Equal(len(feedback), len(returnFeedback)) {
+		suite.Equal(feedback, returnFeedback)
 	}
 }
 
-func TestExportAndImport(t *testing.T) {
-	s, cookie := newMockServer(t)
-	defer s.Close(t)
+func (suite *MasterAPITestSuite) TestExportAndImport() {
 	ctx := context.Background()
 	// insert users
 	users := make([]data.User, batchSize+1)
@@ -871,8 +844,8 @@ func TestExportAndImport(t *testing.T) {
 			Labels: map[string]any{"a": fmt.Sprintf("%d", 2*i+1), "b": fmt.Sprintf("%d", 2*i+2)},
 		}
 	}
-	err := s.DataClient.BatchInsertUsers(ctx, users)
-	assert.NoError(t, err)
+	err := suite.DataClient.BatchInsertUsers(ctx, users)
+	suite.NoError(err)
 	// insert items
 	items := make([]data.Item, batchSize+1)
 	for i := range items {
@@ -881,8 +854,8 @@ func TestExportAndImport(t *testing.T) {
 			Labels: map[string]any{"a": fmt.Sprintf("%d", 2*i+1), "b": fmt.Sprintf("%d", 2*i+2)},
 		}
 	}
-	err = s.DataClient.BatchInsertItems(ctx, items)
-	assert.NoError(t, err)
+	err = suite.DataClient.BatchInsertItems(ctx, items)
+	suite.NoError(err)
 	// insert feedback
 	feedback := make([]data.Feedback, batchSize+1)
 	for i := range feedback {
@@ -894,93 +867,110 @@ func TestExportAndImport(t *testing.T) {
 			},
 		}
 	}
-	err = s.DataClient.BatchInsertFeedback(ctx, feedback, true, true, true)
-	assert.NoError(t, err)
+	err = suite.DataClient.BatchInsertFeedback(ctx, feedback, true, true, true)
+	suite.NoError(err)
 
 	// export users
 	req := httptest.NewRequest("GET", "https://example.com/", nil)
-	req.Header.Set("Cookie", cookie)
+	req.Header.Set("Cookie", suite.cookie)
 	w := httptest.NewRecorder()
-	s.importExportUsers(w, req)
-	assert.Equal(t, http.StatusOK, w.Code)
+	suite.importExportUsers(w, req)
+	suite.Equal(http.StatusOK, w.Code)
 	usersData := w.Body.Bytes()
 	// export items
 	req = httptest.NewRequest("GET", "https://example.com/", nil)
-	req.Header.Set("Cookie", cookie)
+	req.Header.Set("Cookie", suite.cookie)
 	w = httptest.NewRecorder()
-	s.importExportItems(w, req)
-	assert.Equal(t, http.StatusOK, w.Code)
+	suite.importExportItems(w, req)
+	suite.Equal(http.StatusOK, w.Code)
 	itemsData := w.Body.Bytes()
 	// export feedback
 	req = httptest.NewRequest("GET", "https://example.com/", nil)
-	req.Header.Set("Cookie", cookie)
+	req.Header.Set("Cookie", suite.cookie)
 	w = httptest.NewRecorder()
-	s.importExportFeedback(w, req)
-	assert.Equal(t, http.StatusOK, w.Code)
+	suite.importExportFeedback(w, req)
+	suite.Equal(http.StatusOK, w.Code)
 	feedbackData := w.Body.Bytes()
 
-	err = s.DataClient.Purge()
-	assert.NoError(t, err)
+	err = suite.DataClient.Purge()
+	suite.NoError(err)
 	// import users
 	buf := bytes.NewBuffer(nil)
 	writer := multipart.NewWriter(buf)
 	file, err := writer.CreateFormFile("file", "users.jsonl")
-	assert.NoError(t, err)
+	suite.NoError(err)
 	_, err = file.Write(usersData)
-	assert.NoError(t, err)
+	suite.NoError(err)
 	err = writer.Close()
-	assert.NoError(t, err)
+	suite.NoError(err)
 	req = httptest.NewRequest("POST", "https://example.com/", buf)
-	req.Header.Set("Cookie", cookie)
+	req.Header.Set("Cookie", suite.cookie)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	w = httptest.NewRecorder()
-	s.importExportUsers(w, req)
-	assert.Equal(t, http.StatusOK, w.Code)
+	suite.importExportUsers(w, req)
+	suite.Equal(http.StatusOK, w.Code)
 	// import items
 	buf = bytes.NewBuffer(nil)
 	writer = multipart.NewWriter(buf)
 	file, err = writer.CreateFormFile("file", "items.jsonl")
-	assert.NoError(t, err)
+	suite.NoError(err)
 	_, err = file.Write(itemsData)
-	assert.NoError(t, err)
+	suite.NoError(err)
 	err = writer.Close()
-	assert.NoError(t, err)
+	suite.NoError(err)
 	req = httptest.NewRequest("POST", "https://example.com/", buf)
-	req.Header.Set("Cookie", cookie)
+	req.Header.Set("Cookie", suite.cookie)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	w = httptest.NewRecorder()
-	s.importExportItems(w, req)
-	assert.Equal(t, http.StatusOK, w.Code)
+	suite.importExportItems(w, req)
+	suite.Equal(http.StatusOK, w.Code)
 	// import feedback
 	buf = bytes.NewBuffer(nil)
 	writer = multipart.NewWriter(buf)
 	file, err = writer.CreateFormFile("file", "feedback.jsonl")
-	assert.NoError(t, err)
+	suite.NoError(err)
 	_, err = file.Write(feedbackData)
-	assert.NoError(t, err)
+	suite.NoError(err)
 	err = writer.Close()
-	assert.NoError(t, err)
+	suite.NoError(err)
 	req = httptest.NewRequest("POST", "https://example.com/", buf)
-	req.Header.Set("Cookie", cookie)
+	req.Header.Set("Cookie", suite.cookie)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	w = httptest.NewRecorder()
-	s.importExportFeedback(w, req)
-	assert.Equal(t, http.StatusOK, w.Code)
+	suite.importExportFeedback(w, req)
+	suite.Equal(http.StatusOK, w.Code)
 
 	// check data
-	_, returnUsers, err := s.DataClient.GetUsers(ctx, "", len(users))
-	assert.NoError(t, err)
-	if assert.Equal(t, len(users), len(returnUsers)) {
-		assert.Equal(t, users, returnUsers)
+	_, returnUsers, err := suite.DataClient.GetUsers(ctx, "", len(users))
+	suite.NoError(err)
+	if suite.Equal(len(users), len(returnUsers)) {
+		suite.Equal(users, returnUsers)
 	}
-	_, returnItems, err := s.DataClient.GetItems(ctx, "", len(items), nil)
-	assert.NoError(t, err)
-	if assert.Equal(t, len(items), len(returnItems)) {
-		assert.Equal(t, items, returnItems)
+	_, returnItems, err := suite.DataClient.GetItems(ctx, "", len(items), nil)
+	suite.NoError(err)
+	if suite.Equal(len(items), len(returnItems)) {
+		suite.Equal(items, returnItems)
 	}
-	_, returnFeedback, err := s.DataClient.GetFeedback(ctx, "", len(feedback), nil, lo.ToPtr(time.Now()))
-	assert.NoError(t, err)
-	if assert.Equal(t, len(feedback), len(returnFeedback)) {
-		assert.Equal(t, feedback, returnFeedback)
+	_, returnFeedback, err := suite.DataClient.GetFeedback(ctx, "", len(feedback), nil, lo.ToPtr(time.Now()))
+	suite.NoError(err)
+	if suite.Equal(len(feedback), len(returnFeedback)) {
+		suite.Equal(feedback, returnFeedback)
 	}
+}
+
+func (suite *MasterAPITestSuite) TestChat() {
+	content := "In my younger and more vulnerable years my father gave me some advice that I've been turning over in" +
+		" my mind ever since. \"Whenever you feel like criticizing any one,\" he told me, \" just remember that all " +
+		"the people in this world haven't had the advantages that you've had.\""
+	buf := strings.NewReader(content)
+	req := httptest.NewRequest("POST", "https://example.com/", buf)
+	req.Header.Set("Cookie", suite.cookie)
+	w := httptest.NewRecorder()
+	suite.chat(w, req)
+	suite.Equal(http.StatusOK, w.Code, w.Body.String())
+	suite.Equal(content, w.Body.String())
+}
+
+func TestMasterAPI(t *testing.T) {
+	suite.Run(t, new(MasterAPITestSuite))
 }
