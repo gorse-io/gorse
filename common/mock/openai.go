@@ -29,8 +29,6 @@ type OpenAIServer struct {
 	httpServer *http.Server
 	authToken  string
 	ready      chan struct{}
-
-	mockEmbeddings []float32
 }
 
 func NewOpenAIServer() *OpenAIServer {
@@ -81,10 +79,6 @@ func (s *OpenAIServer) Close() error {
 	return s.httpServer.Close()
 }
 
-func (s *OpenAIServer) Embeddings(embeddings []float32) {
-	s.mockEmbeddings = embeddings
-}
-
 func (s *OpenAIServer) chatCompletion(req *restful.Request, resp *restful.Response) {
 	var r openai.ChatCompletionRequest
 	err := req.ReadEntity(&r)
@@ -128,7 +122,7 @@ func (s *OpenAIServer) embeddings(req *restful.Request, resp *restful.Response) 
 	}
 	_ = resp.WriteEntity(openai.EmbeddingResponse{
 		Data: []openai.Embedding{{
-			Embedding: s.mockEmbeddings,
+			Embedding: make([]float32, 1024),
 		}},
 	})
 }

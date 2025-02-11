@@ -97,7 +97,6 @@ func (suite *OpenAITestSuite) TestChatCompletionStream() {
 }
 
 func (suite *OpenAITestSuite) TestEmbeddings() {
-	suite.server.Embeddings([]float32{1, 2, 3})
 	resp, err := suite.client.CreateEmbeddings(
 		context.Background(),
 		openai.EmbeddingRequest{
@@ -106,7 +105,7 @@ func (suite *OpenAITestSuite) TestEmbeddings() {
 		},
 	)
 	suite.NoError(err)
-	suite.Equal([]float32{1, 2, 3}, resp.Data[0].Embedding)
+	suite.Equal(make([]float32, 1024), resp.Data[0].Embedding)
 }
 
 func TestOpenAITestSuite(t *testing.T) {
