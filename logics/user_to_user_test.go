@@ -21,7 +21,6 @@ import (
 
 	"github.com/stretchr/testify/suite"
 	"github.com/zhenghaoz/gorse/dataset"
-	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
 )
 
@@ -45,12 +44,7 @@ func (suite *UserToUserTestSuite) TestEmbedding() {
 		}, nil)
 	}
 
-	var scores []cache.Score
-	user2user.PopAll(func(userId string, score []cache.Score) {
-		if userId == "0" {
-			scores = score
-		}
-	})
+	scores := user2user.PopAll(0)
 	suite.Len(scores, 10)
 	for i := 1; i <= 10; i++ {
 		suite.Equal(strconv.Itoa(i), scores[i-1].Id)
@@ -79,12 +73,7 @@ func (suite *UserToUserTestSuite) TestTags() {
 		}, nil)
 	}
 
-	var scores []cache.Score
-	user2user.PopAll(func(userId string, score []cache.Score) {
-		if userId == "0" {
-			scores = score
-		}
-	})
+	scores := user2user.PopAll(0)
 	suite.Len(scores, 10)
 	for i := 1; i <= 10; i++ {
 		suite.Equal(strconv.Itoa(i), scores[i-1].Id)
@@ -108,12 +97,7 @@ func (suite *UserToUserTestSuite) TestItems() {
 		user2user.Push(&data.User{UserId: strconv.Itoa(i)}, feedback)
 	}
 
-	var scores []cache.Score
-	user2user.PopAll(func(userId string, score []cache.Score) {
-		if userId == "0" {
-			scores = score
-		}
-	})
+	scores := user2user.PopAll(0)
 	suite.Len(scores, 10)
 	for i := 1; i <= 10; i++ {
 		suite.Equal(strconv.Itoa(i), scores[i-1].Id)
@@ -146,15 +130,9 @@ func (suite *UserToUserTestSuite) TestAuto() {
 		user2user.Push(user, feedback)
 	}
 
-	var scores0, scores1 []cache.Score
-	user2user.PopAll(func(userId string, score []cache.Score) {
-		if userId == "0" {
-			scores0 = score
-		} else if userId == "1" {
-			scores1 = score
-		}
-	})
+	scores0 := user2user.PopAll(0)
 	suite.Len(scores0, 10)
+	scores1 := user2user.PopAll(1)
 	suite.Len(scores1, 10)
 }
 

@@ -42,7 +42,7 @@ type ItemToItemOptions struct {
 type ItemToItem interface {
 	Items() []*data.Item
 	Push(item *data.Item, feedback []dataset.ID)
-	PopAll(callback func(itemId string, score []cache.Score))
+	PopAll(i int) []cache.Score
 }
 
 func NewItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time, opts *ItemToItemOptions) (ItemToItem, error) {
@@ -82,22 +82,20 @@ func (b *baseItemToItem[T]) Items() []*data.Item {
 	return b.items
 }
 
-func (b *baseItemToItem[T]) PopAll(callback func(itemId string, score []cache.Score)) {
-	for index, item := range b.items {
-		scores, err := b.index.SearchIndex(index, b.n+1, true)
-		if err != nil {
-			log.Logger().Error("failed to search index", zap.Error(err))
-			return
-		}
-		callback(item.ItemId, lo.Map(scores, func(v lo.Tuple2[int, float32], _ int) cache.Score {
-			return cache.Score{
-				Id:         b.items[v.A].ItemId,
-				Categories: b.items[v.A].Categories,
-				Score:      -float64(v.B),
-				Timestamp:  b.timestamp,
-			}
-		}))
+func (b *baseItemToItem[T]) PopAll(i int) []cache.Score {
+	scores, err := b.index.SearchIndex(i, b.n+1, true)
+	if err != nil {
+		log.Logger().Error("failed to search index", zap.Error(err))
+		return nil
 	}
+	return lo.Map(scores, func(v lo.Tuple2[int, float32], _ int) cache.Score {
+		return cache.Score{
+			Id:         b.items[v.A].ItemId,
+			Categories: b.items[v.A].Categories,
+			Score:      -float64(v.B),
+			Timestamp:  b.timestamp,
+		}
+	})
 }
 
 type embeddingItemToItem struct {
