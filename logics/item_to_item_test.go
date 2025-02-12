@@ -20,6 +20,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/suite"
+	"github.com/zhenghaoz/gorse/base/floats"
+	"github.com/zhenghaoz/gorse/common/mock"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/dataset"
 	"github.com/zhenghaoz/gorse/storage/data"
@@ -191,6 +193,43 @@ func (suite *ItemToItemTestSuite) TestAuto() {
 	suite.Len(scores1, 10)
 	for i := 1; i <= 10; i++ {
 		suite.Equal(strconv.Itoa(i*2+1), scores1[i-1].Id)
+	}
+}
+
+func (suite *ItemToItemTestSuite) TestLLM() {
+	mockAI := mock.NewOpenAIServer()
+	go mockAI.Start()
+	mockAI.Ready()
+	defer mockAI.Close()
+
+	timestamp := time.Now()
+	item2item, err := newGenerativeItemToItem(config.ItemToItemConfig{
+		Column: "item.Labels.embeddings",
+		Prompt: "Please generate similar items for {{ item.Labels.title }}.",
+	}, 10, timestamp, config.OpenAIConfig{
+		BaseURL:             mockAI.BaseURL(),
+		AuthToken:           mockAI.AuthToken(),
+		ChatCompletionModel: "gpt-3.5-turbo",
+		EmbeddingsModel:     "text-similarity-ada-001",
+	})
+	suite.NoError(err)
+
+	for i := 0; i < 100; i++ {
+		embedding := mock.Hash("Please generate similar items for item_0.")
+		floats.AddConst(embedding, float32(i))
+		item2item.Push(&data.Item{
+			ItemId: strconv.Itoa(i),
+			Labels: map[string]any{
+				"title":      "item_" + strconv.Itoa(i),
+				"embeddings": embedding,
+			},
+		}, nil)
+	}
+
+	scores := item2item.PopAll(0)
+	suite.Len(scores, 10)
+	for i := 1; i <= 10; i++ {
+		suite.Equal(strconv.Itoa(i), scores[i-1].Id)
 	}
 }
 

@@ -1012,8 +1012,9 @@ func (m *Master) updateItemToItem(dataset *dataset.Dataset) error {
 	itemToItemRecommenders := make([]logics.ItemToItem, 0, len(itemToItemConfigs))
 	for _, cfg := range itemToItemConfigs {
 		recommender, err := logics.NewItemToItem(cfg, m.Config.Recommend.CacheSize, dataset.GetTimestamp(), &logics.ItemToItemOptions{
-			TagsIDF:  dataset.GetItemColumnValuesIDF(),
-			UsersIDF: dataset.GetUserIDF(),
+			TagsIDF:      dataset.GetItemColumnValuesIDF(),
+			UsersIDF:     dataset.GetUserIDF(),
+			OpenAIConfig: m.Config.OpenAI,
 		})
 		if err != nil {
 			return errors.Trace(err)
