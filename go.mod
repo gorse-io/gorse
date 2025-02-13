@@ -1,6 +1,6 @@
 module github.com/zhenghaoz/gorse
 
-go 1.23.6
+go 1.24
 
 require (
 	github.com/XSAM/otelsql v0.35.0
@@ -35,7 +35,6 @@ require (
 	github.com/madflojo/testcerts v1.3.0
 	github.com/mailru/go-clickhouse/v2 v2.0.1-0.20221121001540-b259988ad8e5
 	github.com/matttproud/golang_protobuf_extensions v1.0.1
-	github.com/nikolalohinski/gonja/v2 v2.3.3
 	github.com/orcaman/concurrent-map v1.0.0
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.13.0
