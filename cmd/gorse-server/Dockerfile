@@ -3,7 +3,7 @@
 ############################
 # STEP 1 build executable binary
 ############################
-FROM golang
+FROM golang:1.24
 
 WORKDIR /src
 
