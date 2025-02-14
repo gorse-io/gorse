@@ -20,9 +20,10 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/suite"
+	"github.com/zhenghaoz/gorse/base/floats"
+	"github.com/zhenghaoz/gorse/common/mock"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/dataset"
-	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
 )
 
@@ -97,12 +98,7 @@ func (suite *ItemToItemTestSuite) TestEmbedding() {
 		}, nil)
 	}
 
-	var scores []cache.Score
-	item2item.PopAll(func(itemId string, score []cache.Score) {
-		if itemId == "0" {
-			scores = score
-		}
-	})
+	scores := item2item.PopAll(0)
 	suite.Len(scores, 10)
 	for i := 1; i <= 10; i++ {
 		suite.Equal(strconv.Itoa(i), scores[i-1].Id)
@@ -131,12 +127,7 @@ func (suite *ItemToItemTestSuite) TestTags() {
 		}, nil)
 	}
 
-	var scores []cache.Score
-	item2item.PopAll(func(itemId string, score []cache.Score) {
-		if itemId == "0" {
-			scores = score
-		}
-	})
+	scores := item2item.PopAll(0)
 	suite.Len(scores, 10)
 	for i := 1; i <= 10; i++ {
 		suite.Equal(strconv.Itoa(i), scores[i-1].Id)
@@ -160,12 +151,7 @@ func (suite *ItemToItemTestSuite) TestUsers() {
 		item2item.Push(&data.Item{ItemId: strconv.Itoa(i)}, feedback)
 	}
 
-	var scores []cache.Score
-	item2item.PopAll(func(itemId string, score []cache.Score) {
-		if itemId == "0" {
-			scores = score
-		}
-	})
+	scores := item2item.PopAll(0)
 	suite.Len(scores, 10)
 	for i := 1; i <= 10; i++ {
 		suite.Equal(strconv.Itoa(i), scores[i-1].Id)
@@ -198,21 +184,54 @@ func (suite *ItemToItemTestSuite) TestAuto() {
 		item2item.Push(item, feedback)
 	}
 
-	var scores0, scores1 []cache.Score
-	item2item.PopAll(func(itemId string, score []cache.Score) {
-		if itemId == "0" {
-			scores0 = score
-		} else if itemId == "1" {
-			scores1 = score
-		}
-	})
+	scores0 := item2item.PopAll(0)
 	suite.Len(scores0, 10)
 	for i := 1; i <= 10; i++ {
 		suite.Equal(strconv.Itoa(i*2), scores0[i-1].Id)
 	}
+	scores1 := item2item.PopAll(1)
 	suite.Len(scores1, 10)
 	for i := 1; i <= 10; i++ {
 		suite.Equal(strconv.Itoa(i*2+1), scores1[i-1].Id)
+	}
+}
+
+func (suite *ItemToItemTestSuite) TestChat() {
+	mockAI := mock.NewOpenAIServer()
+	go func() {
+		_ = mockAI.Start()
+	}()
+	mockAI.Ready()
+	defer mockAI.Close()
+
+	timestamp := time.Now()
+	item2item, err := newChatItemToItem(config.ItemToItemConfig{
+		Column: "item.Labels.embeddings",
+		Prompt: "Please generate similar items for {{ item.Labels.title }}.",
+	}, 10, timestamp, config.OpenAIConfig{
+		BaseURL:             mockAI.BaseURL(),
+		AuthToken:           mockAI.AuthToken(),
+		ChatCompletionModel: "deepseek-r1",
+		EmbeddingsModel:     "text-similarity-ada-001",
+	})
+	suite.NoError(err)
+
+	for i := 0; i < 100; i++ {
+		embedding := mock.Hash("Please generate similar items for item_0.")
+		floats.AddConst(embedding, float32(i))
+		item2item.Push(&data.Item{
+			ItemId: strconv.Itoa(i),
+			Labels: map[string]any{
+				"title":      "item_" + strconv.Itoa(i),
+				"embeddings": embedding,
+			},
+		}, nil)
+	}
+
+	scores := item2item.PopAll(0)
+	suite.Len(scores, 10)
+	for i := 1; i <= 10; i++ {
+		suite.Equal(strconv.Itoa(i), scores[i-1].Id)
 	}
 }
 

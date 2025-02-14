@@ -15,15 +15,21 @@
 package logics
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/chewxy/math32"
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/expr-lang/expr"
 	"github.com/expr-lang/expr/vm"
+	"github.com/nikolalohinski/gonja/v2"
+	"github.com/nikolalohinski/gonja/v2/exec"
 	"github.com/samber/lo"
+	"github.com/sashabaranov/go-openai"
 	"github.com/zhenghaoz/gorse/base/floats"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/common/ann"
@@ -35,14 +41,15 @@ import (
 )
 
 type ItemToItemOptions struct {
-	TagsIDF  []float32
-	UsersIDF []float32
+	TagsIDF      []float32
+	UsersIDF     []float32
+	OpenAIConfig config.OpenAIConfig
 }
 
 type ItemToItem interface {
 	Items() []*data.Item
 	Push(item *data.Item, feedback []dataset.ID)
-	PopAll(callback func(itemId string, score []cache.Score))
+	PopAll(i int) []cache.Score
 }
 
 func NewItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time, opts *ItemToItemOptions) (ItemToItem, error) {
@@ -64,6 +71,11 @@ func NewItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time, opts
 			return nil, errors.New("tags and users IDF are required for auto item-to-item")
 		}
 		return newAutoItemToItem(cfg, n, timestamp, opts.TagsIDF, opts.UsersIDF)
+	case "chat":
+		if opts == nil || opts.OpenAIConfig.BaseURL == "" || opts.OpenAIConfig.AuthToken == "" {
+			return nil, errors.New("OpenAI config is required for chat item-to-item")
+		}
+		return newChatItemToItem(cfg, n, timestamp, opts.OpenAIConfig)
 	default:
 		return nil, errors.New("invalid item-to-item type")
 	}
@@ -82,22 +94,20 @@ func (b *baseItemToItem[T]) Items() []*data.Item {
 	return b.items
 }
 
-func (b *baseItemToItem[T]) PopAll(callback func(itemId string, score []cache.Score)) {
-	for index, item := range b.items {
-		scores, err := b.index.SearchIndex(index, b.n+1, true)
-		if err != nil {
-			log.Logger().Error("failed to search index", zap.Error(err))
-			return
-		}
-		callback(item.ItemId, lo.Map(scores, func(v lo.Tuple2[int, float32], _ int) cache.Score {
-			return cache.Score{
-				Id:         b.items[v.A].ItemId,
-				Categories: b.items[v.A].Categories,
-				Score:      -float64(v.B),
-				Timestamp:  b.timestamp,
-			}
-		}))
+func (b *baseItemToItem[T]) PopAll(i int) []cache.Score {
+	scores, err := b.index.SearchIndex(i, b.n+1, true)
+	if err != nil {
+		log.Logger().Error("failed to search index", zap.Error(err))
+		return nil
 	}
+	return lo.Map(scores, func(v lo.Tuple2[int, float32], _ int) cache.Score {
+		return cache.Score{
+			Id:         b.items[v.A].ItemId,
+			Categories: b.items[v.A].Categories,
+			Score:      -float64(v.B),
+			Timestamp:  b.timestamp,
+		}
+	})
 }
 
 type embeddingItemToItem struct {
@@ -339,4 +349,92 @@ func flatten(o any, tSet mapset.Set[dataset.ID]) {
 			flatten(v, tSet)
 		}
 	}
+}
+
+type chatItemToItem struct {
+	*embeddingItemToItem
+	template       *exec.Template
+	client         *openai.Client
+	chatModel      string
+	embeddingModel string
+}
+
+func newChatItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time, openaiConfig config.OpenAIConfig) (*chatItemToItem, error) {
+	// create embedding item-to-item recommender
+	embedding, err := newEmbeddingItemToItem(cfg, n, timestamp)
+	if err != nil {
+		return nil, err
+	}
+	// parse template
+	template, err := gonja.FromString(cfg.Prompt)
+	if err != nil {
+		return nil, err
+	}
+	// create openai client
+	clientConfig := openai.DefaultConfig(openaiConfig.AuthToken)
+	clientConfig.BaseURL = openaiConfig.BaseURL
+	return &chatItemToItem{
+		embeddingItemToItem: embedding,
+		template:            template,
+		client:              openai.NewClientWithConfig(clientConfig),
+		chatModel:           openaiConfig.ChatCompletionModel,
+		embeddingModel:      openaiConfig.EmbeddingsModel,
+	}, nil
+}
+
+func (g *chatItemToItem) PopAll(i int) []cache.Score {
+	// render template
+	var buf strings.Builder
+	ctx := exec.NewContext(map[string]any{
+		"item": g.items[i],
+	})
+	if err := g.template.Execute(&buf, ctx); err != nil {
+		log.Logger().Error("failed to execute template", zap.Error(err))
+		return nil
+	}
+	fmt.Println(buf.String())
+	// chat completion
+	resp, err := g.client.CreateChatCompletion(context.Background(), openai.ChatCompletionRequest{
+		Model: g.chatModel,
+		Messages: []openai.ChatCompletionMessage{{
+			Role:    openai.ChatMessageRoleUser,
+			Content: buf.String(),
+		}},
+	})
+	if err != nil {
+		log.Logger().Error("failed to chat completion", zap.Error(err))
+		return nil
+	}
+	message := stripThink(resp.Choices[0].Message.Content)
+	// message embedding
+	resp2, err := g.client.CreateEmbeddings(context.Background(), openai.EmbeddingRequest{
+		Input: message,
+		Model: openai.EmbeddingModel(g.embeddingModel),
+	})
+	if err != nil {
+		log.Logger().Error("failed to create embeddings", zap.Error(err))
+		return nil
+	}
+	embedding := resp2.Data[0].Embedding
+	// search index
+	scores := g.index.SearchVector(embedding, g.n+1, true)
+	return lo.Map(scores, func(v lo.Tuple2[int, float32], _ int) cache.Score {
+		return cache.Score{
+			Id:         g.items[v.A].ItemId,
+			Categories: g.items[v.A].Categories,
+			Score:      -float64(v.B),
+			Timestamp:  g.timestamp,
+		}
+	})
+}
+
+func stripThink(s string) string {
+	if len(s) < 7 || s[:7] != "<think>" {
+		return s
+	}
+	end := strings.Index(s, "</think>")
+	if end == -1 {
+		return s
+	}
+	return s[end+8:]
 }

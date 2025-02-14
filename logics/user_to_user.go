@@ -43,7 +43,7 @@ type UserToUserOptions struct {
 type UserToUser interface {
 	Users() []*data.User
 	Push(user *data.User, feedback []dataset.ID)
-	PopAll(callback func(userId string, score []cache.Score))
+	PopAll(i int) []cache.Score
 }
 
 func NewUserToUser(cfg UserToUserConfig, n int, timestamp time.Time, opts *UserToUserOptions) (UserToUser, error) {
@@ -82,21 +82,19 @@ func (b *baseUserToUser[T]) Users() []*data.User {
 	return b.users
 }
 
-func (b *baseUserToUser[T]) PopAll(callback func(userId string, score []cache.Score)) {
-	for index, user := range b.users {
-		scores, err := b.index.SearchIndex(index, b.n+1, true)
-		if err != nil {
-			log.Logger().Error("failed to search index", zap.Error(err))
-			return
-		}
-		callback(user.UserId, lo.Map(scores, func(v lo.Tuple2[int, float32], _ int) cache.Score {
-			return cache.Score{
-				Id:        b.users[v.A].UserId,
-				Score:     -float64(v.B),
-				Timestamp: b.timestamp,
-			}
-		}))
+func (b *baseUserToUser[T]) PopAll(i int) []cache.Score {
+	scores, err := b.index.SearchIndex(i, b.n+1, true)
+	if err != nil {
+		log.Logger().Error("failed to search index", zap.Error(err))
+		return nil
 	}
+	return lo.Map(scores, func(v lo.Tuple2[int, float32], _ int) cache.Score {
+		return cache.Score{
+			Id:        b.users[v.A].UserId,
+			Score:     -float64(v.B),
+			Timestamp: b.timestamp,
+		}
+	})
 }
 
 type embeddingUserToUser struct {
