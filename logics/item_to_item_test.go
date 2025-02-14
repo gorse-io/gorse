@@ -196,20 +196,20 @@ func (suite *ItemToItemTestSuite) TestAuto() {
 	}
 }
 
-func (suite *ItemToItemTestSuite) TestLLM() {
+func (suite *ItemToItemTestSuite) TestChat() {
 	mockAI := mock.NewOpenAIServer()
 	go mockAI.Start()
 	mockAI.Ready()
 	defer mockAI.Close()
 
 	timestamp := time.Now()
-	item2item, err := newGenerativeItemToItem(config.ItemToItemConfig{
+	item2item, err := newChatItemToItem(config.ItemToItemConfig{
 		Column: "item.Labels.embeddings",
 		Prompt: "Please generate similar items for {{ item.Labels.title }}.",
 	}, 10, timestamp, config.OpenAIConfig{
 		BaseURL:             mockAI.BaseURL(),
 		AuthToken:           mockAI.AuthToken(),
-		ChatCompletionModel: "gpt-3.5-turbo",
+		ChatCompletionModel: "deepseek-r1",
 		EmbeddingsModel:     "text-similarity-ada-001",
 	})
 	suite.NoError(err)

@@ -89,8 +89,11 @@ func (s *OpenAIServer) chatCompletion(req *restful.Request, resp *restful.Respon
 		_ = resp.WriteError(http.StatusBadRequest, err)
 		return
 	}
+	content := r.Messages[0].Content
+	if r.Model == "deepseek-r1" {
+		content = "<think>To be or not to be, that is the question.</think>" + content
+	}
 	if r.Stream {
-		content := r.Messages[0].Content
 		for i := 0; i < len(content); i += 8 {
 			buf := bytes.NewBuffer(nil)
 			buf.WriteString("data: ")
@@ -109,7 +112,7 @@ func (s *OpenAIServer) chatCompletion(req *restful.Request, resp *restful.Respon
 		_ = resp.WriteEntity(openai.ChatCompletionResponse{
 			Choices: []openai.ChatCompletionChoice{{
 				Message: openai.ChatCompletionMessage{
-					Content: r.Messages[0].Content,
+					Content: content,
 				},
 			}},
 		})

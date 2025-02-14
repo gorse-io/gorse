@@ -71,11 +71,11 @@ func NewItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time, opts
 			return nil, errors.New("tags and users IDF are required for auto item-to-item")
 		}
 		return newAutoItemToItem(cfg, n, timestamp, opts.TagsIDF, opts.UsersIDF)
-	case "llm":
+	case "chat":
 		if opts == nil || opts.OpenAIConfig.BaseURL == "" || opts.OpenAIConfig.AuthToken == "" {
-			return nil, errors.New("OpenAI config is required for LLM item-to-item")
+			return nil, errors.New("OpenAI config is required for chat item-to-item")
 		}
-		return newGenerativeItemToItem(cfg, n, timestamp, opts.OpenAIConfig)
+		return newChatItemToItem(cfg, n, timestamp, opts.OpenAIConfig)
 	default:
 		return nil, errors.New("invalid item-to-item type")
 	}
@@ -351,7 +351,7 @@ func flatten(o any, tSet mapset.Set[dataset.ID]) {
 	}
 }
 
-type llmItemToItem struct {
+type chatItemToItem struct {
 	*embeddingItemToItem
 	template       *exec.Template
 	client         *openai.Client
@@ -359,7 +359,7 @@ type llmItemToItem struct {
 	embeddingModel string
 }
 
-func newGenerativeItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time, openaiConfig config.OpenAIConfig) (*llmItemToItem, error) {
+func newChatItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time, openaiConfig config.OpenAIConfig) (*chatItemToItem, error) {
 	// create embedding item-to-item recommender
 	embedding, err := newEmbeddingItemToItem(cfg, n, timestamp)
 	if err != nil {
@@ -373,7 +373,7 @@ func newGenerativeItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.
 	// create openai client
 	clientConfig := openai.DefaultConfig(openaiConfig.AuthToken)
 	clientConfig.BaseURL = openaiConfig.BaseURL
-	return &llmItemToItem{
+	return &chatItemToItem{
 		embeddingItemToItem: embedding,
 		template:            template,
 		client:              openai.NewClientWithConfig(clientConfig),
@@ -382,7 +382,7 @@ func newGenerativeItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.
 	}, nil
 }
 
-func (g *llmItemToItem) PopAll(i int) []cache.Score {
+func (g *chatItemToItem) PopAll(i int) []cache.Score {
 	// render template
 	var buf strings.Builder
 	ctx := exec.NewContext(map[string]any{
@@ -405,7 +405,7 @@ func (g *llmItemToItem) PopAll(i int) []cache.Score {
 		log.Logger().Error("failed to chat completion", zap.Error(err))
 		return nil
 	}
-	message := resp.Choices[0].Message.Content
+	message := stripThink(resp.Choices[0].Message.Content)
 	// message embedding
 	resp2, err := g.client.CreateEmbeddings(context.Background(), openai.EmbeddingRequest{
 		Input: message,
@@ -426,4 +426,15 @@ func (g *llmItemToItem) PopAll(i int) []cache.Score {
 			Timestamp:  g.timestamp,
 		}
 	})
+}
+
+func stripThink(s string) string {
+	if len(s) < 7 || s[:7] != "<think>" {
+		return s
+	}
+	end := strings.Index(s, "</think>")
+	if end == -1 {
+		return s
+	}
+	return s[end+8:]
 }
