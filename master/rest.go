@@ -430,6 +430,11 @@ func (m *Master) handleUserInfo(request *restful.Request, response *restful.Resp
 		server.Ok(response, UserInfo{
 			Name: m.Config.Master.DashboardUserName,
 		})
+	} else {
+		response.Header().Set("Content-Type", "application/json")
+		if _, err := response.Write([]byte("null")); err != nil {
+			log.ResponseLogger(response).Error("failed to write response", zap.Error(err))
+		}
 	}
 }
 
