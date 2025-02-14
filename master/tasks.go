@@ -669,10 +669,6 @@ func (m *Master) LoadDataFromDatabase(
 		temp := time.Now().AddDate(0, 0, -int(positiveFeedbackTTL))
 		feedbackTimeLimit = data.WithBeginTime(temp)
 	}
-	timeWindowLimit := time.Time{}
-	if m.Config.Recommend.Popular.PopularWindow > 0 {
-		timeWindowLimit = time.Now().Add(-m.Config.Recommend.Popular.PopularWindow)
-	}
 	rankingDataset = ranking.NewMapIndexDataset()
 
 	// STEP 1: pull users
@@ -790,7 +786,6 @@ func (m *Master) LoadDataFromDatabase(
 	LoadDatasetStepSecondsVec.WithLabelValues("load_items").Set(time.Since(start).Seconds())
 
 	// create positive set
-	popularCount := make([]int32, rankingDataset.ItemCount())
 	positiveSet := make([]mapset.Set[int32], rankingDataset.UserCount())
 	for i := range positiveSet {
 		positiveSet[i] = mapset.NewSet[int32]()
@@ -835,10 +830,6 @@ func (m *Master) LoadDataFromDatabase(
 				posFeedbackCount++
 				// insert feedback to ranking dataset
 				rankingDataset.AddFeedback(f.UserId, f.ItemId, false)
-				// insert feedback to popularity counter
-				if f.Timestamp.After(timeWindowLimit) && !rankingDataset.HiddenItems[itemIndex] {
-					popularCount[itemIndex]++
-				}
 				// insert feedback to evaluator
 				evaluator.Positive(f.FeedbackType, userIndex, itemIndex, f.Timestamp)
 				mu.Unlock()
