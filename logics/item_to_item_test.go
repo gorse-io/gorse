@@ -198,7 +198,9 @@ func (suite *ItemToItemTestSuite) TestAuto() {
 
 func (suite *ItemToItemTestSuite) TestChat() {
 	mockAI := mock.NewOpenAIServer()
-	go mockAI.Start()
+	go func() {
+		_ = mockAI.Start()
+	}()
 	mockAI.Ready()
 	defer mockAI.Close()
 
