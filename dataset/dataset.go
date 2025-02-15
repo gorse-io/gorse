@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/chewxy/math32"
+	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/samber/lo"
 	"github.com/zhenghaoz/gorse/storage/data"
 	"modernc.org/strutil"
@@ -35,6 +36,7 @@ type Dataset struct {
 	itemFeedback [][]ID
 	userDict     *FreqDict
 	itemDict     *FreqDict
+	categories   mapset.Set[string]
 }
 
 func NewDataset(timestamp time.Time, userCount, itemCount int) *Dataset {
@@ -48,6 +50,7 @@ func NewDataset(timestamp time.Time, userCount, itemCount int) *Dataset {
 		itemFeedback: make([][]ID, itemCount),
 		userDict:     NewFreqDict(),
 		itemDict:     NewFreqDict(),
+		categories:   mapset.NewSet[string](),
 	}
 }
 
@@ -69,6 +72,10 @@ func (d *Dataset) GetUserFeedback() [][]ID {
 
 func (d *Dataset) GetItemFeedback() [][]ID {
 	return d.itemFeedback
+}
+
+func (d *Dataset) GetCategories() []string {
+	return d.categories.ToSlice()
 }
 
 // GetUserIDF returns the IDF of users.
@@ -145,6 +152,7 @@ func (d *Dataset) AddItem(item data.Item) {
 	if len(d.itemFeedback) < len(d.items) {
 		d.itemFeedback = append(d.itemFeedback, nil)
 	}
+	d.categories.Append(item.Categories...)
 }
 
 func (d *Dataset) AddFeedback(userId, itemId string) {

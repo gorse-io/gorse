@@ -171,7 +171,7 @@ func (m *Master) runLoadDatasetTask() error {
 	InactiveItemsTotal.Set(float64(inactiveItems))
 
 	// write categories to cache
-	if err = m.CacheClient.SetSet(ctx, cache.ItemCategories, rankingDataset.CategorySet.ToSlice()...); err != nil {
+	if err = m.CacheClient.SetSet(ctx, cache.ItemCategories, dataSet.GetCategories()...); err != nil {
 		log.Logger().Error("failed to write categories to cache", zap.Error(err))
 	}
 
@@ -738,7 +738,6 @@ func (m *Master) LoadDataFromDatabase(
 			itemIndex := rankingDataset.ItemIndex.ToNumber(item.ItemId)
 			if len(rankingDataset.ItemFeatures) == int(itemIndex) {
 				rankingDataset.ItemFeatures = append(rankingDataset.ItemFeatures, nil)
-				rankingDataset.CategorySet.Append(item.Categories...)
 			}
 			features := click.ConvertLabelsToFeatures(item.Labels)
 			rankingDataset.NumItemLabelUsed += len(features)
