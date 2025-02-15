@@ -31,18 +31,16 @@ import (
 
 // DataSet contains preprocessed data structures for recommendation models.
 type DataSet struct {
-	UserIndex      base.Index
-	ItemIndex      base.Index
-	FeedbackUsers  base.Array[int32]
-	FeedbackItems  base.Array[int32]
-	UserFeedback   [][]int32
-	ItemFeedback   [][]int32
-	Negatives      [][]int32
-	ItemFeatures   [][]lo.Tuple2[int32, float32]
-	UserFeatures   [][]lo.Tuple2[int32, float32]
-	HiddenItems    []bool
-	ItemCategories [][]string
-	CategorySet    mapset.Set[string]
+	UserIndex     base.Index
+	ItemIndex     base.Index
+	FeedbackUsers base.Array[int32]
+	FeedbackItems base.Array[int32]
+	UserFeedback  [][]int32
+	ItemFeedback  [][]int32
+	Negatives     [][]int32
+	ItemFeatures  [][]lo.Tuple2[int32, float32]
+	UserFeatures  [][]lo.Tuple2[int32, float32]
+	CategorySet   mapset.Set[string]
 	// statistics
 	NumItemLabels    int32
 	NumUserLabels    int32
@@ -179,8 +177,6 @@ func (dataset *DataSet) Split(numTestUsers int, seed int64) (*DataSet, *DataSet)
 	trainSet, testSet := new(DataSet), new(DataSet)
 	trainSet.NumItemLabels, testSet.NumItemLabels = dataset.NumItemLabels, dataset.NumItemLabels
 	trainSet.NumUserLabels, testSet.NumUserLabels = dataset.NumUserLabels, dataset.NumUserLabels
-	trainSet.HiddenItems, testSet.HiddenItems = dataset.HiddenItems, dataset.HiddenItems
-	trainSet.ItemCategories, testSet.ItemCategories = dataset.ItemCategories, dataset.ItemCategories
 	trainSet.CategorySet, testSet.CategorySet = dataset.CategorySet, dataset.CategorySet
 	trainSet.ItemFeatures, testSet.ItemFeatures = dataset.ItemFeatures, dataset.ItemFeatures
 	trainSet.UserFeatures, testSet.UserFeatures = dataset.UserFeatures, dataset.UserFeatures

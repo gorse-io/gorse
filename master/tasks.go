@@ -738,8 +738,6 @@ func (m *Master) LoadDataFromDatabase(
 			itemIndex := rankingDataset.ItemIndex.ToNumber(item.ItemId)
 			if len(rankingDataset.ItemFeatures) == int(itemIndex) {
 				rankingDataset.ItemFeatures = append(rankingDataset.ItemFeatures, nil)
-				rankingDataset.HiddenItems = append(rankingDataset.HiddenItems, false)
-				rankingDataset.ItemCategories = append(rankingDataset.ItemCategories, item.Categories)
 				rankingDataset.CategorySet.Append(item.Categories...)
 			}
 			features := click.ConvertLabelsToFeatures(item.Labels)
@@ -767,9 +765,6 @@ func (m *Master) LoadDataFromDatabase(
 						B: feature.Value,
 					})
 				}
-			}
-			if item.IsHidden { // set hidden flag
-				rankingDataset.HiddenItems[itemIndex] = true
 			}
 			dataSet.AddItem(item)
 		}
