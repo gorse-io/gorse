@@ -15,10 +15,12 @@
 package logics
 
 import (
+	"strconv"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/zhenghaoz/gorse/base/floats"
 	"github.com/zhenghaoz/gorse/common/mock"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/storage/data"
@@ -33,7 +35,16 @@ func TestChat(t *testing.T) {
 	defer mockAI.Close()
 
 	chat, err := NewChat(config.ChatConfig{
-		Column: "item.Labels.description",
+		Column: "item.Labels.embeddings",
+		Prompt: `You are a ecommerce recommender system. I have purchased:
+{%- for item in items %}
+	{%- if loop.index0 == 0 %}
+		{{- ' ' + item.ItemId -}}
+	{%- else %}
+		{{- ', ' + item.ItemId -}}
+	{%- endif %}
+{%- endfor %}. Please recommend me more items.
+`,
 	}, 10, time.Now(), config.OpenAIConfig{
 		BaseURL:             mockAI.BaseURL(),
 		AuthToken:           mockAI.AuthToken(),
@@ -42,11 +53,43 @@ func TestChat(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	chat.Push(&data.Item{
-		ItemId: "1",
-		Labels: map[string]any{
-			"description": []float32{0.1, 0.2, 0.3},
-		},
-	}, nil)
-	assert.Len(t, chat.Items(), 1)
+	for i := 0; i < 100; i++ {
+		embedding := mock.Hash("You are a ecommerce recommender system. I have purchased: 3, 1, 5. Please recommend me more items.")
+		floats.AddConst(embedding, float32(i))
+		chat.Push(&data.Item{
+			ItemId: strconv.Itoa(i),
+			Labels: map[string]any{
+				"embeddings": embedding,
+			},
+		}, nil)
+	}
+	assert.Len(t, chat.Items(), 100)
+
+	scores := chat.PopAll([]int{3, 1, 5})
+	assert.Len(t, scores, 10)
+	for i := 0; i < 10; i++ {
+		assert.Equal(t, strconv.Itoa(i), scores[i].Id)
+	}
+}
+
+func TestParseMessage(t *testing.T) {
+	// parse JSON object
+	message := "```json\n{\"a\": 1, \"b\": 2}\n```"
+	contents := parseMessage(message)
+	assert.Equal(t, []string{"{\"a\": 1, \"b\": 2}\n"}, contents)
+
+	// parse JSON array
+	message = "```json\n[1, 2]\n```"
+	contents = parseMessage(message)
+	assert.Equal(t, []string{"1", "2"}, contents)
+
+	// parse text
+	message = "Hello, world!"
+	contents = parseMessage(message)
+	assert.Equal(t, []string{"Hello, world!"}, contents)
+
+	// strip think
+	message = "<think>hello</think>World!"
+	content := stripThink(message)
+	assert.Equal(t, "World!", content)
 }

@@ -16,7 +16,7 @@ package logics
 
 import (
 	"context"
-	"fmt"
+	"encoding/json"
 	"strings"
 	"time"
 
@@ -25,6 +25,9 @@ import (
 	"github.com/nikolalohinski/gonja/v2/exec"
 	"github.com/samber/lo"
 	"github.com/sashabaranov/go-openai"
+	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/ast"
+	"github.com/yuin/goldmark/text"
 	"github.com/zhenghaoz/gorse/base/floats"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/common/ann"
@@ -67,20 +70,21 @@ func NewChat(cfg config.ChatConfig, n int, timestamp time.Time, openaiConfig con
 	}, nil
 }
 
-func (c *Chat) PopAll(i int) []cache.Score {
+func (g *Chat) PopAll(indices []int) []cache.Score {
 	// render template
 	var buf strings.Builder
 	ctx := exec.NewContext(map[string]any{
-		"item": c.items[i],
+		"items": lo.Map(indices, func(i int, _ int) any {
+			return g.items[i]
+		}),
 	})
-	if err := c.template.Execute(&buf, ctx); err != nil {
+	if err := g.template.Execute(&buf, ctx); err != nil {
 		log.Logger().Error("failed to execute template", zap.Error(err))
 		return nil
 	}
-	fmt.Println(buf.String())
 	// chat completion
-	resp, err := c.client.CreateChatCompletion(context.Background(), openai.ChatCompletionRequest{
-		Model: c.chatModel,
+	resp, err := g.client.CreateChatCompletion(context.Background(), openai.ChatCompletionRequest{
+		Model: g.chatModel,
 		Messages: []openai.ChatCompletionMessage{{
 			Role:    openai.ChatMessageRoleUser,
 			Content: buf.String(),
@@ -92,9 +96,9 @@ func (c *Chat) PopAll(i int) []cache.Score {
 	}
 	message := stripThink(resp.Choices[0].Message.Content)
 	// message embedding
-	resp2, err := c.client.CreateEmbeddings(context.Background(), openai.EmbeddingRequest{
+	resp2, err := g.client.CreateEmbeddings(context.Background(), openai.EmbeddingRequest{
 		Input: message,
-		Model: openai.EmbeddingModel(c.embeddingModel),
+		Model: openai.EmbeddingModel(g.embeddingModel),
 	})
 	if err != nil {
 		log.Logger().Error("failed to create embeddings", zap.Error(err))
@@ -102,13 +106,61 @@ func (c *Chat) PopAll(i int) []cache.Score {
 	}
 	embedding := resp2.Data[0].Embedding
 	// search index
-	scores := c.index.SearchVector(embedding, c.n+1, true)
+	scores := g.index.SearchVector(embedding, g.n, true)
 	return lo.Map(scores, func(v lo.Tuple2[int, float32], _ int) cache.Score {
 		return cache.Score{
-			Id:         c.items[v.A].ItemId,
-			Categories: c.items[v.A].Categories,
+			Id:         g.items[v.A].ItemId,
+			Categories: g.items[v.A].Categories,
 			Score:      -float64(v.B),
-			Timestamp:  c.timestamp,
+			Timestamp:  g.timestamp,
 		}
 	})
+}
+
+// stripThink strips the <think> tag from the message.
+func stripThink(s string) string {
+	if len(s) < 7 || s[:7] != "<think>" {
+		return s
+	}
+	end := strings.Index(s, "</think>")
+	if end == -1 {
+		return s
+	}
+	return s[end+8:]
+}
+
+// parseMessage parse message from chat completion response.
+// If there is any JSON in the message, it returns the JSON.
+// Otherwise, it returns the message.
+func parseMessage(message string) []string {
+	source := []byte(stripThink(message))
+	root := goldmark.DefaultParser().Parse(text.NewReader(source))
+	for n := root.FirstChild(); n != nil; n = n.NextSibling() {
+		if n.Kind() != ast.KindFencedCodeBlock {
+			continue
+		}
+		if codeBlock, ok := n.(*ast.FencedCodeBlock); ok {
+			if string(codeBlock.Language(source)) == "json" {
+				bytes := codeBlock.Text(source)
+				if bytes[0] == '[' {
+					var temp []any
+					err := json.Unmarshal(bytes, &temp)
+					if err != nil {
+						return []string{string(bytes)}
+					}
+					var result []string
+					for _, v := range temp {
+						bytes, err := json.Marshal(v)
+						if err != nil {
+							return []string{string(bytes)}
+						}
+						result = append(result, string(bytes))
+					}
+					return result
+				}
+				return []string{string(bytes)}
+			}
+		}
+	}
+	return []string{string(source)}
 }

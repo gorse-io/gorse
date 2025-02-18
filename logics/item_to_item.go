@@ -17,7 +17,6 @@ package logics
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -31,6 +30,7 @@ import (
 	"github.com/samber/lo"
 	"github.com/sashabaranov/go-openai"
 	"github.com/zhenghaoz/gorse/base/floats"
+	"github.com/zhenghaoz/gorse/base/heap"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/common/ann"
 	"github.com/zhenghaoz/gorse/config"
@@ -392,7 +392,6 @@ func (g *chatItemToItem) PopAll(i int) []cache.Score {
 		log.Logger().Error("failed to execute template", zap.Error(err))
 		return nil
 	}
-	fmt.Println(buf.String())
 	// chat completion
 	resp, err := g.client.CreateChatCompletion(context.Background(), openai.ChatCompletionRequest{
 		Model: g.chatModel,
@@ -405,36 +404,40 @@ func (g *chatItemToItem) PopAll(i int) []cache.Score {
 		log.Logger().Error("failed to chat completion", zap.Error(err))
 		return nil
 	}
-	message := stripThink(resp.Choices[0].Message.Content)
+	messages := parseMessage(resp.Choices[0].Message.Content)
 	// message embedding
-	resp2, err := g.client.CreateEmbeddings(context.Background(), openai.EmbeddingRequest{
-		Input: message,
-		Model: openai.EmbeddingModel(g.embeddingModel),
-	})
-	if err != nil {
-		log.Logger().Error("failed to create embeddings", zap.Error(err))
-		return nil
+	embeddings := make([][]float32, len(messages))
+	for i, message := range messages {
+		resp2, err := g.client.CreateEmbeddings(context.Background(), openai.EmbeddingRequest{
+			Input: message,
+			Model: openai.EmbeddingModel(g.embeddingModel),
+		})
+		if err != nil {
+			log.Logger().Error("failed to create embeddings", zap.Error(err))
+			return nil
+		}
+		embeddings[i] = resp2.Data[0].Embedding
 	}
-	embedding := resp2.Data[0].Embedding
 	// search index
-	scores := g.index.SearchVector(embedding, g.n+1, true)
-	return lo.Map(scores, func(v lo.Tuple2[int, float32], _ int) cache.Score {
-		return cache.Score{
-			Id:         g.items[v.A].ItemId,
-			Categories: g.items[v.A].Categories,
-			Score:      -float64(v.B),
+	pq := heap.NewPriorityQueue(false)
+	for _, embedding := range embeddings {
+		scores := g.index.SearchVector(embedding, g.n+1, true)
+		for _, score := range scores {
+			pq.Push(int32(score.A), score.B)
+			if pq.Len() > g.n {
+				pq.Pop()
+			}
+		}
+	}
+	scores := make([]cache.Score, pq.Len())
+	for i := range scores {
+		id, score := pq.Pop()
+		scores[i] = cache.Score{
+			Id:         g.items[id].ItemId,
+			Categories: g.items[id].Categories,
+			Score:      -float64(score),
 			Timestamp:  g.timestamp,
 		}
-	})
-}
-
-func stripThink(s string) string {
-	if len(s) < 7 || s[:7] != "<think>" {
-		return s
 	}
-	end := strings.Index(s, "</think>")
-	if end == -1 {
-		return s
-	}
-	return s[end+8:]
+	return scores
 }
