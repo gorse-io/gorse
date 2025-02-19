@@ -47,6 +47,7 @@ type ItemToItemOptions struct {
 }
 
 type ItemToItem interface {
+	Timestamp() time.Time
 	Items() []*data.Item
 	Push(item *data.Item, feedback []dataset.ID)
 	PopAll(i int) []cache.Score
@@ -88,6 +89,10 @@ type baseItemToItem[T any] struct {
 	columnFunc *vm.Program
 	index      *ann.HNSW[T]
 	items      []*data.Item
+}
+
+func (b *baseItemToItem[T]) Timestamp() time.Time {
+	return b.timestamp
 }
 
 func (b *baseItemToItem[T]) Items() []*data.Item {
@@ -419,7 +424,7 @@ func (g *chatItemToItem) PopAll(i int) []cache.Score {
 		embeddings[i] = resp2.Data[0].Embedding
 	}
 	// search index
-	pq := heap.NewPriorityQueue(false)
+	pq := heap.NewPriorityQueue(true)
 	for _, embedding := range embeddings {
 		scores := g.index.SearchVector(embedding, g.n+1, true)
 		for _, score := range scores {

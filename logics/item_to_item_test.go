@@ -212,7 +212,7 @@ func (suite *ItemToItemTestSuite) TestChat() {
 		BaseURL:             mockAI.BaseURL(),
 		AuthToken:           mockAI.AuthToken(),
 		ChatCompletionModel: "deepseek-r1",
-		EmbeddingsModel:     "text-similarity-ada-001",
+		EmbeddingModel:      "text-similarity-ada-001",
 	})
 	suite.NoError(err)
 

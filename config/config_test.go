@@ -161,7 +161,8 @@ func TestUnmarshal(t *testing.T) {
 			assert.Equal(t, "http://localhost:11434/v1", config.OpenAI.BaseURL)
 			assert.Equal(t, "ollama", config.OpenAI.AuthToken)
 			assert.Equal(t, "qwen2.5", config.OpenAI.ChatCompletionModel)
-			assert.Equal(t, "mxbai-embed-large", config.OpenAI.EmbeddingsModel)
+			assert.Equal(t, "mxbai-embed-large", config.OpenAI.EmbeddingModel)
+			assert.Equal(t, 1024, config.OpenAI.EmbeddingDimensions)
 		})
 	}
 }
