@@ -163,6 +163,19 @@ func (config *ItemToItemConfig) Hash() string {
 	return string(hash.Sum(nil))
 }
 
+type ChatConfig struct {
+	Name   string `mapstructure:"name" json:"name"`
+	Column string `mapstructure:"column" json:"column" validate:"item_expr"`
+	Prompt string `mapstructure:"prompt" json:"prompt"`
+}
+
+func (config *ChatConfig) Hash() string {
+	hash := md5.New()
+	hash.Write([]byte(config.Name))
+	hash.Write([]byte(config.Column))
+	return string(hash.Sum(nil))
+}
+
 type CollaborativeConfig struct {
 	ModelFitPeriod        time.Duration `mapstructure:"model_fit_period" validate:"gt=0"`
 	ModelSearchPeriod     time.Duration `mapstructure:"model_search_period" validate:"gt=0"`
@@ -220,7 +233,8 @@ type OpenAIConfig struct {
 	BaseURL             string `mapstructure:"base_url"`
 	AuthToken           string `mapstructure:"auth_token"`
 	ChatCompletionModel string `mapstructure:"chat_completion_model"`
-	EmbeddingsModel     string `mapstructure:"embeddings_model"`
+	EmbeddingModel      string `mapstructure:"embedding_model"`
+	EmbeddingDimensions int    `mapstructure:"embedding_dimensions"`
 }
 
 func GetDefaultConfig() *Config {

@@ -1060,6 +1060,15 @@ func (m *Master) updateItemToItem(dataset *dataset.Dataset) error {
 						zap.String("item_id", item.ItemId), zap.Error(err))
 					continue
 				}
+				// Remove stale item-to-item recommendation
+				if err := m.CacheClient.DeleteScores(ctx, []string{cache.ItemToItem}, cache.ScoreCondition{
+					Subset: lo.ToPtr(cache.Key(itemToItemConfig.Name, item.ItemId)),
+					Before: lo.ToPtr(recommender.Timestamp()),
+				}); err != nil {
+					log.Logger().Error("failed to remove stale item-to-item recommendation",
+						zap.String("item_id", item.ItemId), zap.Error(err))
+					continue
+				}
 			}
 			span.Add(1)
 		}
