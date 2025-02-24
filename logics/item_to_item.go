@@ -16,6 +16,7 @@ package logics
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"sort"
 	"strings"
@@ -29,6 +30,9 @@ import (
 	"github.com/nikolalohinski/gonja/v2/exec"
 	"github.com/samber/lo"
 	"github.com/sashabaranov/go-openai"
+	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/ast"
+	"github.com/yuin/goldmark/text"
 	"github.com/zhenghaoz/gorse/base/floats"
 	"github.com/zhenghaoz/gorse/base/heap"
 	"github.com/zhenghaoz/gorse/base/log"
@@ -358,10 +362,11 @@ func flatten(o any, tSet mapset.Set[dataset.ID]) {
 
 type chatItemToItem struct {
 	*embeddingItemToItem
-	template       *exec.Template
-	client         *openai.Client
-	chatModel      string
-	embeddingModel string
+	template            *exec.Template
+	client              *openai.Client
+	chatCompletionModel string
+	embeddingModel      string
+	embeddingDimensions int
 }
 
 func newChatItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time, openaiConfig config.OpenAIConfig) (*chatItemToItem, error) {
@@ -382,12 +387,27 @@ func newChatItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time, 
 		embeddingItemToItem: embedding,
 		template:            template,
 		client:              openai.NewClientWithConfig(clientConfig),
-		chatModel:           openaiConfig.ChatCompletionModel,
-		embeddingModel:      openaiConfig.EmbeddingsModel,
+		chatCompletionModel: openaiConfig.ChatCompletionModel,
+		embeddingModel:      openaiConfig.EmbeddingModel,
+		embeddingDimensions: openaiConfig.EmbeddingDimensions,
 	}, nil
 }
 
 func (g *chatItemToItem) PopAll(i int) []cache.Score {
+	// evaluate column expression and get embedding vector
+	result, err := expr.Run(g.columnFunc, map[string]any{
+		"item": g.items[i],
+	})
+	if err != nil {
+		log.Logger().Error("failed to evaluate column expression",
+			zap.Any("item", g.items[i]), zap.Error(err))
+		return nil
+	}
+	embedding0, ok := result.([]float32)
+	if !ok {
+		log.Logger().Error("invalid column type", zap.Any("column", result))
+		return nil
+	}
 	// render template
 	var buf strings.Builder
 	ctx := exec.NewContext(map[string]any{
@@ -399,7 +419,7 @@ func (g *chatItemToItem) PopAll(i int) []cache.Score {
 	}
 	// chat completion
 	resp, err := g.client.CreateChatCompletion(context.Background(), openai.ChatCompletionRequest{
-		Model: g.chatModel,
+		Model: g.chatCompletionModel,
 		Messages: []openai.ChatCompletionMessage{{
 			Role:    openai.ChatMessageRoleUser,
 			Content: buf.String(),
@@ -413,29 +433,33 @@ func (g *chatItemToItem) PopAll(i int) []cache.Score {
 	// message embedding
 	embeddings := make([][]float32, len(messages))
 	for i, message := range messages {
-		resp2, err := g.client.CreateEmbeddings(context.Background(), openai.EmbeddingRequest{
-			Input: message,
-			Model: openai.EmbeddingModel(g.embeddingModel),
+		resp, err := g.client.CreateEmbeddings(context.Background(), openai.EmbeddingRequest{
+			Input:      message,
+			Model:      openai.EmbeddingModel(g.embeddingModel),
+			Dimensions: g.embeddingDimensions,
 		})
 		if err != nil {
 			log.Logger().Error("failed to create embeddings", zap.Error(err))
 			return nil
 		}
-		embeddings[i] = resp2.Data[0].Embedding
+		embeddings[i] = resp.Data[0].Embedding
 	}
 	// search index
 	pq := heap.NewPriorityQueue(true)
 	for _, embedding := range embeddings {
+		score0 := floats.Euclidean(embedding, embedding0)
 		scores := g.index.SearchVector(embedding, g.n+1, true)
 		for _, score := range scores {
-			pq.Push(int32(score.A), score.B)
-			if pq.Len() > g.n {
-				pq.Pop()
+			if score.A != i {
+				pq.Push(int32(score.A), score.B*score0)
+				if pq.Len() > g.n {
+					pq.Pop()
+				}
 			}
 		}
 	}
 	scores := make([]cache.Score, pq.Len())
-	for i := range scores {
+	for i := 9; i >= 0; i-- {
 		id, score := pq.Pop()
 		scores[i] = cache.Score{
 			Id:         g.items[id].ItemId,
@@ -445,4 +469,52 @@ func (g *chatItemToItem) PopAll(i int) []cache.Score {
 		}
 	}
 	return scores
+}
+
+// stripThink strips the <think> tag from the message.
+func stripThink(s string) string {
+	if len(s) < 7 || s[:7] != "<think>" {
+		return s
+	}
+	end := strings.Index(s, "</think>")
+	if end == -1 {
+		return s
+	}
+	return s[end+8:]
+}
+
+// parseMessage parse message from chat completion response.
+// If there is any JSON in the message, it returns the JSON.
+// Otherwise, it returns the message.
+func parseMessage(message string) []string {
+	source := []byte(stripThink(message))
+	root := goldmark.DefaultParser().Parse(text.NewReader(source))
+	for n := root.FirstChild(); n != nil; n = n.NextSibling() {
+		if n.Kind() != ast.KindFencedCodeBlock {
+			continue
+		}
+		if codeBlock, ok := n.(*ast.FencedCodeBlock); ok {
+			if string(codeBlock.Language(source)) == "json" {
+				bytes := codeBlock.Text(source)
+				if bytes[0] == '[' {
+					var temp []any
+					err := json.Unmarshal(bytes, &temp)
+					if err != nil {
+						return []string{string(bytes)}
+					}
+					var result []string
+					for _, v := range temp {
+						bytes, err := json.Marshal(v)
+						if err != nil {
+							return []string{string(bytes)}
+						}
+						result = append(result, string(bytes))
+					}
+					return result
+				}
+				return []string{string(bytes)}
+			}
+		}
+	}
+	return []string{string(source)}
 }

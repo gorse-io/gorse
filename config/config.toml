@@ -321,5 +321,8 @@ auth_token = "ollama"
 # Name of chat completion model.
 chat_completion_model = "qwen2.5"
 
-# Name of embeddings model.
-embeddings_model = "mxbai-embed-large"
+# Name of embedding model.
+embedding_model = "mxbai-embed-large"
+
+# Dimensions of embedding vectors.
+embedding_dimensions = 1024
