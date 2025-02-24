@@ -72,10 +72,6 @@ const (
 	UserToUserUpdateTime = "user-to-user_update_time"
 	Neighbors            = "neighbors"
 
-	Chat           = "chat"
-	ChatDigest     = "chat_digest"
-	ChatUpdateTime = "chat_update_time"
-
 	// ItemCategories is the set of item categories. The format of key:
 	//	Global item categories - item_categories
 	ItemCategories = "item_categories"

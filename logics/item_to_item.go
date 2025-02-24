@@ -430,6 +430,8 @@ func (g *chatItemToItem) PopAll(i int) []cache.Score {
 		return nil
 	}
 	messages := parseMessage(resp.Choices[0].Message.Content)
+	log.Logger().Debug("chat based item-to-item recommendation",
+		zap.String("prompt", buf.String()), zap.Strings("response", messages))
 	// message embedding
 	embeddings := make([][]float32, len(messages))
 	for i, message := range messages {

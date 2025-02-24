@@ -158,10 +158,30 @@ filter = "(now() - item.Timestamp).Hours() < 168"
 # #   embedding: recommend by Euclidean distance of embeddings.
 # #   tags: recommend by number of common tags.
 # #   users: recommend by number of common users.
+# #   chat: recommend by chat completion model.
 # type = "embedding"
 
 # # The column of the item embeddings. Leave blank if type is "users".
 # column = "item.Labels.embedding"
+
+# [[recommend.item-to-item]]
+
+# # The name of the item-to-item recommender.
+# name = "chat_recommend"
+
+# # The type of the item-to-item recommender.
+# type = "chat"
+
+# # The column of the item embeddings. Leave blank if type is "users".
+# column = "item.Labels.embedding"
+
+# # The prompt for the chat completion model.
+# prompt = """
+# This is the description of GitHub repository https://github.com/{{ item.ItemId | replace(':','/') }}:
+# {{ item.Comment }}
+# Please find some similar repositores on GitHub and provide a brief description for each of them.
+# The output should be a JSON array.
+# """
 
 [recommend.user_neighbors]
 
