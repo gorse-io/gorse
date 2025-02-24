@@ -220,7 +220,8 @@ type OpenAIConfig struct {
 	BaseURL             string `mapstructure:"base_url"`
 	AuthToken           string `mapstructure:"auth_token"`
 	ChatCompletionModel string `mapstructure:"chat_completion_model"`
-	EmbeddingsModel     string `mapstructure:"embeddings_model"`
+	EmbeddingModel      string `mapstructure:"embedding_model"`
+	EmbeddingDimensions int    `mapstructure:"embedding_dimensions"`
 }
 
 func GetDefaultConfig() *Config {

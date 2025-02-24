@@ -19,6 +19,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 	"github.com/zhenghaoz/gorse/base/floats"
 	"github.com/zhenghaoz/gorse/common/mock"
@@ -212,13 +213,13 @@ func (suite *ItemToItemTestSuite) TestChat() {
 		BaseURL:             mockAI.BaseURL(),
 		AuthToken:           mockAI.AuthToken(),
 		ChatCompletionModel: "deepseek-r1",
-		EmbeddingsModel:     "text-similarity-ada-001",
+		EmbeddingModel:      "text-similarity-ada-001",
 	})
 	suite.NoError(err)
 
 	for i := 0; i < 100; i++ {
 		embedding := mock.Hash("Please generate similar items for item_0.")
-		floats.AddConst(embedding, float32(i))
+		floats.AddConst(embedding, float32(i+1))
 		item2item.Push(&data.Item{
 			ItemId: strconv.Itoa(i),
 			Labels: map[string]any{
@@ -237,4 +238,26 @@ func (suite *ItemToItemTestSuite) TestChat() {
 
 func TestItemToItem(t *testing.T) {
 	suite.Run(t, new(ItemToItemTestSuite))
+}
+
+func TestParseMessage(t *testing.T) {
+	// parse JSON object
+	message := "```json\n{\"a\": 1, \"b\": 2}\n```"
+	contents := parseMessage(message)
+	assert.Equal(t, []string{"{\"a\": 1, \"b\": 2}\n"}, contents)
+
+	// parse JSON array
+	message = "```json\n[1, 2]\n```"
+	contents = parseMessage(message)
+	assert.Equal(t, []string{"1", "2"}, contents)
+
+	// parse text
+	message = "Hello, world!"
+	contents = parseMessage(message)
+	assert.Equal(t, []string{"Hello, world!"}, contents)
+
+	// strip think
+	message = "<think>hello</think>World!"
+	content := stripThink(message)
+	assert.Equal(t, "World!", content)
 }
