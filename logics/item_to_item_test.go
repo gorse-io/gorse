@@ -240,24 +240,23 @@ func TestItemToItem(t *testing.T) {
 	suite.Run(t, new(ItemToItemTestSuite))
 }
 
-func TestParseMessage(t *testing.T) {
+func TestParseJSONArrayFromCompletion(t *testing.T) {
 	// parse JSON object
-	message := "```json\n{\"a\": 1, \"b\": 2}\n```"
-	contents := parseMessage(message)
-	assert.Equal(t, []string{"{\"a\": 1, \"b\": 2}\n"}, contents)
+	completion := "```json\n{\"a\": 1, \"b\": 2}\n```"
+	parsed := parseJSONArrayFromCompletion(completion)
+	assert.Equal(t, []string{"{\"a\": 1, \"b\": 2}\n"}, parsed)
 
 	// parse JSON array
-	message = "```json\n[1, 2]\n```"
-	contents = parseMessage(message)
-	assert.Equal(t, []string{"1", "2"}, contents)
+	completion = "```json\n[1, 2]\n```"
+	parsed = parseJSONArrayFromCompletion(completion)
+	assert.Equal(t, []string{"1", "2"}, parsed)
 
 	// parse text
-	message = "Hello, world!"
-	contents = parseMessage(message)
-	assert.Equal(t, []string{"Hello, world!"}, contents)
+	completion = "Hello, world!"
+	parsed = parseJSONArrayFromCompletion(completion)
+	assert.Equal(t, []string{"Hello, world!"}, parsed)
 
 	// strip think
-	message = "<think>hello</think>World!"
-	content := stripThink(message)
-	assert.Equal(t, "World!", content)
+	completion = "<think>hello</think>World!"
+	assert.Equal(t, "World!", stripThinkInCompletion(completion))
 }

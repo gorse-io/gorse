@@ -418,6 +418,7 @@ func (g *chatItemToItem) PopAll(i int) []cache.Score {
 		return nil
 	}
 	// chat completion
+	start := time.Now()
 	resp, err := g.client.CreateChatCompletion(context.Background(), openai.ChatCompletionRequest{
 		Model: g.chatCompletionModel,
 		Messages: []openai.ChatCompletionMessage{{
@@ -429,12 +430,19 @@ func (g *chatItemToItem) PopAll(i int) []cache.Score {
 		log.Logger().Error("failed to chat completion", zap.Error(err))
 		return nil
 	}
-	messages := parseMessage(resp.Choices[0].Message.Content)
-	log.Logger().Debug("chat based item-to-item recommendation",
-		zap.String("prompt", buf.String()), zap.Strings("response", messages))
+	duration := time.Since(start)
+	parsed := parseJSONArrayFromCompletion(resp.Choices[0].Message.Content)
+	log.OpenAILogger().Info("chat completion",
+		zap.String("prompt", buf.String()),
+		zap.String("completion", resp.Choices[0].Message.Content),
+		zap.Strings("parsed", parsed),
+		zap.Int("prompt_tokens", resp.Usage.PromptTokens),
+		zap.Int("completion_tokens", resp.Usage.CompletionTokens),
+		zap.Int("total_tokens", resp.Usage.TotalTokens),
+		zap.Duration("duration", duration))
 	// message embedding
-	embeddings := make([][]float32, len(messages))
-	for i, message := range messages {
+	embeddings := make([][]float32, len(parsed))
+	for i, message := range parsed {
 		resp, err := g.client.CreateEmbeddings(context.Background(), openai.EmbeddingRequest{
 			Input:      message,
 			Model:      openai.EmbeddingModel(g.embeddingModel),
@@ -473,8 +481,7 @@ func (g *chatItemToItem) PopAll(i int) []cache.Score {
 	return scores
 }
 
-// stripThink strips the <think> tag from the message.
-func stripThink(s string) string {
+func stripThinkInCompletion(s string) string {
 	if len(s) < 7 || s[:7] != "<think>" {
 		return s
 	}
@@ -485,11 +492,12 @@ func stripThink(s string) string {
 	return s[end+8:]
 }
 
-// parseMessage parse message from chat completion response.
-// If there is any JSON in the message, it returns the JSON.
-// Otherwise, it returns the message.
-func parseMessage(message string) []string {
-	source := []byte(stripThink(message))
+// parseJSONArrayFromCompletion parse JSON array from completion.
+// If the completion contains a JSON array, it will return each element in the array.
+// If the completion contains a JSON object, it will return the object as a string.
+// Otherwise, it will return the completion as a string.
+func parseJSONArrayFromCompletion(completion string) []string {
+	source := []byte(stripThinkInCompletion(completion))
 	root := goldmark.DefaultParser().Parse(text.NewReader(source))
 	for n := root.FirstChild(); n != nil; n = n.NextSibling() {
 		if n.Kind() != ast.KindFencedCodeBlock {
@@ -506,9 +514,15 @@ func parseMessage(message string) []string {
 					}
 					var result []string
 					for _, v := range temp {
-						bytes, err := json.Marshal(v)
-						if err != nil {
-							return []string{string(bytes)}
+						var bytes []byte
+						switch typed := v.(type) {
+						case string:
+							bytes = []byte(typed)
+						default:
+							bytes, err = json.Marshal(v)
+							if err != nil {
+								return []string{string(bytes)}
+							}
 						}
 						result = append(result, string(bytes))
 					}

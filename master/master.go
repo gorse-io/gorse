@@ -131,6 +131,8 @@ func NewMaster(cfg *config.Config, cacheFile string, managedMode bool) *Master {
 	// setup OpenAI client
 	clientConfig := openai.DefaultConfig(cfg.OpenAI.AuthToken)
 	clientConfig.BaseURL = cfg.OpenAI.BaseURL
+	// setup OpenAI logger
+	log.InitOpenAILogger(cfg.OpenAI.LogFile)
 
 	m := &Master{
 		// create task monitor

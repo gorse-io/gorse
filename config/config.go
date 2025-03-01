@@ -222,6 +222,7 @@ type OpenAIConfig struct {
 	ChatCompletionModel string `mapstructure:"chat_completion_model"`
 	EmbeddingModel      string `mapstructure:"embedding_model"`
 	EmbeddingDimensions int    `mapstructure:"embedding_dimensions"`
+	LogFile             string `mapstructure:"log_file"`
 }
 
 func GetDefaultConfig() *Config {
