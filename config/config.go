@@ -64,7 +64,6 @@ type Config struct {
 	Experimental ExperimentalConfig `mapstructure:"experimental"`
 	OIDC         OIDCConfig         `mapstructure:"oidc"`
 	OpenAI       OpenAIConfig       `mapstructure:"openai"`
-	Log          LogConfig          `mapstructure:"log"`
 }
 
 // DatabaseConfig is the configuration for the database.
@@ -223,10 +222,7 @@ type OpenAIConfig struct {
 	ChatCompletionModel string `mapstructure:"chat_completion_model"`
 	EmbeddingModel      string `mapstructure:"embedding_model"`
 	EmbeddingDimensions int    `mapstructure:"embedding_dimensions"`
-}
-
-type LogConfig struct {
-	OpenAILogFile string `mapstructure:"openai_log_file"`
+	LogFile             string `mapstructure:"log_file"`
 }
 
 func GetDefaultConfig() *Config {

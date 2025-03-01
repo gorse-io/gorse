@@ -17,6 +17,7 @@ package logics
 import (
 	"context"
 	"strings"
+	"time"
 
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/nikolalohinski/gonja/v2"
@@ -68,6 +69,7 @@ func (r *ChatRanker) Rank(user *data.User, feedback []*FeedbackItem, items []*da
 		return nil, err
 	}
 	// chat completion
+	start := time.Now()
 	resp, err := r.client.CreateChatCompletion(context.Background(), openai.ChatCompletionRequest{
 		Model: r.model,
 		Messages: []openai.ChatCompletionMessage{{
@@ -78,22 +80,26 @@ func (r *ChatRanker) Rank(user *data.User, feedback []*FeedbackItem, items []*da
 	if err != nil {
 		return nil, err
 	}
+	duration := time.Since(start)
+	// parse response
+	parsed := parseJSONArrayFromCompletion(resp.Choices[0].Message.Content)
 	log.OpenAILogger().Info("chat completion",
 		zap.String("prompt", buf.String()),
 		zap.String("completion", resp.Choices[0].Message.Content),
+		zap.Strings("parsed", parsed),
 		zap.Int("prompt_tokens", resp.Usage.PromptTokens),
 		zap.Int("completion_tokens", resp.Usage.CompletionTokens),
-		zap.Int("total_tokens", resp.Usage.TotalTokens))
-	// parse response
+		zap.Int("total_tokens", resp.Usage.TotalTokens),
+		zap.Duration("duration", duration))
+	// filter items
 	s := mapset.NewSet[string]()
 	for _, item := range items {
 		s.Add(item.ItemId)
 	}
-	messages := parseMessage(resp.Choices[0].Message.Content)
 	var result []string
-	for _, message := range messages {
-		if s.Contains(message) {
-			result = append(result, message)
+	for _, itemId := range parsed {
+		if s.Contains(itemId) {
+			result = append(result, itemId)
 		}
 	}
 	return result, nil
