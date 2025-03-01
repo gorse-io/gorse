@@ -514,9 +514,15 @@ func parseJSONArrayFromCompletion(completion string) []string {
 					}
 					var result []string
 					for _, v := range temp {
-						bytes, err := json.Marshal(v)
-						if err != nil {
-							return []string{string(bytes)}
+						var bytes []byte
+						switch typed := v.(type) {
+						case string:
+							bytes = []byte(typed)
+						default:
+							bytes, err = json.Marshal(v)
+							if err != nil {
+								return []string{string(bytes)}
+							}
 						}
 						result = append(result, string(bytes))
 					}

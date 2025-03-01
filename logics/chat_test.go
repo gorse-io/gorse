@@ -36,18 +36,32 @@ func TestChatRankerhat(t *testing.T) {
 		AuthToken:           mockAI.AuthToken(),
 		ChatCompletionModel: "deepseek-r1",
 		EmbeddingModel:      "text-similarity-ada-001",
-	}, "{{ user.UserId }} is a {{ user.Comment }}.")
+	}, `{{ user.UserId }} is a {{ user.Comment }} watched the following movies recently:
+{% for item in feedback -%}
+- {{ item.Comment }}
+{% endfor -%}
+Please sort the following movies based on his or her preference:
+| ID | Title |
+{% for item in items -%}
+| {{ item.ItemId }} | {{ item.Comment }} |
+{% endfor -%}
+Return IDs as a JSON array. For example:
+`+"```json\n"+`["tt1233227", "tt0926084", "tt0890870", "tt1132626", "tt0435761"]`+"\n```")
 	assert.NoError(t, err)
-	_, err = ranker.Rank(&data.User{
+	items, err := ranker.Rank(&data.User{
 		UserId:  "Tom",
 		Comment: "horror movie enthusiast",
 	}, []*FeedbackItem{
-		{},
+		{Item: data.Item{ItemId: "tt0387564", Comment: "Saw"}},
+		{Item: data.Item{ItemId: "tt0432348", Comment: "Saw II"}},
+		{Item: data.Item{ItemId: "tt0435761", Comment: "Saw III"}},
 	}, []*data.Item{
+		{ItemId: "tt1233227", Comment: "Harry Potter and the Half-Blood Prince"},
+		{ItemId: "tt0926084", Comment: "Harry Potter and the Deathly Hallows: Part 1"},
 		{ItemId: "tt0890870", Comment: "Saw IV"},
-		{ItemId: "tt0435761", Comment: "Saw V"},
 		{ItemId: "tt1132626", Comment: "Saw VI"},
+		{ItemId: "tt0435761", Comment: "Saw V"},
 	})
 	assert.NoError(t, err)
-	t.Fail()
+	assert.Equal(t, []string{"tt1233227", "tt0926084", "tt0890870", "tt1132626", "tt0435761"}, items)
 }
