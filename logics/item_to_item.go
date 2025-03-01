@@ -430,8 +430,12 @@ func (g *chatItemToItem) PopAll(i int) []cache.Score {
 		return nil
 	}
 	messages := parseMessage(resp.Choices[0].Message.Content)
-	log.Logger().Debug("chat based item-to-item recommendation",
-		zap.String("prompt", buf.String()), zap.Strings("response", messages))
+	log.OpenAILogger().Info("chat completion",
+		zap.String("prompt", buf.String()),
+		zap.String("completion", resp.Choices[0].Message.Content),
+		zap.Int("prompt_tokens", resp.Usage.PromptTokens),
+		zap.Int("completion_tokens", resp.Usage.CompletionTokens),
+		zap.Int("total_tokens", resp.Usage.TotalTokens))
 	// message embedding
 	embeddings := make([][]float32, len(messages))
 	for i, message := range messages {

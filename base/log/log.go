@@ -29,7 +29,10 @@ import (
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
-var logger *zap.Logger
+var (
+	logger       *zap.Logger
+	openaiLogger *zap.Logger = zap.NewNop()
+)
 
 func init() {
 	// setup default logger
@@ -139,4 +142,8 @@ type errorHandler struct{}
 
 func (h *errorHandler) Handle(err error) {
 	Logger().Error("opentelemetry failure", zap.Error(err))
+}
+
+func OpenAILogger() *zap.Logger {
+	return openaiLogger
 }
