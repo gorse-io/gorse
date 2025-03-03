@@ -223,6 +223,8 @@ type OpenAIConfig struct {
 	EmbeddingModel      string `mapstructure:"embedding_model"`
 	EmbeddingDimensions int    `mapstructure:"embedding_dimensions"`
 	LogFile             string `mapstructure:"log_file"`
+	RequestsPerMinute   int    `mapstructure:"requests_per_minute"`
+	TokensPerMinute     int    `mapstructure:"tokens_per_minute"`
 }
 
 func GetDefaultConfig() *Config {

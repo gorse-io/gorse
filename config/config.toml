@@ -345,4 +345,13 @@ chat_completion_model = "qwen2.5"
 embedding_model = "mxbai-embed-large"
 
 # Dimensions of embedding vectors.
-embedding_dimensions = 1024
+embedding_dimensions = 512
+
+# Log file for OpenAI API.
+log_file = "openai.log"
+
+# Tokens per minute for OpenAI API.
+tokens_per_minute = 1200000
+
+# Requests per minute for OpenAI API.
+requests_per_minute = 15000

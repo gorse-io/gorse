@@ -163,6 +163,8 @@ func TestUnmarshal(t *testing.T) {
 			assert.Equal(t, "qwen2.5", config.OpenAI.ChatCompletionModel)
 			assert.Equal(t, "mxbai-embed-large", config.OpenAI.EmbeddingModel)
 			assert.Equal(t, 1024, config.OpenAI.EmbeddingDimensions)
+			assert.Equal(t, 1200000, config.OpenAI.TokensPerMinute)
+			assert.Equal(t, 15000, config.OpenAI.RequestsPerMinute)
 		})
 	}
 }
