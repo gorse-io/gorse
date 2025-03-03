@@ -37,6 +37,7 @@ import (
 	"github.com/zhenghaoz/gorse/base/heap"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/common/ann"
+	"github.com/zhenghaoz/gorse/common/parallel"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/dataset"
 	"github.com/zhenghaoz/gorse/storage/cache"
@@ -55,6 +56,7 @@ type ItemToItem interface {
 	Items() []*data.Item
 	Push(item *data.Item, feedback []dataset.ID)
 	PopAll(i int) []cache.Score
+	Pool() parallel.Pool
 }
 
 func NewItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time, opts *ItemToItemOptions) (ItemToItem, error) {
@@ -117,6 +119,10 @@ func (b *baseItemToItem[T]) PopAll(i int) []cache.Score {
 			Timestamp:  b.timestamp,
 		}
 	})
+}
+
+func (b *baseItemToItem[T]) Pool() parallel.Pool {
+	return &parallel.SequentialPool{}
 }
 
 type embeddingItemToItem struct {
@@ -479,6 +485,10 @@ func (g *chatItemToItem) PopAll(i int) []cache.Score {
 		}
 	}
 	return scores
+}
+
+func (g *chatItemToItem) Pool() parallel.Pool {
+	return &parallel.InfinitePool{}
 }
 
 func stripThinkInCompletion(s string) string {

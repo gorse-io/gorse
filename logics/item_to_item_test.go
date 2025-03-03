@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/suite"
 	"github.com/zhenghaoz/gorse/base/floats"
 	"github.com/zhenghaoz/gorse/common/mock"
+	"github.com/zhenghaoz/gorse/common/parallel"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/dataset"
 	"github.com/zhenghaoz/gorse/storage/data"
@@ -89,6 +90,7 @@ func (suite *ItemToItemTestSuite) TestEmbedding() {
 		Column: "item.Labels.description",
 	}, 10, timestamp)
 	suite.NoError(err)
+	suite.IsType(item2item.Pool(), &parallel.SequentialPool{})
 
 	for i := 0; i < 100; i++ {
 		item2item.Push(&data.Item{
@@ -116,6 +118,7 @@ func (suite *ItemToItemTestSuite) TestTags() {
 		Column: "item.Labels",
 	}, 10, timestamp, idf)
 	suite.NoError(err)
+	suite.IsType(item2item.Pool(), &parallel.SequentialPool{})
 
 	for i := 0; i < 100; i++ {
 		labels := make(map[string]any)
@@ -143,6 +146,7 @@ func (suite *ItemToItemTestSuite) TestUsers() {
 	}
 	item2item, err := newUsersItemToItem(config.ItemToItemConfig{}, 10, timestamp, idf)
 	suite.NoError(err)
+	suite.IsType(item2item.Pool(), &parallel.SequentialPool{})
 
 	for i := 0; i < 100; i++ {
 		feedback := make([]dataset.ID, 0, 100-i)
@@ -167,6 +171,7 @@ func (suite *ItemToItemTestSuite) TestAuto() {
 	}
 	item2item, err := newAutoItemToItem(config.ItemToItemConfig{}, 10, timestamp, idf, idf)
 	suite.NoError(err)
+	suite.IsType(item2item.Pool(), &parallel.SequentialPool{})
 
 	for i := 0; i < 100; i++ {
 		item := &data.Item{ItemId: strconv.Itoa(i)}
@@ -216,6 +221,7 @@ func (suite *ItemToItemTestSuite) TestChat() {
 		EmbeddingModel:      "text-similarity-ada-001",
 	})
 	suite.NoError(err)
+	suite.IsType(item2item.Pool(), &parallel.InfinitePool{})
 
 	for i := 0; i < 100; i++ {
 		embedding := mock.Hash("Please generate similar items for item_0.")
