@@ -30,6 +30,7 @@ import (
 	"github.com/nikolalohinski/gonja/v2/exec"
 	"github.com/samber/lo"
 	"github.com/sashabaranov/go-openai"
+	"github.com/tiktoken-go/tokenizer"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/text"
@@ -44,6 +45,16 @@ import (
 	"github.com/zhenghaoz/gorse/storage/data"
 	"go.uber.org/zap"
 )
+
+var cl100kBaseTokenizer tokenizer.Codec
+
+func init() {
+	var err error
+	cl100kBaseTokenizer, err = tokenizer.Get(tokenizer.Cl100kBase)
+	if err != nil {
+		panic(err)
+	}
+}
 
 type ItemToItemOptions struct {
 	TagsIDF      []float32
@@ -400,6 +411,8 @@ func newChatItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time, 
 }
 
 func (g *chatItemToItem) PopAll(i int) []cache.Score {
+	// requests per minute limiter
+	time.Sleep(parallel.RPMLimiter().Take(1))
 	// evaluate column expression and get embedding vector
 	result, err := expr.Run(g.columnFunc, map[string]any{
 		"item": g.items[i],
@@ -423,6 +436,9 @@ func (g *chatItemToItem) PopAll(i int) []cache.Score {
 		log.Logger().Error("failed to execute template", zap.Error(err))
 		return nil
 	}
+	// tokens per minute limiter
+	ids, _, _ := cl100kBaseTokenizer.Encode(buf.String())
+	time.Sleep(parallel.TPMLimiter().Take(int64(len(ids))))
 	// chat completion
 	start := time.Now()
 	resp, err := g.client.CreateChatCompletion(context.Background(), openai.ChatCompletionRequest{

@@ -133,6 +133,8 @@ func NewMaster(cfg *config.Config, cacheFile string, managedMode bool) *Master {
 	clientConfig.BaseURL = cfg.OpenAI.BaseURL
 	// setup OpenAI logger
 	log.InitOpenAILogger(cfg.OpenAI.LogFile)
+	// setup OpenAI rate limiter
+	parallel.InitLimiters(cfg.OpenAI.TokensPerMinute, cfg.OpenAI.RequestsPerMinute)
 
 	m := &Master{
 		// create task monitor

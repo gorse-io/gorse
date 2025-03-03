@@ -53,6 +53,7 @@ require (
 	github.com/steinfletcher/apitest v1.5.17
 	github.com/stretchr/testify v1.10.0
 	github.com/thoas/go-funk v0.9.2
+	github.com/tiktoken-go/tokenizer v0.5.1
 	github.com/yuin/goldmark v1.7.8
 	go.mongodb.org/mongo-driver v1.16.1
 	go.opentelemetry.io/contrib/instrumentation/github.com/emicklei/go-restful/otelrestful v0.36.4
@@ -97,6 +98,7 @@ require (
 	github.com/chewxy/hm v1.0.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
+	github.com/dlclark/regexp2 v1.11.5 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
