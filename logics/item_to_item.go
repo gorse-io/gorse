@@ -20,9 +20,9 @@ import (
 	"errors"
 	"sort"
 	"strings"
-	"sync/atomic"
 	"time"
 
+	"github.com/cenkalti/backoff/v5"
 	"github.com/chewxy/math32"
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/expr-lang/expr"
@@ -48,8 +48,6 @@ import (
 )
 
 var cl100kBaseTokenizer tokenizer.Codec
-var requests atomic.Int64
-var tokens atomic.Int64
 
 func init() {
 	var err error
@@ -442,20 +440,26 @@ func (g *chatItemToItem) PopAll(i int) []cache.Score {
 	// chat completion
 	start := time.Now()
 	ids, _, _ := cl100kBaseTokenizer.Encode(buf.String())
-	time.Sleep(parallel.ChatCompletionRequestsLimiter.Take(1))
-	time.Sleep(parallel.ChatCompletionTokensLimiter.Take(int64(len(ids))))
-	resp, err := g.client.CreateChatCompletion(context.Background(), openai.ChatCompletionRequest{
-		Model: g.chatCompletionModel,
-		Messages: []openai.ChatCompletionMessage{{
-			Role:    openai.ChatMessageRoleUser,
-			Content: buf.String(),
-		}},
-	})
+	resp, err := backoff.Retry(context.Background(), func() (openai.ChatCompletionResponse, error) {
+		time.Sleep(parallel.ChatCompletionRequestsLimiter.Take(1))
+		time.Sleep(parallel.ChatCompletionTokensLimiter.Take(int64(len(ids))))
+		resp, err := g.client.CreateChatCompletion(context.Background(), openai.ChatCompletionRequest{
+			Model: g.chatCompletionModel,
+			Messages: []openai.ChatCompletionMessage{{
+				Role:    openai.ChatMessageRoleUser,
+				Content: buf.String(),
+			}},
+		})
+		if err == nil {
+			return resp, nil
+		}
+		if throttled(err) {
+			return openai.ChatCompletionResponse{}, err
+		}
+		return openai.ChatCompletionResponse{}, backoff.Permanent(err)
+	}, backoff.WithBackOff(backoff.NewExponentialBackOff()))
 	if err != nil {
-		log.Logger().Error("failed to chat completion", zap.Error(err),
-			zap.String("item_id", g.items[i].ItemId),
-			zap.Int64("requests", requests.Load()),
-			zap.Int64("tokens", tokens.Load()))
+		log.Logger().Error("failed to chat completion", zap.String("item_id", g.items[i].ItemId), zap.Error(err))
 		return nil
 	}
 	duration := time.Since(start)
@@ -471,27 +475,28 @@ func (g *chatItemToItem) PopAll(i int) []cache.Score {
 	// message embedding
 	embeddings := make([][]float32, len(parsed))
 	for i, message := range parsed {
-		n, err := retry(parallel.EmbeddingBackOff, func() error {
-			ids, _, _ := cl100kBaseTokenizer.Encode(message)
-			time.Sleep(parallel.EmbeddingRequestsLimiter.Take(1) * time.Duration(parallel.EmbeddingBackOff.Factor()))
-			time.Sleep(parallel.EmbeddingTokensLimiter.Take(int64(len(ids))) * time.Duration(parallel.EmbeddingBackOff.Factor()))
+		ids, _, _ := cl100kBaseTokenizer.Encode(message)
+		resp, err := backoff.Retry(context.Background(), func() (openai.EmbeddingResponse, error) {
+			time.Sleep(parallel.EmbeddingRequestsLimiter.Take(1))
+			time.Sleep(parallel.EmbeddingTokensLimiter.Take(int64(len(ids))))
 			resp, err := g.client.CreateEmbeddings(context.Background(), openai.EmbeddingRequest{
 				Input:      message,
 				Model:      openai.EmbeddingModel(g.embeddingModel),
 				Dimensions: g.embeddingDimensions,
 			})
-			if err != nil {
-				return err
+			if err == nil {
+				return resp, nil
 			}
-			embeddings[i] = resp.Data[0].Embedding
-			return nil
-		})
+			if throttled(err) {
+				return openai.EmbeddingResponse{}, err
+			}
+			return openai.EmbeddingResponse{}, backoff.Permanent(err)
+		}, backoff.WithBackOff(backoff.NewExponentialBackOff()))
 		if err != nil {
-			log.Logger().Error("failed to create embeddings",
-				zap.String("item_id", g.items[i].ItemId),
-				zap.Int("retries", n), zap.Error(err))
+			log.Logger().Error("failed to create embeddings", zap.String("item_id", g.items[i].ItemId), zap.Error(err))
 			return nil
 		}
+		embeddings[i] = resp.Data[0].Embedding
 	}
 	// search index
 	pq := heap.NewPriorityQueue(true)
@@ -585,21 +590,4 @@ func throttled(err error) bool {
 		}
 	}
 	return false
-}
-
-func retry(backoff *parallel.BackOff, runner func() error) (int, error) {
-	const maxRetry = 8
-	var err error
-	for i := 0; i < maxRetry; i++ {
-		err = runner()
-		if err == nil {
-			backoff.Recover()
-			return i, nil
-		}
-		if !throttled(err) {
-			return i, err
-		}
-		backoff.BackOff()
-	}
-	return maxRetry, err
 }

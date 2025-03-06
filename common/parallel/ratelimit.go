@@ -1,23 +1,23 @@
 package parallel
 
 import (
-	"sync"
 	"time"
 
 	"github.com/juju/ratelimit"
 )
 
 var (
-	ChatCompletionBackOff                     = NewBackOff()
+	ChatCompletionBackoff                     = time.Duration(0)
 	ChatCompletionRequestsLimiter RateLimiter = &Unlimited{}
 	ChatCompletionTokensLimiter   RateLimiter = &Unlimited{}
-	EmbeddingBackOff                          = NewBackOff()
+	EmbeddingBackoff                          = time.Duration(0)
 	EmbeddingRequestsLimiter      RateLimiter = &Unlimited{}
 	EmbeddingTokensLimiter        RateLimiter = &Unlimited{}
 )
 
 func InitChatCompletionLimiters(rpm, tpm int) {
 	if rpm > 0 {
+		ChatCompletionBackoff = time.Minute / time.Duration(rpm)
 		ChatCompletionRequestsLimiter = ratelimit.NewBucketWithQuantum(time.Second, int64(rpm/60), int64(rpm/60))
 	}
 	if tpm > 0 {
@@ -27,6 +27,7 @@ func InitChatCompletionLimiters(rpm, tpm int) {
 
 func InitEmbeddingLimiters(rpm, tpm int) {
 	if rpm > 0 {
+		EmbeddingBackoff = time.Minute / time.Duration(rpm)
 		EmbeddingRequestsLimiter = ratelimit.NewBucketWithQuantum(time.Second, int64(rpm/60), int64(rpm/60))
 	}
 	if tpm > 0 {
@@ -42,33 +43,4 @@ type Unlimited struct{}
 
 func (n *Unlimited) Take(count int64) time.Duration {
 	return 0
-}
-
-type BackOff struct {
-	mu     sync.Mutex
-	factor int
-}
-
-func NewBackOff() *BackOff {
-	return &BackOff{
-		factor: 1,
-	}
-}
-
-func (b *BackOff) Factor() int {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return b.factor
-}
-
-func (b *BackOff) BackOff() {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	b.factor *= 2
-}
-
-func (b *BackOff) Recover() {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	b.factor = max(1, b.factor-1)
 }
