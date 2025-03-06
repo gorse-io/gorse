@@ -221,7 +221,7 @@ func (suite *ItemToItemTestSuite) TestChat() {
 		EmbeddingModel:      "text-similarity-ada-001",
 	})
 	suite.NoError(err)
-	suite.IsType(item2item.Pool(), &parallel.InfinitePool{})
+	suite.IsType(item2item.Pool(), &parallel.ConcurrentPool{})
 
 	for i := 0; i < 100; i++ {
 		embedding := mock.Hash("Please generate similar items for item_0.")

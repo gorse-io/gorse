@@ -134,7 +134,8 @@ func NewMaster(cfg *config.Config, cacheFile string, managedMode bool) *Master {
 	// setup OpenAI logger
 	log.InitOpenAILogger(cfg.OpenAI.LogFile)
 	// setup OpenAI rate limiter
-	parallel.InitLimiters(cfg.OpenAI.TokensPerMinute, cfg.OpenAI.RequestsPerMinute)
+	parallel.InitChatCompletionLimiters(cfg.OpenAI.ChatCompletionRPM, cfg.OpenAI.ChatCompletionTPM)
+	parallel.InitEmbeddingLimiters(cfg.OpenAI.EmbeddingRPM, cfg.OpenAI.EmbeddingTPM)
 
 	m := &Master{
 		// create task monitor

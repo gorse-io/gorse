@@ -1,29 +1,33 @@
 package parallel
 
 import (
-	"github.com/juju/ratelimit"
 	"time"
+
+	"github.com/juju/ratelimit"
 )
 
 var (
-	tpmLimiter RateLimiter = &NoRateLimiter{}
-	rpmLimiter RateLimiter = &NoRateLimiter{}
+	ChatCompletionRequestsLimiter RateLimiter = &Unlimited{}
+	ChatCompletionTokensLimiter   RateLimiter = &Unlimited{}
+	EmbeddingRequestsLimiter      RateLimiter = &Unlimited{}
+	EmbeddingTokensLimiter        RateLimiter = &Unlimited{}
 )
 
-func RPMLimiter() RateLimiter {
-	return rpmLimiter
-}
-
-func TPMLimiter() RateLimiter {
-	return tpmLimiter
-}
-
-func InitLimiters(tpm, rpm int) {
-	if tpm > 0 {
-		tpmLimiter = ratelimit.NewBucketWithQuantum(time.Minute, int64(tpm), int64(tpm))
-	}
+func InitChatCompletionLimiters(rpm, tpm int) {
 	if rpm > 0 {
-		rpmLimiter = ratelimit.NewBucketWithQuantum(time.Minute, int64(rpm), int64(rpm))
+		ChatCompletionRequestsLimiter = ratelimit.NewBucketWithQuantum(time.Second, int64(rpm/60), int64(rpm/60))
+	}
+	if tpm > 0 {
+		ChatCompletionTokensLimiter = ratelimit.NewBucketWithQuantum(time.Second, int64(tpm/60), int64(tpm/60))
+	}
+}
+
+func InitEmbeddingLimiters(rpm, tpm int) {
+	if rpm > 0 {
+		EmbeddingRequestsLimiter = ratelimit.NewBucketWithQuantum(time.Second, int64(rpm/60), int64(rpm/60))
+	}
+	if tpm > 0 {
+		EmbeddingTokensLimiter = ratelimit.NewBucketWithQuantum(time.Second, int64(tpm/60), int64(tpm/60))
 	}
 }
 
@@ -31,8 +35,8 @@ type RateLimiter interface {
 	Take(count int64) time.Duration
 }
 
-type NoRateLimiter struct{}
+type Unlimited struct{}
 
-func (n *NoRateLimiter) Take(count int64) time.Duration {
+func (n *Unlimited) Take(count int64) time.Duration {
 	return 0
 }

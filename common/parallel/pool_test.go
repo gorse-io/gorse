@@ -1,9 +1,10 @@
 package parallel
 
 import (
-	"github.com/stretchr/testify/assert"
 	"sync/atomic"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestSequentialPool(t *testing.T) {
@@ -18,8 +19,8 @@ func TestSequentialPool(t *testing.T) {
 	assert.Equal(t, 100, count)
 }
 
-func TestInfinitePool(t *testing.T) {
-	pool := &InfinitePool{}
+func TestConcurrentPool(t *testing.T) {
+	pool := &ConcurrentPool{}
 	raceCount := 0
 	atomicCount := atomic.Int64{}
 	for i := 0; i < 100; i++ {

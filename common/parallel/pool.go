@@ -15,11 +15,11 @@ func (p *SequentialPool) Run(runner func()) {
 
 func (p *SequentialPool) Wait() {}
 
-type InfinitePool struct {
+type ConcurrentPool struct {
 	wg sync.WaitGroup
 }
 
-func (p *InfinitePool) Run(runner func()) {
+func (p *ConcurrentPool) Run(runner func()) {
 	p.wg.Add(1)
 	go func() {
 		runner()
@@ -27,6 +27,6 @@ func (p *InfinitePool) Run(runner func()) {
 	}()
 }
 
-func (p *InfinitePool) Wait() {
+func (p *ConcurrentPool) Wait() {
 	p.wg.Wait()
 }
