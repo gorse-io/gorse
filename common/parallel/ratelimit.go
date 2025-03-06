@@ -1,14 +1,17 @@
 package parallel
 
 import (
+	"sync"
 	"time"
 
 	"github.com/juju/ratelimit"
 )
 
 var (
+	ChatCompletionBackOff                     = NewBackOff()
 	ChatCompletionRequestsLimiter RateLimiter = &Unlimited{}
 	ChatCompletionTokensLimiter   RateLimiter = &Unlimited{}
+	EmbeddingBackOff                          = NewBackOff()
 	EmbeddingRequestsLimiter      RateLimiter = &Unlimited{}
 	EmbeddingTokensLimiter        RateLimiter = &Unlimited{}
 )
@@ -39,4 +42,33 @@ type Unlimited struct{}
 
 func (n *Unlimited) Take(count int64) time.Duration {
 	return 0
+}
+
+type BackOff struct {
+	mu     sync.Mutex
+	factor int
+}
+
+func NewBackOff() *BackOff {
+	return &BackOff{
+		factor: 1,
+	}
+}
+
+func (b *BackOff) Factor() int {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.factor
+}
+
+func (b *BackOff) BackOff() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.factor *= 2
+}
+
+func (b *BackOff) Recover() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.factor = max(1, b.factor-1)
 }
