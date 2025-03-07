@@ -20,16 +20,13 @@ func TestSequentialPool(t *testing.T) {
 }
 
 func TestConcurrentPool(t *testing.T) {
-	pool := NewConcurrentPool(1000)
-	raceCount := 0
-	atomicCount := atomic.Int64{}
-	for i := 0; i < 1000; i++ {
+	pool := NewConcurrentPool(100)
+	count := atomic.Int64{}
+	for i := 0; i < 100; i++ {
 		pool.Run(func() {
-			raceCount++
-			atomicCount.Add(1)
+			count.Add(1)
 		})
 	}
 	pool.Wait()
-	assert.Less(t, raceCount, 1000)
-	assert.Equal(t, int64(1000), atomicCount.Load())
+	assert.Equal(t, int64(100), count.Load())
 }

@@ -351,7 +351,7 @@ chat_completion_tpm = 1200000
 embedding_model = "mxbai-embed-large"
 
 # Dimensions of embedding vectors.
-embedding_dimensions = 512
+embedding_dimensions = 1024
 
 # Maximum requests per minute for embedding.
 embedding_rpm = 1800

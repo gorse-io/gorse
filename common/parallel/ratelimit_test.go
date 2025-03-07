@@ -13,11 +13,11 @@ func TestUnlimited(t *testing.T) {
 }
 
 func TestInitEmbeddingLimiters(t *testing.T) {
-	InitEmbeddingLimiters(2, 3)
+	InitEmbeddingLimiters(120, 180)
 	assert.Equal(t, time.Duration(0), EmbeddingRequestsLimiter.Take(1))
-	assert.InDelta(t, time.Minute, EmbeddingRequestsLimiter.Take(2), float64(time.Millisecond))
+	assert.InDelta(t, time.Second, EmbeddingRequestsLimiter.Take(2), float64(time.Millisecond))
 	assert.Equal(t, time.Duration(0), EmbeddingTokensLimiter.Take(2))
-	assert.InDelta(t, 2*time.Minute, EmbeddingTokensLimiter.Take(5), float64(time.Millisecond))
+	assert.InDelta(t, 2*time.Second, EmbeddingTokensLimiter.Take(5), float64(time.Millisecond))
 }
 
 func TestInitChatCompletionLimiters(t *testing.T) {
