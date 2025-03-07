@@ -22,6 +22,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cenkalti/backoff/v5"
 	"github.com/chewxy/math32"
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/expr-lang/expr"
@@ -30,6 +31,7 @@ import (
 	"github.com/nikolalohinski/gonja/v2/exec"
 	"github.com/samber/lo"
 	"github.com/sashabaranov/go-openai"
+	"github.com/tiktoken-go/tokenizer"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/text"
@@ -37,12 +39,23 @@ import (
 	"github.com/zhenghaoz/gorse/base/heap"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/common/ann"
+	"github.com/zhenghaoz/gorse/common/parallel"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/dataset"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
 	"go.uber.org/zap"
 )
+
+var cl100kBaseTokenizer tokenizer.Codec
+
+func init() {
+	var err error
+	cl100kBaseTokenizer, err = tokenizer.Get(tokenizer.Cl100kBase)
+	if err != nil {
+		panic(err)
+	}
+}
 
 type ItemToItemOptions struct {
 	TagsIDF      []float32
@@ -55,6 +68,7 @@ type ItemToItem interface {
 	Items() []*data.Item
 	Push(item *data.Item, feedback []dataset.ID)
 	PopAll(i int) []cache.Score
+	Pool() parallel.Pool
 }
 
 func NewItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time, opts *ItemToItemOptions) (ItemToItem, error) {
@@ -117,6 +131,10 @@ func (b *baseItemToItem[T]) PopAll(i int) []cache.Score {
 			Timestamp:  b.timestamp,
 		}
 	})
+}
+
+func (b *baseItemToItem[T]) Pool() parallel.Pool {
+	return parallel.NewSequentialPool()
 }
 
 type embeddingItemToItem struct {
@@ -367,6 +385,7 @@ type chatItemToItem struct {
 	chatCompletionModel string
 	embeddingModel      string
 	embeddingDimensions int
+	poolSize            int
 }
 
 func newChatItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time, openaiConfig config.OpenAIConfig) (*chatItemToItem, error) {
@@ -390,6 +409,7 @@ func newChatItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time, 
 		chatCompletionModel: openaiConfig.ChatCompletionModel,
 		embeddingModel:      openaiConfig.EmbeddingModel,
 		embeddingDimensions: openaiConfig.EmbeddingDimensions,
+		poolSize:            min(openaiConfig.ChatCompletionRPM, openaiConfig.EmbeddingRPM),
 	}, nil
 }
 
@@ -419,15 +439,27 @@ func (g *chatItemToItem) PopAll(i int) []cache.Score {
 	}
 	// chat completion
 	start := time.Now()
-	resp, err := g.client.CreateChatCompletion(context.Background(), openai.ChatCompletionRequest{
-		Model: g.chatCompletionModel,
-		Messages: []openai.ChatCompletionMessage{{
-			Role:    openai.ChatMessageRoleUser,
-			Content: buf.String(),
-		}},
-	})
+	ids, _, _ := cl100kBaseTokenizer.Encode(buf.String())
+	resp, err := backoff.Retry(context.Background(), func() (openai.ChatCompletionResponse, error) {
+		time.Sleep(parallel.ChatCompletionRequestsLimiter.Take(1))
+		time.Sleep(parallel.ChatCompletionTokensLimiter.Take(int64(len(ids))))
+		resp, err := g.client.CreateChatCompletion(context.Background(), openai.ChatCompletionRequest{
+			Model: g.chatCompletionModel,
+			Messages: []openai.ChatCompletionMessage{{
+				Role:    openai.ChatMessageRoleUser,
+				Content: buf.String(),
+			}},
+		})
+		if err == nil {
+			return resp, nil
+		}
+		if throttled(err) {
+			return openai.ChatCompletionResponse{}, err
+		}
+		return openai.ChatCompletionResponse{}, backoff.Permanent(err)
+	}, backoff.WithBackOff(backoff.NewExponentialBackOff()))
 	if err != nil {
-		log.Logger().Error("failed to chat completion", zap.Error(err))
+		log.Logger().Error("failed to chat completion", zap.String("item_id", g.items[i].ItemId), zap.Error(err))
 		return nil
 	}
 	duration := time.Since(start)
@@ -443,13 +475,25 @@ func (g *chatItemToItem) PopAll(i int) []cache.Score {
 	// message embedding
 	embeddings := make([][]float32, len(parsed))
 	for i, message := range parsed {
-		resp, err := g.client.CreateEmbeddings(context.Background(), openai.EmbeddingRequest{
-			Input:      message,
-			Model:      openai.EmbeddingModel(g.embeddingModel),
-			Dimensions: g.embeddingDimensions,
-		})
+		ids, _, _ := cl100kBaseTokenizer.Encode(message)
+		resp, err := backoff.Retry(context.Background(), func() (openai.EmbeddingResponse, error) {
+			time.Sleep(parallel.EmbeddingRequestsLimiter.Take(1))
+			time.Sleep(parallel.EmbeddingTokensLimiter.Take(int64(len(ids))))
+			resp, err := g.client.CreateEmbeddings(context.Background(), openai.EmbeddingRequest{
+				Input:      message,
+				Model:      openai.EmbeddingModel(g.embeddingModel),
+				Dimensions: g.embeddingDimensions,
+			})
+			if err == nil {
+				return resp, nil
+			}
+			if throttled(err) {
+				return openai.EmbeddingResponse{}, err
+			}
+			return openai.EmbeddingResponse{}, backoff.Permanent(err)
+		}, backoff.WithBackOff(backoff.NewExponentialBackOff()))
 		if err != nil {
-			log.Logger().Error("failed to create embeddings", zap.Error(err))
+			log.Logger().Error("failed to create embeddings", zap.String("item_id", g.items[i].ItemId), zap.Error(err))
 			return nil
 		}
 		embeddings[i] = resp.Data[0].Embedding
@@ -479,6 +523,10 @@ func (g *chatItemToItem) PopAll(i int) []cache.Score {
 		}
 	}
 	return scores
+}
+
+func (g *chatItemToItem) Pool() parallel.Pool {
+	return parallel.NewConcurrentPool(g.poolSize)
 }
 
 func stripThinkInCompletion(s string) string {
@@ -533,4 +581,13 @@ func parseJSONArrayFromCompletion(completion string) []string {
 		}
 	}
 	return []string{string(source)}
+}
+
+func throttled(err error) bool {
+	if requestErr, ok := err.(*openai.APIError); ok {
+		if requestErr.HTTPStatusCode == 429 {
+			return true
+		}
+	}
+	return false
 }

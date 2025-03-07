@@ -20,7 +20,7 @@ import (
 	"github.com/thoas/go-funk"
 	"github.com/zhenghaoz/gorse/base/floats"
 	"github.com/zhenghaoz/gorse/base/heap"
-	"github.com/zhenghaoz/gorse/base/parallel"
+	"github.com/zhenghaoz/gorse/common/parallel"
 )
 
 /* Evaluate Item Ranking */
