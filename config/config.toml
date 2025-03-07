@@ -341,17 +341,23 @@ auth_token = "ollama"
 # Name of chat completion model.
 chat_completion_model = "qwen2.5"
 
+# Maximum requests per minute for chat completion.
+chat_completion_rpm = 15000
+
+# Maximum tokens per minute for chat completion.
+chat_completion_tpm = 1200000
+
 # Name of embedding model.
 embedding_model = "mxbai-embed-large"
 
 # Dimensions of embedding vectors.
 embedding_dimensions = 512
 
+# Maximum requests per minute for embedding.
+embedding_rpm = 1800
+
+# Maximum tokens per minute for embedding.
+embedding_tpm = 1200000
+
 # Log file for OpenAI API.
 log_file = "openai.log"
-
-# Tokens per minute for OpenAI API.
-tokens_per_minute = 1200000
-
-# Requests per minute for OpenAI API.
-requests_per_minute = 15000

@@ -165,7 +165,7 @@ func TestUnmarshal(t *testing.T) {
 			assert.Equal(t, 30000, config.OpenAI.ChatCompletionTPM)
 			assert.Equal(t, "mxbai-embed-large", config.OpenAI.EmbeddingModel)
 			assert.Equal(t, 1024, config.OpenAI.EmbeddingDimensions)
-			assert.Equal(t, 30, config.OpenAI.EmbeddingRPS)
+			assert.Equal(t, 1800, config.OpenAI.EmbeddingRPM)
 			assert.Equal(t, 1200000, config.OpenAI.EmbeddingTPM)
 		})
 	}
