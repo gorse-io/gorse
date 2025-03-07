@@ -32,4 +32,6 @@ func TestFreqDict(t *testing.T) {
 	assert.Equal(t, 1, dict.Freq(0))
 	assert.Equal(t, 2, dict.Freq(1))
 	assert.Equal(t, 3, dict.Freq(2))
+	assert.Equal(t, 0, dict.NotAdd("a"))
+	assert.Equal(t, -1, dict.NotAdd("e"))
 }
