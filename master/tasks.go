@@ -171,7 +171,7 @@ func (m *Master) runLoadDatasetTask() error {
 	InactiveItemsTotal.Set(float64(inactiveItems))
 
 	// write categories to cache
-	if err = m.CacheClient.SetSet(ctx, cache.ItemCategories, rankingDataset.CategorySet.ToSlice()...); err != nil {
+	if err = m.CacheClient.SetSet(ctx, cache.ItemCategories, dataSet.GetCategories()...); err != nil {
 		log.Logger().Error("failed to write categories to cache", zap.Error(err))
 	}
 
@@ -669,10 +669,6 @@ func (m *Master) LoadDataFromDatabase(
 		temp := time.Now().AddDate(0, 0, -int(positiveFeedbackTTL))
 		feedbackTimeLimit = data.WithBeginTime(temp)
 	}
-	timeWindowLimit := time.Time{}
-	if m.Config.Recommend.Popular.PopularWindow > 0 {
-		timeWindowLimit = time.Now().Add(-m.Config.Recommend.Popular.PopularWindow)
-	}
 	rankingDataset = ranking.NewMapIndexDataset()
 
 	// STEP 1: pull users
@@ -742,9 +738,6 @@ func (m *Master) LoadDataFromDatabase(
 			itemIndex := rankingDataset.ItemIndex.ToNumber(item.ItemId)
 			if len(rankingDataset.ItemFeatures) == int(itemIndex) {
 				rankingDataset.ItemFeatures = append(rankingDataset.ItemFeatures, nil)
-				rankingDataset.HiddenItems = append(rankingDataset.HiddenItems, false)
-				rankingDataset.ItemCategories = append(rankingDataset.ItemCategories, item.Categories)
-				rankingDataset.CategorySet.Append(item.Categories...)
 			}
 			features := click.ConvertLabelsToFeatures(item.Labels)
 			rankingDataset.NumItemLabelUsed += len(features)
@@ -772,9 +765,6 @@ func (m *Master) LoadDataFromDatabase(
 					})
 				}
 			}
-			if item.IsHidden { // set hidden flag
-				rankingDataset.HiddenItems[itemIndex] = true
-			}
 			dataSet.AddItem(item)
 		}
 		span.Add(len(batchItems))
@@ -790,7 +780,6 @@ func (m *Master) LoadDataFromDatabase(
 	LoadDatasetStepSecondsVec.WithLabelValues("load_items").Set(time.Since(start).Seconds())
 
 	// create positive set
-	popularCount := make([]int32, rankingDataset.ItemCount())
 	positiveSet := make([]mapset.Set[int32], rankingDataset.UserCount())
 	for i := range positiveSet {
 		positiveSet[i] = mapset.NewSet[int32]()
@@ -835,10 +824,6 @@ func (m *Master) LoadDataFromDatabase(
 				posFeedbackCount++
 				// insert feedback to ranking dataset
 				rankingDataset.AddFeedback(f.UserId, f.ItemId, false)
-				// insert feedback to popularity counter
-				if f.Timestamp.After(timeWindowLimit) && !rankingDataset.HiddenItems[itemIndex] {
-					popularCount[itemIndex]++
-				}
 				// insert feedback to evaluator
 				evaluator.Positive(f.FeedbackType, userIndex, itemIndex, f.Timestamp)
 				mu.Unlock()

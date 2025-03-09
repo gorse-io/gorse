@@ -42,6 +42,13 @@ func (d *FreqDict) Id(s string) (y int) {
 	return
 }
 
+func (d *FreqDict) NotAdd(s string) int {
+	if y, ok := d.si[s]; ok {
+		return y
+	}
+	return -1
+}
+
 func (d *FreqDict) NotCount(s string) (y int) {
 	if y, ok := d.si[s]; ok {
 		return y
