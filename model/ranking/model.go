@@ -18,22 +18,20 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"reflect"
 	"time"
 
 	"github.com/bits-and-blooms/bitset"
 	"github.com/chewxy/math32"
 	mapset "github.com/deckarep/golang-set/v2"
-	"github.com/juju/errors"
 	"github.com/samber/lo"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/copier"
-	"github.com/zhenghaoz/gorse/base/encoding"
 	"github.com/zhenghaoz/gorse/base/floats"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/base/parallel"
 	"github.com/zhenghaoz/gorse/base/progress"
 	"github.com/zhenghaoz/gorse/base/task"
+	"github.com/zhenghaoz/gorse/dataset"
 	"github.com/zhenghaoz/gorse/model"
 	"go.uber.org/zap"
 )
@@ -79,9 +77,9 @@ func (config *FitConfig) LoadDefaultIfNil() *FitConfig {
 type Model interface {
 	model.Model
 	// Fit a model with a train set and parameters.
-	Fit(ctx context.Context, trainSet *DataSet, validateSet *DataSet, config *FitConfig) Score
+	Fit(ctx context.Context, trainSet *dataset.Dataset, validateSet *dataset.Dataset, config *FitConfig) Score
 	// GetItemIndex returns item index.
-	GetItemIndex() base.Index
+	GetItemIndex() *dataset.FreqDict
 	// Marshal model into byte stream.
 	Marshal(w io.Writer) error
 	// Unmarshal model from byte stream.
@@ -99,9 +97,9 @@ type MatrixFactorization interface {
 	// InternalPredict predicts rating given by a user index and a item index
 	InternalPredict(userIndex, itemIndex int32) float32
 	// GetUserIndex returns user index.
-	GetUserIndex() base.Index
+	GetUserIndex() *dataset.FreqDict
 	// GetItemIndex returns item index.
-	GetItemIndex() base.Index
+	GetItemIndex() *dataset.FreqDict
 	// IsUserPredictable returns false if user has no feedback and its embedding vector never be trained.
 	IsUserPredictable(userIndex int32) bool
 	// IsItemPredictable returns false if item has no feedback and its embedding vector never be trained.
@@ -114,8 +112,8 @@ type MatrixFactorization interface {
 
 type BaseMatrixFactorization struct {
 	model.BaseModel
-	UserIndex       base.Index
-	ItemIndex       base.Index
+	UserIndex       *dataset.FreqDict
+	ItemIndex       *dataset.FreqDict
 	UserPredictable *bitset.BitSet
 	ItemPredictable *bitset.BitSet
 	// Model parameters
@@ -123,36 +121,36 @@ type BaseMatrixFactorization struct {
 	ItemFactor [][]float32 // q_i
 }
 
-func (baseModel *BaseMatrixFactorization) Init(trainSet *DataSet) {
-	baseModel.UserIndex = trainSet.UserIndex
-	baseModel.ItemIndex = trainSet.ItemIndex
+func (baseModel *BaseMatrixFactorization) Init(trainSet *dataset.Dataset) {
+	baseModel.UserIndex = trainSet.GetUserDict()
+	baseModel.ItemIndex = trainSet.GetItemDict()
 	// set user trained flags
-	baseModel.UserPredictable = bitset.New(uint(trainSet.UserIndex.Len()))
-	for userIndex := range baseModel.UserIndex.GetNames() {
-		if len(trainSet.UserFeedback[userIndex]) > 0 {
+	baseModel.UserPredictable = bitset.New(uint(baseModel.UserIndex.Count()))
+	for userIndex := 0; userIndex < baseModel.UserIndex.Count(); userIndex++ {
+		if len(trainSet.GetUserFeedback()[userIndex]) > 0 {
 			baseModel.UserPredictable.Set(uint(userIndex))
 		}
 	}
 	// set item trained flags
-	baseModel.ItemPredictable = bitset.New(uint(trainSet.ItemIndex.Len()))
-	for itemIndex := range baseModel.ItemIndex.GetNames() {
-		if len(trainSet.ItemFeedback[itemIndex]) > 0 {
+	baseModel.ItemPredictable = bitset.New(uint(baseModel.ItemIndex.Count()))
+	for itemIndex := 0; itemIndex < baseModel.ItemIndex.Count(); itemIndex++ {
+		if len(trainSet.GetItemFeedback()[itemIndex]) > 0 {
 			baseModel.ItemPredictable.Set(uint(itemIndex))
 		}
 	}
 }
 
-func (baseModel *BaseMatrixFactorization) GetUserIndex() base.Index {
+func (baseModel *BaseMatrixFactorization) GetUserIndex() *dataset.FreqDict {
 	return baseModel.UserIndex
 }
 
-func (baseModel *BaseMatrixFactorization) GetItemIndex() base.Index {
+func (baseModel *BaseMatrixFactorization) GetItemIndex() *dataset.FreqDict {
 	return baseModel.ItemIndex
 }
 
 // IsUserPredictable returns false if user has no feedback and its embedding vector never be trained.
 func (baseModel *BaseMatrixFactorization) IsUserPredictable(userIndex int32) bool {
-	if userIndex >= baseModel.UserIndex.Len() {
+	if int(userIndex) >= baseModel.UserIndex.Count() {
 		return false
 	}
 	return baseModel.UserPredictable.Test(uint(userIndex))
@@ -160,7 +158,7 @@ func (baseModel *BaseMatrixFactorization) IsUserPredictable(userIndex int32) boo
 
 // IsItemPredictable returns false if item has no feedback and its embedding vector never be trained.
 func (baseModel *BaseMatrixFactorization) IsItemPredictable(itemIndex int32) bool {
-	if itemIndex >= baseModel.ItemIndex.Len() {
+	if int(itemIndex) >= baseModel.ItemIndex.Count() {
 		return false
 	}
 	return baseModel.ItemPredictable.Test(uint(itemIndex))
@@ -168,58 +166,14 @@ func (baseModel *BaseMatrixFactorization) IsItemPredictable(itemIndex int32) boo
 
 // Marshal model into byte stream.
 func (baseModel *BaseMatrixFactorization) Marshal(w io.Writer) error {
-	// write params
-	err := encoding.WriteGob(w, baseModel.Params)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	// write user index
-	err = base.MarshalIndex(w, baseModel.UserIndex)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	// write item index
-	err = base.MarshalIndex(w, baseModel.ItemIndex)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	// write user predictable
-	_, err = baseModel.UserPredictable.WriteTo(w)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	// write item predictable
-	_, err = baseModel.ItemPredictable.WriteTo(w)
-	return errors.Trace(err)
+	// TODO: implement Marshal
+	return nil
 }
 
 // Unmarshal model from byte stream.
 func (baseModel *BaseMatrixFactorization) Unmarshal(r io.Reader) error {
-	// read params
-	err := encoding.ReadGob(r, &baseModel.Params)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	// read user index
-	baseModel.UserIndex, err = base.UnmarshalIndex(r)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	// read item index
-	baseModel.ItemIndex, err = base.UnmarshalIndex(r)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	// read user predictable
-	baseModel.UserPredictable = &bitset.BitSet{}
-	_, err = baseModel.UserPredictable.ReadFrom(r)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	// read item predictable
-	baseModel.ItemPredictable = &bitset.BitSet{}
-	_, err = baseModel.ItemPredictable.ReadFrom(r)
-	return errors.Trace(err)
+	// TODO: implement Unmarshal
+	return nil
 }
 
 // Clone a model with deep copy.
@@ -231,54 +185,6 @@ func Clone(m MatrixFactorization) MatrixFactorization {
 		copied.SetParams(copied.GetParams())
 		return copied
 	}
-}
-
-const (
-	CollaborativeBPR = "bpr"
-	CollaborativeCCD = "ccd"
-)
-
-func GetModelName(m Model) string {
-	switch m.(type) {
-	case *BPR:
-		return CollaborativeBPR
-	case *CCD:
-		return CollaborativeCCD
-	default:
-		return reflect.TypeOf(m).String()
-	}
-}
-
-func MarshalModel(w io.Writer, m Model) error {
-	if err := encoding.WriteString(w, GetModelName(m)); err != nil {
-		return errors.Trace(err)
-	}
-	if err := m.Marshal(w); err != nil {
-		return errors.Trace(err)
-	}
-	return nil
-}
-
-func UnmarshalModel(r io.Reader) (MatrixFactorization, error) {
-	name, err := encoding.ReadString(r)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-	switch name {
-	case "bpr":
-		var bpr BPR
-		if err := bpr.Unmarshal(r); err != nil {
-			return nil, errors.Trace(err)
-		}
-		return &bpr, nil
-	case "ccd":
-		var ccd CCD
-		if err := ccd.Unmarshal(r); err != nil {
-			return nil, errors.Trace(err)
-		}
-		return &ccd, nil
-	}
-	return nil, fmt.Errorf("unknown model %v", name)
 }
 
 // BPR means Bayesian Personal Ranking, is a pairwise learning algorithm for matrix factorization
@@ -349,21 +255,21 @@ func (bpr *BPR) GetParamsGrid(withSize bool) model.ParamsGrid {
 // Predict by the BPR model.
 func (bpr *BPR) Predict(userId, itemId string) float32 {
 	// Convert sparse Names to dense Names
-	userIndex := bpr.UserIndex.ToNumber(userId)
-	itemIndex := bpr.ItemIndex.ToNumber(itemId)
-	if userIndex == base.NotId {
+	userIndex := bpr.UserIndex.Id(userId)
+	itemIndex := bpr.ItemIndex.Id(itemId)
+	if userIndex < 0 {
 		log.Logger().Warn("unknown user", zap.String("user_id", userId))
 	}
-	if itemIndex == base.NotId {
+	if itemIndex < 0 {
 		log.Logger().Warn("unknown item", zap.String("item_id", itemId))
 	}
-	return bpr.InternalPredict(userIndex, itemIndex)
+	return bpr.InternalPredict(int32(userIndex), int32(itemIndex))
 }
 
 func (bpr *BPR) InternalPredict(userIndex, itemIndex int32) float32 {
 	ret := float32(0.0)
 	// + q_i^Tp_u
-	if itemIndex != base.NotId && userIndex != base.NotId {
+	if itemIndex >= 0 && userIndex >= 0 {
 		ret += floats.Dot(bpr.UserFactor[userIndex], bpr.ItemFactor[itemIndex])
 	} else {
 		log.Logger().Warn("unknown user or item")
@@ -372,7 +278,7 @@ func (bpr *BPR) InternalPredict(userIndex, itemIndex int32) float32 {
 }
 
 // Fit the BPR model. Its task complexity is O(bpr.nEpochs).
-func (bpr *BPR) Fit(ctx context.Context, trainSet, valSet *DataSet, config *FitConfig) Score {
+func (bpr *BPR) Fit(ctx context.Context, trainSet, valSet *dataset.Dataset, config *FitConfig) Score {
 	config = config.LoadDefaultIfNil()
 	log.Logger().Info("fit bpr",
 		zap.Int("train_set_size", trainSet.Count()),
@@ -391,10 +297,10 @@ func (bpr *BPR) Fit(ctx context.Context, trainSet, valSet *DataSet, config *FitC
 		rng[i] = base.NewRandomGenerator(bpr.GetRandomGenerator().Int63())
 	}
 	// Convert array to hashmap
-	userFeedback := make([]mapset.Set[int32], trainSet.UserCount())
+	userFeedback := make([]mapset.Set[int32], trainSet.CountUsers())
 	for u := range userFeedback {
 		userFeedback[u] = mapset.NewSet[int32]()
-		for _, i := range trainSet.UserFeedback[u] {
+		for _, i := range trainSet.GetUserFeedback()[u] {
 			userFeedback[u].Add(i)
 		}
 	}
@@ -418,17 +324,17 @@ func (bpr *BPR) Fit(ctx context.Context, trainSet, valSet *DataSet, config *FitC
 			var userIndex int32
 			var ratingCount int
 			for {
-				userIndex = rng[workerId].Int31n(int32(trainSet.UserCount()))
-				ratingCount = len(trainSet.UserFeedback[userIndex])
+				userIndex = rng[workerId].Int31n(int32(trainSet.CountUsers()))
+				ratingCount = len(trainSet.GetUserFeedback()[userIndex])
 				if ratingCount > 0 {
 					break
 				}
 			}
-			posIndex := trainSet.UserFeedback[userIndex][rng[workerId].Intn(ratingCount)]
+			posIndex := trainSet.GetUserFeedback()[userIndex][rng[workerId].Intn(ratingCount)]
 			// Select a negative sample
 			negIndex := int32(-1)
 			for {
-				temp := rng[workerId].Int31n(int32(trainSet.ItemCount()))
+				temp := rng[workerId].Int31n(int32(trainSet.CountItems()))
 				if !userFeedback[userIndex].Contains(temp) {
 					negIndex = temp
 					break
@@ -498,29 +404,10 @@ func (bpr *BPR) Invalid() bool {
 		bpr.ItemFactor == nil
 }
 
-func (bpr *BPR) Init(trainSet *DataSet) {
+func (bpr *BPR) Init(trainSet *dataset.Dataset) {
 	// Initialize parameters
-	newUserFactor := bpr.GetRandomGenerator().NormalMatrix(trainSet.UserCount(), bpr.nFactors, bpr.initMean, bpr.initStdDev)
-	newItemFactor := bpr.GetRandomGenerator().NormalMatrix(trainSet.ItemCount(), bpr.nFactors, bpr.initMean, bpr.initStdDev)
-	// Relocate parameters
-	if bpr.UserIndex != nil {
-		for _, userId := range trainSet.UserIndex.GetNames() {
-			oldIndex := bpr.UserIndex.ToNumber(userId)
-			newIndex := trainSet.UserIndex.ToNumber(userId)
-			if oldIndex != base.NotId {
-				newUserFactor[newIndex] = bpr.UserFactor[oldIndex]
-			}
-		}
-	}
-	if bpr.ItemIndex != nil {
-		for _, itemId := range trainSet.ItemIndex.GetNames() {
-			oldIndex := bpr.ItemIndex.ToNumber(itemId)
-			newIndex := trainSet.ItemIndex.ToNumber(itemId)
-			if oldIndex != base.NotId {
-				newItemFactor[newIndex] = bpr.ItemFactor[oldIndex]
-			}
-		}
-	}
+	newUserFactor := bpr.GetRandomGenerator().NormalMatrix(trainSet.CountUsers(), bpr.nFactors, bpr.initMean, bpr.initStdDev)
+	newItemFactor := bpr.GetRandomGenerator().NormalMatrix(trainSet.CountItems(), bpr.nFactors, bpr.initMean, bpr.initStdDev)
 	// Initialize base
 	bpr.UserFactor = newUserFactor
 	bpr.ItemFactor = newItemFactor
@@ -529,45 +416,13 @@ func (bpr *BPR) Init(trainSet *DataSet) {
 
 // Marshal model into byte stream.
 func (bpr *BPR) Marshal(w io.Writer) error {
-	// write base
-	err := bpr.BaseMatrixFactorization.Marshal(w)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	// write user factors
-	err = encoding.WriteMatrix(w, bpr.UserFactor)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	// write item factors
-	err = encoding.WriteMatrix(w, bpr.ItemFactor)
-	if err != nil {
-		return errors.Trace(err)
-	}
+	// TODO: implement Marshal
 	return nil
 }
 
 // Unmarshal model from byte stream.
 func (bpr *BPR) Unmarshal(r io.Reader) error {
-	// read base
-	var err error
-	err = bpr.BaseMatrixFactorization.Unmarshal(r)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	bpr.SetParams(bpr.Params)
-	// read user factors
-	bpr.UserFactor = base.NewMatrix32(int(bpr.UserIndex.Len()), bpr.nFactors)
-	err = encoding.ReadMatrix(r, bpr.UserFactor)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	// read item factors
-	bpr.ItemFactor = base.NewMatrix32(int(bpr.ItemIndex.Len()), bpr.nFactors)
-	err = encoding.ReadMatrix(r, bpr.ItemFactor)
-	if err != nil {
-		return errors.Trace(err)
-	}
+	// TODO: implement Unmarshal
 	return nil
 }
 
@@ -622,22 +477,22 @@ func (ccd *CCD) GetParamsGrid(withSize bool) model.ParamsGrid {
 
 // Predict by the ALS model.
 func (ccd *CCD) Predict(userId, itemId string) float32 {
-	userIndex := ccd.UserIndex.ToNumber(userId)
-	itemIndex := ccd.ItemIndex.ToNumber(itemId)
-	if userIndex == base.NotId {
+	userIndex := ccd.UserIndex.Id(userId)
+	itemIndex := ccd.ItemIndex.Id(itemId)
+	if userIndex < 0 {
 		log.Logger().Info("unknown user:", zap.String("user_id", userId))
 		return 0
 	}
-	if itemIndex == base.NotId {
+	if itemIndex < 0 {
 		log.Logger().Info("unknown item:", zap.String("item_id", itemId))
 		return 0
 	}
-	return ccd.InternalPredict(userIndex, itemIndex)
+	return ccd.InternalPredict(int32(userIndex), int32(itemIndex))
 }
 
 func (ccd *CCD) InternalPredict(userIndex, itemIndex int32) float32 {
 	ret := float32(0.0)
-	if itemIndex != base.NotId && userIndex != base.NotId {
+	if itemIndex >= 0 && userIndex >= 0 {
 		ret = floats.Dot(ccd.UserFactor[userIndex], ccd.ItemFactor[itemIndex])
 	} else {
 		log.Logger().Warn("unknown user or item")
@@ -660,29 +515,10 @@ func (ccd *CCD) Invalid() bool {
 		ccd.UserFactor == nil
 }
 
-func (ccd *CCD) Init(trainSet *DataSet) {
+func (ccd *CCD) Init(trainSet *dataset.Dataset) {
 	// Initialize
-	newUserFactor := ccd.GetRandomGenerator().NormalMatrix(trainSet.UserCount(), ccd.nFactors, ccd.initMean, ccd.initStdDev)
-	newItemFactor := ccd.GetRandomGenerator().NormalMatrix(trainSet.ItemCount(), ccd.nFactors, ccd.initMean, ccd.initStdDev)
-	// Relocate parameters
-	if ccd.UserIndex != nil {
-		for _, userId := range trainSet.UserIndex.GetNames() {
-			oldIndex := ccd.UserIndex.ToNumber(userId)
-			newIndex := trainSet.UserIndex.ToNumber(userId)
-			if oldIndex != base.NotId {
-				newUserFactor[newIndex] = ccd.UserFactor[oldIndex]
-			}
-		}
-	}
-	if ccd.ItemIndex != nil {
-		for _, itemId := range trainSet.ItemIndex.GetNames() {
-			oldIndex := ccd.ItemIndex.ToNumber(itemId)
-			newIndex := trainSet.ItemIndex.ToNumber(itemId)
-			if oldIndex != base.NotId {
-				newItemFactor[newIndex] = ccd.ItemFactor[oldIndex]
-			}
-		}
-	}
+	newUserFactor := ccd.GetRandomGenerator().NormalMatrix(trainSet.CountUsers(), ccd.nFactors, ccd.initMean, ccd.initStdDev)
+	newItemFactor := ccd.GetRandomGenerator().NormalMatrix(trainSet.CountItems(), ccd.nFactors, ccd.initMean, ccd.initStdDev)
 	// Initialize base
 	ccd.UserFactor = newUserFactor
 	ccd.ItemFactor = newItemFactor
@@ -690,7 +526,7 @@ func (ccd *CCD) Init(trainSet *DataSet) {
 }
 
 // Fit the CCD model. Its task complexity is O(ccd.nEpochs).
-func (ccd *CCD) Fit(ctx context.Context, trainSet, valSet *DataSet, config *FitConfig) Score {
+func (ccd *CCD) Fit(ctx context.Context, trainSet, valSet *dataset.Dataset, config *FitConfig) Score {
 	config = config.LoadDefaultIfNil()
 	log.Logger().Info("fit ccd",
 		zap.Int("train_set_size", trainSet.Count()),
@@ -706,10 +542,10 @@ func (ccd *CCD) Fit(ctx context.Context, trainSet, valSet *DataSet, config *FitC
 	userRes := make([][]float32, maxJobs)
 	itemRes := make([][]float32, maxJobs)
 	for i := 0; i < maxJobs; i++ {
-		userPredictions[i] = make([]float32, trainSet.ItemCount())
-		itemPredictions[i] = make([]float32, trainSet.UserCount())
-		userRes[i] = make([]float32, trainSet.ItemCount())
-		itemRes[i] = make([]float32, trainSet.UserCount())
+		userPredictions[i] = make([]float32, trainSet.CountItems())
+		itemPredictions[i] = make([]float32, trainSet.CountUsers())
+		userRes[i] = make([]float32, trainSet.CountItems())
+		itemRes[i] = make([]float32, trainSet.CountUsers())
 	}
 	// evaluate initial model
 	evalStart := time.Now()
@@ -727,8 +563,8 @@ func (ccd *CCD) Fit(ctx context.Context, trainSet, valSet *DataSet, config *FitC
 		// Update user factors
 		// S^q <- \sum^N_{itemIndex=1} c_i q_i q_i^T
 		floats.MatZero(s)
-		for itemIndex := 0; itemIndex < trainSet.ItemCount(); itemIndex++ {
-			if len(trainSet.ItemFeedback[itemIndex]) > 0 {
+		for itemIndex := 0; itemIndex < trainSet.CountItems(); itemIndex++ {
+			if len(trainSet.GetItemFeedback()[itemIndex]) > 0 {
 				for i := 0; i < ccd.nFactors; i++ {
 					for j := 0; j < ccd.nFactors; j++ {
 						s[i][j] += ccd.ItemFactor[itemIndex][i] * ccd.ItemFactor[itemIndex][j]
@@ -736,8 +572,8 @@ func (ccd *CCD) Fit(ctx context.Context, trainSet, valSet *DataSet, config *FitC
 				}
 			}
 		}
-		_ = parallel.Parallel(trainSet.UserCount(), config.AvailableJobs(), func(workerId, userIndex int) error {
-			userFeedback := trainSet.UserFeedback[userIndex]
+		_ = parallel.Parallel(trainSet.CountUsers(), config.AvailableJobs(), func(workerId, userIndex int) error {
+			userFeedback := trainSet.GetUserFeedback()[userIndex]
 			for _, i := range userFeedback {
 				userPredictions[workerId][i] = ccd.InternalPredict(int32(userIndex), i)
 			}
@@ -768,8 +604,8 @@ func (ccd *CCD) Fit(ctx context.Context, trainSet, valSet *DataSet, config *FitC
 		// Update item factors
 		// S^p <- P^T P
 		floats.MatZero(s)
-		for userIndex := 0; userIndex < trainSet.UserCount(); userIndex++ {
-			if len(trainSet.UserFeedback[userIndex]) > 0 {
+		for userIndex := 0; userIndex < trainSet.CountUsers(); userIndex++ {
+			if len(trainSet.GetUserFeedback()[userIndex]) > 0 {
 				for i := 0; i < ccd.nFactors; i++ {
 					for j := 0; j < ccd.nFactors; j++ {
 						s[i][j] += ccd.UserFactor[userIndex][i] * ccd.UserFactor[userIndex][j]
@@ -777,8 +613,8 @@ func (ccd *CCD) Fit(ctx context.Context, trainSet, valSet *DataSet, config *FitC
 				}
 			}
 		}
-		_ = parallel.Parallel(trainSet.ItemCount(), config.AvailableJobs(), func(workerId, itemIndex int) error {
-			itemFeedback := trainSet.ItemFeedback[itemIndex]
+		_ = parallel.Parallel(trainSet.CountItems(), config.AvailableJobs(), func(workerId, itemIndex int) error {
+			itemFeedback := trainSet.GetItemFeedback()[itemIndex]
 			for _, u := range itemFeedback {
 				itemPredictions[workerId][u] = ccd.InternalPredict(u, int32(itemIndex))
 			}
@@ -836,44 +672,12 @@ func (ccd *CCD) Fit(ctx context.Context, trainSet, valSet *DataSet, config *FitC
 
 // Marshal model into byte stream.
 func (ccd *CCD) Marshal(w io.Writer) error {
-	// write params
-	err := ccd.BaseMatrixFactorization.Marshal(w)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	// write user factors
-	err = encoding.WriteMatrix(w, ccd.UserFactor)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	// write item factors
-	err = encoding.WriteMatrix(w, ccd.ItemFactor)
-	if err != nil {
-		return errors.Trace(err)
-	}
+	// TODO: implement Marshal
 	return nil
 }
 
 // Unmarshal model from byte stream.
 func (ccd *CCD) Unmarshal(r io.Reader) error {
-	// read params
-	var err error
-	err = ccd.BaseMatrixFactorization.Unmarshal(r)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	ccd.SetParams(ccd.Params)
-	// read user factors
-	ccd.UserFactor = base.NewMatrix32(int(ccd.UserIndex.Len()), ccd.nFactors)
-	err = encoding.ReadMatrix(r, ccd.UserFactor)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	// read item factors
-	ccd.ItemFactor = base.NewMatrix32(int(ccd.ItemIndex.Len()), ccd.nFactors)
-	err = encoding.ReadMatrix(r, ccd.ItemFactor)
-	if err != nil {
-		return errors.Trace(err)
-	}
+	// TODO: implement Unmarshal
 	return nil
 }

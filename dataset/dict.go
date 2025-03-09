@@ -29,7 +29,7 @@ func (d *FreqDict) Count() int {
 	return len(d.is)
 }
 
-func (d *FreqDict) Id(s string) (y int) {
+func (d *FreqDict) Add(s string) (y int) {
 	if y, ok := d.si[s]; ok {
 		d.cnt[y]++
 		return y
@@ -42,14 +42,7 @@ func (d *FreqDict) Id(s string) (y int) {
 	return
 }
 
-func (d *FreqDict) NotAdd(s string) int {
-	if y, ok := d.si[s]; ok {
-		return y
-	}
-	return -1
-}
-
-func (d *FreqDict) NotCount(s string) (y int) {
+func (d *FreqDict) AddNoCount(s string) (y int) {
 	if y, ok := d.si[s]; ok {
 		return y
 	}
@@ -59,6 +52,13 @@ func (d *FreqDict) NotCount(s string) (y int) {
 	d.is = append(d.is, s)
 	d.cnt = append(d.cnt, 0)
 	return
+}
+
+func (d *FreqDict) Id(s string) int {
+	if y, ok := d.si[s]; ok {
+		return y
+	}
+	return -1
 }
 
 func (d *FreqDict) String(id int) (s string, ok bool) {

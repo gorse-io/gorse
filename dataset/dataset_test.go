@@ -170,3 +170,14 @@ func TestDataset_AddFeedback(t *testing.T) {
 		assert.InDelta(t, math32.Log(float32(10)/float32(i+1)), itemIDF[i], 1e-2)
 	}
 }
+
+func TestDataset_LoadMovieLens1M(t *testing.T) {
+	train, test, err := LoadDataFromBuiltIn("ml-1m")
+	assert.NoError(t, err)
+	assert.Len(t, train.GetUsers(), 6040)
+	assert.Len(t, train.GetItems(), 3706)
+	assert.Equal(t, train.Count(), 994169)
+	assert.Len(t, test.GetUsers(), 6040)
+	assert.Len(t, test.GetItems(), 3706)
+	assert.Equal(t, test.Count(), 6040)
+}

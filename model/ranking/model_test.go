@@ -14,7 +14,6 @@
 package ranking
 
 import (
-	"bytes"
 	"context"
 	"math"
 	"runtime"
@@ -23,6 +22,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/base/floats"
 	"github.com/zhenghaoz/gorse/base/task"
+	"github.com/zhenghaoz/gorse/dataset"
 	"github.com/zhenghaoz/gorse/model"
 )
 

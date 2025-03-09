@@ -45,6 +45,7 @@ type Dataset struct {
 	negatives    [][]int32
 	userDict     *FreqDict
 	itemDict     *FreqDict
+	numFeedback  int
 	categories   mapset.Set[string]
 }
 
@@ -67,8 +68,16 @@ func (d *Dataset) GetTimestamp() time.Time {
 	return d.timestamp
 }
 
+func (d *Dataset) Count() int {
+	return d.numFeedback
+}
+
 func (d *Dataset) GetUsers() []data.User {
 	return d.users
+}
+
+func (d *Dataset) GetUserDict() *FreqDict {
+	return d.userDict
 }
 
 func (d *Dataset) CountUsers() int {
@@ -77,6 +86,10 @@ func (d *Dataset) CountUsers() int {
 
 func (d *Dataset) GetItems() []data.Item {
 	return d.items
+}
+
+func (d *Dataset) GetItemDict() *FreqDict {
+	return d.itemDict
 }
 
 func (d *Dataset) CountItems() int {
@@ -150,7 +163,7 @@ func (d *Dataset) AddUser(user data.User) {
 		Subscribe: user.Subscribe,
 		Comment:   user.Comment,
 	})
-	d.userDict.NotCount(user.UserId)
+	d.userDict.AddNoCount(user.UserId)
 	if len(d.userFeedback) < len(d.users) {
 		d.userFeedback = append(d.userFeedback, nil)
 	}
@@ -165,7 +178,7 @@ func (d *Dataset) AddItem(item data.Item) {
 		Labels:     d.itemLabels.processLabels(item.Labels, ""),
 		Comment:    item.Comment,
 	})
-	d.itemDict.NotCount(item.ItemId)
+	d.itemDict.AddNoCount(item.ItemId)
 	if len(d.itemFeedback) < len(d.items) {
 		d.itemFeedback = append(d.itemFeedback, nil)
 	}
@@ -173,10 +186,11 @@ func (d *Dataset) AddItem(item data.Item) {
 }
 
 func (d *Dataset) AddFeedback(userId, itemId string) {
-	userIndex := d.userDict.Id(userId)
-	itemIndex := d.itemDict.Id(itemId)
+	userIndex := d.userDict.Add(userId)
+	itemIndex := d.itemDict.Add(itemId)
 	d.userFeedback[userIndex] = append(d.userFeedback[userIndex], int32(itemIndex))
 	d.itemFeedback[itemIndex] = append(d.itemFeedback[itemIndex], int32(userIndex))
+	d.numFeedback++
 }
 
 func (d *Dataset) NegativeSample(excludeSet *Dataset, numCandidates int) [][]int32 {
@@ -219,12 +233,12 @@ func (l *Labels) processLabels(labels any, parent string) any {
 			})
 		} else if isSliceOf[string](typed) {
 			return lo.Map(typed, func(e any, _ int) ID {
-				return ID(l.values.Id(parent + ":" + e.(string)))
+				return ID(l.values.Add(parent + ":" + e.(string)))
 			})
 		}
 		return typed
 	case string:
-		return ID(l.values.Id(parent + ":" + typed))
+		return ID(l.values.Add(parent + ":" + typed))
 	default:
 		return labels
 	}
@@ -326,7 +340,7 @@ func loadTest(dataset *Dataset, path string) error {
 		}
 		dataset.negatives[userId] = make([]int32, len(negatives))
 		for i, negative := range negatives {
-			dataset.negatives[userId][i] = int32(dataset.itemDict.Id(negative))
+			dataset.negatives[userId][i] = int32(dataset.itemDict.Add(negative))
 		}
 	}
 	return scanner.Err()

@@ -17,6 +17,7 @@ package ranking
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"sync"
 	"time"
 
@@ -24,6 +25,7 @@ import (
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/base/progress"
 	"github.com/zhenghaoz/gorse/base/task"
+	"github.com/zhenghaoz/gorse/dataset"
 	"github.com/zhenghaoz/gorse/model"
 	"go.uber.org/zap"
 )
@@ -49,7 +51,7 @@ func (r *ParamsSearchResult) AddScore(params model.Params, score Score) {
 }
 
 // GridSearchCV finds the best parameters for a model.
-func GridSearchCV(ctx context.Context, estimator MatrixFactorization, trainSet *DataSet, testSet *DataSet, paramGrid model.ParamsGrid,
+func GridSearchCV(ctx context.Context, estimator MatrixFactorization, trainSet, testSet *dataset.Dataset, paramGrid model.ParamsGrid,
 	_ int64, fitConfig *FitConfig) ParamsSearchResult {
 	// Retrieve parameter names and length
 	paramNames := make([]model.ParamName, 0, len(paramGrid))
@@ -99,7 +101,7 @@ func GridSearchCV(ctx context.Context, estimator MatrixFactorization, trainSet *
 }
 
 // RandomSearchCV searches hyper-parameters by random.
-func RandomSearchCV(ctx context.Context, estimator MatrixFactorization, trainSet *DataSet, testSet *DataSet, paramGrid model.ParamsGrid,
+func RandomSearchCV(ctx context.Context, estimator MatrixFactorization, trainSet, testSet *dataset.Dataset, paramGrid model.ParamsGrid,
 	numTrials int, seed int64, fitConfig *FitConfig) ParamsSearchResult {
 	// if the number of combination is less than number of trials, use grid search
 	if paramGrid.NumCombinations() < numTrials {
@@ -171,10 +173,10 @@ func (searcher *ModelSearcher) GetBestModel() (string, MatrixFactorization, Scor
 	return searcher.bestModelName, searcher.bestModel, searcher.bestScore
 }
 
-func (searcher *ModelSearcher) Fit(ctx context.Context, trainSet, valSet *DataSet, j *task.JobsAllocator) error {
+func (searcher *ModelSearcher) Fit(ctx context.Context, trainSet, valSet *dataset.Dataset, j *task.JobsAllocator) error {
 	log.Logger().Info("ranking model search",
-		zap.Int("n_users", trainSet.UserCount()),
-		zap.Int("n_items", trainSet.ItemCount()))
+		zap.Int("n_users", trainSet.CountUsers()),
+		zap.Int("n_items", trainSet.CountItems()))
 	startTime := time.Now()
 	for _, m := range searcher.models {
 		r := RandomSearchCV(ctx, m, trainSet, valSet, m.GetParamsGrid(searcher.searchSize), searcher.numTrials, 0,
@@ -191,7 +193,7 @@ func (searcher *ModelSearcher) Fit(ctx context.Context, trainSet, valSet *DataSe
 		zap.Float32("NDCG@10", searcher.bestScore.NDCG),
 		zap.Float32("Precision@10", searcher.bestScore.Precision),
 		zap.Float32("Recall@10", searcher.bestScore.Recall),
-		zap.String("model", GetModelName(searcher.bestModel)),
+		zap.String("model", reflect.TypeOf(searcher.bestModel).String()),
 		zap.Any("params", searcher.bestModel.GetParams()),
 		zap.String("search_time", searchTime.String()))
 	return nil
