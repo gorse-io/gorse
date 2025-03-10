@@ -114,7 +114,7 @@ func (m *mockMatrixFactorizationForEval) Predict(_, _ string) float32 {
 	panic("don't call me")
 }
 
-func (m *mockMatrixFactorizationForEval) InternalPredict(userId, itemId int32) float32 {
+func (m *mockMatrixFactorizationForEval) internalPredict(userId, itemId int32) float32 {
 	if m.positive[userId].Contains(itemId) {
 		return 1
 	}

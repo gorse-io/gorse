@@ -161,7 +161,7 @@ func Rank(model MatrixFactorization, userId int32, candidates []int32, topN int)
 	// Get top-n list
 	itemsHeap := heap.NewTopKFilter[int32, float32](topN)
 	for _, itemId := range candidates {
-		itemsHeap.Push(itemId, model.InternalPredict(userId, itemId))
+		itemsHeap.Push(itemId, model.internalPredict(userId, itemId))
 	}
 	elem, scores := itemsHeap.PopAll()
 	recommends := make([]int32, len(elem))
