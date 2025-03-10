@@ -15,16 +15,27 @@
 package util
 
 import (
-	"golang.org/x/exp/constraints"
+	"reflect"
 	"strconv"
+
+	"golang.org/x/exp/constraints"
 )
 
 func ParseFloat[T constraints.Float](s string) (T, error) {
-	v, err := strconv.ParseFloat(s, 32)
+	v, err := strconv.ParseFloat(s, reflect.TypeOf(T(0)).Bits())
 	return T(v), err
 }
 
 func ParseUInt[T constraints.Unsigned](s string) (T, error) {
-	v, err := strconv.ParseUint(s, 10, 8)
+	v, err := strconv.ParseUint(s, 10, reflect.TypeOf(T(0)).Bits())
 	return T(v), err
+}
+
+func ParseInt[T constraints.Signed](s string) (T, error) {
+	v, err := strconv.ParseInt(s, 10, reflect.TypeOf(T(0)).Bits())
+	return T(v), err
+}
+
+func FormatInt[T constraints.Signed](i T) string {
+	return strconv.FormatInt(int64(i), 10)
 }

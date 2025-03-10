@@ -17,7 +17,6 @@ package ranking
 import (
 	"context"
 	"fmt"
-	"reflect"
 	"sync"
 	"time"
 
@@ -193,7 +192,7 @@ func (searcher *ModelSearcher) Fit(ctx context.Context, trainSet, valSet *datase
 		zap.Float32("NDCG@10", searcher.bestScore.NDCG),
 		zap.Float32("Precision@10", searcher.bestScore.Precision),
 		zap.Float32("Recall@10", searcher.bestScore.Recall),
-		zap.String("model", reflect.TypeOf(searcher.bestModel).String()),
+		zap.String("model", GetModelName(searcher.bestModel)),
 		zap.Any("params", searcher.bestModel.GetParams()),
 		zap.String("search_time", searchTime.String()))
 	return nil

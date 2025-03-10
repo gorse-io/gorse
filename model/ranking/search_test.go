@@ -69,7 +69,7 @@ func (m *mockMatrixFactorizationForSearch) GetItemIndex() *dataset.FreqDict {
 	panic("don't call me")
 }
 
-func (m *mockMatrixFactorizationForSearch) Fit(_ context.Context, _, _ *dataset.Dataset, cfg *FitConfig) Score {
+func (m *mockMatrixFactorizationForSearch) Fit(_ context.Context, _, _ *dataset.Dataset, _ *FitConfig) Score {
 	score := float32(0)
 	score += m.Params.GetFloat32(model.NFactors, 0.0)
 	score += m.Params.GetFloat32(model.InitMean, 0.0)

@@ -27,12 +27,13 @@ import (
 	"github.com/juju/errors"
 	"github.com/samber/lo"
 	"github.com/zhenghaoz/gorse/base"
+	"github.com/zhenghaoz/gorse/common/util"
 	"github.com/zhenghaoz/gorse/model"
 	"github.com/zhenghaoz/gorse/storage/data"
 	"modernc.org/strutil"
 )
 
-type ID int
+type ID int32
 
 type Dataset struct {
 	timestamp    time.Time
@@ -116,7 +117,7 @@ func (d *Dataset) GetCategories() []string {
 // freq(u) is the frequency of user u in all feedback.
 func (d *Dataset) GetUserIDF() []float32 {
 	idf := make([]float32, d.userDict.Count())
-	for i := 0; i < d.userDict.Count(); i++ {
+	for i := int32(0); i < d.userDict.Count(); i++ {
 		// Since zero IDF will cause NaN in the future, we set the minimum value to 1e-3.
 		idf[i] = max(math32.Log(float32(len(d.items))/float32(d.userDict.Freq(i))), 1e-3)
 	}
@@ -131,7 +132,7 @@ func (d *Dataset) GetUserIDF() []float32 {
 // freq(i) is the frequency of item i in all feedback.
 func (d *Dataset) GetItemIDF() []float32 {
 	idf := make([]float32, d.itemDict.Count())
-	for i := 0; i < d.itemDict.Count(); i++ {
+	for i := int32(0); i < d.itemDict.Count(); i++ {
 		// Since zero IDF will cause NaN in the future, we set the minimum value to 1e-3.
 		idf[i] = max(math32.Log(float32(len(d.users))/float32(d.itemDict.Freq(i))), 1e-3)
 	}
@@ -140,7 +141,7 @@ func (d *Dataset) GetItemIDF() []float32 {
 
 func (d *Dataset) GetUserColumnValuesIDF() []float32 {
 	idf := make([]float32, d.userLabels.values.Count())
-	for i := 0; i < d.userLabels.values.Count(); i++ {
+	for i := int32(0); i < d.userLabels.values.Count(); i++ {
 		// Since zero IDF will cause NaN in the future, we set the minimum value to 1e-3.
 		idf[i] = max(math32.Log(float32(len(d.users))/float32(d.userLabels.values.Freq(i))), 1e-3)
 	}
@@ -149,7 +150,7 @@ func (d *Dataset) GetUserColumnValuesIDF() []float32 {
 
 func (d *Dataset) GetItemColumnValuesIDF() []float32 {
 	idf := make([]float32, d.itemLabels.values.Count())
-	for i := 0; i < d.itemLabels.values.Count(); i++ {
+	for i := int32(0); i < d.itemLabels.values.Count(); i++ {
 		// Since zero IDF will cause NaN in the future, we set the minimum value to 1e-3.
 		idf[i] = max(math32.Log(float32(len(d.items))/float32(d.itemLabels.values.Freq(i))), 1e-3)
 	}
@@ -188,8 +189,8 @@ func (d *Dataset) AddItem(item data.Item) {
 func (d *Dataset) AddFeedback(userId, itemId string) {
 	userIndex := d.userDict.Add(userId)
 	itemIndex := d.itemDict.Add(itemId)
-	d.userFeedback[userIndex] = append(d.userFeedback[userIndex], int32(itemIndex))
-	d.itemFeedback[itemIndex] = append(d.itemFeedback[itemIndex], int32(userIndex))
+	d.userFeedback[userIndex] = append(d.userFeedback[userIndex], itemIndex)
+	d.itemFeedback[itemIndex] = append(d.itemFeedback[itemIndex], userIndex)
 	d.numFeedback++
 }
 
@@ -354,20 +355,20 @@ func loadTrain(path string) (*Dataset, error) {
 		line := scanner.Text()
 		fields := strings.Split(line, "\t")
 		// add users
-		userId, err := strconv.Atoi(fields[0])
+		userId, err := util.ParseInt[int32](fields[0])
 		if err != nil {
 			return nil, err
 		}
 		for i := dataset.userDict.Count(); i <= userId; i++ {
-			dataset.AddUser(data.User{UserId: strconv.Itoa(i)})
+			dataset.AddUser(data.User{UserId: util.FormatInt(i)})
 		}
 		// add items
-		itemId, err := strconv.Atoi(fields[1])
+		itemId, err := util.ParseInt[int32](fields[1])
 		if err != nil {
 			return nil, err
 		}
 		for i := dataset.itemDict.Count(); i <= itemId; i++ {
-			dataset.AddItem(data.Item{ItemId: strconv.Itoa(i)})
+			dataset.AddItem(data.Item{ItemId: util.FormatInt(i)})
 		}
 		// add feedback
 		dataset.AddFeedback(fields[0], fields[1])
@@ -403,7 +404,7 @@ func loadTest(dataset *Dataset, path string) error {
 		}
 		dataset.negatives[userId] = make([]int32, len(negatives))
 		for i, negative := range negatives {
-			dataset.negatives[userId][i] = int32(dataset.itemDict.Add(negative))
+			dataset.negatives[userId][i] = dataset.itemDict.Add(negative)
 		}
 	}
 	return scanner.Err()

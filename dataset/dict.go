@@ -15,61 +15,61 @@
 package dataset
 
 type FreqDict struct {
-	si  map[string]int
+	si  map[string]int32
 	is  []string
-	cnt []int
+	cnt []int32
 }
 
 func NewFreqDict() (d *FreqDict) {
-	d = &FreqDict{map[string]int{}, []string{}, []int{}}
+	d = &FreqDict{map[string]int32{}, []string{}, []int32{}}
 	return
 }
 
-func (d *FreqDict) Count() int {
-	return len(d.is)
+func (d *FreqDict) Count() int32 {
+	return int32(len(d.is))
 }
 
-func (d *FreqDict) Add(s string) (y int) {
+func (d *FreqDict) Add(s string) (y int32) {
 	if y, ok := d.si[s]; ok {
 		d.cnt[y]++
 		return y
 	}
 
-	y = len(d.is)
+	y = int32(len(d.is))
 	d.si[s] = y
 	d.is = append(d.is, s)
 	d.cnt = append(d.cnt, 1)
 	return
 }
 
-func (d *FreqDict) AddNoCount(s string) (y int) {
+func (d *FreqDict) AddNoCount(s string) (y int32) {
 	if y, ok := d.si[s]; ok {
 		return y
 	}
 
-	y = len(d.is)
+	y = int32(len(d.is))
 	d.si[s] = y
 	d.is = append(d.is, s)
 	d.cnt = append(d.cnt, 0)
 	return
 }
 
-func (d *FreqDict) Id(s string) int {
+func (d *FreqDict) Id(s string) int32 {
 	if y, ok := d.si[s]; ok {
 		return y
 	}
 	return -1
 }
 
-func (d *FreqDict) String(id int) (s string, ok bool) {
-	if id >= len(d.is) {
+func (d *FreqDict) String(id int32) (s string, ok bool) {
+	if id >= int32(len(d.is)) {
 		return "", false
 	}
 	return d.is[id], true
 }
 
-func (d *FreqDict) Freq(id int) int {
-	if id >= len(d.cnt) {
+func (d *FreqDict) Freq(id int32) int32 {
+	if id >= int32(len(d.cnt)) {
 		return 0
 	}
 	return d.cnt[id]

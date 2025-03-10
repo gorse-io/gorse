@@ -132,14 +132,14 @@ func (baseModel *BaseMatrixFactorization) Init(trainSet *dataset.Dataset) {
 	baseModel.ItemIndex = trainSet.GetItemDict()
 	// set user trained flags
 	baseModel.UserPredictable = bitset.New(uint(baseModel.UserIndex.Count()))
-	for userIndex := 0; userIndex < baseModel.UserIndex.Count(); userIndex++ {
+	for userIndex := int32(0); userIndex < baseModel.UserIndex.Count(); userIndex++ {
 		if len(trainSet.GetUserFeedback()[userIndex]) > 0 {
 			baseModel.UserPredictable.Set(uint(userIndex))
 		}
 	}
 	// set item trained flags
 	baseModel.ItemPredictable = bitset.New(uint(baseModel.ItemIndex.Count()))
-	for itemIndex := 0; itemIndex < baseModel.ItemIndex.Count(); itemIndex++ {
+	for itemIndex := int32(0); itemIndex < baseModel.ItemIndex.Count(); itemIndex++ {
 		if len(trainSet.GetItemFeedback()[itemIndex]) > 0 {
 			baseModel.ItemPredictable.Set(uint(itemIndex))
 		}
@@ -156,7 +156,7 @@ func (baseModel *BaseMatrixFactorization) GetItemIndex() *dataset.FreqDict {
 
 // IsUserPredictable returns false if user has no feedback and its embedding vector never be trained.
 func (baseModel *BaseMatrixFactorization) IsUserPredictable(userIndex int32) bool {
-	if int(userIndex) >= baseModel.UserIndex.Count() {
+	if userIndex >= baseModel.UserIndex.Count() {
 		return false
 	}
 	return baseModel.UserPredictable.Test(uint(userIndex))
@@ -164,7 +164,7 @@ func (baseModel *BaseMatrixFactorization) IsUserPredictable(userIndex int32) boo
 
 // IsItemPredictable returns false if item has no feedback and its embedding vector never be trained.
 func (baseModel *BaseMatrixFactorization) IsItemPredictable(itemIndex int32) bool {
-	if int(itemIndex) >= baseModel.ItemIndex.Count() {
+	if itemIndex >= baseModel.ItemIndex.Count() {
 		return false
 	}
 	return baseModel.ItemPredictable.Test(uint(itemIndex))
@@ -190,7 +190,7 @@ func (baseModel *BaseMatrixFactorization) Predict(userId, itemId string) float32
 	if itemIndex < 0 {
 		log.Logger().Warn("unknown item", zap.String("item_id", itemId))
 	}
-	return baseModel.internalPredict(int32(userIndex), int32(itemIndex))
+	return baseModel.internalPredict(userIndex, itemIndex)
 }
 
 func (baseModel *BaseMatrixFactorization) internalPredict(userIndex, itemIndex int32) float32 {
@@ -215,9 +215,9 @@ func (baseModel *BaseMatrixFactorization) Marshal(w io.Writer) error {
 		return errors.Trace(err)
 	}
 	// write user latent factors
-	for userIndex := 0; userIndex < baseModel.UserIndex.Count(); userIndex++ {
+	for userIndex := int32(0); userIndex < baseModel.UserIndex.Count(); userIndex++ {
 		if baseModel.UserPredictable.Test(uint(userIndex)) {
-			userId, _ := baseModel.UserIndex.String(int(int32(userIndex)))
+			userId, _ := baseModel.UserIndex.String(userIndex)
 			latentFactor := &protocol.LatentFactor{
 				Id:   userId,
 				Data: baseModel.UserFactor[userIndex],
@@ -232,9 +232,9 @@ func (baseModel *BaseMatrixFactorization) Marshal(w io.Writer) error {
 		return errors.Trace(err)
 	}
 	// write item latent factors
-	for itemIndex := 0; itemIndex < baseModel.ItemIndex.Count(); itemIndex++ {
+	for itemIndex := int32(0); itemIndex < baseModel.ItemIndex.Count(); itemIndex++ {
 		if baseModel.ItemPredictable.Test(uint(itemIndex)) {
-			itemId, _ := baseModel.ItemIndex.String(int(int32(itemIndex)))
+			itemId, _ := baseModel.ItemIndex.String(itemIndex)
 			latentFactor := &protocol.LatentFactor{
 				Id:   itemId,
 				Data: baseModel.ItemFactor[itemIndex],

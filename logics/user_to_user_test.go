@@ -90,9 +90,9 @@ func (suite *UserToUserTestSuite) TestItems() {
 	suite.NoError(err)
 
 	for i := 0; i < 100; i++ {
-		feedback := make([]dataset.ID, 0, 100-i)
+		feedback := make([]int32, 0, 100-i)
 		for j := 1; j <= 100-i; j++ {
-			feedback = append(feedback, dataset.ID(j))
+			feedback = append(feedback, int32(j))
 		}
 		user2user.Push(&data.User{UserId: strconv.Itoa(i)}, feedback)
 	}
@@ -115,7 +115,7 @@ func (suite *UserToUserTestSuite) TestAuto() {
 
 	for i := 0; i < 100; i++ {
 		user := &data.User{UserId: strconv.Itoa(i)}
-		feedback := make([]dataset.ID, 0, 100-i)
+		feedback := make([]int32, 0, 100-i)
 		if i%2 == 0 {
 			labels := make(map[string]any)
 			for j := 1; j <= 100-i; j++ {
@@ -124,7 +124,7 @@ func (suite *UserToUserTestSuite) TestAuto() {
 			user.Labels = labels
 		} else {
 			for j := 1; j <= 100-i; j++ {
-				feedback = append(feedback, dataset.ID(j))
+				feedback = append(feedback, int32(j))
 			}
 		}
 		user2user.Push(user, feedback)

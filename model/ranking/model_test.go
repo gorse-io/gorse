@@ -27,12 +27,9 @@ import (
 	"github.com/zhenghaoz/gorse/model"
 )
 
-const (
-	benchDelta = 0.01
-	incrDelta  = 0.05
-)
+const benchDelta = 0.01
 
-func newFitConfig(numEpoch int) *FitConfig {
+func newFitConfig(_ int) *FitConfig {
 	cfg := NewFitConfig().SetVerbose(1).SetJobsAllocator(task.NewConstantJobsAllocator(runtime.NumCPU()))
 	return cfg
 }
@@ -117,6 +114,7 @@ func TestCCD_MovieLens(t *testing.T) {
 	err = MarshalModel(buf, m)
 	assert.NoError(t, err)
 	tmp, err := UnmarshalModel(buf)
+	assert.NoError(t, err)
 	assert.Equal(t, m.Params, tmp.GetParams())
 	assert.Equal(t, m.Predict("1", "1"), tmp.Predict("1", "1"))
 
