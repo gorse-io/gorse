@@ -7,6 +7,7 @@ require (
 	github.com/araddon/dateparse v0.0.0-20210429162001-6b43995a97de
 	github.com/benhoyt/goawk v1.20.0
 	github.com/bits-and-blooms/bitset v1.2.1
+	github.com/cenkalti/backoff/v5 v5.0.2
 	github.com/chewxy/math32 v1.11.1
 	github.com/coreos/go-oidc/v3 v3.11.0
 	github.com/deckarep/golang-set/v2 v2.3.1
@@ -29,6 +30,7 @@ require (
 	github.com/jellydator/ttlcache/v3 v3.3.0
 	github.com/json-iterator/go v1.1.12
 	github.com/juju/errors v1.0.0
+	github.com/juju/ratelimit v1.0.2
 	github.com/klauspost/cpuid/v2 v2.2.3
 	github.com/lafikl/consistent v0.0.0-20220512074542-bdd3606bfc3e
 	github.com/lib/pq v1.10.6
@@ -52,6 +54,8 @@ require (
 	github.com/steinfletcher/apitest v1.5.17
 	github.com/stretchr/testify v1.10.0
 	github.com/thoas/go-funk v0.9.2
+	github.com/tiktoken-go/tokenizer v0.5.1
+	github.com/yuin/goldmark v1.7.8
 	go.mongodb.org/mongo-driver v1.16.1
 	go.opentelemetry.io/contrib/instrumentation/github.com/emicklei/go-restful/otelrestful v0.36.4
 	go.opentelemetry.io/contrib/instrumentation/go.mongodb.org/mongo-driver/mongo/otelmongo v0.55.0
@@ -95,6 +99,7 @@ require (
 	github.com/chewxy/hm v1.0.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
+	github.com/dlclark/regexp2 v1.11.5 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect

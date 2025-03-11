@@ -28,9 +28,9 @@ import (
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/encoding"
 	"github.com/zhenghaoz/gorse/base/log"
-	"github.com/zhenghaoz/gorse/base/parallel"
 	"github.com/zhenghaoz/gorse/base/progress"
 	"github.com/zhenghaoz/gorse/base/task"
+	"github.com/zhenghaoz/gorse/common/parallel"
 	"github.com/zhenghaoz/gorse/common/sizeof"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/dataset"
@@ -980,18 +980,22 @@ func (m *Master) updateItemToItem(dataset *dataset.Dataset) error {
 
 	// Add built-in item-to-item recommenders
 	itemToItemConfigs := m.Config.Recommend.ItemToItem
-	builtInConfig := config.ItemToItemConfig{}
-	builtInConfig.Name = cache.Neighbors
-	switch m.Config.Recommend.ItemNeighbors.NeighborType {
-	case config.NeighborTypeSimilar:
-		builtInConfig.Type = "tags"
-		builtInConfig.Column = "item.Labels"
-	case config.NeighborTypeRelated:
-		builtInConfig.Type = "users"
-	case config.NeighborTypeAuto:
-		builtInConfig.Type = "auto"
+	if !lo.ContainsBy(itemToItemConfigs, func(item config.ItemToItemConfig) bool {
+		return item.Name == cache.Neighbors
+	}) {
+		builtInConfig := config.ItemToItemConfig{}
+		builtInConfig.Name = cache.Neighbors
+		switch m.Config.Recommend.ItemNeighbors.NeighborType {
+		case config.NeighborTypeSimilar:
+			builtInConfig.Type = "tags"
+			builtInConfig.Column = "item.Labels"
+		case config.NeighborTypeRelated:
+			builtInConfig.Type = "users"
+		case config.NeighborTypeAuto:
+			builtInConfig.Type = "auto"
+		}
+		itemToItemConfigs = append(itemToItemConfigs, builtInConfig)
 	}
-	itemToItemConfigs = append(itemToItemConfigs, builtInConfig)
 
 	// Build item-to-item recommenders
 	itemToItemRecommenders := make([]logics.ItemToItem, 0, len(itemToItemConfigs))
@@ -1019,35 +1023,50 @@ func (m *Master) updateItemToItem(dataset *dataset.Dataset) error {
 
 	// Save item-to-item recommendations to cache
 	for i, recommender := range itemToItemRecommenders {
+		pool := recommender.Pool()
 		for j, item := range recommender.Items() {
 			itemToItemConfig := itemToItemConfigs[i]
 			if m.needUpdateItemToItem(item.ItemId, itemToItemConfig) {
-				score := recommender.PopAll(j)
-				if score == nil {
-					continue
-				}
-				log.Logger().Debug("update item-to-item recommendation",
-					zap.String("item_id", item.ItemId),
-					zap.String("name", itemToItemConfig.Name),
-					zap.Int("n_recommendations", len(score)))
-				// Save item-to-item recommendation to cache
-				if err := m.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key(itemToItemConfig.Name, item.ItemId), score); err != nil {
-					log.Logger().Error("failed to save item-to-item recommendation to cache",
-						zap.String("item_id", item.ItemId), zap.Error(err))
-					continue
-				}
-				// Save item-to-item digest and last update time to cache
-				if err := m.CacheClient.Set(ctx,
-					cache.String(cache.Key(cache.ItemToItemDigest, itemToItemConfig.Name, item.ItemId), itemToItemConfig.Hash()),
-					cache.Time(cache.Key(cache.ItemToItemUpdateTime, itemToItemConfig.Name, item.ItemId), time.Now()),
-				); err != nil {
-					log.Logger().Error("failed to save item-to-item digest to cache",
-						zap.String("item_id", item.ItemId), zap.Error(err))
-					continue
-				}
+				pool.Run(func() {
+					defer span.Add(1)
+					score := recommender.PopAll(j)
+					if score == nil {
+						return
+					}
+					log.Logger().Debug("update item-to-item recommendation",
+						zap.String("item_id", item.ItemId),
+						zap.String("name", itemToItemConfig.Name),
+						zap.Int("n_recommendations", len(score)))
+					// Save item-to-item recommendation to cache
+					if err := m.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key(itemToItemConfig.Name, item.ItemId), score); err != nil {
+						log.Logger().Error("failed to save item-to-item recommendation to cache",
+							zap.String("item_id", item.ItemId), zap.Error(err))
+						return
+					}
+					// Save item-to-item digest and last update time to cache
+					if err := m.CacheClient.Set(ctx,
+						cache.String(cache.Key(cache.ItemToItemDigest, itemToItemConfig.Name, item.ItemId), itemToItemConfig.Hash()),
+						cache.Time(cache.Key(cache.ItemToItemUpdateTime, itemToItemConfig.Name, item.ItemId), time.Now()),
+					); err != nil {
+						log.Logger().Error("failed to save item-to-item digest to cache",
+							zap.String("item_id", item.ItemId), zap.Error(err))
+						return
+					}
+					// Remove stale item-to-item recommendation
+					if err := m.CacheClient.DeleteScores(ctx, []string{cache.ItemToItem}, cache.ScoreCondition{
+						Subset: lo.ToPtr(cache.Key(itemToItemConfig.Name, item.ItemId)),
+						Before: lo.ToPtr(recommender.Timestamp()),
+					}); err != nil {
+						log.Logger().Error("failed to remove stale item-to-item recommendation",
+							zap.String("item_id", item.ItemId), zap.Error(err))
+						return
+					}
+				})
+			} else {
+				span.Add(1)
 			}
-			span.Add(1)
 		}
+		pool.Wait()
 	}
 	return nil
 }

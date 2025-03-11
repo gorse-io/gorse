@@ -19,6 +19,7 @@ import (
 	"os"
 	"runtime"
 	"strings"
+	"testing"
 
 	"github.com/emicklei/go-restful/v3"
 	"github.com/go-sql-driver/mysql"
@@ -29,7 +30,10 @@ import (
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
-var logger *zap.Logger
+var (
+	logger       *zap.Logger
+	openaiLogger *zap.Logger
+)
 
 func init() {
 	// setup default logger
@@ -37,6 +41,15 @@ func init() {
 	logger, err = zap.NewProduction()
 	if err != nil {
 		panic(err)
+	}
+	// setup OpenAI logger
+	if testing.Testing() {
+		openaiLogger, err = zap.NewDevelopment()
+		if err != nil {
+			panic(err)
+		}
+	} else {
+		openaiLogger = zap.NewNop()
 	}
 	// Windows file sink support: https://github.com/uber-go/zap/issues/621
 	if runtime.GOOS == "windows" {
@@ -139,4 +152,20 @@ type errorHandler struct{}
 
 func (h *errorHandler) Handle(err error) {
 	Logger().Error("opentelemetry failure", zap.Error(err))
+}
+
+func OpenAILogger() *zap.Logger {
+	return openaiLogger
+}
+
+func InitOpenAILogger(filename string) {
+	if filename != "" {
+		openaiLogger = zap.New(
+			zapcore.NewCore(
+				zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig()),
+				zapcore.AddSync(&lumberjack.Logger{
+					Filename: filename,
+				}),
+				zap.InfoLevel))
+	}
 }

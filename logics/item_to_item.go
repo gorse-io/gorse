@@ -16,12 +16,13 @@ package logics
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
-	"fmt"
 	"sort"
 	"strings"
 	"time"
 
+	"github.com/cenkalti/backoff/v5"
 	"github.com/chewxy/math32"
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/expr-lang/expr"
@@ -30,15 +31,31 @@ import (
 	"github.com/nikolalohinski/gonja/v2/exec"
 	"github.com/samber/lo"
 	"github.com/sashabaranov/go-openai"
+	"github.com/tiktoken-go/tokenizer"
+	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/ast"
+	"github.com/yuin/goldmark/text"
 	"github.com/zhenghaoz/gorse/base/floats"
+	"github.com/zhenghaoz/gorse/base/heap"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/common/ann"
+	"github.com/zhenghaoz/gorse/common/parallel"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/dataset"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
 	"go.uber.org/zap"
 )
+
+var cl100kBaseTokenizer tokenizer.Codec
+
+func init() {
+	var err error
+	cl100kBaseTokenizer, err = tokenizer.Get(tokenizer.Cl100kBase)
+	if err != nil {
+		panic(err)
+	}
+}
 
 type ItemToItemOptions struct {
 	TagsIDF      []float32
@@ -47,9 +64,11 @@ type ItemToItemOptions struct {
 }
 
 type ItemToItem interface {
+	Timestamp() time.Time
 	Items() []*data.Item
 	Push(item *data.Item, feedback []int32)
 	PopAll(i int) []cache.Score
+	Pool() parallel.Pool
 }
 
 func NewItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time, opts *ItemToItemOptions) (ItemToItem, error) {
@@ -90,6 +109,10 @@ type baseItemToItem[T any] struct {
 	items      []*data.Item
 }
 
+func (b *baseItemToItem[T]) Timestamp() time.Time {
+	return b.timestamp
+}
+
 func (b *baseItemToItem[T]) Items() []*data.Item {
 	return b.items
 }
@@ -108,6 +131,10 @@ func (b *baseItemToItem[T]) PopAll(i int) []cache.Score {
 			Timestamp:  b.timestamp,
 		}
 	})
+}
+
+func (b *baseItemToItem[T]) Pool() parallel.Pool {
+	return parallel.NewSequentialPool()
 }
 
 type embeddingItemToItem struct {
@@ -353,10 +380,12 @@ func flatten(o any, tSet mapset.Set[dataset.ID]) {
 
 type chatItemToItem struct {
 	*embeddingItemToItem
-	template       *exec.Template
-	client         *openai.Client
-	chatModel      string
-	embeddingModel string
+	template            *exec.Template
+	client              *openai.Client
+	chatCompletionModel string
+	embeddingModel      string
+	embeddingDimensions int
+	poolSize            int
 }
 
 func newChatItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time, openaiConfig config.OpenAIConfig) (*chatItemToItem, error) {
@@ -377,12 +406,28 @@ func newChatItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time, 
 		embeddingItemToItem: embedding,
 		template:            template,
 		client:              openai.NewClientWithConfig(clientConfig),
-		chatModel:           openaiConfig.ChatCompletionModel,
-		embeddingModel:      openaiConfig.EmbeddingsModel,
+		chatCompletionModel: openaiConfig.ChatCompletionModel,
+		embeddingModel:      openaiConfig.EmbeddingModel,
+		embeddingDimensions: openaiConfig.EmbeddingDimensions,
+		poolSize:            min(openaiConfig.ChatCompletionRPM, openaiConfig.EmbeddingRPM),
 	}, nil
 }
 
 func (g *chatItemToItem) PopAll(i int) []cache.Score {
+	// evaluate column expression and get embedding vector
+	result, err := expr.Run(g.columnFunc, map[string]any{
+		"item": g.items[i],
+	})
+	if err != nil {
+		log.Logger().Error("failed to evaluate column expression",
+			zap.Any("item", g.items[i]), zap.Error(err))
+		return nil
+	}
+	embedding0, ok := result.([]float32)
+	if !ok {
+		log.Logger().Error("invalid column type", zap.Any("column", result))
+		return nil
+	}
 	// render template
 	var buf strings.Builder
 	ctx := exec.NewContext(map[string]any{
@@ -392,43 +437,99 @@ func (g *chatItemToItem) PopAll(i int) []cache.Score {
 		log.Logger().Error("failed to execute template", zap.Error(err))
 		return nil
 	}
-	fmt.Println(buf.String())
 	// chat completion
-	resp, err := g.client.CreateChatCompletion(context.Background(), openai.ChatCompletionRequest{
-		Model: g.chatModel,
-		Messages: []openai.ChatCompletionMessage{{
-			Role:    openai.ChatMessageRoleUser,
-			Content: buf.String(),
-		}},
-	})
+	start := time.Now()
+	ids, _, _ := cl100kBaseTokenizer.Encode(buf.String())
+	resp, err := backoff.Retry(context.Background(), func() (openai.ChatCompletionResponse, error) {
+		time.Sleep(parallel.ChatCompletionRequestsLimiter.Take(1))
+		time.Sleep(parallel.ChatCompletionTokensLimiter.Take(int64(len(ids))))
+		resp, err := g.client.CreateChatCompletion(context.Background(), openai.ChatCompletionRequest{
+			Model: g.chatCompletionModel,
+			Messages: []openai.ChatCompletionMessage{{
+				Role:    openai.ChatMessageRoleUser,
+				Content: buf.String(),
+			}},
+		})
+		if err == nil {
+			return resp, nil
+		}
+		if throttled(err) {
+			return openai.ChatCompletionResponse{}, err
+		}
+		return openai.ChatCompletionResponse{}, backoff.Permanent(err)
+	}, backoff.WithBackOff(backoff.NewExponentialBackOff()))
 	if err != nil {
-		log.Logger().Error("failed to chat completion", zap.Error(err))
+		log.Logger().Error("failed to chat completion", zap.String("item_id", g.items[i].ItemId), zap.Error(err))
 		return nil
 	}
-	message := stripThink(resp.Choices[0].Message.Content)
+	duration := time.Since(start)
+	parsed := parseJSONArrayFromCompletion(resp.Choices[0].Message.Content)
+	log.OpenAILogger().Info("chat completion",
+		zap.String("prompt", buf.String()),
+		zap.String("completion", resp.Choices[0].Message.Content),
+		zap.Strings("parsed", parsed),
+		zap.Int("prompt_tokens", resp.Usage.PromptTokens),
+		zap.Int("completion_tokens", resp.Usage.CompletionTokens),
+		zap.Int("total_tokens", resp.Usage.TotalTokens),
+		zap.Duration("duration", duration))
 	// message embedding
-	resp2, err := g.client.CreateEmbeddings(context.Background(), openai.EmbeddingRequest{
-		Input: message,
-		Model: openai.EmbeddingModel(g.embeddingModel),
-	})
-	if err != nil {
-		log.Logger().Error("failed to create embeddings", zap.Error(err))
-		return nil
+	embeddings := make([][]float32, len(parsed))
+	for i, message := range parsed {
+		ids, _, _ := cl100kBaseTokenizer.Encode(message)
+		resp, err := backoff.Retry(context.Background(), func() (openai.EmbeddingResponse, error) {
+			time.Sleep(parallel.EmbeddingRequestsLimiter.Take(1))
+			time.Sleep(parallel.EmbeddingTokensLimiter.Take(int64(len(ids))))
+			resp, err := g.client.CreateEmbeddings(context.Background(), openai.EmbeddingRequest{
+				Input:      message,
+				Model:      openai.EmbeddingModel(g.embeddingModel),
+				Dimensions: g.embeddingDimensions,
+			})
+			if err == nil {
+				return resp, nil
+			}
+			if throttled(err) {
+				return openai.EmbeddingResponse{}, err
+			}
+			return openai.EmbeddingResponse{}, backoff.Permanent(err)
+		}, backoff.WithBackOff(backoff.NewExponentialBackOff()))
+		if err != nil {
+			log.Logger().Error("failed to create embeddings", zap.String("item_id", g.items[i].ItemId), zap.Error(err))
+			return nil
+		}
+		embeddings[i] = resp.Data[0].Embedding
 	}
-	embedding := resp2.Data[0].Embedding
 	// search index
-	scores := g.index.SearchVector(embedding, g.n+1, true)
-	return lo.Map(scores, func(v lo.Tuple2[int, float32], _ int) cache.Score {
-		return cache.Score{
-			Id:         g.items[v.A].ItemId,
-			Categories: g.items[v.A].Categories,
-			Score:      -float64(v.B),
+	pq := heap.NewPriorityQueue(true)
+	for _, embedding := range embeddings {
+		score0 := floats.Euclidean(embedding, embedding0)
+		scores := g.index.SearchVector(embedding, g.n+1, true)
+		for _, score := range scores {
+			if score.A != i {
+				pq.Push(int32(score.A), score.B*score0)
+				if pq.Len() > g.n {
+					pq.Pop()
+				}
+			}
+		}
+	}
+	scores := make([]cache.Score, pq.Len())
+	for i := 9; i >= 0; i-- {
+		id, score := pq.Pop()
+		scores[i] = cache.Score{
+			Id:         g.items[id].ItemId,
+			Categories: g.items[id].Categories,
+			Score:      -float64(score),
 			Timestamp:  g.timestamp,
 		}
-	})
+	}
+	return scores
 }
 
-func stripThink(s string) string {
+func (g *chatItemToItem) Pool() parallel.Pool {
+	return parallel.NewConcurrentPool(g.poolSize)
+}
+
+func stripThinkInCompletion(s string) string {
 	if len(s) < 7 || s[:7] != "<think>" {
 		return s
 	}
@@ -437,4 +538,56 @@ func stripThink(s string) string {
 		return s
 	}
 	return s[end+8:]
+}
+
+// parseJSONArrayFromCompletion parse JSON array from completion.
+// If the completion contains a JSON array, it will return each element in the array.
+// If the completion contains a JSON object, it will return the object as a string.
+// Otherwise, it will return the completion as a string.
+func parseJSONArrayFromCompletion(completion string) []string {
+	source := []byte(stripThinkInCompletion(completion))
+	root := goldmark.DefaultParser().Parse(text.NewReader(source))
+	for n := root.FirstChild(); n != nil; n = n.NextSibling() {
+		if n.Kind() != ast.KindFencedCodeBlock {
+			continue
+		}
+		if codeBlock, ok := n.(*ast.FencedCodeBlock); ok {
+			if string(codeBlock.Language(source)) == "json" {
+				bytes := codeBlock.Text(source)
+				if bytes[0] == '[' {
+					var temp []any
+					err := json.Unmarshal(bytes, &temp)
+					if err != nil {
+						return []string{string(bytes)}
+					}
+					var result []string
+					for _, v := range temp {
+						var bytes []byte
+						switch typed := v.(type) {
+						case string:
+							bytes = []byte(typed)
+						default:
+							bytes, err = json.Marshal(v)
+							if err != nil {
+								return []string{string(bytes)}
+							}
+						}
+						result = append(result, string(bytes))
+					}
+					return result
+				}
+				return []string{string(bytes)}
+			}
+		}
+	}
+	return []string{string(source)}
+}
+
+func throttled(err error) bool {
+	if requestErr, ok := err.(*openai.APIError); ok {
+		if requestErr.HTTPStatusCode == 429 {
+			return true
+		}
+	}
+	return false
 }

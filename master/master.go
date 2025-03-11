@@ -33,9 +33,9 @@ import (
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/encoding"
 	"github.com/zhenghaoz/gorse/base/log"
-	"github.com/zhenghaoz/gorse/base/parallel"
 	"github.com/zhenghaoz/gorse/base/progress"
 	"github.com/zhenghaoz/gorse/base/task"
+	"github.com/zhenghaoz/gorse/common/parallel"
 	"github.com/zhenghaoz/gorse/common/sizeof"
 	"github.com/zhenghaoz/gorse/common/util"
 	"github.com/zhenghaoz/gorse/config"
@@ -131,6 +131,11 @@ func NewMaster(cfg *config.Config, cacheFile string, managedMode bool) *Master {
 	// setup OpenAI client
 	clientConfig := openai.DefaultConfig(cfg.OpenAI.AuthToken)
 	clientConfig.BaseURL = cfg.OpenAI.BaseURL
+	// setup OpenAI logger
+	log.InitOpenAILogger(cfg.OpenAI.LogFile)
+	// setup OpenAI rate limiter
+	parallel.InitChatCompletionLimiters(cfg.OpenAI.ChatCompletionRPM, cfg.OpenAI.ChatCompletionTPM)
+	parallel.InitEmbeddingLimiters(cfg.OpenAI.EmbeddingRPM, cfg.OpenAI.EmbeddingTPM)
 
 	m := &Master{
 		// create task monitor

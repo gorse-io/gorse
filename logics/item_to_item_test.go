@@ -19,9 +19,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 	"github.com/zhenghaoz/gorse/base/floats"
 	"github.com/zhenghaoz/gorse/common/mock"
+	"github.com/zhenghaoz/gorse/common/parallel"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/dataset"
 	"github.com/zhenghaoz/gorse/storage/data"
@@ -88,6 +90,7 @@ func (suite *ItemToItemTestSuite) TestEmbedding() {
 		Column: "item.Labels.description",
 	}, 10, timestamp)
 	suite.NoError(err)
+	suite.IsType(item2item.Pool(), &parallel.SequentialPool{})
 
 	for i := 0; i < 100; i++ {
 		item2item.Push(&data.Item{
@@ -115,6 +118,7 @@ func (suite *ItemToItemTestSuite) TestTags() {
 		Column: "item.Labels",
 	}, 10, timestamp, idf)
 	suite.NoError(err)
+	suite.IsType(item2item.Pool(), &parallel.SequentialPool{})
 
 	for i := 0; i < 100; i++ {
 		labels := make(map[string]any)
@@ -142,6 +146,7 @@ func (suite *ItemToItemTestSuite) TestUsers() {
 	}
 	item2item, err := newUsersItemToItem(config.ItemToItemConfig{}, 10, timestamp, idf)
 	suite.NoError(err)
+	suite.IsType(item2item.Pool(), &parallel.SequentialPool{})
 
 	for i := 0; i < 100; i++ {
 		feedback := make([]int32, 0, 100-i)
@@ -166,6 +171,7 @@ func (suite *ItemToItemTestSuite) TestAuto() {
 	}
 	item2item, err := newAutoItemToItem(config.ItemToItemConfig{}, 10, timestamp, idf, idf)
 	suite.NoError(err)
+	suite.IsType(item2item.Pool(), &parallel.SequentialPool{})
 
 	for i := 0; i < 100; i++ {
 		item := &data.Item{ItemId: strconv.Itoa(i)}
@@ -212,13 +218,14 @@ func (suite *ItemToItemTestSuite) TestChat() {
 		BaseURL:             mockAI.BaseURL(),
 		AuthToken:           mockAI.AuthToken(),
 		ChatCompletionModel: "deepseek-r1",
-		EmbeddingsModel:     "text-similarity-ada-001",
+		EmbeddingModel:      "text-similarity-ada-001",
 	})
 	suite.NoError(err)
+	suite.IsType(item2item.Pool(), &parallel.ConcurrentPool{})
 
 	for i := 0; i < 100; i++ {
 		embedding := mock.Hash("Please generate similar items for item_0.")
-		floats.AddConst(embedding, float32(i))
+		floats.AddConst(embedding, float32(i+1))
 		item2item.Push(&data.Item{
 			ItemId: strconv.Itoa(i),
 			Labels: map[string]any{
@@ -237,4 +244,25 @@ func (suite *ItemToItemTestSuite) TestChat() {
 
 func TestItemToItem(t *testing.T) {
 	suite.Run(t, new(ItemToItemTestSuite))
+}
+
+func TestParseJSONArrayFromCompletion(t *testing.T) {
+	// parse JSON object
+	completion := "```json\n{\"a\": 1, \"b\": 2}\n```"
+	parsed := parseJSONArrayFromCompletion(completion)
+	assert.Equal(t, []string{"{\"a\": 1, \"b\": 2}\n"}, parsed)
+
+	// parse JSON array
+	completion = "```json\n[1, 2]\n```"
+	parsed = parseJSONArrayFromCompletion(completion)
+	assert.Equal(t, []string{"1", "2"}, parsed)
+
+	// parse text
+	completion = "Hello, world!"
+	parsed = parseJSONArrayFromCompletion(completion)
+	assert.Equal(t, []string{"Hello, world!"}, parsed)
+
+	// strip think
+	completion = "<think>hello</think>World!"
+	assert.Equal(t, "World!", stripThinkInCompletion(completion))
 }
