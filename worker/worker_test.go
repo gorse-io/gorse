@@ -38,6 +38,7 @@ import (
 	"github.com/zhenghaoz/gorse/base/progress"
 	"github.com/zhenghaoz/gorse/common/parallel"
 	"github.com/zhenghaoz/gorse/config"
+	"github.com/zhenghaoz/gorse/dataset"
 	"github.com/zhenghaoz/gorse/model"
 	"github.com/zhenghaoz/gorse/model/click"
 	"github.com/zhenghaoz/gorse/model/ranking"
@@ -153,8 +154,8 @@ func (m *mockMatrixFactorizationForRecommend) Complexity() int {
 
 func newMockMatrixFactorizationForRecommend(numUsers, numItems int) *mockMatrixFactorizationForRecommend {
 	m := new(mockMatrixFactorizationForRecommend)
-	m.UserIndex = base.NewMapIndex()
-	m.ItemIndex = base.NewMapIndex()
+	m.UserIndex = dataset.NewFreqDict()
+	m.ItemIndex = dataset.NewFreqDict()
 	for i := 0; i < numUsers; i++ {
 		m.UserIndex.Add(strconv.Itoa(i))
 	}
@@ -178,7 +179,7 @@ func (m *mockMatrixFactorizationForRecommend) Invalid() bool {
 	return false
 }
 
-func (m *mockMatrixFactorizationForRecommend) Fit(_ context.Context, _, _ *ranking.DataSet, _ *ranking.FitConfig) ranking.Score {
+func (m *mockMatrixFactorizationForRecommend) Fit(_ context.Context, _, _ *dataset.Dataset, _ *ranking.FitConfig) ranking.Score {
 	panic("implement me")
 }
 
@@ -188,10 +189,6 @@ func (m *mockMatrixFactorizationForRecommend) Predict(_, itemId string) float32 
 		panic(err)
 	}
 	return float32(itemIndex)
-}
-
-func (m *mockMatrixFactorizationForRecommend) InternalPredict(_, itemId int32) float32 {
-	return float32(itemId)
 }
 
 func (m *mockMatrixFactorizationForRecommend) Clear() {
@@ -572,12 +569,8 @@ func marshal(t *testing.T, v interface{}) string {
 	return string(s)
 }
 
-func newRankingDataset() (*ranking.DataSet, *ranking.DataSet) {
-	dataset := &ranking.DataSet{
-		UserIndex: base.NewMapIndex(),
-		ItemIndex: base.NewMapIndex(),
-	}
-	return dataset, dataset
+func newRankingDataset() (*dataset.Dataset, *dataset.Dataset) {
+	return dataset.NewDataset(time.Now(), 0, 0), dataset.NewDataset(time.Now(), 0, 0)
 }
 
 func newClickDataset() (*click.Dataset, *click.Dataset) {

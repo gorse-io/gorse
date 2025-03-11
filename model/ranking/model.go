@@ -156,7 +156,7 @@ func (baseModel *BaseMatrixFactorization) GetItemIndex() *dataset.FreqDict {
 
 // IsUserPredictable returns false if user has no feedback and its embedding vector never be trained.
 func (baseModel *BaseMatrixFactorization) IsUserPredictable(userIndex int32) bool {
-	if userIndex >= baseModel.UserIndex.Count() {
+	if userIndex >= baseModel.UserIndex.Count() || userIndex < 0 {
 		return false
 	}
 	return baseModel.UserPredictable.Test(uint(userIndex))
@@ -164,7 +164,7 @@ func (baseModel *BaseMatrixFactorization) IsUserPredictable(userIndex int32) boo
 
 // IsItemPredictable returns false if item has no feedback and its embedding vector never be trained.
 func (baseModel *BaseMatrixFactorization) IsItemPredictable(itemIndex int32) bool {
-	if itemIndex >= baseModel.ItemIndex.Count() {
+	if itemIndex >= baseModel.ItemIndex.Count() || itemIndex < 0 {
 		return false
 	}
 	return baseModel.ItemPredictable.Test(uint(itemIndex))

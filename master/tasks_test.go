@@ -81,10 +81,10 @@ func (s *MasterTestSuite) TestFindItemNeighbors() {
 	}
 
 	// load mock dataset
-	dataset, _, dataSet, err := s.LoadDataFromDatabase(context.Background(), s.DataClient, []string{"FeedbackType"},
+	_, dataSet, err := s.LoadDataFromDatabase(context.Background(), s.DataClient, []string{"FeedbackType"},
 		nil, 0, 0, NewOnlineEvaluator(), nil)
 	s.NoError(err)
-	s.rankingTrainSet = dataset
+	s.rankingTrainSet = dataSet
 
 	// similar items (common users)
 	s.Config.Recommend.ItemNeighbors.NeighborType = config.NeighborTypeRelated
@@ -164,10 +164,10 @@ func (s *MasterTestSuite) TestFindUserNeighbors() {
 	s.NoError(err)
 	err = s.DataClient.BatchInsertFeedback(ctx, feedbacks, true, true, true)
 	s.NoError(err)
-	dataset, _, dataSet, err := s.LoadDataFromDatabase(context.Background(), s.DataClient, []string{"FeedbackType"},
+	_, dataSet, err := s.LoadDataFromDatabase(context.Background(), s.DataClient, []string{"FeedbackType"},
 		nil, 0, 0, NewOnlineEvaluator(), nil)
 	s.NoError(err)
-	s.rankingTrainSet = dataset
+	s.rankingTrainSet = dataSet
 
 	// similar items (common users)
 	s.Config.Recommend.UserNeighbors.NeighborType = config.NeighborTypeRelated
@@ -277,10 +277,10 @@ func (s *MasterTestSuite) TestLoadDataFromDatabase() {
 	// load dataset
 	err = s.runLoadDatasetTask()
 	s.NoError(err)
-	s.Equal(11, s.rankingTrainSet.UserCount())
-	s.Equal(10, s.rankingTrainSet.ItemCount())
-	s.Equal(11, s.rankingTestSet.UserCount())
-	s.Equal(10, s.rankingTestSet.ItemCount())
+	s.Equal(11, s.rankingTrainSet.CountUsers())
+	s.Equal(10, s.rankingTrainSet.CountItems())
+	s.Equal(11, s.rankingTestSet.CountUsers())
+	s.Equal(10, s.rankingTestSet.CountItems())
 	s.Equal(55, s.rankingTrainSet.Count()+s.rankingTestSet.Count())
 	s.Equal(11, s.clickTrainSet.UserCount())
 	s.Equal(10, s.clickTrainSet.ItemCount())
