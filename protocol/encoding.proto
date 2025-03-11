@@ -12,30 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package util
+syntax = "proto3";
 
-import (
-	"reflect"
-	"strconv"
+option go_package = "github.com/zhenghaoz/gorse/protocol";
 
-	"golang.org/x/exp/constraints"
-)
+package protocol;
 
-func ParseFloat[T constraints.Float](s string) (T, error) {
-	v, err := strconv.ParseFloat(s, reflect.TypeOf(T(0)).Bits())
-	return T(v), err
+message Tensor {
+  repeated string key = 1;
+  repeated int32 shape = 2;
+  repeated float data = 3;
 }
 
-func ParseUInt[T constraints.Unsigned](s string) (T, error) {
-	v, err := strconv.ParseUint(s, 10, reflect.TypeOf(T(0)).Bits())
-	return T(v), err
-}
-
-func ParseInt[T constraints.Signed](s string) (T, error) {
-	v, err := strconv.ParseInt(s, 10, reflect.TypeOf(T(0)).Bits())
-	return T(v), err
-}
-
-func FormatInt[T constraints.Signed](i T) string {
-	return strconv.FormatInt(int64(i), 10)
+message LatentFactor {
+  string id = 1;
+  repeated float data = 2;
 }

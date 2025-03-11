@@ -66,7 +66,7 @@ type ItemToItemOptions struct {
 type ItemToItem interface {
 	Timestamp() time.Time
 	Items() []*data.Item
-	Push(item *data.Item, feedback []dataset.ID)
+	Push(item *data.Item, feedback []int32)
 	PopAll(i int) []cache.Score
 	Pool() parallel.Pool
 }
@@ -159,7 +159,7 @@ func newEmbeddingItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.T
 	}}, nil
 }
 
-func (e *embeddingItemToItem) Push(item *data.Item, _ []dataset.ID) {
+func (e *embeddingItemToItem) Push(item *data.Item, _ []int32) {
 	// Check if hidden
 	if item.IsHidden {
 		return
@@ -193,7 +193,7 @@ func (e *embeddingItemToItem) Push(item *data.Item, _ []dataset.ID) {
 
 type tagsItemToItem struct {
 	baseItemToItem[[]dataset.ID]
-	IDF
+	IDF[dataset.ID]
 }
 
 func newTagsItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time, idf []float32) (ItemToItem, error) {
@@ -215,7 +215,7 @@ func newTagsItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time, 
 	return t, nil
 }
 
-func (t *tagsItemToItem) Push(item *data.Item, _ []dataset.ID) {
+func (t *tagsItemToItem) Push(item *data.Item, _ []int32) {
 	// Check if hidden
 	if item.IsHidden {
 		return
@@ -242,8 +242,8 @@ func (t *tagsItemToItem) Push(item *data.Item, _ []dataset.ID) {
 }
 
 type usersItemToItem struct {
-	baseItemToItem[[]dataset.ID]
-	IDF
+	baseItemToItem[[]int32]
+	IDF[int32]
 }
 
 func newUsersItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time, idf []float32) (ItemToItem, error) {
@@ -251,16 +251,16 @@ func newUsersItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time,
 		return nil, errors.New("column is not supported in users item-to-item")
 	}
 	u := &usersItemToItem{IDF: idf}
-	u.baseItemToItem = baseItemToItem[[]dataset.ID]{
+	u.baseItemToItem = baseItemToItem[[]int32]{
 		name:      cfg.Name,
 		n:         n,
 		timestamp: timestamp,
-		index:     ann.NewHNSW[[]dataset.ID](u.distance),
+		index:     ann.NewHNSW[[]int32](u.distance),
 	}
 	return u, nil
 }
 
-func (u *usersItemToItem) Push(item *data.Item, feedback []dataset.ID) {
+func (u *usersItemToItem) Push(item *data.Item, feedback []int32) {
 	// Check if hidden
 	if item.IsHidden {
 		return
@@ -275,9 +275,9 @@ func (u *usersItemToItem) Push(item *data.Item, feedback []dataset.ID) {
 }
 
 type autoItemToItem struct {
-	baseItemToItem[lo.Tuple2[[]dataset.ID, []dataset.ID]]
-	tIDF IDF
-	uIDF IDF
+	baseItemToItem[lo.Tuple2[[]dataset.ID, []int32]]
+	tIDF IDF[dataset.ID]
+	uIDF IDF[int32]
 }
 
 func newAutoItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time, tIDF, uIDF []float32) (ItemToItem, error) {
@@ -285,16 +285,16 @@ func newAutoItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time, 
 		tIDF: tIDF,
 		uIDF: uIDF,
 	}
-	a.baseItemToItem = baseItemToItem[lo.Tuple2[[]dataset.ID, []dataset.ID]]{
+	a.baseItemToItem = baseItemToItem[lo.Tuple2[[]dataset.ID, []int32]]{
 		name:      cfg.Name,
 		n:         n,
 		timestamp: timestamp,
-		index:     ann.NewHNSW[lo.Tuple2[[]dataset.ID, []dataset.ID]](a.distance),
+		index:     ann.NewHNSW[lo.Tuple2[[]dataset.ID, []int32]](a.distance),
 	}
 	return a, nil
 }
 
-func (a *autoItemToItem) Push(item *data.Item, feedback []dataset.ID) {
+func (a *autoItemToItem) Push(item *data.Item, feedback []int32) {
 	// Check if hidden
 	if item.IsHidden {
 		return
@@ -312,16 +312,16 @@ func (a *autoItemToItem) Push(item *data.Item, feedback []dataset.ID) {
 	})
 	// Push item
 	a.items = append(a.items, item)
-	_ = a.index.Add(lo.Tuple2[[]dataset.ID, []dataset.ID]{A: v, B: feedback})
+	_ = a.index.Add(lo.Tuple2[[]dataset.ID, []int32]{A: v, B: feedback})
 }
 
-func (a *autoItemToItem) distance(u, v lo.Tuple2[[]dataset.ID, []dataset.ID]) float32 {
+func (a *autoItemToItem) distance(u, v lo.Tuple2[[]dataset.ID, []int32]) float32 {
 	return (a.tIDF.distance(u.A, v.A) + a.uIDF.distance(u.B, v.B)) / 2
 }
 
-type IDF []float32
+type IDF[T dataset.ID | int32] []float32
 
-func (idf IDF) distance(a, b []dataset.ID) float32 {
+func (idf IDF[T]) distance(a, b []T) float32 {
 	commonSum, commonCount := idf.weightedSumCommonElements(a, b)
 	if len(a) == len(b) && commonCount == float32(len(a)) {
 		// If two items have the same tags, its distance is zero.
@@ -338,7 +338,7 @@ func (idf IDF) distance(a, b []dataset.ID) float32 {
 	}
 }
 
-func (idf IDF) weightedSumCommonElements(a, b []dataset.ID) (float32, float32) {
+func (idf IDF[T]) weightedSumCommonElements(a, b []T) (float32, float32) {
 	i, j, sum, count := 0, 0, float32(0), float32(0)
 	for i < len(a) && j < len(b) {
 		if a[i] == b[j] {
@@ -355,7 +355,7 @@ func (idf IDF) weightedSumCommonElements(a, b []dataset.ID) (float32, float32) {
 	return sum, count
 }
 
-func (idf IDF) weightedSum(a []dataset.ID) float32 {
+func (idf IDF[T]) weightedSum(a []T) float32 {
 	var sum float32
 	for _, i := range a {
 		sum += idf[i]

@@ -39,6 +39,7 @@ import (
 	"github.com/zhenghaoz/gorse/common/sizeof"
 	"github.com/zhenghaoz/gorse/common/util"
 	"github.com/zhenghaoz/gorse/config"
+	"github.com/zhenghaoz/gorse/dataset"
 	"github.com/zhenghaoz/gorse/model"
 	"github.com/zhenghaoz/gorse/model/click"
 	"github.com/zhenghaoz/gorse/model/ranking"
@@ -78,8 +79,8 @@ type Master struct {
 	metaStore meta.Database
 
 	// ranking dataset
-	rankingTrainSet  *ranking.DataSet
-	rankingTestSet   *ranking.DataSet
+	rankingTrainSet  *dataset.Dataset
+	rankingTestSet   *dataset.Dataset
 	rankingDataMutex sync.RWMutex
 
 	// click dataset
@@ -368,7 +369,7 @@ func (m *Master) RunPrivilegedTasksLoop() {
 			log.Logger().Error("failed to load ranking dataset", zap.Error(err))
 			continue
 		}
-		if m.rankingTrainSet.UserCount() == 0 && m.rankingTrainSet.ItemCount() == 0 && m.rankingTrainSet.Count() == 0 {
+		if m.rankingTrainSet.CountUsers() == 0 && m.rankingTrainSet.CountItems() == 0 && m.rankingTrainSet.Count() == 0 {
 			log.Logger().Warn("empty ranking dataset",
 				zap.Strings("positive_feedback_type", m.Config.Recommend.DataSource.PositiveFeedbackTypes))
 			continue
@@ -469,7 +470,7 @@ func (m *Master) RunManagedTasksLoop() {
 				log.Logger().Error("failed to load ranking dataset", zap.Error(err))
 				return
 			}
-			if m.rankingTrainSet.UserCount() == 0 && m.rankingTrainSet.ItemCount() == 0 && m.rankingTrainSet.Count() == 0 {
+			if m.rankingTrainSet.CountUsers() == 0 && m.rankingTrainSet.CountItems() == 0 && m.rankingTrainSet.Count() == 0 {
 				log.Logger().Warn("empty ranking dataset",
 					zap.Strings("positive_feedback_type", m.Config.Recommend.DataSource.PositiveFeedbackTypes))
 				return

@@ -42,7 +42,7 @@ type UserToUserOptions struct {
 
 type UserToUser interface {
 	Users() []*data.User
-	Push(user *data.User, feedback []dataset.ID)
+	Push(user *data.User, feedback []int32)
 	PopAll(i int) []cache.Score
 }
 
@@ -120,7 +120,7 @@ func newEmbeddingUserToUser(cfg UserToUserConfig, n int, timestamp time.Time) (U
 	}}, nil
 }
 
-func (e *embeddingUserToUser) Push(user *data.User, feedback []dataset.ID) {
+func (e *embeddingUserToUser) Push(user *data.User, _ []int32) {
 	// Evaluate filter function
 	result, err := expr.Run(e.columnFunc, map[string]any{
 		"user": user,
@@ -149,7 +149,7 @@ func (e *embeddingUserToUser) Push(user *data.User, feedback []dataset.ID) {
 
 type tagsUserToUser struct {
 	baseUserToUser[[]dataset.ID]
-	IDF
+	IDF[dataset.ID]
 }
 
 func newTagsUserToUser(cfg UserToUserConfig, n int, timestamp time.Time, idf []float32) (UserToUser, error) {
@@ -171,7 +171,7 @@ func newTagsUserToUser(cfg UserToUserConfig, n int, timestamp time.Time, idf []f
 	return t, nil
 }
 
-func (t *tagsUserToUser) Push(user *data.User, feedback []dataset.ID) {
+func (t *tagsUserToUser) Push(user *data.User, _ []int32) {
 	// Evaluate filter function
 	result, err := expr.Run(t.columnFunc, map[string]any{
 		"user": user,
@@ -193,8 +193,8 @@ func (t *tagsUserToUser) Push(user *data.User, feedback []dataset.ID) {
 }
 
 type itemsUserToUser struct {
-	baseUserToUser[[]dataset.ID]
-	IDF
+	baseUserToUser[[]int32]
+	IDF[int32]
 }
 
 func newItemsUserToUser(cfg UserToUserConfig, n int, timestamp time.Time, idf []float32) (UserToUser, error) {
@@ -202,16 +202,16 @@ func newItemsUserToUser(cfg UserToUserConfig, n int, timestamp time.Time, idf []
 		return nil, errors.New("column is not supported in items user-to-user")
 	}
 	i := &itemsUserToUser{IDF: idf}
-	i.baseUserToUser = baseUserToUser[[]dataset.ID]{
+	i.baseUserToUser = baseUserToUser[[]int32]{
 		name:      cfg.Name,
 		n:         n,
 		timestamp: timestamp,
-		index:     ann.NewHNSW[[]dataset.ID](i.distance),
+		index:     ann.NewHNSW[[]int32](i.distance),
 	}
 	return i, nil
 }
 
-func (i *itemsUserToUser) Push(user *data.User, feedback []dataset.ID) {
+func (i *itemsUserToUser) Push(user *data.User, feedback []int32) {
 	// Sort feedback
 	sort.Slice(feedback, func(i, j int) bool {
 		return feedback[i] < feedback[j]
@@ -222,9 +222,9 @@ func (i *itemsUserToUser) Push(user *data.User, feedback []dataset.ID) {
 }
 
 type autoUserToUser struct {
-	baseUserToUser[lo.Tuple2[[]dataset.ID, []dataset.ID]]
-	tIDF IDF
-	iIDF IDF
+	baseUserToUser[lo.Tuple2[[]dataset.ID, []int32]]
+	tIDF IDF[dataset.ID]
+	iIDF IDF[int32]
 }
 
 func newAutoUserToUser(cfg UserToUserConfig, n int, timestamp time.Time, tIDF, iIDF []float32) (UserToUser, error) {
@@ -232,16 +232,16 @@ func newAutoUserToUser(cfg UserToUserConfig, n int, timestamp time.Time, tIDF, i
 		tIDF: tIDF,
 		iIDF: iIDF,
 	}
-	a.baseUserToUser = baseUserToUser[lo.Tuple2[[]dataset.ID, []dataset.ID]]{
+	a.baseUserToUser = baseUserToUser[lo.Tuple2[[]dataset.ID, []int32]]{
 		name:      cfg.Name,
 		n:         n,
 		timestamp: timestamp,
-		index:     ann.NewHNSW[lo.Tuple2[[]dataset.ID, []dataset.ID]](a.distance),
+		index:     ann.NewHNSW[lo.Tuple2[[]dataset.ID, []int32]](a.distance),
 	}
 	return a, nil
 }
 
-func (a *autoUserToUser) Push(user *data.User, feedback []dataset.ID) {
+func (a *autoUserToUser) Push(user *data.User, feedback []int32) {
 	// Extract tags
 	tSet := mapset.NewSet[dataset.ID]()
 	flatten(user.Labels, tSet)
@@ -255,9 +255,9 @@ func (a *autoUserToUser) Push(user *data.User, feedback []dataset.ID) {
 	})
 	// Push user
 	a.users = append(a.users, user)
-	_ = a.index.Add(lo.Tuple2[[]dataset.ID, []dataset.ID]{A: t, B: feedback})
+	_ = a.index.Add(lo.Tuple2[[]dataset.ID, []int32]{A: t, B: feedback})
 }
 
-func (a *autoUserToUser) distance(u, v lo.Tuple2[[]dataset.ID, []dataset.ID]) float32 {
+func (a *autoUserToUser) distance(u, v lo.Tuple2[[]dataset.ID, []int32]) float32 {
 	return (a.tIDF.distance(u.A, v.A) + a.iIDF.distance(u.B, v.B)) / 2
 }

@@ -17,20 +17,17 @@ package master
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/zhenghaoz/gorse/base"
+	"github.com/zhenghaoz/gorse/dataset"
 	"github.com/zhenghaoz/gorse/model"
 	"github.com/zhenghaoz/gorse/model/click"
 	"github.com/zhenghaoz/gorse/model/ranking"
 )
 
-func newRankingDataset() (*ranking.DataSet, *ranking.DataSet) {
-	dataset := &ranking.DataSet{
-		UserIndex: base.NewMapIndex(),
-		ItemIndex: base.NewMapIndex(),
-	}
-	return dataset, dataset
+func newRankingDataset() (*dataset.Dataset, *dataset.Dataset) {
+	return dataset.NewDataset(time.Now(), 0, 0), dataset.NewDataset(time.Now(), 0, 0)
 }
 
 func newClickDataset() (*click.Dataset, *click.Dataset) {

@@ -15,6 +15,7 @@
 package dataset
 
 import (
+	"fmt"
 	"strconv"
 	"testing"
 	"time"
@@ -169,4 +170,49 @@ func TestDataset_AddFeedback(t *testing.T) {
 		assert.InDelta(t, math32.Log(float32(10)/float32(10-i)), userIDF[i], 1e-2)
 		assert.InDelta(t, math32.Log(float32(10)/float32(i+1)), itemIDF[i], 1e-2)
 	}
+}
+
+func TestDataset_Split(t *testing.T) {
+	const numUsers, numItems = 3, 5
+	// create dataset
+	dataset := NewDataset(time.Now(), numUsers, numItems)
+	for i := 0; i < numUsers; i++ {
+		dataset.AddUser(data.User{UserId: fmt.Sprintf("user%v", i)})
+	}
+	for i := 0; i < numItems; i++ {
+		dataset.AddItem(data.Item{ItemId: fmt.Sprintf("item%v", i)})
+	}
+	for i := 0; i < numUsers; i++ {
+		for j := i + 1; j < numItems; j++ {
+			dataset.AddFeedback(fmt.Sprintf("user%v", i), fmt.Sprintf("item%v", j))
+		}
+	}
+	assert.Equal(t, 9, dataset.Count())
+	// split
+	train, test := dataset.Split(0, 0)
+	assert.Equal(t, numUsers, train.CountUsers())
+	assert.Equal(t, numItems, train.CountItems())
+	assert.Equal(t, 9-numUsers, train.Count())
+	assert.Equal(t, numUsers, test.CountUsers())
+	assert.Equal(t, numItems, test.CountItems())
+	assert.Equal(t, numUsers, test.Count())
+	// part split
+	train2, test2 := dataset.Split(2, 0)
+	assert.Equal(t, numUsers, train2.CountUsers())
+	assert.Equal(t, numItems, train2.CountItems())
+	assert.Equal(t, 7, train2.Count())
+	assert.Equal(t, numUsers, test2.CountUsers())
+	assert.Equal(t, numItems, test2.CountItems())
+	assert.Equal(t, 2, test2.Count())
+}
+
+func TestDataset_LoadMovieLens1M(t *testing.T) {
+	train, test, err := LoadDataFromBuiltIn("ml-1m")
+	assert.NoError(t, err)
+	assert.Len(t, train.GetUsers(), 6040)
+	assert.Len(t, train.GetItems(), 3706)
+	assert.Equal(t, train.Count(), 994169)
+	assert.Len(t, test.GetUsers(), 6040)
+	assert.Len(t, test.GetItems(), 3706)
+	assert.Equal(t, test.Count(), 6040)
 }

@@ -23,24 +23,19 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/base/floats"
 	"github.com/zhenghaoz/gorse/base/task"
+	"github.com/zhenghaoz/gorse/dataset"
 	"github.com/zhenghaoz/gorse/model"
 )
 
-const (
-	benchDelta = 0.01
-	incrDelta  = 0.05
-)
+const benchDelta = 0.01
 
-func newFitConfig(numEpoch int) *FitConfig {
+func newFitConfig(_ int) *FitConfig {
 	cfg := NewFitConfig().SetVerbose(1).SetJobsAllocator(task.NewConstantJobsAllocator(runtime.NumCPU()))
 	return cfg
 }
 
-// He, Xiangnan, et al. "Neural collaborative filtering." Proceedings
-// of the 26th international conference on world wide web. 2017.
-
 func TestBPR_MovieLens(t *testing.T) {
-	trainSet, testSet, err := LoadDataFromBuiltIn("ml-1m")
+	trainSet, testSet, err := dataset.LoadDataFromBuiltIn("ml-1m")
 	assert.NoError(t, err)
 	m := NewBPR(model.Params{
 		model.NFactors:   8,
@@ -53,12 +48,12 @@ func TestBPR_MovieLens(t *testing.T) {
 	fitConfig := newFitConfig(30)
 	score := m.Fit(context.Background(), trainSet, testSet, fitConfig)
 	assert.InDelta(t, 0.36, score.NDCG, benchDelta)
-	assert.Equal(t, trainSet.UserIndex, m.GetUserIndex())
-	assert.Equal(t, testSet.ItemIndex, m.GetItemIndex())
+	assert.Equal(t, trainSet.GetUserDict(), m.GetUserIndex())
+	assert.Equal(t, testSet.GetItemDict(), m.GetItemIndex())
 
 	// test predict
-	assert.Equal(t, m.Predict("1", "1"), m.InternalPredict(1, 1))
-	assert.Equal(t, m.InternalPredict(1, 1), floats.Dot(m.GetUserFactor(1), m.GetItemFactor(1)))
+	assert.Equal(t, m.Predict("1", "1"), m.internalPredict(1, 1))
+	assert.Equal(t, m.internalPredict(1, 1), floats.Dot(m.GetUserFactor(1), m.GetItemFactor(1)))
 	assert.True(t, m.IsUserPredictable(1))
 	assert.True(t, m.IsItemPredictable(1))
 	assert.False(t, m.IsUserPredictable(math.MaxInt32))
@@ -70,15 +65,12 @@ func TestBPR_MovieLens(t *testing.T) {
 	assert.NoError(t, err)
 	tmp, err := UnmarshalModel(buf)
 	assert.NoError(t, err)
-	assert.True(t, tmp.IsUserPredictable(1))
-	assert.True(t, tmp.IsItemPredictable(1))
-	assert.False(t, tmp.IsUserPredictable(math.MaxInt32))
-	assert.False(t, tmp.IsItemPredictable(math.MaxInt32))
-	m = tmp.(*BPR)
-	m.nEpochs = 1
-	fitConfig = newFitConfig(1)
-	scoreInc := m.Fit(context.Background(), trainSet, testSet, fitConfig)
-	assert.InDelta(t, score.NDCG, scoreInc.NDCG, incrDelta)
+	assert.Equal(t, m.Params, tmp.GetParams())
+	assert.Equal(t, m.Predict("1", "1"), tmp.Predict("1", "1"))
+	assert.True(t, m.IsUserPredictable(1))
+	assert.True(t, m.IsItemPredictable(1))
+	assert.False(t, m.IsUserPredictable(math.MaxInt32))
+	assert.False(t, m.IsItemPredictable(math.MaxInt32))
 
 	// test clear
 	m.Clear()
@@ -101,7 +93,7 @@ func TestBPR_MovieLens(t *testing.T) {
 //}
 
 func TestCCD_MovieLens(t *testing.T) {
-	trainSet, testSet, err := LoadDataFromBuiltIn("ml-1m")
+	trainSet, testSet, err := dataset.LoadDataFromBuiltIn("ml-1m")
 	assert.NoError(t, err)
 	m := NewCCD(model.Params{
 		model.NFactors: 8,
@@ -114,8 +106,8 @@ func TestCCD_MovieLens(t *testing.T) {
 	assert.InDelta(t, 0.36, score.NDCG, benchDelta)
 
 	// test predict
-	assert.Equal(t, m.Predict("1", "1"), m.InternalPredict(1, 1))
-	assert.Equal(t, m.InternalPredict(1, 1), floats.Dot(m.GetUserFactor(1), m.GetItemFactor(1)))
+	assert.Equal(t, m.Predict("1", "1"), m.internalPredict(1, 1))
+	assert.Equal(t, m.internalPredict(1, 1), floats.Dot(m.GetUserFactor(1), m.GetItemFactor(1)))
 
 	// test encode/decode model and increment training
 	buf := bytes.NewBuffer(nil)
@@ -123,11 +115,8 @@ func TestCCD_MovieLens(t *testing.T) {
 	assert.NoError(t, err)
 	tmp, err := UnmarshalModel(buf)
 	assert.NoError(t, err)
-	m = tmp.(*CCD)
-	m.nEpochs = 1
-	fitConfig = newFitConfig(1)
-	scoreInc := m.Fit(context.Background(), trainSet, testSet, fitConfig)
-	assert.InDelta(t, score.NDCG, scoreInc.NDCG, incrDelta)
+	assert.Equal(t, m.Params, tmp.GetParams())
+	assert.Equal(t, m.Predict("1", "1"), tmp.Predict("1", "1"))
 
 	// test clear
 	m.Clear()

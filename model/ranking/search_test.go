@@ -17,10 +17,11 @@ import (
 	"context"
 	"io"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/task"
+	"github.com/zhenghaoz/gorse/dataset"
 	"github.com/zhenghaoz/gorse/model"
 )
 
@@ -60,15 +61,15 @@ func (m *mockMatrixFactorizationForSearch) Invalid() bool {
 	panic("implement me")
 }
 
-func (m *mockMatrixFactorizationForSearch) GetUserIndex() base.Index {
+func (m *mockMatrixFactorizationForSearch) GetUserIndex() *dataset.FreqDict {
 	panic("don't call me")
 }
 
-func (m *mockMatrixFactorizationForSearch) GetItemIndex() base.Index {
+func (m *mockMatrixFactorizationForSearch) GetItemIndex() *dataset.FreqDict {
 	panic("don't call me")
 }
 
-func (m *mockMatrixFactorizationForSearch) Fit(_ context.Context, _, _ *DataSet, cfg *FitConfig) Score {
+func (m *mockMatrixFactorizationForSearch) Fit(_ context.Context, _, _ *dataset.Dataset, _ *FitConfig) Score {
 	score := float32(0)
 	score += m.Params.GetFloat32(model.NFactors, 0.0)
 	score += m.Params.GetFloat32(model.InitMean, 0.0)
@@ -80,7 +81,7 @@ func (m *mockMatrixFactorizationForSearch) Predict(_, _ string) float32 {
 	panic("don't call me")
 }
 
-func (m *mockMatrixFactorizationForSearch) InternalPredict(_, _ int32) float32 {
+func (m *mockMatrixFactorizationForSearch) internalPredict(_, _ int32) float32 {
 	panic("don't call me")
 }
 
@@ -129,7 +130,10 @@ func TestRandomSearchCV(t *testing.T) {
 func TestModelSearcher(t *testing.T) {
 	searcher := NewModelSearcher(2, 63, false)
 	searcher.models = []MatrixFactorization{newMockMatrixFactorizationForSearch(2)}
-	err := searcher.Fit(context.Background(), NewMapIndexDataset(), NewMapIndexDataset(), task.NewConstantJobsAllocator(1))
+	err := searcher.Fit(context.Background(),
+		dataset.NewDataset(time.Now(), 0, 0),
+		dataset.NewDataset(time.Now(), 0, 0),
+		task.NewConstantJobsAllocator(1))
 	assert.NoError(t, err)
 	_, m, score := searcher.GetBestModel()
 	assert.Equal(t, float32(12), score.NDCG)

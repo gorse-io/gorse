@@ -149,9 +149,9 @@ func (suite *ItemToItemTestSuite) TestUsers() {
 	suite.IsType(item2item.Pool(), &parallel.SequentialPool{})
 
 	for i := 0; i < 100; i++ {
-		feedback := make([]dataset.ID, 0, 100-i)
+		feedback := make([]int32, 0, 100-i)
 		for j := 1; j <= 100-i; j++ {
-			feedback = append(feedback, dataset.ID(j))
+			feedback = append(feedback, int32(j))
 		}
 		item2item.Push(&data.Item{ItemId: strconv.Itoa(i)}, feedback)
 	}
@@ -175,7 +175,7 @@ func (suite *ItemToItemTestSuite) TestAuto() {
 
 	for i := 0; i < 100; i++ {
 		item := &data.Item{ItemId: strconv.Itoa(i)}
-		feedback := make([]dataset.ID, 0, 100-i)
+		feedback := make([]int32, 0, 100-i)
 		if i%2 == 0 {
 			labels := make(map[string]any)
 			for j := 1; j <= 100-i; j++ {
@@ -184,7 +184,7 @@ func (suite *ItemToItemTestSuite) TestAuto() {
 			item.Labels = labels
 		} else {
 			for j := 1; j <= 100-i; j++ {
-				feedback = append(feedback, dataset.ID(j))
+				feedback = append(feedback, int32(j))
 			}
 		}
 		item2item.Push(item, feedback)

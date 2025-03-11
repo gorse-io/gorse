@@ -86,7 +86,7 @@ func (m *Master) runLoadDatasetTask() error {
 		zap.Uint("item_ttl", m.Config.Recommend.DataSource.ItemTTL),
 		zap.Uint("feedback_ttl", m.Config.Recommend.DataSource.PositiveFeedbackTTL))
 	evaluator := NewOnlineEvaluator()
-	rankingDataset, clickDataset, dataSet, err := m.LoadDataFromDatabase(ctx, m.DataClient,
+	clickDataset, dataSet, err := m.LoadDataFromDatabase(ctx, m.DataClient,
 		m.Config.Recommend.DataSource.PositiveFeedbackTypes,
 		m.Config.Recommend.DataSource.ReadFeedbackTypes,
 		m.Config.Recommend.DataSource.ItemTTL,
@@ -113,16 +113,16 @@ func (m *Master) runLoadDatasetTask() error {
 	}
 
 	// write statistics to database
-	UsersTotal.Set(float64(rankingDataset.UserCount()))
-	if err = m.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.NumUsers), rankingDataset.UserCount())); err != nil {
+	UsersTotal.Set(float64(dataSet.CountUsers()))
+	if err = m.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.NumUsers), dataSet.CountUsers())); err != nil {
 		log.Logger().Error("failed to write number of users", zap.Error(err))
 	}
-	ItemsTotal.Set(float64(rankingDataset.ItemCount()))
-	if err = m.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.NumItems), rankingDataset.ItemCount())); err != nil {
+	ItemsTotal.Set(float64(dataSet.CountItems()))
+	if err = m.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.NumItems), dataSet.CountItems())); err != nil {
 		log.Logger().Error("failed to write number of items", zap.Error(err))
 	}
-	ImplicitFeedbacksTotal.Set(float64(rankingDataset.Count()))
-	if err = m.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.NumTotalPosFeedbacks), rankingDataset.Count())); err != nil {
+	ImplicitFeedbacksTotal.Set(float64(dataSet.Count()))
+	if err = m.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.NumTotalPosFeedbacks), dataSet.Count())); err != nil {
 		log.Logger().Error("failed to write number of positive feedbacks", zap.Error(err))
 	}
 	UserLabelsTotal.Set(float64(clickDataset.Index.CountUserLabels()))
@@ -133,7 +133,7 @@ func (m *Master) runLoadDatasetTask() error {
 	if err = m.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.NumItemLabels), int(clickDataset.Index.CountItemLabels()))); err != nil {
 		log.Logger().Error("failed to write number of item labels", zap.Error(err))
 	}
-	ImplicitFeedbacksTotal.Set(float64(rankingDataset.Count()))
+	ImplicitFeedbacksTotal.Set(float64(dataSet.Count()))
 	PositiveFeedbacksTotal.Set(float64(clickDataset.PositiveCount))
 	if err = m.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.NumValidPosFeedbacks), clickDataset.PositiveCount)); err != nil {
 		log.Logger().Error("failed to write number of positive feedbacks", zap.Error(err))
@@ -151,14 +151,14 @@ func (m *Master) runLoadDatasetTask() error {
 
 	// collect active users and items
 	activeUsers, activeItems, inactiveUsers, inactiveItems := 0, 0, 0, 0
-	for _, userFeedback := range rankingDataset.UserFeedback {
+	for _, userFeedback := range dataSet.GetUserFeedback() {
 		if len(userFeedback) > 0 {
 			activeUsers++
 		} else {
 			inactiveUsers++
 		}
 	}
-	for _, itemFeedback := range rankingDataset.ItemFeedback {
+	for _, itemFeedback := range dataSet.GetItemFeedback() {
 		if len(itemFeedback) > 0 {
 			activeItems++
 		} else {
@@ -171,15 +171,14 @@ func (m *Master) runLoadDatasetTask() error {
 	InactiveItemsTotal.Set(float64(inactiveItems))
 
 	// write categories to cache
-	if err = m.CacheClient.SetSet(ctx, cache.ItemCategories, rankingDataset.CategorySet.ToSlice()...); err != nil {
+	if err = m.CacheClient.SetSet(ctx, cache.ItemCategories, dataSet.GetCategories()...); err != nil {
 		log.Logger().Error("failed to write categories to cache", zap.Error(err))
 	}
 
 	// split ranking dataset
 	startTime := time.Now()
 	m.rankingDataMutex.Lock()
-	m.rankingTrainSet, m.rankingTestSet = rankingDataset.Split(0, 0)
-	rankingDataset = nil
+	m.rankingTrainSet, m.rankingTestSet = dataSet.Split(0, 0)
 	m.rankingDataMutex.Unlock()
 	LoadDatasetStepSecondsVec.WithLabelValues("split_ranking_dataset").Set(time.Since(startTime).Seconds())
 	MemoryInUseBytesVec.WithLabelValues("collaborative_filtering_train_set").Set(float64(sizeof.DeepSize(m.rankingTrainSet)))
@@ -229,8 +228,8 @@ func (t *FitRankingModelTask) run(ctx context.Context, j *task.JobsAllocator) er
 
 	t.rankingDataMutex.RLock()
 	defer t.rankingDataMutex.RUnlock()
-	dataset := t.rankingTrainSet
-	numFeedback := dataset.Count()
+	dataSet := t.rankingTrainSet
+	numFeedback := dataSet.Count()
 
 	var modelChanged bool
 	bestRankingName, bestRankingModel, bestRankingScore := t.rankingModelSearcher.GetBestModel()
@@ -447,8 +446,8 @@ func (t *SearchRankingModelTask) run(ctx context.Context, j *task.JobsAllocator)
 		log.Logger().Debug("dataset has not been loaded")
 		return nil
 	}
-	numUsers := t.rankingTrainSet.UserCount()
-	numItems := t.rankingTrainSet.ItemCount()
+	numUsers := t.rankingTrainSet.CountUsers()
+	numItems := t.rankingTrainSet.CountItems()
 	numFeedback := t.rankingTrainSet.Count()
 
 	if numUsers == 0 || numItems == 0 || numFeedback == 0 {
@@ -552,7 +551,7 @@ func (t *CacheGarbageCollectionTask) name() string {
 }
 
 func (t *CacheGarbageCollectionTask) priority() int {
-	return -t.rankingTrainSet.UserCount() - t.rankingTrainSet.ItemCount()
+	return -t.rankingTrainSet.CountUsers() - t.rankingTrainSet.CountItems()
 }
 
 func (t *CacheGarbageCollectionTask) run(ctx context.Context, j *task.JobsAllocator) error {
@@ -576,7 +575,7 @@ func (t *CacheGarbageCollectionTask) run(ctx context.Context, j *task.JobsAlloca
 			cache.LastModifyUserTime, cache.UserToUserUpdateTime, cache.LastUpdateUserRecommendTime:
 			userId := splits[1]
 			// check user in dataset
-			if t.rankingTrainSet != nil && t.rankingTrainSet.UserIndex.ToNumber(userId) != base.NotId {
+			if t.rankingTrainSet != nil && t.rankingTrainSet.GetUserDict().Id(userId) >= 0 {
 				return nil
 			}
 			// check user in database
@@ -600,7 +599,7 @@ func (t *CacheGarbageCollectionTask) run(ctx context.Context, j *task.JobsAlloca
 		case cache.ItemToItem, cache.ItemToItemDigest, cache.ItemToItemUpdateTime, cache.LastModifyItemTime:
 			itemId := splits[1]
 			// check item in dataset
-			if t.rankingTrainSet != nil && t.rankingTrainSet.ItemIndex.ToNumber(itemId) != base.NotId {
+			if t.rankingTrainSet != nil && t.rankingTrainSet.GetItemDict().Id(itemId) >= 0 {
 				return nil
 			}
 			// check item in database
@@ -637,19 +636,20 @@ func (m *Master) LoadDataFromDatabase(
 	itemTTL, positiveFeedbackTTL uint,
 	evaluator *OnlineEvaluator,
 	nonPersonalizedRecommenders []*logics.NonPersonalized,
-) (rankingDataset *ranking.DataSet, clickDataset *click.Dataset, dataSet *dataset.Dataset, err error) {
+) (clickDataset *click.Dataset, dataSet *dataset.Dataset, err error) {
+	var rankingDataset *ranking.DataSet
 	// Estimate the number of users, items, and feedbacks
 	estimatedNumUsers, err := m.DataClient.CountUsers(context.Background())
 	if err != nil {
-		return nil, nil, nil, errors.Trace(err)
+		return nil, nil, errors.Trace(err)
 	}
 	estimatedNumItems, err := m.DataClient.CountItems(context.Background())
 	if err != nil {
-		return nil, nil, nil, errors.Trace(err)
+		return nil, nil, errors.Trace(err)
 	}
 	estimatedNumFeedbacks, err := m.DataClient.CountFeedback(context.Background())
 	if err != nil {
-		return nil, nil, nil, errors.Trace(err)
+		return nil, nil, errors.Trace(err)
 	}
 
 	dataSet = dataset.NewDataset(time.Now(), estimatedNumUsers, estimatedNumItems)
@@ -668,10 +668,6 @@ func (m *Master) LoadDataFromDatabase(
 	if positiveFeedbackTTL > 0 {
 		temp := time.Now().AddDate(0, 0, -int(positiveFeedbackTTL))
 		feedbackTimeLimit = data.WithBeginTime(temp)
-	}
-	timeWindowLimit := time.Time{}
-	if m.Config.Recommend.Popular.PopularWindow > 0 {
-		timeWindowLimit = time.Now().Add(-m.Config.Recommend.Popular.PopularWindow)
 	}
 	rankingDataset = ranking.NewMapIndexDataset()
 
@@ -719,7 +715,7 @@ func (m *Master) LoadDataFromDatabase(
 		span.Add(len(users))
 	}
 	if err = <-errChan; err != nil {
-		return nil, nil, nil, errors.Trace(err)
+		return nil, nil, errors.Trace(err)
 	}
 	rankingDataset.NumUserLabels = userLabelIndex.Len()
 	log.Logger().Debug("pulled users from database",
@@ -742,9 +738,6 @@ func (m *Master) LoadDataFromDatabase(
 			itemIndex := rankingDataset.ItemIndex.ToNumber(item.ItemId)
 			if len(rankingDataset.ItemFeatures) == int(itemIndex) {
 				rankingDataset.ItemFeatures = append(rankingDataset.ItemFeatures, nil)
-				rankingDataset.HiddenItems = append(rankingDataset.HiddenItems, false)
-				rankingDataset.ItemCategories = append(rankingDataset.ItemCategories, item.Categories)
-				rankingDataset.CategorySet.Append(item.Categories...)
 			}
 			features := click.ConvertLabelsToFeatures(item.Labels)
 			rankingDataset.NumItemLabelUsed += len(features)
@@ -772,15 +765,12 @@ func (m *Master) LoadDataFromDatabase(
 					})
 				}
 			}
-			if item.IsHidden { // set hidden flag
-				rankingDataset.HiddenItems[itemIndex] = true
-			}
 			dataSet.AddItem(item)
 		}
 		span.Add(len(batchItems))
 	}
 	if err = <-errChan; err != nil {
-		return nil, nil, nil, errors.Trace(err)
+		return nil, nil, errors.Trace(err)
 	}
 	rankingDataset.NumItemLabels = itemLabelIndex.Len()
 	log.Logger().Debug("pulled items from database",
@@ -790,7 +780,6 @@ func (m *Master) LoadDataFromDatabase(
 	LoadDatasetStepSecondsVec.WithLabelValues("load_items").Set(time.Since(start).Seconds())
 
 	// create positive set
-	popularCount := make([]int32, rankingDataset.ItemCount())
 	positiveSet := make([]mapset.Set[int32], rankingDataset.UserCount())
 	for i := range positiveSet {
 		positiveSet[i] = mapset.NewSet[int32]()
@@ -835,10 +824,6 @@ func (m *Master) LoadDataFromDatabase(
 				posFeedbackCount++
 				// insert feedback to ranking dataset
 				rankingDataset.AddFeedback(f.UserId, f.ItemId, false)
-				// insert feedback to popularity counter
-				if f.Timestamp.After(timeWindowLimit) && !rankingDataset.HiddenItems[itemIndex] {
-					popularCount[itemIndex]++
-				}
 				// insert feedback to evaluator
 				evaluator.Positive(f.FeedbackType, userIndex, itemIndex, f.Timestamp)
 				mu.Unlock()
@@ -886,7 +871,7 @@ func (m *Master) LoadDataFromDatabase(
 		return nil
 	})
 	if err != nil {
-		return nil, nil, nil, errors.Trace(err)
+		return nil, nil, errors.Trace(err)
 	}
 	log.Logger().Debug("pulled positive feedback from database",
 		zap.Int("n_positive_feedback", posFeedbackCount),
@@ -936,7 +921,7 @@ func (m *Master) LoadDataFromDatabase(
 		return nil
 	})
 	if err != nil {
-		return nil, nil, nil, errors.Trace(err)
+		return nil, nil, errors.Trace(err)
 	}
 	log.Logger().Debug("pulled negative feedback from database",
 		zap.Int("n_negative_feedback", int(negativeFeedbackCount)),
@@ -985,7 +970,7 @@ func (m *Master) LoadDataFromDatabase(
 		zap.Int("n_valid_negative", clickDataset.NegativeCount),
 		zap.Duration("used_time", time.Since(start)))
 	LoadDatasetStepSecondsVec.WithLabelValues("create_ranking_dataset").Set(time.Since(start).Seconds())
-	return rankingDataset, clickDataset, dataSet, nil
+	return clickDataset, dataSet, nil
 }
 
 func (m *Master) updateItemToItem(dataset *dataset.Dataset) error {
