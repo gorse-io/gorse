@@ -46,7 +46,7 @@ import (
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/logics"
 	"github.com/zhenghaoz/gorse/model/cf"
-	"github.com/zhenghaoz/gorse/model/click"
+	"github.com/zhenghaoz/gorse/model/ctr"
 	"github.com/zhenghaoz/gorse/protocol"
 	"github.com/zhenghaoz/gorse/storage"
 	"github.com/zhenghaoz/gorse/storage/cache"
@@ -77,7 +77,7 @@ type Worker struct {
 	*config.Settings
 
 	// spawned rankers
-	rankers []click.FactorizationMachine
+	rankers []ctr.FactorizationMachine
 
 	// worker config
 	jobs       int
@@ -131,7 +131,7 @@ func NewWorker(
 	tlsConfig *util.TLSConfig,
 ) *Worker {
 	return &Worker{
-		rankers:       make([]click.FactorizationMachine, jobs),
+		rankers:       make([]ctr.FactorizationMachine, jobs),
 		managedMode:   managedMode,
 		Settings:      config.NewSettings(),
 		randGenerator: base.NewRand(time.Now().UTC().UnixNano()),
@@ -291,7 +291,7 @@ func (w *Worker) Pull() {
 				grpc.MaxCallRecvMsgSize(math.MaxInt)); err != nil {
 				log.Logger().Error("failed to pull click model", zap.Error(err))
 			} else {
-				var clickModel click.FactorizationMachine
+				var clickModel ctr.FactorizationMachine
 				clickModel, err = encoding2.UnmarshalClickModel(clickModelReceiver)
 				if err != nil {
 					log.Logger().Error("failed to unmarshal click model", zap.Error(err))
@@ -307,7 +307,7 @@ func (w *Worker) Pull() {
 						if i == 0 {
 							w.rankers[i] = w.ClickModel
 						} else {
-							w.rankers[i] = click.Spawn(w.ClickModel)
+							w.rankers[i] = ctr.Spawn(w.ClickModel)
 						}
 					}
 
@@ -913,7 +913,7 @@ func (w *Worker) rankByCollaborativeFiltering(userId string, candidates [][]stri
 }
 
 // rankByClickTroughRate ranks items by predicted click-through-rate.
-func (w *Worker) rankByClickTroughRate(user *data.User, candidates [][]string, itemCache *ItemCache, predictor click.FactorizationMachine) ([]cache.Score, error) {
+func (w *Worker) rankByClickTroughRate(user *data.User, candidates [][]string, itemCache *ItemCache, predictor ctr.FactorizationMachine) ([]cache.Score, error) {
 	// concat candidates
 	memo := mapset.NewSet[string]()
 	var itemIds []string
@@ -936,13 +936,13 @@ func (w *Worker) rankByClickTroughRate(user *data.User, candidates [][]string, i
 	}
 	// rank by CTR
 	topItems := make([]cache.Score, 0, len(items))
-	if batchPredictor, ok := predictor.(click.BatchInference); ok {
-		inputs := make([]lo.Tuple4[string, string, []click.Feature, []click.Feature], len(items))
+	if batchPredictor, ok := predictor.(ctr.BatchInference); ok {
+		inputs := make([]lo.Tuple4[string, string, []ctr.Feature, []ctr.Feature], len(items))
 		for i, item := range items {
 			inputs[i].A = user.UserId
 			inputs[i].B = item.ItemId
-			inputs[i].C = click.ConvertLabelsToFeatures(user.Labels)
-			inputs[i].D = click.ConvertLabelsToFeatures(item.Labels)
+			inputs[i].C = ctr.ConvertLabelsToFeatures(user.Labels)
+			inputs[i].D = ctr.ConvertLabelsToFeatures(item.Labels)
 		}
 		output := batchPredictor.BatchPredict(inputs)
 		for i, score := range output {
@@ -955,7 +955,7 @@ func (w *Worker) rankByClickTroughRate(user *data.User, candidates [][]string, i
 		for _, item := range items {
 			topItems = append(topItems, cache.Score{
 				Id:    item.ItemId,
-				Score: float64(predictor.Predict(user.UserId, item.ItemId, click.ConvertLabelsToFeatures(user.Labels), click.ConvertLabelsToFeatures(item.Labels))),
+				Score: float64(predictor.Predict(user.UserId, item.ItemId, ctr.ConvertLabelsToFeatures(user.Labels), ctr.ConvertLabelsToFeatures(item.Labels))),
 			})
 		}
 	}
@@ -1237,7 +1237,7 @@ func (w *Worker) replacement(recommend map[string][]cache.Score, user *data.User
 			// 3. Otherwise, give a random score.
 			var score float64
 			if w.Config.Recommend.Offline.EnableClickThroughPrediction && w.ClickModel != nil {
-				score = float64(w.ClickModel.Predict(user.UserId, itemId, click.ConvertLabelsToFeatures(user.Labels), click.ConvertLabelsToFeatures(item.Labels)))
+				score = float64(w.ClickModel.Predict(user.UserId, itemId, ctr.ConvertLabelsToFeatures(user.Labels), ctr.ConvertLabelsToFeatures(item.Labels)))
 			} else if w.RankingModel != nil && !w.RankingModel.Invalid() && w.RankingModel.IsUserPredictable(w.RankingModel.GetUserIndex().Id(user.UserId)) {
 				score = float64(w.RankingModel.Predict(user.UserId, itemId))
 			} else {

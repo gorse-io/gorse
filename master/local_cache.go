@@ -21,7 +21,7 @@ import (
 	"github.com/zhenghaoz/gorse/base/encoding"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/model/cf"
-	"github.com/zhenghaoz/gorse/model/click"
+	"github.com/zhenghaoz/gorse/model/ctr"
 	"go.uber.org/zap"
 	"os"
 	"path/filepath"
@@ -35,8 +35,8 @@ type LocalCache struct {
 	RankingModel        cf.MatrixFactorization
 	RankingModelScore   cf.Score
 	ClickModelVersion   int64
-	ClickModelScore     click.Score
-	ClickModel          click.FactorizationMachine
+	ClickModelScore     ctr.Score
+	ClickModel          ctr.FactorizationMachine
 }
 
 // LoadLocalCache loads local cache from a file.
@@ -94,7 +94,7 @@ func LoadLocalCache(path string) (*LocalCache, error) {
 		return state, errors.Trace(err)
 	}
 	// 9. click model
-	state.ClickModel, err = click.UnmarshalModel(f)
+	state.ClickModel, err = ctr.UnmarshalModel(f)
 	if err != nil {
 		return state, errors.Trace(err)
 	}
@@ -152,7 +152,7 @@ func (c *LocalCache) WriteLocalCache() error {
 		return errors.Trace(err)
 	}
 	// 9. click model
-	err = click.MarshalModel(f, c.ClickModel)
+	err = ctr.MarshalModel(f, c.ClickModel)
 	if err != nil {
 		return errors.Trace(err)
 	}

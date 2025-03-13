@@ -36,7 +36,7 @@ import (
 	"github.com/zhenghaoz/gorse/dataset"
 	"github.com/zhenghaoz/gorse/logics"
 	"github.com/zhenghaoz/gorse/model/cf"
-	"github.com/zhenghaoz/gorse/model/click"
+	"github.com/zhenghaoz/gorse/model/ctr"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
 	"go.uber.org/zap"
@@ -365,7 +365,7 @@ func (t *FitClickModelTask) run(ctx context.Context, j *task.JobsAllocator) erro
 			zap.Float32("Recall", bestClickScore.Recall),
 			zap.Any("params", t.ClickModel.GetParams()))
 	}
-	clickModel := click.Clone(t.ClickModel)
+	clickModel := ctr.Clone(t.ClickModel)
 	t.clickModelMutex.Unlock()
 
 	// training model
@@ -374,7 +374,7 @@ func (t *FitClickModelTask) run(ctx context.Context, j *task.JobsAllocator) erro
 		return nil
 	}
 	startFitTime := time.Now()
-	score := clickModel.Fit(newCtx, t.clickTrainSet, t.clickTestSet, click.NewFitConfig().
+	score := clickModel.Fit(newCtx, t.clickTrainSet, t.clickTestSet, ctr.NewFitConfig().
 		SetJobsAllocator(j))
 	RankingFitSeconds.Set(time.Since(startFitTime).Seconds())
 
@@ -636,7 +636,7 @@ func (m *Master) LoadDataFromDatabase(
 	itemTTL, positiveFeedbackTTL uint,
 	evaluator *OnlineEvaluator,
 	nonPersonalizedRecommenders []*logics.NonPersonalized,
-) (clickDataset *click.Dataset, dataSet *dataset.Dataset, err error) {
+) (clickDataset *ctr.Dataset, dataSet *dataset.Dataset, err error) {
 	var rankingDataset *cf.DataSet
 	// Estimate the number of users, items, and feedbacks
 	estimatedNumUsers, err := m.DataClient.CountUsers(context.Background())
@@ -684,7 +684,7 @@ func (m *Master) LoadDataFromDatabase(
 			if len(rankingDataset.UserFeatures) == int(userIndex) {
 				rankingDataset.UserFeatures = append(rankingDataset.UserFeatures, nil)
 			}
-			features := click.ConvertLabelsToFeatures(user.Labels)
+			features := ctr.ConvertLabelsToFeatures(user.Labels)
 			rankingDataset.NumUserLabelUsed += len(features)
 			rankingDataset.UserFeatures[userIndex] = make([]lo.Tuple2[int32, float32], 0, len(features))
 			for _, feature := range features {
@@ -739,7 +739,7 @@ func (m *Master) LoadDataFromDatabase(
 			if len(rankingDataset.ItemFeatures) == int(itemIndex) {
 				rankingDataset.ItemFeatures = append(rankingDataset.ItemFeatures, nil)
 			}
-			features := click.ConvertLabelsToFeatures(item.Labels)
+			features := ctr.ConvertLabelsToFeatures(item.Labels)
 			rankingDataset.NumItemLabelUsed += len(features)
 			rankingDataset.ItemFeatures[itemIndex] = make([]lo.Tuple2[int32, float32], 0, len(features))
 			for _, feature := range features {
@@ -930,12 +930,12 @@ func (m *Master) LoadDataFromDatabase(
 
 	// STEP 5: create click dataset
 	start = time.Now()
-	unifiedIndex := click.NewUnifiedMapIndexBuilder()
+	unifiedIndex := ctr.NewUnifiedMapIndexBuilder()
 	unifiedIndex.ItemIndex = rankingDataset.ItemIndex
 	unifiedIndex.UserIndex = rankingDataset.UserIndex
 	unifiedIndex.ItemLabelIndex = itemLabelIndex
 	unifiedIndex.UserLabelIndex = userLabelIndex
-	clickDataset = &click.Dataset{
+	clickDataset = &ctr.Dataset{
 		Index:        unifiedIndex.Build(),
 		UserFeatures: rankingDataset.UserFeatures,
 		ItemFeatures: rankingDataset.ItemFeatures,
