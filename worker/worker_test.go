@@ -599,7 +599,7 @@ func newMockMaster(t *testing.T) *mockMaster {
 
 	// create click model
 	train, test := newClickDataset()
-	fm := click.NewFM(click.FMClassification, model.Params{model.NEpochs: 0})
+	fm := click.NewFM(model.Params{model.NEpochs: 0})
 	fm.Fit(context.Background(), train, test, nil)
 	clickModelBuffer := bytes.NewBuffer(nil)
 	err := click.MarshalModel(clickModelBuffer, fm)

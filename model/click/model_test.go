@@ -14,7 +14,6 @@
 package click
 
 import (
-	"bytes"
 	"context"
 	"testing"
 
@@ -44,7 +43,7 @@ func TestFM_Classification_Frappe(t *testing.T) {
 		t.Run(optimizer, func(t *testing.T) {
 			train, test, err := LoadDataFromBuiltIn("frappe")
 			assert.NoError(t, err)
-			m := NewFM(FMClassification, model.Params{
+			m := NewFM(model.Params{
 				model.InitStdDev: 0.01,
 				model.NFactors:   8,
 				model.NEpochs:    20,
@@ -75,92 +74,4 @@ func TestFM_Classification_Frappe(t *testing.T) {
 //	})
 //	score := m.Fit(train, test, fitConfig)
 //	assertEpsilon(t, 0.901777, score.Precision)
-//}
-
-func TestFM_Regression_Criteo(t *testing.T) {
-	// LibFM command:
-	// libfm.exe -train train.libfm -test test.libfm -task r \
-	//   -method sgd -init_stdev 0.01 -dim 1,1,8 -iter 20 \
-	//   -learn_rate 0.001 -regular 0,0,0.0001
-	train, test, err := LoadDataFromBuiltIn("criteo")
-	assert.NoError(t, err)
-	m := NewFM(FMRegression, model.Params{
-		model.InitStdDev: 0.01,
-		model.NFactors:   8,
-		model.NEpochs:    20,
-		model.Lr:         0.001,
-		model.Reg:        0.0001,
-	})
-	fitConfig := newFitConfigWithTestTracker(20)
-	score := m.Fit(context.Background(), train, test, fitConfig)
-	// TODO: Fix it back to 0.839194
-	assert.Less(t, score.RMSE, float32(0.87))
-
-	// test prediction
-	assert.Equal(t, m.InternalPredict([]int32{1, 2, 3, 4, 5, 6}, []float32{1, 1, 0.3, 0.4, 0.5, 0.6}),
-		m.Predict("1", "2",
-			[]Feature{
-				{Name: "3", Value: 0.3},
-				{Name: "4", Value: 0.4},
-			},
-			[]Feature{
-				{Name: "5", Value: 0.5},
-				{Name: "6", Value: 0.6},
-			}))
-
-	// test increment test
-	buf := bytes.NewBuffer(nil)
-	err = MarshalModel(buf, m)
-	assert.NoError(t, err)
-	tmp, err := UnmarshalModel(buf)
-	assert.NoError(t, err)
-	m = tmp.(*FM)
-	m.nEpochs = 1
-	fitConfig = newFitConfigWithTestTracker(1)
-	scoreInc := m.Fit(context.Background(), train, test, fitConfig)
-	// TODO: Fix it back to 0.839194
-	assert.Less(t, scoreInc.RMSE, float32(0.87))
-
-	// test clear
-	assert.False(t, m.Invalid())
-	m.Clear()
-	assert.True(t, m.Invalid())
-}
-
-//func TestFM_Regression_Frappe(t *testing.T) {
-//	// LibFM command:
-//	// libfm.exe -train train.libfm -test test.libfm -task r \
-//	//   -method sgd -init_stdev 0.01 -dim 1,1,8 -iter 20 \
-//	//   -learn_rate 0.01 -regular 0,0,0.0001
-//	train, test, err := LoadDataFromBuiltIn("frappe")
-//	assert.NoError(t, err)
-//	m := NewFM(FMRegression, model.Params{
-//		model.InitStdDev: 0.01,
-//		model.NFactors:   8,
-//		model.NEpochs:    20,
-//		model.Lr:         0.01,
-//		model.Reg:        0.0001,
-//	})
-//	fitConfig, tracker := newFitConfigWithTestTracker(20)
-//	score := m.Fit(train, test, fitConfig)
-//	tracker.AssertExpectations(t)
-//	assert.InDelta(t, 0.494435, score.RMSE, regressionDelta)
-//}
-
-//func TestFM_Regression_MovieLens(t *testing.T) {
-//	// LibFM command:
-//	// libfm.exe -train train.libfm -test test.libfm -task r \
-//	//   -method sgd -init_stdev 0.01 -dim 1,1,8 -iter 20 \
-//	//   -learn_rate 0.01 -regular 0,0,0.0001
-//	train, test, err := LoadDataFromBuiltIn("ml-tag")
-//	assert.NoError(t, err)
-//	m := NewFM(FMRegression, model.Params{
-//		model.InitStdDev: 0.01,
-//		model.NFactors:   8,
-//		model.NEpochs:    20,
-//		model.Lr:         0.01,
-//		model.Reg:        0.0001,
-//	})
-//	score := m.Fit(train, test, fitConfig)
-//	assertEpsilon(t, 0.570648, score.RMSE)
 //}
