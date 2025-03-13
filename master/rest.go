@@ -44,8 +44,8 @@ import (
 	"github.com/zhenghaoz/gorse/cmd/version"
 	"github.com/zhenghaoz/gorse/common/util"
 	"github.com/zhenghaoz/gorse/config"
+	"github.com/zhenghaoz/gorse/model/cf"
 	"github.com/zhenghaoz/gorse/model/click"
-	"github.com/zhenghaoz/gorse/model/ranking"
 	"github.com/zhenghaoz/gorse/protocol"
 	"github.com/zhenghaoz/gorse/server"
 	"github.com/zhenghaoz/gorse/storage/cache"
@@ -510,7 +510,7 @@ type Status struct {
 	PopularItemsUpdateTime  time.Time
 	LatestItemsUpdateTime   time.Time
 	MatchingModelFitTime    time.Time
-	MatchingModelScore      ranking.Score
+	MatchingModelScore      cf.Score
 	RankingModelFitTime     time.Time
 	RankingModelScore       click.Score
 	UserNeighborIndexRecall float32

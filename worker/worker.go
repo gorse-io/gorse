@@ -45,8 +45,8 @@ import (
 	"github.com/zhenghaoz/gorse/common/util"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/logics"
+	"github.com/zhenghaoz/gorse/model/cf"
 	"github.com/zhenghaoz/gorse/model/click"
-	"github.com/zhenghaoz/gorse/model/ranking"
 	"github.com/zhenghaoz/gorse/protocol"
 	"github.com/zhenghaoz/gorse/storage"
 	"github.com/zhenghaoz/gorse/storage/cache"
@@ -267,7 +267,7 @@ func (w *Worker) Pull() {
 				grpc.MaxCallRecvMsgSize(math.MaxInt)); err != nil {
 				log.Logger().Error("failed to pull ranking model", zap.Error(err))
 			} else {
-				var rankingModel ranking.MatrixFactorization
+				var rankingModel cf.MatrixFactorization
 				rankingModel, err = encoding2.UnmarshalRankingModel(rankingModelReceiver)
 				if err != nil {
 					log.Logger().Error("failed to unmarshal ranking model", zap.Error(err))

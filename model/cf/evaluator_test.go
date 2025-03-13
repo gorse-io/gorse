@@ -11,7 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-package ranking
+package cf
 
 import (
 	"context"
@@ -106,7 +106,7 @@ func (m *mockMatrixFactorizationForEval) GetItemIndex() *dataset.FreqDict {
 	panic("don't call me")
 }
 
-func (m *mockMatrixFactorizationForEval) Fit(_ context.Context, _, _ *dataset.Dataset, _ *FitConfig) Score {
+func (m *mockMatrixFactorizationForEval) Fit(_ context.Context, _, _ dataset.CFSplit, _ *FitConfig) Score {
 	panic("don't call me")
 }
 

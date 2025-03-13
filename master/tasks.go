@@ -35,8 +35,8 @@ import (
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/dataset"
 	"github.com/zhenghaoz/gorse/logics"
+	"github.com/zhenghaoz/gorse/model/cf"
 	"github.com/zhenghaoz/gorse/model/click"
-	"github.com/zhenghaoz/gorse/model/ranking"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
 	"go.uber.org/zap"
@@ -178,7 +178,7 @@ func (m *Master) runLoadDatasetTask() error {
 	// split ranking dataset
 	startTime := time.Now()
 	m.rankingDataMutex.Lock()
-	m.rankingTrainSet, m.rankingTestSet = dataSet.Split(0, 0)
+	m.rankingTrainSet, m.rankingTestSet = dataSet.SplitCF(0, 0)
 	m.rankingDataMutex.Unlock()
 	LoadDatasetStepSecondsVec.WithLabelValues("split_ranking_dataset").Set(time.Since(startTime).Seconds())
 	MemoryInUseBytesVec.WithLabelValues("collaborative_filtering_train_set").Set(float64(sizeof.DeepSize(m.rankingTrainSet)))
@@ -249,7 +249,7 @@ func (t *FitRankingModelTask) run(ctx context.Context, j *task.JobsAllocator) er
 			zap.String("name", bestRankingName),
 			zap.Any("params", t.RankingModel.GetParams()))
 	}
-	rankingModel := ranking.Clone(t.RankingModel)
+	rankingModel := cf.Clone(t.RankingModel)
 	t.rankingModelMutex.Unlock()
 
 	if numFeedback == 0 {
@@ -261,7 +261,7 @@ func (t *FitRankingModelTask) run(ctx context.Context, j *task.JobsAllocator) er
 	}
 
 	startFitTime := time.Now()
-	score := rankingModel.Fit(newCtx, t.rankingTrainSet, t.rankingTestSet, ranking.NewFitConfig().SetJobsAllocator(j))
+	score := rankingModel.Fit(newCtx, t.rankingTrainSet, t.rankingTestSet, cf.NewFitConfig().SetJobsAllocator(j))
 	CollaborativeFilteringFitSeconds.Set(time.Since(startFitTime).Seconds())
 
 	// update ranking model
@@ -637,7 +637,7 @@ func (m *Master) LoadDataFromDatabase(
 	evaluator *OnlineEvaluator,
 	nonPersonalizedRecommenders []*logics.NonPersonalized,
 ) (clickDataset *click.Dataset, dataSet *dataset.Dataset, err error) {
-	var rankingDataset *ranking.DataSet
+	var rankingDataset *cf.DataSet
 	// Estimate the number of users, items, and feedbacks
 	estimatedNumUsers, err := m.DataClient.CountUsers(context.Background())
 	if err != nil {
@@ -669,7 +669,7 @@ func (m *Master) LoadDataFromDatabase(
 		temp := time.Now().AddDate(0, 0, -int(positiveFeedbackTTL))
 		feedbackTimeLimit = data.WithBeginTime(temp)
 	}
-	rankingDataset = ranking.NewMapIndexDataset()
+	rankingDataset = cf.NewMapIndexDataset()
 
 	// STEP 1: pull users
 	userLabelCount := make(map[string]int)

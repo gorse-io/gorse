@@ -41,8 +41,8 @@ import (
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/dataset"
 	"github.com/zhenghaoz/gorse/model"
+	"github.com/zhenghaoz/gorse/model/cf"
 	"github.com/zhenghaoz/gorse/model/click"
-	"github.com/zhenghaoz/gorse/model/ranking"
 	"github.com/zhenghaoz/gorse/protocol"
 	"github.com/zhenghaoz/gorse/server"
 	"github.com/zhenghaoz/gorse/storage"
@@ -79,8 +79,8 @@ type Master struct {
 	metaStore meta.Database
 
 	// ranking dataset
-	rankingTrainSet  *dataset.Dataset
-	rankingTestSet   *dataset.Dataset
+	rankingTrainSet  dataset.CFSplit
+	rankingTestSet   dataset.CFSplit
 	rankingDataMutex sync.RWMutex
 
 	// click dataset
@@ -90,9 +90,9 @@ type Master struct {
 
 	// ranking model
 	rankingModelName     string
-	rankingScore         ranking.Score
+	rankingScore         cf.Score
 	rankingModelMutex    sync.RWMutex
-	rankingModelSearcher *ranking.ModelSearcher
+	rankingModelSearcher *cf.ModelSearcher
 
 	// click model
 	clickScore         click.Score
@@ -147,7 +147,7 @@ func NewMaster(cfg *config.Config, cacheFile string, managedMode bool) *Master {
 		openAIClient:  openai.NewClientWithConfig(clientConfig),
 		// default ranking model
 		rankingModelName: "bpr",
-		rankingModelSearcher: ranking.NewModelSearcher(
+		rankingModelSearcher: cf.NewModelSearcher(
 			cfg.Recommend.Collaborative.ModelSearchEpoch,
 			cfg.Recommend.Collaborative.ModelSearchTrials,
 			cfg.Recommend.Collaborative.EnableModelSizeSearch,
@@ -163,7 +163,7 @@ func NewMaster(cfg *config.Config, cacheFile string, managedMode bool) *Master {
 				Config:       cfg,
 				CacheClient:  cache.NoDatabase{},
 				DataClient:   data.NoDatabase{},
-				RankingModel: ranking.NewBPR(nil),
+				RankingModel: cf.NewBPR(nil),
 				ClickModel:   click.NewFM(nil),
 				// init versions
 				RankingModelVersion: rand.Int63(),

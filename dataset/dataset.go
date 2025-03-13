@@ -35,6 +35,18 @@ import (
 
 type ID int32
 
+// CFSplit is the dataset split for collaborative filtering.
+type CFSplit interface {
+	Count() int
+	CountUsers() int
+	CountItems() int
+	GetUserDict() *FreqDict
+	GetItemDict() *FreqDict
+	GetUserFeedback() [][]int32
+	GetItemFeedback() [][]int32
+	NegativeSample(excludeSet CFSplit, numCandidates int) [][]int32
+}
+
 type Dataset struct {
 	timestamp    time.Time
 	users        []data.User
@@ -194,7 +206,7 @@ func (d *Dataset) AddFeedback(userId, itemId string) {
 	d.numFeedback++
 }
 
-func (d *Dataset) NegativeSample(excludeSet *Dataset, numCandidates int) [][]int32 {
+func (d *Dataset) NegativeSample(excludeSet CFSplit, numCandidates int) [][]int32 {
 	if len(d.negatives) == 0 {
 		rng := base.NewRandomGenerator(0)
 		d.negatives = make([][]int32, d.CountUsers())
@@ -207,21 +219,17 @@ func (d *Dataset) NegativeSample(excludeSet *Dataset, numCandidates int) [][]int
 	return d.negatives
 }
 
-// Split dataset by user-leave-one-out method. The argument `numTestUsers` determines the number of users in the test
+// SplitCF splits dataset by user-leave-one-out method. The argument `numTestUsers` determines the number of users in the test
 // set. If numTestUsers is equal or greater than the number of total users or numTestUsers <= 0, all users are presented
 // in the test set.
-func (d *Dataset) Split(numTestUsers int, seed int64) (*Dataset, *Dataset) {
+func (d *Dataset) SplitCF(numTestUsers int, seed int64) (CFSplit, CFSplit) {
 	trainSet, testSet := new(Dataset), new(Dataset)
-	trainSet.timestamp, testSet.timestamp = d.timestamp, d.timestamp
 	trainSet.users, testSet.users = d.users, d.users
 	trainSet.items, testSet.items = d.items, d.items
-	trainSet.userLabels, testSet.userLabels = d.userLabels, d.userLabels
-	trainSet.itemLabels, testSet.itemLabels = d.itemLabels, d.itemLabels
 	trainSet.userFeedback, testSet.userFeedback = make([][]int32, d.CountUsers()), make([][]int32, d.CountUsers())
 	trainSet.itemFeedback, testSet.itemFeedback = make([][]int32, d.CountItems()), make([][]int32, d.CountItems())
 	trainSet.userDict, testSet.userDict = d.userDict, d.userDict
 	trainSet.itemDict, testSet.itemDict = d.itemDict, d.itemDict
-	trainSet.categories, testSet.categories = d.categories, d.categories
 	rng := base.NewRandomGenerator(seed)
 	if numTestUsers >= d.CountUsers() || numTestUsers <= 0 {
 		for userIndex := int32(0); userIndex < int32(d.CountUsers()); userIndex++ {

@@ -28,6 +28,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/zhenghaoz/gorse/model/cf"
 	"github.com/bits-and-blooms/bitset"
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/samber/lo"
@@ -41,7 +42,6 @@ import (
 	"github.com/zhenghaoz/gorse/dataset"
 	"github.com/zhenghaoz/gorse/model"
 	"github.com/zhenghaoz/gorse/model/click"
-	"github.com/zhenghaoz/gorse/model/ranking"
 	"github.com/zhenghaoz/gorse/protocol"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
@@ -145,7 +145,7 @@ func (suite *WorkerTestSuite) TestCheckRecommendCacheTimeout() {
 }
 
 type mockMatrixFactorizationForRecommend struct {
-	ranking.BaseMatrixFactorization
+	cf.BaseMatrixFactorization
 }
 
 func (m *mockMatrixFactorizationForRecommend) Complexity() int {
@@ -179,7 +179,7 @@ func (m *mockMatrixFactorizationForRecommend) Invalid() bool {
 	return false
 }
 
-func (m *mockMatrixFactorizationForRecommend) Fit(_ context.Context, _, _ *dataset.Dataset, _ *ranking.FitConfig) ranking.Score {
+func (m *mockMatrixFactorizationForRecommend) Fit(_ context.Context, _, _ dataset.CFSplit, _ *cf.FitConfig) cf.Score {
 	panic("implement me")
 }
 
@@ -607,10 +607,10 @@ func newMockMaster(t *testing.T) *mockMaster {
 
 	// create ranking model
 	trainSet, testSet := newRankingDataset()
-	bpr := ranking.NewBPR(model.Params{model.NEpochs: 0})
+	bpr := cf.NewBPR(model.Params{model.NEpochs: 0})
 	bpr.Fit(context.Background(), trainSet, testSet, nil)
 	rankingModelBuffer := bytes.NewBuffer(nil)
-	err = ranking.MarshalModel(rankingModelBuffer, bpr)
+	err = cf.MarshalModel(rankingModelBuffer, bpr)
 	assert.NoError(t, err)
 
 	// create user index
