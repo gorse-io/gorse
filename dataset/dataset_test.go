@@ -189,7 +189,7 @@ func TestDataset_Split(t *testing.T) {
 	}
 	assert.Equal(t, 9, dataset.Count())
 	// split
-	train, test := dataset.Split(0, 0)
+	train, test := dataset.SplitCF(0, 0)
 	assert.Equal(t, numUsers, train.CountUsers())
 	assert.Equal(t, numItems, train.CountItems())
 	assert.Equal(t, 9-numUsers, train.Count())
@@ -197,7 +197,7 @@ func TestDataset_Split(t *testing.T) {
 	assert.Equal(t, numItems, test.CountItems())
 	assert.Equal(t, numUsers, test.Count())
 	// part split
-	train2, test2 := dataset.Split(2, 0)
+	train2, test2 := dataset.SplitCF(2, 0)
 	assert.Equal(t, numUsers, train2.CountUsers())
 	assert.Equal(t, numItems, train2.CountItems())
 	assert.Equal(t, 7, train2.Count())

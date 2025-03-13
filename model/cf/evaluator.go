@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package ranking
+package cf
 
 import (
 	"github.com/chewxy/math32"
@@ -30,7 +30,7 @@ import (
 type Metric func(targetSet mapset.Set[int32], rankList []int32) float32
 
 // Evaluate evaluates a model in top-n tasks.
-func Evaluate(estimator MatrixFactorization, testSet, trainSet *dataset.Dataset, topK, numCandidates, nJobs int, scorers ...Metric) []float32 {
+func Evaluate(estimator MatrixFactorization, testSet, trainSet dataset.CFSplit, topK, numCandidates, nJobs int, scorers ...Metric) []float32 {
 	partSum := make([][]float32, nJobs)
 	partCount := make([]float32, nJobs)
 	for i := 0; i < nJobs; i++ {

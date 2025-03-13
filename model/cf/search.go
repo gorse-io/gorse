@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package ranking
+package cf
 
 import (
 	"context"
@@ -50,7 +50,7 @@ func (r *ParamsSearchResult) AddScore(params model.Params, score Score) {
 }
 
 // GridSearchCV finds the best parameters for a model.
-func GridSearchCV(ctx context.Context, estimator MatrixFactorization, trainSet, testSet *dataset.Dataset, paramGrid model.ParamsGrid,
+func GridSearchCV(ctx context.Context, estimator MatrixFactorization, trainSet, testSet dataset.CFSplit, paramGrid model.ParamsGrid,
 	_ int64, fitConfig *FitConfig) ParamsSearchResult {
 	// Retrieve parameter names and length
 	paramNames := make([]model.ParamName, 0, len(paramGrid))
@@ -100,7 +100,7 @@ func GridSearchCV(ctx context.Context, estimator MatrixFactorization, trainSet, 
 }
 
 // RandomSearchCV searches hyper-parameters by random.
-func RandomSearchCV(ctx context.Context, estimator MatrixFactorization, trainSet, testSet *dataset.Dataset, paramGrid model.ParamsGrid,
+func RandomSearchCV(ctx context.Context, estimator MatrixFactorization, trainSet, testSet dataset.CFSplit, paramGrid model.ParamsGrid,
 	numTrials int, seed int64, fitConfig *FitConfig) ParamsSearchResult {
 	// if the number of combination is less than number of trials, use grid search
 	if paramGrid.NumCombinations() < numTrials {
@@ -172,7 +172,7 @@ func (searcher *ModelSearcher) GetBestModel() (string, MatrixFactorization, Scor
 	return searcher.bestModelName, searcher.bestModel, searcher.bestScore
 }
 
-func (searcher *ModelSearcher) Fit(ctx context.Context, trainSet, valSet *dataset.Dataset, j *task.JobsAllocator) error {
+func (searcher *ModelSearcher) Fit(ctx context.Context, trainSet, valSet dataset.CFSplit, j *task.JobsAllocator) error {
 	log.Logger().Info("ranking model search",
 		zap.Int("n_users", trainSet.CountUsers()),
 		zap.Int("n_items", trainSet.CountItems()))

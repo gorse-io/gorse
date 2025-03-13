@@ -11,7 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-package ranking
+package cf
 
 import (
 	"context"
@@ -69,7 +69,7 @@ func (m *mockMatrixFactorizationForSearch) GetItemIndex() *dataset.FreqDict {
 	panic("don't call me")
 }
 
-func (m *mockMatrixFactorizationForSearch) Fit(_ context.Context, _, _ *dataset.Dataset, _ *FitConfig) Score {
+func (m *mockMatrixFactorizationForSearch) Fit(_ context.Context, _, _ dataset.CFSplit, _ *FitConfig) Score {
 	score := float32(0)
 	score += m.Params.GetFloat32(model.NFactors, 0.0)
 	score += m.Params.GetFloat32(model.InitMean, 0.0)

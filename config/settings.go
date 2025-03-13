@@ -15,8 +15,8 @@
 package config
 
 import (
+	"github.com/zhenghaoz/gorse/model/cf"
 	"github.com/zhenghaoz/gorse/model/click"
-	"github.com/zhenghaoz/gorse/model/ranking"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
 )
@@ -29,7 +29,7 @@ type Settings struct {
 	DataClient  data.Database
 
 	// recommendation models
-	RankingModel        ranking.MatrixFactorization
+	RankingModel        cf.MatrixFactorization
 	RankingModelVersion int64
 	ClickModel          click.FactorizationMachine
 	ClickModelVersion   int64

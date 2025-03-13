@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package ranking
+package cf
 
 import (
 	"context"
@@ -83,7 +83,7 @@ func (config *FitConfig) LoadDefaultIfNil() *FitConfig {
 type Model interface {
 	model.Model
 	// Fit a model with a train set and parameters.
-	Fit(ctx context.Context, trainSet *dataset.Dataset, validateSet *dataset.Dataset, config *FitConfig) Score
+	Fit(ctx context.Context, trainSet, validateSet dataset.CFSplit, config *FitConfig) Score
 	// GetItemIndex returns item index.
 	GetItemIndex() *dataset.FreqDict
 	// Marshal model into byte stream.
@@ -127,7 +127,7 @@ type BaseMatrixFactorization struct {
 	ItemFactor [][]float32 // q_i
 }
 
-func (baseModel *BaseMatrixFactorization) Init(trainSet *dataset.Dataset) {
+func (baseModel *BaseMatrixFactorization) Init(trainSet dataset.CFSplit) {
 	baseModel.UserIndex = trainSet.GetUserDict()
 	baseModel.ItemIndex = trainSet.GetItemDict()
 	// set user trained flags
@@ -422,7 +422,7 @@ func (bpr *BPR) GetParamsGrid(withSize bool) model.ParamsGrid {
 }
 
 // Fit the BPR model. Its task complexity is O(bpr.nEpochs).
-func (bpr *BPR) Fit(ctx context.Context, trainSet, valSet *dataset.Dataset, config *FitConfig) Score {
+func (bpr *BPR) Fit(ctx context.Context, trainSet, valSet dataset.CFSplit, config *FitConfig) Score {
 	config = config.LoadDefaultIfNil()
 	log.Logger().Info("fit bpr",
 		zap.Int("train_set_size", trainSet.Count()),
@@ -533,7 +533,7 @@ func (bpr *BPR) Fit(ctx context.Context, trainSet, valSet *dataset.Dataset, conf
 	}
 }
 
-func (bpr *BPR) Init(trainSet *dataset.Dataset) {
+func (bpr *BPR) Init(trainSet dataset.CFSplit) {
 	// Initialize parameters
 	newUserFactor := bpr.GetRandomGenerator().NormalMatrix(trainSet.CountUsers(), bpr.nFactors, bpr.initMean, bpr.initStdDev)
 	newItemFactor := bpr.GetRandomGenerator().NormalMatrix(trainSet.CountItems(), bpr.nFactors, bpr.initMean, bpr.initStdDev)
@@ -599,7 +599,7 @@ func (ccd *CCD) GetParamsGrid(withSize bool) model.ParamsGrid {
 	}
 }
 
-func (ccd *CCD) Init(trainSet *dataset.Dataset) {
+func (ccd *CCD) Init(trainSet dataset.CFSplit) {
 	// Initialize
 	newUserFactor := ccd.GetRandomGenerator().NormalMatrix(trainSet.CountUsers(), ccd.nFactors, ccd.initMean, ccd.initStdDev)
 	newItemFactor := ccd.GetRandomGenerator().NormalMatrix(trainSet.CountItems(), ccd.nFactors, ccd.initMean, ccd.initStdDev)
@@ -610,7 +610,7 @@ func (ccd *CCD) Init(trainSet *dataset.Dataset) {
 }
 
 // Fit the CCD model. Its task complexity is O(ccd.nEpochs).
-func (ccd *CCD) Fit(ctx context.Context, trainSet, valSet *dataset.Dataset, config *FitConfig) Score {
+func (ccd *CCD) Fit(ctx context.Context, trainSet, valSet dataset.CFSplit, config *FitConfig) Score {
 	config = config.LoadDefaultIfNil()
 	log.Logger().Info("fit ccd",
 		zap.Int("train_set_size", trainSet.Count()),
