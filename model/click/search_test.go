@@ -56,7 +56,7 @@ func (m *mockFactorizationMachineForSearch) Fit(_ context.Context, _, _ *Dataset
 	score += m.Params.GetFloat32(model.NFactors, 0.0)
 	score += m.Params.GetFloat32(model.InitMean, 0.0)
 	score += m.Params.GetFloat32(model.InitStdDev, 0.0)
-	return Score{Task: FMClassification, AUC: score}
+	return Score{AUC: score}
 }
 
 func (m *mockFactorizationMachineForSearch) Predict(_, _ string, _, _ []Feature) float32 {

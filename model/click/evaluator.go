@@ -33,12 +33,10 @@ func EvaluateRegression(estimator FactorizationMachine, testSet *Dataset) Score 
 	}
 	if testSet.Count() == 0 {
 		return Score{
-			Task: FMRegression,
 			RMSE: 0,
 		}
 	}
 	return Score{
-		Task: FMRegression,
 		RMSE: math32.Sqrt(sum / float32(testSet.Count())),
 	}
 }
@@ -69,12 +67,10 @@ func EvaluateClassification(estimator FactorizationMachine, testSet *Dataset) Sc
 	}
 	if testSet.Count() == 0 {
 		return Score{
-			Task:      FMClassification,
 			Precision: 0,
 		}
 	}
 	return Score{
-		Task:      FMClassification,
 		Precision: Precision(posPrediction, negPrediction),
 		Recall:    Recall(posPrediction, negPrediction),
 		Accuracy:  Accuracy(posPrediction, negPrediction),

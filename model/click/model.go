@@ -39,7 +39,6 @@ import (
 )
 
 type Score struct {
-	Task      FMTask
 	RMSE      float32
 	Precision float32
 	Recall    float32
@@ -48,49 +47,20 @@ type Score struct {
 }
 
 func (score Score) ZapFields() []zap.Field {
-	switch score.Task {
-	case FMRegression:
-		return []zap.Field{zap.Float32("RMSE", score.RMSE)}
-	case FMClassification:
-		return []zap.Field{
-			zap.Float32("Accuracy", score.Accuracy),
-			zap.Float32("Precision", score.Precision),
-			zap.Float32("Recall", score.Recall),
-			zap.Float32("AUC", score.AUC),
-		}
-	default:
-		return nil
+	return []zap.Field{
+		zap.Float32("Accuracy", score.Accuracy),
+		zap.Float32("Precision", score.Precision),
+		zap.Float32("Recall", score.Recall),
+		zap.Float32("AUC", score.AUC),
 	}
 }
 
 func (score Score) GetValue() float32 {
-	switch score.Task {
-	case FMRegression:
-		return score.RMSE
-	case FMClassification:
-		return score.Precision
-	default:
-		return math32.NaN()
-	}
+	return score.Precision
 }
 
 func (score Score) BetterThan(s Score) bool {
-	if s.Task == 0 && score.Task != 0 {
-		return true
-	} else if s.Task != 0 && score.Task == 0 {
-		return false
-	}
-	if score.Task != s.Task {
-		panic("task type doesn't match")
-	}
-	switch score.Task {
-	case FMRegression:
-		return score.RMSE < s.RMSE
-	case FMClassification:
-		return score.AUC > s.AUC
-	default:
-		return true
-	}
+	return score.AUC > s.AUC
 }
 
 type FitConfig struct {
@@ -151,22 +121,12 @@ func (b *BaseFactorizationMachine) Init(trainSet *Dataset) {
 	b.Index = trainSet.Index
 }
 
-type FMTask uint8
-
-const (
-	FMClassification FMTask = 'c'
-	FMRegression     FMTask = 'r'
-)
-
 type FM struct {
 	BaseFactorizationMachine
 	// Model parameters
-	V         [][]float32
-	W         []float32
-	B         float32
-	MinTarget float32
-	MaxTarget float32
-	Task      FMTask
+	V [][]float32
+	W []float32
+	B float32
 	// Hyper parameters
 	nFactors   int
 	nEpochs    int
@@ -187,9 +147,8 @@ func (fm *FM) GetParamsGrid(withSize bool) model.ParamsGrid {
 	}
 }
 
-func NewFM(task FMTask, params model.Params) *FM {
+func NewFM(params model.Params) *FM {
 	fm := new(FM)
-	fm.Task = task
 	fm.SetParams(params)
 	return fm
 }
@@ -263,13 +222,6 @@ func (fm *FM) internalPredictImpl(features []int32, values []float32) float32 {
 
 func (fm *FM) InternalPredict(features []int32, values []float32) float32 {
 	pred := fm.internalPredictImpl(features, values)
-	if fm.Task == FMRegression {
-		if pred < fm.MinTarget {
-			pred = fm.MinTarget
-		} else if pred > fm.MaxTarget {
-			pred = fm.MaxTarget
-		}
-	}
 	return pred
 }
 
@@ -283,7 +235,6 @@ func (fm *FM) Fit(ctx context.Context, trainSet, testSet *Dataset, config *FitCo
 		zap.Int("test_size", testSet.Count()),
 		zap.Int("test_positive_count", testSet.PositiveCount),
 		zap.Int("test_negative_count", testSet.NegativeCount),
-		zap.String("task", string(fm.Task)),
 		zap.Any("params", fm.GetParams()),
 		zap.Any("config", config))
 	fm.Init(trainSet)
@@ -302,42 +253,22 @@ func (fm *FM) Fit(ctx context.Context, trainSet, testSet *Dataset, config *FitCo
 
 	evalStart := time.Now()
 	var score Score
-	switch fm.Task {
-	case FMRegression:
-		score = EvaluateRegression(fm, testSet)
-	case FMClassification:
-		score = EvaluateClassification(fm, testSet)
-	default:
-		log.Logger().Fatal("unknown task", zap.String("task", string(fm.Task)))
-	}
+	score = EvaluateClassification(fm, testSet)
 	evalTime := time.Since(evalStart)
 	fields := append([]zap.Field{zap.String("eval_time", evalTime.String())}, score.ZapFields()...)
 	log.Logger().Debug(fmt.Sprintf("fit fm %v/%v", 0, fm.nEpochs), fields...)
 
 	_, span := progress.Start(ctx, "FM.Fit", fm.nEpochs)
 	for epoch := 1; epoch <= fm.nEpochs; epoch++ {
-		for i := 0; i < trainSet.Target.Len(); i++ {
-			fm.MinTarget = math32.Min(fm.MinTarget, trainSet.Target.Get(i))
-			fm.MaxTarget = math32.Max(fm.MaxTarget, trainSet.Target.Get(i))
-		}
 		fitStart := time.Now()
 		cost := float32(0)
 		_ = parallel.BatchParallel(trainSet.Count(), config.AvailableJobs(), 128, func(workerId, beginJobId, endJobId int) error {
 			for i := beginJobId; i < endJobId; i++ {
 				features, values, target := trainSet.Get(i)
 				prediction := fm.internalPredictImpl(features, values)
-				var grad float32
-				switch fm.Task {
-				case FMRegression:
-					grad = prediction - target
-					cost += grad * grad / 2
-				case FMClassification:
-					grad = -target * (1 - 1/(1+math32.Exp(-target*prediction)))
-					cost += (1 + target) * math32.Log1p(exp(-prediction)) / 2
-					cost += (1 - target) * math32.Log1p(exp(prediction)) / 2
-				default:
-					log.Logger().Fatal("unknown task", zap.String("task", string(fm.Task)))
-				}
+				grad := -target * (1 - 1/(1+math32.Exp(-target*prediction)))
+				cost += (1 + target) * math32.Log1p(exp(-prediction)) / 2
+				cost += (1 - target) * math32.Log1p(exp(prediction)) / 2
 				// \sum^n_{j=1}v_j,fx_j
 				floats.Zero(temp[workerId])
 				for it, j := range features {
@@ -422,14 +353,7 @@ func (fm *FM) Fit(ctx context.Context, trainSet, testSet *Dataset, config *FitCo
 		// Cross validation
 		if epoch%config.Verbose == 0 || epoch == fm.nEpochs {
 			evalStart = time.Now()
-			switch fm.Task {
-			case FMRegression:
-				score = EvaluateRegression(fm, testSet)
-			case FMClassification:
-				score = EvaluateClassification(fm, testSet)
-			default:
-				log.Logger().Fatal("unknown task", zap.String("task", string(fm.Task)))
-			}
+			score = EvaluateClassification(fm, testSet)
 			evalTime = time.Since(evalStart)
 			fields = append([]zap.Field{
 				zap.String("fit_time", fitTime.String()),
@@ -517,8 +441,6 @@ func (fm *FM) Init(trainSet *Dataset) {
 			}
 		}
 	}
-	fm.MinTarget = math32.Inf(1)
-	fm.MaxTarget = math32.Inf(-1)
 	fm.V = newV
 	fm.W = newW
 	fm.BaseFactorizationMachine.Init(trainSet)
@@ -603,18 +525,6 @@ func (fm *FM) Marshal(w io.Writer) error {
 		return errors.Trace(err)
 	}
 	// write scalars
-	err = binary.Write(w, binary.LittleEndian, fm.MaxTarget)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	err = binary.Write(w, binary.LittleEndian, fm.MinTarget)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	err = binary.Write(w, binary.LittleEndian, fm.Task)
-	if err != nil {
-		return errors.Trace(err)
-	}
 	err = binary.Write(w, binary.LittleEndian, fm.B)
 	if err != nil {
 		return errors.Trace(err)
@@ -646,18 +556,6 @@ func (fm *FM) Unmarshal(r io.Reader) error {
 		return errors.Trace(err)
 	}
 	// read scalars
-	err = binary.Read(r, binary.LittleEndian, &fm.MaxTarget)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	err = binary.Read(r, binary.LittleEndian, &fm.MinTarget)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	err = binary.Read(r, binary.LittleEndian, &fm.Task)
-	if err != nil {
-		return errors.Trace(err)
-	}
 	err = binary.Read(r, binary.LittleEndian, &fm.B)
 	if err != nil {
 		return errors.Trace(err)

@@ -63,11 +63,11 @@ func TestLocalCache(t *testing.T) {
 	cache.RankingModelScore = ranking.Score{Precision: 1, NDCG: 2, Recall: 3}
 
 	train, test := newClickDataset()
-	fm := click.NewFM(click.FMClassification, model.Params{model.NEpochs: 0})
+	fm := click.NewFM(model.Params{model.NEpochs: 0})
 	fm.Fit(context.Background(), train, test, nil)
 	cache.ClickModel = fm
 	cache.ClickModelVersion = 456
-	cache.ClickModelScore = click.Score{Precision: 1, RMSE: 100, Task: click.FMClassification}
+	cache.ClickModelScore = click.Score{Precision: 1, RMSE: 100}
 	assert.NoError(t, cache.WriteLocalCache())
 
 	read, err := LoadLocalCache(path)
@@ -78,5 +78,5 @@ func TestLocalCache(t *testing.T) {
 	assert.Equal(t, ranking.Score{Precision: 1, NDCG: 2, Recall: 3}, read.RankingModelScore)
 	assert.NotNil(t, read.ClickModel)
 	assert.Equal(t, int64(456), read.ClickModelVersion)
-	assert.Equal(t, click.Score{Precision: 1, RMSE: 100, Task: click.FMClassification}, read.ClickModelScore)
+	assert.Equal(t, click.Score{Precision: 1, RMSE: 100}, read.ClickModelScore)
 }

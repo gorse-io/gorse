@@ -164,7 +164,7 @@ func NewMaster(cfg *config.Config, cacheFile string, managedMode bool) *Master {
 				CacheClient:  cache.NoDatabase{},
 				DataClient:   data.NoDatabase{},
 				RankingModel: ranking.NewBPR(nil),
-				ClickModel:   click.NewFM(click.FMClassification, nil),
+				ClickModel:   click.NewFM(nil),
 				// init versions
 				RankingModelVersion: rand.Int63(),
 				ClickModelVersion:   rand.Int63(),
