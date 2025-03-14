@@ -25,6 +25,7 @@ import (
 	"github.com/zhenghaoz/gorse/base/encoding"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/common/nn"
+	"github.com/zhenghaoz/gorse/dataset"
 	"github.com/zhenghaoz/gorse/model"
 	"go.uber.org/zap"
 	"io"
@@ -42,8 +43,6 @@ type DeepFMV2 struct {
 	mu     sync.RWMutex
 
 	// dataset stats
-	minTarget    float32
-	maxTarget    float32
 	numFeatures  int
 	numDimension int
 
@@ -166,7 +165,7 @@ func (fm *DeepFMV2) BatchPredict(inputs []lo.Tuple4[string, string, []Feature, [
 	return fm.BatchInternalPredict(x)
 }
 
-func (fm *DeepFMV2) Fit(ctx context.Context, trainSet *Dataset, testSet *Dataset, config *FitConfig) Score {
+func (fm *DeepFMV2) Fit(ctx context.Context, trainSet, testSet dataset.CTRSplit, config *FitConfig) Score {
 	fm.Init(trainSet)
 	evalStart := time.Now()
 	score := EvaluateClassification(fm, testSet)
@@ -176,9 +175,7 @@ func (fm *DeepFMV2) Fit(ctx context.Context, trainSet *Dataset, testSet *Dataset
 
 	var x []lo.Tuple2[[]int32, []float32]
 	var y []float32
-	for i := 0; i < trainSet.Target.Len(); i++ {
-		fm.minTarget = math32.Min(fm.minTarget, trainSet.Target.Get(i))
-		fm.maxTarget = math32.Max(fm.maxTarget, trainSet.Target.Get(i))
+	for i := 0; i < trainSet.Count(); i++ {
 		indices, values, target := trainSet.Get(i)
 		x = append(x, lo.Tuple2[[]int32, []float32]{A: indices, B: values})
 		y = append(y, target)
@@ -224,8 +221,9 @@ func (fm *DeepFMV2) Fit(ctx context.Context, trainSet *Dataset, testSet *Dataset
 }
 
 // Init parameters for DeepFM.
-func (fm *DeepFMV2) Init(trainSet *Dataset) {
-	fm.numFeatures = trainSet.ItemCount() + trainSet.UserCount() + len(trainSet.UserFeatures) + len(trainSet.ItemFeatures) + len(trainSet.ContextFeatures)
+func (fm *DeepFMV2) Init(trainSet dataset.CTRSplit) {
+	fm.numFeatures = trainSet.CountItems() + trainSet.CountUsers() +
+		trainSet.CountUserLabels() + trainSet.CountItemLabels() + trainSet.CountContextLabels()
 	fm.numDimension = 0
 	for i := 0; i < trainSet.Count(); i++ {
 		_, x, _ := trainSet.Get(i)
@@ -251,14 +249,7 @@ func (fm *DeepFMV2) Marshal(w io.Writer) error {
 		return errors.Trace(err)
 	}
 	// write index
-	if err := MarshalIndex(w, fm.Index); err != nil {
-		return errors.Trace(err)
-	}
-	// write dataset stats
-	if err := encoding.WriteGob(w, fm.minTarget); err != nil {
-		return errors.Trace(err)
-	}
-	if err := encoding.WriteGob(w, fm.maxTarget); err != nil {
+	if err := base.MarshalUnifiedIndex(w, fm.Index); err != nil {
 		return errors.Trace(err)
 	}
 	if err := encoding.WriteGob(w, fm.numFeatures); err != nil {

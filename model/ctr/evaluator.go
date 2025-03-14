@@ -15,6 +15,7 @@
 package ctr
 
 import (
+	"github.com/zhenghaoz/gorse/dataset"
 	"sort"
 
 	"github.com/chewxy/math32"
@@ -42,7 +43,7 @@ func EvaluateRegression(estimator FactorizationMachine, testSet *Dataset) Score 
 }
 
 // EvaluateClassification evaluates factorization machines in classification task.
-func EvaluateClassification(estimator FactorizationMachine, testSet *Dataset) Score {
+func EvaluateClassification(estimator FactorizationMachine, testSet dataset.CTRSplit) Score {
 	// For all UserFeedback
 	var posFeatures, negFeatures []lo.Tuple2[[]int32, []float32]
 	for i := 0; i < testSet.Count(); i++ {

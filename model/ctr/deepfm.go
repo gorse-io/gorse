@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/zhenghaoz/gorse/dataset"
 	"io"
 	"runtime"
 	"sync"
@@ -207,7 +208,7 @@ func (fm *DeepFM) BatchPredict(inputs []lo.Tuple4[string, string, []Feature, []F
 	return fm.BatchInternalPredict(x)
 }
 
-func (fm *DeepFM) Fit(ctx context.Context, trainSet *Dataset, testSet *Dataset, config *FitConfig) Score {
+func (fm *DeepFM) Fit(ctx context.Context, trainSet, testSet dataset.CTRSplit, config *FitConfig) Score {
 	fm.Init(trainSet)
 	evalStart := time.Now()
 	score := EvaluateClassification(fm, testSet)
@@ -217,9 +218,9 @@ func (fm *DeepFM) Fit(ctx context.Context, trainSet *Dataset, testSet *Dataset, 
 
 	var x []lo.Tuple2[[]int32, []float32]
 	var y []float32
-	for i := 0; i < trainSet.Target.Len(); i++ {
-		fm.minTarget = math32.Min(fm.minTarget, trainSet.Target.Get(i))
-		fm.maxTarget = math32.Max(fm.maxTarget, trainSet.Target.Get(i))
+	for i := 0; i < trainSet.Count(); i++ {
+		fm.minTarget = math32.Min(fm.minTarget, trainSet.GetTarget(i))
+		fm.maxTarget = math32.Max(fm.maxTarget, trainSet.GetTarget(i))
 		indices, values, target := trainSet.Get(i)
 		x = append(x, lo.Tuple2[[]int32, []float32]{A: indices, B: values})
 		y = append(y, target)
@@ -274,8 +275,9 @@ func (fm *DeepFM) Fit(ctx context.Context, trainSet *Dataset, testSet *Dataset, 
 }
 
 // Init parameters for DeepFM.
-func (fm *DeepFM) Init(trainSet *Dataset) {
-	fm.numFeatures = trainSet.ItemCount() + trainSet.UserCount() + len(trainSet.UserFeatures) + len(trainSet.ItemFeatures) + len(trainSet.ContextFeatures)
+func (fm *DeepFM) Init(trainSet dataset.CTRSplit) {
+	fm.numFeatures = trainSet.CountItems() + trainSet.CountUsers() +
+		trainSet.CountUserLabels() + trainSet.CountItemLabels() + trainSet.CountContextLabels()
 	fm.numDimension = 0
 	for i := 0; i < trainSet.Count(); i++ {
 		_, x, _ := trainSet.Get(i)
@@ -317,7 +319,7 @@ func (fm *DeepFM) Marshal(w io.Writer) error {
 		return errors.Trace(err)
 	}
 	// write index
-	if err := MarshalIndex(w, fm.Index); err != nil {
+	if err := base.MarshalUnifiedIndex(w, fm.Index); err != nil {
 		return errors.Trace(err)
 	}
 	// write dataset stats
@@ -350,7 +352,7 @@ func (fm *DeepFM) Unmarshal(r io.Reader) error {
 	}
 	fm.SetParams(fm.Params)
 	// read index
-	if fm.Index, err = UnmarshalIndex(r); err != nil {
+	if fm.Index, err = base.UnmarshalUnifiedIndex(r); err != nil {
 		return errors.Trace(err)
 	}
 	// read dataset stats

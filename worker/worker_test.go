@@ -575,7 +575,7 @@ func newRankingDataset() (*dataset.Dataset, *dataset.Dataset) {
 
 func newClickDataset() (*ctr.Dataset, *ctr.Dataset) {
 	dataset := &ctr.Dataset{
-		Index: ctr.NewUnifiedMapIndexBuilder().Build(),
+		Index: base.NewUnifiedMapIndexBuilder().Build(),
 	}
 	return dataset, dataset
 }
@@ -785,7 +785,7 @@ func (m mockFactorizationMachine) InternalPredict(_ []int32, _ []float32) float3
 	panic("implement me")
 }
 
-func (m mockFactorizationMachine) Fit(_ context.Context, _, _ *ctr.Dataset, _ *ctr.FitConfig) ctr.Score {
+func (m mockFactorizationMachine) Fit(_ context.Context, _, _ dataset.CTRSplit, _ *ctr.FitConfig) ctr.Score {
 	panic("implement me")
 }
 

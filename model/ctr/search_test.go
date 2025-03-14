@@ -15,6 +15,7 @@ package ctr
 
 import (
 	"context"
+	"github.com/zhenghaoz/gorse/dataset"
 	"io"
 	"testing"
 
@@ -27,7 +28,7 @@ import (
 // NewMapIndexDataset creates a data set.
 func NewMapIndexDataset() *Dataset {
 	s := new(Dataset)
-	s.Index = NewUnifiedDirectIndex(0)
+	s.Index = base.NewUnifiedDirectIndex(0)
 	return s
 }
 
@@ -51,7 +52,7 @@ func (m *mockFactorizationMachineForSearch) GetItemIndex() base.Index {
 	panic("don't call me")
 }
 
-func (m *mockFactorizationMachineForSearch) Fit(_ context.Context, _, _ *Dataset, cfg *FitConfig) Score {
+func (m *mockFactorizationMachineForSearch) Fit(_ context.Context, _, _ dataset.CTRSplit, cfg *FitConfig) Score {
 	score := float32(0)
 	score += m.Params.GetFloat32(model.NFactors, 0.0)
 	score += m.Params.GetFloat32(model.InitMean, 0.0)

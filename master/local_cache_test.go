@@ -16,6 +16,7 @@ package master
 
 import (
 	"context"
+	"github.com/zhenghaoz/gorse/base"
 	"testing"
 	"time"
 
@@ -32,7 +33,7 @@ func newRankingDataset() (*dataset.Dataset, *dataset.Dataset) {
 
 func newClickDataset() (*ctr.Dataset, *ctr.Dataset) {
 	dataset := &ctr.Dataset{
-		Index: ctr.NewUnifiedMapIndexBuilder().Build(),
+		Index: base.NewUnifiedMapIndexBuilder().Build(),
 	}
 	return dataset, dataset
 }

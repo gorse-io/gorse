@@ -121,8 +121,8 @@ func (m *Master) runLoadDatasetTask() error {
 	if err = m.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.NumItems), dataSet.CountItems())); err != nil {
 		log.Logger().Error("failed to write number of items", zap.Error(err))
 	}
-	ImplicitFeedbacksTotal.Set(float64(dataSet.Count()))
-	if err = m.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.NumTotalPosFeedbacks), dataSet.Count())); err != nil {
+	ImplicitFeedbacksTotal.Set(float64(dataSet.CountFeedback()))
+	if err = m.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.NumTotalPosFeedbacks), dataSet.CountFeedback())); err != nil {
 		log.Logger().Error("failed to write number of positive feedbacks", zap.Error(err))
 	}
 	UserLabelsTotal.Set(float64(clickDataset.Index.CountUserLabels()))
@@ -133,7 +133,7 @@ func (m *Master) runLoadDatasetTask() error {
 	if err = m.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.NumItemLabels), int(clickDataset.Index.CountItemLabels()))); err != nil {
 		log.Logger().Error("failed to write number of item labels", zap.Error(err))
 	}
-	ImplicitFeedbacksTotal.Set(float64(dataSet.Count()))
+	ImplicitFeedbacksTotal.Set(float64(dataSet.CountFeedback()))
 	PositiveFeedbacksTotal.Set(float64(clickDataset.PositiveCount))
 	if err = m.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.NumValidPosFeedbacks), clickDataset.PositiveCount)); err != nil {
 		log.Logger().Error("failed to write number of positive feedbacks", zap.Error(err))
@@ -219,7 +219,7 @@ func (t *FitRankingModelTask) name() string {
 }
 
 func (t *FitRankingModelTask) priority() int {
-	return -t.rankingTrainSet.Count()
+	return -t.rankingTrainSet.CountFeedback()
 }
 
 func (t *FitRankingModelTask) run(ctx context.Context, j *task.JobsAllocator) error {
@@ -229,7 +229,7 @@ func (t *FitRankingModelTask) run(ctx context.Context, j *task.JobsAllocator) er
 	t.rankingDataMutex.RLock()
 	defer t.rankingDataMutex.RUnlock()
 	dataSet := t.rankingTrainSet
-	numFeedback := dataSet.Count()
+	numFeedback := dataSet.CountFeedback()
 
 	var modelChanged bool
 	bestRankingName, bestRankingModel, bestRankingScore := t.rankingModelSearcher.GetBestModel()
@@ -334,8 +334,8 @@ func (t *FitClickModelTask) run(ctx context.Context, j *task.JobsAllocator) erro
 	log.Logger().Info("prepare to fit click model", zap.Int("n_jobs", t.Config.Master.NumJobs))
 	t.clickDataMutex.RLock()
 	defer t.clickDataMutex.RUnlock()
-	numUsers := t.clickTrainSet.UserCount()
-	numItems := t.clickTrainSet.ItemCount()
+	numUsers := t.clickTrainSet.CountUsers()
+	numItems := t.clickTrainSet.CountItems()
 	numFeedback := t.clickTrainSet.Count()
 	var shouldFit bool
 
@@ -435,7 +435,7 @@ func (t *SearchRankingModelTask) name() string {
 }
 
 func (t *SearchRankingModelTask) priority() int {
-	return -t.rankingTrainSet.Count()
+	return -t.rankingTrainSet.CountFeedback()
 }
 
 func (t *SearchRankingModelTask) run(ctx context.Context, j *task.JobsAllocator) error {
@@ -448,7 +448,7 @@ func (t *SearchRankingModelTask) run(ctx context.Context, j *task.JobsAllocator)
 	}
 	numUsers := t.rankingTrainSet.CountUsers()
 	numItems := t.rankingTrainSet.CountItems()
-	numFeedback := t.rankingTrainSet.Count()
+	numFeedback := t.rankingTrainSet.CountFeedback()
 
 	if numUsers == 0 || numItems == 0 || numFeedback == 0 {
 		log.Logger().Warn("empty ranking dataset",
@@ -507,8 +507,8 @@ func (t *SearchClickModelTask) run(ctx context.Context, j *task.JobsAllocator) e
 		log.Logger().Debug("dataset has not been loaded")
 		return nil
 	}
-	numUsers := t.clickTrainSet.UserCount()
-	numItems := t.clickTrainSet.ItemCount()
+	numUsers := t.clickTrainSet.CountUsers()
+	numItems := t.clickTrainSet.CountItems()
 	numFeedback := t.clickTrainSet.Count()
 
 	if numUsers == 0 || numItems == 0 || numFeedback == 0 {
@@ -930,7 +930,7 @@ func (m *Master) LoadDataFromDatabase(
 
 	// STEP 5: create click dataset
 	start = time.Now()
-	unifiedIndex := ctr.NewUnifiedMapIndexBuilder()
+	unifiedIndex := base.NewUnifiedMapIndexBuilder()
 	unifiedIndex.ItemIndex = rankingDataset.ItemIndex
 	unifiedIndex.UserIndex = rankingDataset.UserIndex
 	unifiedIndex.ItemLabelIndex = itemLabelIndex

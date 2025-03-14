@@ -369,7 +369,7 @@ func (m *Master) RunPrivilegedTasksLoop() {
 			log.Logger().Error("failed to load ranking dataset", zap.Error(err))
 			continue
 		}
-		if m.rankingTrainSet.CountUsers() == 0 && m.rankingTrainSet.CountItems() == 0 && m.rankingTrainSet.Count() == 0 {
+		if m.rankingTrainSet.CountUsers() == 0 && m.rankingTrainSet.CountItems() == 0 && m.rankingTrainSet.CountFeedback() == 0 {
 			log.Logger().Warn("empty ranking dataset",
 				zap.Strings("positive_feedback_type", m.Config.Recommend.DataSource.PositiveFeedbackTypes))
 			continue
@@ -470,7 +470,7 @@ func (m *Master) RunManagedTasksLoop() {
 				log.Logger().Error("failed to load ranking dataset", zap.Error(err))
 				return
 			}
-			if m.rankingTrainSet.CountUsers() == 0 && m.rankingTrainSet.CountItems() == 0 && m.rankingTrainSet.Count() == 0 {
+			if m.rankingTrainSet.CountUsers() == 0 && m.rankingTrainSet.CountItems() == 0 && m.rankingTrainSet.CountFeedback() == 0 {
 				log.Logger().Warn("empty ranking dataset",
 					zap.Strings("positive_feedback_type", m.Config.Recommend.DataSource.PositiveFeedbackTypes))
 				return
