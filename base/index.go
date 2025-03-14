@@ -34,11 +34,6 @@ type Index interface {
 	Unmarshal(r io.Reader) error
 }
 
-const (
-	mapIndex uint8 = iota
-	directIndex
-)
-
 // MarshalIndex marshal index into byte stream.
 func MarshalIndex(w io.Writer, index Index) error {
 	// write index type
