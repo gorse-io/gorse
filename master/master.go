@@ -42,7 +42,7 @@ import (
 	"github.com/zhenghaoz/gorse/dataset"
 	"github.com/zhenghaoz/gorse/model"
 	"github.com/zhenghaoz/gorse/model/cf"
-	"github.com/zhenghaoz/gorse/model/click"
+	"github.com/zhenghaoz/gorse/model/ctr"
 	"github.com/zhenghaoz/gorse/protocol"
 	"github.com/zhenghaoz/gorse/server"
 	"github.com/zhenghaoz/gorse/storage"
@@ -84,8 +84,8 @@ type Master struct {
 	rankingDataMutex sync.RWMutex
 
 	// click dataset
-	clickTrainSet  *click.Dataset
-	clickTestSet   *click.Dataset
+	clickTrainSet  *ctr.Dataset
+	clickTestSet   *ctr.Dataset
 	clickDataMutex sync.RWMutex
 
 	// ranking model
@@ -95,9 +95,9 @@ type Master struct {
 	rankingModelSearcher *cf.ModelSearcher
 
 	// click model
-	clickScore         click.Score
+	clickScore         ctr.Score
 	clickModelMutex    sync.RWMutex
-	clickModelSearcher *click.ModelSearcher
+	clickModelSearcher *ctr.ModelSearcher
 
 	// oauth2
 	oauth2Config oauth2.Config
@@ -153,7 +153,7 @@ func NewMaster(cfg *config.Config, cacheFile string, managedMode bool) *Master {
 			cfg.Recommend.Collaborative.EnableModelSizeSearch,
 		),
 		// default click model
-		clickModelSearcher: click.NewModelSearcher(
+		clickModelSearcher: ctr.NewModelSearcher(
 			cfg.Recommend.Collaborative.ModelSearchEpoch,
 			cfg.Recommend.Collaborative.ModelSearchTrials,
 			cfg.Recommend.Collaborative.EnableModelSizeSearch,
@@ -164,7 +164,7 @@ func NewMaster(cfg *config.Config, cacheFile string, managedMode bool) *Master {
 				CacheClient:  cache.NoDatabase{},
 				DataClient:   data.NoDatabase{},
 				RankingModel: cf.NewBPR(nil),
-				ClickModel:   click.NewFM(nil),
+				ClickModel:   ctr.NewFM(nil),
 				// init versions
 				RankingModelVersion: rand.Int63(),
 				ClickModelVersion:   rand.Int63(),
@@ -182,7 +182,7 @@ func NewMaster(cfg *config.Config, cacheFile string, managedMode bool) *Master {
 	// enable deep learning
 	if cfg.Experimental.EnableDeepLearning {
 		log.Logger().Debug("enable deep learning")
-		m.ClickModel = click.NewDeepFM(model.Params{
+		m.ClickModel = ctr.NewDeepFM(model.Params{
 			model.BatchSize: cfg.Experimental.DeepLearningBatchSize,
 		})
 	}
@@ -369,7 +369,7 @@ func (m *Master) RunPrivilegedTasksLoop() {
 			log.Logger().Error("failed to load ranking dataset", zap.Error(err))
 			continue
 		}
-		if m.rankingTrainSet.CountUsers() == 0 && m.rankingTrainSet.CountItems() == 0 && m.rankingTrainSet.Count() == 0 {
+		if m.rankingTrainSet.CountUsers() == 0 && m.rankingTrainSet.CountItems() == 0 && m.rankingTrainSet.CountFeedback() == 0 {
 			log.Logger().Warn("empty ranking dataset",
 				zap.Strings("positive_feedback_type", m.Config.Recommend.DataSource.PositiveFeedbackTypes))
 			continue
@@ -470,7 +470,7 @@ func (m *Master) RunManagedTasksLoop() {
 				log.Logger().Error("failed to load ranking dataset", zap.Error(err))
 				return
 			}
-			if m.rankingTrainSet.CountUsers() == 0 && m.rankingTrainSet.CountItems() == 0 && m.rankingTrainSet.Count() == 0 {
+			if m.rankingTrainSet.CountUsers() == 0 && m.rankingTrainSet.CountItems() == 0 && m.rankingTrainSet.CountFeedback() == 0 {
 				log.Logger().Warn("empty ranking dataset",
 					zap.Strings("positive_feedback_type", m.Config.Recommend.DataSource.PositiveFeedbackTypes))
 				return

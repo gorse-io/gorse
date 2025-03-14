@@ -36,7 +36,7 @@ import (
 	"github.com/zhenghaoz/gorse/dataset"
 	"github.com/zhenghaoz/gorse/logics"
 	"github.com/zhenghaoz/gorse/model/cf"
-	"github.com/zhenghaoz/gorse/model/click"
+	"github.com/zhenghaoz/gorse/model/ctr"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
 	"go.uber.org/zap"
@@ -121,8 +121,8 @@ func (m *Master) runLoadDatasetTask() error {
 	if err = m.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.NumItems), dataSet.CountItems())); err != nil {
 		log.Logger().Error("failed to write number of items", zap.Error(err))
 	}
-	ImplicitFeedbacksTotal.Set(float64(dataSet.Count()))
-	if err = m.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.NumTotalPosFeedbacks), dataSet.Count())); err != nil {
+	ImplicitFeedbacksTotal.Set(float64(dataSet.CountFeedback()))
+	if err = m.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.NumTotalPosFeedbacks), dataSet.CountFeedback())); err != nil {
 		log.Logger().Error("failed to write number of positive feedbacks", zap.Error(err))
 	}
 	UserLabelsTotal.Set(float64(clickDataset.Index.CountUserLabels()))
@@ -133,7 +133,7 @@ func (m *Master) runLoadDatasetTask() error {
 	if err = m.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.NumItemLabels), int(clickDataset.Index.CountItemLabels()))); err != nil {
 		log.Logger().Error("failed to write number of item labels", zap.Error(err))
 	}
-	ImplicitFeedbacksTotal.Set(float64(dataSet.Count()))
+	ImplicitFeedbacksTotal.Set(float64(dataSet.CountFeedback()))
 	PositiveFeedbacksTotal.Set(float64(clickDataset.PositiveCount))
 	if err = m.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.NumValidPosFeedbacks), clickDataset.PositiveCount)); err != nil {
 		log.Logger().Error("failed to write number of positive feedbacks", zap.Error(err))
@@ -219,7 +219,7 @@ func (t *FitRankingModelTask) name() string {
 }
 
 func (t *FitRankingModelTask) priority() int {
-	return -t.rankingTrainSet.Count()
+	return -t.rankingTrainSet.CountFeedback()
 }
 
 func (t *FitRankingModelTask) run(ctx context.Context, j *task.JobsAllocator) error {
@@ -229,7 +229,7 @@ func (t *FitRankingModelTask) run(ctx context.Context, j *task.JobsAllocator) er
 	t.rankingDataMutex.RLock()
 	defer t.rankingDataMutex.RUnlock()
 	dataSet := t.rankingTrainSet
-	numFeedback := dataSet.Count()
+	numFeedback := dataSet.CountFeedback()
 
 	var modelChanged bool
 	bestRankingName, bestRankingModel, bestRankingScore := t.rankingModelSearcher.GetBestModel()
@@ -334,8 +334,8 @@ func (t *FitClickModelTask) run(ctx context.Context, j *task.JobsAllocator) erro
 	log.Logger().Info("prepare to fit click model", zap.Int("n_jobs", t.Config.Master.NumJobs))
 	t.clickDataMutex.RLock()
 	defer t.clickDataMutex.RUnlock()
-	numUsers := t.clickTrainSet.UserCount()
-	numItems := t.clickTrainSet.ItemCount()
+	numUsers := t.clickTrainSet.CountUsers()
+	numItems := t.clickTrainSet.CountItems()
 	numFeedback := t.clickTrainSet.Count()
 	var shouldFit bool
 
@@ -365,7 +365,7 @@ func (t *FitClickModelTask) run(ctx context.Context, j *task.JobsAllocator) erro
 			zap.Float32("Recall", bestClickScore.Recall),
 			zap.Any("params", t.ClickModel.GetParams()))
 	}
-	clickModel := click.Clone(t.ClickModel)
+	clickModel := ctr.Clone(t.ClickModel)
 	t.clickModelMutex.Unlock()
 
 	// training model
@@ -374,7 +374,7 @@ func (t *FitClickModelTask) run(ctx context.Context, j *task.JobsAllocator) erro
 		return nil
 	}
 	startFitTime := time.Now()
-	score := clickModel.Fit(newCtx, t.clickTrainSet, t.clickTestSet, click.NewFitConfig().
+	score := clickModel.Fit(newCtx, t.clickTrainSet, t.clickTestSet, ctr.NewFitConfig().
 		SetJobsAllocator(j))
 	RankingFitSeconds.Set(time.Since(startFitTime).Seconds())
 
@@ -435,7 +435,7 @@ func (t *SearchRankingModelTask) name() string {
 }
 
 func (t *SearchRankingModelTask) priority() int {
-	return -t.rankingTrainSet.Count()
+	return -t.rankingTrainSet.CountFeedback()
 }
 
 func (t *SearchRankingModelTask) run(ctx context.Context, j *task.JobsAllocator) error {
@@ -448,7 +448,7 @@ func (t *SearchRankingModelTask) run(ctx context.Context, j *task.JobsAllocator)
 	}
 	numUsers := t.rankingTrainSet.CountUsers()
 	numItems := t.rankingTrainSet.CountItems()
-	numFeedback := t.rankingTrainSet.Count()
+	numFeedback := t.rankingTrainSet.CountFeedback()
 
 	if numUsers == 0 || numItems == 0 || numFeedback == 0 {
 		log.Logger().Warn("empty ranking dataset",
@@ -507,8 +507,8 @@ func (t *SearchClickModelTask) run(ctx context.Context, j *task.JobsAllocator) e
 		log.Logger().Debug("dataset has not been loaded")
 		return nil
 	}
-	numUsers := t.clickTrainSet.UserCount()
-	numItems := t.clickTrainSet.ItemCount()
+	numUsers := t.clickTrainSet.CountUsers()
+	numItems := t.clickTrainSet.CountItems()
 	numFeedback := t.clickTrainSet.Count()
 
 	if numUsers == 0 || numItems == 0 || numFeedback == 0 {
@@ -636,7 +636,7 @@ func (m *Master) LoadDataFromDatabase(
 	itemTTL, positiveFeedbackTTL uint,
 	evaluator *OnlineEvaluator,
 	nonPersonalizedRecommenders []*logics.NonPersonalized,
-) (clickDataset *click.Dataset, dataSet *dataset.Dataset, err error) {
+) (clickDataset *ctr.Dataset, dataSet *dataset.Dataset, err error) {
 	var rankingDataset *cf.DataSet
 	// Estimate the number of users, items, and feedbacks
 	estimatedNumUsers, err := m.DataClient.CountUsers(context.Background())
@@ -684,7 +684,7 @@ func (m *Master) LoadDataFromDatabase(
 			if len(rankingDataset.UserFeatures) == int(userIndex) {
 				rankingDataset.UserFeatures = append(rankingDataset.UserFeatures, nil)
 			}
-			features := click.ConvertLabelsToFeatures(user.Labels)
+			features := ctr.ConvertLabelsToFeatures(user.Labels)
 			rankingDataset.NumUserLabelUsed += len(features)
 			rankingDataset.UserFeatures[userIndex] = make([]lo.Tuple2[int32, float32], 0, len(features))
 			for _, feature := range features {
@@ -739,7 +739,7 @@ func (m *Master) LoadDataFromDatabase(
 			if len(rankingDataset.ItemFeatures) == int(itemIndex) {
 				rankingDataset.ItemFeatures = append(rankingDataset.ItemFeatures, nil)
 			}
-			features := click.ConvertLabelsToFeatures(item.Labels)
+			features := ctr.ConvertLabelsToFeatures(item.Labels)
 			rankingDataset.NumItemLabelUsed += len(features)
 			rankingDataset.ItemFeatures[itemIndex] = make([]lo.Tuple2[int32, float32], 0, len(features))
 			for _, feature := range features {
@@ -930,12 +930,12 @@ func (m *Master) LoadDataFromDatabase(
 
 	// STEP 5: create click dataset
 	start = time.Now()
-	unifiedIndex := click.NewUnifiedMapIndexBuilder()
+	unifiedIndex := base.NewUnifiedMapIndexBuilder()
 	unifiedIndex.ItemIndex = rankingDataset.ItemIndex
 	unifiedIndex.UserIndex = rankingDataset.UserIndex
 	unifiedIndex.ItemLabelIndex = itemLabelIndex
 	unifiedIndex.UserLabelIndex = userLabelIndex
-	clickDataset = &click.Dataset{
+	clickDataset = &ctr.Dataset{
 		Index:        unifiedIndex.Build(),
 		UserFeatures: rankingDataset.UserFeatures,
 		ItemFeatures: rankingDataset.ItemFeatures,

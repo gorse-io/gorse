@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package click
+package ctr
 
 import (
 	"bufio"
@@ -84,7 +84,7 @@ func convertLabelsToFeatures(result []Feature, prefix string, o any) []Feature {
 
 // Dataset for click-through-rate models.
 type Dataset struct {
-	Index UnifiedIndex
+	Index base.UnifiedIndex
 
 	UserFeatures    [][]lo.Tuple2[int32, float32] // features of users
 	ItemFeatures    [][]lo.Tuple2[int32, float32] // features of items
@@ -98,14 +98,38 @@ type Dataset struct {
 	NegativeCount int
 }
 
-// UserCount returns the number of users.
-func (dataset *Dataset) UserCount() int {
+// CountUsers returns the number of users.
+func (dataset *Dataset) CountUsers() int {
 	return int(dataset.Index.CountUsers())
 }
 
-// ItemCount returns the number of items.
-func (dataset *Dataset) ItemCount() int {
+// CountItems returns the number of items.
+func (dataset *Dataset) CountItems() int {
 	return int(dataset.Index.CountItems())
+}
+
+func (dataset *Dataset) CountUserLabels() int {
+	return int(dataset.Index.CountUserLabels())
+}
+
+func (dataset *Dataset) CountItemLabels() int {
+	return int(dataset.Index.CountItemLabels())
+}
+
+func (dataset *Dataset) CountContextLabels() int {
+	return int(dataset.Index.CountContextLabels())
+}
+
+func (dataset *Dataset) CountPositive() int {
+	return dataset.PositiveCount
+}
+
+func (dataset *Dataset) CountNegative() int {
+	return dataset.NegativeCount
+}
+
+func (dataset *Dataset) GetIndex() base.UnifiedIndex {
+	return dataset.Index
 }
 
 // Count returns the number of samples.
@@ -122,6 +146,10 @@ func (dataset *Dataset) Count() int {
 	return dataset.Target.Len()
 }
 
+func (dataset *Dataset) GetTarget(i int) float32 {
+	return dataset.Target.Get(i)
+}
+
 // Get returns the i-th sample.
 func (dataset *Dataset) Get(i int) ([]int32, []float32, float32) {
 	var (
@@ -133,13 +161,13 @@ func (dataset *Dataset) Get(i int) ([]int32, []float32, float32) {
 	if dataset.Users.Len() > 0 {
 		indices = append(indices, dataset.Users.Get(i))
 		values = append(values, 1)
-		position += int32(dataset.UserCount())
+		position += int32(dataset.CountUsers())
 	}
 	// append item id
 	if dataset.Items.Len() > 0 {
 		indices = append(indices, position+dataset.Items.Get(i))
 		values = append(values, 1)
-		position += int32(dataset.ItemCount())
+		position += int32(dataset.CountItems())
 	}
 	// append user indices
 	if dataset.Users.Len() > 0 {
@@ -231,7 +259,7 @@ func LoadDataFromBuiltIn(name string) (train, test *Dataset, err error) {
 	if test.ContextFeatures, test.Target, testMaxLabel, err = LoadLibFMFile(testFilePath); err != nil {
 		return nil, nil, err
 	}
-	unifiedIndex := NewUnifiedDirectIndex(mathutil.MaxInt32(trainMaxLabel, testMaxLabel) + 1)
+	unifiedIndex := base.NewUnifiedDirectIndex(mathutil.MaxInt32(trainMaxLabel, testMaxLabel) + 1)
 	train.Index = unifiedIndex
 	test.Index = unifiedIndex
 	return

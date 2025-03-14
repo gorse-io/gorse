@@ -38,7 +38,7 @@ func Evaluate(estimator MatrixFactorization, testSet, trainSet dataset.CFSplit, 
 	}
 	//rng := NewRandomGenerator(0)
 	// For all UserFeedback
-	negatives := testSet.NegativeSample(trainSet, numCandidates)
+	negatives := testSet.SampleUserNegatives(trainSet, numCandidates)
 	_ = parallel.Parallel(testSet.CountUsers(), nJobs, func(workerId, userIndex int) error {
 		// Find top-n ItemFeedback in test set
 		targetSet := mapset.NewSet(testSet.GetUserFeedback()[userIndex]...)
