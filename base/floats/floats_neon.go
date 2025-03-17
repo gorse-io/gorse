@@ -18,7 +18,7 @@ func vmul_const(a, b, n unsafe.Pointer)
 func vmul_to(a, b, c, n unsafe.Pointer)
 
 //go:noescape
-func vdot(a, b, n, ret unsafe.Pointer)
+func vdot(a, b, n unsafe.Pointer) (result float32)
 
 //go:noescape
-func veuclidean(a, b, n, ret unsafe.Pointer)
+func veuclidean(a, b, n unsafe.Pointer) (result float32)

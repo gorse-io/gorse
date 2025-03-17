@@ -38,23 +38,24 @@ void mul_to(float *a, float *b, float *c, int64_t n)
   }
 }
 
-void dot(float *a, float *b, int64_t n, float *ret)
+float dot(float *a, float *b, int64_t n)
 {
-  *ret = 0;
+  float sum = 0;
   for (int64_t i = 0; i < n; i++)
   {
-    *ret += a[i] * b[i];
+    sum += a[i] * b[i];
   }
+  return sum;
 }
 
-void euclidean(float *a, float *b, int64_t n, float *ret)
+float euclidean(float *a, float *b, int64_t n)
 {
-  *ret = 0;
+  float sum = 0;
   for (int64_t i = 0; i < n; i++)
   {
-    *ret += powf(a[i] - b[i], 2);
+    sum += powf(a[i] - b[i], 2);
   }
-  *ret = sqrtf(*ret);
+  return sqrtf(sum);
 }
 
 int rand_float(float *a, int64_t n)
@@ -268,8 +269,8 @@ void vmul_const_add_to(float *a, float *b, float *c, int64_t n);
 void vmul_const_to(float *a, float *b, float *c, int64_t n);
 void vmul_const(float *a, float *b, int64_t n);
 void vmul_to(float *a, float *b, float *c, int64_t n);
-void vdot(float *a, float *b, int64_t n, float *ret);
-void veuclidean(float *a, float *b, int64_t n, float *ret);
+float vdot(float *a, float *b, int64_t n);
+float veuclidean(float *a, float *b, int64_t n);
 
 MunitResult vmul_const_add_to_test(const MunitParameter params[], void *user_data_or_fixture)
 {
@@ -324,24 +325,24 @@ MunitResult vmul_to_test(const MunitParameter params[], void *user_data_or_fixtu
 
 MunitResult vdot_test(const MunitParameter params[], void *user_data_or_fixture)
 {
-  float a[kVectorLength], b[kVectorLength], expect, actual;
+  float a[kVectorLength], b[kVectorLength];
   rand_float(a, kVectorLength);
   rand_float(b, kVectorLength);
 
-  dot(a, b, kVectorLength, &expect);
-  vdot(a, b, kVectorLength, &actual);
+  float expect = dot(a, b, kVectorLength);
+  float actual = vdot(a, b, kVectorLength);
   munit_assert_float_equal(expect, actual, 5);
   return MUNIT_OK;
 }
 
 MunitResult veuclidean_test(const MunitParameter params[], void *user_data_or_fixture)
 {
-  float a[kVectorLength], b[kVectorLength], expect, actual;
+  float a[kVectorLength], b[kVectorLength];
   rand_float(a, kVectorLength);
   rand_float(b, kVectorLength);
 
-  euclidean(a, b, kVectorLength, &expect);
-  veuclidean(a, b, kVectorLength, &actual);
+  float expect = euclidean(a, b, kVectorLength);
+  float actual = veuclidean(a, b, kVectorLength);
   munit_assert_float_equal(expect, actual, 5);
   return MUNIT_OK;
 }
