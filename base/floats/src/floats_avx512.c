@@ -133,7 +133,7 @@ void _mm512_mul_to(float *a, float *b, float *c, int64_t n)
     }
 }
 
-void _mm512_dot(float *a, float *b, int64_t n, float *ret)
+float _mm512_dot(float *a, float *b, int64_t n)
 {
     int epoch = n / 16;
     int remain = n % 16;
@@ -166,7 +166,7 @@ void _mm512_dot(float *a, float *b, int64_t n, float *ret)
     const __m128 sxxx_02468ace = sxx_13579bdf_02468ace;
     const __m128 sxxx_13579bdf = _mm_shuffle_ps(sxx_13579bdf_02468ace, sxx_13579bdf_02468ace, 0x1);
     __m128 sxxx_0123456789abcdef = _mm_add_ss(sxxx_02468ace, sxxx_13579bdf);
-    *ret = _mm_cvtss_f32(sxxx_0123456789abcdef);
+    float sum = _mm_cvtss_f32(sxxx_0123456789abcdef);
 
     if (remain >= 8)
     {
@@ -185,17 +185,18 @@ void _mm512_dot(float *a, float *b, int64_t n, float *ret)
         const __m128 sxxx_0246 = sxx_1357_0246;
         const __m128 sxxx_1357 = _mm_shuffle_ps(sxx_1357_0246, sxx_1357_0246, 0x1);
         __m128 sxxx_01234567 = _mm_add_ss(sxxx_0246, sxxx_1357);
-        *ret += _mm_cvtss_f32(sxxx_01234567);
+        sum += _mm_cvtss_f32(sxxx_01234567);
         remain -= 8;
     }
 
     for (int i = 0; i < remain; i++)
     {
-        *ret += a[i] * b[i];
+        sum += a[i] * b[i];
     }
+    return sum;
 }
 
-void _mm512_euclidean(float *a, float *b, int64_t n, float *ret)
+float _mm512_euclidean(float *a, float *b, int64_t n)
 {
     int epoch = n / 16;
     int remain = n % 16;
@@ -231,7 +232,7 @@ void _mm512_euclidean(float *a, float *b, int64_t n, float *ret)
     const __m128 sxxx_02468ace = sxx_13579bdf_02468ace;
     const __m128 sxxx_13579bdf = _mm_shuffle_ps(sxx_13579bdf_02468ace, sxx_13579bdf_02468ace, 0x1);
     __m128 sxxx_0123456789abcdef = _mm_add_ps(sxxx_02468ace, sxxx_13579bdf);
-    *ret = _mm_cvtss_f32(sxxx_0123456789abcdef);
+    float sum = _mm_cvtss_f32(sxxx_0123456789abcdef);
 
     if (remain >= 8)
     {
@@ -251,16 +252,16 @@ void _mm512_euclidean(float *a, float *b, int64_t n, float *ret)
         const __m128 sxxx_0246 = sxx_1357_0246;
         const __m128 sxxx_1357 = _mm_shuffle_ps(sxx_1357_0246, sxx_1357_0246, 0x1);
         __m128 sxxx_01234567 = _mm_add_ss(sxxx_0246, sxxx_1357);
-        *ret += _mm_cvtss_f32(sxxx_01234567);
+        sum += _mm_cvtss_f32(sxxx_01234567);
         remain -= 8;
     }
 
     for (int i = 0; i < remain; i++)
     {
-        *ret += (a[i] - b[i]) * (a[i] - b[i]);
+        sum += (a[i] - b[i]) * (a[i] - b[i]);
     }
 
-    __m128 v = _mm_set1_ps(*ret);
+    __m128 v = _mm_set1_ps(sum);
     __m128 r = _mm_sqrt_ss(v);
-    *ret = _mm_cvtss_f32(r);
+    return _mm_cvtss_f32(r);
 }
