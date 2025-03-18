@@ -20,7 +20,7 @@ import (
 	"github.com/juju/errors"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/model/cf"
-	"github.com/zhenghaoz/gorse/model/click"
+	"github.com/zhenghaoz/gorse/model/ctr"
 	"github.com/zhenghaoz/gorse/protocol"
 	"github.com/zhenghaoz/gorse/storage/meta"
 	"go.uber.org/zap"
@@ -154,7 +154,7 @@ func (m *Master) GetClickModel(version *protocol.VersionInfo, sender protocol.Ma
 				log.Logger().Error("fail to close pipe", zap.Error(err))
 			}
 		}(writer)
-		err := click.MarshalModel(writer, m.ClickModel)
+		err := ctr.MarshalModel(writer, m.ClickModel)
 		if err != nil {
 			log.Logger().Error("fail to marshal click model", zap.Error(err))
 			encoderError = err

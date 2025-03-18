@@ -187,23 +187,23 @@ func TestDataset_Split(t *testing.T) {
 			dataset.AddFeedback(fmt.Sprintf("user%v", i), fmt.Sprintf("item%v", j))
 		}
 	}
-	assert.Equal(t, 9, dataset.Count())
+	assert.Equal(t, 9, dataset.CountFeedback())
 	// split
 	train, test := dataset.SplitCF(0, 0)
 	assert.Equal(t, numUsers, train.CountUsers())
 	assert.Equal(t, numItems, train.CountItems())
-	assert.Equal(t, 9-numUsers, train.Count())
+	assert.Equal(t, 9-numUsers, train.CountFeedback())
 	assert.Equal(t, numUsers, test.CountUsers())
 	assert.Equal(t, numItems, test.CountItems())
-	assert.Equal(t, numUsers, test.Count())
+	assert.Equal(t, numUsers, test.CountFeedback())
 	// part split
 	train2, test2 := dataset.SplitCF(2, 0)
 	assert.Equal(t, numUsers, train2.CountUsers())
 	assert.Equal(t, numItems, train2.CountItems())
-	assert.Equal(t, 7, train2.Count())
+	assert.Equal(t, 7, train2.CountFeedback())
 	assert.Equal(t, numUsers, test2.CountUsers())
 	assert.Equal(t, numItems, test2.CountItems())
-	assert.Equal(t, 2, test2.Count())
+	assert.Equal(t, 2, test2.CountFeedback())
 }
 
 func TestDataset_LoadMovieLens1M(t *testing.T) {
@@ -211,8 +211,8 @@ func TestDataset_LoadMovieLens1M(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Len(t, train.GetUsers(), 6040)
 	assert.Len(t, train.GetItems(), 3706)
-	assert.Equal(t, train.Count(), 994169)
+	assert.Equal(t, train.CountFeedback(), 994169)
 	assert.Len(t, test.GetUsers(), 6040)
 	assert.Len(t, test.GetItems(), 3706)
-	assert.Equal(t, test.Count(), 6040)
+	assert.Equal(t, test.CountFeedback(), 6040)
 }

@@ -37,14 +37,37 @@ type ID int32
 
 // CFSplit is the dataset split for collaborative filtering.
 type CFSplit interface {
+	// CountUsers returns the number of users.
+	CountUsers() int
+	// CountItems returns the number of items.
+	CountItems() int
+	// CountFeedback returns the number of (positive) feedback.
+	CountFeedback() int
+	// GetUserDict returns the frequency dictionary of users.
+	GetUserDict() *FreqDict
+	// GetItemDict returns the frequency dictionary of items.
+	GetItemDict() *FreqDict
+	// GetUserFeedback returns the (positive) feedback of users.
+	GetUserFeedback() [][]int32
+	// GetItemFeedback returns the (positive) feedback of items.
+	GetItemFeedback() [][]int32
+	// SampleUserNegatives samples negative (feedback) for users.
+	SampleUserNegatives(excludeSet CFSplit, numCandidates int) [][]int32
+}
+
+// CTRSplit is the dataset split for click-through rate prediction.
+type CTRSplit interface {
 	Count() int
 	CountUsers() int
 	CountItems() int
-	GetUserDict() *FreqDict
-	GetItemDict() *FreqDict
-	GetUserFeedback() [][]int32
-	GetItemFeedback() [][]int32
-	NegativeSample(excludeSet CFSplit, numCandidates int) [][]int32
+	CountUserLabels() int
+	CountItemLabels() int
+	CountContextLabels() int
+	CountPositive() int
+	CountNegative() int
+	GetIndex() base.UnifiedIndex
+	GetTarget(i int) float32
+	Get(i int) ([]int32, []float32, float32)
 }
 
 type Dataset struct {
@@ -81,7 +104,7 @@ func (d *Dataset) GetTimestamp() time.Time {
 	return d.timestamp
 }
 
-func (d *Dataset) Count() int {
+func (d *Dataset) CountFeedback() int {
 	return d.numFeedback
 }
 
@@ -206,7 +229,7 @@ func (d *Dataset) AddFeedback(userId, itemId string) {
 	d.numFeedback++
 }
 
-func (d *Dataset) NegativeSample(excludeSet CFSplit, numCandidates int) [][]int32 {
+func (d *Dataset) SampleUserNegatives(excludeSet CFSplit, numCandidates int) [][]int32 {
 	if len(d.negatives) == 0 {
 		rng := base.NewRandomGenerator(0)
 		d.negatives = make([][]int32, d.CountUsers())

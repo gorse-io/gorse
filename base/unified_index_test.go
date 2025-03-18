@@ -11,7 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-package click
+package base
 
 import (
 	"bytes"
@@ -81,9 +81,9 @@ func TestUnifiedMapIndex(t *testing.T) {
 	}
 	// Encode and decode
 	buf := bytes.NewBuffer(nil)
-	err := MarshalIndex(buf, index)
+	err := MarshalUnifiedIndex(buf, index)
 	assert.NoError(t, err)
-	indexCopy, err := UnmarshalIndex(buf)
+	indexCopy, err := UnmarshalUnifiedIndex(buf)
 	assert.NoError(t, err)
 	assert.Equal(t, index, indexCopy)
 }
@@ -113,9 +113,9 @@ func TestUnifiedDirectIndex(t *testing.T) {
 	assert.Equal(t, int32(5), index.EncodeContextLabel("5"))
 	// Encode and decode
 	buf := bytes.NewBuffer(nil)
-	err := MarshalIndex(buf, index)
+	err := MarshalUnifiedIndex(buf, index)
 	assert.NoError(t, err)
-	indexCopy, err := UnmarshalIndex(buf)
+	indexCopy, err := UnmarshalUnifiedIndex(buf)
 	assert.NoError(t, err)
 	assert.Equal(t, index, indexCopy)
 }
