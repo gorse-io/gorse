@@ -137,7 +137,7 @@ float _mm512_dot(float *a, float *b, int64_t n)
 {
     int epoch = n / 16;
     int remain = n % 16;
-    __m512 s;
+    __m512 s = _mm512_setzero_ps();
     if (epoch > 0)
     {
         __m512 v1 = _mm512_loadu_ps(a);
@@ -200,7 +200,7 @@ float _mm512_euclidean(float *a, float *b, int64_t n)
 {
     int epoch = n / 16;
     int remain = n % 16;
-    __m512 s;
+    __m512 s = _mm512_setzero_ps();
     if (epoch > 0)
     {
         __m512 v1 = _mm512_loadu_ps(a);
@@ -236,7 +236,6 @@ float _mm512_euclidean(float *a, float *b, int64_t n)
 
     if (remain >= 8)
     {
-        __m256 s;
         __m256 v1 = _mm256_loadu_ps(a);
         __m256 v2 = _mm256_loadu_ps(b);
         __m256 v = _mm256_sub_ps(v1, v2);

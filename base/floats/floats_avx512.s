@@ -619,7 +619,8 @@ TEXT ·_mm512_dot(SB), $8-32
 	JMP  LBB4_5
 
 LBB4_1:
-	JMP LBB4_9
+	LONG $0xc057f8c5 // vxorps	%xmm0, %xmm0, %xmm0
+	JMP  LBB4_9
 
 LBB4_18:
 	WORD $0x8945; BYTE $0xca // movl	%r9d, %r10d
@@ -779,7 +780,8 @@ TEXT ·_mm512_euclidean(SB), $8-32
 	JMP  LBB5_5
 
 LBB5_1:
-	JMP LBB5_9
+	LONG $0xc057f8c5 // vxorps	%xmm0, %xmm0, %xmm0
+	JMP  LBB5_9
 
 LBB5_18:
 	WORD $0x8945; BYTE $0xca // movl	%r9d, %r10d

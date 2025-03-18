@@ -96,7 +96,7 @@ float _mm256_dot(float *a, float *b, int64_t n)
 {
     int epoch = n / 8;
     int remain = n % 8;
-    __m256 s;
+    __m256 s = _mm256_setzero_ps();
     if (epoch > 0)
     {
         __m256 v1 = _mm256_loadu_ps(a);
@@ -134,7 +134,7 @@ float _mm256_euclidean(float *a, float *b, int64_t n)
 {
     int epoch = n / 8;
     int remain = n % 8;
-    __m256 sum;
+    __m256 sum = _mm256_setzero_ps();
     if (epoch > 0)
     {
         __m256 v1 = _mm256_loadu_ps(a);
