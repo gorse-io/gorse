@@ -80,7 +80,7 @@ void vmul_to(float *a, float *b, float *c, long n) {
 float vdot(float *a, float *b, long n) {
     int epoch = n / 4;
     int remain = n % 4;
-    float32x4_t s;
+    float32x4_t s = vdupq_n_f32(0);
     if (epoch > 0) {
         float32x4_t v1 = vld1q_f32(a);
         float32x4_t v2 = vld1q_f32(b);
@@ -110,7 +110,7 @@ float vdot(float *a, float *b, long n) {
 float veuclidean(float *a, float *b, long n) {
     int epoch = n / 4;
     int remain = n % 4;
-    float32x4_t s;
+    float32x4_t s = vdupq_n_f32(0);
     if (epoch > 0) {
         float32x4_t v1 = vld1q_f32(a);
         float32x4_t v2 = vld1q_f32(b);

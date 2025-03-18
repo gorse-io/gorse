@@ -339,7 +339,7 @@ TEXT ·vdot(SB), $8-32
 	WORD $0x71000548  // subs	w8, w10,
 	WORD $0x3cc10421  // ldr	q1, [x1],
 	WORD $0x6e21dc00  // fmul	v0.4s, v0.4s, v1.4s
-	WORD $0x540001e0  // b.eq	.LBB4_6
+	WORD $0x54000200  // b.eq	.LBB4_6
 	WORD $0xb27b7beb  // mov	x11,
 	WORD $0xaa0103ec  // mov	x12, x1
 	WORD $0x8b0a116a  // add	x10, x11, x10, lsl
@@ -355,9 +355,11 @@ LBB4_3:
 	WORD $0x54ffff81 // b.ne	.LBB4_3
 	WORD $0x8b0b0021 // add	x1, x1, x11
 	WORD $0xaa0a03e0 // mov	x0, x10
-	WORD $0x14000001 // b	.LBB4_6
+	WORD $0x14000002 // b	.LBB4_6
 
 LBB4_5:
+	WORD $0x6f00e400 // movi	v0.2d,
+
 LBB4_6:
 	WORD $0x2f00e401 // movi	d1,
 	WORD $0x5e0c0402 // mov	s2, v0.s[1]
@@ -445,7 +447,7 @@ TEXT ·veuclidean(SB), $8-32
 	WORD $0x3cc10421  // ldr	q1, [x1],
 	WORD $0x4ea1d400  // fsub	v0.4s, v0.4s, v1.4s
 	WORD $0x6e20dc00  // fmul	v0.4s, v0.4s, v0.4s
-	WORD $0x54000200  // b.eq	.LBB5_6
+	WORD $0x54000220  // b.eq	.LBB5_6
 	WORD $0xb27b7beb  // mov	x11,
 	WORD $0xaa0103ec  // mov	x12, x1
 	WORD $0x8b0a116a  // add	x10, x11, x10, lsl
@@ -462,9 +464,11 @@ LBB5_3:
 	WORD $0x54ffff61 // b.ne	.LBB5_3
 	WORD $0x8b0b0021 // add	x1, x1, x11
 	WORD $0xaa0a03e0 // mov	x0, x10
-	WORD $0x14000001 // b	.LBB5_6
+	WORD $0x14000002 // b	.LBB5_6
 
 LBB5_5:
+	WORD $0x6f00e400 // movi	v0.2d,
+
 LBB5_6:
 	WORD $0x7e30d801 // faddp	s1, v0.2s
 	WORD $0x5e140402 // mov	s2, v0.s[2]
