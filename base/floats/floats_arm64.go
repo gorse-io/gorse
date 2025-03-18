@@ -72,9 +72,7 @@ func (i implementation) mulConst(a []float32, b float32) {
 
 func (i implementation) dot(a, b []float32) float32 {
 	if i == Neon {
-		var ret float32
-		vdot(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), unsafe.Pointer(uintptr(len(a))), unsafe.Pointer(&ret))
-		return ret
+		return vdot(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), unsafe.Pointer(uintptr(len(a))))
 	} else {
 		return dot(a, b)
 	}
@@ -82,9 +80,7 @@ func (i implementation) dot(a, b []float32) float32 {
 
 func (i implementation) euclidean(a, b []float32) float32 {
 	if i == Neon {
-		var ret float32
-		veuclidean(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), unsafe.Pointer(uintptr(len(a))), unsafe.Pointer(&ret))
-		return ret
+		return veuclidean(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), unsafe.Pointer(uintptr(len(a))))
 	} else {
 		return euclidean(a, b)
 	}

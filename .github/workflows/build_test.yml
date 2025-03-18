@@ -12,8 +12,11 @@ on:
 
 jobs:
   unit_test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm]
     name: unit tests
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
 
     services:
       mysql:
@@ -108,7 +111,7 @@ jobs:
       run: bash <(curl -s https://codecov.io/bash)
 
   unit_test_macos:
-    name: unit tests (macOS)
+    name: unit tests (macos-latest)
     runs-on: macos-latest
     steps:
     - name: Set up dataset
@@ -139,7 +142,7 @@ jobs:
       run: go test -timeout 20m -v ./... -skip "TestPostgres|TestMySQL|TestMongo|TestRedis|TestClickHouse"
 
   unit_test_windows:
-    name: unit tests (Windows)
+    name: unit tests (windows-latest)
     runs-on: windows-latest
     steps:
     - name: Set up dataset

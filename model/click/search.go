@@ -144,7 +144,7 @@ type ModelSearcher struct {
 // NewModelSearcher creates a thread-safe personal ranking model searcher.
 func NewModelSearcher(nEpoch, nTrials int, searchSize bool) *ModelSearcher {
 	return &ModelSearcher{
-		model:      NewFM(FMClassification, model.Params{model.NEpochs: nEpoch}),
+		model:      NewFM(model.Params{model.NEpochs: nEpoch}),
 		numTrials:  nTrials,
 		numEpochs:  nEpoch,
 		searchSize: searchSize,

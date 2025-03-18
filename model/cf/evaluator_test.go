@@ -11,18 +11,19 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-package ranking
+package cf
 
 import (
 	"context"
+	mapset "github.com/deckarep/golang-set/v2"
+	"github.com/stretchr/testify/assert"
+	"github.com/zhenghaoz/gorse/dataset"
+	"github.com/zhenghaoz/gorse/model"
+	"github.com/zhenghaoz/gorse/storage/data"
 	"io"
 	"strconv"
 	"testing"
-
-	mapset "github.com/deckarep/golang-set/v2"
-	"github.com/stretchr/testify/assert"
-	"github.com/zhenghaoz/gorse/base"
-	"github.com/zhenghaoz/gorse/model"
+	"time"
 )
 
 const evalEpsilon = 0.00001
@@ -97,15 +98,15 @@ func (m *mockMatrixFactorizationForEval) Invalid() bool {
 	panic("implement me")
 }
 
-func (m *mockMatrixFactorizationForEval) GetUserIndex() base.Index {
+func (m *mockMatrixFactorizationForEval) GetUserIndex() *dataset.FreqDict {
 	panic("don't call me")
 }
 
-func (m *mockMatrixFactorizationForEval) GetItemIndex() base.Index {
+func (m *mockMatrixFactorizationForEval) GetItemIndex() *dataset.FreqDict {
 	panic("don't call me")
 }
 
-func (m *mockMatrixFactorizationForEval) Fit(_ context.Context, _, _ *DataSet, _ *FitConfig) Score {
+func (m *mockMatrixFactorizationForEval) Fit(_ context.Context, _, _ dataset.CFSplit, _ *FitConfig) Score {
 	panic("don't call me")
 }
 
@@ -113,7 +114,7 @@ func (m *mockMatrixFactorizationForEval) Predict(_, _ string) float32 {
 	panic("don't call me")
 }
 
-func (m *mockMatrixFactorizationForEval) InternalPredict(userId, itemId int32) float32 {
+func (m *mockMatrixFactorizationForEval) internalPredict(userId, itemId int32) float32 {
 	if m.positive[userId].Contains(itemId) {
 		return 1
 	}
@@ -133,14 +134,19 @@ func (m *mockMatrixFactorizationForEval) GetParamsGrid(_ bool) model.ParamsGrid 
 
 func TestEvaluate(t *testing.T) {
 	// create dataset
-	train, test := NewDirectIndexDataset(), NewDirectIndexDataset()
-	train.UserFeedback = make([][]int32, 4)
+	train, test := dataset.NewDataset(time.Now(), 0, 0), dataset.NewDataset(time.Now(), 0, 0)
+	//train.UserFeedback = make([][]int32, 4)
+	for i := 0; i < 4; i++ {
+		train.AddUser(data.User{UserId: strconv.Itoa(i)})
+		test.AddUser(data.User{UserId: strconv.Itoa(i / 4)})
+	}
 	for i := 0; i < 16; i++ {
-		test.AddFeedback(strconv.Itoa(i/4), strconv.Itoa(i), true)
+		test.AddItem(data.Item{ItemId: strconv.Itoa(i)})
+		test.AddFeedback(strconv.Itoa(i/4), strconv.Itoa(i))
 	}
 	assert.Equal(t, 16, test.Count())
-	assert.Equal(t, 4, test.UserCount())
-	assert.Equal(t, 16, test.ItemCount())
+	assert.Equal(t, 4, test.CountUsers())
+	assert.Equal(t, 16, test.CountItems())
 	// create model
 	m := &mockMatrixFactorizationForEval{
 		positive: []mapset.Set[int32]{
@@ -157,7 +163,7 @@ func TestEvaluate(t *testing.T) {
 		},
 	}
 	// evaluate model
-	s := Evaluate(m, test, train, 4, test.ItemCount(), 4, Precision)
+	s := Evaluate(m, test, train, 4, test.CountItems(), 4, Precision)
 	assert.Equal(t, 1, len(s))
 	assert.Equal(t, float32(0.625), s[0])
 }

@@ -31,8 +31,8 @@ import (
 	"github.com/zhenghaoz/gorse/common/util"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model"
+	"github.com/zhenghaoz/gorse/model/cf"
 	"github.com/zhenghaoz/gorse/model/click"
-	"github.com/zhenghaoz/gorse/model/ranking"
 	"github.com/zhenghaoz/gorse/protocol"
 	"github.com/zhenghaoz/gorse/server"
 	"github.com/zhenghaoz/gorse/storage/cache"
@@ -56,11 +56,11 @@ func newMockMasterRPC(t *testing.T) *mockMasterRPC {
 	assert.NoError(t, err)
 	// create click model
 	train, test := newClickDataset()
-	fm := click.NewFM(click.FMClassification, model.Params{model.NEpochs: 0})
+	fm := click.NewFM(model.Params{model.NEpochs: 0})
 	fm.Fit(context.Background(), train, test, nil)
 	// create ranking model
 	trainSet, testSet := newRankingDataset()
-	bpr := ranking.NewBPR(model.Params{model.NEpochs: 0})
+	bpr := cf.NewBPR(model.Params{model.NEpochs: 0})
 	bpr.Fit(context.Background(), trainSet, testSet, nil)
 	return &mockMasterRPC{
 		Master: Master{

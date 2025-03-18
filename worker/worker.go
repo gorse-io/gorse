@@ -37,16 +37,16 @@ import (
 	"github.com/zhenghaoz/gorse/base/encoding"
 	"github.com/zhenghaoz/gorse/base/heap"
 	"github.com/zhenghaoz/gorse/base/log"
-	"github.com/zhenghaoz/gorse/base/parallel"
 	"github.com/zhenghaoz/gorse/base/progress"
 	"github.com/zhenghaoz/gorse/cmd/version"
 	encoding2 "github.com/zhenghaoz/gorse/common/encoding"
+	"github.com/zhenghaoz/gorse/common/parallel"
 	"github.com/zhenghaoz/gorse/common/sizeof"
 	"github.com/zhenghaoz/gorse/common/util"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/logics"
+	"github.com/zhenghaoz/gorse/model/cf"
 	"github.com/zhenghaoz/gorse/model/click"
-	"github.com/zhenghaoz/gorse/model/ranking"
 	"github.com/zhenghaoz/gorse/protocol"
 	"github.com/zhenghaoz/gorse/storage"
 	"github.com/zhenghaoz/gorse/storage/cache"
@@ -267,7 +267,7 @@ func (w *Worker) Pull() {
 				grpc.MaxCallRecvMsgSize(math.MaxInt)); err != nil {
 				log.Logger().Error("failed to pull ranking model", zap.Error(err))
 			} else {
-				var rankingModel ranking.MatrixFactorization
+				var rankingModel cf.MatrixFactorization
 				rankingModel, err = encoding2.UnmarshalRankingModel(rankingModelReceiver)
 				if err != nil {
 					log.Logger().Error("failed to unmarshal ranking model", zap.Error(err))
@@ -547,11 +547,10 @@ func (w *Worker) Recommend(users []data.User) {
 		log.Logger().Info("start building ranking index")
 		itemIndex := w.RankingModel.GetItemIndex()
 		matrixFactorization := logics.NewMatrixFactorization(time.Now())
-		for i := int32(0); i < itemIndex.Len(); i++ {
-			itemId := itemIndex.ToName(i)
-			if itemCache.IsAvailable(itemId) {
+		for i := int32(0); i < itemIndex.Count(); i++ {
+			if itemId, ok := itemIndex.String(i); ok && itemCache.IsAvailable(itemId) {
 				item, _ := itemCache.Get(itemId)
-				matrixFactorization.Add(item, w.RankingModel.GetItemFactor(i))
+				matrixFactorization.Add(item, w.RankingModel.GetItemFactor(int32(i)))
 			}
 		}
 		w.matrixFactorization = matrixFactorization
@@ -615,7 +614,7 @@ func (w *Worker) Recommend(users []data.User) {
 		// Recommender #1: collaborative filtering.
 		collaborativeUsed := false
 		if w.Config.Recommend.Offline.EnableColRecommend && w.RankingModel != nil && !w.RankingModel.Invalid() {
-			if userIndex := w.RankingModel.GetUserIndex().ToNumber(userId); w.RankingModel.IsUserPredictable(userIndex) {
+			if userIndex := w.RankingModel.GetUserIndex().Id(userId); w.RankingModel.IsUserPredictable(int32(userIndex)) {
 				var recommend map[string][]string
 				var usedTime time.Duration
 				recommend, usedTime, err = w.collaborativeRecommendHNSW(w.matrixFactorization, userId, excludeSet, itemCache)
@@ -629,7 +628,7 @@ func (w *Worker) Recommend(users []data.User) {
 				}
 				collaborativeUsed = true
 				collaborativeRecommendSeconds.Add(usedTime.Seconds())
-			} else if !w.RankingModel.IsUserPredictable(userIndex) {
+			} else if !w.RankingModel.IsUserPredictable(int32(userIndex)) {
 				log.Logger().Debug("user is unpredictable", zap.String("user_id", userId))
 			}
 		} else if w.RankingModel == nil || w.RankingModel.Invalid() {
@@ -794,7 +793,7 @@ func (w *Worker) Recommend(users []data.User) {
 				}
 				ctrUsed = true
 			} else if w.RankingModel != nil && !w.RankingModel.Invalid() &&
-				w.RankingModel.IsUserPredictable(w.RankingModel.GetUserIndex().ToNumber(userId)) {
+				w.RankingModel.IsUserPredictable(w.RankingModel.GetUserIndex().Id(userId)) {
 				results[category], err = w.rankByCollaborativeFiltering(userId, catCandidates)
 				if err != nil {
 					log.Logger().Error("failed to rank items", zap.Error(err))
@@ -863,7 +862,7 @@ func (w *Worker) Recommend(users []data.User) {
 
 func (w *Worker) collaborativeRecommendHNSW(rankingIndex *logics.MatrixFactorization, userId string, excludeSet mapset.Set[string], itemCache *ItemCache) (map[string][]string, time.Duration, error) {
 	ctx := context.Background()
-	userIndex := w.RankingModel.GetUserIndex().ToNumber(userId)
+	userIndex := w.RankingModel.GetUserIndex().Id(userId)
 	localStartTime := time.Now()
 	scores := rankingIndex.Search(w.RankingModel.GetUserFactor(userIndex), w.Config.Recommend.CacheSize+excludeSet.Cardinality())
 	// save result
@@ -1239,7 +1238,7 @@ func (w *Worker) replacement(recommend map[string][]cache.Score, user *data.User
 			var score float64
 			if w.Config.Recommend.Offline.EnableClickThroughPrediction && w.ClickModel != nil {
 				score = float64(w.ClickModel.Predict(user.UserId, itemId, click.ConvertLabelsToFeatures(user.Labels), click.ConvertLabelsToFeatures(item.Labels)))
-			} else if w.RankingModel != nil && !w.RankingModel.Invalid() && w.RankingModel.IsUserPredictable(w.RankingModel.GetUserIndex().ToNumber(user.UserId)) {
+			} else if w.RankingModel != nil && !w.RankingModel.Invalid() && w.RankingModel.IsUserPredictable(w.RankingModel.GetUserIndex().Id(user.UserId)) {
 				score = float64(w.RankingModel.Predict(user.UserId, itemId))
 			} else {
 				upper := upperBounds[""]

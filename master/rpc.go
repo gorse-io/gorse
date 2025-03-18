@@ -19,8 +19,8 @@ import (
 	"encoding/json"
 	"github.com/juju/errors"
 	"github.com/zhenghaoz/gorse/base/log"
+	"github.com/zhenghaoz/gorse/model/cf"
 	"github.com/zhenghaoz/gorse/model/click"
-	"github.com/zhenghaoz/gorse/model/ranking"
 	"github.com/zhenghaoz/gorse/protocol"
 	"github.com/zhenghaoz/gorse/storage/meta"
 	"go.uber.org/zap"
@@ -107,7 +107,7 @@ func (m *Master) GetRankingModel(version *protocol.VersionInfo, sender protocol.
 				log.Logger().Error("fail to close pipe", zap.Error(err))
 			}
 		}(writer)
-		err := ranking.MarshalModel(writer, m.RankingModel)
+		err := cf.MarshalModel(writer, m.RankingModel)
 		if err != nil {
 			log.Logger().Error("fail to marshal ranking model", zap.Error(err))
 			encoderError = err

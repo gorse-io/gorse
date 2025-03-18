@@ -20,8 +20,8 @@ import (
 	"github.com/juju/errors"
 	"github.com/zhenghaoz/gorse/base/encoding"
 	"github.com/zhenghaoz/gorse/base/log"
+	"github.com/zhenghaoz/gorse/model/cf"
 	"github.com/zhenghaoz/gorse/model/click"
-	"github.com/zhenghaoz/gorse/model/ranking"
 	"go.uber.org/zap"
 	"os"
 	"path/filepath"
@@ -32,8 +32,8 @@ type LocalCache struct {
 	path                string
 	RankingModelName    string
 	RankingModelVersion int64
-	RankingModel        ranking.MatrixFactorization
-	RankingModelScore   ranking.Score
+	RankingModel        cf.MatrixFactorization
+	RankingModelScore   cf.Score
 	ClickModelVersion   int64
 	ClickModelScore     click.Score
 	ClickModel          click.FactorizationMachine
@@ -74,7 +74,7 @@ func LoadLocalCache(path string) (*LocalCache, error) {
 		return state, errors.Trace(err)
 	}
 	// 3. ranking model
-	state.RankingModel, err = ranking.UnmarshalModel(f)
+	state.RankingModel, err = cf.UnmarshalModel(f)
 	if err != nil {
 		return state, errors.Trace(err)
 	}
@@ -132,7 +132,7 @@ func (c *LocalCache) WriteLocalCache() error {
 		return errors.Trace(err)
 	}
 	// 3. ranking model
-	err = ranking.MarshalModel(f, c.RankingModel)
+	err = cf.MarshalModel(f, c.RankingModel)
 	if err != nil {
 		return errors.Trace(err)
 	}

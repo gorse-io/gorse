@@ -33,15 +33,16 @@ import (
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/encoding"
 	"github.com/zhenghaoz/gorse/base/log"
-	"github.com/zhenghaoz/gorse/base/parallel"
 	"github.com/zhenghaoz/gorse/base/progress"
 	"github.com/zhenghaoz/gorse/base/task"
+	"github.com/zhenghaoz/gorse/common/parallel"
 	"github.com/zhenghaoz/gorse/common/sizeof"
 	"github.com/zhenghaoz/gorse/common/util"
 	"github.com/zhenghaoz/gorse/config"
+	"github.com/zhenghaoz/gorse/dataset"
 	"github.com/zhenghaoz/gorse/model"
+	"github.com/zhenghaoz/gorse/model/cf"
 	"github.com/zhenghaoz/gorse/model/click"
-	"github.com/zhenghaoz/gorse/model/ranking"
 	"github.com/zhenghaoz/gorse/protocol"
 	"github.com/zhenghaoz/gorse/server"
 	"github.com/zhenghaoz/gorse/storage"
@@ -78,8 +79,8 @@ type Master struct {
 	metaStore meta.Database
 
 	// ranking dataset
-	rankingTrainSet  *ranking.DataSet
-	rankingTestSet   *ranking.DataSet
+	rankingTrainSet  dataset.CFSplit
+	rankingTestSet   dataset.CFSplit
 	rankingDataMutex sync.RWMutex
 
 	// click dataset
@@ -89,9 +90,9 @@ type Master struct {
 
 	// ranking model
 	rankingModelName     string
-	rankingScore         ranking.Score
+	rankingScore         cf.Score
 	rankingModelMutex    sync.RWMutex
-	rankingModelSearcher *ranking.ModelSearcher
+	rankingModelSearcher *cf.ModelSearcher
 
 	// click model
 	clickScore         click.Score
@@ -131,6 +132,11 @@ func NewMaster(cfg *config.Config, cacheFile string, managedMode bool) *Master {
 	// setup OpenAI client
 	clientConfig := openai.DefaultConfig(cfg.OpenAI.AuthToken)
 	clientConfig.BaseURL = cfg.OpenAI.BaseURL
+	// setup OpenAI logger
+	log.InitOpenAILogger(cfg.OpenAI.LogFile)
+	// setup OpenAI rate limiter
+	parallel.InitChatCompletionLimiters(cfg.OpenAI.ChatCompletionRPM, cfg.OpenAI.ChatCompletionTPM)
+	parallel.InitEmbeddingLimiters(cfg.OpenAI.EmbeddingRPM, cfg.OpenAI.EmbeddingTPM)
 
 	m := &Master{
 		// create task monitor
@@ -141,7 +147,7 @@ func NewMaster(cfg *config.Config, cacheFile string, managedMode bool) *Master {
 		openAIClient:  openai.NewClientWithConfig(clientConfig),
 		// default ranking model
 		rankingModelName: "bpr",
-		rankingModelSearcher: ranking.NewModelSearcher(
+		rankingModelSearcher: cf.NewModelSearcher(
 			cfg.Recommend.Collaborative.ModelSearchEpoch,
 			cfg.Recommend.Collaborative.ModelSearchTrials,
 			cfg.Recommend.Collaborative.EnableModelSizeSearch,
@@ -157,8 +163,8 @@ func NewMaster(cfg *config.Config, cacheFile string, managedMode bool) *Master {
 				Config:       cfg,
 				CacheClient:  cache.NoDatabase{},
 				DataClient:   data.NoDatabase{},
-				RankingModel: ranking.NewBPR(nil),
-				ClickModel:   click.NewFM(click.FMClassification, nil),
+				RankingModel: cf.NewBPR(nil),
+				ClickModel:   click.NewFM(nil),
 				// init versions
 				RankingModelVersion: rand.Int63(),
 				ClickModelVersion:   rand.Int63(),
@@ -363,7 +369,7 @@ func (m *Master) RunPrivilegedTasksLoop() {
 			log.Logger().Error("failed to load ranking dataset", zap.Error(err))
 			continue
 		}
-		if m.rankingTrainSet.UserCount() == 0 && m.rankingTrainSet.ItemCount() == 0 && m.rankingTrainSet.Count() == 0 {
+		if m.rankingTrainSet.CountUsers() == 0 && m.rankingTrainSet.CountItems() == 0 && m.rankingTrainSet.Count() == 0 {
 			log.Logger().Warn("empty ranking dataset",
 				zap.Strings("positive_feedback_type", m.Config.Recommend.DataSource.PositiveFeedbackTypes))
 			continue
@@ -464,7 +470,7 @@ func (m *Master) RunManagedTasksLoop() {
 				log.Logger().Error("failed to load ranking dataset", zap.Error(err))
 				return
 			}
-			if m.rankingTrainSet.UserCount() == 0 && m.rankingTrainSet.ItemCount() == 0 && m.rankingTrainSet.Count() == 0 {
+			if m.rankingTrainSet.CountUsers() == 0 && m.rankingTrainSet.CountItems() == 0 && m.rankingTrainSet.Count() == 0 {
 				log.Logger().Warn("empty ranking dataset",
 					zap.Strings("positive_feedback_type", m.Config.Recommend.DataSource.PositiveFeedbackTypes))
 				return

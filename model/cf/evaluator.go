@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package ranking
+package cf
 
 import (
 	"github.com/chewxy/math32"
@@ -20,7 +20,8 @@ import (
 	"github.com/thoas/go-funk"
 	"github.com/zhenghaoz/gorse/base/floats"
 	"github.com/zhenghaoz/gorse/base/heap"
-	"github.com/zhenghaoz/gorse/base/parallel"
+	"github.com/zhenghaoz/gorse/common/parallel"
+	"github.com/zhenghaoz/gorse/dataset"
 )
 
 /* Evaluate Item Ranking */
@@ -29,7 +30,7 @@ import (
 type Metric func(targetSet mapset.Set[int32], rankList []int32) float32
 
 // Evaluate evaluates a model in top-n tasks.
-func Evaluate(estimator MatrixFactorization, testSet, trainSet *DataSet, topK, numCandidates, nJobs int, scorers ...Metric) []float32 {
+func Evaluate(estimator MatrixFactorization, testSet, trainSet dataset.CFSplit, topK, numCandidates, nJobs int, scorers ...Metric) []float32 {
 	partSum := make([][]float32, nJobs)
 	partCount := make([]float32, nJobs)
 	for i := 0; i < nJobs; i++ {
@@ -38,15 +39,15 @@ func Evaluate(estimator MatrixFactorization, testSet, trainSet *DataSet, topK, n
 	//rng := NewRandomGenerator(0)
 	// For all UserFeedback
 	negatives := testSet.NegativeSample(trainSet, numCandidates)
-	_ = parallel.Parallel(testSet.UserCount(), nJobs, func(workerId, userIndex int) error {
+	_ = parallel.Parallel(testSet.CountUsers(), nJobs, func(workerId, userIndex int) error {
 		// Find top-n ItemFeedback in test set
-		targetSet := mapset.NewSet(testSet.UserFeedback[userIndex]...)
+		targetSet := mapset.NewSet(testSet.GetUserFeedback()[userIndex]...)
 		if targetSet.Cardinality() > 0 {
 			// Sample negative samples
 			//userTrainSet := NewSet(trainSet.UserFeedback[userIndex])
 			negativeSample := negatives[userIndex]
 			candidates := make([]int32, 0, targetSet.Cardinality()+len(negativeSample))
-			candidates = append(candidates, testSet.UserFeedback[userIndex]...)
+			candidates = append(candidates, testSet.GetUserFeedback()[userIndex]...)
 			candidates = append(candidates, negativeSample...)
 			// Find top-n ItemFeedback in predictions
 			rankList, _ := Rank(estimator, int32(userIndex), candidates, topK)
@@ -160,7 +161,7 @@ func Rank(model MatrixFactorization, userId int32, candidates []int32, topN int)
 	// Get top-n list
 	itemsHeap := heap.NewTopKFilter[int32, float32](topN)
 	for _, itemId := range candidates {
-		itemsHeap.Push(itemId, model.InternalPredict(userId, itemId))
+		itemsHeap.Push(itemId, model.internalPredict(userId, itemId))
 	}
 	elem, scores := itemsHeap.PopAll()
 	recommends := make([]int32, len(elem))

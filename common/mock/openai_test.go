@@ -16,12 +16,13 @@ package mock
 
 import (
 	"context"
-	"github.com/juju/errors"
-	"github.com/sashabaranov/go-openai"
-	"github.com/stretchr/testify/suite"
 	"io"
 	"strings"
 	"testing"
+
+	"github.com/juju/errors"
+	"github.com/sashabaranov/go-openai"
+	"github.com/stretchr/testify/suite"
 )
 
 type OpenAITestSuite struct {
@@ -97,7 +98,6 @@ func (suite *OpenAITestSuite) TestChatCompletionStream() {
 }
 
 func (suite *OpenAITestSuite) TestEmbeddings() {
-	suite.server.Embeddings([]float32{1, 2, 3})
 	resp, err := suite.client.CreateEmbeddings(
 		context.Background(),
 		openai.EmbeddingRequest{
@@ -106,7 +106,7 @@ func (suite *OpenAITestSuite) TestEmbeddings() {
 		},
 	)
 	suite.NoError(err)
-	suite.Equal([]float32{1, 2, 3}, resp.Data[0].Embedding)
+	suite.Equal([]float32{139, 26, 153, 83, 196, 97, 18, 150, 168, 39, 171, 248, 196, 120, 4, 215}, resp.Data[0].Embedding)
 }
 
 func TestOpenAITestSuite(t *testing.T) {

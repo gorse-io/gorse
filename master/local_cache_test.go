@@ -17,20 +17,17 @@ package master
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/zhenghaoz/gorse/base"
+	"github.com/zhenghaoz/gorse/dataset"
 	"github.com/zhenghaoz/gorse/model"
+	"github.com/zhenghaoz/gorse/model/cf"
 	"github.com/zhenghaoz/gorse/model/click"
-	"github.com/zhenghaoz/gorse/model/ranking"
 )
 
-func newRankingDataset() (*ranking.DataSet, *ranking.DataSet) {
-	dataset := &ranking.DataSet{
-		UserIndex: base.NewMapIndex(),
-		ItemIndex: base.NewMapIndex(),
-	}
-	return dataset, dataset
+func newRankingDataset() (*dataset.Dataset, *dataset.Dataset) {
+	return dataset.NewDataset(time.Now(), 0, 0), dataset.NewDataset(time.Now(), 0, 0)
 }
 
 func newClickDataset() (*click.Dataset, *click.Dataset) {
@@ -58,19 +55,19 @@ func TestLocalCache(t *testing.T) {
 
 	// write and load
 	trainSet, testSet := newRankingDataset()
-	bpr := ranking.NewBPR(model.Params{model.NEpochs: 0})
+	bpr := cf.NewBPR(model.Params{model.NEpochs: 0})
 	bpr.Fit(context.Background(), trainSet, testSet, nil)
 	cache.RankingModel = bpr
 	cache.RankingModelName = "bpr"
 	cache.RankingModelVersion = 123
-	cache.RankingModelScore = ranking.Score{Precision: 1, NDCG: 2, Recall: 3}
+	cache.RankingModelScore = cf.Score{Precision: 1, NDCG: 2, Recall: 3}
 
 	train, test := newClickDataset()
-	fm := click.NewFM(click.FMClassification, model.Params{model.NEpochs: 0})
+	fm := click.NewFM(model.Params{model.NEpochs: 0})
 	fm.Fit(context.Background(), train, test, nil)
 	cache.ClickModel = fm
 	cache.ClickModelVersion = 456
-	cache.ClickModelScore = click.Score{Precision: 1, RMSE: 100, Task: click.FMClassification}
+	cache.ClickModelScore = click.Score{Precision: 1, RMSE: 100}
 	assert.NoError(t, cache.WriteLocalCache())
 
 	read, err := LoadLocalCache(path)
@@ -78,8 +75,8 @@ func TestLocalCache(t *testing.T) {
 	assert.NotNil(t, read.RankingModel)
 	assert.Equal(t, "bpr", read.RankingModelName)
 	assert.Equal(t, int64(123), read.RankingModelVersion)
-	assert.Equal(t, ranking.Score{Precision: 1, NDCG: 2, Recall: 3}, read.RankingModelScore)
+	assert.Equal(t, cf.Score{Precision: 1, NDCG: 2, Recall: 3}, read.RankingModelScore)
 	assert.NotNil(t, read.ClickModel)
 	assert.Equal(t, int64(456), read.ClickModelVersion)
-	assert.Equal(t, click.Score{Precision: 1, RMSE: 100, Task: click.FMClassification}, read.ClickModelScore)
+	assert.Equal(t, click.Score{Precision: 1, RMSE: 100}, read.ClickModelScore)
 }

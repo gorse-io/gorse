@@ -37,8 +37,8 @@ import (
 	"github.com/stretchr/testify/suite"
 	"github.com/zhenghaoz/gorse/common/mock"
 	"github.com/zhenghaoz/gorse/config"
+	"github.com/zhenghaoz/gorse/model/cf"
 	"github.com/zhenghaoz/gorse/model/click"
-	"github.com/zhenghaoz/gorse/model/ranking"
 	"github.com/zhenghaoz/gorse/protocol"
 	"github.com/zhenghaoz/gorse/server"
 	"github.com/zhenghaoz/gorse/storage/cache"
@@ -369,7 +369,7 @@ func (suite *MasterAPITestSuite) TestGetCluster() {
 func (suite *MasterAPITestSuite) TestGetStats() {
 	ctx := context.Background()
 	// set stats
-	suite.rankingScore = ranking.Score{Precision: 0.1}
+	suite.rankingScore = cf.Score{Precision: 0.1}
 	suite.clickScore = click.Score{Precision: 0.2}
 	err := suite.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.NumUsers), 123))
 	suite.NoError(err)
@@ -391,7 +391,7 @@ func (suite *MasterAPITestSuite) TestGetStats() {
 			NumItems:            234,
 			NumValidPosFeedback: 345,
 			NumValidNegFeedback: 456,
-			MatchingModelScore:  ranking.Score{Precision: 0.1},
+			MatchingModelScore:  cf.Score{Precision: 0.1},
 			RankingModelScore:   click.Score{Precision: 0.2},
 			BinaryVersion:       "unknown-version",
 		})).

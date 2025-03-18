@@ -16,12 +16,15 @@ package mock
 
 import (
 	"bytes"
+	"crypto/md5"
 	"encoding/json"
 	"fmt"
-	"github.com/emicklei/go-restful/v3"
-	"github.com/sashabaranov/go-openai"
 	"net"
 	"net/http"
+
+	"github.com/emicklei/go-restful/v3"
+	"github.com/samber/lo"
+	"github.com/sashabaranov/go-openai"
 )
 
 type OpenAIServer struct {
@@ -29,8 +32,6 @@ type OpenAIServer struct {
 	httpServer *http.Server
 	authToken  string
 	ready      chan struct{}
-
-	mockEmbeddings []float32
 }
 
 func NewOpenAIServer() *OpenAIServer {
@@ -81,10 +82,6 @@ func (s *OpenAIServer) Close() error {
 	return s.httpServer.Close()
 }
 
-func (s *OpenAIServer) Embeddings(embeddings []float32) {
-	s.mockEmbeddings = embeddings
-}
-
 func (s *OpenAIServer) chatCompletion(req *restful.Request, resp *restful.Response) {
 	var r openai.ChatCompletionRequest
 	err := req.ReadEntity(&r)
@@ -92,8 +89,11 @@ func (s *OpenAIServer) chatCompletion(req *restful.Request, resp *restful.Respon
 		_ = resp.WriteError(http.StatusBadRequest, err)
 		return
 	}
+	content := r.Messages[0].Content
+	if r.Model == "deepseek-r1" {
+		content = "<think>To be or not to be, that is the question.</think>" + content
+	}
 	if r.Stream {
-		content := r.Messages[0].Content
 		for i := 0; i < len(content); i += 8 {
 			buf := bytes.NewBuffer(nil)
 			buf.WriteString("data: ")
@@ -112,7 +112,7 @@ func (s *OpenAIServer) chatCompletion(req *restful.Request, resp *restful.Respon
 		_ = resp.WriteEntity(openai.ChatCompletionResponse{
 			Choices: []openai.ChatCompletionChoice{{
 				Message: openai.ChatCompletionMessage{
-					Content: r.Messages[0].Content,
+					Content: content,
 				},
 			}},
 		})
@@ -120,15 +120,35 @@ func (s *OpenAIServer) chatCompletion(req *restful.Request, resp *restful.Respon
 }
 
 func (s *OpenAIServer) embeddings(req *restful.Request, resp *restful.Response) {
+	// parse request
 	var r openai.EmbeddingRequest
 	err := req.ReadEntity(&r)
 	if err != nil {
 		_ = resp.WriteError(http.StatusBadRequest, err)
 		return
 	}
+	input, ok := r.Input.(string)
+	if !ok {
+		_ = resp.WriteError(http.StatusBadRequest, fmt.Errorf("invalid input type"))
+		return
+	}
+
+	// write response
 	_ = resp.WriteEntity(openai.EmbeddingResponse{
 		Data: []openai.Embedding{{
-			Embedding: s.mockEmbeddings,
+			Embedding: Hash(input),
 		}},
+	})
+}
+
+func Hash(input string) []float32 {
+	hasher := md5.New()
+	_, err := hasher.Write([]byte(input))
+	if err != nil {
+		panic(err)
+	}
+	h := hasher.Sum(nil)
+	return lo.Map(h, func(b byte, _ int) float32 {
+		return float32(b)
 	})
 }

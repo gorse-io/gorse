@@ -15,12 +15,13 @@
 package encoding
 
 import (
+	"io"
+
 	"github.com/zhenghaoz/gorse/base/log"
+	"github.com/zhenghaoz/gorse/model/cf"
 	"github.com/zhenghaoz/gorse/model/click"
-	"github.com/zhenghaoz/gorse/model/ranking"
 	"github.com/zhenghaoz/gorse/protocol"
 	"go.uber.org/zap"
-	"io"
 )
 
 // UnmarshalClickModel unmarshal click model from gRPC.
@@ -67,7 +68,7 @@ func UnmarshalClickModel(receiver protocol.Master_GetClickModelClient) (click.Fa
 }
 
 // UnmarshalRankingModel unmarshal ranking model from gRPC.
-func UnmarshalRankingModel(receiver protocol.Master_GetRankingModelClient) (ranking.MatrixFactorization, error) {
+func UnmarshalRankingModel(receiver protocol.Master_GetRankingModelClient) (cf.MatrixFactorization, error) {
 	// receive model
 	reader, writer := io.Pipe()
 	var receiverError error
@@ -99,7 +100,7 @@ func UnmarshalRankingModel(receiver protocol.Master_GetRankingModelClient) (rank
 		}
 	}()
 	// unmarshal model
-	model, err := ranking.UnmarshalModel(reader)
+	model, err := cf.UnmarshalModel(reader)
 	if err != nil {
 		return nil, err
 	}

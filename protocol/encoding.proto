@@ -1,4 +1,4 @@
-// Copyright 2020 gorse Project Authors
+// Copyright 2025 gorse Project Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,21 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package parallel
+syntax = "proto3";
 
-type Future struct {
-	done chan struct{}
+option go_package = "github.com/zhenghaoz/gorse/protocol";
+
+package protocol;
+
+message Tensor {
+  repeated string key = 1;
+  repeated int32 shape = 2;
+  repeated float data = 3;
 }
 
-func Async(f func()) *Future {
-	future := &Future{done: make(chan struct{})}
-	go func() {
-		f()
-		close(future.done)
-	}()
-	return future
-}
-
-func (f *Future) Wait() {
-	<-f.done
+message LatentFactor {
+  string id = 1;
+  repeated float data = 2;
 }
