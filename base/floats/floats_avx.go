@@ -18,7 +18,7 @@ func _mm256_mul_const(a, b, n unsafe.Pointer)
 func _mm256_mul_to(a, b, c, n unsafe.Pointer)
 
 //go:noescape
-func _mm256_dot(a, b, n, ret unsafe.Pointer)
+func _mm256_dot(a, b, n unsafe.Pointer) (result float32)
 
 //go:noescape
-func _mm256_euclidean(a, b, n, ret unsafe.Pointer)
+func _mm256_euclidean(a, b, n unsafe.Pointer) (result float32)
