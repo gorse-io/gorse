@@ -88,14 +88,10 @@ jobs:
         unzip ~/.gorse/download/criteo.zip -d ~/.gorse/dataset
         unzip ~/.gorse/download/mnist.zip -d ~/.gorse/dataset
 
-    - name: Set up Go 1.23.x
-      uses: actions/setup-go@v4
+    - uses: actions/checkout@v2
+    - uses: actions/setup-go@v5
       with:
-        go-version: 1.23.x
-      id: go
-
-    - name: Check out code into the Go module directory
-      uses: actions/checkout@v2
+        go-version-file: ./go.mod
 
     - name: Test
       run: go test -timeout 30m -v ./... -coverprofile=coverage.txt -covermode=atomic -coverpkg=./...
@@ -137,14 +133,10 @@ jobs:
         unzip ~/.gorse/download/criteo.zip -d ~/.gorse/dataset
         unzip ~/.gorse/download/mnist.zip -d ~/.gorse/dataset
 
-    - name: Set up Go 1.23.x
-      uses: actions/setup-go@v4
+    - uses: actions/checkout@v2
+    - uses: actions/setup-go@v5
       with:
-        go-version: 1.23.x
-      id: go
-
-    - name: Check out code into the Go module directory
-      uses: actions/checkout@v2
+        go-version-file: ./go.mod
 
     - name: Test
       run: go test -timeout 20m -v ./... -skip "TestPostgres|TestMySQL|TestMongo|TestRedis|TestClickHouse"
@@ -172,14 +164,10 @@ jobs:
         Expand-Archive ~/.gorse/download/criteo.zip -DestinationPath ~/.gorse/dataset
         Expand-Archive ~/.gorse/download/mnist.zip -DestinationPath ~/.gorse/dataset
 
-    - name: Set up Go 1.23.x
-      uses: actions/setup-go@v4
+    - uses: actions/checkout@v2
+    - uses: actions/setup-go@v5
       with:
-        go-version: 1.23.x
-      id: go
-
-    - name: Check out code into the Go module directory
-      uses: actions/checkout@v2
+        go-version-file: ./go.mod
 
     - name: Test
       run: go test -timeout 20m -v ./... -skip "TestPostgres|TestMySQL|TestMongo|TestRedis|TestClickHouse"
@@ -218,11 +206,9 @@ jobs:
         # Retry all errors, including 404. This option might trigger curl upgrade.
         retry-all: true
 
-    - name: Set up Go 1.23.x
-      uses: actions/setup-go@v4
+    - uses: actions/setup-go@v5
       with:
-        go-version: 1.23.x
-      id: go
+        go-version-file: ./go.mod
 
     - name: Test
       run: go test -tags='integrate_test' ./client/
@@ -262,14 +248,10 @@ jobs:
             sleep 10
           done
 
-      - name: Set up Go 1.23.x
-        uses: actions/setup-go@v4
+      - uses: actions/checkout@v2
+      - uses: actions/setup-go@v5
         with:
-          go-version: 1.23.x
-        id: go
-
-      - name: Check out code into the Go module directory
-        uses: actions/checkout@v2
+          go-version-file: ./go.mod
 
       - name: Test MariaDB
         run: go test ./storage/data -run TestMySQL
