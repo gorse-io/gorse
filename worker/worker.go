@@ -881,7 +881,7 @@ func (w *Worker) collaborativeRecommendHNSW(rankingIndex *logics.MatrixFactoriza
 		log.Logger().Error("failed to cache collaborative filtering recommendation result", zap.String("user_id", userId), zap.Error(err))
 		return nil, 0, errors.Trace(err)
 	}
-	if err := w.CacheClient.DeleteScores(ctx, []string{cache.CollaborativeRecommend}, cache.ScoreCondition{Before: &localStartTime}); err != nil {
+	if err := w.CacheClient.DeleteScores(ctx, []string{cache.CollaborativeRecommend}, cache.ScoreCondition{Before: &localStartTime, Subset: proto.String(userId)}); err != nil {
 		log.Logger().Error("failed to delete stale collaborative filtering recommendation result", zap.String("user_id", userId), zap.Error(err))
 		return nil, 0, errors.Trace(err)
 	}
