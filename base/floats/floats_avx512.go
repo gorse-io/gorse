@@ -6,19 +6,19 @@ package floats
 import "unsafe"
 
 //go:noescape
-func _mm512_mul_const_add_to(a, b, c, n unsafe.Pointer)
+func _mm512_mul_const_add_to(a, b, c unsafe.Pointer, n int64)
 
 //go:noescape
-func _mm512_mul_const_to(a, b, c, n unsafe.Pointer)
+func _mm512_mul_const_to(a, b, c unsafe.Pointer, n int64)
 
 //go:noescape
-func _mm512_mul_const(a, b, n unsafe.Pointer)
+func _mm512_mul_const(a, b unsafe.Pointer, n int64)
 
 //go:noescape
-func _mm512_mul_to(a, b, c, n unsafe.Pointer)
+func _mm512_mul_to(a, b, c unsafe.Pointer, n int64)
 
 //go:noescape
-func _mm512_dot(a, b, n unsafe.Pointer) (result float32)
+func _mm512_dot(a, b unsafe.Pointer, n int64) (result float32)
 
 //go:noescape
-func _mm512_euclidean(a, b, n unsafe.Pointer) (result float32)
+func _mm512_euclidean(a, b unsafe.Pointer, n int64) (result float32)
