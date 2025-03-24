@@ -40,7 +40,7 @@ func (i implementation) String() string {
 
 func (i implementation) mulConstAddTo(a []float32, b float32, c []float32) {
 	if i == Neon {
-		vmul_const_add_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), unsafe.Pointer(&c[0]), unsafe.Pointer(uintptr(len(a))))
+		vmul_const_add_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), unsafe.Pointer(&c[0]), int64(len(a)))
 	} else {
 		mulConstAddTo(a, b, c)
 	}
@@ -48,7 +48,7 @@ func (i implementation) mulConstAddTo(a []float32, b float32, c []float32) {
 
 func (i implementation) mulConstTo(a []float32, b float32, c []float32) {
 	if i == Neon {
-		vmul_const_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), unsafe.Pointer(&c[0]), unsafe.Pointer(uintptr(len(a))))
+		vmul_const_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), unsafe.Pointer(&c[0]), int64(len(a)))
 	} else {
 		mulConstTo(a, b, c)
 	}
@@ -56,7 +56,7 @@ func (i implementation) mulConstTo(a []float32, b float32, c []float32) {
 
 func (i implementation) mulTo(a, b, c []float32) {
 	if i == Neon {
-		vmul_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), unsafe.Pointer(&c[0]), unsafe.Pointer(uintptr(len(a))))
+		vmul_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), unsafe.Pointer(&c[0]), int64(len(a)))
 	} else {
 		mulTo(a, b, c)
 	}
@@ -64,7 +64,7 @@ func (i implementation) mulTo(a, b, c []float32) {
 
 func (i implementation) mulConst(a []float32, b float32) {
 	if i == Neon {
-		vmul_const(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), unsafe.Pointer(uintptr(len(a))))
+		vmul_const(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), int64(len(a)))
 	} else {
 		mulConst(a, b)
 	}
@@ -72,7 +72,7 @@ func (i implementation) mulConst(a []float32, b float32) {
 
 func (i implementation) dot(a, b []float32) float32 {
 	if i == Neon {
-		return vdot(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), unsafe.Pointer(uintptr(len(a))))
+		return vdot(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), int64(len(a)))
 	} else {
 		return dot(a, b)
 	}
@@ -80,7 +80,7 @@ func (i implementation) dot(a, b []float32) float32 {
 
 func (i implementation) euclidean(a, b []float32) float32 {
 	if i == Neon {
-		return veuclidean(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), unsafe.Pointer(uintptr(len(a))))
+		return veuclidean(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), int64(len(a)))
 	} else {
 		return euclidean(a, b)
 	}

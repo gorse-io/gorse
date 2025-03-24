@@ -6,19 +6,19 @@ package floats
 import "unsafe"
 
 //go:noescape
-func vmul_const_add_to(a, b, c, n unsafe.Pointer)
+func vmul_const_add_to(a, b, c unsafe.Pointer, n int64)
 
 //go:noescape
-func vmul_const_to(a, b, c, n unsafe.Pointer)
+func vmul_const_to(a, b, c unsafe.Pointer, n int64)
 
 //go:noescape
-func vmul_const(a, b, n unsafe.Pointer)
+func vmul_const(a, b unsafe.Pointer, n int64)
 
 //go:noescape
-func vmul_to(a, b, c, n unsafe.Pointer)
+func vmul_to(a, b, c unsafe.Pointer, n int64)
 
 //go:noescape
-func vdot(a, b, n unsafe.Pointer) (result float32)
+func vdot(a, b unsafe.Pointer, n int64) (result float32)
 
 //go:noescape
-func veuclidean(a, b, n unsafe.Pointer) (result float32)
+func veuclidean(a, b unsafe.Pointer, n int64) (result float32)
