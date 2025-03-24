@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package click
+package ctr
 
 import (
 	"github.com/stretchr/testify/assert"

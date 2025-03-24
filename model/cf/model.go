@@ -425,8 +425,8 @@ func (bpr *BPR) GetParamsGrid(withSize bool) model.ParamsGrid {
 func (bpr *BPR) Fit(ctx context.Context, trainSet, valSet dataset.CFSplit, config *FitConfig) Score {
 	config = config.LoadDefaultIfNil()
 	log.Logger().Info("fit bpr",
-		zap.Int("train_set_size", trainSet.Count()),
-		zap.Int("test_set_size", valSet.Count()),
+		zap.Int("train_set_size", trainSet.CountFeedback()),
+		zap.Int("test_set_size", valSet.CountFeedback()),
 		zap.Any("params", bpr.GetParams()),
 		zap.Any("config", config))
 	bpr.Init(trainSet)
@@ -463,7 +463,7 @@ func (bpr *BPR) Fit(ctx context.Context, trainSet, valSet dataset.CFSplit, confi
 		// Training epoch
 		numJobs := config.AvailableJobs()
 		cost := make([]float32, numJobs)
-		_ = parallel.Parallel(trainSet.Count(), numJobs, func(workerId, _ int) error {
+		_ = parallel.Parallel(trainSet.CountFeedback(), numJobs, func(workerId, _ int) error {
 			// Select a user
 			var userIndex int32
 			var ratingCount int
@@ -613,8 +613,8 @@ func (ccd *CCD) Init(trainSet dataset.CFSplit) {
 func (ccd *CCD) Fit(ctx context.Context, trainSet, valSet dataset.CFSplit, config *FitConfig) Score {
 	config = config.LoadDefaultIfNil()
 	log.Logger().Info("fit ccd",
-		zap.Int("train_set_size", trainSet.Count()),
-		zap.Int("test_set_size", valSet.Count()),
+		zap.Int("train_set_size", trainSet.CountFeedback()),
+		zap.Int("test_set_size", valSet.CountFeedback()),
 		zap.Any("params", ccd.GetParams()),
 		zap.Any("config", config))
 	ccd.Init(trainSet)
