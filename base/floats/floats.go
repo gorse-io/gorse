@@ -58,6 +58,15 @@ func mulConst(a []float32, b float32) {
 	}
 }
 
+func matMul(a, b, c []float32, m, n, k int) {
+	for i := 0; i < m; i++ {
+		for j, aij := range a[i*n : (i+1)*n] {
+			// C_j += A_{ij} * B_i
+			MulConstAddTo(b[j*k:(j+1)*k], aij, c[i*k:(i+1)*k])
+		}
+	}
+}
+
 // MatZero fills zeros in a matrix of 32-bit floats.
 func MatZero(x [][]float32) {
 	for i := range x {
@@ -187,4 +196,11 @@ func Euclidean(a, b []float32) float32 {
 		panic("floats: slice lengths do not match")
 	}
 	return impl.euclidean(a, b)
+}
+
+func MatMul(a, b, c []float32, m, k, n int) {
+	if len(a) != m*k || len(b) != k*n || len(c) != m*n {
+		panic("floats: matrix dimensions do not match")
+	}
+	impl.matMul(a, b, c, m, k, n)
 }

@@ -140,3 +140,13 @@ float veuclidean(float *a, float *b, long n) {
     float32x2_t r = vsqrt_f32(v);
     return vget_lane_f32(r, 0);
 }
+
+void vmat_mul(float *a, float *b, float *c, long m, long n, long k) {
+    for (int i = 0; i < m; i++) {
+        for (int l = 0; l < n; l++) {
+            for (int j = 0; j < k; j++) {
+                c[i * k + j] += a[i * n + l] * b[l * k + j];
+            }
+        }
+    }
+}

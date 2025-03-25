@@ -1,4 +1,4 @@
-// Copyright 2020 gorse Project Authors
+// Copyright 2025 gorse Project Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 package floats
 
 import (
@@ -149,6 +150,15 @@ func TestEuclidean(t *testing.T) {
 	assert.Panics(t, func() { Euclidean([]float32{1}, nil) })
 }
 
+func TestMatMul(t *testing.T) {
+	a := []float32{1, 2, 3, 4, 5, 6}
+	b := []float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}
+	c := make([]float32, 8)
+	target := []float32{38, 44, 50, 56, 83, 98, 113, 128}
+	MatMul(a, b, c, 2, 3, 4)
+	assert.Equal(t, target, c)
+}
+
 func TestNative_Dot(t *testing.T) {
 	a := []float32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
 	b := []float32{0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20}
@@ -189,4 +199,13 @@ func TestNative_MulConst(t *testing.T) {
 	a := []float32{1, 2, 3, 4}
 	mulConst(a, 2)
 	assert.Equal(t, []float32{2, 4, 6, 8}, a)
+}
+
+func TestNative_MatMul(t *testing.T) {
+	a := []float32{1, 2, 3, 4, 5, 6}
+	b := []float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}
+	c := make([]float32, 8)
+	target := []float32{38, 44, 50, 56, 83, 98, 113, 128}
+	matMul(a, b, c, 2, 3, 4)
+	assert.Equal(t, target, c)
 }
