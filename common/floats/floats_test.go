@@ -205,27 +205,33 @@ type SIMDTestSuite struct {
 	Feature
 }
 
+func (suite *SIMDTestSuite) SetupSuite() {
+	if feature&suite.Feature != suite.Feature {
+		suite.T().Skipf("%s is not supported", (suite.Feature - (feature & suite.Feature)).String())
+	}
+}
+
 func (suite *SIMDTestSuite) TestMulConstAddTo() {
-	a := []float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
-	b := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100}
+	a := []float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20}
+	b := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200}
 	suite.mulConstAddTo(a, 2, b)
-	c := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100}
+	c := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200}
 	mulConstAddTo(a, 2, c)
 	assert.Equal(suite.T(), c, b)
 }
 
 func (suite *SIMDTestSuite) TestMulConstTo() {
-	a := []float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
-	b := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100}
+	a := []float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20}
+	b := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200}
 	suite.mulConstTo(a, 2, b)
-	c := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100}
+	c := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200}
 	mulConstTo(a, 2, c)
 	assert.Equal(suite.T(), c, b)
 }
 
 func (suite *SIMDTestSuite) TestMulTo() {
-	a := []float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
-	b := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100}
+	a := []float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20}
+	b := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200}
 	expected, actual := make([]float32, len(a)), make([]float32, len(a))
 	suite.mulTo(a, b, actual)
 	mulTo(a, b, expected)
@@ -233,24 +239,24 @@ func (suite *SIMDTestSuite) TestMulTo() {
 }
 
 func (suite *SIMDTestSuite) TestMulConst() {
-	b := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100}
+	b := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200}
 	suite.mulConst(b, 2)
-	c := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100}
+	c := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200}
 	mulConst(c, 2)
 	assert.Equal(suite.T(), c, b)
 }
 
 func (suite *SIMDTestSuite) TestDot() {
-	a := []float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
-	b := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100}
+	a := []float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20}
+	b := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200}
 	actual := suite.dot(a, b)
 	expected := dot(a, b)
 	assert.Equal(suite.T(), expected, actual)
 }
 
 func (suite *SIMDTestSuite) TestEuclidean() {
-	a := []float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
-	b := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100}
+	a := []float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20}
+	b := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200}
 	actual := suite.euclidean(a, b)
 	expected := euclidean(a, b)
 	assert.Equal(suite.T(), expected, actual)

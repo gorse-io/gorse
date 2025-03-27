@@ -17,6 +17,7 @@
 package floats
 
 import (
+	"strings"
 	"unsafe"
 
 	"github.com/klauspost/cpuid/v2"
@@ -25,97 +26,110 @@ import (
 //go:generate goat src/floats_avx.c -O3 -mavx
 //go:generate goat src/floats_avx512.c -O3 -mavx -mfma -mavx512f -mavx512dq
 
-var impl = Default
-
-func init() {
-	if cpuid.CPU.Supports(cpuid.AVX512F, cpuid.AVX512DQ) {
-		impl = AVX512
-	} else if cpuid.CPU.Supports(cpuid.AVX) {
-		impl = AVX
-	}
-}
-
-type implementation int
+type Feature uint64
 
 const (
-	Default implementation = iota
-	AVX
-	AVX512
+	AVX Feature = 1 << iota
+	FMA
+	AVX512F
+	AVX512DQ
 )
 
-func (i implementation) String() string {
-	switch i {
-	case AVX:
-		return "avx"
-	case AVX512:
-		return "avx512"
-	default:
-		return "default"
+const AVX512 = AVX | FMA | AVX512F | AVX512DQ
+
+var feature Feature
+
+func init() {
+	if cpuid.CPU.Supports(cpuid.AVX) {
+		feature = feature | AVX
+	}
+	if cpuid.CPU.Supports(cpuid.FMA3) {
+		feature = feature | FMA
+	}
+	if cpuid.CPU.Supports(cpuid.AVX512F) {
+		feature = feature | AVX512F
+	}
+	if cpuid.CPU.Supports(cpuid.AVX512DQ) {
+		feature = feature | AVX512DQ
 	}
 }
 
-func (i implementation) mulConstAddTo(a []float32, b float32, c []float32) {
-	switch i {
-	case AVX:
-		_mm256_mul_const_add_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), unsafe.Pointer(&c[0]), int64(len(a)))
-	case AVX512:
+func (feature Feature) String() string {
+	var features []string
+	if feature&AVX > 0 {
+		features = append(features, "AVX")
+	}
+	if feature&FMA > 0 {
+		features = append(features, "FMA")
+	}
+	if feature&AVX512F > 0 {
+		features = append(features, "AVX512F")
+	}
+	if feature&AVX512DQ > 0 {
+		features = append(features, "AVX512DQ")
+	}
+	if len(features) == 0 {
+		return "AMD64"
+	}
+	return strings.Join(features, "+")
+}
+
+func (feature Feature) mulConstAddTo(a []float32, b float32, c []float32) {
+	if feature&AVX512 == AVX512 {
 		_mm512_mul_const_add_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), unsafe.Pointer(&c[0]), int64(len(a)))
-	default:
+	} else if feature&AVX == AVX {
+		_mm256_mul_const_add_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), unsafe.Pointer(&c[0]), int64(len(a)))
+	} else {
 		mulConstAddTo(a, b, c)
 	}
 }
 
-func (i implementation) mulConstTo(a []float32, b float32, c []float32) {
-	switch i {
-	case AVX:
-		_mm256_mul_const_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), unsafe.Pointer(&c[0]), int64(len(a)))
-	case AVX512:
+func (feature Feature) mulConstTo(a []float32, b float32, c []float32) {
+	if feature&AVX512 == AVX512 {
 		_mm512_mul_const_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), unsafe.Pointer(&c[0]), int64(len(a)))
-	default:
+	} else if feature&AVX == AVX {
+		_mm256_mul_const_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), unsafe.Pointer(&c[0]), int64(len(a)))
+	} else {
 		mulConstTo(a, b, c)
 	}
 }
 
-func (i implementation) mulTo(a, b, c []float32) {
-	switch i {
-	case AVX:
-		_mm256_mul_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), unsafe.Pointer(&c[0]), int64(len(a)))
-	case AVX512:
+func (feature Feature) mulTo(a, b, c []float32) {
+	if feature&AVX512 == AVX512 {
 		_mm512_mul_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), unsafe.Pointer(&c[0]), int64(len(a)))
-	default:
+	} else if feature&AVX == AVX {
+		_mm256_mul_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), unsafe.Pointer(&c[0]), int64(len(a)))
+	} else {
 		mulTo(a, b, c)
 	}
 }
 
-func (i implementation) mulConst(a []float32, b float32) {
-	switch i {
-	case AVX:
-		_mm256_mul_const(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), int64(len(a)))
-	case AVX512:
+func (feature Feature) mulConst(a []float32, b float32) {
+	if feature&AVX512 == AVX512 {
 		_mm512_mul_const(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), int64(len(a)))
-	default:
+	} else if feature&AVX == AVX {
+		_mm256_mul_const(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), int64(len(a)))
+	} else {
 		mulConst(a, b)
 	}
 }
 
-func (i implementation) dot(a, b []float32) float32 {
-	switch i {
-	case AVX:
-		return _mm256_dot(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), int64(len(a)))
-	case AVX512:
+func (feature Feature) dot(a, b []float32) float32 {
+	if feature&AVX512 == AVX512 {
 		return _mm512_dot(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), int64(len(a)))
-	default:
+	} else if feature&AVX == AVX {
+		return _mm256_dot(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), int64(len(a)))
+	} else {
 		return dot(a, b)
 	}
 }
 
-func (i implementation) euclidean(a, b []float32) float32 {
-	switch i {
-	case AVX:
-		return _mm256_euclidean(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), int64(len(a)))
-	case AVX512:
+func (feature Feature) euclidean(a, b []float32) float32 {
+	if feature&AVX512 == AVX512 {
 		return _mm512_euclidean(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), int64(len(a)))
-	default:
+	} else if feature&AVX == AVX {
+		return _mm256_euclidean(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), int64(len(a)))
+	} else {
 		return euclidean(a, b)
 	}
 }

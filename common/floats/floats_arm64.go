@@ -38,16 +38,18 @@ func init() {
 }
 
 func (feature Feature) String() string {
-	var builder strings.Builder
-	builder.WriteString("ARM64")
+	var features []string
 	if feature&ASIMD > 0 {
-		builder.WriteString("+ASIMD")
+		features = append(features, "ASIMD")
 	}
-	return builder.String()
+	if len(features) == 0 {
+		return "ARM64"
+	}
+	return strings.Join(features, "+")
 }
 
 func (feature Feature) mulConstAddTo(a []float32, b float32, c []float32) {
-	if feature&ASIMD > 0 {
+	if feature&ASIMD == ASIMD {
 		vmul_const_add_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), unsafe.Pointer(&c[0]), int64(len(a)))
 	} else {
 		mulConstAddTo(a, b, c)
@@ -55,7 +57,7 @@ func (feature Feature) mulConstAddTo(a []float32, b float32, c []float32) {
 }
 
 func (feature Feature) mulConstTo(a []float32, b float32, c []float32) {
-	if feature&ASIMD > 0 {
+	if feature&ASIMD == ASIMD {
 		vmul_const_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), unsafe.Pointer(&c[0]), int64(len(a)))
 	} else {
 		mulConstTo(a, b, c)
@@ -63,7 +65,7 @@ func (feature Feature) mulConstTo(a []float32, b float32, c []float32) {
 }
 
 func (feature Feature) mulTo(a, b, c []float32) {
-	if feature&ASIMD > 0 {
+	if feature&ASIMD == ASIMD {
 		vmul_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), unsafe.Pointer(&c[0]), int64(len(a)))
 	} else {
 		mulTo(a, b, c)
@@ -71,7 +73,7 @@ func (feature Feature) mulTo(a, b, c []float32) {
 }
 
 func (feature Feature) mulConst(a []float32, b float32) {
-	if feature&ASIMD > 0 {
+	if feature&ASIMD == ASIMD {
 		vmul_const(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), int64(len(a)))
 	} else {
 		mulConst(a, b)
@@ -79,7 +81,7 @@ func (feature Feature) mulConst(a []float32, b float32) {
 }
 
 func (feature Feature) dot(a, b []float32) float32 {
-	if feature&ASIMD > 0 {
+	if feature&ASIMD == ASIMD {
 		return vdot(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), int64(len(a)))
 	} else {
 		return dot(a, b)
@@ -87,7 +89,7 @@ func (feature Feature) dot(a, b []float32) float32 {
 }
 
 func (feature Feature) euclidean(a, b []float32) float32 {
-	if feature&ASIMD > 0 {
+	if feature&ASIMD == ASIMD {
 		return veuclidean(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), int64(len(a)))
 	} else {
 		return euclidean(a, b)
