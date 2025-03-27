@@ -33,7 +33,7 @@ func TestAVX_MulConstAddTo(t *testing.T) {
 	b := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100}
 	AVX.mulConstAddTo(a, 2, b)
 	c := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100}
-	Default.mulConstAddTo(a, 2, c)
+	ARM64.mulConstAddTo(a, 2, c)
 	assert.Equal(t, c, b)
 }
 
@@ -45,7 +45,7 @@ func TestAVX_MulConstTo(t *testing.T) {
 	b := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100}
 	AVX.mulConstTo(a, 2, b)
 	c := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100}
-	Default.mulConstTo(a, 2, c)
+	ARM64.mulConstTo(a, 2, c)
 	assert.Equal(t, c, b)
 }
 
@@ -57,7 +57,7 @@ func TestAVX_MulTo(t *testing.T) {
 	b := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100}
 	expected, actual := make([]float32, len(a)), make([]float32, len(a))
 	AVX.mulTo(a, b, actual)
-	Default.mulTo(a, b, expected)
+	ARM64.mulTo(a, b, expected)
 	assert.Equal(t, expected, actual)
 }
 
@@ -68,7 +68,7 @@ func TestAVX_MulConst(t *testing.T) {
 	b := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100}
 	AVX.mulConst(b, 2)
 	c := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100}
-	Default.mulConst(c, 2)
+	ARM64.mulConst(c, 2)
 	assert.Equal(t, c, b)
 }
 
@@ -79,7 +79,7 @@ func TestAVX_Dot(t *testing.T) {
 	a := []float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
 	b := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100}
 	actual := AVX.dot(a, b)
-	expected := Default.dot(a, b)
+	expected := ARM64.dot(a, b)
 	assert.Equal(t, expected, actual)
 }
 
@@ -90,7 +90,7 @@ func TestAVX_Euclidean(t *testing.T) {
 	a := []float32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
 	b := []float32{0, 2, 4, 6, 8, 10, 12, 14, 16, 18}
 	actual := AVX.euclidean(a, b)
-	expected := Default.euclidean(a, b)
+	expected := ARM64.euclidean(a, b)
 	assert.InDelta(t, expected, actual, 1e-6)
 }
 
@@ -102,7 +102,7 @@ func TestAVX512_MulConstAddTo(t *testing.T) {
 	b := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200}
 	AVX512.mulConstAddTo(a, 2, b)
 	c := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200}
-	Default.mulConstAddTo(a, 2, c)
+	ARM64.mulConstAddTo(a, 2, c)
 	assert.Equal(t, c, b)
 }
 
@@ -114,7 +114,7 @@ func TestAVX512_MulConstTo(t *testing.T) {
 	b := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200}
 	AVX512.mulConstTo(a, 2, b)
 	c := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200}
-	Default.mulConstTo(a, 2, c)
+	ARM64.mulConstTo(a, 2, c)
 	assert.Equal(t, c, b)
 }
 
@@ -126,7 +126,7 @@ func TestAVX512_MulTo(t *testing.T) {
 	b := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200}
 	expected, actual := make([]float32, len(a)), make([]float32, len(a))
 	AVX512.mulTo(a, b, actual)
-	Default.mulTo(a, b, expected)
+	ARM64.mulTo(a, b, expected)
 	assert.Equal(t, expected, actual)
 }
 
@@ -137,7 +137,7 @@ func TestAVX512_MulConst(t *testing.T) {
 	b := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200}
 	AVX512.mulConst(b, 2)
 	c := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200}
-	Default.mulConst(c, 2)
+	ARM64.mulConst(c, 2)
 	assert.Equal(t, c, b)
 }
 
@@ -148,7 +148,7 @@ func TestAVX512_Dot(t *testing.T) {
 	a := []float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20}
 	b := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200}
 	actual := AVX512.dot(a, b)
-	expected := Default.dot(a, b)
+	expected := ARM64.dot(a, b)
 	assert.Equal(t, expected, actual)
 }
 
@@ -159,7 +159,7 @@ func TestAVX512_Euclidean(t *testing.T) {
 	a := []float32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
 	b := []float32{0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20}
 	actual := AVX512.euclidean(a, b)
-	expected := Default.euclidean(a, b)
+	expected := ARM64.euclidean(a, b)
 	assert.InDelta(t, expected, actual, 1e-6)
 }
 
@@ -172,7 +172,7 @@ func initializeFloat32Array(n int) []float32 {
 }
 
 func BenchmarkDot(b *testing.B) {
-	for _, impl := range []implementation{Default, AVX, AVX512} {
+	for _, impl := range []Feature{ARM64, AVX, AVX512} {
 		b.Run(impl.String(), func(b *testing.B) {
 			for i := 16; i <= 128; i *= 2 {
 				b.Run(strconv.Itoa(i), func(b *testing.B) {
@@ -189,7 +189,7 @@ func BenchmarkDot(b *testing.B) {
 }
 
 func BenchmarkEuclidean(b *testing.B) {
-	for _, impl := range []implementation{Default, AVX, AVX512} {
+	for _, impl := range []Feature{ARM64, AVX, AVX512} {
 		b.Run(impl.String(), func(b *testing.B) {
 			for i := 16; i <= 128; i *= 2 {
 				b.Run(strconv.Itoa(i), func(b *testing.B) {
@@ -206,7 +206,7 @@ func BenchmarkEuclidean(b *testing.B) {
 }
 
 func BenchmarkMulConstAddTo(b *testing.B) {
-	for _, impl := range []implementation{Default, AVX, AVX512} {
+	for _, impl := range []Feature{ARM64, AVX, AVX512} {
 		b.Run(impl.String(), func(b *testing.B) {
 			for i := 16; i <= 128; i *= 2 {
 				b.Run(strconv.Itoa(i), func(b *testing.B) {
@@ -223,7 +223,7 @@ func BenchmarkMulConstAddTo(b *testing.B) {
 }
 
 func BenchmarkMulConst(b *testing.B) {
-	for _, impl := range []implementation{Default, AVX, AVX512} {
+	for _, impl := range []Feature{ARM64, AVX, AVX512} {
 		b.Run(impl.String(), func(b *testing.B) {
 			for i := 16; i <= 128; i *= 2 {
 				b.Run(strconv.Itoa(i), func(b *testing.B) {
@@ -239,7 +239,7 @@ func BenchmarkMulConst(b *testing.B) {
 }
 
 func BenchmarkMulConstTo(b *testing.B) {
-	for _, impl := range []implementation{Default, AVX, AVX512} {
+	for _, impl := range []Feature{ARM64, AVX, AVX512} {
 		b.Run(impl.String(), func(b *testing.B) {
 			for i := 16; i <= 128; i *= 2 {
 				b.Run(strconv.Itoa(i), func(b *testing.B) {
@@ -256,7 +256,7 @@ func BenchmarkMulConstTo(b *testing.B) {
 }
 
 func BenchmarkMulTo(b *testing.B) {
-	for _, impl := range []implementation{Default, AVX, AVX512} {
+	for _, impl := range []Feature{ARM64, AVX, AVX512} {
 		b.Run(impl.String(), func(b *testing.B) {
 			for i := 16; i <= 128; i *= 2 {
 				b.Run(strconv.Itoa(i), func(b *testing.B) {
