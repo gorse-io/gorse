@@ -29,7 +29,7 @@ type Feature uint64
 
 const ASIMD Feature = 1 << iota
 
-var feature Feature = 9
+var feature Feature
 
 func init() {
 	if cpuid.CPU.Supports(cpuid.ASIMD) {
