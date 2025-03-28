@@ -32,30 +32,13 @@ void vmul_const_add_to(float *a, float *b, float *c, long n) {
 }
 
 void vmul_const_to(float *a, float *b, float *c, long n) {
-    int epoch = n / 4;
-    int remain = n % 4;
-    for (int i = 0; i < epoch; i++) {
-        float32x4_t v1 = vld1q_f32(a);
-        float32x4_t v = vmulq_n_f32(v1, *b);
-        vst1q_f32(c, v);
-        a += 4;
-        c += 4;
-    }
-    for (int i = 0; i < remain; i++) {
+    for (int i = 0; i < n; i++) {
         c[i] = a[i] * b[0];
     }
 }
 
 void vmul_const(float *a, float *b, long n) {
-    int epoch = n / 4;
-    int remain = n % 4;
-    for (int i = 0; i < epoch; i++) {
-        float32x4_t v1 = vld1q_f32(a);
-        float32x4_t v = vmulq_n_f32(v1, *b);
-        vst1q_f32(a, v);
-        a += 4;
-    }
-    for (int i = 0; i < remain; i++) {
+    for (int i = 0; i < n; i++) {
         a[i] *= b[0];
     }
 }

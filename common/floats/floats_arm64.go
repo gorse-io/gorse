@@ -16,70 +16,80 @@
 
 package floats
 
-import "unsafe"
+import (
+	"strings"
+	"unsafe"
+
+	"github.com/klauspost/cpuid/v2"
+)
 
 //go:generate goat src/floats_neon.c -O3
 
-var impl = Neon
+type Feature uint64
 
-type implementation int
+const ASIMD Feature = 1 << iota
 
-const (
-	Default implementation = iota
-	Neon
-)
+var feature Feature
 
-func (i implementation) String() string {
-	switch i {
-	case Neon:
-		return "neon"
-	default:
-		return "default"
+func init() {
+	if cpuid.CPU.Supports(cpuid.ASIMD) {
+		feature = feature | ASIMD
 	}
 }
 
-func (i implementation) mulConstAddTo(a []float32, b float32, c []float32) {
-	if i == Neon {
+func (feature Feature) String() string {
+	var features []string
+	if feature&ASIMD > 0 {
+		features = append(features, "ASIMD")
+	}
+	if len(features) == 0 {
+		return "ARM64"
+	}
+	return strings.Join(features, "+")
+}
+
+func (feature Feature) mulConstAddTo(a []float32, b float32, c []float32) {
+	if feature&ASIMD == ASIMD {
 		vmul_const_add_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), unsafe.Pointer(&c[0]), int64(len(a)))
 	} else {
 		mulConstAddTo(a, b, c)
 	}
 }
 
-func (i implementation) mulConstTo(a []float32, b float32, c []float32) {
-	if i == Neon {
+func (feature Feature) mulConstTo(a []float32, b float32, c []float32) {
+	if feature&ASIMD == ASIMD {
 		vmul_const_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), unsafe.Pointer(&c[0]), int64(len(a)))
 	} else {
 		mulConstTo(a, b, c)
 	}
 }
 
-func (i implementation) mulTo(a, b, c []float32) {
-	if i == Neon {
+func (feature Feature) mulTo(a, b, c []float32) {
+	if feature&ASIMD == ASIMD {
 		vmul_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), unsafe.Pointer(&c[0]), int64(len(a)))
 	} else {
 		mulTo(a, b, c)
 	}
 }
 
-func (i implementation) mulConst(a []float32, b float32) {
-	if i == Neon {
+func (feature Feature) mulConst(a []float32, b float32) {
+	if feature&ASIMD == ASIMD {
 		vmul_const(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), int64(len(a)))
 	} else {
 		mulConst(a, b)
 	}
 }
 
-func (i implementation) dot(a, b []float32) float32 {
-	if i == Neon {
+func (feature Feature) dot(a, b []float32) float32 {
+	if feature&ASIMD == ASIMD {
 		return vdot(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), int64(len(a)))
 	} else {
 		return dot(a, b)
 	}
 }
 
-func (i implementation) euclidean(a, b []float32) float32 {
-	if i == Neon {
+func (feature Feature) euclidean(a, b []float32) float32 {
+	if feature&ASIMD == ASIMD {
 		return veuclidean(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), int64(len(a)))
 	} else {
 		return euclidean(a, b)

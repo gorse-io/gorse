@@ -21,58 +21,11 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/suite"
 )
 
-func TestNEON_MulConstAddTo(t *testing.T) {
-	a := []float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
-	b := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100}
-	Neon.mulConstAddTo(a, 2, b)
-	c := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100}
-	Default.mulConstAddTo(a, 2, c)
-	assert.Equal(t, c, b)
-}
-
-func TestNEON_MulConstTo(t *testing.T) {
-	a := []float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
-	b := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100}
-	Neon.mulConstTo(a, 2, b)
-	c := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100}
-	Default.mulConstTo(a, 2, c)
-	assert.Equal(t, c, b)
-}
-
-func TestNEON_MulTo(t *testing.T) {
-	a := []float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
-	b := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100}
-	expected, actual := make([]float32, len(a)), make([]float32, len(a))
-	Neon.mulTo(a, b, actual)
-	Default.mulTo(a, b, expected)
-	assert.Equal(t, expected, actual)
-}
-
-func TestNEON_MulConst(t *testing.T) {
-	b := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100}
-	Neon.mulConst(b, 2)
-	c := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100}
-	Default.mulConst(c, 2)
-	assert.Equal(t, c, b)
-}
-
-func TestNEON_Dot(t *testing.T) {
-	a := []float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
-	b := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100}
-	actual := Neon.dot(a, b)
-	expected := Default.dot(a, b)
-	assert.Equal(t, expected, actual)
-}
-
-func TestNEON_Euclidean(t *testing.T) {
-	a := []float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
-	b := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100}
-	actual := Neon.euclidean(a, b)
-	expected := Default.euclidean(a, b)
-	assert.Equal(t, expected, actual)
+func TestASIMD(t *testing.T) {
+	suite.Run(t, &SIMDTestSuite{Feature: ASIMD})
 }
 
 func initializeFloat32Array(n int) []float32 {
@@ -84,15 +37,15 @@ func initializeFloat32Array(n int) []float32 {
 }
 
 func BenchmarkDot(b *testing.B) {
-	for _, impl := range []implementation{Default, Neon} {
-		b.Run(impl.String(), func(b *testing.B) {
+	for _, feat := range []Feature{0, ASIMD} {
+		b.Run(feat.String(), func(b *testing.B) {
 			for i := 16; i <= 128; i *= 2 {
 				b.Run(strconv.Itoa(i), func(b *testing.B) {
 					v1 := initializeFloat32Array(i)
 					v2 := initializeFloat32Array(i)
 					b.ResetTimer()
 					for i := 0; i < b.N; i++ {
-						impl.dot(v1, v2)
+						feat.dot(v1, v2)
 					}
 				})
 			}
@@ -101,15 +54,15 @@ func BenchmarkDot(b *testing.B) {
 }
 
 func BenchmarkEuclidean(b *testing.B) {
-	for _, impl := range []implementation{Default, Neon} {
-		b.Run(impl.String(), func(b *testing.B) {
+	for _, feat := range []Feature{0, ASIMD} {
+		b.Run(feat.String(), func(b *testing.B) {
 			for i := 16; i <= 128; i *= 2 {
 				b.Run(strconv.Itoa(i), func(b *testing.B) {
 					v1 := initializeFloat32Array(i)
 					v2 := initializeFloat32Array(i)
 					b.ResetTimer()
 					for i := 0; i < b.N; i++ {
-						impl.euclidean(v1, v2)
+						feat.euclidean(v1, v2)
 					}
 				})
 			}
@@ -118,15 +71,15 @@ func BenchmarkEuclidean(b *testing.B) {
 }
 
 func BenchmarkMulConstAddTo(b *testing.B) {
-	for _, impl := range []implementation{Default, Neon} {
-		b.Run(impl.String(), func(b *testing.B) {
+	for _, feat := range []Feature{0, ASIMD} {
+		b.Run(feat.String(), func(b *testing.B) {
 			for i := 16; i <= 128; i *= 2 {
 				b.Run(strconv.Itoa(i), func(b *testing.B) {
 					v1 := initializeFloat32Array(i)
 					v2 := initializeFloat32Array(i)
 					b.ResetTimer()
 					for i := 0; i < b.N; i++ {
-						impl.mulConstAddTo(v1, 2, v2)
+						feat.mulConstAddTo(v1, 2, v2)
 					}
 				})
 			}
@@ -135,15 +88,15 @@ func BenchmarkMulConstAddTo(b *testing.B) {
 }
 
 func BenchmarkMulConstTo(b *testing.B) {
-	for _, impl := range []implementation{Default, Neon} {
-		b.Run(impl.String(), func(b *testing.B) {
+	for _, feat := range []Feature{0, ASIMD} {
+		b.Run(feat.String(), func(b *testing.B) {
 			for i := 16; i <= 128; i *= 2 {
 				b.Run(strconv.Itoa(i), func(b *testing.B) {
 					v1 := initializeFloat32Array(i)
 					v2 := initializeFloat32Array(i)
 					b.ResetTimer()
 					for i := 0; i < b.N; i++ {
-						impl.mulConstTo(v1, 2, v2)
+						feat.mulConstTo(v1, 2, v2)
 					}
 				})
 			}
@@ -152,14 +105,14 @@ func BenchmarkMulConstTo(b *testing.B) {
 }
 
 func BenchmarkMulConst(b *testing.B) {
-	for _, impl := range []implementation{Default, Neon} {
-		b.Run(impl.String(), func(b *testing.B) {
+	for _, feat := range []Feature{0, ASIMD} {
+		b.Run(feat.String(), func(b *testing.B) {
 			for i := 16; i <= 128; i *= 2 {
 				b.Run(strconv.Itoa(i), func(b *testing.B) {
 					v1 := initializeFloat32Array(i)
 					b.ResetTimer()
 					for i := 0; i < b.N; i++ {
-						impl.mulConst(v1, 2)
+						feat.mulConst(v1, 2)
 					}
 				})
 			}
@@ -168,8 +121,8 @@ func BenchmarkMulConst(b *testing.B) {
 }
 
 func BenchmarkMulTo(b *testing.B) {
-	for _, impl := range []implementation{Default, Neon} {
-		b.Run(impl.String(), func(b *testing.B) {
+	for _, feat := range []Feature{0, ASIMD} {
+		b.Run(feat.String(), func(b *testing.B) {
 			for i := 16; i <= 128; i *= 2 {
 				b.Run(strconv.Itoa(i), func(b *testing.B) {
 					v1 := initializeFloat32Array(i)
@@ -177,7 +130,7 @@ func BenchmarkMulTo(b *testing.B) {
 					v3 := make([]float32, i)
 					b.ResetTimer()
 					for i := 0; i < b.N; i++ {
-						impl.mulTo(v1, v2, v3)
+						feat.mulTo(v1, v2, v3)
 					}
 				})
 			}
