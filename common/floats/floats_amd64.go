@@ -24,7 +24,7 @@ import (
 )
 
 //go:generate goat src/floats_avx.c -O3 -mavx
-//go:generate goat src/floats_avx512.c -O3 -mavx -mfma -mavx512f -mavx512dq
+//go:generate goat src/floats_avx512.c -O3 -mavx -mfma -mavx512f
 
 type Feature uint64
 
@@ -32,10 +32,9 @@ const (
 	AVX Feature = 1 << iota
 	FMA
 	AVX512F
-	AVX512DQ
 )
 
-const AVX512 = AVX | FMA | AVX512F | AVX512DQ
+const AVX512 = AVX | FMA | AVX512F
 
 var feature Feature
 
@@ -49,9 +48,6 @@ func init() {
 	if cpuid.CPU.Supports(cpuid.AVX512F) {
 		feature = feature | AVX512F
 	}
-	if cpuid.CPU.Supports(cpuid.AVX512DQ) {
-		feature = feature | AVX512DQ
-	}
 }
 
 func (feature Feature) String() string {
@@ -64,9 +60,6 @@ func (feature Feature) String() string {
 	}
 	if feature&AVX512F > 0 {
 		features = append(features, "AVX512F")
-	}
-	if feature&AVX512DQ > 0 {
-		features = append(features, "AVX512DQ")
 	}
 	if len(features) == 0 {
 		return "AMD64"

@@ -154,10 +154,10 @@ float _mm512_dot(float *a, float *b, int64_t n)
         a += 16;
         b += 16;
     }
-    __m256 sf_e_d_c_b_a_9_8 = _mm512_extractf32x8_ps(s, 1);
+    __m256 sf_e_d_c_b_a_9_8 = _mm256_castpd_ps(_mm512_extractf64x4_pd(_mm512_castps_pd(s), 1));
     __m256 s7_6_5_4_3_2_1_0 = _mm512_castps512_ps256(s);
     __m256 s7f_6e_5d_4c_3b_2a_19_08 = _mm256_add_ps(sf_e_d_c_b_a_9_8, s7_6_5_4_3_2_1_0);
-    __m128 s7f_6e_5d_4c = _mm256_extractf128_ps(s7f_6e_5d_4c_3b_2a_19_08, 1);
+    __m128 s7f_6e_5d_4c = _mm_castsi128_ps(_mm256_extracti128_si256(_mm256_castps_si256(s7f_6e_5d_4c_3b_2a_19_08), 1));
     __m128 s3b_2a_19_08 = _mm256_castps256_ps128(s7f_6e_5d_4c_3b_2a_19_08);
     __m128 s37bf_26ae_159d_048c = _mm_add_ps(s7f_6e_5d_4c, s3b_2a_19_08);
     __m128 sxx_159d_048c = s37bf_26ae_159d_048c;
@@ -220,10 +220,10 @@ float _mm512_euclidean(float *a, float *b, int64_t n)
         a += 16;
         b += 16;
     }
-    __m256 sf_e_d_c_b_a_9_8 = _mm512_extractf32x8_ps(s, 1);
+    __m256 sf_e_d_c_b_a_9_8 = _mm256_castpd_ps(_mm512_extractf64x4_pd(_mm512_castps_pd(s), 1));
     __m256 s7_6_5_4_3_2_1_0 = _mm512_castps512_ps256(s);
     __m256 s7f_6e_5d_4c_3b_2a_19_08 = _mm256_add_ps(sf_e_d_c_b_a_9_8, s7_6_5_4_3_2_1_0);
-    __m128 s7f_6e_5d_4c = _mm256_extractf128_ps(s7f_6e_5d_4c_3b_2a_19_08, 1);
+    __m128 s7f_6e_5d_4c = _mm_castsi128_ps(_mm256_extracti128_si256(_mm256_castps_si256(s7f_6e_5d_4c_3b_2a_19_08), 1));
     __m128 s3b_2a_19_08 = _mm256_castps256_ps128(s7f_6e_5d_4c_3b_2a_19_08);
     __m128 s37bf_26ae_159d_048c = _mm_add_ps(s7f_6e_5d_4c, s3b_2a_19_08);
     __m128 sxx_159d_048c = s37bf_26ae_159d_048c;
