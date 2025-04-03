@@ -21,7 +21,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
-	"github.com/zhenghaoz/gorse/base/floats"
+	"github.com/zhenghaoz/gorse/common/floats"
 	"github.com/zhenghaoz/gorse/common/mock"
 	"github.com/zhenghaoz/gorse/common/parallel"
 	"github.com/zhenghaoz/gorse/config"

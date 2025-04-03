@@ -24,7 +24,7 @@ import (
 	"github.com/chewxy/math32"
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/samber/lo"
-	"github.com/zhenghaoz/gorse/base/floats"
+	"github.com/zhenghaoz/gorse/common/floats"
 	"github.com/zhenghaoz/gorse/protocol"
 	"golang.org/x/exp/slices"
 )

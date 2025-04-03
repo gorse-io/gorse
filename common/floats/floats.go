@@ -105,7 +105,7 @@ func Add(dst, s []float32) {
 
 // MulConst multiplies a vector with a const: dst = dst * c
 func MulConst(dst []float32, c float32) {
-	impl.mulConst(dst, c)
+	feature.mulConst(dst, c)
 }
 
 // Div one vectors by another: dst = dst / s
@@ -122,7 +122,7 @@ func MulTo(a, b, c []float32) {
 	if len(a) != len(b) || len(a) != len(c) {
 		panic("floats: slice lengths do not match")
 	}
-	impl.mulTo(a, b, c)
+	feature.mulTo(a, b, c)
 }
 
 // Sub one vector by another: dst = dst - s
@@ -140,7 +140,7 @@ func MulConstTo(a []float32, c float32, dst []float32) {
 	if len(a) != len(dst) {
 		panic("floats: slice lengths do not match")
 	}
-	impl.mulConstTo(a, c, dst)
+	feature.mulConstTo(a, c, dst)
 }
 
 // MulConstAddTo multiplies a vector and a const, then adds to dst: dst = dst + a * c
@@ -148,7 +148,7 @@ func MulConstAddTo(a []float32, c float32, dst []float32) {
 	if len(a) != len(dst) {
 		panic("floats: slice lengths do not match")
 	}
-	impl.mulConstAddTo(a, c, dst)
+	feature.mulConstAddTo(a, c, dst)
 }
 
 // MulAddTo multiplies a vector and a vector, then adds to a vector: c += a * b
@@ -188,14 +188,14 @@ func Dot(a, b []float32) (ret float32) {
 	if len(a) != len(b) {
 		panic("floats: slice lengths do not match")
 	}
-	return impl.dot(a, b)
+	return feature.dot(a, b)
 }
 
 func Euclidean(a, b []float32) float32 {
 	if len(a) != len(b) {
 		panic("floats: slice lengths do not match")
 	}
-	return impl.euclidean(a, b)
+	return feature.euclidean(a, b)
 }
 
 func MatMul(a, b, c []float32, m, k, n int) {
