@@ -1157,9 +1157,11 @@ func (d *SQLDatabase) CountFeedback(ctx context.Context) (int, error) {
 			Scan(&tableStatus).Error
 		count = tableStatus.Rows
 	case Postgres:
+		var pgCount float64
 		err = d.gormDB.WithContext(ctx).
 			Raw(fmt.Sprintf("SELECT reltuples AS estimate FROM pg_class where relname = '%s'", d.FeedbackTable())).
-			Scan(&count).Error
+			Scan(&pgCount).Error
+		count = int64(pgCount)
 	default:
 		err = d.gormDB.WithContext(ctx).Table(d.FeedbackTable()).Count(&count).Error
 	}
