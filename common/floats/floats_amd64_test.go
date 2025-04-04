@@ -141,21 +141,3 @@ func BenchmarkMulTo(b *testing.B) {
 		})
 	}
 }
-
-func BenchmarkMatMul(b *testing.B) {
-	for _, impl := range []Feature{0, AVX, AVX512} {
-		b.Run(impl.String(), func(b *testing.B) {
-			for n := 16; n <= 128; n *= 2 {
-				b.Run(strconv.Itoa(n), func(b *testing.B) {
-					matA := initializeFloat32Array(n * n)
-					matB := initializeFloat32Array(n * n)
-					matC := make([]float32, n*n)
-					b.ResetTimer()
-					for i := 0; i < b.N; i++ {
-						impl.matmul(matA, matB, matC, n, n, n)
-					}
-				})
-			}
-		})
-	}
-}
