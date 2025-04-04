@@ -58,6 +58,38 @@ func mulConst(a []float32, b float32) {
 	}
 }
 
+func mm(a, b, c []float32, m, n, k int, transA, transB bool) {
+	if !transA && !transB {
+		for i := 0; i < m; i++ {
+			for l := 0; l < k; l++ {
+				// C_l += A_{il} * B_i
+				MulConstAddTo(b[l*n:(l+1)*n], a[i*k+l], c[i*n:(i+1)*n])
+			}
+		}
+	} else if !transA && transB {
+		for i := 0; i < m; i++ {
+			for j := 0; j < n; j++ {
+				c[i*n+j] = Dot(a[i*k:i*k+k], b[j*k:j*k+k])
+			}
+		}
+	} else if transA && !transB {
+		for i := 0; i < m; i++ {
+			for l := 0; l < k; l++ {
+				// C_j += A_{ji} * B_i
+				MulConstAddTo(b[l*n:(l+1)*n], a[l*m+i], c[i*n:(i+1)*n])
+			}
+		}
+	} else {
+		for i := 0; i < m; i++ {
+			for j := 0; j < n; j++ {
+				for l := 0; l < k; l++ {
+					c[i*n+j] += a[l*m+i] * b[j*k+l]
+				}
+			}
+		}
+	}
+}
+
 // MatZero fills zeros in a matrix of 32-bit floats.
 func MatZero(x [][]float32) {
 	for i := range x {
@@ -187,4 +219,11 @@ func Euclidean(a, b []float32) float32 {
 		panic("floats: slice lengths do not match")
 	}
 	return feature.euclidean(a, b)
+}
+
+func MM(a, b, c []float32, m, n, k int, transA, transB bool) {
+	if len(a) != m*k || len(b) != k*n || len(c) != m*n {
+		panic("floats: matrix dimensions do not match")
+	}
+	feature.mm(a, b, c, m, n, k, transA, transB)
 }
