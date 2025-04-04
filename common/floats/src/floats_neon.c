@@ -124,7 +124,7 @@ float veuclidean(float *a, float *b, long n) {
     return vget_lane_f32(r, 0);
 }
 
-void vmat_mul(float *a, float *b, float *c, long m, long n, long k) {
+void vmatmul(float *a, float *b, float *c, long m, long n, long k) {
     for (int i = 0; i < m; i++) {
         for (int l = 0; l < n; l++) {
             for (int j = 0; j < k; j++) {

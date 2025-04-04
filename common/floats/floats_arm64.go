@@ -96,10 +96,10 @@ func (feature Feature) euclidean(a, b []float32) float32 {
 	}
 }
 
-func (i implementation) matMul(a, b, c []float32, m, n, k int) {
-	if i == Neon {
-		vmat_mul(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), unsafe.Pointer(&c[0]), int64(m), int64(n), int64(k))
+func (feature Feature) matmul(a, b, c []float32, m, n, k int) {
+	if feature&ASIMD == ASIMD {
+		vmatmul(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), unsafe.Pointer(&c[0]), int64(m), int64(n), int64(k))
 	} else {
-		matMul(a, b, c, m, n, k)
+		matmul(a, b, c, m, n, k)
 	}
 }

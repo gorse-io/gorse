@@ -58,11 +58,11 @@ func mulConst(a []float32, b float32) {
 	}
 }
 
-func matMul(a, b, c []float32, m, n, k int) {
+func matmul(a, b, c []float32, m, n, k int) {
 	for i := 0; i < m; i++ {
-		for j, aij := range a[i*n : (i+1)*n] {
-			// C_j += A_{ij} * B_i
-			MulConstAddTo(b[j*k:(j+1)*k], aij, c[i*k:(i+1)*k])
+		for l := 0; l < k; l++ {
+			// C_l += A_{il} * B_i
+			MulConstAddTo(b[l*n:(l+1)*n], a[i*k+l], c[i*n:(i+1)*n])
 		}
 	}
 }
@@ -202,5 +202,5 @@ func MatMul(a, b, c []float32, m, k, n int) {
 	if len(a) != m*k || len(b) != k*n || len(c) != m*n {
 		panic("floats: matrix dimensions do not match")
 	}
-	impl.matMul(a, b, c, m, k, n)
+	feature.matmul(a, b, c, m, k, n)
 }

@@ -127,9 +127,6 @@ func (feature Feature) euclidean(a, b []float32) float32 {
 	}
 }
 
-func (i implementation) matMul(a, b, c []float32, m, n, k int) {
-	switch i {
-	default:
-		matMul(a, b, c, m, n, k)
-	}
+func (feature Feature) matmul(a, b, c []float32, m, n, k int) {
+	matmul(a, b, c, m, n, k)
 }
