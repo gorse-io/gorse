@@ -160,7 +160,9 @@ func (config *ItemToItemConfig) Hash() string {
 	hash.Write([]byte(config.Name))
 	hash.Write([]byte(config.Type))
 	hash.Write([]byte(config.Column))
-	return string(hash.Sum(nil))
+
+	digest := hash.Sum(nil)
+	return hex.EncodeToString(digest[:])
 }
 
 type CollaborativeConfig struct {
@@ -313,7 +315,9 @@ func (config *Config) UserNeighborDigest() string {
 	} else {
 		hash.Write([]byte("-"))
 	}
-	return string(hash.Sum(nil))
+
+	digest := hash.Sum(nil)
+	return hex.EncodeToString(digest[:])
 }
 
 func (config *Config) ItemNeighborDigest() string {
@@ -324,7 +328,9 @@ func (config *Config) ItemNeighborDigest() string {
 	} else {
 		hash.Write([]byte("-"))
 	}
-	return string(hash.Sum(nil))
+
+	digest := hash.Sum(nil)
+	return hex.EncodeToString(digest[:])
 }
 
 type digestOptions struct {
