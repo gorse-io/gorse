@@ -30,3 +30,6 @@ func veuclidean(a, b unsafe.Pointer, n int64) (result float32)
 
 //go:noescape
 func vmatmul(a, b, c unsafe.Pointer, m, n, k int64)
+
+//go:noescape
+func vmatmul_nt(a, b, c unsafe.Pointer, m, n, k int64)

@@ -519,16 +519,16 @@ TEXT ·vmatmul(SB), $0-48
 	MOVD k+40(FP), R5
 	WORD $0xf100047f  // cmp	x3, #1
 	WORD $0x54000b2b  // b.lt	.LBB6_15
-	WORD $0xf100049f  // cmp	x4, #1
-	WORD $0x54000aeb  // b.lt	.LBB6_15
 	WORD $0xf10004bf  // cmp	x5, #1
+	WORD $0x54000aeb  // b.lt	.LBB6_15
+	WORD $0xf100049f  // cmp	x4, #1
 	WORD $0x54000aab  // b.lt	.LBB6_15
 	WORD $0xa9bc7bfd  // stp	x29, x30, [sp, #-64]!
 	WORD $0x9b047cab  // mul	x11, x5, x4
-	WORD $0xd37ef4a9  // lsl	x9, x5, #2
-	WORD $0xd37ef48a  // lsl	x10, x4, #2
+	WORD $0xd37ef489  // lsl	x9, x4, #2
+	WORD $0xd37ef4aa  // lsl	x10, x5, #2
 	WORD $0xaa1f03e8  // mov	x8, xzr
-	WORD $0x927df0ae  // and	x14, x5, #0xfffffffffffffff8
+	WORD $0x927df08e  // and	x14, x4, #0xfffffffffffffff8
 	WORD $0x9100402f  // add	x15, x1, #16
 	WORD $0x8b09004c  // add	x12, x2, x9
 	WORD $0x8b0a000d  // add	x13, x0, x10
@@ -552,7 +552,7 @@ LBB6_5:
 	WORD $0x9b087d26 // mul	x6, x9, x8
 	WORD $0xaa1f03f2 // mov	x18, xzr
 	WORD $0x9b087d47 // mul	x7, x10, x8
-	WORD $0x9b047d15 // mul	x21, x8, x4
+	WORD $0x9b057d15 // mul	x21, x8, x5
 	WORD $0x8b060053 // add	x19, x2, x6
 	WORD $0x8b060186 // add	x6, x12, x6
 	WORD $0x8b0701b4 // add	x20, x13, x7
@@ -573,11 +573,11 @@ LBB6_6:
 	WORD $0x91000652 // add	x18, x18, #1
 	WORD $0x8b090294 // add	x20, x20, x9
 	WORD $0x8b090273 // add	x19, x19, x9
-	WORD $0xeb04025f // cmp	x18, x4
+	WORD $0xeb05025f // cmp	x18, x5
 	WORD $0x54fffc80 // b.eq	.LBB6_4
 
 LBB6_7:
-	WORD $0xf10020bf // cmp	x5, #8
+	WORD $0xf100209f // cmp	x4, #8
 	WORD $0x1a9f24f5 // csinc	w21, w7, wzr, hs
 	WORD $0x36000075 // tbz	w21, #0, .LBB6_9
 	WORD $0xaa1f03f7 // mov	x23, xzr
@@ -600,13 +600,13 @@ LBB6_10:
 	WORD $0xad3f92c1 // stp	q1, q4, [x22, #-16]
 	WORD $0x910082d6 // add	x22, x22, #32
 	WORD $0x54ffff01 // b.ne	.LBB6_10
-	WORD $0xeb0501df // cmp	x14, x5
+	WORD $0xeb0401df // cmp	x14, x4
 	WORD $0xaa0e03f7 // mov	x23, x14
 	WORD $0x54fffcc0 // b.eq	.LBB6_6
 
 LBB6_12:
 	WORD $0xd37ef6f6 // lsl	x22, x23, #2
-	WORD $0xcb1700b7 // sub	x23, x5, x23
+	WORD $0xcb170097 // sub	x23, x4, x23
 	WORD $0x8b160275 // add	x21, x19, x22
 	WORD $0x8b160236 // add	x22, x17, x22
 
@@ -625,4 +625,16 @@ LBB6_14:
 	WORD $0xf9400bf7 // ldr	x23, [sp, #16]
 	WORD $0xa94257f6 // ldp	x22, x21, [sp, #32]
 	WORD $0xa8c47bfd // ldp	x29, x30, [sp], #64
+	RET
+
+TEXT ·vmatmul_nt(SB), $0-48
+	MOVD a+0(FP), R0
+	MOVD b+8(FP), R1
+	MOVD c+16(FP), R2
+	MOVD m+24(FP), R3
+	MOVD n+32(FP), R4
+	MOVD k+40(FP), R5
+	WORD $0xa9bf7bfd  // stp	x29, x30, [sp, #-16]!
+	WORD $0x910003fd  // mov	x29, sp
+	WORD $0xa8c17bfd  // ldp	x29, x30, [sp], #16
 	RET

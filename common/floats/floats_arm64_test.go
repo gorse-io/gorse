@@ -148,7 +148,7 @@ func BenchmarkMatMul(b *testing.B) {
 					matC := make([]float32, n*n)
 					b.ResetTimer()
 					for i := 0; i < b.N; i++ {
-						feat.matmul(matA, matB, matC, n, n, n)
+						feat.mm(matA, matB, matC, n, n, n, false, false)
 					}
 				})
 			}

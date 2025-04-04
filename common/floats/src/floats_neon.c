@@ -126,9 +126,19 @@ float veuclidean(float *a, float *b, long n) {
 
 void vmatmul(float *a, float *b, float *c, long m, long n, long k) {
     for (int i = 0; i < m; i++) {
-        for (int l = 0; l < n; l++) {
-            for (int j = 0; j < k; j++) {
-                c[i * k + j] += a[i * n + l] * b[l * k + j];
+        for (int l = 0; l < k; l++) {
+            for (int j = 0; j < n; j++) {
+                c[i * n + j] += a[i * k + l] * b[l * n + j];
+            }
+        }
+    }
+}
+
+void vmatmul_nt(float *a, float *b, float *c, long m, long n, long k) {
+    for (int i = 0; i < m; i++) {
+        for (int j = 0; j < n; j++) {
+            for (int l = 0; l < k; l++) {
+                c[i * n + j] += a[i * k + l] * b[j * k + l];
             }
         }
     }
