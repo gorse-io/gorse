@@ -127,6 +127,6 @@ func (feature Feature) euclidean(a, b []float32) float32 {
 	}
 }
 
-func (feature Feature) matmul(a, b, c []float32, m, n, k int) {
-	mm(a, b, c, m, n, k, false, false)
+func (feature Feature) mm(a, b, c []float32, m, n, k int, transA, transB bool) {
+	mm(a, b, c, m, n, k, transA, transB)
 }

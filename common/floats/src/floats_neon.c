@@ -60,7 +60,7 @@ void vmul_to(float *a, float *b, float *c, long n) {
     }
 }
 
-float vdot(float *a, float *b, long n) {
+inline float dot(float *a, float *b, long n) {
     int epoch = n / 4;
     int remain = n % 4;
     float32x4_t s = vdupq_n_f32(0);
@@ -88,6 +88,10 @@ float vdot(float *a, float *b, long n) {
         sum += a[i] * b[i];
     }
     return sum;
+}
+
+float vdot(float *a, float *b, long n) {
+    return dot(a, b, n);
 }
 
 float veuclidean(float *a, float *b, long n) {
@@ -124,21 +128,39 @@ float veuclidean(float *a, float *b, long n) {
     return vget_lane_f32(r, 0);
 }
 
-void vmatmul(float *a, float *b, float *c, long m, long n, long k) {
-    for (int i = 0; i < m; i++) {
-        for (int l = 0; l < k; l++) {
-            for (int j = 0; j < n; j++) {
-                c[i * n + j] += a[i * k + l] * b[l * n + j];
+void vmm(float *a, float *b, float *c, long m, long n, long k, _Bool transA, _Bool transB) {
+    if (!transA && !transB)
+    {
+        for (int i = 0; i < m; i++) {
+            for (int l = 0; l < k; l++) {
+                for (int j = 0; j < n; j++) {
+                    c[i * n + j] += a[i * k + l] * b[l * n + j];
+                }
             }
         }
-    }
-}
-
-void vmatmul_nt(float *a, float *b, float *c, long m, long n, long k) {
-    for (int i = 0; i < m; i++) {
-        for (int j = 0; j < n; j++) {
+    } else if (!transA && transB)
+    {
+        for (int i = 0; i < m; i++) {
+            for (int j = 0; j < n; j++) {
+                c[i * n + j] = dot(a + i * k, b + j * k, k);
+            }
+        }
+    } else if (transA && !transB)
+    {
+        for (int i = 0; i < m; i++) {
             for (int l = 0; l < k; l++) {
-                c[i * n + j] += a[i * k + l] * b[j * k + l];
+                for (int j = 0; j < n; j++) {
+                    c[i * n + j] += a[l * m + i] * b[l * n + j];
+                }
+            }
+        }
+    } else if (transA && transB)
+    {
+        for (int i = 0; i < m; i++) {
+            for (int l = 0; l < k; l++) {
+                for (int j = 0; j < n; j++) {
+                    c[i * n + j] += a[l * m + i] * b[j * k + l];
+                }
             }
         }
     }
