@@ -52,14 +52,10 @@ func init() {
 
 func (feature Feature) String() string {
 	var features []string
-	if feature&AVX > 0 {
+	if feature&AVX512 == AVX512 {
+		features = append(features, "AVX512")
+	} else if feature&AVX == AVX {
 		features = append(features, "AVX")
-	}
-	if feature&FMA > 0 {
-		features = append(features, "FMA")
-	}
-	if feature&AVX512F > 0 {
-		features = append(features, "AVX512F")
 	}
 	if len(features) == 0 {
 		return "AMD64"
@@ -128,5 +124,11 @@ func (feature Feature) euclidean(a, b []float32) float32 {
 }
 
 func (feature Feature) mm(a, b, c []float32, m, n, k int, transA, transB bool) {
-	mm(a, b, c, m, n, k, transA, transB)
+	if feature&AVX512 == AVX512 {
+		_mm512_mm(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), unsafe.Pointer(&c[0]), int64(m), int64(n), int64(k), transA, transB)
+	} else if feature&AVX == AVX {
+		_mm256_mm(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), unsafe.Pointer(&c[0]), int64(m), int64(n), int64(k), transA, transB)
+	} else {
+		mm(a, b, c, m, n, k, transA, transB)
+	}
 }

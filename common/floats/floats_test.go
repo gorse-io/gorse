@@ -287,7 +287,7 @@ func (suite *SIMDTestSuite) TestEuclidean() {
 	assert.Equal(suite.T(), expected, actual)
 }
 
-func (suite *SIMDTestSuite) TestMatMul() {
+func (suite *SIMDTestSuite) TestMM() {
 	a := []float32{1, 2, 3, 4, 5, 6}
 	b := []float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}
 	c := make([]float32, 8)
