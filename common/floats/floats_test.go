@@ -1,4 +1,4 @@
-// Copyright 2020 gorse Project Authors
+// Copyright 2025 gorse Project Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,6 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
 package floats
 
 import (
@@ -196,6 +197,30 @@ func (suite *NativeTestSuite) TestMulConst() {
 	suite.Equal([]float32{2, 4, 6, 8}, a)
 }
 
+func (suite *NativeTestSuite) TestMM() {
+	a := []float32{1, 2, 3, 4, 5, 6}
+	b := []float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}
+	c := make([]float32, 8)
+	target := []float32{38, 44, 50, 56, 83, 98, 113, 128}
+	mm(a, b, c, 2, 4, 3, false, false)
+	suite.Equal(target, c)
+
+	c = make([]float32, 8)
+	target = []float32{14, 32, 50, 68, 32, 77, 122, 167}
+	mm(a, b, c, 2, 4, 3, false, true)
+	suite.Equal(target, c)
+
+	c = make([]float32, 8)
+	target = []float32{61, 70, 79, 88, 76, 88, 100, 112}
+	mm(a, b, c, 2, 4, 3, true, false)
+	suite.Equal(target, c)
+
+	c = make([]float32, 8)
+	target = []float32{22, 49, 76, 103, 28, 64, 100, 136}
+	mm(a, b, c, 2, 4, 3, true, true)
+	suite.Equal(target, c)
+}
+
 func TestNativeTestSuite(t *testing.T) {
 	suite.Run(t, new(NativeTestSuite))
 }
@@ -260,4 +285,28 @@ func (suite *SIMDTestSuite) TestEuclidean() {
 	actual := suite.euclidean(a, b)
 	expected := euclidean(a, b)
 	assert.Equal(suite.T(), expected, actual)
+}
+
+func (suite *SIMDTestSuite) TestMM() {
+	a := []float32{1, 2, 3, 4, 5, 6}
+	b := []float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}
+	c := make([]float32, 8)
+	target := []float32{38, 44, 50, 56, 83, 98, 113, 128}
+	suite.mm(a, b, c, 2, 4, 3, false, false)
+	suite.Equal(target, c)
+
+	c = make([]float32, 8)
+	target = []float32{14, 32, 50, 68, 32, 77, 122, 167}
+	suite.mm(a, b, c, 2, 4, 3, false, true)
+	suite.Equal(target, c)
+
+	c = make([]float32, 8)
+	target = []float32{61, 70, 79, 88, 76, 88, 100, 112}
+	suite.mm(a, b, c, 2, 4, 3, true, false)
+	suite.Equal(target, c)
+
+	c = make([]float32, 8)
+	target = []float32{22, 49, 76, 103, 28, 64, 100, 136}
+	suite.mm(a, b, c, 2, 4, 3, true, true)
+	suite.Equal(target, c)
 }

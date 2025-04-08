@@ -27,3 +27,6 @@ func vdot(a, b unsafe.Pointer, n int64) (result float32)
 
 //go:noescape
 func veuclidean(a, b unsafe.Pointer, n int64) (result float32)
+
+//go:noescape
+func vmm(a, b, c unsafe.Pointer, m, n, k int64, transA, transB bool)

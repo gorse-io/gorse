@@ -133,7 +133,7 @@ void _mm512_mul_to(float *a, float *b, float *c, int64_t n)
     }
 }
 
-float _mm512_dot(float *a, float *b, int64_t n)
+inline __attribute__((always_inline)) float dot(float *a, float *b, int64_t n)
 {
     int epoch = n / 16;
     int remain = n % 16;
@@ -194,6 +194,11 @@ float _mm512_dot(float *a, float *b, int64_t n)
         sum += a[i] * b[i];
     }
     return sum;
+}
+
+float _mm512_dot(float *a, float *b, int64_t n)
+{
+    return dot(a, b, n);
 }
 
 float _mm512_euclidean(float *a, float *b, int64_t n)
@@ -263,4 +268,43 @@ float _mm512_euclidean(float *a, float *b, int64_t n)
     __m128 v = _mm_set1_ps(sum);
     __m128 r = _mm_sqrt_ss(v);
     return _mm_cvtss_f32(r);
+}
+
+void _mm512_mm(float *a, float *b, float *c, int64_t m, int64_t n, int64_t k, _Bool transA, _Bool transB)
+{
+    if (!transA && !transB)
+    {
+        for (int i = 0; i < m; i++) {
+            for (int l = 0; l < k; l++) {
+                for (int j = 0; j < n; j++) {
+                    c[i * n + j] += a[i * k + l] * b[l * n + j];
+                }
+            }
+        }
+    } else if (!transA && transB)
+    {
+        for (int i = 0; i < m; i++) {
+            for (int j = 0; j < n; j++) {
+                c[i * n + j] = dot(a + i * k, b + j * k, k);
+            }
+        }
+    } else if (transA && !transB)
+    {
+        for (int i = 0; i < m; i++) {
+            for (int l = 0; l < k; l++) {
+                for (int j = 0; j < n; j++) {
+                    c[i * n + j] += a[l * m + i] * b[l * n + j];
+                }
+            }
+        }
+    } else if (transA && transB)
+    {
+        for (int i = 0; i < m; i++) {
+            for (int l = 0; l < k; l++) {
+                for (int j = 0; j < n; j++) {
+                    c[i * n + j] += a[l * m + i] * b[j * k + l];
+                }
+            }
+        }
+    }
 }
