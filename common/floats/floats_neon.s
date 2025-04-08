@@ -510,7 +510,7 @@ LBB5_15:
 	FMOVS F0, result+24(FP)
 	RET
 
-TEXT ·vmm(SB), $0-64
+TEXT ·vmm(SB), $0-50
 	MOVD a+0(FP), R0
 	MOVD b+8(FP), R1
 	MOVD c+16(FP), R2
