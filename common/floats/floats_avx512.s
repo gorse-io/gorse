@@ -785,7 +785,7 @@ LBB5_17:
 	MOVSS X0, result+24(FP)
 	RET
 
-TEXT ·_mm512_mm(SB), $0-64
+TEXT ·_mm512_mm(SB), $0-50
 	MOVQ a+0(FP), DI
 	MOVQ b+8(FP), SI
 	MOVQ c+16(FP), DX
