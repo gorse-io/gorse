@@ -868,6 +868,11 @@ func (w *Worker) collaborativeRecommendHNSW(rankingIndex *logics.MatrixFactoriza
 	// save result
 	recommend := make(map[string][]string)
 	for _, score := range scores {
+		// the scores use the timestamp of the ranking index, which is only refreshed every so often.
+		// if we don't overwrite the timestamp here, the code below will delete all scores that were
+		// just written.
+		score.Timestamp = localStartTime
+
 		if !excludeSet.Contains(score.Id) && itemCache.IsAvailable(score.Id) {
 			for _, category := range score.Categories {
 				recommend[category] = append(recommend[category], score.Id)
