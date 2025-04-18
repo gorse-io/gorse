@@ -19,8 +19,8 @@ jobs:
         
       - name: Build release
         run: >
-          gox  -output="{{.OS}}/{{.Arch}}/{{.Dir}}" \
-            -osarch='darwin/arm64 windows/arm64 windows/amd64 linux/arm64 linux/amd64' -ldflags="
+          gox -output="{{.OS}}/{{.Arch}}/{{.Dir}}" \
+            -osarch='windows/arm64 windows/amd64 linux/arm64 linux/amd64' -ldflags="
             -X 'github.com/zhenghaoz/gorse/cmd/version.Version=$(git describe --tags $(git rev-parse HEAD))'
             -X 'github.com/zhenghaoz/gorse/cmd/version.GitCommit=$(git rev-parse HEAD)'
             -X 'github.com/zhenghaoz/gorse/cmd/version.BuildTime=$(date)'" ./...
@@ -36,8 +36,42 @@ jobs:
           zip -j gorse_linux_arm64.zip linux/arm64/gorse-*
           zip -j gorse_windows_amd64.zip windows/amd64/gorse-*
           zip -j gorse_windows_arm64.zip windows/arm64/gorse-*
-          zip -j gorse_darwin_arm64.zip darwin/arm64/gorse-*
           
+      - name: Upload release
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: gorse_*_*.zip
+          tag: ${{ github.ref }}
+          overwrite: true
+          file_glob: true
+
+  build-macos-binaries:
+    name: build macos binaries
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: ./go.mod
+
+      - name: Install gox
+        run: go install github.com/mitchellh/gox@master
+
+      - name: Build release
+        run: >
+          gox -output="{{.OS}}/{{.Arch}}/{{.Dir}}" \
+            -osarch='darwin/arm64' -ldflags="
+            -X 'github.com/zhenghaoz/gorse/cmd/version.Version=$(git describe --tags $(git rev-parse HEAD))'
+            -X 'github.com/zhenghaoz/gorse/cmd/version.GitCommit=$(git rev-parse HEAD)'
+            -X 'github.com/zhenghaoz/gorse/cmd/version.BuildTime=$(date)'" ./...
+
+      - name: Install zip
+        uses: montudor/action-zip@v0.1.1
+
+      - name: Zip binaries
+        run: zip -j gorse_darwin_arm64.zip darwin/arm64/gorse-*
+
       - name: Upload release
         uses: svenstaro/upload-release-action@v2
         with:
