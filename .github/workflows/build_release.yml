@@ -67,7 +67,7 @@ jobs:
             -X 'github.com/zhenghaoz/gorse/cmd/version.BuildTime=$(date)'" ./...
 
       - name: Install zip
-        uses: montudor/action-zip@v0.1.1
+        run: brew install zip
 
       - name: Zip binaries
         run: zip -j gorse_darwin_arm64.zip darwin/arm64/gorse-*
