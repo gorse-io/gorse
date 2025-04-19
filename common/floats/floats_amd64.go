@@ -32,6 +32,7 @@ const (
 	AVX Feature = 1 << iota
 	FMA
 	AVX512F
+	CUDA
 )
 
 const AVX512 = AVX | FMA | AVX512F
@@ -124,9 +125,11 @@ func (feature Feature) euclidean(a, b []float32) float32 {
 }
 
 func (feature Feature) mm(a, b, c []float32, m, n, k int, transA, transB bool) {
-	if feature&AVX512 == AVX512 {
+	// Bypass AVX512 optimizations when CUDA is enabled to avoid potential conflicts
+	// between CUDA-based and AVX512-based matrix multiplication implementations.
+	if feature&AVX512 == AVX512 && feature&CUDA == 0 {
 		_mm512_mm(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), unsafe.Pointer(&c[0]), int64(m), int64(n), int64(k), transA, transB)
-	} else if feature&AVX == AVX {
+	} else if feature&AVX == AVX && feature&CUDA == 0 {
 		_mm256_mm(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), unsafe.Pointer(&c[0]), int64(m), int64(n), int64(k), transA, transB)
 	} else {
 		mm(a, b, c, m, n, k, transA, transB)
