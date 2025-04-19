@@ -1,4 +1,4 @@
-//go:build !cgo || (!(darwin && arm64) && !cuda)
+//go:build cgo && cuda
 
 // Copyright 2025 gorse Project Authors
 //
@@ -16,34 +16,28 @@
 
 package floats
 
+import "github.com/zhenghaoz/gorse/common/blas"
+
+func init() {
+	feature = feature | CUDA
+}
+
 func mm(a, b, c []float32, m, n, k int, transA, transB bool) {
+	var err *blas.Error
 	if !transA && !transB {
-		for i := 0; i < m; i++ {
-			for l := 0; l < k; l++ {
-				// C_l += A_{il} * B_i
-				MulConstAddTo(b[l*n:(l+1)*n], a[i*k+l], c[i*n:(i+1)*n])
-			}
-		}
+		err = blas.SGEMM(blas.RowMajor, blas.NoTrans, blas.NoTrans, m, n, k, 1.0,
+			a, k, b, n, 0, c, n)
 	} else if !transA && transB {
-		for i := 0; i < m; i++ {
-			for j := 0; j < n; j++ {
-				c[i*n+j] = Dot(a[i*k:i*k+k], b[j*k:j*k+k])
-			}
-		}
+		err = blas.SGEMM(blas.RowMajor, blas.NoTrans, blas.Trans, m, n, k, 1.0,
+			a, k, b, k, 0, c, n)
 	} else if transA && !transB {
-		for i := 0; i < m; i++ {
-			for l := 0; l < k; l++ {
-				// C_j += A_{ji} * B_i
-				MulConstAddTo(b[l*n:(l+1)*n], a[l*m+i], c[i*n:(i+1)*n])
-			}
-		}
+		err = blas.SGEMM(blas.RowMajor, blas.Trans, blas.NoTrans, m, n, k, 1.0,
+			a, m, b, n, 0, c, n)
 	} else {
-		for i := 0; i < m; i++ {
-			for j := 0; j < n; j++ {
-				for l := 0; l < k; l++ {
-					c[i*n+j] += a[l*m+i] * b[j*k+l]
-				}
-			}
-		}
+		err = blas.SGEMM(blas.RowMajor, blas.Trans, blas.Trans, m, n, k, 1.0,
+			a, m, b, k, 0, c, n)
+	}
+	if err != nil {
+		panic(err)
 	}
 }
