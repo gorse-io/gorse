@@ -100,7 +100,7 @@ jobs:
 
       - name: Resolve Images on Description
         run: |
-          sed -i -E "s/src=\"assets\//src=\"https:\/\/github.com\/gorse-io\/gorse\/raw\/master\/assets\//" README.md
+          sed -i -E "s/src=\"assets\//src=\"https:\/\/github.com\/gorse-io\/gorse\/raw\/${{ env.DEFAULT_BRANCH }}\/assets\//" README.md
           
       - name: Update DockerHub Description
         uses: peter-evans/dockerhub-description@v3
