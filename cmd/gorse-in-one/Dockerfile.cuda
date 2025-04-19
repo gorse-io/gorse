@@ -1,0 +1,45 @@
+# syntax = docker/dockerfile:1-experimental
+
+############################
+# STEP 1 build executable binary
+############################
+FROM nvidia/cuda:12.8.1-devel-ubuntu24.04
+
+COPY --from=golang:1.24 /usr/local/go/ /usr/local/go/
+
+ENV PATH /usr/local/go/bin:$PATH
+
+RUN apt update && apt install -y git
+
+WORKDIR /src
+
+COPY go.* ./
+
+RUN go mod download
+
+COPY . ./
+
+RUN cd common/blas/cublas && make
+
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    cd cmd/gorse-in-one && \
+    go build -tags cuda -ldflags=" \
+       -X 'github.com/zhenghaoz/gorse/cmd/version.Version=$(git describe --tags $(git rev-parse HEAD))' \
+       -X 'github.com/zhenghaoz/gorse/cmd/version.GitCommit=$(git rev-parse HEAD)' \
+       -X 'github.com/zhenghaoz/gorse/cmd/version.BuildTime=$(date)'" . && \
+       mv gorse-in-one /usr/bin
+
+RUN /usr/bin/gorse-in-one --version
+
+############################
+# STEP 2 build runtime image
+############################
+FROM nvidia/cuda:12.8.1-runtime-ubuntu24.04
+
+COPY --from=0 /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+
+COPY --from=0 /usr/bin/gorse-in-one /usr/bin/gorse-in-one
+
+ENV USER root
+
+ENTRYPOINT ["/usr/bin/gorse-in-one", "-c", "/etc/gorse/config.toml"]
