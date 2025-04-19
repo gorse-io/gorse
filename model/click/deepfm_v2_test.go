@@ -46,7 +46,7 @@ func TestDeepFMV2_Classification_Criteo(t *testing.T) {
 	t.Skip()
 	train, test, err := LoadDataFromBuiltIn("criteo")
 	assert.NoError(t, err)
-	m := NewDeepFM(model.Params{
+	m := NewDeepFMV2(model.Params{
 		model.InitStdDev: 0.01,
 		model.NFactors:   8,
 		model.NEpochs:    10,
