@@ -17,7 +17,6 @@ package model
 import (
 	"archive/zip"
 	"fmt"
-	"github.com/zhenghaoz/gorse/base/log"
 	"io"
 	"net/http"
 	"os"
@@ -25,6 +24,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/zhenghaoz/gorse/base/log"
 	"go.uber.org/zap"
 )
 

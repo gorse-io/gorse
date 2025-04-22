@@ -18,15 +18,16 @@ import (
 	"archive/zip"
 	"encoding/csv"
 	"fmt"
-	"github.com/zhenghaoz/gorse/base/log"
-	"github.com/zhenghaoz/gorse/common/util"
-	"go.uber.org/zap"
 	"io"
 	"net/http"
 	"os"
 	"os/user"
 	"path/filepath"
 	"strings"
+
+	"github.com/zhenghaoz/gorse/base/log"
+	"github.com/zhenghaoz/gorse/common/util"
+	"go.uber.org/zap"
 )
 
 var (
@@ -81,7 +82,7 @@ func LoadIris() ([][]float32, []int, error) {
 }
 
 func DownloadAndUnzip(name string) (string, error) {
-	url := fmt.Sprintf("https://pub-64226d9f34c64d6f829f5b63a5540d27.r2.dev/datasets/%s.zip", name)
+	url := fmt.Sprintf("https://cdn.gorse.io/datasets/%s.zip", name)
 	path := filepath.Join(datasetDir, name)
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		zipFileName, _ := downloadFromUrl(url, tempDir)
