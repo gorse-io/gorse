@@ -30,6 +30,7 @@ type Feature uint64
 const (
 	ASIMD Feature = 1 << iota
 	AMX           // Apple matrix extension
+	CUDA
 )
 
 var feature Feature
@@ -100,7 +101,7 @@ func (feature Feature) euclidean(a, b []float32) float32 {
 }
 
 func (feature Feature) mm(a, b, c []float32, m, n, k int, transA, transB bool) {
-	if feature&ASIMD == ASIMD && feature&AMX == 0 {
+	if feature&ASIMD == ASIMD && feature&AMX == 0 && feature&CUDA == 0 {
 		vmm(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), unsafe.Pointer(&c[0]), int64(m), int64(n), int64(k), transA, transB)
 	} else {
 		mm(a, b, c, m, n, k, transA, transB)
