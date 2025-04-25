@@ -28,10 +28,12 @@ import (
 	"go.uber.org/zap"
 	"reflect"
 	"sort"
+	"sync"
 	"time"
 )
 
 type NonPersonalized struct {
+	sync.Mutex
 	name       string
 	timestamp  time.Time
 	scoreFunc  *vm.Program
@@ -147,6 +149,8 @@ func (l *NonPersonalized) Push(item data.Item, feedback []data.Feedback) {
 		return
 	}
 	// Add to heap
+	l.Lock()
+	defer l.Unlock()
 	l.heaps[""].Push(item.ItemId, score)
 	for _, group := range item.Categories {
 		if _, exist := l.heaps[group]; !exist {
@@ -158,6 +162,8 @@ func (l *NonPersonalized) Push(item data.Item, feedback []data.Feedback) {
 
 func (l *NonPersonalized) PopAll() []cache.Score {
 	scores := make(map[string]*cache.Score)
+	l.Lock()
+	defer l.Unlock()
 	for category, h := range l.heaps {
 		names, values := h.PopAll()
 		for i, name := range names {
