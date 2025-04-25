@@ -475,6 +475,9 @@ func decodeCategory(s string) (string, error) {
 	if err != nil {
 		return "", errors.Trace(err)
 	}
+	if len(b) == 0 {
+		return "", nil
+	}
 	return string(b[1:]), nil
 }
 
@@ -496,7 +499,9 @@ func decodeCategories(s string) ([]string, error) {
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
-		categories = append(categories, category)
+		if len(category) > 0 {
+			categories = append(categories, category)
+		}
 	}
 	return categories, nil
 }
