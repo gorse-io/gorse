@@ -776,6 +776,11 @@ func (w *Worker) Recommend(users []data.User) {
 				candidates[category] = append(candidates[category], recommend)
 			}
 			popularRecommendSeconds.Add(time.Since(localStartTime).Seconds())
+
+			// update latest popular items timestamp
+			if err = w.CacheClient.Set(ctx, cache.Time(cache.Key(cache.GlobalMeta, cache.LastUpdatePopularItemsTime), localStartTime)); err != nil {
+				log.Logger().Error("failed to cache popular time", zap.Error(err))
+			}
 		}
 
 		// rank items from different recommenders
