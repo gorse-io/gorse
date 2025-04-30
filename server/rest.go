@@ -2015,6 +2015,13 @@ func ReadCategories(request *restful.Request) []string {
 	} else if queryValues := request.QueryParameters("category"); len(queryValues) > 0 {
 		return queryValues
 	} else {
+		_, ok := request.PathParameters()["category"]
+		if !ok {
+			_, ok = request.Request.URL.Query()["category"]
+			if !ok {
+				return nil
+			}
+		}
 		return []string{""}
 	}
 }
