@@ -749,6 +749,7 @@ func (fm *FactorizationMachines) Fit(ctx context.Context, trainSet *Dataset, tes
 	indices, values, target := fm.convertToTensors(x, y)
 
 	optimizer := nn.NewAdam(fm.Parameters(), fm.lr)
+	optimizer.SetWeightDecay(fm.reg)
 	for epoch := 1; epoch <= fm.nEpochs; epoch++ {
 		fitStart := time.Now()
 		cost := float32(0)
