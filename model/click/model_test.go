@@ -94,7 +94,10 @@ func TestFM_Classification_Criteo(t *testing.T) {
 }
 
 func TestFactorizationMachines_Classification_Frappe(t *testing.T) {
-	t.Skip()
+	// LibFM command:
+	// libfm.exe -train train.libfm -test test.libfm -task c \
+	//   -method sgd -init_stdev 0.01 -dim 1,1,8 -iter 20 \
+	//   -learn_rate 0.01 -regular 0,0,0.0001
 	train, test, err := LoadDataFromBuiltIn("frappe")
 	assert.NoError(t, err)
 	m := NewFactorizationMachines(model.Params{
