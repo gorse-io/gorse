@@ -83,8 +83,8 @@ func TestFactorizationMachines_Classification_Frappe(t *testing.T) {
 		model.InitStdDev: 0.01,
 		model.NFactors:   8,
 		model.NEpochs:    10,
-		model.Lr:         0.001,
-		model.Reg:        0.00001,
+		model.Lr:         0.01,
+		model.Reg:        0.0001,
 		model.BatchSize:  1024,
 	})
 	fitConfig := newFitConfigWithTestTracker(20)
