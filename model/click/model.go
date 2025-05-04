@@ -641,8 +641,9 @@ func (fm *FactorizationMachines) Invalid() bool {
 }
 
 func (fm *FactorizationMachines) Forward(indices, values *nn.Tensor) *nn.Tensor {
+	batchSize := indices.Shape()[0]
 	v := fm.V.Forward(indices)
-	x := nn.Reshape(values, fm.batchSize, fm.numDimension, 1)
+	x := nn.Reshape(values, batchSize, fm.numDimension, 1)
 	vx := nn.BMM(v, x, true)
 	sumSquare := nn.Square(vx)
 	e2 := nn.Square(v)
@@ -653,7 +654,7 @@ func (fm *FactorizationMachines) Forward(indices, values *nn.Tensor) *nn.Tensor 
 	sum = nn.Mul(sum, nn.NewScalar(0.5))
 	w := fm.W.Forward(indices)
 	linear := nn.BMM(w, x, true)
-	fmOutput := nn.Add(nn.Reshape(linear, fm.batchSize), nn.Reshape(sum, fm.batchSize), fm.B)
+	fmOutput := nn.Add(nn.Reshape(linear, batchSize), nn.Reshape(sum, batchSize), fm.B)
 	return nn.Flatten(fmOutput)
 }
 
@@ -679,9 +680,8 @@ func (fm *FactorizationMachines) BatchInternalPredict(x []lo.Tuple2[[]int32, []f
 	indicesTensor, valuesTensor, _ := fm.convertToTensors(x, nil)
 	predictions := make([]float32, 0, len(x))
 	for i := 0; i < len(x); i += fm.batchSize {
-		output := fm.Forward(
-			indicesTensor.Slice(i, i+fm.batchSize),
-			valuesTensor.Slice(i, i+fm.batchSize))
+		j := mathutil.Min(i+fm.batchSize, len(x))
+		output := fm.Forward(indicesTensor.Slice(i, j), valuesTensor.Slice(i, j))
 		predictions = append(predictions, output.Data()...)
 	}
 	return predictions[:len(x)]
@@ -753,9 +753,10 @@ func (fm *FactorizationMachines) Fit(ctx context.Context, trainSet *Dataset, tes
 		fitStart := time.Now()
 		cost := float32(0)
 		for i := 0; i < trainSet.Count(); i += fm.batchSize {
-			batchIndices := indices.Slice(i, i+fm.batchSize)
-			batchValues := values.Slice(i, i+fm.batchSize)
-			batchTarget := target.Slice(i, i+fm.batchSize)
+			j := mathutil.Min(i+fm.batchSize, trainSet.Count())
+			batchIndices := indices.Slice(i, j)
+			batchValues := values.Slice(i, j)
+			batchTarget := target.Slice(i, j)
 			batchOutput := fm.Forward(batchIndices, batchValues)
 			batchLoss := nn.BCEWithLogits(batchTarget, batchOutput)
 			cost += batchLoss.Data()[0]
@@ -795,11 +796,9 @@ func (fm *FactorizationMachines) convertToTensors(x []lo.Tuple2[[]int32, []float
 		panic("length of x and y must be equal")
 	}
 
-	numBatch := (len(x) + fm.batchSize - 1) / fm.batchSize
-	alignedSize := numBatch * fm.batchSize
-	alignedIndices := make([]float32, alignedSize*fm.numDimension)
-	alignedValues := make([]float32, alignedSize*fm.numDimension)
-	alignedTarget := make([]float32, alignedSize)
+	alignedIndices := make([]float32, len(x)*fm.numDimension)
+	alignedValues := make([]float32, len(x)*fm.numDimension)
+	alignedTarget := make([]float32, len(x))
 	for i := range x {
 		if len(x[i].A) != len(x[i].B) {
 			panic("length of indices and values must be equal")
@@ -813,10 +812,10 @@ func (fm *FactorizationMachines) convertToTensors(x []lo.Tuple2[[]int32, []float
 		}
 	}
 
-	indicesTensor = nn.NewTensor(alignedIndices, alignedSize, fm.numDimension)
-	valuesTensor = nn.NewTensor(alignedValues, alignedSize, fm.numDimension)
+	indicesTensor = nn.NewTensor(alignedIndices, len(x), fm.numDimension)
+	valuesTensor = nn.NewTensor(alignedValues, len(x), fm.numDimension)
 	if y != nil {
-		targetTensor = nn.NewTensor(alignedTarget, alignedSize)
+		targetTensor = nn.NewTensor(alignedTarget, len(x))
 	}
 	return
 }
