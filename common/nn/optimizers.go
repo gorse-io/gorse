@@ -19,18 +19,24 @@ import (
 )
 
 type Optimizer interface {
+	SetWeightDecay(rate float32)
 	ZeroGrad()
 	Step()
 }
 
 type baseOptimizer struct {
 	params []*Tensor
+	wd     float32
 }
 
 func (o *baseOptimizer) ZeroGrad() {
 	for _, p := range o.params {
 		p.grad = nil
 	}
+}
+
+func (o *baseOptimizer) SetWeightDecay(wd float32) {
+	o.wd = wd
 }
 
 type SGD struct {

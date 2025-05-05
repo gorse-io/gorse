@@ -748,7 +748,15 @@ func (fm *FactorizationMachines) Fit(ctx context.Context, trainSet *Dataset, tes
 	}
 	indices, values, target := fm.convertToTensors(x, y)
 
-	optimizer := nn.NewAdam(fm.Parameters(), fm.lr)
+	var optimizer nn.Optimizer
+	switch fm.optimizer {
+	case model.SGD:
+		optimizer = nn.NewSGD(fm.Parameters(), fm.lr)
+	case model.Adam:
+		optimizer = nn.NewAdam(fm.Parameters(), fm.lr)
+	default:
+		panic("unknown optimizer")
+	}
 	optimizer.SetWeightDecay(fm.reg)
 	for epoch := 1; epoch <= fm.nEpochs; epoch++ {
 		fitStart := time.Now()
