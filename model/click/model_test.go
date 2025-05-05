@@ -103,7 +103,7 @@ func TestFactorizationMachines_Classification_Criteo(t *testing.T) {
 	tmp, err := UnmarshalModel(buf)
 	assert.NoError(t, err)
 	scoreClone := EvaluateClassification(tmp, test)
-	assert.InDelta(t, 0.77, scoreClone.Accuracy, classificationDelta)
+	assert.InDelta(t, 0.77, scoreClone.Accuracy, 0.02)
 
 	// test clear
 	assert.False(t, m.Invalid())
