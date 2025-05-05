@@ -16,6 +16,7 @@ package nn
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/csv"
 	"fmt"
 	"math/rand"
@@ -320,15 +321,15 @@ func TestSaveAndLoad(t *testing.T) {
 		expected = loss.data[0]
 	}
 
-	modelPath := filepath.Join(os.TempDir(), "spiral.nn")
-	err = Save(model, modelPath)
+	buffer := bytes.NewBuffer(nil)
+	err = Save(model, buffer)
 	assert.NoError(t, err)
 	modelLoaded := NewSequential(
 		NewLinear(2, 10),
 		NewSigmoid(),
 		NewLinear(10, 3),
 	)
-	err = Load(modelLoaded, modelPath)
+	err = Load(modelLoaded, buffer)
 	assert.NoError(t, err)
 	yPred := modelLoaded.Forward(x)
 	loss := SoftmaxCrossEntropy(yPred, y)
