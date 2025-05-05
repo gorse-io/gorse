@@ -461,6 +461,8 @@ func MarshalModel(w io.Writer, m FactorizationMachine) error {
 	switch m.(type) {
 	case *FM:
 		err = encoding.WriteString(w, headerFM)
+	case *FactorizationMachines:
+		err = encoding.WriteString(w, headerFM2)
 	default:
 		return fmt.Errorf("unknown model: %v", reflect.TypeOf(m))
 	}
@@ -471,7 +473,8 @@ func MarshalModel(w io.Writer, m FactorizationMachine) error {
 }
 
 const (
-	headerFM = "FM"
+	headerFM  = "FM"
+	headerFM2 = "FM2"
 )
 
 func UnmarshalModel(r io.Reader) (FactorizationMachine, error) {
@@ -483,6 +486,12 @@ func UnmarshalModel(r io.Reader) (FactorizationMachine, error) {
 	switch header {
 	case headerFM:
 		var fm FM
+		if err := fm.Unmarshal(r); err != nil {
+			return nil, errors.Trace(err)
+		}
+		return &fm, nil
+	case headerFM2:
+		var fm FactorizationMachines
 		if err := fm.Unmarshal(r); err != nil {
 			return nil, errors.Trace(err)
 		}
@@ -719,7 +728,7 @@ func (fm *FactorizationMachines) BatchPredict(inputs []lo.Tuple4[string, string,
 }
 
 func (fm *FactorizationMachines) Init(trainSet *Dataset) {
-	fm.numFeatures = trainSet.ItemCount() + trainSet.UserCount() + len(trainSet.UserFeatures) + len(trainSet.ItemFeatures) + len(trainSet.ContextFeatures)
+	fm.numFeatures = int(trainSet.Index.Len())
 	fm.numDimension = 0
 	for i := 0; i < trainSet.Count(); i++ {
 		_, x, _ := trainSet.Get(i)
@@ -797,7 +806,55 @@ func (fm *FactorizationMachines) Fit(ctx context.Context, trainSet *Dataset, tes
 }
 
 func (fm *FactorizationMachines) Marshal(w io.Writer) error {
-	return errors.New("Marshal is not implemented for FactorizationMachines")
+	// write params
+	if err := encoding.WriteGob(w, fm.Params); err != nil {
+		return errors.Trace(err)
+	}
+	// write index
+	if err := MarshalIndex(w, fm.Index); err != nil {
+		return errors.Trace(err)
+	}
+	// write dataset stats
+	if err := encoding.WriteGob(w, fm.numFeatures); err != nil {
+		return errors.Trace(err)
+	}
+	if err := encoding.WriteGob(w, fm.numDimension); err != nil {
+		return errors.Trace(err)
+	}
+	// write parameters
+	if err := nn.Save(fm.Parameters(), w); err != nil {
+		return errors.Trace(err)
+	}
+	return nil
+}
+
+func (fm *FactorizationMachines) Unmarshal(r io.Reader) error {
+	// read params
+	err := encoding.ReadGob(r, &fm.Params)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	fm.SetParams(fm.Params)
+	// read index
+	fm.Index, err = UnmarshalIndex(r)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	// read dataset stats
+	if err = encoding.ReadGob(r, &fm.numFeatures); err != nil {
+		return errors.Trace(err)
+	}
+	if err = encoding.ReadGob(r, &fm.numDimension); err != nil {
+		return errors.Trace(err)
+	}
+	// read parameters
+	fm.B = nn.Zeros()
+	fm.W = nn.NewEmbedding(fm.numFeatures, 1)
+	fm.V = nn.NewEmbedding(fm.numFeatures, fm.nFactors)
+	if err = nn.Load(fm.Parameters(), r); err != nil {
+		return errors.Trace(err)
+	}
+	return nil
 }
 
 func (fm *FactorizationMachines) convertToTensors(x []lo.Tuple2[[]int32, []float32], y []float32) (indicesTensor, valuesTensor, targetTensor *nn.Tensor) {
