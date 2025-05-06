@@ -227,9 +227,9 @@ func (w *Worker) Sync() {
 
 		// check ranking model version
 		w.latestRankingModelVersion = meta.RankingModelVersion
-		if w.latestRankingModelVersion != w.RankingModelVersion {
+		if w.latestRankingModelVersion != w.CollaborativeFilteringModelVersion {
 			log.Logger().Info("new ranking model found",
-				zap.String("old_version", encoding.Hex(w.RankingModelVersion)),
+				zap.String("old_version", encoding.Hex(w.CollaborativeFilteringModelVersion)),
 				zap.String("new_version", encoding.Hex(w.latestRankingModelVersion)))
 			w.syncedChan.Signal()
 		}
@@ -260,7 +260,7 @@ func (w *Worker) Pull() {
 		pulled := false
 
 		// pull ranking model
-		if w.latestRankingModelVersion != w.RankingModelVersion {
+		if w.latestRankingModelVersion != w.CollaborativeFilteringModelVersion {
 			log.Logger().Info("start pull ranking model")
 			if rankingModelReceiver, err := w.masterClient.GetRankingModel(context.Background(),
 				&protocol.VersionInfo{Version: w.latestRankingModelVersion},
@@ -272,12 +272,12 @@ func (w *Worker) Pull() {
 				if err != nil {
 					log.Logger().Error("failed to unmarshal ranking model", zap.Error(err))
 				} else {
-					w.RankingModel = rankingModel
+					w.CollaborativeFilteringModel = rankingModel
 					w.matrixFactorization = nil
-					w.RankingModelVersion = w.latestRankingModelVersion
+					w.CollaborativeFilteringModelVersion = w.latestRankingModelVersion
 					log.Logger().Info("synced ranking model",
-						zap.String("version", encoding.Hex(w.RankingModelVersion)))
-					MemoryInuseBytesVec.WithLabelValues("collaborative_filtering_model").Set(float64(sizeof.DeepSize(w.RankingModel)))
+						zap.String("version", encoding.Hex(w.CollaborativeFilteringModelVersion)))
+					MemoryInuseBytesVec.WithLabelValues("collaborative_filtering_model").Set(float64(sizeof.DeepSize(w.CollaborativeFilteringModel)))
 					pulled = true
 				}
 			}
@@ -542,15 +542,15 @@ func (w *Worker) Recommend(users []data.User) {
 	}()
 
 	// build ranking index
-	if w.RankingModel != nil && !w.RankingModel.Invalid() && w.matrixFactorization == nil {
+	if w.CollaborativeFilteringModel != nil && !w.CollaborativeFilteringModel.Invalid() && w.matrixFactorization == nil {
 		startTime := time.Now()
 		log.Logger().Info("start building ranking index")
-		itemIndex := w.RankingModel.GetItemIndex()
+		itemIndex := w.CollaborativeFilteringModel.GetItemIndex()
 		matrixFactorization := logics.NewMatrixFactorization(time.Now())
 		for i := int32(0); i < itemIndex.Count(); i++ {
 			if itemId, ok := itemIndex.String(i); ok && itemCache.IsAvailable(itemId) {
 				item, _ := itemCache.Get(itemId)
-				matrixFactorization.Add(item, w.RankingModel.GetItemFactor(int32(i)))
+				matrixFactorization.Add(item, w.CollaborativeFilteringModel.GetItemFactor(int32(i)))
 			}
 		}
 		w.matrixFactorization = matrixFactorization
@@ -613,8 +613,8 @@ func (w *Worker) Recommend(users []data.User) {
 
 		// Recommender #1: collaborative filtering.
 		collaborativeUsed := false
-		if w.Config.Recommend.Offline.EnableColRecommend && w.RankingModel != nil && !w.RankingModel.Invalid() {
-			if userIndex := w.RankingModel.GetUserIndex().Id(userId); w.RankingModel.IsUserPredictable(int32(userIndex)) {
+		if w.Config.Recommend.Offline.EnableColRecommend && w.CollaborativeFilteringModel != nil && !w.CollaborativeFilteringModel.Invalid() {
+			if userIndex := w.CollaborativeFilteringModel.GetUserIndex().Id(userId); w.CollaborativeFilteringModel.IsUserPredictable(int32(userIndex)) {
 				var recommend map[string][]string
 				var usedTime time.Duration
 				recommend, usedTime, err = w.collaborativeRecommendHNSW(w.matrixFactorization, userId, excludeSet, itemCache)
@@ -628,10 +628,10 @@ func (w *Worker) Recommend(users []data.User) {
 				}
 				collaborativeUsed = true
 				collaborativeRecommendSeconds.Add(usedTime.Seconds())
-			} else if !w.RankingModel.IsUserPredictable(int32(userIndex)) {
+			} else if !w.CollaborativeFilteringModel.IsUserPredictable(int32(userIndex)) {
 				log.Logger().Debug("user is unpredictable", zap.String("user_id", userId))
 			}
-		} else if w.RankingModel == nil || w.RankingModel.Invalid() {
+		} else if w.CollaborativeFilteringModel == nil || w.CollaborativeFilteringModel.Invalid() {
 			log.Logger().Debug("no collaborative filtering model")
 		}
 
@@ -792,8 +792,8 @@ func (w *Worker) Recommend(users []data.User) {
 					return errors.Trace(err)
 				}
 				ctrUsed = true
-			} else if w.RankingModel != nil && !w.RankingModel.Invalid() &&
-				w.RankingModel.IsUserPredictable(w.RankingModel.GetUserIndex().Id(userId)) {
+			} else if w.CollaborativeFilteringModel != nil && !w.CollaborativeFilteringModel.Invalid() &&
+				w.CollaborativeFilteringModel.IsUserPredictable(w.CollaborativeFilteringModel.GetUserIndex().Id(userId)) {
 				results[category], err = w.rankByCollaborativeFiltering(userId, catCandidates)
 				if err != nil {
 					log.Logger().Error("failed to rank items", zap.Error(err))
@@ -862,9 +862,9 @@ func (w *Worker) Recommend(users []data.User) {
 
 func (w *Worker) collaborativeRecommendHNSW(rankingIndex *logics.MatrixFactorization, userId string, excludeSet mapset.Set[string], itemCache *ItemCache) (map[string][]string, time.Duration, error) {
 	ctx := context.Background()
-	userIndex := w.RankingModel.GetUserIndex().Id(userId)
+	userIndex := w.CollaborativeFilteringModel.GetUserIndex().Id(userId)
 	localStartTime := time.Now()
-	scores := rankingIndex.Search(w.RankingModel.GetUserFactor(userIndex), w.Config.Recommend.CacheSize+excludeSet.Cardinality())
+	scores := rankingIndex.Search(w.CollaborativeFilteringModel.GetUserFactor(userIndex), w.Config.Recommend.CacheSize+excludeSet.Cardinality())
 	// save result
 	recommend := make(map[string][]string)
 	for i := range scores {
@@ -909,7 +909,7 @@ func (w *Worker) rankByCollaborativeFiltering(userId string, candidates [][]stri
 	for _, itemId := range itemIds {
 		topItems = append(topItems, cache.Score{
 			Id:    itemId,
-			Score: float64(w.RankingModel.Predict(userId, itemId)),
+			Score: float64(w.CollaborativeFilteringModel.Predict(userId, itemId)),
 		})
 	}
 	cache.SortDocuments(topItems)
@@ -1242,8 +1242,8 @@ func (w *Worker) replacement(recommend map[string][]cache.Score, user *data.User
 			var score float64
 			if w.Config.Recommend.Offline.EnableClickThroughPrediction && w.ClickModel != nil {
 				score = float64(w.ClickModel.Predict(user.UserId, itemId, click.ConvertLabelsToFeatures(user.Labels), click.ConvertLabelsToFeatures(item.Labels)))
-			} else if w.RankingModel != nil && !w.RankingModel.Invalid() && w.RankingModel.IsUserPredictable(w.RankingModel.GetUserIndex().Id(user.UserId)) {
-				score = float64(w.RankingModel.Predict(user.UserId, itemId))
+			} else if w.CollaborativeFilteringModel != nil && !w.CollaborativeFilteringModel.Invalid() && w.CollaborativeFilteringModel.IsUserPredictable(w.CollaborativeFilteringModel.GetUserIndex().Id(user.UserId)) {
+				score = float64(w.CollaborativeFilteringModel.Predict(user.UserId, itemId))
 			} else {
 				upper := upperBounds[""]
 				lower := lowerBounds[""]

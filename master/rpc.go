@@ -47,12 +47,12 @@ func (m *Master) GetMeta(ctx context.Context, nodeInfo *protocol.NodeInfo) (*pro
 		return nil, err
 	}
 	// save ranking model version
-	m.rankingModelMutex.RLock()
+	m.collaborativeFilteringModelMutex.RLock()
 	var rankingModelVersion int64
-	if m.RankingModel != nil && !m.RankingModel.Invalid() {
-		rankingModelVersion = m.RankingModelVersion
+	if m.CollaborativeFilteringModel != nil && !m.CollaborativeFilteringModel.Invalid() {
+		rankingModelVersion = m.CollaborativeFilteringModelVersion
 	}
-	m.rankingModelMutex.RUnlock()
+	m.collaborativeFilteringModelMutex.RUnlock()
 	// save click model version
 	m.clickModelMutex.RLock()
 	var clickModelVersion int64
@@ -87,14 +87,14 @@ func (m *Master) GetMeta(ctx context.Context, nodeInfo *protocol.NodeInfo) (*pro
 
 // GetRankingModel returns latest ranking model.
 func (m *Master) GetRankingModel(version *protocol.VersionInfo, sender protocol.Master_GetRankingModelServer) error {
-	m.rankingModelMutex.RLock()
-	defer m.rankingModelMutex.RUnlock()
+	m.collaborativeFilteringModelMutex.RLock()
+	defer m.collaborativeFilteringModelMutex.RUnlock()
 	// skip empty model
-	if m.RankingModel == nil || m.RankingModel.Invalid() {
+	if m.CollaborativeFilteringModel == nil || m.CollaborativeFilteringModel.Invalid() {
 		return errors.New("no valid model found")
 	}
 	// check model version
-	if m.RankingModelVersion != version.Version {
+	if m.CollaborativeFilteringModelVersion != version.Version {
 		return errors.New("model version mismatch")
 	}
 	// encode model
@@ -107,7 +107,7 @@ func (m *Master) GetRankingModel(version *protocol.VersionInfo, sender protocol.
 				log.Logger().Error("fail to close pipe", zap.Error(err))
 			}
 		}(writer)
-		err := cf.MarshalModel(writer, m.RankingModel)
+		err := cf.MarshalModel(writer, m.CollaborativeFilteringModel)
 		if err != nil {
 			log.Logger().Error("fail to marshal ranking model", zap.Error(err))
 			encoderError = err

@@ -369,7 +369,7 @@ func (suite *MasterAPITestSuite) TestGetCluster() {
 func (suite *MasterAPITestSuite) TestGetStats() {
 	ctx := context.Background()
 	// set stats
-	suite.rankingScore = cf.Score{Precision: 0.1}
+	suite.collaborativeFilteringModelScore = cf.Score{Precision: 0.1}
 	suite.clickScore = click.Score{Precision: 0.2}
 	err := suite.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.NumUsers), 123))
 	suite.NoError(err)

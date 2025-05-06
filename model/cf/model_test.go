@@ -21,7 +21,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/zhenghaoz/gorse/base/task"
 	"github.com/zhenghaoz/gorse/common/floats"
 	"github.com/zhenghaoz/gorse/dataset"
 	"github.com/zhenghaoz/gorse/model"
@@ -30,7 +29,7 @@ import (
 const benchDelta = 0.01
 
 func newFitConfig(_ int) *FitConfig {
-	cfg := NewFitConfig().SetVerbose(1).SetJobsAllocator(task.NewConstantJobsAllocator(runtime.NumCPU()))
+	cfg := NewFitConfig().SetVerbose(1).SetJobs(runtime.NumCPU())
 	return cfg
 }
 
