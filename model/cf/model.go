@@ -318,17 +318,12 @@ func Clone(m MatrixFactorization) MatrixFactorization {
 	}
 }
 
-const (
-	CollaborativeBPR = "bpr"
-	CollaborativeCCD = "ccd"
-)
-
 func GetModelName(m Model) string {
 	switch m.(type) {
 	case *BPR:
-		return CollaborativeBPR
-	case *CCD:
-		return CollaborativeCCD
+		return "bpr"
+	case *ALS:
+		return "als"
 	default:
 		return reflect.TypeOf(m).String()
 	}
@@ -356,12 +351,12 @@ func UnmarshalModel(r io.Reader) (MatrixFactorization, error) {
 			return nil, errors.Trace(err)
 		}
 		return &bpr, nil
-	case "ccd":
-		var ccd CCD
-		if err := ccd.Unmarshal(r); err != nil {
+	case "als":
+		var als ALS
+		if err := als.Unmarshal(r); err != nil {
 			return nil, errors.Trace(err)
 		}
-		return &ccd, nil
+		return &als, nil
 	}
 	return nil, fmt.Errorf("unknown model %v", name)
 }
@@ -560,7 +555,7 @@ func (bpr *BPR) Unmarshal(r io.Reader) error {
 	return nil
 }
 
-type CCD struct {
+type ALS struct {
 	BaseMatrixFactorization
 	// Hyper parameters
 	nFactors   int
@@ -571,25 +566,25 @@ type CCD struct {
 	weight     float32
 }
 
-// NewCCD creates a eALS model.
-func NewCCD(params model.Params) *CCD {
-	fast := new(CCD)
+// NewALS creates a eALS model.
+func NewALS(params model.Params) *ALS {
+	fast := new(ALS)
 	fast.SetParams(params)
 	return fast
 }
 
 // SetParams sets hyper-parameters for the ALS model.
-func (ccd *CCD) SetParams(params model.Params) {
-	ccd.BaseMatrixFactorization.SetParams(params)
-	ccd.nFactors = ccd.Params.GetInt(model.NFactors, 16)
-	ccd.nEpochs = ccd.Params.GetInt(model.NEpochs, 50)
-	ccd.initMean = ccd.Params.GetFloat32(model.InitMean, 0)
-	ccd.initStdDev = ccd.Params.GetFloat32(model.InitStdDev, 0.1)
-	ccd.reg = ccd.Params.GetFloat32(model.Reg, 0.06)
-	ccd.weight = ccd.Params.GetFloat32(model.Alpha, 0.001)
+func (als *ALS) SetParams(params model.Params) {
+	als.BaseMatrixFactorization.SetParams(params)
+	als.nFactors = als.Params.GetInt(model.NFactors, 16)
+	als.nEpochs = als.Params.GetInt(model.NEpochs, 50)
+	als.initMean = als.Params.GetFloat32(model.InitMean, 0)
+	als.initStdDev = als.Params.GetFloat32(model.InitStdDev, 0.1)
+	als.reg = als.Params.GetFloat32(model.Reg, 0.06)
+	als.weight = als.Params.GetFloat32(model.Alpha, 0.001)
 }
 
-func (ccd *CCD) GetParamsGrid(withSize bool) model.ParamsGrid {
+func (als *ALS) GetParamsGrid(withSize bool) model.ParamsGrid {
 	return model.ParamsGrid{
 		model.NFactors:   lo.If(withSize, []interface{}{8, 16, 32, 64}).Else([]interface{}{16}),
 		model.InitMean:   []interface{}{0},
@@ -599,28 +594,28 @@ func (ccd *CCD) GetParamsGrid(withSize bool) model.ParamsGrid {
 	}
 }
 
-func (ccd *CCD) Init(trainSet dataset.CFSplit) {
+func (als *ALS) Init(trainSet dataset.CFSplit) {
 	// Initialize
-	newUserFactor := ccd.GetRandomGenerator().NormalMatrix(trainSet.CountUsers(), ccd.nFactors, ccd.initMean, ccd.initStdDev)
-	newItemFactor := ccd.GetRandomGenerator().NormalMatrix(trainSet.CountItems(), ccd.nFactors, ccd.initMean, ccd.initStdDev)
+	newUserFactor := als.GetRandomGenerator().NormalMatrix(trainSet.CountUsers(), als.nFactors, als.initMean, als.initStdDev)
+	newItemFactor := als.GetRandomGenerator().NormalMatrix(trainSet.CountItems(), als.nFactors, als.initMean, als.initStdDev)
 	// Initialize base
-	ccd.UserFactor = newUserFactor
-	ccd.ItemFactor = newItemFactor
-	ccd.BaseMatrixFactorization.Init(trainSet)
+	als.UserFactor = newUserFactor
+	als.ItemFactor = newItemFactor
+	als.BaseMatrixFactorization.Init(trainSet)
 }
 
-// Fit the CCD model. Its task complexity is O(ccd.nEpochs).
-func (ccd *CCD) Fit(ctx context.Context, trainSet, valSet dataset.CFSplit, config *FitConfig) Score {
+// Fit the ALS model. Its task complexity is O(ccd.nEpochs).
+func (als *ALS) Fit(ctx context.Context, trainSet, valSet dataset.CFSplit, config *FitConfig) Score {
 	config = config.LoadDefaultIfNil()
-	log.Logger().Info("fit ccd",
+	log.Logger().Info("fit als",
 		zap.Int("train_set_size", trainSet.Count()),
 		zap.Int("test_set_size", valSet.Count()),
-		zap.Any("params", ccd.GetParams()),
+		zap.Any("params", als.GetParams()),
 		zap.Any("config", config))
-	ccd.Init(trainSet)
+	als.Init(trainSet)
 	// Create temporary matrix
 	maxJobs := config.MaxJobs()
-	s := base.NewMatrix32(ccd.nFactors, ccd.nFactors)
+	s := base.NewMatrix32(als.nFactors, als.nFactors)
 	userPredictions := make([][]float32, maxJobs)
 	itemPredictions := make([][]float32, maxJobs)
 	userRes := make([][]float32, maxJobs)
@@ -633,25 +628,25 @@ func (ccd *CCD) Fit(ctx context.Context, trainSet, valSet dataset.CFSplit, confi
 	}
 	// evaluate initial model
 	evalStart := time.Now()
-	scores := Evaluate(ccd, valSet, trainSet, config.TopK, config.Candidates, config.AvailableJobs(), NDCG, Precision, Recall)
+	scores := Evaluate(als, valSet, trainSet, config.TopK, config.Candidates, config.AvailableJobs(), NDCG, Precision, Recall)
 	evalTime := time.Since(evalStart)
-	log.Logger().Debug(fmt.Sprintf("fit ccd %v/%v", 0, ccd.nEpochs),
+	log.Logger().Debug(fmt.Sprintf("fit als %v/%v", 0, als.nEpochs),
 		zap.String("eval_time", evalTime.String()),
 		zap.Float32(fmt.Sprintf("NDCG@%v", config.TopK), scores[0]),
 		zap.Float32(fmt.Sprintf("Precision@%v", config.TopK), scores[1]),
 		zap.Float32(fmt.Sprintf("Recall@%v", config.TopK), scores[2]))
 
-	_, span := progress.Start(ctx, "CCD.Fit", ccd.nEpochs)
-	for ep := 1; ep <= ccd.nEpochs; ep++ {
+	_, span := progress.Start(ctx, "ALS.Fit", als.nEpochs)
+	for ep := 1; ep <= als.nEpochs; ep++ {
 		fitStart := time.Now()
 		// Update user factors
 		// S^q <- \sum^N_{itemIndex=1} c_i q_i q_i^T
 		floats.MatZero(s)
 		for itemIndex := 0; itemIndex < trainSet.CountItems(); itemIndex++ {
 			if len(trainSet.GetItemFeedback()[itemIndex]) > 0 {
-				for i := 0; i < ccd.nFactors; i++ {
-					for j := 0; j < ccd.nFactors; j++ {
-						s[i][j] += ccd.ItemFactor[itemIndex][i] * ccd.ItemFactor[itemIndex][j]
+				for i := 0; i < als.nFactors; i++ {
+					for j := 0; j < als.nFactors; j++ {
+						s[i][j] += als.ItemFactor[itemIndex][i] * als.ItemFactor[itemIndex][j]
 					}
 				}
 			}
@@ -659,28 +654,28 @@ func (ccd *CCD) Fit(ctx context.Context, trainSet, valSet dataset.CFSplit, confi
 		_ = parallel.Parallel(trainSet.CountUsers(), config.AvailableJobs(), func(workerId, userIndex int) error {
 			userFeedback := trainSet.GetUserFeedback()[userIndex]
 			for _, i := range userFeedback {
-				userPredictions[workerId][i] = ccd.internalPredict(int32(userIndex), i)
+				userPredictions[workerId][i] = als.internalPredict(int32(userIndex), i)
 			}
-			for f := 0; f < ccd.nFactors; f++ {
+			for f := 0; f < als.nFactors; f++ {
 				// for itemIndex \in R_u do   \hat_{r}^f_{ui} <- \hat_{r}_{ui} - p_{uf]q_{if}
 				for _, i := range userFeedback {
-					userRes[workerId][i] = userPredictions[workerId][i] - ccd.UserFactor[userIndex][f]*ccd.ItemFactor[i][f]
+					userRes[workerId][i] = userPredictions[workerId][i] - als.UserFactor[userIndex][f]*als.ItemFactor[i][f]
 				}
 				// p_{uf} <-
 				a, b, c := float32(0), float32(0), float32(0)
 				for _, i := range userFeedback {
-					a += (1 - (1-ccd.weight)*userRes[workerId][i]) * ccd.ItemFactor[i][f]
-					c += (1 - ccd.weight) * ccd.ItemFactor[i][f] * ccd.ItemFactor[i][f]
+					a += (1 - (1-als.weight)*userRes[workerId][i]) * als.ItemFactor[i][f]
+					c += (1 - als.weight) * als.ItemFactor[i][f] * als.ItemFactor[i][f]
 				}
-				for k := 0; k < ccd.nFactors; k++ {
+				for k := 0; k < als.nFactors; k++ {
 					if k != f {
-						b += ccd.weight * ccd.UserFactor[userIndex][k] * s[k][f]
+						b += als.weight * als.UserFactor[userIndex][k] * s[k][f]
 					}
 				}
-				ccd.UserFactor[userIndex][f] = (a - b) / (c + ccd.weight*s[f][f] + ccd.reg)
+				als.UserFactor[userIndex][f] = (a - b) / (c + als.weight*s[f][f] + als.reg)
 				// for itemIndex \in R_u do   \hat_{r}_{ui} <- \hat_{r}^f_{ui} - p_{uf]q_{if}
 				for _, i := range userFeedback {
-					userPredictions[workerId][i] = userRes[workerId][i] + ccd.UserFactor[userIndex][f]*ccd.ItemFactor[i][f]
+					userPredictions[workerId][i] = userRes[workerId][i] + als.UserFactor[userIndex][f]*als.ItemFactor[i][f]
 				}
 			}
 			return nil
@@ -690,9 +685,9 @@ func (ccd *CCD) Fit(ctx context.Context, trainSet, valSet dataset.CFSplit, confi
 		floats.MatZero(s)
 		for userIndex := 0; userIndex < trainSet.CountUsers(); userIndex++ {
 			if len(trainSet.GetUserFeedback()[userIndex]) > 0 {
-				for i := 0; i < ccd.nFactors; i++ {
-					for j := 0; j < ccd.nFactors; j++ {
-						s[i][j] += ccd.UserFactor[userIndex][i] * ccd.UserFactor[userIndex][j]
+				for i := 0; i < als.nFactors; i++ {
+					for j := 0; j < als.nFactors; j++ {
+						s[i][j] += als.UserFactor[userIndex][i] * als.UserFactor[userIndex][j]
 					}
 				}
 			}
@@ -700,39 +695,39 @@ func (ccd *CCD) Fit(ctx context.Context, trainSet, valSet dataset.CFSplit, confi
 		_ = parallel.Parallel(trainSet.CountItems(), config.AvailableJobs(), func(workerId, itemIndex int) error {
 			itemFeedback := trainSet.GetItemFeedback()[itemIndex]
 			for _, u := range itemFeedback {
-				itemPredictions[workerId][u] = ccd.internalPredict(u, int32(itemIndex))
+				itemPredictions[workerId][u] = als.internalPredict(u, int32(itemIndex))
 			}
-			for f := 0; f < ccd.nFactors; f++ {
+			for f := 0; f < als.nFactors; f++ {
 				// for itemIndex \in R_u do   \hat_{r}^f_{ui} <- \hat_{r}_{ui} - p_{uf]q_{if}
 				for _, u := range itemFeedback {
-					itemRes[workerId][u] = itemPredictions[workerId][u] - ccd.UserFactor[u][f]*ccd.ItemFactor[itemIndex][f]
+					itemRes[workerId][u] = itemPredictions[workerId][u] - als.UserFactor[u][f]*als.ItemFactor[itemIndex][f]
 				}
 				// q_{if} <-
 				a, b, c := float32(0), float32(0), float32(0)
 				for _, u := range itemFeedback {
-					a += (1 - (1-ccd.weight)*itemRes[workerId][u]) * ccd.UserFactor[u][f]
-					c += (1 - ccd.weight) * ccd.UserFactor[u][f] * ccd.UserFactor[u][f]
+					a += (1 - (1-als.weight)*itemRes[workerId][u]) * als.UserFactor[u][f]
+					c += (1 - als.weight) * als.UserFactor[u][f] * als.UserFactor[u][f]
 				}
-				for k := 0; k < ccd.nFactors; k++ {
+				for k := 0; k < als.nFactors; k++ {
 					if k != f {
-						b += ccd.weight * ccd.ItemFactor[itemIndex][k] * s[k][f]
+						b += als.weight * als.ItemFactor[itemIndex][k] * s[k][f]
 					}
 				}
-				ccd.ItemFactor[itemIndex][f] = (a - b) / (c + ccd.weight*s[f][f] + ccd.reg)
+				als.ItemFactor[itemIndex][f] = (a - b) / (c + als.weight*s[f][f] + als.reg)
 				// for itemIndex \in R_u do   \hat_{r}_{ui} <- \hat_{r}^f_{ui} - p_{uf]q_{if}
 				for _, u := range itemFeedback {
-					itemPredictions[workerId][u] = itemRes[workerId][u] + ccd.UserFactor[u][f]*ccd.ItemFactor[itemIndex][f]
+					itemPredictions[workerId][u] = itemRes[workerId][u] + als.UserFactor[u][f]*als.ItemFactor[itemIndex][f]
 				}
 			}
 			return nil
 		})
 		fitTime := time.Since(fitStart)
 		// Cross validation
-		if ep%config.Verbose == 0 || ep == ccd.nEpochs {
+		if ep%config.Verbose == 0 || ep == als.nEpochs {
 			evalStart = time.Now()
-			scores = Evaluate(ccd, valSet, trainSet, config.TopK, config.Candidates, config.AvailableJobs(), NDCG, Precision, Recall)
+			scores = Evaluate(als, valSet, trainSet, config.TopK, config.Candidates, config.AvailableJobs(), NDCG, Precision, Recall)
 			evalTime = time.Since(evalStart)
-			log.Logger().Debug(fmt.Sprintf("fit ccd %v/%v", ep, ccd.nEpochs),
+			log.Logger().Debug(fmt.Sprintf("fit als %v/%v", ep, als.nEpochs),
 				zap.String("fit_time", fitTime.String()),
 				zap.String("eval_time", evalTime.String()),
 				zap.Float32(fmt.Sprintf("NDCG@%v", config.TopK), scores[0]),
@@ -743,7 +738,7 @@ func (ccd *CCD) Fit(ctx context.Context, trainSet, valSet dataset.CFSplit, confi
 	}
 	span.End()
 
-	log.Logger().Info("fit ccd complete",
+	log.Logger().Info("fit als complete",
 		zap.Float32(fmt.Sprintf("NDCG@%v", config.TopK), scores[0]),
 		zap.Float32(fmt.Sprintf("Precision@%v", config.TopK), scores[1]),
 		zap.Float32(fmt.Sprintf("Recall@%v", config.TopK), scores[2]))
@@ -755,18 +750,18 @@ func (ccd *CCD) Fit(ctx context.Context, trainSet, valSet dataset.CFSplit, confi
 }
 
 // Marshal model into byte stream.
-func (ccd *CCD) Marshal(w io.Writer) error {
-	if err := ccd.BaseMatrixFactorization.Marshal(w); err != nil {
+func (als *ALS) Marshal(w io.Writer) error {
+	if err := als.BaseMatrixFactorization.Marshal(w); err != nil {
 		return errors.Trace(err)
 	}
 	return nil
 }
 
 // Unmarshal model from byte stream.
-func (ccd *CCD) Unmarshal(r io.Reader) error {
-	if err := ccd.BaseMatrixFactorization.Unmarshal(r); err != nil {
+func (als *ALS) Unmarshal(r io.Reader) error {
+	if err := als.BaseMatrixFactorization.Unmarshal(r); err != nil {
 		return errors.Trace(err)
 	}
-	ccd.SetParams(ccd.Params)
+	als.SetParams(als.Params)
 	return nil
 }

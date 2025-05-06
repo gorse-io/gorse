@@ -161,7 +161,7 @@ func NewModelSearcher(nEpoch, nTrials int, searchSize bool) *ModelSearcher {
 		searchSize: searchSize,
 	}
 	searcher.models = append(searcher.models, NewBPR(model.Params{model.NEpochs: searcher.numEpochs}))
-	searcher.models = append(searcher.models, NewCCD(model.Params{model.NEpochs: searcher.numEpochs}))
+	searcher.models = append(searcher.models, NewALS(model.Params{model.NEpochs: searcher.numEpochs}))
 	return searcher
 }
 

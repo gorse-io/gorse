@@ -95,7 +95,7 @@ func TestBPR_MovieLens(t *testing.T) {
 func TestCCD_MovieLens(t *testing.T) {
 	trainSet, testSet, err := dataset.LoadDataFromBuiltIn("ml-1m")
 	assert.NoError(t, err)
-	m := NewCCD(model.Params{
+	m := NewALS(model.Params{
 		model.NFactors: 8,
 		model.Reg:      0.015,
 		model.NEpochs:  30,
@@ -126,7 +126,7 @@ func TestCCD_MovieLens(t *testing.T) {
 //func TestCCD_Pinterest(t *testing.T) {
 //	trainSet, testSet, err := LoadDataFromBuiltIn("pinterest-20")
 //	assert.NoError(t, err)
-//	m := NewCCD(model.Params{
+//	m := NewALS(model.Params{
 //		model.NFactors:   8,
 //		model.Reg:        0.01,
 //		model.NEpochs:    20,
