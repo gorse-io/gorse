@@ -109,7 +109,7 @@ func (m *Master) GetRankingModel(version *protocol.VersionInfo, sender protocol.
 		}(writer)
 		err := cf.MarshalModel(writer, m.CollaborativeFilteringModel)
 		if err != nil {
-			log.Logger().Error("fail to marshal ranking model", zap.Error(err))
+			log.Logger().Error("fail to marshal collaborative filtering model", zap.Error(err))
 			encoderError = err
 			return
 		}

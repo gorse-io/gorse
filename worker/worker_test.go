@@ -608,7 +608,7 @@ func newMockMaster(t *testing.T) *mockMaster {
 	// create ranking model
 	trainSet, testSet := newRankingDataset()
 	bpr := cf.NewBPR(model.Params{model.NEpochs: 0})
-	bpr.Fit(context.Background(), trainSet, testSet, nil)
+	bpr.Fit(context.Background(), trainSet, testSet, cf.NewFitConfig())
 	rankingModelBuffer := bytes.NewBuffer(nil)
 	err = cf.MarshalModel(rankingModelBuffer, bpr)
 	assert.NoError(t, err)
