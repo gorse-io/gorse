@@ -56,7 +56,7 @@ func TestLocalCache(t *testing.T) {
 	// write and load
 	trainSet, testSet := newRankingDataset()
 	bpr := cf.NewBPR(model.Params{model.NEpochs: 0})
-	bpr.Fit(context.Background(), trainSet, testSet, nil)
+	bpr.Fit(context.Background(), trainSet, testSet, cf.NewFitConfig())
 	cache.CollaborativeFilteringModel = bpr
 	cache.CollaborativeFilteringModelName = "bpr"
 	cache.CollaborativeFilteringModelVersion = 123
