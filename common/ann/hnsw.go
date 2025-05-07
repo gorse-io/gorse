@@ -34,7 +34,7 @@ type HNSW[T any] struct {
 	enterPoint      int32
 	initOnce        sync.Once
 	indexMutex      sync.Mutex
-	rootMutex       sync.RWMutex
+	rootMutex       sync.Mutex
 	bottomMutex     []*sync.RWMutex
 
 	levelFactor    float32
