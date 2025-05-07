@@ -126,16 +126,16 @@ func (h *HNSW[T]) insert(q int32) {
 		return
 	}
 
-	h.rootMutex.RLock()
+	h.rootMutex.Lock()
 	var (
 		w           *heap.PriorityQueue                               // list for the currently found nearest elements
 		enterPoints = h.distance(h.vectors[q], []int32{h.enterPoint}) // get enter point for hnsw
 		l           = int(math32.Floor(-math32.Log(rand.Float32()) * h.levelFactor))
 		topLayer    = len(h.upperNeighbors)
 	)
-	h.rootMutex.RUnlock()
-	if l > topLayer {
-		h.rootMutex.Lock()
+	if l <= topLayer {
+		h.rootMutex.Unlock()
+	} else {
 		defer h.rootMutex.Unlock()
 	}
 
