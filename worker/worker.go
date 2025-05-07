@@ -461,7 +461,7 @@ func (w *Worker) Serve() {
 	for {
 		select {
 		case tick := <-w.ticker.C:
-			if time.Since(tick) < w.Config.Recommend.Offline.CheckRecommendPeriod {
+			if time.Since(tick) >= w.Config.Recommend.Offline.CheckRecommendPeriod {
 				loop()
 			}
 		case <-w.pulledChan.C:
