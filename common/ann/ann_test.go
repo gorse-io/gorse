@@ -155,7 +155,7 @@ func TestMultithread(t *testing.T) {
 	hnsw := NewHNSW(floats.Euclidean)
 	var wg1 sync.WaitGroup
 	wg1.Add(trainSize)
-	for i, _ := range dat.TrainImages[:trainSize] {
+	for i := range dat.TrainImages[:trainSize] {
 		go func(i int) {
 			defer wg1.Done()
 			indices[i] = hnsw.Add(dat.TrainImages[i])

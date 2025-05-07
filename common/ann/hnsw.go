@@ -33,9 +33,9 @@ type HNSW[T any] struct {
 	upperNeighbors  []sync.Map
 	enterPoint      int32
 	initOnce        sync.Once
-	indexMutex      sync.Mutex    // mutex for vectors, bottomNeighbors, and upperNeighbors
-	rootMutex       sync.Mutex    // mutex for enterPoint
-	bottomMutex     []*sync.Mutex // mutex for bottomNeighbors
+	indexMutex      sync.Mutex
+	rootMutex       sync.RWMutex
+	bottomMutex     []*sync.RWMutex
 
 	levelFactor    float32
 	maxConnection  int // maximum number of connections for each element per layer
@@ -59,7 +59,7 @@ func (h *HNSW[T]) Add(v T) int {
 	h.indexMutex.Lock()
 	h.vectors = append(h.vectors, v)
 	h.bottomNeighbors = append(h.bottomNeighbors, heap.NewPriorityQueue(false))
-	h.bottomMutex = append(h.bottomMutex, new(sync.Mutex))
+	h.bottomMutex = append(h.bottomMutex, new(sync.RWMutex))
 	q := len(h.vectors) - 1
 	h.indexMutex.Unlock()
 	h.insert(int32(q))
@@ -126,14 +126,14 @@ func (h *HNSW[T]) insert(q int32) {
 		return
 	}
 
-	h.rootMutex.Lock()
+	h.rootMutex.RLock()
 	var (
 		w           *heap.PriorityQueue                               // list for the currently found nearest elements
 		enterPoints = h.distance(h.vectors[q], []int32{h.enterPoint}) // get enter point for hnsw
 		l           = int(math32.Floor(-math32.Log(rand.Float32()) * h.levelFactor))
 		topLayer    = len(h.upperNeighbors)
 	)
-	h.rootMutex.Unlock()
+	h.rootMutex.RUnlock()
 	if l > topLayer {
 		h.rootMutex.Lock()
 		defer h.rootMutex.Unlock()
@@ -196,9 +196,9 @@ func (h *HNSW[T]) searchLayer(q T, enterPoints *heap.PriorityQueue, ef, currentL
 		}
 
 		// update candidates and w
-		h.bottomMutex[c].Lock()
+		h.bottomMutex[c].RLock()
 		neighbors := h.getNeighbourhood(c, currentLayer).Values()
-		h.bottomMutex[c].Unlock()
+		h.bottomMutex[c].RUnlock()
 		for _, e := range neighbors {
 			if !v.Contains(e) {
 				v.Add(e)
@@ -233,7 +233,7 @@ func (h *HNSW[T]) getNeighbourhood(e int32, currentLayer int) *heap.PriorityQueu
 		if connections, ok := h.upperNeighbors[currentLayer-1].Load(e); ok {
 			return connections.(*heap.PriorityQueue)
 		}
-		return heap.NewPriorityQueue(false)
+		return nil
 	}
 }
 
