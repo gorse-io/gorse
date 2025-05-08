@@ -414,8 +414,9 @@ func (r *Redis) DeleteScores(ctx context.Context, collections []string, conditio
 
 func (r *Redis) AddTimeSeriesPoints(ctx context.Context, points []TimeSeriesPoint) error {
 	p := r.client.Pipeline()
+	opt := &redis.TSOptions{DuplicatePolicy: "LAST"}
 	for _, point := range points {
-		if err := p.TSAdd(ctx, r.PointsTable()+":"+point.Name, point.Timestamp.UnixMilli(), point.Value).Err(); err != nil {
+		if err := p.TSAdd(ctx, r.PointsTable()+":"+point.Name, point.Timestamp.UnixMilli(), point.Value, opt).Err(); err != nil {
 			return errors.Trace(err)
 		}
 	}
