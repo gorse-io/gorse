@@ -1241,7 +1241,7 @@ func (w *Worker) replacement(recommend map[string][]cache.Score, user *data.User
 			// 3. Otherwise, give a random score.
 			var score float64
 			if w.Config.Recommend.Offline.EnableClickThroughPrediction && w.ClickModel != nil {
-				score = float64(w.ClickModel.Predict(user.UserId, itemId, click.ConvertLabelsToFeatures(user.Labels), click.ConvertLabelsToFeatures(item.Labels)))
+				score = float64(w.ClickModel.Predict(user.UserId, itemId, ctr.ConvertLabelsToFeatures(user.Labels), ctr.ConvertLabelsToFeatures(item.Labels)))
 			} else if w.CollaborativeFilteringModel != nil && !w.CollaborativeFilteringModel.Invalid() && w.CollaborativeFilteringModel.IsUserPredictable(w.CollaborativeFilteringModel.GetUserIndex().Id(user.UserId)) {
 				score = float64(w.CollaborativeFilteringModel.Predict(user.UserId, itemId))
 			} else {

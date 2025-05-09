@@ -370,7 +370,7 @@ func (suite *MasterAPITestSuite) TestGetStats() {
 	ctx := context.Background()
 	// set stats
 	suite.collaborativeFilteringModelScore = cf.Score{Precision: 0.1}
-	suite.clickScore = click.Score{Precision: 0.2}
+	suite.clickScore = ctr.Score{Precision: 0.2}
 	err := suite.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.NumUsers), 123))
 	suite.NoError(err)
 	err = suite.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.NumItems), 234))
