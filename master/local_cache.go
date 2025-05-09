@@ -35,8 +35,8 @@ type LocalCache struct {
 	CollaborativeFilteringModel        cf.MatrixFactorization
 	CollaborativeFilteringModelScore   cf.Score
 	ClickModelVersion                  int64
-	ClickModelScore                    click.Score
-	ClickModel                         click.FactorizationMachine
+	ClickModelScore                    ctr.Score
+	ClickModel                         ctr.FactorizationMachine
 }
 
 // LoadLocalCache loads local cache from a file.

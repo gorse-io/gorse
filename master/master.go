@@ -162,7 +162,7 @@ func NewMaster(cfg *config.Config, cacheFile string, managedMode bool) *Master {
 				CacheClient:                 cache.NoDatabase{},
 				DataClient:                  data.NoDatabase{},
 				CollaborativeFilteringModel: cf.NewBPR(nil),
-				ClickModel:                  click.NewFM(nil),
+				ClickModel:                  ctr.NewFM(nil),
 				// init versions
 				CollaborativeFilteringModelVersion: rand.Int63(),
 				ClickModelVersion:                  rand.Int63(),
@@ -432,7 +432,6 @@ func (m *Master) RunManagedTasksLoop() {
 	var (
 		privilegedTasks = []Task{
 			NewFitClickModelTask(m),
-			NewFitRankingModelTask(m),
 		}
 		ragtagTasks = []Task{
 			NewCacheGarbageCollectionTask(m),
