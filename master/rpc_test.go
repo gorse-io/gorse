@@ -61,7 +61,7 @@ func newMockMasterRPC(t *testing.T) *mockMasterRPC {
 	// create ranking model
 	trainSet, testSet := newRankingDataset()
 	bpr := cf.NewBPR(model.Params{model.NEpochs: 0})
-	bpr.Fit(context.Background(), trainSet, testSet, nil)
+	bpr.Fit(context.Background(), trainSet, testSet, cf.NewFitConfig())
 	return &mockMasterRPC{
 		Master: Master{
 			collaborativeFilteringModelName: "bpr",
