@@ -15,6 +15,8 @@
 package nn
 
 import (
+	"weak"
+
 	"github.com/chewxy/math32"
 )
 
@@ -31,12 +33,12 @@ type op interface {
 
 type base struct {
 	inputs []*Tensor
-	output *Tensor // TODO: Use weak pointer
+	output weak.Pointer[Tensor]
 	gen    int
 }
 
 func (b *base) inputsAndOutput() ([]*Tensor, *Tensor) {
-	return b.inputs, b.output
+	return b.inputs, b.output.Value()
 }
 
 func (b *base) setInputs(inputs ...*Tensor) {
@@ -44,7 +46,7 @@ func (b *base) setInputs(inputs ...*Tensor) {
 }
 
 func (b *base) setOutput(y *Tensor) {
-	b.output = y
+	b.output = weak.Make(y)
 }
 
 func (b *base) generation() int {
@@ -294,7 +296,7 @@ func (p *pow) backward(dy *Tensor) []*Tensor {
 	}
 	dx1 := Zeros(p.inputs[1].shape...)
 	for i := range dy.data {
-		dx1.data[i%wSize] += dy.data[i] * p.output.data[i] * math32.Log(p.inputs[0].data[i])
+		dx1.data[i%wSize] += dy.data[i] * p.output.Value().data[i] * math32.Log(p.inputs[0].data[i])
 	}
 	return []*Tensor{dx0, dx1}
 }
@@ -687,10 +689,10 @@ func (s *sigmoid) forward(inputs ...*Tensor) *Tensor {
 
 func (s *sigmoid) backward(dy *Tensor) []*Tensor {
 	// dx = dy * y * (1 - y)
-	dx := s.output.clone()
+	dx := s.output.Value().clone()
 	dx.neg()
 	dx.add(NewScalar(1))
-	dx.mul(s.output)
+	dx.mul(s.output.Value())
 	dx.mul(dy)
 	return []*Tensor{dx}
 }
@@ -734,7 +736,7 @@ func (s *softmax) forward(inputs ...*Tensor) *Tensor {
 }
 
 func (s *softmax) backward(dy *Tensor) []*Tensor {
-	y := s.output
+	y := s.output.Value()
 	gx := y.clone()
 	gx.mul(dy)
 	sumdx := gx.sum(s.axis, true)

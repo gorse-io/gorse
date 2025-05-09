@@ -19,18 +19,24 @@ import (
 )
 
 type Optimizer interface {
+	SetWeightDecay(rate float32)
 	ZeroGrad()
 	Step()
 }
 
 type baseOptimizer struct {
 	params []*Tensor
+	wd     float32
 }
 
 func (o *baseOptimizer) ZeroGrad() {
 	for _, p := range o.params {
 		p.grad = nil
 	}
+}
+
+func (o *baseOptimizer) SetWeightDecay(wd float32) {
+	o.wd = wd
 }
 
 type SGD struct {
@@ -48,7 +54,7 @@ func NewSGD(params []*Tensor, lr float32) Optimizer {
 func (s *SGD) Step() {
 	for _, p := range s.params {
 		for i := range p.data {
-			p.data[i] -= s.lr * p.grad.data[i]
+			p.data[i] -= s.lr * (p.grad.data[i] + p.data[i]*s.wd)
 		}
 	}
 }
@@ -78,24 +84,23 @@ func NewAdam(params []*Tensor, alpha float32) Optimizer {
 
 func (a *Adam) Step() {
 	a.t++
+
+	fix1 := 1 - math32.Pow(a.beta1, a.t)
+	fix2 := 1 - math32.Pow(a.beta2, a.t)
+	lr := a.alpha * math32.Sqrt(fix2) / fix1
+
 	for _, p := range a.params {
 		if _, ok := a.ms[p]; !ok {
 			a.ms[p] = Zeros(p.shape...)
 			a.vs[p] = Zeros(p.shape...)
 		}
-
 		m, v := a.ms[p], a.vs[p]
-		grad := p.grad.data
-
-		fix1 := 1 - math32.Pow(a.beta1, a.t)
-		fix2 := 1 - math32.Pow(a.beta2, a.t)
-		lr := a.alpha * math32.Sqrt(fix2) / fix1
-
-		for i := range m.data {
+		for i := range p.data {
+			g := p.grad.data[i] + a.wd*p.data[i]
 			// m += (1 - beta1) * (grad - m)
-			m.data[i] += (1 - a.beta1) * (grad[i] - m.data[i])
+			m.data[i] += (1 - a.beta1) * (g - m.data[i])
 			// v += (1 - beta2) * (grad * grad - v)
-			v.data[i] += (1 - a.beta2) * (grad[i]*grad[i] - v.data[i])
+			v.data[i] += (1 - a.beta2) * (g*g - v.data[i])
 			// param.data -= self.lr * m / (xp.sqrt(v) + eps)
 			p.data[i] -= lr * m.data[i] / (math32.Sqrt(v.data[i]) + a.eps)
 		}

@@ -46,7 +46,6 @@ import (
 const (
 	PositiveFeedbackRate = "PositiveFeedbackRate"
 
-	TaskFitRankingModel        = "Fit collaborative filtering model"
 	TaskFitClickModel          = "Fit click-through rate prediction model"
 	TaskSearchRankingModel     = "Search collaborative filtering  model"
 	TaskSearchClickModel       = "Search click-through rate prediction model"
@@ -61,8 +60,7 @@ type Task interface {
 	run(ctx context.Context, j *task.JobsAllocator) error
 }
 
-// runLoadDatasetTask loads dataset.
-func (m *Master) runLoadDatasetTask() error {
+func (m *Master) loadDataset() (*click.Dataset, *dataset.Dataset, error) {
 	ctx, span := m.tracer.Start(context.Background(), "Load Dataset", 1)
 	defer span.End()
 
@@ -75,7 +73,7 @@ func (m *Master) runLoadDatasetTask() error {
 	for _, cfg := range m.Config.Recommend.NonPersonalized {
 		recommender, err := logics.NewNonPersonalized(cfg, m.Config.Recommend.CacheSize, initialStartTime)
 		if err != nil {
-			return errors.Trace(err)
+			return nil, nil, errors.Trace(err)
 		}
 		nonPersonalizedRecommenders = append(nonPersonalizedRecommenders, recommender)
 	}
@@ -94,7 +92,7 @@ func (m *Master) runLoadDatasetTask() error {
 		evaluator,
 		nonPersonalizedRecommenders)
 	if err != nil {
-		return errors.Trace(err)
+		return nil, nil, errors.Trace(err)
 	}
 
 	// save non-personalized recommenders to cache
@@ -194,6 +192,16 @@ func (m *Master) runLoadDatasetTask() error {
 	MemoryInUseBytesVec.WithLabelValues("ranking_train_set").Set(float64(sizeof.DeepSize(m.clickTrainSet)))
 	MemoryInUseBytesVec.WithLabelValues("ranking_test_set").Set(float64(sizeof.DeepSize(m.clickTestSet)))
 
+	LoadDatasetTotalSeconds.Set(time.Since(initialStartTime).Seconds())
+	return clickDataset, dataSet, nil
+}
+
+// runLoadDatasetTask loads dataset.
+func (m *Master) runLoadDatasetTask() error {
+	_, dataSet, err := m.loadDataset()
+	if err != nil {
+		return errors.Trace(err)
+	}
 	if err = m.updateUserToUser(dataSet); err != nil {
 		log.Logger().Error("failed to update user-to-user recommendation", zap.Error(err))
 	}
@@ -301,6 +309,9 @@ func (t *FitRankingModelTask) run(ctx context.Context, j *task.JobsAllocator) er
 
 	// t.taskMonitor.Finish(TaskFitRankingModel)
 	t.lastNumFeedback = numFeedback
+	if err = m.trainCollaborativeFiltering(m.rankingTrainSet, m.rankingTestSet); err != nil {
+		log.Logger().Error("failed to train collaborative filtering model", zap.Error(err))
+	}
 	return nil
 }
 
@@ -400,7 +411,7 @@ func (t *FitClickModelTask) run(ctx context.Context, j *task.JobsAllocator) erro
 	t.localCache.ClickModelVersion = t.ClickModelVersion
 	t.localCache.ClickModel = t.ClickModel
 	t.clickModelMutex.RUnlock()
-	if t.localCache.RankingModel == nil || t.localCache.RankingModel.Invalid() {
+	if t.localCache.CollaborativeFilteringModel == nil || t.localCache.CollaborativeFilteringModel.Invalid() {
 		log.Logger().Info("wait ranking model")
 	} else if err := t.localCache.WriteLocalCache(); err != nil {
 		log.Logger().Error("failed to write local cache", zap.Error(err))
@@ -463,13 +474,13 @@ func (t *SearchRankingModelTask) run(ctx context.Context, j *task.JobsAllocator)
 	}
 
 	startTime := time.Now()
-	err := t.rankingModelSearcher.Fit(ctx, t.rankingTrainSet, t.rankingTestSet, nil)
+	err := t.collaborativeFilteringSearcher.Fit(ctx, t.rankingTrainSet, t.rankingTestSet, nil)
 	if err != nil {
 		log.Logger().Error("failed to search collaborative filtering model", zap.Error(err))
 		return nil
 	}
 	CollaborativeFilteringSearchSeconds.Set(time.Since(startTime).Seconds())
-	_, _, bestScore := t.rankingModelSearcher.GetBestModel()
+	_, _, bestScore := t.collaborativeFilteringSearcher.GetBestModel()
 	CollaborativeFilteringSearchPrecision10.Set(float64(bestScore.Precision))
 
 	t.lastNumItems = numItems
@@ -1202,4 +1213,84 @@ func (m *Master) needUpdateUserToUser(userId string) bool {
 		return true
 	}
 	return updateTime.Before(time.Now().Add(-m.Config.Recommend.CacheExpire))
+}
+
+func (m *Master) trainCollaborativeFiltering(trainSet, testSet dataset.CFSplit) error {
+	newCtx, span := m.tracer.Start(context.Background(), "Train Collaborative Filtering Model", 1)
+	defer span.End()
+
+	if trainSet.CountUsers() == 0 {
+		span.Fail(errors.New("No user found."))
+		return nil
+	} else if trainSet.CountItems() == 0 {
+		span.Fail(errors.New("No item found."))
+		return nil
+	} else if trainSet.Count() == 0 {
+		span.Fail(errors.New("No feedback found."))
+		return nil
+	} else if trainSet.Count() == m.collaborativeFilteringTrainSetSize {
+		log.Logger().Info("collaborative filtering dataset not changed")
+		return nil
+	}
+
+	bestModelName, bestModel, bestModelScore := m.collaborativeFilteringSearcher.GetBestModel()
+	m.collaborativeFilteringModelMutex.Lock()
+	if bestModel != nil && !bestModel.Invalid() &&
+		(bestModelName != m.collaborativeFilteringModelName ||
+			bestModel.GetParams().ToString() != m.CollaborativeFilteringModel.GetParams().ToString()) &&
+		(bestModelScore.NDCG > m.collaborativeFilteringModelScore.NDCG) {
+		// 1. best ranking model must have been found.
+		// 2. best ranking model must be different from current model
+		// 3. best ranking model must perform better than current model
+		m.CollaborativeFilteringModel = bestModel
+		m.collaborativeFilteringModelName = bestModelName
+		m.collaborativeFilteringModelScore = bestModelScore
+		log.Logger().Info("find better collaborative filtering model",
+			zap.Any("score", bestModelScore),
+			zap.String("name", bestModelName),
+			zap.Any("params", m.CollaborativeFilteringModel.GetParams()))
+	}
+	collaborativeFilteringModel := cf.Clone(m.CollaborativeFilteringModel)
+	m.collaborativeFilteringModelMutex.Unlock()
+
+	startFitTime := time.Now()
+	score := collaborativeFilteringModel.Fit(newCtx, trainSet, testSet, cf.NewFitConfig())
+	CollaborativeFilteringFitSeconds.Set(time.Since(startFitTime).Seconds())
+
+	// update ranking model
+	m.collaborativeFilteringModelMutex.Lock()
+	m.CollaborativeFilteringModel = collaborativeFilteringModel
+	m.CollaborativeFilteringModelVersion++
+	m.collaborativeFilteringTrainSetSize = trainSet.Count()
+	m.collaborativeFilteringModelScore = score
+	m.collaborativeFilteringModelMutex.Unlock()
+	log.Logger().Info("fit collaborative filtering model completed",
+		zap.String("version", fmt.Sprintf("%x", m.CollaborativeFilteringModelVersion)))
+	CollaborativeFilteringNDCG10.Set(float64(score.NDCG))
+	CollaborativeFilteringRecall10.Set(float64(score.Recall))
+	CollaborativeFilteringPrecision10.Set(float64(score.Precision))
+	MemoryInUseBytesVec.WithLabelValues("collaborative_filtering_model").Set(float64(sizeof.DeepSize(m.CollaborativeFilteringModel)))
+	if err := m.CacheClient.Set(context.Background(), cache.Time(cache.Key(cache.GlobalMeta, cache.LastFitMatchingModelTime), time.Now())); err != nil {
+		log.Logger().Error("failed to write meta", zap.Error(err))
+	}
+
+	// caching model
+	m.collaborativeFilteringModelMutex.RLock()
+	m.localCache.CollaborativeFilteringModelName = m.collaborativeFilteringModelName
+	m.localCache.CollaborativeFilteringModelVersion = m.CollaborativeFilteringModelVersion
+	m.localCache.CollaborativeFilteringModel = collaborativeFilteringModel
+	m.localCache.CollaborativeFilteringModelScore = score
+	m.collaborativeFilteringModelMutex.RUnlock()
+	if m.localCache.ClickModel == nil || m.localCache.ClickModel.Invalid() {
+		log.Logger().Info("wait click model")
+	} else if err := m.localCache.WriteLocalCache(); err != nil {
+		log.Logger().Error("failed to write local cache", zap.Error(err))
+	} else {
+		log.Logger().Info("write model to local cache",
+			zap.String("collaborative_filtering_model_name", m.localCache.CollaborativeFilteringModelName),
+			zap.String("collaborative_filtering_model_version", encoding.Hex(m.localCache.CollaborativeFilteringModelVersion)),
+			zap.Float32("collaborative_filtering_model_score", m.localCache.CollaborativeFilteringModelScore.NDCG),
+			zap.Any("collaborative_filtering_model_params", m.localCache.CollaborativeFilteringModel.GetParams()))
+	}
+	return nil
 }

@@ -92,11 +92,11 @@ void _mm256_mul_to(float *a, float *b, float *c, int64_t n)
     }
 }
 
-void _mm256_dot(float *a, float *b, int64_t n, float *ret)
+inline __attribute__((always_inline)) float dot(float *a, float *b, int64_t n)
 {
     int epoch = n / 8;
     int remain = n % 8;
-    __m256 s;
+    __m256 s = _mm256_setzero_ps();
     if (epoch > 0)
     {
         __m256 v1 = _mm256_loadu_ps(a);
@@ -122,18 +122,24 @@ void _mm256_dot(float *a, float *b, int64_t n, float *ret)
     const __m128 sxxx_0246 = sxx_1357_0246;
     const __m128 sxxx_1357 = _mm_shuffle_ps(sxx_1357_0246, sxx_1357_0246, 0x1);
     __m128 sxxx_01234567 = _mm_add_ss(sxxx_0246, sxxx_1357);
-    *ret = _mm_cvtss_f32(sxxx_01234567);
+    float sum = _mm_cvtss_f32(sxxx_01234567);
     for (int i = 0; i < remain; i++)
     {
-        *ret += a[i] * b[i];
+        sum += a[i] * b[i];
     }
+    return sum;
 }
 
-void _mm256_euclidean(float *a, float *b, int64_t n, float *ret)
+float _mm256_dot(float *a, float *b, int64_t n)
+{
+    return dot(a, b, n);
+}
+
+float _mm256_euclidean(float *a, float *b, int64_t n)
 {
     int epoch = n / 8;
     int remain = n % 8;
-    __m256 sum;
+    __m256 sum = _mm256_setzero_ps();
     if (epoch > 0)
     {
         __m256 v1 = _mm256_loadu_ps(a);
@@ -162,12 +168,51 @@ void _mm256_euclidean(float *a, float *b, int64_t n, float *ret)
     const __m128 sxxx_0246 = sxx_1357_0246;
     const __m128 sxxx_1357 = _mm_shuffle_ps(sxx_1357_0246, sxx_1357_0246, 0x1);
     __m128 sxxx_01234567 = _mm_add_ss(sxxx_0246, sxxx_1357);
-    *ret = _mm_cvtss_f32(sxxx_01234567);
+    float ret = _mm_cvtss_f32(sxxx_01234567);
     for (int i = 0; i < remain; i++)
     {
-        *ret += (a[i] - b[i]) * (a[i] - b[i]);
+        ret += (a[i] - b[i]) * (a[i] - b[i]);
     }
-    __m128 v = _mm_set1_ps(*ret);
+    __m128 v = _mm_set1_ps(ret);
     __m128 r = _mm_sqrt_ss(v);
-    *ret = _mm_cvtss_f32(r);
+    return _mm_cvtss_f32(r);
+}
+
+void _mm256_mm(float *a, float *b, float *c, int64_t m, int64_t n, int64_t k, _Bool transA, _Bool transB)
+{
+    if (!transA && !transB)
+    {
+        for (int i = 0; i < m; i++) {
+            for (int l = 0; l < k; l++) {
+                for (int j = 0; j < n; j++) {
+                    c[i * n + j] += a[i * k + l] * b[l * n + j];
+                }
+            }
+        }
+    } else if (!transA && transB)
+    {
+        for (int i = 0; i < m; i++) {
+            for (int j = 0; j < n; j++) {
+                c[i * n + j] = dot(a + i * k, b + j * k, k);
+            }
+        }
+    } else if (transA && !transB)
+    {
+        for (int i = 0; i < m; i++) {
+            for (int l = 0; l < k; l++) {
+                for (int j = 0; j < n; j++) {
+                    c[i * n + j] += a[l * m + i] * b[l * n + j];
+                }
+            }
+        }
+    } else if (transA && transB)
+    {
+        for (int i = 0; i < m; i++) {
+            for (int l = 0; l < k; l++) {
+                for (int j = 0; j < n; j++) {
+                    c[i * n + j] += a[l * m + i] * b[j * k + l];
+                }
+            }
+        }
+    }
 }

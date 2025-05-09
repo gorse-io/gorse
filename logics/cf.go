@@ -18,9 +18,9 @@ import (
 	"time"
 
 	"github.com/samber/lo"
-	"github.com/zhenghaoz/gorse/base/floats"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/common/ann"
+	"github.com/zhenghaoz/gorse/common/floats"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
 	"go.uber.org/zap"

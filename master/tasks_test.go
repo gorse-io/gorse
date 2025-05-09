@@ -275,7 +275,7 @@ func (s *MasterTestSuite) TestLoadDataFromDatabase() {
 	s.NoError(err)
 
 	// load dataset
-	err = s.runLoadDatasetTask()
+	_, _, err = s.loadDataset()
 	s.NoError(err)
 	s.Equal(11, s.rankingTrainSet.CountUsers())
 	s.Equal(10, s.rankingTrainSet.CountItems())
@@ -394,7 +394,7 @@ func (s *MasterTestSuite) TestNonPersonalizedRecommend() {
 	s.NoError(err)
 
 	// load dataset
-	err = s.runLoadDatasetTask()
+	_, _, err = s.loadDataset()
 	s.NoError(err)
 
 	// check latest items
