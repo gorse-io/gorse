@@ -60,8 +60,7 @@ type Task interface {
 	run(ctx context.Context, j *task.JobsAllocator) error
 }
 
-// runLoadDatasetTask loads dataset.
-func (m *Master) runLoadDatasetTask() error {
+func (m *Master) loadDataset() (*click.Dataset, *dataset.Dataset, error) {
 	ctx, span := m.tracer.Start(context.Background(), "Load Dataset", 1)
 	defer span.End()
 
@@ -74,7 +73,7 @@ func (m *Master) runLoadDatasetTask() error {
 	for _, cfg := range m.Config.Recommend.NonPersonalized {
 		recommender, err := logics.NewNonPersonalized(cfg, m.Config.Recommend.CacheSize, initialStartTime)
 		if err != nil {
-			return errors.Trace(err)
+			return nil, nil, errors.Trace(err)
 		}
 		nonPersonalizedRecommenders = append(nonPersonalizedRecommenders, recommender)
 	}
@@ -93,7 +92,7 @@ func (m *Master) runLoadDatasetTask() error {
 		evaluator,
 		nonPersonalizedRecommenders)
 	if err != nil {
-		return errors.Trace(err)
+		return nil, nil, errors.Trace(err)
 	}
 
 	// save non-personalized recommenders to cache
@@ -193,6 +192,16 @@ func (m *Master) runLoadDatasetTask() error {
 	MemoryInUseBytesVec.WithLabelValues("ranking_train_set").Set(float64(sizeof.DeepSize(m.clickTrainSet)))
 	MemoryInUseBytesVec.WithLabelValues("ranking_test_set").Set(float64(sizeof.DeepSize(m.clickTestSet)))
 
+	LoadDatasetTotalSeconds.Set(time.Since(initialStartTime).Seconds())
+	return clickDataset, dataSet, nil
+}
+
+// runLoadDatasetTask loads dataset.
+func (m *Master) runLoadDatasetTask() error {
+	_, dataSet, err := m.loadDataset()
+	if err != nil {
+		return errors.Trace(err)
+	}
 	if err = m.updateUserToUser(dataSet); err != nil {
 		log.Logger().Error("failed to update user-to-user recommendation", zap.Error(err))
 	}
@@ -202,8 +211,6 @@ func (m *Master) runLoadDatasetTask() error {
 	if err = m.trainCollaborativeFiltering(m.rankingTrainSet, m.rankingTestSet); err != nil {
 		log.Logger().Error("failed to train collaborative filtering model", zap.Error(err))
 	}
-
-	LoadDatasetTotalSeconds.Set(time.Since(initialStartTime).Seconds())
 	return nil
 }
 
