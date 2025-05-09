@@ -161,7 +161,7 @@ func NewModelSearcher(nEpoch, nTrials int, searchSize bool) *ModelSearcher {
 		searchSize: searchSize,
 	}
 	searcher.models = append(searcher.models, NewBPR(model.Params{model.NEpochs: searcher.numEpochs}))
-	searcher.models = append(searcher.models, NewCCD(model.Params{model.NEpochs: searcher.numEpochs}))
+	searcher.models = append(searcher.models, NewALS(model.Params{model.NEpochs: searcher.numEpochs}))
 	return searcher
 }
 
@@ -178,8 +178,7 @@ func (searcher *ModelSearcher) Fit(ctx context.Context, trainSet, valSet dataset
 		zap.Int("n_items", trainSet.CountItems()))
 	startTime := time.Now()
 	for _, m := range searcher.models {
-		r := RandomSearchCV(ctx, m, trainSet, valSet, m.GetParamsGrid(searcher.searchSize), searcher.numTrials, 0,
-			NewFitConfig().SetJobsAllocator(j))
+		r := RandomSearchCV(ctx, m, trainSet, valSet, m.GetParamsGrid(searcher.searchSize), searcher.numTrials, 0, NewFitConfig())
 		searcher.bestMutex.Lock()
 		if searcher.bestModel == nil || r.BestScore.NDCG > searcher.bestScore.NDCG {
 			searcher.bestModel = r.BestModel

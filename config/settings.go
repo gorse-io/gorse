@@ -29,10 +29,10 @@ type Settings struct {
 	DataClient  data.Database
 
 	// recommendation models
-	RankingModel        cf.MatrixFactorization
-	RankingModelVersion int64
-	ClickModel          click.FactorizationMachine
-	ClickModelVersion   int64
+	CollaborativeFilteringModel        cf.MatrixFactorization
+	CollaborativeFilteringModelVersion int64
+	ClickModel                         click.FactorizationMachine
+	ClickModelVersion                  int64
 }
 
 func NewSettings() *Settings {
