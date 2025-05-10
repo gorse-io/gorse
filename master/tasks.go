@@ -114,6 +114,12 @@ func (m *Master) loadDataset() (*ctr.Dataset, *dataset.Dataset, error) {
 	}
 
 	// write statistics to database
+	if err = m.CacheClient.AddTimeSeriesPoints(ctx, []cache.TimeSeriesPoint{
+		{Name: cache.NumUsers, Value: float64(dataSet.CountUsers()), Timestamp: dataSet.GetTimestamp()},
+		{Name: cache.NumItems, Value: float64(dataSet.CountItems()), Timestamp: dataSet.GetTimestamp()},
+	}); err != nil {
+		log.Logger().Error("failed to write timeseries points", zap.Error(err))
+	}
 	UsersTotal.Set(float64(dataSet.CountUsers()))
 	if err = m.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.NumUsers), dataSet.CountUsers())); err != nil {
 		log.Logger().Error("failed to write number of users", zap.Error(err))
