@@ -110,22 +110,22 @@ func (suite *GorseClientTestSuite) TestRecommend() {
 
 func (suite *GorseClientTestSuite) TestSessionRecommend() {
 	ctx := context.Background()
-	suite.hSet("item-to-item", cache.Key(cache.Neighbors, "1"), []client.Score{
+	suite.hSet("item-to-item", cache.Key("neighbors", "1"), []client.Score{
 		{Id: "2", Score: 100000},
 		{Id: "9", Score: 1},
 	})
-	suite.hSet("item-to-item", cache.Key(cache.Neighbors, "2"), []client.Score{
+	suite.hSet("item-to-item", cache.Key("neighbors", "2"), []client.Score{
 		{Id: "3", Score: 100000},
 		{Id: "8", Score: 1},
 		{Id: "9", Score: 1},
 	})
-	suite.hSet("item-to-item", cache.Key(cache.Neighbors, "3"), []client.Score{
+	suite.hSet("item-to-item", cache.Key("neighbors", "3"), []client.Score{
 		{Id: "4", Score: 100000},
 		{Id: "7", Score: 1},
 		{Id: "8", Score: 1},
 		{Id: "9", Score: 1},
 	})
-	suite.hSet("item-to-item", cache.Key(cache.Neighbors, "4"), []client.Score{
+	suite.hSet("item-to-item", cache.Key("neighbors", "4"), []client.Score{
 		{Id: "1", Score: 100000},
 		{Id: "6", Score: 1},
 		{Id: "7", Score: 1},
@@ -181,7 +181,7 @@ func (suite *GorseClientTestSuite) TestSessionRecommend() {
 
 func (suite *GorseClientTestSuite) TestNeighbors() {
 	ctx := context.Background()
-	suite.hSet("item-to-item", cache.Key(cache.Neighbors, "100"), []client.Score{
+	suite.hSet("item-to-item", cache.Key("neighbors", "100"), []client.Score{
 		{Id: "1", Score: 1},
 		{Id: "2", Score: 2},
 		{Id: "3", Score: 3},
