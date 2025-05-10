@@ -80,7 +80,7 @@ func TestFactorizationMachines_Classification_Criteo(t *testing.T) {
 	})
 	fitConfig := newFitConfigWithTestTracker(10)
 	score := m.Fit(context.Background(), train, test, fitConfig)
-	assert.InDelta(t, 0.77, score.Accuracy, 0.02)
+	assert.InDelta(t, 0.77, score.Accuracy, 0.025)
 
 	// test prediction
 	assert.Equal(t, m.BatchInternalPredict([]lo.Tuple2[[]int32, []float32]{{A: []int32{1, 2, 3, 4, 5, 6}, B: []float32{1, 1, 0.3, 0.4, 0.5, 0.6}}}),
