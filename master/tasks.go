@@ -768,28 +768,14 @@ func (m *Master) LoadDataFromDatabase(
 }
 
 func (m *Master) updateItemToItem(dataset *dataset.Dataset) error {
+	itemToItemConfigs := m.Config.Recommend.ItemToItem
+	if len(itemToItemConfigs) == 0 {
+		return nil
+	}
+
 	ctx, span := m.tracer.Start(context.Background(), "Generate item-to-item recommendation",
 		len(dataset.GetItems())*(len(m.Config.Recommend.ItemToItem)+1)*2)
 	defer span.End()
-
-	// Add built-in item-to-item recommenders
-	itemToItemConfigs := m.Config.Recommend.ItemToItem
-	if !lo.ContainsBy(itemToItemConfigs, func(item config.ItemToItemConfig) bool {
-		return item.Name == cache.Neighbors
-	}) {
-		builtInConfig := config.ItemToItemConfig{}
-		builtInConfig.Name = cache.Neighbors
-		switch m.Config.Recommend.ItemNeighbors.NeighborType {
-		case config.NeighborTypeSimilar:
-			builtInConfig.Type = "tags"
-			builtInConfig.Column = "item.Labels"
-		case config.NeighborTypeRelated:
-			builtInConfig.Type = "users"
-		case config.NeighborTypeAuto:
-			builtInConfig.Type = "auto"
-		}
-		itemToItemConfigs = append(itemToItemConfigs, builtInConfig)
-	}
 
 	// Build item-to-item recommenders
 	itemToItemRecommenders := make([]logics.ItemToItem, 0, len(itemToItemConfigs))
