@@ -933,6 +933,7 @@ func BenchmarkRecommendFromItemBased(b *testing.B) {
 	ctx := context.Background()
 	log.CloseLogger()
 	s := newBenchServer(b)
+	s.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "default"}}
 	defer s.Close(b)
 
 	for batchSize := 10; batchSize <= 1000; batchSize *= 10 {
@@ -958,7 +959,7 @@ func BenchmarkRecommendFromItemBased(b *testing.B) {
 
 			// insert user neighbors
 			for i := 0; i < s.Config.Recommend.Online.NumFeedbackFallbackItemBased; i++ {
-				err := s.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key(cache.Neighbors, fmt.Sprintf("init_item_%d", i)), documents)
+				err := s.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key("default", fmt.Sprintf("init_item_%d", i)), documents)
 				require.NoError(b, err)
 			}
 

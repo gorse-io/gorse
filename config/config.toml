@@ -149,59 +149,32 @@ score = "count(feedback, .FeedbackType == 'star')"
 # The filter for items in the leaderboard.
 filter = "(now() - item.Timestamp).Hours() < 168"
 
-# [[recommend.item-to-item]]
+[[recommend.item-to-item]]
 
-# # The name of the item-to-item recommender.
-# name = "similar_embedding"
+# The name of the item-to-item recommender.
+name = "neighbors"
 
-# # The type of the item-to-item recommender. There are three types:
-# #   embedding: recommend by Euclidean distance of embeddings.
-# #   tags: recommend by number of common tags.
-# #   users: recommend by number of common users.
-# #   chat: recommend by chat completion model.
-# type = "embedding"
+# The type of the item-to-item recommender. There are three types:
+#   embedding: recommend by Euclidean distance of embeddings.
+#   tags: recommend by number of common tags.
+#   users: recommend by number of common users.
+#   chat: recommend by chat completion model.
+type = "embedding"
 
-# # The column of the item embeddings. Leave blank if type is "users".
-# column = "item.Labels.embedding"
+# The column of the item embeddings. Leave blank if type is "users".
+column = "item.Labels.embedding"
 
-# [[recommend.item-to-item]]
+[[recommend.user-to-user]]
 
-# # The name of the item-to-item recommender.
-# name = "chat_recommend"
+# The name of the user-to-user recommender.
+name = "neighbors"
 
-# # The type of the item-to-item recommender.
-# type = "chat"
-
-# # The column of the item embeddings. Leave blank if type is "users".
-# column = "item.Labels.embedding"
-
-# # The prompt for the chat completion model.
-# prompt = """
-# This is the description of GitHub repository https://github.com/{{ item.ItemId | replace(':','/') }}:
-# {{ item.Comment }}
-# Please find some similar repositores on GitHub and provide a brief description for each of them.
-# The output should be a JSON array.
-# """
-
-[recommend.user_neighbors]
-
-# The type of neighbors for users. There are three types:
-#   similar: Neighbors are found by number of common labels.
-#   related: Neighbors are found by number of common liked items.
-#   auto: If a user have labels, neighbors are found by number of common labels.
-#         If this user have no labels, neighbors are found by number of common liked items.
-# The default value is "auto".
-neighbor_type = "related"
-
-[recommend.item_neighbors]
-
-# The type of neighbors for items. There are three types:
-#   similar: Neighbors are found by number of common labels.
-#   related: Neighbors are found by number of common users.
-#   auto: If a item have labels, neighbors are found by number of common labels.
-#         If this item have no labels, neighbors are found by number of common users.
-# The default value is "auto".
-neighbor_type = "similar"
+# The type of the item-to-item recommender. There are three types:
+#   embedding: recommend by Euclidean distance of embeddings.
+#   tags: recommend by number of common tags.
+#   items: recommend by number of common items.
+#   auto: recommend by number of common tags and items.
+type = "items"
 
 [recommend.collaborative]
 

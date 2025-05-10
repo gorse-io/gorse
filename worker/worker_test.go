@@ -249,6 +249,7 @@ func (suite *WorkerTestSuite) TestRecommendItemBased() {
 	ctx := context.Background()
 	suite.Config.Recommend.Offline.EnableColRecommend = false
 	suite.Config.Recommend.Offline.EnableItemBasedRecommend = true
+	suite.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "default"}}
 	// insert feedback
 	err := suite.DataClient.BatchInsertFeedback(ctx, []data.Feedback{
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "21"}},
@@ -259,20 +260,20 @@ func (suite *WorkerTestSuite) TestRecommendItemBased() {
 	suite.NoError(err)
 
 	// insert similar items
-	err = suite.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key(cache.Neighbors, "21"), []cache.Score{
+	err = suite.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key("default", "21"), []cache.Score{
 		{Id: "22", Score: 100000, Categories: []string{"*"}},
 		{Id: "25", Score: 1000000},
 		{Id: "29", Score: 1},
 	})
 	suite.NoError(err)
-	err = suite.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key(cache.Neighbors, "22"), []cache.Score{
+	err = suite.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key("default", "22"), []cache.Score{
 		{Id: "23", Score: 100000, Categories: []string{"*"}},
 		{Id: "25", Score: 1000000},
 		{Id: "28", Score: 1, Categories: []string{"*"}},
 		{Id: "29", Score: 1},
 	})
 	suite.NoError(err)
-	err = suite.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key(cache.Neighbors, "23"), []cache.Score{
+	err = suite.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key("default", "23"), []cache.Score{
 		{Id: "24", Score: 100000, Categories: []string{"*"}},
 		{Id: "25", Score: 1000000},
 		{Id: "27", Score: 1},
@@ -280,7 +281,7 @@ func (suite *WorkerTestSuite) TestRecommendItemBased() {
 		{Id: "29", Score: 1},
 	})
 	suite.NoError(err)
-	err = suite.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key(cache.Neighbors, "24"), []cache.Score{
+	err = suite.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key("default", "24"), []cache.Score{
 		{Id: "21", Score: 100000},
 		{Id: "25", Score: 1000000},
 		{Id: "26", Score: 1, Categories: []string{"*"}},
@@ -325,8 +326,9 @@ func (suite *WorkerTestSuite) TestRecommendUserBased() {
 	ctx := context.Background()
 	suite.Config.Recommend.Offline.EnableColRecommend = false
 	suite.Config.Recommend.Offline.EnableUserBasedRecommend = true
+	suite.Config.Recommend.UserToUser = []config.UserToUserConfig{{Name: "default"}}
 	// insert similar users
-	err := suite.CacheClient.AddScores(ctx, cache.UserToUser, cache.Key(cache.Neighbors, "0"), []cache.Score{
+	err := suite.CacheClient.AddScores(ctx, cache.UserToUser, cache.Key("default", "0"), []cache.Score{
 		{Id: "1", Score: 2},
 		{Id: "2", Score: 1.5},
 		{Id: "3", Score: 1},
