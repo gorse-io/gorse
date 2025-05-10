@@ -690,12 +690,14 @@ func (s *RestServer) SearchDocuments(collection, subset string, categories []str
 func (s *RestServer) getPopular(request *restful.Request, response *restful.Response) {
 	categories := ReadCategories(request)
 	log.ResponseLogger(response).Debug("get category popular items in category", zap.Strings("categories", categories))
+	s.SetLastModified(request, response, cache.Key(cache.NonPersonalizedUpdateTime, cache.Popular))
 	s.SearchDocuments(cache.NonPersonalized, cache.Popular, categories, nil, request, response)
 }
 
 func (s *RestServer) getLatest(request *restful.Request, response *restful.Response) {
 	categories := ReadCategories(request)
 	log.ResponseLogger(response).Debug("get category latest items in category", zap.Strings("categories", categories))
+	s.SetLastModified(request, response, cache.Key(cache.NonPersonalizedUpdateTime, cache.Latest))
 	s.SearchDocuments(cache.NonPersonalized, cache.Latest, categories, nil, request, response)
 }
 
@@ -703,6 +705,7 @@ func (s *RestServer) getNonPersonalized(request *restful.Request, response *rest
 	name := request.PathParameter("name")
 	categories := ReadCategories(request)
 	log.ResponseLogger(response).Debug("get leaderboard", zap.String("name", name))
+	s.SetLastModified(request, response, cache.Key(cache.NonPersonalizedUpdateTime, name))
 	s.SearchDocuments(cache.NonPersonalized, name, categories, nil, request, response)
 }
 
@@ -710,7 +713,17 @@ func (s *RestServer) getItemToItem(request *restful.Request, response *restful.R
 	name := request.PathParameter("name")
 	itemId := request.PathParameter("item-id")
 	categories := request.QueryParameters("category")
+	s.SetLastModified(request, response, cache.Key(cache.ItemToItemUpdateTime, name, itemId))
 	s.SearchDocuments(cache.ItemToItem, cache.Key(name, itemId), categories, nil, request, response)
+}
+
+func (s *RestServer) SetLastModified(request *restful.Request, response *restful.Response, key string) {
+	lastModified, err := s.CacheClient.Get(request.Request.Context(), key).Time()
+	if err != nil {
+		log.ResponseLogger(response).Error("failed to get last modified time", zap.Error(err))
+		return
+	}
+	response.AddHeader("Last-Modified", lastModified.Format(time.RFC1123))
 }
 
 // get feedback by item-id with feedback type
@@ -749,6 +762,7 @@ func (s *RestServer) getItemNeighbors(request *restful.Request, response *restfu
 	// Get item id
 	itemId := request.PathParameter("item-id")
 	categories := ReadCategories(request)
+	s.SetLastModified(request, response, cache.Key(cache.ItemToItemUpdateTime, cache.Neighbors, itemId))
 	s.SearchDocuments(cache.ItemToItem, cache.Key(cache.Neighbors, itemId), categories, nil, request, response)
 }
 
@@ -756,6 +770,7 @@ func (s *RestServer) getItemNeighbors(request *restful.Request, response *restfu
 func (s *RestServer) getUserNeighbors(request *restful.Request, response *restful.Response) {
 	// Get item id
 	userId := request.PathParameter("user-id")
+	s.SetLastModified(request, response, cache.Key(cache.UserToUserUpdateTime, cache.Neighbors, userId))
 	s.SearchDocuments(cache.UserToUser, cache.Key(cache.Neighbors, userId), []string{""}, nil, request, response)
 }
 
@@ -764,6 +779,7 @@ func (s *RestServer) getCollaborative(request *restful.Request, response *restfu
 	// Get user id
 	userId := request.PathParameter("user-id")
 	categories := ReadCategories(request)
+	s.SetLastModified(request, response, cache.Key(cache.OfflineRecommendUpdateTime, userId))
 	s.SearchDocuments(cache.OfflineRecommend, userId, categories, nil, request, response)
 }
 
@@ -1980,7 +1996,7 @@ func PageNotFound(response *restful.Response, err error) {
 
 // Ok sends the content as JSON to the client.
 func Ok(response *restful.Response, content interface{}) {
-	response.Header().Set("Access-Control-Allow-Origin", "*")
+	response.AddHeader("Access-Control-Allow-Origin", "*")
 	if err := response.WriteAsJson(content); err != nil {
 		log.ResponseLogger(response).Error("failed to write json", zap.Error(err))
 	}

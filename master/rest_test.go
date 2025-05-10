@@ -509,6 +509,7 @@ func (suite *MasterAPITestSuite) TestSearchDocumentsOfItems() {
 		{"LatestItemsCategory", cache.NonPersonalized, cache.Latest, "*", "/api/dashboard/non-personalized/latest/"},
 		{"PopularItemsCategory", cache.NonPersonalized, cache.Popular, "*", "/api/dashboard/non-personalized/popular/"},
 	}
+	lastModified := time.Now()
 	for i, operator := range operators {
 		suite.T().Run(operator.Name, func(t *testing.T) {
 			// Put scores
@@ -521,6 +522,8 @@ func (suite *MasterAPITestSuite) TestSearchDocumentsOfItems() {
 			}
 			err := suite.CacheClient.AddScores(ctx, operator.Collection, operator.Subset, scores)
 			suite.NoError(err)
+			err = suite.CacheClient.Set(ctx, cache.Time(cache.Key(operator.Collection+"_update_time", operator.Subset), lastModified))
+			assert.NoError(t, err)
 			items := make([]ScoredItem, 0)
 			for _, score := range scores {
 				items = append(items, ScoredItem{Item: data.Item{ItemId: score.Id}, Score: score.Score})
@@ -543,6 +546,7 @@ func (suite *MasterAPITestSuite) TestSearchDocumentsOfItems() {
 				Query("category", operator.Category).
 				Expect(t).
 				Status(http.StatusOK).
+				HeaderPresent("Last-Modified").
 				Body(marshal(t, []ScoredItem{items[0], items[1], items[2], items[4]})).
 				End()
 		})
@@ -559,6 +563,7 @@ func (suite *MasterAPITestSuite) TestSearchDocumentsOfUsers() {
 	operators := []ListOperator{
 		{cache.UserToUser, cache.Key(cache.Neighbors, "0"), "/api/dashboard/user-to-user/neighbors/0/"},
 	}
+	lastModified := time.Now()
 	for _, operator := range operators {
 		suite.T().Logf("test RESTful API: %v", operator.Get)
 		// Put scores
@@ -570,6 +575,8 @@ func (suite *MasterAPITestSuite) TestSearchDocumentsOfUsers() {
 			{Id: "4", Score: 96, Categories: []string{""}},
 		}
 		err := suite.CacheClient.AddScores(ctx, operator.Prefix, operator.Label, scores)
+		suite.NoError(err)
+		err = suite.CacheClient.Set(ctx, cache.Time(cache.Key(operator.Prefix+"_update_time", operator.Label), lastModified))
 		suite.NoError(err)
 		users := make([]ScoreUser, 0)
 		for _, score := range scores {
@@ -583,6 +590,7 @@ func (suite *MasterAPITestSuite) TestSearchDocumentsOfUsers() {
 			Header("Cookie", suite.cookie).
 			Expect(suite.T()).
 			Status(http.StatusOK).
+			HeaderPresent("Last-Modified").
 			Body(marshal(suite.T(), users)).
 			End()
 	}

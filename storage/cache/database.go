@@ -54,19 +54,21 @@ const (
 	// OfflineRecommend is sorted set of offline recommendation for each user.
 	//  Global recommendation      - offline_recommend/{user_id}
 	//  Categorized recommendation - offline_recommend/{user_id}/{category}
-	OfflineRecommend = "offline_recommend"
+	OfflineRecommend           = "offline_recommend"
+	OfflineRecommendUpdateTime = "offline_recommend_update_time"
 
 	// OfflineRecommendDigest is digest of offline recommendation configuration.
 	//	Recommendation digest      - offline_recommend_digest/{user_id}
 	OfflineRecommendDigest = "offline_recommend_digest"
 
-	NonPersonalized = "non-personalized"
-	Latest          = "latest"
-	Popular         = "popular"
+	NonPersonalized           = "non-personalized"
+	NonPersonalizedUpdateTime = "non-personalized_update_time"
+	Latest                    = "latest"
+	Popular                   = "popular"
 
 	ItemToItem           = "item-to-item"
 	ItemToItemDigest     = "item-to-item_digest"
-	ItemToItemUpdateTime = "item-to-time_update_time"
+	ItemToItemUpdateTime = "item-to-item_update_time"
 	UserToUser           = "user-to-user"
 	UserToUserDigest     = "user-to-user_digest"
 	UserToUserUpdateTime = "user-to-user_update_time"

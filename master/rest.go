@@ -853,6 +853,7 @@ func (m *Master) GetUser(score cache.Score) (any, error) {
 func (m *Master) getNonPersonalized(request *restful.Request, response *restful.Response) {
 	name := request.PathParameter("name")
 	categories := server.ReadCategories(request)
+	m.SetLastModified(request, response, cache.Key(cache.NonPersonalizedUpdateTime, name))
 	m.SearchDocuments(cache.NonPersonalized, name, categories, m.GetItem, request, response)
 }
 
@@ -860,11 +861,13 @@ func (m *Master) getItemToItem(request *restful.Request, response *restful.Respo
 	name := request.PathParameter("name")
 	itemId := request.PathParameter("item-id")
 	categories := request.QueryParameters("category")
+	m.SetLastModified(request, response, cache.Key(cache.ItemToItemUpdateTime, name, itemId))
 	m.SearchDocuments(cache.ItemToItem, cache.Key(name, itemId), categories, m.GetItem, request, response)
 }
 
 func (m *Master) getUserToUser(request *restful.Request, response *restful.Response) {
 	userId := request.PathParameter("user-id")
+	m.SetLastModified(request, response, cache.Key(cache.UserToUserUpdateTime, cache.Neighbors, userId))
 	m.SearchDocuments(cache.UserToUser, cache.Key(cache.Neighbors, userId), nil, m.GetUser, request, response)
 }
 
