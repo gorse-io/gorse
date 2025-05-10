@@ -120,7 +120,6 @@ type RecommendConfig struct {
 	Popular         PopularConfig           `mapstructure:"popular"`
 	ItemToItem      []ItemToItemConfig      `mapstructure:"item-to-item" validate:"dive"`
 	UserToUser      []UserToUserConfig      `mapstructure:"user-to-user" validate:"dive"`
-	UserNeighbors   NeighborsConfig         `mapstructure:"user_neighbors"`
 	Collaborative   CollaborativeConfig     `mapstructure:"collaborative"`
 	Replacement     ReplacementConfig       `mapstructure:"replacement"`
 	Offline         OfflineConfig           `mapstructure:"offline"`
@@ -277,9 +276,6 @@ func GetDefaultConfig() *Config {
 			Popular: PopularConfig{
 				PopularWindow: 180 * 24 * time.Hour,
 			},
-			UserNeighbors: NeighborsConfig{
-				NeighborType: "auto",
-			},
 			Collaborative: CollaborativeConfig{
 				ModelFitPeriod:    60 * time.Minute,
 				ModelSearchPeriod: 180 * time.Minute,
@@ -320,19 +316,6 @@ func (config *Config) Now() *time.Time {
 	return lo.ToPtr(time.Now().Add(config.Server.ClockError))
 }
 
-func (config *Config) UserNeighborDigest() string {
-	hash := md5.New()
-	hash.Write([]byte(config.Recommend.UserNeighbors.NeighborType))
-	if lo.Contains([]string{"auto", "related"}, config.Recommend.UserNeighbors.NeighborType) {
-		hash.Write([]byte(fmt.Sprintf("-%s", strings.Join(config.Recommend.DataSource.PositiveFeedbackTypes, "-"))))
-	} else {
-		hash.Write([]byte("-"))
-	}
-
-	digest := hash.Sum(nil)
-	return hex.EncodeToString(digest[:])
-}
-
 type digestOptions struct {
 	userNeighborDigest  string
 	enableCollaborative bool
@@ -340,12 +323,6 @@ type digestOptions struct {
 }
 
 type DigestOption func(option *digestOptions)
-
-func WithUserNeighborDigest(digest string) DigestOption {
-	return func(option *digestOptions) {
-		option.userNeighborDigest = digest
-	}
-}
 
 func WithCollaborative(v bool) DigestOption {
 	return func(option *digestOptions) {
@@ -361,7 +338,6 @@ func WithRanking(v bool) DigestOption {
 
 func (config *Config) OfflineRecommendDigest(option ...DigestOption) string {
 	options := digestOptions{
-		userNeighborDigest:  config.UserNeighborDigest(),
 		enableCollaborative: config.Recommend.Offline.EnableColRecommend,
 		enableRanking:       config.Recommend.Offline.EnableClickThroughPrediction,
 	}
@@ -507,8 +483,6 @@ func setDefault() {
 	viper.SetDefault("recommend.cache_expire", defaultConfig.Recommend.CacheExpire)
 	// [recommend.popular]
 	viper.SetDefault("recommend.popular.popular_window", defaultConfig.Recommend.Popular.PopularWindow)
-	// [recommend.user_neighbors]
-	viper.SetDefault("recommend.user_neighbors.neighbor_type", defaultConfig.Recommend.UserNeighbors.NeighborType)
 	// [recommend.collaborative]
 	viper.SetDefault("recommend.collaborative.model_fit_period", defaultConfig.Recommend.Collaborative.ModelFitPeriod)
 	viper.SetDefault("recommend.collaborative.model_search_period", defaultConfig.Recommend.Collaborative.ModelSearchPeriod)

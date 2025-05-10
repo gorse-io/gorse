@@ -916,9 +916,10 @@ func (m *Master) updateUserToUser(dataset *dataset.Dataset) error {
 	}
 
 	// Save user-to-user recommendations to cache
-	for _, recommender := range userToUserRecommenders {
+	for i, recommender := range userToUserRecommenders {
 		for j, user := range recommender.Users() {
-			if m.needUpdateUserToUser(user.UserId) {
+			userToUserConfig := m.Config.Recommend.UserToUser[i]
+			if m.needUpdateUserToUser(user.UserId, userToUserConfig) {
 				score := recommender.PopAll(j)
 				if score == nil {
 					continue
@@ -933,7 +934,7 @@ func (m *Master) updateUserToUser(dataset *dataset.Dataset) error {
 				}
 				// Save user-to-user digest and last update time to cache
 				if err := m.CacheClient.Set(ctx,
-					cache.String(cache.Key(cache.UserToUserDigest, cache.Key(cache.Neighbors, user.UserId)), m.Config.UserNeighborDigest()),
+					cache.String(cache.Key(cache.UserToUserDigest, cache.Key(cache.Neighbors, user.UserId)), userToUserConfig.Hash()),
 					cache.Time(cache.Key(cache.UserToUserUpdateTime, cache.Key(cache.Neighbors, user.UserId)), time.Now()),
 				); err != nil {
 					log.Logger().Error("failed to save user neighbors digest to cache", zap.String("user_id", user.UserId), zap.Error(err))
@@ -947,7 +948,7 @@ func (m *Master) updateUserToUser(dataset *dataset.Dataset) error {
 }
 
 // needUpdateUserToUser checks if user-to-user recommendation needs to be updated.
-func (m *Master) needUpdateUserToUser(userId string) bool {
+func (m *Master) needUpdateUserToUser(userId string, userToUserConfig config.UserToUserConfig) bool {
 	ctx := context.Background()
 
 	// check cache
@@ -966,7 +967,7 @@ func (m *Master) needUpdateUserToUser(userId string) bool {
 		}
 		return true
 	}
-	if cacheDigest != m.Config.UserNeighborDigest() {
+	if cacheDigest != userToUserConfig.Hash() {
 		return true
 	}
 

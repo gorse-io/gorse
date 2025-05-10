@@ -827,8 +827,6 @@ func (w *Worker) Recommend(users []data.User) {
 			cache.String(cache.Key(cache.OfflineRecommendDigest, userId), w.Config.OfflineRecommendDigest(
 				config.WithCollaborative(collaborativeUsed),
 				config.WithRanking(ctrUsed),
-				config.WithItemNeighborDigest(strings.Join(itemNeighborDigests.ToSlice(), "-")),
-				config.WithUserNeighborDigest(strings.Join(userNeighborDigests.ToSlice(), "-")),
 			))); err != nil {
 			log.Logger().Error("failed to cache recommendation time", zap.Error(err))
 		}

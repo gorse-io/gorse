@@ -26,7 +26,7 @@ import (
 	"github.com/zhenghaoz/gorse/storage/data"
 )
 
-func (s *MasterTestSuite) TestFindItemNeighbors() {
+func (s *MasterTestSuite) TestFindItemToItem() {
 	ctx := context.Background()
 	// create config
 	s.Config = &config.Config{}
@@ -87,7 +87,7 @@ func (s *MasterTestSuite) TestFindItemNeighbors() {
 	s.rankingTrainSet = dataSet
 
 	// similar items (common users)
-	s.Config.Recommend.ItemNeighbors.NeighborType = config.NeighborTypeRelated
+	s.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: cache.Neighbors, Type: "users"}}
 	s.NoError(s.updateItemToItem(dataSet))
 	similar, err := s.CacheClient.SearchScores(ctx, cache.ItemToItem, cache.Key(cache.Neighbors, "9"), nil, 0, 100)
 	s.NoError(err)
@@ -100,7 +100,7 @@ func (s *MasterTestSuite) TestFindItemNeighbors() {
 	// similar items (common labels)
 	err = s.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastModifyItemTime, "8"), time.Now()))
 	s.NoError(err)
-	s.Config.Recommend.ItemNeighbors.NeighborType = config.NeighborTypeSimilar
+	s.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: cache.Neighbors, Type: "tags", Column: "item.Labels"}}
 	s.NoError(s.updateItemToItem(dataSet))
 	similar, err = s.CacheClient.SearchScores(ctx, cache.ItemToItem, cache.Key(cache.Neighbors, "8"), nil, 0, 100)
 	s.NoError(err)
@@ -115,7 +115,7 @@ func (s *MasterTestSuite) TestFindItemNeighbors() {
 	s.NoError(err)
 	err = s.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastModifyItemTime, "9"), time.Now()))
 	s.NoError(err)
-	s.Config.Recommend.ItemNeighbors.NeighborType = config.NeighborTypeAuto
+	s.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: cache.Neighbors, Type: "auto"}}
 	s.NoError(s.updateItemToItem(dataSet))
 	similar, err = s.CacheClient.SearchScores(ctx, cache.ItemToItem, cache.Key(cache.Neighbors, "8"), nil, 0, 100)
 	s.NoError(err)
@@ -125,7 +125,7 @@ func (s *MasterTestSuite) TestFindItemNeighbors() {
 	s.Equal([]string{"7", "5", "3"}, cache.ConvertDocumentsToValues(similar))
 }
 
-func (s *MasterTestSuite) TestFindUserNeighbors() {
+func (s *MasterTestSuite) TestUserToUser() {
 	ctx := context.Background()
 	// create config
 	s.Config = &config.Config{}
@@ -170,7 +170,7 @@ func (s *MasterTestSuite) TestFindUserNeighbors() {
 	s.rankingTrainSet = dataSet
 
 	// similar items (common users)
-	s.Config.Recommend.UserNeighbors.NeighborType = config.NeighborTypeRelated
+	s.Config.Recommend.UserToUser = []config.UserToUserConfig{{Name: cache.Neighbors, Type: "items"}}
 	s.NoError(s.updateUserToUser(dataSet))
 	similar, err := s.CacheClient.SearchScores(ctx, cache.UserToUser, cache.Key(cache.Neighbors, "9"), nil, 0, 100)
 	s.NoError(err)
@@ -179,7 +179,7 @@ func (s *MasterTestSuite) TestFindUserNeighbors() {
 	// similar items (common labels)
 	err = s.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastModifyUserTime, "8"), time.Now()))
 	s.NoError(err)
-	s.Config.Recommend.UserNeighbors.NeighborType = config.NeighborTypeSimilar
+	s.Config.Recommend.UserToUser = []config.UserToUserConfig{{Name: cache.Neighbors, Type: "tags", Column: "user.Labels"}}
 	s.NoError(s.updateUserToUser(dataSet))
 	similar, err = s.CacheClient.SearchScores(ctx, cache.UserToUser, cache.Key(cache.Neighbors, "8"), nil, 0, 100)
 	s.NoError(err)
@@ -190,7 +190,7 @@ func (s *MasterTestSuite) TestFindUserNeighbors() {
 	s.NoError(err)
 	err = s.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastModifyUserTime, "9"), time.Now()))
 	s.NoError(err)
-	s.Config.Recommend.UserNeighbors.NeighborType = config.NeighborTypeAuto
+	s.Config.Recommend.UserToUser = []config.UserToUserConfig{{Name: cache.Neighbors, Type: "auto"}}
 	s.NoError(s.updateUserToUser(dataSet))
 	similar, err = s.CacheClient.SearchScores(ctx, cache.UserToUser, cache.Key(cache.Neighbors, "8"), nil, 0, 100)
 	s.NoError(err)
@@ -456,9 +456,10 @@ func (s *MasterTestSuite) TestNeedUpdateItemToItem() {
 func (s *MasterTestSuite) TestNeedUpdateUserToUser() {
 	ctx := context.Background()
 	s.Config = config.GetDefaultConfig()
+	recommendConfig := config.UserToUserConfig{Name: cache.Neighbors}
 
 	// empty cache
-	s.True(s.needUpdateUserToUser("1"))
+	s.True(s.needUpdateUserToUser("1", recommendConfig))
 	err := s.CacheClient.AddScores(ctx, cache.UserToUser, cache.Key(cache.Neighbors, "1"), []cache.Score{
 		{Id: "1", Score: 1, Categories: []string{""}},
 		{Id: "2", Score: 2, Categories: []string{""}},
@@ -469,18 +470,18 @@ func (s *MasterTestSuite) TestNeedUpdateUserToUser() {
 	// digest mismatch
 	err = s.CacheClient.Set(ctx, cache.String(cache.Key(cache.UserToUserDigest, cache.Neighbors, "1"), "digest"))
 	s.NoError(err)
-	s.True(s.needUpdateUserToUser("1"))
+	s.True(s.needUpdateUserToUser("1", recommendConfig))
 
 	// staled cache
-	err = s.CacheClient.Set(ctx, cache.String(cache.Key(cache.UserToUserDigest, cache.Neighbors, "1"), s.Config.UserNeighborDigest()))
+	err = s.CacheClient.Set(ctx, cache.String(cache.Key(cache.UserToUserDigest, cache.Neighbors, "1"), recommendConfig.Hash()))
 	s.NoError(err)
-	s.True(s.needUpdateUserToUser("1"))
+	s.True(s.needUpdateUserToUser("1", recommendConfig))
 	err = s.CacheClient.Set(ctx, cache.Time(cache.Key(cache.UserToUserUpdateTime, cache.Neighbors, "1"), time.Now().Add(-s.Config.Recommend.CacheExpire)))
 	s.NoError(err)
-	s.True(s.needUpdateUserToUser("1"))
+	s.True(s.needUpdateUserToUser("1", recommendConfig))
 
 	// not staled cache
 	err = s.CacheClient.Set(ctx, cache.Time(cache.Key(cache.UserToUserUpdateTime, cache.Neighbors, "1"), time.Now()))
 	s.NoError(err)
-	s.False(s.needUpdateUserToUser("1"))
+	s.False(s.needUpdateUserToUser("1", recommendConfig))
 }
