@@ -15,13 +15,13 @@ package ctr
 
 import (
 	"context"
-	"github.com/zhenghaoz/gorse/dataset"
 	"io"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/task"
+	"github.com/zhenghaoz/gorse/dataset"
 	"github.com/zhenghaoz/gorse/model"
 )
 

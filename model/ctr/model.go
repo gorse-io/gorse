@@ -33,7 +33,6 @@ import (
 	"github.com/zhenghaoz/gorse/base/encoding"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/base/progress"
-	"github.com/zhenghaoz/gorse/base/task"
 	"github.com/zhenghaoz/gorse/common/floats"
 	"github.com/zhenghaoz/gorse/common/nn"
 	"github.com/zhenghaoz/gorse/common/parallel"
@@ -74,12 +73,13 @@ func (score Score) BetterThan(s Score) bool {
 }
 
 type FitConfig struct {
-	*task.JobsAllocator
+	Jobs    int
 	Verbose int
 }
 
 func NewFitConfig() *FitConfig {
 	return &FitConfig{
+		Jobs:    1,
 		Verbose: 10,
 	}
 }
@@ -89,8 +89,8 @@ func (config *FitConfig) SetVerbose(verbose int) *FitConfig {
 	return config
 }
 
-func (config *FitConfig) SetJobsAllocator(allocator *task.JobsAllocator) *FitConfig {
-	config.JobsAllocator = allocator
+func (config *FitConfig) SetJobs(jobs int) *FitConfig {
+	config.Jobs = jobs
 	return config
 }
 
@@ -248,18 +248,17 @@ func (fm *FM) Fit(ctx context.Context, trainSet, testSet dataset.CTRSplit, confi
 		zap.Any("params", fm.GetParams()),
 		zap.Any("config", config))
 	fm.Init(trainSet)
-	maxJobs := config.MaxJobs()
-	temp := base.NewMatrix32(maxJobs, fm.nFactors)
-	vGrad := base.NewMatrix32(maxJobs, fm.nFactors)
-	vGrad2 := base.NewMatrix32(maxJobs, fm.nFactors)
-	mV := base.NewTensor32(maxJobs, int(trainSet.GetIndex().Len()), fm.nFactors)
-	mW := base.NewMatrix32(maxJobs, int(trainSet.GetIndex().Len()))
-	mB := make([]float32, maxJobs)
-	vV := base.NewTensor32(maxJobs, int(trainSet.GetIndex().Len()), fm.nFactors)
-	vW := base.NewMatrix32(maxJobs, int(trainSet.GetIndex().Len()))
-	vB := make([]float32, maxJobs)
-	mVHat := base.NewMatrix32(maxJobs, fm.nFactors)
-	vVHat := base.NewMatrix32(maxJobs, fm.nFactors)
+	temp := base.NewMatrix32(config.Jobs, fm.nFactors)
+	vGrad := base.NewMatrix32(config.Jobs, fm.nFactors)
+	vGrad2 := base.NewMatrix32(config.Jobs, fm.nFactors)
+	mV := base.NewTensor32(config.Jobs, int(trainSet.GetIndex().Len()), fm.nFactors)
+	mW := base.NewMatrix32(config.Jobs, int(trainSet.GetIndex().Len()))
+	mB := make([]float32, config.Jobs)
+	vV := base.NewTensor32(config.Jobs, int(trainSet.GetIndex().Len()), fm.nFactors)
+	vW := base.NewMatrix32(config.Jobs, int(trainSet.GetIndex().Len()))
+	vB := make([]float32, config.Jobs)
+	mVHat := base.NewMatrix32(config.Jobs, fm.nFactors)
+	vVHat := base.NewMatrix32(config.Jobs, fm.nFactors)
 
 	evalStart := time.Now()
 	var score Score
@@ -272,7 +271,7 @@ func (fm *FM) Fit(ctx context.Context, trainSet, testSet dataset.CTRSplit, confi
 	for epoch := 1; epoch <= fm.nEpochs; epoch++ {
 		fitStart := time.Now()
 		cost := float32(0)
-		_ = parallel.BatchParallel(trainSet.Count(), config.AvailableJobs(), 128, func(workerId, beginJobId, endJobId int) error {
+		_ = parallel.BatchParallel(trainSet.Count(), config.Jobs, 128, func(workerId, beginJobId, endJobId int) error {
 			for i := beginJobId; i < endJobId; i++ {
 				features, values, target := trainSet.Get(i)
 				prediction := fm.internalPredictImpl(features, values)
@@ -370,7 +369,7 @@ func (fm *FM) Fit(ctx context.Context, trainSet, testSet dataset.CTRSplit, confi
 				zap.String("eval_time", evalTime.String()),
 				zap.Float32("loss", cost),
 			}, score.ZapFields()...)
-			log.Logger().Debug(fmt.Sprintf("fit fm %v/%v", epoch, fm.nEpochs), fields...)
+			log.Logger().Info(fmt.Sprintf("fit fm %v/%v", epoch, fm.nEpochs), fields...)
 			// check NaN
 			if math32.IsNaN(cost) || math32.IsNaN(score.GetValue()) {
 				log.Logger().Warn("model diverged", zap.Float32("lr", fm.lr))

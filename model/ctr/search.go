@@ -169,7 +169,7 @@ func (searcher *ModelSearcher) Fit(ctx context.Context, trainSet, valSet dataset
 
 	// Random search
 	grid := searcher.model.GetParamsGrid(searcher.searchSize)
-	r := RandomSearchCV(ctx, searcher.model, trainSet, valSet, grid, searcher.numTrials, 0, NewFitConfig().SetJobsAllocator(j))
+	r := RandomSearchCV(ctx, searcher.model, trainSet, valSet, grid, searcher.numTrials, 0, NewFitConfig())
 	searcher.bestMutex.Lock()
 	defer searcher.bestMutex.Unlock()
 	searcher.bestModel = r.BestModel

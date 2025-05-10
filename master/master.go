@@ -94,6 +94,7 @@ type Master struct {
 	collaborativeFilteringSearcher     *cf.ModelSearcher
 
 	// click model
+	clickTrainSetSize  int
 	clickScore         ctr.Score
 	clickModelMutex    sync.RWMutex
 	clickModelSearcher *ctr.ModelSearcher
@@ -332,10 +333,7 @@ func (m *Master) Shutdown() {
 func (m *Master) RunPrivilegedTasksLoop() {
 	defer base.CheckPanic()
 	var (
-		err   error
-		tasks = []Task{
-			NewFitClickModelTask(m),
-		}
+		err       error
 		firstLoop = true
 	)
 	go func() {
@@ -368,24 +366,6 @@ func (m *Master) RunPrivilegedTasksLoop() {
 		if firstLoop {
 			m.loadDataChan.Signal()
 			firstLoop = false
-		}
-
-		var registeredTask []Task
-		for _, t := range tasks {
-			if m.jobsScheduler.Register(t.name(), t.priority(), true) {
-				registeredTask = append(registeredTask, t)
-			}
-		}
-		for _, t := range registeredTask {
-			go func(task Task) {
-				j := m.jobsScheduler.GetJobsAllocator(task.name())
-				defer m.jobsScheduler.Unregister(task.name())
-				j.Init()
-				if err := task.run(context.Background(), j); err != nil {
-					log.Logger().Error("failed to run task", zap.String("task", task.name()), zap.Error(err))
-					return
-				}
-			}(t)
 		}
 	}
 }
@@ -425,76 +405,6 @@ func (m *Master) RunRagtagTasksLoop() {
 			}(t)
 		}
 		time.Sleep(m.Config.Recommend.Collaborative.ModelSearchPeriod)
-	}
-}
-
-func (m *Master) RunManagedTasksLoop() {
-	var (
-		privilegedTasks = []Task{
-			NewFitClickModelTask(m),
-		}
-		ragtagTasks = []Task{
-			NewCacheGarbageCollectionTask(m),
-			NewSearchRankingModelTask(m),
-			NewSearchClickModelTask(m),
-		}
-	)
-
-	for range m.triggerChan.C {
-		func() {
-			defer base.CheckPanic()
-
-			searchModel := m.scheduleState.SearchModel
-			m.scheduleState.IsRunning = true
-			m.scheduleState.StartTime = time.Now()
-			defer func() {
-				m.scheduleState.IsRunning = false
-				m.scheduleState.SearchModel = false
-				m.scheduleState.StartTime = time.Time{}
-			}()
-			_ = searchModel
-
-			// download dataset
-			if err := m.runLoadDatasetTask(); err != nil {
-				log.Logger().Error("failed to load ranking dataset", zap.Error(err))
-				return
-			}
-			if m.rankingTrainSet.CountUsers() == 0 && m.rankingTrainSet.CountItems() == 0 && m.rankingTrainSet.CountFeedback() == 0 {
-				log.Logger().Warn("empty ranking dataset",
-					zap.Strings("positive_feedback_type", m.Config.Recommend.DataSource.PositiveFeedbackTypes))
-				return
-			}
-
-			var registeredTask []Task
-			for _, t := range privilegedTasks {
-				if m.jobsScheduler.Register(t.name(), t.priority(), true) {
-					registeredTask = append(registeredTask, t)
-				}
-			}
-			if searchModel {
-				for _, t := range ragtagTasks {
-					if m.jobsScheduler.Register(t.name(), t.priority(), false) {
-						registeredTask = append(registeredTask, t)
-					}
-				}
-			}
-
-			var wg sync.WaitGroup
-			wg.Add(len(registeredTask))
-			for _, t := range registeredTask {
-				go func(task Task) {
-					j := m.jobsScheduler.GetJobsAllocator(task.name())
-					defer m.jobsScheduler.Unregister(task.name())
-					defer wg.Done()
-					j.Init()
-					if err := task.run(context.Background(), j); err != nil {
-						log.Logger().Error("failed to run task", zap.String("task", task.name()), zap.Error(err))
-						return
-					}
-				}(t)
-			}
-			wg.Wait()
-		}()
 	}
 }
 
