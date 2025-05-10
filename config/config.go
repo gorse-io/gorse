@@ -119,6 +119,7 @@ type RecommendConfig struct {
 	NonPersonalized []NonPersonalizedConfig `mapstructure:"non-personalized" validate:"dive"`
 	Popular         PopularConfig           `mapstructure:"popular"`
 	ItemToItem      []ItemToItemConfig      `mapstructure:"item-to-item" validate:"dive"`
+	UserToUser      []UserToUserConfig      `mapstructure:"user-to-user" validate:"dive"`
 	UserNeighbors   NeighborsConfig         `mapstructure:"user_neighbors"`
 	Collaborative   CollaborativeConfig     `mapstructure:"collaborative"`
 	Replacement     ReplacementConfig       `mapstructure:"replacement"`
@@ -155,6 +156,22 @@ type ItemToItemConfig struct {
 }
 
 func (config *ItemToItemConfig) Hash() string {
+	hash := md5.New()
+	hash.Write([]byte(config.Name))
+	hash.Write([]byte(config.Type))
+	hash.Write([]byte(config.Column))
+
+	digest := hash.Sum(nil)
+	return hex.EncodeToString(digest[:])
+}
+
+type UserToUserConfig struct {
+	Name   string `mapstructure:"name" json:"name"`
+	Type   string `mapstructure:"type" json:"type" validate:"oneof=embedding tags items"`
+	Column string `mapstructure:"column" json:"column" validate:"item_expr"`
+}
+
+func (config *UserToUserConfig) Hash() string {
 	hash := md5.New()
 	hash.Write([]byte(config.Name))
 	hash.Write([]byte(config.Type))
