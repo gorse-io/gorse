@@ -110,6 +110,9 @@ func (m *Master) runLoadDatasetTask() error {
 			}); err != nil {
 			log.Logger().Error("failed to reclaim outdated items", zap.Error(err))
 		}
+		if err = m.CacheClient.Set(ctx, cache.Time(cache.Key(cache.NonPersonalizedUpdateTime, recommender.Name()), recommender.Timestamp())); err != nil {
+			log.Logger().Error("failed to write meta", zap.Error(err))
+		}
 	}
 
 	// write statistics to database

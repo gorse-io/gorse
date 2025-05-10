@@ -833,6 +833,7 @@ func (suite *ServerTestSuite) TestNonPersonalizedRecommend() {
 		{"Offline Recommend", cache.OfflineRecommend, "0", "", "/api/intermediate/recommend/0"},
 		{"Offline Recommend in Category", cache.OfflineRecommend, "0", "0", "/api/intermediate/recommend/0/0"},
 	}
+	lastModified := time.Now()
 
 	for i, operator := range operators {
 		suite.T().Run(operator.Name, func(t *testing.T) {
@@ -845,6 +846,8 @@ func (suite *ServerTestSuite) TestNonPersonalizedRecommend() {
 				{Id: strconv.Itoa(i) + "4", Score: 96, Categories: []string{operator.Category}},
 			}
 			err := suite.CacheClient.AddScores(ctx, operator.Collection, operator.Subset, documents)
+			assert.NoError(t, err)
+			err = suite.CacheClient.Set(ctx, cache.Time(cache.Key(operator.Collection+"_update_time", operator.Subset), lastModified))
 			assert.NoError(t, err)
 			// hidden item
 			apitest.New().
@@ -873,6 +876,7 @@ func (suite *ServerTestSuite) TestNonPersonalizedRecommend() {
 				Header("X-API-Key", apiKey).
 				Expect(t).
 				Status(http.StatusOK).
+				HeaderPresent("Last-Modified").
 				Body(suite.marshal([]cache.Score{documents[0], documents[1], documents[2], documents[4]})).
 				End()
 			apitest.New().
@@ -885,6 +889,7 @@ func (suite *ServerTestSuite) TestNonPersonalizedRecommend() {
 					"n":      "3"}).
 				Expect(t).
 				Status(http.StatusOK).
+				HeaderPresent("Last-Modified").
 				Body(suite.marshal([]cache.Score{documents[0], documents[1], documents[2]})).
 				End()
 			apitest.New().
@@ -897,6 +902,7 @@ func (suite *ServerTestSuite) TestNonPersonalizedRecommend() {
 					"n":      "3"}).
 				Expect(t).
 				Status(http.StatusOK).
+				HeaderPresent("Last-Modified").
 				Body(suite.marshal([]cache.Score{documents[1], documents[2], documents[4]})).
 				End()
 			apitest.New().
@@ -909,6 +915,7 @@ func (suite *ServerTestSuite) TestNonPersonalizedRecommend() {
 					"n":      "0"}).
 				Expect(t).
 				Status(http.StatusOK).
+				HeaderPresent("Last-Modified").
 				Body(suite.marshal([]cache.Score{documents[0], documents[1], documents[2], documents[4]})).
 				End()
 			apitest.New().
@@ -922,6 +929,7 @@ func (suite *ServerTestSuite) TestNonPersonalizedRecommend() {
 					"n":       "0"}).
 				Expect(t).
 				Status(http.StatusOK).
+				HeaderPresent("Last-Modified").
 				Body(suite.marshal([]cache.Score{documents[0], documents[2], documents[4]})).
 				End()
 		})
