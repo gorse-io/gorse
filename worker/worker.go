@@ -70,10 +70,9 @@ type ScheduleState struct {
 
 // Worker manages states of a worker node.
 type Worker struct {
-	tracer      *progress.Tracer
-	oneMode     bool
-	testMode    bool
-	managedMode bool
+	tracer   *progress.Tracer
+	oneMode  bool
+	testMode bool
 	*config.Settings
 
 	// spawned rankers
@@ -127,12 +126,10 @@ func NewWorker(
 	httpPort int,
 	jobs int,
 	cacheFile string,
-	managedMode bool,
 	tlsConfig *util.TLSConfig,
 ) *Worker {
 	return &Worker{
 		rankers:       make([]ctr.FactorizationMachine, jobs),
-		managedMode:   managedMode,
 		Settings:      config.NewSettings(),
 		randGenerator: base.NewRand(time.Now().UTC().UnixNano()),
 		// config
@@ -406,7 +403,6 @@ func (w *Worker) Serve() {
 		}
 		w.workerName = state.WorkerName
 		log.Logger().Info("start worker",
-			zap.Bool("managed", w.managedMode),
 			zap.Int("n_jobs", w.jobs),
 			zap.String("worker_name", w.workerName))
 	}
@@ -462,20 +458,14 @@ func (w *Worker) Serve() {
 		w.Recommend(workingUsers)
 	}
 
-	if w.managedMode {
-		for range w.triggerChan.C {
-			loop()
-		}
-	} else {
-		for {
-			select {
-			case tick := <-w.ticker.C:
-				if time.Since(tick) < w.Config.Recommend.Offline.CheckRecommendPeriod {
-					loop()
-				}
-			case <-w.pulledChan.C:
+	for {
+		select {
+		case tick := <-w.ticker.C:
+			if time.Since(tick) < w.Config.Recommend.Offline.CheckRecommendPeriod {
 				loop()
 			}
+		case <-w.pulledChan.C:
+			loop()
 		}
 	}
 }

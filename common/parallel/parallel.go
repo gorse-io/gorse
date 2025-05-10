@@ -19,8 +19,6 @@ import (
 	"sync"
 
 	"github.com/juju/errors"
-	"github.com/zhenghaoz/gorse/base/task"
-	"go.uber.org/atomic"
 	"modernc.org/mathutil"
 )
 
@@ -82,55 +80,6 @@ func Parallel(nJobs, nWorkers int, worker func(workerId, jobId int) error) error
 		}
 	}
 	return nil
-}
-
-func DynamicParallel(nJobs int, jobsAlloc *task.JobsAllocator, worker func(workerId, jobId int) error) error {
-	c := make(chan int, chanSize)
-	// producer
-	go func() {
-		for i := 0; i < nJobs; i++ {
-			c <- i
-		}
-		close(c)
-	}()
-	// consumer
-	for {
-		exit := atomic.NewBool(true)
-		numJobs := jobsAlloc.AvailableJobs()
-		var wg sync.WaitGroup
-		wg.Add(numJobs)
-		errs := make([]error, nJobs)
-		for j := 0; j < numJobs; j++ {
-			// start workers
-			go func(workerId int) {
-				defer wg.Done()
-				for i := 0; i < allocPeriod; i++ {
-					// read job
-					jobId, ok := <-c
-					if !ok {
-						return
-					}
-					exit.Store(false)
-					// run job
-					if err := worker(workerId, jobId); err != nil {
-						errs[jobId] = err
-						return
-					}
-				}
-			}(j)
-		}
-		wg.Wait()
-		// check errors
-		for _, err := range errs {
-			if err != nil {
-				return errors.Trace(err)
-			}
-		}
-		// exit if finished
-		if exit.Load() {
-			return nil
-		}
-	}
 }
 
 type batchJob struct {

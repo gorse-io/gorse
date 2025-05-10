@@ -117,7 +117,7 @@ type Master struct {
 }
 
 // NewMaster creates a master node.
-func NewMaster(cfg *config.Config, cacheFile string, managedMode bool) *Master {
+func NewMaster(cfg *config.Config, cacheFile string) *Master {
 	rand.Seed(time.Now().UnixNano())
 
 	// setup trace provider
