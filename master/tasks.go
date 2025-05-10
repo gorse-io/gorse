@@ -768,32 +768,16 @@ func (m *Master) LoadDataFromDatabase(
 }
 
 func (m *Master) updateItemToItem(dataset *dataset.Dataset) error {
+	if len(m.Config.Recommend.ItemToItem) == 0 {
+		return nil
+	}
 	ctx, span := m.tracer.Start(context.Background(), "Generate item-to-item recommendation",
-		len(dataset.GetItems())*(len(m.Config.Recommend.ItemToItem)+1)*2)
+		len(dataset.GetItems())*(len(m.Config.Recommend.ItemToItem))*2)
 	defer span.End()
 
-	// Add built-in item-to-item recommenders
-	itemToItemConfigs := m.Config.Recommend.ItemToItem
-	if !lo.ContainsBy(itemToItemConfigs, func(item config.ItemToItemConfig) bool {
-		return item.Name == cache.Neighbors
-	}) {
-		builtInConfig := config.ItemToItemConfig{}
-		builtInConfig.Name = cache.Neighbors
-		switch m.Config.Recommend.ItemNeighbors.NeighborType {
-		case config.NeighborTypeSimilar:
-			builtInConfig.Type = "tags"
-			builtInConfig.Column = "item.Labels"
-		case config.NeighborTypeRelated:
-			builtInConfig.Type = "users"
-		case config.NeighborTypeAuto:
-			builtInConfig.Type = "auto"
-		}
-		itemToItemConfigs = append(itemToItemConfigs, builtInConfig)
-	}
-
 	// Build item-to-item recommenders
-	itemToItemRecommenders := make([]logics.ItemToItem, 0, len(itemToItemConfigs))
-	for _, cfg := range itemToItemConfigs {
+	itemToItemRecommenders := make([]logics.ItemToItem, 0, len(m.Config.Recommend.ItemToItem))
+	for _, cfg := range m.Config.Recommend.ItemToItem {
 		recommender, err := logics.NewItemToItem(cfg, m.Config.Recommend.CacheSize, dataset.GetTimestamp(), &logics.ItemToItemOptions{
 			TagsIDF:      dataset.GetItemColumnValuesIDF(),
 			UsersIDF:     dataset.GetUserIDF(),
@@ -819,7 +803,7 @@ func (m *Master) updateItemToItem(dataset *dataset.Dataset) error {
 	for i, recommender := range itemToItemRecommenders {
 		pool := recommender.Pool()
 		for j, item := range recommender.Items() {
-			itemToItemConfig := itemToItemConfigs[i]
+			itemToItemConfig := m.Config.Recommend.ItemToItem[i]
 			if m.needUpdateItemToItem(item.ItemId, itemToItemConfig) {
 				pool.Run(func() {
 					defer span.Add(1)
@@ -904,71 +888,71 @@ func (m *Master) needUpdateItemToItem(itemId string, itemToItemConfig config.Ite
 }
 
 func (m *Master) updateUserToUser(dataset *dataset.Dataset) error {
+	if len(m.Config.Recommend.UserToUser) == 0 {
+		return nil
+	}
 	ctx, span := m.tracer.Start(context.Background(), "Generate user-to-user recommendation",
-		len(dataset.GetUsers())*2)
+		len(dataset.GetUsers())*(len(m.Config.Recommend.UserToUser))*2)
 	defer span.End()
 
-	// Build user-to-user recommenders
-	var cfg logics.UserToUserConfig
-	cfg.Name = cache.Neighbors
-	switch m.Config.Recommend.UserNeighbors.NeighborType {
-	case config.NeighborTypeSimilar:
-		cfg.Type = "tags"
-		cfg.Column = "user.Labels"
-	case config.NeighborTypeRelated:
-		cfg.Type = "items"
-	case config.NeighborTypeAuto:
-		cfg.Type = "auto"
-	}
-	userToUserRecommender, err := logics.NewUserToUser(cfg, m.Config.Recommend.CacheSize, dataset.GetTimestamp(), &logics.UserToUserOptions{
-		TagsIDF:  dataset.GetUserColumnValuesIDF(),
-		ItemsIDF: dataset.GetItemIDF(),
-	})
-	if err != nil {
-		return errors.Trace(err)
+	userToUserRecommenders := make([]logics.UserToUser, 0, len(m.Config.Recommend.UserToUser))
+	for _, cfg := range m.Config.Recommend.UserToUser {
+		recommender, err := logics.NewUserToUser(cfg, m.Config.Recommend.CacheSize, dataset.GetTimestamp(), &logics.UserToUserOptions{
+			TagsIDF:  dataset.GetUserColumnValuesIDF(),
+			ItemsIDF: dataset.GetItemIDF(),
+		})
+		if err != nil {
+			return errors.Trace(err)
+		}
+		userToUserRecommenders = append(userToUserRecommenders, recommender)
 	}
 
 	// Push users to user-to-user recommender
 	for i, user := range dataset.GetUsers() {
-		userToUserRecommender.Push(&user, dataset.GetUserFeedback()[i])
-		span.Add(1)
+		for _, recommender := range userToUserRecommenders {
+			recommender.Push(&user, dataset.GetUserFeedback()[i])
+			span.Add(1)
+		}
 	}
 
 	// Save user-to-user recommendations to cache
-	for j, user := range userToUserRecommender.Users() {
-		if m.needUpdateUserToUser(user.UserId) {
-			score := userToUserRecommender.PopAll(j)
-			if score == nil {
-				continue
+	for i, recommender := range userToUserRecommenders {
+		for j, user := range recommender.Users() {
+			userToUserConfig := m.Config.Recommend.UserToUser[i]
+			if m.needUpdateUserToUser(user.UserId, userToUserConfig) {
+				score := recommender.PopAll(j)
+				if score == nil {
+					continue
+				}
+				log.Logger().Debug("update user neighbors",
+					zap.String("user_id", user.UserId),
+					zap.Int("n_recommendations", len(score)))
+				// Save user-to-user recommendations to cache
+				if err := m.CacheClient.AddScores(ctx, cache.UserToUser, cache.Key(userToUserConfig.Name, user.UserId), score); err != nil {
+					log.Logger().Error("failed to save user neighbors to cache", zap.String("user_id", user.UserId), zap.Error(err))
+					continue
+				}
+				// Save user-to-user digest and last update time to cache
+				if err := m.CacheClient.Set(ctx,
+					cache.String(cache.Key(cache.UserToUserDigest, cache.Key(userToUserConfig.Name, user.UserId)), userToUserConfig.Hash()),
+					cache.Time(cache.Key(cache.UserToUserUpdateTime, cache.Key(userToUserConfig.Name, user.UserId)), time.Now()),
+				); err != nil {
+					log.Logger().Error("failed to save user neighbors digest to cache", zap.String("user_id", user.UserId), zap.Error(err))
+					continue
+				}
 			}
-			log.Logger().Debug("update user neighbors",
-				zap.String("user_id", user.UserId),
-				zap.Int("n_recommendations", len(score)))
-			// Save user-to-user recommendations to cache
-			if err := m.CacheClient.AddScores(ctx, cache.UserToUser, cache.Key(cache.Neighbors, user.UserId), score); err != nil {
-				log.Logger().Error("failed to save user neighbors to cache", zap.String("user_id", user.UserId), zap.Error(err))
-				continue
-			}
-			// Save user-to-user digest and last update time to cache
-			if err := m.CacheClient.Set(ctx,
-				cache.String(cache.Key(cache.UserToUserDigest, cache.Key(cache.Neighbors, user.UserId)), m.Config.UserNeighborDigest()),
-				cache.Time(cache.Key(cache.UserToUserUpdateTime, cache.Key(cache.Neighbors, user.UserId)), time.Now()),
-			); err != nil {
-				log.Logger().Error("failed to save user neighbors digest to cache", zap.String("user_id", user.UserId), zap.Error(err))
-				continue
-			}
+			span.Add(1)
 		}
-		span.Add(1)
 	}
 	return nil
 }
 
 // needUpdateUserToUser checks if user-to-user recommendation needs to be updated.
-func (m *Master) needUpdateUserToUser(userId string) bool {
+func (m *Master) needUpdateUserToUser(userId string, userToUserConfig config.UserToUserConfig) bool {
 	ctx := context.Background()
 
 	// check cache
-	if items, err := m.CacheClient.SearchScores(ctx, cache.UserToUser, cache.Key(cache.Neighbors, userId), nil, 0, -1); err != nil {
+	if items, err := m.CacheClient.SearchScores(ctx, cache.UserToUser, cache.Key(userToUserConfig.Name, userId), nil, 0, -1); err != nil {
 		log.Logger().Error("failed to load user neighbors", zap.String("user_id", userId), zap.Error(err))
 		return true
 	} else if len(items) == 0 {
@@ -976,19 +960,19 @@ func (m *Master) needUpdateUserToUser(userId string) bool {
 	}
 
 	// read digest
-	cacheDigest, err := m.CacheClient.Get(ctx, cache.Key(cache.UserToUserDigest, cache.Key(cache.Neighbors, userId))).String()
+	cacheDigest, err := m.CacheClient.Get(ctx, cache.Key(cache.UserToUserDigest, cache.Key(userToUserConfig.Name, userId))).String()
 	if err != nil {
 		if !errors.Is(err, errors.NotFound) {
 			log.Logger().Error("failed to read user neighbors digest", zap.Error(err))
 		}
 		return true
 	}
-	if cacheDigest != m.Config.UserNeighborDigest() {
+	if cacheDigest != userToUserConfig.Hash() {
 		return true
 	}
 
 	// check update time
-	updateTime, err := m.CacheClient.Get(ctx, cache.Key(cache.UserToUserUpdateTime, cache.Key(cache.Neighbors, userId))).Time()
+	updateTime, err := m.CacheClient.Get(ctx, cache.Key(cache.UserToUserUpdateTime, cache.Key(userToUserConfig.Name, userId))).Time()
 	if err != nil {
 		if !errors.Is(err, errors.NotFound) {
 			log.Logger().Error("failed to read last update user neighbors time", zap.Error(err))

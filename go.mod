@@ -23,7 +23,7 @@ require (
 	github.com/go-viper/mapstructure/v2 v2.2.1
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/securecookie v1.1.1
-	github.com/gorse-io/dashboard v0.0.0-20250510092726-c894ba882beb
+	github.com/gorse-io/dashboard v0.0.0-20250510125937-7845dd126256
 	github.com/gorse-io/gorse-go v0.5.0-alpha.1
 	github.com/haxii/go-swagger-ui v0.0.0-20210203093335-a63a6bbde946
 	github.com/jaswdr/faker v1.16.0
@@ -43,7 +43,7 @@ require (
 	github.com/prometheus/client_golang v1.13.0
 	github.com/rakyll/statik v0.1.7
 	github.com/redis/go-redis/extra/redisotel/v9 v9.5.3
-	github.com/redis/go-redis/v9 v9.7.0
+	github.com/redis/go-redis/v9 v9.8.0
 	github.com/samber/lo v1.38.1
 	github.com/sashabaranov/go-openai v1.36.1
 	github.com/schollz/progressbar/v3 v3.17.1

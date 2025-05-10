@@ -48,12 +48,6 @@ import (
 	"go.uber.org/zap"
 )
 
-const (
-	NeighborTypeAuto    = "auto"
-	NeighborTypeSimilar = "similar"
-	NeighborTypeRelated = "related"
-)
-
 // Config is the configuration for the engine.
 type Config struct {
 	Database     DatabaseConfig     `mapstructure:"database"`
@@ -119,8 +113,7 @@ type RecommendConfig struct {
 	NonPersonalized []NonPersonalizedConfig `mapstructure:"non-personalized" validate:"dive"`
 	Popular         PopularConfig           `mapstructure:"popular"`
 	ItemToItem      []ItemToItemConfig      `mapstructure:"item-to-item" validate:"dive"`
-	UserNeighbors   NeighborsConfig         `mapstructure:"user_neighbors"`
-	ItemNeighbors   NeighborsConfig         `mapstructure:"item_neighbors"`
+	UserToUser      []UserToUserConfig      `mapstructure:"user-to-user" validate:"dive"`
 	Collaborative   CollaborativeConfig     `mapstructure:"collaborative"`
 	Replacement     ReplacementConfig       `mapstructure:"replacement"`
 	Offline         OfflineConfig           `mapstructure:"offline"`
@@ -144,18 +137,30 @@ type PopularConfig struct {
 	PopularWindow time.Duration `mapstructure:"popular_window" validate:"gte=0"`
 }
 
-type NeighborsConfig struct {
-	NeighborType string `mapstructure:"neighbor_type" validate:"oneof=auto similar related ''"`
-}
-
 type ItemToItemConfig struct {
 	Name   string `mapstructure:"name" json:"name"`
-	Type   string `mapstructure:"type" json:"type" validate:"oneof=embedding tags users chat"`
+	Type   string `mapstructure:"type" json:"type" validate:"oneof=embedding tags users chat auto"`
 	Column string `mapstructure:"column" json:"column" validate:"item_expr"`
 	Prompt string `mapstructure:"prompt" json:"prompt"`
 }
 
 func (config *ItemToItemConfig) Hash() string {
+	hash := md5.New()
+	hash.Write([]byte(config.Name))
+	hash.Write([]byte(config.Type))
+	hash.Write([]byte(config.Column))
+
+	digest := hash.Sum(nil)
+	return hex.EncodeToString(digest[:])
+}
+
+type UserToUserConfig struct {
+	Name   string `mapstructure:"name" json:"name"`
+	Type   string `mapstructure:"type" json:"type" validate:"oneof=embedding tags items auto"`
+	Column string `mapstructure:"column" json:"column" validate:"item_expr"`
+}
+
+func (config *UserToUserConfig) Hash() string {
 	hash := md5.New()
 	hash.Write([]byte(config.Name))
 	hash.Write([]byte(config.Type))
@@ -261,12 +266,6 @@ func GetDefaultConfig() *Config {
 			Popular: PopularConfig{
 				PopularWindow: 180 * 24 * time.Hour,
 			},
-			UserNeighbors: NeighborsConfig{
-				NeighborType: "auto",
-			},
-			ItemNeighbors: NeighborsConfig{
-				NeighborType: "auto",
-			},
 			Collaborative: CollaborativeConfig{
 				ModelFitPeriod:    60 * time.Minute,
 				ModelSearchPeriod: 180 * time.Minute,
@@ -307,52 +306,13 @@ func (config *Config) Now() *time.Time {
 	return lo.ToPtr(time.Now().Add(config.Server.ClockError))
 }
 
-func (config *Config) UserNeighborDigest() string {
-	hash := md5.New()
-	hash.Write([]byte(config.Recommend.UserNeighbors.NeighborType))
-	if lo.Contains([]string{"auto", "related"}, config.Recommend.UserNeighbors.NeighborType) {
-		hash.Write([]byte(fmt.Sprintf("-%s", strings.Join(config.Recommend.DataSource.PositiveFeedbackTypes, "-"))))
-	} else {
-		hash.Write([]byte("-"))
-	}
-
-	digest := hash.Sum(nil)
-	return hex.EncodeToString(digest[:])
-}
-
-func (config *Config) ItemNeighborDigest() string {
-	hash := md5.New()
-	hash.Write([]byte(config.Recommend.ItemNeighbors.NeighborType))
-	if lo.Contains([]string{"auto", "related"}, config.Recommend.ItemNeighbors.NeighborType) {
-		hash.Write([]byte(fmt.Sprintf("-%s", strings.Join(config.Recommend.DataSource.PositiveFeedbackTypes, "-"))))
-	} else {
-		hash.Write([]byte("-"))
-	}
-
-	digest := hash.Sum(nil)
-	return hex.EncodeToString(digest[:])
-}
-
 type digestOptions struct {
 	userNeighborDigest  string
-	itemNeighborDigest  string
 	enableCollaborative bool
 	enableRanking       bool
 }
 
 type DigestOption func(option *digestOptions)
-
-func WithUserNeighborDigest(digest string) DigestOption {
-	return func(option *digestOptions) {
-		option.userNeighborDigest = digest
-	}
-}
-
-func WithItemNeighborDigest(digest string) DigestOption {
-	return func(option *digestOptions) {
-		option.itemNeighborDigest = digest
-	}
-}
 
 func WithCollaborative(v bool) DigestOption {
 	return func(option *digestOptions) {
@@ -368,8 +328,6 @@ func WithRanking(v bool) DigestOption {
 
 func (config *Config) OfflineRecommendDigest(option ...DigestOption) string {
 	options := digestOptions{
-		userNeighborDigest:  config.UserNeighborDigest(),
-		itemNeighborDigest:  config.ItemNeighborDigest(),
 		enableCollaborative: config.Recommend.Offline.EnableColRecommend,
 		enableRanking:       config.Recommend.Offline.EnableClickThroughPrediction,
 	}
@@ -395,9 +353,6 @@ func (config *Config) OfflineRecommendDigest(option ...DigestOption) string {
 	}
 	if config.Recommend.Offline.EnableUserBasedRecommend {
 		builder.WriteString(fmt.Sprintf("-%v", options.userNeighborDigest))
-	}
-	if config.Recommend.Offline.EnableItemBasedRecommend {
-		builder.WriteString(fmt.Sprintf("-%v", options.itemNeighborDigest))
 	}
 	if config.Recommend.Replacement.EnableReplacement {
 		builder.WriteString(fmt.Sprintf("-%v-%v",
@@ -518,10 +473,6 @@ func setDefault() {
 	viper.SetDefault("recommend.cache_expire", defaultConfig.Recommend.CacheExpire)
 	// [recommend.popular]
 	viper.SetDefault("recommend.popular.popular_window", defaultConfig.Recommend.Popular.PopularWindow)
-	// [recommend.user_neighbors]
-	viper.SetDefault("recommend.user_neighbors.neighbor_type", defaultConfig.Recommend.UserNeighbors.NeighborType)
-	// [recommend.item_neighbors]
-	viper.SetDefault("recommend.item_neighbors.neighbor_type", defaultConfig.Recommend.ItemNeighbors.NeighborType)
 	// [recommend.collaborative]
 	viper.SetDefault("recommend.collaborative.model_fit_period", defaultConfig.Recommend.Collaborative.ModelFitPeriod)
 	viper.SetDefault("recommend.collaborative.model_search_period", defaultConfig.Recommend.Collaborative.ModelSearchPeriod)

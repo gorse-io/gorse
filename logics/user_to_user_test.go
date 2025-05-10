@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/suite"
+	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/dataset"
 	"github.com/zhenghaoz/gorse/storage/data"
 )
@@ -30,7 +31,7 @@ type UserToUserTestSuite struct {
 
 func (suite *UserToUserTestSuite) TestEmbedding() {
 	timestamp := time.Now()
-	user2user, err := newEmbeddingUserToUser(UserToUserConfig{
+	user2user, err := newEmbeddingUserToUser(config.UserToUserConfig{
 		Column: "user.Labels.description",
 	}, 10, timestamp)
 	suite.NoError(err)
@@ -57,7 +58,7 @@ func (suite *UserToUserTestSuite) TestTags() {
 	for i := range idf {
 		idf[i] = 1
 	}
-	user2user, err := newTagsUserToUser(UserToUserConfig{
+	user2user, err := newTagsUserToUser(config.UserToUserConfig{
 		Column: "user.Labels",
 	}, 10, timestamp, idf)
 	suite.NoError(err)
@@ -86,7 +87,7 @@ func (suite *UserToUserTestSuite) TestItems() {
 	for i := range idf {
 		idf[i] = 1
 	}
-	user2user, err := newItemsUserToUser(UserToUserConfig{}, 10, timestamp, idf)
+	user2user, err := newItemsUserToUser(config.UserToUserConfig{}, 10, timestamp, idf)
 	suite.NoError(err)
 
 	for i := 0; i < 100; i++ {
@@ -110,7 +111,7 @@ func (suite *UserToUserTestSuite) TestAuto() {
 	for i := range idf {
 		idf[i] = 1
 	}
-	user2user, err := newAutoUserToUser(UserToUserConfig{}, 10, timestamp, idf, idf)
+	user2user, err := newAutoUserToUser(config.UserToUserConfig{}, 10, timestamp, idf, idf)
 	suite.NoError(err)
 
 	for i := 0; i < 100; i++ {
