@@ -16,7 +16,7 @@ package config
 
 import (
 	"github.com/zhenghaoz/gorse/model/cf"
-	"github.com/zhenghaoz/gorse/model/click"
+	"github.com/zhenghaoz/gorse/model/ctr"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
 )
@@ -29,10 +29,10 @@ type Settings struct {
 	DataClient  data.Database
 
 	// recommendation models
-	RankingModel        cf.MatrixFactorization
-	RankingModelVersion int64
-	ClickModel          click.FactorizationMachine
-	ClickModelVersion   int64
+	CollaborativeFilteringModel        cf.MatrixFactorization
+	CollaborativeFilteringModelVersion int64
+	ClickModel                         ctr.FactorizationMachine
+	ClickModelVersion                  int64
 }
 
 func NewSettings() *Settings {

@@ -21,7 +21,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/zhenghaoz/gorse/base/task"
 	"github.com/zhenghaoz/gorse/common/floats"
 	"github.com/zhenghaoz/gorse/dataset"
 	"github.com/zhenghaoz/gorse/model"
@@ -30,7 +29,7 @@ import (
 const benchDelta = 0.01
 
 func newFitConfig(_ int) *FitConfig {
-	cfg := NewFitConfig().SetVerbose(1).SetJobsAllocator(task.NewConstantJobsAllocator(runtime.NumCPU()))
+	cfg := NewFitConfig().SetVerbose(1).SetJobs(runtime.NumCPU())
 	return cfg
 }
 
@@ -95,7 +94,7 @@ func TestBPR_MovieLens(t *testing.T) {
 func TestCCD_MovieLens(t *testing.T) {
 	trainSet, testSet, err := dataset.LoadDataFromBuiltIn("ml-1m")
 	assert.NoError(t, err)
-	m := NewCCD(model.Params{
+	m := NewALS(model.Params{
 		model.NFactors: 8,
 		model.Reg:      0.015,
 		model.NEpochs:  30,
@@ -126,7 +125,7 @@ func TestCCD_MovieLens(t *testing.T) {
 //func TestCCD_Pinterest(t *testing.T) {
 //	trainSet, testSet, err := LoadDataFromBuiltIn("pinterest-20")
 //	assert.NoError(t, err)
-//	m := NewCCD(model.Params{
+//	m := NewALS(model.Params{
 //		model.NFactors:   8,
 //		model.Reg:        0.01,
 //		model.NEpochs:    20,

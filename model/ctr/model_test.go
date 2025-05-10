@@ -1,4 +1,4 @@
-// Copyright 2023 gorse Project Authors
+// Copyright 2020 gorse Project Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -11,12 +11,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
-package click
+package ctr
 
 import (
 	"bytes"
 	"context"
+	"runtime"
 	"testing"
 
 	"github.com/samber/lo"
@@ -24,39 +24,61 @@ import (
 	"github.com/zhenghaoz/gorse/model"
 )
 
-func TestDeepFMV2_Classification_Frappe(t *testing.T) {
-	t.Skip()
-	train, test, err := LoadDataFromBuiltIn("frappe")
-	assert.NoError(t, err)
-	m := NewDeepFMV2(model.Params{
-		model.InitStdDev: 0.01,
-		model.NFactors:   8,
-		model.NEpochs:    10,
-		model.Lr:         0.01,
-		model.Reg:        0.0001,
-		model.BatchSize:  1024,
-	})
-	fitConfig := newFitConfigWithTestTracker(20)
-	score := m.Fit(context.Background(), train, test, fitConfig)
-	//assert.InDelta(t, 0.9439709, score.Accuracy, classificationDelta)
-	_ = score
+const classificationDelta = 0.01
+
+func newFitConfigWithTestTracker() *FitConfig {
+	cfg := NewFitConfig().SetVerbose(1).SetJobs(runtime.NumCPU())
+	return cfg
 }
 
-func TestDeepFMV2_Classification_Criteo(t *testing.T) {
-	t.Skip()
-	train, test, err := LoadDataFromBuiltIn("criteo")
+func TestFactorizationMachines_Classification_Frappe(t *testing.T) {
+	// python .\model.py frappe -dim 8 -iter 10 -learn_rate 0.01 -regular 0.0001
+	train, test, err := LoadDataFromBuiltIn("frappe")
 	assert.NoError(t, err)
-	m := NewDeepFMV2(model.Params{
+	m := NewFactorizationMachines(model.Params{
+		model.NFactors:  8,
+		model.NEpochs:   10,
+		model.Lr:        0.01,
+		model.Reg:       0.0001,
+		model.BatchSize: 1024,
+	})
+	fitConfig := newFitConfigWithTestTracker()
+	score := m.Fit(context.Background(), train, test, fitConfig)
+	assert.InDelta(t, 0.919, score.Accuracy, classificationDelta)
+}
+
+func TestFactorizationMachines_Classification_MovieLens(t *testing.T) {
+	t.Skip("Skip time-consuming test")
+	// python .\model.py ml-tag -dim 8 -iter 10 -learn_rate 0.01 -regular 0.0001
+	train, test, err := LoadDataFromBuiltIn("ml-tag")
+	assert.NoError(t, err)
+	m := NewFactorizationMachines(model.Params{
 		model.InitStdDev: 0.01,
 		model.NFactors:   8,
 		model.NEpochs:    10,
-		model.Lr:         0.01,
+		model.Lr:         0.001,
 		model.Reg:        0.0001,
 		model.BatchSize:  1024,
 	})
-	fitConfig := newFitConfigWithTestTracker(10)
+	fitConfig := newFitConfigWithTestTracker()
 	score := m.Fit(context.Background(), train, test, fitConfig)
-	assert.InDelta(t, 0.77, score.Accuracy, classificationDelta)
+	assert.InDelta(t, 0.815, score.Accuracy, classificationDelta)
+}
+
+func TestFactorizationMachines_Classification_Criteo(t *testing.T) {
+	// python .\model.py criteo -dim 8 -iter 10 -learn_rate 0.01 -regular 0.0001
+	train, test, err := LoadDataFromBuiltIn("criteo")
+	assert.NoError(t, err)
+	m := NewFactorizationMachines(model.Params{
+		model.NFactors:  8,
+		model.NEpochs:   10,
+		model.Lr:        0.01,
+		model.Reg:       0.0001,
+		model.BatchSize: 1024,
+	})
+	fitConfig := newFitConfigWithTestTracker()
+	score := m.Fit(context.Background(), train, test, fitConfig)
+	assert.InDelta(t, 0.77, score.Accuracy, 0.025)
 
 	// test prediction
 	assert.Equal(t, m.BatchInternalPredict([]lo.Tuple2[[]int32, []float32]{{A: []int32{1, 2, 3, 4, 5, 6}, B: []float32{1, 1, 0.3, 0.4, 0.5, 0.6}}}),
@@ -79,7 +101,7 @@ func TestDeepFMV2_Classification_Criteo(t *testing.T) {
 	tmp, err := UnmarshalModel(buf)
 	assert.NoError(t, err)
 	scoreClone := EvaluateClassification(tmp, test)
-	assert.InDelta(t, 0.77, scoreClone.Accuracy, regressionDelta)
+	assert.InDelta(t, 0.77, scoreClone.Accuracy, 0.02)
 
 	// test clear
 	assert.False(t, m.Invalid())

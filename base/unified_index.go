@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package click
+package base
 
 import (
 	"encoding/binary"
@@ -21,7 +21,6 @@ import (
 	"strconv"
 
 	"github.com/juju/errors"
-	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/log"
 )
 
@@ -54,7 +53,7 @@ const (
 )
 
 // MarshalIndex marshal index into byte stream.
-func MarshalIndex(w io.Writer, index UnifiedIndex) error {
+func MarshalUnifiedIndex(w io.Writer, index UnifiedIndex) error {
 	// if index is nil
 	if index == nil {
 		return binary.Write(w, binary.LittleEndian, nilIndex)
@@ -78,7 +77,7 @@ func MarshalIndex(w io.Writer, index UnifiedIndex) error {
 }
 
 // UnmarshalIndex unmarshal index from byte stream.
-func UnmarshalIndex(r io.Reader) (UnifiedIndex, error) {
+func UnmarshalUnifiedIndex(r io.Reader) (UnifiedIndex, error) {
 	// read type index
 	var indexType uint8
 	err := binary.Read(r, binary.LittleEndian, &indexType)
@@ -106,21 +105,21 @@ func UnmarshalIndex(r io.Reader) (UnifiedIndex, error) {
 
 // UnifiedMapIndexBuilder is the builder for UnifiedMapIndex.
 type UnifiedMapIndexBuilder struct {
-	UserIndex      base.Index
-	ItemIndex      base.Index
-	UserLabelIndex base.Index
-	ItemLabelIndex base.Index
-	CtxLabelIndex  base.Index
+	UserIndex      *Index
+	ItemIndex      *Index
+	UserLabelIndex *Index
+	ItemLabelIndex *Index
+	CtxLabelIndex  *Index
 }
 
 // NewUnifiedMapIndexBuilder creates a UnifiedMapIndexBuilder.
 func NewUnifiedMapIndexBuilder() *UnifiedMapIndexBuilder {
 	return &UnifiedMapIndexBuilder{
-		UserIndex:      base.NewMapIndex(),
-		ItemIndex:      base.NewMapIndex(),
-		UserLabelIndex: base.NewMapIndex(),
-		ItemLabelIndex: base.NewMapIndex(),
-		CtxLabelIndex:  base.NewMapIndex(),
+		UserIndex:      NewMapIndex(),
+		ItemIndex:      NewMapIndex(),
+		UserLabelIndex: NewMapIndex(),
+		ItemLabelIndex: NewMapIndex(),
+		CtxLabelIndex:  NewMapIndex(),
 	}
 }
 
@@ -163,11 +162,11 @@ func (builder *UnifiedMapIndexBuilder) Build() UnifiedIndex {
 // UnifiedMapIndex is the id -> index mapper for factorization machines.
 // The division of id is: | user | item | user label | item label | context label |
 type UnifiedMapIndex struct {
-	UserIndex      base.Index
-	ItemIndex      base.Index
-	UserLabelIndex base.Index
-	ItemLabelIndex base.Index
-	CtxLabelIndex  base.Index
+	UserIndex      *Index
+	ItemIndex      *Index
+	UserLabelIndex *Index
+	ItemLabelIndex *Index
+	CtxLabelIndex  *Index
 }
 
 // GetUserLabels returns all user labels.
@@ -215,7 +214,7 @@ func (unified *UnifiedMapIndex) EncodeUser(userId string) int32 {
 // EncodeItem converts a item id to a integer in the encoding space.
 func (unified *UnifiedMapIndex) EncodeItem(itemId string) int32 {
 	itemIndex := unified.ItemIndex.ToNumber(itemId)
-	if itemIndex != base.NotId {
+	if itemIndex != NotId {
 		itemIndex += unified.UserIndex.Len()
 	}
 	return itemIndex
@@ -224,7 +223,7 @@ func (unified *UnifiedMapIndex) EncodeItem(itemId string) int32 {
 // EncodeUserLabel converts a user label to a integer in the encoding space.
 func (unified *UnifiedMapIndex) EncodeUserLabel(userLabel string) int32 {
 	userLabelIndex := unified.UserLabelIndex.ToNumber(userLabel)
-	if userLabelIndex != base.NotId {
+	if userLabelIndex != NotId {
 		userLabelIndex += unified.UserIndex.Len() + unified.ItemIndex.Len()
 	}
 	return userLabelIndex
@@ -233,7 +232,7 @@ func (unified *UnifiedMapIndex) EncodeUserLabel(userLabel string) int32 {
 // EncodeItemLabel converts a item label to a integer in the encoding space.
 func (unified *UnifiedMapIndex) EncodeItemLabel(itemLabel string) int32 {
 	itemLabelIndex := unified.ItemLabelIndex.ToNumber(itemLabel)
-	if itemLabelIndex != base.NotId {
+	if itemLabelIndex != NotId {
 		itemLabelIndex += unified.UserIndex.Len() + unified.ItemIndex.Len() + unified.UserLabelIndex.Len()
 	}
 	return itemLabelIndex
@@ -242,7 +241,7 @@ func (unified *UnifiedMapIndex) EncodeItemLabel(itemLabel string) int32 {
 // EncodeContextLabel converts a context label to a integer in the encoding space.
 func (unified *UnifiedMapIndex) EncodeContextLabel(label string) int32 {
 	ctxLabelIndex := unified.CtxLabelIndex.ToNumber(label)
-	if ctxLabelIndex != base.NotId {
+	if ctxLabelIndex != NotId {
 		ctxLabelIndex += unified.UserIndex.Len() + unified.ItemIndex.Len() +
 			unified.UserLabelIndex.Len() + unified.ItemLabelIndex.Len()
 	}
@@ -271,9 +270,9 @@ func (unified *UnifiedMapIndex) CountItems() int32 {
 
 // Marshal map index into byte stream.
 func (unified *UnifiedMapIndex) Marshal(w io.Writer) error {
-	indices := []base.Index{unified.UserIndex, unified.ItemIndex, unified.UserLabelIndex, unified.ItemLabelIndex, unified.CtxLabelIndex}
+	indices := []*Index{unified.UserIndex, unified.ItemIndex, unified.UserLabelIndex, unified.ItemLabelIndex, unified.CtxLabelIndex}
 	for _, index := range indices {
-		err := base.MarshalIndex(w, index)
+		err := MarshalIndex(w, index)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -283,10 +282,10 @@ func (unified *UnifiedMapIndex) Marshal(w io.Writer) error {
 
 // Unmarshal map index from byte stream.
 func (unified *UnifiedMapIndex) Unmarshal(r io.Reader) error {
-	indices := []*base.Index{&unified.UserIndex, &unified.ItemIndex, &unified.UserLabelIndex, &unified.ItemLabelIndex, &unified.CtxLabelIndex}
+	indices := []**Index{&unified.UserIndex, &unified.ItemIndex, &unified.UserLabelIndex, &unified.ItemLabelIndex, &unified.CtxLabelIndex}
 	for i := range indices {
 		var err error
-		*indices[i], err = base.UnmarshalIndex(r)
+		*indices[i], err = UnmarshalIndex(r)
 		if err != nil {
 			return errors.Trace(err)
 		}

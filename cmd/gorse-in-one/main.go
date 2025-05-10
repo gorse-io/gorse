@@ -98,12 +98,11 @@ var oneCommand = &cobra.Command{
 
 		// create master
 		cachePath, _ := cmd.PersistentFlags().GetString("cache-path")
-		managedMode, _ := cmd.PersistentFlags().GetBool("managed")
-		m := master.NewMaster(conf, cachePath, managedMode)
+		m := master.NewMaster(conf, cachePath)
 		// Start worker
 		workerJobs, _ := cmd.PersistentFlags().GetInt("recommend-jobs")
 		w := worker.NewWorker(conf.Master.Host, conf.Master.Port, conf.Master.Host,
-			0, workerJobs, "", managedMode, nil)
+			0, workerJobs, "", nil)
 		go func() {
 			w.SetOneMode(m.Settings)
 			w.Serve()

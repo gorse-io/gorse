@@ -19,13 +19,13 @@ import (
 
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/model/cf"
-	"github.com/zhenghaoz/gorse/model/click"
+	"github.com/zhenghaoz/gorse/model/ctr"
 	"github.com/zhenghaoz/gorse/protocol"
 	"go.uber.org/zap"
 )
 
 // UnmarshalClickModel unmarshal click model from gRPC.
-func UnmarshalClickModel(receiver protocol.Master_GetClickModelClient) (click.FactorizationMachine, error) {
+func UnmarshalClickModel(receiver protocol.Master_GetClickModelClient) (ctr.FactorizationMachine, error) {
 	// receive model
 	reader, writer := io.Pipe()
 	var finalError error
@@ -57,7 +57,7 @@ func UnmarshalClickModel(receiver protocol.Master_GetClickModelClient) (click.Fa
 		}
 	}()
 	// unmarshal model
-	model, err := click.UnmarshalModel(reader)
+	model, err := ctr.UnmarshalModel(reader)
 	if err != nil {
 		return nil, err
 	}

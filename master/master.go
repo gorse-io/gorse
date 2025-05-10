@@ -41,7 +41,7 @@ import (
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/dataset"
 	"github.com/zhenghaoz/gorse/model/cf"
-	"github.com/zhenghaoz/gorse/model/click"
+	"github.com/zhenghaoz/gorse/model/ctr"
 	"github.com/zhenghaoz/gorse/protocol"
 	"github.com/zhenghaoz/gorse/server"
 	"github.com/zhenghaoz/gorse/storage"
@@ -71,7 +71,6 @@ type Master struct {
 	remoteProgress sync.Map
 	jobsScheduler  *task.JobsScheduler
 	cacheFile      string
-	managedMode    bool
 	openAIClient   *openai.Client
 
 	// cluster meta cache
@@ -83,20 +82,22 @@ type Master struct {
 	rankingDataMutex sync.RWMutex
 
 	// click dataset
-	clickTrainSet  *click.Dataset
-	clickTestSet   *click.Dataset
+	clickTrainSet  *ctr.Dataset
+	clickTestSet   *ctr.Dataset
 	clickDataMutex sync.RWMutex
 
-	// ranking model
-	rankingModelName     string
-	rankingScore         cf.Score
-	rankingModelMutex    sync.RWMutex
-	rankingModelSearcher *cf.ModelSearcher
+	// collaborative filtering
+	collaborativeFilteringTrainSetSize int
+	collaborativeFilteringModelName    string
+	collaborativeFilteringModelScore   cf.Score
+	collaborativeFilteringModelMutex   sync.RWMutex
+	collaborativeFilteringSearcher     *cf.ModelSearcher
 
 	// click model
-	clickScore         click.Score
+	clickTrainSetSize  int
+	clickScore         ctr.Score
 	clickModelMutex    sync.RWMutex
-	clickModelSearcher *click.ModelSearcher
+	clickModelSearcher *ctr.ModelSearcher
 
 	// oauth2
 	oauth2Config oauth2.Config
@@ -116,7 +117,7 @@ type Master struct {
 }
 
 // NewMaster creates a master node.
-func NewMaster(cfg *config.Config, cacheFile string, managedMode bool) *Master {
+func NewMaster(cfg *config.Config, cacheFile string) *Master {
 	rand.Seed(time.Now().UnixNano())
 
 	// setup trace provider
@@ -140,33 +141,32 @@ func NewMaster(cfg *config.Config, cacheFile string, managedMode bool) *Master {
 	m := &Master{
 		// create task monitor
 		cacheFile:     cacheFile,
-		managedMode:   managedMode,
 		jobsScheduler: task.NewJobsScheduler(cfg.Master.NumJobs),
 		tracer:        progress.NewTracer("master"),
 		openAIClient:  openai.NewClientWithConfig(clientConfig),
 		// default ranking model
-		rankingModelName: "bpr",
-		rankingModelSearcher: cf.NewModelSearcher(
+		collaborativeFilteringModelName: "bpr",
+		collaborativeFilteringSearcher: cf.NewModelSearcher(
 			cfg.Recommend.Collaborative.ModelSearchEpoch,
 			cfg.Recommend.Collaborative.ModelSearchTrials,
 			cfg.Recommend.Collaborative.EnableModelSizeSearch,
 		),
 		// default click model
-		clickModelSearcher: click.NewModelSearcher(
+		clickModelSearcher: ctr.NewModelSearcher(
 			cfg.Recommend.Collaborative.ModelSearchEpoch,
 			cfg.Recommend.Collaborative.ModelSearchTrials,
 			cfg.Recommend.Collaborative.EnableModelSizeSearch,
 		),
 		RestServer: server.RestServer{
 			Settings: &config.Settings{
-				Config:       cfg,
-				CacheClient:  cache.NoDatabase{},
-				DataClient:   data.NoDatabase{},
-				RankingModel: cf.NewBPR(nil),
-				ClickModel:   click.NewFM(nil),
+				Config:                      cfg,
+				CacheClient:                 cache.NoDatabase{},
+				DataClient:                  data.NoDatabase{},
+				CollaborativeFilteringModel: cf.NewBPR(nil),
+				ClickModel:                  ctr.NewFM(nil),
 				// init versions
-				RankingModelVersion: rand.Int63(),
-				ClickModelVersion:   rand.Int63(),
+				CollaborativeFilteringModelVersion: rand.Int63(),
+				ClickModelVersion:                  rand.Int63(),
 			},
 			HttpHost:   cfg.Master.HttpHost,
 			HttpPort:   cfg.Master.HttpPort,
@@ -199,20 +199,20 @@ func (m *Master) Serve() {
 			log.Logger().Error("failed to load local cache", zap.String("path", m.cacheFile), zap.Error(err))
 		}
 	}
-	if m.localCache.RankingModel != nil {
+	if m.localCache.CollaborativeFilteringModel != nil {
 		log.Logger().Info("load cached ranking model",
-			zap.String("model_name", m.localCache.RankingModelName),
-			zap.String("model_version", encoding.Hex(m.localCache.RankingModelVersion)),
-			zap.Float32("model_score", m.localCache.RankingModelScore.NDCG),
-			zap.Any("params", m.localCache.RankingModel.GetParams()))
-		m.RankingModel = m.localCache.RankingModel
-		m.rankingModelName = m.localCache.RankingModelName
-		m.RankingModelVersion = m.localCache.RankingModelVersion
-		m.rankingScore = m.localCache.RankingModelScore
-		CollaborativeFilteringPrecision10.Set(float64(m.rankingScore.Precision))
-		CollaborativeFilteringRecall10.Set(float64(m.rankingScore.Recall))
-		CollaborativeFilteringNDCG10.Set(float64(m.rankingScore.NDCG))
-		MemoryInUseBytesVec.WithLabelValues("collaborative_filtering_model").Set(float64(sizeof.DeepSize(m.RankingModel)))
+			zap.String("model_name", m.localCache.CollaborativeFilteringModelName),
+			zap.String("model_version", encoding.Hex(m.localCache.CollaborativeFilteringModelVersion)),
+			zap.Float32("model_score", m.localCache.CollaborativeFilteringModelScore.NDCG),
+			zap.Any("params", m.localCache.CollaborativeFilteringModel.GetParams()))
+		m.CollaborativeFilteringModel = m.localCache.CollaborativeFilteringModel
+		m.collaborativeFilteringModelName = m.localCache.CollaborativeFilteringModelName
+		m.CollaborativeFilteringModelVersion = m.localCache.CollaborativeFilteringModelVersion
+		m.collaborativeFilteringModelScore = m.localCache.CollaborativeFilteringModelScore
+		CollaborativeFilteringPrecision10.Set(float64(m.collaborativeFilteringModelScore.Precision))
+		CollaborativeFilteringRecall10.Set(float64(m.collaborativeFilteringModelScore.Recall))
+		CollaborativeFilteringNDCG10.Set(float64(m.collaborativeFilteringModelScore.NDCG))
+		MemoryInUseBytesVec.WithLabelValues("collaborative_filtering_model").Set(float64(sizeof.DeepSize(m.CollaborativeFilteringModel)))
 	}
 	if m.localCache.ClickModel != nil {
 		log.Logger().Info("load cached click model",
@@ -259,14 +259,10 @@ func (m *Master) Serve() {
 		log.Logger().Fatal("failed to init database", zap.Error(err))
 	}
 
-	if m.managedMode {
-		go m.RunManagedTasksLoop()
-	} else {
-		go m.RunPrivilegedTasksLoop()
-		log.Logger().Info("start model fit", zap.Duration("period", m.Config.Recommend.Collaborative.ModelFitPeriod))
-		go m.RunRagtagTasksLoop()
-		log.Logger().Info("start model searcher", zap.Duration("period", m.Config.Recommend.Collaborative.ModelSearchPeriod))
-	}
+	go m.RunPrivilegedTasksLoop()
+	log.Logger().Info("start model fit", zap.Duration("period", m.Config.Recommend.Collaborative.ModelFitPeriod))
+	go m.RunRagtagTasksLoop()
+	log.Logger().Info("start model searcher", zap.Duration("period", m.Config.Recommend.Collaborative.ModelSearchPeriod))
 
 	// start rpc server
 	go func() {
@@ -337,11 +333,7 @@ func (m *Master) Shutdown() {
 func (m *Master) RunPrivilegedTasksLoop() {
 	defer base.CheckPanic()
 	var (
-		err   error
-		tasks = []Task{
-			NewFitClickModelTask(m),
-			NewFitRankingModelTask(m),
-		}
+		err       error
 		firstLoop = true
 	)
 	go func() {
@@ -365,7 +357,7 @@ func (m *Master) RunPrivilegedTasksLoop() {
 			log.Logger().Error("failed to load ranking dataset", zap.Error(err))
 			continue
 		}
-		if m.rankingTrainSet.CountUsers() == 0 && m.rankingTrainSet.CountItems() == 0 && m.rankingTrainSet.Count() == 0 {
+		if m.rankingTrainSet.CountUsers() == 0 && m.rankingTrainSet.CountItems() == 0 && m.rankingTrainSet.CountFeedback() == 0 {
 			log.Logger().Warn("empty ranking dataset",
 				zap.Strings("positive_feedback_type", m.Config.Recommend.DataSource.PositiveFeedbackTypes))
 			continue
@@ -375,29 +367,11 @@ func (m *Master) RunPrivilegedTasksLoop() {
 			m.loadDataChan.Signal()
 			firstLoop = false
 		}
-
-		var registeredTask []Task
-		for _, t := range tasks {
-			if m.jobsScheduler.Register(t.name(), t.priority(), true) {
-				registeredTask = append(registeredTask, t)
-			}
-		}
-		for _, t := range registeredTask {
-			go func(task Task) {
-				j := m.jobsScheduler.GetJobsAllocator(task.name())
-				defer m.jobsScheduler.Unregister(task.name())
-				j.Init()
-				if err := task.run(context.Background(), j); err != nil {
-					log.Logger().Error("failed to run task", zap.String("task", task.name()), zap.Error(err))
-					return
-				}
-			}(t)
-		}
 	}
 }
 
 // RunRagtagTasksLoop searches optimal recommendation model in background. It never modifies variables other than
-// rankingModelSearcher, clickSearchedModel and clickSearchedScore.
+// collaborativeFilteringSearcher, clickSearchedModel and clickSearchedScore.
 func (m *Master) RunRagtagTasksLoop() {
 	defer base.CheckPanic()
 	<-m.loadDataChan.C
@@ -431,77 +405,6 @@ func (m *Master) RunRagtagTasksLoop() {
 			}(t)
 		}
 		time.Sleep(m.Config.Recommend.Collaborative.ModelSearchPeriod)
-	}
-}
-
-func (m *Master) RunManagedTasksLoop() {
-	var (
-		privilegedTasks = []Task{
-			NewFitClickModelTask(m),
-			NewFitRankingModelTask(m),
-		}
-		ragtagTasks = []Task{
-			NewCacheGarbageCollectionTask(m),
-			NewSearchRankingModelTask(m),
-			NewSearchClickModelTask(m),
-		}
-	)
-
-	for range m.triggerChan.C {
-		func() {
-			defer base.CheckPanic()
-
-			searchModel := m.scheduleState.SearchModel
-			m.scheduleState.IsRunning = true
-			m.scheduleState.StartTime = time.Now()
-			defer func() {
-				m.scheduleState.IsRunning = false
-				m.scheduleState.SearchModel = false
-				m.scheduleState.StartTime = time.Time{}
-			}()
-			_ = searchModel
-
-			// download dataset
-			if err := m.runLoadDatasetTask(); err != nil {
-				log.Logger().Error("failed to load ranking dataset", zap.Error(err))
-				return
-			}
-			if m.rankingTrainSet.CountUsers() == 0 && m.rankingTrainSet.CountItems() == 0 && m.rankingTrainSet.Count() == 0 {
-				log.Logger().Warn("empty ranking dataset",
-					zap.Strings("positive_feedback_type", m.Config.Recommend.DataSource.PositiveFeedbackTypes))
-				return
-			}
-
-			var registeredTask []Task
-			for _, t := range privilegedTasks {
-				if m.jobsScheduler.Register(t.name(), t.priority(), true) {
-					registeredTask = append(registeredTask, t)
-				}
-			}
-			if searchModel {
-				for _, t := range ragtagTasks {
-					if m.jobsScheduler.Register(t.name(), t.priority(), false) {
-						registeredTask = append(registeredTask, t)
-					}
-				}
-			}
-
-			var wg sync.WaitGroup
-			wg.Add(len(registeredTask))
-			for _, t := range registeredTask {
-				go func(task Task) {
-					j := m.jobsScheduler.GetJobsAllocator(task.name())
-					defer m.jobsScheduler.Unregister(task.name())
-					defer wg.Done()
-					j.Init()
-					if err := task.run(context.Background(), j); err != nil {
-						log.Logger().Error("failed to run task", zap.String("task", task.name()), zap.Error(err))
-						return
-					}
-				}(t)
-			}
-			wg.Wait()
-		}()
 	}
 }
 

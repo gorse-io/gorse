@@ -21,7 +21,7 @@ import (
 	"github.com/zhenghaoz/gorse/base/encoding"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/model/cf"
-	"github.com/zhenghaoz/gorse/model/click"
+	"github.com/zhenghaoz/gorse/model/ctr"
 	"go.uber.org/zap"
 	"os"
 	"path/filepath"
@@ -29,18 +29,18 @@ import (
 
 // LocalCache is local cache for the master node.
 type LocalCache struct {
-	path                string
-	RankingModelName    string
-	RankingModelVersion int64
-	RankingModel        cf.MatrixFactorization
-	RankingModelScore   cf.Score
-	ClickModelVersion   int64
-	ClickModelScore     click.Score
-	ClickModel          click.FactorizationMachine
+	path                               string
+	CollaborativeFilteringModelName    string
+	CollaborativeFilteringModelVersion int64
+	CollaborativeFilteringModel        cf.MatrixFactorization
+	CollaborativeFilteringModelScore   cf.Score
+	ClickModelVersion                  int64
+	ClickModelScore                    ctr.Score
+	ClickModel                         ctr.FactorizationMachine
 }
 
 // LoadLocalCache loads local cache from a file.
-// If the ranking model is invalid, RankingModel == nil.
+// If the ranking model is invalid, CollaborativeFilteringModel == nil.
 // If the click model is invalid, ClickModel == nil.
 func LoadLocalCache(path string) (*LocalCache, error) {
 	log.Logger().Info("load cache", zap.String("path", path))
@@ -64,22 +64,22 @@ func LoadLocalCache(path string) (*LocalCache, error) {
 		}
 	}(f)
 	// 1. ranking model name
-	state.RankingModelName, err = encoding.ReadString(f)
+	state.CollaborativeFilteringModelName, err = encoding.ReadString(f)
 	if err != nil {
 		return state, errors.Trace(err)
 	}
 	// 2. ranking model version
-	err = binary.Read(f, binary.LittleEndian, &state.RankingModelVersion)
+	err = binary.Read(f, binary.LittleEndian, &state.CollaborativeFilteringModelVersion)
 	if err != nil {
 		return state, errors.Trace(err)
 	}
 	// 3. ranking model
-	state.RankingModel, err = cf.UnmarshalModel(f)
+	state.CollaborativeFilteringModel, err = cf.UnmarshalModel(f)
 	if err != nil {
 		return state, errors.Trace(err)
 	}
 	// 4. ranking model score
-	err = encoding.ReadGob(f, &state.RankingModelScore)
+	err = encoding.ReadGob(f, &state.CollaborativeFilteringModelScore)
 	if err != nil {
 		return state, errors.Trace(err)
 	}
@@ -94,7 +94,7 @@ func LoadLocalCache(path string) (*LocalCache, error) {
 		return state, errors.Trace(err)
 	}
 	// 9. click model
-	state.ClickModel, err = click.UnmarshalModel(f)
+	state.ClickModel, err = ctr.UnmarshalModel(f)
 	if err != nil {
 		return state, errors.Trace(err)
 	}
@@ -122,22 +122,22 @@ func (c *LocalCache) WriteLocalCache() error {
 		}
 	}(f)
 	// 1. ranking model name
-	err = encoding.WriteString(f, c.RankingModelName)
+	err = encoding.WriteString(f, c.CollaborativeFilteringModelName)
 	if err != nil {
 		return errors.Trace(err)
 	}
 	// 2. ranking model version
-	err = binary.Write(f, binary.LittleEndian, c.RankingModelVersion)
+	err = binary.Write(f, binary.LittleEndian, c.CollaborativeFilteringModelVersion)
 	if err != nil {
 		return errors.Trace(err)
 	}
 	// 3. ranking model
-	err = cf.MarshalModel(f, c.RankingModel)
+	err = cf.MarshalModel(f, c.CollaborativeFilteringModel)
 	if err != nil {
 		return errors.Trace(err)
 	}
 	// 4. ranking model score
-	err = encoding.WriteGob(f, c.RankingModelScore)
+	err = encoding.WriteGob(f, c.CollaborativeFilteringModelScore)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -152,7 +152,7 @@ func (c *LocalCache) WriteLocalCache() error {
 		return errors.Trace(err)
 	}
 	// 9. click model
-	err = click.MarshalModel(f, c.ClickModel)
+	err = ctr.MarshalModel(f, c.ClickModel)
 	if err != nil {
 		return errors.Trace(err)
 	}

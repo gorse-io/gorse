@@ -45,7 +45,7 @@ import (
 	"github.com/zhenghaoz/gorse/common/util"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model/cf"
-	"github.com/zhenghaoz/gorse/model/click"
+	"github.com/zhenghaoz/gorse/model/ctr"
 	"github.com/zhenghaoz/gorse/protocol"
 	"github.com/zhenghaoz/gorse/server"
 	"github.com/zhenghaoz/gorse/storage/cache"
@@ -512,7 +512,7 @@ type Status struct {
 	MatchingModelFitTime    time.Time
 	MatchingModelScore      cf.Score
 	RankingModelFitTime     time.Time
-	RankingModelScore       click.Score
+	RankingModelScore       ctr.Score
 	UserNeighborIndexRecall float32
 	ItemNeighborIndexRecall float32
 	MatchingIndexRecall     float32
@@ -575,7 +575,7 @@ func (m *Master) getStats(request *restful.Request, response *restful.Response) 
 	if status.LatestItemsUpdateTime, err = m.CacheClient.Get(ctx, cache.Key(cache.GlobalMeta, cache.LastUpdateLatestItemsTime)).Time(); err != nil {
 		log.ResponseLogger(response).Warn("failed to get latest items update time", zap.Error(err))
 	}
-	status.MatchingModelScore = m.rankingScore
+	status.MatchingModelScore = m.collaborativeFilteringModelScore
 	status.RankingModelScore = m.clickScore
 	// read last fit matching model time
 	if status.MatchingModelFitTime, err = m.CacheClient.Get(ctx, cache.Key(cache.GlobalMeta, cache.LastFitMatchingModelTime)).Time(); err != nil {

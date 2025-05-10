@@ -22,10 +22,12 @@ import (
 	"github.com/zhenghaoz/gorse/common/datautil"
 	"github.com/zhenghaoz/gorse/common/floats"
 	"github.com/zhenghaoz/gorse/common/util"
+	"go.uber.org/atomic"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -142,6 +144,51 @@ func TestMNIST(t *testing.T) {
 	}
 	r /= float64(testSize)
 	assert.Greater(t, r, 0.99)
+}
+
+func TestMultithread(t *testing.T) {
+	dat, err := mnist()
+	assert.NoError(t, err)
+
+	// Create HNSW index
+	indices := make([]int, trainSize)
+	hnsw := NewHNSW(floats.Euclidean)
+	var wg1 sync.WaitGroup
+	wg1.Add(trainSize)
+	for i := range dat.TrainImages[:trainSize] {
+		go func(i int) {
+			defer wg1.Done()
+			indices[i] = hnsw.Add(dat.TrainImages[i])
+		}(i)
+	}
+	wg1.Wait()
+
+	// Create brute-force index
+	reverse := make([]int, trainSize)
+	for i, index := range indices {
+		reverse[index] = i
+	}
+	bf := NewBruteforce(floats.Euclidean)
+	for i := range reverse {
+		_ = bf.Add(dat.TrainImages[reverse[i]])
+	}
+
+	// Test search
+	var r atomic.Float64
+	var wg2 sync.WaitGroup
+	wg2.Add(testSize)
+	for _, image := range dat.TestImages[:testSize] {
+		go func(image []float32) {
+			defer wg2.Done()
+			gt := bf.SearchVector(image, 100, false)
+			assert.Len(t, gt, 100)
+			scores := hnsw.SearchVector(image, 100, false)
+			assert.Len(t, scores, 100)
+			r.Add(recall(gt, scores))
+		}(image)
+	}
+	wg2.Wait()
+	assert.Greater(t, r.Load()/float64(testSize), 0.99)
 }
 
 func movieLens() ([][]int, error) {
