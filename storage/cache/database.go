@@ -72,7 +72,6 @@ const (
 	UserToUser           = "user-to-user"
 	UserToUserDigest     = "user-to-user_digest"
 	UserToUserUpdateTime = "user-to-user_update_time"
-	Neighbors            = "neighbors"
 
 	// ItemCategories is the set of item categories. The format of key:
 	//	Global item categories - item_categories

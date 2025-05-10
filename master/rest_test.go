@@ -502,8 +502,8 @@ func (suite *MasterAPITestSuite) TestSearchDocumentsOfItems() {
 	}
 	ctx := context.Background()
 	operators := []ListOperator{
-		{"ItemToItem", cache.ItemToItem, cache.Key(cache.Neighbors, "0"), "", "/api/dashboard/item-to-item/neighbors/0"},
-		{"ItemToItemCategory", cache.ItemToItem, cache.Key(cache.Neighbors, "0"), "*", "/api/dashboard/item-to-item/neighbors/0"},
+		{"ItemToItem", cache.ItemToItem, cache.Key("neighbors", "0"), "", "/api/dashboard/item-to-item/neighbors/0"},
+		{"ItemToItemCategory", cache.ItemToItem, cache.Key("neighbors", "0"), "*", "/api/dashboard/item-to-item/neighbors/0"},
 		{"LatestItems", cache.NonPersonalized, cache.Latest, "", "/api/dashboard/non-personalized/latest/"},
 		{"PopularItems", cache.NonPersonalized, cache.Popular, "", "/api/dashboard/non-personalized/popular/"},
 		{"LatestItemsCategory", cache.NonPersonalized, cache.Latest, "*", "/api/dashboard/non-personalized/latest/"},
@@ -561,7 +561,7 @@ func (suite *MasterAPITestSuite) TestSearchDocumentsOfUsers() {
 	}
 	ctx := context.Background()
 	operators := []ListOperator{
-		{cache.UserToUser, cache.Key(cache.Neighbors, "0"), "/api/dashboard/user-to-user/neighbors/0/"},
+		{cache.UserToUser, cache.Key("neighbors", "0"), "/api/dashboard/user-to-user/neighbors/0/"},
 	}
 	lastModified := time.Now()
 	for _, operator := range operators {

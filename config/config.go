@@ -48,12 +48,6 @@ import (
 	"go.uber.org/zap"
 )
 
-const (
-	NeighborTypeAuto    = "auto"
-	NeighborTypeSimilar = "similar"
-	NeighborTypeRelated = "related"
-)
-
 // Config is the configuration for the engine.
 type Config struct {
 	Database     DatabaseConfig     `mapstructure:"database"`
@@ -143,13 +137,9 @@ type PopularConfig struct {
 	PopularWindow time.Duration `mapstructure:"popular_window" validate:"gte=0"`
 }
 
-type NeighborsConfig struct {
-	NeighborType string `mapstructure:"neighbor_type" validate:"oneof=auto similar related ''"`
-}
-
 type ItemToItemConfig struct {
 	Name   string `mapstructure:"name" json:"name"`
-	Type   string `mapstructure:"type" json:"type" validate:"oneof=embedding tags users chat"`
+	Type   string `mapstructure:"type" json:"type" validate:"oneof=embedding tags users chat auto"`
 	Column string `mapstructure:"column" json:"column" validate:"item_expr"`
 	Prompt string `mapstructure:"prompt" json:"prompt"`
 }
@@ -166,7 +156,7 @@ func (config *ItemToItemConfig) Hash() string {
 
 type UserToUserConfig struct {
 	Name   string `mapstructure:"name" json:"name"`
-	Type   string `mapstructure:"type" json:"type" validate:"oneof=embedding tags items"`
+	Type   string `mapstructure:"type" json:"type" validate:"oneof=embedding tags items auto"`
 	Column string `mapstructure:"column" json:"column" validate:"item_expr"`
 }
 

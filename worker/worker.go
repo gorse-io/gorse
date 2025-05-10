@@ -627,13 +627,14 @@ func (w *Worker) Recommend(users []data.User) {
 
 		// Recommender #2: item-based.
 		itemNeighborDigests := mapset.NewSet[string]()
-		if w.Config.Recommend.Offline.EnableItemBasedRecommend {
+		if w.Config.Recommend.Offline.EnableItemBasedRecommend && len(w.Config.Recommend.ItemToItem) > 0 {
 			localStartTime := time.Now()
+			name := w.Config.Recommend.ItemToItem[0].Name
 			// collect candidates
 			scores := make(map[string]float64)
 			for _, itemId := range positiveItems {
 				// load similar items
-				similarItems, err := w.CacheClient.SearchScores(ctx, cache.ItemToItem, cache.Key(cache.Neighbors, itemId), nil, 0, w.Config.Recommend.CacheSize)
+				similarItems, err := w.CacheClient.SearchScores(ctx, cache.ItemToItem, cache.Key(name, itemId), nil, 0, w.Config.Recommend.CacheSize)
 				if err != nil {
 					log.Logger().Error("failed to load similar items", zap.Error(err))
 					return errors.Trace(err)
@@ -645,7 +646,7 @@ func (w *Worker) Recommend(users []data.User) {
 					}
 				}
 				// load item neighbors digest
-				digest, err := w.CacheClient.Get(ctx, cache.Key(cache.ItemToItemDigest, cache.Neighbors, itemId)).String()
+				digest, err := w.CacheClient.Get(ctx, cache.Key(cache.ItemToItemDigest, name, itemId)).String()
 				if err != nil {
 					if !errors.Is(err, errors.NotFound) {
 						log.Logger().Error("failed to load item neighbors digest", zap.Error(err))
@@ -675,11 +676,12 @@ func (w *Worker) Recommend(users []data.User) {
 
 		// Recommender #3: insert user-based items
 		userNeighborDigests := mapset.NewSet[string]()
-		if w.Config.Recommend.Offline.EnableUserBasedRecommend {
+		if w.Config.Recommend.Offline.EnableUserBasedRecommend && len(w.Config.Recommend.UserToUser) > 0 {
 			localStartTime := time.Now()
+			name := w.Config.Recommend.UserToUser[0].Name
 			scores := make(map[string]float64)
 			// load similar users
-			similarUsers, err := w.CacheClient.SearchScores(ctx, cache.UserToUser, cache.Key(cache.Neighbors, userId), nil, 0, w.Config.Recommend.CacheSize)
+			similarUsers, err := w.CacheClient.SearchScores(ctx, cache.UserToUser, cache.Key(name, userId), nil, 0, w.Config.Recommend.CacheSize)
 			if err != nil {
 				log.Logger().Error("failed to load similar users", zap.Error(err))
 				return errors.Trace(err)
@@ -700,7 +702,7 @@ func (w *Worker) Recommend(users []data.User) {
 					}
 				}
 				// load user neighbors digest
-				digest, err := w.CacheClient.Get(ctx, cache.Key(cache.UserToUserDigest, cache.Neighbors, user.Id)).String()
+				digest, err := w.CacheClient.Get(ctx, cache.Key(cache.UserToUserDigest, name, user.Id)).String()
 				if err != nil {
 					if !errors.Is(err, errors.NotFound) {
 						log.Logger().Error("failed to load user neighbors digest", zap.Error(err))
