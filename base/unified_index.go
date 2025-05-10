@@ -105,11 +105,11 @@ func UnmarshalUnifiedIndex(r io.Reader) (UnifiedIndex, error) {
 
 // UnifiedMapIndexBuilder is the builder for UnifiedMapIndex.
 type UnifiedMapIndexBuilder struct {
-	UserIndex      Index
-	ItemIndex      Index
-	UserLabelIndex Index
-	ItemLabelIndex Index
-	CtxLabelIndex  Index
+	UserIndex      *Index
+	ItemIndex      *Index
+	UserLabelIndex *Index
+	ItemLabelIndex *Index
+	CtxLabelIndex  *Index
 }
 
 // NewUnifiedMapIndexBuilder creates a UnifiedMapIndexBuilder.
@@ -162,11 +162,11 @@ func (builder *UnifiedMapIndexBuilder) Build() UnifiedIndex {
 // UnifiedMapIndex is the id -> index mapper for factorization machines.
 // The division of id is: | user | item | user label | item label | context label |
 type UnifiedMapIndex struct {
-	UserIndex      Index
-	ItemIndex      Index
-	UserLabelIndex Index
-	ItemLabelIndex Index
-	CtxLabelIndex  Index
+	UserIndex      *Index
+	ItemIndex      *Index
+	UserLabelIndex *Index
+	ItemLabelIndex *Index
+	CtxLabelIndex  *Index
 }
 
 // GetUserLabels returns all user labels.
@@ -270,7 +270,7 @@ func (unified *UnifiedMapIndex) CountItems() int32 {
 
 // Marshal map index into byte stream.
 func (unified *UnifiedMapIndex) Marshal(w io.Writer) error {
-	indices := []Index{unified.UserIndex, unified.ItemIndex, unified.UserLabelIndex, unified.ItemLabelIndex, unified.CtxLabelIndex}
+	indices := []*Index{unified.UserIndex, unified.ItemIndex, unified.UserLabelIndex, unified.ItemLabelIndex, unified.CtxLabelIndex}
 	for _, index := range indices {
 		err := MarshalIndex(w, index)
 		if err != nil {
@@ -282,7 +282,7 @@ func (unified *UnifiedMapIndex) Marshal(w io.Writer) error {
 
 // Unmarshal map index from byte stream.
 func (unified *UnifiedMapIndex) Unmarshal(r io.Reader) error {
-	indices := []*Index{&unified.UserIndex, &unified.ItemIndex, &unified.UserLabelIndex, &unified.ItemLabelIndex, &unified.CtxLabelIndex}
+	indices := []**Index{&unified.UserIndex, &unified.ItemIndex, &unified.UserLabelIndex, &unified.ItemLabelIndex, &unified.CtxLabelIndex}
 	for i := range indices {
 		var err error
 		*indices[i], err = UnmarshalIndex(r)
