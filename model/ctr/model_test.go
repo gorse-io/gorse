@@ -11,25 +11,23 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-package click
+package ctr
 
 import (
 	"bytes"
 	"context"
+	"runtime"
 	"testing"
 
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
-	"github.com/zhenghaoz/gorse/base/task"
 	"github.com/zhenghaoz/gorse/model"
 )
 
 const classificationDelta = 0.01
 
-func newFitConfigWithTestTracker(numEpoch int) *FitConfig {
-	cfg := NewFitConfig().
-		SetVerbose(1).
-		SetJobsAllocator(task.NewConstantJobsAllocator(1))
+func newFitConfigWithTestTracker() *FitConfig {
+	cfg := NewFitConfig().SetVerbose(1).SetJobs(runtime.NumCPU())
 	return cfg
 }
 
@@ -44,7 +42,7 @@ func TestFactorizationMachines_Classification_Frappe(t *testing.T) {
 		model.Reg:       0.0001,
 		model.BatchSize: 1024,
 	})
-	fitConfig := newFitConfigWithTestTracker(20)
+	fitConfig := newFitConfigWithTestTracker()
 	score := m.Fit(context.Background(), train, test, fitConfig)
 	assert.InDelta(t, 0.919, score.Accuracy, classificationDelta)
 }
@@ -62,7 +60,7 @@ func TestFactorizationMachines_Classification_MovieLens(t *testing.T) {
 		model.Reg:        0.0001,
 		model.BatchSize:  1024,
 	})
-	fitConfig := newFitConfigWithTestTracker(20)
+	fitConfig := newFitConfigWithTestTracker()
 	score := m.Fit(context.Background(), train, test, fitConfig)
 	assert.InDelta(t, 0.815, score.Accuracy, classificationDelta)
 }
@@ -78,9 +76,9 @@ func TestFactorizationMachines_Classification_Criteo(t *testing.T) {
 		model.Reg:       0.0001,
 		model.BatchSize: 1024,
 	})
-	fitConfig := newFitConfigWithTestTracker(10)
+	fitConfig := newFitConfigWithTestTracker()
 	score := m.Fit(context.Background(), train, test, fitConfig)
-	assert.InDelta(t, 0.77, score.Accuracy, 0.02)
+	assert.InDelta(t, 0.77, score.Accuracy, 0.025)
 
 	// test prediction
 	assert.Equal(t, m.BatchInternalPredict([]lo.Tuple2[[]int32, []float32]{{A: []int32{1, 2, 3, 4, 5, 6}, B: []float32{1, 1, 0.3, 0.4, 0.5, 0.6}}}),

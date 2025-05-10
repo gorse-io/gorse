@@ -41,7 +41,7 @@ import (
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/dataset"
 	"github.com/zhenghaoz/gorse/model/cf"
-	"github.com/zhenghaoz/gorse/model/click"
+	"github.com/zhenghaoz/gorse/model/ctr"
 	"github.com/zhenghaoz/gorse/protocol"
 	"github.com/zhenghaoz/gorse/server"
 	"github.com/zhenghaoz/gorse/storage"
@@ -82,8 +82,8 @@ type Master struct {
 	rankingDataMutex sync.RWMutex
 
 	// click dataset
-	clickTrainSet  *click.Dataset
-	clickTestSet   *click.Dataset
+	clickTrainSet  *ctr.Dataset
+	clickTestSet   *ctr.Dataset
 	clickDataMutex sync.RWMutex
 
 	// collaborative filtering
@@ -94,9 +94,10 @@ type Master struct {
 	collaborativeFilteringSearcher     *cf.ModelSearcher
 
 	// click model
-	clickScore         click.Score
+	clickTrainSetSize  int
+	clickScore         ctr.Score
 	clickModelMutex    sync.RWMutex
-	clickModelSearcher *click.ModelSearcher
+	clickModelSearcher *ctr.ModelSearcher
 
 	// oauth2
 	oauth2Config oauth2.Config
@@ -151,7 +152,7 @@ func NewMaster(cfg *config.Config, cacheFile string, managedMode bool) *Master {
 			cfg.Recommend.Collaborative.EnableModelSizeSearch,
 		),
 		// default click model
-		clickModelSearcher: click.NewModelSearcher(
+		clickModelSearcher: ctr.NewModelSearcher(
 			cfg.Recommend.Collaborative.ModelSearchEpoch,
 			cfg.Recommend.Collaborative.ModelSearchTrials,
 			cfg.Recommend.Collaborative.EnableModelSizeSearch,
@@ -162,7 +163,7 @@ func NewMaster(cfg *config.Config, cacheFile string, managedMode bool) *Master {
 				CacheClient:                 cache.NoDatabase{},
 				DataClient:                  data.NoDatabase{},
 				CollaborativeFilteringModel: cf.NewBPR(nil),
-				ClickModel:                  click.NewFM(nil),
+				ClickModel:                  ctr.NewFM(nil),
 				// init versions
 				CollaborativeFilteringModelVersion: rand.Int63(),
 				ClickModelVersion:                  rand.Int63(),
@@ -332,10 +333,7 @@ func (m *Master) Shutdown() {
 func (m *Master) RunPrivilegedTasksLoop() {
 	defer base.CheckPanic()
 	var (
-		err   error
-		tasks = []Task{
-			NewFitClickModelTask(m),
-		}
+		err       error
 		firstLoop = true
 	)
 	go func() {
@@ -359,7 +357,7 @@ func (m *Master) RunPrivilegedTasksLoop() {
 			log.Logger().Error("failed to load ranking dataset", zap.Error(err))
 			continue
 		}
-		if m.rankingTrainSet.CountUsers() == 0 && m.rankingTrainSet.CountItems() == 0 && m.rankingTrainSet.Count() == 0 {
+		if m.rankingTrainSet.CountUsers() == 0 && m.rankingTrainSet.CountItems() == 0 && m.rankingTrainSet.CountFeedback() == 0 {
 			log.Logger().Warn("empty ranking dataset",
 				zap.Strings("positive_feedback_type", m.Config.Recommend.DataSource.PositiveFeedbackTypes))
 			continue
@@ -368,24 +366,6 @@ func (m *Master) RunPrivilegedTasksLoop() {
 		if firstLoop {
 			m.loadDataChan.Signal()
 			firstLoop = false
-		}
-
-		var registeredTask []Task
-		for _, t := range tasks {
-			if m.jobsScheduler.Register(t.name(), t.priority(), true) {
-				registeredTask = append(registeredTask, t)
-			}
-		}
-		for _, t := range registeredTask {
-			go func(task Task) {
-				j := m.jobsScheduler.GetJobsAllocator(task.name())
-				defer m.jobsScheduler.Unregister(task.name())
-				j.Init()
-				if err := task.run(context.Background(), j); err != nil {
-					log.Logger().Error("failed to run task", zap.String("task", task.name()), zap.Error(err))
-					return
-				}
-			}(t)
 		}
 	}
 }

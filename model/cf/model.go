@@ -412,8 +412,8 @@ func (bpr *BPR) GetParamsGrid(withSize bool) model.ParamsGrid {
 // Fit the BPR model. Its task complexity is O(bpr.nEpochs).
 func (bpr *BPR) Fit(ctx context.Context, trainSet, valSet dataset.CFSplit, config *FitConfig) Score {
 	log.Logger().Info("fit bpr",
-		zap.Int("train_set_size", trainSet.Count()),
-		zap.Int("test_set_size", valSet.Count()),
+		zap.Int("train_set_size", trainSet.CountFeedback()),
+		zap.Int("test_set_size", valSet.CountFeedback()),
 		zap.Any("params", bpr.GetParams()),
 		zap.Any("config", config))
 	bpr.Init(trainSet)
@@ -448,7 +448,7 @@ func (bpr *BPR) Fit(ctx context.Context, trainSet, valSet dataset.CFSplit, confi
 		fitStart := time.Now()
 		// Training epoch
 		cost := make([]float32, config.Jobs)
-		_ = parallel.Parallel(trainSet.Count(), config.Jobs, func(workerId, _ int) error {
+		_ = parallel.Parallel(trainSet.CountFeedback(), config.Jobs, func(workerId, _ int) error {
 			// Select a user
 			var userIndex int32
 			var ratingCount int
@@ -597,8 +597,8 @@ func (als *ALS) Init(trainSet dataset.CFSplit) {
 // Fit the ALS model. Its task complexity is O(ccd.nEpochs).
 func (als *ALS) Fit(ctx context.Context, trainSet, valSet dataset.CFSplit, config *FitConfig) Score {
 	log.Logger().Info("fit als",
-		zap.Int("train_set_size", trainSet.Count()),
-		zap.Int("test_set_size", valSet.Count()),
+		zap.Int("train_set_size", trainSet.CountFeedback()),
+		zap.Int("test_set_size", valSet.CountFeedback()),
 		zap.Any("params", als.GetParams()),
 		zap.Any("config", config))
 	als.Init(trainSet)

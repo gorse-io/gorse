@@ -12,12 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package click
+package ctr
 
 import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"github.com/zhenghaoz/gorse/dataset"
 	"io"
 	"reflect"
 	"sync"
@@ -32,7 +33,6 @@ import (
 	"github.com/zhenghaoz/gorse/base/encoding"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/base/progress"
-	"github.com/zhenghaoz/gorse/base/task"
 	"github.com/zhenghaoz/gorse/common/floats"
 	"github.com/zhenghaoz/gorse/common/nn"
 	"github.com/zhenghaoz/gorse/common/parallel"
@@ -73,12 +73,13 @@ func (score Score) BetterThan(s Score) bool {
 }
 
 type FitConfig struct {
-	*task.JobsAllocator
+	Jobs    int
 	Verbose int
 }
 
 func NewFitConfig() *FitConfig {
 	return &FitConfig{
+		Jobs:    1,
 		Verbose: 10,
 	}
 }
@@ -88,8 +89,8 @@ func (config *FitConfig) SetVerbose(verbose int) *FitConfig {
 	return config
 }
 
-func (config *FitConfig) SetJobsAllocator(allocator *task.JobsAllocator) *FitConfig {
-	config.JobsAllocator = allocator
+func (config *FitConfig) SetJobs(jobs int) *FitConfig {
+	config.Jobs = jobs
 	return config
 }
 
@@ -104,7 +105,7 @@ type FactorizationMachine interface {
 	model.Model
 	Predict(userId, itemId string, userFeatures, itemFeatures []Feature) float32
 	InternalPredict(x []int32, values []float32) float32
-	Fit(ctx context.Context, trainSet *Dataset, testSet *Dataset, config *FitConfig) Score
+	Fit(ctx context.Context, trainSet, testSet dataset.CTRSplit, config *FitConfig) Score
 	Marshal(w io.Writer) error
 }
 
@@ -123,11 +124,11 @@ type FactorizationMachineSpawner interface {
 
 type BaseFactorizationMachine struct {
 	model.BaseModel
-	Index UnifiedIndex
+	Index base.UnifiedIndex
 }
 
-func (b *BaseFactorizationMachine) Init(trainSet *Dataset) {
-	b.Index = trainSet.Index
+func (b *BaseFactorizationMachine) Init(trainSet dataset.CTRSplit) {
+	b.Index = trainSet.GetIndex()
 }
 
 type FM struct {
@@ -235,30 +236,29 @@ func (fm *FM) InternalPredict(features []int32, values []float32) float32 {
 }
 
 // Fit trains the model. Its task complexity is O(fm.nEpochs).
-func (fm *FM) Fit(ctx context.Context, trainSet, testSet *Dataset, config *FitConfig) Score {
+func (fm *FM) Fit(ctx context.Context, trainSet, testSet dataset.CTRSplit, config *FitConfig) Score {
 	config = config.LoadDefaultIfNil()
 	log.Logger().Info("fit FM",
 		zap.Int("train_size", trainSet.Count()),
-		zap.Int("train_positive_count", trainSet.PositiveCount),
-		zap.Int("train_negative_count", trainSet.NegativeCount),
+		zap.Int("train_positive_count", trainSet.CountPositive()),
+		zap.Int("train_negative_count", trainSet.CountNegative()),
 		zap.Int("test_size", testSet.Count()),
-		zap.Int("test_positive_count", testSet.PositiveCount),
-		zap.Int("test_negative_count", testSet.NegativeCount),
+		zap.Int("test_positive_count", testSet.CountPositive()),
+		zap.Int("test_negative_count", testSet.CountNegative()),
 		zap.Any("params", fm.GetParams()),
 		zap.Any("config", config))
 	fm.Init(trainSet)
-	maxJobs := config.MaxJobs()
-	temp := base.NewMatrix32(maxJobs, fm.nFactors)
-	vGrad := base.NewMatrix32(maxJobs, fm.nFactors)
-	vGrad2 := base.NewMatrix32(maxJobs, fm.nFactors)
-	mV := base.NewTensor32(maxJobs, int(trainSet.Index.Len()), fm.nFactors)
-	mW := base.NewMatrix32(maxJobs, int(trainSet.Index.Len()))
-	mB := make([]float32, maxJobs)
-	vV := base.NewTensor32(maxJobs, int(trainSet.Index.Len()), fm.nFactors)
-	vW := base.NewMatrix32(maxJobs, int(trainSet.Index.Len()))
-	vB := make([]float32, maxJobs)
-	mVHat := base.NewMatrix32(maxJobs, fm.nFactors)
-	vVHat := base.NewMatrix32(maxJobs, fm.nFactors)
+	temp := base.NewMatrix32(config.Jobs, fm.nFactors)
+	vGrad := base.NewMatrix32(config.Jobs, fm.nFactors)
+	vGrad2 := base.NewMatrix32(config.Jobs, fm.nFactors)
+	mV := base.NewTensor32(config.Jobs, int(trainSet.GetIndex().Len()), fm.nFactors)
+	mW := base.NewMatrix32(config.Jobs, int(trainSet.GetIndex().Len()))
+	mB := make([]float32, config.Jobs)
+	vV := base.NewTensor32(config.Jobs, int(trainSet.GetIndex().Len()), fm.nFactors)
+	vW := base.NewMatrix32(config.Jobs, int(trainSet.GetIndex().Len()))
+	vB := make([]float32, config.Jobs)
+	mVHat := base.NewMatrix32(config.Jobs, fm.nFactors)
+	vVHat := base.NewMatrix32(config.Jobs, fm.nFactors)
 
 	evalStart := time.Now()
 	var score Score
@@ -271,7 +271,7 @@ func (fm *FM) Fit(ctx context.Context, trainSet, testSet *Dataset, config *FitCo
 	for epoch := 1; epoch <= fm.nEpochs; epoch++ {
 		fitStart := time.Now()
 		cost := float32(0)
-		_ = parallel.BatchParallel(trainSet.Count(), config.AvailableJobs(), 128, func(workerId, beginJobId, endJobId int) error {
+		_ = parallel.BatchParallel(trainSet.Count(), config.Jobs, 128, func(workerId, beginJobId, endJobId int) error {
 			for i := beginJobId; i < endJobId; i++ {
 				features, values, target := trainSet.Get(i)
 				prediction := fm.internalPredictImpl(features, values)
@@ -369,7 +369,7 @@ func (fm *FM) Fit(ctx context.Context, trainSet, testSet *Dataset, config *FitCo
 				zap.String("eval_time", evalTime.String()),
 				zap.Float32("loss", cost),
 			}, score.ZapFields()...)
-			log.Logger().Debug(fmt.Sprintf("fit fm %v/%v", epoch, fm.nEpochs), fields...)
+			log.Logger().Info(fmt.Sprintf("fit fm %v/%v", epoch, fm.nEpochs), fields...)
 			// check NaN
 			if math32.IsNaN(cost) || math32.IsNaN(score.GetValue()) {
 				log.Logger().Warn("model diverged", zap.Float32("lr", fm.lr))
@@ -399,51 +399,51 @@ func (fm *FM) Invalid() bool {
 		fm.Index == nil
 }
 
-func (fm *FM) Init(trainSet *Dataset) {
-	newV := fm.GetRandomGenerator().NormalMatrix(int(trainSet.Index.Len()), fm.nFactors, fm.initMean, fm.initStdDev)
-	newW := make([]float32, trainSet.Index.Len())
+func (fm *FM) Init(trainSet dataset.CTRSplit) {
+	newV := fm.GetRandomGenerator().NormalMatrix(int(trainSet.GetIndex().Len()), fm.nFactors, fm.initMean, fm.initStdDev)
+	newW := make([]float32, trainSet.GetIndex().Len())
 	// Relocate parameters
 	if fm.Index != nil {
 		// users
-		for _, userId := range trainSet.Index.GetUsers() {
+		for _, userId := range trainSet.GetIndex().GetUsers() {
 			oldIndex := fm.Index.EncodeUser(userId)
-			newIndex := trainSet.Index.EncodeUser(userId)
+			newIndex := trainSet.GetIndex().EncodeUser(userId)
 			if oldIndex != base.NotId {
 				newW[newIndex] = fm.W[oldIndex]
 				newV[newIndex] = fm.V[oldIndex]
 			}
 		}
 		// items
-		for _, itemId := range trainSet.Index.GetItems() {
+		for _, itemId := range trainSet.GetIndex().GetItems() {
 			oldIndex := fm.Index.EncodeItem(itemId)
-			newIndex := trainSet.Index.EncodeItem(itemId)
+			newIndex := trainSet.GetIndex().EncodeItem(itemId)
 			if oldIndex != base.NotId {
 				newW[newIndex] = fm.W[oldIndex]
 				newV[newIndex] = fm.V[oldIndex]
 			}
 		}
 		// user labels
-		for _, label := range trainSet.Index.GetUserLabels() {
+		for _, label := range trainSet.GetIndex().GetUserLabels() {
 			oldIndex := fm.Index.EncodeUserLabel(label)
-			newIndex := trainSet.Index.EncodeUserLabel(label)
+			newIndex := trainSet.GetIndex().EncodeUserLabel(label)
 			if oldIndex != base.NotId {
 				newW[newIndex] = fm.W[oldIndex]
 				newV[newIndex] = fm.V[oldIndex]
 			}
 		}
 		// item labels
-		for _, label := range trainSet.Index.GetItemLabels() {
+		for _, label := range trainSet.GetIndex().GetItemLabels() {
 			oldIndex := fm.Index.EncodeItemLabel(label)
-			newIndex := trainSet.Index.EncodeItemLabel(label)
+			newIndex := trainSet.GetIndex().EncodeItemLabel(label)
 			if oldIndex != base.NotId {
 				newW[newIndex] = fm.W[oldIndex]
 				newV[newIndex] = fm.V[oldIndex]
 			}
 		}
 		// context labels
-		for _, label := range trainSet.Index.GetContextLabels() {
+		for _, label := range trainSet.GetIndex().GetContextLabels() {
 			oldIndex := fm.Index.EncodeContextLabel(label)
-			newIndex := trainSet.Index.EncodeContextLabel(label)
+			newIndex := trainSet.GetIndex().EncodeContextLabel(label)
 			if oldIndex != base.NotId {
 				newW[newIndex] = fm.W[oldIndex]
 				newV[newIndex] = fm.V[oldIndex]
@@ -529,7 +529,7 @@ func (fm *FM) Marshal(w io.Writer) error {
 		return errors.Trace(err)
 	}
 	// write index
-	err = MarshalIndex(w, fm.Index)
+	err = base.MarshalUnifiedIndex(w, fm.Index)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -560,7 +560,7 @@ func (fm *FM) Unmarshal(r io.Reader) error {
 	}
 	fm.SetParams(fm.Params)
 	// read index
-	fm.Index, err = UnmarshalIndex(r)
+	fm.Index, err = base.UnmarshalUnifiedIndex(r)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -727,20 +727,20 @@ func (fm *FactorizationMachines) BatchPredict(inputs []lo.Tuple4[string, string,
 	return fm.BatchInternalPredict(x)
 }
 
-func (fm *FactorizationMachines) Init(trainSet *Dataset) {
-	fm.numFeatures = int(trainSet.Index.Len())
+func (fm *FactorizationMachines) Init(trainSet dataset.CTRSplit) {
+	fm.numFeatures = int(trainSet.GetIndex().Len())
 	fm.numDimension = 0
 	for i := 0; i < trainSet.Count(); i++ {
 		_, x, _ := trainSet.Get(i)
 		fm.numDimension = mathutil.MaxVal(fm.numDimension, len(x))
 	}
 	fm.B = nn.Zeros()
-	fm.W = nn.NewEmbedding(int(trainSet.Index.Len()), 1)
-	fm.V = nn.NewEmbedding(int(trainSet.Index.Len()), fm.nFactors)
+	fm.W = nn.NewEmbedding(int(trainSet.GetIndex().Len()), 1)
+	fm.V = nn.NewEmbedding(int(trainSet.GetIndex().Len()), fm.nFactors)
 	fm.BaseFactorizationMachine.Init(trainSet)
 }
 
-func (fm *FactorizationMachines) Fit(ctx context.Context, trainSet *Dataset, testSet *Dataset, config *FitConfig) Score {
+func (fm *FactorizationMachines) Fit(ctx context.Context, trainSet, testSet dataset.CTRSplit, config *FitConfig) Score {
 	fm.Init(trainSet)
 	evalStart := time.Now()
 	score := EvaluateClassification(fm, testSet)
@@ -750,7 +750,7 @@ func (fm *FactorizationMachines) Fit(ctx context.Context, trainSet *Dataset, tes
 
 	var x []lo.Tuple2[[]int32, []float32]
 	var y []float32
-	for i := 0; i < trainSet.Target.Len(); i++ {
+	for i := 0; i < trainSet.Count(); i++ {
 		indices, values, target := trainSet.Get(i)
 		x = append(x, lo.Tuple2[[]int32, []float32]{A: indices, B: values})
 		y = append(y, target)
@@ -811,7 +811,7 @@ func (fm *FactorizationMachines) Marshal(w io.Writer) error {
 		return errors.Trace(err)
 	}
 	// write index
-	if err := MarshalIndex(w, fm.Index); err != nil {
+	if err := base.MarshalUnifiedIndex(w, fm.Index); err != nil {
 		return errors.Trace(err)
 	}
 	// write dataset stats
@@ -836,7 +836,7 @@ func (fm *FactorizationMachines) Unmarshal(r io.Reader) error {
 	}
 	fm.SetParams(fm.Params)
 	// read index
-	fm.Index, err = UnmarshalIndex(r)
+	fm.Index, err = base.UnmarshalUnifiedIndex(r)
 	if err != nil {
 		return errors.Trace(err)
 	}

@@ -11,7 +11,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-package click
+package ctr
 
 import (
 	"context"
@@ -21,13 +21,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/task"
+	"github.com/zhenghaoz/gorse/dataset"
 	"github.com/zhenghaoz/gorse/model"
 )
 
 // NewMapIndexDataset creates a data set.
 func NewMapIndexDataset() *Dataset {
 	s := new(Dataset)
-	s.Index = NewUnifiedDirectIndex(0)
+	s.Index = base.NewUnifiedDirectIndex(0)
 	return s
 }
 
@@ -51,7 +52,7 @@ func (m *mockFactorizationMachineForSearch) GetItemIndex() base.Index {
 	panic("don't call me")
 }
 
-func (m *mockFactorizationMachineForSearch) Fit(_ context.Context, _, _ *Dataset, cfg *FitConfig) Score {
+func (m *mockFactorizationMachineForSearch) Fit(_ context.Context, _, _ dataset.CTRSplit, cfg *FitConfig) Score {
 	score := float32(0)
 	score += m.Params.GetFloat32(model.NFactors, 0.0)
 	score += m.Params.GetFloat32(model.InitMean, 0.0)

@@ -19,6 +19,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/zhenghaoz/gorse/model/ctr"
 	"io"
 	"math/rand"
 	"net"
@@ -41,7 +42,6 @@ import (
 	"github.com/zhenghaoz/gorse/dataset"
 	"github.com/zhenghaoz/gorse/model"
 	"github.com/zhenghaoz/gorse/model/cf"
-	"github.com/zhenghaoz/gorse/model/click"
 	"github.com/zhenghaoz/gorse/protocol"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
@@ -573,9 +573,9 @@ func newRankingDataset() (*dataset.Dataset, *dataset.Dataset) {
 	return dataset.NewDataset(time.Now(), 0, 0), dataset.NewDataset(time.Now(), 0, 0)
 }
 
-func newClickDataset() (*click.Dataset, *click.Dataset) {
-	dataset := &click.Dataset{
-		Index: click.NewUnifiedMapIndexBuilder().Build(),
+func newClickDataset() (*ctr.Dataset, *ctr.Dataset) {
+	dataset := &ctr.Dataset{
+		Index: base.NewUnifiedMapIndexBuilder().Build(),
 	}
 	return dataset, dataset
 }
@@ -599,10 +599,10 @@ func newMockMaster(t *testing.T) *mockMaster {
 
 	// create click model
 	train, test := newClickDataset()
-	fm := click.NewFM(model.Params{model.NEpochs: 0})
+	fm := ctr.NewFM(model.Params{model.NEpochs: 0})
 	fm.Fit(context.Background(), train, test, nil)
 	clickModelBuffer := bytes.NewBuffer(nil)
-	err := click.MarshalModel(clickModelBuffer, fm)
+	err := ctr.MarshalModel(clickModelBuffer, fm)
 	assert.NoError(t, err)
 
 	// create ranking model
@@ -754,7 +754,7 @@ func TestWorker_SyncRecommend(t *testing.T) {
 }
 
 type mockFactorizationMachine struct {
-	click.BaseFactorizationMachine
+	ctr.BaseFactorizationMachine
 }
 
 func (m mockFactorizationMachine) Complexity() int {
@@ -773,7 +773,7 @@ func (m mockFactorizationMachine) Invalid() bool {
 	return false
 }
 
-func (m mockFactorizationMachine) Predict(_, itemId string, _, _ []click.Feature) float32 {
+func (m mockFactorizationMachine) Predict(_, itemId string, _, _ []ctr.Feature) float32 {
 	score, err := strconv.Atoi(itemId)
 	if err != nil {
 		panic(err)
@@ -785,7 +785,7 @@ func (m mockFactorizationMachine) InternalPredict(_ []int32, _ []float32) float3
 	panic("implement me")
 }
 
-func (m mockFactorizationMachine) Fit(_ context.Context, _, _ *click.Dataset, _ *click.FitConfig) click.Score {
+func (m mockFactorizationMachine) Fit(_ context.Context, _, _ dataset.CTRSplit, _ *ctr.FitConfig) ctr.Score {
 	panic("implement me")
 }
 
@@ -858,7 +858,7 @@ func (suite *WorkerTestSuite) TestReplacement_ClickThroughRate() {
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "i", UserId: "0", ItemId: "8"}},
 	}, true, false, true)
 	suite.NoError(err)
-	suite.rankers = []click.FactorizationMachine{new(mockFactorizationMachine)}
+	suite.rankers = []ctr.FactorizationMachine{new(mockFactorizationMachine)}
 	suite.Recommend([]data.User{{UserId: "0"}})
 	// read recommend time
 	recommendTime, err := suite.CacheClient.Get(ctx, cache.Key(cache.LastUpdateUserRecommendTime, "0")).Time()
