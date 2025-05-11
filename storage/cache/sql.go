@@ -25,6 +25,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/araddon/dateparse"
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/go-sql-driver/mysql"
 	"github.com/juju/errors"
@@ -569,11 +570,29 @@ func (db *SQLDatabase) GetTimeSeriesPoints(ctx context.Context, name string, beg
 			Scan(&points).Error; err != nil {
 			return nil, errors.Trace(err)
 		}
-	} else {
-		if err := db.gormDB.WithContext(ctx).Table(db.PointsTable()).
-			Where("name = ? and timestamp >= ? and timestamp <= ?", name, begin, end).
-			Order("timestamp").Find(&points).Error; err != nil {
+	} else if db.driver == SQLite {
+		rows, err := db.gormDB.WithContext(ctx).
+			Raw(fmt.Sprintf("select name, bucket_timestamp as timestamp, value from ("+
+				"select *, datetime(strftime('%%s', substr(timestamp, 0, 20)) / ? * ?, 'unixepoch') as bucket_timestamp,"+
+				"row_number() over (partition by strftime('%%s', substr(timestamp, 0, 20)) / ? order by timestamp desc) as rn "+
+				"from %s where name = ? and timestamp >= ? and timestamp <= ?) where rn = 1",
+				db.PointsTable()), int(duration.Seconds()), int(duration.Seconds()), int(duration.Seconds()), name, begin, end).
+			Rows()
+		if err != nil {
 			return nil, errors.Trace(err)
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var point TimeSeriesPoint
+			var timestamp string
+			if err := rows.Scan(&point.Name, &timestamp, &point.Value); err != nil {
+				return nil, errors.Trace(err)
+			}
+			point.Timestamp, err = dateparse.ParseAny(timestamp)
+			if err != nil {
+				return nil, errors.Trace(err)
+			}
+			points = append(points, point)
 		}
 	}
 	return points, nil
