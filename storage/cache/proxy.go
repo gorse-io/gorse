@@ -182,8 +182,7 @@ func (p *ProxyServer) AddTimeSeriesPoints(ctx context.Context, request *protocol
 }
 
 func (p *ProxyServer) GetTimeSeriesPoints(ctx context.Context, request *protocol.GetTimeSeriesPointsRequest) (*protocol.GetTimeSeriesPointsResponse, error) {
-	// TODO: Support aggregation by duration
-	resp, err := p.database.GetTimeSeriesPoints(ctx, request.GetName(), request.GetBegin().AsTime(), request.GetEnd().AsTime(), 0)
+	resp, err := p.database.GetTimeSeriesPoints(ctx, request.GetName(), request.GetBegin().AsTime(), request.GetEnd().AsTime(), time.Duration(request.GetDuration()))
 	if err != nil {
 		return nil, err
 	}
@@ -414,11 +413,11 @@ func (p ProxyClient) AddTimeSeriesPoints(ctx context.Context, points []TimeSerie
 }
 
 func (p ProxyClient) GetTimeSeriesPoints(ctx context.Context, name string, begin, end time.Time, duration time.Duration) ([]TimeSeriesPoint, error) {
-	// TODO: Support aggregation by duration
 	resp, err := p.CacheStoreClient.GetTimeSeriesPoints(ctx, &protocol.GetTimeSeriesPointsRequest{
-		Name:  name,
-		Begin: timestamppb.New(begin),
-		End:   timestamppb.New(end),
+		Name:     name,
+		Begin:    timestamppb.New(begin),
+		End:      timestamppb.New(end),
+		Duration: int64(duration),
 	})
 	if err != nil {
 		return nil, err

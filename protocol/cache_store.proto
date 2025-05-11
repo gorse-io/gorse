@@ -170,6 +170,7 @@ message GetTimeSeriesPointsRequest {
   string name = 1;
   google.protobuf.Timestamp begin = 2;
   google.protobuf.Timestamp end = 3;
+  int64 duration = 4;
 }
 
 message GetTimeSeriesPointsResponse {
