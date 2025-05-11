@@ -549,7 +549,7 @@ func (db *SQLDatabase) AddTimeSeriesPoints(ctx context.Context, points []TimeSer
 func (db *SQLDatabase) GetTimeSeriesPoints(ctx context.Context, name string, begin, end time.Time) ([]TimeSeriesPoint, error) {
 	var points []TimeSeriesPoint
 	if err := db.gormDB.WithContext(ctx).Table(db.PointsTable()).
-		Where("name = ? and timestamp >= ? and timestamp < ?", name, begin, end).
+		Where("name = ? and timestamp >= ? and timestamp <= ?", name, begin, end).
 		Order("timestamp").Find(&points).Error; err != nil {
 		return nil, errors.Trace(err)
 	}

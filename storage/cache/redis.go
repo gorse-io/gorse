@@ -70,19 +70,6 @@ func (r *Redis) Init() error {
 			return errors.Trace(err)
 		}
 	}
-	if !lo.Contains(indices, r.PointsTable()) {
-		_, err = r.client.FTCreate(context.TODO(), r.PointsTable(),
-			&redis.FTCreateOptions{
-				OnHash: true,
-				Prefix: []any{r.PointsTable() + ":"},
-			},
-			&redis.FieldSchema{FieldName: "name", FieldType: redis.SearchFieldTypeTag},
-			&redis.FieldSchema{FieldName: "timestamp", FieldType: redis.SearchFieldTypeNumeric, Sortable: true},
-		).Result()
-		if err != nil {
-			return errors.Trace(err)
-		}
-	}
 	return nil
 }
 
@@ -430,37 +417,25 @@ func (r *Redis) pointKey(name string, timestamp time.Time) string {
 }
 
 func (r *Redis) AddTimeSeriesPoints(ctx context.Context, points []TimeSeriesPoint) error {
-	p := r.client.Pipeline()
 	for _, point := range points {
-		p.HSet(ctx, r.pointKey(point.Name, point.Timestamp),
-			"name", point.Name,
-			"value", point.Value,
-			"timestamp", point.Timestamp.UnixMicro())
+		if err := r.client.TSAdd(ctx, r.PointsTable()+":"+point.Name, point.Timestamp.UnixMicro(), point.Value).Err(); err != nil {
+			return errors.Trace(err)
+		}
 	}
-	_, err := p.Exec(ctx)
-	return errors.Trace(err)
+	return nil
 }
 
 func (r *Redis) GetTimeSeriesPoints(ctx context.Context, name string, begin, end time.Time) ([]TimeSeriesPoint, error) {
-	result, err := r.client.FTSearchWithArgs(ctx, r.PointsTable(),
-		fmt.Sprintf("@name:{ %s } @timestamp:[%d (%d]", escape(name), begin.UnixMicro(), end.UnixMicro()),
-		&redis.FTSearchOptions{SortBy: []redis.FTSearchSortBy{{FieldName: "timestamp"}}}).Result()
+	result, err := r.client.TSRange(ctx, r.PointsTable()+":"+name, int(begin.UnixMicro()), int(end.UnixMicro())).Result()
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	points := make([]TimeSeriesPoint, 0, len(result.Docs))
-	for _, doc := range result.Docs {
+	points := make([]TimeSeriesPoint, 0, len(result))
+	for _, doc := range result {
 		var point TimeSeriesPoint
-		point.Name = doc.Fields["name"]
-		point.Value, err = strconv.ParseFloat(doc.Fields["value"], 64)
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
-		timestamp, err := strconv.ParseInt(doc.Fields["timestamp"], 10, 64)
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
-		point.Timestamp = time.UnixMicro(timestamp).In(time.UTC)
+		point.Name = name
+		point.Value = doc.Value
+		point.Timestamp = time.UnixMicro(doc.Timestamp).UTC()
 		points = append(points, point)
 	}
 	return points, nil

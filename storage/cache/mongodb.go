@@ -435,7 +435,7 @@ func (m MongoDB) AddTimeSeriesPoints(ctx context.Context, points []TimeSeriesPoi
 func (m MongoDB) GetTimeSeriesPoints(ctx context.Context, name string, begin, end time.Time) ([]TimeSeriesPoint, error) {
 	cur, err := m.client.Database(m.dbName).Collection(m.PointsTable()).Find(ctx, bson.M{
 		"name":      name,
-		"timestamp": bson.M{"$gte": begin, "$lt": end},
+		"timestamp": bson.M{"$gte": begin, "$lte": end},
 	}, options.Find().SetSort(bson.M{"timestamp": 1}))
 	if err != nil {
 		return nil, errors.Trace(err)
