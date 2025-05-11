@@ -413,12 +413,14 @@ func (r *Redis) DeleteScores(ctx context.Context, collections []string, conditio
 }
 
 func (r *Redis) AddTimeSeriesPoints(ctx context.Context, points []TimeSeriesPoint) error {
+	p := r.client.Pipeline()
 	for _, point := range points {
-		if err := r.client.TSAdd(ctx, r.PointsTable()+":"+point.Name, point.Timestamp.UnixMilli(), point.Value).Err(); err != nil {
+		if err := p.TSAdd(ctx, r.PointsTable()+":"+point.Name, point.Timestamp.UnixMilli(), point.Value).Err(); err != nil {
 			return errors.Trace(err)
 		}
 	}
-	return nil
+	_, err := p.Exec(ctx)
+	return errors.Trace(err)
 }
 
 func (r *Redis) GetTimeSeriesPoints(ctx context.Context, name string, begin, end time.Time, duration time.Duration) ([]TimeSeriesPoint, error) {
