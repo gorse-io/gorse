@@ -546,7 +546,8 @@ func (db *SQLDatabase) AddTimeSeriesPoints(ctx context.Context, points []TimeSer
 	}).Create(points).Error
 }
 
-func (db *SQLDatabase) GetTimeSeriesPoints(ctx context.Context, name string, begin, end time.Time) ([]TimeSeriesPoint, error) {
+func (db *SQLDatabase) GetTimeSeriesPoints(ctx context.Context, name string, begin, end time.Time, duration time.Duration) ([]TimeSeriesPoint, error) {
+	// TODO: Support aggregation by duration
 	var points []TimeSeriesPoint
 	if err := db.gormDB.WithContext(ctx).Table(db.PointsTable()).
 		Where("name = ? and timestamp >= ? and timestamp <= ?", name, begin, end).

@@ -412,21 +412,18 @@ func (r *Redis) DeleteScores(ctx context.Context, collections []string, conditio
 	return nil
 }
 
-func (r *Redis) pointKey(name string, timestamp time.Time) string {
-	return fmt.Sprintf("%s:%s:%d", r.PointsTable(), name, timestamp.UnixMicro())
-}
-
 func (r *Redis) AddTimeSeriesPoints(ctx context.Context, points []TimeSeriesPoint) error {
 	for _, point := range points {
-		if err := r.client.TSAdd(ctx, r.PointsTable()+":"+point.Name, point.Timestamp.UnixMicro(), point.Value).Err(); err != nil {
+		if err := r.client.TSAdd(ctx, r.PointsTable()+":"+point.Name, point.Timestamp.UnixMilli(), point.Value).Err(); err != nil {
 			return errors.Trace(err)
 		}
 	}
 	return nil
 }
 
-func (r *Redis) GetTimeSeriesPoints(ctx context.Context, name string, begin, end time.Time) ([]TimeSeriesPoint, error) {
-	result, err := r.client.TSRange(ctx, r.PointsTable()+":"+name, int(begin.UnixMicro()), int(end.UnixMicro())).Result()
+func (r *Redis) GetTimeSeriesPoints(ctx context.Context, name string, begin, end time.Time, duration time.Duration) ([]TimeSeriesPoint, error) {
+	result, err := r.client.TSRangeWithArgs(ctx, r.PointsTable()+":"+name, int(begin.UnixMilli()), int(end.UnixMilli()),
+		&redis.TSRangeOptions{Aggregator: redis.Last, BucketDuration: int(duration / time.Millisecond)}).Result()
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -435,7 +432,7 @@ func (r *Redis) GetTimeSeriesPoints(ctx context.Context, name string, begin, end
 		var point TimeSeriesPoint
 		point.Name = name
 		point.Value = doc.Value
-		point.Timestamp = time.UnixMicro(doc.Timestamp).UTC()
+		point.Timestamp = time.UnixMilli(doc.Timestamp).UTC()
 		points = append(points, point)
 	}
 	return points, nil

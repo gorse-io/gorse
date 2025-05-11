@@ -432,7 +432,8 @@ func (m MongoDB) AddTimeSeriesPoints(ctx context.Context, points []TimeSeriesPoi
 	return errors.Trace(err)
 }
 
-func (m MongoDB) GetTimeSeriesPoints(ctx context.Context, name string, begin, end time.Time) ([]TimeSeriesPoint, error) {
+func (m MongoDB) GetTimeSeriesPoints(ctx context.Context, name string, begin, end time.Time, duration time.Duration) ([]TimeSeriesPoint, error) {
+	// TODO: Support aggregation by duration
 	cur, err := m.client.Database(m.dbName).Collection(m.PointsTable()).Find(ctx, bson.M{
 		"name":      name,
 		"timestamp": bson.M{"$gte": begin, "$lte": end},

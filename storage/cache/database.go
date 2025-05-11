@@ -283,7 +283,7 @@ type Database interface {
 	UpdateScores(ctx context.Context, collections []string, subset *string, id string, patch ScorePatch) error
 
 	AddTimeSeriesPoints(ctx context.Context, points []TimeSeriesPoint) error
-	GetTimeSeriesPoints(ctx context.Context, name string, begin, end time.Time) ([]TimeSeriesPoint, error)
+	GetTimeSeriesPoints(ctx context.Context, name string, begin, end time.Time, duration time.Duration) ([]TimeSeriesPoint, error)
 }
 
 // Open a connection to a database.
