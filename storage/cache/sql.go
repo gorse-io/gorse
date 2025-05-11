@@ -549,10 +549,22 @@ func (db *SQLDatabase) AddTimeSeriesPoints(ctx context.Context, points []TimeSer
 func (db *SQLDatabase) GetTimeSeriesPoints(ctx context.Context, name string, begin, end time.Time, duration time.Duration) ([]TimeSeriesPoint, error) {
 	// TODO: Support aggregation by duration
 	var points []TimeSeriesPoint
-	if err := db.gormDB.WithContext(ctx).Table(db.PointsTable()).
-		Where("name = ? and timestamp >= ? and timestamp <= ?", name, begin, end).
-		Order("timestamp").Find(&points).Error; err != nil {
-		return nil, errors.Trace(err)
+	if db.driver == Postgres {
+		if err := db.gormDB.WithContext(ctx).
+			Raw(fmt.Sprintf("SELECT name, bucket_timestamp AS timestamp, value FROM ("+
+				"SELECT *, TO_TIMESTAMP((EXTRACT(epoch FROM timestamp)::int / ?) * ?) AS bucket_timestamp,"+
+				"ROW_NUMBER() OVER (PARTITION BY (EXTRACT(epoch FROM timestamp)::int / ?) ORDER BY timestamp DESC) AS rn "+
+				"FROM %s WHERE name = ? and timestamp >= ? and timestamp <= ?) AS t WHERE rn = 1",
+				db.PointsTable()), int(duration.Seconds()), int(duration.Seconds()), int(duration.Seconds()), name, begin, end).
+			Scan(&points).Error; err != nil {
+			return nil, errors.Trace(err)
+		}
+	} else {
+		if err := db.gormDB.WithContext(ctx).Table(db.PointsTable()).
+			Where("name = ? and timestamp >= ? and timestamp <= ?", name, begin, end).
+			Order("timestamp").Find(&points).Error; err != nil {
+			return nil, errors.Trace(err)
+		}
 	}
 	return points, nil
 }
