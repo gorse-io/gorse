@@ -997,7 +997,7 @@ func (suite *ServerTestSuite) TestDeleteFeedback() {
 func (suite *ServerTestSuite) TestTimeSeries() {
 	ctx := context.Background()
 	t := suite.T()
-	timestamp := time.Now().Add(24 * time.Hour * -2)
+	timestamp := time.Now().UTC().Truncate(24 * time.Hour).Add(24 * time.Hour * -2)
 	points := []cache.TimeSeriesPoint{
 		{"Test_NDCG", timestamp.Add(24 * time.Hour * 0), 0},
 		{"Test_NDCG", timestamp.Add(24 * time.Hour * 1), 1},
