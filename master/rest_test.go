@@ -403,7 +403,7 @@ func (suite *MasterAPITestSuite) TestGetRates() {
 	// write rates
 	suite.Config.Recommend.DataSource.PositiveFeedbackTypes = []string{"a", "b"}
 	// This first measurement should be overwritten.
-	baseTimestamp := time.Now()
+	baseTimestamp := time.Now().UTC().Truncate(24 * time.Hour)
 	err := suite.CacheClient.AddTimeSeriesPoints(ctx, []cache.TimeSeriesPoint{
 		{Name: cache.Key(PositiveFeedbackRate, "a"), Value: 100.0, Timestamp: baseTimestamp.Add(-2 * 24 * time.Hour)},
 		{Name: cache.Key(PositiveFeedbackRate, "a"), Value: 2.0, Timestamp: baseTimestamp.Add(-2 * 24 * time.Hour)},

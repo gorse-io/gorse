@@ -470,14 +470,23 @@ func (suite *baseTestSuite) TestTimeSeries() {
 		{Name: "a", Value: 2, Timestamp: ts.Add(2 * time.Second)},
 		{Name: "a", Value: 3, Timestamp: ts.Add(3 * time.Second)},
 		{Name: "a", Value: 4, Timestamp: ts.Add(4 * time.Second)},
-		{Name: "a", Value: 5, Timestamp: ts.Add(5 * time.Second)}})
+		{Name: "a", Value: 5, Timestamp: ts.Add(5 * time.Second)},
+		{Name: "b", Value: 3, Timestamp: ts.Add(3 * time.Second)},
+	})
 	suite.NoError(err)
 
-	points, err := suite.GetTimeSeriesPoints(ctx, "a", ts.Add(2*time.Second), ts.Add(5*time.Second))
+	points, err := suite.GetTimeSeriesPoints(ctx, "a", ts.Add(2*time.Second), ts.Add(4*time.Second), time.Second)
 	suite.NoError(err)
 	suite.Equal([]TimeSeriesPoint{
 		{Name: "a", Value: 2, Timestamp: ts.Add(2 * time.Second)},
 		{Name: "a", Value: 3, Timestamp: ts.Add(3 * time.Second)},
+		{Name: "a", Value: 4, Timestamp: ts.Add(4 * time.Second)},
+	}, points)
+
+	points, err = suite.GetTimeSeriesPoints(ctx, "a", ts.Add(2*time.Second), ts.Add(4*time.Second), 2*time.Second)
+	suite.NoError(err)
+	suite.Equal([]TimeSeriesPoint{
+		{Name: "a", Value: 3, Timestamp: ts.Add(2 * time.Second)},
 		{Name: "a", Value: 4, Timestamp: ts.Add(4 * time.Second)},
 	}, points)
 }

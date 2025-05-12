@@ -1986,7 +1986,7 @@ func (s *RestServer) getMeasurements(request *restful.Request, response *restful
 		BadRequest(response, err)
 		return
 	}
-	measurements, err := s.CacheClient.GetTimeSeriesPoints(ctx, name, time.Now().Add(-24*time.Hour*time.Duration(n)), time.Now())
+	measurements, err := s.CacheClient.GetTimeSeriesPoints(ctx, name, time.Now().Add(-24*time.Hour*time.Duration(n)), time.Now(), 24*time.Hour)
 	if err != nil {
 		InternalServerError(response, err)
 		return

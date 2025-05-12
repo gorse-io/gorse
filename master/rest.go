@@ -636,8 +636,7 @@ func (m *Master) getRates(request *restful.Request, response *restful.Response) 
 	}
 	measurements := make(map[string][]cache.TimeSeriesPoint, len(m.Config.Recommend.DataSource.PositiveFeedbackTypes))
 	for _, feedbackType := range m.Config.Recommend.DataSource.PositiveFeedbackTypes {
-		measurements[feedbackType], err = m.CacheClient.GetTimeSeriesPoints(ctx, cache.Key(PositiveFeedbackRate, feedbackType),
-			time.Now().Add(-24*time.Hour*time.Duration(n)), time.Now())
+		measurements[feedbackType], err = m.CacheClient.GetTimeSeriesPoints(ctx, cache.Key(PositiveFeedbackRate, feedbackType), time.Now().Add(-24*time.Hour*time.Duration(n)), time.Now(), 24*time.Hour)
 		if err != nil {
 			server.InternalServerError(response, err)
 			return

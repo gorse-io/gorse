@@ -110,6 +110,6 @@ func (NoDatabase) AddTimeSeriesPoints(_ context.Context, _ []TimeSeriesPoint) er
 	return ErrNoDatabase
 }
 
-func (NoDatabase) GetTimeSeriesPoints(_ context.Context, _ string, _, _ time.Time) ([]TimeSeriesPoint, error) {
+func (NoDatabase) GetTimeSeriesPoints(_ context.Context, _ string, _, _ time.Time, _ time.Duration) ([]TimeSeriesPoint, error) {
 	return nil, ErrNoDatabase
 }
