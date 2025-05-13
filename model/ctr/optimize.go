@@ -17,7 +17,6 @@ package ctr
 import (
 	"context"
 	"fmt"
-	"github.com/zhenghaoz/gorse/dataset"
 	"sync"
 	"time"
 
@@ -25,6 +24,7 @@ import (
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/base/progress"
 	"github.com/zhenghaoz/gorse/base/task"
+	"github.com/zhenghaoz/gorse/dataset"
 	"github.com/zhenghaoz/gorse/model"
 	"go.uber.org/zap"
 )
