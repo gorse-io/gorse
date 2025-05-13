@@ -15,6 +15,10 @@ package cf
 
 import (
 	"context"
+	"fmt"
+	"github.com/c-bata/goptuna"
+	"github.com/c-bata/goptuna/tpe"
+	"github.com/samber/lo"
 	"io"
 	"testing"
 	"time"
@@ -92,8 +96,16 @@ func (m *mockMatrixFactorizationForSearch) Clear() {
 func (m *mockMatrixFactorizationForSearch) GetParamsGrid(_ bool) model.ParamsGrid {
 	return model.ParamsGrid{
 		model.NFactors:   []interface{}{1, 2, 3, 4},
-		model.InitMean:   []interface{}{4, 3, 2, 1},
-		model.InitStdDev: []interface{}{4, 4, 4, 4},
+		model.InitMean:   []interface{}{1, 2, 3, 4},
+		model.InitStdDev: []interface{}{4},
+	}
+}
+
+func (m *mockMatrixFactorizationForSearch) Suggest(trial goptuna.Trial) model.Params {
+	return model.Params{
+		model.NFactors:   lo.Must(trial.SuggestInt(string(model.NFactors), 1, 4)),
+		model.InitMean:   lo.Must(trial.SuggestInt(string(model.InitMean), 1, 4)),
+		model.InitStdDev: 4,
 	}
 }
 
@@ -118,13 +130,38 @@ func TestGridSearchCV(t *testing.T) {
 func TestRandomSearchCV(t *testing.T) {
 	m := &mockMatrixFactorizationForSearch{}
 	fitConfig := newFitConfigForSearch()
-	r := RandomSearchCV(context.Background(), m, nil, nil, m.GetParamsGrid(false), 63, 0, fitConfig)
+	r := RandomSearchCV(context.Background(), m, nil, nil, m.GetParamsGrid(false), 17, 0, fitConfig)
 	assert.Equal(t, float32(12), r.BestScore.NDCG)
 	assert.Equal(t, model.Params{
 		model.NFactors:   4,
 		model.InitMean:   4,
 		model.InitStdDev: 4,
 	}, r.BestParams)
+}
+
+func objective(trial goptuna.Trial) (float64, error) {
+	m := &mockMatrixFactorizationForSearch{}
+	m.SetParams(m.Suggest(trial))
+	fmt.Println(m.GetParams())
+	score := m.Fit(context.Background(), nil, nil, nil)
+	return float64(score.NDCG), nil
+}
+
+func TestTPE(t *testing.T) {
+	study, err := goptuna.CreateStudy("TestTPE",
+		goptuna.StudyOptionDirection(goptuna.StudyDirectionMaximize),
+		goptuna.StudyOptionSampler(tpe.NewSampler()))
+	assert.NoError(t, err)
+	err = study.Optimize(objective, 17)
+	assert.NoError(t, err)
+	v, _ := study.GetBestValue()
+	//p, _ := study.GetBestParams()
+	assert.Equal(t, float64(12), v)
+	//assert.Equal(t, model.Params{
+	//	model.NFactors:   4,
+	//	model.InitMean:   4,
+	//	model.InitStdDev: 4,
+	//}, p)
 }
 
 func TestModelSearcher(t *testing.T) {
