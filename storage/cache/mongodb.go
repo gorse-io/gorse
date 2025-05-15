@@ -422,6 +422,13 @@ func (m MongoDB) ScanScores(ctx context.Context, callback func(collection string
 	}
 	defer cursor.Close(ctx)
 	for cursor.Next(ctx) {
+		// check context cancellation
+		select {
+		case <-ctx.Done():
+			return errors.Trace(ctx.Err())
+		default:
+		}
+		// decode document
 		collection := cursor.Current.Lookup("collection").StringValue()
 		subset := cursor.Current.Lookup("subset").StringValue()
 		id := cursor.Current.Lookup("id").StringValue()
