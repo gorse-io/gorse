@@ -500,10 +500,10 @@ func (suite *baseTestSuite) TestScanScores() {
 
 	// scan scores with timeout
 	scanScores := 0
-	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
 	defer cancel()
 	err = suite.ScanScores(ctx, func(collection, id, subset string, timestamp time.Time) error {
-		time.Sleep(time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 		scanScores++
 		return nil
 	})
