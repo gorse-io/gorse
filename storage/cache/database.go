@@ -281,6 +281,7 @@ type Database interface {
 	SearchScores(ctx context.Context, collection, subset string, query []string, begin, end int) ([]Score, error)
 	DeleteScores(ctx context.Context, collection []string, condition ScoreCondition) error
 	UpdateScores(ctx context.Context, collections []string, subset *string, id string, patch ScorePatch) error
+	ScanScores(ctx context.Context, callback func(collection, id, subset string, timestamp time.Time) error) error
 
 	AddTimeSeriesPoints(ctx context.Context, points []TimeSeriesPoint) error
 	GetTimeSeriesPoints(ctx context.Context, name string, begin, end time.Time, duration time.Duration) ([]TimeSeriesPoint, error)
