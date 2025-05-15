@@ -492,7 +492,7 @@ func (suite *baseTestSuite) TestScanScores() {
 	ctx := context.Background()
 	err := suite.ScanScores(ctx, func(collection, id, subset string, t time.Time) error {
 		totalScores++
-		suite.Equal(timestamp, t)
+		suite.Equal(timestamp, t.UTC())
 		return nil
 	})
 	suite.NoError(err)
