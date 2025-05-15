@@ -26,6 +26,7 @@ import (
 	"github.com/juju/errors"
 	"github.com/redis/go-redis/v9"
 	"github.com/samber/lo"
+	"github.com/zhenghaoz/gorse/common/util"
 	"github.com/zhenghaoz/gorse/storage"
 )
 
@@ -410,6 +411,48 @@ func (r *Redis) DeleteScores(ctx context.Context, collections []string, conditio
 		}
 	}
 	return nil
+}
+
+func (r *Redis) ScanScores(ctx context.Context, callback func(collection string, id string, subset string, timestamp time.Time) error) error {
+	if clusterClient, isCluster := r.client.(*redis.ClusterClient); isCluster {
+		return clusterClient.ForEachMaster(ctx, func(ctx context.Context, client *redis.Client) error {
+			return r.scanScores(ctx, client, callback)
+		})
+	} else {
+		return r.scanScores(ctx, r.client, callback)
+	}
+}
+
+func (r *Redis) scanScores(ctx context.Context, client redis.UniversalClient, callback func(collection string, id string, subset string, timestamp time.Time) error) error {
+	var (
+		result []string
+		cursor uint64
+		err    error
+	)
+	for {
+		result, cursor, err = client.Scan(ctx, cursor, r.DocumentTable()+"*", 0).Result()
+		if err != nil {
+			return errors.Trace(err)
+		}
+		for _, key := range result {
+			var row map[string]string
+			row, err = client.HGetAll(ctx, key).Result()
+			if err != nil {
+				return errors.Trace(err)
+			}
+			var usec int64
+			usec, err = util.ParseInt[int64](row["timestamp"])
+			if err != nil {
+				return errors.Trace(err)
+			}
+			if err = callback(row["collection"], row["id"], row["subset"], time.UnixMicro(usec).In(time.UTC)); err != nil {
+				return errors.Trace(err)
+			}
+		}
+		if cursor == 0 {
+			return nil
+		}
+	}
 }
 
 func (r *Redis) AddTimeSeriesPoints(ctx context.Context, points []TimeSeriesPoint) error {

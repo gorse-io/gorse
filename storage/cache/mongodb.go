@@ -415,6 +415,31 @@ func (m MongoDB) DeleteScores(ctx context.Context, collections []string, conditi
 	return errors.Trace(err)
 }
 
+func (m MongoDB) ScanScores(ctx context.Context, callback func(collection string, id string, subset string, timestamp time.Time) error) error {
+	cursor, err := m.client.Database(m.dbName).Collection(m.DocumentTable()).Find(ctx, bson.M{})
+	if err != nil {
+		return errors.Trace(err)
+	}
+	defer cursor.Close(ctx)
+	for cursor.Next(ctx) {
+		// check context cancellation
+		select {
+		case <-ctx.Done():
+			return errors.Trace(ctx.Err())
+		default:
+		}
+		// decode document
+		collection := cursor.Current.Lookup("collection").StringValue()
+		subset := cursor.Current.Lookup("subset").StringValue()
+		id := cursor.Current.Lookup("id").StringValue()
+		timestamp := cursor.Current.Lookup("timestamp").Time()
+		if err = callback(collection, id, subset, timestamp); err != nil {
+			return errors.Trace(err)
+		}
+	}
+	return nil
+}
+
 func (m MongoDB) AddTimeSeriesPoints(ctx context.Context, points []TimeSeriesPoint) error {
 	var models []mongo.WriteModel
 	for _, point := range points {
