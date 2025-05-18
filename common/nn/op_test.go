@@ -283,7 +283,7 @@ func TestLog(t *testing.T) {
 	assert.InDeltaSlice(t, []float32{0, math32.Log(2), math32.Log(3), math32.Log(4), math32.Log(5), math32.Log(6)}, y.data, 1e-6)
 
 	// Test gradient
-	x = Rand(2, 3)
+	x = Uniform(1, 2, 2, 3)
 	y = Log(x)
 	y.Backward()
 	dx := numericalDiff(Log, x)
