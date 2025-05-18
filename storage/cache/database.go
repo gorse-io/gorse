@@ -46,10 +46,7 @@ import (
 )
 
 const (
-	// CollaborativeRecommend is sorted set of collaborative filtering recommendations for each user.
-	//  Global recommendation      - collaborative_recommend/{user_id}
-	//  Categorized recommendation - collaborative_recommend/{user_id}/{category}
-	CollaborativeRecommend = "collaborative_recommend" // collaborative filtering recommendation for each user
+	CollaborativeFiltering = "collaborative_recommend"
 
 	// OfflineRecommend is sorted set of offline recommendation for each user.
 	//  Global recommendation      - offline_recommend/{user_id}

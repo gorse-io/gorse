@@ -378,7 +378,6 @@ func (m *Master) RunRagtagTasksLoop() {
 	var (
 		err   error
 		tasks = []Task{
-			NewCacheGarbageCollectionTask(m),
 			NewSearchRankingModelTask(m),
 			NewSearchClickModelTask(m),
 		}
