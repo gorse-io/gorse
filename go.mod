@@ -81,7 +81,7 @@ require (
 	gorm.io/driver/mysql v1.5.1
 	gorm.io/driver/postgres v1.5.2
 	gorm.io/driver/sqlite v1.5.3
-	gorm.io/gorm v1.25.4
+	gorm.io/gorm v1.25.7-0.20240204074919-46816ad31dde
 	modernc.org/mathutil v1.7.1
 	modernc.org/sortutil v1.2.1
 	modernc.org/sqlite v1.37.0
@@ -124,7 +124,6 @@ require (
 	github.com/magiconair/properties v1.8.7 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
-	github.com/mattn/go-sqlite3 v1.14.17 // indirect
 	github.com/minio/blake2b-simd v0.0.0-20160723061019-3f5f724cb5b1 // indirect
 	github.com/mitchellh/colorstring v0.0.0-20190213212951-d06e56a500db // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
@@ -173,8 +172,6 @@ require (
 )
 
 replace (
-	gorgonia.org/gorgonia v0.9.18-0.20230327110624-d1c17944ed22 => github.com/gorse-io/gorgonia v0.0.0-20230817132253-6dd1dbf95849
-	gorgonia.org/tensor v0.9.23 => github.com/gorse-io/tensor v0.0.0-20230617102451-4c006ddc5162
 	gorm.io/driver/clickhouse v0.4.2 => github.com/gorse-io/clickhouse v0.3.3-0.20220715124633-688011a495bb
-	gorm.io/driver/sqlite v1.3.4 => github.com/gorse-io/sqlite v1.3.3-0.20220713123255-c322aec4e59e
+	gorm.io/driver/sqlite v1.5.3 => github.com/gorse-io/sqlite v1.3.3-0.20250518105304-af0cea70d8f9
 )
