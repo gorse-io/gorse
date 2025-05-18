@@ -234,8 +234,8 @@ func TestPow(t *testing.T) {
 	assert.InDeltaSlice(t, []float32{1, 8, 81, 1024, 15625, 279936}, z.data, 1e-6)
 
 	// Test gradient
-	x = Rand(2, 3)
-	y = Rand(2, 3)
+	x = Uniform(0.5, 1, 2, 3)
+	y = Uniform(0.5, 1, 2, 3)
 	z = Pow(x, y)
 	z.Backward()
 	dx := numericalDiff(func(x *Tensor) *Tensor { return Pow(x, y) }, x)
