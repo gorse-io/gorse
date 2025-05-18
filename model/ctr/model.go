@@ -18,12 +18,12 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
-	"github.com/zhenghaoz/gorse/dataset"
 	"io"
 	"reflect"
 	"sync"
 	"time"
 
+	"github.com/c-bata/goptuna"
 	"github.com/chewxy/math32"
 	"github.com/juju/errors"
 	"github.com/samber/lo"
@@ -36,6 +36,7 @@ import (
 	"github.com/zhenghaoz/gorse/common/floats"
 	"github.com/zhenghaoz/gorse/common/nn"
 	"github.com/zhenghaoz/gorse/common/parallel"
+	"github.com/zhenghaoz/gorse/dataset"
 	"github.com/zhenghaoz/gorse/model"
 	"go.uber.org/zap"
 	"modernc.org/mathutil"
@@ -173,6 +174,16 @@ func (fm *FM) SetParams(params model.Params) {
 	fm.initMean = fm.Params.GetFloat32(model.InitMean, 0)
 	fm.initStdDev = fm.Params.GetFloat32(model.InitStdDev, 0.01)
 	fm.optimizer = fm.Params.GetString(model.Optimizer, model.Adam)
+}
+
+func (fm *FM) SuggestParams(trial goptuna.Trial) model.Params {
+	return model.Params{
+		model.NFactors:   16,
+		model.Lr:         lo.Must(trial.SuggestLogFloat(string(model.Lr), 0.001, 0.1)),
+		model.Reg:        lo.Must(trial.SuggestLogFloat(string(model.Reg), 0.001, 0.1)),
+		model.InitMean:   0,
+		model.InitStdDev: lo.Must(trial.SuggestLogFloat(string(model.InitStdDev), 0.001, 0.1)),
+	}
 }
 
 func (fm *FM) Predict(userId, itemId string, userFeatures, itemFeatures []Feature) float32 {
@@ -639,6 +650,16 @@ func (fm *FactorizationMachines) SetParams(params model.Params) {
 	fm.initMean = fm.Params.GetFloat32(model.InitMean, 0)
 	fm.initStdDev = fm.Params.GetFloat32(model.InitStdDev, 0.01)
 	fm.optimizer = fm.Params.GetString(model.Optimizer, model.Adam)
+}
+
+func (fm *FactorizationMachines) SuggestParams(trial goptuna.Trial) model.Params {
+	return model.Params{
+		model.NFactors:   16,
+		model.Lr:         lo.Must(trial.SuggestLogFloat(string(model.Lr), 0.001, 0.1)),
+		model.Reg:        lo.Must(trial.SuggestLogFloat(string(model.Reg), 0.001, 0.1)),
+		model.InitMean:   0,
+		model.InitStdDev: lo.Must(trial.SuggestLogFloat(string(model.InitStdDev), 0.001, 0.1)),
+	}
 }
 
 func (fm *FactorizationMachines) Clear() {

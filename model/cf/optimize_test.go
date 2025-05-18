@@ -15,14 +15,13 @@ package cf
 
 import (
 	"context"
-	"fmt"
-	"github.com/c-bata/goptuna"
-	"github.com/c-bata/goptuna/tpe"
-	"github.com/samber/lo"
 	"io"
 	"testing"
 	"time"
 
+	"github.com/c-bata/goptuna"
+	"github.com/c-bata/goptuna/tpe"
+	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/base/task"
 	"github.com/zhenghaoz/gorse/dataset"
@@ -101,11 +100,11 @@ func (m *mockMatrixFactorizationForSearch) GetParamsGrid(_ bool) model.ParamsGri
 	}
 }
 
-func (m *mockMatrixFactorizationForSearch) Suggest(trial goptuna.Trial) model.Params {
+func (m *mockMatrixFactorizationForSearch) SuggestParams(trial goptuna.Trial) model.Params {
 	return model.Params{
 		model.NFactors:   lo.Must(trial.SuggestInt(string(model.NFactors), 1, 4)),
 		model.InitMean:   lo.Must(trial.SuggestInt(string(model.InitMean), 1, 4)),
-		model.InitStdDev: 4,
+		model.InitStdDev: lo.Must(trial.SuggestInt(string(model.InitStdDev), 4, 4)),
 	}
 }
 
@@ -139,29 +138,22 @@ func TestRandomSearchCV(t *testing.T) {
 	}, r.BestParams)
 }
 
-func objective(trial goptuna.Trial) (float64, error) {
-	m := &mockMatrixFactorizationForSearch{}
-	m.SetParams(m.Suggest(trial))
-	fmt.Println(m.GetParams())
-	score := m.Fit(context.Background(), nil, nil, nil)
-	return float64(score.NDCG), nil
-}
-
 func TestTPE(t *testing.T) {
+	search := NewModelSearch(nil, nil, &mockMatrixFactorizationForSearch{})
 	study, err := goptuna.CreateStudy("TestTPE",
 		goptuna.StudyOptionDirection(goptuna.StudyDirectionMaximize),
 		goptuna.StudyOptionSampler(tpe.NewSampler()))
 	assert.NoError(t, err)
-	err = study.Optimize(objective, 17)
+	err = study.Optimize(search.Objective, 32)
 	assert.NoError(t, err)
 	v, _ := study.GetBestValue()
-	//p, _ := study.GetBestParams()
+	p, _ := study.GetBestParams()
 	assert.Equal(t, float64(12), v)
-	//assert.Equal(t, model.Params{
-	//	model.NFactors:   4,
-	//	model.InitMean:   4,
-	//	model.InitStdDev: 4,
-	//}, p)
+	assert.Equal(t, model.Params{
+		model.NFactors:   4,
+		model.InitMean:   4,
+		model.InitStdDev: 4,
+	}, search.New(p).GetParams())
 }
 
 func TestModelSearcher(t *testing.T) {

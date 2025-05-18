@@ -19,7 +19,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/zhenghaoz/gorse/model/ctr"
 	"io"
 	"math/rand"
 	"net"
@@ -30,6 +29,7 @@ import (
 	"time"
 
 	"github.com/bits-and-blooms/bitset"
+	"github.com/c-bata/goptuna"
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
@@ -42,6 +42,7 @@ import (
 	"github.com/zhenghaoz/gorse/dataset"
 	"github.com/zhenghaoz/gorse/model"
 	"github.com/zhenghaoz/gorse/model/cf"
+	"github.com/zhenghaoz/gorse/model/ctr"
 	"github.com/zhenghaoz/gorse/protocol"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
@@ -197,6 +198,10 @@ func (m *mockMatrixFactorizationForRecommend) Clear() {
 
 func (m *mockMatrixFactorizationForRecommend) GetParamsGrid(_ bool) model.ParamsGrid {
 	panic("don't call me")
+}
+
+func (m *mockMatrixFactorizationForRecommend) SuggestParams(_ goptuna.Trial) model.Params {
+	panic("not implemented")
 }
 
 func (suite *WorkerTestSuite) TestRecommendMatrixFactorizationHNSW() {
@@ -764,6 +769,10 @@ func (m mockFactorizationMachine) Complexity() int {
 }
 
 func (m mockFactorizationMachine) GetParamsGrid(_ bool) model.ParamsGrid {
+	panic("implement me")
+}
+
+func (m mockFactorizationMachine) SuggestParams(_ goptuna.Trial) model.Params {
 	panic("implement me")
 }
 

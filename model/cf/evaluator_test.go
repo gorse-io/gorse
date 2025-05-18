@@ -15,15 +15,17 @@ package cf
 
 import (
 	"context"
+	"io"
+	"strconv"
+	"testing"
+	"time"
+
+	"github.com/c-bata/goptuna"
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/dataset"
 	"github.com/zhenghaoz/gorse/model"
 	"github.com/zhenghaoz/gorse/storage/data"
-	"io"
-	"strconv"
-	"testing"
-	"time"
 )
 
 const evalEpsilon = 0.00001
@@ -130,6 +132,10 @@ func (m *mockMatrixFactorizationForEval) Clear() {
 
 func (m *mockMatrixFactorizationForEval) GetParamsGrid(_ bool) model.ParamsGrid {
 	panic("don't call me")
+}
+
+func (m *mockMatrixFactorizationForEval) SuggestParams(trial goptuna.Trial) model.Params {
+	panic("not implemented")
 }
 
 func TestEvaluate(t *testing.T) {
