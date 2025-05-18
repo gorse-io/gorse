@@ -871,11 +871,11 @@ func (w *Worker) collaborativeRecommendHNSW(rankingIndex *logics.MatrixFactoriza
 	recommend[""] = lo.Map(scores, func(score cache.Score, _ int) string {
 		return score.Id
 	})
-	if err := w.CacheClient.AddScores(ctx, cache.CollaborativeRecommend, userId, scores); err != nil {
+	if err := w.CacheClient.AddScores(ctx, cache.CollaborativeFiltering, userId, scores); err != nil {
 		log.Logger().Error("failed to cache collaborative filtering recommendation result", zap.String("user_id", userId), zap.Error(err))
 		return nil, 0, errors.Trace(err)
 	}
-	if err := w.CacheClient.DeleteScores(ctx, []string{cache.CollaborativeRecommend}, cache.ScoreCondition{Before: &localStartTime, Subset: proto.String(userId)}); err != nil {
+	if err := w.CacheClient.DeleteScores(ctx, []string{cache.CollaborativeFiltering}, cache.ScoreCondition{Before: &localStartTime, Subset: proto.String(userId)}); err != nil {
 		log.Logger().Error("failed to delete stale collaborative filtering recommendation result", zap.String("user_id", userId), zap.Error(err))
 		return nil, 0, errors.Trace(err)
 	}
@@ -1062,7 +1062,7 @@ func (w *Worker) checkUserActiveTime(ctx context.Context, userId string) bool {
 		return true
 	}
 	// remove recommend cache for inactive users
-	if err := w.CacheClient.DeleteScores(ctx, []string{cache.OfflineRecommend, cache.CollaborativeRecommend},
+	if err := w.CacheClient.DeleteScores(ctx, []string{cache.OfflineRecommend, cache.CollaborativeFiltering},
 		cache.ScoreCondition{Subset: proto.String(userId)}); err != nil {
 		log.Logger().Error("failed to delete recommend cache", zap.String("user_id", userId), zap.Error(err))
 	}

@@ -200,6 +200,8 @@ func (m *Master) loadDataset() (*ctr.Dataset, *dataset.Dataset, error) {
 
 // runLoadDatasetTask loads dataset.
 func (m *Master) runLoadDatasetTask() error {
+	ctx, cancel := context.WithTimeout(context.Background(), m.Config.Recommend.Collaborative.ModelFitPeriod)
+	defer cancel()
 	_, dataSet, err := m.loadDataset()
 	if err != nil {
 		return errors.Trace(err)
@@ -215,6 +217,9 @@ func (m *Master) runLoadDatasetTask() error {
 	}
 	if err = m.trainClickThroughRatePrediction(m.clickTrainSet, m.clickTestSet); err != nil {
 		log.Logger().Error("failed to train click-through rate prediction model", zap.Error(err))
+	}
+	if err = m.collectGarbage(ctx, dataSet); err != nil {
+		log.Logger().Error("failed to collect garbage in cache", zap.Error(err))
 	}
 	return nil
 }
@@ -338,96 +343,6 @@ func (t *SearchClickModelTask) run(ctx context.Context, j *task.JobsAllocator) e
 	t.lastNumUsers = numUsers
 	t.lastNumFeedback = numFeedback
 	return nil
-}
-
-type CacheGarbageCollectionTask struct {
-	*Master
-}
-
-func NewCacheGarbageCollectionTask(m *Master) *CacheGarbageCollectionTask {
-	return &CacheGarbageCollectionTask{m}
-}
-
-func (t *CacheGarbageCollectionTask) name() string {
-	return TaskCacheGarbageCollection
-}
-
-func (t *CacheGarbageCollectionTask) priority() int {
-	return -t.rankingTrainSet.CountUsers() - t.rankingTrainSet.CountItems()
-}
-
-func (t *CacheGarbageCollectionTask) run(ctx context.Context, j *task.JobsAllocator) error {
-	if t.rankingTrainSet == nil {
-		log.Logger().Debug("dataset has not been loaded")
-		return nil
-	}
-
-	log.Logger().Info("start cache garbage collection")
-	var scanCount, reclaimCount int
-	start := time.Now()
-	err := t.CacheClient.Scan(func(s string) error {
-		splits := strings.Split(s, "/")
-		if len(splits) <= 1 {
-			return nil
-		}
-		scanCount++
-		switch splits[0] {
-		case cache.UserToUser, cache.UserToUserDigest,
-			cache.OfflineRecommend, cache.OfflineRecommendDigest, cache.CollaborativeRecommend,
-			cache.LastModifyUserTime, cache.UserToUserUpdateTime, cache.LastUpdateUserRecommendTime:
-			userId := splits[1]
-			// check user in dataset
-			if t.rankingTrainSet != nil && t.rankingTrainSet.GetUserDict().Id(userId) >= 0 {
-				return nil
-			}
-			// check user in database
-			_, err := t.DataClient.GetUser(ctx, userId)
-			if !errors.Is(err, errors.NotFound) {
-				if err != nil {
-					log.Logger().Error("failed to load user", zap.String("user_id", userId), zap.Error(err))
-				}
-				return err
-			}
-			// delete user cache
-			switch splits[0] {
-			case cache.UserToUserDigest, cache.OfflineRecommendDigest,
-				cache.LastModifyUserTime, cache.UserToUserUpdateTime, cache.LastUpdateUserRecommendTime:
-				err = t.CacheClient.Delete(ctx, s)
-			}
-			if err != nil {
-				return errors.Trace(err)
-			}
-			reclaimCount++
-		case cache.ItemToItem, cache.ItemToItemDigest, cache.ItemToItemUpdateTime, cache.LastModifyItemTime:
-			itemId := splits[1]
-			// check item in dataset
-			if t.rankingTrainSet != nil && t.rankingTrainSet.GetItemDict().Id(itemId) >= 0 {
-				return nil
-			}
-			// check item in database
-			_, err := t.DataClient.GetItem(ctx, itemId)
-			if !errors.Is(err, errors.NotFound) {
-				if err != nil {
-					log.Logger().Error("failed to load item", zap.String("item_id", itemId), zap.Error(err))
-				}
-				return err
-			}
-			// delete item cache
-			switch splits[0] {
-			case cache.ItemToItemDigest, cache.ItemToItemUpdateTime, cache.LastModifyItemTime:
-				err = t.CacheClient.Delete(ctx, s)
-			}
-			if err != nil {
-				return errors.Trace(err)
-			}
-			reclaimCount++
-		}
-		return nil
-	})
-	CacheScannedTotal.Set(float64(scanCount))
-	CacheReclaimedTotal.Set(float64(reclaimCount))
-	CacheScannedSeconds.Set(time.Since(start).Seconds())
-	return errors.Trace(err)
 }
 
 // LoadDataFromDatabase loads dataset from data store.
@@ -1136,4 +1051,58 @@ func (m *Master) trainClickThroughRatePrediction(trainSet, testSet *ctr.Dataset)
 			zap.Any("click_model_params", m.localCache.ClickModel.GetParams()))
 	}
 	return nil
+}
+
+func (m *Master) collectGarbage(ctx context.Context, dataSet *dataset.Dataset) error {
+	_, span := m.tracer.Start(context.Background(), "Collect Garbage in Cache", 1)
+	defer span.End()
+	err := m.CacheClient.ScanScores(ctx, func(collection, id, subset string, timestamp time.Time) error {
+		switch collection {
+		case cache.NonPersonalized:
+			if subset != cache.Popular && subset != cache.Latest && !lo.ContainsBy(m.Config.Recommend.NonPersonalized, func(cfg config.NonPersonalizedConfig) bool {
+				return cfg.Name == subset
+			}) {
+				return m.CacheClient.DeleteScores(ctx, []string{cache.NonPersonalized}, cache.ScoreCondition{
+					Subset: lo.ToPtr(subset),
+				})
+			}
+		case cache.UserToUser:
+			splits := strings.Split(subset, "/")
+			if len(splits) != 2 {
+				log.Logger().Error("invalid subset", zap.String("subset", subset))
+				return nil
+			}
+			if dataSet.GetUserDict().Id(splits[1]) == base.NotId || !lo.ContainsBy(m.Config.Recommend.UserToUser, func(cfg config.UserToUserConfig) bool {
+				return cfg.Name == splits[0]
+			}) {
+				return m.CacheClient.DeleteScores(ctx, []string{cache.UserToUser}, cache.ScoreCondition{
+					Subset: lo.ToPtr(subset),
+					Before: lo.ToPtr(dataSet.GetTimestamp()),
+				})
+			}
+		case cache.ItemToItem:
+			splits := strings.Split(subset, "/")
+			if len(splits) != 2 {
+				log.Logger().Error("invalid subset", zap.String("subset", subset))
+				return nil
+			}
+			if dataSet.GetItemDict().Id(splits[1]) == base.NotId || !lo.ContainsBy(m.Config.Recommend.ItemToItem, func(cfg config.ItemToItemConfig) bool {
+				return cfg.Name == splits[0]
+			}) {
+				return m.CacheClient.DeleteScores(ctx, []string{cache.ItemToItem}, cache.ScoreCondition{
+					Subset: lo.ToPtr(subset),
+					Before: lo.ToPtr(dataSet.GetTimestamp()),
+				})
+			}
+		case cache.CollaborativeFiltering:
+			if dataSet.GetUserDict().Id(subset) == base.NotId {
+				return m.CacheClient.DeleteScores(ctx, []string{cache.CollaborativeFiltering}, cache.ScoreCondition{
+					Subset: lo.ToPtr(subset),
+					Before: lo.ToPtr(dataSet.GetTimestamp()),
+				})
+			}
+		}
+		return nil
+	})
+	return errors.Trace(err)
 }

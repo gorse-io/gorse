@@ -912,7 +912,7 @@ func (s *RestServer) RecommendOffline(ctx *recommendContext) error {
 func (s *RestServer) RecommendCollaborative(ctx *recommendContext) error {
 	if len(ctx.results) < ctx.n {
 		start := time.Now()
-		collaborativeRecommendation, err := s.CacheClient.SearchScores(ctx.context, cache.CollaborativeRecommend, ctx.userId, ctx.categories, 0, s.Config.Recommend.CacheSize)
+		collaborativeRecommendation, err := s.CacheClient.SearchScores(ctx.context, cache.CollaborativeFiltering, ctx.userId, ctx.categories, 0, s.Config.Recommend.CacheSize)
 		if err != nil {
 			return errors.Trace(err)
 		}
