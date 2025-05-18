@@ -1456,13 +1456,13 @@ func (suite *ServerTestSuite) TestGetRecommendsFallbackPreCached() {
 		{Id: "112", Score: 88, Categories: []string{"*"}}})
 	assert.NoError(t, err)
 	// insert collaborative filtering
-	err = suite.CacheClient.AddScores(ctx, cache.CollaborativeRecommend, "0", []cache.Score{
+	err = suite.CacheClient.AddScores(ctx, cache.CollaborativeFiltering, "0", []cache.Score{
 		{Id: "13", Score: 79, Categories: []string{""}},
 		{Id: "14", Score: 78, Categories: []string{""}},
 		{Id: "15", Score: 77, Categories: []string{""}},
 		{Id: "16", Score: 76, Categories: []string{""}}})
 	assert.NoError(t, err)
-	err = suite.CacheClient.AddScores(ctx, cache.CollaborativeRecommend, "0", []cache.Score{
+	err = suite.CacheClient.AddScores(ctx, cache.CollaborativeFiltering, "0", []cache.Score{
 		{Id: "113", Score: 79, Categories: []string{"*"}},
 		{Id: "114", Score: 78, Categories: []string{"*"}},
 		{Id: "115", Score: 77, Categories: []string{"*"}},
