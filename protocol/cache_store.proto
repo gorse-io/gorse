@@ -160,6 +160,15 @@ message UpdateScoresRequest {
 
 message UpdateScoresResponse {}
 
+message ScanScoresRequest {}
+
+message ScanScoresResponse {
+  string collection = 1;
+  string id = 2;
+  string subset = 3;
+  google.protobuf.Timestamp timestamp = 4;
+}
+
 message AddTimeSeriesPointsRequest {
   repeated TimeSeriesPoint points = 1;
 }
@@ -193,6 +202,7 @@ service CacheStore {
   rpc SearchScores(SearchScoresRequest) returns (SearchScoresResponse) {}
   rpc DeleteScores(DeleteScoresRequest) returns (DeleteScoresResponse) {}
   rpc UpdateScores(UpdateScoresRequest) returns (UpdateScoresResponse) {}
+  rpc ScanScores(ScanScoresRequest) returns (stream ScanScoresResponse) {}
   rpc AddTimeSeriesPoints(AddTimeSeriesPointsRequest) returns (AddTimeSeriesPointsResponse) {}
   rpc GetTimeSeriesPoints(GetTimeSeriesPointsRequest) returns (GetTimeSeriesPointsResponse) {}
 }

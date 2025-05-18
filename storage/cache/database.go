@@ -46,10 +46,7 @@ import (
 )
 
 const (
-	// CollaborativeRecommend is sorted set of collaborative filtering recommendations for each user.
-	//  Global recommendation      - collaborative_recommend/{user_id}
-	//  Categorized recommendation - collaborative_recommend/{user_id}/{category}
-	CollaborativeRecommend = "collaborative_recommend" // collaborative filtering recommendation for each user
+	CollaborativeFiltering = "collaborative_recommend"
 
 	// OfflineRecommend is sorted set of offline recommendation for each user.
 	//  Global recommendation      - offline_recommend/{user_id}
@@ -281,6 +278,7 @@ type Database interface {
 	SearchScores(ctx context.Context, collection, subset string, query []string, begin, end int) ([]Score, error)
 	DeleteScores(ctx context.Context, collection []string, condition ScoreCondition) error
 	UpdateScores(ctx context.Context, collections []string, subset *string, id string, patch ScorePatch) error
+	ScanScores(ctx context.Context, callback func(collection, id, subset string, timestamp time.Time) error) error
 
 	AddTimeSeriesPoints(ctx context.Context, points []TimeSeriesPoint) error
 	GetTimeSeriesPoints(ctx context.Context, name string, begin, end time.Time, duration time.Duration) ([]TimeSeriesPoint, error)

@@ -537,6 +537,25 @@ func (db *SQLDatabase) DeleteScores(ctx context.Context, collections []string, c
 	return db.gormDB.WithContext(ctx).Delete(&SQLDocument{}, append([]any{builder.String()}, args...)...).Error
 }
 
+func (db *SQLDatabase) ScanScores(ctx context.Context, callback func(collection, id, subset string, timestamp time.Time) error) error {
+	rows, err := db.gormDB.WithContext(ctx).Table(db.DocumentTable()).Select("collection, id, subset, timestamp").Rows()
+	if err != nil {
+		return errors.Trace(err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var collection, id, subset string
+		var timestamp time.Time
+		if err = rows.Scan(&collection, &id, &subset, &timestamp); err != nil {
+			return errors.Trace(err)
+		}
+		if err = callback(collection, id, subset, timestamp); err != nil {
+			return errors.Trace(err)
+		}
+	}
+	return nil
+}
+
 func (db *SQLDatabase) AddTimeSeriesPoints(ctx context.Context, points []TimeSeriesPoint) error {
 	if len(points) == 0 {
 		return nil
