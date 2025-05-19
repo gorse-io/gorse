@@ -16,6 +16,7 @@ package nn
 
 import (
 	"github.com/chewxy/math32"
+	"github.com/zhenghaoz/gorse/common/floats"
 )
 
 type Optimizer interface {
@@ -42,6 +43,7 @@ func (o *baseOptimizer) SetWeightDecay(wd float32) {
 type SGD struct {
 	baseOptimizer
 	lr float32
+	b  []float32
 }
 
 func NewSGD(params []*Tensor, lr float32) Optimizer {
@@ -53,9 +55,13 @@ func NewSGD(params []*Tensor, lr float32) Optimizer {
 
 func (s *SGD) Step() {
 	for _, p := range s.params {
-		for i := range p.data {
-			p.data[i] -= s.lr * (p.grad.data[i] + p.data[i]*s.wd)
+		if len(s.b) < len(p.data) {
+			s.b = make([]float32, len(p.data))
 		}
+		b := s.b[:len(p.data)]
+		floats.MulConstTo(p.data, s.wd, b)
+		floats.Add(b, p.grad.data)
+		floats.MulConstAddTo(b, -s.lr, p.data)
 	}
 }
 
