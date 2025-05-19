@@ -24,12 +24,6 @@ func _mm512_mul_const(a, b unsafe.Pointer, n int64)
 func _mm512_mul_to(a, b, c unsafe.Pointer, n int64)
 
 //go:noescape
-func _mm512_div_to(a, b, c unsafe.Pointer, n int64)
-
-//go:noescape
-func _mm512_sqrt_to(a, b unsafe.Pointer, n int64)
-
-//go:noescape
 func _mm512_dot(a, b unsafe.Pointer, n int64) (result float32)
 
 //go:noescape
