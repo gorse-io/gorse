@@ -48,7 +48,6 @@ func TestFactorizationMachines_Classification_Frappe(t *testing.T) {
 }
 
 func TestFactorizationMachines_Classification_MovieLens(t *testing.T) {
-	t.Skip("Skip time-consuming test")
 	// python .\model.py ml-tag -dim 8 -iter 10 -learn_rate 0.01 -regular 0.0001
 	train, test, err := LoadDataFromBuiltIn("ml-tag")
 	assert.NoError(t, err)

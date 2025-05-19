@@ -120,11 +120,9 @@ func (a *Adam) Step() {
 		floats.Sub(b2, v.data)
 		floats.MulConstAddTo(b2, 1-a.beta2, v.data)
 		// param.data -= self.lr * m / (xp.sqrt(v) + eps)
-		copy(b2, v.data)
-		floats.Sqrt(b2)
+		floats.SqrtTo(v.data, b2)
 		floats.AddConst(b2, a.eps)
-		copy(b1, m.data)
-		floats.Div(b1, b2)
+		floats.DivTo(m.data, b2, b1)
 		floats.MulConstAddTo(b1, -lr, p.data)
 	}
 }

@@ -94,6 +94,14 @@ func (feature Feature) mulTo(a, b, c []float32) {
 	}
 }
 
+func DivTo(a, b, c []float32) {
+	_mm256_div_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), unsafe.Pointer(&c[0]), int64(len(a)))
+}
+
+func SqrtTo(a, b []float32) {
+	_mm256_sqrt_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), int64(len(a)))
+}
+
 func (feature Feature) mulConst(a []float32, b float32) {
 	if feature&AVX512 == AVX512 {
 		_mm512_mul_const(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), int64(len(a)))
