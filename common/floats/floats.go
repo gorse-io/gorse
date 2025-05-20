@@ -58,6 +58,12 @@ func mulConst(a []float32, b float32) {
 	}
 }
 
+func divTo(a, b, c []float32) {
+	for i := range a {
+		c[i] = a[i] / b[i]
+	}
+}
+
 // MatZero fills zeros in a matrix of 32-bit floats.
 func MatZero(x [][]float32) {
 	for i := range x {
@@ -166,6 +172,13 @@ func AddConst(dst []float32, c float32) {
 	for i := range dst {
 		dst[i] += c
 	}
+}
+
+func DivTo(a, b, c []float32) {
+	if len(a) != len(b) || len(a) != len(c) {
+		panic("floats: slice lengths do not match")
+	}
+	feature.divTo(a, b, c)
 }
 
 func Sqrt(a []float32) {

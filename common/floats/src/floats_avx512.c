@@ -133,6 +133,37 @@ void _mm512_mul_to(float *a, float *b, float *c, int64_t n)
     }
 }
 
+void _mm512_div_to(float *a, float *b, float *c, int64_t n)
+{
+    int epoch = n / 16;
+    int remain = n % 16;
+    for (int i = 0; i < epoch; i++)
+    {
+        __m512 v1 = _mm512_loadu_ps(a);
+        __m512 v2 = _mm512_loadu_ps(b);
+        __m512 v = _mm512_div_ps(v1, v2);
+        _mm512_storeu_ps(c, v);
+        a += 16;
+        b += 16;
+        c += 16;
+    }
+    if (remain >= 8)
+    {
+        __m256 v1 = _mm256_loadu_ps(a);
+        __m256 v2 = _mm256_loadu_ps(b);
+        __m256 v = _mm256_div_ps(v1, v2);
+        _mm256_storeu_ps(c, v);
+        a += 8;
+        b += 8;
+        c += 8;
+        remain -= 8;
+    }
+    for (int i = 0; i < remain; i++)
+    {
+        c[i] = a[i] / b[i];
+    }
+}
+
 inline __attribute__((always_inline)) float dot(float *a, float *b, int64_t n)
 {
     int epoch = n / 16;

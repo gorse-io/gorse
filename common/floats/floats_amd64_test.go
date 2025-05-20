@@ -143,6 +143,24 @@ func BenchmarkMulTo(b *testing.B) {
 	}
 }
 
+func BenchmarkDivTo(b *testing.B) {
+	for _, feat := range []Feature{0, AVX} {
+		b.Run(feat.String(), func(b *testing.B) {
+			for i := 16; i <= 128; i *= 2 {
+				b.Run(strconv.Itoa(i), func(b *testing.B) {
+					v1 := initializeFloat32Array(i)
+					v2 := initializeFloat32Array(i)
+					v3 := make([]float32, i)
+					b.ResetTimer()
+					for i := 0; i < b.N; i++ {
+						feat.divTo(v1, v2, v3)
+					}
+				})
+			}
+		})
+	}
+}
+
 func BenchmarkMM(b *testing.B) {
 	for _, transA := range []bool{false, true} {
 		for _, transB := range []bool{false, true} {

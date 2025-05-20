@@ -131,6 +131,15 @@ func TestAddConst(t *testing.T) {
 	assert.Equal(t, []float32{3, 4, 5, 6}, a)
 }
 
+func TestDivTo(t *testing.T) {
+	a := []float32{1, 4, 9, 16}
+	b := []float32{1, 2, 3, 4}
+	c := make([]float32, 4)
+	DivTo(a, b, c)
+	assert.Equal(t, []float32{1, 2, 3, 4}, c)
+	assert.Panics(t, func() { DivTo([]float32{1}, nil, nil) })
+}
+
 func TestSqrt(t *testing.T) {
 	a := []float32{1, 4, 9, 16}
 	Sqrt(a)
@@ -269,6 +278,16 @@ func (suite *SIMDTestSuite) TestMulConst() {
 	c := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200}
 	mulConst(c, 2)
 	assert.Equal(suite.T(), c, b)
+}
+
+func (suite *SIMDTestSuite) TestDivTo() {
+	a := []float32{1, 4, 9, 16, 25, 36, 49, 64, 81, 100, 121, 144, 169, 196, 225, 256, 289, 324, 361, 400}
+	b := []float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20}
+	c := make([]float32, len(a))
+	suite.divTo(a, b, c)
+	d := make([]float32, len(a))
+	divTo(a, b, d)
+	assert.Equal(suite.T(), c, d)
 }
 
 func (suite *SIMDTestSuite) TestDot() {

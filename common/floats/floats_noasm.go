@@ -33,6 +33,10 @@ func (implementation) mulConst(a []float32, b float32) {
 	mulConst(a, b)
 }
 
+func (implementation) divTo(a, b, c []float32) {
+	divTo(a, b, c)
+}
+
 func (implementation) dot(a, b []float32) float32 {
 	return dot(a, b)
 }
