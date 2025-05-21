@@ -76,6 +76,16 @@ func (feature Feature) mulTo(a, b, c []float32) {
 	}
 }
 
+func (feature Feature) divTo(a, b, c []float32) {
+	// TODO: use SIMD for division
+	divTo(a, b, c)
+}
+
+func (feature Feature) sqrtTo(a, b []float32) {
+	// TODO: use SIMD for square root
+	sqrtTo(a, b)
+}
+
 func (feature Feature) mulConst(a []float32, b float32) {
 	if feature&ASIMD == ASIMD {
 		vmul_const(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), int64(len(a)))
