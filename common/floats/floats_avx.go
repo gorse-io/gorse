@@ -26,6 +26,9 @@ func _mm256_mul_to(a, b, c unsafe.Pointer, n int64)
 func _mm256_div_to(a, b, c unsafe.Pointer, n int64)
 
 //go:noescape
+func _mm256_sqrt_to(a, b unsafe.Pointer, n int64)
+
+//go:noescape
 func _mm256_dot(a, b unsafe.Pointer, n int64) (result float32)
 
 //go:noescape

@@ -114,6 +114,16 @@ func (feature Feature) divTo(a, b, c []float32) {
 	}
 }
 
+func (feature Feature) sqrtTo(a, b []float32) {
+	if feature&AVX512 == AVX512 {
+		_mm512_sqrt_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), int64(len(a)))
+	} else if feature&AVX == AVX {
+		_mm256_sqrt_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), int64(len(a)))
+	} else {
+		sqrtTo(a, b)
+	}
+}
+
 func (feature Feature) dot(a, b []float32) float32 {
 	if feature&AVX512 == AVX512 {
 		return _mm512_dot(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), int64(len(a)))

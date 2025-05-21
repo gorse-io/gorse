@@ -37,6 +37,10 @@ func (implementation) divTo(a, b, c []float32) {
 	divTo(a, b, c)
 }
 
+func (implementation) sqrtTo(a, b []float32) {
+	sqrtTo(a, b)
+}
+
 func (implementation) dot(a, b []float32) float32 {
 	return dot(a, b)
 }

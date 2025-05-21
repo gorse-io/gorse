@@ -140,6 +140,14 @@ func TestDivTo(t *testing.T) {
 	assert.Panics(t, func() { DivTo([]float32{1}, nil, nil) })
 }
 
+func TestSqrtTo(t *testing.T) {
+	a := []float32{1, 4, 9, 16}
+	b := make([]float32, 4)
+	SqrtTo(a, b)
+	assert.Equal(t, []float32{1, 2, 3, 4}, b)
+	assert.Panics(t, func() { SqrtTo(nil, nil) })
+}
+
 func TestSqrt(t *testing.T) {
 	a := []float32{1, 4, 9, 16}
 	Sqrt(a)
@@ -288,6 +296,15 @@ func (suite *SIMDTestSuite) TestDivTo() {
 	d := make([]float32, len(a))
 	divTo(a, b, d)
 	assert.Equal(suite.T(), c, d)
+}
+
+func (suite *SIMDTestSuite) TestSqrtTo() {
+	a := []float32{1, 4, 9, 16, 25, 36, 49, 64, 81, 100, 121, 144, 169, 196, 225, 256, 289, 324, 361, 400}
+	b := make([]float32, len(a))
+	suite.sqrtTo(a, b)
+	c := make([]float32, len(a))
+	sqrtTo(a, c)
+	assert.Equal(suite.T(), b, c)
 }
 
 func (suite *SIMDTestSuite) TestDot() {
