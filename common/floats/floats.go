@@ -34,6 +34,12 @@ func euclidean(a, b []float32) (ret float32) {
 	return math32.Sqrt(ret)
 }
 
+func subTo(a, b, c []float32) {
+	for i := range a {
+		c[i] = a[i] - b[i]
+	}
+}
+
 func mulTo(a, b, c []float32) {
 	for i := range a {
 		c[i] = a[i] * b[i]

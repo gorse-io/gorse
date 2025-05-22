@@ -25,6 +25,10 @@ func (implementation) mulConstTo(a []float32, b float32, c []float32) {
 	mulConstTo(a, b, c)
 }
 
+func (implementation) subTo(a, b, c []float32) {
+	subTo(a, b, c)
+}
+
 func (implementation) mulTo(a, b, c []float32) {
 	mulTo(a, b, c)
 }

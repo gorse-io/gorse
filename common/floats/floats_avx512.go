@@ -20,6 +20,9 @@ func _mm512_mul_const_to(a, b, c unsafe.Pointer, n int64)
 func _mm512_mul_const(a, b unsafe.Pointer, n int64)
 
 //go:noescape
+func _mm512_sub_to(a, b, c unsafe.Pointer, n int64)
+
+//go:noescape
 func _mm512_mul_to(a, b, c unsafe.Pointer, n int64)
 
 //go:noescape
