@@ -145,7 +145,7 @@ func TestSqrtTo(t *testing.T) {
 	b := make([]float32, 4)
 	SqrtTo(a, b)
 	assert.Equal(t, []float32{1, 2, 3, 4}, b)
-	assert.Panics(t, func() { SqrtTo(nil, nil) })
+	assert.Panics(t, func() { SqrtTo([]float32{1}, nil) })
 }
 
 func TestSqrt(t *testing.T) {
@@ -198,6 +198,13 @@ func (suite *NativeTestSuite) TestMulConstTo() {
 	target := []float32{0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20}
 	mulConstTo(a, 2, dst)
 	suite.Equal(target, dst)
+}
+
+func (suite *NativeTestSuite) TestSub() {
+	a := []float32{1, 2, 3, 4}
+	b := []float32{5, 6, 7, 8}
+	sub(a, b)
+	suite.Equal([]float32{-4, -4, -4, -4}, a)
 }
 
 func (suite *NativeTestSuite) TestSubTo() {
@@ -294,7 +301,16 @@ func (suite *SIMDTestSuite) TestMulConstTo() {
 	assert.Equal(suite.T(), c, b)
 }
 
-func (suite *SIMDTestSuite) SubTo() {
+func (suite *SIMDTestSuite) TestSub() {
+	a := []float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20}
+	b := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200}
+	suite.sub(a, b)
+	c := []float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20}
+	sub(c, b)
+	suite.Equal(c, a)
+}
+
+func (suite *SIMDTestSuite) TestSubTo() {
 	a := []float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20}
 	b := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200}
 	c := make([]float32, len(a))

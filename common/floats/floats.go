@@ -34,6 +34,12 @@ func euclidean(a, b []float32) (ret float32) {
 	return math32.Sqrt(ret)
 }
 
+func sub(a, b []float32) {
+	for i := range a {
+		a[i] -= b[i]
+	}
+}
+
 func subTo(a, b, c []float32) {
 	for i := range a {
 		c[i] = a[i] - b[i]
@@ -139,9 +145,7 @@ func Sub(dst, s []float32) {
 	if len(dst) != len(s) {
 		panic("floats: slice lengths do not match")
 	}
-	for i := range dst {
-		dst[i] -= s[i]
-	}
+	feature.sub(dst, s)
 }
 
 // MulConstTo multiplies a vector and a const, then saves the result in dst: dst = a * c

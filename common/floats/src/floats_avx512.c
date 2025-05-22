@@ -102,6 +102,25 @@ void _mm512_mul_const(float *a, float *b, int64_t n)
     }
 }
 
+void _mm512_sub(float *a, float *b, int64_t n)
+{
+    int epoch = n / 16;
+    int remain = n % 16;
+    for (int i = 0; i < epoch; i++)
+    {
+        __m512 v1 = _mm512_loadu_ps(a);
+        __m512 v2 = _mm512_loadu_ps(b);
+        __m512 v = _mm512_sub_ps(v1, v2);
+        _mm512_storeu_ps(a, v);
+        a += 16;
+        b += 16;
+    }
+    for (int i = 0; i < remain; i++)
+    {
+        a[i] -= b[i];
+    }
+}
+
 void _mm512_sub_to(float *a, float *b, float *c, int64_t n)
 {
     int epoch = n / 16;

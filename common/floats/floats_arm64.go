@@ -68,6 +68,16 @@ func (feature Feature) mulConstTo(a []float32, b float32, c []float32) {
 	}
 }
 
+func (feature Feature) sub(a, b []float32) {
+	// TODO: use SIMD for subtraction
+	sub(a, b)
+}
+
+func (feature Feature) subTo(a, b, c []float32) {
+	// TODO: use SIMD for subtraction
+	subTo(a, b, c)
+}
+
 func (feature Feature) mulTo(a, b, c []float32) {
 	if feature&ASIMD == ASIMD {
 		vmul_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), unsafe.Pointer(&c[0]), int64(len(a)))
