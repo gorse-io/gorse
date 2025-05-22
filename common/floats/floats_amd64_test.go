@@ -125,6 +125,22 @@ func BenchmarkMulConstTo(b *testing.B) {
 	}
 }
 
+func BenchmarkAddConst(b *testing.B) {
+	for _, feat := range []Feature{0, AVX} {
+		b.Run(feat.String(), func(b *testing.B) {
+			for i := 16; i <= 128; i *= 2 {
+				b.Run(strconv.Itoa(i), func(b *testing.B) {
+					v1 := initializeFloat32Array(i)
+					b.ResetTimer()
+					for i := 0; i < b.N; i++ {
+						feat.addConst(v1, 2)
+					}
+				})
+			}
+		})
+	}
+}
+
 func BenchmarkSub(b *testing.B) {
 	for _, feat := range []Feature{0, AVX} {
 		b.Run(feat.String(), func(b *testing.B) {

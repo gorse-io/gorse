@@ -20,6 +20,9 @@ func _mm256_mul_const_to(a, b, c unsafe.Pointer, n int64)
 func _mm256_mul_const(a, b unsafe.Pointer, n int64)
 
 //go:noescape
+func _mm256_add_const(a, b unsafe.Pointer, n int64)
+
+//go:noescape
 func _mm256_sub(a, b unsafe.Pointer, n int64)
 
 //go:noescape

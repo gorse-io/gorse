@@ -68,6 +68,11 @@ func (feature Feature) mulConstTo(a []float32, b float32, c []float32) {
 	}
 }
 
+func (feature Feature) addConst(a []float32, b float32) {
+	// TODO: use SIMD for addition
+	addConst(a, b)
+}
+
 func (feature Feature) sub(a, b []float32) {
 	// TODO: use SIMD for subtraction
 	sub(a, b)

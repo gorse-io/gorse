@@ -34,6 +34,12 @@ func euclidean(a, b []float32) (ret float32) {
 	return math32.Sqrt(ret)
 }
 
+func addConst(a []float32, c float32) {
+	for i := range a {
+		a[i] += c
+	}
+}
+
 func sub(a, b []float32) {
 	for i := range a {
 		a[i] -= b[i]

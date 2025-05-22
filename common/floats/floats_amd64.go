@@ -84,6 +84,16 @@ func (feature Feature) mulConstTo(a []float32, b float32, c []float32) {
 	}
 }
 
+func (feature Feature) addConst(a []float32, b float32) {
+	if feature&AVX512 == AVX512 {
+		_mm512_add_const(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), int64(len(a)))
+	} else if feature&AVX == AVX {
+		_mm256_add_const(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), int64(len(a)))
+	} else {
+		addConst(a, b)
+	}
+}
+
 func (feature Feature) sub(a, b []float32) {
 	if feature&AVX512 == AVX512 {
 		_mm512_sub(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), int64(len(a)))
