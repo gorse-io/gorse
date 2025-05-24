@@ -478,17 +478,17 @@ func (bpr *BPR) Fit(ctx context.Context, trainSet, valSet dataset.CFSplit, confi
 			copy(negativeItemFactor[workerId], bpr.ItemFactor[negIndex])
 			// Update positive item latent factor: +w_u
 			floats.MulConstTo(userFactor[workerId], grad, temp[workerId])
-			floats.MulConstAddTo(positiveItemFactor[workerId], -bpr.reg, temp[workerId])
-			floats.MulConstAddTo(temp[workerId], bpr.lr, bpr.ItemFactor[posIndex])
+			floats.MulConstAdd(positiveItemFactor[workerId], -bpr.reg, temp[workerId])
+			floats.MulConstAdd(temp[workerId], bpr.lr, bpr.ItemFactor[posIndex])
 			// Update negative item latent factor: -w_u
 			floats.MulConstTo(userFactor[workerId], -grad, temp[workerId])
-			floats.MulConstAddTo(negativeItemFactor[workerId], -bpr.reg, temp[workerId])
-			floats.MulConstAddTo(temp[workerId], bpr.lr, bpr.ItemFactor[negIndex])
+			floats.MulConstAdd(negativeItemFactor[workerId], -bpr.reg, temp[workerId])
+			floats.MulConstAdd(temp[workerId], bpr.lr, bpr.ItemFactor[negIndex])
 			// Update user latent factor: h_i-h_j
 			floats.SubTo(positiveItemFactor[workerId], negativeItemFactor[workerId], temp[workerId])
 			floats.MulConst(temp[workerId], grad)
-			floats.MulConstAddTo(userFactor[workerId], -bpr.reg, temp[workerId])
-			floats.MulConstAddTo(temp[workerId], bpr.lr, bpr.UserFactor[userIndex])
+			floats.MulConstAdd(userFactor[workerId], -bpr.reg, temp[workerId])
+			floats.MulConstAdd(temp[workerId], bpr.lr, bpr.UserFactor[userIndex])
 			return nil
 		})
 		fitTime := time.Since(fitStart)

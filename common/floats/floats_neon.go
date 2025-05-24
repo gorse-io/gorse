@@ -11,7 +11,10 @@ package floats
 import "unsafe"
 
 //go:noescape
-func vmul_const_add_to(a, b, c unsafe.Pointer, n int64)
+func vmul_const_add_to(a, b, c, dst unsafe.Pointer, n int64)
+
+//go:noescape
+func vmul_const_add(a, b, c unsafe.Pointer, n int64)
 
 //go:noescape
 func vmul_const_to(a, b, c unsafe.Pointer, n int64)
@@ -20,7 +23,22 @@ func vmul_const_to(a, b, c unsafe.Pointer, n int64)
 func vmul_const(a, b unsafe.Pointer, n int64)
 
 //go:noescape
+func vadd_const(a, b unsafe.Pointer, n int64)
+
+//go:noescape
+func vsub_to(a, b, c unsafe.Pointer, n int64)
+
+//go:noescape
+func vsub(a, b unsafe.Pointer, n int64)
+
+//go:noescape
 func vmul_to(a, b, c unsafe.Pointer, n int64)
+
+//go:noescape
+func vdiv_to(a, b, c unsafe.Pointer, n int64)
+
+//go:noescape
+func vsqrt_to(a, b unsafe.Pointer, n int64)
 
 //go:noescape
 func vdot(a, b unsafe.Pointer, n int64) (result float32)
