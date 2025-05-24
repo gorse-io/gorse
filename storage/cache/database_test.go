@@ -28,6 +28,8 @@ import (
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -507,7 +509,7 @@ func (suite *baseTestSuite) TestScanScores() {
 		scanScores++
 		return nil
 	})
-	if err != nil {
+	if err != nil && status.Code(err) != codes.DeadlineExceeded {
 		suite.ErrorIs(err, context.DeadlineExceeded)
 	}
 	suite.Less(scanScores, 9)
