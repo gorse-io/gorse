@@ -70,7 +70,7 @@ func NewSGD(params []*Tensor, lr float32) Optimizer {
 func (s *SGD) Step() {
 	for _, p := range s.params {
 		b := s.b[:len(p.data)]
-		parts := split(len(p.data), s.jobs, 32)
+		parts := splitSlice(len(p.data), s.jobs, 32)
 		var wg sync.WaitGroup
 		wg.Add(len(parts))
 		for _, part := range parts {
@@ -131,7 +131,7 @@ func (a *Adam) Step() {
 		m, v := a.ms[p], a.vs[p]
 		b1, b2 := a.b1[:len(p.data)], a.b2[:len(p.data)]
 
-		parts := split(len(p.data), a.jobs, 32)
+		parts := splitSlice(len(p.data), a.jobs, 32)
 		var wg sync.WaitGroup
 		wg.Add(len(parts))
 		for _, part := range parts {
@@ -157,9 +157,9 @@ func (a *Adam) Step() {
 	}
 }
 
-// split n-size slice into m parts. Each part is aligned to k elements except the last part. For example:
+// splitSlice n-size slice into m parts. Each part is aligned to k elements except the last part. For example:
 // split(10, 3, 2) = [(0, 4), (4, 8), (8, 10)]
-func split(n, m, k int) []lo.Tuple2[int, int] {
+func splitSlice(n, m, k int) []lo.Tuple2[int, int] {
 	if n <= 0 {
 		return nil
 	}
