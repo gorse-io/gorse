@@ -21,6 +21,8 @@ package blas
 // #include <Accelerate/Accelerate.h>
 import "C"
 
+const Backend = "Accelerate"
+
 type Order int
 
 const (
