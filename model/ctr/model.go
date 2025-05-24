@@ -767,6 +767,7 @@ func (fm *FactorizationMachines) Fit(ctx context.Context, trainSet, testSet data
 		panic("unknown optimizer")
 	}
 	optimizer.SetWeightDecay(fm.reg)
+	optimizer.SetJobs(config.Jobs)
 	for epoch := 1; epoch <= fm.nEpochs; epoch++ {
 		fitStart := time.Now()
 		cost := float32(0)

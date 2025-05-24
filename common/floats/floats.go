@@ -202,9 +202,7 @@ func AddTo(a, b, dst []float32) {
 }
 
 func AddConst(dst []float32, c float32) {
-	for i := range dst {
-		dst[i] += c
-	}
+	feature.addConst(dst, c)
 }
 
 func DivTo(a, b, c []float32) {
