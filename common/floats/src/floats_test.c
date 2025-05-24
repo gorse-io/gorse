@@ -134,11 +134,9 @@ float _mm512_euclidean(float *a, float *b, int64_t n);
 
 MunitResult mm256_mul_const_add_to_test(const MunitParameter params[], void *user_data_or_fixture)
 {
-  float a[kVectorLength], b[kVectorLength], c[kVectorLength], expect[kVectorLength], actual[kVectorLength];
+  float a[kVectorLength], b[kVectorLength], expect[kVectorLength], actual[kVectorLength];
   rand_float(a, kVectorLength);
   rand_float(b, kVectorLength);
-  rand_float(c, kVectorLength);
-  memcpy(expect, actual, sizeof(float) * kVectorLength);
   float d = munit_rand_double();
 
   mul_const_add_to(a, &d, b, expect, kVectorLength);
@@ -200,13 +198,14 @@ MunitResult mm256_sub_to_test(const MunitParameter params[], void *user_data_or_
 
 MunitResult mm256_sub_test(const MunitParameter params[], void *user_data_or_fixture)
 {
-  float a[kVectorLength], b[kVectorLength];
-  rand_float(a, kVectorLength);
+  float expected[kVectorLength], actual[kVectorLength], b[kVectorLength];
   rand_float(b, kVectorLength);
+  rand_float(expected, kVectorLength);
+  memcpy(expected, actual, sizeof(float) * kVectorLength);
 
-  sub(a, b, kVectorLength);
-  _mm256_sub(a, b, kVectorLength);
-  munit_assert_floats_equal(kVectorLength, a, b);
+  sub(expected, b, kVectorLength);
+  _mm256_sub(actual, b, kVectorLength);
+  munit_assert_floats_equal(kVectorLength, expected, actual);
   return MUNIT_OK;
 }
 
@@ -343,13 +342,14 @@ MunitResult mm512_mul_const_test(const MunitParameter params[], void *user_data_
 
 MunitResult mm512_sub_test(const MunitParameter params[], void *user_data_or_fixture)
 {
-  float a[kVectorLength], b[kVectorLength];
-  rand_float(a, kVectorLength);
+  float expected[kVectorLength], actual[kVectorLength], b[kVectorLength];
   rand_float(b, kVectorLength);
+  rand_float(expected, kVectorLength);
+  memcpy(expected, actual, sizeof(float) * kVectorLength);
 
-  sub(a, b, kVectorLength);
-  _mm512_sub(a, b, kVectorLength);
-  munit_assert_floats_equal(kVectorLength, a, b);
+  sub(expected, b, kVectorLength);
+  _mm512_sub(actual, b, kVectorLength);
+  munit_assert_floats_equal(kVectorLength, expected, actual);
   return MUNIT_OK;
 }
 

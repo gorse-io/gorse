@@ -44,7 +44,7 @@ void _mm512_mul_const_add_to(float *a, float *b, float *c, float *dst, int64_t n
     }
     for (int i = 0; i < remain; i++)
     {
-        dst[i] += a[i] * b[0];
+        dst[i] = c[i] + a[i] * b[0];
     }
 }
 
