@@ -64,13 +64,23 @@ func (feature Feature) String() string {
 	return strings.Join(features, "+")
 }
 
-func (feature Feature) mulConstAddTo(a []float32, b float32, c []float32) {
+func (feature Feature) mulConstAddTo(a []float32, b float32, c []float32, dst []float32) {
 	if feature&AVX512 == AVX512 {
-		_mm512_mul_const_add_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), unsafe.Pointer(&c[0]), int64(len(a)))
+		_mm512_mul_const_add_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), unsafe.Pointer(&c[0]), unsafe.Pointer(&dst[0]), int64(len(a)))
 	} else if feature&AVX == AVX {
-		_mm256_mul_const_add_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), unsafe.Pointer(&c[0]), int64(len(a)))
+		_mm256_mul_const_add_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), unsafe.Pointer(&c[0]), unsafe.Pointer(&dst[0]), int64(len(a)))
 	} else {
-		mulConstAddTo(a, b, c)
+		mulConstAddTo(a, b, c, dst)
+	}
+}
+
+func (feature Feature) mulConstAdd(a []float32, b float32, c []float32) {
+	if feature&AVX512 == AVX512 {
+		_mm512_mul_const_add(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), unsafe.Pointer(&c[0]), int64(len(a)))
+	} else if feature&AVX == AVX {
+		_mm256_mul_const_add(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), unsafe.Pointer(&c[0]), int64(len(a)))
+	} else {
+		mulConstAdd(a, b, c)
 	}
 }
 
@@ -81,6 +91,36 @@ func (feature Feature) mulConstTo(a []float32, b float32, c []float32) {
 		_mm256_mul_const_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), unsafe.Pointer(&c[0]), int64(len(a)))
 	} else {
 		mulConstTo(a, b, c)
+	}
+}
+
+func (feature Feature) addConst(a []float32, b float32) {
+	if feature&AVX512 == AVX512 {
+		_mm512_add_const(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), int64(len(a)))
+	} else if feature&AVX == AVX {
+		_mm256_add_const(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), int64(len(a)))
+	} else {
+		addConst(a, b)
+	}
+}
+
+func (feature Feature) sub(a, b []float32) {
+	if feature&AVX512 == AVX512 {
+		_mm512_sub(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), int64(len(a)))
+	} else if feature&AVX == AVX {
+		_mm256_sub(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), int64(len(a)))
+	} else {
+		sub(a, b)
+	}
+}
+
+func (feature Feature) subTo(a, b, c []float32) {
+	if feature&AVX512 == AVX512 {
+		_mm512_sub_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), unsafe.Pointer(&c[0]), int64(len(a)))
+	} else if feature&AVX == AVX {
+		_mm256_sub_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), unsafe.Pointer(&c[0]), int64(len(a)))
+	} else {
+		subTo(a, b, c)
 	}
 }
 
@@ -101,6 +141,26 @@ func (feature Feature) mulConst(a []float32, b float32) {
 		_mm256_mul_const(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), int64(len(a)))
 	} else {
 		mulConst(a, b)
+	}
+}
+
+func (feature Feature) divTo(a, b, c []float32) {
+	if feature&AVX512 == AVX512 {
+		_mm512_div_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), unsafe.Pointer(&c[0]), int64(len(a)))
+	} else if feature&AVX == AVX {
+		_mm256_div_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), unsafe.Pointer(&c[0]), int64(len(a)))
+	} else {
+		divTo(a, b, c)
+	}
+}
+
+func (feature Feature) sqrtTo(a, b []float32) {
+	if feature&AVX512 == AVX512 {
+		_mm512_sqrt_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), int64(len(a)))
+	} else if feature&AVX == AVX {
+		_mm256_sqrt_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), int64(len(a)))
+	} else {
+		sqrtTo(a, b)
 	}
 }
 

@@ -21,7 +21,7 @@ func mm(a, b, c []float32, m, n, k int, transA, transB bool) {
 		for i := 0; i < m; i++ {
 			for l := 0; l < k; l++ {
 				// C_l += A_{il} * B_i
-				MulConstAddTo(b[l*n:(l+1)*n], a[i*k+l], c[i*n:(i+1)*n])
+				MulConstAdd(b[l*n:(l+1)*n], a[i*k+l], c[i*n:(i+1)*n])
 			}
 		}
 	} else if !transA && transB {
@@ -34,7 +34,7 @@ func mm(a, b, c []float32, m, n, k int, transA, transB bool) {
 		for i := 0; i < m; i++ {
 			for l := 0; l < k; l++ {
 				// C_j += A_{ji} * B_i
-				MulConstAddTo(b[l*n:(l+1)*n], a[l*m+i], c[i*n:(i+1)*n])
+				MulConstAdd(b[l*n:(l+1)*n], a[l*m+i], c[i*n:(i+1)*n])
 			}
 		}
 	} else {
