@@ -22,6 +22,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -238,6 +239,7 @@ func TestMNIST(t *testing.T) {
 		NewReLU(),
 		NewLinear(1000, 10),
 	)
+	model.SetJobs(runtime.NumCPU())
 	optimizer := NewAdam(model.Parameters(), 0.001)
 
 	const (
