@@ -52,11 +52,11 @@ func (feature Feature) String() string {
 	return strings.Join(features, "+")
 }
 
-func (feature Feature) mulConstAddTo(a []float32, b float32, c []float32) {
+func (feature Feature) mulConstAdd(a []float32, b float32, c []float32) {
 	if feature&ASIMD == ASIMD {
-		vmul_const_add_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), unsafe.Pointer(&c[0]), int64(len(a)))
+		vmul_const_add(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), unsafe.Pointer(&c[0]), int64(len(a)))
 	} else {
-		mulConstAddTo(a, b, c)
+		mulConstAdd(a, b, c)
 	}
 }
 

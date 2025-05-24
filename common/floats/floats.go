@@ -58,7 +58,13 @@ func mulTo(a, b, c []float32) {
 	}
 }
 
-func mulConstAddTo(a []float32, c float32, dst []float32) {
+func mulConstAddTo(a []float32, b float32, c []float32, dst []float32) {
+	for i := range a {
+		dst[i] = a[i]*b + c[i]
+	}
+}
+
+func mulConstAdd(a []float32, c float32, dst []float32) {
 	for i := range a {
 		dst[i] += a[i] * c
 	}
