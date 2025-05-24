@@ -63,6 +63,7 @@ LBB0_6:
 	LONG $0x0258fcc5             // vaddps	(%rdx), %ymm0, %ymm0
 	LONG $0x0111fcc5             // vmovups	%ymm0, (%rcx)
 	LONG $0x20c78348             // addq	$32, %rdi
+	LONG $0x20c28348             // addq	$32, %rdx
 	LONG $0x20c18348             // addq	$32, %rcx
 	LONG $0xf8c08341             // addl	$-8, %r8d
 
@@ -72,34 +73,34 @@ LBB0_8:
 	WORD $0x8944; BYTE $0xc0 // movl	%r8d, %eax
 	LONG $0x01f88341         // cmpl	$1, %r8d
 	JNE  LBB0_14
-	WORD $0xd231             // xorl	%edx, %edx
+	WORD $0x3145; BYTE $0xc0 // xorl	%r8d, %r8d
 	JMP  LBB0_11
 
 LBB0_14:
-	WORD $0x8941; BYTE $0xc0                   // movl	%eax, %r8d
-	LONG $0xfee08141; WORD $0xffff; BYTE $0x7f // andl	$2147483646, %r8d               # imm = 0x7FFFFFFE
-	WORD $0xd231                               // xorl	%edx, %edx
+	WORD $0x8941; BYTE $0xc1                   // movl	%eax, %r9d
+	LONG $0xfee18141; WORD $0xffff; BYTE $0x7f // andl	$2147483646, %r9d               # imm = 0x7FFFFFFE
+	WORD $0x3145; BYTE $0xc0                   // xorl	%r8d, %r8d
 
 LBB0_15:
-	LONG $0x0410fac5; BYTE $0x97               // vmovss	(%rdi,%rdx,4), %xmm0            # xmm0 = mem[0],zero,zero,zero
+	LONG $0x107aa1c4; WORD $0x8704             // vmovss	(%rdi,%r8,4), %xmm0             # xmm0 = mem[0],zero,zero,zero
 	LONG $0x0e10fac5                           // vmovss	(%rsi), %xmm1                   # xmm1 = mem[0],zero,zero,zero
-	LONG $0xa979e2c4; WORD $0x910c             // vfmadd213ss	(%rcx,%rdx,4), %xmm0, %xmm1 # xmm1 = (xmm0 * xmm1) + mem
-	LONG $0x0c11fac5; BYTE $0x91               // vmovss	%xmm1, (%rcx,%rdx,4)
-	LONG $0x4410fac5; WORD $0x0497             // vmovss	4(%rdi,%rdx,4), %xmm0           # xmm0 = mem[0],zero,zero,zero
+	LONG $0xa979a2c4; WORD $0x820c             // vfmadd213ss	(%rdx,%r8,4), %xmm0, %xmm1 # xmm1 = (xmm0 * xmm1) + mem
+	LONG $0x117aa1c4; WORD $0x810c             // vmovss	%xmm1, (%rcx,%r8,4)
+	LONG $0x107aa1c4; WORD $0x8744; BYTE $0x04 // vmovss	4(%rdi,%r8,4), %xmm0            # xmm0 = mem[0],zero,zero,zero
 	LONG $0x0e10fac5                           // vmovss	(%rsi), %xmm1                   # xmm1 = mem[0],zero,zero,zero
-	LONG $0xa979e2c4; WORD $0x914c; BYTE $0x04 // vfmadd213ss	4(%rcx,%rdx,4), %xmm0, %xmm1 # xmm1 = (xmm0 * xmm1) + mem
-	LONG $0x4c11fac5; WORD $0x0491             // vmovss	%xmm1, 4(%rcx,%rdx,4)
-	LONG $0x02c28348                           // addq	$2, %rdx
-	WORD $0x3949; BYTE $0xd0                   // cmpq	%rdx, %r8
+	LONG $0xa979a2c4; WORD $0x824c; BYTE $0x04 // vfmadd213ss	4(%rdx,%r8,4), %xmm0, %xmm1 # xmm1 = (xmm0 * xmm1) + mem
+	LONG $0x117aa1c4; WORD $0x814c; BYTE $0x04 // vmovss	%xmm1, 4(%rcx,%r8,4)
+	LONG $0x02c08349                           // addq	$2, %r8
+	WORD $0x394d; BYTE $0xc1                   // cmpq	%r8, %r9
 	JNE  LBB0_15
 
 LBB0_11:
 	WORD $0x01a8                   // testb	$1, %al
 	JE   LBB0_13
-	LONG $0x0410fac5; BYTE $0x97   // vmovss	(%rdi,%rdx,4), %xmm0            # xmm0 = mem[0],zero,zero,zero
+	LONG $0x107aa1c4; WORD $0x8704 // vmovss	(%rdi,%r8,4), %xmm0             # xmm0 = mem[0],zero,zero,zero
 	LONG $0x0e10fac5               // vmovss	(%rsi), %xmm1                   # xmm1 = mem[0],zero,zero,zero
-	LONG $0xa979e2c4; WORD $0x910c // vfmadd213ss	(%rcx,%rdx,4), %xmm0, %xmm1 # xmm1 = (xmm0 * xmm1) + mem
-	LONG $0x0c11fac5; BYTE $0x91   // vmovss	%xmm1, (%rcx,%rdx,4)
+	LONG $0xa979a2c4; WORD $0x820c // vfmadd213ss	(%rdx,%r8,4), %xmm0, %xmm1 # xmm1 = (xmm0 * xmm1) + mem
+	LONG $0x117aa1c4; WORD $0x810c // vmovss	%xmm1, (%rcx,%r8,4)
 
 LBB0_13:
 	WORD $0x8948; BYTE $0xec // movq	%rbp, %rsp
