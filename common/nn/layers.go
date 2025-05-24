@@ -47,7 +47,7 @@ func NewLinear(in, out int) Layer {
 }
 
 func (l *LinearLayer) Forward(x *Tensor) *Tensor {
-	return Add(MatMul(x, l.W), l.B)
+	return Add(MatMul(x, l.W, false, false, l.jobs), l.B)
 }
 
 func (l *LinearLayer) Parameters() []*Tensor {
@@ -174,11 +174,13 @@ func Save(o any, w io.Writer) error {
 			} else if tp.Kind() == reflect.Struct {
 				for i := 0; i < tp.NumField(); i++ {
 					field := tp.Field(i)
-					newKey := make([]string, len(key))
-					copy(newKey, key)
-					newKey = append(newKey, field.Name)
-					if err := save(reflect.ValueOf(o).Field(i).Interface(), newKey); err != nil {
-						return err
+					if field.IsExported() {
+						newKey := make([]string, len(key))
+						copy(newKey, key)
+						newKey = append(newKey, field.Name)
+						if err := save(reflect.ValueOf(o).Field(i).Interface(), newKey); err != nil {
+							return err
+						}
 					}
 				}
 			} else if tp.Kind() == reflect.Slice {

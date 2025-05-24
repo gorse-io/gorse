@@ -43,7 +43,7 @@ func TestLinearRegression(t *testing.T) {
 
 	w := Zeros(1, 1)
 	b := Zeros(1)
-	predict := func(x *Tensor) *Tensor { return Add(MatMul(x, w), b) }
+	predict := func(x *Tensor) *Tensor { return Add(MatMul(x, w, false, false, 0), b) }
 
 	lr := float32(0.1)
 	for i := 0; i < 100; i++ {

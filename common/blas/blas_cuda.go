@@ -20,6 +20,8 @@ package blas
 // #include "cublas/cublas_sgemm.h"
 import "C"
 
+const Backend = "cuBLAS"
+
 type Order int
 
 const (
