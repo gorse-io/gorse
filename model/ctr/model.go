@@ -23,8 +23,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/zhenghaoz/gorse/dataset"
-
 	"github.com/chewxy/math32"
 	"github.com/juju/errors"
 	"github.com/samber/lo"
@@ -37,6 +35,7 @@ import (
 	"github.com/zhenghaoz/gorse/common/floats"
 	"github.com/zhenghaoz/gorse/common/nn"
 	"github.com/zhenghaoz/gorse/common/parallel"
+	"github.com/zhenghaoz/gorse/dataset"
 	"github.com/zhenghaoz/gorse/model"
 	"go.uber.org/zap"
 	"modernc.org/mathutil"

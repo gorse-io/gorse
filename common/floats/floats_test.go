@@ -96,13 +96,22 @@ func TestMulConstTo(t *testing.T) {
 	assert.Panics(t, func() { MulConstTo(nil, 2, dst) })
 }
 
-func TestMulConstAddTo(t *testing.T) {
+func TestMulConstAdd(t *testing.T) {
 	a := []float32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
 	dst := []float32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
 	target := []float32{0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30}
 	MulConstAdd(a, 2, dst)
 	assert.Equal(t, target, dst)
 	assert.Panics(t, func() { MulConstAdd(nil, 1, dst) })
+}
+
+func TestMulConstAddTo(t *testing.T) {
+	a := []float32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
+	b := []float32{0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20}
+	dst := make([]float32, 11)
+	target := []float32{0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50}
+	MulConstAddTo(a, 3, b, dst)
+	assert.Equal(t, target, dst)
 }
 
 func TestMulAddTo(t *testing.T) {
@@ -206,6 +215,12 @@ func (suite *NativeTestSuite) TestMulConstTo() {
 	target := []float32{0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20}
 	mulConstTo(a, 2, dst)
 	suite.Equal(target, dst)
+}
+
+func (suite *NativeTestSuite) TestAddConst() {
+	a := []float32{1, 2, 3, 4}
+	addConst(a, 2)
+	suite.Equal([]float32{3, 4, 5, 6}, a)
 }
 
 func (suite *NativeTestSuite) TestSub() {
