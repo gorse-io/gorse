@@ -451,14 +451,32 @@ int main(int argc, char *const argv[MUNIT_ARRAY_PARAM(argc + 1)])
 
 #elif defined(__aarch64__)
 
-void vmul_const_add_to(float *a, float *b, float *c, int64_t n);
+void vmul_const_add_to(float *a, float *b, float *c, float *dst, int64_t n);
+void vmul_const_add(float *a, float *b, float *c, int64_t n);
 void vmul_const_to(float *a, float *b, float *c, int64_t n);
 void vmul_const(float *a, float *b, int64_t n);
+void vsub_to(float *a, float *b, float *c, int64_t n);
+void vsub(float *a, float *b, int64_t n);
 void vmul_to(float *a, float *b, float *c, int64_t n);
+void vdiv_to(float *a, float *b, float *c, int64_t n);
+void vsqrt_to(float *a, float *b, int64_t n);
 float vdot(float *a, float *b, int64_t n);
 float veuclidean(float *a, float *b, int64_t n);
 
 MunitResult vmul_const_add_to_test(const MunitParameter params[], void *user_data_or_fixture)
+{
+  float a[kVectorLength], b[kVectorLength], expect[kVectorLength], actual[kVectorLength];
+  rand_float(a, kVectorLength);
+  rand_float(b, kVectorLength);
+  float d = munit_rand_double();
+
+  mul_const_add_to(a, &d, b, expect, kVectorLength);
+  vmul_const_add_to(a, &d, b, actual, kVectorLength);
+  munit_assert_floats_equal(kVectorLength, expect, actual);
+  return MUNIT_OK;
+}
+
+MunitResult vmul_const_add_test(const MunitParameter params[], void *user_data_or_fixture)
 {
   float a[kVectorLength], expect[kVectorLength], actual[kVectorLength];
   rand_float(a, kVectorLength);
@@ -466,8 +484,8 @@ MunitResult vmul_const_add_to_test(const MunitParameter params[], void *user_dat
   memcpy(expect, actual, sizeof(float) * kVectorLength);
   float b = munit_rand_double();
 
-  mul_const_add_to(a, &b, expect, kVectorLength);
-  vmul_const_add_to(a, &b, actual, kVectorLength);
+  mul_const_add(a, &b, expect, kVectorLength);
+  vmul_const_add(a, &b, actual, kVectorLength);
   munit_assert_floats_equal(kVectorLength, expect, actual);
   return MUNIT_OK;
 }
@@ -545,21 +563,20 @@ MunitTest vtests[] = {
 static const MunitSuite vsuite = {
     "v", vtests, NULL, kIteration, MUNIT_SUITE_OPTION_NONE};
 
-void svmul_const_add_to(float *a, float *b, float *c, long n);
+void svmul_const_add_to(float *a, float *b, float *c, float *dst, long n);
 void svmul_const_to(float *a, float *b, float *c, long n);
 void svmul_const(float *a, float *b, long n);
 void svmul_to(float *a, float *b, float *c, long n);
 
 MunitResult svmul_const_add_to_test(const MunitParameter params[], void *user_data_or_fixture)
 {
-  float a[kVectorLength], expect[kVectorLength], actual[kVectorLength];
+  float a[kVectorLength], b[kVectorLength], expect[kVectorLength], actual[kVectorLength];
   rand_float(a, kVectorLength);
-  rand_float(expect, kVectorLength);
-  memcpy(expect, actual, sizeof(float) * kVectorLength);
-  float b = munit_rand_double();
+  rand_float(b, kVectorLength);
+  float d = munit_rand_double();
 
-  mul_const_add_to(a, &b, expect, kVectorLength);
-  svmul_const_add_to(a, &b, actual, kVectorLength);
+  mul_const_add_to(a, &d, b, expect, kVectorLength);
+  svmul_const_add_to(a, &d, b, actual, kVectorLength);
   munit_assert_floats_equal(kVectorLength, expect, actual);
   return MUNIT_OK;
 }
