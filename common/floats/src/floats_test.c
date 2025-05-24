@@ -6,7 +6,7 @@ const size_t kIteration = 1;
 
 /* no simd */
 
-void mul_const_add_to(float *a, float *b, float *c, int64_t n)
+void mul_const_add(float *a, float *b, float *c, int64_t n)
 {
   for (int64_t i = 0; i < n; i++)
   {
@@ -35,6 +35,14 @@ void sub_to(float *a, float *b, float *c, int64_t n)
   for (int64_t i = 0; i < n; i++)
   {
     c[i] = a[i] - b[i];
+  }
+}
+
+void sub(float *a, float *b, int64_t n)
+{
+  for (int64_t i = 0; i < n; i++)
+  {
+    a[i] -= b[i];
   }
 }
 
@@ -92,27 +100,29 @@ int rand_float(float *a, int64_t n)
 
 #if defined(__x86_64__)
 
-void _mm256_mul_const_add_to(float *a, float *b, float *c, int64_t n);
+void _mm256_mul_const_add(float *a, float *b, float *c, int64_t n);
 void _mm256_mul_const_to(float *a, float *b, float *c, int64_t n);
 void _mm256_mul_const(float *a, float *b, int64_t n);
 void _mm256_sub_to(float *a, float *b, float *c, int64_t n);
+void _mm256_sub(float *a, float *b, int64_t n);
 void _mm256_mul_to(float *a, float *b, float *c, int64_t n);
 void _mm256_div_to(float *a, float *b, float *c, int64_t n);
 void _mm256_sqrt_to(float *a, float *b, int64_t n);
 float _mm256_dot(float *a, float *b, int64_t n);
 float _mm256_euclidean(float *a, float *b, int64_t n);
 
-void _mm512_mul_const_add_to(float *a, float *b, float *c, int64_t n);
+void _mm512_mul_const_add(float *a, float *b, float *c, int64_t n);
 void _mm512_mul_const_to(float *a, float *b, float *c, int64_t n);
 void _mm512_mul_const(float *a, float *b, int64_t n);
 void _mm512_sub_to(float *a, float *b, float *c, int64_t n);
+void _mm512_sub(float *a, float *b, int64_t n);
 void _mm512_mul_to(float *a, float *b, float *c, int64_t n);
 void _mm512_div_to(float *a, float *b, float *c, int64_t n);
 void _mm512_sqrt_to(float *a, float *b, int64_t n);
 float _mm512_dot(float *a, float *b, int64_t n);
 float _mm512_euclidean(float *a, float *b, int64_t n);
 
-MunitResult mm256_mul_const_add_to_test(const MunitParameter params[], void *user_data_or_fixture)
+MunitResult mm256_mul_const_add_test(const MunitParameter params[], void *user_data_or_fixture)
 {
   float a[kVectorLength], expect[kVectorLength], actual[kVectorLength];
   rand_float(a, kVectorLength);
@@ -120,8 +130,8 @@ MunitResult mm256_mul_const_add_to_test(const MunitParameter params[], void *use
   memcpy(expect, actual, sizeof(float) * kVectorLength);
   float b = munit_rand_double();
 
-  mul_const_add_to(a, &b, expect, kVectorLength);
-  _mm256_mul_const_add_to(a, &b, actual, kVectorLength);
+  mul_const_add(a, &b, expect, kVectorLength);
+  _mm256_mul_const_add(a, &b, actual, kVectorLength);
   munit_assert_floats_equal(kVectorLength, expect, actual);
   return MUNIT_OK;
 }
@@ -224,7 +234,7 @@ MunitResult mm256_euclidean_test(const MunitParameter params[], void *user_data_
 }
 
 MunitTest mm256_tests[] = {
-    {"mul_const_add_to", mm256_mul_const_add_to_test, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL},
+    {"mul_const_add", mm256_mul_const_add_test, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL},
     {"mul_const_to", mm256_mul_const_to_test, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL},
     {"mul_const", mm256_mul_const_test, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL},
     {"sub_to", mm256_sub_to_test, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL},
@@ -238,7 +248,7 @@ MunitTest mm256_tests[] = {
 static const MunitSuite mm256_suite = {
     "mm256_", mm256_tests, NULL, kIteration, MUNIT_SUITE_OPTION_NONE};
 
-MunitResult mm512_mul_const_add_to_test(const MunitParameter params[], void *user_data_or_fixture)
+MunitResult mm512_mul_const_add_test(const MunitParameter params[], void *user_data_or_fixture)
 {
   float a[kVectorLength], expect[kVectorLength], actual[kVectorLength];
   rand_float(a, kVectorLength);
@@ -246,8 +256,8 @@ MunitResult mm512_mul_const_add_to_test(const MunitParameter params[], void *use
   memcpy(expect, actual, sizeof(float) * kVectorLength);
   float b = munit_rand_double();
 
-  mul_const_add_to(a, &b, expect, kVectorLength);
-  _mm512_mul_const_add_to(a, &b, actual, kVectorLength);
+  mul_const_add(a, &b, expect, kVectorLength);
+  _mm512_mul_const_add(a, &b, actual, kVectorLength);
   munit_assert_floats_equal(kVectorLength, expect, actual);
   return MUNIT_OK;
 }
@@ -350,7 +360,7 @@ MunitResult mm512_euclidean_test(const MunitParameter params[], void *user_data_
 }
 
 MunitTest mm512_tests[] = {
-    {"mul_const_add_to", mm512_mul_const_add_to_test, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL},
+    {"mul_const_add", mm512_mul_const_add_test, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL},
     {"mul_const_to", mm512_mul_const_to_test, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL},
     {"mul_const", mm512_mul_const_test, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL},
     {"sub_to", mm512_sub_to_test, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL},

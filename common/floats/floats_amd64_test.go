@@ -75,7 +75,7 @@ func BenchmarkEuclidean(b *testing.B) {
 	}
 }
 
-func BenchmarkMulConstAddTo(b *testing.B) {
+func BenchmarkMulConstAdd(b *testing.B) {
 	for _, feat := range []Feature{0, AVX, AVX512} {
 		b.Run(feat.String(), func(b *testing.B) {
 			for i := 16; i <= 128; i *= 2 {
@@ -84,7 +84,7 @@ func BenchmarkMulConstAddTo(b *testing.B) {
 					v2 := initializeFloat32Array(i)
 					b.ResetTimer()
 					for i := 0; i < b.N; i++ {
-						feat.mulConstAddTo(v1, 2, v2)
+						feat.mulConstAdd(v1, 2, v2)
 					}
 				})
 			}

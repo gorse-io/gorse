@@ -100,9 +100,9 @@ func TestMulConstAddTo(t *testing.T) {
 	a := []float32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
 	dst := []float32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
 	target := []float32{0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30}
-	MulConstAddTo(a, 2, dst)
+	MulConstAdd(a, 2, dst)
 	assert.Equal(t, target, dst)
-	assert.Panics(t, func() { MulConstAddTo(nil, 1, dst) })
+	assert.Panics(t, func() { MulConstAdd(nil, 1, dst) })
 }
 
 func TestMulAddTo(t *testing.T) {
@@ -283,10 +283,10 @@ func (suite *SIMDTestSuite) SetupSuite() {
 	}
 }
 
-func (suite *SIMDTestSuite) TestMulConstAddTo() {
+func (suite *SIMDTestSuite) TestMulConstAdd() {
 	a := []float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20}
 	b := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200}
-	suite.mulConstAddTo(a, 2, b)
+	suite.mulConstAdd(a, 2, b)
 	c := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200}
 	mulConstAddTo(a, 2, c)
 	assert.Equal(suite.T(), c, b)

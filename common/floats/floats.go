@@ -163,11 +163,11 @@ func MulConstTo(a []float32, c float32, dst []float32) {
 }
 
 // MulConstAddTo multiplies a vector and a const, then adds to dst: dst = dst + a * c
-func MulConstAddTo(a []float32, c float32, dst []float32) {
+func MulConstAdd(a []float32, c float32, dst []float32) {
 	if len(a) != len(dst) {
 		panic("floats: slice lengths do not match")
 	}
-	feature.mulConstAddTo(a, c, dst)
+	feature.mulConstAdd(a, c, dst)
 }
 
 // MulAddTo multiplies a vector and a vector, then adds to a vector: c += a * b

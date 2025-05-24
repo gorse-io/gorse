@@ -64,11 +64,11 @@ func (feature Feature) String() string {
 	return strings.Join(features, "+")
 }
 
-func (feature Feature) mulConstAddTo(a []float32, b float32, c []float32) {
+func (feature Feature) mulConstAdd(a []float32, b float32, c []float32) {
 	if feature&AVX512 == AVX512 {
-		_mm512_mul_const_add_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), unsafe.Pointer(&c[0]), int64(len(a)))
+		_mm512_mul_const_add(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), unsafe.Pointer(&c[0]), int64(len(a)))
 	} else if feature&AVX == AVX {
-		_mm256_mul_const_add_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), unsafe.Pointer(&c[0]), int64(len(a)))
+		_mm256_mul_const_add(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), unsafe.Pointer(&c[0]), int64(len(a)))
 	} else {
 		mulConstAddTo(a, b, c)
 	}

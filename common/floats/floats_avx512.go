@@ -11,7 +11,7 @@ package floats
 import "unsafe"
 
 //go:noescape
-func _mm512_mul_const_add_to(a, b, c unsafe.Pointer, n int64)
+func _mm512_mul_const_add(a, b, c unsafe.Pointer, n int64)
 
 //go:noescape
 func _mm512_mul_const_to(a, b, c unsafe.Pointer, n int64)
@@ -23,10 +23,10 @@ func _mm512_mul_const(a, b unsafe.Pointer, n int64)
 func _mm512_add_const(a, b unsafe.Pointer, n int64)
 
 //go:noescape
-func _mm512_sub(a, b unsafe.Pointer, n int64)
+func _mm512_sub_to(a, b, c unsafe.Pointer, n int64)
 
 //go:noescape
-func _mm512_sub_to(a, b, c unsafe.Pointer, n int64)
+func _mm512_sub(a, b unsafe.Pointer, n int64)
 
 //go:noescape
 func _mm512_mul_to(a, b, c unsafe.Pointer, n int64)
