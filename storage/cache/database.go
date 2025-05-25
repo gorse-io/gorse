@@ -348,7 +348,7 @@ func Open(path, tablePrefix string, opts ...storage.Option) (Database, error) {
 		); err != nil {
 			return nil, errors.Trace(err)
 		}
-		database.gormDB, err = gorm.Open(postgres.New(postgres.Config{Conn: database.client}), storage.NewGORMConfig(tablePrefix))
+		database.gormDB, err = gorm.Open(postgres.New(postgres.Config{DSN: path}), storage.NewGORMConfig(tablePrefix))
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
