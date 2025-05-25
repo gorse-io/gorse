@@ -16,10 +16,13 @@ package cf
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
 
+	"github.com/c-bata/goptuna"
+	"github.com/samber/lo"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/base/progress"
@@ -28,6 +31,47 @@ import (
 	"github.com/zhenghaoz/gorse/model"
 	"go.uber.org/zap"
 )
+
+type ModelSearch struct {
+	trainSet dataset.CFSplit
+	valSet   dataset.CFSplit
+	models   []MatrixFactorization
+}
+
+func NewModelSearch(trainSet, valSet dataset.CFSplit, models ...MatrixFactorization) *ModelSearch {
+	return &ModelSearch{
+		trainSet: trainSet,
+		valSet:   valSet,
+		models:   models,
+	}
+}
+
+func (ms *ModelSearch) Objective(trial goptuna.Trial) (float64, error) {
+	if len(ms.models) == 0 {
+		return 0, errors.New("no model to search")
+	}
+	m := ms.models[lo.Must(trial.SuggestInt("Model", 0, len(ms.models)-1))]
+	m.Clear()
+	m.SetParams(m.SuggestParams(trial))
+	score := m.Fit(context.Background(), ms.trainSet, ms.valSet, NewFitConfig())
+	return float64(score.NDCG), nil
+}
+
+func (ms *ModelSearch) New(p map[string]any) MatrixFactorization {
+	if len(ms.models) == 0 {
+		return nil
+	}
+	m := ms.models[p["Model"].(int)]
+	m.Clear()
+	params := model.Params{}
+	for k, v := range p {
+		if k != "Model" {
+			params[model.ParamName(k)] = v
+		}
+	}
+	m.SetParams(params)
+	return m
+}
 
 // ParamsSearchResult contains the return of grid search.
 type ParamsSearchResult struct {
