@@ -150,9 +150,9 @@ func (s *Sequential) Forward(x *Tensor) *Tensor {
 	return x
 }
 
-func (s *Sequential) SetJobs(int) {
+func (s *Sequential) SetJobs(jobs int) {
 	for _, l := range s.Layers {
-		l.SetJobs(1)
+		l.SetJobs(jobs)
 	}
 }
 
