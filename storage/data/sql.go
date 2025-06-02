@@ -158,6 +158,7 @@ func (d *SQLDatabase) Init() error {
 			FeedbackType string    `gorm:"column:feedback_type;type:varchar(256);not null;primaryKey"`
 			UserId       string    `gorm:"column:user_id;type:varchar(256);not null;primaryKey;index:user_id"`
 			ItemId       string    `gorm:"column:item_id;type:varchar(256);not null;primaryKey;index:item_id"`
+			Value        float64   `gorm:"column:value;type:float;not null;default:0"`
 			Timestamp    time.Time `gorm:"column:time_stamp;type:datetime;not null"`
 			Comment      string    `gorm:"column:comment;type:text;not null"`
 		}
@@ -906,11 +907,17 @@ func (d *SQLDatabase) BatchInsertFeedback(ctx context.Context, feedback []Feedba
 		}
 		var updates clause.Set
 		if overwrite {
-			updates = clause.Assignments(map[string]interface{}{
+			values := map[string]any{
 				"time_stamp": clause.Column{Table: "excluded", Name: "time_stamp"},
 				"comment":    clause.Column{Table: "excluded", Name: "comment"},
-				"value":      clause.Column{Raw: true, Name: "value + excluded.value"},
-			})
+			}
+			switch d.driver {
+			case MySQL:
+				values["value"] = clause.Column{Raw: true, Name: "value + VALUES(value)"}
+			case SQLite:
+				values["value"] = clause.Column{Raw: true, Name: "value + excluded.value"}
+			}
+			updates = clause.Assignments(values)
 		}
 		err := tx.Clauses(clause.OnConflict{
 			Columns:   []clause.Column{{Name: "feedback_type"}, {Name: "user_id"}, {Name: "item_id"}},
