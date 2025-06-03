@@ -252,6 +252,7 @@ func (d *SQLDatabase) Init() error {
 			FeedbackType string    `gorm:"column:feedback_type;type:String"`
 			UserId       string    `gorm:"column:user_id;type:String"`
 			ItemId       string    `gorm:"column:item_id;type:String"`
+			Value        float64   `gorm:"column:value;type:Float64;default:0"`
 			Timestamp    time.Time `gorm:"column:time_stamp;type:DateTime64(9,'UTC')"`
 			Comment      string    `gorm:"column:comment;type:String"`
 			Version      struct{}  `gorm:"column:version;type:DateTime"`

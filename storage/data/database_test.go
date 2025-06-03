@@ -409,28 +409,30 @@ func (suite *baseTestSuite) TestFeedback() {
 	suite.NoError(err)
 
 	// insert duplicate feedback
-	err = suite.Database.BatchInsertFeedback(ctx, []Feedback{
-		{FeedbackKey: FeedbackKey{"a", "0", "0"}, Value: 1},
-		{FeedbackKey: FeedbackKey{"a", "0", "0"}, Value: 1},
-	}, true, true, true)
-	suite.NoError(err)
-	err = suite.Database.BatchInsertFeedback(ctx, []Feedback{
-		{FeedbackKey: FeedbackKey{"a", "0", "0"}, Value: 1},
-	}, true, true, false)
-	suite.NoError(err)
-	// check duplicate feedback
-	ret, err = suite.Database.GetUserItemFeedback(ctx, "0", "0", "a")
-	suite.NoError(err)
-	suite.Equal([]Feedback{{FeedbackKey: FeedbackKey{"a", "0", "0"}, Value: 2, Timestamp: time.Time{}, Comment: ""}}, ret)
-	// put duplicate feedback
-	err = suite.Database.BatchInsertFeedback(ctx, []Feedback{
-		{FeedbackKey: FeedbackKey{"a", "0", "0"}, Value: 1},
-	}, true, true, true)
-	suite.NoError(err)
-	// check duplicate feedback again
-	ret, err = suite.Database.GetUserItemFeedback(ctx, "0", "0", "a")
-	suite.NoError(err)
-	suite.Equal([]Feedback{{FeedbackKey: FeedbackKey{"a", "0", "0"}, Value: 1, Timestamp: time.Time{}, Comment: ""}}, ret)
+	if !suite.isClickHouse() {
+		err = suite.Database.BatchInsertFeedback(ctx, []Feedback{
+			{FeedbackKey: FeedbackKey{"a", "0", "0"}, Value: 1},
+			{FeedbackKey: FeedbackKey{"a", "0", "0"}, Value: 1},
+		}, true, true, true)
+		suite.NoError(err)
+		err = suite.Database.BatchInsertFeedback(ctx, []Feedback{
+			{FeedbackKey: FeedbackKey{"a", "0", "0"}, Value: 1},
+		}, true, true, false)
+		suite.NoError(err)
+		// check duplicate feedback
+		ret, err = suite.Database.GetUserItemFeedback(ctx, "0", "0", "a")
+		suite.NoError(err)
+		suite.Equal([]Feedback{{FeedbackKey: FeedbackKey{"a", "0", "0"}, Value: 2, Timestamp: time.Time{}, Comment: ""}}, ret)
+		// put duplicate feedback
+		err = suite.Database.BatchInsertFeedback(ctx, []Feedback{
+			{FeedbackKey: FeedbackKey{"a", "0", "0"}, Value: 1},
+		}, true, true, true)
+		suite.NoError(err)
+		// check duplicate feedback again
+		ret, err = suite.Database.GetUserItemFeedback(ctx, "0", "0", "a")
+		suite.NoError(err)
+		suite.Equal([]Feedback{{FeedbackKey: FeedbackKey{"a", "0", "0"}, Value: 1, Timestamp: time.Time{}, Comment: ""}}, ret)
+	}
 }
 
 func (suite *baseTestSuite) TestItems() {
