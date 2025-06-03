@@ -127,6 +127,11 @@ func (tp TablePrefix) FeedbackTable() string {
 	return string(tp) + "feedback"
 }
 
+// AggregatingFeedbackTable returns the aggregating feedback table.
+func (tp TablePrefix) AggregatingFeedbackTable() string {
+	return string(tp) + "aggregating_feedback"
+}
+
 // UserFeedbackTable returns the materialized view of user feedback.
 func (tp TablePrefix) UserFeedbackTable() string {
 	return string(tp) + "user_feedback"
