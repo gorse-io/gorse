@@ -42,8 +42,9 @@ message Feedback {
   string feedback_type = 2;
   string user_id = 3;
   string item_id = 4;
-  google.protobuf.Timestamp timestamp = 5;
-  string comment = 6;
+  double value = 5;
+  google.protobuf.Timestamp timestamp = 6;
+  string comment = 7;
 }
 
 enum NodeType {

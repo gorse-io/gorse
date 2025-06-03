@@ -185,6 +185,7 @@ func (p *ProxyServer) GetItemFeedback(ctx context.Context, in *protocol.GetItemF
 			FeedbackType: f.FeedbackType,
 			UserId:       f.UserId,
 			ItemId:       f.ItemId,
+			Value:        f.Value,
 			Timestamp:    timestamppb.New(f.Timestamp),
 			Comment:      f.Comment,
 		}
@@ -290,6 +291,7 @@ func (p *ProxyServer) GetUserFeedback(ctx context.Context, in *protocol.GetUserF
 			FeedbackType: f.FeedbackType,
 			UserId:       f.UserId,
 			ItemId:       f.ItemId,
+			Value:        f.Value,
 			Timestamp:    timestamppb.New(f.Timestamp),
 			Comment:      f.Comment,
 		}
@@ -308,6 +310,7 @@ func (p *ProxyServer) GetUserItemFeedback(ctx context.Context, in *protocol.GetU
 			FeedbackType: f.FeedbackType,
 			UserId:       f.UserId,
 			ItemId:       f.ItemId,
+			Value:        f.Value,
 			Timestamp:    timestamppb.New(f.Timestamp),
 			Comment:      f.Comment,
 		}
@@ -329,6 +332,7 @@ func (p *ProxyServer) BatchInsertFeedback(ctx context.Context, in *protocol.Batc
 				UserId:       f.UserId,
 				ItemId:       f.ItemId,
 			},
+			Value:     f.Value,
 			Timestamp: f.Timestamp.AsTime(),
 			Comment:   f.Comment,
 		}
@@ -355,6 +359,7 @@ func (p *ProxyServer) GetFeedback(ctx context.Context, in *protocol.GetFeedbackR
 			FeedbackType: f.FeedbackType,
 			UserId:       f.UserId,
 			ItemId:       f.ItemId,
+			Value:        f.Value,
 			Timestamp:    timestamppb.New(f.Timestamp),
 			Comment:      f.Comment,
 		}
@@ -450,6 +455,7 @@ func (p *ProxyServer) GetFeedbackStream(in *protocol.GetFeedbackStreamRequest, s
 				FeedbackType: f.FeedbackType,
 				UserId:       f.UserId,
 				ItemId:       f.ItemId,
+				Value:        f.Value,
 				Timestamp:    timestamppb.New(f.Timestamp),
 				Comment:      f.Comment,
 			}
@@ -649,6 +655,7 @@ func (p ProxyClient) GetItemFeedback(ctx context.Context, itemId string, feedbac
 				UserId:       f.UserId,
 				ItemId:       f.ItemId,
 			},
+			Value:     f.Value,
 			Timestamp: f.Timestamp.AsTime(),
 			Comment:   f.Comment,
 		}
@@ -761,6 +768,7 @@ func (p ProxyClient) GetUserFeedback(ctx context.Context, userId string, endTime
 				UserId:       f.UserId,
 				ItemId:       f.ItemId,
 			},
+			Value:     f.Value,
 			Timestamp: f.Timestamp.AsTime(),
 			Comment:   f.Comment,
 		}
@@ -785,6 +793,7 @@ func (p ProxyClient) GetUserItemFeedback(ctx context.Context, userId, itemId str
 				UserId:       f.UserId,
 				ItemId:       f.ItemId,
 			},
+			Value:     f.Value,
 			Timestamp: f.Timestamp.AsTime(),
 			Comment:   f.Comment,
 		}
@@ -811,6 +820,7 @@ func (p ProxyClient) BatchInsertFeedback(ctx context.Context, feedback []Feedbac
 			FeedbackType: f.FeedbackType,
 			UserId:       f.UserId,
 			ItemId:       f.ItemId,
+			Value:        f.Value,
 			Timestamp:    timestamppb.New(f.Timestamp),
 			Comment:      f.Comment,
 		}
@@ -850,6 +860,7 @@ func (p ProxyClient) GetFeedback(ctx context.Context, cursor string, n int, begi
 				UserId:       f.UserId,
 				ItemId:       f.ItemId,
 			},
+			Value:     f.Value,
 			Timestamp: f.Timestamp.AsTime(),
 			Comment:   f.Comment,
 		}
@@ -991,6 +1002,7 @@ func (p ProxyClient) GetFeedbackStream(ctx context.Context, batchSize int, optio
 						UserId:       f.UserId,
 						ItemId:       f.ItemId,
 					},
+					Value:     f.Value,
 					Timestamp: f.Timestamp.AsTime(),
 					Comment:   f.Comment,
 				}

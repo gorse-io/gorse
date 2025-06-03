@@ -619,7 +619,16 @@ func (db *MongoDB) BatchInsertFeedback(ctx context.Context, feedback []Feedback,
 			if overwrite {
 				model.SetUpdate(bson.M{"$set": f})
 			} else {
-				model.SetUpdate(bson.M{"$setOnInsert": f})
+				model.SetUpdate(bson.M{
+					"$setOnInsert": bson.M{
+						"feedbackkey": f.FeedbackKey,
+						"timestamp":   f.Timestamp,
+						"comment":     f.Comment,
+					},
+					"$inc": bson.M{
+						"value": f.Value,
+					},
+				})
 			}
 			models = append(models, model)
 		}

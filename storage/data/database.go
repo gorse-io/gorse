@@ -144,6 +144,7 @@ type FeedbackKey struct {
 // Feedback stores feedback.
 type Feedback struct {
 	FeedbackKey `gorm:"embedded" mapstructure:",squash"`
+	Value       float64   `gorm:"column:value" mapstructure:"value"`
 	Timestamp   time.Time `gorm:"column:time_stamp" mapsstructure:"timestamp"`
 	Comment     string    `gorm:"column:comment" mapsstructure:"comment"`
 }

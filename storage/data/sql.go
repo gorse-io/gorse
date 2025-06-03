@@ -158,6 +158,7 @@ func (d *SQLDatabase) Init() error {
 			FeedbackType string    `gorm:"column:feedback_type;type:varchar(256);not null;primaryKey"`
 			UserId       string    `gorm:"column:user_id;type:varchar(256);not null;primaryKey;index:user_id"`
 			ItemId       string    `gorm:"column:item_id;type:varchar(256);not null;primaryKey;index:item_id"`
+			Value        float64   `gorm:"column:value;type:float;not null;default:0"`
 			Timestamp    time.Time `gorm:"column:time_stamp;type:datetime;not null"`
 			Comment      string    `gorm:"column:comment;type:text;not null"`
 		}
@@ -185,6 +186,7 @@ func (d *SQLDatabase) Init() error {
 			FeedbackType string    `gorm:"column:feedback_type;type:varchar(256);not null;primaryKey"`
 			UserId       string    `gorm:"column:user_id;type:varchar(256);not null;primaryKey;index:user_id_index"`
 			ItemId       string    `gorm:"column:item_id;type:varchar(256);not null;primaryKey;index:item_id_index"`
+			Value        float64   `gorm:"column:value;type:float8;not null;default:0"`
 			Timestamp    time.Time `gorm:"column:time_stamp;type:timestamptz;not null"`
 			Comment      string    `gorm:"column:comment;type:text;not null;default:''"`
 		}
@@ -209,11 +211,12 @@ func (d *SQLDatabase) Init() error {
 			Comment   string `gorm:"column:comment;type:text;not null;default:''"`
 		}
 		type Feedback struct {
-			FeedbackType string `gorm:"column:feedback_type;type:varchar(256);not null;primaryKey"`
-			UserId       string `gorm:"column:user_id;type:varchar(256);not null;primaryKey;index:user_id_index"`
-			ItemId       string `gorm:"column:item_id;type:varchar(256);not null;primaryKey;index:item_id_index"`
-			Timestamp    string `gorm:"column:time_stamp;type:datetime;not null;default:'0001-01-01'"`
-			Comment      string `gorm:"column:comment;type:text;not null;default:''"`
+			FeedbackType string  `gorm:"column:feedback_type;type:varchar(256);not null;primaryKey"`
+			UserId       string  `gorm:"column:user_id;type:varchar(256);not null;primaryKey;index:user_id_index"`
+			ItemId       string  `gorm:"column:item_id;type:varchar(256);not null;primaryKey;index:item_id_index"`
+			Value        float64 `gorm:"column:value;type:real;not null;default:0"`
+			Timestamp    string  `gorm:"column:time_stamp;type:datetime;not null;default:'0001-01-01'"`
+			Comment      string  `gorm:"column:comment;type:text;not null;default:''"`
 		}
 		err := d.gormDB.AutoMigrate(Users{}, Items{}, Feedback{})
 		if err != nil {
@@ -249,6 +252,7 @@ func (d *SQLDatabase) Init() error {
 			FeedbackType string    `gorm:"column:feedback_type;type:String"`
 			UserId       string    `gorm:"column:user_id;type:String"`
 			ItemId       string    `gorm:"column:item_id;type:String"`
+			Value        float64   `gorm:"column:value;type:Float64;default:0"`
 			Timestamp    time.Time `gorm:"column:time_stamp;type:DateTime64(9,'UTC')"`
 			Comment      string    `gorm:"column:comment;type:String"`
 			Version      struct{}  `gorm:"column:version;type:DateTime"`
@@ -737,7 +741,7 @@ func (d *SQLDatabase) GetUserFeedback(ctx context.Context, userId string, endTim
 	} else {
 		tx = tx.Table(d.FeedbackTable())
 	}
-	tx.Select("feedback_type, user_id, item_id, time_stamp, comment").
+	tx.Select("feedback_type, user_id, item_id, value, time_stamp, comment").
 		Where("user_id = ?", userId)
 	if endTime != nil {
 		tx.Where("time_stamp <= ?", d.convertTimeZone(endTime))
@@ -903,10 +907,24 @@ func (d *SQLDatabase) BatchInsertFeedback(ctx context.Context, feedback []Feedba
 		if len(rows) == 0 {
 			return nil
 		}
+		var updates clause.Set
+		if overwrite {
+			updates = clause.AssignmentColumns([]string{"time_stamp", "comment", "value"})
+		} else {
+			values := make(map[string]any)
+			switch d.driver {
+			case MySQL:
+				values["value"] = clause.Column{Raw: true, Name: "value + VALUES(value)"}
+			case Postgres:
+				values["value"] = clause.Column{Raw: true, Name: fmt.Sprintf("%s.value + EXCLUDED.value", d.FeedbackTable())}
+			case SQLite:
+				values["value"] = clause.Column{Raw: true, Name: "value + excluded.value"}
+			}
+			updates = clause.Assignments(values)
+		}
 		err := tx.Clauses(clause.OnConflict{
 			Columns:   []clause.Column{{Name: "feedback_type"}, {Name: "user_id"}, {Name: "item_id"}},
-			DoNothing: !overwrite,
-			DoUpdates: lo.If(overwrite, clause.AssignmentColumns([]string{"time_stamp", "comment"})).Else(nil),
+			DoUpdates: updates,
 		}).Create(rows).Error
 		return errors.Trace(err)
 	}
@@ -918,7 +936,7 @@ func (d *SQLDatabase) GetFeedback(ctx context.Context, cursor string, n int, beg
 	if err != nil {
 		return "", nil, errors.Trace(err)
 	}
-	tx := d.gormDB.WithContext(ctx).Table(d.FeedbackTable()).Select("feedback_type, user_id, item_id, time_stamp, comment")
+	tx := d.gormDB.WithContext(ctx).Table(d.FeedbackTable()).Select("feedback_type, user_id, item_id, value, time_stamp, comment")
 	if len(buf) > 0 {
 		var cursorKey FeedbackKey
 		if err := jsonutil.Unmarshal(buf, &cursorKey); err != nil {
@@ -971,7 +989,7 @@ func (d *SQLDatabase) GetFeedbackStream(ctx context.Context, batchSize int, scan
 		// send query
 		tx := d.gormDB.WithContext(ctx).
 			Table(d.FeedbackTable()).
-			Select("feedback_type, user_id, item_id, time_stamp, comment")
+			Select("feedback_type, user_id, item_id, value, time_stamp, comment")
 		if len(scan.FeedbackTypes) > 0 {
 			tx.Where("feedback_type IN ?", scan.FeedbackTypes)
 		}
@@ -1034,7 +1052,7 @@ func (d *SQLDatabase) GetUserItemFeedback(ctx context.Context, userId, itemId st
 	} else {
 		tx = tx.Table(d.FeedbackTable())
 	}
-	tx.Select("feedback_type, user_id, item_id, time_stamp, comment").
+	tx.Select("feedback_type, user_id, item_id, value, time_stamp, comment").
 		Where("user_id = ? AND item_id = ?", userId, itemId)
 	if len(feedbackTypes) > 0 {
 		tx.Where("feedback_type IN ?", feedbackTypes)
