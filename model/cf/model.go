@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/bits-and-blooms/bitset"
+	"github.com/c-bata/goptuna"
 	"github.com/chewxy/math32"
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/juju/errors"
@@ -409,6 +410,16 @@ func (bpr *BPR) GetParamsGrid(withSize bool) model.ParamsGrid {
 	}
 }
 
+func (bpr *BPR) SuggestParams(trial goptuna.Trial) model.Params {
+	return model.Params{
+		model.NFactors:   16,
+		model.Lr:         lo.Must(trial.SuggestLogFloat(string(model.Lr), 0.001, 0.1)),
+		model.Reg:        lo.Must(trial.SuggestLogFloat(string(model.Reg), 0.001, 0.1)),
+		model.InitMean:   0,
+		model.InitStdDev: lo.Must(trial.SuggestLogFloat(string(model.InitStdDev), 0.001, 0.1)),
+	}
+}
+
 // Fit the BPR model. Its task complexity is O(bpr.nEpochs).
 func (bpr *BPR) Fit(ctx context.Context, trainSet, valSet dataset.CFSplit, config *FitConfig) Score {
 	log.Logger().Info("fit bpr",
@@ -581,6 +592,16 @@ func (als *ALS) GetParamsGrid(withSize bool) model.ParamsGrid {
 		model.InitStdDev: []interface{}{0.001, 0.005, 0.01, 0.05, 0.1},
 		model.Reg:        []interface{}{0.001, 0.005, 0.01, 0.05, 0.1},
 		model.Alpha:      []interface{}{0.001, 0.005, 0.01, 0.05, 0.1},
+	}
+}
+
+func (als *ALS) SuggestParams(trial goptuna.Trial) model.Params {
+	return model.Params{
+		model.NFactors:   16,
+		model.InitMean:   0,
+		model.InitStdDev: lo.Must(trial.SuggestLogFloat(string(model.InitStdDev), 0.001, 0.1)),
+		model.Reg:        lo.Must(trial.SuggestLogFloat(string(model.Reg), 0.001, 0.1)),
+		model.Alpha:      lo.Must(trial.SuggestLogFloat(string(model.Alpha), 0.001, 0.1)),
 	}
 }
 
