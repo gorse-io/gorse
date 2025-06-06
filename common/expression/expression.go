@@ -21,7 +21,7 @@ import (
 	"strconv"
 )
 
-var expressionPattern = regexp.MustCompile("^(?P<feedback_type>[a-zA-Z][a-zA-Z0-9_]*)(?P<expr_type><=|>=|<|>|=)?(?P<value>[0-9]*\\.?[0-9]*)$")
+var expressionPattern = regexp.MustCompile(`^(?P<feedback_type>[a-zA-Z][a-zA-Z0-9_]*)(?P<expr_type><=|>=|<|>|=)?(?P<value>[0-9]*\.?[0-9]*)$`)
 
 type ExprType int
 
@@ -48,33 +48,22 @@ func (typ ExprType) String() string {
 	}
 }
 
-func (typ ExprType) FromString(s string) ExprType {
-	switch s {
-	case "<":
-		return Less
-	case "<=":
-		return LessOrEqual
-	case ">":
-		return Greater
-	case ">=":
-		return GreaterOrEqual
-	default:
-		return None
-	}
-}
-
 type FeedbackTypeExpression struct {
 	FeedbackType string
 	ExprType     ExprType
 	Value        float64
 }
 
-func (f *FeedbackTypeExpression) MarshalJSON() ([]byte, error) {
+func (f *FeedbackTypeExpression) String() string {
 	if f.ExprType == None {
-		return []byte(f.FeedbackType), nil
+		return f.FeedbackType
 	} else {
-		return []byte(fmt.Sprintf("%s%v%v", f.FeedbackType, f.ExprType, f.Value)), nil
+		return fmt.Sprintf("%s%v%v", f.FeedbackType, f.ExprType, f.Value)
 	}
+}
+
+func (f *FeedbackTypeExpression) MarshalJSON() ([]byte, error) {
+	return []byte(f.String()), nil
 }
 
 func (f *FeedbackTypeExpression) UnmarshalJSON(data []byte) error {
@@ -111,4 +100,24 @@ func (f *FeedbackTypeExpression) UnmarshalJSON(data []byte) error {
 		}
 	}
 	return nil
+}
+
+func (f *FeedbackTypeExpression) Match(feedbackType string, value float64) bool {
+	if f.FeedbackType != feedbackType {
+		return false
+	}
+	switch f.ExprType {
+	case None:
+		return true
+	case Less:
+		return value < f.Value
+	case LessOrEqual:
+		return value <= f.Value
+	case Greater:
+		return value > f.Value
+	case GreaterOrEqual:
+		return value >= f.Value
+	default:
+		return false
+	}
 }

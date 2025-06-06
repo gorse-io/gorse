@@ -15,8 +15,9 @@
 package expression
 
 import (
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestFeedbackTypeExpression_MarshalJSON(t *testing.T) {
@@ -79,4 +80,26 @@ func TestFeedbackTypeExpression_UnmarshalJSON(t *testing.T) {
 	buf, err = f.MarshalJSON()
 	assert.NoError(t, err)
 	assert.Equal(t, `test>=16`, string(buf))
+}
+
+func TestFeedbackTypeExpression_Match(t *testing.T) {
+	f := FeedbackTypeExpression{FeedbackType: "test", Value: 6}
+	assert.True(t, f.Match("test", 0))
+	assert.False(t, f.Match("a", 1))
+
+	f.ExprType = Less
+	assert.True(t, f.Match("test", 5))
+	assert.False(t, f.Match("test", 6))
+
+	f.ExprType = LessOrEqual
+	assert.True(t, f.Match("test", 6))
+	assert.False(t, f.Match("test", 7))
+
+	f.ExprType = Greater
+	assert.True(t, f.Match("test", 7))
+	assert.False(t, f.Match("test", 6))
+
+	f.ExprType = GreaterOrEqual
+	assert.True(t, f.Match("test", 6))
+	assert.False(t, f.Match("test", 5))
 }

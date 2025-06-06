@@ -19,7 +19,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/zhenghaoz/gorse/model/ctr"
 	"io"
 	"math/rand"
 	"net"
@@ -37,11 +36,13 @@ import (
 	"github.com/thoas/go-funk"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/progress"
+	"github.com/zhenghaoz/gorse/common/expression"
 	"github.com/zhenghaoz/gorse/common/parallel"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/dataset"
 	"github.com/zhenghaoz/gorse/model"
 	"github.com/zhenghaoz/gorse/model/cf"
+	"github.com/zhenghaoz/gorse/model/ctr"
 	"github.com/zhenghaoz/gorse/protocol"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
@@ -840,8 +841,10 @@ func (suite *WorkerTestSuite) TestRankByClickTroughRate() {
 
 func (suite *WorkerTestSuite) TestReplacement_ClickThroughRate() {
 	ctx := context.Background()
-	suite.Config.Recommend.DataSource.PositiveFeedbackTypes = []string{"p"}
-	suite.Config.Recommend.DataSource.ReadFeedbackTypes = []string{"n"}
+	suite.Config.Recommend.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{
+		config.MustParseFeedbackTypeExpression("p")}
+	suite.Config.Recommend.DataSource.ReadFeedbackTypes = []expression.FeedbackTypeExpression{
+		config.MustParseFeedbackTypeExpression("n")}
 	suite.Config.Recommend.Offline.EnableColRecommend = false
 	suite.Config.Recommend.Offline.EnablePopularRecommend = true
 	suite.Config.Recommend.Replacement.EnableReplacement = true
@@ -906,8 +909,10 @@ func (suite *WorkerTestSuite) TestReplacement_ClickThroughRate() {
 
 func (suite *WorkerTestSuite) TestReplacement_CollaborativeFiltering() {
 	ctx := context.Background()
-	suite.Config.Recommend.DataSource.PositiveFeedbackTypes = []string{"p"}
-	suite.Config.Recommend.DataSource.ReadFeedbackTypes = []string{"n"}
+	suite.Config.Recommend.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{
+		config.MustParseFeedbackTypeExpression("p")}
+	suite.Config.Recommend.DataSource.ReadFeedbackTypes = []expression.FeedbackTypeExpression{
+		config.MustParseFeedbackTypeExpression("n")}
 	suite.Config.Recommend.Offline.EnableColRecommend = false
 	suite.Config.Recommend.Offline.EnablePopularRecommend = true
 	suite.Config.Recommend.Replacement.EnableReplacement = true

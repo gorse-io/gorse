@@ -35,6 +35,7 @@ import (
 	"github.com/steinfletcher/apitest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
+	"github.com/zhenghaoz/gorse/common/expression"
 	"github.com/zhenghaoz/gorse/common/mock"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model/cf"
@@ -401,7 +402,10 @@ func (suite *MasterAPITestSuite) TestGetStats() {
 func (suite *MasterAPITestSuite) TestGetRates() {
 	ctx := context.Background()
 	// write rates
-	suite.Config.Recommend.DataSource.PositiveFeedbackTypes = []string{"a", "b"}
+	suite.Config.Recommend.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{
+		config.MustParseFeedbackTypeExpression("a"),
+		config.MustParseFeedbackTypeExpression("b"),
+	}
 	// This first measurement should be overwritten.
 	baseTimestamp := time.Now().UTC().Truncate(24 * time.Hour)
 	err := suite.CacheClient.AddTimeSeriesPoints(ctx, []cache.TimeSeriesPoint{

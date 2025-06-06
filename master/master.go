@@ -359,7 +359,7 @@ func (m *Master) RunPrivilegedTasksLoop() {
 		}
 		if m.rankingTrainSet.CountUsers() == 0 && m.rankingTrainSet.CountItems() == 0 && m.rankingTrainSet.CountFeedback() == 0 {
 			log.Logger().Warn("empty ranking dataset",
-				zap.Strings("positive_feedback_type", m.Config.Recommend.DataSource.PositiveFeedbackTypes))
+				zap.Any("positive_feedback_type", m.Config.Recommend.DataSource.PositiveFeedbackTypes))
 			continue
 		}
 
