@@ -23,6 +23,7 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/samber/lo"
+	"github.com/zhenghaoz/gorse/common/expression"
 	"github.com/zhenghaoz/gorse/protocol"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -175,7 +176,11 @@ func (p *ProxyServer) GetItems(ctx context.Context, in *protocol.GetItemsRequest
 }
 
 func (p *ProxyServer) GetItemFeedback(ctx context.Context, in *protocol.GetItemFeedbackRequest) (*protocol.GetFeedbackResponse, error) {
-	feedback, err := p.database.GetItemFeedback(ctx, in.ItemId, in.FeedbackTypes...)
+	var types []string
+	for _, t := range in.FeedbackTypes {
+		types = append(types, t.FeedbackType)
+	}
+	feedback, err := p.database.GetItemFeedback(ctx, in.ItemId, types...)
 	if err != nil {
 		return nil, err
 	}
@@ -281,7 +286,11 @@ func (p *ProxyServer) GetUserFeedback(ctx context.Context, in *protocol.GetUserF
 	if in.EndTime != nil {
 		endTime = lo.ToPtr(in.EndTime.AsTime())
 	}
-	feedback, err := p.database.GetUserFeedback(ctx, in.UserId, endTime, in.FeedbackTypes...)
+	types := make([]expression.FeedbackTypeExpression, len(in.FeedbackTypes))
+	for i, t := range in.FeedbackTypes {
+		types[i].FromPB(t)
+	}
+	feedback, err := p.database.GetUserFeedback(ctx, in.UserId, endTime, types...)
 	if err != nil {
 		return nil, err
 	}
@@ -300,7 +309,11 @@ func (p *ProxyServer) GetUserFeedback(ctx context.Context, in *protocol.GetUserF
 }
 
 func (p *ProxyServer) GetUserItemFeedback(ctx context.Context, in *protocol.GetUserItemFeedbackRequest) (*protocol.GetFeedbackResponse, error) {
-	feedback, err := p.database.GetUserItemFeedback(ctx, in.UserId, in.ItemId, in.FeedbackTypes...)
+	var types []string
+	for _, t := range in.FeedbackTypes {
+		types = append(types, t.FeedbackType)
+	}
+	feedback, err := p.database.GetUserItemFeedback(ctx, in.UserId, in.ItemId, types...)
 	if err != nil {
 		return nil, err
 	}
@@ -349,7 +362,11 @@ func (p *ProxyServer) GetFeedback(ctx context.Context, in *protocol.GetFeedbackR
 	if in.EndTime != nil {
 		endTime = lo.ToPtr(in.EndTime.AsTime())
 	}
-	cursor, feedback, err := p.database.GetFeedback(ctx, in.Cursor, int(in.N), beginTime, endTime, in.FeedbackTypes...)
+	var types []string
+	for _, t := range in.FeedbackTypes {
+		types = append(types, t.FeedbackType)
+	}
+	cursor, feedback, err := p.database.GetFeedback(ctx, in.Cursor, int(in.N), beginTime, endTime, types...)
 	if err != nil {
 		return nil, err
 	}
@@ -430,7 +447,11 @@ func (p *ProxyServer) GetFeedbackStream(in *protocol.GetFeedbackStreamRequest, s
 		opts = append(opts, WithEndTime(in.ScanOptions.EndTime.AsTime()))
 	}
 	if in.ScanOptions.FeedbackTypes != nil {
-		opts = append(opts, WithFeedbackTypes(in.ScanOptions.FeedbackTypes...))
+		types := make([]expression.FeedbackTypeExpression, len(in.ScanOptions.FeedbackTypes))
+		for i, t := range in.ScanOptions.FeedbackTypes {
+			types[i].FromPB(t)
+		}
+		opts = append(opts, WithFeedbackTypes(types...))
 	}
 	if in.ScanOptions.BeginUserId != nil {
 		opts = append(opts, WithBeginUserId(*in.ScanOptions.BeginUserId))
@@ -640,9 +661,13 @@ func (p ProxyClient) GetItems(ctx context.Context, cursor string, n int, beginTi
 }
 
 func (p ProxyClient) GetItemFeedback(ctx context.Context, itemId string, feedbackTypes ...string) ([]Feedback, error) {
+	var types []*protocol.FeedbackTypeExpression
+	for _, t := range feedbackTypes {
+		types = append(types, &protocol.FeedbackTypeExpression{FeedbackType: t})
+	}
 	resp, err := p.DataStoreClient.GetItemFeedback(ctx, &protocol.GetItemFeedbackRequest{
 		ItemId:        itemId,
-		FeedbackTypes: feedbackTypes,
+		FeedbackTypes: types,
 	})
 	if err != nil {
 		return nil, err
@@ -748,13 +773,17 @@ func (p ProxyClient) GetUsers(ctx context.Context, cursor string, n int) (string
 	return resp.Cursor, users, nil
 }
 
-func (p ProxyClient) GetUserFeedback(ctx context.Context, userId string, endTime *time.Time, feedbackTypes ...string) ([]Feedback, error) {
+func (p ProxyClient) GetUserFeedback(ctx context.Context, userId string, endTime *time.Time, feedbackTypes ...expression.FeedbackTypeExpression) ([]Feedback, error) {
 	req := &protocol.GetUserFeedbackRequest{UserId: userId}
 	if endTime != nil {
 		req.EndTime = timestamppb.New(*endTime)
 	}
 	if len(feedbackTypes) > 0 {
-		req.FeedbackTypes = feedbackTypes
+		var types []*protocol.FeedbackTypeExpression
+		for _, t := range feedbackTypes {
+			types = append(types, t.ToPB())
+		}
+		req.FeedbackTypes = types
 	}
 	resp, err := p.DataStoreClient.GetUserFeedback(ctx, req)
 	if err != nil {
@@ -777,10 +806,14 @@ func (p ProxyClient) GetUserFeedback(ctx context.Context, userId string, endTime
 }
 
 func (p ProxyClient) GetUserItemFeedback(ctx context.Context, userId, itemId string, feedbackTypes ...string) ([]Feedback, error) {
+	var types []*protocol.FeedbackTypeExpression
+	for _, t := range feedbackTypes {
+		types = append(types, &protocol.FeedbackTypeExpression{FeedbackType: t})
+	}
 	resp, err := p.DataStoreClient.GetUserItemFeedback(ctx, &protocol.GetUserItemFeedbackRequest{
 		UserId:        userId,
 		ItemId:        itemId,
-		FeedbackTypes: feedbackTypes,
+		FeedbackTypes: types,
 	})
 	if err != nil {
 		return nil, err
@@ -846,7 +879,11 @@ func (p ProxyClient) GetFeedback(ctx context.Context, cursor string, n int, begi
 		req.EndTime = timestamppb.New(*endTime)
 	}
 	if len(feedbackTypes) > 0 {
-		req.FeedbackTypes = feedbackTypes
+		var types []*protocol.FeedbackTypeExpression
+		for _, t := range feedbackTypes {
+			types = append(types, &protocol.FeedbackTypeExpression{FeedbackType: t})
+		}
+		req.FeedbackTypes = types
 	}
 	resp, err := p.DataStoreClient.GetFeedback(ctx, req)
 	if err != nil {
@@ -955,12 +992,16 @@ func (p ProxyClient) GetFeedbackStream(ctx context.Context, batchSize int, optio
 	for _, opt := range options {
 		opt(&o)
 	}
+	var types []*protocol.FeedbackTypeExpression
+	for _, t := range o.FeedbackTypes {
+		types = append(types, t.ToPB())
+	}
 	pbOptions := &protocol.ScanOptions{
 		BeginUserId:   o.BeginUserId,
 		EndUserId:     o.EndUserId,
 		BeginItemId:   o.BeginItemId,
 		EndItemId:     o.EndItemId,
-		FeedbackTypes: o.FeedbackTypes,
+		FeedbackTypes: types,
 		OrderByItemId: o.OrderByItemId,
 	}
 	if o.BeginTime != nil {

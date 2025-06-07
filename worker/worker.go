@@ -32,7 +32,6 @@ import (
 	cmap "github.com/orcaman/concurrent-map"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/samber/lo"
-	"github.com/thoas/go-funk"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/encoding"
 	"github.com/zhenghaoz/gorse/base/heap"
@@ -40,6 +39,7 @@ import (
 	"github.com/zhenghaoz/gorse/base/progress"
 	"github.com/zhenghaoz/gorse/cmd/version"
 	encoding2 "github.com/zhenghaoz/gorse/common/encoding"
+	"github.com/zhenghaoz/gorse/common/expression"
 	"github.com/zhenghaoz/gorse/common/parallel"
 	"github.com/zhenghaoz/gorse/common/sizeof"
 	"github.com/zhenghaoz/gorse/common/util"
@@ -1162,7 +1162,7 @@ func (w *Worker) pullItems(ctx context.Context) (*ItemCache, []string, error) {
 func (w *Worker) pullUsers(peers []string, me string) ([]data.User, error) {
 	ctx := context.Background()
 	// locate me
-	if !funk.ContainsString(peers, me) {
+	if !lo.Contains(peers, me) {
 		return nil, errors.New("current node isn't in worker nodes")
 	}
 	// create consistent hash ring
@@ -1201,8 +1201,8 @@ func (w *Worker) replacement(recommend map[string][]cache.Score, user *data.User
 			s := lo.Map(scores, func(score cache.Score, _ int) float64 {
 				return score.Score
 			})
-			upperBounds[category] = funk.MaxFloat64(s)
-			lowerBounds[category] = funk.MinFloat64(s)
+			upperBounds[category] = lo.Max(s)
+			lowerBounds[category] = lo.Min(s)
 		} else {
 			upperBounds[category] = math.Inf(1)
 			lowerBounds[category] = math.Inf(-1)
@@ -1215,10 +1215,10 @@ func (w *Worker) replacement(recommend map[string][]cache.Score, user *data.User
 	positiveItems := mapset.NewSet[string]()
 	distinctItems := mapset.NewSet[string]()
 	for _, feedback := range feedbacks {
-		if funk.ContainsString(w.Config.Recommend.DataSource.PositiveFeedbackTypes, feedback.FeedbackType) {
+		if expression.MatchFeedbackTypeExpressions(w.Config.Recommend.DataSource.PositiveFeedbackTypes, feedback.FeedbackType, feedback.Value) {
 			positiveItems.Add(feedback.ItemId)
 			distinctItems.Add(feedback.ItemId)
-		} else if funk.ContainsString(w.Config.Recommend.DataSource.ReadFeedbackTypes, feedback.FeedbackType) {
+		} else if expression.MatchFeedbackTypeExpressions(w.Config.Recommend.DataSource.ReadFeedbackTypes, feedback.FeedbackType, feedback.Value) {
 			distinctItems.Add(feedback.ItemId)
 		}
 	}
@@ -1339,12 +1339,12 @@ func (c *ItemCache) IsAvailable(itemId string) bool {
 type FeedbackCache struct {
 	*config.Config
 	Client data.Database
-	Types  []string
+	Types  []expression.FeedbackTypeExpression
 	Cache  cmap.ConcurrentMap
 }
 
 // NewFeedbackCache creates a new FeedbackCache.
-func NewFeedbackCache(worker *Worker, feedbackTypes ...string) *FeedbackCache {
+func NewFeedbackCache(worker *Worker, feedbackTypes ...expression.FeedbackTypeExpression) *FeedbackCache {
 	return &FeedbackCache{
 		Config: worker.Config,
 		Client: worker.DataClient,

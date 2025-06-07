@@ -29,6 +29,7 @@ import (
 	"github.com/samber/lo"
 	"github.com/zhenghaoz/gorse/base/jsonutil"
 	"github.com/zhenghaoz/gorse/base/log"
+	"github.com/zhenghaoz/gorse/common/expression"
 	"github.com/zhenghaoz/gorse/storage"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -107,6 +108,21 @@ func NewClickhouseUser(user User) (clickhouseUser ClickhouseUser) {
 	clickhouseUser.SQLUser = NewSQLUser(user)
 	clickhouseUser.Version = time.Now().In(time.UTC)
 	return
+}
+
+func FeedbackTypeExpressionToSQL(db *gorm.DB, e expression.FeedbackTypeExpression) *gorm.DB {
+	switch e.ExprType {
+	case expression.Less:
+		return db.Where("feedback_type = ? AND value < ?", e.FeedbackType, e.Value)
+	case expression.LessOrEqual:
+		return db.Where("feedback_type = ? AND value <= ?", e.FeedbackType, e.Value)
+	case expression.Greater:
+		return db.Where("feedback_type = ? AND value > ?", e.FeedbackType, e.Value)
+	case expression.GreaterOrEqual:
+		return db.Where("feedback_type = ? AND value >= ?", e.FeedbackType, e.Value)
+	default:
+		return db.Where("feedback_type = ?", e.FeedbackType)
+	}
 }
 
 // SQLDatabase use MySQL as data storage.
@@ -571,7 +587,11 @@ func (d *SQLDatabase) GetItemFeedback(ctx context.Context, itemId string, feedba
 	}
 	tx.Where("item_id = ?", itemId)
 	if len(feedbackTypes) > 0 {
-		tx.Where("feedback_type IN ?", feedbackTypes)
+		db := d.gormDB
+		for _, feedbackType := range feedbackTypes {
+			db = db.Or("feedback_type = ?", feedbackType)
+		}
+		tx = tx.Where(db)
 	}
 	result, err := tx.Rows()
 	if err != nil {
@@ -754,7 +774,7 @@ func (d *SQLDatabase) GetUserStream(ctx context.Context, batchSize int) (chan []
 }
 
 // GetUserFeedback returns feedback of a user from MySQL.
-func (d *SQLDatabase) GetUserFeedback(ctx context.Context, userId string, endTime *time.Time, feedbackTypes ...string) ([]Feedback, error) {
+func (d *SQLDatabase) GetUserFeedback(ctx context.Context, userId string, endTime *time.Time, feedbackTypes ...expression.FeedbackTypeExpression) ([]Feedback, error) {
 	tx := d.gormDB.WithContext(ctx)
 	if d.driver == ClickHouse {
 		tx = tx.Table(d.UserFeedbackTable())
@@ -775,7 +795,11 @@ func (d *SQLDatabase) GetUserFeedback(ctx context.Context, userId string, endTim
 	}
 	tx.Where("user_id = ?", userId)
 	if len(feedbackTypes) > 0 {
-		tx.Where("feedback_type IN ?", feedbackTypes)
+		db := d.gormDB
+		for _, feedbackType := range feedbackTypes {
+			db = FeedbackTypeExpressionToSQL(db, feedbackType)
+		}
+		tx.Where(db)
 	}
 	result, err := tx.Rows()
 	if err != nil {
@@ -975,7 +999,11 @@ func (d *SQLDatabase) GetFeedback(ctx context.Context, cursor string, n int, beg
 		tx.Where("(feedback_type, user_id, item_id) >= (?,?,?)", cursorKey.FeedbackType, cursorKey.UserId, cursorKey.ItemId)
 	}
 	if len(feedbackTypes) > 0 {
-		tx.Where("feedback_type IN ?", feedbackTypes)
+		db := d.gormDB
+		for _, feedbackType := range feedbackTypes {
+			db = db.Or("feedback_type = ?", feedbackType)
+		}
+		tx.Where(db)
 	}
 	if beginTime != nil {
 		tx.Where("time_stamp >= ?", d.convertTimeZone(beginTime))
@@ -1021,7 +1049,11 @@ func (d *SQLDatabase) GetFeedbackStream(ctx context.Context, batchSize int, scan
 			Table(d.FeedbackTable()).
 			Select("feedback_type, user_id, item_id, value, time_stamp, comment")
 		if len(scan.FeedbackTypes) > 0 {
-			tx.Where("feedback_type IN ?", scan.FeedbackTypes)
+			db := d.gormDB
+			for _, feedbackType := range scan.FeedbackTypes {
+				db = FeedbackTypeExpressionToSQL(db, feedbackType)
+			}
+			tx.Where(db)
 		}
 		if scan.BeginTime != nil {
 			tx.Where("time_stamp >= ?", d.convertTimeZone(scan.BeginTime))
@@ -1087,7 +1119,11 @@ func (d *SQLDatabase) GetUserItemFeedback(ctx context.Context, userId, itemId st
 	}
 	tx.Where("user_id = ? AND item_id = ?", userId, itemId)
 	if len(feedbackTypes) > 0 {
-		tx.Where("feedback_type IN ?", feedbackTypes)
+		db := d.gormDB
+		for _, feedbackType := range feedbackTypes {
+			db = db.Or("feedback_type = ?", feedbackType)
+		}
+		tx.Where(db)
 	}
 	result, err := tx.Rows()
 	if err != nil {

@@ -22,6 +22,7 @@ import (
 
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/juju/errors"
+	"github.com/zhenghaoz/gorse/common/expression"
 	"github.com/zhenghaoz/gorse/storage"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -56,6 +57,21 @@ func unpack(o any) any {
 	default:
 		return p
 	}
+}
+
+func FeedbackTypeExpressionToMongo(e expression.FeedbackTypeExpression) bson.M {
+	filter := bson.M{"feedbackkey.feedbacktype": e.FeedbackType}
+	switch e.ExprType {
+	case expression.Less:
+		filter["value"] = bson.M{"$lt": e.Value}
+	case expression.LessOrEqual:
+		filter["value"] = bson.M{"$lte": e.Value}
+	case expression.Greater:
+		filter["value"] = bson.M{"$gt": e.Value}
+	case expression.GreaterOrEqual:
+		filter["value"] = bson.M{"$gte": e.Value}
+	}
+	return filter
 }
 
 // MongoDB is the data storage based on MongoDB.
@@ -356,7 +372,13 @@ func (db *MongoDB) GetItemFeedback(ctx context.Context, itemId string, feedbackT
 		"timestamp":          bson.M{"$lte": time.Now()},
 	}
 	if len(feedbackTypes) > 0 {
-		filter["feedbackkey.feedbacktype"] = bson.M{"$in": feedbackTypes}
+		var conditions []bson.M
+		for _, feedbackType := range feedbackTypes {
+			conditions = append(conditions, bson.M{
+				"feedbackkey.feedbacktype": bson.M{"$eq": feedbackType},
+			})
+		}
+		filter["$or"] = conditions
 	}
 	r, err = c.Find(ctx, filter)
 	if err != nil {
@@ -510,7 +532,7 @@ func (db *MongoDB) GetUserStream(ctx context.Context, batchSize int) (chan []Use
 }
 
 // GetUserFeedback returns feedback of a user from MongoDB.
-func (db *MongoDB) GetUserFeedback(ctx context.Context, userId string, endTime *time.Time, feedbackTypes ...string) ([]Feedback, error) {
+func (db *MongoDB) GetUserFeedback(ctx context.Context, userId string, endTime *time.Time, feedbackTypes ...expression.FeedbackTypeExpression) ([]Feedback, error) {
 	c := db.client.Database(db.dbName).Collection(db.FeedbackTable())
 	var r *mongo.Cursor
 	var err error
@@ -521,7 +543,11 @@ func (db *MongoDB) GetUserFeedback(ctx context.Context, userId string, endTime *
 		filter["timestamp"] = bson.M{"$lte": endTime}
 	}
 	if len(feedbackTypes) > 0 {
-		filter["feedbackkey.feedbacktype"] = bson.M{"$in": feedbackTypes}
+		var conditions []bson.M
+		for _, feedbackType := range feedbackTypes {
+			conditions = append(conditions, FeedbackTypeExpressionToMongo(feedbackType))
+		}
+		filter["$or"] = conditions
 	}
 	r, err = c.Find(ctx, filter)
 	if err != nil {
@@ -661,7 +687,13 @@ func (db *MongoDB) GetFeedback(ctx context.Context, cursor string, n int, beginT
 	}
 	// pass feedback type to filter
 	if len(feedbackTypes) > 0 {
-		filter["feedbackkey.feedbacktype"] = bson.M{"$in": feedbackTypes}
+		var conditions []bson.M
+		for _, feedbackType := range feedbackTypes {
+			conditions = append(conditions, bson.M{
+				"feedbackkey.feedbacktype": bson.M{"$eq": feedbackType},
+			})
+		}
+		filter["$or"] = conditions
 	}
 	// pass time limit to filter
 	timestampConditions := bson.M{}
@@ -711,7 +743,11 @@ func (db *MongoDB) GetFeedbackStream(ctx context.Context, batchSize int, scanOpt
 		filter := make(bson.M)
 		// pass feedback type to filter
 		if len(scan.FeedbackTypes) > 0 {
-			filter["feedbackkey.feedbacktype"] = bson.M{"$in": scan.FeedbackTypes}
+			var conditions []bson.M
+			for _, feedbackType := range scan.FeedbackTypes {
+				conditions = append(conditions, FeedbackTypeExpressionToMongo(feedbackType))
+			}
+			filter["$or"] = conditions
 		}
 		// pass time limit to filter
 		if scan.BeginTime != nil || scan.EndTime != nil {
@@ -784,7 +820,13 @@ func (db *MongoDB) GetUserItemFeedback(ctx context.Context, userId, itemId strin
 		"feedbackkey.itemid": bson.M{"$eq": itemId},
 	}
 	if len(feedbackTypes) > 0 {
-		filter["feedbackkey.feedbacktype"] = bson.M{"$in": feedbackTypes}
+		var conditions []bson.M
+		for _, feedbackType := range feedbackTypes {
+			conditions = append(conditions, bson.M{
+				"feedbackkey.feedbacktype": bson.M{"$eq": feedbackType},
+			})
+		}
+		filter["$or"] = conditions
 	}
 	r, err := c.Find(ctx, filter)
 	if err != nil {

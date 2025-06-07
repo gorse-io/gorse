@@ -18,8 +18,8 @@ import (
 
 	"github.com/chewxy/math32"
 	mapset "github.com/deckarep/golang-set/v2"
+	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
-	"github.com/thoas/go-funk"
 )
 
 const randomEpsilon = 0.1
@@ -34,8 +34,8 @@ func TestRandomGenerator_MakeNormalMatrix(t *testing.T) {
 func TestRandomGenerator_MakeUniformMatrix(t *testing.T) {
 	rng := NewRandomGenerator(0)
 	vec := rng.UniformMatrix(1, 1000, 1, 2)[0]
-	assert.False(t, funk.MinFloat32(vec) < 1)
-	assert.False(t, funk.MaxFloat32(vec) > 2)
+	assert.False(t, lo.Min(vec) < 1)
+	assert.False(t, lo.Max(vec) > 2)
 }
 
 func TestRandomGenerator_Sample(t *testing.T) {
@@ -62,7 +62,7 @@ func TestRandomGenerator_SampleInt32(t *testing.T) {
 
 // mean of a slice of 32-bit floats.
 func mean(x []float32) float32 {
-	return funk.SumFloat32(x) / float32(len(x))
+	return lo.Sum(x) / float32(len(x))
 }
 
 // stdDev returns the sample standard deviation.

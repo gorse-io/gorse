@@ -122,7 +122,7 @@ active_user_ttl = 0
 [recommend.data_source]
 
 # The feedback types for positive events.
-positive_feedback_types = ["star","like"]
+positive_feedback_types = ["star","like","read>=3"]
 
 # The feedback types for read events.
 read_feedback_types = ["read"]

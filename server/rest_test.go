@@ -27,6 +27,7 @@ import (
 	"github.com/steinfletcher/apitest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
+	"github.com/zhenghaoz/gorse/common/expression"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
@@ -774,7 +775,7 @@ func (suite *ServerTestSuite) TestFeedback() {
 		Status(http.StatusOK).
 		Body(`{"RowAffected": 1}`).
 		End()
-	ret, err := suite.DataClient.GetUserFeedback(ctx, "0", suite.Config.Now(), "click")
+	ret, err := suite.DataClient.GetUserFeedback(ctx, "0", suite.Config.Now(), expression.MustParseFeedbackTypeExpression("click"))
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(ret))
 	assert.Equal(t, "override", ret[0].Comment)
@@ -791,7 +792,7 @@ func (suite *ServerTestSuite) TestFeedback() {
 		Status(http.StatusOK).
 		Body(`{"RowAffected": 1}`).
 		End()
-	ret, err = suite.DataClient.GetUserFeedback(ctx, "0", suite.Config.Now(), "click")
+	ret, err = suite.DataClient.GetUserFeedback(ctx, "0", suite.Config.Now(), expression.MustParseFeedbackTypeExpression("click"))
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(ret))
 	assert.Equal(t, "override", ret[0].Comment)
@@ -1246,7 +1247,8 @@ func (suite *ServerTestSuite) TestServerGetRecommendsFallbackItemBasedSimilar() 
 	ctx := context.Background()
 	t := suite.T()
 	suite.Config.Recommend.Online.NumFeedbackFallbackItemBased = 4
-	suite.Config.Recommend.DataSource.PositiveFeedbackTypes = []string{"a"}
+	suite.Config.Recommend.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{
+		expression.MustParseFeedbackTypeExpression("a")}
 	suite.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "default"}}
 	// insert recommendation
 	err := suite.CacheClient.AddScores(ctx, cache.OfflineRecommend, "0", []cache.Score{
@@ -1558,7 +1560,8 @@ func (suite *ServerTestSuite) TestSessionRecommend() {
 	ctx := context.Background()
 	t := suite.T()
 	suite.Config.Recommend.Online.NumFeedbackFallbackItemBased = 4
-	suite.Config.Recommend.DataSource.PositiveFeedbackTypes = []string{"a"}
+	suite.Config.Recommend.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{
+		expression.MustParseFeedbackTypeExpression("a")}
 	suite.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "default"}}
 
 	// insert similar items

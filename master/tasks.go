@@ -30,6 +30,7 @@ import (
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/base/progress"
 	"github.com/zhenghaoz/gorse/base/task"
+	"github.com/zhenghaoz/gorse/common/expression"
 	"github.com/zhenghaoz/gorse/common/parallel"
 	"github.com/zhenghaoz/gorse/common/sizeof"
 	"github.com/zhenghaoz/gorse/config"
@@ -78,8 +79,8 @@ func (m *Master) loadDataset() (*ctr.Dataset, *dataset.Dataset, error) {
 	}
 
 	log.Logger().Info("load dataset",
-		zap.Strings("positive_feedback_types", m.Config.Recommend.DataSource.PositiveFeedbackTypes),
-		zap.Strings("read_feedback_types", m.Config.Recommend.DataSource.ReadFeedbackTypes),
+		zap.Any("positive_feedback_types", m.Config.Recommend.DataSource.PositiveFeedbackTypes),
+		zap.Any("read_feedback_types", m.Config.Recommend.DataSource.ReadFeedbackTypes),
 		zap.Uint("item_ttl", m.Config.Recommend.DataSource.ItemTTL),
 		zap.Uint("feedback_ttl", m.Config.Recommend.DataSource.PositiveFeedbackTTL))
 	evaluator := NewOnlineEvaluator()
@@ -259,7 +260,7 @@ func (t *SearchRankingModelTask) run(ctx context.Context, j *task.JobsAllocator)
 
 	if numUsers == 0 || numItems == 0 || numFeedback == 0 {
 		log.Logger().Warn("empty ranking dataset",
-			zap.Strings("positive_feedback_type", t.Config.Recommend.DataSource.PositiveFeedbackTypes))
+			zap.Any("positive_feedback_type", t.Config.Recommend.DataSource.PositiveFeedbackTypes))
 		// t.taskMonitor.Fail(TaskSearchRankingModel, "No feedback found.")
 		return nil
 	} else if numUsers == t.lastNumUsers &&
@@ -320,7 +321,7 @@ func (t *SearchClickModelTask) run(ctx context.Context, j *task.JobsAllocator) e
 
 	if numUsers == 0 || numItems == 0 || numFeedback == 0 {
 		log.Logger().Warn("empty click dataset",
-			zap.Strings("positive_feedback_type", t.Config.Recommend.DataSource.PositiveFeedbackTypes))
+			zap.Any("positive_feedback_type", t.Config.Recommend.DataSource.PositiveFeedbackTypes))
 		return nil
 	} else if numUsers == t.lastNumUsers &&
 		numItems == t.lastNumItems &&
@@ -349,7 +350,7 @@ func (t *SearchClickModelTask) run(ctx context.Context, j *task.JobsAllocator) e
 func (m *Master) LoadDataFromDatabase(
 	ctx context.Context,
 	database data.Database,
-	posFeedbackTypes, readTypes []string,
+	posFeedbackTypes, readTypes []expression.FeedbackTypeExpression,
 	itemTTL, positiveFeedbackTTL uint,
 	evaluator *OnlineEvaluator,
 	nonPersonalizedRecommenders []*logics.NonPersonalized,
