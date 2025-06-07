@@ -21,7 +21,7 @@ import (
 	"github.com/zhenghaoz/gorse/protocol"
 )
 
-func TestFeedbackTypeExpression_MarshalJSON(t *testing.T) {
+func TestFeedbackTypeExpression_UnmarshalJSON(t *testing.T) {
 	var f FeedbackTypeExpression
 	err := f.UnmarshalJSON([]byte(`"test"`))
 	assert.NoError(t, err)
@@ -56,7 +56,7 @@ func TestFeedbackTypeExpression_MarshalJSON(t *testing.T) {
 	assert.Equal(t, 16.0, f.Value)
 }
 
-func TestFeedbackTypeExpression_UnmarshalJSON(t *testing.T) {
+func TestFeedbackTypeExpression_MarshalJSON(t *testing.T) {
 	f := FeedbackTypeExpression{FeedbackType: "test", Value: 16}
 	buf, err := f.MarshalJSON()
 	assert.NoError(t, err)
@@ -65,22 +65,22 @@ func TestFeedbackTypeExpression_UnmarshalJSON(t *testing.T) {
 	f.ExprType = Less
 	buf, err = f.MarshalJSON()
 	assert.NoError(t, err)
-	assert.Equal(t, `"test<16"`, string(buf))
+	assert.Equal(t, `"test\u003c16"`, string(buf))
 
 	f.ExprType = LessOrEqual
 	buf, err = f.MarshalJSON()
 	assert.NoError(t, err)
-	assert.Equal(t, `"test<=16"`, string(buf))
+	assert.Equal(t, `"test\u003c=16"`, string(buf))
 
 	f.ExprType = Greater
 	buf, err = f.MarshalJSON()
 	assert.NoError(t, err)
-	assert.Equal(t, `"test>16"`, string(buf))
+	assert.Equal(t, `"test\u003e16"`, string(buf))
 
 	f.ExprType = GreaterOrEqual
 	buf, err = f.MarshalJSON()
 	assert.NoError(t, err)
-	assert.Equal(t, `"test>=16"`, string(buf))
+	assert.Equal(t, `"test\u003e=16"`, string(buf))
 }
 
 func TestFeedbackTypeExpression_ToPB(t *testing.T) {

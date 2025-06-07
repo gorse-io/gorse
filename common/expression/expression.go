@@ -15,6 +15,7 @@
 package expression
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
@@ -102,17 +103,16 @@ func (f *FeedbackTypeExpression) FromString(data string) error {
 }
 
 func (f *FeedbackTypeExpression) MarshalJSON() ([]byte, error) {
-	return []byte(fmt.Sprintf(`"%s"`, f.String())), nil
+	return json.Marshal(f.String())
 }
 
 func (f *FeedbackTypeExpression) UnmarshalJSON(data []byte) error {
-	str := string(data)
-	if len(str) < 2 || str[0] != '"' || str[len(str)-1] != '"' {
-		return fmt.Errorf("invalid JSON format: %s", str)
+	var s string
+	if err := json.Unmarshal(data, &s); err != nil {
+		return fmt.Errorf("unmarshal FeedbackTypeExpression: %w", err)
 	}
-	str = str[1 : len(str)-1] // remove quotes
-	if err := f.FromString(str); err != nil {
-		return fmt.Errorf("failed to parse expression: %w", err)
+	if err := f.FromString(s); err != nil {
+		return fmt.Errorf("unmarshal FeedbackTypeExpression: %w", err)
 	}
 	return nil
 }
