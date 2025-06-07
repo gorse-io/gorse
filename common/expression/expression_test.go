@@ -15,9 +15,10 @@
 package expression
 
 import (
+	"testing"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/protocol"
-	"testing"
 )
 
 func TestFeedbackTypeExpression_MarshalJSON(t *testing.T) {
@@ -155,6 +156,16 @@ func TestFeedbackTypeExpression_Match(t *testing.T) {
 	f.ExprType = GreaterOrEqual
 	assert.True(t, f.Match("test", 6))
 	assert.False(t, f.Match("test", 5))
+}
+
+func TestMatchFeedbackTypeExpressions(t *testing.T) {
+	expressions := []FeedbackTypeExpression{
+		{FeedbackType: "a"},
+		{FeedbackType: "b"},
+		{FeedbackType: "c"},
+	}
+	assert.True(t, MatchFeedbackTypeExpressions(expressions, "a", 0))
+	assert.False(t, MatchFeedbackTypeExpressions(expressions, "d", 0))
 }
 
 func TestMustParseFeedbackTypeExpression(t *testing.T) {

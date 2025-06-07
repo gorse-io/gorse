@@ -53,7 +53,6 @@ require (
 	github.com/spf13/viper v1.20.1
 	github.com/steinfletcher/apitest v1.5.17
 	github.com/stretchr/testify v1.10.0
-	github.com/thoas/go-funk v0.9.2
 	github.com/tiktoken-go/tokenizer v0.5.1
 	github.com/yuin/goldmark v1.7.8
 	go.mongodb.org/mongo-driver v1.16.1

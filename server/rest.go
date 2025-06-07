@@ -1401,8 +1401,13 @@ func (s *RestServer) getTypedFeedbackByUser(request *restful.Request, response *
 		ctx = request.Request.Context()
 	}
 	feedbackType := request.PathParameter("feedback-type")
+	var feednackTypeExpr expression.FeedbackTypeExpression
+	if err := feednackTypeExpr.UnmarshalJSON([]byte(feedbackType)); err != nil {
+		BadRequest(response, err)
+		return
+	}
 	userId := request.PathParameter("user-id")
-	feedback, err := s.DataClient.GetUserFeedback(ctx, userId, s.Config.Now(), feedbackType)
+	feedback, err := s.DataClient.GetUserFeedback(ctx, userId, s.Config.Now(), feednackTypeExpr)
 	if err != nil {
 		InternalServerError(response, err)
 		return
