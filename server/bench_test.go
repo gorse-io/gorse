@@ -967,7 +967,7 @@ func BenchmarkRecommendFromItemBased(b *testing.B) {
 
 			s.Config.Recommend.CacheSize = len(documents)
 			s.Config.Recommend.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{
-				config.MustParseFeedbackTypeExpression("feedback_type_positive")}
+				expression.MustParseFeedbackTypeExpression("feedback_type_positive")}
 			s.Config.Recommend.Online.FallbackRecommend = []string{"item_based"}
 
 			response := make([]*resty.Response, b.N)

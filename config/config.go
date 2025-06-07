@@ -57,12 +57,6 @@ func init() {
 	)))
 }
 
-func MustParseFeedbackTypeExpression(s string) expression.FeedbackTypeExpression {
-	var expr expression.FeedbackTypeExpression
-	lo.Must0(expr.UnmarshalJSON([]byte(s)))
-	return expr
-}
-
 // Config is the configuration for the engine.
 type Config struct {
 	Database     DatabaseConfig     `mapstructure:"database"`

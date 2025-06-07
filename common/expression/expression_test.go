@@ -15,9 +15,9 @@
 package expression
 
 import (
-	"testing"
-
 	"github.com/stretchr/testify/assert"
+	"github.com/zhenghaoz/gorse/protocol"
+	"testing"
 )
 
 func TestFeedbackTypeExpression_MarshalJSON(t *testing.T) {
@@ -82,6 +82,59 @@ func TestFeedbackTypeExpression_UnmarshalJSON(t *testing.T) {
 	assert.Equal(t, `test>=16`, string(buf))
 }
 
+func TestFeedbackTypeExpression_ToPB(t *testing.T) {
+	f := FeedbackTypeExpression{FeedbackType: "test", Value: 6}
+	pb := f.ToPB()
+	assert.Equal(t, "test", pb.FeedbackType)
+	assert.Equal(t, protocol.ExpressionType_None, pb.ExpressionType)
+	assert.Equal(t, 6.0, pb.Value)
+
+	f.ExprType = Less
+	pb = f.ToPB()
+	assert.Equal(t, protocol.ExpressionType_Less, pb.ExpressionType)
+
+	f.ExprType = LessOrEqual
+	pb = f.ToPB()
+	assert.Equal(t, protocol.ExpressionType_LessOrEqual, pb.ExpressionType)
+
+	f.ExprType = Greater
+	pb = f.ToPB()
+	assert.Equal(t, protocol.ExpressionType_Greater, pb.ExpressionType)
+
+	f.ExprType = GreaterOrEqual
+	pb = f.ToPB()
+	assert.Equal(t, protocol.ExpressionType_GreaterOrEqual, pb.ExpressionType)
+}
+
+func TestFeedbackTypeExpression_FromPB(t *testing.T) {
+	pb := &protocol.FeedbackTypeExpression{
+		FeedbackType:   "test",
+		ExpressionType: protocol.ExpressionType_Less,
+		Value:          6.0,
+	}
+	f := FeedbackTypeExpression{}
+	f.FromPB(pb)
+	assert.Equal(t, "test", f.FeedbackType)
+	assert.Equal(t, Less, f.ExprType)
+	assert.Equal(t, 6.0, f.Value)
+
+	pb.ExpressionType = protocol.ExpressionType_LessOrEqual
+	f.FromPB(pb)
+	assert.Equal(t, LessOrEqual, f.ExprType)
+
+	pb.ExpressionType = protocol.ExpressionType_Greater
+	f.FromPB(pb)
+	assert.Equal(t, Greater, f.ExprType)
+
+	pb.ExpressionType = protocol.ExpressionType_GreaterOrEqual
+	f.FromPB(pb)
+	assert.Equal(t, GreaterOrEqual, f.ExprType)
+
+	pb.ExpressionType = protocol.ExpressionType_None
+	f.FromPB(pb)
+	assert.Equal(t, None, f.ExprType)
+}
+
 func TestFeedbackTypeExpression_Match(t *testing.T) {
 	f := FeedbackTypeExpression{FeedbackType: "test", Value: 6}
 	assert.True(t, f.Match("test", 0))
@@ -102,4 +155,10 @@ func TestFeedbackTypeExpression_Match(t *testing.T) {
 	f.ExprType = GreaterOrEqual
 	assert.True(t, f.Match("test", 6))
 	assert.False(t, f.Match("test", 5))
+}
+
+func TestMustParseFeedbackTypeExpression(t *testing.T) {
+	assert.Panics(t, func() {
+		MustParseFeedbackTypeExpression("test+")
+	})
 }

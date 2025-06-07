@@ -26,7 +26,6 @@ import (
 	"github.com/chewxy/math32"
 	"github.com/juju/errors"
 	"github.com/samber/lo"
-	"github.com/thoas/go-funk"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/copier"
 	"github.com/zhenghaoz/gorse/base/encoding"
@@ -226,7 +225,7 @@ func (fm *FM) internalPredictImpl(features []int32, values []float32) float32 {
 	// 3) (\sum^n_{i=1} v^2_{i,f} x^2_i)^2 - \sum^n_{i=1} v^2_{i,f} x^2_i
 	floats.MulTo(a, a, temp)
 	floats.MulConstAdd(b, -1, temp)
-	pred += funk.SumFloat32(temp) / 2
+	pred += lo.Sum(temp) / 2
 	return pred
 }
 

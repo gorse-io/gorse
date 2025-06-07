@@ -29,6 +29,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
+	"github.com/zhenghaoz/gorse/common/expression"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -287,15 +288,18 @@ func (suite *baseTestSuite) TestFeedback() {
 	ret = suite.getFeedback(ctx, 2, lo.ToPtr(timestamp.Add(time.Second)), lo.ToPtr(time.Now()))
 	suite.Empty(ret)
 	// Get feedback stream
-	feedbackFromStream := suite.getFeedbackStream(ctx, 3, WithEndTime(time.Now()), WithFeedbackTypes(positiveFeedbackType))
+	feedbackFromStream := suite.getFeedbackStream(ctx, 3, WithEndTime(time.Now()),
+		WithFeedbackTypes(expression.MustParseFeedbackTypeExpression(positiveFeedbackType)))
 	suite.ElementsMatch(feedback, feedbackFromStream)
 	feedbackFromStream = suite.getFeedbackStream(ctx, 3, WithEndTime(time.Now()))
 	suite.Equal(len(feedback)+2, len(feedbackFromStream))
 	feedbackFromStream = suite.getFeedbackStream(ctx, 3, WithBeginTime(timestamp.Add(time.Second)), WithEndTime(time.Now()))
 	suite.Empty(feedbackFromStream)
-	feedbackFromStream = suite.getFeedbackStream(ctx, 3, WithBeginUserId("1"), WithEndUserId("3"), WithEndTime(time.Now()), WithFeedbackTypes(positiveFeedbackType))
+	feedbackFromStream = suite.getFeedbackStream(ctx, 3, WithBeginUserId("1"), WithEndUserId("3"), WithEndTime(time.Now()),
+		WithFeedbackTypes(expression.MustParseFeedbackTypeExpression(positiveFeedbackType)))
 	suite.Equal(feedback[1:4], feedbackFromStream)
-	feedbackFromStream = suite.getFeedbackStream(ctx, 3, WithBeginItemId("2"), WithEndItemId("6"), WithEndTime(time.Now()), WithFeedbackTypes(positiveFeedbackType), WithOrderByItemId())
+	feedbackFromStream = suite.getFeedbackStream(ctx, 3, WithBeginItemId("2"), WithEndItemId("6"), WithEndTime(time.Now()),
+		WithFeedbackTypes(expression.MustParseFeedbackTypeExpression(positiveFeedbackType)), WithOrderByItemId())
 	suite.Equal([]Feedback{feedback[3], feedback[2], feedback[1]}, feedbackFromStream)
 	// Get items
 	err = suite.Database.Optimize()
@@ -335,7 +339,7 @@ func (suite *baseTestSuite) TestFeedback() {
 	suite.NoError(err)
 	suite.Equal(Item{ItemId: "0", Labels: []any{"b"}, Timestamp: time.Date(1996, 4, 8, 10, 0, 0, 0, time.UTC)}, item)
 	// Get typed feedback by user
-	ret, err = suite.Database.GetUserFeedback(ctx, "2", lo.ToPtr(time.Now()), positiveFeedbackType)
+	ret, err = suite.Database.GetUserFeedback(ctx, "2", lo.ToPtr(time.Now()), expression.MustParseFeedbackTypeExpression(positiveFeedbackType))
 	suite.NoError(err)
 	if suite.Equal(1, len(ret)) {
 		suite.Equal("2", ret[0].UserId)
@@ -363,7 +367,7 @@ func (suite *baseTestSuite) TestFeedback() {
 	suite.NoError(err)
 	err = suite.Database.Optimize()
 	suite.NoError(err)
-	ret, err = suite.Database.GetUserFeedback(ctx, "0", lo.ToPtr(time.Now()), positiveFeedbackType)
+	ret, err = suite.Database.GetUserFeedback(ctx, "0", lo.ToPtr(time.Now()), expression.MustParseFeedbackTypeExpression(positiveFeedbackType))
 	suite.NoError(err)
 	suite.Equal(1, len(ret))
 	suite.Equal("override", ret[0].Comment)
@@ -375,7 +379,7 @@ func (suite *baseTestSuite) TestFeedback() {
 	suite.NoError(err)
 	err = suite.Database.Optimize()
 	suite.NoError(err)
-	ret, err = suite.Database.GetUserFeedback(ctx, "0", lo.ToPtr(time.Now()), positiveFeedbackType)
+	ret, err = suite.Database.GetUserFeedback(ctx, "0", lo.ToPtr(time.Now()), expression.MustParseFeedbackTypeExpression(positiveFeedbackType))
 	suite.NoError(err)
 	suite.Equal(1, len(ret))
 	suite.Equal("override", ret[0].Comment)
@@ -570,7 +574,7 @@ func (suite *baseTestSuite) TestDeleteUser() {
 	suite.NoError(err)
 	_, err = suite.Database.GetUser(ctx, "a")
 	suite.NotNil(err, "failed to delete user")
-	ret, err := suite.Database.GetUserFeedback(ctx, "a", lo.ToPtr(time.Now()), positiveFeedbackType)
+	ret, err := suite.Database.GetUserFeedback(ctx, "a", lo.ToPtr(time.Now()), expression.MustParseFeedbackTypeExpression(positiveFeedbackType))
 	suite.NoError(err)
 	suite.Equal(0, len(ret))
 	_, ret, err = suite.Database.GetFeedback(ctx, "", 100, nil, lo.ToPtr(time.Now()), positiveFeedbackType)

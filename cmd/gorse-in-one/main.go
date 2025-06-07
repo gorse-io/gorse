@@ -72,12 +72,12 @@ var oneCommand = &cobra.Command{
 			conf.Database.DataStore = "sqlite://data.db"
 			conf.Database.CacheStore = "sqlite://cache.db"
 			conf.Recommend.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{
-				config.MustParseFeedbackTypeExpression("star"),
-				config.MustParseFeedbackTypeExpression("like"),
-				config.MustParseFeedbackTypeExpression("read>=3"),
+				expression.MustParseFeedbackTypeExpression("star"),
+				expression.MustParseFeedbackTypeExpression("like"),
+				expression.MustParseFeedbackTypeExpression("read>=3"),
 			}
 			conf.Recommend.DataSource.ReadFeedbackTypes = []expression.FeedbackTypeExpression{
-				config.MustParseFeedbackTypeExpression("read"),
+				expression.MustParseFeedbackTypeExpression("read"),
 			}
 			if err := conf.Validate(); err != nil {
 				log.Logger().Fatal("invalid config", zap.Error(err))

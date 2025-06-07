@@ -403,8 +403,8 @@ func (suite *MasterAPITestSuite) TestGetRates() {
 	ctx := context.Background()
 	// write rates
 	suite.Config.Recommend.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{
-		config.MustParseFeedbackTypeExpression("a"),
-		config.MustParseFeedbackTypeExpression("b"),
+		expression.MustParseFeedbackTypeExpression("a"),
+		expression.MustParseFeedbackTypeExpression("b"),
 	}
 	// This first measurement should be overwritten.
 	baseTimestamp := time.Now().UTC().Truncate(24 * time.Hour)

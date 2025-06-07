@@ -19,6 +19,9 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
+
+	"github.com/samber/lo"
+	"github.com/zhenghaoz/gorse/protocol"
 )
 
 var expressionPattern = regexp.MustCompile(`^(?P<feedback_type>[a-zA-Z][a-zA-Z0-9_]*)(?P<expr_type><=|>=|<|>|=)?(?P<value>[0-9]*\.?[0-9]*)$`)
@@ -102,6 +105,42 @@ func (f *FeedbackTypeExpression) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+func (f *FeedbackTypeExpression) ToPB() *protocol.FeedbackTypeExpression {
+	pb := &protocol.FeedbackTypeExpression{}
+	pb.FeedbackType = f.FeedbackType
+	switch f.ExprType {
+	case None:
+		pb.ExpressionType = protocol.ExpressionType_None
+	case Less:
+		pb.ExpressionType = protocol.ExpressionType_Less
+	case LessOrEqual:
+		pb.ExpressionType = protocol.ExpressionType_LessOrEqual
+	case Greater:
+		pb.ExpressionType = protocol.ExpressionType_Greater
+	case GreaterOrEqual:
+		pb.ExpressionType = protocol.ExpressionType_GreaterOrEqual
+	}
+	pb.Value = f.Value
+	return pb
+}
+
+func (f *FeedbackTypeExpression) FromPB(pb *protocol.FeedbackTypeExpression) {
+	f.FeedbackType = pb.FeedbackType
+	switch pb.ExpressionType {
+	case protocol.ExpressionType_None:
+		f.ExprType = None
+	case protocol.ExpressionType_Less:
+		f.ExprType = Less
+	case protocol.ExpressionType_LessOrEqual:
+		f.ExprType = LessOrEqual
+	case protocol.ExpressionType_Greater:
+		f.ExprType = Greater
+	case protocol.ExpressionType_GreaterOrEqual:
+		f.ExprType = GreaterOrEqual
+	}
+	f.Value = pb.Value
+}
+
 func (f *FeedbackTypeExpression) Match(feedbackType string, value float64) bool {
 	if f.FeedbackType != feedbackType {
 		return false
@@ -120,4 +159,19 @@ func (f *FeedbackTypeExpression) Match(feedbackType string, value float64) bool 
 	default:
 		return false
 	}
+}
+
+func MatchFeedbackTypeExpressions(exprs []FeedbackTypeExpression, feedbackType string, value float64) bool {
+	for _, expr := range exprs {
+		if expr.Match(feedbackType, value) {
+			return true
+		}
+	}
+	return false
+}
+
+func MustParseFeedbackTypeExpression(s string) FeedbackTypeExpression {
+	var expr FeedbackTypeExpression
+	lo.Must0(expr.UnmarshalJSON([]byte(s)))
+	return expr
 }

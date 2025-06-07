@@ -83,7 +83,7 @@ func (s *MasterTestSuite) TestFindItemToItem() {
 
 	// load mock dataset
 	_, dataSet, err := s.LoadDataFromDatabase(context.Background(), s.DataClient,
-		[]expression.FeedbackTypeExpression{config.MustParseFeedbackTypeExpression("FeedbackType")},
+		[]expression.FeedbackTypeExpression{expression.MustParseFeedbackTypeExpression("FeedbackType")},
 		nil, 0, 0, NewOnlineEvaluator(), nil)
 	s.NoError(err)
 	s.rankingTrainSet = dataSet
@@ -167,7 +167,7 @@ func (s *MasterTestSuite) TestUserToUser() {
 	err = s.DataClient.BatchInsertFeedback(ctx, feedbacks, true, true, true)
 	s.NoError(err)
 	_, dataSet, err := s.LoadDataFromDatabase(context.Background(), s.DataClient,
-		[]expression.FeedbackTypeExpression{config.MustParseFeedbackTypeExpression("FeedbackType")},
+		[]expression.FeedbackTypeExpression{expression.MustParseFeedbackTypeExpression("FeedbackType")},
 		nil, 0, 0, NewOnlineEvaluator(), nil)
 	s.NoError(err)
 	s.rankingTrainSet = dataSet
@@ -209,9 +209,9 @@ func (s *MasterTestSuite) TestLoadDataFromDatabase() {
 	s.Config = &config.Config{}
 	s.Config.Recommend.CacheSize = 3
 	s.Config.Recommend.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{
-		config.MustParseFeedbackTypeExpression("positive")}
+		expression.MustParseFeedbackTypeExpression("positive")}
 	s.Config.Recommend.DataSource.ReadFeedbackTypes = []expression.FeedbackTypeExpression{
-		config.MustParseFeedbackTypeExpression("negative")}
+		expression.MustParseFeedbackTypeExpression("negative")}
 	s.Config.Master.NumJobs = runtime.NumCPU()
 
 	// insert items
@@ -351,9 +351,9 @@ func (s *MasterTestSuite) TestNonPersonalizedRecommend() {
 	s.Config = &config.Config{}
 	s.Config.Recommend.CacheSize = 3
 	s.Config.Recommend.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{
-		config.MustParseFeedbackTypeExpression("positive")}
+		expression.MustParseFeedbackTypeExpression("positive")}
 	s.Config.Recommend.DataSource.ReadFeedbackTypes = []expression.FeedbackTypeExpression{
-		config.MustParseFeedbackTypeExpression("negative")}
+		expression.MustParseFeedbackTypeExpression("negative")}
 	s.Config.Master.NumJobs = runtime.NumCPU()
 
 	// insert items

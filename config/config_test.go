@@ -100,12 +100,12 @@ func TestUnmarshal(t *testing.T) {
 			assert.Equal(t, 72*time.Hour, config.Recommend.CacheExpire)
 			// [recommend.data_source]
 			assert.Equal(t, []expression.FeedbackTypeExpression{
-				MustParseFeedbackTypeExpression("star"),
-				MustParseFeedbackTypeExpression("like"),
-				MustParseFeedbackTypeExpression("read>=3"),
+				expression.MustParseFeedbackTypeExpression("star"),
+				expression.MustParseFeedbackTypeExpression("like"),
+				expression.MustParseFeedbackTypeExpression("read>=3"),
 			}, config.Recommend.DataSource.PositiveFeedbackTypes)
 			assert.Equal(t, []expression.FeedbackTypeExpression{
-				MustParseFeedbackTypeExpression("read"),
+				expression.MustParseFeedbackTypeExpression("read"),
 			}, config.Recommend.DataSource.ReadFeedbackTypes)
 			assert.Equal(t, uint(0), config.Recommend.DataSource.PositiveFeedbackTTL)
 			assert.Equal(t, uint(0), config.Recommend.DataSource.ItemTTL)
