@@ -137,7 +137,7 @@ func StringToFeedbackTypeHookFunc() mapstructure.DecodeHookFunc {
 	) (interface{}, error) {
 		if f.Kind() == reflect.String && t == reflect.TypeOf(expression.FeedbackTypeExpression{}) {
 			var expr expression.FeedbackTypeExpression
-			if err := expr.UnmarshalJSON([]byte(data.(string))); err != nil {
+			if err := expr.FromString(data.(string)); err != nil {
 				return nil, errors.Trace(err)
 			}
 			return expr, nil // only convert string to FeedbackType

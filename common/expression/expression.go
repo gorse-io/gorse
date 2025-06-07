@@ -65,22 +65,18 @@ func (f *FeedbackTypeExpression) String() string {
 	}
 }
 
-func (f *FeedbackTypeExpression) MarshalJSON() ([]byte, error) {
-	return []byte(f.String()), nil
-}
-
-func (f *FeedbackTypeExpression) UnmarshalJSON(data []byte) error {
+func (f *FeedbackTypeExpression) FromString(data string) error {
 	groupNames := expressionPattern.SubexpNames()
-	subMatches := expressionPattern.FindSubmatch(data)
+	subMatches := expressionPattern.FindStringSubmatch(data)
 	if len(subMatches) == 0 {
 		return errors.New("invalid expression format, expected format: <feedback_type>[<operator><value>]")
 	}
 	for i, match := range subMatches {
 		switch groupNames[i] {
 		case "feedback_type":
-			f.FeedbackType = string(match)
+			f.FeedbackType = match
 		case "expr_type":
-			switch string(match) {
+			switch match {
 			case "<":
 				f.ExprType = Less
 			case "<=":
@@ -95,12 +91,28 @@ func (f *FeedbackTypeExpression) UnmarshalJSON(data []byte) error {
 		case "value":
 			if len(match) > 0 {
 				var err error
-				f.Value, err = strconv.ParseFloat(string(match), 64)
+				f.Value, err = strconv.ParseFloat(match, 64)
 				if err != nil {
 					return fmt.Errorf("invalid value: %w", err)
 				}
 			}
 		}
+	}
+	return nil
+}
+
+func (f *FeedbackTypeExpression) MarshalJSON() ([]byte, error) {
+	return []byte(fmt.Sprintf(`"%s"`, f.String())), nil
+}
+
+func (f *FeedbackTypeExpression) UnmarshalJSON(data []byte) error {
+	str := string(data)
+	if len(str) < 2 || str[0] != '"' || str[len(str)-1] != '"' {
+		return fmt.Errorf("invalid JSON format: %s", str)
+	}
+	str = str[1 : len(str)-1] // remove quotes
+	if err := f.FromString(str); err != nil {
+		return fmt.Errorf("failed to parse expression: %w", err)
 	}
 	return nil
 }
@@ -172,6 +184,6 @@ func MatchFeedbackTypeExpressions(exprs []FeedbackTypeExpression, feedbackType s
 
 func MustParseFeedbackTypeExpression(s string) FeedbackTypeExpression {
 	var expr FeedbackTypeExpression
-	lo.Must0(expr.UnmarshalJSON([]byte(s)))
+	lo.Must0(expr.FromString(s))
 	return expr
 }

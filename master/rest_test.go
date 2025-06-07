@@ -753,6 +753,10 @@ func (suite *MasterAPITestSuite) TestPurge() {
 }
 
 func (suite *MasterAPITestSuite) TestGetConfig() {
+	suite.Config.Recommend.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{
+		expression.MustParseFeedbackTypeExpression("a")}
+	suite.Config.Recommend.DataSource.ReadFeedbackTypes = []expression.FeedbackTypeExpression{
+		expression.MustParseFeedbackTypeExpression("b")}
 	apitest.New().
 		Handler(suite.handler).
 		Get("/api/dashboard/config").

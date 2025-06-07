@@ -796,7 +796,7 @@ func (m *Master) getTypedFeedbackByUser(request *restful.Request, response *rest
 	}
 	feedbackType := request.PathParameter("feedback-type")
 	var feedbackTypeExpr expression.FeedbackTypeExpression
-	if err := feedbackTypeExpr.UnmarshalJSON([]byte(feedbackType)); err != nil {
+	if err := feedbackTypeExpr.FromString(feedbackType); err != nil {
 		server.BadRequest(response, fmt.Errorf("invalid feedback type `%s`: %w", feedbackType, err))
 		return
 	}

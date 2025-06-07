@@ -1402,7 +1402,7 @@ func (s *RestServer) getTypedFeedbackByUser(request *restful.Request, response *
 	}
 	feedbackType := request.PathParameter("feedback-type")
 	var feednackTypeExpr expression.FeedbackTypeExpression
-	if err := feednackTypeExpr.UnmarshalJSON([]byte(feedbackType)); err != nil {
+	if err := feednackTypeExpr.FromString(feedbackType); err != nil {
 		BadRequest(response, err)
 		return
 	}
