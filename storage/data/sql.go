@@ -277,16 +277,16 @@ func (d *SQLDatabase) Init() error {
 			FeedbackType string    `gorm:"column:feedback_type;type:String"`
 			UserId       string    `gorm:"column:user_id;type:String"`
 			ItemId       string    `gorm:"column:item_id;type:String"`
-			Value        float64   `gorm:"column:value;type:AggregateFunction(sum, Float64)"`
-			Timestamp    time.Time `gorm:"column:time_stamp;type:AggregateFunction(any, DateTime64(9,'UTC'))"`
-			Comment      string    `gorm:"column:comment;type:AggregateFunction(any, String)"`
+			Value        float64   `gorm:"column:value;type:SimpleAggregateFunction(sum, Float64)"`
+			Timestamp    time.Time `gorm:"column:time_stamp;type:SimpleAggregateFunction(any, DateTime64(9,'UTC'))"`
+			Comment      string    `gorm:"column:comment;type:SimpleAggregateFunction(any, String)"`
 		}
 		err = d.gormDB.Set("gorm:table_options", "ENGINE = AggregatingMergeTree() ORDER BY (user_id, item_id, feedback_type)").AutoMigrate(AggregatingFeedback{})
 		if err != nil {
 			return errors.Trace(err)
 		}
 		err = d.gormDB.Exec(fmt.Sprintf("CREATE MATERIALIZED VIEW IF NOT EXISTS %s_mv TO %s AS "+
-			"SELECT feedback_type, user_id, item_id, sumState(value) AS value, anyState(time_stamp) AS time_stamp, anyState(comment) AS comment "+
+			"SELECT feedback_type, user_id, item_id, sum(value) AS value, any(time_stamp) AS time_stamp, any(comment) AS comment "+
 			"FROM %s GROUP BY feedback_type, user_id, item_id",
 			d.AggregatingFeedbackTable(), d.AggregatingFeedbackTable(), d.FeedbackTable())).Error
 		if err != nil {
@@ -298,7 +298,7 @@ func (d *SQLDatabase) Init() error {
 			return errors.Trace(err)
 		}
 		err = d.gormDB.Exec(fmt.Sprintf("CREATE MATERIALIZED VIEW IF NOT EXISTS %s_mv TO %s AS "+
-			"SELECT feedback_type, user_id, item_id, sumState(value) AS value, anyState(time_stamp) AS time_stamp, anyState(comment) AS comment "+
+			"SELECT feedback_type, user_id, item_id, sum(value) AS value, any(time_stamp) AS time_stamp, any(comment) AS comment "+
 			"FROM %s GROUP BY feedback_type, user_id, item_id",
 			d.UserFeedbackTable(), d.UserFeedbackTable(), d.FeedbackTable())).Error
 		if err != nil {
@@ -310,7 +310,7 @@ func (d *SQLDatabase) Init() error {
 			return errors.Trace(err)
 		}
 		err = d.gormDB.Exec(fmt.Sprintf("CREATE MATERIALIZED VIEW IF NOT EXISTS %s_mv TO %s AS "+
-			"SELECT feedback_type, user_id, item_id, sumState(value) AS value, anyState(time_stamp) AS time_stamp, anyState(comment) AS comment "+
+			"SELECT feedback_type, user_id, item_id, sum(value) AS value, any(time_stamp) AS time_stamp, any(comment) AS comment "+
 			"FROM %s GROUP BY feedback_type, user_id, item_id",
 			d.ItemFeedbackTable(), d.ItemFeedbackTable(), d.FeedbackTable())).Error
 		if err != nil {
@@ -571,7 +571,7 @@ func (d *SQLDatabase) GetItemFeedback(ctx context.Context, itemId string, feedba
 	tx := d.gormDB.WithContext(ctx)
 	if d.driver == ClickHouse {
 		tx = tx.Table(d.ItemFeedbackTable()).
-			Select("user_id, item_id, feedback_type, sumMerge(value) AS value, anyMerge(time_stamp) AS time_stamp, anyMerge(comment) AS comment").
+			Select("user_id, item_id, feedback_type, sum(value) AS value, any(time_stamp) AS time_stamp, any(comment) AS comment").
 			Group("user_id, item_id, feedback_type")
 	} else {
 		tx = tx.Table(d.FeedbackTable()).
@@ -782,7 +782,7 @@ func (d *SQLDatabase) GetUserFeedback(ctx context.Context, userId string, endTim
 		tx = tx.Table(d.FeedbackTable())
 	}
 	if d.driver == ClickHouse {
-		tx.Select("feedback_type, user_id, item_id, sumMerge(value), anyMerge(time_stamp) AS time_stamp, anyMerge(comment) AS comment").
+		tx.Select("feedback_type, user_id, item_id, sum(value), any(time_stamp) AS time_stamp, any(comment) AS comment").
 			Group("feedback_type, user_id, item_id")
 		if endTime != nil {
 			tx.Having("time_stamp <= ?", d.convertTimeZone(endTime))
@@ -1111,7 +1111,7 @@ func (d *SQLDatabase) GetUserItemFeedback(ctx context.Context, userId, itemId st
 	tx := d.gormDB.WithContext(ctx)
 	if d.driver == ClickHouse {
 		tx = tx.Table(d.UserFeedbackTable()).
-			Select("feedback_type, user_id, item_id, sumMerge(value) AS value, anyMerge(time_stamp) AS time_stamp, anyMerge(comment) AS comment").
+			Select("feedback_type, user_id, item_id, sum(value) AS value, any(time_stamp) AS time_stamp, any(comment) AS comment").
 			Group("feedback_type, user_id, item_id")
 	} else {
 		tx = tx.Table(d.FeedbackTable()).
