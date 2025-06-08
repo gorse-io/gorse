@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/samber/lo"
+	"github.com/zhenghaoz/gorse/common/expression"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
@@ -81,7 +82,8 @@ func (s *MasterTestSuite) TestFindItemToItem() {
 	}
 
 	// load mock dataset
-	_, dataSet, err := s.LoadDataFromDatabase(context.Background(), s.DataClient, []string{"FeedbackType"},
+	_, dataSet, err := s.LoadDataFromDatabase(context.Background(), s.DataClient,
+		[]expression.FeedbackTypeExpression{expression.MustParseFeedbackTypeExpression("FeedbackType")},
 		nil, 0, 0, NewOnlineEvaluator(), nil)
 	s.NoError(err)
 	s.rankingTrainSet = dataSet
@@ -164,7 +166,8 @@ func (s *MasterTestSuite) TestUserToUser() {
 	s.NoError(err)
 	err = s.DataClient.BatchInsertFeedback(ctx, feedbacks, true, true, true)
 	s.NoError(err)
-	_, dataSet, err := s.LoadDataFromDatabase(context.Background(), s.DataClient, []string{"FeedbackType"},
+	_, dataSet, err := s.LoadDataFromDatabase(context.Background(), s.DataClient,
+		[]expression.FeedbackTypeExpression{expression.MustParseFeedbackTypeExpression("FeedbackType")},
 		nil, 0, 0, NewOnlineEvaluator(), nil)
 	s.NoError(err)
 	s.rankingTrainSet = dataSet
@@ -205,8 +208,10 @@ func (s *MasterTestSuite) TestLoadDataFromDatabase() {
 	// create config
 	s.Config = &config.Config{}
 	s.Config.Recommend.CacheSize = 3
-	s.Config.Recommend.DataSource.PositiveFeedbackTypes = []string{"positive"}
-	s.Config.Recommend.DataSource.ReadFeedbackTypes = []string{"negative"}
+	s.Config.Recommend.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{
+		expression.MustParseFeedbackTypeExpression("positive")}
+	s.Config.Recommend.DataSource.ReadFeedbackTypes = []expression.FeedbackTypeExpression{
+		expression.MustParseFeedbackTypeExpression("negative")}
 	s.Config.Master.NumJobs = runtime.NumCPU()
 
 	// insert items
@@ -345,8 +350,10 @@ func (s *MasterTestSuite) TestNonPersonalizedRecommend() {
 	// create config
 	s.Config = &config.Config{}
 	s.Config.Recommend.CacheSize = 3
-	s.Config.Recommend.DataSource.PositiveFeedbackTypes = []string{"positive"}
-	s.Config.Recommend.DataSource.ReadFeedbackTypes = []string{"negative"}
+	s.Config.Recommend.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{
+		expression.MustParseFeedbackTypeExpression("positive")}
+	s.Config.Recommend.DataSource.ReadFeedbackTypes = []expression.FeedbackTypeExpression{
+		expression.MustParseFeedbackTypeExpression("negative")}
 	s.Config.Master.NumJobs = runtime.NumCPU()
 
 	// insert items

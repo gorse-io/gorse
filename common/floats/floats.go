@@ -34,13 +34,37 @@ func euclidean(a, b []float32) (ret float32) {
 	return math32.Sqrt(ret)
 }
 
+func addConst(a []float32, c float32) {
+	for i := range a {
+		a[i] += c
+	}
+}
+
+func sub(a, b []float32) {
+	for i := range a {
+		a[i] -= b[i]
+	}
+}
+
+func subTo(a, b, c []float32) {
+	for i := range a {
+		c[i] = a[i] - b[i]
+	}
+}
+
 func mulTo(a, b, c []float32) {
 	for i := range a {
 		c[i] = a[i] * b[i]
 	}
 }
 
-func mulConstAddTo(a []float32, c float32, dst []float32) {
+func mulConstAddTo(a []float32, b float32, c []float32, dst []float32) {
+	for i := range a {
+		dst[i] = a[i]*b + c[i]
+	}
+}
+
+func mulConstAdd(a []float32, c float32, dst []float32) {
 	for i := range a {
 		dst[i] += a[i] * c
 	}
@@ -55,6 +79,18 @@ func mulConstTo(a []float32, b float32, c []float32) {
 func mulConst(a []float32, b float32) {
 	for i := range a {
 		a[i] *= b
+	}
+}
+
+func divTo(a, b, c []float32) {
+	for i := range a {
+		c[i] = a[i] / b[i]
+	}
+}
+
+func sqrtTo(a, b []float32) {
+	for i := range a {
+		b[i] = math32.Sqrt(a[i])
 	}
 }
 
@@ -79,9 +115,7 @@ func SubTo(a, b, dst []float32) {
 	if len(dst) != len(b) || len(a) != len(b) {
 		panic("floats: slice lengths do not match")
 	}
-	for i := range dst {
-		dst[i] = a[i] - b[i]
-	}
+	feature.subTo(a, b, dst)
 }
 
 // Add two vectors: dst = dst + s
@@ -121,9 +155,7 @@ func Sub(dst, s []float32) {
 	if len(dst) != len(s) {
 		panic("floats: slice lengths do not match")
 	}
-	for i := range dst {
-		dst[i] -= s[i]
-	}
+	feature.sub(dst, s)
 }
 
 // MulConstTo multiplies a vector and a const, then saves the result in dst: dst = a * c
@@ -134,12 +166,19 @@ func MulConstTo(a []float32, c float32, dst []float32) {
 	feature.mulConstTo(a, c, dst)
 }
 
+func MulConstAddTo(a []float32, c float32, b, dst []float32) {
+	if len(a) != len(b) || len(a) != len(dst) {
+		panic("floats: slice lengths do not match")
+	}
+	feature.mulConstAddTo(a, c, b, dst)
+}
+
 // MulConstAddTo multiplies a vector and a const, then adds to dst: dst = dst + a * c
-func MulConstAddTo(a []float32, c float32, dst []float32) {
+func MulConstAdd(a []float32, c float32, dst []float32) {
 	if len(a) != len(dst) {
 		panic("floats: slice lengths do not match")
 	}
-	feature.mulConstAddTo(a, c, dst)
+	feature.mulConstAdd(a, c, dst)
 }
 
 // MulAddTo multiplies a vector and a vector, then adds to a vector: c += a * b
@@ -163,9 +202,21 @@ func AddTo(a, b, dst []float32) {
 }
 
 func AddConst(dst []float32, c float32) {
-	for i := range dst {
-		dst[i] += c
+	feature.addConst(dst, c)
+}
+
+func DivTo(a, b, c []float32) {
+	if len(a) != len(b) || len(a) != len(c) {
+		panic("floats: slice lengths do not match")
 	}
+	feature.divTo(a, b, c)
+}
+
+func SqrtTo(a, b []float32) {
+	if len(a) != len(b) {
+		panic("floats: slice lengths do not match")
+	}
+	feature.sqrtTo(a, b)
 }
 
 func Sqrt(a []float32) {

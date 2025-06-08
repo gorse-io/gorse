@@ -15,18 +15,14 @@
 #include <arm_neon.h>
 #include <stdint.h>
 
-void vmul_const_add_to(float *a, float *b, float *c, long n) {
-    int epoch = n / 4;
-    int remain = n % 4;
-    for (int i = 0; i < epoch; i++) {
-        float32x4_t v1 = vld1q_f32(a);
-        float32x4_t v3 = vld1q_f32(c);
-        float32x4_t v = vmlaq_n_f32(v3, v1, *b);
-        vst1q_f32(c, v);
-        a += 4;
-        c += 4;
+void vmul_const_add_to(float *a, float *b, float *c, float *dst, long n) {
+    for (int i = 0; i < n; i++) {
+        dst[i] = a[i] * (*b) + c[i];
     }
-    for (int i = 0; i < remain; i++) {
+}
+
+void vmul_const_add(float *a, float *b, float *c, long n) {
+    for (int i = 0; i < n; i++) {
         c[i] += a[i] * b[0];
     }
 }
@@ -43,20 +39,50 @@ void vmul_const(float *a, float *b, long n) {
     }
 }
 
+void vadd_const(float *a, float *b, long n) {
+    for (int i = 0; i < n; i++) {
+        a[i] += b[0];
+    }
+}
+
+void vsub_to(float *a, float *b, float *c, long n) {
+    for (long i = 0; i < n; i++) {
+        c[i] = a[i] - b[i];
+    }
+}
+
+void vsub(float *a, float *b, long n) {
+    for (long i = 0; i < n; i++) {
+        a[i] -= b[i];
+    }
+}
+
 void vmul_to(float *a, float *b, float *c, long n) {
+    for (long i = 0; i < n; i++) {
+        c[i] = a[i] * b[i];
+    }
+}
+
+void vdiv_to(float *a, float *b, float *c, long n) {
+    for (int64_t i = 0; i < n; i++) {
+        c[i] = a[i] / b[i];
+    }
+}
+
+void vsqrt_to(float *a, float *b, long n) {
     int epoch = n / 4;
     int remain = n % 4;
     for (int i = 0; i < epoch; i++) {
         float32x4_t v1 = vld1q_f32(a);
-        float32x4_t v2 = vld1q_f32(b);
-        float32x4_t v = vmulq_f32(v1, v2);
-        vst1q_f32(c, v);
+        float32x4_t v2 = vsqrtq_f32(v1);
+        vst1q_f32(b, v2);
         a += 4;
         b += 4;
-        c += 4;
     }
     for (int i = 0; i < remain; i++) {
-        c[i] = a[i] * b[i];
+        float32x2_t v = vdup_n_f32(a[i]);
+        float32x2_t r = vsqrt_f32(v);
+        b[i] = vget_lane_f32(r, 0);
     }
 }
 

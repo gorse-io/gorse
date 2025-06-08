@@ -82,9 +82,27 @@ func BenchmarkMulConstAddTo(b *testing.B) {
 				b.Run(strconv.Itoa(i), func(b *testing.B) {
 					v1 := initializeFloat32Array(i)
 					v2 := initializeFloat32Array(i)
+					v3 := make([]float32, i)
 					b.ResetTimer()
 					for i := 0; i < b.N; i++ {
-						feat.mulConstAddTo(v1, 2, v2)
+						feat.mulConstAddTo(v1, 2, v2, v3)
+					}
+				})
+			}
+		})
+	}
+}
+
+func BenchmarkMulConstAdd(b *testing.B) {
+	for _, feat := range []Feature{0, AVX, AVX512} {
+		b.Run(feat.String(), func(b *testing.B) {
+			for i := 16; i <= 128; i *= 2 {
+				b.Run(strconv.Itoa(i), func(b *testing.B) {
+					v1 := initializeFloat32Array(i)
+					v2 := initializeFloat32Array(i)
+					b.ResetTimer()
+					for i := 0; i < b.N; i++ {
+						feat.mulConstAdd(v1, 2, v2)
 					}
 				})
 			}
@@ -125,6 +143,57 @@ func BenchmarkMulConstTo(b *testing.B) {
 	}
 }
 
+func BenchmarkAddConst(b *testing.B) {
+	for _, feat := range []Feature{0, AVX, AVX512} {
+		b.Run(feat.String(), func(b *testing.B) {
+			for i := 16; i <= 128; i *= 2 {
+				b.Run(strconv.Itoa(i), func(b *testing.B) {
+					v1 := initializeFloat32Array(i)
+					b.ResetTimer()
+					for i := 0; i < b.N; i++ {
+						feat.addConst(v1, 2)
+					}
+				})
+			}
+		})
+	}
+}
+
+func BenchmarkSub(b *testing.B) {
+	for _, feat := range []Feature{0, AVX, AVX512} {
+		b.Run(feat.String(), func(b *testing.B) {
+			for i := 16; i <= 128; i *= 2 {
+				b.Run(strconv.Itoa(i), func(b *testing.B) {
+					v1 := initializeFloat32Array(i)
+					v2 := initializeFloat32Array(i)
+					b.ResetTimer()
+					for i := 0; i < b.N; i++ {
+						feat.sub(v1, v2)
+					}
+				})
+			}
+		})
+	}
+}
+
+func BenchmarkSubTo(b *testing.B) {
+	for _, feat := range []Feature{0, AVX, AVX512} {
+		b.Run(feat.String(), func(b *testing.B) {
+			for i := 16; i <= 128; i *= 2 {
+				b.Run(strconv.Itoa(i), func(b *testing.B) {
+					v1 := initializeFloat32Array(i)
+					v2 := initializeFloat32Array(i)
+					v3 := make([]float32, i)
+					b.ResetTimer()
+					for i := 0; i < b.N; i++ {
+						feat.subTo(v1, v2, v3)
+					}
+				})
+			}
+		})
+	}
+}
+
 func BenchmarkMulTo(b *testing.B) {
 	for _, feat := range []Feature{0, AVX, AVX512} {
 		b.Run(feat.String(), func(b *testing.B) {
@@ -136,6 +205,41 @@ func BenchmarkMulTo(b *testing.B) {
 					b.ResetTimer()
 					for i := 0; i < b.N; i++ {
 						feat.mulTo(v1, v2, v3)
+					}
+				})
+			}
+		})
+	}
+}
+
+func BenchmarkDivTo(b *testing.B) {
+	for _, feat := range []Feature{0, AVX, AVX512} {
+		b.Run(feat.String(), func(b *testing.B) {
+			for i := 16; i <= 128; i *= 2 {
+				b.Run(strconv.Itoa(i), func(b *testing.B) {
+					v1 := initializeFloat32Array(i)
+					v2 := initializeFloat32Array(i)
+					v3 := make([]float32, i)
+					b.ResetTimer()
+					for i := 0; i < b.N; i++ {
+						feat.divTo(v1, v2, v3)
+					}
+				})
+			}
+		})
+	}
+}
+
+func BenchmarkSqrtTo(b *testing.B) {
+	for _, feat := range []Feature{0, AVX, AVX512} {
+		b.Run(feat.String(), func(b *testing.B) {
+			for i := 16; i <= 128; i *= 2 {
+				b.Run(strconv.Itoa(i), func(b *testing.B) {
+					v1 := initializeFloat32Array(i)
+					v2 := make([]float32, i)
+					b.ResetTimer()
+					for i := 0; i < b.N; i++ {
+						feat.sqrtTo(v1, v2)
 					}
 				})
 			}

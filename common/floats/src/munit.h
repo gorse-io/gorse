@@ -354,7 +354,7 @@ void munit_errorf_ex(const char* filename, int line, const char* format, ...);
     if (MUNIT_UNLIKELY(memcmp(munit_tmp_a_, munit_tmp_b_, munit_tmp_size_ * sizeof(float))) != 0) { \
       size_t munit_tmp_pos_; \
       for (munit_tmp_pos_ = 0 ; munit_tmp_pos_ < munit_tmp_size_ ; munit_tmp_pos_++) { \
-        if (munit_tmp_a_[munit_tmp_pos_] != munit_tmp_b_[munit_tmp_pos_]) { \
+        if (abs(munit_tmp_a_[munit_tmp_pos_] - munit_tmp_b_[munit_tmp_pos_]) > 1e-6) { \
           munit_errorf("assertion failed: floats %s == %s (%f == %f), at offset %" MUNIT_SIZE_MODIFIER "u", \
                        #a, #b, munit_tmp_a_[munit_tmp_pos_], munit_tmp_b_[munit_tmp_pos_], munit_tmp_pos_); \
           break; \

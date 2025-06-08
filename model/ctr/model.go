@@ -27,7 +27,6 @@ import (
 	"github.com/chewxy/math32"
 	"github.com/juju/errors"
 	"github.com/samber/lo"
-	"github.com/thoas/go-funk"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/copier"
 	"github.com/zhenghaoz/gorse/base/encoding"
@@ -229,15 +228,15 @@ func (fm *FM) internalPredictImpl(features []int32, values []float32) float32 {
 	b := make([]float32, fm.nFactors)
 	for it, i := range features {
 		// 1) \sum^n_{i=1} v^2_{i,f} x_i
-		floats.MulConstAddTo(fm.V[i], values[it], a)
+		floats.MulConstAdd(fm.V[i], values[it], a)
 		// 2) \sum^n_{i=1} v^2_{i,f} x^2_i
 		floats.MulTo(fm.V[i], fm.V[i], temp)
-		floats.MulConstAddTo(temp, values[it]*values[it], b)
+		floats.MulConstAdd(temp, values[it]*values[it], b)
 	}
 	// 3) (\sum^n_{i=1} v^2_{i,f} x^2_i)^2 - \sum^n_{i=1} v^2_{i,f} x^2_i
 	floats.MulTo(a, a, temp)
-	floats.MulConstAddTo(b, -1, temp)
-	pred += funk.SumFloat32(temp) / 2
+	floats.MulConstAdd(b, -1, temp)
+	pred += lo.Sum(temp) / 2
 	return pred
 }
 
@@ -292,7 +291,7 @@ func (fm *FM) Fit(ctx context.Context, trainSet, testSet dataset.CTRSplit, confi
 				// \sum^n_{j=1}v_j,fx_j
 				floats.Zero(temp[workerId])
 				for it, j := range features {
-					floats.MulConstAddTo(fm.V[j], values[it], temp[workerId])
+					floats.MulConstAdd(fm.V[j], values[it], temp[workerId])
 				}
 
 				correct1 := 1 / (1 - math32.Pow(beta1, float32(epoch)))
@@ -339,20 +338,20 @@ func (fm *FM) Fit(ctx context.Context, trainSet, testSet dataset.CTRSplit, confi
 
 					// Update v_{i,f}
 					floats.MulConstTo(temp[workerId], values[it], vGrad[workerId])
-					floats.MulConstAddTo(fm.V[i], -values[it]*values[it], vGrad[workerId])
+					floats.MulConstAdd(fm.V[i], -values[it]*values[it], vGrad[workerId])
 					floats.MulConst(vGrad[workerId], grad)
-					floats.MulConstAddTo(fm.V[i], fm.reg, vGrad[workerId])
+					floats.MulConstAdd(fm.V[i], fm.reg, vGrad[workerId])
 					switch fm.optimizer {
 					case model.SGD:
-						floats.MulConstAddTo(vGrad[workerId], -fm.lr, fm.V[i])
+						floats.MulConstAdd(vGrad[workerId], -fm.lr, fm.V[i])
 					case model.Adam:
 						// m_t = \beta_1 m_{t-1} + (1 - \beta_1) g_t
 						floats.MulConst(mV[workerId][i], beta1)
-						floats.MulConstAddTo(vGrad[workerId], 1-beta1, mV[workerId][i])
+						floats.MulConstAdd(vGrad[workerId], 1-beta1, mV[workerId][i])
 						// v_t = \beta_2 v_{t-1} + (1 - \beta_2) g^2_t
 						floats.MulConst(vV[workerId][i], beta2)
 						floats.MulTo(vGrad[workerId], vGrad[workerId], vGrad2[workerId])
-						floats.MulConstAddTo(vGrad2[workerId], 1-beta2, vV[workerId][i])
+						floats.MulConstAdd(vGrad2[workerId], 1-beta2, vV[workerId][i])
 						// \hat{m}_t = m_t / (1 - \beta^t_1)
 						floats.MulConstTo(mV[workerId][i], correct1, mVHat[workerId])
 						// \hat{v}_t = v_t / (1 - \beta^t_2)
@@ -361,7 +360,7 @@ func (fm *FM) Fit(ctx context.Context, trainSet, testSet dataset.CTRSplit, confi
 						floats.Sqrt(vVHat[workerId])
 						floats.AddConst(vVHat[workerId], eps)
 						floats.Div(mVHat[workerId], vVHat[workerId])
-						floats.MulConstAddTo(mVHat[workerId], -fm.lr, fm.V[i])
+						floats.MulConstAdd(mVHat[workerId], -fm.lr, fm.V[i])
 					default:
 						log.Logger().Fatal("unknown optimizer", zap.String("optimizer", fm.optimizer))
 					}
@@ -788,6 +787,7 @@ func (fm *FactorizationMachines) Fit(ctx context.Context, trainSet, testSet data
 		panic("unknown optimizer")
 	}
 	optimizer.SetWeightDecay(fm.reg)
+	optimizer.SetJobs(config.Jobs)
 	for epoch := 1; epoch <= fm.nEpochs; epoch++ {
 		fitStart := time.Now()
 		cost := float32(0)

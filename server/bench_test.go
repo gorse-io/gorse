@@ -19,18 +19,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"github.com/emicklei/go-restful/v3"
-	"github.com/go-resty/resty/v2"
-	"github.com/redis/go-redis/v9"
-	"github.com/samber/lo"
-	"github.com/stretchr/testify/require"
-	"github.com/zhenghaoz/gorse/base/log"
-	"github.com/zhenghaoz/gorse/config"
-	"github.com/zhenghaoz/gorse/storage/cache"
-	"github.com/zhenghaoz/gorse/storage/data"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
-	"google.golang.org/protobuf/proto"
 	"math/rand"
 	"net"
 	"net/http"
@@ -40,6 +28,20 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/emicklei/go-restful/v3"
+	"github.com/go-resty/resty/v2"
+	"github.com/redis/go-redis/v9"
+	"github.com/samber/lo"
+	"github.com/stretchr/testify/require"
+	"github.com/zhenghaoz/gorse/base/log"
+	"github.com/zhenghaoz/gorse/common/expression"
+	"github.com/zhenghaoz/gorse/config"
+	"github.com/zhenghaoz/gorse/storage/cache"
+	"github.com/zhenghaoz/gorse/storage/data"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -964,7 +966,8 @@ func BenchmarkRecommendFromItemBased(b *testing.B) {
 			}
 
 			s.Config.Recommend.CacheSize = len(documents)
-			s.Config.Recommend.DataSource.PositiveFeedbackTypes = []string{"feedback_type_positive"}
+			s.Config.Recommend.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{
+				expression.MustParseFeedbackTypeExpression("feedback_type_positive")}
 			s.Config.Recommend.Online.FallbackRecommend = []string{"item_based"}
 
 			response := make([]*resty.Response, b.N)

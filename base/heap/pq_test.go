@@ -15,11 +15,12 @@
 package heap
 
 import (
-	"github.com/stretchr/testify/assert"
-	"github.com/thoas/go-funk"
-	"modernc.org/sortutil"
 	"sort"
 	"testing"
+
+	"github.com/samber/lo"
+	"github.com/stretchr/testify/assert"
+	"modernc.org/sortutil"
 )
 
 func TestPriorityQueue(t *testing.T) {
@@ -49,7 +50,7 @@ func TestPriorityQueue(t *testing.T) {
 
 	// test reverse
 	r := cp.Reverse()
-	funk.ReverseInt32(elements)
+	lo.Reverse(elements)
 	for _, e := range elements {
 		value, weight := r.Pop()
 		assert.Equal(t, e, value)
