@@ -19,8 +19,6 @@ package floats
 import (
 	"strings"
 	"unsafe"
-
-	"github.com/klauspost/cpuid/v2"
 )
 
 //go:generate goat src/floats_neon.c -O3
@@ -28,130 +26,72 @@ import (
 type Feature uint64
 
 const (
-	ASIMD Feature = 1 << iota
-	AMX           // Apple matrix extension
+	AMX Feature = 1 << iota // Apple matrix extension
 	CUDA
 )
 
 var feature Feature
 
-func init() {
-	if cpuid.CPU.Supports(cpuid.ASIMD) {
-		feature = feature | ASIMD
-	}
-}
-
 func (feature Feature) String() string {
-	var features []string
-	if feature&ASIMD > 0 {
-		features = append(features, "ASIMD")
-	}
-	if len(features) == 0 {
-		return "ARM64"
+	var features = []string{"ARM64"}
+	if feature&AMX > 0 {
+		features = append(features, "AMX")
 	}
 	return strings.Join(features, "+")
 }
 
 func (feature Feature) mulConstAddTo(a []float32, b float32, c, dst []float32) {
-	if feature&ASIMD == ASIMD {
-		vmul_const_add_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), unsafe.Pointer(&c[0]), unsafe.Pointer(&dst[0]), int64(len(a)))
-	} else {
-		mulConstAddTo(a, b, c, dst)
-	}
+	vmul_const_add_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), unsafe.Pointer(&c[0]), unsafe.Pointer(&dst[0]), int64(len(a)))
 }
 
 func (feature Feature) mulConstAdd(a []float32, b float32, c []float32) {
-	if feature&ASIMD == ASIMD {
-		vmul_const_add(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), unsafe.Pointer(&c[0]), int64(len(a)))
-	} else {
-		mulConstAdd(a, b, c)
-	}
+	vmul_const_add(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), unsafe.Pointer(&c[0]), int64(len(a)))
 }
 
 func (feature Feature) mulConstTo(a []float32, b float32, c []float32) {
-	if feature&ASIMD == ASIMD {
-		vmul_const_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), unsafe.Pointer(&c[0]), int64(len(a)))
-	} else {
-		mulConstTo(a, b, c)
-	}
+	vmul_const_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), unsafe.Pointer(&c[0]), int64(len(a)))
 }
 
 func (feature Feature) addConst(a []float32, b float32) {
-	if feature&ASIMD == ASIMD {
-		vadd_const(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), int64(len(a)))
-	} else {
-		addConst(a, b)
-	}
+	vadd_const(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), int64(len(a)))
 }
 
 func (feature Feature) sub(a, b []float32) {
-	if feature&ASIMD == ASIMD {
-		vsub(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), int64(len(a)))
-	} else {
-		sub(a, b)
-	}
+	vsub(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), int64(len(a)))
 }
 
 func (feature Feature) subTo(a, b, c []float32) {
-	if feature&ASIMD == ASIMD {
-		vsub_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), unsafe.Pointer(&c[0]), int64(len(a)))
-	} else {
-		subTo(a, b, c)
-	}
+	vsub_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), unsafe.Pointer(&c[0]), int64(len(a)))
 }
 
 func (feature Feature) mulTo(a, b, c []float32) {
-	if feature&ASIMD == ASIMD {
-		vmul_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), unsafe.Pointer(&c[0]), int64(len(a)))
-	} else {
-		mulTo(a, b, c)
-	}
+	vmul_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), unsafe.Pointer(&c[0]), int64(len(a)))
 }
 
 func (feature Feature) divTo(a, b, c []float32) {
-	if feature&ASIMD == ASIMD {
-		vdiv_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), unsafe.Pointer(&c[0]), int64(len(a)))
-	} else {
-		divTo(a, b, c)
-	}
+	vdiv_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), unsafe.Pointer(&c[0]), int64(len(a)))
 }
 
 func (feature Feature) sqrtTo(a, b []float32) {
-	if feature&ASIMD == ASIMD {
-		vsqrt_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), int64(len(a)))
-	} else {
-		sqrtTo(a, b)
-	}
+	vsqrt_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), int64(len(a)))
 }
 
 func (feature Feature) mulConst(a []float32, b float32) {
-	if feature&ASIMD == ASIMD {
-		vmul_const(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), int64(len(a)))
-	} else {
-		mulConst(a, b)
-	}
+	vmul_const(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), int64(len(a)))
 }
 
 func (feature Feature) dot(a, b []float32) float32 {
-	if feature&ASIMD == ASIMD {
-		return vdot(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), int64(len(a)))
-	} else {
-		return dot(a, b)
-	}
+	return vdot(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), int64(len(a)))
 }
 
 func (feature Feature) euclidean(a, b []float32) float32 {
-	if feature&ASIMD == ASIMD {
-		return veuclidean(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), int64(len(a)))
-	} else {
-		return euclidean(a, b)
-	}
+	return veuclidean(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), int64(len(a)))
 }
 
 func (feature Feature) mm(a, b, c []float32, m, n, k int, transA, transB bool) {
-	if feature&ASIMD == ASIMD && feature&AMX == 0 && feature&CUDA == 0 {
-		vmm(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), unsafe.Pointer(&c[0]), int64(m), int64(n), int64(k), transA, transB)
-	} else {
+	if feature&AMX == AMX || feature&CUDA == CUDA {
 		mm(a, b, c, m, n, k, transA, transB)
+	} else {
+		vmm(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), unsafe.Pointer(&c[0]), int64(m), int64(n), int64(k), transA, transB)
 	}
 }
