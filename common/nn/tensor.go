@@ -443,7 +443,7 @@ func (t *Tensor) neg() *Tensor {
 	return t
 }
 
-func (t *Tensor) matMul(other *Tensor, transpose1, transpose2 bool) *Tensor {
+func (t *Tensor) matMul(other *Tensor, transpose1, transpose2 bool, jobs int) *Tensor {
 	if len(t.shape) != 2 || len(other.shape) != 2 {
 		panic("matMul requires 2-D tensors")
 	}

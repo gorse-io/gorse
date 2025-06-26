@@ -43,7 +43,7 @@ func TestLinearRegression(t *testing.T) {
 
 	w := Zeros(1, 1)
 	b := Zeros(1)
-	predict := func(x *Tensor) *Tensor { return Add(MatMul(x, w), b) }
+	predict := func(x *Tensor) *Tensor { return Add(MatMul(x, w, false, false, 0), b) }
 
 	lr := float32(0.1)
 	for i := 0; i < 100; i++ {
@@ -239,6 +239,7 @@ func TestMNIST(t *testing.T) {
 		NewReLU(),
 		NewLinear(1000, 10),
 	)
+	model.SetJobs(runtime.NumCPU())
 	optimizer := NewAdam(model.Parameters(), 0.001)
 
 	const (
