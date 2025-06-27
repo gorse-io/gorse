@@ -187,6 +187,25 @@ jobs:
     - name: Test
       run: go test -timeout 20m -v ./... -skip "TestPostgres|TestMySQL|TestMongo|TestRedis|TestClickHouse"
 
+  unit_test_riscv:
+    name: unit tests (ubuntu-24.04-riscv)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: uraimo/run-on-arch-action@v3
+        with:
+          arch: riscv64
+          distro: ubuntu24.04
+          githubToken: ${{ github.token }}
+          dockerRunArgs: |
+            --volume "${PWD}:/opt/gorse"
+          install: |
+            wget https://go.dev/dl/go1.24.4.linux-riscv64.tar.gz
+            tar -C /usr/local -xzf go1.24.4.linux-riscv64.tar.gz
+          run: |
+            export PATH=$PATH:/usr/local/go/bin
+            go version
+
   integrate_test:
     name: integrate tests
     runs-on: ubuntu-latest
