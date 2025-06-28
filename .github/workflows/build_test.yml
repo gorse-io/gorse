@@ -200,11 +200,12 @@ jobs:
           dockerRunArgs: |
             --volume "${PWD}:/opt/gorse"
           install: |
-            wget https://go.dev/dl/go1.24.4.linux-riscv64.tar.gz
+            curl -L https://go.dev/dl/go1.24.4.linux-riscv64.tar.gz -o go1.24.4.linux-riscv64.tar.gz
             tar -C /usr/local -xzf go1.24.4.linux-riscv64.tar.gz
           run: |
             export PATH=$PATH:/usr/local/go/bin
-            go version
+            cd /opt/gorse
+            go test -timeout 20m -v ./... -skip "TestPostgres|TestMySQL|TestMongo|TestRedis|TestClickHouse"
 
   integrate_test:
     name: integrate tests
