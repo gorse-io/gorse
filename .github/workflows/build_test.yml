@@ -200,7 +200,9 @@ jobs:
           dockerRunArgs: |
             --volume "${PWD}:/opt/gorse"
           install: |
-            curl -L https://go.dev/dl/go1.24.4.linux-riscv64.tar.gz -o go1.24.4.linux-riscv64.tar.gz
+            apt-get update
+            apt-get install -y wget tar
+            wget https://go.dev/dl/go1.24.4.linux-riscv64.tar.gz
             tar -C /usr/local -xzf go1.24.4.linux-riscv64.tar.gz
           run: |
             export PATH=$PATH:/usr/local/go/bin
