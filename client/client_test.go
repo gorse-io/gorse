@@ -19,6 +19,8 @@ package client
 import (
 	"context"
 	"encoding/base64"
+	"maps"
+	"strconv"
 	"testing"
 	"time"
 
@@ -37,14 +39,15 @@ const (
 type GorseClientTestSuite struct {
 	suite.Suite
 	client *client.GorseClient
-	redis  *rueidis.Client
+	redis  rueidis.Client
 }
 
 func (suite *GorseClientTestSuite) SetupSuite() {
 	suite.client = client.NewGorseClient(GorseEndpoint, GorseApiKey)
 	options, err := rueidis.ParseURL(RedisEndpoint)
 	suite.NoError(err)
-	suite.redis = rueidis.NewClient(options)
+	suite.redis, err = rueidis.NewClient(options)
+	suite.NoError(err)
 }
 
 func (suite *GorseClientTestSuite) TearDownSuite() {
