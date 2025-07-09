@@ -31,7 +31,7 @@ import (
 
 	"github.com/emicklei/go-restful/v3"
 	"github.com/go-resty/resty/v2"
-	"github.com/redis/go-redis/v9"
+	"github.com/redis/rueidis"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/require"
 	"github.com/zhenghaoz/gorse/base/log"
@@ -222,10 +222,11 @@ func (s *benchServer) prepareData(b *testing.B, url, benchName string) string {
 func (s *benchServer) prepareCache(b *testing.B, url, benchName string) string {
 	dbName := "gorse_cache_" + benchName
 	if strings.HasPrefix(url, "redis://") {
-		opt, err := redis.ParseURL(url)
+		opt, err := rueidis.ParseURL(url)
 		require.NoError(b, err)
-		cli := redis.NewClient(opt)
-		require.NoError(b, cli.FlushDB(context.Background()).Err())
+		cli, err := rueidis.NewClient(opt)
+		require.NoError(b, err)
+		require.NoError(b, cli.Do(context.Background(), cli.B().Flushdb().Build()).Error())
 		return url
 	} else if strings.HasPrefix(url, "mongodb://") {
 		ctx := context.Background()
