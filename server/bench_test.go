@@ -224,8 +224,9 @@ func (s *benchServer) prepareCache(b *testing.B, url, benchName string) string {
 	if strings.HasPrefix(url, "redis://") {
 		opt, err := rueidis.ParseURL(url)
 		require.NoError(b, err)
-		cli := rueidis.NewClient(opt)
-		require.NoError(b, cli.Do(context.Background(), redisClient.client.B().Flushdb().Build()).Error())
+		cli, err := rueidis.NewClient(opt)
+		require.NoError(b, err)
+		require.NoError(b, cli.Do(context.Background(), cli.B().Flushdb().Build()).Error())
 		return url
 	} else if strings.HasPrefix(url, "mongodb://") {
 		ctx := context.Background()
