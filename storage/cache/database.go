@@ -26,8 +26,8 @@ import (
 	"github.com/XSAM/otelsql"
 	"github.com/araddon/dateparse"
 	"github.com/juju/errors"
-	"github.com/redis/go-redis/extra/redisotel/v9"
-	"github.com/redis/go-redis/v9"
+	"github.com/redis/rueidis"
+	"github.com/redis/rueidis/rueidisotel"
 	"github.com/samber/lo"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/storage"
@@ -36,7 +36,6 @@ import (
 	"go.mongodb.org/mongo-driver/x/mongo/driver/connstring"
 	"go.opentelemetry.io/contrib/instrumentation/go.mongodb.org/mongo-driver/mongo/otelmongo"
 	semconv "go.opentelemetry.io/otel/semconv/v1.8.0"
-	"go.uber.org/zap"
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
 	"gorm.io/driver/sqlite"
@@ -287,39 +286,30 @@ type Database interface {
 // Open a connection to a database.
 func Open(path, tablePrefix string, opts ...storage.Option) (Database, error) {
 	var err error
-	if strings.HasPrefix(path, storage.RedisPrefix) || strings.HasPrefix(path, storage.RedissPrefix) {
-		opt, err := redis.ParseURL(path)
-		if err != nil {
-			return nil, err
-		}
-		opt.Protocol = 2
-		database := new(Redis)
-		database.client = redis.NewClient(opt)
-		database.TablePrefix = storage.TablePrefix(tablePrefix)
-		if err = redisotel.InstrumentTracing(database.client, redisotel.WithAttributes(semconv.DBSystemRedis)); err != nil {
-			log.Logger().Error("failed to add tracing for redis", zap.Error(err))
-			return nil, errors.Trace(err)
-		}
-		return database, nil
-	} else if strings.HasPrefix(path, storage.RedisClusterPrefix) || strings.HasPrefix(path, storage.RedissClusterPrefix) {
-		var newURL string
+	if strings.HasPrefix(path, storage.RedisPrefix) || strings.HasPrefix(path, storage.RedissPrefix) ||
+		strings.HasPrefix(path, storage.RedisClusterPrefix) || strings.HasPrefix(path, storage.RedissClusterPrefix) {
+		// rueidis treat cluster and normal client as the same, so replace all cluster prefix with the normal one
+		newURL := path
 		if strings.HasPrefix(path, storage.RedisClusterPrefix) {
 			newURL = strings.Replace(path, storage.RedisClusterPrefix, storage.RedisPrefix, 1)
 		} else if strings.HasPrefix(path, storage.RedissClusterPrefix) {
 			newURL = strings.Replace(path, storage.RedissClusterPrefix, storage.RedissPrefix, 1)
 		}
-		opt, err := redis.ParseClusterURL(newURL)
+		if strings.HasSuffix(newURL, "/") {
+			// rueidis not allow empty db in the path, so we have to add a default one to make old conf happy
+			newURL = newURL + "0"
+		}
+		opt, err := rueidis.ParseURL(newURL)
 		if err != nil {
 			return nil, err
 		}
-		opt.Protocol = 2
 		database := new(Redis)
-		database.client = redis.NewClusterClient(opt)
-		database.TablePrefix = storage.TablePrefix(tablePrefix)
-		if err = redisotel.InstrumentTracing(database.client, redisotel.WithAttributes(semconv.DBSystemRedis)); err != nil {
-			log.Logger().Error("failed to add tracing for redis", zap.Error(err))
-			return nil, errors.Trace(err)
+		database.client, err = rueidis.NewClient(opt)
+		if err != nil {
+			return nil, err
 		}
+		database.TablePrefix = storage.TablePrefix(tablePrefix)
+		database.client = rueidisotel.WithClient(database.client, rueidisotel.TraceAttrs(semconv.DBSystemRedis))
 		return database, nil
 	} else if strings.HasPrefix(path, storage.MongoPrefix) || strings.HasPrefix(path, storage.MongoSrvPrefix) {
 		// connect to database
