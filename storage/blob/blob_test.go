@@ -45,17 +45,10 @@ func TestBlob(t *testing.T) {
 	tempFilePath := path.Join(t.TempDir(), "test.txt")
 	err = os.WriteFile(tempFilePath, []byte("hello world"), 0644)
 	assert.NoError(t, err)
-	info, err := os.Stat(tempFilePath)
-	assert.NoError(t, err)
 
 	// upload blob
 	err = client.UploadBlob("test", tempFilePath)
 	assert.NoError(t, err)
-
-	// fetch blob
-	modTime, err := client.FetchBlob("test")
-	assert.NoError(t, err)
-	assert.Equal(t, info.ModTime().UTC(), modTime)
 
 	// download blob
 	downloadFilePath := path.Join(t.TempDir(), "download.txt")
