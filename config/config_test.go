@@ -27,6 +27,7 @@ import (
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
+	"github.com/zhenghaoz/gorse/common/expression"
 )
 
 func TestUnmarshal(t *testing.T) {
@@ -98,8 +99,14 @@ func TestUnmarshal(t *testing.T) {
 			assert.Equal(t, 100, config.Recommend.CacheSize)
 			assert.Equal(t, 72*time.Hour, config.Recommend.CacheExpire)
 			// [recommend.data_source]
-			assert.Equal(t, []string{"star", "like"}, config.Recommend.DataSource.PositiveFeedbackTypes)
-			assert.Equal(t, []string{"read"}, config.Recommend.DataSource.ReadFeedbackTypes)
+			assert.Equal(t, []expression.FeedbackTypeExpression{
+				expression.MustParseFeedbackTypeExpression("star"),
+				expression.MustParseFeedbackTypeExpression("like"),
+				expression.MustParseFeedbackTypeExpression("read>=3"),
+			}, config.Recommend.DataSource.PositiveFeedbackTypes)
+			assert.Equal(t, []expression.FeedbackTypeExpression{
+				expression.MustParseFeedbackTypeExpression("read"),
+			}, config.Recommend.DataSource.ReadFeedbackTypes)
 			assert.Equal(t, uint(0), config.Recommend.DataSource.PositiveFeedbackTTL)
 			assert.Equal(t, uint(0), config.Recommend.DataSource.ItemTTL)
 			// [recommend.popular]
@@ -109,10 +116,6 @@ func TestUnmarshal(t *testing.T) {
 			assert.Equal(t, "most_starred_weekly", config.Recommend.NonPersonalized[0].Name)
 			assert.Equal(t, "count(feedback, .FeedbackType == 'star')", config.Recommend.NonPersonalized[0].Score)
 			assert.Equal(t, "(now() - item.Timestamp).Hours() < 168", config.Recommend.NonPersonalized[0].Filter)
-			// [recommend.user_neighbors]
-			assert.Equal(t, "related", config.Recommend.UserNeighbors.NeighborType)
-			// [recommend.item_neighbors]
-			assert.Equal(t, "similar", config.Recommend.ItemNeighbors.NeighborType)
 			// [recommend.collaborative]
 			assert.Equal(t, 60*time.Minute, config.Recommend.Collaborative.ModelFitPeriod)
 			assert.Equal(t, 360*time.Minute, config.Recommend.Collaborative.ModelSearchPeriod)
@@ -268,62 +271,6 @@ func TestTablePrefixCompat(t *testing.T) {
 	assert.Equal(t, "gorse_", config.Database.DataTablePrefix)
 }
 
-func TestConfig_UserNeighborDigest(t *testing.T) {
-	cfg1, cfg2 := GetDefaultConfig(), GetDefaultConfig()
-	cfg1.Recommend.UserNeighbors.NeighborType = "auto"
-	cfg2.Recommend.UserNeighbors.NeighborType = "manual"
-	assert.NotEqual(t, cfg1.UserNeighborDigest(), cfg2.UserNeighborDigest())
-
-	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
-	cfg1.Recommend.UserNeighbors.NeighborType = "auto"
-	cfg2.Recommend.UserNeighbors.NeighborType = "auto"
-	cfg1.Recommend.DataSource.PositiveFeedbackTypes = []string{"positive"}
-	cfg2.Recommend.DataSource.PositiveFeedbackTypes = []string{"negative"}
-	assert.NotEqual(t, cfg1.UserNeighborDigest(), cfg2.UserNeighborDigest())
-
-	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
-	cfg1.Recommend.UserNeighbors.NeighborType = "related"
-	cfg2.Recommend.UserNeighbors.NeighborType = "related"
-	cfg1.Recommend.DataSource.PositiveFeedbackTypes = []string{"positive"}
-	cfg2.Recommend.DataSource.PositiveFeedbackTypes = []string{"negative"}
-	assert.NotEqual(t, cfg1.UserNeighborDigest(), cfg2.UserNeighborDigest())
-
-	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
-	cfg1.Recommend.UserNeighbors.NeighborType = "similar"
-	cfg2.Recommend.UserNeighbors.NeighborType = "similar"
-	cfg1.Recommend.DataSource.PositiveFeedbackTypes = []string{"positive"}
-	cfg2.Recommend.DataSource.PositiveFeedbackTypes = []string{"negative"}
-	assert.Equal(t, cfg1.UserNeighborDigest(), cfg2.UserNeighborDigest())
-}
-
-func TestConfig_ItemNeighborDigest(t *testing.T) {
-	cfg1, cfg2 := GetDefaultConfig(), GetDefaultConfig()
-	cfg1.Recommend.ItemNeighbors.NeighborType = "auto"
-	cfg2.Recommend.ItemNeighbors.NeighborType = "related"
-	assert.NotEqual(t, cfg1.ItemNeighborDigest(), cfg2.ItemNeighborDigest())
-
-	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
-	cfg1.Recommend.ItemNeighbors.NeighborType = "auto"
-	cfg2.Recommend.ItemNeighbors.NeighborType = "auto"
-	cfg1.Recommend.DataSource.PositiveFeedbackTypes = []string{"positive"}
-	cfg2.Recommend.DataSource.PositiveFeedbackTypes = []string{"negative"}
-	assert.NotEqual(t, cfg1.ItemNeighborDigest(), cfg2.ItemNeighborDigest())
-
-	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
-	cfg1.Recommend.ItemNeighbors.NeighborType = "related"
-	cfg2.Recommend.ItemNeighbors.NeighborType = "related"
-	cfg1.Recommend.DataSource.PositiveFeedbackTypes = []string{"positive"}
-	cfg2.Recommend.DataSource.PositiveFeedbackTypes = []string{"negative"}
-	assert.NotEqual(t, cfg1.ItemNeighborDigest(), cfg2.ItemNeighborDigest())
-
-	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
-	cfg1.Recommend.ItemNeighbors.NeighborType = "similar"
-	cfg2.Recommend.ItemNeighbors.NeighborType = "similar"
-	cfg1.Recommend.DataSource.PositiveFeedbackTypes = []string{"positive"}
-	cfg2.Recommend.DataSource.PositiveFeedbackTypes = []string{"negative"}
-	assert.Equal(t, cfg1.ItemNeighborDigest(), cfg2.ItemNeighborDigest())
-}
-
 func TestConfig_OfflineRecommendDigest(t *testing.T) {
 	// test explore recommendation
 	cfg1, cfg2 := GetDefaultConfig(), GetDefaultConfig()
@@ -363,31 +310,11 @@ func TestConfig_OfflineRecommendDigest(t *testing.T) {
 	cfg2.Recommend.Offline.EnableUserBasedRecommend = false
 	assert.NotEqual(t, cfg1.OfflineRecommendDigest(), cfg2.OfflineRecommendDigest())
 
-	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
-	cfg1.Recommend.Offline.EnableUserBasedRecommend = true
-	cfg2.Recommend.Offline.EnableUserBasedRecommend = true
-	assert.NotEqual(t, cfg1.OfflineRecommendDigest(WithUserNeighborDigest("1")), cfg2.OfflineRecommendDigest(WithUserNeighborDigest("2")))
-
-	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
-	cfg1.Recommend.Offline.EnableUserBasedRecommend = false
-	cfg2.Recommend.Offline.EnableUserBasedRecommend = false
-	assert.Equal(t, cfg1.OfflineRecommendDigest(WithUserNeighborDigest("1")), cfg2.OfflineRecommendDigest(WithUserNeighborDigest("2")))
-
 	// test item-based recommendation
 	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
 	cfg1.Recommend.Offline.EnableItemBasedRecommend = true
 	cfg2.Recommend.Offline.EnableItemBasedRecommend = false
 	assert.NotEqual(t, cfg1.OfflineRecommendDigest(), cfg2.OfflineRecommendDigest())
-
-	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
-	cfg1.Recommend.Offline.EnableItemBasedRecommend = true
-	cfg2.Recommend.Offline.EnableItemBasedRecommend = true
-	assert.NotEqual(t, cfg1.OfflineRecommendDigest(WithItemNeighborDigest("1")), cfg2.OfflineRecommendDigest(WithItemNeighborDigest("2")))
-
-	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
-	cfg1.Recommend.Offline.EnableItemBasedRecommend = false
-	cfg2.Recommend.Offline.EnableItemBasedRecommend = false
-	assert.Equal(t, cfg1.OfflineRecommendDigest(WithItemNeighborDigest("1")), cfg2.OfflineRecommendDigest(WithItemNeighborDigest("2")))
 
 	// test collaborative-filtering recommendation
 	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()

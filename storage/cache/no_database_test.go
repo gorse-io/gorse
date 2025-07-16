@@ -70,9 +70,11 @@ func TestNoDatabase(t *testing.T) {
 	assert.ErrorIs(t, err, ErrNoDatabase)
 	err = database.DeleteScores(ctx, nil, ScoreCondition{})
 	assert.ErrorIs(t, err, ErrNoDatabase)
+	err = database.ScanScores(ctx, nil)
+	assert.ErrorIs(t, err, ErrNoDatabase)
 
 	err = database.AddTimeSeriesPoints(ctx, nil)
 	assert.ErrorIs(t, err, ErrNoDatabase)
-	_, err = database.GetTimeSeriesPoints(ctx, "", time.Time{}, time.Time{})
+	_, err = database.GetTimeSeriesPoints(ctx, "", time.Time{}, time.Time{}, 0)
 	assert.ErrorIs(t, err, ErrNoDatabase)
 }

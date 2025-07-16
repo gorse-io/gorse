@@ -29,6 +29,7 @@ import (
 	"github.com/samber/lo"
 	"github.com/zhenghaoz/gorse/base/jsonutil"
 	"github.com/zhenghaoz/gorse/base/log"
+	"github.com/zhenghaoz/gorse/common/expression"
 	"github.com/zhenghaoz/gorse/storage"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -109,9 +110,19 @@ func NewClickhouseUser(user User) (clickhouseUser ClickhouseUser) {
 	return
 }
 
-type ClickHouseFeedback struct {
-	Feedback `gorm:"embedded"`
-	Version  time.Time `gorm:"column:version"`
+func FeedbackTypeExpressionToSQL(db *gorm.DB, e expression.FeedbackTypeExpression) *gorm.DB {
+	switch e.ExprType {
+	case expression.Less:
+		return db.Where("feedback_type = ? AND value < ?", e.FeedbackType, e.Value)
+	case expression.LessOrEqual:
+		return db.Where("feedback_type = ? AND value <= ?", e.FeedbackType, e.Value)
+	case expression.Greater:
+		return db.Where("feedback_type = ? AND value > ?", e.FeedbackType, e.Value)
+	case expression.GreaterOrEqual:
+		return db.Where("feedback_type = ? AND value >= ?", e.FeedbackType, e.Value)
+	default:
+		return db.Where("feedback_type = ?", e.FeedbackType)
+	}
 }
 
 // SQLDatabase use MySQL as data storage.
@@ -125,7 +136,8 @@ type SQLDatabase struct {
 // Optimize is used by ClickHouse only.
 func (d *SQLDatabase) Optimize() error {
 	if d.driver == ClickHouse {
-		for _, tableName := range []string{d.UsersTable(), d.ItemsTable(), d.FeedbackTable(), d.UserFeedbackTable(), d.ItemFeedbackTable()} {
+		for _, tableName := range []string{d.UsersTable(), d.ItemsTable(), d.FeedbackTable(),
+			d.AggregatingFeedbackTable(), d.UserFeedbackTable(), d.ItemFeedbackTable()} {
 			_, err := d.client.Exec("OPTIMIZE TABLE " + tableName)
 			if err != nil {
 				return errors.Trace(err)
@@ -158,6 +170,7 @@ func (d *SQLDatabase) Init() error {
 			FeedbackType string    `gorm:"column:feedback_type;type:varchar(256);not null;primaryKey"`
 			UserId       string    `gorm:"column:user_id;type:varchar(256);not null;primaryKey;index:user_id"`
 			ItemId       string    `gorm:"column:item_id;type:varchar(256);not null;primaryKey;index:item_id"`
+			Value        float64   `gorm:"column:value;type:float;not null;default:0"`
 			Timestamp    time.Time `gorm:"column:time_stamp;type:datetime;not null"`
 			Comment      string    `gorm:"column:comment;type:text;not null"`
 		}
@@ -185,6 +198,7 @@ func (d *SQLDatabase) Init() error {
 			FeedbackType string    `gorm:"column:feedback_type;type:varchar(256);not null;primaryKey"`
 			UserId       string    `gorm:"column:user_id;type:varchar(256);not null;primaryKey;index:user_id_index"`
 			ItemId       string    `gorm:"column:item_id;type:varchar(256);not null;primaryKey;index:item_id_index"`
+			Value        float64   `gorm:"column:value;type:float8;not null;default:0"`
 			Timestamp    time.Time `gorm:"column:time_stamp;type:timestamptz;not null"`
 			Comment      string    `gorm:"column:comment;type:text;not null;default:''"`
 		}
@@ -209,11 +223,12 @@ func (d *SQLDatabase) Init() error {
 			Comment   string `gorm:"column:comment;type:text;not null;default:''"`
 		}
 		type Feedback struct {
-			FeedbackType string `gorm:"column:feedback_type;type:varchar(256);not null;primaryKey"`
-			UserId       string `gorm:"column:user_id;type:varchar(256);not null;primaryKey;index:user_id_index"`
-			ItemId       string `gorm:"column:item_id;type:varchar(256);not null;primaryKey;index:item_id_index"`
-			Timestamp    string `gorm:"column:time_stamp;type:datetime;not null;default:'0001-01-01'"`
-			Comment      string `gorm:"column:comment;type:text;not null;default:''"`
+			FeedbackType string  `gorm:"column:feedback_type;type:varchar(256);not null;primaryKey"`
+			UserId       string  `gorm:"column:user_id;type:varchar(256);not null;primaryKey;index:user_id_index"`
+			ItemId       string  `gorm:"column:item_id;type:varchar(256);not null;primaryKey;index:item_id_index"`
+			Value        float64 `gorm:"column:value;type:real;not null;default:0"`
+			Timestamp    string  `gorm:"column:time_stamp;type:datetime;not null;default:'0001-01-01'"`
+			Comment      string  `gorm:"column:comment;type:text;not null;default:''"`
 		}
 		err := d.gormDB.AutoMigrate(Users{}, Items{}, Feedback{})
 		if err != nil {
@@ -249,31 +264,54 @@ func (d *SQLDatabase) Init() error {
 			FeedbackType string    `gorm:"column:feedback_type;type:String"`
 			UserId       string    `gorm:"column:user_id;type:String"`
 			ItemId       string    `gorm:"column:item_id;type:String"`
+			Value        float64   `gorm:"column:value;type:Float64;default:0"`
 			Timestamp    time.Time `gorm:"column:time_stamp;type:DateTime64(9,'UTC')"`
 			Comment      string    `gorm:"column:comment;type:String"`
-			Version      struct{}  `gorm:"column:version;type:DateTime"`
 		}
-		err = d.gormDB.Set("gorm:table_options", "ENGINE = ReplacingMergeTree(version) ORDER BY (feedback_type, user_id, item_id)").AutoMigrate(Feedback{})
+		err = d.gormDB.Set("gorm:table_options", "ENGINE = MergeTree ORDER BY (feedback_type, user_id, item_id)").AutoMigrate(Feedback{})
 		if err != nil {
 			return errors.Trace(err)
 		}
 		// create materialized views
-		type UserFeedback Feedback
-		err = d.gormDB.Set("gorm:table_options", "ENGINE = ReplacingMergeTree(version) ORDER BY (user_id, item_id, feedback_type)").AutoMigrate(UserFeedback{})
+		type AggregatingFeedback struct {
+			FeedbackType string    `gorm:"column:feedback_type;type:String"`
+			UserId       string    `gorm:"column:user_id;type:String"`
+			ItemId       string    `gorm:"column:item_id;type:String"`
+			Value        float64   `gorm:"column:value;type:SimpleAggregateFunction(sum, Float64)"`
+			Timestamp    time.Time `gorm:"column:time_stamp;type:SimpleAggregateFunction(any, DateTime64(9,'UTC'))"`
+			Comment      string    `gorm:"column:comment;type:SimpleAggregateFunction(any, String)"`
+		}
+		err = d.gormDB.Set("gorm:table_options", "ENGINE = AggregatingMergeTree() ORDER BY (user_id, item_id, feedback_type)").AutoMigrate(AggregatingFeedback{})
 		if err != nil {
 			return errors.Trace(err)
 		}
-		err = d.gormDB.Exec(fmt.Sprintf("CREATE MATERIALIZED VIEW IF NOT EXISTS %s_mv TO %s AS SELECT * FROM %s",
+		err = d.gormDB.Exec(fmt.Sprintf("CREATE MATERIALIZED VIEW IF NOT EXISTS %s_mv TO %s AS "+
+			"SELECT feedback_type, user_id, item_id, sum(value) AS value, any(time_stamp) AS time_stamp, any(comment) AS comment "+
+			"FROM %s GROUP BY feedback_type, user_id, item_id",
+			d.AggregatingFeedbackTable(), d.AggregatingFeedbackTable(), d.FeedbackTable())).Error
+		if err != nil {
+			return errors.Trace(err)
+		}
+		type UserFeedback AggregatingFeedback
+		err = d.gormDB.Set("gorm:table_options", "ENGINE = AggregatingMergeTree() ORDER BY (user_id, item_id, feedback_type)").AutoMigrate(UserFeedback{})
+		if err != nil {
+			return errors.Trace(err)
+		}
+		err = d.gormDB.Exec(fmt.Sprintf("CREATE MATERIALIZED VIEW IF NOT EXISTS %s_mv TO %s AS "+
+			"SELECT feedback_type, user_id, item_id, sum(value) AS value, any(time_stamp) AS time_stamp, any(comment) AS comment "+
+			"FROM %s GROUP BY feedback_type, user_id, item_id",
 			d.UserFeedbackTable(), d.UserFeedbackTable(), d.FeedbackTable())).Error
 		if err != nil {
 			return errors.Trace(err)
 		}
-		type ItemFeedback Feedback
-		err = d.gormDB.Set("gorm:table_options", "ENGINE = ReplacingMergeTree(version) ORDER BY (item_id, user_id, feedback_type)").AutoMigrate(ItemFeedback{})
+		type ItemFeedback AggregatingFeedback
+		err = d.gormDB.Set("gorm:table_options", "ENGINE = AggregatingMergeTree() ORDER BY (item_id, user_id, feedback_type)").AutoMigrate(ItemFeedback{})
 		if err != nil {
 			return errors.Trace(err)
 		}
-		err = d.gormDB.Exec(fmt.Sprintf("CREATE MATERIALIZED VIEW IF NOT EXISTS %s_mv TO %s AS SELECT * FROM %s",
+		err = d.gormDB.Exec(fmt.Sprintf("CREATE MATERIALIZED VIEW IF NOT EXISTS %s_mv TO %s AS "+
+			"SELECT feedback_type, user_id, item_id, sum(value) AS value, any(time_stamp) AS time_stamp, any(comment) AS comment "+
+			"FROM %s GROUP BY feedback_type, user_id, item_id",
 			d.ItemFeedbackTable(), d.ItemFeedbackTable(), d.FeedbackTable())).Error
 		if err != nil {
 			return errors.Trace(err)
@@ -532,22 +570,28 @@ func (d *SQLDatabase) GetItemStream(ctx context.Context, batchSize int, timeLimi
 func (d *SQLDatabase) GetItemFeedback(ctx context.Context, itemId string, feedbackTypes ...string) ([]Feedback, error) {
 	tx := d.gormDB.WithContext(ctx)
 	if d.driver == ClickHouse {
-		tx = tx.Table(d.ItemFeedbackTable())
+		tx = tx.Table(d.ItemFeedbackTable()).
+			Select("user_id, item_id, feedback_type, sum(value) AS value, any(time_stamp) AS time_stamp, any(comment) AS comment").
+			Group("user_id, item_id, feedback_type")
 	} else {
-		tx = tx.Table(d.FeedbackTable())
+		tx = tx.Table(d.FeedbackTable()).
+			Select("user_id, item_id, feedback_type, value, time_stamp, comment")
 	}
-	tx.Select("user_id, item_id, feedback_type, time_stamp")
 	switch d.driver {
 	case SQLite:
 		tx.Where("time_stamp <= DATETIME()")
 	case ClickHouse:
-		tx.Where("time_stamp <= NOW('UTC')")
+		tx.Having("time_stamp <= NOW('UTC')")
 	default:
 		tx.Where("time_stamp <= NOW()")
 	}
 	tx.Where("item_id = ?", itemId)
 	if len(feedbackTypes) > 0 {
-		tx.Where("feedback_type IN ?", feedbackTypes)
+		db := d.gormDB
+		for _, feedbackType := range feedbackTypes {
+			db = db.Or("feedback_type = ?", feedbackType)
+		}
+		tx = tx.Where(db)
 	}
 	result, err := tx.Rows()
 	if err != nil {
@@ -730,20 +774,32 @@ func (d *SQLDatabase) GetUserStream(ctx context.Context, batchSize int) (chan []
 }
 
 // GetUserFeedback returns feedback of a user from MySQL.
-func (d *SQLDatabase) GetUserFeedback(ctx context.Context, userId string, endTime *time.Time, feedbackTypes ...string) ([]Feedback, error) {
+func (d *SQLDatabase) GetUserFeedback(ctx context.Context, userId string, endTime *time.Time, feedbackTypes ...expression.FeedbackTypeExpression) ([]Feedback, error) {
 	tx := d.gormDB.WithContext(ctx)
 	if d.driver == ClickHouse {
 		tx = tx.Table(d.UserFeedbackTable())
 	} else {
 		tx = tx.Table(d.FeedbackTable())
 	}
-	tx.Select("feedback_type, user_id, item_id, time_stamp, comment").
-		Where("user_id = ?", userId)
-	if endTime != nil {
-		tx.Where("time_stamp <= ?", d.convertTimeZone(endTime))
+	if d.driver == ClickHouse {
+		tx.Select("feedback_type, user_id, item_id, sum(value), any(time_stamp) AS time_stamp, any(comment) AS comment").
+			Group("feedback_type, user_id, item_id")
+		if endTime != nil {
+			tx.Having("time_stamp <= ?", d.convertTimeZone(endTime))
+		}
+	} else {
+		tx.Select("feedback_type, user_id, item_id, value, time_stamp, comment")
+		if endTime != nil {
+			tx.Where("time_stamp <= ?", d.convertTimeZone(endTime))
+		}
 	}
+	tx.Where("user_id = ?", userId)
 	if len(feedbackTypes) > 0 {
-		tx.Where("feedback_type IN ?", feedbackTypes)
+		db := d.gormDB
+		for _, feedbackType := range feedbackTypes {
+			db = FeedbackTypeExpressionToSQL(db, feedbackType)
+		}
+		tx.Where(db)
 	}
 	result, err := tx.Rows()
 	if err != nil {
@@ -867,17 +923,19 @@ func (d *SQLDatabase) BatchInsertFeedback(ctx context.Context, feedback []Feedba
 	}
 	// insert feedback
 	if d.driver == ClickHouse {
-		rows := make([]ClickHouseFeedback, 0, len(feedback))
+		rows := make([]Feedback, 0, len(feedback))
 		memo := make(map[lo.Tuple3[string, string, string]]struct{})
 		for _, f := range feedback {
 			if users.Contains(f.UserId) && items.Contains(f.ItemId) {
 				if _, exist := memo[lo.Tuple3[string, string, string]{f.FeedbackType, f.UserId, f.ItemId}]; !exist {
 					memo[lo.Tuple3[string, string, string]{f.FeedbackType, f.UserId, f.ItemId}] = struct{}{}
 					f.Timestamp = f.Timestamp.In(time.UTC)
-					rows = append(rows, ClickHouseFeedback{
-						Feedback: f,
-						Version:  lo.If(overwrite, time.Now().In(time.UTC)).Else(time.Time{}),
-					})
+					rows = append(rows, f)
+					if overwrite {
+						if _, err := d.DeleteUserItemFeedback(ctx, f.UserId, f.ItemId, f.FeedbackType); err != nil {
+							return errors.Trace(err)
+						}
+					}
 				}
 			}
 		}
@@ -903,10 +961,24 @@ func (d *SQLDatabase) BatchInsertFeedback(ctx context.Context, feedback []Feedba
 		if len(rows) == 0 {
 			return nil
 		}
+		var updates clause.Set
+		if overwrite {
+			updates = clause.AssignmentColumns([]string{"time_stamp", "comment", "value"})
+		} else {
+			values := make(map[string]any)
+			switch d.driver {
+			case MySQL:
+				values["value"] = clause.Column{Raw: true, Name: "value + VALUES(value)"}
+			case Postgres:
+				values["value"] = clause.Column{Raw: true, Name: fmt.Sprintf("%s.value + EXCLUDED.value", d.FeedbackTable())}
+			case SQLite:
+				values["value"] = clause.Column{Raw: true, Name: "value + excluded.value"}
+			}
+			updates = clause.Assignments(values)
+		}
 		err := tx.Clauses(clause.OnConflict{
 			Columns:   []clause.Column{{Name: "feedback_type"}, {Name: "user_id"}, {Name: "item_id"}},
-			DoNothing: !overwrite,
-			DoUpdates: lo.If(overwrite, clause.AssignmentColumns([]string{"time_stamp", "comment"})).Else(nil),
+			DoUpdates: updates,
 		}).Create(rows).Error
 		return errors.Trace(err)
 	}
@@ -918,7 +990,7 @@ func (d *SQLDatabase) GetFeedback(ctx context.Context, cursor string, n int, beg
 	if err != nil {
 		return "", nil, errors.Trace(err)
 	}
-	tx := d.gormDB.WithContext(ctx).Table(d.FeedbackTable()).Select("feedback_type, user_id, item_id, time_stamp, comment")
+	tx := d.gormDB.WithContext(ctx).Table(d.FeedbackTable()).Select("feedback_type, user_id, item_id, value, time_stamp, comment")
 	if len(buf) > 0 {
 		var cursorKey FeedbackKey
 		if err := jsonutil.Unmarshal(buf, &cursorKey); err != nil {
@@ -927,7 +999,11 @@ func (d *SQLDatabase) GetFeedback(ctx context.Context, cursor string, n int, beg
 		tx.Where("(feedback_type, user_id, item_id) >= (?,?,?)", cursorKey.FeedbackType, cursorKey.UserId, cursorKey.ItemId)
 	}
 	if len(feedbackTypes) > 0 {
-		tx.Where("feedback_type IN ?", feedbackTypes)
+		db := d.gormDB
+		for _, feedbackType := range feedbackTypes {
+			db = db.Or("feedback_type = ?", feedbackType)
+		}
+		tx.Where(db)
 	}
 	if beginTime != nil {
 		tx.Where("time_stamp >= ?", d.convertTimeZone(beginTime))
@@ -971,9 +1047,13 @@ func (d *SQLDatabase) GetFeedbackStream(ctx context.Context, batchSize int, scan
 		// send query
 		tx := d.gormDB.WithContext(ctx).
 			Table(d.FeedbackTable()).
-			Select("feedback_type, user_id, item_id, time_stamp, comment")
+			Select("feedback_type, user_id, item_id, value, time_stamp, comment")
 		if len(scan.FeedbackTypes) > 0 {
-			tx.Where("feedback_type IN ?", scan.FeedbackTypes)
+			db := d.gormDB
+			for _, feedbackType := range scan.FeedbackTypes {
+				db = FeedbackTypeExpressionToSQL(db, feedbackType)
+			}
+			tx.Where(db)
 		}
 		if scan.BeginTime != nil {
 			tx.Where("time_stamp >= ?", d.convertTimeZone(scan.BeginTime))
@@ -1030,14 +1110,20 @@ func (d *SQLDatabase) GetFeedbackStream(ctx context.Context, batchSize int, scan
 func (d *SQLDatabase) GetUserItemFeedback(ctx context.Context, userId, itemId string, feedbackTypes ...string) ([]Feedback, error) {
 	tx := d.gormDB.WithContext(ctx)
 	if d.driver == ClickHouse {
-		tx = tx.Table(d.UserFeedbackTable())
+		tx = tx.Table(d.UserFeedbackTable()).
+			Select("feedback_type, user_id, item_id, sum(value) AS value, any(time_stamp) AS time_stamp, any(comment) AS comment").
+			Group("feedback_type, user_id, item_id")
 	} else {
-		tx = tx.Table(d.FeedbackTable())
+		tx = tx.Table(d.FeedbackTable()).
+			Select("feedback_type, user_id, item_id, value, time_stamp, comment")
 	}
-	tx.Select("feedback_type, user_id, item_id, time_stamp, comment").
-		Where("user_id = ? AND item_id = ?", userId, itemId)
+	tx.Where("user_id = ? AND item_id = ?", userId, itemId)
 	if len(feedbackTypes) > 0 {
-		tx.Where("feedback_type IN ?", feedbackTypes)
+		db := d.gormDB
+		for _, feedbackType := range feedbackTypes {
+			db = db.Or("feedback_type = ?", feedbackType)
+		}
+		tx.Where(db)
 	}
 	result, err := tx.Rows()
 	if err != nil {

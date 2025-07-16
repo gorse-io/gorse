@@ -32,7 +32,7 @@ import (
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model"
 	"github.com/zhenghaoz/gorse/model/cf"
-	"github.com/zhenghaoz/gorse/model/click"
+	"github.com/zhenghaoz/gorse/model/ctr"
 	"github.com/zhenghaoz/gorse/protocol"
 	"github.com/zhenghaoz/gorse/server"
 	"github.com/zhenghaoz/gorse/storage/cache"
@@ -56,24 +56,24 @@ func newMockMasterRPC(t *testing.T) *mockMasterRPC {
 	assert.NoError(t, err)
 	// create click model
 	train, test := newClickDataset()
-	fm := click.NewFM(model.Params{model.NEpochs: 0})
+	fm := ctr.NewFM(model.Params{model.NEpochs: 0})
 	fm.Fit(context.Background(), train, test, nil)
 	// create ranking model
 	trainSet, testSet := newRankingDataset()
 	bpr := cf.NewBPR(model.Params{model.NEpochs: 0})
-	bpr.Fit(context.Background(), trainSet, testSet, nil)
+	bpr.Fit(context.Background(), trainSet, testSet, cf.NewFitConfig())
 	return &mockMasterRPC{
 		Master: Master{
-			rankingModelName: "bpr",
+			collaborativeFilteringModelName: "bpr",
 			RestServer: server.RestServer{
 				Settings: &config.Settings{
-					Config:              config.GetDefaultConfig(),
-					CacheClient:         cache.NoDatabase{},
-					DataClient:          data.NoDatabase{},
-					RankingModel:        bpr,
-					ClickModel:          fm,
-					RankingModelVersion: 123,
-					ClickModelVersion:   456,
+					Config:                             config.GetDefaultConfig(),
+					CacheClient:                        cache.NoDatabase{},
+					DataClient:                         data.NoDatabase{},
+					CollaborativeFilteringModel:        bpr,
+					ClickModel:                         fm,
+					CollaborativeFilteringModelVersion: 123,
+					ClickModelVersion:                  456,
 				},
 			},
 			metaStore: metaStore,
@@ -152,8 +152,8 @@ func TestRPC(t *testing.T) {
 	assert.NoError(t, err)
 	rankingModel, err := encoding.UnmarshalRankingModel(rankingModelReceiver)
 	assert.NoError(t, err)
-	rpcServer.RankingModel.SetParams(rpcServer.RankingModel.GetParams())
-	assert.Equal(t, rpcServer.RankingModel, rankingModel)
+	rpcServer.CollaborativeFilteringModel.SetParams(rpcServer.CollaborativeFilteringModel.GetParams())
+	assert.Equal(t, rpcServer.CollaborativeFilteringModel, rankingModel)
 
 	// test get meta
 	_, err = client.GetMeta(ctx,

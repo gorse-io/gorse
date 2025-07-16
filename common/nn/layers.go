@@ -20,7 +20,6 @@ import (
 	"github.com/matttproud/golang_protobuf_extensions/pbutil"
 	"github.com/zhenghaoz/gorse/protocol"
 	"io"
-	"os"
 	"reflect"
 	"strconv"
 )
@@ -137,22 +136,14 @@ func (s *Sequential) Forward(x *Tensor) *Tensor {
 	return x
 }
 
-func Save[T Model](o T, path string) error {
-	// Open file
-	file, err := os.Create(path)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	// Save function
+func Save(o any, w io.Writer) error {
 	var save func(o any, key []string) error
 	save = func(o any, key []string) error {
 		switch typed := o.(type) {
 		case *Tensor:
 			pb := typed.toPB()
 			pb.Key = key
-			_, err = pbutil.WriteDelimited(file, pb)
+			_, err := pbutil.WriteDelimited(w, pb)
 			if err != nil {
 				return err
 			}
@@ -166,7 +157,7 @@ func Save[T Model](o T, path string) error {
 					newKey := make([]string, len(key))
 					copy(newKey, key)
 					newKey = append(newKey, field.Name)
-					if err = save(reflect.ValueOf(o).Field(i).Interface(), newKey); err != nil {
+					if err := save(reflect.ValueOf(o).Field(i).Interface(), newKey); err != nil {
 						return err
 					}
 				}
@@ -175,7 +166,7 @@ func Save[T Model](o T, path string) error {
 					newKey := make([]string, len(key))
 					copy(newKey, key)
 					newKey = append(newKey, strconv.Itoa(i))
-					if err = save(reflect.ValueOf(o).Index(i).Interface(), newKey); err != nil {
+					if err := save(reflect.ValueOf(o).Index(i).Interface(), newKey); err != nil {
 						return err
 					}
 				}
@@ -188,14 +179,7 @@ func Save[T Model](o T, path string) error {
 	return save(o, nil)
 }
 
-func Load[T Model](o T, path string) error {
-	// Open file
-	file, err := os.Open(path)
-	if err != nil {
-		return err
-	}
-
-	// Place function
+func Load(o any, r io.Reader) error {
 	var place func(o any, key []string, pb *protocol.Tensor) error
 	place = func(o any, key []string, pb *protocol.Tensor) error {
 		switch typed := o.(type) {
@@ -233,13 +217,13 @@ func Load[T Model](o T, path string) error {
 	// Read data
 	for {
 		pb := new(protocol.Tensor)
-		if _, err = pbutil.ReadDelimited(file, pb); err != nil {
+		if _, err := pbutil.ReadDelimited(r, pb); err != nil {
 			if errors.Is(err, io.EOF) {
 				break
 			}
 			return err
 		}
-		if err = place(o, pb.Key, pb); err != nil {
+		if err := place(o, pb.Key, pb); err != nil {
 			return err
 		}
 	}

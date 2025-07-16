@@ -30,9 +30,12 @@ type HNSW[T any] struct {
 	distanceFunc    func(a, b T) float32
 	vectors         []T
 	bottomNeighbors []*heap.PriorityQueue
-	upperNeighbors  []map[int32]*heap.PriorityQueue
+	upperNeighbors  []sync.Map
 	enterPoint      int32
 	initOnce        sync.Once
+	indexMutex      sync.Mutex
+	rootMutex       sync.Mutex
+	bottomMutex     []*sync.RWMutex
 
 	levelFactor    float32
 	maxConnection  int // maximum number of connections for each element per layer
@@ -53,10 +56,14 @@ func NewHNSW[T any](distanceFunc func(a, b T) float32) *HNSW[T] {
 
 func (h *HNSW[T]) Add(v T) int {
 	// Add vector
+	h.indexMutex.Lock()
 	h.vectors = append(h.vectors, v)
 	h.bottomNeighbors = append(h.bottomNeighbors, heap.NewPriorityQueue(false))
-	h.insert(int32(len(h.vectors) - 1))
-	return len(h.vectors) - 1
+	h.bottomMutex = append(h.bottomMutex, new(sync.RWMutex))
+	q := len(h.vectors) - 1
+	h.indexMutex.Unlock()
+	h.insert(int32(q))
+	return q
 }
 
 func (h *HNSW[T]) SearchIndex(q, k int, prune0 bool) ([]lo.Tuple2[int, float32], error) {
@@ -109,7 +116,7 @@ func (h *HNSW[T]) insert(q int32) {
 	h.initOnce.Do(func() {
 		if h.upperNeighbors == nil {
 			h.bottomNeighbors[q] = heap.NewPriorityQueue(false)
-			h.upperNeighbors = make([]map[int32]*heap.PriorityQueue, 0)
+			h.upperNeighbors = make([]sync.Map, 0)
 			h.enterPoint = q
 			isFirstPoint = true
 			return
@@ -119,24 +126,32 @@ func (h *HNSW[T]) insert(q int32) {
 		return
 	}
 
+	h.rootMutex.Lock()
 	var (
 		w           *heap.PriorityQueue                               // list for the currently found nearest elements
 		enterPoints = h.distance(h.vectors[q], []int32{h.enterPoint}) // get enter point for hnsw
 		l           = int(math32.Floor(-math32.Log(rand.Float32()) * h.levelFactor))
 		topLayer    = len(h.upperNeighbors)
 	)
+	if l <= topLayer {
+		h.rootMutex.Unlock()
+	} else {
+		defer h.rootMutex.Unlock()
+	}
 
 	for currentLayer := topLayer; currentLayer >= l+1; currentLayer-- {
 		w = h.searchLayer(h.vectors[q], enterPoints, 1, currentLayer)
 		enterPoints = h.selectNeighbors(h.vectors[q], w, 1)
 	}
 
+	h.bottomMutex[q].Lock()
 	for currentLayer := mathutil.Min(topLayer, l); currentLayer >= 0; currentLayer-- {
 		w = h.searchLayer(h.vectors[q], enterPoints, h.efConstruction, currentLayer)
 		neighbors := h.selectNeighbors(h.vectors[q], w, h.maxConnection)
 		// add bidirectional connections from upperNeighbors to q at layer l_c
 		h.setNeighbourhood(q, currentLayer, neighbors)
 		for _, e := range neighbors.Elems() {
+			h.bottomMutex[e.Value].Lock()
 			h.getNeighbourhood(e.Value, currentLayer).Push(q, e.Weight)
 			connections := h.getNeighbourhood(e.Value, currentLayer)
 			var currentMaxConnection int
@@ -150,14 +165,16 @@ func (h *HNSW[T]) insert(q int32) {
 				newConnections := h.selectNeighbors(h.vectors[q], connections, h.maxConnection)
 				h.setNeighbourhood(e.Value, currentLayer, newConnections)
 			}
+			h.bottomMutex[e.Value].Unlock()
 		}
 		enterPoints = w
 	}
+	h.bottomMutex[q].Unlock()
 
 	if l > topLayer {
 		// set enter point for hnsw to q
 		h.enterPoint = q
-		h.upperNeighbors = append(h.upperNeighbors, make(map[int32]*heap.PriorityQueue))
+		h.upperNeighbors = append(h.upperNeighbors, sync.Map{})
 		h.setNeighbourhood(q, topLayer+1, heap.NewPriorityQueue(false))
 	}
 }
@@ -179,7 +196,9 @@ func (h *HNSW[T]) searchLayer(q T, enterPoints *heap.PriorityQueue, ef, currentL
 		}
 
 		// update candidates and w
+		h.bottomMutex[c].RLock()
 		neighbors := h.getNeighbourhood(c, currentLayer).Values()
+		h.bottomMutex[c].RUnlock()
 		for _, e := range neighbors {
 			if !v.Contains(e) {
 				v.Add(e)
@@ -203,7 +222,7 @@ func (h *HNSW[T]) setNeighbourhood(e int32, currentLayer int, connections *heap.
 	if currentLayer == 0 {
 		h.bottomNeighbors[e] = connections
 	} else {
-		h.upperNeighbors[currentLayer-1][e] = connections
+		h.upperNeighbors[currentLayer-1].Store(e, connections)
 	}
 }
 
@@ -211,7 +230,10 @@ func (h *HNSW[T]) getNeighbourhood(e int32, currentLayer int) *heap.PriorityQueu
 	if currentLayer == 0 {
 		return h.bottomNeighbors[e]
 	} else {
-		return h.upperNeighbors[currentLayer-1][e]
+		if connections, ok := h.upperNeighbors[currentLayer-1].Load(e); ok {
+			return connections.(*heap.PriorityQueue)
+		}
+		return nil
 	}
 }
 

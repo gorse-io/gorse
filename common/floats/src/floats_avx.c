@@ -15,7 +15,28 @@
 #include <immintrin.h>
 #include <stdint.h>
 
-void _mm256_mul_const_add_to(float *a, float *b, float *c, int64_t n)
+void _mm256_mul_const_add_to(float *a, float *b, float *c, float *dst, int64_t n)
+{
+    int epoch = n / 8;
+    int remain = n % 8;
+    for (int i = 0; i < epoch; i++)
+    {
+        __m256 v1 = _mm256_loadu_ps(a);
+        __m256 v2 = _mm256_broadcast_ss(b);
+        __m256 v3 = _mm256_loadu_ps(c);
+        __m256 v = _mm256_add_ps(_mm256_mul_ps(v1, v2), v3);
+        _mm256_storeu_ps(dst, v);
+        a += 8;
+        c += 8;
+        dst += 8;
+    }
+    for (int i = 0; i < remain; i++)
+    {
+        dst[i] = c[i] + a[i] * b[0];
+    }
+}
+
+void _mm256_mul_const_add(float *a, float *b, float *c, int64_t n)
 {
     int epoch = n / 8;
     int remain = n % 8;
@@ -72,6 +93,63 @@ void _mm256_mul_const(float *a, float *b, int64_t n)
     }
 }
 
+void _mm256_add_const(float *a, float *b, int64_t n)
+{
+    int epoch = n / 8;
+    int remain = n % 8;
+    for (int i = 0; i < epoch; i++)
+    {
+        __m256 v1 = _mm256_loadu_ps(a);
+        __m256 v2 = _mm256_broadcast_ss(b);
+        __m256 v = _mm256_add_ps(v1, v2);
+        _mm256_storeu_ps(a, v);
+        a += 8;
+    }
+    for (int i = 0; i < remain; i++)
+    {
+        a[i] += b[0];
+    }
+}
+
+void _mm256_sub_to(float *a, float *b, float *c, int64_t n)
+{
+    int epoch = n / 8;
+    int remain = n % 8;
+    for (int i = 0; i < epoch; i++)
+    {
+        __m256 v1 = _mm256_loadu_ps(a);
+        __m256 v2 = _mm256_loadu_ps(b);
+        __m256 v = _mm256_sub_ps(v1, v2);
+        _mm256_storeu_ps(c, v);
+        a += 8;
+        b += 8;
+        c += 8;
+    }
+    for (int i = 0; i < remain; i++)
+    {
+        c[i] = a[i] - b[i];
+    }
+}
+
+void _mm256_sub(float *a, float *b, int64_t n)
+{
+    int epoch = n / 8;
+    int remain = n % 8;
+    for (int i = 0; i < epoch; i++)
+    {
+        __m256 v1 = _mm256_loadu_ps(a);
+        __m256 v2 = _mm256_loadu_ps(b);
+        __m256 v = _mm256_sub_ps(v1, v2);
+        _mm256_storeu_ps(a, v);
+        a += 8;
+        b += 8;
+    }
+    for (int i = 0; i < remain; i++)
+    {
+        a[i] -= b[i];
+    }
+}
+
 void _mm256_mul_to(float *a, float *b, float *c, int64_t n)
 {
     int epoch = n / 8;
@@ -89,6 +167,46 @@ void _mm256_mul_to(float *a, float *b, float *c, int64_t n)
     for (int i = 0; i < remain; i++)
     {
         c[i] = a[i] * b[i];
+    }
+}
+
+void _mm256_div_to(float *a, float *b, float *c, int64_t n)
+{
+    int epoch = n / 8;
+    int remain = n % 8;
+    for (int i = 0; i < epoch; i++)
+    {
+        __m256 v1 = _mm256_loadu_ps(a);
+        __m256 v2 = _mm256_loadu_ps(b);
+        __m256 v = _mm256_div_ps(v1, v2);
+        _mm256_storeu_ps(c, v);
+        a += 8;
+        b += 8;
+        c += 8;
+    }
+    for (int i = 0; i < remain; i++)
+    {
+        c[i] = a[i] / b[i];
+    }
+}
+
+void _mm256_sqrt_to(float *a, float *b, int64_t n)
+{
+    int epoch = n / 8;
+    int remain = n % 8;
+    for (int i = 0; i < epoch; i++)
+    {
+        __m256 v1 = _mm256_loadu_ps(a);
+        __m256 v2 = _mm256_sqrt_ps(v1);
+        _mm256_storeu_ps(b, v2);
+        a += 8;
+        b += 8;
+    }
+    for (int i = 0; i < remain; i++)
+    {
+        __m128 v = _mm_set1_ps(a[i]);
+        __m128 r = _mm_sqrt_ss(v);
+        b[i] = _mm_cvtss_f32(r);
     }
 }
 

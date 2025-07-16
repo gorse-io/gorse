@@ -35,10 +35,11 @@ import (
 	"github.com/steinfletcher/apitest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
+	"github.com/zhenghaoz/gorse/common/expression"
 	"github.com/zhenghaoz/gorse/common/mock"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model/cf"
-	"github.com/zhenghaoz/gorse/model/click"
+	"github.com/zhenghaoz/gorse/model/ctr"
 	"github.com/zhenghaoz/gorse/protocol"
 	"github.com/zhenghaoz/gorse/server"
 	"github.com/zhenghaoz/gorse/storage/cache"
@@ -369,8 +370,8 @@ func (suite *MasterAPITestSuite) TestGetCluster() {
 func (suite *MasterAPITestSuite) TestGetStats() {
 	ctx := context.Background()
 	// set stats
-	suite.rankingScore = cf.Score{Precision: 0.1}
-	suite.clickScore = click.Score{Precision: 0.2}
+	suite.collaborativeFilteringModelScore = cf.Score{Precision: 0.1}
+	suite.clickScore = ctr.Score{Precision: 0.2}
 	err := suite.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.NumUsers), 123))
 	suite.NoError(err)
 	err = suite.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.NumItems), 234))
@@ -392,7 +393,7 @@ func (suite *MasterAPITestSuite) TestGetStats() {
 			NumValidPosFeedback: 345,
 			NumValidNegFeedback: 456,
 			MatchingModelScore:  cf.Score{Precision: 0.1},
-			RankingModelScore:   click.Score{Precision: 0.2},
+			RankingModelScore:   ctr.Score{Precision: 0.2},
 			BinaryVersion:       "unknown-version",
 		})).
 		End()
@@ -401,9 +402,12 @@ func (suite *MasterAPITestSuite) TestGetStats() {
 func (suite *MasterAPITestSuite) TestGetRates() {
 	ctx := context.Background()
 	// write rates
-	suite.Config.Recommend.DataSource.PositiveFeedbackTypes = []string{"a", "b"}
+	suite.Config.Recommend.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{
+		expression.MustParseFeedbackTypeExpression("a"),
+		expression.MustParseFeedbackTypeExpression("b"),
+	}
 	// This first measurement should be overwritten.
-	baseTimestamp := time.Now()
+	baseTimestamp := time.Now().UTC().Truncate(24 * time.Hour)
 	err := suite.CacheClient.AddTimeSeriesPoints(ctx, []cache.TimeSeriesPoint{
 		{Name: cache.Key(PositiveFeedbackRate, "a"), Value: 100.0, Timestamp: baseTimestamp.Add(-2 * 24 * time.Hour)},
 		{Name: cache.Key(PositiveFeedbackRate, "a"), Value: 2.0, Timestamp: baseTimestamp.Add(-2 * 24 * time.Hour)},
@@ -502,13 +506,14 @@ func (suite *MasterAPITestSuite) TestSearchDocumentsOfItems() {
 	}
 	ctx := context.Background()
 	operators := []ListOperator{
-		{"ItemToItem", cache.ItemToItem, cache.Key(cache.Neighbors, "0"), "", "/api/dashboard/item-to-item/neighbors/0"},
-		{"ItemToItemCategory", cache.ItemToItem, cache.Key(cache.Neighbors, "0"), "*", "/api/dashboard/item-to-item/neighbors/0"},
+		{"ItemToItem", cache.ItemToItem, cache.Key("neighbors", "0"), "", "/api/dashboard/item-to-item/neighbors/0"},
+		{"ItemToItemCategory", cache.ItemToItem, cache.Key("neighbors", "0"), "*", "/api/dashboard/item-to-item/neighbors/0"},
 		{"LatestItems", cache.NonPersonalized, cache.Latest, "", "/api/dashboard/non-personalized/latest/"},
 		{"PopularItems", cache.NonPersonalized, cache.Popular, "", "/api/dashboard/non-personalized/popular/"},
 		{"LatestItemsCategory", cache.NonPersonalized, cache.Latest, "*", "/api/dashboard/non-personalized/latest/"},
 		{"PopularItemsCategory", cache.NonPersonalized, cache.Popular, "*", "/api/dashboard/non-personalized/popular/"},
 	}
+	lastModified := time.Now()
 	for i, operator := range operators {
 		suite.T().Run(operator.Name, func(t *testing.T) {
 			// Put scores
@@ -521,6 +526,8 @@ func (suite *MasterAPITestSuite) TestSearchDocumentsOfItems() {
 			}
 			err := suite.CacheClient.AddScores(ctx, operator.Collection, operator.Subset, scores)
 			suite.NoError(err)
+			err = suite.CacheClient.Set(ctx, cache.Time(cache.Key(operator.Collection+"_update_time", operator.Subset), lastModified))
+			assert.NoError(t, err)
 			items := make([]ScoredItem, 0)
 			for _, score := range scores {
 				items = append(items, ScoredItem{Item: data.Item{ItemId: score.Id}, Score: score.Score})
@@ -543,6 +550,7 @@ func (suite *MasterAPITestSuite) TestSearchDocumentsOfItems() {
 				Query("category", operator.Category).
 				Expect(t).
 				Status(http.StatusOK).
+				HeaderPresent("Last-Modified").
 				Body(marshal(t, []ScoredItem{items[0], items[1], items[2], items[4]})).
 				End()
 		})
@@ -557,8 +565,9 @@ func (suite *MasterAPITestSuite) TestSearchDocumentsOfUsers() {
 	}
 	ctx := context.Background()
 	operators := []ListOperator{
-		{cache.UserToUser, cache.Key(cache.Neighbors, "0"), "/api/dashboard/user-to-user/neighbors/0/"},
+		{cache.UserToUser, cache.Key("neighbors", "0"), "/api/dashboard/user-to-user/neighbors/0/"},
 	}
+	lastModified := time.Now()
 	for _, operator := range operators {
 		suite.T().Logf("test RESTful API: %v", operator.Get)
 		// Put scores
@@ -570,6 +579,8 @@ func (suite *MasterAPITestSuite) TestSearchDocumentsOfUsers() {
 			{Id: "4", Score: 96, Categories: []string{""}},
 		}
 		err := suite.CacheClient.AddScores(ctx, operator.Prefix, operator.Label, scores)
+		suite.NoError(err)
+		err = suite.CacheClient.Set(ctx, cache.Time(cache.Key(operator.Prefix+"_update_time", operator.Label), lastModified))
 		suite.NoError(err)
 		users := make([]ScoreUser, 0)
 		for _, score := range scores {
@@ -583,6 +594,7 @@ func (suite *MasterAPITestSuite) TestSearchDocumentsOfUsers() {
 			Header("Cookie", suite.cookie).
 			Expect(suite.T()).
 			Status(http.StatusOK).
+			HeaderPresent("Last-Modified").
 			Body(marshal(suite.T(), users)).
 			End()
 	}
@@ -741,6 +753,10 @@ func (suite *MasterAPITestSuite) TestPurge() {
 }
 
 func (suite *MasterAPITestSuite) TestGetConfig() {
+	suite.Config.Recommend.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{
+		expression.MustParseFeedbackTypeExpression("a")}
+	suite.Config.Recommend.DataSource.ReadFeedbackTypes = []expression.FeedbackTypeExpression{
+		expression.MustParseFeedbackTypeExpression("b")}
 	apitest.New().
 		Handler(suite.handler).
 		Get("/api/dashboard/config").

@@ -106,10 +106,14 @@ func (NoDatabase) DeleteScores(_ context.Context, _ []string, _ ScoreCondition) 
 	return ErrNoDatabase
 }
 
+func (NoDatabase) ScanScores(context.Context, func(collection, id, subset string, timestamp time.Time) error) error {
+	return ErrNoDatabase
+}
+
 func (NoDatabase) AddTimeSeriesPoints(_ context.Context, _ []TimeSeriesPoint) error {
 	return ErrNoDatabase
 }
 
-func (NoDatabase) GetTimeSeriesPoints(_ context.Context, _ string, _, _ time.Time) ([]TimeSeriesPoint, error) {
+func (NoDatabase) GetTimeSeriesPoints(_ context.Context, _ string, _, _ time.Time, _ time.Duration) ([]TimeSeriesPoint, error) {
 	return nil, ErrNoDatabase
 }

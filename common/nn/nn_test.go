@@ -16,23 +16,25 @@ package nn
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/csv"
 	"fmt"
 	"math/rand"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/chewxy/math32"
-	"github.com/klauspost/cpuid/v2"
 	"github.com/samber/lo"
 	"github.com/schollz/progressbar/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/common/datautil"
 	"github.com/zhenghaoz/gorse/common/util"
+	"golang.org/x/sys/cpu"
 )
 
 func TestLinearRegression(t *testing.T) {
@@ -222,7 +224,7 @@ func accuracy(prediction, target *Tensor) float32 {
 }
 
 func TestMNIST(t *testing.T) {
-	if cpuid.CPU.VendorString != "Apple" && !cpuid.CPU.Supports(cpuid.AVX512F, cpuid.AVX512DQ) {
+	if !(runtime.GOOS == "darwin" && runtime.GOARCH == "arm64") && !cpu.X86.HasAVX512F {
 		// Since the test takes a long time, we run the test only in development environment.
 		// 1. Mac with Apple Silicon.
 		// 2. x86 CPU with AVX512 support.
@@ -320,15 +322,15 @@ func TestSaveAndLoad(t *testing.T) {
 		expected = loss.data[0]
 	}
 
-	modelPath := filepath.Join(os.TempDir(), "spiral.nn")
-	err = Save(model, modelPath)
+	buffer := bytes.NewBuffer(nil)
+	err = Save(model, buffer)
 	assert.NoError(t, err)
 	modelLoaded := NewSequential(
 		NewLinear(2, 10),
 		NewSigmoid(),
 		NewLinear(10, 3),
 	)
-	err = Load(modelLoaded, modelPath)
+	err = Load(modelLoaded, buffer)
 	assert.NoError(t, err)
 	yPred := modelLoaded.Forward(x)
 	loss := SoftmaxCrossEntropy(yPred, y)

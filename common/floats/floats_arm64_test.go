@@ -19,6 +19,7 @@ package floats
 import (
 	"fmt"
 	"math/rand"
+	"runtime"
 	"strconv"
 	"testing"
 
@@ -26,7 +27,14 @@ import (
 )
 
 func TestASIMD(t *testing.T) {
-	suite.Run(t, &SIMDTestSuite{Feature: ASIMD})
+	suite.Run(t, &SIMDTestSuite{})
+}
+
+func TestAMX(t *testing.T) {
+	if runtime.GOOS != "darwin" || runtime.GOARCH != "arm64" {
+		t.Skip("AMX is only supported on macOS ARM64")
+	}
+	suite.Run(t, &SIMDTestSuite{Feature: AMX})
 }
 
 func initializeFloat32Array(n int) []float32 {
@@ -38,7 +46,7 @@ func initializeFloat32Array(n int) []float32 {
 }
 
 func BenchmarkDot(b *testing.B) {
-	for _, feat := range []Feature{0, ASIMD} {
+	for _, feat := range []Feature{0} {
 		b.Run(feat.String(), func(b *testing.B) {
 			for i := 16; i <= 128; i *= 2 {
 				b.Run(strconv.Itoa(i), func(b *testing.B) {
@@ -55,7 +63,7 @@ func BenchmarkDot(b *testing.B) {
 }
 
 func BenchmarkEuclidean(b *testing.B) {
-	for _, feat := range []Feature{0, ASIMD} {
+	for _, feat := range []Feature{0} {
 		b.Run(feat.String(), func(b *testing.B) {
 			for i := 16; i <= 128; i *= 2 {
 				b.Run(strconv.Itoa(i), func(b *testing.B) {
@@ -72,7 +80,25 @@ func BenchmarkEuclidean(b *testing.B) {
 }
 
 func BenchmarkMulConstAddTo(b *testing.B) {
-	for _, feat := range []Feature{0, ASIMD} {
+	for _, feat := range []Feature{0} {
+		b.Run(feat.String(), func(b *testing.B) {
+			for i := 16; i <= 128; i *= 2 {
+				b.Run(strconv.Itoa(i), func(b *testing.B) {
+					v1 := initializeFloat32Array(i)
+					v2 := initializeFloat32Array(i)
+					v3 := make([]float32, i)
+					b.ResetTimer()
+					for i := 0; i < b.N; i++ {
+						feat.mulConstAddTo(v1, 2, v2, v3)
+					}
+				})
+			}
+		})
+	}
+}
+
+func BenchmarkMulConstAdd(b *testing.B) {
+	for _, feat := range []Feature{0} {
 		b.Run(feat.String(), func(b *testing.B) {
 			for i := 16; i <= 128; i *= 2 {
 				b.Run(strconv.Itoa(i), func(b *testing.B) {
@@ -80,7 +106,7 @@ func BenchmarkMulConstAddTo(b *testing.B) {
 					v2 := initializeFloat32Array(i)
 					b.ResetTimer()
 					for i := 0; i < b.N; i++ {
-						feat.mulConstAddTo(v1, 2, v2)
+						feat.mulConstAdd(v1, 2, v2)
 					}
 				})
 			}
@@ -89,7 +115,7 @@ func BenchmarkMulConstAddTo(b *testing.B) {
 }
 
 func BenchmarkMulConstTo(b *testing.B) {
-	for _, feat := range []Feature{0, ASIMD} {
+	for _, feat := range []Feature{0} {
 		b.Run(feat.String(), func(b *testing.B) {
 			for i := 16; i <= 128; i *= 2 {
 				b.Run(strconv.Itoa(i), func(b *testing.B) {
@@ -105,8 +131,24 @@ func BenchmarkMulConstTo(b *testing.B) {
 	}
 }
 
+func BenchmarkAddConst(b *testing.B) {
+	for _, feat := range []Feature{0} {
+		b.Run(feat.String(), func(b *testing.B) {
+			for i := 16; i <= 128; i *= 2 {
+				b.Run(strconv.Itoa(i), func(b *testing.B) {
+					v1 := initializeFloat32Array(i)
+					b.ResetTimer()
+					for i := 0; i < b.N; i++ {
+						feat.addConst(v1, 2)
+					}
+				})
+			}
+		})
+	}
+}
+
 func BenchmarkMulConst(b *testing.B) {
-	for _, feat := range []Feature{0, ASIMD} {
+	for _, feat := range []Feature{0} {
 		b.Run(feat.String(), func(b *testing.B) {
 			for i := 16; i <= 128; i *= 2 {
 				b.Run(strconv.Itoa(i), func(b *testing.B) {
@@ -121,8 +163,43 @@ func BenchmarkMulConst(b *testing.B) {
 	}
 }
 
+func BenchmarkSubTo(b *testing.B) {
+	for _, feat := range []Feature{0} {
+		b.Run(feat.String(), func(b *testing.B) {
+			for i := 16; i <= 128; i *= 2 {
+				b.Run(strconv.Itoa(i), func(b *testing.B) {
+					v1 := initializeFloat32Array(i)
+					v2 := initializeFloat32Array(i)
+					v3 := make([]float32, i)
+					b.ResetTimer()
+					for i := 0; i < b.N; i++ {
+						feat.subTo(v1, v2, v3)
+					}
+				})
+			}
+		})
+	}
+}
+
+func BenchmarkSub(b *testing.B) {
+	for _, feat := range []Feature{0} {
+		b.Run(feat.String(), func(b *testing.B) {
+			for i := 16; i <= 128; i *= 2 {
+				b.Run(strconv.Itoa(i), func(b *testing.B) {
+					v1 := initializeFloat32Array(i)
+					v2 := initializeFloat32Array(i)
+					b.ResetTimer()
+					for i := 0; i < b.N; i++ {
+						feat.sub(v1, v2)
+					}
+				})
+			}
+		})
+	}
+}
+
 func BenchmarkMulTo(b *testing.B) {
-	for _, feat := range []Feature{0, ASIMD} {
+	for _, feat := range []Feature{0} {
 		b.Run(feat.String(), func(b *testing.B) {
 			for i := 16; i <= 128; i *= 2 {
 				b.Run(strconv.Itoa(i), func(b *testing.B) {
@@ -139,10 +216,49 @@ func BenchmarkMulTo(b *testing.B) {
 	}
 }
 
+func BenchmarkDivTo(b *testing.B) {
+	for _, feat := range []Feature{0} {
+		b.Run(feat.String(), func(b *testing.B) {
+			for i := 16; i <= 128; i *= 2 {
+				b.Run(strconv.Itoa(i), func(b *testing.B) {
+					v1 := initializeFloat32Array(i)
+					v2 := initializeFloat32Array(i)
+					v3 := make([]float32, i)
+					b.ResetTimer()
+					for i := 0; i < b.N; i++ {
+						feat.divTo(v1, v2, v3)
+					}
+				})
+			}
+		})
+	}
+}
+
+func BenchmarkSqrtTo(b *testing.B) {
+	for _, feat := range []Feature{0} {
+		b.Run(feat.String(), func(b *testing.B) {
+			for i := 16; i <= 128; i *= 2 {
+				b.Run(strconv.Itoa(i), func(b *testing.B) {
+					v1 := initializeFloat32Array(i)
+					v2 := make([]float32, i)
+					b.ResetTimer()
+					for i := 0; i < b.N; i++ {
+						feat.sqrtTo(v1, v2)
+					}
+				})
+			}
+		})
+	}
+}
+
 func BenchmarkMM(b *testing.B) {
+	var feats = []Feature{0}
+	if runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" {
+		feats = append(feats, AMX)
+	}
 	for _, transA := range []bool{false, true} {
 		for _, transB := range []bool{false, true} {
-			for _, feat := range []Feature{0, ASIMD} {
+			for _, feat := range feats {
 				b.Run(fmt.Sprintf("(%v,%v,%v)", transA, transB, feat.String()), func(b *testing.B) {
 					for n := 16; n <= 128; n *= 2 {
 						b.Run(strconv.Itoa(n), func(b *testing.B) {

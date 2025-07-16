@@ -48,6 +48,7 @@ const (
 	CacheStore_SearchScores_FullMethodName        = "/protocol.CacheStore/SearchScores"
 	CacheStore_DeleteScores_FullMethodName        = "/protocol.CacheStore/DeleteScores"
 	CacheStore_UpdateScores_FullMethodName        = "/protocol.CacheStore/UpdateScores"
+	CacheStore_ScanScores_FullMethodName          = "/protocol.CacheStore/ScanScores"
 	CacheStore_AddTimeSeriesPoints_FullMethodName = "/protocol.CacheStore/AddTimeSeriesPoints"
 	CacheStore_GetTimeSeriesPoints_FullMethodName = "/protocol.CacheStore/GetTimeSeriesPoints"
 )
@@ -71,6 +72,7 @@ type CacheStoreClient interface {
 	SearchScores(ctx context.Context, in *SearchScoresRequest, opts ...grpc.CallOption) (*SearchScoresResponse, error)
 	DeleteScores(ctx context.Context, in *DeleteScoresRequest, opts ...grpc.CallOption) (*DeleteScoresResponse, error)
 	UpdateScores(ctx context.Context, in *UpdateScoresRequest, opts ...grpc.CallOption) (*UpdateScoresResponse, error)
+	ScanScores(ctx context.Context, in *ScanScoresRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ScanScoresResponse], error)
 	AddTimeSeriesPoints(ctx context.Context, in *AddTimeSeriesPointsRequest, opts ...grpc.CallOption) (*AddTimeSeriesPointsResponse, error)
 	GetTimeSeriesPoints(ctx context.Context, in *GetTimeSeriesPointsRequest, opts ...grpc.CallOption) (*GetTimeSeriesPointsResponse, error)
 }
@@ -233,6 +235,25 @@ func (c *cacheStoreClient) UpdateScores(ctx context.Context, in *UpdateScoresReq
 	return out, nil
 }
 
+func (c *cacheStoreClient) ScanScores(ctx context.Context, in *ScanScoresRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ScanScoresResponse], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &CacheStore_ServiceDesc.Streams[0], CacheStore_ScanScores_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[ScanScoresRequest, ScanScoresResponse]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type CacheStore_ScanScoresClient = grpc.ServerStreamingClient[ScanScoresResponse]
+
 func (c *cacheStoreClient) AddTimeSeriesPoints(ctx context.Context, in *AddTimeSeriesPointsRequest, opts ...grpc.CallOption) (*AddTimeSeriesPointsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(AddTimeSeriesPointsResponse)
@@ -272,6 +293,7 @@ type CacheStoreServer interface {
 	SearchScores(context.Context, *SearchScoresRequest) (*SearchScoresResponse, error)
 	DeleteScores(context.Context, *DeleteScoresRequest) (*DeleteScoresResponse, error)
 	UpdateScores(context.Context, *UpdateScoresRequest) (*UpdateScoresResponse, error)
+	ScanScores(*ScanScoresRequest, grpc.ServerStreamingServer[ScanScoresResponse]) error
 	AddTimeSeriesPoints(context.Context, *AddTimeSeriesPointsRequest) (*AddTimeSeriesPointsResponse, error)
 	GetTimeSeriesPoints(context.Context, *GetTimeSeriesPointsRequest) (*GetTimeSeriesPointsResponse, error)
 	mustEmbedUnimplementedCacheStoreServer()
@@ -328,6 +350,9 @@ func (UnimplementedCacheStoreServer) DeleteScores(context.Context, *DeleteScores
 }
 func (UnimplementedCacheStoreServer) UpdateScores(context.Context, *UpdateScoresRequest) (*UpdateScoresResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UpdateScores not implemented")
+}
+func (UnimplementedCacheStoreServer) ScanScores(*ScanScoresRequest, grpc.ServerStreamingServer[ScanScoresResponse]) error {
+	return status.Errorf(codes.Unimplemented, "method ScanScores not implemented")
 }
 func (UnimplementedCacheStoreServer) AddTimeSeriesPoints(context.Context, *AddTimeSeriesPointsRequest) (*AddTimeSeriesPointsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method AddTimeSeriesPoints not implemented")
@@ -626,6 +651,17 @@ func _CacheStore_UpdateScores_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _CacheStore_ScanScores_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(ScanScoresRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(CacheStoreServer).ScanScores(m, &grpc.GenericServerStream[ScanScoresRequest, ScanScoresResponse]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type CacheStore_ScanScoresServer = grpc.ServerStreamingServer[ScanScoresResponse]
+
 func _CacheStore_AddTimeSeriesPoints_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(AddTimeSeriesPointsRequest)
 	if err := dec(in); err != nil {
@@ -738,6 +774,12 @@ var CacheStore_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _CacheStore_GetTimeSeriesPoints_Handler,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "ScanScores",
+			Handler:       _CacheStore_ScanScores_Handler,
+			ServerStreams: true,
+		},
+	},
 	Metadata: "cache_store.proto",
 }

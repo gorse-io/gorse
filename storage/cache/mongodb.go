@@ -415,6 +415,31 @@ func (m MongoDB) DeleteScores(ctx context.Context, collections []string, conditi
 	return errors.Trace(err)
 }
 
+func (m MongoDB) ScanScores(ctx context.Context, callback func(collection string, id string, subset string, timestamp time.Time) error) error {
+	cursor, err := m.client.Database(m.dbName).Collection(m.DocumentTable()).Find(ctx, bson.M{})
+	if err != nil {
+		return errors.Trace(err)
+	}
+	defer cursor.Close(ctx)
+	for cursor.Next(ctx) {
+		// check context cancellation
+		select {
+		case <-ctx.Done():
+			return errors.Trace(ctx.Err())
+		default:
+		}
+		// decode document
+		collection := cursor.Current.Lookup("collection").StringValue()
+		subset := cursor.Current.Lookup("subset").StringValue()
+		id := cursor.Current.Lookup("id").StringValue()
+		timestamp := cursor.Current.Lookup("timestamp").Time()
+		if err = callback(collection, id, subset, timestamp); err != nil {
+			return errors.Trace(err)
+		}
+	}
+	return nil
+}
+
 func (m MongoDB) AddTimeSeriesPoints(ctx context.Context, points []TimeSeriesPoint) error {
 	var models []mongo.WriteModel
 	for _, point := range points {
@@ -432,21 +457,44 @@ func (m MongoDB) AddTimeSeriesPoints(ctx context.Context, points []TimeSeriesPoi
 	return errors.Trace(err)
 }
 
-func (m MongoDB) GetTimeSeriesPoints(ctx context.Context, name string, begin, end time.Time) ([]TimeSeriesPoint, error) {
-	cur, err := m.client.Database(m.dbName).Collection(m.PointsTable()).Find(ctx, bson.M{
-		"name":      name,
-		"timestamp": bson.M{"$gte": begin, "$lt": end},
-	}, options.Find().SetSort(bson.M{"timestamp": 1}))
+func (m MongoDB) GetTimeSeriesPoints(ctx context.Context, name string, begin, end time.Time, duration time.Duration) ([]TimeSeriesPoint, error) {
+	cursor, err := m.client.Database(m.dbName).Collection(m.PointsTable()).Aggregate(ctx, []bson.M{
+		{"$match": bson.M{
+			"name":      name,
+			"timestamp": bson.M{"$gte": begin, "$lte": end},
+		}},
+		{"$sort": bson.M{"timestamp": -1}},
+		{"$group": bson.M{
+			"_id": bson.M{
+				"$multiply": bson.A{
+					bson.M{"$floor": bson.M{"$divide": bson.A{bson.M{"$toLong": "$timestamp"}, duration.Milliseconds()}}},
+					duration.Milliseconds(),
+				},
+			},
+			"name":  bson.M{"$first": "$name"},
+			"value": bson.M{"$first": "$value"},
+		}},
+		{"$project": bson.M{
+			"_id":       0,
+			"timestamp": bson.M{"$toDate": "$_id"},
+			"name":      1,
+			"value":     1,
+		}},
+	})
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	points := make([]TimeSeriesPoint, 0)
-	for cur.Next(ctx) {
+	defer cursor.Close(ctx)
+	var points []TimeSeriesPoint
+	for cursor.Next(ctx) {
 		var point TimeSeriesPoint
-		if err = cur.Decode(&point); err != nil {
+		if err = cursor.Decode(&point); err != nil {
 			return nil, errors.Trace(err)
 		}
 		points = append(points, point)
+	}
+	if err = cursor.Err(); err != nil {
+		return nil, errors.Trace(err)
 	}
 	return points, nil
 }

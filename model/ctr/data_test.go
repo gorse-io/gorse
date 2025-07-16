@@ -11,13 +11,14 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-package click
+package ctr
 
 import (
 	"encoding/json"
 	"fmt"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
+	"github.com/zhenghaoz/gorse/base"
 	"testing"
 )
 
@@ -72,7 +73,7 @@ func TestLoadDataFromBuiltIn(t *testing.T) {
 
 func TestDataset_Split(t *testing.T) {
 	// create dataset
-	unifiedIndex := NewUnifiedMapIndexBuilder()
+	unifiedIndex := base.NewUnifiedMapIndexBuilder()
 	dataset := NewMapIndexDataset()
 	numUsers, numItems := 5, 6
 	for i := 0; i < numUsers; i++ {
@@ -115,8 +116,8 @@ func TestDataset_Split(t *testing.T) {
 	dataset.Index = unifiedIndex.Build()
 
 	assert.Equal(t, numUsers*numItems, dataset.Count())
-	assert.Equal(t, numUsers, dataset.UserCount())
-	assert.Equal(t, numItems, dataset.ItemCount())
+	assert.Equal(t, numUsers, dataset.CountUsers())
+	assert.Equal(t, numItems, dataset.CountItems())
 	assert.Equal(t, numUsers*numItems/2, dataset.PositiveCount)
 	assert.Equal(t, numUsers*numItems/2, dataset.NegativeCount)
 
@@ -136,13 +137,13 @@ func TestDataset_Split(t *testing.T) {
 
 	// split
 	train, test := dataset.Split(0.2, 0)
-	assert.Equal(t, numUsers, train.UserCount())
-	assert.Equal(t, numItems, train.ItemCount())
+	assert.Equal(t, numUsers, train.CountUsers())
+	assert.Equal(t, numItems, train.CountItems())
 	assert.Equal(t, 24, train.Count())
 	assert.Equal(t, 12, train.PositiveCount)
 	assert.Equal(t, 12, train.NegativeCount)
-	assert.Equal(t, numUsers, test.UserCount())
-	assert.Equal(t, numItems, test.ItemCount())
+	assert.Equal(t, numUsers, test.CountUsers())
+	assert.Equal(t, numItems, test.CountItems())
 	assert.Equal(t, 6, test.Count())
 	assert.Equal(t, 3, test.PositiveCount)
 	assert.Equal(t, 3, test.NegativeCount)

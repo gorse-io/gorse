@@ -12,11 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package click
+package ctr
 
 import (
 	"context"
 	"fmt"
+	"github.com/zhenghaoz/gorse/dataset"
 	"sync"
 	"time"
 
@@ -39,7 +40,7 @@ type ParamsSearchResult struct {
 }
 
 // GridSearchCV finds the best parameters for a model.
-func GridSearchCV(ctx context.Context, estimator FactorizationMachine, trainSet *Dataset, testSet *Dataset, paramGrid model.ParamsGrid,
+func GridSearchCV(ctx context.Context, estimator FactorizationMachine, trainSet, testSet dataset.CTRSplit, paramGrid model.ParamsGrid,
 	_ int64, fitConfig *FitConfig) ParamsSearchResult {
 	// Retrieve parameter names and length
 	paramNames := make([]model.ParamName, 0, len(paramGrid))
@@ -89,7 +90,7 @@ func GridSearchCV(ctx context.Context, estimator FactorizationMachine, trainSet 
 }
 
 // RandomSearchCV searches hyper-parameters by random.
-func RandomSearchCV(ctx context.Context, estimator FactorizationMachine, trainSet *Dataset, testSet *Dataset, paramGrid model.ParamsGrid,
+func RandomSearchCV(ctx context.Context, estimator FactorizationMachine, trainSet, testSet dataset.CTRSplit, paramGrid model.ParamsGrid,
 	numTrials int, seed int64, fitConfig *FitConfig) ParamsSearchResult {
 	// if the number of combination is less than number of trials, use grid search
 	if paramGrid.NumCombinations() <= numTrials {
@@ -158,17 +159,17 @@ func (searcher *ModelSearcher) GetBestModel() (FactorizationMachine, Score) {
 	return searcher.bestModel, searcher.bestScore
 }
 
-func (searcher *ModelSearcher) Fit(ctx context.Context, trainSet, valSet *Dataset, j *task.JobsAllocator) error {
+func (searcher *ModelSearcher) Fit(ctx context.Context, trainSet, valSet dataset.CTRSplit, j *task.JobsAllocator) error {
 	log.Logger().Info("click model search",
-		zap.Int("n_users", trainSet.UserCount()),
-		zap.Int("n_items", trainSet.ItemCount()),
-		zap.Int32("n_user_labels", trainSet.Index.CountUserLabels()),
-		zap.Int32("n_item_labels", trainSet.Index.CountItemLabels()))
+		zap.Int("n_users", trainSet.CountUsers()),
+		zap.Int("n_items", trainSet.CountItems()),
+		zap.Int("n_user_labels", trainSet.CountUserLabels()),
+		zap.Int("n_item_labels", trainSet.CountItemLabels()))
 	startTime := time.Now()
 
 	// Random search
 	grid := searcher.model.GetParamsGrid(searcher.searchSize)
-	r := RandomSearchCV(ctx, searcher.model, trainSet, valSet, grid, searcher.numTrials, 0, NewFitConfig().SetJobsAllocator(j))
+	r := RandomSearchCV(ctx, searcher.model, trainSet, valSet, grid, searcher.numTrials, 0, NewFitConfig())
 	searcher.bestMutex.Lock()
 	defer searcher.bestMutex.Unlock()
 	searcher.bestModel = r.BestModel

@@ -32,7 +32,6 @@ import (
 	cmap "github.com/orcaman/concurrent-map"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/samber/lo"
-	"github.com/thoas/go-funk"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/encoding"
 	"github.com/zhenghaoz/gorse/base/heap"
@@ -40,13 +39,14 @@ import (
 	"github.com/zhenghaoz/gorse/base/progress"
 	"github.com/zhenghaoz/gorse/cmd/version"
 	encoding2 "github.com/zhenghaoz/gorse/common/encoding"
+	"github.com/zhenghaoz/gorse/common/expression"
 	"github.com/zhenghaoz/gorse/common/parallel"
 	"github.com/zhenghaoz/gorse/common/sizeof"
 	"github.com/zhenghaoz/gorse/common/util"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/logics"
 	"github.com/zhenghaoz/gorse/model/cf"
-	"github.com/zhenghaoz/gorse/model/click"
+	"github.com/zhenghaoz/gorse/model/ctr"
 	"github.com/zhenghaoz/gorse/protocol"
 	"github.com/zhenghaoz/gorse/storage"
 	"github.com/zhenghaoz/gorse/storage/cache"
@@ -70,14 +70,13 @@ type ScheduleState struct {
 
 // Worker manages states of a worker node.
 type Worker struct {
-	tracer      *progress.Tracer
-	oneMode     bool
-	testMode    bool
-	managedMode bool
+	tracer   *progress.Tracer
+	oneMode  bool
+	testMode bool
 	*config.Settings
 
 	// spawned rankers
-	rankers []click.FactorizationMachine
+	rankers []ctr.FactorizationMachine
 
 	// worker config
 	jobs       int
@@ -127,12 +126,10 @@ func NewWorker(
 	httpPort int,
 	jobs int,
 	cacheFile string,
-	managedMode bool,
 	tlsConfig *util.TLSConfig,
 ) *Worker {
 	return &Worker{
-		rankers:       make([]click.FactorizationMachine, jobs),
-		managedMode:   managedMode,
+		rankers:       make([]ctr.FactorizationMachine, jobs),
 		Settings:      config.NewSettings(),
 		randGenerator: base.NewRand(time.Now().UTC().UnixNano()),
 		// config
@@ -227,9 +224,9 @@ func (w *Worker) Sync() {
 
 		// check ranking model version
 		w.latestRankingModelVersion = meta.RankingModelVersion
-		if w.latestRankingModelVersion != w.RankingModelVersion {
+		if w.latestRankingModelVersion != w.CollaborativeFilteringModelVersion {
 			log.Logger().Info("new ranking model found",
-				zap.String("old_version", encoding.Hex(w.RankingModelVersion)),
+				zap.String("old_version", encoding.Hex(w.CollaborativeFilteringModelVersion)),
 				zap.String("new_version", encoding.Hex(w.latestRankingModelVersion)))
 			w.syncedChan.Signal()
 		}
@@ -260,7 +257,7 @@ func (w *Worker) Pull() {
 		pulled := false
 
 		// pull ranking model
-		if w.latestRankingModelVersion != w.RankingModelVersion {
+		if w.latestRankingModelVersion != w.CollaborativeFilteringModelVersion {
 			log.Logger().Info("start pull ranking model")
 			if rankingModelReceiver, err := w.masterClient.GetRankingModel(context.Background(),
 				&protocol.VersionInfo{Version: w.latestRankingModelVersion},
@@ -272,12 +269,12 @@ func (w *Worker) Pull() {
 				if err != nil {
 					log.Logger().Error("failed to unmarshal ranking model", zap.Error(err))
 				} else {
-					w.RankingModel = rankingModel
+					w.CollaborativeFilteringModel = rankingModel
 					w.matrixFactorization = nil
-					w.RankingModelVersion = w.latestRankingModelVersion
+					w.CollaborativeFilteringModelVersion = w.latestRankingModelVersion
 					log.Logger().Info("synced ranking model",
-						zap.String("version", encoding.Hex(w.RankingModelVersion)))
-					MemoryInuseBytesVec.WithLabelValues("collaborative_filtering_model").Set(float64(sizeof.DeepSize(w.RankingModel)))
+						zap.String("version", encoding.Hex(w.CollaborativeFilteringModelVersion)))
+					MemoryInuseBytesVec.WithLabelValues("collaborative_filtering_model").Set(float64(sizeof.DeepSize(w.CollaborativeFilteringModel)))
 					pulled = true
 				}
 			}
@@ -291,7 +288,7 @@ func (w *Worker) Pull() {
 				grpc.MaxCallRecvMsgSize(math.MaxInt)); err != nil {
 				log.Logger().Error("failed to pull click model", zap.Error(err))
 			} else {
-				var clickModel click.FactorizationMachine
+				var clickModel ctr.FactorizationMachine
 				clickModel, err = encoding2.UnmarshalClickModel(clickModelReceiver)
 				if err != nil {
 					log.Logger().Error("failed to unmarshal click model", zap.Error(err))
@@ -307,7 +304,7 @@ func (w *Worker) Pull() {
 						if i == 0 {
 							w.rankers[i] = w.ClickModel
 						} else {
-							w.rankers[i] = click.Spawn(w.ClickModel)
+							w.rankers[i] = ctr.Spawn(w.ClickModel)
 						}
 					}
 
@@ -406,7 +403,6 @@ func (w *Worker) Serve() {
 		}
 		w.workerName = state.WorkerName
 		log.Logger().Info("start worker",
-			zap.Bool("managed", w.managedMode),
 			zap.Int("n_jobs", w.jobs),
 			zap.String("worker_name", w.workerName))
 	}
@@ -462,20 +458,14 @@ func (w *Worker) Serve() {
 		w.Recommend(workingUsers)
 	}
 
-	if w.managedMode {
-		for range w.triggerChan.C {
-			loop()
-		}
-	} else {
-		for {
-			select {
-			case tick := <-w.ticker.C:
-				if time.Since(tick) < w.Config.Recommend.Offline.CheckRecommendPeriod {
-					loop()
-				}
-			case <-w.pulledChan.C:
+	for {
+		select {
+		case tick := <-w.ticker.C:
+			if time.Since(tick) >= w.Config.Recommend.Offline.CheckRecommendPeriod {
 				loop()
 			}
+		case <-w.pulledChan.C:
+			loop()
 		}
 	}
 }
@@ -542,15 +532,15 @@ func (w *Worker) Recommend(users []data.User) {
 	}()
 
 	// build ranking index
-	if w.RankingModel != nil && !w.RankingModel.Invalid() && w.matrixFactorization == nil {
+	if w.CollaborativeFilteringModel != nil && !w.CollaborativeFilteringModel.Invalid() && w.matrixFactorization == nil {
 		startTime := time.Now()
 		log.Logger().Info("start building ranking index")
-		itemIndex := w.RankingModel.GetItemIndex()
+		itemIndex := w.CollaborativeFilteringModel.GetItemIndex()
 		matrixFactorization := logics.NewMatrixFactorization(time.Now())
 		for i := int32(0); i < itemIndex.Count(); i++ {
 			if itemId, ok := itemIndex.String(i); ok && itemCache.IsAvailable(itemId) {
 				item, _ := itemCache.Get(itemId)
-				matrixFactorization.Add(item, w.RankingModel.GetItemFactor(int32(i)))
+				matrixFactorization.Add(item, w.CollaborativeFilteringModel.GetItemFactor(int32(i)))
 			}
 		}
 		w.matrixFactorization = matrixFactorization
@@ -613,8 +603,8 @@ func (w *Worker) Recommend(users []data.User) {
 
 		// Recommender #1: collaborative filtering.
 		collaborativeUsed := false
-		if w.Config.Recommend.Offline.EnableColRecommend && w.RankingModel != nil && !w.RankingModel.Invalid() {
-			if userIndex := w.RankingModel.GetUserIndex().Id(userId); w.RankingModel.IsUserPredictable(int32(userIndex)) {
+		if w.Config.Recommend.Offline.EnableColRecommend && w.CollaborativeFilteringModel != nil && !w.CollaborativeFilteringModel.Invalid() {
+			if userIndex := w.CollaborativeFilteringModel.GetUserIndex().Id(userId); w.CollaborativeFilteringModel.IsUserPredictable(int32(userIndex)) {
 				var recommend map[string][]string
 				var usedTime time.Duration
 				recommend, usedTime, err = w.collaborativeRecommendHNSW(w.matrixFactorization, userId, excludeSet, itemCache)
@@ -628,22 +618,23 @@ func (w *Worker) Recommend(users []data.User) {
 				}
 				collaborativeUsed = true
 				collaborativeRecommendSeconds.Add(usedTime.Seconds())
-			} else if !w.RankingModel.IsUserPredictable(int32(userIndex)) {
+			} else if !w.CollaborativeFilteringModel.IsUserPredictable(int32(userIndex)) {
 				log.Logger().Debug("user is unpredictable", zap.String("user_id", userId))
 			}
-		} else if w.RankingModel == nil || w.RankingModel.Invalid() {
+		} else if w.CollaborativeFilteringModel == nil || w.CollaborativeFilteringModel.Invalid() {
 			log.Logger().Debug("no collaborative filtering model")
 		}
 
 		// Recommender #2: item-based.
 		itemNeighborDigests := mapset.NewSet[string]()
-		if w.Config.Recommend.Offline.EnableItemBasedRecommend {
+		if w.Config.Recommend.Offline.EnableItemBasedRecommend && len(w.Config.Recommend.ItemToItem) > 0 {
 			localStartTime := time.Now()
+			name := w.Config.Recommend.ItemToItem[0].Name
 			// collect candidates
 			scores := make(map[string]float64)
 			for _, itemId := range positiveItems {
 				// load similar items
-				similarItems, err := w.CacheClient.SearchScores(ctx, cache.ItemToItem, cache.Key(cache.Neighbors, itemId), nil, 0, w.Config.Recommend.CacheSize)
+				similarItems, err := w.CacheClient.SearchScores(ctx, cache.ItemToItem, cache.Key(name, itemId), nil, 0, w.Config.Recommend.CacheSize)
 				if err != nil {
 					log.Logger().Error("failed to load similar items", zap.Error(err))
 					return errors.Trace(err)
@@ -655,7 +646,7 @@ func (w *Worker) Recommend(users []data.User) {
 					}
 				}
 				// load item neighbors digest
-				digest, err := w.CacheClient.Get(ctx, cache.Key(cache.ItemToItemDigest, cache.Neighbors, itemId)).String()
+				digest, err := w.CacheClient.Get(ctx, cache.Key(cache.ItemToItemDigest, name, itemId)).String()
 				if err != nil {
 					if !errors.Is(err, errors.NotFound) {
 						log.Logger().Error("failed to load item neighbors digest", zap.Error(err))
@@ -685,11 +676,12 @@ func (w *Worker) Recommend(users []data.User) {
 
 		// Recommender #3: insert user-based items
 		userNeighborDigests := mapset.NewSet[string]()
-		if w.Config.Recommend.Offline.EnableUserBasedRecommend {
+		if w.Config.Recommend.Offline.EnableUserBasedRecommend && len(w.Config.Recommend.UserToUser) > 0 {
 			localStartTime := time.Now()
+			name := w.Config.Recommend.UserToUser[0].Name
 			scores := make(map[string]float64)
 			// load similar users
-			similarUsers, err := w.CacheClient.SearchScores(ctx, cache.UserToUser, cache.Key(cache.Neighbors, userId), nil, 0, w.Config.Recommend.CacheSize)
+			similarUsers, err := w.CacheClient.SearchScores(ctx, cache.UserToUser, cache.Key(name, userId), nil, 0, w.Config.Recommend.CacheSize)
 			if err != nil {
 				log.Logger().Error("failed to load similar users", zap.Error(err))
 				return errors.Trace(err)
@@ -710,7 +702,7 @@ func (w *Worker) Recommend(users []data.User) {
 					}
 				}
 				// load user neighbors digest
-				digest, err := w.CacheClient.Get(ctx, cache.Key(cache.UserToUserDigest, cache.Neighbors, user.Id)).String()
+				digest, err := w.CacheClient.Get(ctx, cache.Key(cache.UserToUserDigest, name, user.Id)).String()
 				if err != nil {
 					if !errors.Is(err, errors.NotFound) {
 						log.Logger().Error("failed to load user neighbors digest", zap.Error(err))
@@ -792,8 +784,8 @@ func (w *Worker) Recommend(users []data.User) {
 					return errors.Trace(err)
 				}
 				ctrUsed = true
-			} else if w.RankingModel != nil && !w.RankingModel.Invalid() &&
-				w.RankingModel.IsUserPredictable(w.RankingModel.GetUserIndex().Id(userId)) {
+			} else if w.CollaborativeFilteringModel != nil && !w.CollaborativeFilteringModel.Invalid() &&
+				w.CollaborativeFilteringModel.IsUserPredictable(w.CollaborativeFilteringModel.GetUserIndex().Id(userId)) {
 				results[category], err = w.rankByCollaborativeFiltering(userId, catCandidates)
 				if err != nil {
 					log.Logger().Error("failed to rank items", zap.Error(err))
@@ -837,8 +829,6 @@ func (w *Worker) Recommend(users []data.User) {
 			cache.String(cache.Key(cache.OfflineRecommendDigest, userId), w.Config.OfflineRecommendDigest(
 				config.WithCollaborative(collaborativeUsed),
 				config.WithRanking(ctrUsed),
-				config.WithItemNeighborDigest(strings.Join(itemNeighborDigests.ToSlice(), "-")),
-				config.WithUserNeighborDigest(strings.Join(userNeighborDigests.ToSlice(), "-")),
 			))); err != nil {
 			log.Logger().Error("failed to cache recommendation time", zap.Error(err))
 		}
@@ -862,9 +852,9 @@ func (w *Worker) Recommend(users []data.User) {
 
 func (w *Worker) collaborativeRecommendHNSW(rankingIndex *logics.MatrixFactorization, userId string, excludeSet mapset.Set[string], itemCache *ItemCache) (map[string][]string, time.Duration, error) {
 	ctx := context.Background()
-	userIndex := w.RankingModel.GetUserIndex().Id(userId)
+	userIndex := w.CollaborativeFilteringModel.GetUserIndex().Id(userId)
 	localStartTime := time.Now()
-	scores := rankingIndex.Search(w.RankingModel.GetUserFactor(userIndex), w.Config.Recommend.CacheSize+excludeSet.Cardinality())
+	scores := rankingIndex.Search(w.CollaborativeFilteringModel.GetUserFactor(userIndex), w.Config.Recommend.CacheSize+excludeSet.Cardinality())
 	// save result
 	recommend := make(map[string][]string)
 	for i := range scores {
@@ -881,11 +871,11 @@ func (w *Worker) collaborativeRecommendHNSW(rankingIndex *logics.MatrixFactoriza
 	recommend[""] = lo.Map(scores, func(score cache.Score, _ int) string {
 		return score.Id
 	})
-	if err := w.CacheClient.AddScores(ctx, cache.CollaborativeRecommend, userId, scores); err != nil {
+	if err := w.CacheClient.AddScores(ctx, cache.CollaborativeFiltering, userId, scores); err != nil {
 		log.Logger().Error("failed to cache collaborative filtering recommendation result", zap.String("user_id", userId), zap.Error(err))
 		return nil, 0, errors.Trace(err)
 	}
-	if err := w.CacheClient.DeleteScores(ctx, []string{cache.CollaborativeRecommend}, cache.ScoreCondition{Before: &localStartTime, Subset: proto.String(userId)}); err != nil {
+	if err := w.CacheClient.DeleteScores(ctx, []string{cache.CollaborativeFiltering}, cache.ScoreCondition{Before: &localStartTime, Subset: proto.String(userId)}); err != nil {
 		log.Logger().Error("failed to delete stale collaborative filtering recommendation result", zap.String("user_id", userId), zap.Error(err))
 		return nil, 0, errors.Trace(err)
 	}
@@ -909,7 +899,7 @@ func (w *Worker) rankByCollaborativeFiltering(userId string, candidates [][]stri
 	for _, itemId := range itemIds {
 		topItems = append(topItems, cache.Score{
 			Id:    itemId,
-			Score: float64(w.RankingModel.Predict(userId, itemId)),
+			Score: float64(w.CollaborativeFilteringModel.Predict(userId, itemId)),
 		})
 	}
 	cache.SortDocuments(topItems)
@@ -917,7 +907,7 @@ func (w *Worker) rankByCollaborativeFiltering(userId string, candidates [][]stri
 }
 
 // rankByClickTroughRate ranks items by predicted click-through-rate.
-func (w *Worker) rankByClickTroughRate(user *data.User, candidates [][]string, itemCache *ItemCache, predictor click.FactorizationMachine) ([]cache.Score, error) {
+func (w *Worker) rankByClickTroughRate(user *data.User, candidates [][]string, itemCache *ItemCache, predictor ctr.FactorizationMachine) ([]cache.Score, error) {
 	// concat candidates
 	memo := mapset.NewSet[string]()
 	var itemIds []string
@@ -940,13 +930,13 @@ func (w *Worker) rankByClickTroughRate(user *data.User, candidates [][]string, i
 	}
 	// rank by CTR
 	topItems := make([]cache.Score, 0, len(items))
-	if batchPredictor, ok := predictor.(click.BatchInference); ok {
-		inputs := make([]lo.Tuple4[string, string, []click.Feature, []click.Feature], len(items))
+	if batchPredictor, ok := predictor.(ctr.BatchInference); ok {
+		inputs := make([]lo.Tuple4[string, string, []ctr.Feature, []ctr.Feature], len(items))
 		for i, item := range items {
 			inputs[i].A = user.UserId
 			inputs[i].B = item.ItemId
-			inputs[i].C = click.ConvertLabelsToFeatures(user.Labels)
-			inputs[i].D = click.ConvertLabelsToFeatures(item.Labels)
+			inputs[i].C = ctr.ConvertLabelsToFeatures(user.Labels)
+			inputs[i].D = ctr.ConvertLabelsToFeatures(item.Labels)
 		}
 		output := batchPredictor.BatchPredict(inputs)
 		for i, score := range output {
@@ -959,7 +949,7 @@ func (w *Worker) rankByClickTroughRate(user *data.User, candidates [][]string, i
 		for _, item := range items {
 			topItems = append(topItems, cache.Score{
 				Id:    item.ItemId,
-				Score: float64(predictor.Predict(user.UserId, item.ItemId, click.ConvertLabelsToFeatures(user.Labels), click.ConvertLabelsToFeatures(item.Labels))),
+				Score: float64(predictor.Predict(user.UserId, item.ItemId, ctr.ConvertLabelsToFeatures(user.Labels), ctr.ConvertLabelsToFeatures(item.Labels))),
 			})
 		}
 	}
@@ -1072,7 +1062,7 @@ func (w *Worker) checkUserActiveTime(ctx context.Context, userId string) bool {
 		return true
 	}
 	// remove recommend cache for inactive users
-	if err := w.CacheClient.DeleteScores(ctx, []string{cache.OfflineRecommend, cache.CollaborativeRecommend},
+	if err := w.CacheClient.DeleteScores(ctx, []string{cache.OfflineRecommend, cache.CollaborativeFiltering},
 		cache.ScoreCondition{Subset: proto.String(userId)}); err != nil {
 		log.Logger().Error("failed to delete recommend cache", zap.String("user_id", userId), zap.Error(err))
 	}
@@ -1172,7 +1162,7 @@ func (w *Worker) pullItems(ctx context.Context) (*ItemCache, []string, error) {
 func (w *Worker) pullUsers(peers []string, me string) ([]data.User, error) {
 	ctx := context.Background()
 	// locate me
-	if !funk.ContainsString(peers, me) {
+	if !lo.Contains(peers, me) {
 		return nil, errors.New("current node isn't in worker nodes")
 	}
 	// create consistent hash ring
@@ -1211,8 +1201,8 @@ func (w *Worker) replacement(recommend map[string][]cache.Score, user *data.User
 			s := lo.Map(scores, func(score cache.Score, _ int) float64 {
 				return score.Score
 			})
-			upperBounds[category] = funk.MaxFloat64(s)
-			lowerBounds[category] = funk.MinFloat64(s)
+			upperBounds[category] = lo.Max(s)
+			lowerBounds[category] = lo.Min(s)
 		} else {
 			upperBounds[category] = math.Inf(1)
 			lowerBounds[category] = math.Inf(-1)
@@ -1225,10 +1215,10 @@ func (w *Worker) replacement(recommend map[string][]cache.Score, user *data.User
 	positiveItems := mapset.NewSet[string]()
 	distinctItems := mapset.NewSet[string]()
 	for _, feedback := range feedbacks {
-		if funk.ContainsString(w.Config.Recommend.DataSource.PositiveFeedbackTypes, feedback.FeedbackType) {
+		if expression.MatchFeedbackTypeExpressions(w.Config.Recommend.DataSource.PositiveFeedbackTypes, feedback.FeedbackType, feedback.Value) {
 			positiveItems.Add(feedback.ItemId)
 			distinctItems.Add(feedback.ItemId)
-		} else if funk.ContainsString(w.Config.Recommend.DataSource.ReadFeedbackTypes, feedback.FeedbackType) {
+		} else if expression.MatchFeedbackTypeExpressions(w.Config.Recommend.DataSource.ReadFeedbackTypes, feedback.FeedbackType, feedback.Value) {
 			distinctItems.Add(feedback.ItemId)
 		}
 	}
@@ -1241,9 +1231,9 @@ func (w *Worker) replacement(recommend map[string][]cache.Score, user *data.User
 			// 3. Otherwise, give a random score.
 			var score float64
 			if w.Config.Recommend.Offline.EnableClickThroughPrediction && w.ClickModel != nil {
-				score = float64(w.ClickModel.Predict(user.UserId, itemId, click.ConvertLabelsToFeatures(user.Labels), click.ConvertLabelsToFeatures(item.Labels)))
-			} else if w.RankingModel != nil && !w.RankingModel.Invalid() && w.RankingModel.IsUserPredictable(w.RankingModel.GetUserIndex().Id(user.UserId)) {
-				score = float64(w.RankingModel.Predict(user.UserId, itemId))
+				score = float64(w.ClickModel.Predict(user.UserId, itemId, ctr.ConvertLabelsToFeatures(user.Labels), ctr.ConvertLabelsToFeatures(item.Labels)))
+			} else if w.CollaborativeFilteringModel != nil && !w.CollaborativeFilteringModel.Invalid() && w.CollaborativeFilteringModel.IsUserPredictable(w.CollaborativeFilteringModel.GetUserIndex().Id(user.UserId)) {
+				score = float64(w.CollaborativeFilteringModel.Predict(user.UserId, itemId))
 			} else {
 				upper := upperBounds[""]
 				lower := lowerBounds[""]
@@ -1349,12 +1339,12 @@ func (c *ItemCache) IsAvailable(itemId string) bool {
 type FeedbackCache struct {
 	*config.Config
 	Client data.Database
-	Types  []string
+	Types  []expression.FeedbackTypeExpression
 	Cache  cmap.ConcurrentMap
 }
 
 // NewFeedbackCache creates a new FeedbackCache.
-func NewFeedbackCache(worker *Worker, feedbackTypes ...string) *FeedbackCache {
+func NewFeedbackCache(worker *Worker, feedbackTypes ...expression.FeedbackTypeExpression) *FeedbackCache {
 	return &FeedbackCache{
 		Config: worker.Config,
 		Client: worker.DataClient,

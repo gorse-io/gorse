@@ -40,7 +40,6 @@ var workerCommand = &cobra.Command{
 		httpHost, _ := cmd.PersistentFlags().GetString("http-host")
 		httpPort, _ := cmd.PersistentFlags().GetInt("http-port")
 		workingJobs, _ := cmd.PersistentFlags().GetInt("jobs")
-		managedModel, _ := cmd.PersistentFlags().GetBool("managed")
 		// setup logger
 		debug, _ := cmd.PersistentFlags().GetBool("debug")
 		log.SetLogger(cmd.PersistentFlags(), debug)
@@ -64,7 +63,7 @@ var workerCommand = &cobra.Command{
 				zap.String("ssl_cert", certFile),
 				zap.String("ssl_key", keyFile))
 		}
-		w := worker.NewWorker(masterHost, masterPort, httpHost, httpPort, workingJobs, cachePath, managedModel, tlsConfig)
+		w := worker.NewWorker(masterHost, masterPort, httpHost, httpPort, workingJobs, cachePath, tlsConfig)
 		w.Serve()
 	},
 }

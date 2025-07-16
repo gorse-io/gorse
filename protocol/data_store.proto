@@ -21,6 +21,20 @@ package protocol;
 import "google/protobuf/timestamp.proto";
 import "protocol.proto";
 
+enum ExpressionType {
+  None = 0;
+  Less = 1;
+  LessOrEqual = 2;
+  Greater = 3;
+  GreaterOrEqual = 4;
+}
+
+message FeedbackTypeExpression {
+  string feedback_type = 1;
+  ExpressionType expression_type = 2;
+  double value = 3;
+}
+
 message UserPatch {
   bytes labels = 1;
   optional string comment = 2;
@@ -42,7 +56,7 @@ message ScanOptions {
   optional string end_item_id = 4;
   optional google.protobuf.Timestamp begin_time = 5;
   optional google.protobuf.Timestamp end_time = 6;
-  repeated string feedback_types = 7;
+  repeated FeedbackTypeExpression feedback_types = 7;
   bool order_by_item_id = 8;
 }
 
@@ -94,7 +108,7 @@ message GetItemsResponse {
 
 message GetItemFeedbackRequest {
   string item_id = 1;
-  repeated string feedback_types = 2;
+  repeated FeedbackTypeExpression feedback_types = 2;
 }
 
 message BatchInsertUsersRequest {
@@ -137,13 +151,13 @@ message GetUsersResponse {
 message GetUserFeedbackRequest {
   string user_id = 1;
   google.protobuf.Timestamp end_time = 2;
-  repeated string feedback_types = 3;
+  repeated FeedbackTypeExpression feedback_types = 3;
 }
 
 message GetUserItemFeedbackRequest {
   string user_id = 1;
   string item_id = 2;
-  repeated string feedback_types = 3;
+  repeated FeedbackTypeExpression feedback_types = 3;
 }
 
 message DeleteUserItemFeedbackRequest {
@@ -170,7 +184,7 @@ message GetFeedbackRequest {
   int32 n = 2;
   google.protobuf.Timestamp begin_time = 3;
   google.protobuf.Timestamp end_time = 4;
-  repeated string feedback_types = 5;
+  repeated FeedbackTypeExpression feedback_types = 5;
 }
 
 message GetFeedbackResponse {

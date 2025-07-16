@@ -17,7 +17,7 @@ package cf
 import (
 	"github.com/chewxy/math32"
 	mapset "github.com/deckarep/golang-set/v2"
-	"github.com/thoas/go-funk"
+	"github.com/samber/lo"
 	"github.com/zhenghaoz/gorse/base/heap"
 	"github.com/zhenghaoz/gorse/common/floats"
 	"github.com/zhenghaoz/gorse/common/parallel"
@@ -38,7 +38,7 @@ func Evaluate(estimator MatrixFactorization, testSet, trainSet dataset.CFSplit, 
 	}
 	//rng := NewRandomGenerator(0)
 	// For all UserFeedback
-	negatives := testSet.NegativeSample(trainSet, numCandidates)
+	negatives := testSet.SampleUserNegatives(trainSet, numCandidates)
 	_ = parallel.Parallel(testSet.CountUsers(), nJobs, func(workerId, userIndex int) error {
 		// Find top-n ItemFeedback in test set
 		targetSet := mapset.NewSet(testSet.GetUserFeedback()[userIndex]...)
@@ -64,7 +64,7 @@ func Evaluate(estimator MatrixFactorization, testSet, trainSet dataset.CFSplit, 
 			sum[j] += partSum[i][j]
 		}
 	}
-	count := funk.SumFloat32(partCount)
+	count := lo.Sum(partCount)
 	floats.MulConst(sum, 1/count)
 	return sum
 }

@@ -34,6 +34,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/cmd/version"
+	"github.com/zhenghaoz/gorse/common/expression"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/master"
 	"github.com/zhenghaoz/gorse/storage"
@@ -70,8 +71,14 @@ var oneCommand = &cobra.Command{
 			conf = config.GetDefaultConfig()
 			conf.Database.DataStore = "sqlite://data.db"
 			conf.Database.CacheStore = "sqlite://cache.db"
-			conf.Recommend.DataSource.PositiveFeedbackTypes = []string{"star", "like"}
-			conf.Recommend.DataSource.ReadFeedbackTypes = []string{"read"}
+			conf.Recommend.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{
+				expression.MustParseFeedbackTypeExpression("star"),
+				expression.MustParseFeedbackTypeExpression("like"),
+				expression.MustParseFeedbackTypeExpression("read>=3"),
+			}
+			conf.Recommend.DataSource.ReadFeedbackTypes = []expression.FeedbackTypeExpression{
+				expression.MustParseFeedbackTypeExpression("read"),
+			}
 			if err := conf.Validate(); err != nil {
 				log.Logger().Fatal("invalid config", zap.Error(err))
 			}
@@ -98,12 +105,11 @@ var oneCommand = &cobra.Command{
 
 		// create master
 		cachePath, _ := cmd.PersistentFlags().GetString("cache-path")
-		managedMode, _ := cmd.PersistentFlags().GetBool("managed")
-		m := master.NewMaster(conf, cachePath, managedMode)
+		m := master.NewMaster(conf, cachePath)
 		// Start worker
 		workerJobs, _ := cmd.PersistentFlags().GetInt("recommend-jobs")
 		w := worker.NewWorker(conf.Master.Host, conf.Master.Port, conf.Master.Host,
-			0, workerJobs, "", managedMode, nil)
+			0, workerJobs, "", nil)
 		go func() {
 			w.SetOneMode(m.Settings)
 			w.Serve()

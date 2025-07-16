@@ -33,8 +33,6 @@ import (
 	"go.uber.org/zap"
 )
 
-type UserToUserConfig config.ItemToItemConfig
-
 type UserToUserOptions struct {
 	TagsIDF  []float32
 	ItemsIDF []float32
@@ -46,7 +44,7 @@ type UserToUser interface {
 	PopAll(i int) []cache.Score
 }
 
-func NewUserToUser(cfg UserToUserConfig, n int, timestamp time.Time, opts *UserToUserOptions) (UserToUser, error) {
+func NewUserToUser(cfg config.UserToUserConfig, n int, timestamp time.Time, opts *UserToUserOptions) (UserToUser, error) {
 	switch cfg.Type {
 	case "embedding":
 		return newEmbeddingUserToUser(cfg, n, timestamp)
@@ -102,7 +100,7 @@ type embeddingUserToUser struct {
 	dimension int
 }
 
-func newEmbeddingUserToUser(cfg UserToUserConfig, n int, timestamp time.Time) (UserToUser, error) {
+func newEmbeddingUserToUser(cfg config.UserToUserConfig, n int, timestamp time.Time) (UserToUser, error) {
 	// Compile column expression
 	columnFunc, err := expr.Compile(cfg.Column, expr.Env(map[string]any{
 		"user": data.User{},
@@ -152,7 +150,7 @@ type tagsUserToUser struct {
 	IDF[dataset.ID]
 }
 
-func newTagsUserToUser(cfg UserToUserConfig, n int, timestamp time.Time, idf []float32) (UserToUser, error) {
+func newTagsUserToUser(cfg config.UserToUserConfig, n int, timestamp time.Time, idf []float32) (UserToUser, error) {
 	// Compile column expression
 	columnFunc, err := expr.Compile(cfg.Column, expr.Env(map[string]any{
 		"user": data.User{},
@@ -197,7 +195,7 @@ type itemsUserToUser struct {
 	IDF[int32]
 }
 
-func newItemsUserToUser(cfg UserToUserConfig, n int, timestamp time.Time, idf []float32) (UserToUser, error) {
+func newItemsUserToUser(cfg config.UserToUserConfig, n int, timestamp time.Time, idf []float32) (UserToUser, error) {
 	if cfg.Column != "" {
 		return nil, errors.New("column is not supported in items user-to-user")
 	}
@@ -227,7 +225,7 @@ type autoUserToUser struct {
 	iIDF IDF[int32]
 }
 
-func newAutoUserToUser(cfg UserToUserConfig, n int, timestamp time.Time, tIDF, iIDF []float32) (UserToUser, error) {
+func newAutoUserToUser(cfg config.UserToUserConfig, n int, timestamp time.Time, tIDF, iIDF []float32) (UserToUser, error) {
 	a := &autoUserToUser{
 		tIDF: tIDF,
 		iIDF: iIDF,

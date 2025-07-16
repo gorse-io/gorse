@@ -25,6 +25,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/araddon/dateparse"
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/go-sql-driver/mysql"
 	"github.com/juju/errors"
@@ -536,6 +537,25 @@ func (db *SQLDatabase) DeleteScores(ctx context.Context, collections []string, c
 	return db.gormDB.WithContext(ctx).Delete(&SQLDocument{}, append([]any{builder.String()}, args...)...).Error
 }
 
+func (db *SQLDatabase) ScanScores(ctx context.Context, callback func(collection, id, subset string, timestamp time.Time) error) error {
+	rows, err := db.gormDB.WithContext(ctx).Table(db.DocumentTable()).Select("collection, id, subset, timestamp").Rows()
+	if err != nil {
+		return errors.Trace(err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var collection, id, subset string
+		var timestamp time.Time
+		if err = rows.Scan(&collection, &id, &subset, &timestamp); err != nil {
+			return errors.Trace(err)
+		}
+		if err = callback(collection, id, subset, timestamp); err != nil {
+			return errors.Trace(err)
+		}
+	}
+	return nil
+}
+
 func (db *SQLDatabase) AddTimeSeriesPoints(ctx context.Context, points []TimeSeriesPoint) error {
 	if len(points) == 0 {
 		return nil
@@ -546,12 +566,52 @@ func (db *SQLDatabase) AddTimeSeriesPoints(ctx context.Context, points []TimeSer
 	}).Create(points).Error
 }
 
-func (db *SQLDatabase) GetTimeSeriesPoints(ctx context.Context, name string, begin, end time.Time) ([]TimeSeriesPoint, error) {
+func (db *SQLDatabase) GetTimeSeriesPoints(ctx context.Context, name string, begin, end time.Time, duration time.Duration) ([]TimeSeriesPoint, error) {
 	var points []TimeSeriesPoint
-	if err := db.gormDB.WithContext(ctx).Table(db.PointsTable()).
-		Where("name = ? and timestamp >= ? and timestamp < ?", name, begin, end).
-		Order("timestamp").Find(&points).Error; err != nil {
-		return nil, errors.Trace(err)
+	if db.driver == Postgres {
+		if err := db.gormDB.WithContext(ctx).
+			Raw(fmt.Sprintf("SELECT name, bucket_timestamp AS timestamp, value FROM ("+
+				"SELECT *, TO_TIMESTAMP((EXTRACT(epoch FROM timestamp)::int / ?) * ?) AS bucket_timestamp,"+
+				"ROW_NUMBER() OVER (PARTITION BY (EXTRACT(epoch FROM timestamp)::int / ?) ORDER BY timestamp DESC) AS rn "+
+				"FROM %s WHERE name = ? and timestamp >= ? and timestamp <= ?) AS t WHERE rn = 1",
+				db.PointsTable()), int(duration.Seconds()), int(duration.Seconds()), int(duration.Seconds()), name, begin, end).
+			Scan(&points).Error; err != nil {
+			return nil, errors.Trace(err)
+		}
+	} else if db.driver == MySQL {
+		if err := db.gormDB.WithContext(ctx).
+			Raw(fmt.Sprintf("SELECT name, bucket_timestamp AS timestamp, value FROM("+
+				"SELECT *, FROM_UNIXTIME(FLOOR(UNIX_TIMESTAMP(timestamp) / ?) * ?) AS bucket_timestamp,"+
+				"ROW_NUMBER() OVER (PARTITION BY FLOOR(UNIX_TIMESTAMP(timestamp) / ?) ORDER BY timestamp DESC) AS rn "+
+				"FROM %s WHERE name = ? and timestamp >= ? and timestamp <= ?) AS t WHERE rn = 1;",
+				db.PointsTable()), int(duration.Seconds()), int(duration.Seconds()), int(duration.Seconds()), name, begin, end).
+			Scan(&points).Error; err != nil {
+			return nil, errors.Trace(err)
+		}
+	} else if db.driver == SQLite {
+		rows, err := db.gormDB.WithContext(ctx).
+			Raw(fmt.Sprintf("select name, bucket_timestamp as timestamp, value from ("+
+				"select *, datetime(strftime('%%s', substr(timestamp, 0, 20)) / ? * ?, 'unixepoch') as bucket_timestamp,"+
+				"row_number() over (partition by strftime('%%s', substr(timestamp, 0, 20)) / ? order by timestamp desc) as rn "+
+				"from %s where name = ? and timestamp >= ? and timestamp <= ?) where rn = 1",
+				db.PointsTable()), int(duration.Seconds()), int(duration.Seconds()), int(duration.Seconds()), name, begin, end).
+			Rows()
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var point TimeSeriesPoint
+			var timestamp string
+			if err := rows.Scan(&point.Name, &timestamp, &point.Value); err != nil {
+				return nil, errors.Trace(err)
+			}
+			point.Timestamp, err = dateparse.ParseAny(timestamp)
+			if err != nil {
+				return nil, errors.Trace(err)
+			}
+			points = append(points, point)
+		}
 	}
 	return points, nil
 }

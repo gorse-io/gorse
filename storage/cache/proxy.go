@@ -20,6 +20,8 @@ import (
 	"github.com/samber/lo"
 	"github.com/zhenghaoz/gorse/protocol"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 	"io"
@@ -169,6 +171,21 @@ func (p *ProxyServer) UpdateScores(ctx context.Context, request *protocol.Update
 	})
 }
 
+func (p *ProxyServer) ScanScores(request *protocol.ScanScoresRequest, stream grpc.ServerStreamingServer[protocol.ScanScoresResponse]) error {
+	err := p.database.ScanScores(stream.Context(), func(collection, id, subset string, timestamp time.Time) error {
+		return stream.Send(&protocol.ScanScoresResponse{
+			Collection: collection,
+			Id:         id,
+			Subset:     subset,
+			Timestamp:  timestamppb.New(timestamp),
+		})
+	})
+	if err != nil {
+		return status.Errorf(codes.Internal, "failed to scan scores: %v", err)
+	}
+	return nil
+}
+
 func (p *ProxyServer) AddTimeSeriesPoints(ctx context.Context, request *protocol.AddTimeSeriesPointsRequest) (*protocol.AddTimeSeriesPointsResponse, error) {
 	points := make([]TimeSeriesPoint, len(request.Points))
 	for i, point := range request.Points {
@@ -182,7 +199,7 @@ func (p *ProxyServer) AddTimeSeriesPoints(ctx context.Context, request *protocol
 }
 
 func (p *ProxyServer) GetTimeSeriesPoints(ctx context.Context, request *protocol.GetTimeSeriesPointsRequest) (*protocol.GetTimeSeriesPointsResponse, error) {
-	resp, err := p.database.GetTimeSeriesPoints(ctx, request.GetName(), request.GetBegin().AsTime(), request.GetEnd().AsTime())
+	resp, err := p.database.GetTimeSeriesPoints(ctx, request.GetName(), request.GetBegin().AsTime(), request.GetEnd().AsTime(), time.Duration(request.GetDuration()))
 	if err != nil {
 		return nil, err
 	}
@@ -397,6 +414,32 @@ func (p ProxyClient) UpdateScores(ctx context.Context, collection []string, subs
 	return err
 }
 
+func (p ProxyClient) ScanScores(ctx context.Context, callback func(collection string, id string, subset string, timestamp time.Time) error) error {
+	stream, err := p.CacheStoreClient.ScanScores(ctx, &protocol.ScanScoresRequest{})
+	if err != nil {
+		return err
+	}
+	for {
+		// check for context cancellation
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+		// receive the next message
+		resp, err := stream.Recv()
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if err := callback(resp.Collection, resp.Id, resp.Subset, resp.Timestamp.AsTime()); err != nil {
+			return err
+		}
+	}
+}
+
 func (p ProxyClient) AddTimeSeriesPoints(ctx context.Context, points []TimeSeriesPoint) error {
 	pbPoints := make([]*protocol.TimeSeriesPoint, len(points))
 	for i, point := range points {
@@ -412,11 +455,12 @@ func (p ProxyClient) AddTimeSeriesPoints(ctx context.Context, points []TimeSerie
 	return err
 }
 
-func (p ProxyClient) GetTimeSeriesPoints(ctx context.Context, name string, begin, end time.Time) ([]TimeSeriesPoint, error) {
+func (p ProxyClient) GetTimeSeriesPoints(ctx context.Context, name string, begin, end time.Time, duration time.Duration) ([]TimeSeriesPoint, error) {
 	resp, err := p.CacheStoreClient.GetTimeSeriesPoints(ctx, &protocol.GetTimeSeriesPointsRequest{
-		Name:  name,
-		Begin: timestamppb.New(begin),
-		End:   timestamppb.New(end),
+		Name:     name,
+		Begin:    timestamppb.New(begin),
+		End:      timestamppb.New(end),
+		Duration: int64(duration),
 	})
 	if err != nil {
 		return nil, err

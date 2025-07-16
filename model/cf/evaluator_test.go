@@ -144,7 +144,7 @@ func TestEvaluate(t *testing.T) {
 		test.AddItem(data.Item{ItemId: strconv.Itoa(i)})
 		test.AddFeedback(strconv.Itoa(i/4), strconv.Itoa(i))
 	}
-	assert.Equal(t, 16, test.Count())
+	assert.Equal(t, 16, test.CountFeedback())
 	assert.Equal(t, 4, test.CountUsers())
 	assert.Equal(t, 16, test.CountItems())
 	// create model
