@@ -39,8 +39,8 @@ func TestS3(t *testing.T) {
 	client, err := NewS3(config.S3Config{
 		Endpoint:        endpoint,
 		AccessKeyID:     accessKeyID,
-		SecretAccessKey: accessKeyID,
-		Bucket:          "gorse_test",
+		SecretAccessKey: secretAccessKey,
+		Bucket:          "gorse-test",
 		Prefix:          "blob",
 	})
 	assert.NoError(t, err)
