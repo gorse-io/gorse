@@ -154,8 +154,11 @@ jobs:
       run: go test -timeout 20m -v ./... -skip "TestPostgres|TestMySQL|TestMongo|TestRedis|TestClickHouse"
 
   unit_test_windows:
-    name: unit tests (windows-latest)
-    runs-on: windows-latest
+    strategy:
+      matrix:
+        os: [windows-latest, windows-11-arm]
+    name: unit tests
+    runs-on: ${{ matrix.os }}
     steps:
     - name: Set up dataset
       run: |
