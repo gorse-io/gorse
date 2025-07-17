@@ -69,17 +69,12 @@ jobs:
           - 6379
 
       rustfs:
-        image: rustfs/rustfs
+        image: rustfs/rustfs:alpha
         ports:
           - 9000
         env:
           RUSTFS_ACCESS_KEY: rustfsadmin
           RUSTFS_SECRET_KEY: rustfsadmin
-        options: >-
-          --health-cmd="curl -f http://localhost:9000"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
 
     steps:
     - name: Set up dataset
