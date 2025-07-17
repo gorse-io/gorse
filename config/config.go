@@ -67,6 +67,7 @@ type Config struct {
 	Experimental ExperimentalConfig `mapstructure:"experimental"`
 	OIDC         OIDCConfig         `mapstructure:"oidc"`
 	OpenAI       OpenAIConfig       `mapstructure:"openai"`
+	S3           S3Config           `mapstructure:"s3"`
 }
 
 // DatabaseConfig is the configuration for the database.
@@ -260,6 +261,14 @@ type OpenAIConfig struct {
 	EmbeddingRPM        int    `mapstructure:"embedding_rpm"`
 	EmbeddingTPM        int    `mapstructure:"embedding_tpm"`
 	LogFile             string `mapstructure:"log_file"`
+}
+
+type S3Config struct {
+	Endpoint        string `mapstructure:"endpoint"`
+	AccessKeyID     string `mapstructure:"access_key_id"`
+	SecretAccessKey string `mapstructure:"secret_access_key"`
+	Bucket          string `mapstructure:"bucket"`
+	Prefix          string `mapstructure:"prefix"`
 }
 
 func GetDefaultConfig() *Config {

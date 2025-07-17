@@ -192,14 +192,6 @@ func (c *MasterStoreClient) UploadBlob(name, path string) error {
 	return err
 }
 
-func (c *MasterStoreClient) FetchBlob(name string) (time.Time, error) {
-	resp, err := c.client.FetchBlob(context.Background(), &protocol.FetchBlobRequest{Name: name})
-	if err != nil {
-		return time.Time{}, err
-	}
-	return resp.Timestamp.AsTime(), nil
-}
-
 func (c *MasterStoreClient) DownloadBlob(name, path string) error {
 	// Open file
 	file, err := os.Create(path)
