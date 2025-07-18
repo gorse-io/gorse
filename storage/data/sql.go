@@ -113,15 +113,15 @@ func NewClickhouseUser(user User) (clickhouseUser ClickhouseUser) {
 func FeedbackTypeExpressionToSQL(db *gorm.DB, e expression.FeedbackTypeExpression) *gorm.DB {
 	switch e.ExprType {
 	case expression.Less:
-		return db.Where("feedback_type = ? AND value < ?", e.FeedbackType, e.Value)
+		return db.Or("feedback_type = ? AND value < ?", e.FeedbackType, e.Value)
 	case expression.LessOrEqual:
-		return db.Where("feedback_type = ? AND value <= ?", e.FeedbackType, e.Value)
+		return db.Or("feedback_type = ? AND value <= ?", e.FeedbackType, e.Value)
 	case expression.Greater:
-		return db.Where("feedback_type = ? AND value > ?", e.FeedbackType, e.Value)
+		return db.Or("feedback_type = ? AND value > ?", e.FeedbackType, e.Value)
 	case expression.GreaterOrEqual:
-		return db.Where("feedback_type = ? AND value >= ?", e.FeedbackType, e.Value)
+		return db.Or("feedback_type = ? AND value >= ?", e.FeedbackType, e.Value)
 	default:
-		return db.Where("feedback_type = ?", e.FeedbackType)
+		return db.Or("feedback_type = ?", e.FeedbackType)
 	}
 }
 
