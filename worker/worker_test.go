@@ -623,9 +623,9 @@ func newMockMaster(t *testing.T) *mockMaster {
 	return &mockMaster{
 		addr: make(chan string),
 		meta: &protocol.Meta{
-			Config:              marshal(t, cfg),
-			ClickModelVersion:   1,
-			RankingModelVersion: 2,
+			Config:                        marshal(t, cfg),
+			ClickThroughRateModelId:       1,
+			CollaborativeFilteringModelId: 2,
 		},
 		cacheFilePath: cfg.Database.CacheStore,
 		dataFilePath:  cfg.Database.DataStore,
@@ -637,14 +637,6 @@ func newMockMaster(t *testing.T) *mockMaster {
 
 func (m *mockMaster) GetMeta(_ context.Context, _ *protocol.NodeInfo) (*protocol.Meta, error) {
 	return m.meta, nil
-}
-
-func (m *mockMaster) GetRankingModel(_ *protocol.VersionInfo, sender protocol.Master_GetRankingModelServer) error {
-	return sender.Send(&protocol.Fragment{Data: m.rankingModel})
-}
-
-func (m *mockMaster) GetClickModel(_ *protocol.VersionInfo, sender protocol.Master_GetClickModelServer) error {
-	return sender.Send(&protocol.Fragment{Data: m.clickModel})
 }
 
 func (m *mockMaster) Start(t *testing.T) {
@@ -695,13 +687,10 @@ func TestWorker_Sync(t *testing.T) {
 	assert.Equal(t, master.cacheFilePath, serv.cachePath)
 	assert.NoError(t, serv.DataClient.Close())
 	assert.NoError(t, serv.CacheClient.Close())
-	assert.Equal(t, int64(1), serv.latestClickModelVersion)
-	assert.Equal(t, int64(2), serv.latestRankingModelVersion)
-	assert.Zero(t, serv.ClickModelVersion)
-	assert.Zero(t, serv.CollaborativeFilteringModelVersion)
-	serv.Pull()
-	assert.Equal(t, int64(1), serv.ClickModelVersion)
-	assert.Equal(t, int64(2), serv.CollaborativeFilteringModelVersion)
+	assert.Equal(t, int64(1), serv.latestClickThroughRateModelId)
+	assert.Equal(t, int64(2), serv.latestCollaborativeFilteringModelId)
+	assert.Zero(t, serv.ClickThroughRateModelId)
+	assert.Zero(t, serv.CollaborativeFilteringModelId)
 	master.Stop()
 	done <- struct{}{}
 }

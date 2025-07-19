@@ -32,7 +32,7 @@ type Settings struct {
 	CollaborativeFilteringModel   cf.MatrixFactorization
 	CollaborativeFilteringModelId int64
 	ClickModel                    ctr.FactorizationMachine
-	ClickModelId                  int64
+	ClickThroughRateModelId       int64
 }
 
 func NewSettings() *Settings {

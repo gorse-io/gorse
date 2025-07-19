@@ -162,7 +162,7 @@ func NewMaster(cfg *config.Config, cacheFolder string) *Master {
 				CollaborativeFilteringModel:   cf.NewBPR(nil),
 				ClickModel:                    ctr.NewFM(nil),
 				CollaborativeFilteringModelId: 0,
-				ClickModelId:                  0,
+				ClickThroughRateModelId:       0,
 			},
 			HttpHost:   cfg.Master.HttpHost,
 			HttpPort:   cfg.Master.HttpPort,

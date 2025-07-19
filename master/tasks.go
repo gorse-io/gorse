@@ -1035,10 +1035,10 @@ func (m *Master) trainClickThroughRatePrediction(trainSet, testSet *ctr.Dataset)
 	m.clickModelMutex.Lock()
 	m.ClickModel = clickModel
 	m.clickTrainSetSize = trainSet.Count()
-	m.ClickModelId = time.Now().Unix()
+	m.ClickThroughRateModelId = time.Now().Unix()
 	m.clickModelMutex.Unlock()
 	log.Logger().Info("fit click model complete",
-		zap.Int64("id", m.ClickModelId))
+		zap.Int64("id", m.ClickThroughRateModelId))
 	RankingPrecision.Set(float64(score.Precision))
 	RankingRecall.Set(float64(score.Recall))
 	RankingAUC.Set(float64(score.AUC))
@@ -1048,27 +1048,27 @@ func (m *Master) trainClickThroughRatePrediction(trainSet, testSet *ctr.Dataset)
 	}
 
 	// upload model
-	w, done, err := m.blobStore.Create(strconv.FormatInt(m.ClickModelId, 10))
+	w, done, err := m.blobStore.Create(strconv.FormatInt(m.ClickThroughRateModelId, 10))
 	if err != nil {
 		log.Logger().Error("failed to create blob for click-through rate model",
-			zap.Int64("id", m.ClickModelId), zap.Error(err))
+			zap.Int64("id", m.ClickThroughRateModelId), zap.Error(err))
 		return err
 	}
 	if err = ctr.MarshalModel(w, clickModel); err != nil {
 		log.Logger().Error("failed to marshal click-through rate model",
-			zap.Int64("id", m.ClickModelId), zap.Error(err))
+			zap.Int64("id", m.ClickThroughRateModelId), zap.Error(err))
 		return err
 	}
 	if err = w.Close(); err != nil {
 		log.Logger().Error("failed to close blob for click-through rate model",
-			zap.Int64("id", m.ClickModelId), zap.Error(err))
+			zap.Int64("id", m.ClickThroughRateModelId), zap.Error(err))
 		return err
 	}
 	<-done
 
 	// update meta
 	m.clickModelMutex.RLock()
-	m.clickThroughRateMeta.ID = m.ClickModelId
+	m.clickThroughRateMeta.ID = m.ClickThroughRateModelId
 	m.clickThroughRateMeta.Score = score
 	m.clickModelMutex.RUnlock()
 	if err = m.metaStore.Put(meta.CLICK_THROUGH_RATE_MODEL, m.clickThroughRateMeta.ToJSON()); err != nil {
@@ -1076,7 +1076,7 @@ func (m *Master) trainClickThroughRatePrediction(trainSet, testSet *ctr.Dataset)
 		return err
 	} else {
 		log.Logger().Info("write click-through rate model meta",
-			zap.Int64("id", m.ClickModelId),
+			zap.Int64("id", m.ClickThroughRateModelId),
 			zap.Float32("precision", score.Precision),
 			zap.Float32("recall", score.Recall),
 			zap.Float32("auc", score.AUC),
