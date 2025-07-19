@@ -16,7 +16,6 @@ package master
 
 import (
 	"context"
-	"github.com/zhenghaoz/gorse/storage/meta"
 	"sort"
 	"strconv"
 	"strings"
@@ -40,6 +39,7 @@ import (
 	"github.com/zhenghaoz/gorse/model/ctr"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
+	"github.com/zhenghaoz/gorse/storage/meta"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
 )

@@ -55,14 +55,6 @@ func (m *mockMaster) GetMeta(_ context.Context, _ *protocol.NodeInfo) (*protocol
 	return m.meta, nil
 }
 
-func (m *mockMaster) GetRankingModel(_ *protocol.VersionInfo, _ protocol.Master_GetRankingModelServer) error {
-	panic("not implement")
-}
-
-func (m *mockMaster) GetClickModel(_ *protocol.VersionInfo, _ protocol.Master_GetClickModelServer) error {
-	panic("not implement")
-}
-
 func (m *mockMaster) Start(t *testing.T) {
 	listen, err := net.Listen("tcp", "localhost:0")
 	assert.NoError(t, err)
