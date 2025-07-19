@@ -31,9 +31,6 @@ var (
 )
 
 func TestS3(t *testing.T) {
-	endpoint = "192.168.20.160:9000"
-	accessKeyID = "rustfsadmin"
-	secretAccessKey = "rustfsadmin"
 	if endpoint == "" || accessKeyID == "" || secretAccessKey == "" {
 		t.Skip("S3 environment variables are not set, skipping S3 tests")
 	}
