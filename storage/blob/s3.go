@@ -46,7 +46,7 @@ func NewS3(cfg config.S3Config) (*S3, error) {
 }
 
 // Open a file in S3 for reading. This function returns an io.Reader that can be used to read the file's content.
-func (s *S3) Open(name string) (io.Reader, error) {
+func (s *S3) Open(name string) (io.ReadCloser, error) {
 	object, err := s.Client.GetObject(context.Background(), s.bucket, filepath.Join(s.prefix, name), minio.GetObjectOptions{})
 	if err != nil {
 		return nil, err

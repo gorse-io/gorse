@@ -16,7 +16,6 @@ package blob
 
 import (
 	"context"
-	"fmt"
 	"github.com/juju/errors"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/protocol"
@@ -30,7 +29,7 @@ import (
 )
 
 type Store interface {
-	Open(name string) (io.Reader, error)
+	Open(name string) (io.ReadCloser, error)
 	Create(name string) (io.WriteCloser, chan struct{}, error)
 }
 
@@ -98,12 +97,6 @@ func (s *MasterStoreServer) UploadBlob(stream grpc.ClientStreamingServer[protoco
 	if err != nil {
 		return err
 	}
-	// Change timestamp
-	fmt.Println(timestamp)
-	err = os.Chtimes(path.Join(s.dir, name), timestamp, timestamp)
-	if err != nil {
-		return err
-	}
 	return stream.SendAndClose(&protocol.UploadBlobResponse{})
 }
 
@@ -153,7 +146,7 @@ func NewMasterStoreClient(clientConn *grpc.ClientConn) *MasterStoreClient {
 	return &MasterStoreClient{client: protocol.NewBlobStoreClient(clientConn)}
 }
 
-func (c *MasterStoreClient) Open(name string) (io.Reader, error) {
+func (c *MasterStoreClient) Open(name string) (io.ReadCloser, error) {
 	stream, err := c.client.DownloadBlob(context.Background(), &protocol.DownloadBlobRequest{Name: name})
 	if err != nil {
 		return nil, err

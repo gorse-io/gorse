@@ -31,7 +31,7 @@ func NewPOSIX(dir string) *POSIX {
 }
 
 // Open a file for reading. It returns an io.Reader that can be used to read the file's content.
-func (p *POSIX) Open(name string) (io.Reader, error) {
+func (p *POSIX) Open(name string) (io.ReadCloser, error) {
 	fullPath := path.Join(p.dir, name)
 	return os.Open(fullPath)
 }

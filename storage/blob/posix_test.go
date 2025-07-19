@@ -29,8 +29,7 @@ func TestPOSIX(t *testing.T) {
 	assert.NoError(t, err)
 	_, err = w.Write([]byte("hello world"))
 	assert.NoError(t, err)
-	err = w.Close()
-	assert.NoError(t, err)
+	assert.NoError(t, w.Close())
 	<-done
 
 	// read the file
@@ -39,4 +38,6 @@ func TestPOSIX(t *testing.T) {
 	content := make([]byte, 11)
 	_, err = r.Read(content)
 	assert.NoError(t, err)
+	assert.Equal(t, "hello world", string(content))
+	assert.NoError(t, r.Close())
 }

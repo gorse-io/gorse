@@ -45,8 +45,7 @@ func TestBlob(t *testing.T) {
 	assert.NoError(t, err)
 	_, err = w.Write([]byte("hello world"))
 	assert.NoError(t, err)
-	err = w.Close()
-	assert.NoError(t, err)
+	assert.NoError(t, w.Close())
 	<-done
 
 	// read the file
