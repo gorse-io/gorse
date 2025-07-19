@@ -50,7 +50,10 @@ func (p *POSIX) Create(name string) (io.WriteCloser, chan struct{}, error) {
 	done := make(chan struct{})
 	pr, pw := io.Pipe()
 	go func() {
-		defer close(done)
+		defer func() {
+			_ = file.Close()
+			close(done)
+		}()
 		_, err := io.Copy(file, pr)
 		if err != nil {
 			log.Logger().Error("failed to write to file", zap.String("file", fullPath), zap.Error(err))
