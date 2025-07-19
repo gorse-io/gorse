@@ -26,10 +26,11 @@ import (
 
 	"github.com/madflojo/testcerts"
 	"github.com/stretchr/testify/assert"
+	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/progress"
-	"github.com/zhenghaoz/gorse/common/encoding"
 	"github.com/zhenghaoz/gorse/common/util"
 	"github.com/zhenghaoz/gorse/config"
+	"github.com/zhenghaoz/gorse/dataset"
 	"github.com/zhenghaoz/gorse/model"
 	"github.com/zhenghaoz/gorse/model/cf"
 	"github.com/zhenghaoz/gorse/model/ctr"
@@ -41,6 +42,17 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
+
+func newRankingDataset() (*dataset.Dataset, *dataset.Dataset) {
+	return dataset.NewDataset(time.Now(), 0, 0), dataset.NewDataset(time.Now(), 0, 0)
+}
+
+func newClickDataset() (*ctr.Dataset, *ctr.Dataset) {
+	dataset := &ctr.Dataset{
+		Index: base.NewUnifiedMapIndexBuilder().Build(),
+	}
+	return dataset, dataset
+}
 
 type mockMasterRPC struct {
 	Master
@@ -64,16 +76,15 @@ func newMockMasterRPC(t *testing.T) *mockMasterRPC {
 	bpr.Fit(context.Background(), trainSet, testSet, cf.NewFitConfig())
 	return &mockMasterRPC{
 		Master: Master{
-			collaborativeFilteringModelName: "bpr",
 			RestServer: server.RestServer{
 				Settings: &config.Settings{
-					Config:                             config.GetDefaultConfig(),
-					CacheClient:                        cache.NoDatabase{},
-					DataClient:                         data.NoDatabase{},
-					CollaborativeFilteringModel:        bpr,
-					ClickModel:                         fm,
-					CollaborativeFilteringModelVersion: 123,
-					ClickModelVersion:                  456,
+					Config:                        config.GetDefaultConfig(),
+					CacheClient:                   cache.NoDatabase{},
+					DataClient:                    data.NoDatabase{},
+					CollaborativeFilteringModel:   bpr,
+					ClickModel:                    fm,
+					CollaborativeFilteringModelId: 123,
+					ClickThroughRateModelId:       456,
 				},
 			},
 			metaStore: metaStore,
@@ -140,21 +151,6 @@ func TestRPC(t *testing.T) {
 	remoteProgressList := i.([]progress.Progress)
 	assert.Equal(t, progressList, remoteProgressList)
 
-	// test get click model
-	clickModelReceiver, err := client.GetClickModel(ctx, &protocol.VersionInfo{Version: 456})
-	assert.NoError(t, err)
-	clickModel, err := encoding.UnmarshalClickModel(clickModelReceiver)
-	assert.NoError(t, err)
-	assert.Equal(t, rpcServer.ClickModel, clickModel)
-
-	// test get ranking model
-	rankingModelReceiver, err := client.GetRankingModel(ctx, &protocol.VersionInfo{Version: 123})
-	assert.NoError(t, err)
-	rankingModel, err := encoding.UnmarshalRankingModel(rankingModelReceiver)
-	assert.NoError(t, err)
-	rpcServer.CollaborativeFilteringModel.SetParams(rpcServer.CollaborativeFilteringModel.GetParams())
-	assert.Equal(t, rpcServer.CollaborativeFilteringModel, rankingModel)
-
 	// test get meta
 	_, err = client.GetMeta(ctx,
 		&protocol.NodeInfo{NodeType: protocol.NodeType_Server, Uuid: "server1", Hostname: "yoga"})
@@ -162,8 +158,8 @@ func TestRPC(t *testing.T) {
 	metaResp, err := client.GetMeta(ctx,
 		&protocol.NodeInfo{NodeType: protocol.NodeType_Worker, Uuid: "worker1", Hostname: "yoga"})
 	assert.NoError(t, err)
-	assert.Equal(t, int64(123), metaResp.RankingModelVersion)
-	assert.Equal(t, int64(456), metaResp.ClickModelVersion)
+	assert.Equal(t, int64(123), metaResp.CollaborativeFilteringModelId)
+	assert.Equal(t, int64(456), metaResp.ClickThroughRateModelId)
 	assert.Equal(t, "worker1", metaResp.Me)
 	assert.Equal(t, []string{"server1"}, metaResp.Servers)
 	assert.Equal(t, []string{"worker1"}, metaResp.Workers)

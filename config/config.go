@@ -18,6 +18,7 @@ import (
 	"context"
 	"crypto/md5"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"os"
 	"reflect"
@@ -269,6 +270,10 @@ type S3Config struct {
 	SecretAccessKey string `mapstructure:"secret_access_key"`
 	Bucket          string `mapstructure:"bucket"`
 	Prefix          string `mapstructure:"prefix"`
+}
+
+func (s *S3Config) ToJSON() string {
+	return string(lo.Must1(json.Marshal(s)))
 }
 
 func GetDefaultConfig() *Config {

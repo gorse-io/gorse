@@ -576,8 +576,6 @@ func (m *Master) getStats(request *restful.Request, response *restful.Response) 
 	if status.LatestItemsUpdateTime, err = m.CacheClient.Get(ctx, cache.Key(cache.GlobalMeta, cache.LastUpdateLatestItemsTime)).Time(); err != nil {
 		log.ResponseLogger(response).Warn("failed to get latest items update time", zap.Error(err))
 	}
-	status.MatchingModelScore = m.collaborativeFilteringModelScore
-	status.RankingModelScore = m.clickScore
 	// read last fit matching model time
 	if status.MatchingModelFitTime, err = m.CacheClient.Get(ctx, cache.Key(cache.GlobalMeta, cache.LastFitMatchingModelTime)).Time(); err != nil {
 		log.ResponseLogger(response).Warn("failed to get last fit matching model time", zap.Error(err))

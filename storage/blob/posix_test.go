@@ -15,39 +15,14 @@
 package blob
 
 import (
-	"context"
-	"github.com/minio/minio-go/v7"
 	"github.com/stretchr/testify/assert"
-	"github.com/zhenghaoz/gorse/config"
-	"io"
-	"os"
+	"path"
 	"testing"
 )
 
-var (
-	endpoint        = os.Getenv("S3_ENDPOINT")
-	accessKeyID     = os.Getenv("S3_ACCESS_KEY_ID")
-	secretAccessKey = os.Getenv("S3_SECRET_ACCESS_KEY")
-)
-
-func TestS3(t *testing.T) {
-	if endpoint == "" || accessKeyID == "" || secretAccessKey == "" {
-		t.Skip("S3 environment variables are not set, skipping S3 tests")
-	}
-
+func TestPOSIX(t *testing.T) {
 	// create client
-	client, err := NewS3(config.S3Config{
-		Endpoint:        endpoint,
-		AccessKeyID:     accessKeyID,
-		SecretAccessKey: secretAccessKey,
-		Bucket:          "gorse-test",
-		Prefix:          "blob",
-	})
-	assert.NoError(t, err)
-
-	// create bucket if not exists
-	err = client.Client.MakeBucket(context.Background(), client.bucket, minio.MakeBucketOptions{})
-	assert.NoError(t, err)
+	client := NewPOSIX(path.Join(t.TempDir(), "blob"))
 
 	// write a temp file
 	w, done, err := client.Create("test")
@@ -62,6 +37,7 @@ func TestS3(t *testing.T) {
 	assert.NoError(t, err)
 	content := make([]byte, 11)
 	_, err = r.Read(content)
-	assert.ErrorIs(t, err, io.EOF)
+	assert.NoError(t, err)
 	assert.Equal(t, "hello world", string(content))
+	assert.NoError(t, r.Close())
 }

@@ -19,7 +19,6 @@ import (
 	"github.com/zhenghaoz/gorse/protocol"
 	"google.golang.org/grpc"
 	"net"
-	"os"
 	"path"
 	"testing"
 )
@@ -41,20 +40,19 @@ func TestBlob(t *testing.T) {
 	assert.NoError(t, err)
 	client := NewMasterStoreClient(clientConn)
 
-	// create a temp file
-	tempFilePath := path.Join(t.TempDir(), "test.txt")
-	err = os.WriteFile(tempFilePath, []byte("hello world"), 0644)
+	// write a temp file
+	w, done, err := client.Create("test")
 	assert.NoError(t, err)
+	_, err = w.Write([]byte("hello world"))
+	assert.NoError(t, err)
+	assert.NoError(t, w.Close())
+	<-done
 
-	// upload blob
-	err = client.UploadBlob("test", tempFilePath)
+	// read the file
+	r, err := client.Open("test")
 	assert.NoError(t, err)
-
-	// download blob
-	downloadFilePath := path.Join(t.TempDir(), "download.txt")
-	err = client.DownloadBlob("test", downloadFilePath)
+	content := make([]byte, 11)
+	_, err = r.Read(content)
 	assert.NoError(t, err)
-	downloadContent, err := os.ReadFile(downloadFilePath)
-	assert.NoError(t, err)
-	assert.Equal(t, "hello world", string(downloadContent))
+	assert.Equal(t, "hello world", string(content))
 }

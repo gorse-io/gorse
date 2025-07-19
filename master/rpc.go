@@ -18,13 +18,8 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/juju/errors"
-	"github.com/zhenghaoz/gorse/base/log"
-	"github.com/zhenghaoz/gorse/model/cf"
-	"github.com/zhenghaoz/gorse/model/ctr"
 	"github.com/zhenghaoz/gorse/protocol"
 	"github.com/zhenghaoz/gorse/storage/meta"
-	"go.uber.org/zap"
-	"io"
 	"time"
 )
 
@@ -48,16 +43,16 @@ func (m *Master) GetMeta(ctx context.Context, nodeInfo *protocol.NodeInfo) (*pro
 	}
 	// save ranking model version
 	m.collaborativeFilteringModelMutex.RLock()
-	var rankingModelVersion int64
+	var collaborativeFilteringModelId int64
 	if m.CollaborativeFilteringModel != nil && !m.CollaborativeFilteringModel.Invalid() {
-		rankingModelVersion = m.CollaborativeFilteringModelVersion
+		collaborativeFilteringModelId = m.CollaborativeFilteringModelId
 	}
 	m.collaborativeFilteringModelMutex.RUnlock()
 	// save click model version
 	m.clickModelMutex.RLock()
-	var clickModelVersion int64
+	var clickThroughRateModelId int64
 	if m.ClickModel != nil && !m.ClickModel.Invalid() {
-		clickModelVersion = m.ClickModelVersion
+		clickThroughRateModelId = m.ClickThroughRateModelId
 	}
 	m.clickModelMutex.RUnlock()
 	// collect nodes
@@ -76,107 +71,13 @@ func (m *Master) GetMeta(ctx context.Context, nodeInfo *protocol.NodeInfo) (*pro
 		}
 	}
 	return &protocol.Meta{
-		Config:              string(s),
-		RankingModelVersion: rankingModelVersion,
-		ClickModelVersion:   clickModelVersion,
-		Me:                  nodeInfo.Uuid,
-		Workers:             workers,
-		Servers:             servers,
+		Config:                        string(s),
+		CollaborativeFilteringModelId: collaborativeFilteringModelId,
+		ClickThroughRateModelId:       clickThroughRateModelId,
+		Me:                            nodeInfo.Uuid,
+		Workers:                       workers,
+		Servers:                       servers,
 	}, nil
-}
-
-// GetRankingModel returns latest ranking model.
-func (m *Master) GetRankingModel(version *protocol.VersionInfo, sender protocol.Master_GetRankingModelServer) error {
-	m.collaborativeFilteringModelMutex.RLock()
-	defer m.collaborativeFilteringModelMutex.RUnlock()
-	// skip empty model
-	if m.CollaborativeFilteringModel == nil || m.CollaborativeFilteringModel.Invalid() {
-		return errors.New("no valid model found")
-	}
-	// check model version
-	if m.CollaborativeFilteringModelVersion != version.Version {
-		return errors.New("model version mismatch")
-	}
-	// encode model
-	reader, writer := io.Pipe()
-	var encoderError error
-	go func() {
-		defer func(writer *io.PipeWriter) {
-			err := writer.Close()
-			if err != nil {
-				log.Logger().Error("fail to close pipe", zap.Error(err))
-			}
-		}(writer)
-		err := cf.MarshalModel(writer, m.CollaborativeFilteringModel)
-		if err != nil {
-			log.Logger().Error("fail to marshal collaborative filtering model", zap.Error(err))
-			encoderError = err
-			return
-		}
-	}()
-	// send model
-	for {
-		buf := make([]byte, batchSize)
-		n, err := reader.Read(buf)
-		if err == io.EOF {
-			log.Logger().Debug("complete sending ranking model")
-			break
-		} else if err != nil {
-			return err
-		}
-		err = sender.Send(&protocol.Fragment{Data: buf[:n]})
-		if err != nil {
-			return err
-		}
-	}
-	return encoderError
-}
-
-// GetClickModel returns latest click model.
-func (m *Master) GetClickModel(version *protocol.VersionInfo, sender protocol.Master_GetClickModelServer) error {
-	m.clickModelMutex.RLock()
-	defer m.clickModelMutex.RUnlock()
-	// skip empty model
-	if m.ClickModel == nil || m.ClickModel.Invalid() {
-		return errors.New("no valid model found")
-	}
-	// check empty model
-	if m.ClickModelVersion != version.Version {
-		return errors.New("model version mismatch")
-	}
-	// encode model
-	reader, writer := io.Pipe()
-	var encoderError error
-	go func() {
-		defer func(writer *io.PipeWriter) {
-			err := writer.Close()
-			if err != nil {
-				log.Logger().Error("fail to close pipe", zap.Error(err))
-			}
-		}(writer)
-		err := ctr.MarshalModel(writer, m.ClickModel)
-		if err != nil {
-			log.Logger().Error("fail to marshal click model", zap.Error(err))
-			encoderError = err
-			return
-		}
-	}()
-	// send model
-	for {
-		buf := make([]byte, batchSize)
-		n, err := reader.Read(buf)
-		if err == io.EOF {
-			log.Logger().Debug("complete sending click model")
-			break
-		} else if err != nil {
-			return err
-		}
-		err = sender.Send(&protocol.Fragment{Data: buf[:n]})
-		if err != nil {
-			return err
-		}
-	}
-	return encoderError
 }
 
 func (m *Master) PushProgress(
