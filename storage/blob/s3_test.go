@@ -19,8 +19,8 @@ import (
 	"github.com/minio/minio-go/v7"
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/config"
+	"io"
 	"os"
-	"path"
 	"testing"
 )
 
@@ -31,6 +31,9 @@ var (
 )
 
 func TestS3(t *testing.T) {
+	endpoint = "192.168.20.160:9000"
+	accessKeyID = "rustfsadmin"
+	secretAccessKey = "rustfsadmin"
 	if endpoint == "" || accessKeyID == "" || secretAccessKey == "" {
 		t.Skip("S3 environment variables are not set, skipping S3 tests")
 	}
@@ -49,20 +52,20 @@ func TestS3(t *testing.T) {
 	err = client.Client.MakeBucket(context.Background(), client.bucket, minio.MakeBucketOptions{})
 	assert.NoError(t, err)
 
-	// create a temp file
-	tempFilePath := path.Join(t.TempDir(), "test.txt")
-	err = os.WriteFile(tempFilePath, []byte("hello world"), 0644)
+	// write a temp file
+	w, done, err := client.Create("test")
 	assert.NoError(t, err)
+	_, err = w.Write([]byte("hello world"))
+	assert.NoError(t, err)
+	err = w.Close()
+	assert.NoError(t, err)
+	<-done
 
-	// upload blob
-	err = client.UploadBlob("test", tempFilePath)
+	// read the file
+	r, err := client.Open("test")
 	assert.NoError(t, err)
-
-	// download blob
-	downloadFilePath := path.Join(t.TempDir(), "download.txt")
-	err = client.DownloadBlob("test", downloadFilePath)
-	assert.NoError(t, err)
-	downloadContent, err := os.ReadFile(downloadFilePath)
-	assert.NoError(t, err)
-	assert.Equal(t, "hello world", string(downloadContent))
+	content := make([]byte, 11)
+	_, err = r.Read(content)
+	assert.ErrorIs(t, err, io.EOF)
+	assert.Equal(t, "hello world", string(content))
 }

@@ -224,18 +224,18 @@ func (w *Worker) Sync() {
 
 		// check ranking model version
 		w.latestRankingModelVersion = meta.RankingModelVersion
-		if w.latestRankingModelVersion != w.CollaborativeFilteringModelVersion {
+		if w.latestRankingModelVersion != w.CollaborativeFilteringModelId {
 			log.Logger().Info("new ranking model found",
-				zap.String("old_version", encoding.Hex(w.CollaborativeFilteringModelVersion)),
+				zap.String("old_version", encoding.Hex(w.CollaborativeFilteringModelId)),
 				zap.String("new_version", encoding.Hex(w.latestRankingModelVersion)))
 			w.syncedChan.Signal()
 		}
 
 		// check click model version
 		w.latestClickModelVersion = meta.ClickModelVersion
-		if w.latestClickModelVersion != w.ClickModelVersion {
+		if w.latestClickModelVersion != w.ClickModelId {
 			log.Logger().Info("new click model found",
-				zap.String("old_version", encoding.Hex(w.ClickModelVersion)),
+				zap.String("old_version", encoding.Hex(w.ClickModelId)),
 				zap.String("new_version", encoding.Hex(w.latestClickModelVersion)))
 			w.syncedChan.Signal()
 		}
@@ -257,7 +257,7 @@ func (w *Worker) Pull() {
 		pulled := false
 
 		// pull ranking model
-		if w.latestRankingModelVersion != w.CollaborativeFilteringModelVersion {
+		if w.latestRankingModelVersion != w.CollaborativeFilteringModelId {
 			log.Logger().Info("start pull ranking model")
 			if rankingModelReceiver, err := w.masterClient.GetRankingModel(context.Background(),
 				&protocol.VersionInfo{Version: w.latestRankingModelVersion},
@@ -271,9 +271,9 @@ func (w *Worker) Pull() {
 				} else {
 					w.CollaborativeFilteringModel = rankingModel
 					w.matrixFactorization = nil
-					w.CollaborativeFilteringModelVersion = w.latestRankingModelVersion
+					w.CollaborativeFilteringModelId = w.latestRankingModelVersion
 					log.Logger().Info("synced ranking model",
-						zap.String("version", encoding.Hex(w.CollaborativeFilteringModelVersion)))
+						zap.String("version", encoding.Hex(w.CollaborativeFilteringModelId)))
 					MemoryInuseBytesVec.WithLabelValues("collaborative_filtering_model").Set(float64(sizeof.DeepSize(w.CollaborativeFilteringModel)))
 					pulled = true
 				}
@@ -281,7 +281,7 @@ func (w *Worker) Pull() {
 		}
 
 		// pull click model
-		if w.latestClickModelVersion != w.ClickModelVersion {
+		if w.latestClickModelVersion != w.ClickModelId {
 			log.Logger().Info("start pull click model")
 			if clickModelReceiver, err := w.masterClient.GetClickModel(context.Background(),
 				&protocol.VersionInfo{Version: w.latestClickModelVersion},
@@ -294,9 +294,9 @@ func (w *Worker) Pull() {
 					log.Logger().Error("failed to unmarshal click model", zap.Error(err))
 				} else {
 					w.ClickModel = clickModel
-					w.ClickModelVersion = w.latestClickModelVersion
+					w.ClickModelId = w.latestClickModelVersion
 					log.Logger().Info("synced click model",
-						zap.String("version", encoding.Hex(w.ClickModelVersion)))
+						zap.String("version", encoding.Hex(w.ClickModelId)))
 					MemoryInuseBytesVec.WithLabelValues("ranking_model").Set(float64(sizeof.DeepSize(w.ClickModel)))
 
 					// spawn rankers

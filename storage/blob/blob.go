@@ -29,6 +29,11 @@ import (
 	"time"
 )
 
+type Store interface {
+	Open(name string) (io.Reader, error)
+	Create(name string) (io.WriteCloser, chan struct{}, error)
+}
+
 type MasterStoreServer struct {
 	protocol.UnimplementedBlobStoreServer
 	dir string
@@ -148,79 +153,62 @@ func NewMasterStoreClient(clientConn *grpc.ClientConn) *MasterStoreClient {
 	return &MasterStoreClient{client: protocol.NewBlobStoreClient(clientConn)}
 }
 
-func (c *MasterStoreClient) UploadBlob(name, path string) error {
-	// Stat file
-	fileInfo, err := os.Stat(path)
-	if err != nil {
-		return err
-	}
-	// Open file
-	file, err := os.Open(path)
-	if err != nil {
-		return err
-	}
-	defer func(file *os.File) {
-		err = file.Close()
-		if err != nil {
-			log.Logger().Error("failed to close file", zap.Error(err))
-		}
-	}(file)
-	// Upload blob
-	stream, err := c.client.UploadBlob(context.Background())
-	if err != nil {
-		return err
-	}
-	for {
-		data := make([]byte, 1024*1024*4)
-		n, err := file.Read(data)
-		if err != nil {
-			if errors.Is(err, io.EOF) {
-				break
-			}
-			return err
-		}
-		err = stream.Send(&protocol.UploadBlobRequest{
-			Name:      name,
-			Timestamp: timestamppb.New(fileInfo.ModTime()),
-			Data:      data[:n],
-		})
-		if err != nil {
-			return err
-		}
-	}
-	_, err = stream.CloseAndRecv()
-	return err
-}
-
-func (c *MasterStoreClient) DownloadBlob(name, path string) error {
-	// Open file
-	file, err := os.Create(path)
-	if err != nil {
-		return err
-	}
-	defer func(file *os.File) {
-		err = file.Close()
-		if err != nil {
-			log.Logger().Error("failed to close file", zap.Error(err))
-		}
-	}(file)
-	// Fetch blob
+func (c *MasterStoreClient) Open(name string) (io.Reader, error) {
 	stream, err := c.client.DownloadBlob(context.Background(), &protocol.DownloadBlobRequest{Name: name})
 	if err != nil {
-		return err
+		return nil, err
 	}
-	for {
-		resp, err := stream.Recv()
-		if err != nil {
-			if errors.Is(err, io.EOF) {
-				break
+	pr, pw := io.Pipe()
+	go func() {
+		for {
+			resp, err := stream.Recv()
+			if err != nil {
+				_ = pw.CloseWithError(err)
+				return
 			}
-			return err
+			_, err = pw.Write(resp.Data)
+			if err != nil {
+				_ = pw.CloseWithError(err)
+				return
+			}
 		}
-		_, err = file.Write(resp.Data)
-		if err != nil {
-			return err
-		}
+	}()
+	return pr, nil
+}
+
+func (c *MasterStoreClient) Create(name string) (io.WriteCloser, chan struct{}, error) {
+	stream, err := c.client.UploadBlob(context.Background())
+	if err != nil {
+		return nil, nil, err
 	}
-	return nil
+	done := make(chan struct{})
+	pr, pw := io.Pipe()
+	go func() {
+		defer close(done)
+		for {
+			data := make([]byte, 1024*1024*4)
+			n, err := pr.Read(data)
+			if err != nil {
+				if errors.Is(err, io.EOF) {
+					break
+				}
+				log.Logger().Error("failed to read data", zap.Error(err))
+				return
+			}
+			err = stream.Send(&protocol.UploadBlobRequest{
+				Name:      name,
+				Timestamp: timestamppb.Now(),
+				Data:      data[:n],
+			})
+			if err != nil {
+				log.Logger().Error("failed to send data", zap.Error(err))
+				return
+			}
+		}
+		_, err = stream.CloseAndRecv()
+		if err != nil {
+			log.Logger().Error("failed to close stream", zap.Error(err))
+		}
+	}()
+	return pw, done, nil
 }

@@ -50,14 +50,14 @@ func (m *Master) GetMeta(ctx context.Context, nodeInfo *protocol.NodeInfo) (*pro
 	m.collaborativeFilteringModelMutex.RLock()
 	var rankingModelVersion int64
 	if m.CollaborativeFilteringModel != nil && !m.CollaborativeFilteringModel.Invalid() {
-		rankingModelVersion = m.CollaborativeFilteringModelVersion
+		rankingModelVersion = m.CollaborativeFilteringModelId
 	}
 	m.collaborativeFilteringModelMutex.RUnlock()
 	// save click model version
 	m.clickModelMutex.RLock()
 	var clickModelVersion int64
 	if m.ClickModel != nil && !m.ClickModel.Invalid() {
-		clickModelVersion = m.ClickModelVersion
+		clickModelVersion = m.ClickModelId
 	}
 	m.clickModelMutex.RUnlock()
 	// collect nodes
@@ -94,7 +94,7 @@ func (m *Master) GetRankingModel(version *protocol.VersionInfo, sender protocol.
 		return errors.New("no valid model found")
 	}
 	// check model version
-	if m.CollaborativeFilteringModelVersion != version.Version {
+	if m.CollaborativeFilteringModelId != version.Version {
 		return errors.New("model version mismatch")
 	}
 	// encode model
@@ -141,7 +141,7 @@ func (m *Master) GetClickModel(version *protocol.VersionInfo, sender protocol.Ma
 		return errors.New("no valid model found")
 	}
 	// check empty model
-	if m.ClickModelVersion != version.Version {
+	if m.ClickModelId != version.Version {
 		return errors.New("model version mismatch")
 	}
 	// encode model

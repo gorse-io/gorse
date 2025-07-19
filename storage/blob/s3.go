@@ -18,7 +18,10 @@ import (
 	"context"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
+	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/config"
+	"go.uber.org/zap"
+	"io"
 	"path/filepath"
 )
 
@@ -42,12 +45,27 @@ func NewS3(cfg config.S3Config) (*S3, error) {
 	}, nil
 }
 
-func (s *S3) UploadBlob(name, path string) error {
-	_, err := s.Client.FPutObject(context.Background(), s.bucket, filepath.Join(s.prefix, name), path, minio.PutObjectOptions{})
-	return err
+// Open a file in S3 for reading. This function returns an io.Reader that can be used to read the file's content.
+func (s *S3) Open(name string) (io.Reader, error) {
+	object, err := s.Client.GetObject(context.Background(), s.bucket, filepath.Join(s.prefix, name), minio.GetObjectOptions{})
+	if err != nil {
+		return nil, err
+	}
+	return object, nil
 }
 
-func (s *S3) DownloadBlob(name, path string) error {
-	err := s.Client.FGetObject(context.Background(), s.bucket, filepath.Join(s.prefix, name), path, minio.GetObjectOptions{})
-	return err
+// Create a new file in S3 for writing. This function returns an io.WriteCloser that can be used to write data to the
+// file. It also returns a done channel that is closed when the writing is complete.
+func (s *S3) Create(name string) (io.WriteCloser, chan struct{}, error) {
+	fullPath := filepath.Join(s.prefix, name)
+	pr, pw := io.Pipe()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_, err := s.Client.PutObject(context.Background(), s.bucket, fullPath, pr, -1, minio.PutObjectOptions{})
+		if err != nil {
+			log.Logger().Error("failed to upload file to S3", zap.String("file", fullPath), zap.Error(err))
+		}
+	}()
+	return pw, done, nil
 }
