@@ -549,7 +549,7 @@ func (suite *baseTestSuite) TestTimestampPrecision() {
 	timestamp := time.Date(2023, 1, 1, 0, 0, 0, 500, time.UTC)
 	// add scores
 	err := suite.Database.AddScores(ctx, "a", "s", []Score{
-		{Id: "1", Score: 1, Timestamp: timestamp},
+		{Id: "1", Score: 1, Categories: []string{""}, Timestamp: timestamp},
 	})
 	suite.NoError(err)
 	// remove by timestamp
