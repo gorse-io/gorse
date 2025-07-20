@@ -856,6 +856,13 @@ func (m *Master) updateUserToUser(dataset *dataset.Dataset) error {
 					log.Logger().Error("failed to save user neighbors digest to cache", zap.String("user_id", user.UserId), zap.Error(err))
 					continue
 				}
+				// Delete stale user-to-user recommendations
+				if err := m.CacheClient.DeleteScores(ctx, []string{cache.UserToUser}, cache.ScoreCondition{
+					Subset: lo.ToPtr(cache.Key(userToUserConfig.Name, user.UserId)),
+					Before: lo.ToPtr(recommender.Timestamp()),
+				}); err != nil {
+					log.Logger().Error("failed to remove stale user neighbors", zap.String("user_id", user.UserId), zap.Error(err))
+				}
 			}
 			span.Add(1)
 		}

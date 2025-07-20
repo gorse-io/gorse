@@ -42,6 +42,7 @@ type UserToUser interface {
 	Users() []*data.User
 	Push(user *data.User, feedback []int32)
 	PopAll(i int) []cache.Score
+	Timestamp() time.Time
 }
 
 func NewUserToUser(cfg config.UserToUserConfig, n int, timestamp time.Time, opts *UserToUserOptions) (UserToUser, error) {
@@ -78,6 +79,10 @@ type baseUserToUser[T any] struct {
 
 func (b *baseUserToUser[T]) Users() []*data.User {
 	return b.users
+}
+
+func (b *baseUserToUser[T]) Timestamp() time.Time {
+	return b.timestamp
 }
 
 func (b *baseUserToUser[T]) PopAll(i int) []cache.Score {

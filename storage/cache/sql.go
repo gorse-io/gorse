@@ -532,7 +532,12 @@ func (db *SQLDatabase) DeleteScores(ctx context.Context, collections []string, c
 	}
 	if condition.Before != nil {
 		builder.WriteString(" and timestamp < ?")
-		args = append(args, *condition.Before)
+		if db.driver == MySQL {
+			// In MySQL, we need to truncate the time to milliseconds because MySQL will round the time to milliseconds.
+			args = append(args, condition.Before.Truncate(time.Millisecond))
+		} else {
+			args = append(args, *condition.Before)
+		}
 	}
 	return db.gormDB.WithContext(ctx).Delete(&SQLDocument{}, append([]any{builder.String()}, args...)...).Error
 }
