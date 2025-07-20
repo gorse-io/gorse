@@ -420,11 +420,11 @@ func (db *SQLDatabase) AddScores(ctx context.Context, collection, subset string,
 			}
 		})
 	}
-	db.gormDB.WithContext(ctx).Table(db.DocumentTable()).Clauses(clause.OnConflict{
+	err := db.gormDB.WithContext(ctx).Table(db.DocumentTable()).Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "collection"}, {Name: "subset"}, {Name: "id"}},
 		DoUpdates: clause.AssignmentColumns([]string{"score", "categories", "timestamp"}),
-	}).Create(rows)
-	return nil
+	}).Create(rows).Error
+	return errors.Trace(err)
 }
 
 func (db *SQLDatabase) SearchScores(ctx context.Context, collection, subset string, query []string, begin, end int) ([]Score, error) {
