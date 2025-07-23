@@ -244,5 +244,13 @@ func MM(a, b, c []float32, m, n, k int, transA, transB bool) {
 	if len(a) != m*k || len(b) != k*n || len(c) != m*n {
 		panic("floats: matrix dimensions do not match")
 	}
-	feature.mm(a, b, c, m, n, k, transA, transB)
+	if !transA && !transB {
+		feature.mm(false, false, m, n, k, a, k, b, n, c, n)
+	} else if !transA && transB {
+		feature.mm(false, true, m, n, k, a, k, b, k, c, n)
+	} else if transA && !transB {
+		feature.mm(true, false, m, n, k, a, m, b, n, c, n)
+	} else {
+		feature.mm(true, true, m, n, k, a, m, b, k, c, n)
+	}
 }

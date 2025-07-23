@@ -1,5 +1,3 @@
-//go:build cgo
-
 // Copyright 2025 gorse Project Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,15 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package floats
+package blas
 
-import "github.com/zhenghaoz/gorse/common/blas"
+type Order int
 
-func init() {
-	feature = feature | AMX
-}
+const RowMajor Order = 101
 
-func mm(transA, transB bool, m, n, k int, a []float32, lda int, b []float32, ldb int, c []float32, ldc int) {
-	blas.SGEMM(blas.RowMajor, blas.NewTranspose(transA), blas.NewTranspose(transB),
-		m, n, k, 1.0, a, lda, b, ldb, 0, c, ldc)
+type Transpose int
+
+const (
+	NoTrans Transpose = 111
+	Trans   Transpose = 112
+)
+
+func NewTranspose(transpose bool) Transpose {
+	if transpose {
+		return Trans
+	} else {
+		return NoTrans
+	}
 }

@@ -272,22 +272,22 @@ func (suite *NativeTestSuite) TestMM() {
 	b := []float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}
 	c := make([]float32, 8)
 	target := []float32{38, 44, 50, 56, 83, 98, 113, 128}
-	mm(a, b, c, 2, 4, 3, false, false)
+	mm(false, false, 2, 4, 3, a, 3, b, 4, c, 4)
 	suite.Equal(target, c)
 
 	c = make([]float32, 8)
 	target = []float32{14, 32, 50, 68, 32, 77, 122, 167}
-	mm(a, b, c, 2, 4, 3, false, true)
+	mm(false, true, 2, 4, 3, a, 3, b, 3, c, 4)
 	suite.Equal(target, c)
 
 	c = make([]float32, 8)
 	target = []float32{61, 70, 79, 88, 76, 88, 100, 112}
-	mm(a, b, c, 2, 4, 3, true, false)
+	mm(true, false, 2, 4, 3, a, 2, b, 4, c, 4)
 	suite.Equal(target, c)
 
 	c = make([]float32, 8)
 	target = []float32{22, 49, 76, 103, 28, 64, 100, 136}
-	mm(a, b, c, 2, 4, 3, true, true)
+	mm(true, true, 2, 4, 3, a, 2, b, 3, c, 4)
 	suite.Equal(target, c)
 }
 
@@ -418,21 +418,21 @@ func (suite *SIMDTestSuite) TestMM() {
 	b := []float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}
 	c := make([]float32, 8)
 	target := []float32{38, 44, 50, 56, 83, 98, 113, 128}
-	suite.mm(a, b, c, 2, 4, 3, false, false)
+	suite.mm(false, false, 2, 4, 3, a, 3, b, 4, c, 4)
 	suite.Equal(target, c)
 
 	c = make([]float32, 8)
 	target = []float32{14, 32, 50, 68, 32, 77, 122, 167}
-	suite.mm(a, b, c, 2, 4, 3, false, true)
+	suite.mm(false, true, 2, 4, 3, a, 3, b, 3, c, 4)
 	suite.Equal(target, c)
 
 	c = make([]float32, 8)
 	target = []float32{61, 70, 79, 88, 76, 88, 100, 112}
-	suite.mm(a, b, c, 2, 4, 3, true, false)
+	suite.mm(true, false, 2, 4, 3, a, 2, b, 4, c, 4)
 	suite.Equal(target, c)
 
 	c = make([]float32, 8)
 	target = []float32{22, 49, 76, 103, 28, 64, 100, 136}
-	suite.mm(a, b, c, 2, 4, 3, true, true)
+	suite.mm(true, true, 2, 4, 3, a, 2, b, 3, c, 4)
 	suite.Equal(target, c)
 }
