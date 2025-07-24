@@ -47,4 +47,4 @@ func _mm256_dot(a, b unsafe.Pointer, n int64) (result float32)
 func _mm256_euclidean(a, b unsafe.Pointer, n int64) (result float32)
 
 //go:noescape
-func _mm256_mm(a, b, c unsafe.Pointer, m, n, k int64, transA, transB bool)
+func _mm256_mm(transA, transB bool, m, n, k int64, a unsafe.Pointer, lda int64, b unsafe.Pointer, ldb int64, c unsafe.Pointer, ldc int64)

@@ -448,29 +448,36 @@ func (t *Tensor) matMul(other *Tensor, transpose1, transpose2 bool) *Tensor {
 		panic("matMul requires 2-D tensors")
 	}
 	var m, n, k int
+	var result []float32
 	if !transpose1 && !transpose2 {
 		if t.shape[1] != other.shape[0] {
 			panic(fmt.Sprintf("matMul requires the shapes of tensors are compatible, but got %v and %v", t.shape, other.shape))
 		}
 		m, n, k = t.shape[0], other.shape[1], t.shape[1]
+		result = make([]float32, m*n)
+		floats.MM(transpose1, transpose2, m, n, k, t.data, k, other.data, n, result, n)
 	} else if transpose1 && !transpose2 {
 		if t.shape[0] != other.shape[0] {
 			panic(fmt.Sprintf("matMul requires the shapes of tensors are compatible, but got %v and %v", t.shape, other.shape))
 		}
 		m, n, k = t.shape[1], other.shape[1], t.shape[0]
+		result = make([]float32, m*n)
+		floats.MM(transpose1, transpose2, m, n, k, t.data, m, other.data, n, result, n)
 	} else if !transpose1 && transpose2 {
 		if t.shape[1] != other.shape[1] {
 			panic(fmt.Sprintf("matMul requires the shapes of tensors are compatible, but got %v and %v", t.shape, other.shape))
 		}
 		m, n, k = t.shape[0], other.shape[0], t.shape[1]
+		result = make([]float32, m*n)
+		floats.MM(transpose1, transpose2, m, n, k, t.data, k, other.data, k, result, n)
 	} else {
 		if t.shape[0] != other.shape[1] {
 			panic(fmt.Sprintf("matMul requires the shapes of tensors are compatible, but got %v and %v", t.shape, other.shape))
 		}
 		m, n, k = t.shape[1], other.shape[0], t.shape[0]
+		result = make([]float32, m*n)
+		floats.MM(transpose1, transpose2, m, n, k, t.data, m, other.data, k, result, n)
 	}
-	result := make([]float32, m*n)
-	floats.MM(t.data, other.data, result, m, n, k, transpose1, transpose2)
 	return &Tensor{
 		data:  result,
 		shape: []int{m, n},
@@ -482,30 +489,43 @@ func (t *Tensor) batchMatMul(other *Tensor, transpose1, transpose2 bool) *Tensor
 		panic("BatchMatMul requires 3-D tensors")
 	}
 	var b, m, n, k int
+	var result []float32
 	if !transpose1 && !transpose2 {
 		if t.shape[0] != other.shape[0] || t.shape[2] != other.shape[1] {
 			panic("BatchMatMul requires the shapes of tensors are compatible")
 		}
 		b, m, n, k = t.shape[0], t.shape[1], other.shape[2], t.shape[2]
+		result = make([]float32, b*m*n)
+		for i := 0; i < b; i++ {
+			floats.MM(transpose1, transpose2, m, n, k, t.data[i*m*k:(i+1)*m*k], k, other.data[i*n*k:(i+1)*n*k], n, result[i*m*n:(i+1)*m*n], n)
+		}
 	} else if transpose1 && !transpose2 {
 		if t.shape[0] != other.shape[0] || t.shape[1] != other.shape[1] {
 			panic("batchMatMul requires the shapes of tensors are compatible")
 		}
 		b, m, n, k = t.shape[0], t.shape[2], other.shape[2], t.shape[1]
+		result = make([]float32, b*m*n)
+		for i := 0; i < b; i++ {
+			floats.MM(transpose1, transpose2, m, n, k, t.data[i*m*k:(i+1)*m*k], m, other.data[i*n*k:(i+1)*n*k], n, result[i*m*n:(i+1)*m*n], n)
+		}
 	} else if !transpose1 && transpose2 {
 		if t.shape[0] != other.shape[0] || t.shape[2] != other.shape[2] {
 			panic("batchMatMul requires the shapes of tensors are compatible")
 		}
 		b, m, n, k = t.shape[0], t.shape[1], other.shape[1], t.shape[2]
+		result = make([]float32, b*m*n)
+		for i := 0; i < b; i++ {
+			floats.MM(transpose1, transpose2, m, n, k, t.data[i*m*k:(i+1)*m*k], k, other.data[i*n*k:(i+1)*n*k], k, result[i*m*n:(i+1)*m*n], n)
+		}
 	} else {
 		if t.shape[0] != other.shape[0] || t.shape[1] != other.shape[2] {
 			panic("batchMatMul requires the shapes of tensors are compatible")
 		}
 		b, m, n, k = t.shape[0], t.shape[2], other.shape[1], t.shape[1]
-	}
-	result := make([]float32, b*m*n)
-	for i := 0; i < b; i++ {
-		floats.MM(t.data[i*m*k:(i+1)*m*k], other.data[i*n*k:(i+1)*n*k], result[i*m*n:(i+1)*m*n], m, n, k, transpose1, transpose2)
+		result = make([]float32, b*m*n)
+		for i := 0; i < b; i++ {
+			floats.MM(transpose1, transpose2, m, n, k, t.data[i*m*k:(i+1)*m*k], m, other.data[i*n*k:(i+1)*n*k], k, result[i*m*n:(i+1)*m*n], n)
+		}
 	}
 	return &Tensor{
 		data:  result,

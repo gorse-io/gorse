@@ -267,7 +267,7 @@ func BenchmarkMM(b *testing.B) {
 							matC := make([]float32, n*n)
 							b.ResetTimer()
 							for i := 0; i < b.N; i++ {
-								feat.mm(matA, matB, matC, n, n, n, transA, transB)
+								feat.mm(transA, transB, n, n, n, matA, n, matB, n, matC, n)
 							}
 						})
 					}

@@ -20,19 +20,6 @@ package blas
 // #include "cublas/cublas_sgemm.h"
 import "C"
 
-type Order int
-
-const (
-	RowMajor Order = 101
-)
-
-type Transpose int
-
-const (
-	NoTrans Transpose = 111
-	Trans   Transpose = 112
-)
-
 type Error int
 
 const (
