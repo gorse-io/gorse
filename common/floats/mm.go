@@ -34,7 +34,7 @@ func mm(transA, transB bool, m, n, k int, a []float32, lda int, b []float32, ldb
 		for i := 0; i < m; i++ {
 			for l := 0; l < k; l++ {
 				// C_j += A_{ji} * B_i
-				MulConstAdd(b[l*ldb:(l+1)*n], a[l*lda+i], c[i*ldc:(i+1)*ldc])
+				MulConstAdd(b[l*ldb:(l+1)*ldb], a[l*lda+i], c[i*ldc:(i+1)*ldc])
 			}
 		}
 	} else {
