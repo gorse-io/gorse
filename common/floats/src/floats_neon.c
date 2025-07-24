@@ -154,13 +154,13 @@ float veuclidean(float *a, float *b, long n) {
     return vget_lane_f32(r, 0);
 }
 
-void vmm(float *a, float *b, float *c, long m, long n, long k, _Bool transA, _Bool transB) {
+void vmm(_Bool transA, _Bool transB, long m, long n, long k, float *a, long lda, float *b, long ldb, float *c, long ldc) {
     if (!transA && !transB)
     {
         for (int i = 0; i < m; i++) {
             for (int l = 0; l < k; l++) {
                 for (int j = 0; j < n; j++) {
-                    c[i * n + j] += a[i * k + l] * b[l * n + j];
+                    c[i * ldc + j] += a[i * lda + l] * b[l * ldb + j];
                 }
             }
         }
@@ -168,7 +168,7 @@ void vmm(float *a, float *b, float *c, long m, long n, long k, _Bool transA, _Bo
     {
         for (int i = 0; i < m; i++) {
             for (int j = 0; j < n; j++) {
-                c[i * n + j] = dot(a + i * k, b + j * k, k);
+                c[i * ldc + j] = dot(a + i * lda, b + j * ldb, k);
             }
         }
     } else if (transA && !transB)
@@ -176,7 +176,7 @@ void vmm(float *a, float *b, float *c, long m, long n, long k, _Bool transA, _Bo
         for (int i = 0; i < m; i++) {
             for (int l = 0; l < k; l++) {
                 for (int j = 0; j < n; j++) {
-                    c[i * n + j] += a[l * m + i] * b[l * n + j];
+                    c[i * ldc + j] += a[l * lda + i] * b[l * ldb + j];
                 }
             }
         }
@@ -185,7 +185,7 @@ void vmm(float *a, float *b, float *c, long m, long n, long k, _Bool transA, _Bo
         for (int i = 0; i < m; i++) {
             for (int l = 0; l < k; l++) {
                 for (int j = 0; j < n; j++) {
-                    c[i * n + j] += a[l * m + i] * b[j * k + l];
+                    c[i * ldc + j] += a[l * lda + i] * b[j * ldb + l];
                 }
             }
         }
