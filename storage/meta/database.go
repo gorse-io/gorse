@@ -15,6 +15,7 @@
 package meta
 
 import (
+	"encoding/json"
 	"github.com/XSAM/otelsql"
 	"github.com/juju/errors"
 	"github.com/samber/lo"
@@ -23,6 +24,24 @@ import (
 	"strings"
 	"time"
 )
+
+const (
+	COLLABORATIVE_FILTERING_MODEL = "COLLABORATIVE_FILTERING_MODEL"
+	CLICK_THROUGH_RATE_MODEL      = "CLICK_THROUGH_RATE_MODEL"
+)
+
+type Model[T any] struct {
+	ID    int64
+	Score T
+}
+
+func (m *Model[T]) ToJSON() string {
+	return string(lo.Must1(json.Marshal(m)))
+}
+
+func (m *Model[T]) FromJSON(data string) error {
+	return json.Unmarshal([]byte(data), m)
+}
 
 type Node struct {
 	UUID       string
@@ -37,6 +56,8 @@ type Database interface {
 	Init() error
 	UpdateNode(node *Node) error
 	ListNodes() ([]*Node, error)
+	Put(key, value string) error
+	Get(key string) (*string, error)
 }
 
 // Open a connection to a database.

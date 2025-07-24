@@ -42,8 +42,9 @@ message Feedback {
   string feedback_type = 2;
   string user_id = 3;
   string item_id = 4;
-  google.protobuf.Timestamp timestamp = 5;
-  string comment = 6;
+  double value = 5;
+  google.protobuf.Timestamp timestamp = 6;
+  string comment = 7;
 }
 
 enum NodeType {
@@ -56,18 +57,13 @@ service Master {
 
   /* meta distribute */
   rpc GetMeta(NodeInfo) returns (Meta) {}
-
-  /* data distribute */
-  rpc GetRankingModel(VersionInfo) returns (stream Fragment) {}
-  rpc GetClickModel(VersionInfo) returns (stream Fragment) {}
-
   rpc PushProgress(PushProgressRequest) returns (PushProgressResponse) {}
 }
 
 message Meta {
   string config = 1;
-  int64 ranking_model_version = 3;
-  int64 click_model_version = 4;
+  int64 collaborative_filtering_model_id = 3;
+  int64 click_through_rate_model_id = 4;
   string me = 5;
   repeated string servers = 6;
   repeated string workers = 7;
@@ -75,10 +71,6 @@ message Meta {
 
 message Fragment {
   bytes data = 1;
-}
-
-message VersionInfo {
-  int64 version = 1;
 }
 
 message NodeInfo {

@@ -68,6 +68,14 @@ jobs:
         ports:
           - 6379
 
+      rustfs:
+        image: rustfs/rustfs:alpha
+        ports:
+          - 9000
+        env:
+          RUSTFS_ACCESS_KEY: rustfsadmin
+          RUSTFS_SECRET_KEY: rustfsadmin
+
     steps:
     - name: Set up dataset
       run: |
@@ -106,6 +114,10 @@ jobs:
         CLICKHOUSE_URI: clickhouse://localhost:${{ job.services.clickhouse.ports[8123] }}/
         # Redis
         REDIS_URI: redis://localhost:${{ job.services.redis.ports[6379] }}/
+        # S3
+        S3_ENDPOINT: localhost:${{ job.services.rustfs.ports[9000] }}
+        S3_ACCESS_KEY_ID: rustfsadmin
+        S3_SECRET_ACCESS_KEY: rustfsadmin
 
     - name: Upload 
       run: bash <(curl -s https://codecov.io/bash)
@@ -142,8 +154,11 @@ jobs:
       run: go test -timeout 20m -v ./... -skip "TestPostgres|TestMySQL|TestMongo|TestRedis|TestClickHouse"
 
   unit_test_windows:
-    name: unit tests (windows-latest)
-    runs-on: windows-latest
+    strategy:
+      matrix:
+        os: [windows-latest, windows-11-arm]
+    name: unit tests
+    runs-on: ${{ matrix.os }}
     steps:
     - name: Set up dataset
       run: |

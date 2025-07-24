@@ -18,6 +18,7 @@ import (
 	"context"
 	"crypto/md5"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"os"
 	"reflect"
@@ -31,10 +32,12 @@ import (
 	ut "github.com/go-playground/universal-translator"
 	"github.com/go-playground/validator/v10"
 	en_translations "github.com/go-playground/validator/v10/translations/en"
+	"github.com/go-viper/mapstructure/v2"
 	"github.com/juju/errors"
 	"github.com/samber/lo"
 	"github.com/spf13/viper"
 	"github.com/zhenghaoz/gorse/base/log"
+	"github.com/zhenghaoz/gorse/common/expression"
 	"github.com/zhenghaoz/gorse/storage"
 	"go.opentelemetry.io/otel/exporters/jaeger"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
@@ -48,6 +51,13 @@ import (
 	"go.uber.org/zap"
 )
 
+func init() {
+	viper.SetOptions(viper.WithDecodeHook(mapstructure.ComposeDecodeHookFunc(
+		mapstructure.StringToTimeDurationHookFunc(),
+		StringToFeedbackTypeHookFunc(),
+	)))
+}
+
 // Config is the configuration for the engine.
 type Config struct {
 	Database     DatabaseConfig     `mapstructure:"database"`
@@ -58,6 +68,7 @@ type Config struct {
 	Experimental ExperimentalConfig `mapstructure:"experimental"`
 	OIDC         OIDCConfig         `mapstructure:"oidc"`
 	OpenAI       OpenAIConfig       `mapstructure:"openai"`
+	S3           S3Config           `mapstructure:"s3"`
 }
 
 // DatabaseConfig is the configuration for the database.
@@ -120,11 +131,28 @@ type RecommendConfig struct {
 	Online          OnlineConfig            `mapstructure:"online"`
 }
 
+func StringToFeedbackTypeHookFunc() mapstructure.DecodeHookFunc {
+	return func(
+		f reflect.Type,
+		t reflect.Type,
+		data interface{},
+	) (interface{}, error) {
+		if f.Kind() == reflect.String && t == reflect.TypeOf(expression.FeedbackTypeExpression{}) {
+			var expr expression.FeedbackTypeExpression
+			if err := expr.FromString(data.(string)); err != nil {
+				return nil, errors.Trace(err)
+			}
+			return expr, nil // only convert string to FeedbackType
+		}
+		return data, nil
+	}
+}
+
 type DataSourceConfig struct {
-	PositiveFeedbackTypes []string `mapstructure:"positive_feedback_types"`                // positive feedback type
-	ReadFeedbackTypes     []string `mapstructure:"read_feedback_types"`                    // feedback type for read event
-	PositiveFeedbackTTL   uint     `mapstructure:"positive_feedback_ttl" validate:"gte=0"` // time-to-live of positive feedbacks
-	ItemTTL               uint     `mapstructure:"item_ttl" validate:"gte=0"`              // item-to-live of items
+	PositiveFeedbackTypes []expression.FeedbackTypeExpression `mapstructure:"positive_feedback_types"`                // positive feedback type
+	ReadFeedbackTypes     []expression.FeedbackTypeExpression `mapstructure:"read_feedback_types"`                    // feedback type for read event
+	PositiveFeedbackTTL   uint                                `mapstructure:"positive_feedback_ttl" validate:"gte=0"` // time-to-live of positive feedbacks
+	ItemTTL               uint                                `mapstructure:"item_ttl" validate:"gte=0"`              // item-to-live of items
 }
 
 type NonPersonalizedConfig struct {
@@ -234,6 +262,18 @@ type OpenAIConfig struct {
 	EmbeddingRPM        int    `mapstructure:"embedding_rpm"`
 	EmbeddingTPM        int    `mapstructure:"embedding_tpm"`
 	LogFile             string `mapstructure:"log_file"`
+}
+
+type S3Config struct {
+	Endpoint        string `mapstructure:"endpoint"`
+	AccessKeyID     string `mapstructure:"access_key_id"`
+	SecretAccessKey string `mapstructure:"secret_access_key"`
+	Bucket          string `mapstructure:"bucket"`
+	Prefix          string `mapstructure:"prefix"`
+}
+
+func (s *S3Config) ToJSON() string {
+	return string(lo.Must1(json.Marshal(s)))
 }
 
 func GetDefaultConfig() *Config {

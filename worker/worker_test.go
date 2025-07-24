@@ -19,7 +19,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/zhenghaoz/gorse/model/ctr"
 	"io"
 	"math/rand"
 	"net"
@@ -34,14 +33,15 @@ import (
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
-	"github.com/thoas/go-funk"
 	"github.com/zhenghaoz/gorse/base"
 	"github.com/zhenghaoz/gorse/base/progress"
+	"github.com/zhenghaoz/gorse/common/expression"
 	"github.com/zhenghaoz/gorse/common/parallel"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/dataset"
 	"github.com/zhenghaoz/gorse/model"
 	"github.com/zhenghaoz/gorse/model/cf"
+	"github.com/zhenghaoz/gorse/model/ctr"
 	"github.com/zhenghaoz/gorse/protocol"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
@@ -556,7 +556,7 @@ func (suite *WorkerTestSuite) TestExploreRecommend() {
 	items := lo.Map(recommend, func(d cache.Score, _ int) string { return d.Id })
 	suite.Contains(items, "latest")
 	suite.Contains(items, "popular")
-	items = funk.FilterString(items, func(item string) bool {
+	items = lo.Filter(items, func(item string, _ int) bool {
 		return item != "latest" && item != "popular"
 	})
 	suite.IsDecreasing(items)
@@ -623,9 +623,9 @@ func newMockMaster(t *testing.T) *mockMaster {
 	return &mockMaster{
 		addr: make(chan string),
 		meta: &protocol.Meta{
-			Config:              marshal(t, cfg),
-			ClickModelVersion:   1,
-			RankingModelVersion: 2,
+			Config:                        marshal(t, cfg),
+			ClickThroughRateModelId:       1,
+			CollaborativeFilteringModelId: 2,
 		},
 		cacheFilePath: cfg.Database.CacheStore,
 		dataFilePath:  cfg.Database.DataStore,
@@ -637,14 +637,6 @@ func newMockMaster(t *testing.T) *mockMaster {
 
 func (m *mockMaster) GetMeta(_ context.Context, _ *protocol.NodeInfo) (*protocol.Meta, error) {
 	return m.meta, nil
-}
-
-func (m *mockMaster) GetRankingModel(_ *protocol.VersionInfo, sender protocol.Master_GetRankingModelServer) error {
-	return sender.Send(&protocol.Fragment{Data: m.rankingModel})
-}
-
-func (m *mockMaster) GetClickModel(_ *protocol.VersionInfo, sender protocol.Master_GetClickModelServer) error {
-	return sender.Send(&protocol.Fragment{Data: m.clickModel})
 }
 
 func (m *mockMaster) Start(t *testing.T) {
@@ -695,13 +687,10 @@ func TestWorker_Sync(t *testing.T) {
 	assert.Equal(t, master.cacheFilePath, serv.cachePath)
 	assert.NoError(t, serv.DataClient.Close())
 	assert.NoError(t, serv.CacheClient.Close())
-	assert.Equal(t, int64(1), serv.latestClickModelVersion)
-	assert.Equal(t, int64(2), serv.latestRankingModelVersion)
-	assert.Zero(t, serv.ClickModelVersion)
-	assert.Zero(t, serv.CollaborativeFilteringModelVersion)
-	serv.Pull()
-	assert.Equal(t, int64(1), serv.ClickModelVersion)
-	assert.Equal(t, int64(2), serv.CollaborativeFilteringModelVersion)
+	assert.Equal(t, int64(1), serv.latestClickThroughRateModelId)
+	assert.Equal(t, int64(2), serv.latestCollaborativeFilteringModelId)
+	assert.Zero(t, serv.ClickThroughRateModelId)
+	assert.Zero(t, serv.CollaborativeFilteringModelId)
 	master.Stop()
 	done <- struct{}{}
 }
@@ -840,8 +829,10 @@ func (suite *WorkerTestSuite) TestRankByClickTroughRate() {
 
 func (suite *WorkerTestSuite) TestReplacement_ClickThroughRate() {
 	ctx := context.Background()
-	suite.Config.Recommend.DataSource.PositiveFeedbackTypes = []string{"p"}
-	suite.Config.Recommend.DataSource.ReadFeedbackTypes = []string{"n"}
+	suite.Config.Recommend.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{
+		expression.MustParseFeedbackTypeExpression("p")}
+	suite.Config.Recommend.DataSource.ReadFeedbackTypes = []expression.FeedbackTypeExpression{
+		expression.MustParseFeedbackTypeExpression("n")}
 	suite.Config.Recommend.Offline.EnableColRecommend = false
 	suite.Config.Recommend.Offline.EnablePopularRecommend = true
 	suite.Config.Recommend.Replacement.EnableReplacement = true
@@ -906,8 +897,10 @@ func (suite *WorkerTestSuite) TestReplacement_ClickThroughRate() {
 
 func (suite *WorkerTestSuite) TestReplacement_CollaborativeFiltering() {
 	ctx := context.Background()
-	suite.Config.Recommend.DataSource.PositiveFeedbackTypes = []string{"p"}
-	suite.Config.Recommend.DataSource.ReadFeedbackTypes = []string{"n"}
+	suite.Config.Recommend.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{
+		expression.MustParseFeedbackTypeExpression("p")}
+	suite.Config.Recommend.DataSource.ReadFeedbackTypes = []expression.FeedbackTypeExpression{
+		expression.MustParseFeedbackTypeExpression("n")}
 	suite.Config.Recommend.Offline.EnableColRecommend = false
 	suite.Config.Recommend.Offline.EnablePopularRecommend = true
 	suite.Config.Recommend.Replacement.EnableReplacement = true

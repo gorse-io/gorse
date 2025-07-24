@@ -420,11 +420,11 @@ func (db *SQLDatabase) AddScores(ctx context.Context, collection, subset string,
 			}
 		})
 	}
-	db.gormDB.WithContext(ctx).Table(db.DocumentTable()).Clauses(clause.OnConflict{
+	err := db.gormDB.WithContext(ctx).Table(db.DocumentTable()).Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "collection"}, {Name: "subset"}, {Name: "id"}},
 		DoUpdates: clause.AssignmentColumns([]string{"score", "categories", "timestamp"}),
-	}).Create(rows)
-	return nil
+	}).Create(rows).Error
+	return errors.Trace(err)
 }
 
 func (db *SQLDatabase) SearchScores(ctx context.Context, collection, subset string, query []string, begin, end int) ([]Score, error) {
@@ -532,7 +532,12 @@ func (db *SQLDatabase) DeleteScores(ctx context.Context, collections []string, c
 	}
 	if condition.Before != nil {
 		builder.WriteString(" and timestamp < ?")
-		args = append(args, *condition.Before)
+		if db.driver == MySQL {
+			// In MySQL, we need to truncate the time to milliseconds because MySQL will round the time to milliseconds.
+			args = append(args, condition.Before.Truncate(time.Millisecond))
+		} else {
+			args = append(args, *condition.Before)
+		}
 	}
 	return db.gormDB.WithContext(ctx).Delete(&SQLDocument{}, append([]any{builder.String()}, args...)...).Error
 }

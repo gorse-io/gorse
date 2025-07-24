@@ -29,12 +29,12 @@ import (
 	"time"
 
 	"github.com/chewxy/math32"
-	"github.com/klauspost/cpuid/v2"
 	"github.com/samber/lo"
 	"github.com/schollz/progressbar/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/zhenghaoz/gorse/common/datautil"
 	"github.com/zhenghaoz/gorse/common/util"
+	"golang.org/x/sys/cpu"
 )
 
 func TestLinearRegression(t *testing.T) {
@@ -224,7 +224,7 @@ func accuracy(prediction, target *Tensor) float32 {
 }
 
 func TestMNIST(t *testing.T) {
-	if cpuid.CPU.VendorString != "Apple" && !cpuid.CPU.Supports(cpuid.AVX512F, cpuid.AVX512DQ) {
+	if !(runtime.GOOS == "darwin" && runtime.GOARCH == "arm64") && !cpu.X86.HasAVX512F {
 		// Since the test takes a long time, we run the test only in development environment.
 		// 1. Mac with Apple Silicon.
 		// 2. x86 CPU with AVX512 support.

@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/pprof"
+	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -32,9 +33,9 @@ import (
 	"github.com/juju/errors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/samber/lo"
-	"github.com/thoas/go-funk"
 	"github.com/zhenghaoz/gorse/base/heap"
 	"github.com/zhenghaoz/gorse/base/log"
+	"github.com/zhenghaoz/gorse/common/expression"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
@@ -955,7 +956,7 @@ func (s *RestServer) RecommendUserBased(ctx *recommendContext) error {
 					if err != nil {
 						return errors.Trace(err)
 					}
-					if funk.Equal(ctx.categories, []string{""}) || funk.Subset(ctx.categories, item.Categories) {
+					if reflect.DeepEqual(ctx.categories, []string{""}) || lo.Every(item.Categories, ctx.categories) {
 						candidates[feedback.ItemId] += user.Score
 					}
 				}
@@ -991,7 +992,7 @@ func (s *RestServer) RecommendItemBased(ctx *recommendContext) error {
 			if s.Config.Recommend.Online.NumFeedbackFallbackItemBased <= len(userFeedback) {
 				break
 			}
-			if funk.ContainsString(s.Config.Recommend.DataSource.PositiveFeedbackTypes, feedback.FeedbackType) {
+			if expression.MatchFeedbackTypeExpressions(s.Config.Recommend.DataSource.PositiveFeedbackTypes, feedback.FeedbackType, feedback.Value) {
 				userFeedback = append(userFeedback, feedback)
 			}
 		}
@@ -1185,7 +1186,7 @@ func (s *RestServer) sessionRecommend(request *restful.Request, response *restfu
 	var userFeedback []data.Feedback
 	for _, feedback := range dataFeedback {
 		excludeSet.Add(feedback.ItemId)
-		if funk.ContainsString(s.Config.Recommend.DataSource.PositiveFeedbackTypes, feedback.FeedbackType) {
+		if expression.MatchFeedbackTypeExpressions(s.Config.Recommend.DataSource.PositiveFeedbackTypes, feedback.FeedbackType, feedback.Value) {
 			userFeedback = append(userFeedback, feedback)
 		}
 	}
@@ -1400,8 +1401,13 @@ func (s *RestServer) getTypedFeedbackByUser(request *restful.Request, response *
 		ctx = request.Request.Context()
 	}
 	feedbackType := request.PathParameter("feedback-type")
+	var feednackTypeExpr expression.FeedbackTypeExpression
+	if err := feednackTypeExpr.FromString(feedbackType); err != nil {
+		BadRequest(response, err)
+		return
+	}
 	userId := request.PathParameter("user-id")
-	feedback, err := s.DataClient.GetUserFeedback(ctx, userId, s.Config.Now(), feedbackType)
+	feedback, err := s.DataClient.GetUserFeedback(ctx, userId, s.Config.Now(), feednackTypeExpr)
 	if err != nil {
 		InternalServerError(response, err)
 		return
@@ -1705,7 +1711,7 @@ func (s *RestServer) insertItemCategory(request *restful.Request, response *rest
 		InternalServerError(response, err)
 		return
 	}
-	if !funk.ContainsString(item.Categories, category) {
+	if !lo.Contains(item.Categories, category) {
 		item.Categories = append(item.Categories, category)
 	}
 	// insert category to database

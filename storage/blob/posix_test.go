@@ -1,4 +1,4 @@
-// Copyright 2024 gorse Project Authors
+// Copyright 2025 gorse Project Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,29 +16,13 @@ package blob
 
 import (
 	"github.com/stretchr/testify/assert"
-	"github.com/zhenghaoz/gorse/protocol"
-	"google.golang.org/grpc"
-	"net"
 	"path"
 	"testing"
 )
 
-func TestBlob(t *testing.T) {
-	// start server
-	lis, err := net.Listen("tcp", "localhost:0")
-	assert.NoError(t, err)
-	grpcServer := grpc.NewServer()
-	protocol.RegisterBlobStoreServer(grpcServer, NewMasterStoreServer(path.Join(t.TempDir(), "blob")))
-	go func() {
-		err = grpcServer.Serve(lis)
-		assert.NoError(t, err)
-	}()
-	defer grpcServer.Stop()
-
+func TestPOSIX(t *testing.T) {
 	// create client
-	clientConn, err := grpc.Dial(lis.Addr().String(), grpc.WithInsecure())
-	assert.NoError(t, err)
-	client := NewMasterStoreClient(clientConn)
+	client := NewPOSIX(path.Join(t.TempDir(), "blob"))
 
 	// write a temp file
 	w, done, err := client.Create("test")
@@ -55,4 +39,5 @@ func TestBlob(t *testing.T) {
 	_, err = r.Read(content)
 	assert.NoError(t, err)
 	assert.Equal(t, "hello world", string(content))
+	assert.NoError(t, r.Close())
 }

@@ -35,10 +35,9 @@ import (
 	"github.com/steinfletcher/apitest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
+	"github.com/zhenghaoz/gorse/common/expression"
 	"github.com/zhenghaoz/gorse/common/mock"
 	"github.com/zhenghaoz/gorse/config"
-	"github.com/zhenghaoz/gorse/model/cf"
-	"github.com/zhenghaoz/gorse/model/ctr"
 	"github.com/zhenghaoz/gorse/protocol"
 	"github.com/zhenghaoz/gorse/server"
 	"github.com/zhenghaoz/gorse/storage/cache"
@@ -369,8 +368,6 @@ func (suite *MasterAPITestSuite) TestGetCluster() {
 func (suite *MasterAPITestSuite) TestGetStats() {
 	ctx := context.Background()
 	// set stats
-	suite.collaborativeFilteringModelScore = cf.Score{Precision: 0.1}
-	suite.clickScore = ctr.Score{Precision: 0.2}
 	err := suite.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.NumUsers), 123))
 	suite.NoError(err)
 	err = suite.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.NumItems), 234))
@@ -391,8 +388,6 @@ func (suite *MasterAPITestSuite) TestGetStats() {
 			NumItems:            234,
 			NumValidPosFeedback: 345,
 			NumValidNegFeedback: 456,
-			MatchingModelScore:  cf.Score{Precision: 0.1},
-			RankingModelScore:   ctr.Score{Precision: 0.2},
 			BinaryVersion:       "unknown-version",
 		})).
 		End()
@@ -401,7 +396,10 @@ func (suite *MasterAPITestSuite) TestGetStats() {
 func (suite *MasterAPITestSuite) TestGetRates() {
 	ctx := context.Background()
 	// write rates
-	suite.Config.Recommend.DataSource.PositiveFeedbackTypes = []string{"a", "b"}
+	suite.Config.Recommend.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{
+		expression.MustParseFeedbackTypeExpression("a"),
+		expression.MustParseFeedbackTypeExpression("b"),
+	}
 	// This first measurement should be overwritten.
 	baseTimestamp := time.Now().UTC().Truncate(24 * time.Hour)
 	err := suite.CacheClient.AddTimeSeriesPoints(ctx, []cache.TimeSeriesPoint{
@@ -749,6 +747,10 @@ func (suite *MasterAPITestSuite) TestPurge() {
 }
 
 func (suite *MasterAPITestSuite) TestGetConfig() {
+	suite.Config.Recommend.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{
+		expression.MustParseFeedbackTypeExpression("a")}
+	suite.Config.Recommend.DataSource.ReadFeedbackTypes = []expression.FeedbackTypeExpression{
+		expression.MustParseFeedbackTypeExpression("b")}
 	apitest.New().
 		Handler(suite.handler).
 		Get("/api/dashboard/config").

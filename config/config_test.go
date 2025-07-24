@@ -27,6 +27,7 @@ import (
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
+	"github.com/zhenghaoz/gorse/common/expression"
 )
 
 func TestUnmarshal(t *testing.T) {
@@ -98,8 +99,14 @@ func TestUnmarshal(t *testing.T) {
 			assert.Equal(t, 100, config.Recommend.CacheSize)
 			assert.Equal(t, 72*time.Hour, config.Recommend.CacheExpire)
 			// [recommend.data_source]
-			assert.Equal(t, []string{"star", "like"}, config.Recommend.DataSource.PositiveFeedbackTypes)
-			assert.Equal(t, []string{"read"}, config.Recommend.DataSource.ReadFeedbackTypes)
+			assert.Equal(t, []expression.FeedbackTypeExpression{
+				expression.MustParseFeedbackTypeExpression("star"),
+				expression.MustParseFeedbackTypeExpression("like"),
+				expression.MustParseFeedbackTypeExpression("read>=3"),
+			}, config.Recommend.DataSource.PositiveFeedbackTypes)
+			assert.Equal(t, []expression.FeedbackTypeExpression{
+				expression.MustParseFeedbackTypeExpression("read"),
+			}, config.Recommend.DataSource.ReadFeedbackTypes)
 			assert.Equal(t, uint(0), config.Recommend.DataSource.PositiveFeedbackTTL)
 			assert.Equal(t, uint(0), config.Recommend.DataSource.ItemTTL)
 			// [recommend.popular]

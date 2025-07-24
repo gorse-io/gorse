@@ -16,6 +16,7 @@ package meta
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	_ "modernc.org/sqlite"
 	"time"
@@ -51,6 +52,13 @@ CREATE TABLE IF NOT EXISTS cron_jobs (
 	start_time TIMESTAMP,
 	end_time TIMESTAMP,
 	update_time TIMESTAMP
+);`); err != nil {
+		return err
+	}
+	if _, err := s.db.Exec(`
+CREATE TABLE IF NOT EXISTS key_values (
+	key TEXT PRIMARY KEY,
+	value TEXT
 );`); err != nil {
 		return err
 	}
@@ -95,4 +103,25 @@ DELETE FROM nodes WHERE update_time < datetime('now', ?)
 		return nil, err
 	}
 	return nodes, nil
+}
+
+func (s *SQLite) Put(key, value string) error {
+	_, err := s.db.Exec(`
+INSERT INTO key_values (key, value) VALUES (?, ?)
+`, key, value)
+	return err
+}
+
+func (s *SQLite) Get(key string) (*string, error) {
+	var value string
+	err := s.db.QueryRow(`
+SELECT value FROM key_values WHERE key = ?
+`, key).Scan(&value)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil // key not found
+		}
+		return nil, err // other error
+	}
+	return &value, nil // key found
 }

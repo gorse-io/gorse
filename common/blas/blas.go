@@ -1,5 +1,3 @@
-//go:build !cgo || (!(darwin && arm64) && !cuda)
-
 // Copyright 2025 gorse Project Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,4 +14,21 @@
 
 package blas
 
-const Backend = ""
+type Order int
+
+const RowMajor Order = 101
+
+type Transpose int
+
+const (
+	NoTrans Transpose = 111
+	Trans   Transpose = 112
+)
+
+func NewTranspose(transpose bool) Transpose {
+	if transpose {
+		return Trans
+	} else {
+		return NoTrans
+	}
+}

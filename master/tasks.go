@@ -16,8 +16,8 @@ package master
 
 import (
 	"context"
-	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -26,10 +26,10 @@ import (
 	"github.com/juju/errors"
 	"github.com/samber/lo"
 	"github.com/zhenghaoz/gorse/base"
-	"github.com/zhenghaoz/gorse/base/encoding"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/base/progress"
 	"github.com/zhenghaoz/gorse/base/task"
+	"github.com/zhenghaoz/gorse/common/expression"
 	"github.com/zhenghaoz/gorse/common/parallel"
 	"github.com/zhenghaoz/gorse/common/sizeof"
 	"github.com/zhenghaoz/gorse/config"
@@ -39,6 +39,7 @@ import (
 	"github.com/zhenghaoz/gorse/model/ctr"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
+	"github.com/zhenghaoz/gorse/storage/meta"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
 )
@@ -78,8 +79,8 @@ func (m *Master) loadDataset() (*ctr.Dataset, *dataset.Dataset, error) {
 	}
 
 	log.Logger().Info("load dataset",
-		zap.Strings("positive_feedback_types", m.Config.Recommend.DataSource.PositiveFeedbackTypes),
-		zap.Strings("read_feedback_types", m.Config.Recommend.DataSource.ReadFeedbackTypes),
+		zap.Any("positive_feedback_types", m.Config.Recommend.DataSource.PositiveFeedbackTypes),
+		zap.Any("read_feedback_types", m.Config.Recommend.DataSource.ReadFeedbackTypes),
 		zap.Uint("item_ttl", m.Config.Recommend.DataSource.ItemTTL),
 		zap.Uint("feedback_ttl", m.Config.Recommend.DataSource.PositiveFeedbackTTL))
 	evaluator := NewOnlineEvaluator()
@@ -259,7 +260,7 @@ func (t *SearchRankingModelTask) run(ctx context.Context, j *task.JobsAllocator)
 
 	if numUsers == 0 || numItems == 0 || numFeedback == 0 {
 		log.Logger().Warn("empty ranking dataset",
-			zap.Strings("positive_feedback_type", t.Config.Recommend.DataSource.PositiveFeedbackTypes))
+			zap.Any("positive_feedback_type", t.Config.Recommend.DataSource.PositiveFeedbackTypes))
 		// t.taskMonitor.Fail(TaskSearchRankingModel, "No feedback found.")
 		return nil
 	} else if numUsers == t.lastNumUsers &&
@@ -320,7 +321,7 @@ func (t *SearchClickModelTask) run(ctx context.Context, j *task.JobsAllocator) e
 
 	if numUsers == 0 || numItems == 0 || numFeedback == 0 {
 		log.Logger().Warn("empty click dataset",
-			zap.Strings("positive_feedback_type", t.Config.Recommend.DataSource.PositiveFeedbackTypes))
+			zap.Any("positive_feedback_type", t.Config.Recommend.DataSource.PositiveFeedbackTypes))
 		return nil
 	} else if numUsers == t.lastNumUsers &&
 		numItems == t.lastNumItems &&
@@ -349,7 +350,7 @@ func (t *SearchClickModelTask) run(ctx context.Context, j *task.JobsAllocator) e
 func (m *Master) LoadDataFromDatabase(
 	ctx context.Context,
 	database data.Database,
-	posFeedbackTypes, readTypes []string,
+	posFeedbackTypes, readTypes []expression.FeedbackTypeExpression,
 	itemTTL, positiveFeedbackTTL uint,
 	evaluator *OnlineEvaluator,
 	nonPersonalizedRecommenders []*logics.NonPersonalized,
@@ -855,6 +856,13 @@ func (m *Master) updateUserToUser(dataset *dataset.Dataset) error {
 					log.Logger().Error("failed to save user neighbors digest to cache", zap.String("user_id", user.UserId), zap.Error(err))
 					continue
 				}
+				// Delete stale user-to-user recommendations
+				if err := m.CacheClient.DeleteScores(ctx, []string{cache.UserToUser}, cache.ScoreCondition{
+					Subset: lo.ToPtr(cache.Key(userToUserConfig.Name, user.UserId)),
+					Before: lo.ToPtr(recommender.Timestamp()),
+				}); err != nil {
+					log.Logger().Error("failed to remove stale user neighbors", zap.String("user_id", user.UserId), zap.Error(err))
+				}
 			}
 			span.Add(1)
 		}
@@ -918,15 +926,13 @@ func (m *Master) trainCollaborativeFiltering(trainSet, testSet dataset.CFSplit) 
 	bestModelName, bestModel, bestModelScore := m.collaborativeFilteringSearcher.GetBestModel()
 	m.collaborativeFilteringModelMutex.Lock()
 	if bestModel != nil && !bestModel.Invalid() &&
-		(bestModelName != m.collaborativeFilteringModelName ||
-			bestModel.GetParams().ToString() != m.CollaborativeFilteringModel.GetParams().ToString()) &&
-		(bestModelScore.NDCG > m.collaborativeFilteringModelScore.NDCG) {
+		(bestModel.GetParams().ToString() != m.CollaborativeFilteringModel.GetParams().ToString()) &&
+		(bestModelScore.NDCG > m.collaborativeFilteringMeta.Score.NDCG) {
 		// 1. best ranking model must have been found.
 		// 2. best ranking model must be different from current model
 		// 3. best ranking model must perform better than current model
 		m.CollaborativeFilteringModel = bestModel
-		m.collaborativeFilteringModelName = bestModelName
-		m.collaborativeFilteringModelScore = bestModelScore
+		m.collaborativeFilteringMeta.Score = bestModelScore
 		log.Logger().Info("find better collaborative filtering model",
 			zap.Any("score", bestModelScore),
 			zap.String("name", bestModelName),
@@ -942,12 +948,11 @@ func (m *Master) trainCollaborativeFiltering(trainSet, testSet dataset.CFSplit) 
 	// update ranking model
 	m.collaborativeFilteringModelMutex.Lock()
 	m.CollaborativeFilteringModel = collaborativeFilteringModel
-	m.CollaborativeFilteringModelVersion++
+	m.CollaborativeFilteringModelId = time.Now().Unix()
 	m.collaborativeFilteringTrainSetSize = trainSet.CountFeedback()
-	m.collaborativeFilteringModelScore = score
 	m.collaborativeFilteringModelMutex.Unlock()
 	log.Logger().Info("fit collaborative filtering model completed",
-		zap.String("version", fmt.Sprintf("%x", m.CollaborativeFilteringModelVersion)))
+		zap.Int64("id", m.CollaborativeFilteringModelId))
 	CollaborativeFilteringNDCG10.Set(float64(score.NDCG))
 	CollaborativeFilteringRecall10.Set(float64(score.Recall))
 	CollaborativeFilteringPrecision10.Set(float64(score.Precision))
@@ -956,23 +961,39 @@ func (m *Master) trainCollaborativeFiltering(trainSet, testSet dataset.CFSplit) 
 		log.Logger().Error("failed to write meta", zap.Error(err))
 	}
 
-	// caching model
+	// upload model
+	w, done, err := m.blobStore.Create(strconv.FormatInt(m.CollaborativeFilteringModelId, 10))
+	if err != nil {
+		log.Logger().Error("failed to create blob for collaborative filtering model",
+			zap.Int64("id", m.CollaborativeFilteringModelId), zap.Error(err))
+		return err
+	}
+	if err = cf.MarshalModel(w, collaborativeFilteringModel); err != nil {
+		log.Logger().Error("failed to marshal collaborative filtering model",
+			zap.Int64("id", m.CollaborativeFilteringModelId), zap.Error(err))
+		return err
+	}
+	if err = w.Close(); err != nil {
+		log.Logger().Error("failed to close blob for collaborative filtering model",
+			zap.Int64("id", m.CollaborativeFilteringModelId), zap.Error(err))
+		return err
+	}
+	<-done
+
+	// update meta
 	m.collaborativeFilteringModelMutex.RLock()
-	m.localCache.CollaborativeFilteringModelName = m.collaborativeFilteringModelName
-	m.localCache.CollaborativeFilteringModelVersion = m.CollaborativeFilteringModelVersion
-	m.localCache.CollaborativeFilteringModel = collaborativeFilteringModel
-	m.localCache.CollaborativeFilteringModelScore = score
+	m.collaborativeFilteringMeta.ID = m.CollaborativeFilteringModelId
+	m.collaborativeFilteringMeta.Score = score
 	m.collaborativeFilteringModelMutex.RUnlock()
-	if m.localCache.ClickModel == nil || m.localCache.ClickModel.Invalid() {
-		log.Logger().Info("wait click model")
-	} else if err := m.localCache.WriteLocalCache(); err != nil {
-		log.Logger().Error("failed to write local cache", zap.Error(err))
+	if err = m.metaStore.Put(meta.COLLABORATIVE_FILTERING_MODEL, m.collaborativeFilteringMeta.ToJSON()); err != nil {
+		log.Logger().Error("failed to write collaborative filtering model meta", zap.Error(err))
+		return err
 	} else {
-		log.Logger().Info("write model to local cache",
-			zap.String("collaborative_filtering_model_name", m.localCache.CollaborativeFilteringModelName),
-			zap.String("collaborative_filtering_model_version", encoding.Hex(m.localCache.CollaborativeFilteringModelVersion)),
-			zap.Float32("collaborative_filtering_model_score", m.localCache.CollaborativeFilteringModelScore.NDCG),
-			zap.Any("collaborative_filtering_model_params", m.localCache.CollaborativeFilteringModel.GetParams()))
+		log.Logger().Info("write collaborative filtering model meta",
+			zap.Int64("id", m.CollaborativeFilteringModelId),
+			zap.Float32("ndcg", score.NDCG),
+			zap.Float32("recall", score.Recall),
+			zap.Float32("precision", score.Precision))
 	}
 	return nil
 }
@@ -999,12 +1020,12 @@ func (m *Master) trainClickThroughRatePrediction(trainSet, testSet *ctr.Dataset)
 	m.clickModelMutex.Lock()
 	if bestModel != nil && !bestModel.Invalid() &&
 		bestModel.GetParams().ToString() != m.ClickModel.GetParams().ToString() &&
-		bestScore.Precision > m.clickScore.Precision {
+		bestScore.Precision > m.clickThroughRateMeta.Score.Precision {
 		// 1. best click model must have been found.
 		// 2. best click model must be different from current model
 		// 3. best click model must perform better than current model
 		m.ClickModel = bestModel
-		m.clickScore = bestScore
+		m.clickThroughRateMeta.Score = bestScore
 		log.Logger().Info("find better click model",
 			zap.Float32("Precision", bestScore.Precision),
 			zap.Float32("Recall", bestScore.Recall),
@@ -1021,11 +1042,10 @@ func (m *Master) trainClickThroughRatePrediction(trainSet, testSet *ctr.Dataset)
 	m.clickModelMutex.Lock()
 	m.ClickModel = clickModel
 	m.clickTrainSetSize = trainSet.Count()
-	m.clickScore = score
-	m.ClickModelVersion++
+	m.ClickThroughRateModelId = time.Now().Unix()
 	m.clickModelMutex.Unlock()
 	log.Logger().Info("fit click model complete",
-		zap.String("version", fmt.Sprintf("%x", m.ClickModelVersion)))
+		zap.Int64("id", m.ClickThroughRateModelId))
 	RankingPrecision.Set(float64(score.Precision))
 	RankingRecall.Set(float64(score.Recall))
 	RankingAUC.Set(float64(score.AUC))
@@ -1034,21 +1054,40 @@ func (m *Master) trainClickThroughRatePrediction(trainSet, testSet *ctr.Dataset)
 		log.Logger().Error("failed to write meta", zap.Error(err))
 	}
 
-	// caching model
+	// upload model
+	w, done, err := m.blobStore.Create(strconv.FormatInt(m.ClickThroughRateModelId, 10))
+	if err != nil {
+		log.Logger().Error("failed to create blob for click-through rate model",
+			zap.Int64("id", m.ClickThroughRateModelId), zap.Error(err))
+		return err
+	}
+	if err = ctr.MarshalModel(w, clickModel); err != nil {
+		log.Logger().Error("failed to marshal click-through rate model",
+			zap.Int64("id", m.ClickThroughRateModelId), zap.Error(err))
+		return err
+	}
+	if err = w.Close(); err != nil {
+		log.Logger().Error("failed to close blob for click-through rate model",
+			zap.Int64("id", m.ClickThroughRateModelId), zap.Error(err))
+		return err
+	}
+	<-done
+
+	// update meta
 	m.clickModelMutex.RLock()
-	m.localCache.ClickModelScore = m.clickScore
-	m.localCache.ClickModelVersion = m.ClickModelVersion
-	m.localCache.ClickModel = m.ClickModel
+	m.clickThroughRateMeta.ID = m.ClickThroughRateModelId
+	m.clickThroughRateMeta.Score = score
 	m.clickModelMutex.RUnlock()
-	if m.localCache.CollaborativeFilteringModel == nil || m.localCache.CollaborativeFilteringModel.Invalid() {
-		log.Logger().Info("wait collaborative filtering model")
-	} else if err := m.localCache.WriteLocalCache(); err != nil {
-		log.Logger().Error("failed to write local cache", zap.Error(err))
+	if err = m.metaStore.Put(meta.CLICK_THROUGH_RATE_MODEL, m.clickThroughRateMeta.ToJSON()); err != nil {
+		log.Logger().Error("failed to write click-through rate model meta", zap.Error(err))
+		return err
 	} else {
-		log.Logger().Info("write model to local cache",
-			zap.String("click_model_version", encoding.Hex(m.localCache.ClickModelVersion)),
-			zap.Float32("click_model_score", score.Precision),
-			zap.Any("click_model_params", m.localCache.ClickModel.GetParams()))
+		log.Logger().Info("write click-through rate model meta",
+			zap.Int64("id", m.ClickThroughRateModelId),
+			zap.Float32("precision", score.Precision),
+			zap.Float32("recall", score.Recall),
+			zap.Float32("auc", score.AUC),
+			zap.Any("params", m.ClickModel.GetParams()))
 	}
 	return nil
 }

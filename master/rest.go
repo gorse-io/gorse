@@ -42,6 +42,7 @@ import (
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/base/progress"
 	"github.com/zhenghaoz/gorse/cmd/version"
+	"github.com/zhenghaoz/gorse/common/expression"
 	"github.com/zhenghaoz/gorse/common/util"
 	"github.com/zhenghaoz/gorse/config"
 	"github.com/zhenghaoz/gorse/model/cf"
@@ -575,8 +576,6 @@ func (m *Master) getStats(request *restful.Request, response *restful.Response) 
 	if status.LatestItemsUpdateTime, err = m.CacheClient.Get(ctx, cache.Key(cache.GlobalMeta, cache.LastUpdateLatestItemsTime)).Time(); err != nil {
 		log.ResponseLogger(response).Warn("failed to get latest items update time", zap.Error(err))
 	}
-	status.MatchingModelScore = m.collaborativeFilteringModelScore
-	status.RankingModelScore = m.clickScore
 	// read last fit matching model time
 	if status.MatchingModelFitTime, err = m.CacheClient.Get(ctx, cache.Key(cache.GlobalMeta, cache.LastFitMatchingModelTime)).Time(); err != nil {
 		log.ResponseLogger(response).Warn("failed to get last fit matching model time", zap.Error(err))
@@ -636,7 +635,7 @@ func (m *Master) getRates(request *restful.Request, response *restful.Response) 
 	}
 	measurements := make(map[string][]cache.TimeSeriesPoint, len(m.Config.Recommend.DataSource.PositiveFeedbackTypes))
 	for _, feedbackType := range m.Config.Recommend.DataSource.PositiveFeedbackTypes {
-		measurements[feedbackType], err = m.CacheClient.GetTimeSeriesPoints(ctx, cache.Key(PositiveFeedbackRate, feedbackType), time.Now().Add(-24*time.Hour*time.Duration(n)), time.Now(), 24*time.Hour)
+		measurements[feedbackType.String()], err = m.CacheClient.GetTimeSeriesPoints(ctx, cache.Key(PositiveFeedbackRate, feedbackType.String()), time.Now().Add(-24*time.Hour*time.Duration(n)), time.Now(), 24*time.Hour)
 		if err != nil {
 			server.InternalServerError(response, err)
 			return
@@ -794,8 +793,13 @@ func (m *Master) getTypedFeedbackByUser(request *restful.Request, response *rest
 		ctx = request.Request.Context()
 	}
 	feedbackType := request.PathParameter("feedback-type")
+	var feedbackTypeExpr expression.FeedbackTypeExpression
+	if err := feedbackTypeExpr.FromString(feedbackType); err != nil {
+		server.BadRequest(response, fmt.Errorf("invalid feedback type `%s`: %w", feedbackType, err))
+		return
+	}
 	userId := request.PathParameter("user-id")
-	feedback, err := m.DataClient.GetUserFeedback(ctx, userId, m.Config.Now(), feedbackType)
+	feedback, err := m.DataClient.GetUserFeedback(ctx, userId, m.Config.Now(), feedbackTypeExpr)
 	if err != nil {
 		server.InternalServerError(response, err)
 		return
@@ -1419,6 +1423,7 @@ func (m *Master) dump(response http.ResponseWriter, request *http.Request) {
 				FeedbackType: feedback.FeedbackType,
 				UserId:       feedback.UserId,
 				ItemId:       feedback.ItemId,
+				Value:        feedback.Value,
 				Timestamp:    timestamppb.New(feedback.Timestamp),
 				Comment:      feedback.Comment,
 			}); err != nil {
@@ -1564,6 +1569,7 @@ func (m *Master) restore(response http.ResponseWriter, request *http.Request) {
 						UserId:       feedback.UserId,
 						ItemId:       feedback.ItemId,
 					},
+					Value:     feedback.Value,
 					Timestamp: feedback.Timestamp.AsTime(),
 					Comment:   feedback.Comment,
 				})

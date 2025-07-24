@@ -22,6 +22,7 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -32,14 +33,12 @@ import (
 	cmap "github.com/orcaman/concurrent-map"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/samber/lo"
-	"github.com/thoas/go-funk"
 	"github.com/zhenghaoz/gorse/base"
-	"github.com/zhenghaoz/gorse/base/encoding"
 	"github.com/zhenghaoz/gorse/base/heap"
 	"github.com/zhenghaoz/gorse/base/log"
 	"github.com/zhenghaoz/gorse/base/progress"
 	"github.com/zhenghaoz/gorse/cmd/version"
-	encoding2 "github.com/zhenghaoz/gorse/common/encoding"
+	"github.com/zhenghaoz/gorse/common/expression"
 	"github.com/zhenghaoz/gorse/common/parallel"
 	"github.com/zhenghaoz/gorse/common/sizeof"
 	"github.com/zhenghaoz/gorse/common/util"
@@ -49,6 +48,7 @@ import (
 	"github.com/zhenghaoz/gorse/model/ctr"
 	"github.com/zhenghaoz/gorse/protocol"
 	"github.com/zhenghaoz/gorse/storage"
+	"github.com/zhenghaoz/gorse/storage/blob"
 	"github.com/zhenghaoz/gorse/storage/cache"
 	"github.com/zhenghaoz/gorse/storage/data"
 	"go.uber.org/atomic"
@@ -94,14 +94,17 @@ type Worker struct {
 	dataPath    string
 	dataPrefix  string
 
+	blobConfig string
+	blobStore  blob.Store
+
 	// master connection
 	conn         *grpc.ClientConn
 	masterClient protocol.MasterClient
 
-	latestRankingModelVersion int64
-	latestClickModelVersion   int64
-	matrixFactorization       *logics.MatrixFactorization
-	randGenerator             *rand.Rand
+	latestCollaborativeFilteringModelId int64
+	latestClickThroughRateModelId       int64
+	matrixFactorization                 *logics.MatrixFactorization
+	randGenerator                       *rand.Rand
 
 	// peers
 	peers []string
@@ -222,21 +225,36 @@ func (w *Worker) Sync() {
 			w.cachePrefix = w.Config.Database.CacheTablePrefix
 		}
 
-		// check ranking model version
-		w.latestRankingModelVersion = meta.RankingModelVersion
-		if w.latestRankingModelVersion != w.CollaborativeFilteringModelVersion {
+		// connect to blob store
+		if w.blobConfig != w.Config.S3.ToJSON() {
+			if w.Config.S3.Endpoint == "" {
+				log.Logger().Info("connect blob store via master")
+				w.blobStore = blob.NewMasterStoreClient(w.conn)
+			} else {
+				log.Logger().Info("connect s3 endpoint", zap.String("endpoint", w.Config.S3.Endpoint))
+				if w.blobStore, err = blob.NewS3(w.Config.S3); err != nil {
+					log.Logger().Error("failed to connect s3 endpoint", zap.Error(err))
+					goto sleep
+				}
+			}
+			w.blobConfig = w.Config.S3.ToJSON()
+		}
+
+		// synchronize collaborative filtering model
+		w.latestCollaborativeFilteringModelId = meta.CollaborativeFilteringModelId
+		if w.latestCollaborativeFilteringModelId > w.CollaborativeFilteringModelId {
 			log.Logger().Info("new ranking model found",
-				zap.String("old_version", encoding.Hex(w.CollaborativeFilteringModelVersion)),
-				zap.String("new_version", encoding.Hex(w.latestRankingModelVersion)))
+				zap.Int64("old_version", w.CollaborativeFilteringModelId),
+				zap.Int64("new_version", w.latestCollaborativeFilteringModelId))
 			w.syncedChan.Signal()
 		}
 
-		// check click model version
-		w.latestClickModelVersion = meta.ClickModelVersion
-		if w.latestClickModelVersion != w.ClickModelVersion {
+		// synchronize click-through rate model
+		w.latestClickThroughRateModelId = meta.ClickThroughRateModelId
+		if w.latestClickThroughRateModelId > w.ClickThroughRateModelId {
 			log.Logger().Info("new click model found",
-				zap.String("old_version", encoding.Hex(w.ClickModelVersion)),
-				zap.String("new_version", encoding.Hex(w.latestClickModelVersion)))
+				zap.Int64("old_version", w.ClickThroughRateModelId),
+				zap.Int64("new_version", w.latestClickThroughRateModelId))
 			w.syncedChan.Signal()
 		}
 
@@ -257,48 +275,41 @@ func (w *Worker) Pull() {
 		pulled := false
 
 		// pull ranking model
-		if w.latestRankingModelVersion != w.CollaborativeFilteringModelVersion {
-			log.Logger().Info("start pull ranking model")
-			if rankingModelReceiver, err := w.masterClient.GetRankingModel(context.Background(),
-				&protocol.VersionInfo{Version: w.latestRankingModelVersion},
-				grpc.MaxCallRecvMsgSize(math.MaxInt)); err != nil {
-				log.Logger().Error("failed to pull ranking model", zap.Error(err))
+		if w.latestCollaborativeFilteringModelId > w.CollaborativeFilteringModelId {
+			log.Logger().Info("start pull collaborative filtering model")
+			r, err := w.blobStore.Open(strconv.FormatInt(w.latestCollaborativeFilteringModelId, 10))
+			if err != nil {
+				log.Logger().Error("failed to open collaborative filtering model", zap.Error(err))
 			} else {
-				var rankingModel cf.MatrixFactorization
-				rankingModel, err = encoding2.UnmarshalRankingModel(rankingModelReceiver)
+				model, err := cf.UnmarshalModel(r)
 				if err != nil {
-					log.Logger().Error("failed to unmarshal ranking model", zap.Error(err))
+					log.Logger().Error("failed to unmarshal collaborative filtering model", zap.Error(err))
 				} else {
-					w.CollaborativeFilteringModel = rankingModel
+					w.CollaborativeFilteringModel = model
 					w.matrixFactorization = nil
-					w.CollaborativeFilteringModelVersion = w.latestRankingModelVersion
-					log.Logger().Info("synced ranking model",
-						zap.String("version", encoding.Hex(w.CollaborativeFilteringModelVersion)))
-					MemoryInuseBytesVec.WithLabelValues("collaborative_filtering_model").Set(float64(sizeof.DeepSize(w.CollaborativeFilteringModel)))
+					w.CollaborativeFilteringModelId = w.latestCollaborativeFilteringModelId
+					log.Logger().Info("synced collaborative filtering model",
+						zap.Int64("version", w.CollaborativeFilteringModelId))
 					pulled = true
 				}
 			}
 		}
 
 		// pull click model
-		if w.latestClickModelVersion != w.ClickModelVersion {
+		if w.latestClickThroughRateModelId > w.ClickThroughRateModelId {
 			log.Logger().Info("start pull click model")
-			if clickModelReceiver, err := w.masterClient.GetClickModel(context.Background(),
-				&protocol.VersionInfo{Version: w.latestClickModelVersion},
-				grpc.MaxCallRecvMsgSize(math.MaxInt)); err != nil {
-				log.Logger().Error("failed to pull click model", zap.Error(err))
+			r, err := w.blobStore.Open(strconv.FormatInt(w.latestClickThroughRateModelId, 10))
+			if err != nil {
+				log.Logger().Error("failed to open click-through rate model", zap.Error(err))
 			} else {
-				var clickModel ctr.FactorizationMachine
-				clickModel, err = encoding2.UnmarshalClickModel(clickModelReceiver)
+				model, err := ctr.UnmarshalModel(r)
 				if err != nil {
-					log.Logger().Error("failed to unmarshal click model", zap.Error(err))
+					log.Logger().Error("failed to unmarshal click-through rate model", zap.Error(err))
 				} else {
-					w.ClickModel = clickModel
-					w.ClickModelVersion = w.latestClickModelVersion
-					log.Logger().Info("synced click model",
-						zap.String("version", encoding.Hex(w.ClickModelVersion)))
-					MemoryInuseBytesVec.WithLabelValues("ranking_model").Set(float64(sizeof.DeepSize(w.ClickModel)))
-
+					w.ClickModel = model
+					w.ClickThroughRateModelId = w.latestClickThroughRateModelId
+					log.Logger().Info("synced click-through rate model",
+						zap.Int64("version", w.ClickThroughRateModelId))
 					// spawn rankers
 					for i := 0; i < w.jobs; i++ {
 						if i == 0 {
@@ -307,7 +318,6 @@ func (w *Worker) Pull() {
 							w.rankers[i] = ctr.Spawn(w.ClickModel)
 						}
 					}
-
 					pulled = true
 				}
 			}
@@ -412,6 +422,7 @@ func (w *Worker) Serve() {
 
 	// connect to master
 	var opts []grpc.DialOption
+	opts = append(opts, grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(512*1024*1024)))
 	if w.tlsConfig != nil {
 		c, err := util.NewClientCreds(w.tlsConfig)
 		if err != nil {
@@ -1162,7 +1173,7 @@ func (w *Worker) pullItems(ctx context.Context) (*ItemCache, []string, error) {
 func (w *Worker) pullUsers(peers []string, me string) ([]data.User, error) {
 	ctx := context.Background()
 	// locate me
-	if !funk.ContainsString(peers, me) {
+	if !lo.Contains(peers, me) {
 		return nil, errors.New("current node isn't in worker nodes")
 	}
 	// create consistent hash ring
@@ -1201,8 +1212,8 @@ func (w *Worker) replacement(recommend map[string][]cache.Score, user *data.User
 			s := lo.Map(scores, func(score cache.Score, _ int) float64 {
 				return score.Score
 			})
-			upperBounds[category] = funk.MaxFloat64(s)
-			lowerBounds[category] = funk.MinFloat64(s)
+			upperBounds[category] = lo.Max(s)
+			lowerBounds[category] = lo.Min(s)
 		} else {
 			upperBounds[category] = math.Inf(1)
 			lowerBounds[category] = math.Inf(-1)
@@ -1215,10 +1226,10 @@ func (w *Worker) replacement(recommend map[string][]cache.Score, user *data.User
 	positiveItems := mapset.NewSet[string]()
 	distinctItems := mapset.NewSet[string]()
 	for _, feedback := range feedbacks {
-		if funk.ContainsString(w.Config.Recommend.DataSource.PositiveFeedbackTypes, feedback.FeedbackType) {
+		if expression.MatchFeedbackTypeExpressions(w.Config.Recommend.DataSource.PositiveFeedbackTypes, feedback.FeedbackType, feedback.Value) {
 			positiveItems.Add(feedback.ItemId)
 			distinctItems.Add(feedback.ItemId)
-		} else if funk.ContainsString(w.Config.Recommend.DataSource.ReadFeedbackTypes, feedback.FeedbackType) {
+		} else if expression.MatchFeedbackTypeExpressions(w.Config.Recommend.DataSource.ReadFeedbackTypes, feedback.FeedbackType, feedback.Value) {
 			distinctItems.Add(feedback.ItemId)
 		}
 	}
@@ -1339,12 +1350,12 @@ func (c *ItemCache) IsAvailable(itemId string) bool {
 type FeedbackCache struct {
 	*config.Config
 	Client data.Database
-	Types  []string
+	Types  []expression.FeedbackTypeExpression
 	Cache  cmap.ConcurrentMap
 }
 
 // NewFeedbackCache creates a new FeedbackCache.
-func NewFeedbackCache(worker *Worker, feedbackTypes ...string) *FeedbackCache {
+func NewFeedbackCache(worker *Worker, feedbackTypes ...expression.FeedbackTypeExpression) *FeedbackCache {
 	return &FeedbackCache{
 		Config: worker.Config,
 		Client: worker.DataClient,

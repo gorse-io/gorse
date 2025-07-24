@@ -1,4 +1,4 @@
-// Copyright 2024 gorse Project Authors
+// Copyright 2025 gorse Project Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,30 +15,39 @@
 package blob
 
 import (
+	"context"
+	"github.com/minio/minio-go/v7"
 	"github.com/stretchr/testify/assert"
-	"github.com/zhenghaoz/gorse/protocol"
-	"google.golang.org/grpc"
-	"net"
-	"path"
+	"github.com/zhenghaoz/gorse/config"
+	"io"
+	"os"
 	"testing"
 )
 
-func TestBlob(t *testing.T) {
-	// start server
-	lis, err := net.Listen("tcp", "localhost:0")
-	assert.NoError(t, err)
-	grpcServer := grpc.NewServer()
-	protocol.RegisterBlobStoreServer(grpcServer, NewMasterStoreServer(path.Join(t.TempDir(), "blob")))
-	go func() {
-		err = grpcServer.Serve(lis)
-		assert.NoError(t, err)
-	}()
-	defer grpcServer.Stop()
+var (
+	endpoint        = os.Getenv("S3_ENDPOINT")
+	accessKeyID     = os.Getenv("S3_ACCESS_KEY_ID")
+	secretAccessKey = os.Getenv("S3_SECRET_ACCESS_KEY")
+)
+
+func TestS3(t *testing.T) {
+	if endpoint == "" || accessKeyID == "" || secretAccessKey == "" {
+		t.Skip("S3 environment variables are not set, skipping S3 tests")
+	}
 
 	// create client
-	clientConn, err := grpc.Dial(lis.Addr().String(), grpc.WithInsecure())
+	client, err := NewS3(config.S3Config{
+		Endpoint:        endpoint,
+		AccessKeyID:     accessKeyID,
+		SecretAccessKey: secretAccessKey,
+		Bucket:          "gorse-test",
+		Prefix:          "blob",
+	})
 	assert.NoError(t, err)
-	client := NewMasterStoreClient(clientConn)
+
+	// create bucket if not exists
+	err = client.Client.MakeBucket(context.Background(), client.bucket, minio.MakeBucketOptions{})
+	assert.NoError(t, err)
 
 	// write a temp file
 	w, done, err := client.Create("test")
@@ -53,6 +62,6 @@ func TestBlob(t *testing.T) {
 	assert.NoError(t, err)
 	content := make([]byte, 11)
 	_, err = r.Read(content)
-	assert.NoError(t, err)
+	assert.ErrorIs(t, err, io.EOF)
 	assert.Equal(t, "hello world", string(content))
 }

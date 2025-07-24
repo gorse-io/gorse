@@ -29,6 +29,7 @@ import (
 	"github.com/samber/lo"
 	"github.com/zhenghaoz/gorse/base/jsonutil"
 	"github.com/zhenghaoz/gorse/base/log"
+	"github.com/zhenghaoz/gorse/common/expression"
 	"github.com/zhenghaoz/gorse/storage"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -144,6 +145,7 @@ type FeedbackKey struct {
 // Feedback stores feedback.
 type Feedback struct {
 	FeedbackKey `gorm:"embedded" mapstructure:",squash"`
+	Value       float64   `gorm:"column:value" mapstructure:"value"`
 	Timestamp   time.Time `gorm:"column:time_stamp" mapsstructure:"timestamp"`
 	Comment     string    `gorm:"column:comment" mapsstructure:"comment"`
 }
@@ -178,7 +180,7 @@ type ScanOptions struct {
 	EndItemId     *string
 	BeginTime     *time.Time
 	EndTime       *time.Time
-	FeedbackTypes []string
+	FeedbackTypes []expression.FeedbackTypeExpression
 	OrderByItemId bool
 }
 
@@ -227,7 +229,7 @@ func WithEndTime(t time.Time) ScanOption {
 }
 
 // WithFeedbackTypes sets the feedback types.
-func WithFeedbackTypes(feedbackTypes ...string) ScanOption {
+func WithFeedbackTypes(feedbackTypes ...expression.FeedbackTypeExpression) ScanOption {
 	return func(options *ScanOptions) {
 		options.FeedbackTypes = feedbackTypes
 	}
@@ -268,7 +270,7 @@ type Database interface {
 	GetUser(ctx context.Context, userId string) (User, error)
 	ModifyUser(ctx context.Context, userId string, patch UserPatch) error
 	GetUsers(ctx context.Context, cursor string, n int) (string, []User, error)
-	GetUserFeedback(ctx context.Context, userId string, endTime *time.Time, feedbackTypes ...string) ([]Feedback, error)
+	GetUserFeedback(ctx context.Context, userId string, endTime *time.Time, feedbackTypes ...expression.FeedbackTypeExpression) ([]Feedback, error)
 	GetUserItemFeedback(ctx context.Context, userId, itemId string, feedbackTypes ...string) ([]Feedback, error)
 	DeleteUserItemFeedback(ctx context.Context, userId, itemId string, feedbackTypes ...string) (int, error)
 	BatchInsertFeedback(ctx context.Context, feedback []Feedback, insertUser, insertItem, overwrite bool) error
