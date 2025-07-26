@@ -27,13 +27,15 @@ import (
 type Layer interface {
 	Parameters() []*Tensor
 	Forward(x *Tensor) *Tensor
+	SetJobs(jobs int)
 }
 
 type Model Layer
 
 type LinearLayer struct {
-	W *Tensor
-	B *Tensor
+	W    *Tensor
+	B    *Tensor
+	jobs int
 }
 
 func NewLinear(in, out int) Layer {
@@ -45,11 +47,15 @@ func NewLinear(in, out int) Layer {
 }
 
 func (l *LinearLayer) Forward(x *Tensor) *Tensor {
-	return Add(MatMul(x, l.W), l.B)
+	return Add(MatMul(x, l.W, false, false, l.jobs), l.B)
 }
 
 func (l *LinearLayer) Parameters() []*Tensor {
 	return []*Tensor{l.W, l.B}
+}
+
+func (l *LinearLayer) SetJobs(jobs int) {
+	l.jobs = max(1, jobs)
 }
 
 type flattenLayer struct{}
@@ -65,6 +71,8 @@ func (f *flattenLayer) Parameters() []*Tensor {
 func (f *flattenLayer) Forward(x *Tensor) *Tensor {
 	return Flatten(x)
 }
+
+func (f *flattenLayer) SetJobs(int) {}
 
 type EmbeddingLayer struct {
 	W *Tensor
@@ -85,6 +93,8 @@ func (e *EmbeddingLayer) Forward(x *Tensor) *Tensor {
 	return Embedding(e.W, x)
 }
 
+func (e *EmbeddingLayer) SetJobs(int) {}
+
 type sigmoidLayer struct{}
 
 func NewSigmoid() Layer {
@@ -99,6 +109,8 @@ func (s *sigmoidLayer) Forward(x *Tensor) *Tensor {
 	return Sigmoid(x)
 }
 
+func (e *sigmoidLayer) SetJobs(int) {}
+
 type reluLayer struct{}
 
 func NewReLU() Layer {
@@ -112,6 +124,8 @@ func (r *reluLayer) Parameters() []*Tensor {
 func (r *reluLayer) Forward(x *Tensor) *Tensor {
 	return ReLu(x)
 }
+
+func (r *reluLayer) SetJobs(int) {}
 
 type Sequential struct {
 	Layers []Layer
@@ -136,6 +150,12 @@ func (s *Sequential) Forward(x *Tensor) *Tensor {
 	return x
 }
 
+func (s *Sequential) SetJobs(jobs int) {
+	for _, l := range s.Layers {
+		l.SetJobs(jobs)
+	}
+}
+
 func Save(o any, w io.Writer) error {
 	var save func(o any, key []string) error
 	save = func(o any, key []string) error {
@@ -154,11 +174,13 @@ func Save(o any, w io.Writer) error {
 			} else if tp.Kind() == reflect.Struct {
 				for i := 0; i < tp.NumField(); i++ {
 					field := tp.Field(i)
-					newKey := make([]string, len(key))
-					copy(newKey, key)
-					newKey = append(newKey, field.Name)
-					if err := save(reflect.ValueOf(o).Field(i).Interface(), newKey); err != nil {
-						return err
+					if field.IsExported() {
+						newKey := make([]string, len(key))
+						copy(newKey, key)
+						newKey = append(newKey, field.Name)
+						if err := save(reflect.ValueOf(o).Field(i).Interface(), newKey); err != nil {
+							return err
+						}
 					}
 				}
 			} else if tp.Kind() == reflect.Slice {

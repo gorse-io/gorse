@@ -464,6 +464,7 @@ type matMul struct {
 	base
 	transpose1 bool
 	transpose2 bool
+	jobs       int
 }
 
 func (m *matMul) String() string {
@@ -471,31 +472,31 @@ func (m *matMul) String() string {
 }
 
 func (m *matMul) forward(inputs ...*Tensor) *Tensor {
-	return inputs[0].matMul(inputs[1], m.transpose1, m.transpose2)
+	return inputs[0].matMul(inputs[1], m.transpose1, m.transpose2, m.jobs)
 }
 
 func (m *matMul) backward(dy *Tensor) []*Tensor {
 	var dx0, dx1 *Tensor
 	if !m.transpose1 && !m.transpose2 { // y = x0 * x1
 		// dx0 = dy * x1^T
-		dx0 = dy.matMul(m.inputs[1], false, true)
+		dx0 = dy.matMul(m.inputs[1], false, true, m.jobs)
 		// dx1 = x0^T * dy
-		dx1 = m.inputs[0].matMul(dy, true, false)
+		dx1 = m.inputs[0].matMul(dy, true, false, m.jobs)
 	} else if m.transpose1 && !m.transpose2 { // y = x0^T * x1
 		// dx0 = dy * x1^T
-		dx0 = m.inputs[1].matMul(dy, false, true)
+		dx0 = m.inputs[1].matMul(dy, false, true, m.jobs)
 		// dx1 = dy^T * x0
-		dx1 = m.inputs[0].matMul(dy, false, false)
+		dx1 = m.inputs[0].matMul(dy, false, false, m.jobs)
 	} else if !m.transpose1 && m.transpose2 { // y = x0 * x1^T
 		// dx0 = dy * x1
-		dx0 = dy.matMul(m.inputs[1], false, false)
+		dx0 = dy.matMul(m.inputs[1], false, false, m.jobs)
 		// dx1 = dy^T * x0
-		dx1 = dy.matMul(m.inputs[0], true, false)
+		dx1 = dy.matMul(m.inputs[0], true, false, m.jobs)
 	} else { // y = x0^T * x1^T
 		// dx0 = x1 * dy^T
-		dx0 = m.inputs[1].matMul(dy, true, true)
+		dx0 = m.inputs[1].matMul(dy, true, true, m.jobs)
 		// dx1 = dy * x0^T
-		dx1 = dy.matMul(m.inputs[0], true, true)
+		dx1 = dy.matMul(m.inputs[0], true, true, m.jobs)
 	}
 	return []*Tensor{dx0, dx1}
 }
@@ -504,6 +505,7 @@ type batchMatMul struct {
 	base
 	transpose1 bool
 	transpose2 bool
+	jobs       int
 }
 
 func (b *batchMatMul) String() string {
@@ -511,31 +513,31 @@ func (b *batchMatMul) String() string {
 }
 
 func (b *batchMatMul) forward(inputs ...*Tensor) *Tensor {
-	return inputs[0].batchMatMul(inputs[1], b.transpose1, b.transpose2)
+	return inputs[0].batchMatMul(inputs[1], b.transpose1, b.transpose2, b.jobs)
 }
 
 func (b *batchMatMul) backward(dy *Tensor) []*Tensor {
 	var dx0, dx1 *Tensor
 	if !b.transpose1 && !b.transpose2 { // y = x0 * x1
 		// dx0 = dy * x1^T
-		dx0 = dy.batchMatMul(b.inputs[1], false, true)
+		dx0 = dy.batchMatMul(b.inputs[1], false, true, b.jobs)
 		// dx1 = x0^T * dy
-		dx1 = b.inputs[0].batchMatMul(dy, true, false)
+		dx1 = b.inputs[0].batchMatMul(dy, true, false, b.jobs)
 	} else if b.transpose1 && !b.transpose2 { // y = x0^T * x1
 		// dx0 = dy * x1^T
-		dx0 = b.inputs[1].batchMatMul(dy, false, true)
+		dx0 = b.inputs[1].batchMatMul(dy, false, true, b.jobs)
 		// dx1 = dy^T * x0
-		dx1 = b.inputs[0].batchMatMul(dy, false, false)
+		dx1 = b.inputs[0].batchMatMul(dy, false, false, b.jobs)
 	} else if !b.transpose1 && b.transpose2 { // y = x0 * x1^T
 		// dx0 = dy * x1
-		dx0 = dy.batchMatMul(b.inputs[1], false, false)
+		dx0 = dy.batchMatMul(b.inputs[1], false, false, b.jobs)
 		// dx1 = dy^T * x0
-		dx1 = dy.batchMatMul(b.inputs[0], true, false)
+		dx1 = dy.batchMatMul(b.inputs[0], true, false, b.jobs)
 	} else { // y = x0^T * x1^T
 		// dx0 = x1 * dy^T
-		dx0 = b.inputs[1].batchMatMul(dy, true, true)
+		dx0 = b.inputs[1].batchMatMul(dy, true, true, b.jobs)
 		// dx1 = dy * x0^T
-		dx1 = dy.batchMatMul(b.inputs[0], true, true)
+		dx1 = dy.batchMatMul(b.inputs[0], true, true, b.jobs)
 	}
 	return []*Tensor{dx0, dx1}
 }

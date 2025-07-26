@@ -130,30 +130,20 @@ func Mean(x *Tensor) *Tensor {
 	return apply(&mean{}, x)
 }
 
-func MatMul(x, y *Tensor, transpose ...bool) *Tensor {
-	op := &matMul{}
-	if len(transpose) > 2 {
-		panic("only two transpose is allowed")
-	}
-	if len(transpose) > 0 {
-		op.transpose1 = transpose[0]
-	}
-	if len(transpose) > 1 {
-		op.transpose2 = transpose[1]
+func MatMul(x, y *Tensor, transpose1, transpose2 bool, jobs int) *Tensor {
+	op := &matMul{
+		transpose1: transpose1,
+		transpose2: transpose2,
+		jobs:       jobs,
 	}
 	return apply(op, x, y)
 }
 
-func BMM(x, y *Tensor, transpose ...bool) *Tensor {
-	op := &batchMatMul{}
-	if len(transpose) > 2 {
-		panic("only two transpose is allowed")
-	}
-	if len(transpose) > 0 {
-		op.transpose1 = transpose[0]
-	}
-	if len(transpose) > 1 {
-		op.transpose2 = transpose[1]
+func BMM(x, y *Tensor, transpose1, transpose2 bool, jobs int) *Tensor {
+	op := &batchMatMul{
+		transpose1: transpose1,
+		transpose2: transpose2,
+		jobs:       jobs,
 	}
 	return apply(op, x, y)
 }
