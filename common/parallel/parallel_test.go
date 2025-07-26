@@ -49,6 +49,23 @@ func TestParallel(t *testing.T) {
 	assert.Equal(t, 1, workersSet.Cardinality())
 }
 
+func TestFor(t *testing.T) {
+	// multiple threads
+	a := base.RangeInt(10000)
+	b := make([]int, len(a))
+	For(len(a), 4, func(jobId int) {
+		b[jobId] = a[jobId]
+		time.Sleep(time.Microsecond)
+	})
+	assert.Equal(t, a, b)
+	// single thread
+	For(len(a), 1, func(jobId int) {
+		b[jobId] = a[jobId]
+		time.Sleep(time.Microsecond)
+	})
+	assert.Equal(t, a, b)
+}
+
 func TestBatchParallel(t *testing.T) {
 	a := base.RangeInt(10000)
 	b := make([]int, len(a))

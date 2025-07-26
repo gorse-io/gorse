@@ -33,7 +33,7 @@ const (
 // the number of executors. worker is the executed function which passed a range of task
 // Names (begin, end).
 func Parallel(nJobs, nWorkers int, worker func(workerId, jobId int) error) error {
-	if nWorkers == 1 {
+	if nWorkers <= 1 {
 		for i := 0; i < nJobs; i++ {
 			if err := worker(0, i); err != nil {
 				return errors.Trace(err)
@@ -80,6 +80,36 @@ func Parallel(nJobs, nWorkers int, worker func(workerId, jobId int) error) error
 		}
 	}
 	return nil
+}
+
+func For(nJobs, nWorkers int, worker func(int)) {
+	if nWorkers <= 1 {
+		for i := 0; i < nJobs; i++ {
+			worker(i)
+		}
+	} else {
+		c := make(chan int, chanSize)
+		// producer
+		go func() {
+			for i := 0; i < nJobs; i++ {
+				c <- i
+			}
+			close(c)
+		}()
+		// consumer
+		var wg sync.WaitGroup
+		wg.Add(nWorkers)
+		for j := 0; j < nWorkers; j++ {
+			// start workers
+			go func(workerId int) {
+				defer wg.Done()
+				for jobId := range c {
+					worker(jobId)
+				}
+			}(j)
+		}
+		wg.Wait()
+	}
 }
 
 type batchJob struct {

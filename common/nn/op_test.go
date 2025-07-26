@@ -406,7 +406,7 @@ func TestBMM(t *testing.T) {
 		1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
 		1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
 	}, 2, 3, 4)
-	z := BMM(x, y)
+	z := BMM(x, y, false, false, 0)
 	assert.Equal(t, []int{2, 2, 4}, z.shape)
 	assert.Equal(t, []float32{
 		38, 44, 50, 56, 83, 98, 113, 128,
@@ -429,7 +429,7 @@ func TestBMM(t *testing.T) {
 	// (2,3,2).T * (2,3,4) -> (2,2,4)
 	x = Rand(2, 3, 2)
 	y = Rand(2, 3, 4)
-	z = BMM(x, y, true, false)
+	z = BMM(x, y, true, false, 0)
 	assert.Equal(t, []int{2, 2, 4}, z.shape)
 	z.Backward()
 	assert.Equal(t, []int{2, 3, 2}, x.grad.shape)
@@ -437,7 +437,7 @@ func TestBMM(t *testing.T) {
 	// (2,2,3) * (2,4,3).T -> (2,2,4)
 	x = Rand(2, 2, 3)
 	y = Rand(2, 4, 3)
-	z = BMM(x, y, false, true)
+	z = BMM(x, y, false, true, 0)
 	assert.Equal(t, []int{2, 2, 4}, z.shape)
 	z.Backward()
 	assert.Equal(t, []int{2, 2, 3}, x.grad.shape)
@@ -445,7 +445,7 @@ func TestBMM(t *testing.T) {
 	// (2,3,2).T * (2,43).T -> (2,2,4)
 	x = Rand(2, 3, 2)
 	y = Rand(2, 4, 3)
-	z = BMM(x, y, true, true)
+	z = BMM(x, y, true, true, 0)
 	assert.Equal(t, []int{2, 2, 4}, z.shape)
 	z.Backward()
 	assert.Equal(t, []int{2, 3, 2}, x.grad.shape)

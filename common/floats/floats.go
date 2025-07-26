@@ -241,8 +241,5 @@ func Euclidean(a, b []float32) float32 {
 }
 
 func MM(transA, transB bool, m, n, k int, a []float32, lda int, b []float32, ldb int, c []float32, ldc int) {
-	if len(a) != m*k || len(b) != k*n || len(c) != m*n {
-		panic("floats: matrix dimensions do not match")
-	}
 	feature.mm(transA, transB, m, n, k, a, lda, b, ldb, c, ldc)
 }
