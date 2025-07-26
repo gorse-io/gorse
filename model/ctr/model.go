@@ -648,20 +648,20 @@ func (fm *FactorizationMachines) Invalid() bool {
 	return fm == nil || fm.Index == nil
 }
 
-func (fm *FactorizationMachines) Forward(indices, values *nn.Tensor) *nn.Tensor {
+func (fm *FactorizationMachines) Forward(indices, values *nn.Tensor, jobs int) *nn.Tensor {
 	batchSize := indices.Shape()[0]
 	v := fm.V.Forward(indices)
 	x := nn.Reshape(values, batchSize, fm.numDimension, 1)
-	vx := nn.BMM(v, x, true)
+	vx := nn.BMM(v, x, true, false, jobs)
 	sumSquare := nn.Square(vx)
 	e2 := nn.Square(v)
 	x2 := nn.Square(x)
-	squareSum := nn.BMM(e2, x2, true)
+	squareSum := nn.BMM(e2, x2, true, false, jobs)
 	sum := nn.Sub(sumSquare, squareSum)
 	sum = nn.Sum(sum, 1)
 	sum = nn.Mul(sum, nn.NewScalar(0.5))
 	w := fm.W.Forward(indices)
-	linear := nn.BMM(w, x, true)
+	linear := nn.BMM(w, x, true, false, jobs)
 	fmOutput := nn.Add(nn.Reshape(linear, batchSize), nn.Reshape(sum, batchSize), fm.B)
 	return nn.Flatten(fmOutput)
 }
@@ -689,7 +689,7 @@ func (fm *FactorizationMachines) BatchInternalPredict(x []lo.Tuple2[[]int32, []f
 	predictions := make([]float32, 0, len(x))
 	for i := 0; i < len(x); i += fm.batchSize {
 		j := mathutil.Min(i+fm.batchSize, len(x))
-		output := fm.Forward(indicesTensor.Slice(i, j), valuesTensor.Slice(i, j))
+		output := fm.Forward(indicesTensor.Slice(i, j), valuesTensor.Slice(i, j), 0)
 		predictions = append(predictions, output.Data()...)
 	}
 	return predictions[:len(x)]
@@ -775,7 +775,7 @@ func (fm *FactorizationMachines) Fit(ctx context.Context, trainSet, testSet data
 			batchIndices := indices.Slice(i, j)
 			batchValues := values.Slice(i, j)
 			batchTarget := target.Slice(i, j)
-			batchOutput := fm.Forward(batchIndices, batchValues)
+			batchOutput := fm.Forward(batchIndices, batchValues, config.Jobs)
 			batchLoss := nn.BCEWithLogits(batchTarget, batchOutput)
 			cost += batchLoss.Data()[0]
 			optimizer.ZeroGrad()
