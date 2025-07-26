@@ -19,11 +19,13 @@ package client
 import (
 	"context"
 	"encoding/base64"
+	"maps"
+	"strconv"
 	"testing"
 	"time"
 
 	client "github.com/gorse-io/gorse-go"
-	"github.com/redis/go-redis/v9"
+	"github.com/redis/rueidis"
 	"github.com/stretchr/testify/suite"
 	"github.com/zhenghaoz/gorse/storage/cache"
 )
@@ -37,19 +39,19 @@ const (
 type GorseClientTestSuite struct {
 	suite.Suite
 	client *client.GorseClient
-	redis  *redis.Client
+	redis  rueidis.Client
 }
 
 func (suite *GorseClientTestSuite) SetupSuite() {
 	suite.client = client.NewGorseClient(GorseEndpoint, GorseApiKey)
-	options, err := redis.ParseURL(RedisEndpoint)
+	options, err := rueidis.ParseURL(RedisEndpoint)
 	suite.NoError(err)
-	suite.redis = redis.NewClient(options)
+	suite.redis, err = rueidis.NewClient(options)
+	suite.NoError(err)
 }
 
 func (suite *GorseClientTestSuite) TearDownSuite() {
-	err := suite.redis.Close()
-	suite.NoError(err)
+	suite.redis.Close()
 }
 
 func (suite *GorseClientTestSuite) TestFeedback() {
@@ -275,15 +277,19 @@ func (suite *GorseClientTestSuite) TestItems() {
 
 func (suite *GorseClientTestSuite) hSet(collection, subset string, scores []client.Score) {
 	for _, score := range scores {
-		err := suite.redis.HSet(context.TODO(), "documents:"+collection+":"+subset+":"+score.Id,
-			"collection", collection,
-			"subset", subset,
-			"id", score.Id,
-			"score", score.Score,
-			"is_hidden", 0,
-			"categories", base64.RawStdEncoding.EncodeToString([]byte("_")),
-			"timestamp", time.Now().UnixMicro(),
-		).Err()
+		fields := map[string]string{
+			"collection": collection,
+			"subset":     subset,
+			"id":         score.Id,
+			"is_hidden":  "0",
+			"score":      strconv.FormatFloat(score.Score, 'f', -1, 64),
+			"categories": base64.RawStdEncoding.EncodeToString([]byte("_")),
+			"timestamp":  strconv.FormatInt(time.Now().UnixMicro(), 10),
+		}
+		cmd := suite.redis.B().Hset().Key("documents:" + collection + ":" + subset + ":" + score.Id).
+			FieldValue().FieldValueIter(maps.All(fields)).
+			Build()
+		err := suite.redis.Do(context.TODO(), cmd).Error()
 		suite.NoError(err)
 	}
 }
