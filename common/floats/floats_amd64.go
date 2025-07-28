@@ -40,15 +40,15 @@ const AVX512 = AVX | FMA | AVX512F
 var feature Feature
 
 func init() {
-	//if cpu.X86.HasAVX {
-	//	feature = feature | AVX
-	//}
-	//if cpu.X86.HasFMA {
-	//	feature = feature | FMA
-	//}
-	//if cpu.X86.HasAVX512F {
-	//	feature = feature | AVX512F
-	//}
+	if cpu.X86.HasAVX {
+		feature = feature | AVX
+	}
+	if cpu.X86.HasFMA {
+		feature = feature | FMA
+	}
+	if cpu.X86.HasAVX512F {
+		feature = feature | AVX512F
+	}
 }
 
 func (feature Feature) String() string {
