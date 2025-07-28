@@ -69,6 +69,6 @@ func (Feature) euclidean(a, b []float32) float32 {
 	return euclidean(a, b)
 }
 
-func (Feature) mm(a, b, c []float32, m, n, k int, transA, transB bool) {
-	mm(a, b, c, m, n, k, transA, transB)
+func (Feature) mm(transA, transB bool, m, n, k int, a []float32, lda int, b []float32, ldb int, c []float32, ldc int) {
+	mm(transA, transB, m, n, k, a, lda, b, ldb, c, ldc)
 }
