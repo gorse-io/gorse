@@ -40,8 +40,6 @@ import (
 	"gorm.io/driver/postgres"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
-	"moul.io/zapgorm2"
 )
 
 const (
@@ -373,15 +371,7 @@ func Open(path, tablePrefix string, opts ...storage.Option) (Database, error) {
 		); err != nil {
 			return nil, errors.Trace(err)
 		}
-		gormConfig := storage.NewGORMConfig(tablePrefix)
-		gormConfig.Logger = &zapgorm2.Logger{
-			ZapLogger:                 log.Logger(),
-			LogLevel:                  logger.Warn,
-			SlowThreshold:             10 * time.Second,
-			SkipCallerLookup:          false,
-			IgnoreRecordNotFoundError: false,
-		}
-		database.gormDB, err = gorm.Open(sqlite.Dialector{Conn: database.client}, gormConfig)
+		database.gormDB, err = gorm.Open(sqlite.Dialector{Conn: database.client}, storage.NewGORMConfig(tablePrefix))
 		if err != nil {
 			return nil, errors.Trace(err)
 		}

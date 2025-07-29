@@ -22,13 +22,12 @@ import (
 	"strings"
 
 	"github.com/go-sql-driver/mysql"
-	"github.com/gorse-io/gorse/common/log"
 	"github.com/juju/errors"
 	"github.com/samber/lo"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 	"gorm.io/gorm/schema"
 	"modernc.org/sqlite"
-	"moul.io/zapgorm2"
 )
 
 func init() {
@@ -195,7 +194,7 @@ func (tp TablePrefix) Key(key string) string {
 
 func NewGORMConfig(tablePrefix string) *gorm.Config {
 	return &gorm.Config{
-		Logger:                 zapgorm2.New(log.Logger()),
+		Logger:                 logger.Default.LogMode(logger.Silent),
 		CreateBatchSize:        1000,
 		SkipDefaultTransaction: true,
 		NamingStrategy: schema.NamingStrategy{
