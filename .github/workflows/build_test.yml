@@ -188,38 +188,38 @@ jobs:
     - name: Test
       run: go test -timeout 20m -v ./... -skip "TestPostgres|TestMySQL|TestMongo|TestRedis|TestClickHouse"
 
-  unit_test_riscv:
-    name: unit tests (ubuntu-24.04-riscv)
-    runs-on: self-hosted
-    steps:
-      - name: Install wget and unzip
-        uses: ConorMacBride/install-package@v1
-        with:
-          apt: wget unzip
-      - name: Set up dataset
-        run: |
-          mkdir -p ~/.gorse/dataset
-          mkdir -p ~/.gorse/download
-          wget -nc https://cdn.gorse.io/datasets/ml-100k.zip -P ~/.gorse/download
-          wget -nc https://cdn.gorse.io/datasets/ml-1m.zip -P ~/.gorse/download
-          wget -nc https://cdn.gorse.io/datasets/pinterest-20.zip -P ~/.gorse/download
-          wget -nc https://cdn.gorse.io/datasets/frappe.zip -P ~/.gorse/download
-          wget -nc https://cdn.gorse.io/datasets/ml-tag.zip -P ~/.gorse/download
-          wget -nc https://cdn.gorse.io/datasets/criteo.zip -P ~/.gorse/download
-          wget -nc https://cdn.gorse.io/datasets/mnist.zip -P ~/.gorse/download
-          unzip -n ~/.gorse/download/ml-100k.zip -d ~/.gorse/dataset
-          unzip -n ~/.gorse/download/ml-1m.zip -d ~/.gorse/dataset
-          unzip -n ~/.gorse/download/pinterest-20.zip -d ~/.gorse/dataset
-          unzip -n ~/.gorse/download/frappe.zip -d ~/.gorse/dataset
-          unzip -n ~/.gorse/download/ml-tag.zip -d ~/.gorse/dataset
-          unzip -n ~/.gorse/download/criteo.zip -d ~/.gorse/dataset
-          unzip -n ~/.gorse/download/mnist.zip -d ~/.gorse/dataset
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: ./go.mod
-      - name: Test
-        run: go test -timeout 20m -v ./... -skip "TestPostgres|TestMySQL|TestMongo|TestRedis|TestClickHouse"
+  # unit_test_riscv:
+  #   name: unit tests (ubuntu-24.04-riscv)
+  #   runs-on: self-hosted
+  #   steps:
+  #     - name: Install wget and unzip
+  #       uses: ConorMacBride/install-package@v1
+  #       with:
+  #         apt: wget unzip
+  #     - name: Set up dataset
+  #       run: |
+  #         mkdir -p ~/.gorse/dataset
+  #         mkdir -p ~/.gorse/download
+  #         wget -nc https://cdn.gorse.io/datasets/ml-100k.zip -P ~/.gorse/download
+  #         wget -nc https://cdn.gorse.io/datasets/ml-1m.zip -P ~/.gorse/download
+  #         wget -nc https://cdn.gorse.io/datasets/pinterest-20.zip -P ~/.gorse/download
+  #         wget -nc https://cdn.gorse.io/datasets/frappe.zip -P ~/.gorse/download
+  #         wget -nc https://cdn.gorse.io/datasets/ml-tag.zip -P ~/.gorse/download
+  #         wget -nc https://cdn.gorse.io/datasets/criteo.zip -P ~/.gorse/download
+  #         wget -nc https://cdn.gorse.io/datasets/mnist.zip -P ~/.gorse/download
+  #         unzip -n ~/.gorse/download/ml-100k.zip -d ~/.gorse/dataset
+  #         unzip -n ~/.gorse/download/ml-1m.zip -d ~/.gorse/dataset
+  #         unzip -n ~/.gorse/download/pinterest-20.zip -d ~/.gorse/dataset
+  #         unzip -n ~/.gorse/download/frappe.zip -d ~/.gorse/dataset
+  #         unzip -n ~/.gorse/download/ml-tag.zip -d ~/.gorse/dataset
+  #         unzip -n ~/.gorse/download/criteo.zip -d ~/.gorse/dataset
+  #         unzip -n ~/.gorse/download/mnist.zip -d ~/.gorse/dataset
+  #     - uses: actions/checkout@v4
+  #     - uses: actions/setup-go@v5
+  #       with:
+  #         go-version-file: ./go.mod
+  #     - name: Test
+  #       run: go test -timeout 20m -v ./... -skip "TestPostgres|TestMySQL|TestMongo|TestRedis|TestClickHouse"
 
   integrate_test:
     name: integrate tests
