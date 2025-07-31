@@ -19,8 +19,8 @@ import (
 	"time"
 
 	mapset "github.com/deckarep/golang-set/v2"
+	"github.com/gorse-io/gorse/base"
 	"github.com/stretchr/testify/assert"
-	"github.com/zhenghaoz/gorse/base"
 )
 
 func TestParallel(t *testing.T) {

@@ -21,10 +21,10 @@ import (
 	"net"
 	"time"
 
+	"github.com/gorse-io/gorse/common/expression"
+	"github.com/gorse-io/gorse/protocol"
 	"github.com/juju/errors"
 	"github.com/samber/lo"
-	"github.com/zhenghaoz/gorse/common/expression"
-	"github.com/zhenghaoz/gorse/protocol"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )

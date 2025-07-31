@@ -18,8 +18,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gorse-io/gorse/base/progress"
 	"github.com/stretchr/testify/assert"
-	"github.com/zhenghaoz/gorse/base/progress"
 )
 
 func TestEncodeDecode(t *testing.T) {

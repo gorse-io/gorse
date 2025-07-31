@@ -20,11 +20,11 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/gorse-io/gorse/common/expression"
+	"github.com/gorse-io/gorse/config"
+	"github.com/gorse-io/gorse/storage/cache"
+	"github.com/gorse-io/gorse/storage/data"
 	"github.com/samber/lo"
-	"github.com/zhenghaoz/gorse/common/expression"
-	"github.com/zhenghaoz/gorse/config"
-	"github.com/zhenghaoz/gorse/storage/cache"
-	"github.com/zhenghaoz/gorse/storage/data"
 )
 
 func (s *MasterTestSuite) TestFindItemToItem() {

@@ -14,7 +14,7 @@
 
 package dataset
 
-import "github.com/zhenghaoz/gorse/base"
+import "github.com/gorse-io/gorse/base"
 
 type FreqDict struct {
 	si  map[string]int32

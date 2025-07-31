@@ -16,20 +16,21 @@ package logics
 
 import (
 	"fmt"
-	"github.com/expr-lang/expr"
-	"github.com/expr-lang/expr/vm"
-	"github.com/juju/errors"
-	"github.com/samber/lo"
-	"github.com/zhenghaoz/gorse/base/heap"
-	"github.com/zhenghaoz/gorse/base/log"
-	"github.com/zhenghaoz/gorse/config"
-	"github.com/zhenghaoz/gorse/storage/cache"
-	"github.com/zhenghaoz/gorse/storage/data"
-	"go.uber.org/zap"
 	"reflect"
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/expr-lang/expr"
+	"github.com/expr-lang/expr/vm"
+	"github.com/gorse-io/gorse/base/heap"
+	"github.com/gorse-io/gorse/base/log"
+	"github.com/gorse-io/gorse/config"
+	"github.com/gorse-io/gorse/storage/cache"
+	"github.com/gorse-io/gorse/storage/data"
+	"github.com/juju/errors"
+	"github.com/samber/lo"
+	"go.uber.org/zap"
 )
 
 type NonPersonalized struct {

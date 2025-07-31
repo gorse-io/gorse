@@ -16,17 +16,18 @@ package cache
 
 import (
 	"context"
+	"io"
+	"net"
+	"time"
+
+	"github.com/gorse-io/gorse/protocol"
 	"github.com/juju/errors"
 	"github.com/samber/lo"
-	"github.com/zhenghaoz/gorse/protocol"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
-	"io"
-	"net"
-	"time"
 )
 
 type ProxyServer struct {

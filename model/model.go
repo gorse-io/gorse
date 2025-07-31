@@ -15,7 +15,7 @@
 package model
 
 import (
-	"github.com/zhenghaoz/gorse/base"
+	"github.com/gorse-io/gorse/base"
 )
 
 // Model is the interface for all models. Any model in this

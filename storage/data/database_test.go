@@ -23,13 +23,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gorse-io/gorse/common/expression"
 	"github.com/jaswdr/faker"
 	"github.com/juju/errors"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-	"github.com/zhenghaoz/gorse/common/expression"
 	"google.golang.org/protobuf/proto"
 )
 

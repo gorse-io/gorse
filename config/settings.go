@@ -15,10 +15,10 @@
 package config
 
 import (
-	"github.com/zhenghaoz/gorse/model/cf"
-	"github.com/zhenghaoz/gorse/model/ctr"
-	"github.com/zhenghaoz/gorse/storage/cache"
-	"github.com/zhenghaoz/gorse/storage/data"
+	"github.com/gorse-io/gorse/model/cf"
+	"github.com/gorse-io/gorse/model/ctr"
+	"github.com/gorse-io/gorse/storage/cache"
+	"github.com/gorse-io/gorse/storage/data"
 )
 
 type Settings struct {

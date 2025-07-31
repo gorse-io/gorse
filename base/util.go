@@ -18,7 +18,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/zhenghaoz/gorse/base/log"
+	"github.com/gorse-io/gorse/base/log"
 	"go.uber.org/zap"
 )
 

@@ -19,14 +19,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gorse-io/gorse/common/floats"
+	"github.com/gorse-io/gorse/common/mock"
+	"github.com/gorse-io/gorse/common/parallel"
+	"github.com/gorse-io/gorse/config"
+	"github.com/gorse-io/gorse/dataset"
+	"github.com/gorse-io/gorse/storage/data"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
-	"github.com/zhenghaoz/gorse/common/floats"
-	"github.com/zhenghaoz/gorse/common/mock"
-	"github.com/zhenghaoz/gorse/common/parallel"
-	"github.com/zhenghaoz/gorse/config"
-	"github.com/zhenghaoz/gorse/dataset"
-	"github.com/zhenghaoz/gorse/storage/data"
 )
 
 type ItemToItemTestSuite struct {

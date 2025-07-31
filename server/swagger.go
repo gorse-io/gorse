@@ -16,13 +16,14 @@ package server
 
 import (
 	"fmt"
-	"github.com/zhenghaoz/gorse/base/log"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/gorse-io/gorse/base/log"
 
 	"go.uber.org/zap"
 

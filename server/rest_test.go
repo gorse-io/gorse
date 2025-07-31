@@ -23,14 +23,14 @@ import (
 	"time"
 
 	"github.com/emicklei/go-restful/v3"
+	"github.com/gorse-io/gorse/common/expression"
+	"github.com/gorse-io/gorse/config"
+	"github.com/gorse-io/gorse/storage/cache"
+	"github.com/gorse-io/gorse/storage/data"
 	"github.com/samber/lo"
 	"github.com/steinfletcher/apitest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
-	"github.com/zhenghaoz/gorse/common/expression"
-	"github.com/zhenghaoz/gorse/config"
-	"github.com/zhenghaoz/gorse/storage/cache"
-	"github.com/zhenghaoz/gorse/storage/data"
 	"google.golang.org/protobuf/proto"
 )
 

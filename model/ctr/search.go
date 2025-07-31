@@ -17,15 +17,16 @@ package ctr
 import (
 	"context"
 	"fmt"
-	"github.com/zhenghaoz/gorse/dataset"
 	"sync"
 	"time"
 
-	"github.com/zhenghaoz/gorse/base"
-	"github.com/zhenghaoz/gorse/base/log"
-	"github.com/zhenghaoz/gorse/base/progress"
-	"github.com/zhenghaoz/gorse/base/task"
-	"github.com/zhenghaoz/gorse/model"
+	"github.com/gorse-io/gorse/dataset"
+
+	"github.com/gorse-io/gorse/base"
+	"github.com/gorse-io/gorse/base/log"
+	"github.com/gorse-io/gorse/base/progress"
+	"github.com/gorse-io/gorse/base/task"
+	"github.com/gorse-io/gorse/model"
 	"go.uber.org/zap"
 )
 

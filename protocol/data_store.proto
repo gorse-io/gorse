@@ -14,7 +14,7 @@
 
 syntax = "proto3";
 
-option go_package = "github.com/zhenghaoz/gorse/protocol";
+option go_package = "github.com/gorse-io/gorse/protocol";
 
 package protocol;
 
@@ -60,33 +60,21 @@ message ScanOptions {
   bool order_by_item_id = 8;
 }
 
-message BatchInsertItemsRequest {
-  repeated Item items = 1;
-}
+message BatchInsertItemsRequest { repeated Item items = 1; }
 
 message BatchInsertItemsResponse {}
 
-message BatchGetItemsRequest {
-  repeated string item_ids = 1;
-}
+message BatchGetItemsRequest { repeated string item_ids = 1; }
 
-message BatchGetItemsResponse {
-  repeated Item items = 1;
-}
+message BatchGetItemsResponse { repeated Item items = 1; }
 
-message DeleteItemRequest {
-  string item_id = 1;
-}
+message DeleteItemRequest { string item_id = 1; }
 
 message DeleteItemResponse {}
 
-message GetItemRequest {
-  string item_id = 1;
-}
+message GetItemRequest { string item_id = 1; }
 
-message GetItemResponse {
-  optional Item item = 1;
-}
+message GetItemResponse { optional Item item = 1; }
 
 message ModifyItemRequest {
   string item_id = 1;
@@ -111,25 +99,17 @@ message GetItemFeedbackRequest {
   repeated FeedbackTypeExpression feedback_types = 2;
 }
 
-message BatchInsertUsersRequest {
-  repeated User users = 1;
-}
+message BatchInsertUsersRequest { repeated User users = 1; }
 
 message BatchInsertUsersResponse {}
 
-message DeleteUserRequest {
-  string user_id = 1;
-}
+message DeleteUserRequest { string user_id = 1; }
 
 message DeleteUserResponse {}
 
-message GetUserRequest {
-  string user_id = 1;
-}
+message GetUserRequest { string user_id = 1; }
 
-message GetUserResponse {
-  optional User user = 1;
-}
+message GetUserResponse { optional User user = 1; }
 
 message ModifyUserRequest {
   string user_id = 1;
@@ -166,9 +146,7 @@ message DeleteUserItemFeedbackRequest {
   repeated string feedback_types = 3;
 }
 
-message DeleteUserItemFeedbackResponse {
-  int32 count = 1;
-}
+message DeleteUserItemFeedbackResponse { int32 count = 1; }
 
 message BatchInsertFeedbackRequest {
   repeated Feedback feedback = 1;
@@ -192,72 +170,66 @@ message GetFeedbackResponse {
   repeated Feedback feedback = 2;
 }
 
-message GetUserStreamRequest {
-  int32 batch_size = 1;
-}
+message GetUserStreamRequest { int32 batch_size = 1; }
 
-message GetUserStreamResponse {
-  repeated User users = 1;
-}
+message GetUserStreamResponse { repeated User users = 1; }
 
 message GetItemStreamRequest {
   int32 batch_size = 1;
   google.protobuf.Timestamp time_limit = 2;
 }
 
-message GetItemStreamResponse {
-  repeated Item items = 1;
-}
+message GetItemStreamResponse { repeated Item items = 1; }
 
 message GetFeedbackStreamRequest {
   int32 batch_size = 1;
   ScanOptions scan_options = 2;
 }
 
-message GetFeedbackStreamResponse {
-  repeated Feedback feedback = 1;
-}
+message GetFeedbackStreamResponse { repeated Feedback feedback = 1; }
 
 message CountUsersRequest {}
 
-message CountUsersResponse {
-  int32 count = 1;
-}
+message CountUsersResponse { int32 count = 1; }
 
 message CountItemsRequest {}
 
-message CountItemsResponse {
-  int32 count = 1;
-}
+message CountItemsResponse { int32 count = 1; }
 
 message CountFeedbackRequest {}
 
-message CountFeedbackResponse {
-  int32 count = 1;
-}
+message CountFeedbackResponse { int32 count = 1; }
 
 service DataStore {
   rpc Ping(PingRequest) returns (PingResponse) {}
-  rpc BatchInsertItems(BatchInsertItemsRequest) returns (BatchInsertItemsResponse) {}
+  rpc BatchInsertItems(BatchInsertItemsRequest)
+      returns (BatchInsertItemsResponse) {}
   rpc BatchGetItems(BatchGetItemsRequest) returns (BatchGetItemsResponse) {}
   rpc DeleteItem(DeleteItemRequest) returns (DeleteItemResponse) {}
   rpc GetItem(GetItemRequest) returns (GetItemResponse) {}
   rpc ModifyItem(ModifyItemRequest) returns (ModifyItemResponse) {}
   rpc GetItems(GetItemsRequest) returns (GetItemsResponse) {}
   rpc GetItemFeedback(GetItemFeedbackRequest) returns (GetFeedbackResponse) {}
-  rpc BatchInsertUsers(BatchInsertUsersRequest) returns (BatchInsertUsersResponse) {}
+  rpc BatchInsertUsers(BatchInsertUsersRequest)
+      returns (BatchInsertUsersResponse) {}
   rpc DeleteUser(DeleteUserRequest) returns (DeleteUserResponse) {}
   rpc GetUser(GetUserRequest) returns (GetUserResponse) {}
   rpc ModifyUser(ModifyUserRequest) returns (ModifyUserResponse) {}
   rpc GetUsers(GetUsersRequest) returns (GetUsersResponse) {}
   rpc GetUserFeedback(GetUserFeedbackRequest) returns (GetFeedbackResponse) {}
-  rpc GetUserItemFeedback(GetUserItemFeedbackRequest) returns (GetFeedbackResponse) {}
-  rpc DeleteUserItemFeedback(DeleteUserItemFeedbackRequest) returns (DeleteUserItemFeedbackResponse) {}
-  rpc BatchInsertFeedback(BatchInsertFeedbackRequest) returns (BatchInsertFeedbackResponse) {}
+  rpc GetUserItemFeedback(GetUserItemFeedbackRequest)
+      returns (GetFeedbackResponse) {}
+  rpc DeleteUserItemFeedback(DeleteUserItemFeedbackRequest)
+      returns (DeleteUserItemFeedbackResponse) {}
+  rpc BatchInsertFeedback(BatchInsertFeedbackRequest)
+      returns (BatchInsertFeedbackResponse) {}
   rpc GetFeedback(GetFeedbackRequest) returns (GetFeedbackResponse) {}
-  rpc GetUserStream(GetUserStreamRequest) returns (stream GetUserStreamResponse) {}
-  rpc GetItemStream(GetItemStreamRequest) returns (stream GetItemStreamResponse) {}
-  rpc GetFeedbackStream(GetFeedbackStreamRequest) returns (stream GetFeedbackStreamResponse) {}
+  rpc GetUserStream(GetUserStreamRequest)
+      returns (stream GetUserStreamResponse) {}
+  rpc GetItemStream(GetItemStreamRequest)
+      returns (stream GetItemStreamResponse) {}
+  rpc GetFeedbackStream(GetFeedbackStreamRequest)
+      returns (stream GetFeedbackStreamResponse) {}
   rpc CountUsers(CountUsersRequest) returns (CountUsersResponse) {}
   rpc CountItems(CountItemsRequest) returns (CountItemsResponse) {}
   rpc CountFeedback(CountFeedbackRequest) returns (CountFeedbackResponse) {}

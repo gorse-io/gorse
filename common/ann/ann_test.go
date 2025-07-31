@@ -16,19 +16,20 @@ package ann
 
 import (
 	"bufio"
-	mapset "github.com/deckarep/golang-set/v2"
-	"github.com/samber/lo"
-	"github.com/stretchr/testify/assert"
-	"github.com/zhenghaoz/gorse/common/datautil"
-	"github.com/zhenghaoz/gorse/common/floats"
-	"github.com/zhenghaoz/gorse/common/util"
-	"go.uber.org/atomic"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
 	"testing"
+
+	mapset "github.com/deckarep/golang-set/v2"
+	"github.com/gorse-io/gorse/common/datautil"
+	"github.com/gorse-io/gorse/common/floats"
+	"github.com/gorse-io/gorse/common/util"
+	"github.com/samber/lo"
+	"github.com/stretchr/testify/assert"
+	"go.uber.org/atomic"
 )
 
 const (

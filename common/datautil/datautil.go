@@ -25,8 +25,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/zhenghaoz/gorse/base/log"
-	"github.com/zhenghaoz/gorse/common/util"
+	"github.com/gorse-io/gorse/base/log"
+	"github.com/gorse-io/gorse/common/util"
 	"go.uber.org/zap"
 )
 

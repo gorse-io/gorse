@@ -16,13 +16,14 @@ package meta
 
 import (
 	"encoding/json"
-	"github.com/XSAM/otelsql"
-	"github.com/juju/errors"
-	"github.com/samber/lo"
-	"github.com/zhenghaoz/gorse/storage"
-	semconv "go.opentelemetry.io/otel/semconv/v1.12.0"
 	"strings"
 	"time"
+
+	"github.com/XSAM/otelsql"
+	"github.com/gorse-io/gorse/storage"
+	"github.com/juju/errors"
+	"github.com/samber/lo"
+	semconv "go.opentelemetry.io/otel/semconv/v1.12.0"
 )
 
 const (

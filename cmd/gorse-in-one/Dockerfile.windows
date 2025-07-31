@@ -5,13 +5,13 @@ FROM golang:1.24
 
 COPY . gorse
 
-ENV CGO_ENABLED 0 
+ENV CGO_ENABLED 0
 
 RUN cd gorse/cmd/gorse-in-one; \
     go build -ldflags="\" \
-        -X 'github.com/zhenghaoz/gorse/cmd/version.Version=$(git describe --tags $(git rev-parse HEAD))' \
-        -X 'github.com/zhenghaoz/gorse/cmd/version.GitCommit=$(git rev-parse HEAD)' \
-        -X 'github.com/zhenghaoz/gorse/cmd/version.BuildTime=$(date)'\"" .; \
+        -X 'github.com/gorse-io/gorse/cmd/version.Version=$(git describe --tags $(git rev-parse HEAD))' \
+        -X 'github.com/gorse-io/gorse/cmd/version.GitCommit=$(git rev-parse HEAD)' \
+        -X 'github.com/gorse-io/gorse/cmd/version.BuildTime=$(date)'\"" .; \
     mv gorse-in-one.exe /gorse-in-one.exe
 
 RUN /gorse-in-one.exe --version

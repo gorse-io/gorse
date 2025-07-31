@@ -23,9 +23,9 @@ import (
 	"time"
 
 	client "github.com/gorse-io/gorse-go"
+	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/suite"
-	"github.com/zhenghaoz/gorse/storage/cache"
 )
 
 const (

@@ -18,11 +18,11 @@ import (
 	"os"
 	"os/signal"
 
+	"github.com/gorse-io/gorse/base/log"
+	"github.com/gorse-io/gorse/cmd/version"
+	"github.com/gorse-io/gorse/common/util"
+	"github.com/gorse-io/gorse/server"
 	"github.com/spf13/cobra"
-	"github.com/zhenghaoz/gorse/base/log"
-	"github.com/zhenghaoz/gorse/cmd/version"
-	"github.com/zhenghaoz/gorse/common/util"
-	"github.com/zhenghaoz/gorse/server"
 	"go.uber.org/zap"
 )
 

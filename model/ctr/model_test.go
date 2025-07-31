@@ -19,9 +19,9 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/gorse-io/gorse/model"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
-	"github.com/zhenghaoz/gorse/model"
 )
 
 const classificationDelta = 0.01

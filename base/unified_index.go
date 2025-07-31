@@ -20,8 +20,8 @@ import (
 	"io"
 	"strconv"
 
+	"github.com/gorse-io/gorse/base/log"
 	"github.com/juju/errors"
-	"github.com/zhenghaoz/gorse/base/log"
 )
 
 // UnifiedIndex maps users, items and labels into a unified encoding space.

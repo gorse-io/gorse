@@ -24,12 +24,12 @@ import (
 
 	"github.com/chewxy/math32"
 	mapset "github.com/deckarep/golang-set/v2"
+	"github.com/gorse-io/gorse/base"
+	"github.com/gorse-io/gorse/common/util"
+	"github.com/gorse-io/gorse/model"
+	"github.com/gorse-io/gorse/storage/data"
 	"github.com/juju/errors"
 	"github.com/samber/lo"
-	"github.com/zhenghaoz/gorse/base"
-	"github.com/zhenghaoz/gorse/common/util"
-	"github.com/zhenghaoz/gorse/model"
-	"github.com/zhenghaoz/gorse/storage/data"
 	"modernc.org/strutil"
 )
 

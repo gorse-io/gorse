@@ -21,8 +21,8 @@ import (
 	"time"
 
 	"github.com/chewxy/math32"
+	"github.com/gorse-io/gorse/storage/data"
 	"github.com/stretchr/testify/assert"
-	"github.com/zhenghaoz/gorse/storage/data"
 )
 
 func TestDataset_AddItem(t *testing.T) {

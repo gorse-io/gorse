@@ -14,7 +14,7 @@
 
 syntax = "proto3";
 
-option go_package = "github.com/zhenghaoz/gorse/protocol";
+option go_package = "github.com/gorse-io/gorse/protocol";
 
 package protocol;
 
@@ -69,9 +69,7 @@ message Meta {
   repeated string workers = 7;
 }
 
-message Fragment {
-  bytes data = 1;
-}
+message Fragment { bytes data = 1; }
 
 message NodeInfo {
   NodeType node_type = 1;
@@ -91,9 +89,7 @@ message Progress {
   int64 finish_time = 8;
 }
 
-message PushProgressRequest {
-  repeated Progress progress = 1;
-}
+message PushProgressRequest { repeated Progress progress = 1; }
 
 message PushProgressResponse {}
 
@@ -109,21 +105,13 @@ message UploadBlobRequest {
 
 message UploadBlobResponse {}
 
-message FetchBlobRequest {
-  string name = 1;
-}
+message FetchBlobRequest { string name = 1; }
 
-message FetchBlobResponse {
-  google.protobuf.Timestamp timestamp = 1;
-}
+message FetchBlobResponse { google.protobuf.Timestamp timestamp = 1; }
 
-message DownloadBlobRequest {
-  string name = 1;
-}
+message DownloadBlobRequest { string name = 1; }
 
-message DownloadBlobResponse {
-  bytes data = 1;
-}
+message DownloadBlobResponse { bytes data = 1; }
 
 service BlobStore {
   rpc UploadBlob(stream UploadBlobRequest) returns (UploadBlobResponse) {}

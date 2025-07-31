@@ -17,10 +17,11 @@ package master
 import (
 	"context"
 	"encoding/json"
-	"github.com/juju/errors"
-	"github.com/zhenghaoz/gorse/protocol"
-	"github.com/zhenghaoz/gorse/storage/meta"
 	"time"
+
+	"github.com/gorse-io/gorse/protocol"
+	"github.com/gorse-io/gorse/storage/meta"
+	"github.com/juju/errors"
 )
 
 // GetMeta returns latest configuration.

@@ -16,9 +16,9 @@ COPY . ./
 RUN --mount=type=cache,target=/root/.cache/go-build \
     cd cmd/gorse-worker && \
     CGO_ENABLED=0 go build -ldflags=" \
-       -X 'github.com/zhenghaoz/gorse/cmd/version.Version=$(git describe --tags $(git rev-parse HEAD))' \
-       -X 'github.com/zhenghaoz/gorse/cmd/version.GitCommit=$(git rev-parse HEAD)' \
-       -X 'github.com/zhenghaoz/gorse/cmd/version.BuildTime=$(date)'" .
+    -X 'github.com/gorse-io/gorse/cmd/version.Version=$(git describe --tags $(git rev-parse HEAD))' \
+    -X 'github.com/gorse-io/gorse/cmd/version.GitCommit=$(git rev-parse HEAD)' \
+    -X 'github.com/gorse-io/gorse/cmd/version.BuildTime=$(date)'" .
 
 RUN /src/cmd/gorse-worker/gorse-worker --version
 

@@ -18,10 +18,10 @@ import (
 	"time"
 
 	mapset "github.com/deckarep/golang-set/v2"
+	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/samber/lo"
-	"github.com/zhenghaoz/gorse/storage/cache"
 )
 
 const (

@@ -22,11 +22,11 @@ import (
 	"strings"
 
 	mapset "github.com/deckarep/golang-set/v2"
+	"github.com/gorse-io/gorse/base"
+	"github.com/gorse-io/gorse/base/jsonutil"
+	"github.com/gorse-io/gorse/model"
 	"github.com/juju/errors"
 	"github.com/samber/lo"
-	"github.com/zhenghaoz/gorse/base"
-	"github.com/zhenghaoz/gorse/base/jsonutil"
-	"github.com/zhenghaoz/gorse/model"
 	"modernc.org/mathutil"
 )
 

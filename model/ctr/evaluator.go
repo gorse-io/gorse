@@ -15,8 +15,9 @@
 package ctr
 
 import (
-	"github.com/zhenghaoz/gorse/dataset"
 	"sort"
+
+	"github.com/gorse-io/gorse/dataset"
 
 	"github.com/chewxy/math32"
 	"github.com/samber/lo"

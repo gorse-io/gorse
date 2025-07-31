@@ -16,9 +16,10 @@ package base
 
 import (
 	"encoding/binary"
-	"github.com/juju/errors"
-	"github.com/zhenghaoz/gorse/base/encoding"
 	"io"
+
+	"github.com/gorse-io/gorse/base/encoding"
+	"github.com/juju/errors"
 )
 
 // MarshalIndex marshal index into byte stream.
