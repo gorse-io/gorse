@@ -78,21 +78,25 @@ void vsqrt_to(float *a, float *b, long n) {
 }
 
 inline float dot(float *a, float *b, long n) {
-    size_t vl = __riscv_vsetvl_e32m1(1);
-    vfloat32m1_t s = __riscv_vfmv_v_f_f32m1(0, vl);
-    for (; n > 0; a += vl, b += vl, n -= vl) {
-        vl = __riscv_vsetvl_e32m1(n);
-        vfloat32m1_t v1 = __riscv_vle32_v_f32m1(a, vl);
-        vfloat32m1_t v2 = __riscv_vle32_v_f32m1(b, vl);
-        s = __riscv_vfmacc_vv_f32m1(s, v1, v2, vl);
+    size_t vlmax = __riscv_vsetvlmax_e32m1();
+    int epoch = n / vlmax;
+    int remain = n % vlmax;
+    vfloat32m1_t s1 = __riscv_vfmv_v_f_f32m1(0, vlmax);
+    for (int i = 0; i < epoch; i++) {
+        vfloat32m1_t v1 = __riscv_vle32_v_f32m1(a, vlmax);
+        vfloat32m1_t v2 = __riscv_vle32_v_f32m1(b, vlmax);
+        s1 = __riscv_vfmacc_vv_f32m1(s1, v1, v2, vlmax);
+        a += vlmax;
+        b += vlmax;
     }
-    float sum = 0;
-    vl = __riscv_vsetvlmax_e32m1();
-    for (int i = 0; i < vl; i++) {
-        sum += __riscv_vfmv_f_s_f32m1_f32(s);
-        s = __riscv_vslidedown_vx_f32m1(s, 1, vl);
-    }
-    return sum;
+    vfloat32m1_t s = __riscv_vfmv_v_f_f32m1(0, vlmax);
+    s = __riscv_vfredosum_vs_f32m1_f32m1(s1, s, vlmax);
+    size_t vl = __riscv_vsetvl_e32m1(remain);
+    vfloat32m1_t v1 = __riscv_vle32_v_f32m1(a, vl);
+    vfloat32m1_t v2 = __riscv_vle32_v_f32m1(b, vl);
+    vfloat32m1_t s2 = __riscv_vfmul_vv_f32m1(v1, v2, vl);
+    s = __riscv_vfredosum_vs_f32m1_f32m1(s2, s, vl);
+    return __riscv_vfmv_f_s_f32m1_f32(s);
 }
 
 float vdot(float *a, float *b, long n) {
@@ -100,23 +104,26 @@ float vdot(float *a, float *b, long n) {
 }
 
 float veuclidean(float *a, float *b, long n) {
-    size_t vl = __riscv_vsetvl_e32m1(1);
-    vfloat32m1_t s = __riscv_vfmv_v_f_f32m1(0, vl);
-    for (; n > 0; a += vl, b += vl, n -= vl) {
-        vl = __riscv_vsetvl_e32m1(n);
-        vfloat32m1_t v1 = __riscv_vle32_v_f32m1(a, vl);
-        vfloat32m1_t v2 = __riscv_vle32_v_f32m1(b, vl);
-        vfloat32m1_t v = __riscv_vfsub_vv_f32m1(v1, v2, vl);
-        s = __riscv_vfmacc_vv_f32m1(s, v, v, vl);
+    size_t vlmax = __riscv_vsetvlmax_e32m1();
+    int epoch = n / vlmax;
+    int remain = n % vlmax;
+    vfloat32m1_t s1 = __riscv_vfmv_v_f_f32m1(0, vlmax);
+    for (int i = 0; i < epoch; i++) {
+        vfloat32m1_t v1 = __riscv_vle32_v_f32m1(a, vlmax);
+        vfloat32m1_t v2 = __riscv_vle32_v_f32m1(b, vlmax);
+        vfloat32m1_t v = __riscv_vfsub_vv_f32m1(v1, v2, vlmax);
+        s1 = __riscv_vfmacc_vv_f32m1(s1, v, v, vlmax);
+        a += vlmax;
+        b += vlmax;
     }
-    float sum = 0;
-    vl = __riscv_vsetvlmax_e32m1();
-    for (int i = 0; i < vl; i++) {
-        sum += __riscv_vfmv_f_s_f32m1_f32(s);
-        s = __riscv_vslidedown_vx_f32m1(s, 1, vl);
-    }
-    vl = __riscv_vsetvl_e32m1(1);
-    s = __riscv_vfmv_v_f_f32m1(sum, vl);
+    vfloat32m1_t s = __riscv_vfmv_v_f_f32m1(0, vlmax);
+    s = __riscv_vfredosum_vs_f32m1_f32m1(s1, s, vlmax);
+    size_t vl = __riscv_vsetvl_e32m1(remain);
+    vfloat32m1_t v1 = __riscv_vle32_v_f32m1(a, vl);
+    vfloat32m1_t v2 = __riscv_vle32_v_f32m1(b, vl);
+    vfloat32m1_t v = __riscv_vfsub_vv_f32m1(v1, v2, vlmax);
+    vfloat32m1_t s2 = __riscv_vfmul_vv_f32m1(v, v, vl);
+    s = __riscv_vfredosum_vs_f32m1_f32m1(s2, s, vl);
     s = __riscv_vfsqrt_v_f32m1(s, vl);
     return __riscv_vfmv_f_s_f32m1_f32(s);
 }

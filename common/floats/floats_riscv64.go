@@ -115,15 +115,27 @@ func (feature Feature) divTo(a, b, c []float32) {
 }
 
 func (feature Feature) sqrtTo(a, b []float32) {
-	sqrtTo(a, b)
+	if feature&V == V {
+		vsqrt_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), int64(len(a)))
+	} else {
+		sqrtTo(a, b)
+	}
 }
 
 func (feature Feature) dot(a, b []float32) float32 {
-	return dot(a, b)
+	if feature&V == V {
+		return vdot(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), int64(len(a)))
+	} else {
+		return dot(a, b)
+	}
 }
 
 func (feature Feature) euclidean(a, b []float32) float32 {
-	return euclidean(a, b)
+	if feature&V == V {
+		return veuclidean(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), int64(len(a)))
+	} else {
+		return euclidean(a, b)
+	}
 }
 
 func (feature Feature) mm(transA, transB bool, m, n, k int, a []float32, lda int, b []float32, ldb int, c []float32, ldc int) {
