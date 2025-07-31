@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <riscv_vector.h>
+
 void vmul_const_add_to(float *a, float *b, float *c, float *dst, long n) {
     for (int i = 0; i < n; i++) {
         dst[i] = a[i] * (*b) + c[i];
@@ -67,15 +69,28 @@ void vdiv_to(float *a, float *b, float *c, long n) {
 }
 
 void vsqrt_to(float *a, float *b, long n) {
-    for (long i = 0; i < n; i++) {
-        b[i] = a[i] < 0 ? 0 : sqrtf(a[i]);
+    for (size_t vl; n > 0; a += vl, b += vl, n -= vl) {
+        vl = __riscv_vsetvl_e32m1(n);
+        vfloat32m1_t v1 = __riscv_vle32_v_f32m1(a, vl);
+        vfloat32m1_t v2 = __riscv_vfsqrt_v_f32m1(v1, vl);
+        __riscv_vse32_v_f32m1(b, v2, vl);
     }
 }
 
 inline float dot(float *a, float *b, long n) {
+    size_t vl = __riscv_vsetvl_e32m1(1);
+    vfloat32m1_t s = __riscv_vfmv_v_f_f32m1(0, vl);
+    for (; n > 0; a += vl, b += vl, n -= vl) {
+        vl = __riscv_vsetvl_e32m1(n);
+        vfloat32m1_t v1 = __riscv_vle32_v_f32m1(a, vl);
+        vfloat32m1_t v2 = __riscv_vle32_v_f32m1(b, vl);
+        s = __riscv_vfmacc_vv_f32m1(s, v1, v2, vl);
+    }
     float sum = 0;
-    for (int i = 0; i < n; i++) {
-        sum += a[i] * b[i];
+    vl = __riscv_vsetvlmax_e32m1();
+    for (int i = 0; i < vl; i++) {
+        sum += __riscv_vfmv_f_s_f32m1_f32(s);
+        s = __riscv_vslidedown_vx_f32m1(s, 1, vl);
     }
     return sum;
 }
@@ -85,10 +100,61 @@ float vdot(float *a, float *b, long n) {
 }
 
 float veuclidean(float *a, float *b, long n) {
-    float sum = 0;
-    for (int i = 0; i < n; i++) {
-        float diff = a[i] - b[i];
-        sum += diff * diff;
+    size_t vl = __riscv_vsetvl_e32m1(1);
+    vfloat32m1_t s = __riscv_vfmv_v_f_f32m1(0, vl);
+    for (; n > 0; a += vl, b += vl, n -= vl) {
+        vl = __riscv_vsetvl_e32m1(n);
+        vfloat32m1_t v1 = __riscv_vle32_v_f32m1(a, vl);
+        vfloat32m1_t v2 = __riscv_vle32_v_f32m1(b, vl);
+        vfloat32m1_t v = __riscv_vfsub_vv_f32m1(v1, v2, vl);
+        s = __riscv_vfmacc_vv_f32m1(s, v, v, vl);
     }
-    return sqrtf(sum);
+    float sum = 0;
+    vl = __riscv_vsetvlmax_e32m1();
+    for (int i = 0; i < vl; i++) {
+        sum += __riscv_vfmv_f_s_f32m1_f32(s);
+        s = __riscv_vslidedown_vx_f32m1(s, 1, vl);
+    }
+    vl = __riscv_vsetvl_e32m1(1);
+    s = __riscv_vfmv_v_f_f32m1(sum, vl);
+    s = __riscv_vfsqrt_v_f32m1(s, vl);
+    return __riscv_vfmv_f_s_f32m1_f32(s);
+}
+
+void vmm(_Bool transA, _Bool transB, long m, long n, long k, float *a, long lda, float *b, long ldb, float *c, long ldc) {
+    if (!transA && !transB)
+    {
+        for (int i = 0; i < m; i++) {
+            for (int l = 0; l < k; l++) {
+                for (int j = 0; j < n; j++) {
+                    c[i * ldc + j] += a[i * lda + l] * b[l * ldb + j];
+                }
+            }
+        }
+    } else if (!transA && transB)
+    {
+        for (int i = 0; i < m; i++) {
+            for (int j = 0; j < n; j++) {
+                c[i * ldc + j] = dot(a + i * lda, b + j * ldb, k);
+            }
+        }
+    } else if (transA && !transB)
+    {
+        for (int i = 0; i < m; i++) {
+            for (int l = 0; l < k; l++) {
+                for (int j = 0; j < n; j++) {
+                    c[i * ldc + j] += a[l * lda + i] * b[l * ldb + j];
+                }
+            }
+        }
+    } else if (transA && transB)
+    {
+        for (int i = 0; i < m; i++) {
+            for (int l = 0; l < k; l++) {
+                for (int j = 0; j < n; j++) {
+                    c[i * ldc + j] += a[l * lda + i] * b[j * ldb + l];
+                }
+            }
+        }
+    }
 }

@@ -713,6 +713,18 @@ MunitResult vmul_to_test(const MunitParameter params[], void *user_data_or_fixtu
   return MUNIT_OK;
 }
 
+MunitResult vsqrt_to_test(const MunitParameter params[], void *user_data_or_fixture)
+{
+  float a[kVectorLength], expect[kVectorLength], actual[kVectorLength];
+  rand_float(a, kVectorLength);
+  memcpy(expect, actual, sizeof(float) * kVectorLength);
+
+  sqrt_to(a, expect, kVectorLength);
+  vsqrt_to(a, actual, kVectorLength);
+  munit_assert_floats_equal(kVectorLength, expect, actual);
+  return MUNIT_OK;
+}
+
 MunitResult vdot_test(const MunitParameter params[], void *user_data_or_fixture)
 {
   float a[kVectorLength], b[kVectorLength];
@@ -742,6 +754,7 @@ MunitTest vtests[] = {
     {"mul_const_to", vmul_const_to_test, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL},
     {"mul_const", vmul_const_test, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL},
     {"mul_to", vmul_to_test, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL},
+    {"sqrt_to", vsqrt_to_test, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL},
     {"dot", vdot_test, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL},
     {"euclidean", veuclidean_test, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL},
     {NULL, NULL, NULL, NULL, MUNIT_TEST_OPTION_NONE, NULL}};
