@@ -15,12 +15,13 @@
 package logics
 
 import (
-	"github.com/stretchr/testify/assert"
-	"github.com/zhenghaoz/gorse/config"
-	"github.com/zhenghaoz/gorse/storage/data"
 	"strconv"
 	"testing"
 	"time"
+
+	"github.com/gorse-io/gorse/config"
+	"github.com/gorse-io/gorse/storage/data"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestLatest(t *testing.T) {

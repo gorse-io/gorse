@@ -16,13 +16,14 @@ package blob
 
 import (
 	"context"
-	"github.com/minio/minio-go/v7"
-	"github.com/minio/minio-go/v7/pkg/credentials"
-	"github.com/zhenghaoz/gorse/base/log"
-	"github.com/zhenghaoz/gorse/config"
-	"go.uber.org/zap"
 	"io"
 	"path/filepath"
+
+	"github.com/gorse-io/gorse/base/log"
+	"github.com/gorse-io/gorse/config"
+	"github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7/pkg/credentials"
+	"go.uber.org/zap"
 )
 
 type S3 struct {

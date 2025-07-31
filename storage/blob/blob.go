@@ -16,16 +16,17 @@ package blob
 
 import (
 	"context"
-	"github.com/juju/errors"
-	"github.com/zhenghaoz/gorse/base/log"
-	"github.com/zhenghaoz/gorse/protocol"
-	"go.uber.org/zap"
-	"google.golang.org/grpc"
-	"google.golang.org/protobuf/types/known/timestamppb"
 	"io"
 	"os"
 	"path"
 	"time"
+
+	"github.com/gorse-io/gorse/base/log"
+	"github.com/gorse-io/gorse/protocol"
+	"github.com/juju/errors"
+	"go.uber.org/zap"
+	"google.golang.org/grpc"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type Store interface {

@@ -14,7 +14,7 @@
 
 syntax = "proto3";
 
-option go_package = "github.com/zhenghaoz/gorse/protocol";
+option go_package = "github.com/gorse-io/gorse/protocol";
 
 package protocol;
 

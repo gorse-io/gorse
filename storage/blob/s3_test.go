@@ -16,12 +16,13 @@ package blob
 
 import (
 	"context"
-	"github.com/minio/minio-go/v7"
-	"github.com/stretchr/testify/assert"
-	"github.com/zhenghaoz/gorse/config"
 	"io"
 	"os"
 	"testing"
+
+	"github.com/gorse-io/gorse/config"
+	"github.com/minio/minio-go/v7"
+	"github.com/stretchr/testify/assert"
 )
 
 var (

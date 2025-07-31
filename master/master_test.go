@@ -17,11 +17,11 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/gorse-io/gorse/base/progress"
+	"github.com/gorse-io/gorse/config"
+	"github.com/gorse-io/gorse/storage/cache"
+	"github.com/gorse-io/gorse/storage/data"
 	"github.com/stretchr/testify/suite"
-	"github.com/zhenghaoz/gorse/base/progress"
-	"github.com/zhenghaoz/gorse/config"
-	"github.com/zhenghaoz/gorse/storage/cache"
-	"github.com/zhenghaoz/gorse/storage/data"
 )
 
 type MasterTestSuite struct {

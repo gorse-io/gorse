@@ -15,14 +15,15 @@
 package ann
 
 import (
+	"math/rand"
+	"sync"
+
 	"github.com/chewxy/math32"
 	mapset "github.com/deckarep/golang-set/v2"
+	"github.com/gorse-io/gorse/base/heap"
 	"github.com/pkg/errors"
 	"github.com/samber/lo"
-	"github.com/zhenghaoz/gorse/base/heap"
-	"math/rand"
 	"modernc.org/mathutil"
-	"sync"
 )
 
 // HNSW is a vector index based on Hierarchical Navigable Small Worlds.

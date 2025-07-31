@@ -16,10 +16,11 @@ package ctr
 import (
 	"encoding/json"
 	"fmt"
+	"testing"
+
+	"github.com/gorse-io/gorse/base"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
-	"github.com/zhenghaoz/gorse/base"
-	"testing"
 )
 
 func TestConvertLabelsToFeatures(t *testing.T) {

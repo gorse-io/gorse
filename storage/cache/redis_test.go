@@ -22,10 +22,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gorse-io/gorse/base/log"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
-	"github.com/zhenghaoz/gorse/base/log"
 	"google.golang.org/protobuf/proto"
 )
 

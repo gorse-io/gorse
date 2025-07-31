@@ -15,11 +15,12 @@
 package blob
 
 import (
-	"github.com/zhenghaoz/gorse/base/log"
-	"go.uber.org/zap"
 	"io"
 	"os"
 	"path"
+
+	"github.com/gorse-io/gorse/base/log"
+	"go.uber.org/zap"
 )
 
 type POSIX struct {

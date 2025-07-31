@@ -15,9 +15,9 @@
 package ann
 
 import (
+	"github.com/gorse-io/gorse/base/heap"
 	"github.com/juju/errors"
 	"github.com/samber/lo"
-	"github.com/zhenghaoz/gorse/base/heap"
 )
 
 // Bruteforce is a naive implementation of vector index.

@@ -29,11 +29,11 @@ import (
 	"time"
 
 	"github.com/chewxy/math32"
+	"github.com/gorse-io/gorse/common/datautil"
+	"github.com/gorse-io/gorse/common/util"
 	"github.com/samber/lo"
 	"github.com/schollz/progressbar/v3"
 	"github.com/stretchr/testify/assert"
-	"github.com/zhenghaoz/gorse/common/datautil"
-	"github.com/zhenghaoz/gorse/common/util"
 	"golang.org/x/sys/cpu"
 )
 

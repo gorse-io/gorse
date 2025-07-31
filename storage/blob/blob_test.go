@@ -15,12 +15,13 @@
 package blob
 
 import (
-	"github.com/stretchr/testify/assert"
-	"github.com/zhenghaoz/gorse/protocol"
-	"google.golang.org/grpc"
 	"net"
 	"path"
 	"testing"
+
+	"github.com/gorse-io/gorse/protocol"
+	"github.com/stretchr/testify/assert"
+	"google.golang.org/grpc"
 )
 
 func TestBlob(t *testing.T) {

@@ -15,8 +15,9 @@
 package parallel
 
 import (
-	"github.com/zhenghaoz/gorse/base"
 	"sync"
+
+	"github.com/gorse-io/gorse/base"
 
 	"github.com/juju/errors"
 	"modernc.org/mathutil"

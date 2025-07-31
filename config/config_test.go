@@ -23,11 +23,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gorse-io/gorse/common/expression"
 	"github.com/sclevine/yj/convert"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
-	"github.com/zhenghaoz/gorse/common/expression"
 )
 
 func TestUnmarshal(t *testing.T) {

@@ -16,7 +16,7 @@
 
 package floats
 
-import "github.com/zhenghaoz/gorse/common/blas"
+import "github.com/gorse-io/gorse/common/blas"
 
 func init() {
 	feature = feature | CUDA

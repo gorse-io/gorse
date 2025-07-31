@@ -1,4 +1,4 @@
-module github.com/zhenghaoz/gorse
+module github.com/gorse-io/gorse
 
 go 1.24
 

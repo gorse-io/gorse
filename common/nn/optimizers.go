@@ -18,8 +18,8 @@ import (
 	"sync"
 
 	"github.com/chewxy/math32"
+	"github.com/gorse-io/gorse/common/floats"
 	"github.com/samber/lo"
-	"github.com/zhenghaoz/gorse/common/floats"
 )
 
 type Optimizer interface {

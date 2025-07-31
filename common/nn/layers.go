@@ -15,13 +15,14 @@
 package nn
 
 import (
-	"github.com/chewxy/math32"
-	"github.com/juju/errors"
-	"github.com/matttproud/golang_protobuf_extensions/pbutil"
-	"github.com/zhenghaoz/gorse/protocol"
 	"io"
 	"reflect"
 	"strconv"
+
+	"github.com/chewxy/math32"
+	"github.com/gorse-io/gorse/protocol"
+	"github.com/juju/errors"
+	"github.com/matttproud/golang_protobuf_extensions/pbutil"
 )
 
 type Layer interface {

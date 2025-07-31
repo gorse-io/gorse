@@ -19,10 +19,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gorse-io/gorse/config"
+	"github.com/gorse-io/gorse/dataset"
+	"github.com/gorse-io/gorse/storage/data"
 	"github.com/stretchr/testify/suite"
-	"github.com/zhenghaoz/gorse/config"
-	"github.com/zhenghaoz/gorse/dataset"
-	"github.com/zhenghaoz/gorse/storage/data"
 )
 
 type UserToUserTestSuite struct {

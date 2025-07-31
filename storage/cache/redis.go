@@ -23,11 +23,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gorse-io/gorse/common/util"
+	"github.com/gorse-io/gorse/storage"
 	"github.com/juju/errors"
 	"github.com/redis/go-redis/v9"
 	"github.com/samber/lo"
-	"github.com/zhenghaoz/gorse/common/util"
-	"github.com/zhenghaoz/gorse/storage"
 )
 
 // Redis cache storage.
