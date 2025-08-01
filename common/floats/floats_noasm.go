@@ -1,5 +1,8 @@
-//go:build noasm || (!amd64 && !arm64)
+//go:build noasm || (!amd64 && !arm64 && !riscv64)
 
+// Copyright 2025 gorse Project Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
@@ -69,6 +72,6 @@ func (Feature) euclidean(a, b []float32) float32 {
 	return euclidean(a, b)
 }
 
-func (Feature) mm(a, b, c []float32, m, n, k int, transA, transB bool) {
-	mm(a, b, c, m, n, k, transA, transB)
+func (Feature) mm(transA, transB bool, m, n, k int, a []float32, lda int, b []float32, ldb int, c []float32, ldc int) {
+	mm(transA, transB, m, n, k, a, lda, b, ldb, c, ldc)
 }
