@@ -102,8 +102,7 @@ jobs:
         go-version-file: ./go.mod
 
     - name: Test
-#      run: go test -timeout 30m -v ./... -coverprofile=coverage.txt -covermode=atomic -coverpkg=./...
-      run: go test -timeout 30m -v ./...
+      run: go test -timeout 30m -v ./... -coverprofile=coverage.txt -covermode=atomic -coverpkg=./...
       env:
         # MySQL
         MYSQL_URI: mysql://root:password@tcp(localhost:${{ job.services.mysql.ports[3306] }})/
@@ -120,8 +119,9 @@ jobs:
         S3_ACCESS_KEY_ID: rustfsadmin
         S3_SECRET_ACCESS_KEY: rustfsadmin
 
-#    - name: Upload
-#      run: bash <(curl -s https://codecov.io/bash)
+    - name: Upload
+      if: matrix.os == 'ubuntu-latest'
+      run: bash <(curl -s https://codecov.io/bash)
 
   unit_test_macos:
     name: unit tests (macos-latest)

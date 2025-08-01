@@ -17,7 +17,6 @@
 package floats
 
 import (
-	"strings"
 	"unsafe"
 
 	"golang.org/x/sys/cpu"
@@ -38,8 +37,11 @@ func init() {
 }
 
 func (feature Feature) String() string {
-	var features []string
-	return strings.Join(features, "+")
+	if feature == V {
+		return "RVV"
+	} else {
+		return "RV"
+	}
 }
 
 func (feature Feature) mulConstAddTo(a []float32, b float32, c []float32, dst []float32) {
