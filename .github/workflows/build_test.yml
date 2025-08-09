@@ -290,7 +290,7 @@ jobs:
           --health-cmd="redis-cli -p 6666 ping"
           --health-interval=10s
           --health-timeout=5s
-          --health-retries=3
+          --health-retries=5
 
     steps:
       - name: Install pre-requisites
