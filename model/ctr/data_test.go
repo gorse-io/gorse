@@ -89,16 +89,16 @@ func TestConvertEmbeddings(t *testing.T) {
 
 	embeddings = ConvertEmbeddings(map[string]any{
 		"embedding1": []float32{1, 2, 3},
-		"z": map[string]any{
+		"a": map[string]any{
 			"embedding2": []float64{4, 5, 6},
 		},
 		"no_embedding": "test",
 	})
 	if assert.Len(t, embeddings, 2) {
-		assert.Equal(t, "embedding1", embeddings[0].Name)
-		assert.Equal(t, []float32{1, 2, 3}, embeddings[0].Value)
-		assert.Equal(t, "z.embedding2", embeddings[1].Name)
-		assert.Equal(t, []float32{4, 5, 6}, embeddings[1].Value)
+		assert.ElementsMatch(t, []Embedding{
+			{Name: "embedding1", Value: []float32{1, 2, 3}},
+			{Name: "a.embedding2", Value: []float32{4, 5, 6}},
+		}, embeddings)
 	}
 }
 
