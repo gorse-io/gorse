@@ -282,6 +282,11 @@ jobs:
         env:
           MYSQL_ROOT_PASSWORD: password
 
+      kvrocks:
+        image: kvrocks/kvrocks:nightly
+        ports:
+          - 6666
+
     steps:
       - name: Install pre-requisites
         uses: awalsh128/cache-apt-pkgs-action@latest
@@ -306,6 +311,11 @@ jobs:
         run: go test ./storage/data -run TestMySQL
         env:
           MYSQL_URI: mysql://root:password@tcp(localhost:${{ job.services.mariadb.ports[3306] }})/
+
+      - name: Test Kvrocks
+        run: go test ./storage/cache -run ^TestRedis
+        env:
+          REDIS_URI: redis://localhost:${{ job.services.kvrocks.ports[6666] }}/
 
       - name: Test Redis cluster (1 address)
         run: go test ./storage/cache -run ^TestRedis
