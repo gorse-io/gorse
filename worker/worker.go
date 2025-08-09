@@ -942,12 +942,12 @@ func (w *Worker) rankByClickTroughRate(user *data.User, candidates [][]string, i
 	// rank by CTR
 	topItems := make([]cache.Score, 0, len(items))
 	if batchPredictor, ok := predictor.(ctr.BatchInference); ok {
-		inputs := make([]lo.Tuple4[string, string, []ctr.Feature, []ctr.Feature], len(items))
+		inputs := make([]lo.Tuple4[string, string, []ctr.Label, []ctr.Label], len(items))
 		for i, item := range items {
 			inputs[i].A = user.UserId
 			inputs[i].B = item.ItemId
-			inputs[i].C = ctr.ConvertLabelsToFeatures(user.Labels)
-			inputs[i].D = ctr.ConvertLabelsToFeatures(item.Labels)
+			inputs[i].C = ctr.ConvertLabels(user.Labels)
+			inputs[i].D = ctr.ConvertLabels(item.Labels)
 		}
 		output := batchPredictor.BatchPredict(inputs)
 		for i, score := range output {
@@ -960,7 +960,7 @@ func (w *Worker) rankByClickTroughRate(user *data.User, candidates [][]string, i
 		for _, item := range items {
 			topItems = append(topItems, cache.Score{
 				Id:    item.ItemId,
-				Score: float64(predictor.Predict(user.UserId, item.ItemId, ctr.ConvertLabelsToFeatures(user.Labels), ctr.ConvertLabelsToFeatures(item.Labels))),
+				Score: float64(predictor.Predict(user.UserId, item.ItemId, ctr.ConvertLabels(user.Labels), ctr.ConvertLabels(item.Labels))),
 			})
 		}
 	}
@@ -1242,7 +1242,7 @@ func (w *Worker) replacement(recommend map[string][]cache.Score, user *data.User
 			// 3. Otherwise, give a random score.
 			var score float64
 			if w.Config.Recommend.Offline.EnableClickThroughPrediction && w.ClickModel != nil {
-				score = float64(w.ClickModel.Predict(user.UserId, itemId, ctr.ConvertLabelsToFeatures(user.Labels), ctr.ConvertLabelsToFeatures(item.Labels)))
+				score = float64(w.ClickModel.Predict(user.UserId, itemId, ctr.ConvertLabels(user.Labels), ctr.ConvertLabels(item.Labels)))
 			} else if w.CollaborativeFilteringModel != nil && !w.CollaborativeFilteringModel.Invalid() && w.CollaborativeFilteringModel.IsUserPredictable(w.CollaborativeFilteringModel.GetUserIndex().Id(user.UserId)) {
 				score = float64(w.CollaborativeFilteringModel.Predict(user.UserId, itemId))
 			} else {

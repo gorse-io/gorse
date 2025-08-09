@@ -102,14 +102,14 @@ func (config *FitConfig) LoadDefaultIfNil() *FitConfig {
 
 type FactorizationMachine interface {
 	model.Model
-	Predict(userId, itemId string, userFeatures, itemFeatures []Feature) float32
+	Predict(userId, itemId string, userFeatures, itemFeatures []Label) float32
 	InternalPredict(x []int32, values []float32) float32
 	Fit(ctx context.Context, trainSet, testSet dataset.CTRSplit, config *FitConfig) Score
 	Marshal(w io.Writer) error
 }
 
 type BatchInference interface {
-	BatchPredict(inputs []lo.Tuple4[string, string, []Feature, []Feature]) []float32
+	BatchPredict(inputs []lo.Tuple4[string, string, []Label, []Label]) []float32
 	BatchInternalPredict(x []lo.Tuple2[[]int32, []float32]) []float32
 }
 
@@ -174,7 +174,7 @@ func (fm *FM) SetParams(params model.Params) {
 	fm.optimizer = fm.Params.GetString(model.Optimizer, model.Adam)
 }
 
-func (fm *FM) Predict(userId, itemId string, userFeatures, itemFeatures []Feature) float32 {
+func (fm *FM) Predict(userId, itemId string, userFeatures, itemFeatures []Label) float32 {
 	var features []int32
 	var values []float32
 	// encode user
@@ -674,7 +674,7 @@ func (fm *FactorizationMachines) Parameters() []*nn.Tensor {
 	return params
 }
 
-func (fm *FactorizationMachines) Predict(_, _ string, _, _ []Feature) float32 {
+func (fm *FactorizationMachines) Predict(_, _ string, _, _ []Label) float32 {
 	panic("Predict is unsupported for deep learning models")
 }
 
@@ -695,7 +695,7 @@ func (fm *FactorizationMachines) BatchInternalPredict(x []lo.Tuple2[[]int32, []f
 	return predictions[:len(x)]
 }
 
-func (fm *FactorizationMachines) BatchPredict(inputs []lo.Tuple4[string, string, []Feature, []Feature]) []float32 {
+func (fm *FactorizationMachines) BatchPredict(inputs []lo.Tuple4[string, string, []Label, []Label]) []float32 {
 	x := make([]lo.Tuple2[[]int32, []float32], len(inputs))
 	for i, input := range inputs {
 		// encode user

@@ -764,7 +764,7 @@ func (m mockFactorizationMachine) Invalid() bool {
 	return false
 }
 
-func (m mockFactorizationMachine) Predict(_, itemId string, _, _ []ctr.Feature) float32 {
+func (m mockFactorizationMachine) Predict(_, itemId string, _, _ []ctr.Label) float32 {
 	score, err := strconv.Atoi(itemId)
 	if err != nil {
 		panic(err)
