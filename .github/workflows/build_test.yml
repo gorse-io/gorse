@@ -283,14 +283,9 @@ jobs:
           MYSQL_ROOT_PASSWORD: password
 
       kvrocks:
-        image: kvrocks/kvrocks:nightly
+        image: apache/kvrocks:nightly
         ports:
           - 6666
-        options: >-
-          --health-cmd="redis-cli -p 6666 ping"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
 
     steps:
       - name: Install pre-requisites
