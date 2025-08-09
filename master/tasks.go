@@ -354,8 +354,7 @@ func (m *Master) LoadDataFromDatabase(
 	itemTTL, positiveFeedbackTTL uint,
 	evaluator *OnlineEvaluator,
 	nonPersonalizedRecommenders []*logics.NonPersonalized,
-) (clickDataset *ctr.Dataset, dataSet *dataset.Dataset, err error) {
-	var rankingDataset *cf.DataSet
+) (ctrDataset *ctr.Dataset, dataSet *dataset.Dataset, err error) {
 	// Estimate the number of users, items, and feedbacks
 	estimatedNumUsers, err := m.DataClient.CountUsers(context.Background())
 	if err != nil {
@@ -387,23 +386,23 @@ func (m *Master) LoadDataFromDatabase(
 		temp := time.Now().AddDate(0, 0, -int(positiveFeedbackTTL))
 		feedbackTimeLimit = data.WithBeginTime(temp)
 	}
-	rankingDataset = cf.NewMapIndexDataset()
 
 	// STEP 1: pull users
 	userLabelCount := make(map[string]int)
 	userLabelFirst := make(map[string]int32)
 	userLabelIndex := base.NewMapIndex()
+	userLabels := make([][]lo.Tuple2[int32, float32], 0, estimatedNumUsers)
 	start := time.Now()
 	userChan, errChan := database.GetUserStream(newCtx, batchSize)
 	for users := range userChan {
 		for _, user := range users {
 			dataSet.AddUser(user)
 			userIndex := dataSet.GetUserDict().Id(user.UserId)
-			if len(rankingDataset.UserFeatures) == int(userIndex) {
-				rankingDataset.UserFeatures = append(rankingDataset.UserFeatures, nil)
+			if len(userLabels) == int(userIndex) {
+				userLabels = append(userLabels, nil)
 			}
-			features := ctr.ConvertLabelsToFeatures(user.Labels)
-			rankingDataset.UserFeatures[userIndex] = make([]lo.Tuple2[int32, float32], 0, len(features))
+			features := ctr.ConvertLabels(user.Labels)
+			userLabels[userIndex] = make([]lo.Tuple2[int32, float32], 0, len(features))
 			for _, feature := range features {
 				userLabelCount[feature.Name]++
 				// Memorize the first occurrence.
@@ -414,14 +413,14 @@ func (m *Master) LoadDataFromDatabase(
 				if userLabelCount[feature.Name] == 2 {
 					userLabelIndex.Add(feature.Name)
 					firstUserIndex := userLabelFirst[feature.Name]
-					rankingDataset.UserFeatures[firstUserIndex] = append(rankingDataset.UserFeatures[firstUserIndex], lo.Tuple2[int32, float32]{
+					userLabels[firstUserIndex] = append(userLabels[firstUserIndex], lo.Tuple2[int32, float32]{
 						A: userLabelIndex.ToNumber(feature.Name),
 						B: feature.Value,
 					})
 				}
 				// Add the label to the user.
 				if userLabelCount[feature.Name] > 1 {
-					rankingDataset.UserFeatures[userIndex] = append(rankingDataset.UserFeatures[userIndex], lo.Tuple2[int32, float32]{
+					userLabels[userIndex] = append(userLabels[userIndex], lo.Tuple2[int32, float32]{
 						A: userLabelIndex.ToNumber(feature.Name),
 						B: feature.Value,
 					})
@@ -444,6 +443,10 @@ func (m *Master) LoadDataFromDatabase(
 	itemLabelCount := make(map[string]int)
 	itemLabelFirst := make(map[string]int32)
 	itemLabelIndex := base.NewMapIndex()
+	itemLabels := make([][]lo.Tuple2[int32, float32], 0, estimatedNumItems)
+	itemEmbeddingIndexer := base.NewMapIndex()
+	itemEmbeddingDimension := make([]map[int]int, 0)
+	itemEmbeddings := make([][][]float32, 0, estimatedNumItems)
 	start = time.Now()
 	itemChan, errChan := database.GetItemStream(newCtx, batchSize, itemTimeLimit)
 	for batchItems := range itemChan {
@@ -451,12 +454,16 @@ func (m *Master) LoadDataFromDatabase(
 		for _, item := range batchItems {
 			dataSet.AddItem(item)
 			itemIndex := dataSet.GetItemDict().Id(item.ItemId)
-			if len(rankingDataset.ItemFeatures) == int(itemIndex) {
-				rankingDataset.ItemFeatures = append(rankingDataset.ItemFeatures, nil)
+			if len(itemLabels) == int(itemIndex) {
+				itemLabels = append(itemLabels, nil)
 			}
-			features := ctr.ConvertLabelsToFeatures(item.Labels)
-			rankingDataset.ItemFeatures[itemIndex] = make([]lo.Tuple2[int32, float32], 0, len(features))
-			for _, feature := range features {
+			if len(itemEmbeddings) == int(itemIndex) {
+				itemEmbeddings = append(itemEmbeddings, nil)
+			}
+			// load labels
+			labels := ctr.ConvertLabels(item.Labels)
+			itemLabels[itemIndex] = make([]lo.Tuple2[int32, float32], 0, len(labels))
+			for _, feature := range labels {
 				itemLabelCount[feature.Name]++
 				// Memorize the first occurrence.
 				if itemLabelCount[feature.Name] == 1 {
@@ -466,18 +473,33 @@ func (m *Master) LoadDataFromDatabase(
 				if itemLabelCount[feature.Name] == 2 {
 					itemLabelIndex.Add(feature.Name)
 					firstItemIndex := itemLabelFirst[feature.Name]
-					rankingDataset.ItemFeatures[firstItemIndex] = append(rankingDataset.ItemFeatures[firstItemIndex], lo.Tuple2[int32, float32]{
+					itemLabels[firstItemIndex] = append(itemLabels[firstItemIndex], lo.Tuple2[int32, float32]{
 						A: itemLabelIndex.ToNumber(feature.Name),
 						B: feature.Value,
 					})
 				}
 				// Add the label to the item.
 				if itemLabelCount[feature.Name] > 1 {
-					rankingDataset.ItemFeatures[itemIndex] = append(rankingDataset.ItemFeatures[itemIndex], lo.Tuple2[int32, float32]{
+					itemLabels[itemIndex] = append(itemLabels[itemIndex], lo.Tuple2[int32, float32]{
 						A: itemLabelIndex.ToNumber(feature.Name),
 						B: feature.Value,
 					})
 				}
+			}
+			// load embeddings
+			embeddings := ctr.ConvertEmbeddings(item.Labels)
+			itemEmbeddings[itemIndex] = make([][]float32, 0, len(embeddings))
+			for _, embedding := range embeddings {
+				itemEmbeddingIndexer.Add(embedding.Name)
+				itemEmbeddingIndex := itemEmbeddingIndexer.ToNumber(embedding.Name)
+				for len(itemEmbeddings[itemIndex]) <= int(itemEmbeddingIndex) {
+					itemEmbeddings[itemIndex] = append(itemEmbeddings[itemIndex], nil)
+				}
+				itemEmbeddings[itemIndex][itemEmbeddingIndex] = embedding.Value
+				for len(itemEmbeddingDimension) <= int(itemEmbeddingIndex) {
+					itemEmbeddingDimension = append(itemEmbeddingDimension, make(map[int]int))
+				}
+				itemEmbeddingDimension[itemEmbeddingIndex][len(itemEmbeddings[itemIndex][itemEmbeddingIndex])]++
 			}
 		}
 		span.Add(len(batchItems))
@@ -638,18 +660,38 @@ func (m *Master) LoadDataFromDatabase(
 		zap.Duration("used_time", time.Since(start)))
 	LoadDatasetStepSecondsVec.WithLabelValues("load_negative_feedback").Set(time.Since(start).Seconds())
 
-	// STEP 5: create click dataset
+	// STEP 5: create click-through rate dataset
 	start = time.Now()
 	unifiedIndex := base.NewUnifiedMapIndexBuilder()
 	unifiedIndex.ItemIndex = dataSet.GetItemDict().ToIndex()
 	unifiedIndex.UserIndex = dataSet.GetUserDict().ToIndex()
 	unifiedIndex.ItemLabelIndex = itemLabelIndex
 	unifiedIndex.UserLabelIndex = userLabelIndex
-	clickDataset = &ctr.Dataset{
-		Index:        unifiedIndex.Build(),
-		UserFeatures: rankingDataset.UserFeatures,
-		ItemFeatures: rankingDataset.ItemFeatures,
+	ctrDataset = &ctr.Dataset{
+		Index:      unifiedIndex.Build(),
+		UserLabels: userLabels,
+		ItemLabels: itemLabels,
+		Users:      make([]int32, 0, estimatedNumFeedbacks),
+		Items:      make([]int32, 0, estimatedNumFeedbacks),
+		Target:     make([]float32, 0, estimatedNumFeedbacks),
 	}
+	ctrDataset.ItemEmbeddingIndex = itemEmbeddingIndexer
+	ctrDataset.ItemEmbeddingDimension = make([]int, len(itemEmbeddingDimension))
+	for i, dimension := range itemEmbeddingDimension {
+		for dim, cnt := range dimension {
+			if cnt > itemEmbeddingDimension[i][ctrDataset.ItemEmbeddingDimension[i]] {
+				ctrDataset.ItemEmbeddingDimension[i] = dim
+			}
+		}
+	}
+	for i, embeddings := range itemEmbeddings {
+		for j, embedding := range embeddings {
+			if len(embedding) != ctrDataset.ItemEmbeddingDimension[j] {
+				itemEmbeddings[i][j] = nil
+			}
+		}
+	}
+	ctrDataset.ItemEmbeddings = itemEmbeddings
 	for userIndex := range positiveSet {
 		if positiveSet[userIndex].Cardinality() == 0 || negativeSet[userIndex].Cardinality() == 0 {
 			// release positive set and negative set
@@ -659,28 +701,28 @@ func (m *Master) LoadDataFromDatabase(
 		}
 		// insert positive feedback
 		for _, itemIndex := range positiveSet[userIndex].ToSlice() {
-			clickDataset.Users.Append(int32(userIndex))
-			clickDataset.Items.Append(itemIndex)
-			clickDataset.Target.Append(1)
-			clickDataset.PositiveCount++
+			ctrDataset.Users = append(ctrDataset.Users, int32(userIndex))
+			ctrDataset.Items = append(ctrDataset.Items, itemIndex)
+			ctrDataset.Target = append(ctrDataset.Target, 1)
+			ctrDataset.PositiveCount++
 		}
 		// insert negative feedback
 		for _, itemIndex := range negativeSet[userIndex].ToSlice() {
-			clickDataset.Users.Append(int32(userIndex))
-			clickDataset.Items.Append(itemIndex)
-			clickDataset.Target.Append(-1)
-			clickDataset.NegativeCount++
+			ctrDataset.Users = append(ctrDataset.Users, int32(userIndex))
+			ctrDataset.Items = append(ctrDataset.Items, itemIndex)
+			ctrDataset.Target = append(ctrDataset.Target, -1)
+			ctrDataset.NegativeCount++
 		}
 		// release positive set and negative set
 		positiveSet[userIndex] = nil
 		negativeSet[userIndex] = nil
 	}
 	log.Logger().Debug("created ranking dataset",
-		zap.Int("n_valid_positive", clickDataset.PositiveCount),
-		zap.Int("n_valid_negative", clickDataset.NegativeCount),
+		zap.Int("n_valid_positive", ctrDataset.PositiveCount),
+		zap.Int("n_valid_negative", ctrDataset.NegativeCount),
 		zap.Duration("used_time", time.Since(start)))
 	LoadDatasetStepSecondsVec.WithLabelValues("create_ranking_dataset").Set(time.Since(start).Seconds())
-	return clickDataset, dataSet, nil
+	return ctrDataset, dataSet, nil
 }
 
 func (m *Master) updateItemToItem(dataset *dataset.Dataset) error {

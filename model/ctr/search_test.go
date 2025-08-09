@@ -60,7 +60,7 @@ func (m *mockFactorizationMachineForSearch) Fit(_ context.Context, _, _ dataset.
 	return Score{AUC: score}
 }
 
-func (m *mockFactorizationMachineForSearch) Predict(_, _ string, _, _ []Feature) float32 {
+func (m *mockFactorizationMachineForSearch) Predict(_, _ string, _, _ []Label) float32 {
 	panic("don't call me")
 }
 
