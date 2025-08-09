@@ -62,10 +62,10 @@ func (r *Redis) Init() error {
 			&redis.FieldSchema{FieldName: "collection", FieldType: redis.SearchFieldTypeTag},
 			&redis.FieldSchema{FieldName: "subset", FieldType: redis.SearchFieldTypeTag},
 			&redis.FieldSchema{FieldName: "id", FieldType: redis.SearchFieldTypeTag},
-			&redis.FieldSchema{FieldName: "score", FieldType: redis.SearchFieldTypeNumeric, Sortable: true},
+			&redis.FieldSchema{FieldName: "score", FieldType: redis.SearchFieldTypeNumeric},
 			&redis.FieldSchema{FieldName: "is_hidden", FieldType: redis.SearchFieldTypeNumeric},
 			&redis.FieldSchema{FieldName: "categories", FieldType: redis.SearchFieldTypeTag, Separator: ";"},
-			&redis.FieldSchema{FieldName: "timestamp", FieldType: redis.SearchFieldTypeNumeric, Sortable: true},
+			&redis.FieldSchema{FieldName: "timestamp", FieldType: redis.SearchFieldTypeNumeric},
 		).Result()
 		if err != nil {
 			return errors.Trace(err)
