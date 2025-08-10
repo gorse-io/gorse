@@ -84,7 +84,7 @@ func (m *Master) loadDataset() (*ctr.Dataset, *dataset.Dataset, error) {
 		zap.Uint("item_ttl", m.Config.Recommend.DataSource.ItemTTL),
 		zap.Uint("feedback_ttl", m.Config.Recommend.DataSource.PositiveFeedbackTTL))
 	evaluator := NewOnlineEvaluator()
-	clickDataset, dataSet, err := m.LoadDataFromDatabase(ctx, m.DataClient,
+	ctrDataset, dataSet, err := m.LoadDataFromDatabase(ctx, m.DataClient,
 		m.Config.Recommend.DataSource.PositiveFeedbackTypes,
 		m.Config.Recommend.DataSource.ReadFeedbackTypes,
 		m.Config.Recommend.DataSource.ItemTTL,
@@ -117,6 +117,9 @@ func (m *Master) loadDataset() (*ctr.Dataset, *dataset.Dataset, error) {
 	if err = m.CacheClient.AddTimeSeriesPoints(ctx, []cache.TimeSeriesPoint{
 		{Name: cache.NumUsers, Value: float64(dataSet.CountUsers()), Timestamp: dataSet.GetTimestamp()},
 		{Name: cache.NumItems, Value: float64(dataSet.CountItems()), Timestamp: dataSet.GetTimestamp()},
+		{Name: cache.NumFeedback, Value: float64(len(ctrDataset.Target)), Timestamp: dataSet.GetTimestamp()},
+		{Name: cache.NumPosFeedbacks, Value: float64(ctrDataset.PositiveCount), Timestamp: dataSet.GetTimestamp()},
+		{Name: cache.NumNegFeedbacks, Value: float64(ctrDataset.NegativeCount), Timestamp: dataSet.GetTimestamp()},
 	}); err != nil {
 		log.Logger().Error("failed to write timeseries points", zap.Error(err))
 	}
@@ -132,21 +135,21 @@ func (m *Master) loadDataset() (*ctr.Dataset, *dataset.Dataset, error) {
 	if err = m.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.NumTotalPosFeedbacks), dataSet.CountFeedback())); err != nil {
 		log.Logger().Error("failed to write number of positive feedbacks", zap.Error(err))
 	}
-	UserLabelsTotal.Set(float64(clickDataset.Index.CountUserLabels()))
-	if err = m.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.NumUserLabels), int(clickDataset.Index.CountUserLabels()))); err != nil {
+	UserLabelsTotal.Set(float64(ctrDataset.Index.CountUserLabels()))
+	if err = m.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.NumUserLabels), int(ctrDataset.Index.CountUserLabels()))); err != nil {
 		log.Logger().Error("failed to write number of user labels", zap.Error(err))
 	}
-	ItemLabelsTotal.Set(float64(clickDataset.Index.CountItemLabels()))
-	if err = m.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.NumItemLabels), int(clickDataset.Index.CountItemLabels()))); err != nil {
+	ItemLabelsTotal.Set(float64(ctrDataset.Index.CountItemLabels()))
+	if err = m.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.NumItemLabels), int(ctrDataset.Index.CountItemLabels()))); err != nil {
 		log.Logger().Error("failed to write number of item labels", zap.Error(err))
 	}
 	ImplicitFeedbacksTotal.Set(float64(dataSet.CountFeedback()))
-	PositiveFeedbacksTotal.Set(float64(clickDataset.PositiveCount))
-	if err = m.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.NumValidPosFeedbacks), clickDataset.PositiveCount)); err != nil {
+	PositiveFeedbacksTotal.Set(float64(ctrDataset.PositiveCount))
+	if err = m.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.NumValidPosFeedbacks), ctrDataset.PositiveCount)); err != nil {
 		log.Logger().Error("failed to write number of positive feedbacks", zap.Error(err))
 	}
-	NegativeFeedbackTotal.Set(float64(clickDataset.NegativeCount))
-	if err = m.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.NumValidNegFeedbacks), clickDataset.NegativeCount)); err != nil {
+	NegativeFeedbackTotal.Set(float64(ctrDataset.NegativeCount))
+	if err = m.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.NumValidNegFeedbacks), ctrDataset.NegativeCount)); err != nil {
 		log.Logger().Error("failed to write number of negative feedbacks", zap.Error(err))
 	}
 
@@ -194,15 +197,15 @@ func (m *Master) loadDataset() (*ctr.Dataset, *dataset.Dataset, error) {
 	// split click dataset
 	startTime = time.Now()
 	m.clickDataMutex.Lock()
-	m.clickTrainSet, m.clickTestSet = clickDataset.Split(0.2, 0)
-	clickDataset = nil
+	m.clickTrainSet, m.clickTestSet = ctrDataset.Split(0.2, 0)
+	ctrDataset = nil
 	m.clickDataMutex.Unlock()
 	LoadDatasetStepSecondsVec.WithLabelValues("split_click_dataset").Set(time.Since(startTime).Seconds())
 	MemoryInUseBytesVec.WithLabelValues("ranking_train_set").Set(float64(sizeof.DeepSize(m.clickTrainSet)))
 	MemoryInUseBytesVec.WithLabelValues("ranking_test_set").Set(float64(sizeof.DeepSize(m.clickTestSet)))
 
 	LoadDatasetTotalSeconds.Set(time.Since(initialStartTime).Seconds())
-	return clickDataset, dataSet, nil
+	return ctrDataset, dataSet, nil
 }
 
 // runLoadDatasetTask loads dataset.
@@ -642,10 +645,7 @@ func (m *Master) LoadDataFromDatabase(
 				if itemIndex == base.NotId {
 					continue
 				}
-				if !positiveSet[userIndex].Contains(itemIndex) {
-					negativeSet[userIndex].Add(itemIndex)
-				}
-
+				negativeSet[userIndex].Add(itemIndex)
 				mu.Lock()
 				negativeFeedbackCount++
 				evaluator.Read(userIndex, itemIndex, f.Timestamp)
@@ -699,12 +699,6 @@ func (m *Master) LoadDataFromDatabase(
 	}
 	ctrDataset.ItemEmbeddings = itemEmbeddings
 	for userIndex := range positiveSet {
-		if positiveSet[userIndex].Cardinality() == 0 || negativeSet[userIndex].Cardinality() == 0 {
-			// release positive set and negative set
-			positiveSet[userIndex] = nil
-			negativeSet[userIndex] = nil
-			continue
-		}
 		// insert positive feedback
 		for _, itemIndex := range positiveSet[userIndex].ToSlice() {
 			ctrDataset.Users = append(ctrDataset.Users, int32(userIndex))
