@@ -114,6 +114,13 @@ func (m *Master) CreateWebService() {
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
 		Returns(http.StatusOK, "OK", map[string][]cache.TimeSeriesPoint{}).
 		Writes(map[string][]cache.TimeSeriesPoint{}))
+	ws.Route(ws.GET("/dashboard/timeseries/{name}").To(m.getTimeseries).
+		Doc("Get time series data.").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
+		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
+		Param(ws.PathParameter("name", "name of the time series").DataType("string")).
+		Returns(http.StatusOK, "OK", map[string][]cache.TimeSeriesPoint{}).
+		Writes(map[string][]cache.TimeSeriesPoint{}))
 	// Get a user
 	ws.Route(ws.GET("/dashboard/user/{user-id}").To(m.getUser).
 		Doc("Get a user.").
@@ -642,6 +649,52 @@ func (m *Master) getRates(request *restful.Request, response *restful.Response) 
 		}
 	}
 	server.Ok(response, measurements)
+}
+
+func (m *Master) getTimeseries(request *restful.Request, response *restful.Response) {
+	ctx := context.Background()
+	if request != nil && request.Request != nil {
+		ctx = request.Request.Context()
+	}
+	// get time series name
+	name := request.PathParameter("name")
+	// get begin time
+	beginStr := request.QueryParameter("begin")
+	if beginStr == "" {
+		beginStr = time.Now().Add(-7 * 24 * time.Hour).Format(time.RFC3339)
+	}
+	begin, err := dateparse.ParseAny(beginStr)
+	if err != nil {
+		server.BadRequest(response, err)
+		return
+	}
+	// get end time
+	endStr := request.QueryParameter("end")
+	if endStr == "" {
+		endStr = time.Now().Format(time.RFC3339)
+	}
+	end, err := dateparse.ParseAny(endStr)
+	if err != nil {
+		server.BadRequest(response, err)
+		return
+	}
+	// get duration
+	durationStr := request.QueryParameter("duration")
+	if durationStr == "" {
+		durationStr = "24h"
+	}
+	duration, err := time.ParseDuration(durationStr)
+	if err != nil {
+		server.BadRequest(response, err)
+		return
+	}
+	// get time series data
+	data, err := m.CacheClient.GetTimeSeriesPoints(ctx, cache.Key(name), begin, end, duration)
+	if err != nil {
+		server.InternalServerError(response, err)
+		return
+	}
+	server.Ok(response, data)
 }
 
 type UserIterator struct {

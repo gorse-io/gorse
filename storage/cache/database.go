@@ -83,6 +83,9 @@ const (
 	DataImported               = "data_imported"
 	NumUsers                   = "num_users"
 	NumItems                   = "num_items"
+	NumFeedback                = "num_feedback"
+	NumPosFeedbacks            = "num_pos_feedbacks"
+	NumNegFeedbacks            = "num_neg_feedbacks"
 	NumUserLabels              = "num_user_labels"
 	NumItemLabels              = "num_item_labels"
 	NumTotalPosFeedbacks       = "num_total_pos_feedbacks"
@@ -93,6 +96,9 @@ const (
 	LastUpdateLatestItemsTime  = "last_update_latest_items_time"  // the latest timestamp that latest items were updated
 	LastUpdatePopularItemsTime = "last_update_popular_items_time" // the latest timestamp that popular items were updated
 	MatchingIndexRecall        = "matching_index_recall"
+	CFNDCG                     = "cf_ndcg"
+	CFPrecision                = "cf_precision"
+	CFRecall                   = "cf_recall"
 )
 
 var ItemCache = []string{

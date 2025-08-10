@@ -18,8 +18,9 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	_ "modernc.org/sqlite"
 	"time"
+
+	_ "modernc.org/sqlite"
 )
 
 type SQLite struct {
@@ -107,7 +108,7 @@ DELETE FROM nodes WHERE update_time < datetime('now', ?)
 
 func (s *SQLite) Put(key, value string) error {
 	_, err := s.db.Exec(`
-INSERT INTO key_values (key, value) VALUES (?, ?)
+INSERT INTO key_values (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value
 `, key, value)
 	return err
 }
