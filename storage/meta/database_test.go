@@ -15,8 +15,9 @@
 package meta
 
 import (
-	"github.com/stretchr/testify/suite"
 	"time"
+
+	"github.com/stretchr/testify/suite"
 )
 
 type baseTestSuite struct {
@@ -82,6 +83,13 @@ func (suite *baseTestSuite) TestKeyValues() {
 	value, err = suite.Database.Get("key3")
 	suite.NoError(err)
 	suite.Equal("value3", *value)
+
+	// Test overwrite
+	err = suite.Database.Put("key1", "new_value1")
+	suite.NoError(err)
+	value, err = suite.Database.Get("key1")
+	suite.NoError(err)
+	suite.Equal("new_value1", *value)
 
 	// Test non-existing key
 	value, err = suite.Database.Get("non-existing-key")

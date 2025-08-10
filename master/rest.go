@@ -658,8 +658,38 @@ func (m *Master) getTimeseries(request *restful.Request, response *restful.Respo
 	}
 	// get time series name
 	name := request.PathParameter("name")
+	// get begin time
+	beginStr := request.QueryParameter("begin")
+	if beginStr == "" {
+		beginStr = time.Now().Add(-7 * 24 * time.Hour).Format(time.RFC3339)
+	}
+	begin, err := dateparse.ParseAny(beginStr)
+	if err != nil {
+		server.BadRequest(response, err)
+		return
+	}
+	// get end time
+	endStr := request.QueryParameter("end")
+	if endStr == "" {
+		endStr = time.Now().Format(time.RFC3339)
+	}
+	end, err := dateparse.ParseAny(endStr)
+	if err != nil {
+		server.BadRequest(response, err)
+		return
+	}
+	// get duration
+	durationStr := request.QueryParameter("duration")
+	if durationStr == "" {
+		durationStr = "24h"
+	}
+	duration, err := time.ParseDuration(durationStr)
+	if err != nil {
+		server.BadRequest(response, err)
+		return
+	}
 	// get time series data
-	data, err := m.CacheClient.GetTimeSeriesPoints(ctx, cache.Key(name), time.Now().Add(-7*24*time.Hour), time.Now(), 24*time.Hour)
+	data, err := m.CacheClient.GetTimeSeriesPoints(ctx, cache.Key(name), begin, end, duration)
 	if err != nil {
 		server.InternalServerError(response, err)
 		return

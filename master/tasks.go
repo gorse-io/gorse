@@ -1037,6 +1037,16 @@ func (m *Master) trainCollaborativeFiltering(trainSet, testSet dataset.CFSplit) 
 			zap.Float32("recall", score.Recall),
 			zap.Float32("precision", score.Precision))
 	}
+
+	// update statistics
+	if err = m.CacheClient.AddTimeSeriesPoints(context.Background(), []cache.TimeSeriesPoint{
+		{Name: cache.CFNDCG, Value: float64(score.NDCG), Timestamp: time.Now()},
+		{Name: cache.CFPrecision, Value: float64(score.Precision), Timestamp: time.Now()},
+		{Name: cache.CFRecall, Value: float64(score.Recall), Timestamp: time.Now()},
+	}); err != nil {
+		log.Logger().Error("failed to write time series points", zap.Error(err))
+		return nil
+	}
 	return nil
 }
 

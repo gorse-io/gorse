@@ -96,6 +96,9 @@ const (
 	LastUpdateLatestItemsTime  = "last_update_latest_items_time"  // the latest timestamp that latest items were updated
 	LastUpdatePopularItemsTime = "last_update_popular_items_time" // the latest timestamp that popular items were updated
 	MatchingIndexRecall        = "matching_index_recall"
+	CFNDCG                     = "cf_ndcg"
+	CFPrecision                = "cf_precision"
+	CFRecall                   = "cf_recall"
 )
 
 var ItemCache = []string{
