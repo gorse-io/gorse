@@ -36,12 +36,6 @@ import (
 	"modernc.org/mathutil"
 )
 
-const (
-	beta1 float32 = 0.9
-	beta2 float32 = 0.999
-	eps   float32 = 1e-8
-)
-
 type Score struct {
 	RMSE      float32
 	Precision float32
