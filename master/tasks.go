@@ -1141,6 +1141,14 @@ func (m *Master) trainClickThroughRatePrediction(trainSet, testSet *ctr.Dataset)
 			zap.Float32("auc", score.AUC),
 			zap.Any("params", m.ClickModel.GetParams()))
 	}
+
+	// update statistics
+	if err = m.CacheClient.AddTimeSeriesPoints(context.Background(), []cache.TimeSeriesPoint{
+		{Name: cache.CTRAUC, Value: float64(score.AUC), Timestamp: time.Now()},
+	}); err != nil {
+		log.Logger().Error("failed to write time series points", zap.Error(err))
+		return err
+	}
 	return nil
 }
 

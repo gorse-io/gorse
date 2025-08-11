@@ -76,7 +76,7 @@ type Worker struct {
 	*config.Settings
 
 	// spawned rankers
-	rankers []ctr.FactorizationMachine
+	rankers []ctr.FactorizationMachines
 
 	// worker config
 	jobs       int
@@ -132,7 +132,7 @@ func NewWorker(
 	tlsConfig *util.TLSConfig,
 ) *Worker {
 	return &Worker{
-		rankers:       make([]ctr.FactorizationMachine, jobs),
+		rankers:       make([]ctr.FactorizationMachines, jobs),
 		Settings:      config.NewSettings(),
 		randGenerator: base.NewRand(time.Now().UTC().UnixNano()),
 		// config
@@ -918,7 +918,7 @@ func (w *Worker) rankByCollaborativeFiltering(userId string, candidates [][]stri
 }
 
 // rankByClickTroughRate ranks items by predicted click-through-rate.
-func (w *Worker) rankByClickTroughRate(user *data.User, candidates [][]string, itemCache *ItemCache, predictor ctr.FactorizationMachine) ([]cache.Score, error) {
+func (w *Worker) rankByClickTroughRate(user *data.User, candidates [][]string, itemCache *ItemCache, predictor ctr.FactorizationMachines) ([]cache.Score, error) {
 	// concat candidates
 	memo := mapset.NewSet[string]()
 	var itemIds []string

@@ -33,7 +33,7 @@ import (
 // ParamsSearchResult contains the return of grid search.
 type ParamsSearchResult struct {
 	BestScore  Score
-	BestModel  FactorizationMachine
+	BestModel  FactorizationMachines
 	BestParams model.Params
 	BestIndex  int
 	Scores     []Score
@@ -41,7 +41,7 @@ type ParamsSearchResult struct {
 }
 
 // GridSearchCV finds the best parameters for a model.
-func GridSearchCV(ctx context.Context, estimator FactorizationMachine, trainSet, testSet dataset.CTRSplit, paramGrid model.ParamsGrid,
+func GridSearchCV(ctx context.Context, estimator FactorizationMachines, trainSet, testSet dataset.CTRSplit, paramGrid model.ParamsGrid,
 	_ int64, fitConfig *FitConfig) ParamsSearchResult {
 	// Retrieve parameter names and length
 	paramNames := make([]model.ParamName, 0, len(paramGrid))
@@ -91,7 +91,7 @@ func GridSearchCV(ctx context.Context, estimator FactorizationMachine, trainSet,
 }
 
 // RandomSearchCV searches hyper-parameters by random.
-func RandomSearchCV(ctx context.Context, estimator FactorizationMachine, trainSet, testSet dataset.CTRSplit, paramGrid model.ParamsGrid,
+func RandomSearchCV(ctx context.Context, estimator FactorizationMachines, trainSet, testSet dataset.CTRSplit, paramGrid model.ParamsGrid,
 	numTrials int, seed int64, fitConfig *FitConfig) ParamsSearchResult {
 	// if the number of combination is less than number of trials, use grid search
 	if paramGrid.NumCombinations() <= numTrials {
@@ -132,21 +132,21 @@ func RandomSearchCV(ctx context.Context, estimator FactorizationMachine, trainSe
 
 // ModelSearcher is a thread-safe click model searcher.
 type ModelSearcher struct {
-	model FactorizationMachine
+	model FactorizationMachines
 	// arguments
 	numEpochs  int
 	numTrials  int
 	searchSize bool
 	// results
 	bestMutex sync.Mutex
-	bestModel FactorizationMachine
+	bestModel FactorizationMachines
 	bestScore Score
 }
 
 // NewModelSearcher creates a thread-safe personal ranking model searcher.
 func NewModelSearcher(nEpoch, nTrials int, searchSize bool) *ModelSearcher {
 	return &ModelSearcher{
-		model:      NewFM(model.Params{model.NEpochs: nEpoch}),
+		model:      NewFMV2(model.Params{model.NEpochs: nEpoch}),
 		numTrials:  nTrials,
 		numEpochs:  nEpoch,
 		searchSize: searchSize,
@@ -154,7 +154,7 @@ func NewModelSearcher(nEpoch, nTrials int, searchSize bool) *ModelSearcher {
 }
 
 // GetBestModel returns the best click model with its score.
-func (searcher *ModelSearcher) GetBestModel() (FactorizationMachine, Score) {
+func (searcher *ModelSearcher) GetBestModel() (FactorizationMachines, Score) {
 	searcher.bestMutex.Lock()
 	defer searcher.bestMutex.Unlock()
 	return searcher.bestModel, searcher.bestScore
