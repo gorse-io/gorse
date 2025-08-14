@@ -57,7 +57,6 @@ func Parallel(nJobs, nWorkers int, worker func(workerId, jobId int) error) error
 			wg.Go(func() {
 				workerId := j
 				defer base.CheckPanic()
-				defer wg.Done()
 				for {
 					// read job
 					jobId, ok := <-c

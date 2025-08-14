@@ -35,7 +35,6 @@ func (p *ConcurrentPool) Run(runner func()) {
 		p.pool <- struct{}{}
 		defer func() {
 			<-p.pool
-			p.wg.Done()
 		}()
 		runner()
 	})

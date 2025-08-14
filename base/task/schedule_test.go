@@ -53,13 +53,11 @@ func TestDynamicJobsAllocator(t *testing.T) {
 	barrier := make(chan struct{})
 	var wg sync.WaitGroup
 	wg.Go(func() {
-		defer wg.Done()
 		barrier <- struct{}{}
 		d := s.GetJobsAllocator("d")
 		assert.Equal(t, 4, d.AvailableJobs())
 	})
 	wg.Go(func() {
-		defer wg.Done()
 		barrier <- struct{}{}
 		e := s.GetJobsAllocator("e")
 		e.Init()
