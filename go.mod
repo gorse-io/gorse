@@ -1,6 +1,6 @@
 module github.com/gorse-io/gorse
 
-go 1.24.6
+go 1.25
 
 require (
 	github.com/XSAM/otelsql v0.35.0

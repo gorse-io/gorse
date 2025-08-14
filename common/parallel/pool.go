@@ -31,15 +31,14 @@ func NewConcurrentPool(size int) *ConcurrentPool {
 }
 
 func (p *ConcurrentPool) Run(runner func()) {
-	p.wg.Add(1)
-	go func() {
+	p.wg.Go(func() {
 		p.pool <- struct{}{}
 		defer func() {
 			<-p.pool
 			p.wg.Done()
 		}()
 		runner()
-	}()
+	})
 }
 
 func (p *ConcurrentPool) Wait() {

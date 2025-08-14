@@ -51,11 +51,11 @@ func Parallel(nJobs, nWorkers int, worker func(workerId, jobId int) error) error
 		}()
 		// consumer
 		var wg sync.WaitGroup
-		wg.Add(nWorkers)
 		errs := make([]error, nJobs)
 		for j := 0; j < nWorkers; j++ {
 			// start workers
-			go func(workerId int) {
+			wg.Go(func() {
+				workerId := j
 				defer base.CheckPanic()
 				defer wg.Done()
 				for {
@@ -70,7 +70,7 @@ func Parallel(nJobs, nWorkers int, worker func(workerId, jobId int) error) error
 						return
 					}
 				}
-			}(j)
+			})
 		}
 		wg.Wait()
 		// check errors
@@ -99,15 +99,13 @@ func For(nJobs, nWorkers int, worker func(int)) {
 		}()
 		// consumer
 		var wg sync.WaitGroup
-		wg.Add(nWorkers)
 		for j := 0; j < nWorkers; j++ {
 			// start workers
-			go func(workerId int) {
-				defer wg.Done()
+			wg.Go(func() {
 				for jobId := range c {
 					worker(jobId)
 				}
-			}(j)
+			})
 		}
 		wg.Wait()
 	}
@@ -133,12 +131,11 @@ func BatchParallel(nJobs, nWorkers, batchSize int, worker func(workerId, beginJo
 	}()
 	// consumer
 	var wg sync.WaitGroup
-	wg.Add(nWorkers)
 	errs := make([]error, nJobs)
 	for j := 0; j < nWorkers; j++ {
 		// start workers
-		go func(workerId int) {
-			defer wg.Done()
+		wg.Go(func() {
+			workerId := j
 			for {
 				// read job
 				job, ok := <-c
@@ -151,7 +148,7 @@ func BatchParallel(nJobs, nWorkers, batchSize int, worker func(workerId, beginJo
 					return
 				}
 			}
-		}(j)
+		})
 	}
 	wg.Wait()
 	// check errors

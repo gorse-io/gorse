@@ -72,14 +72,12 @@ func (s *SGD) Step() {
 		b := s.b[:len(p.data)]
 		parts := partitionAligned(len(p.data), s.jobs, 32)
 		var wg sync.WaitGroup
-		// TODO: Replace with wg.Go in Go 1.25
-		wg.Add(len(parts))
 		for _, part := range parts {
-			go func(i, j int) {
-				defer wg.Done()
+			i, j := part.A, part.B
+			wg.Go(func() {
 				floats.MulConstAddTo(p.data[i:j], s.wd, p.grad.data[i:j], b[i:j])
 				floats.MulConstAdd(b[i:j], -s.lr, p.data[i:j])
-			}(part.A, part.B)
+			})
 		}
 		wg.Wait()
 	}
@@ -135,10 +133,9 @@ func (a *Adam) Step() {
 		parts := partitionAligned(len(p.data), a.jobs, 32)
 		var wg sync.WaitGroup
 		// TODO: Replace with wg.Go in Go 1.25
-		wg.Add(len(parts))
 		for _, part := range parts {
-			go func(i, j int) {
-				defer wg.Done()
+			i, j := part.A, part.B
+			wg.Go(func() {
 				// grad = grad + wd * param.data
 				floats.MulConstAddTo(p.data[i:j], a.wd, p.grad.data[i:j], b1[i:j])
 				// m += (1 - beta1) * (grad - m)
@@ -153,7 +150,7 @@ func (a *Adam) Step() {
 				floats.AddConst(b2[i:j], a.eps)
 				floats.DivTo(m.data[i:j], b2[i:j], b1[i:j])
 				floats.MulConstAdd(b1[i:j], -lr, p.data[i:j])
-			}(part.A, part.B)
+			})
 		}
 		wg.Wait()
 	}
