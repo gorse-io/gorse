@@ -110,7 +110,7 @@ func (s *sigmoidLayer) Forward(x *Tensor) *Tensor {
 	return Sigmoid(x)
 }
 
-func (e *sigmoidLayer) SetJobs(int) {}
+func (s *sigmoidLayer) SetJobs(int) {}
 
 type reluLayer struct{}
 
