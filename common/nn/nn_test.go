@@ -224,7 +224,7 @@ func accuracy(prediction, target *Tensor) float32 {
 }
 
 func TestMNIST(t *testing.T) {
-	if !(runtime.GOOS == "darwin" && runtime.GOARCH == "arm64") && !cpu.X86.HasAVX512F {
+	if (runtime.GOOS != "darwin" || runtime.GOARCH != "arm64") && !cpu.X86.HasAVX512F {
 		// Since the test takes a long time, we run the test only in development environment.
 		// 1. Mac with Apple Silicon.
 		// 2. x86 CPU with AVX512 support.

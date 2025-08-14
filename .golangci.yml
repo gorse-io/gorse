@@ -1,11 +1,19 @@
-run:
-  go: 1.18
-
-linters-settings:
-  govet:
-    disable:
-      - composites
-  staticcheck:
-    checks:
-      - all
-      - "-SA1019"
+version: "2"
+linters:
+  settings:
+    govet:
+      disable:
+        - composites
+    staticcheck:
+      checks:
+        - all
+        - -QF1004
+        - -QF1008
+        - -SA1019
+        - -ST1003
+  exclusions:
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling

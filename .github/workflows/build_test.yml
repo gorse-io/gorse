@@ -326,6 +326,6 @@ jobs:
         with:
           go-version-file: ./go.mod
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v2
+        uses: golangci/golangci-lint-action@v8
         with:
           args: --timeout 20m

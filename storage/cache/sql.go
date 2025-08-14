@@ -573,7 +573,8 @@ func (db *SQLDatabase) AddTimeSeriesPoints(ctx context.Context, points []TimeSer
 
 func (db *SQLDatabase) GetTimeSeriesPoints(ctx context.Context, name string, begin, end time.Time, duration time.Duration) ([]TimeSeriesPoint, error) {
 	var points []TimeSeriesPoint
-	if db.driver == Postgres {
+	switch db.driver {
+	case Postgres:
 		if err := db.gormDB.WithContext(ctx).
 			Raw(fmt.Sprintf("SELECT name, bucket_timestamp AS timestamp, value FROM ("+
 				"SELECT *, TO_TIMESTAMP((EXTRACT(epoch FROM timestamp)::int / ?) * ?) AS bucket_timestamp,"+
@@ -583,7 +584,7 @@ func (db *SQLDatabase) GetTimeSeriesPoints(ctx context.Context, name string, beg
 			Scan(&points).Error; err != nil {
 			return nil, errors.Trace(err)
 		}
-	} else if db.driver == MySQL {
+	case MySQL:
 		if err := db.gormDB.WithContext(ctx).
 			Raw(fmt.Sprintf("SELECT name, bucket_timestamp AS timestamp, value FROM("+
 				"SELECT *, FROM_UNIXTIME(FLOOR(UNIX_TIMESTAMP(timestamp) / ?) * ?) AS bucket_timestamp,"+
@@ -593,7 +594,7 @@ func (db *SQLDatabase) GetTimeSeriesPoints(ctx context.Context, name string, beg
 			Scan(&points).Error; err != nil {
 			return nil, errors.Trace(err)
 		}
-	} else if db.driver == SQLite {
+	case SQLite:
 		rows, err := db.gormDB.WithContext(ctx).
 			Raw(fmt.Sprintf("select name, bucket_timestamp as timestamp, value from ("+
 				"select *, datetime(strftime('%%s', substr(timestamp, 0, 20)) / ? * ?, 'unixepoch') as bucket_timestamp,"+

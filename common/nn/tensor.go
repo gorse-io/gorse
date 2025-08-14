@@ -497,12 +497,9 @@ func (t *Tensor) matMul(other *Tensor, transpose1, transpose2 bool, jobs int) *T
 		m, n, k = t.shape[0], other.shape[1], t.shape[1]
 		result = make([]float32, m*n)
 		for _, p := range partition(m, jobs) {
-			// TODO: Replace with wg.Go in Go 1.25
-			wg.Add(1)
-			go func(part lo.Tuple2[int, int]) {
-				defer wg.Done()
-				floats.MM(transpose1, transpose2, part.B-part.A, n, k, t.data[part.A*k:], k, other.data, n, result[part.A*n:], n)
-			}(p)
+			wg.Go(func() {
+				floats.MM(transpose1, transpose2, p.B-p.A, n, k, t.data[p.A*k:], k, other.data, n, result[p.A*n:], n)
+			})
 		}
 	} else if transpose1 && !transpose2 {
 		if t.shape[0] != other.shape[0] {
@@ -511,12 +508,9 @@ func (t *Tensor) matMul(other *Tensor, transpose1, transpose2 bool, jobs int) *T
 		m, n, k = t.shape[1], other.shape[1], t.shape[0]
 		result = make([]float32, m*n)
 		for _, p := range partition(m, jobs) {
-			// TODO: Replace with wg.Go in Go 1.25
-			wg.Add(1)
-			go func(part lo.Tuple2[int, int]) {
-				defer wg.Done()
-				floats.MM(transpose1, transpose2, part.B-part.A, n, k, t.data[part.A:], m, other.data, n, result[part.A*n:], n)
-			}(p)
+			wg.Go(func() {
+				floats.MM(transpose1, transpose2, p.B-p.A, n, k, t.data[p.A:], m, other.data, n, result[p.A*n:], n)
+			})
 		}
 	} else if !transpose1 && transpose2 {
 		if t.shape[1] != other.shape[1] {
@@ -525,12 +519,9 @@ func (t *Tensor) matMul(other *Tensor, transpose1, transpose2 bool, jobs int) *T
 		m, n, k = t.shape[0], other.shape[0], t.shape[1]
 		result = make([]float32, m*n)
 		for _, p := range partition(m, jobs) {
-			// TODO: Replace with wg.Go in Go 1.25
-			wg.Add(1)
-			go func(part lo.Tuple2[int, int]) {
-				defer wg.Done()
-				floats.MM(transpose1, transpose2, part.B-part.A, n, k, t.data[part.A*k:], k, other.data, k, result[part.A*n:], n)
-			}(p)
+			wg.Go(func() {
+				floats.MM(transpose1, transpose2, p.B-p.A, n, k, t.data[p.A*k:], k, other.data, k, result[p.A*n:], n)
+			})
 		}
 	} else {
 		if t.shape[0] != other.shape[1] {
@@ -539,12 +530,9 @@ func (t *Tensor) matMul(other *Tensor, transpose1, transpose2 bool, jobs int) *T
 		m, n, k = t.shape[1], other.shape[0], t.shape[0]
 		result = make([]float32, m*n)
 		for _, p := range partition(m, jobs) {
-			// TODO: Replace with wg.Go in Go 1.25
-			wg.Add(1)
-			go func(part lo.Tuple2[int, int]) {
-				defer wg.Done()
-				floats.MM(transpose1, transpose2, part.B-part.A, n, k, t.data[part.A:], m, other.data, k, result[part.A*n:], n)
-			}(p)
+			wg.Go(func() {
+				floats.MM(transpose1, transpose2, p.B-p.A, n, k, t.data[p.A:], m, other.data, k, result[p.A*n:], n)
+			})
 		}
 	}
 	wg.Wait()
