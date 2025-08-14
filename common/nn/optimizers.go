@@ -132,7 +132,6 @@ func (a *Adam) Step() {
 
 		parts := partitionAligned(len(p.data), a.jobs, 32)
 		var wg sync.WaitGroup
-		// TODO: Replace with wg.Go in Go 1.25
 		for _, part := range parts {
 			i, j := part.A, part.B
 			wg.Go(func() {

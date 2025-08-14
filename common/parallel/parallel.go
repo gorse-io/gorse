@@ -54,8 +54,8 @@ func Parallel(nJobs, nWorkers int, worker func(workerId, jobId int) error) error
 		errs := make([]error, nJobs)
 		for j := 0; j < nWorkers; j++ {
 			// start workers
+			workerId := j
 			wg.Go(func() {
-				workerId := j
 				defer base.CheckPanic()
 				for {
 					// read job
@@ -133,8 +133,8 @@ func BatchParallel(nJobs, nWorkers, batchSize int, worker func(workerId, beginJo
 	errs := make([]error, nJobs)
 	for j := 0; j < nWorkers; j++ {
 		// start workers
+		workerId := j
 		wg.Go(func() {
-			workerId := j
 			for {
 				// read job
 				job, ok := <-c
