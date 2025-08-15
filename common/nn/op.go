@@ -342,6 +342,34 @@ func (l *log) backward(dy *Tensor) []*Tensor {
 	return []*Tensor{dx}
 }
 
+type abs struct {
+	base
+}
+
+func (a *abs) String() string {
+	return "Abs"
+}
+
+func (a *abs) forward(inputs ...*Tensor) *Tensor {
+	y := inputs[0].clone()
+	for i := range y.data {
+		if y.data[i] < 0 {
+			y.data[i] = -y.data[i]
+		}
+	}
+	return y
+}
+
+func (a *abs) backward(dy *Tensor) []*Tensor {
+	dx := dy.clone()
+	for i := range dx.data {
+		if a.inputs[0].data[i] < 0 {
+			dx.data[i] = -dx.data[i]
+		}
+	}
+	return []*Tensor{dx}
+}
+
 type sum struct {
 	base
 }

@@ -339,6 +339,8 @@ func (fm *FMV2) Fit(ctx context.Context, trainSet, testSet dataset.CTRSplit, con
 		y = append(y, target)
 	}
 	indices, values, target := fm.convertToTensors(x, y)
+	posWeight := float32(trainSet.Count()) / 2 / float32(trainSet.CountPositive())
+	negWeight := float32(trainSet.Count()) / 2 / float32(trainSet.CountNegative())
 
 	var optimizer nn.Optimizer
 	switch fm.optimizer {
@@ -360,7 +362,8 @@ func (fm *FMV2) Fit(ctx context.Context, trainSet, testSet dataset.CTRSplit, con
 			batchValues := values.Slice(i, j)
 			batchTarget := target.Slice(i, j)
 			batchOutput := fm.Forward(batchIndices, batchValues, config.Jobs)
-			batchLoss := nn.BCEWithLogits(batchTarget, batchOutput)
+			batchWeights := fm.assignWeights(batchTarget, posWeight, negWeight)
+			batchLoss := nn.BCEWithLogits(batchTarget, batchOutput, batchWeights)
 			cost += batchLoss.Data()[0]
 			optimizer.ZeroGrad()
 			batchLoss.Backward()
@@ -468,4 +471,16 @@ func (fm *FMV2) convertToTensors(x []lo.Tuple2[[]int32, []float32], y []float32)
 		targetTensor = nn.NewTensor(alignedTarget, len(x))
 	}
 	return
+}
+
+func (fm *FMV2) assignWeights(target *nn.Tensor, pos, neg float32) *nn.Tensor {
+	weights := nn.Ones(target.Shape()...)
+	for i := range weights.Data() {
+		if target.Data()[i] > 0 {
+			weights.Data()[i] = pos
+		} else {
+			weights.Data()[i] = neg
+		}
+	}
+	return weights
 }
