@@ -160,7 +160,7 @@ func NewMaster(cfg *config.Config, cacheFolder string) *Master {
 				CacheClient:                   cache.NoDatabase{},
 				DataClient:                    data.NoDatabase{},
 				CollaborativeFilteringModel:   cf.NewBPR(nil),
-				ClickModel:                    ctr.NewFM(nil),
+				ClickModel:                    ctr.NewFMV2(nil),
 				CollaborativeFilteringModelId: 0,
 				ClickThroughRateModelId:       0,
 			},

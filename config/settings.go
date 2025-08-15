@@ -31,7 +31,7 @@ type Settings struct {
 	// recommendation models
 	CollaborativeFilteringModel   cf.MatrixFactorization
 	CollaborativeFilteringModelId int64
-	ClickModel                    ctr.FactorizationMachine
+	ClickModel                    ctr.FactorizationMachines
 	ClickThroughRateModelId       int64
 }
 

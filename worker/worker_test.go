@@ -601,8 +601,8 @@ func newMockMaster(t *testing.T) *mockMaster {
 
 	// create click model
 	train, test := newClickDataset()
-	fm := ctr.NewFM(model.Params{model.NEpochs: 0})
-	fm.Fit(context.Background(), train, test, nil)
+	fm := ctr.NewFMV2(model.Params{model.NEpochs: 0})
+	fm.Fit(context.Background(), train, test, &ctr.FitConfig{})
 	clickModelBuffer := bytes.NewBuffer(nil)
 	err := ctr.MarshalModel(clickModelBuffer, fm)
 	assert.NoError(t, err)
@@ -745,7 +745,7 @@ func TestWorker_SyncRecommend(t *testing.T) {
 }
 
 type mockFactorizationMachine struct {
-	ctr.BaseFactorizationMachine
+	ctr.BaseFactorizationMachines
 }
 
 func (m mockFactorizationMachine) Complexity() int {
@@ -851,7 +851,7 @@ func (suite *WorkerTestSuite) TestReplacement_ClickThroughRate() {
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "i", UserId: "0", ItemId: "8"}},
 	}, true, false, true)
 	suite.NoError(err)
-	suite.rankers = []ctr.FactorizationMachine{new(mockFactorizationMachine)}
+	suite.rankers = []ctr.FactorizationMachines{new(mockFactorizationMachine)}
 	suite.Recommend([]data.User{{UserId: "0"}})
 	// read recommend time
 	recommendTime, err := suite.CacheClient.Get(ctx, cache.Key(cache.LastUpdateUserRecommendTime, "0")).Time()

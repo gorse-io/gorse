@@ -99,6 +99,7 @@ const (
 	CFNDCG                     = "cf_ndcg"
 	CFPrecision                = "cf_precision"
 	CFRecall                   = "cf_recall"
+	CTRAUC                     = "ctr_auc"
 )
 
 var ItemCache = []string{

@@ -15,9 +15,10 @@
 package nn
 
 import (
+	"testing"
+
 	"github.com/chewxy/math32"
 	"github.com/stretchr/testify/assert"
-	"testing"
 )
 
 const (
@@ -287,6 +288,20 @@ func TestLog(t *testing.T) {
 	y = Log(x)
 	y.Backward()
 	dx := numericalDiff(Log, x)
+	allClose(t, x.grad, dx)
+}
+
+func TestAbs(t *testing.T) {
+	// (2,3) -> (2,3)
+	x := NewTensor([]float32{1, -2, 3, -4, 5, -6}, 2, 3)
+	y := Abs(x)
+	assert.Equal(t, []float32{1, 2, 3, 4, 5, 6}, y.data)
+
+	// Test gradient
+	x = Rand(2, 3)
+	y = Abs(x)
+	y.Backward()
+	dx := numericalDiff(Abs, x)
 	allClose(t, x.grad, dx)
 }
 
