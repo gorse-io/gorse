@@ -778,7 +778,7 @@ func (m *Master) getRecommend(request *restful.Request, response *restful.Respon
 	// parse arguments
 	recommender := request.PathParameter("recommender")
 	userId := request.PathParameter("user-id")
-	categories := server.ReadCategories(request)
+	categories := server.ReadCategories(request, []string{""})
 	n, err := server.ParseInt(request, "n", m.Config.Server.DefaultN)
 	if err != nil {
 		server.BadRequest(response, err)
@@ -908,7 +908,7 @@ func (m *Master) GetUser(score cache.Score) (any, error) {
 
 func (m *Master) getNonPersonalized(request *restful.Request, response *restful.Response) {
 	name := request.PathParameter("name")
-	categories := server.ReadCategories(request)
+	categories := server.ReadCategories(request, []string{""})
 	m.SetLastModified(request, response, cache.Key(cache.NonPersonalizedUpdateTime, name))
 	m.SearchDocuments(cache.NonPersonalized, name, categories, m.GetItem, request, response)
 }

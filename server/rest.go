@@ -689,14 +689,14 @@ func (s *RestServer) SearchDocuments(collection, subset string, categories []str
 }
 
 func (s *RestServer) getPopular(request *restful.Request, response *restful.Response) {
-	categories := ReadCategories(request)
+	categories := ReadCategories(request, []string{""})
 	log.ResponseLogger(response).Debug("get category popular items in category", zap.Strings("categories", categories))
 	s.SetLastModified(request, response, cache.Key(cache.NonPersonalizedUpdateTime, cache.Popular))
 	s.SearchDocuments(cache.NonPersonalized, cache.Popular, categories, nil, request, response)
 }
 
 func (s *RestServer) getLatest(request *restful.Request, response *restful.Response) {
-	categories := ReadCategories(request)
+	categories := ReadCategories(request, []string{""})
 	log.ResponseLogger(response).Debug("get category latest items in category", zap.Strings("categories", categories))
 	s.SetLastModified(request, response, cache.Key(cache.NonPersonalizedUpdateTime, cache.Latest))
 	s.SearchDocuments(cache.NonPersonalized, cache.Latest, categories, nil, request, response)
@@ -704,7 +704,7 @@ func (s *RestServer) getLatest(request *restful.Request, response *restful.Respo
 
 func (s *RestServer) getNonPersonalized(request *restful.Request, response *restful.Response) {
 	name := request.PathParameter("name")
-	categories := ReadCategories(request)
+	categories := ReadCategories(request, []string{""})
 	log.ResponseLogger(response).Debug("get leaderboard", zap.String("name", name))
 	s.SetLastModified(request, response, cache.Key(cache.NonPersonalizedUpdateTime, name))
 	s.SearchDocuments(cache.NonPersonalized, name, categories, nil, request, response)
@@ -762,7 +762,7 @@ func (s *RestServer) getFeedbackByItem(request *restful.Request, response *restf
 func (s *RestServer) getItemNeighbors(request *restful.Request, response *restful.Response) {
 	// Get item id
 	itemId := request.PathParameter("item-id")
-	categories := ReadCategories(request)
+	categories := ReadCategories(request, nil)
 	if len(s.Config.Recommend.ItemToItem) == 0 {
 		PageNotFound(response, errors.New("item-to-item recommendation is not enabled"))
 		return
@@ -791,7 +791,7 @@ func (s *RestServer) getUserNeighbors(request *restful.Request, response *restfu
 func (s *RestServer) getCollaborative(request *restful.Request, response *restful.Response) {
 	// Get user id
 	userId := request.PathParameter("user-id")
-	categories := ReadCategories(request)
+	categories := ReadCategories(request, nil)
 	s.SetLastModified(request, response, cache.Key(cache.OfflineRecommendUpdateTime, userId))
 	s.SearchDocuments(cache.OfflineRecommend, userId, categories, nil, request, response)
 }
@@ -1079,7 +1079,7 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 		BadRequest(response, err)
 		return
 	}
-	categories := ReadCategories(request)
+	categories := ReadCategories(request, []string{""})
 	offset, err := ParseInt(request, "offset", 0)
 	if err != nil {
 		BadRequest(response, err)
@@ -2057,12 +2057,12 @@ func withWildCard(categories []string) []string {
 }
 
 // ReadCategories tries to read categories from the request. If the category is not found, it returns an empty string.
-func ReadCategories(request *restful.Request) []string {
+func ReadCategories(request *restful.Request, defaultCategories []string) []string {
 	if pathValue := request.PathParameter("category"); pathValue != "" {
 		return []string{pathValue}
 	} else if queryValues := request.QueryParameters("category"); len(queryValues) > 0 {
 		return queryValues
 	} else {
-		return []string{""}
+		return defaultCategories
 	}
 }
