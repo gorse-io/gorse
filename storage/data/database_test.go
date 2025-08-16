@@ -380,6 +380,8 @@ func (suite *baseTestSuite) TestFeedback() {
 	// test override
 	err = suite.Database.BatchInsertFeedback(ctx, []Feedback{{
 		FeedbackKey: FeedbackKey{positiveFeedbackType, "0", "8"},
+		Value:       100,
+		Timestamp:   time.Date(1996, 4, 8, 0, 0, 0, 0, time.UTC),
 		Comment:     "override",
 	}}, true, true, true)
 	suite.NoError(err)
@@ -388,10 +390,14 @@ func (suite *baseTestSuite) TestFeedback() {
 	ret, err = suite.Database.GetUserFeedback(ctx, "0", lo.ToPtr(time.Now()), expression.MustParseFeedbackTypeExpression(positiveFeedbackType))
 	suite.NoError(err)
 	suite.Equal(1, len(ret))
+	suite.Equal(float64(100), ret[0].Value)
+	suite.Equal(time.Date(1996, 4, 8, 0, 0, 0, 0, time.UTC), ret[0].Timestamp)
 	suite.Equal("override", ret[0].Comment)
 	// test not overwrite
 	err = suite.Database.BatchInsertFeedback(ctx, []Feedback{{
 		FeedbackKey: FeedbackKey{positiveFeedbackType, "0", "8"},
+		Value:       80,
+		Timestamp:   time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
 		Comment:     "not_override",
 	}}, true, true, false)
 	suite.NoError(err)
@@ -400,7 +406,9 @@ func (suite *baseTestSuite) TestFeedback() {
 	ret, err = suite.Database.GetUserFeedback(ctx, "0", lo.ToPtr(time.Now()), expression.MustParseFeedbackTypeExpression(positiveFeedbackType))
 	suite.NoError(err)
 	suite.Equal(1, len(ret))
-	suite.Equal("override", ret[0].Comment)
+	suite.Equal(float64(180), ret[0].Value)
+	suite.Equal(time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), ret[0].Timestamp)
+	suite.Equal("not_override", ret[0].Comment)
 
 	// insert no feedback
 	err = suite.Database.BatchInsertFeedback(ctx, nil, true, true, true)

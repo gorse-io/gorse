@@ -969,10 +969,16 @@ func (d *SQLDatabase) BatchInsertFeedback(ctx context.Context, feedback []Feedba
 			switch d.driver {
 			case MySQL:
 				values["value"] = clause.Column{Raw: true, Name: "value + VALUES(value)"}
+				values["time_stamp"] = clause.Column{Raw: true, Name: "LEAST(time_stamp, VALUES(time_stamp))"}
+				values["comment"] = clause.Column{Raw: true, Name: "VALUES(comment)"}
 			case Postgres:
 				values["value"] = clause.Column{Raw: true, Name: fmt.Sprintf("%s.value + EXCLUDED.value", d.FeedbackTable())}
+				values["time_stamp"] = clause.Column{Raw: true, Name: fmt.Sprintf("LEAST(%s.time_stamp, EXCLUDED.time_stamp)", d.FeedbackTable())}
+				values["comment"] = clause.Column{Raw: true, Name: "EXCLUDED.comment"}
 			case SQLite:
 				values["value"] = clause.Column{Raw: true, Name: "value + excluded.value"}
+				values["time_stamp"] = clause.Column{Raw: true, Name: "MIN(time_stamp, excluded.time_stamp)"}
+				values["comment"] = clause.Column{Raw: true, Name: "excluded.comment"}
 			}
 			updates = clause.Assignments(values)
 		}
