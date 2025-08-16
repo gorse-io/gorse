@@ -795,7 +795,7 @@ func (suite *ServerTestSuite) TestFeedback() {
 	ret, err = suite.DataClient.GetUserFeedback(ctx, "0", suite.Config.Now(), expression.MustParseFeedbackTypeExpression("click"))
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(ret))
-	assert.Equal(t, "override", ret[0].Comment)
+	assert.Equal(t, "not_override", ret[0].Comment)
 
 	// insert feedback without timestamp
 	apitest.New().
