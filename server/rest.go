@@ -1764,6 +1764,7 @@ func (s *RestServer) deleteItemCategory(request *restful.Request, response *rest
 // Feedback is the data structure for the feedback but stores the timestamp using string.
 type Feedback struct {
 	data.FeedbackKey
+	Value     float64
 	Timestamp string
 	Comment   string
 }
@@ -1771,6 +1772,7 @@ type Feedback struct {
 func (f Feedback) ToDataFeedback() (data.Feedback, error) {
 	var feedback data.Feedback
 	feedback.FeedbackKey = f.FeedbackKey
+	feedback.Value = f.Value
 	feedback.Comment = f.Comment
 	if f.Timestamp != "" {
 		var err error
