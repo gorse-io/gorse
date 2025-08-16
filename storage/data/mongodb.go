@@ -648,11 +648,15 @@ func (db *MongoDB) BatchInsertFeedback(ctx context.Context, feedback []Feedback,
 				model.SetUpdate(bson.M{
 					"$setOnInsert": bson.M{
 						"feedbackkey": f.FeedbackKey,
-						"timestamp":   f.Timestamp,
-						"comment":     f.Comment,
 					},
 					"$inc": bson.M{
 						"value": f.Value,
+					},
+					"$min": bson.M{
+						"timestamp": f.Timestamp,
+					},
+					"$set": bson.M{
+						"comment": f.Comment,
 					},
 				})
 			}
