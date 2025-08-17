@@ -597,7 +597,7 @@ func (suite *MasterAPITestSuite) TestSearchDocumentsOfUsers() {
 func (suite *MasterAPITestSuite) TestFeedback() {
 	ctx := context.Background()
 	// insert feedback
-	feedback := []Feedback{
+	feedback := []DetailedFeedback{
 		{FeedbackType: "click", UserId: "0", Item: data.Item{ItemId: "0"}},
 		{FeedbackType: "click", UserId: "0", Item: data.Item{ItemId: "2"}},
 		{FeedbackType: "click", UserId: "0", Item: data.Item{ItemId: "4"}},

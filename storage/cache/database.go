@@ -99,6 +99,8 @@ const (
 	CFNDCG                     = "cf_ndcg"
 	CFPrecision                = "cf_precision"
 	CFRecall                   = "cf_recall"
+	CTRPrecision               = "ctr_precision"
+	CTRRecall                  = "ctr_recall"
 	CTRAUC                     = "ctr_auc"
 )
 
