@@ -135,8 +135,8 @@ func (m *Master) CreateWebService() {
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
 		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
 		Param(ws.PathParameter("feedback-type", "feedback type").DataType("string")).
-		Returns(http.StatusOK, "OK", []Feedback{}).
-		Writes([]Feedback{}))
+		Returns(http.StatusOK, "OK", []DetailedFeedback{}).
+		Writes([]DetailedFeedback{}))
 	// Get users
 	ws.Route(ws.GET("/dashboard/users").To(m.getUsers).
 		Doc("Get users.").
@@ -819,19 +819,34 @@ func (m *Master) getRecommend(request *restful.Request, response *restful.Respon
 		server.InternalServerError(response, err)
 		return
 	}
+
+	// Get item details
+	items, err := m.DataClient.BatchGetItems(ctx, lo.Map(results, func(id string, _ int) string {
+		return id
+	}))
+	if err != nil {
+		server.InternalServerError(response, err)
+		return
+	}
+	itemsMap := make(map[string]data.Item, len(items))
+	for _, item := range items {
+		itemsMap[item.ItemId] = item
+	}
+
 	// Send result
 	details := make([]data.Item, len(results))
 	for i := range results {
-		details[i], err = m.DataClient.GetItem(ctx, results[i])
-		if err != nil {
-			server.InternalServerError(response, err)
+		var exist bool
+		details[i], exist = itemsMap[results[i]]
+		if !exist {
+			server.InternalServerError(response, fmt.Errorf("item `%s` not found", results[i]))
 			return
 		}
 	}
 	server.Ok(response, details)
 }
 
-type Feedback struct {
+type DetailedFeedback struct {
 	FeedbackType string
 	UserId       string
 	Item         data.Item
@@ -872,7 +887,7 @@ func (m *Master) getTypedFeedbackByUser(request *restful.Request, response *rest
 		itemsMap[item.ItemId] = item
 	}
 
-	details := make([]Feedback, len(feedback))
+	details := make([]DetailedFeedback, len(feedback))
 	for i := range feedback {
 		details[i].FeedbackType = feedback[i].FeedbackType
 		details[i].UserId = feedback[i].UserId
