@@ -835,6 +835,7 @@ type Feedback struct {
 	FeedbackType string
 	UserId       string
 	Item         data.Item
+	Value        float64
 	Timestamp    time.Time
 	Comment      string
 }
@@ -857,18 +858,31 @@ func (m *Master) getTypedFeedbackByUser(request *restful.Request, response *rest
 		server.InternalServerError(response, err)
 		return
 	}
+
+	// Get item details
+	items, err := m.DataClient.BatchGetItems(ctx, lo.Map(feedback, func(f data.Feedback, _ int) string {
+		return f.ItemId
+	}))
+	if err != nil {
+		server.InternalServerError(response, err)
+		return
+	}
+	itemsMap := make(map[string]data.Item, len(items))
+	for _, item := range items {
+		itemsMap[item.ItemId] = item
+	}
+
 	details := make([]Feedback, len(feedback))
 	for i := range feedback {
 		details[i].FeedbackType = feedback[i].FeedbackType
 		details[i].UserId = feedback[i].UserId
+		details[i].Value = feedback[i].Value
 		details[i].Timestamp = feedback[i].Timestamp
 		details[i].Comment = feedback[i].Comment
-		details[i].Item, err = m.DataClient.GetItem(ctx, feedback[i].ItemId)
-		if errors.Is(err, errors.NotFound) {
+		var exist bool
+		details[i].Item, exist = itemsMap[feedback[i].ItemId]
+		if !exist {
 			details[i].Item = data.Item{ItemId: feedback[i].ItemId, Comment: "** This item doesn't exist in Gorse **"}
-		} else if err != nil {
-			server.InternalServerError(response, err)
-			return
 		}
 	}
 	server.Ok(response, details)
