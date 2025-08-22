@@ -32,6 +32,8 @@ import (
 type Store interface {
 	Open(name string) (io.ReadCloser, error)
 	Create(name string) (io.WriteCloser, chan struct{}, error)
+	List() ([]string, error)
+	Remove(name string) error
 }
 
 type MasterStoreServer struct {
@@ -101,14 +103,6 @@ func (s *MasterStoreServer) UploadBlob(stream grpc.ClientStreamingServer[protoco
 	return stream.SendAndClose(&protocol.UploadBlobResponse{})
 }
 
-func (s *MasterStoreServer) FetchBlob(ctx context.Context, request *protocol.FetchBlobRequest) (*protocol.FetchBlobResponse, error) {
-	fileInfo, err := os.Stat(path.Join(s.dir, request.Name))
-	if err != nil {
-		return nil, err
-	}
-	return &protocol.FetchBlobResponse{Timestamp: timestamppb.New(fileInfo.ModTime())}, nil
-}
-
 func (s *MasterStoreServer) DownloadBlob(request *protocol.DownloadBlobRequest, stream grpc.ServerStreamingServer[protocol.DownloadBlobResponse]) error {
 	// Open file
 	file, err := os.Open(path.Join(s.dir, request.Name))
@@ -137,6 +131,28 @@ func (s *MasterStoreServer) DownloadBlob(request *protocol.DownloadBlobRequest, 
 		}
 	}
 	return nil
+}
+
+func (s *MasterStoreServer) ListBlobs(ctx context.Context, request *protocol.ListBlobsRequest) (*protocol.ListBlobsResponse, error) {
+	files, err := os.ReadDir(s.dir)
+	if err != nil {
+		return nil, err
+	}
+	var names []string
+	for _, file := range files {
+		if !file.IsDir() {
+			names = append(names, file.Name())
+		}
+	}
+	return &protocol.ListBlobsResponse{Names: names}, nil
+}
+
+func (s *MasterStoreServer) RemoveBlob(ctx context.Context, request *protocol.RemoveBlobRequest) (*protocol.RemoveBlobResponse, error) {
+	err := os.Remove(path.Join(s.dir, request.Name))
+	if err != nil {
+		return nil, err
+	}
+	return &protocol.RemoveBlobResponse{}, nil
 }
 
 type MasterStoreClient struct {
@@ -205,4 +221,20 @@ func (c *MasterStoreClient) Create(name string) (io.WriteCloser, chan struct{}, 
 		}
 	}()
 	return pw, done, nil
+}
+
+func (c *MasterStoreClient) List() ([]string, error) {
+	resp, err := c.client.ListBlobs(context.Background(), &protocol.ListBlobsRequest{})
+	if err != nil {
+		return nil, err
+	}
+	return resp.Names, nil
+}
+
+func (c *MasterStoreClient) Remove(name string) error {
+	_, err := c.client.RemoveBlob(context.Background(), &protocol.RemoveBlobRequest{Name: name})
+	if err != nil {
+		return err
+	}
+	return nil
 }

@@ -105,16 +105,25 @@ message UploadBlobRequest {
 
 message UploadBlobResponse {}
 
-message FetchBlobRequest { string name = 1; }
-
-message FetchBlobResponse { google.protobuf.Timestamp timestamp = 1; }
-
 message DownloadBlobRequest { string name = 1; }
 
 message DownloadBlobResponse { bytes data = 1; }
 
+message ListBlobsRequest {}
+
+message ListBlobsResponse {
+  repeated string names = 1;
+}
+
+message RemoveBlobRequest {
+  string name = 1;
+}
+
+message RemoveBlobResponse {}
+
 service BlobStore {
   rpc UploadBlob(stream UploadBlobRequest) returns (UploadBlobResponse) {}
-  rpc FetchBlob(FetchBlobRequest) returns (FetchBlobResponse) {}
   rpc DownloadBlob(DownloadBlobRequest) returns (stream DownloadBlobResponse) {}
+  rpc ListBlobs(ListBlobsRequest) returns (ListBlobsResponse) {}
+  rpc RemoveBlob(RemoveBlobRequest) returns (RemoveBlobResponse) {}
 }

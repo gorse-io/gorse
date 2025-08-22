@@ -70,3 +70,29 @@ func (s *S3) Create(name string) (io.WriteCloser, chan struct{}, error) {
 	}()
 	return pw, done, nil
 }
+
+// List files in the S3 bucket with the specified prefix. This function returns a slice of file names.
+func (s *S3) List() ([]string, error) {
+	var names []string
+	for object := range s.Client.ListObjects(context.Background(), s.bucket, minio.ListObjectsOptions{
+		Prefix:    s.prefix,
+		Recursive: true,
+	}) {
+		if object.Err != nil {
+			return nil, object.Err
+		}
+		names = append(names, object.Key)
+	}
+	return names, nil
+}
+
+// Remove a file from the S3 bucket by its name. This function deletes the file from S3.
+func (s *S3) Remove(name string) error {
+	fullPath := filepath.Join(s.prefix, name)
+	err := s.Client.RemoveObject(context.Background(), s.bucket, fullPath, minio.RemoveObjectOptions{})
+	if err != nil {
+		log.Logger().Error("failed to remove file from S3", zap.String("file", fullPath), zap.Error(err))
+		return err
+	}
+	return nil
+}
