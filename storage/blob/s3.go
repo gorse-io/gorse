@@ -81,7 +81,11 @@ func (s *S3) List() ([]string, error) {
 		if object.Err != nil {
 			return nil, object.Err
 		}
-		names = append(names, object.Key)
+		name := object.Key[len(s.prefix):]
+		if len(name) > 0 && name[0] == '/' {
+			name = name[1:]
+		}
+		names = append(names, name)
 	}
 	return names, nil
 }
