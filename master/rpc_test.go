@@ -25,7 +25,7 @@ import (
 	"time"
 
 	"github.com/gorse-io/gorse/base"
-	"github.com/gorse-io/gorse/base/progress"
+	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/common/util"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/dataset"
@@ -135,10 +135,10 @@ func TestRPC(t *testing.T) {
 	client := protocol.NewMasterClient(conn)
 	ctx := context.Background()
 
-	progressList := []progress.Progress{{
+	progressList := []monitor.Progress{{
 		Tracer:     "tracer",
 		Name:       "a",
-		Status:     progress.StatusRunning,
+		Status:     monitor.StatusRunning,
 		Total:      12,
 		Count:      6,
 		StartTime:  time.Date(2018, time.January, 1, 0, 0, 0, 0, time.Local),
@@ -148,7 +148,7 @@ func TestRPC(t *testing.T) {
 	assert.NoError(t, err)
 	i, ok := rpcServer.remoteProgress.Load("tracer")
 	assert.True(t, ok)
-	remoteProgressList := i.([]progress.Progress)
+	remoteProgressList := i.([]monitor.Progress)
 	assert.Equal(t, progressList, remoteProgressList)
 
 	// test get meta

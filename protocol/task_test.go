@@ -18,18 +18,18 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gorse-io/gorse/base/progress"
+	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestEncodeDecode(t *testing.T) {
-	progressList := []progress.Progress{
+	progressList := []monitor.Progress{
 		{
 			Tracer:     "tracer",
 			Name:       "a",
 			Total:      100,
 			Count:      50,
-			Status:     progress.StatusRunning,
+			Status:     monitor.StatusRunning,
 			StartTime:  time.Date(2018, time.January, 1, 0, 0, 0, 0, time.Local),
 			FinishTime: time.Date(2018, time.January, 2, 0, 0, 0, 0, time.Local),
 		},
@@ -38,7 +38,7 @@ func TestEncodeDecode(t *testing.T) {
 			Name:       "b",
 			Total:      100,
 			Count:      50,
-			Status:     progress.StatusRunning,
+			Status:     monitor.StatusRunning,
 			StartTime:  time.Date(2018, time.January, 1, 0, 0, 0, 0, time.Local),
 			FinishTime: time.Date(2018, time.January, 2, 0, 0, 0, 0, time.Local),
 		},

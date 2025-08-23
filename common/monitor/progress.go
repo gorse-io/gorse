@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package progress
+package monitor
 
 import (
 	"context"
@@ -38,17 +38,17 @@ const (
 	StatusFailed    Status = "Failed"
 )
 
-type Tracer struct {
+type Monitor struct {
 	name  string
 	spans sync.Map
 }
 
-func NewTracer(name string) *Tracer {
-	return &Tracer{name: name}
+func NewTracer(name string) *Monitor {
+	return &Monitor{name: name}
 }
 
 // Start creates a root span.
-func (t *Tracer) Start(ctx context.Context, name string, total int) (context.Context, *Span) {
+func (t *Monitor) Start(ctx context.Context, name string, total int) (context.Context, *Span) {
 	span := &Span{
 		name:   name,
 		status: StatusRunning,
@@ -59,11 +59,13 @@ func (t *Tracer) Start(ctx context.Context, name string, total int) (context.Con
 	return context.WithValue(ctx, spanKeyName, span), span
 }
 
-func (t *Tracer) List() []Progress {
+func (t *Monitor) List() []Progress {
 	var progress []Progress
 	t.spans.Range(func(key, value interface{}) bool {
 		span := value.(*Span)
-		progress = append(progress, span.Progress())
+		p := span.Progress()
+		p.Tracer = t.name
+		progress = append(progress, p)
 		return true
 	})
 	// sort by start time

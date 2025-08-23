@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package progress
+package monitor
 
 import (
 	"testing"
@@ -22,11 +22,11 @@ import (
 
 type ProgressTestSuite struct {
 	suite.Suite
-	tracer Tracer
+	tracer Monitor
 }
 
 func (suite *ProgressTestSuite) SetupTest() {
-	suite.tracer = Tracer{}
+	suite.tracer = Monitor{}
 }
 
 func TestProgressTestSuite(t *testing.T) {

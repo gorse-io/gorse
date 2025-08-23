@@ -31,9 +31,9 @@ import (
 	"github.com/gorse-io/gorse/base"
 	"github.com/gorse-io/gorse/base/heap"
 	"github.com/gorse-io/gorse/base/log"
-	"github.com/gorse-io/gorse/base/progress"
 	"github.com/gorse-io/gorse/cmd/version"
 	"github.com/gorse-io/gorse/common/expression"
+	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/common/parallel"
 	"github.com/gorse-io/gorse/common/sizeof"
 	"github.com/gorse-io/gorse/common/util"
@@ -70,7 +70,7 @@ type ScheduleState struct {
 
 // Worker manages states of a worker node.
 type Worker struct {
-	tracer   *progress.Tracer
+	tracer   *monitor.Monitor
 	oneMode  bool
 	testMode bool
 	*config.Settings
@@ -418,7 +418,7 @@ func (w *Worker) Serve() {
 	}
 
 	// create progress tracer
-	w.tracer = progress.NewTracer(w.workerName)
+	w.tracer = monitor.NewTracer(w.workerName)
 
 	// connect to master
 	var opts []grpc.DialOption

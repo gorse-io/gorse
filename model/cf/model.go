@@ -29,8 +29,8 @@ import (
 	"github.com/gorse-io/gorse/base/copier"
 	"github.com/gorse-io/gorse/base/encoding"
 	"github.com/gorse-io/gorse/base/log"
-	"github.com/gorse-io/gorse/base/progress"
 	"github.com/gorse-io/gorse/common/floats"
+	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/common/parallel"
 	"github.com/gorse-io/gorse/dataset"
 	"github.com/gorse-io/gorse/model"
@@ -443,7 +443,7 @@ func (bpr *BPR) Fit(ctx context.Context, trainSet, valSet dataset.CFSplit, confi
 		zap.Float32(fmt.Sprintf("Precision@%v", config.TopK), scores[1]),
 		zap.Float32(fmt.Sprintf("Recall@%v", config.TopK), scores[2]))
 	// Training
-	_, span := progress.Start(ctx, "BPR.Fit", bpr.nEpochs)
+	_, span := monitor.Start(ctx, "BPR.Fit", bpr.nEpochs)
 	for epoch := 1; epoch <= bpr.nEpochs; epoch++ {
 		fitStart := time.Now()
 		// Training epoch
@@ -624,7 +624,7 @@ func (als *ALS) Fit(ctx context.Context, trainSet, valSet dataset.CFSplit, confi
 		zap.Float32(fmt.Sprintf("Precision@%v", config.TopK), scores[1]),
 		zap.Float32(fmt.Sprintf("Recall@%v", config.TopK), scores[2]))
 
-	_, span := progress.Start(ctx, "ALS.Fit", als.nEpochs)
+	_, span := monitor.Start(ctx, "ALS.Fit", als.nEpochs)
 	for ep := 1; ep <= als.nEpochs; ep++ {
 		fitStart := time.Now()
 		// Update user factors

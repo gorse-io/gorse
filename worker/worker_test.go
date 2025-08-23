@@ -31,8 +31,8 @@ import (
 	"github.com/bits-and-blooms/bitset"
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/gorse-io/gorse/base"
-	"github.com/gorse-io/gorse/base/progress"
 	"github.com/gorse-io/gorse/common/expression"
+	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/common/parallel"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/dataset"
@@ -58,7 +58,7 @@ type WorkerTestSuite struct {
 func (suite *WorkerTestSuite) SetupSuite() {
 	// open database
 	var err error
-	suite.tracer = progress.NewTracer("test")
+	suite.tracer = monitor.NewTracer("test")
 	suite.Settings = config.NewSettings()
 	suite.DataClient, err = data.Open(fmt.Sprintf("sqlite://%s/data.db", suite.T().TempDir()), "")
 	suite.NoError(err)

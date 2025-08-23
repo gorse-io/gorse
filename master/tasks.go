@@ -25,9 +25,9 @@ import (
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/gorse-io/gorse/base"
 	"github.com/gorse-io/gorse/base/log"
-	"github.com/gorse-io/gorse/base/progress"
 	"github.com/gorse-io/gorse/base/task"
 	"github.com/gorse-io/gorse/common/expression"
+	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/common/parallel"
 	"github.com/gorse-io/gorse/common/sizeof"
 	"github.com/gorse-io/gorse/config"
@@ -380,7 +380,7 @@ func (m *Master) LoadDataFromDatabase(
 
 	dataSet = dataset.NewDataset(time.Now(), estimatedNumUsers, estimatedNumItems)
 
-	newCtx, span := progress.Start(ctx, "LoadDataFromDatabase",
+	newCtx, span := monitor.Start(ctx, "LoadDataFromDatabase",
 		estimatedNumUsers+estimatedNumItems+estimatedNumFeedbacks)
 	defer span.End()
 
