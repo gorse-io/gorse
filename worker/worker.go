@@ -578,7 +578,7 @@ func (w *Worker) Recommend(users []data.User) {
 		user := users[jobId]
 		userId := user.UserId
 		// skip inactive users before max recommend period
-		if !w.checkUserActiveTime(ctx, userId) || !w.checkRecommendCacheOutOfDate(ctx, userId, itemCategories) {
+		if !w.checkUserActiveTime(ctx, userId) || !w.checkRecommendCacheOutOfDate(ctx, userId) {
 			fmt.Println("SKIP")
 			return nil
 		}
@@ -1081,7 +1081,7 @@ func (w *Worker) checkUserActiveTime(ctx context.Context, userId string) bool {
 }
 
 // checkRecommendCacheOutOfDate checks if recommend cache stale.
-func (w *Worker) checkRecommendCacheOutOfDate(ctx context.Context, userId string, categories []string) bool {
+func (w *Worker) checkRecommendCacheOutOfDate(ctx context.Context, userId string) bool {
 	var (
 		activeTime    time.Time
 		recommendTime time.Time
