@@ -62,3 +62,28 @@ func (p *POSIX) Create(name string) (io.WriteCloser, chan struct{}, error) {
 	}()
 	return pw, done, err
 }
+
+// List files in the directory. It returns a slice of file names.
+func (p *POSIX) List() ([]string, error) {
+	files, err := os.ReadDir(p.dir)
+	if err != nil {
+		return nil, err
+	}
+	var names []string
+	for _, file := range files {
+		if !file.IsDir() {
+			names = append(names, file.Name())
+		}
+	}
+	return names, nil
+}
+
+// Remove a file by its name. It deletes the file from the filesystem.
+func (p *POSIX) Remove(name string) error {
+	fullPath := path.Join(p.dir, name)
+	if err := os.Remove(fullPath); err != nil {
+		log.Logger().Error("failed to remove file", zap.String("file", fullPath), zap.Error(err))
+		return err
+	}
+	return nil
+}

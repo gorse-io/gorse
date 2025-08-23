@@ -40,4 +40,16 @@ func TestPOSIX(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "hello world", string(content))
 	assert.NoError(t, r.Close())
+
+	// list files
+	files, err := client.List()
+	assert.NoError(t, err)
+	assert.Contains(t, files, "test")
+
+	// remove the file
+	err = client.Remove("test")
+	assert.NoError(t, err)
+	files, err = client.List()
+	assert.NoError(t, err)
+	assert.NotContains(t, files, "test")
 }

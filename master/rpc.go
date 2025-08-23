@@ -50,12 +50,12 @@ func (m *Master) GetMeta(ctx context.Context, nodeInfo *protocol.NodeInfo) (*pro
 	}
 	m.collaborativeFilteringModelMutex.RUnlock()
 	// save click model version
-	m.clickModelMutex.RLock()
+	m.clickThroughRateModelMutex.RLock()
 	var clickThroughRateModelId int64
 	if m.ClickModel != nil && !m.ClickModel.Invalid() {
 		clickThroughRateModelId = m.ClickThroughRateModelId
 	}
-	m.clickModelMutex.RUnlock()
+	m.clickThroughRateModelMutex.RUnlock()
 	// collect nodes
 	workers := make([]string, 0)
 	servers := make([]string, 0)
