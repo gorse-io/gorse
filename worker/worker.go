@@ -103,7 +103,7 @@ type Worker struct {
 
 	latestCollaborativeFilteringModelId int64
 	latestClickThroughRateModelId       int64
-	matrixFactorization                 *logics.MatrixFactorization
+	matrixFactorizationRecommender      *logics.MatrixFactorization
 	randGenerator                       *rand.Rand
 
 	// peers
@@ -286,7 +286,6 @@ func (w *Worker) Pull() {
 					log.Logger().Error("failed to unmarshal collaborative filtering model", zap.Error(err))
 				} else {
 					w.CollaborativeFilteringModel = model
-					w.matrixFactorization = nil
 					w.CollaborativeFilteringModelId = w.latestCollaborativeFilteringModelId
 					log.Logger().Info("synced collaborative filtering model",
 						zap.Int64("version", w.CollaborativeFilteringModelId))
@@ -543,7 +542,7 @@ func (w *Worker) Recommend(users []data.User) {
 	}()
 
 	// build ranking index
-	if w.CollaborativeFilteringModel != nil && !w.CollaborativeFilteringModel.Invalid() && w.matrixFactorization == nil {
+	if w.CollaborativeFilteringModel != nil && !w.CollaborativeFilteringModel.Invalid() && w.matrixFactorizationRecommender == nil {
 		startTime := time.Now()
 		log.Logger().Info("start building ranking index")
 		itemIndex := w.CollaborativeFilteringModel.GetItemIndex()
@@ -554,7 +553,7 @@ func (w *Worker) Recommend(users []data.User) {
 				matrixFactorization.Add(item, w.CollaborativeFilteringModel.GetItemFactor(int32(i)))
 			}
 		}
-		w.matrixFactorization = matrixFactorization
+		w.matrixFactorizationRecommender = matrixFactorization
 		log.Logger().Info("complete building ranking index",
 			zap.Duration("build_time", time.Since(startTime)))
 	}
@@ -579,7 +578,8 @@ func (w *Worker) Recommend(users []data.User) {
 		user := users[jobId]
 		userId := user.UserId
 		// skip inactive users before max recommend period
-		if !w.checkUserActiveTime(ctx, userId) || !w.checkRecommendCacheTimeout(ctx, userId, itemCategories) {
+		if !w.checkUserActiveTime(ctx, userId) || !w.checkRecommendCacheOutOfDate(ctx, userId, itemCategories) {
+			fmt.Println("SKIP")
 			return nil
 		}
 		updateUserCount.Add(1)
@@ -618,7 +618,7 @@ func (w *Worker) Recommend(users []data.User) {
 			if userIndex := w.CollaborativeFilteringModel.GetUserIndex().Id(userId); w.CollaborativeFilteringModel.IsUserPredictable(int32(userIndex)) {
 				var recommend map[string][]string
 				var usedTime time.Duration
-				recommend, usedTime, err = w.collaborativeRecommendHNSW(w.matrixFactorization, userId, excludeSet, itemCache)
+				recommend, usedTime, err = w.collaborativeRecommendHNSW(w.matrixFactorizationRecommender, userId, excludeSet, itemCache)
 				if err != nil {
 					log.Logger().Error("failed to recommend by collaborative filtering",
 						zap.String("user_id", userId), zap.Error(err))
@@ -1080,28 +1080,25 @@ func (w *Worker) checkUserActiveTime(ctx context.Context, userId string) bool {
 	return false
 }
 
-// checkRecommendCacheTimeout checks if recommend cache stale.
-// 1. if cache is empty, stale.
-// 2. if active time > recommend time, stale.
-// 3. if recommend time + timeout < now, stale.
-func (w *Worker) checkRecommendCacheTimeout(ctx context.Context, userId string, categories []string) bool {
+// checkRecommendCacheOutOfDate checks if recommend cache stale.
+func (w *Worker) checkRecommendCacheOutOfDate(ctx context.Context, userId string, categories []string) bool {
 	var (
 		activeTime    time.Time
 		recommendTime time.Time
 		cacheDigest   string
 		err           error
 	)
-	// check cache
-	for _, category := range append([]string{""}, categories...) {
-		items, err := w.CacheClient.SearchScores(ctx, cache.OfflineRecommend, userId, []string{category}, 0, -1)
-		if err != nil {
-			log.Logger().Error("failed to load offline recommendation", zap.String("user_id", userId), zap.Error(err))
-			return true
-		} else if len(items) == 0 {
-			return true
-		}
+
+	// 1. If cache is empty, stale.
+	items, err := w.CacheClient.SearchScores(ctx, cache.OfflineRecommend, userId, nil, 0, -1)
+	if err != nil {
+		log.Logger().Error("failed to load offline recommendation", zap.String("user_id", userId), zap.Error(err))
+		return true
+	} else if len(items) == 0 {
+		return true
 	}
-	// read digest
+
+	// 2. If digest is empty or not match, stale.
 	cacheDigest, err = w.CacheClient.Get(ctx, cache.Key(cache.OfflineRecommendDigest, userId)).String()
 	if err != nil {
 		if !errors.Is(err, errors.NotFound) {
@@ -1112,15 +1109,16 @@ func (w *Worker) checkRecommendCacheTimeout(ctx context.Context, userId string, 
 	if cacheDigest != w.Config.OfflineRecommendDigest() {
 		return true
 	}
+
 	// read active time
 	activeTime, err = w.CacheClient.Get(ctx, cache.Key(cache.LastModifyUserTime, userId)).Time()
 	if err != nil {
 		if !errors.Is(err, errors.NotFound) {
 			log.Logger().Error("failed to read last modify user time", zap.Error(err))
 		}
-		return true
 	}
-	// read recommend time
+
+	// 3. If update time is empty, stale.
 	recommendTime, err = w.CacheClient.Get(ctx, cache.Key(cache.LastUpdateUserRecommendTime, userId)).Time()
 	if err != nil {
 		if !errors.Is(err, errors.NotFound) {
@@ -1128,11 +1126,13 @@ func (w *Worker) checkRecommendCacheTimeout(ctx context.Context, userId string, 
 		}
 		return true
 	}
-	// check cache expire
+
+	// 4. If update time + cache expire > current time, not stale.
 	if recommendTime.Before(time.Now().Add(-w.Config.Recommend.CacheExpire)) {
 		return true
 	}
-	// check time
+
+	// 5. If active time > recommend time, not stale.
 	if activeTime.Before(recommendTime) {
 		timeoutTime := recommendTime.Add(w.Config.Recommend.Offline.RefreshRecommendPeriod)
 		return timeoutTime.Before(time.Now())

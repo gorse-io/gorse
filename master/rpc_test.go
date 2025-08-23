@@ -87,7 +87,9 @@ func newMockMasterRPC(t *testing.T) *mockMasterRPC {
 					ClickThroughRateModelId:       456,
 				},
 			},
-			metaStore: metaStore,
+			metaStore:                  metaStore,
+			collaborativeFilteringMeta: meta.Model[cf.Score]{ID: 123},
+			clickThroughRateMeta:       meta.Model[ctr.Score]{ID: 456},
 		},
 		addr: make(chan string),
 	}
