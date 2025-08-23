@@ -1047,6 +1047,8 @@ func (m *Master) trainCollaborativeFiltering(trainSet, testSet dataset.CFSplit) 
 		log.Logger().Error("failed to write time series points", zap.Error(err))
 		return nil
 	}
+
+	m.removeOutOfDateModels()
 	return nil
 }
 
@@ -1069,7 +1071,7 @@ func (m *Master) trainClickThroughRatePrediction(trainSet, testSet *ctr.Dataset)
 	}
 
 	bestModel, bestScore := m.clickModelSearcher.GetBestModel()
-	m.clickModelMutex.Lock()
+	m.clickThroughRateModelMutex.Lock()
 	if bestModel != nil && !bestModel.Invalid() &&
 		bestModel.GetParams().ToString() != m.ClickModel.GetParams().ToString() &&
 		bestScore.Precision > m.clickThroughRateMeta.Score.Precision {
@@ -1084,18 +1086,18 @@ func (m *Master) trainClickThroughRatePrediction(trainSet, testSet *ctr.Dataset)
 			zap.Any("params", m.ClickModel.GetParams()))
 	}
 	clickModel := ctr.Clone(m.ClickModel)
-	m.clickModelMutex.Unlock()
+	m.clickThroughRateModelMutex.Unlock()
 
 	startFitTime := time.Now()
 	score := clickModel.Fit(newCtx, trainSet, testSet, ctr.NewFitConfig())
 	RankingFitSeconds.Set(time.Since(startFitTime).Seconds())
 
 	// update match model
-	m.clickModelMutex.Lock()
+	m.clickThroughRateModelMutex.Lock()
 	m.ClickModel = clickModel
 	m.clickTrainSetSize = trainSet.Count()
 	m.ClickThroughRateModelId = time.Now().Unix()
-	m.clickModelMutex.Unlock()
+	m.clickThroughRateModelMutex.Unlock()
 	log.Logger().Info("fit click model complete",
 		zap.Int64("id", m.ClickThroughRateModelId))
 	RankingPrecision.Set(float64(score.Precision))
@@ -1126,10 +1128,10 @@ func (m *Master) trainClickThroughRatePrediction(trainSet, testSet *ctr.Dataset)
 	<-done
 
 	// update meta
-	m.clickModelMutex.RLock()
+	m.clickThroughRateModelMutex.RLock()
 	m.clickThroughRateMeta.ID = m.ClickThroughRateModelId
 	m.clickThroughRateMeta.Score = score
-	m.clickModelMutex.RUnlock()
+	m.clickThroughRateModelMutex.RUnlock()
 	if err = m.metaStore.Put(meta.CLICK_THROUGH_RATE_MODEL, m.clickThroughRateMeta.ToJSON()); err != nil {
 		log.Logger().Error("failed to write click-through rate model meta", zap.Error(err))
 		return err
@@ -1151,7 +1153,37 @@ func (m *Master) trainClickThroughRatePrediction(trainSet, testSet *ctr.Dataset)
 		log.Logger().Error("failed to write time series points", zap.Error(err))
 		return err
 	}
+
+	m.removeOutOfDateModels()
 	return nil
+}
+
+func (m *Master) removeOutOfDateModels() {
+	m.collaborativeFilteringModelMutex.RLock()
+	m.clickThroughRateModelMutex.RLock()
+	timestamp := min(m.collaborativeFilteringMeta.ID, m.clickThroughRateMeta.ID)
+	m.clickThroughRateModelMutex.RUnlock()
+	m.collaborativeFilteringModelMutex.RUnlock()
+
+	files, err := m.blobStore.List()
+	if err != nil {
+		log.Logger().Error("failed to list models in blob store", zap.Error(err))
+		return
+	}
+	for _, file := range files {
+		id, err := strconv.ParseInt(file, 10, 64)
+		if err != nil {
+			log.Logger().Error("failed to parse model id", zap.String("file", file), zap.Error(err))
+			continue
+		}
+		if id < timestamp {
+			if err = m.blobStore.Remove(file); err != nil {
+				log.Logger().Error("failed to delete model from blob store", zap.Int64("id", id), zap.Error(err))
+			} else {
+				log.Logger().Info("deleted out-of-date model from blob store", zap.Int64("id", id))
+			}
+		}
+	}
 }
 
 func (m *Master) collectGarbage(ctx context.Context, dataSet *dataset.Dataset) error {

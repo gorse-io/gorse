@@ -94,10 +94,10 @@ type Master struct {
 	collaborativeFilteringMeta         meta.Model[cf.Score]
 
 	// click model
-	clickTrainSetSize    int
-	clickThroughRateMeta meta.Model[ctr.Score]
-	clickModelMutex      sync.RWMutex
-	clickModelSearcher   *ctr.ModelSearcher
+	clickTrainSetSize          int
+	clickThroughRateMeta       meta.Model[ctr.Score]
+	clickThroughRateModelMutex sync.RWMutex
+	clickModelSearcher         *ctr.ModelSearcher
 
 	// oauth2
 	oauth2Config oauth2.Config
@@ -270,10 +270,10 @@ func (m *Master) Serve() {
 				if model, err := ctr.UnmarshalModel(r); err != nil {
 					log.Logger().Error("failed to unmarshal click-through rate model", zap.Error(err))
 				} else {
-					m.clickModelMutex.Lock()
+					m.clickThroughRateModelMutex.Lock()
 					m.ClickModel = model
 					m.clickThroughRateMeta = metaData
-					m.clickModelMutex.Unlock()
+					m.clickThroughRateModelMutex.Unlock()
 					log.Logger().Info("loaded click-through rate model",
 						zap.Int64("id", metaData.ID))
 				}
