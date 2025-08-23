@@ -31,8 +31,8 @@ import (
 	"github.com/bits-and-blooms/bitset"
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/gorse-io/gorse/base"
-	"github.com/gorse-io/gorse/base/progress"
 	"github.com/gorse-io/gorse/common/expression"
+	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/common/parallel"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/dataset"
@@ -58,7 +58,7 @@ type WorkerTestSuite struct {
 func (suite *WorkerTestSuite) SetupSuite() {
 	// open database
 	var err error
-	suite.tracer = progress.NewTracer("test")
+	suite.tracer = monitor.NewTracer("test")
 	suite.Settings = config.NewSettings()
 	suite.DataClient, err = data.Open(fmt.Sprintf("sqlite://%s/data.db", suite.T().TempDir()), "")
 	suite.NoError(err)
@@ -89,7 +89,7 @@ func (suite *WorkerTestSuite) SetupTest() {
 	// reset random generator
 	suite.randGenerator = rand.New(rand.NewSource(0))
 	// reset index
-	suite.matrixFactorization = nil
+	suite.matrixFactorizationRecommender = nil
 }
 
 func (suite *WorkerTestSuite) TestPullUsers() {
@@ -121,27 +121,27 @@ func (suite *WorkerTestSuite) TestCheckRecommendCacheTimeout() {
 	ctx := context.Background()
 
 	// empty cache
-	suite.True(suite.checkRecommendCacheTimeout(ctx, "0", nil))
+	suite.True(suite.checkRecommendCacheOutOfDate(ctx, "0"))
 	err := suite.CacheClient.AddScores(ctx, cache.OfflineRecommend, "0", []cache.Score{{Id: "0", Score: 0, Categories: []string{""}}})
 	suite.NoError(err)
 
 	// digest mismatch
-	suite.True(suite.checkRecommendCacheTimeout(ctx, "0", nil))
+	suite.True(suite.checkRecommendCacheOutOfDate(ctx, "0"))
 	err = suite.CacheClient.Set(ctx, cache.String(cache.Key(cache.OfflineRecommendDigest, "0"), suite.Config.OfflineRecommendDigest()))
 	suite.NoError(err)
 
 	err = suite.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastModifyUserTime, "0"), time.Now().Add(-time.Hour)))
 	suite.NoError(err)
-	suite.True(suite.checkRecommendCacheTimeout(ctx, "0", nil))
+	suite.True(suite.checkRecommendCacheOutOfDate(ctx, "0"))
 	err = suite.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastUpdateUserRecommendTime, "0"), time.Now().Add(-time.Hour*100)))
 	suite.NoError(err)
-	suite.True(suite.checkRecommendCacheTimeout(ctx, "0", nil))
+	suite.True(suite.checkRecommendCacheOutOfDate(ctx, "0"))
 	err = suite.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastUpdateUserRecommendTime, "0"), time.Now().Add(time.Hour*100)))
 	suite.NoError(err)
-	suite.False(suite.checkRecommendCacheTimeout(ctx, "0", nil))
+	suite.False(suite.checkRecommendCacheOutOfDate(ctx, "0"))
 	err = suite.CacheClient.DeleteScores(ctx, []string{cache.OfflineRecommend}, cache.ScoreCondition{Subset: proto.String("0")})
 	suite.NoError(err)
-	suite.True(suite.checkRecommendCacheTimeout(ctx, "0", nil))
+	suite.True(suite.checkRecommendCacheOutOfDate(ctx, "0"))
 }
 
 type mockMatrixFactorizationForRecommend struct {

@@ -29,8 +29,8 @@ import (
 	"github.com/emicklei/go-restful/v3"
 	"github.com/gorse-io/gorse/base"
 	"github.com/gorse-io/gorse/base/log"
-	"github.com/gorse-io/gorse/base/progress"
 	"github.com/gorse-io/gorse/base/task"
+	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/common/parallel"
 	"github.com/gorse-io/gorse/common/util"
 	"github.com/gorse-io/gorse/config"
@@ -66,7 +66,7 @@ type Master struct {
 	server.RestServer
 	grpcServer *grpc.Server
 
-	tracer         *progress.Tracer
+	tracer         *monitor.Monitor
 	remoteProgress sync.Map
 	jobsScheduler  *task.JobsScheduler
 	cachePath      string
@@ -140,7 +140,7 @@ func NewMaster(cfg *config.Config, cacheFolder string) *Master {
 		// create task monitor
 		cachePath:     cacheFolder,
 		jobsScheduler: task.NewJobsScheduler(cfg.Master.NumJobs),
-		tracer:        progress.NewTracer("master"),
+		tracer:        monitor.NewTracer("master"),
 		openAIClient:  openai.NewClientWithConfig(clientConfig),
 		// default ranking model
 		collaborativeFilteringSearcher: cf.NewModelSearcher(

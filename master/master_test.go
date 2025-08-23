@@ -17,7 +17,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/gorse-io/gorse/base/progress"
+	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
@@ -32,7 +32,7 @@ type MasterTestSuite struct {
 func (s *MasterTestSuite) SetupTest() {
 	// open database
 	var err error
-	s.tracer = progress.NewTracer("test")
+	s.tracer = monitor.NewTracer("test")
 	s.Settings = config.NewSettings()
 	s.DataClient, err = data.Open(fmt.Sprintf("sqlite://%s/data.db", s.T().TempDir()), "")
 	s.NoError(err)

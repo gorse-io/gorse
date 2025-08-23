@@ -36,9 +36,9 @@ import (
 	_ "github.com/gorse-io/dashboard"
 	"github.com/gorse-io/gorse/base"
 	"github.com/gorse-io/gorse/base/log"
-	"github.com/gorse-io/gorse/base/progress"
 	"github.com/gorse-io/gorse/cmd/version"
 	"github.com/gorse-io/gorse/common/expression"
+	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/common/util"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/model/cf"
@@ -106,8 +106,8 @@ func (m *Master) CreateWebService() {
 		Doc("Get tasks.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
-		Returns(http.StatusOK, "OK", []progress.Progress{}).
-		Writes([]progress.Progress{}))
+		Returns(http.StatusOK, "OK", []monitor.Progress{}).
+		Writes([]monitor.Progress{}))
 	ws.Route(ws.GET("/dashboard/rates").To(m.getRates).
 		Doc("Get positive feedback rates.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
@@ -622,7 +622,7 @@ func (m *Master) getTasks(_ *restful.Request, response *restful.Response) {
 	// list remote progress
 	m.remoteProgress.Range(func(key, value interface{}) bool {
 		if workers.Contains(key.(string)) {
-			progressList = append(progressList, value.([]progress.Progress)...)
+			progressList = append(progressList, value.([]monitor.Progress)...)
 		}
 		return true
 	})
