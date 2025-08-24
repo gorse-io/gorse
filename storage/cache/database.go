@@ -46,8 +46,6 @@ import (
 )
 
 const (
-	CollaborativeFiltering = "collaborative_recommend"
-
 	// OfflineRecommend is sorted set of offline recommendation for each user.
 	//  Global recommendation      - offline_recommend/{user_id}
 	//  Categorized recommendation - offline_recommend/{user_id}/{category}
@@ -63,12 +61,13 @@ const (
 	Latest                    = "latest"
 	Popular                   = "popular"
 
-	ItemToItem           = "item-to-item"
-	ItemToItemDigest     = "item-to-item_digest"
-	ItemToItemUpdateTime = "item-to-item_update_time"
-	UserToUser           = "user-to-user"
-	UserToUserDigest     = "user-to-user_digest"
-	UserToUserUpdateTime = "user-to-user_update_time"
+	ItemToItem             = "item-to-item"
+	ItemToItemDigest       = "item-to-item_digest"
+	ItemToItemUpdateTime   = "item-to-item_update_time"
+	UserToUser             = "user-to-user"
+	UserToUserDigest       = "user-to-user_digest"
+	UserToUserUpdateTime   = "user-to-user_update_time"
+	CollaborativeFiltering = "collaborative-filtering"
 
 	// ItemCategories is the set of item categories. The format of key:
 	//	Global item categories - item_categories
