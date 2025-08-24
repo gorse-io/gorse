@@ -778,7 +778,7 @@ func (m *Master) getRecommend(request *restful.Request, response *restful.Respon
 	// parse arguments
 	recommender := request.PathParameter("recommender")
 	userId := request.PathParameter("user-id")
-	categories := server.ReadCategories(request, []string{""})
+	categories := server.ReadCategories(request, nil)
 	n, err := server.ParseInt(request, "n", m.Config.Server.DefaultN)
 	if err != nil {
 		server.BadRequest(response, err)
