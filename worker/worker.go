@@ -16,10 +16,13 @@ package worker
 
 import (
 	"context"
+	"crypto/md5"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"math"
 	"math/rand"
+	"net"
 	"net/http"
 	"os"
 	"strconv"
@@ -27,7 +30,6 @@ import (
 	"time"
 
 	mapset "github.com/deckarep/golang-set/v2"
-	"github.com/google/uuid"
 	"github.com/gorse-io/gorse/base"
 	"github.com/gorse-io/gorse/base/heap"
 	"github.com/gorse-io/gorse/base/log"
@@ -392,28 +394,9 @@ func writeError(w http.ResponseWriter, error string, code int) {
 
 // Serve as a worker node.
 func (w *Worker) Serve() {
-	// open local store
-	if !w.oneMode {
-		state, err := LoadLocalCache(w.cacheFile)
-		if err != nil {
-			if errors.Is(err, errors.NotFound) {
-				log.Logger().Info("no cache file found, create a new one", zap.String("path", state.path))
-			} else {
-				log.Logger().Error("failed to load persist state", zap.Error(err),
-					zap.String("path", w.cacheFile))
-			}
-		}
-		if state.WorkerName == "" {
-			state.WorkerName = uuid.New().String()
-			err = state.WriteLocalCache()
-			if err != nil {
-				log.Logger().Fatal("failed to write meta", zap.Error(err))
-			}
-		}
-		w.workerName = state.WorkerName
-		log.Logger().Info("start worker",
-			zap.Int("n_jobs", w.jobs),
-			zap.String("worker_name", w.workerName))
+	var err error
+	if w.workerName, err = w.WorkerName(); err != nil {
+		log.Logger().Fatal("failed to get worker name", zap.Error(err))
 	}
 
 	// create progress tracer
@@ -431,8 +414,7 @@ func (w *Worker) Serve() {
 	} else {
 		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	}
-	var err error
-	w.conn, err = grpc.Dial(fmt.Sprintf("%v:%v", w.masterHost, w.masterPort), opts...)
+	w.conn, err = grpc.Dial(net.JoinHostPort(w.masterHost, strconv.Itoa(w.masterPort)), opts...)
 	if err != nil {
 		log.Logger().Fatal("failed to connect master", zap.Error(err))
 	}
@@ -478,6 +460,19 @@ func (w *Worker) Serve() {
 			loop()
 		}
 	}
+}
+
+func (w *Worker) WorkerName() (string, error) {
+	hostname, err := os.Hostname()
+	if err != nil {
+		return "", err
+	}
+	hash := md5.New()
+	hash.Write([]byte(hostname))
+	hash.Write([]byte(w.httpHost))
+	hash.Write([]byte(strconv.Itoa(w.httpPort)))
+	b := hash.Sum(nil)
+	return hex.EncodeToString(b), nil
 }
 
 // Recommend items to users. The workflow of recommendation is:
@@ -579,7 +574,6 @@ func (w *Worker) Recommend(users []data.User) {
 		userId := user.UserId
 		// skip inactive users before max recommend period
 		if !w.checkUserActiveTime(ctx, userId) || !w.checkRecommendCacheOutOfDate(ctx, userId) {
-			fmt.Println("SKIP")
 			return nil
 		}
 		updateUserCount.Add(1)
