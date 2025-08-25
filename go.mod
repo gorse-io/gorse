@@ -23,7 +23,7 @@ require (
 	github.com/go-viper/mapstructure/v2 v2.2.1
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/securecookie v1.1.1
-	github.com/gorse-io/dashboard v0.0.0-20250824061311-16fa59afdcfe
+	github.com/gorse-io/dashboard v0.0.0-20250824130732-d3f375fc12de
 	github.com/gorse-io/gorse-go v0.5.0-alpha.1
 	github.com/haxii/go-swagger-ui v0.0.0-20210203093335-a63a6bbde946
 	github.com/jaswdr/faker v1.16.0
