@@ -18,7 +18,7 @@ import (
 	"encoding/binary"
 	"io"
 
-	"github.com/gorse-io/gorse/base/encoding"
+	"github.com/gorse-io/gorse/common/encoding"
 	"github.com/juju/errors"
 )
 

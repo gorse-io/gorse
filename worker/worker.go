@@ -31,10 +31,10 @@ import (
 
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/gorse-io/gorse/base"
-	"github.com/gorse-io/gorse/base/heap"
 	"github.com/gorse-io/gorse/base/log"
 	"github.com/gorse-io/gorse/cmd/version"
 	"github.com/gorse-io/gorse/common/expression"
+	"github.com/gorse-io/gorse/common/heap"
 	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/common/parallel"
 	"github.com/gorse-io/gorse/common/sizeof"
