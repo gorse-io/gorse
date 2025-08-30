@@ -17,8 +17,8 @@ package cf
 import (
 	"github.com/chewxy/math32"
 	mapset "github.com/deckarep/golang-set/v2"
-	"github.com/gorse-io/gorse/base/heap"
 	"github.com/gorse-io/gorse/common/floats"
+	"github.com/gorse-io/gorse/common/heap"
 	"github.com/gorse-io/gorse/common/parallel"
 	"github.com/gorse-io/gorse/dataset"
 	"github.com/samber/lo"

@@ -15,6 +15,8 @@
 package heap
 
 import (
+	"os"
+	"path/filepath"
 	"sort"
 	"testing"
 
@@ -56,4 +58,31 @@ func TestPriorityQueue(t *testing.T) {
 		assert.Equal(t, e, value)
 		assert.Equal(t, e, int32(weight))
 	}
+}
+
+func TestMarshalUnmarshal(t *testing.T) {
+	pq := NewPriorityQueue(false)
+	elements := []int32{5, 3, 7, 8, 6, 2, 9}
+	for _, e := range elements {
+		pq.Push(e, float32(e))
+	}
+
+	path := filepath.Join(t.TempDir(), "pq.bin")
+	f, err := os.Create(path)
+	assert.NoError(t, err)
+	defer f.Close()
+	err = pq.Marshal(f)
+	assert.NoError(t, err)
+
+	f, err = os.Open(path)
+	assert.NoError(t, err)
+	defer f.Close()
+	pq2 := NewPriorityQueue(false)
+	err = pq2.Unmarshal(f)
+	assert.NoError(t, err)
+
+	assert.Equal(t, pq.Len(), pq2.Len())
+	assert.Equal(t, pq.desc, pq2.desc)
+	assert.Equal(t, pq.elems, pq2.elems)
+	assert.True(t, pq.lookup.Equal(pq2.lookup))
 }

@@ -16,23 +16,18 @@ package encoding
 
 import (
 	"bytes"
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
-func TestHex(t *testing.T) {
-	assert.Equal(t, fmt.Sprintf("%x", 325600), Hex(325600))
-}
-
-func TestWriteMatrix(t *testing.T) {
-	a := [][]float32{{1, 2}, {3, 4}}
+func TestReadWriteSlice(t *testing.T) {
+	a := []float32{1, 2, 3, 4}
 	buf := bytes.NewBuffer(nil)
-	err := WriteMatrix(buf, a)
+	err := WriteSlice(buf, a)
 	assert.NoError(t, err)
-	b := [][]float32{{0, 0}, {0, 0}}
-	err = ReadMatrix(buf, b)
+	var b []float32
+	err = ReadSlice(buf, &b)
 	assert.NoError(t, err)
 	assert.Equal(t, a, b)
 }

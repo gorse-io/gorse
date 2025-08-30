@@ -15,12 +15,15 @@
 package ann
 
 import (
+	"encoding/binary"
+	"io"
 	"math/rand"
 	"sync"
 
 	"github.com/chewxy/math32"
 	mapset "github.com/deckarep/golang-set/v2"
-	"github.com/gorse-io/gorse/base/heap"
+	"github.com/gorse-io/gorse/common/encoding"
+	"github.com/gorse-io/gorse/common/heap"
 	"github.com/pkg/errors"
 	"github.com/samber/lo"
 	"modernc.org/mathutil"
@@ -260,4 +263,146 @@ func (h *HNSW[T]) efSearchValue(n int) int {
 		return mathutil.Max(h.ef, n)
 	}
 	return mathutil.Max(h.efConstruction, n)
+}
+
+func (h *HNSW[T]) Marshal(w io.Writer) error {
+	if err := binary.Write(w, binary.LittleEndian, h.levelFactor); err != nil {
+		return err
+	}
+	if err := binary.Write(w, binary.LittleEndian, int64(h.maxConnection)); err != nil {
+		return err
+	}
+	if err := binary.Write(w, binary.LittleEndian, int64(h.maxConnection0)); err != nil {
+		return err
+	}
+	if err := binary.Write(w, binary.LittleEndian, int64(h.ef)); err != nil {
+		return err
+	}
+	if err := binary.Write(w, binary.LittleEndian, int64(h.efConstruction)); err != nil {
+		return err
+	}
+
+	// save vectors
+	numVectors := int64(len(h.vectors))
+	if err := binary.Write(w, binary.LittleEndian, numVectors); err != nil {
+		return err
+	}
+	for i := int64(0); i < numVectors; i++ {
+		if err := encoding.WriteGob(w, h.vectors[i]); err != nil {
+			return err
+		}
+	}
+
+	// save neighbors
+	for i := int64(0); i < numVectors; i++ {
+		if err := h.bottomNeighbors[i].Marshal(w); err != nil {
+			return err
+		}
+	}
+	numLayers := len(h.upperNeighbors)
+	if err := binary.Write(w, binary.LittleEndian, int64(numLayers)); err != nil {
+		return err
+	}
+	for i := 0; i < numLayers; i++ {
+		var elements []lo.Tuple2[int32, *heap.PriorityQueue]
+		h.upperNeighbors[i].Range(func(key, value any) bool {
+			elements = append(elements, lo.Tuple2[int32, *heap.PriorityQueue]{
+				A: key.(int32), B: value.(*heap.PriorityQueue)})
+			return true
+		})
+		numElements := int32(len(elements))
+		if err := binary.Write(w, binary.LittleEndian, numElements); err != nil {
+			return err
+		}
+		for j := int32(0); j < numElements; j++ {
+			if err := binary.Write(w, binary.LittleEndian, elements[j].A); err != nil {
+				return err
+			}
+			if err := elements[j].B.Marshal(w); err != nil {
+				return err
+			}
+		}
+	}
+	if err := binary.Write(w, binary.LittleEndian, h.enterPoint); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (h *HNSW[T]) Unmarshal(r io.Reader) error {
+	if err := binary.Read(r, binary.LittleEndian, &h.levelFactor); err != nil {
+		return err
+	}
+	var maxConnection int64
+	if err := binary.Read(r, binary.LittleEndian, &maxConnection); err != nil {
+		return err
+	}
+	h.maxConnection = int(maxConnection)
+	var maxConnection0 int64
+	if err := binary.Read(r, binary.LittleEndian, &maxConnection0); err != nil {
+		return err
+	}
+	h.maxConnection0 = int(maxConnection0)
+	var ef int64
+	if err := binary.Read(r, binary.LittleEndian, &ef); err != nil {
+		return err
+	}
+	h.ef = int(ef)
+	var efConstruction int64
+	if err := binary.Read(r, binary.LittleEndian, &efConstruction); err != nil {
+		return err
+	}
+	h.efConstruction = int(efConstruction)
+
+	// read vectors
+	var numVectors int64
+	if err := binary.Read(r, binary.LittleEndian, &numVectors); err != nil {
+		return errors.WithStack(err)
+	}
+	h.vectors = make([]T, numVectors)
+	for i := int64(0); i < numVectors; i++ {
+		if err := encoding.ReadGob(r, &h.vectors[i]); err != nil {
+			return errors.WithStack(err)
+		}
+	}
+
+	// save neighbors
+	h.bottomNeighbors = make([]*heap.PriorityQueue, numVectors)
+	for i := int64(0); i < numVectors; i++ {
+		h.bottomNeighbors[i] = heap.NewPriorityQueue(false)
+		if err := h.bottomNeighbors[i].Unmarshal(r); err != nil {
+			return errors.WithStack(err)
+		}
+	}
+	var numLayers int64
+	if err := binary.Read(r, binary.LittleEndian, &numLayers); err != nil {
+		return errors.WithStack(err)
+	}
+	h.upperNeighbors = make([]sync.Map, numLayers)
+	for i := int64(0); i < numLayers; i++ {
+		var numElements int32
+		if err := binary.Read(r, binary.LittleEndian, &numElements); err != nil {
+			return errors.WithStack(err)
+		}
+		for j := int32(0); j < numElements; j++ {
+			var e int32
+			if err := binary.Read(r, binary.LittleEndian, &e); err != nil {
+				return errors.WithStack(err)
+			}
+			pq := heap.NewPriorityQueue(false)
+			if err := pq.Unmarshal(r); err != nil {
+				return errors.WithStack(err)
+			}
+			h.upperNeighbors[i].Store(e, pq)
+		}
+	}
+	if err := binary.Read(r, binary.LittleEndian, &h.enterPoint); err != nil {
+		return errors.WithStack(err)
+	}
+
+	h.bottomMutex = make([]*sync.RWMutex, numVectors)
+	for i := int64(0); i < numVectors; i++ {
+		h.bottomMutex[i] = new(sync.RWMutex)
+	}
+	return nil
 }

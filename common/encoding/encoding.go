@@ -18,38 +18,26 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/gob"
-	"fmt"
+	"github.com/pkg/errors"
 	"io"
-	"strconv"
-
-	"github.com/juju/errors"
 )
 
-// Hex returns the hex form of a 64-bit integer.
-func Hex(v int64) string {
-	return fmt.Sprintf("%x", v)
+// WriteSlice writes matrix to byte stream.
+func WriteSlice[T any](w io.Writer, s []T) error {
+	if err := binary.Write(w, binary.LittleEndian, int32(len(s))); err != nil {
+		return errors.WithStack(err)
+	}
+	return binary.Write(w, binary.LittleEndian, s)
 }
 
-// WriteMatrix writes matrix to byte stream.
-func WriteMatrix(w io.Writer, m [][]float32) error {
-	for i := range m {
-		err := binary.Write(w, binary.LittleEndian, m[i])
-		if err != nil {
-			return errors.Trace(err)
-		}
+// ReadSlice reads matrix from byte stream.
+func ReadSlice[T any](r io.Reader, s *[]T) error {
+	var length int32
+	if err := binary.Read(r, binary.LittleEndian, &length); err != nil {
+		return errors.WithStack(err)
 	}
-	return nil
-}
-
-// ReadMatrix reads matrix from byte stream.
-func ReadMatrix(r io.Reader, m [][]float32) error {
-	for i := range m {
-		err := binary.Read(r, binary.LittleEndian, m[i])
-		if err != nil {
-			return errors.Trace(err)
-		}
-	}
-	return nil
+	*s = make([]T, length)
+	return binary.Read(r, binary.LittleEndian, *s)
 }
 
 // WriteString writes string to byte stream.
@@ -121,8 +109,4 @@ func ReadGob(r io.Reader, v interface{}) error {
 	buffer := bytes.NewBuffer(data)
 	decoder := gob.NewDecoder(buffer)
 	return decoder.Decode(v)
-}
-
-func FormatFloat32(val float32) string {
-	return strconv.FormatFloat(float64(val), 'f', -1, 32)
 }
