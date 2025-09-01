@@ -321,9 +321,9 @@ jobs:
           MYSQL_URI: mysql://root:password@tcp(localhost:${{ job.services.mariadb.ports[3306] }})/
 
       - name: Test DocumentDB
-        run: go test ./... -run TestMongo
+        run: go test ./storage/... -run TestMongo
         env:
-          MONGO_URI: mongodb://root:password@localhost:${{ job.services.documentdb.ports[10260] }}/
+          MONGO_URI: mongodb://root:password@localhost:${{ job.services.documentdb.ports[10260] }}/?ssl=false
 
       - name: Test Kvrocks
         run: go test ./storage/cache -run ^TestRedis
