@@ -282,6 +282,14 @@ jobs:
         env:
           MYSQL_ROOT_PASSWORD: password
 
+      documentdb:
+        image: ghcr.io/microsoft/documentdb/documentdb-local:latest
+        ports:
+          - 10260
+        env:
+          USERNAME: root
+          PASSWORD: password
+
       kvrocks:
         image: apache/kvrocks:nightly
         ports:
@@ -311,6 +319,11 @@ jobs:
         run: go test ./storage/data -run TestMySQL
         env:
           MYSQL_URI: mysql://root:password@tcp(localhost:${{ job.services.mariadb.ports[3306] }})/
+
+      - name: Test DocumentDB
+        run: go test ./... -run TestMongo
+        env:
+          MONGO_URI: mongodb://root:password@localhost:${{ job.services.documentdb.ports[10260] }}/
 
       - name: Test Kvrocks
         run: go test ./storage/cache -run ^TestRedis
