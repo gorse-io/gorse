@@ -323,7 +323,7 @@ jobs:
       - name: Test DocumentDB
         run: go test ./storage/... -run TestMongo
         env:
-          MONGO_URI: mongodb://root:password@localhost:${{ job.services.documentdb.ports[10260] }}/?ssl=false
+          MONGO_URI: mongodb://root:password@localhost:${{ job.services.documentdb.ports[10260] }}/?tls=false
 
       - name: Test Kvrocks
         run: go test ./storage/cache -run ^TestRedis
