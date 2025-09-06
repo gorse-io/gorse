@@ -643,7 +643,7 @@ func TestWorker_Sync(t *testing.T) {
 	assert.NoError(t, serv.CacheClient.Close())
 	assert.Equal(t, int64(1), serv.latestClickThroughRateModelId)
 	assert.Equal(t, int64(2), serv.latestCollaborativeFilteringModelId)
-	assert.Zero(t, serv.ClickThroughRateModelId)
+	assert.Zero(t, serv.clickThroughRateModelId)
 	assert.Zero(t, serv.collaborativeFilteringModelId)
 	master.Stop()
 	done <- struct{}{}
