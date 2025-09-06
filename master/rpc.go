@@ -44,8 +44,7 @@ func (m *Master) GetMeta(ctx context.Context, nodeInfo *protocol.NodeInfo) (*pro
 	}
 	// save ranking model version
 	m.collaborativeFilteringModelMutex.RLock()
-	var collaborativeFilteringModelId int64
-	collaborativeFilteringModelId = m.collaborativeFilteringMeta.ID
+	collaborativeFilteringModelId := m.collaborativeFilteringMeta.ID
 	m.collaborativeFilteringModelMutex.RUnlock()
 	// save click model version
 	m.clickThroughRateModelMutex.RLock()
