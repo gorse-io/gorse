@@ -16,6 +16,7 @@ package master
 
 import (
 	"context"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -948,7 +949,7 @@ func (m *Master) needUpdateUserToUser(userId string, userToUserConfig config.Use
 }
 
 func (m *Master) trainCollaborativeFiltering(trainSet, testSet dataset.CFSplit) error {
-	newCtx, span := m.tracer.Start(context.Background(), "Train Collaborative Filtering Model", 1)
+	newCtx, span := m.tracer.Start(context.Background(), "Train Collaborative Filtering Model", 2)
 	defer span.End()
 
 	if trainSet.CountUsers() == 0 {
@@ -967,64 +968,88 @@ func (m *Master) trainCollaborativeFiltering(trainSet, testSet dataset.CFSplit) 
 
 	bestModelName, bestModel, bestModelScore := m.collaborativeFilteringSearcher.GetBestModel()
 	m.collaborativeFilteringModelMutex.Lock()
+	collaborativeFilteringParams := m.collaborativeFilteringMeta.Params
 	if bestModel != nil && !bestModel.Invalid() &&
-		(bestModel.GetParams().ToString() != m.CollaborativeFilteringModel.GetParams().ToString()) &&
+		(bestModel.GetParams().ToString() != collaborativeFilteringParams.ToString()) &&
 		(bestModelScore.NDCG > m.collaborativeFilteringMeta.Score.NDCG) {
 		// 1. best ranking model must have been found.
 		// 2. best ranking model must be different from current model
 		// 3. best ranking model must perform better than current model
-		m.CollaborativeFilteringModel = bestModel
-		m.collaborativeFilteringMeta.Score = bestModelScore
+		collaborativeFilteringParams = bestModel.GetParams()
 		log.Logger().Info("find better collaborative filtering model",
 			zap.Any("score", bestModelScore),
 			zap.String("name", bestModelName),
-			zap.Any("params", m.CollaborativeFilteringModel.GetParams()))
+			zap.Any("params", collaborativeFilteringParams))
 	}
-	collaborativeFilteringModel := cf.Clone(m.CollaborativeFilteringModel)
 	m.collaborativeFilteringModelMutex.Unlock()
 
 	startFitTime := time.Now()
-	score := collaborativeFilteringModel.Fit(newCtx, trainSet, testSet, cf.NewFitConfig())
+	fitCtx, fitSpan := monitor.Start(newCtx, "Fit", 1)
+	collaborativeFilteringModel := cf.NewBPR(collaborativeFilteringParams)
+	score := collaborativeFilteringModel.Fit(fitCtx, trainSet, testSet, cf.NewFitConfig())
 	CollaborativeFilteringFitSeconds.Set(time.Since(startFitTime).Seconds())
+	span.Add(1)
+	fitSpan.End()
+
+	_, indexSpan := monitor.Start(newCtx, "Index", trainSet.CountItems())
+	matrixFactorizationItems := logics.NewMatrixFactorizationItems(time.Now())
+	parallel.For(trainSet.CountItems(), runtime.NumCPU(), func(i int) {
+		defer indexSpan.Add(1)
+		if itemId, ok := trainSet.GetItemDict().String(int32(i)); ok && collaborativeFilteringModel.IsItemPredictable(int32(i)) {
+			matrixFactorizationItems.Add(itemId, collaborativeFilteringModel.GetItemFactor(int32(i)))
+		}
+	})
+	span.Add(1)
+	indexSpan.End()
+
+	matrixFactorizationUsers := logics.NewMatrixFactorizationUsers()
+	for i := 0; i < trainSet.CountUsers(); i++ {
+		if userId, ok := trainSet.GetUserDict().String(int32(i)); ok && collaborativeFilteringModel.IsUserPredictable(int32(i)) {
+			matrixFactorizationUsers.Add(userId, collaborativeFilteringModel.GetUserFactor(int32(i)))
+		}
+	}
 
 	// update ranking model
 	m.collaborativeFilteringModelMutex.Lock()
-	m.CollaborativeFilteringModel = collaborativeFilteringModel
-	m.CollaborativeFilteringModelId = time.Now().Unix()
 	m.collaborativeFilteringTrainSetSize = trainSet.CountFeedback()
 	m.collaborativeFilteringModelMutex.Unlock()
+	collaborativeFilteringModelId := time.Now().Unix()
 	log.Logger().Info("fit collaborative filtering model completed",
-		zap.Int64("id", m.CollaborativeFilteringModelId))
+		zap.Int64("id", collaborativeFilteringModelId))
 	CollaborativeFilteringNDCG10.Set(float64(score.NDCG))
 	CollaborativeFilteringRecall10.Set(float64(score.Recall))
 	CollaborativeFilteringPrecision10.Set(float64(score.Precision))
-	MemoryInUseBytesVec.WithLabelValues("collaborative_filtering_model").Set(float64(sizeof.DeepSize(m.CollaborativeFilteringModel)))
 	if err := m.CacheClient.Set(context.Background(), cache.Time(cache.Key(cache.GlobalMeta, cache.LastFitMatchingModelTime), time.Now())); err != nil {
 		log.Logger().Error("failed to write meta", zap.Error(err))
 	}
 
 	// upload model
-	w, done, err := m.blobStore.Create(strconv.FormatInt(m.CollaborativeFilteringModelId, 10))
+	w, done, err := m.blobStore.Create(strconv.FormatInt(collaborativeFilteringModelId, 10))
 	if err != nil {
 		log.Logger().Error("failed to create blob for collaborative filtering model",
-			zap.Int64("id", m.CollaborativeFilteringModelId), zap.Error(err))
+			zap.Int64("id", collaborativeFilteringModelId), zap.Error(err))
 		return err
 	}
-	if err = cf.MarshalModel(w, collaborativeFilteringModel); err != nil {
-		log.Logger().Error("failed to marshal collaborative filtering model",
-			zap.Int64("id", m.CollaborativeFilteringModelId), zap.Error(err))
+	if err = matrixFactorizationItems.Marshal(w); err != nil {
+		log.Logger().Error("failed to matrix factorization items",
+			zap.Int64("id", collaborativeFilteringModelId), zap.Error(err))
+		return err
+	}
+	if err = matrixFactorizationUsers.Marshal(w); err != nil {
+		log.Logger().Error("failed to matrix factorization users",
+			zap.Int64("id", collaborativeFilteringModelId), zap.Error(err))
 		return err
 	}
 	if err = w.Close(); err != nil {
 		log.Logger().Error("failed to close blob for collaborative filtering model",
-			zap.Int64("id", m.CollaborativeFilteringModelId), zap.Error(err))
+			zap.Int64("id", collaborativeFilteringModelId), zap.Error(err))
 		return err
 	}
 	<-done
 
 	// update meta
 	m.collaborativeFilteringModelMutex.RLock()
-	m.collaborativeFilteringMeta.ID = m.CollaborativeFilteringModelId
+	m.collaborativeFilteringMeta.ID = collaborativeFilteringModelId
 	m.collaborativeFilteringMeta.Score = score
 	m.collaborativeFilteringModelMutex.RUnlock()
 	if err = m.metaStore.Put(meta.COLLABORATIVE_FILTERING_MODEL, m.collaborativeFilteringMeta.ToJSON()); err != nil {
@@ -1032,7 +1057,7 @@ func (m *Master) trainCollaborativeFiltering(trainSet, testSet dataset.CFSplit) 
 		return err
 	} else {
 		log.Logger().Info("write collaborative filtering model meta",
-			zap.Int64("id", m.CollaborativeFilteringModelId),
+			zap.Int64("id", collaborativeFilteringModelId),
 			zap.Float32("ndcg", score.NDCG),
 			zap.Float32("recall", score.Recall),
 			zap.Float32("precision", score.Precision))
@@ -1173,7 +1198,7 @@ func (m *Master) removeOutOfDateModels() {
 	for _, file := range files {
 		id, err := strconv.ParseInt(file, 10, 64)
 		if err != nil {
-			log.Logger().Error("failed to parse model id", zap.String("file", file), zap.Error(err))
+			log.Logger().Info("failed to parse model id", zap.String("file", file), zap.Error(err))
 			continue
 		}
 		if id < timestamp {
