@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/XSAM/otelsql"
+	"github.com/gorse-io/gorse/model"
 	"github.com/gorse-io/gorse/storage"
 	"github.com/juju/errors"
 	"github.com/samber/lo"
@@ -32,8 +33,9 @@ const (
 )
 
 type Model[T any] struct {
-	ID    int64
-	Score T
+	ID     int64
+	Params model.Params
+	Score  T
 }
 
 func (m *Model[T]) ToJSON() string {

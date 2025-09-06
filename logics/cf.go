@@ -15,53 +15,162 @@
 package logics
 
 import (
+	"io"
+	"sync"
 	"time"
 
 	"github.com/gorse-io/gorse/base/log"
 	"github.com/gorse-io/gorse/common/ann"
+	"github.com/gorse-io/gorse/common/encoding"
 	"github.com/gorse-io/gorse/common/floats"
 	"github.com/gorse-io/gorse/storage/cache"
-	"github.com/gorse-io/gorse/storage/data"
+	"github.com/pkg/errors"
 	"github.com/samber/lo"
 	"go.uber.org/zap"
 )
 
-type MatrixFactorization struct {
+func distance(a, b []float32) float32 {
+	return -floats.Dot(a, b)
+}
+
+type MatrixFactorizationItems struct {
 	timestamp time.Time
-	items     []*data.Item
+	items     []string
+	itemsLock sync.Mutex
 	index     *ann.HNSW[[]float32]
 	dimension int
 }
 
-func NewMatrixFactorization(timestamp time.Time) *MatrixFactorization {
-	return &MatrixFactorization{
+func NewMatrixFactorizationItems(timestamp time.Time) *MatrixFactorizationItems {
+	return &MatrixFactorizationItems{
 		timestamp: timestamp,
-		items:     make([]*data.Item, 0),
-		index:     ann.NewHNSW[[]float32](floats.Dot),
+		items:     make([]string, 0),
+		index:     ann.NewHNSW[[]float32](distance),
 	}
 }
 
-func (mf *MatrixFactorization) Add(item *data.Item, v []float32) {
+func (items *MatrixFactorizationItems) Add(itemId string, v []float32) {
 	// Check dimension
-	if mf.dimension == 0 {
-		mf.dimension = len(v)
-	} else if mf.dimension != len(v) {
+	items.itemsLock.Lock()
+	if items.dimension == 0 {
+		items.dimension = len(v)
+	} else if items.dimension != len(v) {
 		log.Logger().Error("dimension mismatch", zap.Int("dimension", len(v)))
 		return
 	}
 	// Push item
-	mf.items = append(mf.items, item)
-	_ = mf.index.Add(v)
+	items.items = append(items.items, itemId)
+	items.itemsLock.Unlock()
+	_ = items.index.Add(v)
 }
 
-func (mf *MatrixFactorization) Search(v []float32, n int) []cache.Score {
-	scores := mf.index.SearchVector(v, n, false)
+func (items *MatrixFactorizationItems) Search(v []float32, n int) []cache.Score {
+	scores := items.index.SearchVector(v, n, false)
 	return lo.Map(scores, func(v lo.Tuple2[int, float32], _ int) cache.Score {
 		return cache.Score{
-			Id:         mf.items[v.A].ItemId,
-			Score:      -float64(v.B),
-			Categories: mf.items[v.A].Categories,
-			Timestamp:  mf.timestamp,
+			Id:        items.items[v.A],
+			Score:     -float64(v.B),
+			Timestamp: items.timestamp,
 		}
 	})
+}
+
+func (items *MatrixFactorizationItems) Marshal(w io.Writer) error {
+	if err := encoding.WriteGob(w, items.timestamp); err != nil {
+		return errors.WithStack(err)
+	}
+	if err := encoding.WriteGob(w, items.dimension); err != nil {
+		return errors.WithStack(err)
+	}
+	if err := items.index.Marshal(w); err != nil {
+		return errors.WithStack(err)
+	}
+	numItems := int64(len(items.items))
+	if err := encoding.WriteGob(w, numItems); err != nil {
+		return errors.WithStack(err)
+	}
+	for _, item := range items.items {
+		if err := encoding.WriteGob(w, item); err != nil {
+			return errors.WithStack(err)
+		}
+	}
+	return nil
+}
+
+func (items *MatrixFactorizationItems) Unmarshal(r io.Reader) error {
+	if err := encoding.ReadGob(r, &items.timestamp); err != nil {
+		return errors.WithStack(err)
+	}
+	if err := encoding.ReadGob(r, &items.dimension); err != nil {
+		return errors.WithStack(err)
+	}
+	if err := items.index.Unmarshal(r); err != nil {
+		return errors.WithStack(err)
+	}
+	var numItems int64
+	if err := encoding.ReadGob(r, &numItems); err != nil {
+		return errors.WithStack(err)
+	}
+	items.items = make([]string, numItems)
+	for i := int64(0); i < numItems; i++ {
+		if err := encoding.ReadGob(r, &items.items[i]); err != nil {
+			return errors.WithStack(err)
+		}
+	}
+	return nil
+}
+
+type MatrixFactorizationUsers struct {
+	embeddings map[string][]float32
+}
+
+func NewMatrixFactorizationUsers() *MatrixFactorizationUsers {
+	return &MatrixFactorizationUsers{
+		embeddings: make(map[string][]float32),
+	}
+}
+
+func (users *MatrixFactorizationUsers) Add(userId string, v []float32) {
+	users.embeddings[userId] = v
+}
+
+func (users *MatrixFactorizationUsers) Get(userId string) ([]float32, bool) {
+	v, ok := users.embeddings[userId]
+	return v, ok
+}
+
+func (users *MatrixFactorizationUsers) Marshal(w io.Writer) error {
+	numUsers := int64(len(users.embeddings))
+	if err := encoding.WriteGob(w, numUsers); err != nil {
+		return errors.WithStack(err)
+	}
+	for userId, embedding := range users.embeddings {
+		if err := encoding.WriteString(w, userId); err != nil {
+			return errors.WithStack(err)
+		}
+		if err := encoding.WriteSlice(w, embedding); err != nil {
+			return errors.WithStack(err)
+		}
+	}
+	return nil
+}
+
+func (users *MatrixFactorizationUsers) Unmarshal(r io.Reader) error {
+	var numUsers int64
+	if err := encoding.ReadGob(r, &numUsers); err != nil {
+		return errors.WithStack(err)
+	}
+	users.embeddings = make(map[string][]float32, numUsers)
+	for i := int64(0); i < numUsers; i++ {
+		userId, err := encoding.ReadString(r)
+		if err != nil {
+			return errors.WithStack(err)
+		}
+		var embedding []float32
+		if err = encoding.ReadSlice(r, &embedding); err != nil {
+			return errors.WithStack(err)
+		}
+		users.embeddings[userId] = embedding
+	}
+	return nil
 }

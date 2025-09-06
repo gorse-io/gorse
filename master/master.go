@@ -156,13 +156,11 @@ func NewMaster(cfg *config.Config, cacheFolder string) *Master {
 		),
 		RestServer: server.RestServer{
 			Settings: &config.Settings{
-				Config:                        cfg,
-				CacheClient:                   cache.NoDatabase{},
-				DataClient:                    data.NoDatabase{},
-				CollaborativeFilteringModel:   cf.NewBPR(nil),
-				ClickModel:                    ctr.NewFMV2(nil),
-				CollaborativeFilteringModelId: 0,
-				ClickThroughRateModelId:       0,
+				Config:                  cfg,
+				CacheClient:             cache.NoDatabase{},
+				DataClient:              data.NoDatabase{},
+				ClickModel:              ctr.NewFMV2(nil),
+				ClickThroughRateModelId: 0,
 			},
 			HttpHost:   cfg.Master.HttpHost,
 			HttpPort:   cfg.Master.HttpPort,
@@ -227,7 +225,7 @@ func (m *Master) Serve() {
 		log.Logger().Fatal("failed to init database", zap.Error(err))
 	}
 
-	// load collective filtering model
+	// load collective filtering model meta
 	metaStr, err := m.metaStore.Get(meta.COLLABORATIVE_FILTERING_MODEL)
 	if err != nil && !errors.Is(err, errors.NotFound) {
 		log.Logger().Error("failed to load collaborative filtering meta", zap.Error(err))
@@ -235,22 +233,6 @@ func (m *Master) Serve() {
 		var metaData meta.Model[cf.Score]
 		if err = metaData.FromJSON(*metaStr); err != nil {
 			log.Logger().Error("failed to unmarshal collaborative filtering meta", zap.Error(err))
-		} else {
-			r, err := m.blobStore.Open(strconv.FormatInt(metaData.ID, 10))
-			if err != nil {
-				log.Logger().Error("failed to open collaborative filtering model", zap.Error(err))
-			} else {
-				if model, err := cf.UnmarshalModel(r); err != nil {
-					log.Logger().Error("failed to unmarshal collaborative filtering model", zap.Error(err))
-				} else {
-					m.collaborativeFilteringModelMutex.Lock()
-					m.CollaborativeFilteringModel = model
-					m.collaborativeFilteringMeta = metaData
-					m.collaborativeFilteringModelMutex.Unlock()
-					log.Logger().Info("loaded collaborative filtering model",
-						zap.Int64("id", metaData.ID))
-				}
-			}
 		}
 	}
 

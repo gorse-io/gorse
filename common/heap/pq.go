@@ -16,9 +16,12 @@ package heap
 
 import (
 	"container/heap"
+	"encoding/binary"
+	"io"
 
 	"github.com/chewxy/math32"
 	mapset "github.com/deckarep/golang-set/v2"
+	"github.com/gorse-io/gorse/common/encoding"
 	"golang.org/x/exp/constraints"
 )
 
@@ -125,4 +128,25 @@ func (p *PriorityQueue) Reverse() *PriorityQueue {
 		pq.Push(elem.Value, elem.Weight)
 	}
 	return pq
+}
+
+func (p *PriorityQueue) Marshal(w io.Writer) error {
+	if err := binary.Write(w, binary.LittleEndian, p.desc); err != nil {
+		return err
+	}
+	return encoding.WriteSlice(w, p.elems)
+}
+
+func (p *PriorityQueue) Unmarshal(r io.Reader) error {
+	if err := binary.Read(r, binary.LittleEndian, &p.desc); err != nil {
+		return err
+	}
+	if err := encoding.ReadSlice(r, &p.elems); err != nil {
+		return err
+	}
+	p.lookup = mapset.NewSetWithSize[int32](p.Len())
+	for _, elem := range p.elems {
+		p.lookup.Add(elem.Value)
+	}
+	return nil
 }
