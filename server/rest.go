@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/pprof"
-	"reflect"
 	"strconv"
 	"strings"
 	"time"
@@ -939,7 +938,7 @@ func (s *RestServer) RecommendUserBased(ctx *recommendContext) error {
 		start := time.Now()
 		candidates := make(map[string]float64)
 		// load similar users
-		similarUsers, err := s.CacheClient.SearchScores(ctx.context, cache.UserToUser, cache.Key(name, ctx.userId), []string{""}, 0, s.Config.Recommend.CacheSize)
+		similarUsers, err := s.CacheClient.SearchScores(ctx.context, cache.UserToUser, cache.Key(name, ctx.userId), nil, 0, s.Config.Recommend.CacheSize)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -952,13 +951,7 @@ func (s *RestServer) RecommendUserBased(ctx *recommendContext) error {
 			// add unseen items
 			for _, feedback := range feedbacks {
 				if !ctx.excludeSet.Contains(feedback.ItemId) {
-					item, err := s.DataClient.GetItem(ctx.context, feedback.ItemId)
-					if err != nil {
-						return errors.Trace(err)
-					}
-					if reflect.DeepEqual(ctx.categories, []string{""}) || lo.Every(item.Categories, ctx.categories) {
-						candidates[feedback.ItemId] += user.Score
-					}
+					candidates[feedback.ItemId] += user.Score
 				}
 			}
 		}
@@ -969,8 +962,25 @@ func (s *RestServer) RecommendUserBased(ctx *recommendContext) error {
 			filter.Push(id, score)
 		}
 		ids, _ := filter.PopAll()
-		ctx.results = append(ctx.results, ids...)
-		ctx.excludeSet.Append(ids...)
+		var results []string
+		for i := 0; i < len(ids) && len(results)+len(ctx.results) < ctx.n; i += 100 {
+			items, err := s.DataClient.BatchGetItems(ctx.context, ids[i:min(i+100, len(ids))])
+			if err != nil {
+				return errors.Trace(err)
+			}
+			itemsMap := make(map[string]data.Item)
+			for _, item := range items {
+				itemsMap[item.ItemId] = item
+			}
+			for _, id := range ids[i:min(i+100, len(ids))] {
+				item, exists := itemsMap[id]
+				if exists && lo.Every(item.Categories, ctx.categories) {
+					results = append(results, id)
+				}
+			}
+		}
+		ctx.results = append(ctx.results, results...)
+		ctx.excludeSet.Append(results...)
 		ctx.userBasedTime = time.Since(start)
 		ctx.numFromUserBased = len(ctx.results) - ctx.numPrevStage
 		ctx.numPrevStage = len(ctx.results)
