@@ -18,6 +18,7 @@ import (
 	"context"
 	"crypto/md5"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"os"
 	"reflect"
@@ -32,12 +33,12 @@ import (
 	"github.com/go-playground/validator/v10"
 	en_translations "github.com/go-playground/validator/v10/translations/en"
 	"github.com/go-viper/mapstructure/v2"
+	"github.com/gorse-io/gorse/base/log"
+	"github.com/gorse-io/gorse/common/expression"
+	"github.com/gorse-io/gorse/storage"
 	"github.com/juju/errors"
 	"github.com/samber/lo"
 	"github.com/spf13/viper"
-	"github.com/zhenghaoz/gorse/base/log"
-	"github.com/zhenghaoz/gorse/common/expression"
-	"github.com/zhenghaoz/gorse/storage"
 	"go.opentelemetry.io/otel/exporters/jaeger"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
@@ -67,6 +68,7 @@ type Config struct {
 	Experimental ExperimentalConfig `mapstructure:"experimental"`
 	OIDC         OIDCConfig         `mapstructure:"oidc"`
 	OpenAI       OpenAIConfig       `mapstructure:"openai"`
+	S3           S3Config           `mapstructure:"s3"`
 }
 
 // DatabaseConfig is the configuration for the database.
@@ -260,6 +262,18 @@ type OpenAIConfig struct {
 	EmbeddingRPM        int    `mapstructure:"embedding_rpm"`
 	EmbeddingTPM        int    `mapstructure:"embedding_tpm"`
 	LogFile             string `mapstructure:"log_file"`
+}
+
+type S3Config struct {
+	Endpoint        string `mapstructure:"endpoint"`
+	AccessKeyID     string `mapstructure:"access_key_id"`
+	SecretAccessKey string `mapstructure:"secret_access_key"`
+	Bucket          string `mapstructure:"bucket"`
+	Prefix          string `mapstructure:"prefix"`
+}
+
+func (s *S3Config) ToJSON() string {
+	return string(lo.Must1(json.Marshal(s)))
 }
 
 func GetDefaultConfig() *Config {

@@ -17,8 +17,8 @@ package expression
 import (
 	"testing"
 
+	"github.com/gorse-io/gorse/protocol"
 	"github.com/stretchr/testify/assert"
-	"github.com/zhenghaoz/gorse/protocol"
 )
 
 func TestFeedbackTypeExpression_UnmarshalJSON(t *testing.T) {

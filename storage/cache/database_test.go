@@ -544,6 +544,25 @@ func (suite *baseTestSuite) TestTimeSeries() {
 	}, points)
 }
 
+func (suite *baseTestSuite) TestTimestampPrecision() {
+	ctx := context.Background()
+	timestamp := time.Date(2023, 1, 1, 0, 0, 0, 500, time.UTC)
+	// add scores
+	err := suite.Database.AddScores(ctx, "a", "s", []Score{
+		{Id: "1", Score: 1, Categories: []string{""}, Timestamp: timestamp},
+	})
+	suite.NoError(err)
+	// remove by timestamp
+	err = suite.Database.DeleteScores(ctx, []string{"a"}, ScoreCondition{
+		Subset: proto.String("s"),
+		Before: lo.ToPtr(timestamp)})
+	suite.NoError(err)
+	// search scores
+	documents, err := suite.Database.SearchScores(ctx, "a", "s", nil, 0, -1)
+	suite.NoError(err)
+	suite.NotEmpty(documents)
+}
+
 func TestKey(t *testing.T) {
 	assert.Empty(t, Key())
 	assert.Equal(t, "a", Key("a"))

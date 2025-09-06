@@ -20,11 +20,11 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/gorse-io/gorse/common/expression"
+	"github.com/gorse-io/gorse/config"
+	"github.com/gorse-io/gorse/storage/cache"
+	"github.com/gorse-io/gorse/storage/data"
 	"github.com/samber/lo"
-	"github.com/zhenghaoz/gorse/common/expression"
-	"github.com/zhenghaoz/gorse/config"
-	"github.com/zhenghaoz/gorse/storage/cache"
-	"github.com/zhenghaoz/gorse/storage/data"
 )
 
 func (s *MasterTestSuite) TestFindItemToItem() {
@@ -295,9 +295,9 @@ func (s *MasterTestSuite) TestLoadDataFromDatabase() {
 	s.Equal(int32(5), s.clickTrainSet.Index.CountUserLabels())
 	s.Equal(int32(3), s.clickTestSet.Index.CountItemLabels())
 	s.Equal(int32(5), s.clickTestSet.Index.CountUserLabels())
-	s.Equal(90, s.clickTrainSet.Count()+s.clickTestSet.Count())
-	s.Equal(45, s.clickTrainSet.PositiveCount+s.clickTestSet.PositiveCount)
-	s.Equal(45, s.clickTrainSet.NegativeCount+s.clickTestSet.NegativeCount)
+	s.Equal(110, s.clickTrainSet.Count()+s.clickTestSet.Count())
+	s.Equal(55, s.clickTrainSet.PositiveCount+s.clickTestSet.PositiveCount)
+	s.Equal(55, s.clickTrainSet.NegativeCount+s.clickTestSet.NegativeCount)
 
 	// check latest items
 	latest, err := s.CacheClient.SearchScores(ctx, cache.NonPersonalized, cache.Latest, []string{""}, 0, 100)

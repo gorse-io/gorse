@@ -21,15 +21,15 @@ import (
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/expr-lang/expr"
 	"github.com/expr-lang/expr/vm"
+	"github.com/gorse-io/gorse/base/log"
+	"github.com/gorse-io/gorse/common/ann"
+	"github.com/gorse-io/gorse/common/floats"
+	"github.com/gorse-io/gorse/config"
+	"github.com/gorse-io/gorse/dataset"
+	"github.com/gorse-io/gorse/storage/cache"
+	"github.com/gorse-io/gorse/storage/data"
 	"github.com/juju/errors"
 	"github.com/samber/lo"
-	"github.com/zhenghaoz/gorse/base/log"
-	"github.com/zhenghaoz/gorse/common/ann"
-	"github.com/zhenghaoz/gorse/common/floats"
-	"github.com/zhenghaoz/gorse/config"
-	"github.com/zhenghaoz/gorse/dataset"
-	"github.com/zhenghaoz/gorse/storage/cache"
-	"github.com/zhenghaoz/gorse/storage/data"
 	"go.uber.org/zap"
 )
 
@@ -42,6 +42,7 @@ type UserToUser interface {
 	Users() []*data.User
 	Push(user *data.User, feedback []int32)
 	PopAll(i int) []cache.Score
+	Timestamp() time.Time
 }
 
 func NewUserToUser(cfg config.UserToUserConfig, n int, timestamp time.Time, opts *UserToUserOptions) (UserToUser, error) {
@@ -78,6 +79,10 @@ type baseUserToUser[T any] struct {
 
 func (b *baseUserToUser[T]) Users() []*data.User {
 	return b.users
+}
+
+func (b *baseUserToUser[T]) Timestamp() time.Time {
+	return b.timestamp
 }
 
 func (b *baseUserToUser[T]) PopAll(i int) []cache.Score {

@@ -31,21 +31,22 @@ import (
 	"github.com/bits-and-blooms/bitset"
 	"github.com/c-bata/goptuna"
 	mapset "github.com/deckarep/golang-set/v2"
+	"github.com/gorse-io/gorse/base"
+	"github.com/gorse-io/gorse/common/expression"
+	"github.com/gorse-io/gorse/common/monitor"
+	"github.com/gorse-io/gorse/common/parallel"
+	"github.com/gorse-io/gorse/config"
+	"github.com/gorse-io/gorse/dataset"
+	"github.com/gorse-io/gorse/logics"
+	"github.com/gorse-io/gorse/model"
+	"github.com/gorse-io/gorse/model/cf"
+	"github.com/gorse-io/gorse/model/ctr"
+	"github.com/gorse-io/gorse/protocol"
+	"github.com/gorse-io/gorse/storage/cache"
+	"github.com/gorse-io/gorse/storage/data"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
-	"github.com/zhenghaoz/gorse/base"
-	"github.com/zhenghaoz/gorse/base/progress"
-	"github.com/zhenghaoz/gorse/common/expression"
-	"github.com/zhenghaoz/gorse/common/parallel"
-	"github.com/zhenghaoz/gorse/config"
-	"github.com/zhenghaoz/gorse/dataset"
-	"github.com/zhenghaoz/gorse/model"
-	"github.com/zhenghaoz/gorse/model/cf"
-	"github.com/zhenghaoz/gorse/model/ctr"
-	"github.com/zhenghaoz/gorse/protocol"
-	"github.com/zhenghaoz/gorse/storage/cache"
-	"github.com/zhenghaoz/gorse/storage/data"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/proto"
@@ -59,7 +60,7 @@ type WorkerTestSuite struct {
 func (suite *WorkerTestSuite) SetupSuite() {
 	// open database
 	var err error
-	suite.tracer = progress.NewTracer("test")
+	suite.tracer = monitor.NewTracer("test")
 	suite.Settings = config.NewSettings()
 	suite.DataClient, err = data.Open(fmt.Sprintf("sqlite://%s/data.db", suite.T().TempDir()), "")
 	suite.NoError(err)
@@ -90,7 +91,7 @@ func (suite *WorkerTestSuite) SetupTest() {
 	// reset random generator
 	suite.randGenerator = rand.New(rand.NewSource(0))
 	// reset index
-	suite.matrixFactorization = nil
+	suite.matrixFactorizationItems = nil
 }
 
 func (suite *WorkerTestSuite) TestPullUsers() {
@@ -122,91 +123,33 @@ func (suite *WorkerTestSuite) TestCheckRecommendCacheTimeout() {
 	ctx := context.Background()
 
 	// empty cache
-	suite.True(suite.checkRecommendCacheTimeout(ctx, "0", nil))
+	suite.True(suite.checkRecommendCacheOutOfDate(ctx, "0"))
 	err := suite.CacheClient.AddScores(ctx, cache.OfflineRecommend, "0", []cache.Score{{Id: "0", Score: 0, Categories: []string{""}}})
 	suite.NoError(err)
 
 	// digest mismatch
-	suite.True(suite.checkRecommendCacheTimeout(ctx, "0", nil))
+	suite.True(suite.checkRecommendCacheOutOfDate(ctx, "0"))
 	err = suite.CacheClient.Set(ctx, cache.String(cache.Key(cache.OfflineRecommendDigest, "0"), suite.Config.OfflineRecommendDigest()))
 	suite.NoError(err)
 
 	err = suite.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastModifyUserTime, "0"), time.Now().Add(-time.Hour)))
 	suite.NoError(err)
-	suite.True(suite.checkRecommendCacheTimeout(ctx, "0", nil))
+	suite.True(suite.checkRecommendCacheOutOfDate(ctx, "0"))
 	err = suite.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastUpdateUserRecommendTime, "0"), time.Now().Add(-time.Hour*100)))
 	suite.NoError(err)
-	suite.True(suite.checkRecommendCacheTimeout(ctx, "0", nil))
+	suite.True(suite.checkRecommendCacheOutOfDate(ctx, "0"))
 	err = suite.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastUpdateUserRecommendTime, "0"), time.Now().Add(time.Hour*100)))
 	suite.NoError(err)
-	suite.False(suite.checkRecommendCacheTimeout(ctx, "0", nil))
+	suite.False(suite.checkRecommendCacheOutOfDate(ctx, "0"))
 	err = suite.CacheClient.DeleteScores(ctx, []string{cache.OfflineRecommend}, cache.ScoreCondition{Subset: proto.String("0")})
 	suite.NoError(err)
-	suite.True(suite.checkRecommendCacheTimeout(ctx, "0", nil))
+	suite.True(suite.checkRecommendCacheOutOfDate(ctx, "0"))
 }
 
-type mockMatrixFactorizationForRecommend struct {
-	cf.BaseMatrixFactorization
-}
-
-func (m *mockMatrixFactorizationForRecommend) Complexity() int {
-	panic("implement me")
-}
-
-func newMockMatrixFactorizationForRecommend(numUsers, numItems int) *mockMatrixFactorizationForRecommend {
-	m := new(mockMatrixFactorizationForRecommend)
-	m.UserIndex = dataset.NewFreqDict()
-	m.ItemIndex = dataset.NewFreqDict()
-	for i := 0; i < numUsers; i++ {
-		m.UserIndex.Add(strconv.Itoa(i))
-	}
-	for i := 0; i < numItems; i++ {
-		m.ItemIndex.Add(strconv.Itoa(i))
-	}
-	m.UserPredictable = bitset.New(uint(numUsers)).Complement()
-	m.ItemPredictable = bitset.New(uint(numItems)).Complement()
-	return m
-}
-
-func (m *mockMatrixFactorizationForRecommend) GetUserFactor(_ int32) []float32 {
-	return []float32{1}
-}
-
-func (m *mockMatrixFactorizationForRecommend) GetItemFactor(itemId int32) []float32 {
-	return []float32{float32(itemId)}
-}
-
-func (m *mockMatrixFactorizationForRecommend) Invalid() bool {
-	return false
-}
-
-func (m *mockMatrixFactorizationForRecommend) Fit(_ context.Context, _, _ dataset.CFSplit, _ *cf.FitConfig) cf.Score {
-	panic("implement me")
-}
-
-func (m *mockMatrixFactorizationForRecommend) Predict(_, itemId string) float32 {
-	itemIndex, err := strconv.Atoi(itemId)
-	if err != nil {
-		panic(err)
-	}
-	return float32(itemIndex)
-}
-
-func (m *mockMatrixFactorizationForRecommend) Clear() {
-	// do nothing
-}
-
-func (m *mockMatrixFactorizationForRecommend) GetParamsGrid(_ bool) model.ParamsGrid {
-	panic("don't call me")
-}
-
-func (m *mockMatrixFactorizationForRecommend) SuggestParams(_ goptuna.Trial) model.Params {
-	panic("not implemented")
-}
-
-func (suite *WorkerTestSuite) TestRecommendMatrixFactorizationHNSW() {
+func (suite *WorkerTestSuite) TestRecommendMatrixFactorization() {
 	ctx := context.Background()
 	suite.Config.Recommend.Offline.EnableColRecommend = true
+	suite.Config.Recommend.Offline.EnableClickThroughPrediction = true
 	// insert feedbacks
 	now := time.Now()
 	err := suite.DataClient.BatchInsertFeedback(ctx, []data.Feedback{
@@ -233,7 +176,13 @@ func (suite *WorkerTestSuite) TestRecommendMatrixFactorizationHNSW() {
 	suite.NoError(err)
 
 	// create mock model
-	suite.CollaborativeFilteringModel = newMockMatrixFactorizationForRecommend(1, 12)
+	suite.matrixFactorizationItems = logics.NewMatrixFactorizationItems(time.Time{})
+	for i := 0; i < 10; i++ {
+		suite.matrixFactorizationItems.Add(strconv.Itoa(i), []float32{float32(i)})
+	}
+	suite.matrixFactorizationUsers = logics.NewMatrixFactorizationUsers()
+	suite.matrixFactorizationUsers.Add("0", []float32{1})
+	suite.rankers = []ctr.FactorizationMachines{&mockFactorizationMachine{}}
 	suite.Recommend([]data.User{{UserId: "0"}})
 
 	// read recommend time
@@ -254,6 +203,7 @@ func (suite *WorkerTestSuite) TestRecommendItemBased() {
 	ctx := context.Background()
 	suite.Config.Recommend.Offline.EnableColRecommend = false
 	suite.Config.Recommend.Offline.EnableItemBasedRecommend = true
+	suite.Config.Recommend.Offline.EnableClickThroughPrediction = true
 	suite.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "default"}}
 	// insert feedback
 	err := suite.DataClient.BatchInsertFeedback(ctx, []data.Feedback{
@@ -306,7 +256,7 @@ func (suite *WorkerTestSuite) TestRecommendItemBased() {
 	// insert categorized items
 	err = suite.DataClient.BatchInsertItems(ctx, []data.Item{{ItemId: "26", Categories: []string{"*"}}, {ItemId: "28", Categories: []string{"*"}}})
 	suite.NoError(err)
-	suite.CollaborativeFilteringModel = newMockMatrixFactorizationForRecommend(1, 10)
+	suite.rankers = []ctr.FactorizationMachines{&mockFactorizationMachine{}}
 	suite.Recommend([]data.User{{UserId: "0"}})
 	// read recommend time
 	recommendTime, err := suite.CacheClient.Get(ctx, cache.Key(cache.LastUpdateUserRecommendTime, "0")).Time()
@@ -331,6 +281,7 @@ func (suite *WorkerTestSuite) TestRecommendUserBased() {
 	ctx := context.Background()
 	suite.Config.Recommend.Offline.EnableColRecommend = false
 	suite.Config.Recommend.Offline.EnableUserBasedRecommend = true
+	suite.Config.Recommend.Offline.EnableClickThroughPrediction = true
 	suite.Config.Recommend.UserToUser = []config.UserToUserConfig{{Name: "default"}}
 	// insert similar users
 	err := suite.CacheClient.AddScores(ctx, cache.UserToUser, cache.Key("default", "0"), []cache.Score{
@@ -366,7 +317,7 @@ func (suite *WorkerTestSuite) TestRecommendUserBased() {
 		{ItemId: "48", Categories: []string{"*"}},
 	})
 	suite.NoError(err)
-	suite.CollaborativeFilteringModel = newMockMatrixFactorizationForRecommend(1, 10)
+	suite.rankers = []ctr.FactorizationMachines{&mockFactorizationMachine{}}
 	suite.Recommend([]data.User{{UserId: "0"}})
 	// read recommend time
 	recommendTime, err := suite.CacheClient.Get(ctx, cache.Key(cache.LastUpdateUserRecommendTime, "0")).Time()
@@ -391,6 +342,7 @@ func (suite *WorkerTestSuite) TestRecommendPopular() {
 	ctx := context.Background()
 	suite.Config.Recommend.Offline.EnableColRecommend = false
 	suite.Config.Recommend.Offline.EnablePopularRecommend = true
+	suite.Config.Recommend.Offline.EnableClickThroughPrediction = true
 	// insert popular items
 	err := suite.CacheClient.AddScores(ctx, cache.NonPersonalized, cache.Popular, []cache.Score{
 		{Id: "11", Score: 11, Categories: []string{""}},
@@ -413,7 +365,7 @@ func (suite *WorkerTestSuite) TestRecommendPopular() {
 	// insert hidden items
 	err = suite.DataClient.BatchInsertItems(ctx, []data.Item{{ItemId: "11", IsHidden: true}})
 	suite.NoError(err)
-	suite.CollaborativeFilteringModel = newMockMatrixFactorizationForRecommend(1, 10)
+	suite.rankers = []ctr.FactorizationMachines{&mockFactorizationMachine{}}
 	suite.Recommend([]data.User{{UserId: "0"}})
 	// read recommend time
 	recommendTime, err := suite.CacheClient.Get(ctx, cache.Key(cache.LastUpdateUserRecommendTime, "0")).Time()
@@ -440,6 +392,7 @@ func (suite *WorkerTestSuite) TestRecommendLatest() {
 	ctx := context.Background()
 	suite.Config.Recommend.Offline.EnableColRecommend = false
 	suite.Config.Recommend.Offline.EnableLatestRecommend = true
+	suite.Config.Recommend.Offline.EnableClickThroughPrediction = true
 	// insert latest items
 	err := suite.CacheClient.AddScores(ctx, cache.NonPersonalized, cache.Latest, []cache.Score{
 		{Id: "11", Score: 11, Categories: []string{""}},
@@ -462,7 +415,7 @@ func (suite *WorkerTestSuite) TestRecommendLatest() {
 	// insert hidden items
 	err = suite.DataClient.BatchInsertItems(ctx, []data.Item{{ItemId: "11", IsHidden: true}})
 	suite.NoError(err)
-	suite.CollaborativeFilteringModel = newMockMatrixFactorizationForRecommend(1, 10)
+	suite.rankers = []ctr.FactorizationMachines{&mockFactorizationMachine{}}
 	suite.Recommend([]data.User{{UserId: "0"}})
 	// read recommend time
 	recommendTime, err := suite.CacheClient.Get(ctx, cache.Key(cache.LastUpdateUserRecommendTime, "0")).Time()
@@ -512,7 +465,6 @@ func (suite *WorkerTestSuite) TestRecommendColdStart() {
 	suite.NoError(err)
 
 	// ranking model not exist
-	m := newMockMatrixFactorizationForRecommend(10, 100)
 	suite.Recommend([]data.User{{UserId: "0"}})
 	recommends, err := suite.CacheClient.SearchScores(ctx, cache.OfflineRecommend, "0", []string{""}, 0, -1)
 	suite.NoError(err)
@@ -522,7 +474,6 @@ func (suite *WorkerTestSuite) TestRecommendColdStart() {
 	suite.Equal([]string{"20", "19", "18"}, lo.Map(recommends, func(d cache.Score, _ int) string { return d.Id }))
 
 	// user not predictable
-	suite.CollaborativeFilteringModel = m
 	suite.Recommend([]data.User{{UserId: "100"}})
 	recommends, err = suite.CacheClient.SearchScores(ctx, cache.OfflineRecommend, "100", []string{""}, 0, -1)
 	suite.NoError(err)
@@ -606,8 +557,8 @@ func newMockMaster(t *testing.T) *mockMaster {
 
 	// create click model
 	train, test := newClickDataset()
-	fm := ctr.NewFM(model.Params{model.NEpochs: 0})
-	fm.Fit(context.Background(), train, test, nil)
+	fm := ctr.NewFMV2(model.Params{model.NEpochs: 0})
+	fm.Fit(context.Background(), train, test, &ctr.FitConfig{})
 	clickModelBuffer := bytes.NewBuffer(nil)
 	err := ctr.MarshalModel(clickModelBuffer, fm)
 	assert.NoError(t, err)
@@ -628,9 +579,9 @@ func newMockMaster(t *testing.T) *mockMaster {
 	return &mockMaster{
 		addr: make(chan string),
 		meta: &protocol.Meta{
-			Config:              marshal(t, cfg),
-			ClickModelVersion:   1,
-			RankingModelVersion: 2,
+			Config:                        marshal(t, cfg),
+			ClickThroughRateModelId:       1,
+			CollaborativeFilteringModelId: 2,
 		},
 		cacheFilePath: cfg.Database.CacheStore,
 		dataFilePath:  cfg.Database.DataStore,
@@ -642,14 +593,6 @@ func newMockMaster(t *testing.T) *mockMaster {
 
 func (m *mockMaster) GetMeta(_ context.Context, _ *protocol.NodeInfo) (*protocol.Meta, error) {
 	return m.meta, nil
-}
-
-func (m *mockMaster) GetRankingModel(_ *protocol.VersionInfo, sender protocol.Master_GetRankingModelServer) error {
-	return sender.Send(&protocol.Fragment{Data: m.rankingModel})
-}
-
-func (m *mockMaster) GetClickModel(_ *protocol.VersionInfo, sender protocol.Master_GetClickModelServer) error {
-	return sender.Send(&protocol.Fragment{Data: m.clickModel})
 }
 
 func (m *mockMaster) Start(t *testing.T) {
@@ -700,13 +643,10 @@ func TestWorker_Sync(t *testing.T) {
 	assert.Equal(t, master.cacheFilePath, serv.cachePath)
 	assert.NoError(t, serv.DataClient.Close())
 	assert.NoError(t, serv.CacheClient.Close())
-	assert.Equal(t, int64(1), serv.latestClickModelVersion)
-	assert.Equal(t, int64(2), serv.latestRankingModelVersion)
-	assert.Zero(t, serv.ClickModelVersion)
-	assert.Zero(t, serv.CollaborativeFilteringModelVersion)
-	serv.Pull()
-	assert.Equal(t, int64(1), serv.ClickModelVersion)
-	assert.Equal(t, int64(2), serv.CollaborativeFilteringModelVersion)
+	assert.Equal(t, int64(1), serv.latestClickThroughRateModelId)
+	assert.Equal(t, int64(2), serv.latestCollaborativeFilteringModelId)
+	assert.Zero(t, serv.clickThroughRateModelId)
+	assert.Zero(t, serv.collaborativeFilteringModelId)
 	master.Stop()
 	done <- struct{}{}
 }
@@ -761,7 +701,7 @@ func TestWorker_SyncRecommend(t *testing.T) {
 }
 
 type mockFactorizationMachine struct {
-	ctr.BaseFactorizationMachine
+	ctr.BaseFactorizationMachines
 }
 
 func (m mockFactorizationMachine) Complexity() int {
@@ -784,7 +724,7 @@ func (m mockFactorizationMachine) Invalid() bool {
 	return false
 }
 
-func (m mockFactorizationMachine) Predict(_, itemId string, _, _ []ctr.Feature) float32 {
+func (m mockFactorizationMachine) Predict(_, itemId string, _, _ []ctr.Label) float32 {
 	score, err := strconv.Atoi(itemId)
 	if err != nil {
 		panic(err)
@@ -802,28 +742,6 @@ func (m mockFactorizationMachine) Fit(_ context.Context, _, _ dataset.CTRSplit, 
 
 func (m mockFactorizationMachine) Marshal(_ io.Writer) error {
 	panic("implement me")
-}
-
-func (suite *WorkerTestSuite) TestRankByCollaborativeFiltering() {
-	ctx := context.Background()
-	// insert a user
-	err := suite.DataClient.BatchInsertUsers(ctx, []data.User{{UserId: "1"}})
-	suite.NoError(err)
-	// insert items
-	itemCache := make(map[string]data.Item)
-	for i := 1; i <= 5; i++ {
-		itemCache[strconv.Itoa(i)] = data.Item{ItemId: strconv.Itoa(i)}
-	}
-	// rank items
-	suite.CollaborativeFilteringModel = newMockMatrixFactorizationForRecommend(10, 10)
-	result, err := suite.rankByCollaborativeFiltering("1", [][]string{{"1", "2", "3", "4", "5"}})
-	suite.NoError(err)
-	suite.Equal([]string{"5", "4", "3", "2", "1"}, lo.Map(result, func(d cache.Score, _ int) string {
-		return d.Id
-	}))
-	suite.IsDecreasing(lo.Map(result, func(d cache.Score, _ int) float64 {
-		return d.Score
-	}))
 }
 
 func (suite *WorkerTestSuite) TestRankByClickTroughRate() {
@@ -871,7 +789,7 @@ func (suite *WorkerTestSuite) TestReplacement_ClickThroughRate() {
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "i", UserId: "0", ItemId: "8"}},
 	}, true, false, true)
 	suite.NoError(err)
-	suite.rankers = []ctr.FactorizationMachine{new(mockFactorizationMachine)}
+	suite.rankers = []ctr.FactorizationMachines{new(mockFactorizationMachine)}
 	suite.Recommend([]data.User{{UserId: "0"}})
 	// read recommend time
 	recommendTime, err := suite.CacheClient.Get(ctx, cache.Key(cache.LastUpdateUserRecommendTime, "0")).Time()
@@ -923,6 +841,7 @@ func (suite *WorkerTestSuite) TestReplacement_CollaborativeFiltering() {
 		expression.MustParseFeedbackTypeExpression("n")}
 	suite.Config.Recommend.Offline.EnableColRecommend = false
 	suite.Config.Recommend.Offline.EnablePopularRecommend = true
+	suite.Config.Recommend.Offline.EnableClickThroughPrediction = true
 	suite.Config.Recommend.Replacement.EnableReplacement = true
 
 	// 1. Insert historical items into empty recommendation.
@@ -938,7 +857,7 @@ func (suite *WorkerTestSuite) TestReplacement_CollaborativeFiltering() {
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "i", UserId: "0", ItemId: "8"}},
 	}, true, false, true)
 	suite.NoError(err)
-	suite.CollaborativeFilteringModel = newMockMatrixFactorizationForRecommend(1, 10)
+	suite.rankers = []ctr.FactorizationMachines{new(mockFactorizationMachine)}
 	suite.Recommend([]data.User{{UserId: "0"}})
 	// read recommend time
 	recommendTime, err := suite.CacheClient.Get(ctx, cache.Key(cache.LastUpdateUserRecommendTime, "0")).Time()

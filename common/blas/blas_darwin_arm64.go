@@ -21,22 +21,6 @@ package blas
 // #include <Accelerate/Accelerate.h>
 import "C"
 
-type Order int
-
-const (
-	RowMajor Order = 101
-	ColMajor Order = 102
-)
-
-type Transpose int
-
-const (
-	NoTrans     Transpose = 111
-	Trans       Transpose = 112
-	ConjTrans   Transpose = 113
-	ConjNoTrans Transpose = 114
-)
-
 func SGEMM(order Order, transA, transB Transpose, m, n, k int, alpha float32, a []float32, lda int, b []float32, ldb int, beta float32, c []float32, ldc int) {
 	C.cblas_sgemm(uint32(order), uint32(transA), uint32(transB), C.int(m), C.int(n), C.int(k), C.float(alpha),
 		(*C.float)(&a[0]), C.int(lda), (*C.float)(&b[0]), C.int(ldb), C.float(beta), (*C.float)(&c[0]), C.int(ldc))

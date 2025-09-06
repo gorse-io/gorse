@@ -16,32 +16,32 @@
 
 package floats
 
-func mm(a, b, c []float32, m, n, k int, transA, transB bool) {
+func mm(transA, transB bool, m, n, k int, a []float32, lda int, b []float32, ldb int, c []float32, ldc int) {
 	if !transA && !transB {
 		for i := 0; i < m; i++ {
 			for l := 0; l < k; l++ {
 				// C_l += A_{il} * B_i
-				MulConstAdd(b[l*n:(l+1)*n], a[i*k+l], c[i*n:(i+1)*n])
+				MulConstAdd(b[l*ldb:(l+1)*ldb], a[i*lda+l], c[i*ldc:(i+1)*ldc])
 			}
 		}
 	} else if !transA && transB {
 		for i := 0; i < m; i++ {
 			for j := 0; j < n; j++ {
-				c[i*n+j] = Dot(a[i*k:i*k+k], b[j*k:j*k+k])
+				c[i*ldc+j] = Dot(a[i*lda:(i+1)*lda], b[j*ldb:(j+1)*ldb])
 			}
 		}
 	} else if transA && !transB {
 		for i := 0; i < m; i++ {
 			for l := 0; l < k; l++ {
 				// C_j += A_{ji} * B_i
-				MulConstAdd(b[l*n:(l+1)*n], a[l*m+i], c[i*n:(i+1)*n])
+				MulConstAdd(b[l*ldb:(l+1)*ldb], a[l*lda+i], c[i*ldc:(i+1)*ldc])
 			}
 		}
 	} else {
 		for i := 0; i < m; i++ {
 			for j := 0; j < n; j++ {
 				for l := 0; l < k; l++ {
-					c[i*n+j] += a[l*m+i] * b[j*k+l]
+					c[i*ldc+j] += a[l*lda+i] * b[j*ldb+l]
 				}
 			}
 		}

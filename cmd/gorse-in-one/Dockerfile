@@ -1,15 +1,15 @@
 ############################
 # STEP 1 build executable binary
 ############################
-FROM golang:1.24
+FROM golang:1.25
 
 COPY . gorse
 
 RUN cd gorse/cmd/gorse-in-one && \
     CGO_ENABLED=0 go build -ldflags=" \
-       -X 'github.com/zhenghaoz/gorse/cmd/version.Version=$(git describe --tags $(git rev-parse HEAD))' \
-       -X 'github.com/zhenghaoz/gorse/cmd/version.GitCommit=$(git rev-parse HEAD)' \
-       -X 'github.com/zhenghaoz/gorse/cmd/version.BuildTime=$(date)'" . && \
+    -X 'github.com/gorse-io/gorse/cmd/version.Version=$(git describe --tags $(git rev-parse HEAD))' \
+    -X 'github.com/gorse-io/gorse/cmd/version.GitCommit=$(git rev-parse HEAD)' \
+    -X 'github.com/gorse-io/gorse/cmd/version.BuildTime=$(date)'" . && \
     mv gorse-in-one /usr/bin
 
 RUN /usr/bin/gorse-in-one --version

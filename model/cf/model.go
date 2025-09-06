@@ -26,19 +26,19 @@ import (
 	"github.com/c-bata/goptuna"
 	"github.com/chewxy/math32"
 	mapset "github.com/deckarep/golang-set/v2"
+	"github.com/gorse-io/gorse/base"
+	"github.com/gorse-io/gorse/base/copier"
+	"github.com/gorse-io/gorse/base/log"
+	"github.com/gorse-io/gorse/common/encoding"
+	"github.com/gorse-io/gorse/common/floats"
+	"github.com/gorse-io/gorse/common/monitor"
+	"github.com/gorse-io/gorse/common/parallel"
+	"github.com/gorse-io/gorse/dataset"
+	"github.com/gorse-io/gorse/model"
+	"github.com/gorse-io/gorse/protocol"
 	"github.com/juju/errors"
 	"github.com/matttproud/golang_protobuf_extensions/pbutil"
 	"github.com/samber/lo"
-	"github.com/zhenghaoz/gorse/base"
-	"github.com/zhenghaoz/gorse/base/copier"
-	"github.com/zhenghaoz/gorse/base/encoding"
-	"github.com/zhenghaoz/gorse/base/log"
-	"github.com/zhenghaoz/gorse/base/progress"
-	"github.com/zhenghaoz/gorse/common/floats"
-	"github.com/zhenghaoz/gorse/common/parallel"
-	"github.com/zhenghaoz/gorse/dataset"
-	"github.com/zhenghaoz/gorse/model"
-	"github.com/zhenghaoz/gorse/protocol"
 	"go.uber.org/zap"
 )
 
@@ -454,7 +454,7 @@ func (bpr *BPR) Fit(ctx context.Context, trainSet, valSet dataset.CFSplit, confi
 		zap.Float32(fmt.Sprintf("Precision@%v", config.TopK), scores[1]),
 		zap.Float32(fmt.Sprintf("Recall@%v", config.TopK), scores[2]))
 	// Training
-	_, span := progress.Start(ctx, "BPR.Fit", bpr.nEpochs)
+	_, span := monitor.Start(ctx, "BPR.Fit", bpr.nEpochs)
 	for epoch := 1; epoch <= bpr.nEpochs; epoch++ {
 		fitStart := time.Now()
 		// Training epoch
@@ -645,7 +645,7 @@ func (als *ALS) Fit(ctx context.Context, trainSet, valSet dataset.CFSplit, confi
 		zap.Float32(fmt.Sprintf("Precision@%v", config.TopK), scores[1]),
 		zap.Float32(fmt.Sprintf("Recall@%v", config.TopK), scores[2]))
 
-	_, span := progress.Start(ctx, "ALS.Fit", als.nEpochs)
+	_, span := monitor.Start(ctx, "ALS.Fit", als.nEpochs)
 	for ep := 1; ep <= als.nEpochs; ep++ {
 		fitStart := time.Now()
 		// Update user factors

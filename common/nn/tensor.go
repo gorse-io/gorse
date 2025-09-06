@@ -20,12 +20,14 @@ import (
 	"math"
 	"math/rand"
 	"strings"
+	"sync"
 
 	"github.com/chewxy/math32"
 	mapset "github.com/deckarep/golang-set/v2"
+	"github.com/gorse-io/gorse/common/floats"
+	"github.com/gorse-io/gorse/common/parallel"
+	"github.com/gorse-io/gorse/protocol"
 	"github.com/samber/lo"
-	"github.com/zhenghaoz/gorse/common/floats"
-	"github.com/zhenghaoz/gorse/protocol"
 	"golang.org/x/exp/slices"
 )
 
@@ -443,69 +445,145 @@ func (t *Tensor) neg() *Tensor {
 	return t
 }
 
-func (t *Tensor) matMul(other *Tensor, transpose1, transpose2 bool) *Tensor {
+func partition(n, p int) []lo.Tuple2[int, int] {
+	// If n is less than or equal to 0, return nil.
+	if n <= 0 {
+		return nil
+	}
+
+	// If p is less than or equal to 1, return a single part covering the whole range.
+	if p <= 1 {
+		return []lo.Tuple2[int, int]{{A: 0, B: n}}
+	}
+
+	// If n is less than or equal to p, return each index as a separate part.
+	if n <= p {
+		return lo.Map(lo.Range(n), func(i int, _ int) lo.Tuple2[int, int] {
+			return lo.Tuple2[int, int]{A: i, B: i + 1}
+		})
+	}
+
+	// Otherwise, split n into p parts as evenly as possible.
+	minPartSize := n / p
+	maxPartCount := n % p
+	parts := make([]lo.Tuple2[int, int], 0, p)
+	for i := 0; i < n; {
+		partSize := minPartSize
+		if maxPartCount > 0 {
+			partSize++
+			maxPartCount--
+		}
+		end := i + partSize
+		if end > n {
+			end = n
+		}
+		parts = append(parts, lo.Tuple2[int, int]{A: i, B: end})
+		i = end
+	}
+	return parts
+}
+
+func (t *Tensor) matMul(other *Tensor, transpose1, transpose2 bool, jobs int) *Tensor {
 	if len(t.shape) != 2 || len(other.shape) != 2 {
 		panic("matMul requires 2-D tensors")
 	}
 	var m, n, k int
+	var result []float32
+	var wg sync.WaitGroup
 	if !transpose1 && !transpose2 {
 		if t.shape[1] != other.shape[0] {
 			panic(fmt.Sprintf("matMul requires the shapes of tensors are compatible, but got %v and %v", t.shape, other.shape))
 		}
 		m, n, k = t.shape[0], other.shape[1], t.shape[1]
+		result = make([]float32, m*n)
+		for _, p := range partition(m, jobs) {
+			wg.Go(func() {
+				floats.MM(transpose1, transpose2, p.B-p.A, n, k, t.data[p.A*k:], k, other.data, n, result[p.A*n:], n)
+			})
+		}
 	} else if transpose1 && !transpose2 {
 		if t.shape[0] != other.shape[0] {
 			panic(fmt.Sprintf("matMul requires the shapes of tensors are compatible, but got %v and %v", t.shape, other.shape))
 		}
 		m, n, k = t.shape[1], other.shape[1], t.shape[0]
+		result = make([]float32, m*n)
+		for _, p := range partition(m, jobs) {
+			wg.Go(func() {
+				floats.MM(transpose1, transpose2, p.B-p.A, n, k, t.data[p.A:], m, other.data, n, result[p.A*n:], n)
+			})
+		}
 	} else if !transpose1 && transpose2 {
 		if t.shape[1] != other.shape[1] {
 			panic(fmt.Sprintf("matMul requires the shapes of tensors are compatible, but got %v and %v", t.shape, other.shape))
 		}
 		m, n, k = t.shape[0], other.shape[0], t.shape[1]
+		result = make([]float32, m*n)
+		for _, p := range partition(m, jobs) {
+			wg.Go(func() {
+				floats.MM(transpose1, transpose2, p.B-p.A, n, k, t.data[p.A*k:], k, other.data, k, result[p.A*n:], n)
+			})
+		}
 	} else {
 		if t.shape[0] != other.shape[1] {
 			panic(fmt.Sprintf("matMul requires the shapes of tensors are compatible, but got %v and %v", t.shape, other.shape))
 		}
 		m, n, k = t.shape[1], other.shape[0], t.shape[0]
+		result = make([]float32, m*n)
+		for _, p := range partition(m, jobs) {
+			wg.Go(func() {
+				floats.MM(transpose1, transpose2, p.B-p.A, n, k, t.data[p.A:], m, other.data, k, result[p.A*n:], n)
+			})
+		}
 	}
-	result := make([]float32, m*n)
-	floats.MM(t.data, other.data, result, m, n, k, transpose1, transpose2)
+	wg.Wait()
 	return &Tensor{
 		data:  result,
 		shape: []int{m, n},
 	}
 }
 
-func (t *Tensor) batchMatMul(other *Tensor, transpose1, transpose2 bool) *Tensor {
+func (t *Tensor) batchMatMul(other *Tensor, transpose1, transpose2 bool, jobs int) *Tensor {
 	if len(t.shape) != 3 || len(other.shape) != 3 {
 		panic("BatchMatMul requires 3-D tensors")
 	}
 	var b, m, n, k int
+	var result []float32
 	if !transpose1 && !transpose2 {
 		if t.shape[0] != other.shape[0] || t.shape[2] != other.shape[1] {
 			panic("BatchMatMul requires the shapes of tensors are compatible")
 		}
 		b, m, n, k = t.shape[0], t.shape[1], other.shape[2], t.shape[2]
+		result = make([]float32, b*m*n)
+		parallel.For(b, jobs, func(i int) {
+			floats.MM(transpose1, transpose2, m, n, k, t.data[i*m*k:(i+1)*m*k], k, other.data[i*n*k:(i+1)*n*k], n, result[i*m*n:(i+1)*m*n], n)
+		})
 	} else if transpose1 && !transpose2 {
 		if t.shape[0] != other.shape[0] || t.shape[1] != other.shape[1] {
 			panic("batchMatMul requires the shapes of tensors are compatible")
 		}
 		b, m, n, k = t.shape[0], t.shape[2], other.shape[2], t.shape[1]
+		result = make([]float32, b*m*n)
+		parallel.For(b, jobs, func(i int) {
+			floats.MM(transpose1, transpose2, m, n, k, t.data[i*m*k:(i+1)*m*k], m, other.data[i*n*k:(i+1)*n*k], n, result[i*m*n:(i+1)*m*n], n)
+		})
 	} else if !transpose1 && transpose2 {
 		if t.shape[0] != other.shape[0] || t.shape[2] != other.shape[2] {
 			panic("batchMatMul requires the shapes of tensors are compatible")
 		}
 		b, m, n, k = t.shape[0], t.shape[1], other.shape[1], t.shape[2]
+		result = make([]float32, b*m*n)
+		parallel.For(b, jobs, func(i int) {
+			floats.MM(transpose1, transpose2, m, n, k, t.data[i*m*k:(i+1)*m*k], k, other.data[i*n*k:(i+1)*n*k], k, result[i*m*n:(i+1)*m*n], n)
+		})
 	} else {
 		if t.shape[0] != other.shape[0] || t.shape[1] != other.shape[2] {
 			panic("batchMatMul requires the shapes of tensors are compatible")
 		}
 		b, m, n, k = t.shape[0], t.shape[2], other.shape[1], t.shape[1]
-	}
-	result := make([]float32, b*m*n)
-	for i := 0; i < b; i++ {
-		floats.MM(t.data[i*m*k:(i+1)*m*k], other.data[i*n*k:(i+1)*n*k], result[i*m*n:(i+1)*m*n], m, n, k, transpose1, transpose2)
+		result = make([]float32, b*m*n)
+		parallel.For(b, jobs, func(i int) {
+			floats.MM(transpose1, transpose2, m, n, k, t.data[i*m*k:(i+1)*m*k], m, other.data[i*n*k:(i+1)*n*k], k, result[i*m*n:(i+1)*m*n], n)
+		})
 	}
 	return &Tensor{
 		data:  result,

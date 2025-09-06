@@ -20,7 +20,7 @@ import (
 	"strings"
 	"unsafe"
 
-	"github.com/klauspost/cpuid/v2"
+	"golang.org/x/sys/cpu"
 )
 
 //go:generate goat src/floats_avx.c -O3 -mavx
@@ -40,13 +40,13 @@ const AVX512 = AVX | FMA | AVX512F
 var feature Feature
 
 func init() {
-	if cpuid.CPU.Supports(cpuid.AVX) {
+	if cpu.X86.HasAVX {
 		feature = feature | AVX
 	}
-	if cpuid.CPU.Supports(cpuid.FMA3) {
+	if cpu.X86.HasFMA {
 		feature = feature | FMA
 	}
-	if cpuid.CPU.Supports(cpuid.AVX512F) {
+	if cpu.X86.HasAVX512F {
 		feature = feature | AVX512F
 	}
 }
@@ -184,14 +184,14 @@ func (feature Feature) euclidean(a, b []float32) float32 {
 	}
 }
 
-func (feature Feature) mm(a, b, c []float32, m, n, k int, transA, transB bool) {
+func (feature Feature) mm(transA, transB bool, m, n, k int, a []float32, lda int, b []float32, ldb int, c []float32, ldc int) {
 	// Bypass AVX512 optimizations when CUDA is enabled to avoid potential conflicts
 	// between CUDA-based and AVX512-based matrix multiplication implementations.
 	if feature&AVX512 == AVX512 && feature&CUDA == 0 {
-		_mm512_mm(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), unsafe.Pointer(&c[0]), int64(m), int64(n), int64(k), transA, transB)
+		_mm512_mm(transA, transB, int64(m), int64(n), int64(k), unsafe.Pointer(&a[0]), int64(lda), unsafe.Pointer(&b[0]), int64(ldb), unsafe.Pointer(&c[0]), int64(ldc))
 	} else if feature&AVX == AVX && feature&CUDA == 0 {
-		_mm256_mm(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), unsafe.Pointer(&c[0]), int64(m), int64(n), int64(k), transA, transB)
+		_mm256_mm(transA, transB, int64(m), int64(n), int64(k), unsafe.Pointer(&a[0]), int64(lda), unsafe.Pointer(&b[0]), int64(ldb), unsafe.Pointer(&c[0]), int64(ldc))
 	} else {
-		mm(a, b, c, m, n, k, transA, transB)
+		mm(transA, transB, m, n, k, a, lda, b, ldb, c, ldc)
 	}
 }

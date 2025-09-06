@@ -15,10 +15,8 @@
 package config
 
 import (
-	"github.com/zhenghaoz/gorse/model/cf"
-	"github.com/zhenghaoz/gorse/model/ctr"
-	"github.com/zhenghaoz/gorse/storage/cache"
-	"github.com/zhenghaoz/gorse/storage/data"
+	"github.com/gorse-io/gorse/storage/cache"
+	"github.com/gorse-io/gorse/storage/data"
 )
 
 type Settings struct {
@@ -27,12 +25,6 @@ type Settings struct {
 	// database clients
 	CacheClient cache.Database
 	DataClient  data.Database
-
-	// recommendation models
-	CollaborativeFilteringModel        cf.MatrixFactorization
-	CollaborativeFilteringModelVersion int64
-	ClickModel                         ctr.FactorizationMachine
-	ClickModelVersion                  int64
 }
 
 func NewSettings() *Settings {

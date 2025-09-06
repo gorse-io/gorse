@@ -23,14 +23,14 @@ import (
 	"time"
 
 	"github.com/emicklei/go-restful/v3"
+	"github.com/gorse-io/gorse/common/expression"
+	"github.com/gorse-io/gorse/config"
+	"github.com/gorse-io/gorse/storage/cache"
+	"github.com/gorse-io/gorse/storage/data"
 	"github.com/samber/lo"
 	"github.com/steinfletcher/apitest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
-	"github.com/zhenghaoz/gorse/common/expression"
-	"github.com/zhenghaoz/gorse/config"
-	"github.com/zhenghaoz/gorse/storage/cache"
-	"github.com/zhenghaoz/gorse/storage/data"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -662,11 +662,11 @@ func (suite *ServerTestSuite) TestFeedback() {
 	t := suite.T()
 	// Insert ret
 	feedback := []data.Feedback{
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "0"}},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "1", ItemId: "2"}},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "2", ItemId: "4"}},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "3", ItemId: "6"}},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "4", ItemId: "8"}},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "0"}, Value: 1.0},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "1", ItemId: "2"}, Value: 1.0},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "2", ItemId: "4"}, Value: 1.0},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "3", ItemId: "6"}, Value: 1.0},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "4", ItemId: "8"}, Value: 1.0},
 	}
 	//BatchInsertFeedback
 	apitest.New().
@@ -752,7 +752,7 @@ func (suite *ServerTestSuite) TestFeedback() {
 		Header("X-API-Key", apiKey).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(`[{"FeedbackType":"click", "UserId": "2", "ItemId": "4", "Timestamp":"0001-01-01T00:00:00Z", "Comment":"", "Value":0}]`).
+		Body(`[{"FeedbackType":"click", "UserId": "2", "ItemId": "4", "Timestamp":"0001-01-01T00:00:00Z", "Comment":"", "Value":1}]`).
 		End()
 	apitest.New().
 		Handler(suite.handler).
@@ -760,7 +760,7 @@ func (suite *ServerTestSuite) TestFeedback() {
 		Header("X-API-Key", apiKey).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(`[{"FeedbackType":"click", "UserId": "2", "ItemId": "4", "Timestamp":"0001-01-01T00:00:00Z", "Comment":"", "Value":0}]`).
+		Body(`[{"FeedbackType":"click", "UserId": "2", "ItemId": "4", "Timestamp":"0001-01-01T00:00:00Z", "Comment":"", "Value":1}]`).
 		End()
 	// test overwrite
 	apitest.New().
@@ -795,7 +795,7 @@ func (suite *ServerTestSuite) TestFeedback() {
 	ret, err = suite.DataClient.GetUserFeedback(ctx, "0", suite.Config.Now(), expression.MustParseFeedbackTypeExpression("click"))
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(ret))
-	assert.Equal(t, "override", ret[0].Comment)
+	assert.Equal(t, "not_override", ret[0].Comment)
 
 	// insert feedback without timestamp
 	apitest.New().
@@ -832,8 +832,8 @@ func (suite *ServerTestSuite) TestNonPersonalizedRecommend() {
 		{"NonPersonalizedCategory", cache.NonPersonalized, "trending", "0", "/api/non-personalized/trending"},
 		{"ItemToItem", cache.ItemToItem, cache.Key("lookalike", "0"), "", "/api/item-to-item/lookalike/0"},
 		{"ItemToItemCategory", cache.ItemToItem, cache.Key("lookalike", "0"), "0", "/api/item-to-item/lookalike/0"},
-		{"Offline Recommend", cache.OfflineRecommend, "0", "", "/api/intermediate/recommend/0"},
-		{"Offline Recommend in Category", cache.OfflineRecommend, "0", "0", "/api/intermediate/recommend/0/0"},
+		{"CollaborativeFiltering", cache.OfflineRecommend, "0", "", "/api/collaborative-filtering/0"},
+		{"CollaborativeFilteringCategory", cache.OfflineRecommend, "0", "0", "/api/collaborative-filtering/0/0"},
 	}
 	lastModified := time.Now()
 
@@ -1420,16 +1420,10 @@ func (suite *ServerTestSuite) TestGetRecommendsFallbackPreCached() {
 	t := suite.T()
 	// insert offline recommendation
 	err := suite.CacheClient.AddScores(ctx, cache.OfflineRecommend, "0", []cache.Score{
-		{Id: "1", Score: 99, Categories: []string{""}},
-		{Id: "2", Score: 98, Categories: []string{""}},
-		{Id: "3", Score: 97, Categories: []string{""}},
-		{Id: "4", Score: 96, Categories: []string{""}}})
-	assert.NoError(t, err)
-	err = suite.CacheClient.AddScores(ctx, cache.OfflineRecommend, "0", []cache.Score{
-		{Id: "101", Score: 99, Categories: []string{"*"}},
-		{Id: "102", Score: 98, Categories: []string{"*"}},
-		{Id: "103", Score: 97, Categories: []string{"*"}},
-		{Id: "104", Score: 96, Categories: []string{"*"}}})
+		{Id: "1", Score: 99, Categories: []string{"*"}},
+		{Id: "2", Score: 98, Categories: []string{"*"}},
+		{Id: "3", Score: 97, Categories: []string{"*"}},
+		{Id: "4", Score: 96, Categories: []string{"*"}}})
 	assert.NoError(t, err)
 	// insert latest
 	err = suite.CacheClient.AddScores(ctx, cache.NonPersonalized, cache.Latest, []cache.Score{
@@ -1459,16 +1453,10 @@ func (suite *ServerTestSuite) TestGetRecommendsFallbackPreCached() {
 	assert.NoError(t, err)
 	// insert collaborative filtering
 	err = suite.CacheClient.AddScores(ctx, cache.CollaborativeFiltering, "0", []cache.Score{
-		{Id: "13", Score: 79, Categories: []string{""}},
-		{Id: "14", Score: 78, Categories: []string{""}},
-		{Id: "15", Score: 77, Categories: []string{""}},
-		{Id: "16", Score: 76, Categories: []string{""}}})
-	assert.NoError(t, err)
-	err = suite.CacheClient.AddScores(ctx, cache.CollaborativeFiltering, "0", []cache.Score{
-		{Id: "113", Score: 79, Categories: []string{"*"}},
-		{Id: "114", Score: 78, Categories: []string{"*"}},
-		{Id: "115", Score: 77, Categories: []string{"*"}},
-		{Id: "116", Score: 76, Categories: []string{"*"}}})
+		{Id: "13", Score: 79, Categories: []string{"*"}},
+		{Id: "14", Score: 78, Categories: []string{"*"}},
+		{Id: "15", Score: 77, Categories: []string{"*"}},
+		{Id: "16", Score: 76, Categories: []string{"*"}}})
 	assert.NoError(t, err)
 	// test popular fallback
 	suite.Config.Recommend.Online.FallbackRecommend = []string{"popular"}
@@ -1492,7 +1480,7 @@ func (suite *ServerTestSuite) TestGetRecommendsFallbackPreCached() {
 		}).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(suite.marshal([]string{"101", "102", "103", "104", "109", "110", "111", "112"})).
+		Body(suite.marshal([]string{"1", "2", "3", "4", "109", "110", "111", "112"})).
 		End()
 	// test latest fallback
 	suite.Config.Recommend.Online.FallbackRecommend = []string{"latest"}
@@ -1516,7 +1504,7 @@ func (suite *ServerTestSuite) TestGetRecommendsFallbackPreCached() {
 		}).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(suite.marshal([]string{"101", "102", "103", "104", "105", "106", "107", "108"})).
+		Body(suite.marshal([]string{"1", "2", "3", "4", "105", "106", "107", "108"})).
 		End()
 	// test collaborative filtering
 	suite.Config.Recommend.Online.FallbackRecommend = []string{"collaborative"}
@@ -1540,7 +1528,7 @@ func (suite *ServerTestSuite) TestGetRecommendsFallbackPreCached() {
 		}).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(suite.marshal([]string{"101", "102", "103", "104", "113", "114", "115", "116"})).
+		Body(suite.marshal([]string{"1", "2", "3", "4", "13", "14", "15", "16"})).
 		End()
 	// test wrong fallback
 	suite.Config.Recommend.Online.FallbackRecommend = []string{""}

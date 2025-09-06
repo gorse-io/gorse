@@ -21,11 +21,11 @@ import (
 
 	"github.com/c-bata/goptuna"
 	"github.com/c-bata/goptuna/tpe"
+	"github.com/gorse-io/gorse/base/task"
+	"github.com/gorse-io/gorse/dataset"
+	"github.com/gorse-io/gorse/model"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
-	"github.com/zhenghaoz/gorse/base/task"
-	"github.com/zhenghaoz/gorse/dataset"
-	"github.com/zhenghaoz/gorse/model"
 )
 
 type mockMatrixFactorizationForSearch struct {

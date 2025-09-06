@@ -296,14 +296,14 @@ float _mm256_euclidean(float *a, float *b, int64_t n)
     return _mm_cvtss_f32(r);
 }
 
-void _mm256_mm(float *a, float *b, float *c, int64_t m, int64_t n, int64_t k, _Bool transA, _Bool transB)
+void _mm256_mm(_Bool transA, _Bool transB, int64_t m, int64_t n, int64_t k, float *a, int64_t lda, float *b, int64_t ldb, float *c, int64_t ldc)
 {
     if (!transA && !transB)
     {
         for (int i = 0; i < m; i++) {
             for (int l = 0; l < k; l++) {
                 for (int j = 0; j < n; j++) {
-                    c[i * n + j] += a[i * k + l] * b[l * n + j];
+                    c[i * ldc + j] += a[i * lda + l] * b[l * ldb + j];
                 }
             }
         }
@@ -311,7 +311,7 @@ void _mm256_mm(float *a, float *b, float *c, int64_t m, int64_t n, int64_t k, _B
     {
         for (int i = 0; i < m; i++) {
             for (int j = 0; j < n; j++) {
-                c[i * n + j] = dot(a + i * k, b + j * k, k);
+                c[i * ldc + j] = dot(a + i * lda, b + j * ldb, k);
             }
         }
     } else if (transA && !transB)
@@ -319,7 +319,7 @@ void _mm256_mm(float *a, float *b, float *c, int64_t m, int64_t n, int64_t k, _B
         for (int i = 0; i < m; i++) {
             for (int l = 0; l < k; l++) {
                 for (int j = 0; j < n; j++) {
-                    c[i * n + j] += a[l * m + i] * b[l * n + j];
+                    c[i * ldc + j] += a[l * lda + i] * b[l * ldb + j];
                 }
             }
         }
@@ -328,7 +328,7 @@ void _mm256_mm(float *a, float *b, float *c, int64_t m, int64_t n, int64_t k, _B
         for (int i = 0; i < m; i++) {
             for (int l = 0; l < k; l++) {
                 for (int j = 0; j < n; j++) {
-                    c[i * n + j] += a[l * m + i] * b[j * k + l];
+                    c[i * ldc + j] += a[l * lda + i] * b[j * ldb + l];
                 }
             }
         }

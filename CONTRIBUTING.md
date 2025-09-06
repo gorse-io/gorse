@@ -56,13 +56,13 @@ go run cmd/gorse-master/main.go --config config/config.toml
 - Start the worker node.
 
 ```bash
-go run cmd/gorse-worker/main.go 
+go run cmd/gorse-worker/main.go
 ```
 
 - Start the server node.
 
 ```bash
-go run cmd/gorse-server/main.go 
+go run cmd/gorse-server/main.go
 ```
 
 ### Run Unit Tests
@@ -91,7 +91,7 @@ MYSQL_URI=mysql://root:password@tcp(127.0.0.1:4000)/ go test -v ./...
 
 ## Your First Contribution
 
-You can start by finding an existing issue with the [help wanted](https://github.com/zhenghaoz/gorse/issues?q=is%3Aopen+is%3Aissue+label%3A%22help+wanted%22) label in the Gorse repository. These issues are well suited for new contributors. Issues can be claimed by publishing an `/assign` comment.
+You can start by finding an existing issue with the [help wanted](https://github.com/gorse-io/gorse/issues?q=is%3Aopen+is%3Aissue+label%3A%22help+wanted%22) label in the Gorse repository. These issues are well suited for new contributors. Issues can be claimed by publishing an `/assign` comment.
 
 ### Contribution Workflow
 

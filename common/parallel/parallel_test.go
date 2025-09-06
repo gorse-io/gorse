@@ -19,8 +19,8 @@ import (
 	"time"
 
 	mapset "github.com/deckarep/golang-set/v2"
+	"github.com/gorse-io/gorse/base"
 	"github.com/stretchr/testify/assert"
-	"github.com/zhenghaoz/gorse/base"
 )
 
 func TestParallel(t *testing.T) {
@@ -47,6 +47,23 @@ func TestParallel(t *testing.T) {
 	workersSet = mapset.NewSet(workerIds...)
 	assert.Equal(t, a, b)
 	assert.Equal(t, 1, workersSet.Cardinality())
+}
+
+func TestFor(t *testing.T) {
+	// multiple threads
+	a := base.RangeInt(10000)
+	b := make([]int, len(a))
+	For(len(a), 4, func(jobId int) {
+		b[jobId] = a[jobId]
+		time.Sleep(time.Microsecond)
+	})
+	assert.Equal(t, a, b)
+	// single thread
+	For(len(a), 1, func(jobId int) {
+		b[jobId] = a[jobId]
+		time.Sleep(time.Microsecond)
+	})
+	assert.Equal(t, a, b)
 }
 
 func TestBatchParallel(t *testing.T) {

@@ -25,12 +25,12 @@ import (
 
 	"github.com/XSAM/otelsql"
 	"github.com/araddon/dateparse"
+	"github.com/gorse-io/gorse/base/log"
+	"github.com/gorse-io/gorse/storage"
 	"github.com/juju/errors"
 	"github.com/redis/go-redis/extra/redisotel/v9"
 	"github.com/redis/go-redis/v9"
 	"github.com/samber/lo"
-	"github.com/zhenghaoz/gorse/base/log"
-	"github.com/zhenghaoz/gorse/storage"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.mongodb.org/mongo-driver/x/mongo/driver/connstring"
@@ -46,8 +46,6 @@ import (
 )
 
 const (
-	CollaborativeFiltering = "collaborative_recommend"
-
 	// OfflineRecommend is sorted set of offline recommendation for each user.
 	//  Global recommendation      - offline_recommend/{user_id}
 	//  Categorized recommendation - offline_recommend/{user_id}/{category}
@@ -63,12 +61,13 @@ const (
 	Latest                    = "latest"
 	Popular                   = "popular"
 
-	ItemToItem           = "item-to-item"
-	ItemToItemDigest     = "item-to-item_digest"
-	ItemToItemUpdateTime = "item-to-item_update_time"
-	UserToUser           = "user-to-user"
-	UserToUserDigest     = "user-to-user_digest"
-	UserToUserUpdateTime = "user-to-user_update_time"
+	ItemToItem             = "item-to-item"
+	ItemToItemDigest       = "item-to-item_digest"
+	ItemToItemUpdateTime   = "item-to-item_update_time"
+	UserToUser             = "user-to-user"
+	UserToUserDigest       = "user-to-user_digest"
+	UserToUserUpdateTime   = "user-to-user_update_time"
+	CollaborativeFiltering = "collaborative-filtering"
 
 	// ItemCategories is the set of item categories. The format of key:
 	//	Global item categories - item_categories
@@ -83,6 +82,9 @@ const (
 	DataImported               = "data_imported"
 	NumUsers                   = "num_users"
 	NumItems                   = "num_items"
+	NumFeedback                = "num_feedback"
+	NumPosFeedbacks            = "num_pos_feedbacks"
+	NumNegFeedbacks            = "num_neg_feedbacks"
 	NumUserLabels              = "num_user_labels"
 	NumItemLabels              = "num_item_labels"
 	NumTotalPosFeedbacks       = "num_total_pos_feedbacks"
@@ -93,6 +95,12 @@ const (
 	LastUpdateLatestItemsTime  = "last_update_latest_items_time"  // the latest timestamp that latest items were updated
 	LastUpdatePopularItemsTime = "last_update_popular_items_time" // the latest timestamp that popular items were updated
 	MatchingIndexRecall        = "matching_index_recall"
+	CFNDCG                     = "cf_ndcg"
+	CFPrecision                = "cf_precision"
+	CFRecall                   = "cf_recall"
+	CTRPrecision               = "ctr_precision"
+	CTRRecall                  = "ctr_recall"
+	CTRAUC                     = "ctr_auc"
 )
 
 var ItemCache = []string{

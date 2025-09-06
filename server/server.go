@@ -16,26 +16,27 @@ package server
 
 import (
 	"context"
+	"crypto/md5"
+	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"math/rand"
+	"net"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/emicklei/go-restful/v3"
-	"github.com/google/uuid"
-	"github.com/juju/errors"
+	"github.com/gorse-io/gorse/base"
+	"github.com/gorse-io/gorse/base/log"
+	"github.com/gorse-io/gorse/cmd/version"
+	"github.com/gorse-io/gorse/common/util"
+	"github.com/gorse-io/gorse/config"
+	"github.com/gorse-io/gorse/protocol"
+	"github.com/gorse-io/gorse/storage"
+	"github.com/gorse-io/gorse/storage/cache"
+	"github.com/gorse-io/gorse/storage/data"
 	"github.com/samber/lo"
-	"github.com/zhenghaoz/gorse/base"
-	"github.com/zhenghaoz/gorse/base/log"
-	"github.com/zhenghaoz/gorse/cmd/version"
-	"github.com/zhenghaoz/gorse/common/util"
-	"github.com/zhenghaoz/gorse/config"
-	"github.com/zhenghaoz/gorse/protocol"
-	"github.com/zhenghaoz/gorse/storage"
-	"github.com/zhenghaoz/gorse/storage/cache"
-	"github.com/zhenghaoz/gorse/storage/data"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
 	"go.uber.org/zap"
@@ -88,24 +89,12 @@ func NewServer(
 // Serve starts a server node.
 func (s *Server) Serve() {
 	rand.Seed(time.Now().UTC().UnixNano())
-	// open local store
-	state, err := LoadLocalCache(s.cacheFile)
+	var err error
+	s.serverName, err = s.ServerName()
 	if err != nil {
-		if errors.Is(err, errors.NotFound) {
-			log.Logger().Info("no cache file found, create a new one", zap.String("path", s.cacheFile))
-		} else {
-			log.Logger().Error("failed to connect local store", zap.Error(err),
-				zap.String("path", s.cacheFile))
-		}
+		log.Logger().Fatal("failed to get server name", zap.Error(err))
 	}
-	if state.ServerName == "" {
-		state.ServerName = uuid.New().String()
-		err = state.WriteLocalCache()
-		if err != nil {
-			log.Logger().Fatal("failed to write meta", zap.Error(err))
-		}
-	}
-	s.serverName = state.ServerName
+
 	log.Logger().Info("start server",
 		zap.String("server_name", s.serverName),
 		zap.String("server_host", s.HttpHost),
@@ -124,7 +113,7 @@ func (s *Server) Serve() {
 	} else {
 		opts = append(opts, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	}
-	s.conn, err = grpc.Dial(fmt.Sprintf("%v:%v", s.masterHost, s.masterPort), opts...)
+	s.conn, err = grpc.Dial(net.JoinHostPort(s.masterHost, strconv.Itoa(s.masterPort)), opts...)
 	if err != nil {
 		log.Logger().Fatal("failed to connect master", zap.Error(err))
 	}
@@ -133,6 +122,19 @@ func (s *Server) Serve() {
 	go s.Sync()
 	container := restful.NewContainer()
 	s.StartHttpServer(container)
+}
+
+func (s *Server) ServerName() (string, error) {
+	hostname, err := os.Hostname()
+	if err != nil {
+		return "", err
+	}
+	hash := md5.New()
+	hash.Write([]byte(hostname))
+	hash.Write([]byte(s.HttpHost))
+	hash.Write([]byte(strconv.Itoa(s.HttpPort)))
+	b := hash.Sum(nil)
+	return hex.EncodeToString(b), nil
 }
 
 func (s *Server) Shutdown() {

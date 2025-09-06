@@ -19,8 +19,8 @@ import (
 	"io"
 	"time"
 
+	"github.com/gorse-io/gorse/storage"
 	"github.com/juju/errors"
-	"github.com/zhenghaoz/gorse/storage"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"

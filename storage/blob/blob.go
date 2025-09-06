@@ -16,18 +16,25 @@ package blob
 
 import (
 	"context"
-	"fmt"
-	"github.com/juju/errors"
-	"github.com/zhenghaoz/gorse/base/log"
-	"github.com/zhenghaoz/gorse/protocol"
-	"go.uber.org/zap"
-	"google.golang.org/grpc"
-	"google.golang.org/protobuf/types/known/timestamppb"
 	"io"
 	"os"
 	"path"
 	"time"
+
+	"github.com/gorse-io/gorse/base/log"
+	"github.com/gorse-io/gorse/protocol"
+	"github.com/juju/errors"
+	"go.uber.org/zap"
+	"google.golang.org/grpc"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
+
+type Store interface {
+	Open(name string) (io.ReadCloser, error)
+	Create(name string) (io.WriteCloser, chan struct{}, error)
+	List() ([]string, error)
+	Remove(name string) error
+}
 
 type MasterStoreServer struct {
 	protocol.UnimplementedBlobStoreServer
@@ -93,21 +100,7 @@ func (s *MasterStoreServer) UploadBlob(stream grpc.ClientStreamingServer[protoco
 	if err != nil {
 		return err
 	}
-	// Change timestamp
-	fmt.Println(timestamp)
-	err = os.Chtimes(path.Join(s.dir, name), timestamp, timestamp)
-	if err != nil {
-		return err
-	}
 	return stream.SendAndClose(&protocol.UploadBlobResponse{})
-}
-
-func (s *MasterStoreServer) FetchBlob(ctx context.Context, request *protocol.FetchBlobRequest) (*protocol.FetchBlobResponse, error) {
-	fileInfo, err := os.Stat(path.Join(s.dir, request.Name))
-	if err != nil {
-		return nil, err
-	}
-	return &protocol.FetchBlobResponse{Timestamp: timestamppb.New(fileInfo.ModTime())}, nil
 }
 
 func (s *MasterStoreServer) DownloadBlob(request *protocol.DownloadBlobRequest, stream grpc.ServerStreamingServer[protocol.DownloadBlobResponse]) error {
@@ -140,6 +133,28 @@ func (s *MasterStoreServer) DownloadBlob(request *protocol.DownloadBlobRequest, 
 	return nil
 }
 
+func (s *MasterStoreServer) ListBlobs(ctx context.Context, request *protocol.ListBlobsRequest) (*protocol.ListBlobsResponse, error) {
+	files, err := os.ReadDir(s.dir)
+	if err != nil {
+		return nil, err
+	}
+	var names []string
+	for _, file := range files {
+		if !file.IsDir() {
+			names = append(names, file.Name())
+		}
+	}
+	return &protocol.ListBlobsResponse{Names: names}, nil
+}
+
+func (s *MasterStoreServer) RemoveBlob(ctx context.Context, request *protocol.RemoveBlobRequest) (*protocol.RemoveBlobResponse, error) {
+	err := os.Remove(path.Join(s.dir, request.Name))
+	if err != nil {
+		return nil, err
+	}
+	return &protocol.RemoveBlobResponse{}, nil
+}
+
 type MasterStoreClient struct {
 	client protocol.BlobStoreClient
 }
@@ -148,87 +163,78 @@ func NewMasterStoreClient(clientConn *grpc.ClientConn) *MasterStoreClient {
 	return &MasterStoreClient{client: protocol.NewBlobStoreClient(clientConn)}
 }
 
-func (c *MasterStoreClient) UploadBlob(name, path string) error {
-	// Stat file
-	fileInfo, err := os.Stat(path)
-	if err != nil {
-		return err
-	}
-	// Open file
-	file, err := os.Open(path)
-	if err != nil {
-		return err
-	}
-	defer func(file *os.File) {
-		err = file.Close()
-		if err != nil {
-			log.Logger().Error("failed to close file", zap.Error(err))
-		}
-	}(file)
-	// Upload blob
-	stream, err := c.client.UploadBlob(context.Background())
-	if err != nil {
-		return err
-	}
-	for {
-		data := make([]byte, 1024*1024*4)
-		n, err := file.Read(data)
-		if err != nil {
-			if errors.Is(err, io.EOF) {
-				break
-			}
-			return err
-		}
-		err = stream.Send(&protocol.UploadBlobRequest{
-			Name:      name,
-			Timestamp: timestamppb.New(fileInfo.ModTime()),
-			Data:      data[:n],
-		})
-		if err != nil {
-			return err
-		}
-	}
-	_, err = stream.CloseAndRecv()
-	return err
-}
-
-func (c *MasterStoreClient) FetchBlob(name string) (time.Time, error) {
-	resp, err := c.client.FetchBlob(context.Background(), &protocol.FetchBlobRequest{Name: name})
-	if err != nil {
-		return time.Time{}, err
-	}
-	return resp.Timestamp.AsTime(), nil
-}
-
-func (c *MasterStoreClient) DownloadBlob(name, path string) error {
-	// Open file
-	file, err := os.Create(path)
-	if err != nil {
-		return err
-	}
-	defer func(file *os.File) {
-		err = file.Close()
-		if err != nil {
-			log.Logger().Error("failed to close file", zap.Error(err))
-		}
-	}(file)
-	// Fetch blob
+func (c *MasterStoreClient) Open(name string) (io.ReadCloser, error) {
 	stream, err := c.client.DownloadBlob(context.Background(), &protocol.DownloadBlobRequest{Name: name})
 	if err != nil {
-		return err
+		return nil, err
 	}
-	for {
-		resp, err := stream.Recv()
-		if err != nil {
-			if errors.Is(err, io.EOF) {
-				break
+	pr, pw := io.Pipe()
+	go func() {
+		for {
+			resp, err := stream.Recv()
+			if err != nil {
+				_ = pw.CloseWithError(err)
+				return
 			}
-			return err
+			_, err = pw.Write(resp.Data)
+			if err != nil {
+				_ = pw.CloseWithError(err)
+				return
+			}
 		}
-		_, err = file.Write(resp.Data)
+	}()
+	return pr, nil
+}
+
+func (c *MasterStoreClient) Create(name string) (io.WriteCloser, chan struct{}, error) {
+	stream, err := c.client.UploadBlob(context.Background())
+	if err != nil {
+		return nil, nil, err
+	}
+	done := make(chan struct{})
+	pr, pw := io.Pipe()
+	go func() {
+		defer close(done)
+		for {
+			data := make([]byte, 1024*1024*4)
+			n, err := pr.Read(data)
+			if err != nil {
+				if errors.Is(err, io.EOF) {
+					break
+				}
+				log.Logger().Error("failed to read data", zap.Error(err))
+				return
+			}
+			err = stream.Send(&protocol.UploadBlobRequest{
+				Name:      name,
+				Timestamp: timestamppb.Now(),
+				Data:      data[:n],
+			})
+			if err != nil {
+				log.Logger().Error("failed to send data", zap.Error(err))
+				return
+			}
+		}
+		_, err = stream.CloseAndRecv()
 		if err != nil {
-			return err
+			log.Logger().Error("failed to close stream", zap.Error(err))
 		}
+	}()
+	return pw, done, nil
+}
+
+func (c *MasterStoreClient) List() ([]string, error) {
+	resp, err := c.client.ListBlobs(context.Background(), &protocol.ListBlobsRequest{})
+	if err != nil {
+		return nil, err
+	}
+	return resp.Names, nil
+}
+
+func (c *MasterStoreClient) Remove(name string) error {
+	_, err := c.client.RemoveBlob(context.Background(), &protocol.RemoveBlobRequest{Name: name})
+	if err != nil {
+		return err
 	}
 	return nil
 }

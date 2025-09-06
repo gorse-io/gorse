@@ -22,13 +22,13 @@ import (
 	"time"
 
 	"github.com/c-bata/goptuna"
+	"github.com/gorse-io/gorse/base"
+	"github.com/gorse-io/gorse/base/log"
+	"github.com/gorse-io/gorse/base/task"
+	"github.com/gorse-io/gorse/common/monitor"
+	"github.com/gorse-io/gorse/dataset"
+	"github.com/gorse-io/gorse/model"
 	"github.com/samber/lo"
-	"github.com/zhenghaoz/gorse/base"
-	"github.com/zhenghaoz/gorse/base/log"
-	"github.com/zhenghaoz/gorse/base/progress"
-	"github.com/zhenghaoz/gorse/base/task"
-	"github.com/zhenghaoz/gorse/dataset"
-	"github.com/zhenghaoz/gorse/model"
 	"go.uber.org/zap"
 )
 
@@ -109,7 +109,7 @@ func GridSearchCV(ctx context.Context, estimator MatrixFactorization, trainSet, 
 		Params: make([]model.Params, 0, total),
 	}
 	var dfs func(deep int, params model.Params)
-	newCtx, span := progress.Start(ctx, "GridSearchCV", total)
+	newCtx, span := monitor.Start(ctx, "GridSearchCV", total)
 	dfs = func(deep int, params model.Params) {
 		if deep == len(paramNames) {
 			log.Logger().Info(fmt.Sprintf("grid search (%v/%v)", span.Count(), total),
@@ -155,7 +155,7 @@ func RandomSearchCV(ctx context.Context, estimator MatrixFactorization, trainSet
 		Scores: make([]Score, 0, numTrials),
 		Params: make([]model.Params, 0, numTrials),
 	}
-	newCtx, span := progress.Start(ctx, "RandomSearchCV", numTrials)
+	newCtx, span := monitor.Start(ctx, "RandomSearchCV", numTrials)
 	for i := 1; i <= numTrials; i++ {
 		// Make parameters
 		params := model.Params{}

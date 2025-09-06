@@ -5,7 +5,7 @@
 ![](https://img.shields.io/github/go-mod/go-version/zhenghaoz/gorse)
 [![test](https://github.com/gorse-io/gorse/actions/workflows/build_test.yml/badge.svg)](https://github.com/gorse-io/gorse/actions/workflows/build_test.yml)
 [![codecov](https://codecov.io/gh/gorse-io/gorse/branch/master/graph/badge.svg)](https://codecov.io/gh/gorse-io/gorse)
-[![Go Report Card](https://goreportcard.com/badge/github.com/zhenghaoz/gorse)](https://goreportcard.com/report/github.com/zhenghaoz/gorse)
+[![Go Report Card](https://goreportcard.com/badge/github.com/gorse-io/gorse)](https://goreportcard.com/report/github.com/gorse-io/gorse)
 [![Discord](https://img.shields.io/discord/830635934210588743)](https://discord.gg/x6gAtNNkAE)
 [![Twitter Follow](https://img.shields.io/twitter/follow/gorse_io?label=Follow&style=social)](https://twitter.com/gorse_io)
 [![Gurubase](https://img.shields.io/badge/Gurubase-Ask%20Gorse%20Guru-006BFF)](https://gurubase.io/g/gorse)
@@ -23,7 +23,7 @@ Gorse is an open-source recommendation system written in Go. Gorse aims to be a 
 
 ## Quick Start
 
-The playground mode has been prepared for beginners. Just set up a recommender system for GitHub repositories by the following commands. 
+The playground mode has been prepared for beginners. Just set up a recommender system for GitHub repositories by the following commands.
 
 - Linux/macOS:
 
@@ -108,7 +108,7 @@ In addition, the administrator can perform system monitoring, data import and ex
 
 ## Contributors
 
-<a href="https://github.com/zhenghaoz/gorse/graphs/contributors">
+<a href="https://github.com/gorse-io/gorse/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=zhenghaoz/gorse" />
 </a>
 

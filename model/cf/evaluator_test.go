@@ -22,10 +22,10 @@ import (
 
 	"github.com/c-bata/goptuna"
 	mapset "github.com/deckarep/golang-set/v2"
+	"github.com/gorse-io/gorse/dataset"
+	"github.com/gorse-io/gorse/model"
+	"github.com/gorse-io/gorse/storage/data"
 	"github.com/stretchr/testify/assert"
-	"github.com/zhenghaoz/gorse/dataset"
-	"github.com/zhenghaoz/gorse/model"
-	"github.com/zhenghaoz/gorse/storage/data"
 )
 
 const evalEpsilon = 0.00001

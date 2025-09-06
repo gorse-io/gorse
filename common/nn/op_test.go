@@ -15,9 +15,10 @@
 package nn
 
 import (
+	"testing"
+
 	"github.com/chewxy/math32"
 	"github.com/stretchr/testify/assert"
-	"testing"
 )
 
 const (
@@ -290,6 +291,20 @@ func TestLog(t *testing.T) {
 	allClose(t, x.grad, dx)
 }
 
+func TestAbs(t *testing.T) {
+	// (2,3) -> (2,3)
+	x := NewTensor([]float32{1, -2, 3, -4, 5, -6}, 2, 3)
+	y := Abs(x)
+	assert.Equal(t, []float32{1, 2, 3, 4, 5, 6}, y.data)
+
+	// Test gradient
+	x = Rand(2, 3)
+	y = Abs(x)
+	y.Backward()
+	dx := numericalDiff(Abs, x)
+	allClose(t, x.grad, dx)
+}
+
 func TestSum(t *testing.T) {
 	// (2,3) -> ()
 	x := NewTensor([]float32{1, 2, 3, 4, 5, 6}, 2, 3)
@@ -361,7 +376,7 @@ func TestMatMul(t *testing.T) {
 	// (2,3) * (3,4) -> (2,4)
 	x := NewTensor([]float32{1, 2, 3, 4, 5, 6}, 2, 3)
 	y := NewTensor([]float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}, 3, 4)
-	z := MatMul(x, y)
+	z := MatMul(x, y, false, false, 0)
 	assert.Equal(t, []int{2, 4}, z.shape)
 	assert.Equal(t, []float32{38, 44, 50, 56, 83, 98, 113, 128}, z.data)
 
@@ -375,7 +390,7 @@ func TestMatMul(t *testing.T) {
 	// (3,2).T * (3,4) -> (2,4)
 	x = Rand(3, 2)
 	y = Rand(3, 4)
-	z = MatMul(x, y, true, false)
+	z = MatMul(x, y, true, false, 0)
 	assert.Equal(t, []int{2, 4}, z.shape)
 	z.Backward()
 	assert.Equal(t, []int{3, 2}, x.grad.shape)
@@ -384,7 +399,7 @@ func TestMatMul(t *testing.T) {
 	// (2,3) * (4,3).T -> (2,4)
 	x = Rand(2, 3)
 	y = Rand(4, 3)
-	z = MatMul(x, y, false, true)
+	z = MatMul(x, y, false, true, 0)
 	assert.Equal(t, []int{2, 4}, z.shape)
 	z.Backward()
 	assert.Equal(t, []int{2, 3}, x.grad.shape)
@@ -393,7 +408,7 @@ func TestMatMul(t *testing.T) {
 	// (3,2).T * (4,3).T -> (2,4)
 	x = Rand(3, 2)
 	y = Rand(4, 3)
-	z = MatMul(x, y, true, true)
+	z = MatMul(x, y, true, true, 0)
 	assert.Equal(t, []int{2, 4}, z.shape)
 	z.Backward()
 	assert.Equal(t, []int{3, 2}, x.grad.shape)
@@ -406,7 +421,7 @@ func TestBMM(t *testing.T) {
 		1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
 		1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
 	}, 2, 3, 4)
-	z := BMM(x, y)
+	z := BMM(x, y, false, false, 0)
 	assert.Equal(t, []int{2, 2, 4}, z.shape)
 	assert.Equal(t, []float32{
 		38, 44, 50, 56, 83, 98, 113, 128,
@@ -429,7 +444,7 @@ func TestBMM(t *testing.T) {
 	// (2,3,2).T * (2,3,4) -> (2,2,4)
 	x = Rand(2, 3, 2)
 	y = Rand(2, 3, 4)
-	z = BMM(x, y, true, false)
+	z = BMM(x, y, true, false, 0)
 	assert.Equal(t, []int{2, 2, 4}, z.shape)
 	z.Backward()
 	assert.Equal(t, []int{2, 3, 2}, x.grad.shape)
@@ -437,7 +452,7 @@ func TestBMM(t *testing.T) {
 	// (2,2,3) * (2,4,3).T -> (2,2,4)
 	x = Rand(2, 2, 3)
 	y = Rand(2, 4, 3)
-	z = BMM(x, y, false, true)
+	z = BMM(x, y, false, true, 0)
 	assert.Equal(t, []int{2, 2, 4}, z.shape)
 	z.Backward()
 	assert.Equal(t, []int{2, 2, 3}, x.grad.shape)
@@ -445,7 +460,7 @@ func TestBMM(t *testing.T) {
 	// (2,3,2).T * (2,43).T -> (2,2,4)
 	x = Rand(2, 3, 2)
 	y = Rand(2, 4, 3)
-	z = BMM(x, y, true, true)
+	z = BMM(x, y, true, true, 0)
 	assert.Equal(t, []int{2, 2, 4}, z.shape)
 	z.Backward()
 	assert.Equal(t, []int{2, 3, 2}, x.grad.shape)

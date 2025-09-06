@@ -18,8 +18,8 @@ import (
 	"sync"
 
 	"github.com/chewxy/math32"
+	"github.com/gorse-io/gorse/common/floats"
 	"github.com/samber/lo"
-	"github.com/zhenghaoz/gorse/common/floats"
 )
 
 type Optimizer interface {
@@ -70,15 +70,14 @@ func NewSGD(params []*Tensor, lr float32) Optimizer {
 func (s *SGD) Step() {
 	for _, p := range s.params {
 		b := s.b[:len(p.data)]
-		parts := split(len(p.data), s.jobs, 32)
+		parts := partitionAligned(len(p.data), s.jobs, 32)
 		var wg sync.WaitGroup
-		wg.Add(len(parts))
 		for _, part := range parts {
-			go func(i, j int) {
-				defer wg.Done()
+			i, j := part.A, part.B
+			wg.Go(func() {
 				floats.MulConstAddTo(p.data[i:j], s.wd, p.grad.data[i:j], b[i:j])
 				floats.MulConstAdd(b[i:j], -s.lr, p.data[i:j])
-			}(part.A, part.B)
+			})
 		}
 		wg.Wait()
 	}
@@ -131,12 +130,11 @@ func (a *Adam) Step() {
 		m, v := a.ms[p], a.vs[p]
 		b1, b2 := a.b1[:len(p.data)], a.b2[:len(p.data)]
 
-		parts := split(len(p.data), a.jobs, 32)
+		parts := partitionAligned(len(p.data), a.jobs, 32)
 		var wg sync.WaitGroup
-		wg.Add(len(parts))
 		for _, part := range parts {
-			go func(i, j int) {
-				defer wg.Done()
+			i, j := part.A, part.B
+			wg.Go(func() {
 				// grad = grad + wd * param.data
 				floats.MulConstAddTo(p.data[i:j], a.wd, p.grad.data[i:j], b1[i:j])
 				// m += (1 - beta1) * (grad - m)
@@ -151,15 +149,15 @@ func (a *Adam) Step() {
 				floats.AddConst(b2[i:j], a.eps)
 				floats.DivTo(m.data[i:j], b2[i:j], b1[i:j])
 				floats.MulConstAdd(b1[i:j], -lr, p.data[i:j])
-			}(part.A, part.B)
+			})
 		}
 		wg.Wait()
 	}
 }
 
-// split n-size slice into m parts. Each part is aligned to k elements except the last part. For example:
+// partitionAligned partitions n-size slice into m parts. Each part is aligned to k elements except the last part. For example:
 // split(10, 3, 2) = [(0, 4), (4, 8), (8, 10)]
-func split(n, m, k int) []lo.Tuple2[int, int] {
+func partitionAligned(n, m, k int) []lo.Tuple2[int, int] {
 	if n <= 0 {
 		return nil
 	}

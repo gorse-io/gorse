@@ -1,4 +1,4 @@
-// Copyright 2021 gorse Project Authors
+// Copyright 2023 gorse Project Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,28 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package base
+package monitor
 
-const batchSize = 1024 * 1024
+import (
+	"testing"
 
-type Array[T any] struct {
-	Data [][]T
+	"github.com/stretchr/testify/suite"
+)
+
+type ProgressTestSuite struct {
+	suite.Suite
+	tracer Monitor
 }
 
-func (a *Array[T]) Len() int {
-	if len(a.Data) == 0 {
-		return 0
-	}
-	return len(a.Data)*batchSize - batchSize + len(a.Data[len(a.Data)-1])
+func (suite *ProgressTestSuite) SetupTest() {
+	suite.tracer = Monitor{}
 }
 
-func (a *Array[T]) Get(index int) T {
-	return a.Data[index/batchSize][index%batchSize]
-}
-
-func (a *Array[T]) Append(val T) {
-	if len(a.Data) == 0 || len(a.Data[len(a.Data)-1]) == batchSize {
-		a.Data = append(a.Data, make([]T, 0, batchSize))
-	}
-	a.Data[len(a.Data)-1] = append(a.Data[len(a.Data)-1], val)
+func TestProgressTestSuite(t *testing.T) {
+	suite.Run(t, new(ProgressTestSuite))
 }

@@ -21,8 +21,8 @@ import (
 	"regexp"
 	"strconv"
 
+	"github.com/gorse-io/gorse/protocol"
 	"github.com/samber/lo"
-	"github.com/zhenghaoz/gorse/protocol"
 )
 
 var expressionPattern = regexp.MustCompile(`^(?P<feedback_type>[a-zA-Z][a-zA-Z0-9_]*)(?P<expr_type><=|>=|<|>|=)?(?P<value>[0-9]*\.?[0-9]*)$`)

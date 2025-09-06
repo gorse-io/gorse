@@ -1,4 +1,4 @@
-// Copyright 2023 gorse Project Authors
+// Copyright 2025 gorse Project Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,23 +12,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package progress
+package blas
 
-import (
-	"testing"
+type Order int
 
-	"github.com/stretchr/testify/suite"
+const RowMajor Order = 101
+
+type Transpose int
+
+const (
+	NoTrans Transpose = 111
+	Trans   Transpose = 112
 )
 
-type ProgressTestSuite struct {
-	suite.Suite
-	tracer Tracer
-}
-
-func (suite *ProgressTestSuite) SetupTest() {
-	suite.tracer = Tracer{}
-}
-
-func TestProgressTestSuite(t *testing.T) {
-	suite.Run(t, new(ProgressTestSuite))
+func NewTranspose(transpose bool) Transpose {
+	if transpose {
+		return Trans
+	} else {
+		return NoTrans
+	}
 }

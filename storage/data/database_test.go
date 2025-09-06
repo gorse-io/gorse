@@ -23,18 +23,20 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gorse-io/gorse/common/expression"
 	"github.com/jaswdr/faker"
 	"github.com/juju/errors"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-	"github.com/zhenghaoz/gorse/common/expression"
 	"google.golang.org/protobuf/proto"
 )
 
 var (
 	positiveFeedbackType  = "positiveFeedbackType"
+	positiveFeedbackType1 = "positiveFeedbackType1"
+	positiveFeedbackType2 = "positiveFeedbackType2"
 	negativeFeedbackType  = "negativeFeedbackType"
 	duplicateFeedbackType = "duplicateFeedbackType"
 	dateTime64Zero        = time.Date(1900, 1, 1, 0, 0, 0, 0, time.UTC)
@@ -252,11 +254,11 @@ func (suite *baseTestSuite) TestFeedback() {
 	// insert feedbacks
 	timestamp := time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC)
 	feedback := []Feedback{
-		{FeedbackKey{positiveFeedbackType, "0", "8"}, 1, timestamp, "comment"},
-		{FeedbackKey{positiveFeedbackType, "1", "6"}, 1, timestamp, "comment"},
-		{FeedbackKey{positiveFeedbackType, "2", "4"}, 1, timestamp, "comment"},
-		{FeedbackKey{positiveFeedbackType, "3", "2"}, 1, timestamp, "comment"},
-		{FeedbackKey{positiveFeedbackType, "4", "0"}, 1, timestamp, "comment"},
+		{FeedbackKey{positiveFeedbackType1, "0", "8"}, 1, timestamp, "comment"},
+		{FeedbackKey{positiveFeedbackType1, "1", "6"}, 1, timestamp, "comment"},
+		{FeedbackKey{positiveFeedbackType2, "2", "4"}, 1, timestamp, "comment"},
+		{FeedbackKey{positiveFeedbackType2, "3", "2"}, 1, timestamp, "comment"},
+		{FeedbackKey{positiveFeedbackType2, "4", "0"}, 1, timestamp, "comment"},
 	}
 	err = suite.Database.BatchInsertFeedback(ctx, feedback, true, true, true)
 	suite.NoError(err)
@@ -281,25 +283,39 @@ func (suite *baseTestSuite) TestFeedback() {
 	suite.NoError(err)
 	suite.Equal(12, count)
 	// Get feedback
-	ret := suite.getFeedback(ctx, 3, nil, lo.ToPtr(time.Now()), positiveFeedbackType)
+	ret := suite.getFeedback(ctx, 3, nil, lo.ToPtr(time.Now()), positiveFeedbackType1, positiveFeedbackType2)
 	suite.Equal(feedback, ret)
 	ret = suite.getFeedback(ctx, 2, nil, lo.ToPtr(time.Now()))
 	suite.Equal(len(feedback)+2, len(ret))
 	ret = suite.getFeedback(ctx, 2, lo.ToPtr(timestamp.Add(time.Second)), lo.ToPtr(time.Now()))
 	suite.Empty(ret)
 	// Get feedback stream
-	feedbackFromStream := suite.getFeedbackStream(ctx, 3, WithEndTime(time.Now()),
-		WithFeedbackTypes(expression.MustParseFeedbackTypeExpression(positiveFeedbackType)))
+	feedbackFromStream := suite.getFeedbackStream(ctx, 3,
+		WithEndTime(time.Now()),
+		WithFeedbackTypes(
+			expression.MustParseFeedbackTypeExpression(positiveFeedbackType1),
+			expression.MustParseFeedbackTypeExpression(positiveFeedbackType2)))
 	suite.ElementsMatch(feedback, feedbackFromStream)
 	feedbackFromStream = suite.getFeedbackStream(ctx, 3, WithEndTime(time.Now()))
 	suite.Equal(len(feedback)+2, len(feedbackFromStream))
 	feedbackFromStream = suite.getFeedbackStream(ctx, 3, WithBeginTime(timestamp.Add(time.Second)), WithEndTime(time.Now()))
 	suite.Empty(feedbackFromStream)
-	feedbackFromStream = suite.getFeedbackStream(ctx, 3, WithBeginUserId("1"), WithEndUserId("3"), WithEndTime(time.Now()),
-		WithFeedbackTypes(expression.MustParseFeedbackTypeExpression(positiveFeedbackType)))
+	feedbackFromStream = suite.getFeedbackStream(ctx, 3,
+		WithBeginUserId("1"),
+		WithEndUserId("3"),
+		WithEndTime(time.Now()),
+		WithFeedbackTypes(
+			expression.MustParseFeedbackTypeExpression(positiveFeedbackType1),
+			expression.MustParseFeedbackTypeExpression(positiveFeedbackType2)))
 	suite.Equal(feedback[1:4], feedbackFromStream)
-	feedbackFromStream = suite.getFeedbackStream(ctx, 3, WithBeginItemId("2"), WithEndItemId("6"), WithEndTime(time.Now()),
-		WithFeedbackTypes(expression.MustParseFeedbackTypeExpression(positiveFeedbackType)), WithOrderByItemId())
+	feedbackFromStream = suite.getFeedbackStream(ctx, 3,
+		WithBeginItemId("2"),
+		WithEndItemId("6"),
+		WithEndTime(time.Now()),
+		WithFeedbackTypes(
+			expression.MustParseFeedbackTypeExpression(positiveFeedbackType1),
+			expression.MustParseFeedbackTypeExpression(positiveFeedbackType2)),
+		WithOrderByItemId())
 	suite.Equal([]Feedback{feedback[3], feedback[2], feedback[1]}, feedbackFromStream)
 	// Get items
 	err = suite.Database.Optimize()
@@ -339,7 +355,9 @@ func (suite *baseTestSuite) TestFeedback() {
 	suite.NoError(err)
 	suite.Equal(Item{ItemId: "0", Labels: []any{"b"}, Timestamp: time.Date(1996, 4, 8, 10, 0, 0, 0, time.UTC)}, item)
 	// Get typed feedback by user
-	ret, err = suite.Database.GetUserFeedback(ctx, "2", lo.ToPtr(time.Now()), expression.MustParseFeedbackTypeExpression(positiveFeedbackType))
+	ret, err = suite.Database.GetUserFeedback(ctx, "2", lo.ToPtr(time.Now()),
+		expression.MustParseFeedbackTypeExpression(positiveFeedbackType1),
+		expression.MustParseFeedbackTypeExpression(positiveFeedbackType2))
 	suite.NoError(err)
 	if suite.Equal(1, len(ret)) {
 		suite.Equal("2", ret[0].UserId)
@@ -350,7 +368,7 @@ func (suite *baseTestSuite) TestFeedback() {
 	suite.NoError(err)
 	suite.Equal(2, len(ret))
 	// Get typed feedback by item
-	ret, err = suite.Database.GetItemFeedback(ctx, "4", positiveFeedbackType)
+	ret, err = suite.Database.GetItemFeedback(ctx, "4", positiveFeedbackType1, positiveFeedbackType2)
 	suite.NoError(err)
 	suite.Equal(1, len(ret))
 	suite.Equal("2", ret[0].UserId)
@@ -362,6 +380,8 @@ func (suite *baseTestSuite) TestFeedback() {
 	// test override
 	err = suite.Database.BatchInsertFeedback(ctx, []Feedback{{
 		FeedbackKey: FeedbackKey{positiveFeedbackType, "0", "8"},
+		Value:       100,
+		Timestamp:   time.Date(1996, 4, 8, 0, 0, 0, 0, time.UTC),
 		Comment:     "override",
 	}}, true, true, true)
 	suite.NoError(err)
@@ -370,10 +390,14 @@ func (suite *baseTestSuite) TestFeedback() {
 	ret, err = suite.Database.GetUserFeedback(ctx, "0", lo.ToPtr(time.Now()), expression.MustParseFeedbackTypeExpression(positiveFeedbackType))
 	suite.NoError(err)
 	suite.Equal(1, len(ret))
+	suite.Equal(float64(100), ret[0].Value)
+	suite.Equal(time.Date(1996, 4, 8, 0, 0, 0, 0, time.UTC), ret[0].Timestamp)
 	suite.Equal("override", ret[0].Comment)
 	// test not overwrite
 	err = suite.Database.BatchInsertFeedback(ctx, []Feedback{{
 		FeedbackKey: FeedbackKey{positiveFeedbackType, "0", "8"},
+		Value:       80,
+		Timestamp:   time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
 		Comment:     "not_override",
 	}}, true, true, false)
 	suite.NoError(err)
@@ -382,7 +406,9 @@ func (suite *baseTestSuite) TestFeedback() {
 	ret, err = suite.Database.GetUserFeedback(ctx, "0", lo.ToPtr(time.Now()), expression.MustParseFeedbackTypeExpression(positiveFeedbackType))
 	suite.NoError(err)
 	suite.Equal(1, len(ret))
-	suite.Equal("override", ret[0].Comment)
+	suite.Equal(float64(180), ret[0].Value)
+	suite.Equal(time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), ret[0].Timestamp)
+	suite.Equal("not_override", ret[0].Comment)
 
 	// insert no feedback
 	err = suite.Database.BatchInsertFeedback(ctx, nil, true, true, true)

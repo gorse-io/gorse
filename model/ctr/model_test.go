@@ -19,9 +19,9 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/gorse-io/gorse/model"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
-	"github.com/zhenghaoz/gorse/model"
 )
 
 const classificationDelta = 0.01
@@ -35,7 +35,7 @@ func TestFactorizationMachines_Classification_Frappe(t *testing.T) {
 	// python .\model.py frappe -dim 8 -iter 10 -learn_rate 0.01 -regular 0.0001
 	train, test, err := LoadDataFromBuiltIn("frappe")
 	assert.NoError(t, err)
-	m := NewFactorizationMachines(model.Params{
+	m := NewFMV2(model.Params{
 		model.NFactors:  8,
 		model.NEpochs:   10,
 		model.Lr:        0.01,
@@ -52,7 +52,7 @@ func TestFactorizationMachines_Classification_MovieLens(t *testing.T) {
 	// python .\model.py ml-tag -dim 8 -iter 10 -learn_rate 0.01 -regular 0.0001
 	train, test, err := LoadDataFromBuiltIn("ml-tag")
 	assert.NoError(t, err)
-	m := NewFactorizationMachines(model.Params{
+	m := NewFMV2(model.Params{
 		model.InitStdDev: 0.01,
 		model.NFactors:   8,
 		model.NEpochs:    10,
@@ -69,7 +69,7 @@ func TestFactorizationMachines_Classification_Criteo(t *testing.T) {
 	// python .\model.py criteo -dim 8 -iter 10 -learn_rate 0.01 -regular 0.0001
 	train, test, err := LoadDataFromBuiltIn("criteo")
 	assert.NoError(t, err)
-	m := NewFactorizationMachines(model.Params{
+	m := NewFMV2(model.Params{
 		model.NFactors:  8,
 		model.NEpochs:   10,
 		model.Lr:        0.01,
@@ -82,14 +82,14 @@ func TestFactorizationMachines_Classification_Criteo(t *testing.T) {
 
 	// test prediction
 	assert.Equal(t, m.BatchInternalPredict([]lo.Tuple2[[]int32, []float32]{{A: []int32{1, 2, 3, 4, 5, 6}, B: []float32{1, 1, 0.3, 0.4, 0.5, 0.6}}}),
-		m.BatchPredict([]lo.Tuple4[string, string, []Feature, []Feature]{{
+		m.BatchPredict([]lo.Tuple4[string, string, []Label, []Label]{{
 			A: "1",
 			B: "2",
-			C: []Feature{
+			C: []Label{
 				{Name: "3", Value: 0.3},
 				{Name: "4", Value: 0.4},
 			},
-			D: []Feature{
+			D: []Label{
 				{Name: "5", Value: 0.5},
 				{Name: "6", Value: 0.6},
 			}}}))

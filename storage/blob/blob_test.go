@@ -15,13 +15,14 @@
 package blob
 
 import (
-	"github.com/stretchr/testify/assert"
-	"github.com/zhenghaoz/gorse/protocol"
-	"google.golang.org/grpc"
+	"io"
 	"net"
-	"os"
 	"path"
 	"testing"
+
+	"github.com/gorse-io/gorse/protocol"
+	"github.com/stretchr/testify/assert"
+	"google.golang.org/grpc"
 )
 
 func TestBlob(t *testing.T) {
@@ -41,27 +42,33 @@ func TestBlob(t *testing.T) {
 	assert.NoError(t, err)
 	client := NewMasterStoreClient(clientConn)
 
-	// create a temp file
-	tempFilePath := path.Join(t.TempDir(), "test.txt")
-	err = os.WriteFile(tempFilePath, []byte("hello world"), 0644)
+	// write a temp file
+	w, done, err := client.Create("test")
 	assert.NoError(t, err)
-	info, err := os.Stat(tempFilePath)
+	_, err = w.Write([]byte("hello world"))
 	assert.NoError(t, err)
+	assert.NoError(t, w.Close())
+	<-done
 
-	// upload blob
-	err = client.UploadBlob("test", tempFilePath)
+	// read the file
+	r, err := client.Open("test")
 	assert.NoError(t, err)
+	content := make([]byte, 11)
+	_, err = r.Read(content)
+	assert.NoError(t, err)
+	assert.Equal(t, "hello world", string(content))
+	_, err = r.Read(content)
+	assert.ErrorIs(t, err, io.EOF)
 
-	// fetch blob
-	modTime, err := client.FetchBlob("test")
+	// list files
+	files, err := client.List()
 	assert.NoError(t, err)
-	assert.Equal(t, info.ModTime().UTC(), modTime)
+	assert.Contains(t, files, "test")
 
-	// download blob
-	downloadFilePath := path.Join(t.TempDir(), "download.txt")
-	err = client.DownloadBlob("test", downloadFilePath)
+	// remove the file
+	err = client.Remove("test")
 	assert.NoError(t, err)
-	downloadContent, err := os.ReadFile(downloadFilePath)
+	files, err = client.List()
 	assert.NoError(t, err)
-	assert.Equal(t, "hello world", string(downloadContent))
+	assert.NotContains(t, files, "test")
 }

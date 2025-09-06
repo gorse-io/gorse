@@ -16,19 +16,20 @@ package ann
 
 import (
 	"bufio"
-	mapset "github.com/deckarep/golang-set/v2"
-	"github.com/samber/lo"
-	"github.com/stretchr/testify/assert"
-	"github.com/zhenghaoz/gorse/common/datautil"
-	"github.com/zhenghaoz/gorse/common/floats"
-	"github.com/zhenghaoz/gorse/common/util"
-	"go.uber.org/atomic"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
 	"testing"
+
+	mapset "github.com/deckarep/golang-set/v2"
+	"github.com/gorse-io/gorse/common/datautil"
+	"github.com/gorse-io/gorse/common/floats"
+	"github.com/gorse-io/gorse/common/util"
+	"github.com/samber/lo"
+	"github.com/stretchr/testify/assert"
+	"go.uber.org/atomic"
 )
 
 const (
@@ -135,6 +136,28 @@ func TestMNIST(t *testing.T) {
 
 	// Test search
 	r := 0.0
+	for _, image := range dat.TestImages[:testSize] {
+		gt := bf.SearchVector(image, 100, false)
+		assert.Len(t, gt, 100)
+		scores := hnsw.SearchVector(image, 100, false)
+		assert.Len(t, scores, 100)
+		r += recall(gt, scores)
+	}
+	r /= float64(testSize)
+	assert.Greater(t, r, 0.99)
+
+	// Test save and load
+	path := filepath.Join(t.TempDir(), "mnist.bin")
+	f, err := os.Create(path)
+	assert.NoError(t, err)
+	defer f.Close()
+	assert.NoError(t, hnsw.Marshal(f))
+
+	f, err = os.Open(path)
+	assert.NoError(t, err)
+	defer f.Close()
+	assert.NoError(t, hnsw.Unmarshal(f))
+	r = 0
 	for _, image := range dat.TestImages[:testSize] {
 		gt := bf.SearchVector(image, 100, false)
 		assert.Len(t, gt, 100)

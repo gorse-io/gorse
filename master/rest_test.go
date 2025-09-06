@@ -29,22 +29,20 @@ import (
 
 	"github.com/emicklei/go-restful/v3"
 	"github.com/go-viper/mapstructure/v2"
+	"github.com/gorse-io/gorse/common/expression"
+	"github.com/gorse-io/gorse/common/mock"
+	"github.com/gorse-io/gorse/config"
+	"github.com/gorse-io/gorse/protocol"
+	"github.com/gorse-io/gorse/server"
+	"github.com/gorse-io/gorse/storage/cache"
+	"github.com/gorse-io/gorse/storage/data"
+	"github.com/gorse-io/gorse/storage/meta"
 	"github.com/juju/errors"
 	"github.com/samber/lo"
 	"github.com/sashabaranov/go-openai"
 	"github.com/steinfletcher/apitest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
-	"github.com/zhenghaoz/gorse/common/expression"
-	"github.com/zhenghaoz/gorse/common/mock"
-	"github.com/zhenghaoz/gorse/config"
-	"github.com/zhenghaoz/gorse/model/cf"
-	"github.com/zhenghaoz/gorse/model/ctr"
-	"github.com/zhenghaoz/gorse/protocol"
-	"github.com/zhenghaoz/gorse/server"
-	"github.com/zhenghaoz/gorse/storage/cache"
-	"github.com/zhenghaoz/gorse/storage/data"
-	"github.com/zhenghaoz/gorse/storage/meta"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -370,8 +368,6 @@ func (suite *MasterAPITestSuite) TestGetCluster() {
 func (suite *MasterAPITestSuite) TestGetStats() {
 	ctx := context.Background()
 	// set stats
-	suite.collaborativeFilteringModelScore = cf.Score{Precision: 0.1}
-	suite.clickScore = ctr.Score{Precision: 0.2}
 	err := suite.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.NumUsers), 123))
 	suite.NoError(err)
 	err = suite.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.NumItems), 234))
@@ -392,8 +388,6 @@ func (suite *MasterAPITestSuite) TestGetStats() {
 			NumItems:            234,
 			NumValidPosFeedback: 345,
 			NumValidNegFeedback: 456,
-			MatchingModelScore:  cf.Score{Precision: 0.1},
-			RankingModelScore:   ctr.Score{Precision: 0.2},
 			BinaryVersion:       "unknown-version",
 		})).
 		End()
@@ -603,7 +597,7 @@ func (suite *MasterAPITestSuite) TestSearchDocumentsOfUsers() {
 func (suite *MasterAPITestSuite) TestFeedback() {
 	ctx := context.Background()
 	// insert feedback
-	feedback := []Feedback{
+	feedback := []DetailedFeedback{
 		{FeedbackType: "click", UserId: "0", Item: data.Item{ItemId: "0"}},
 		{FeedbackType: "click", UserId: "0", Item: data.Item{ItemId: "2"}},
 		{FeedbackType: "click", UserId: "0", Item: data.Item{ItemId: "4"}},

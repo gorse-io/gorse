@@ -280,7 +280,7 @@ func BenchmarkMatMul64(b *testing.B) {
 		for t2 := 0; t2 < 2; t2++ {
 			b.Run(fmt.Sprintf("(%d,%d)", t1, t2), func(b *testing.B) {
 				for i := 0; i < b.N; i++ {
-					x.matMul(y, t1 == 1, t2 == 1)
+					x.matMul(y, t1 == 1, t2 == 1, 0)
 				}
 			})
 		}
@@ -308,7 +308,7 @@ func BenchmarkBatchMatMul64(b *testing.B) {
 		for t2 := 0; t2 < 2; t2++ {
 			b.Run(fmt.Sprintf("(%d,%d)", t1, t2), func(b *testing.B) {
 				for i := 0; i < b.N; i++ {
-					x.batchMatMul(y, t1 == 1, t2 == 1)
+					x.batchMatMul(y, t1 == 1, t2 == 1, 0)
 				}
 			})
 		}

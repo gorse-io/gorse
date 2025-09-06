@@ -24,23 +24,35 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gorse-io/gorse/base"
+	"github.com/gorse-io/gorse/common/monitor"
+	"github.com/gorse-io/gorse/common/util"
+	"github.com/gorse-io/gorse/config"
+	"github.com/gorse-io/gorse/dataset"
+	"github.com/gorse-io/gorse/model"
+	"github.com/gorse-io/gorse/model/cf"
+	"github.com/gorse-io/gorse/model/ctr"
+	"github.com/gorse-io/gorse/protocol"
+	"github.com/gorse-io/gorse/server"
+	"github.com/gorse-io/gorse/storage/cache"
+	"github.com/gorse-io/gorse/storage/data"
+	"github.com/gorse-io/gorse/storage/meta"
 	"github.com/madflojo/testcerts"
 	"github.com/stretchr/testify/assert"
-	"github.com/zhenghaoz/gorse/base/progress"
-	"github.com/zhenghaoz/gorse/common/encoding"
-	"github.com/zhenghaoz/gorse/common/util"
-	"github.com/zhenghaoz/gorse/config"
-	"github.com/zhenghaoz/gorse/model"
-	"github.com/zhenghaoz/gorse/model/cf"
-	"github.com/zhenghaoz/gorse/model/ctr"
-	"github.com/zhenghaoz/gorse/protocol"
-	"github.com/zhenghaoz/gorse/server"
-	"github.com/zhenghaoz/gorse/storage/cache"
-	"github.com/zhenghaoz/gorse/storage/data"
-	"github.com/zhenghaoz/gorse/storage/meta"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
+
+func newRankingDataset() (*dataset.Dataset, *dataset.Dataset) {
+	return dataset.NewDataset(time.Now(), 0, 0), dataset.NewDataset(time.Now(), 0, 0)
+}
+
+func newClickDataset() (*ctr.Dataset, *ctr.Dataset) {
+	dataset := &ctr.Dataset{
+		Index: base.NewUnifiedMapIndexBuilder().Build(),
+	}
+	return dataset, dataset
+}
 
 type mockMasterRPC struct {
 	Master
@@ -56,27 +68,24 @@ func newMockMasterRPC(t *testing.T) *mockMasterRPC {
 	assert.NoError(t, err)
 	// create click model
 	train, test := newClickDataset()
-	fm := ctr.NewFM(model.Params{model.NEpochs: 0})
-	fm.Fit(context.Background(), train, test, nil)
+	fm := ctr.NewFMV2(model.Params{model.NEpochs: 0})
+	fm.Fit(context.Background(), train, test, &ctr.FitConfig{})
 	// create ranking model
 	trainSet, testSet := newRankingDataset()
 	bpr := cf.NewBPR(model.Params{model.NEpochs: 0})
 	bpr.Fit(context.Background(), trainSet, testSet, cf.NewFitConfig())
 	return &mockMasterRPC{
 		Master: Master{
-			collaborativeFilteringModelName: "bpr",
 			RestServer: server.RestServer{
 				Settings: &config.Settings{
-					Config:                             config.GetDefaultConfig(),
-					CacheClient:                        cache.NoDatabase{},
-					DataClient:                         data.NoDatabase{},
-					CollaborativeFilteringModel:        bpr,
-					ClickModel:                         fm,
-					CollaborativeFilteringModelVersion: 123,
-					ClickModelVersion:                  456,
+					Config:      config.GetDefaultConfig(),
+					CacheClient: cache.NoDatabase{},
+					DataClient:  data.NoDatabase{},
 				},
 			},
-			metaStore: metaStore,
+			metaStore:                  metaStore,
+			collaborativeFilteringMeta: meta.Model[cf.Score]{ID: 123},
+			clickThroughRateMeta:       meta.Model[ctr.Score]{ID: 456},
 		},
 		addr: make(chan string),
 	}
@@ -124,10 +133,10 @@ func TestRPC(t *testing.T) {
 	client := protocol.NewMasterClient(conn)
 	ctx := context.Background()
 
-	progressList := []progress.Progress{{
+	progressList := []monitor.Progress{{
 		Tracer:     "tracer",
 		Name:       "a",
-		Status:     progress.StatusRunning,
+		Status:     monitor.StatusRunning,
 		Total:      12,
 		Count:      6,
 		StartTime:  time.Date(2018, time.January, 1, 0, 0, 0, 0, time.Local),
@@ -137,23 +146,8 @@ func TestRPC(t *testing.T) {
 	assert.NoError(t, err)
 	i, ok := rpcServer.remoteProgress.Load("tracer")
 	assert.True(t, ok)
-	remoteProgressList := i.([]progress.Progress)
+	remoteProgressList := i.([]monitor.Progress)
 	assert.Equal(t, progressList, remoteProgressList)
-
-	// test get click model
-	clickModelReceiver, err := client.GetClickModel(ctx, &protocol.VersionInfo{Version: 456})
-	assert.NoError(t, err)
-	clickModel, err := encoding.UnmarshalClickModel(clickModelReceiver)
-	assert.NoError(t, err)
-	assert.Equal(t, rpcServer.ClickModel, clickModel)
-
-	// test get ranking model
-	rankingModelReceiver, err := client.GetRankingModel(ctx, &protocol.VersionInfo{Version: 123})
-	assert.NoError(t, err)
-	rankingModel, err := encoding.UnmarshalRankingModel(rankingModelReceiver)
-	assert.NoError(t, err)
-	rpcServer.CollaborativeFilteringModel.SetParams(rpcServer.CollaborativeFilteringModel.GetParams())
-	assert.Equal(t, rpcServer.CollaborativeFilteringModel, rankingModel)
 
 	// test get meta
 	_, err = client.GetMeta(ctx,
@@ -162,8 +156,8 @@ func TestRPC(t *testing.T) {
 	metaResp, err := client.GetMeta(ctx,
 		&protocol.NodeInfo{NodeType: protocol.NodeType_Worker, Uuid: "worker1", Hostname: "yoga"})
 	assert.NoError(t, err)
-	assert.Equal(t, int64(123), metaResp.RankingModelVersion)
-	assert.Equal(t, int64(456), metaResp.ClickModelVersion)
+	assert.Equal(t, int64(123), metaResp.CollaborativeFilteringModelId)
+	assert.Equal(t, int64(456), metaResp.ClickThroughRateModelId)
 	assert.Equal(t, "worker1", metaResp.Me)
 	assert.Equal(t, []string{"server1"}, metaResp.Servers)
 	assert.Equal(t, []string{"worker1"}, metaResp.Workers)

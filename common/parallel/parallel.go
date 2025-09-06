@@ -15,8 +15,9 @@
 package parallel
 
 import (
-	"github.com/zhenghaoz/gorse/base"
 	"sync"
+
+	"github.com/gorse-io/gorse/base"
 
 	"github.com/juju/errors"
 	"modernc.org/mathutil"
@@ -33,7 +34,7 @@ const (
 // the number of executors. worker is the executed function which passed a range of task
 // Names (begin, end).
 func Parallel(nJobs, nWorkers int, worker func(workerId, jobId int) error) error {
-	if nWorkers == 1 {
+	if nWorkers <= 1 {
 		for i := 0; i < nJobs; i++ {
 			if err := worker(0, i); err != nil {
 				return errors.Trace(err)
@@ -50,13 +51,12 @@ func Parallel(nJobs, nWorkers int, worker func(workerId, jobId int) error) error
 		}()
 		// consumer
 		var wg sync.WaitGroup
-		wg.Add(nWorkers)
 		errs := make([]error, nJobs)
 		for j := 0; j < nWorkers; j++ {
 			// start workers
-			go func(workerId int) {
+			workerId := j
+			wg.Go(func() {
 				defer base.CheckPanic()
-				defer wg.Done()
 				for {
 					// read job
 					jobId, ok := <-c
@@ -69,7 +69,7 @@ func Parallel(nJobs, nWorkers int, worker func(workerId, jobId int) error) error
 						return
 					}
 				}
-			}(j)
+			})
 		}
 		wg.Wait()
 		// check errors
@@ -80,6 +80,34 @@ func Parallel(nJobs, nWorkers int, worker func(workerId, jobId int) error) error
 		}
 	}
 	return nil
+}
+
+func For(nJobs, nWorkers int, worker func(int)) {
+	if nWorkers <= 1 {
+		for i := 0; i < nJobs; i++ {
+			worker(i)
+		}
+	} else {
+		c := make(chan int, chanSize)
+		// producer
+		go func() {
+			for i := 0; i < nJobs; i++ {
+				c <- i
+			}
+			close(c)
+		}()
+		// consumer
+		var wg sync.WaitGroup
+		for j := 0; j < nWorkers; j++ {
+			// start workers
+			wg.Go(func() {
+				for jobId := range c {
+					worker(jobId)
+				}
+			})
+		}
+		wg.Wait()
+	}
 }
 
 type batchJob struct {
@@ -102,12 +130,11 @@ func BatchParallel(nJobs, nWorkers, batchSize int, worker func(workerId, beginJo
 	}()
 	// consumer
 	var wg sync.WaitGroup
-	wg.Add(nWorkers)
 	errs := make([]error, nJobs)
 	for j := 0; j < nWorkers; j++ {
 		// start workers
-		go func(workerId int) {
-			defer wg.Done()
+		workerId := j
+		wg.Go(func() {
 			for {
 				// read job
 				job, ok := <-c
@@ -120,7 +147,7 @@ func BatchParallel(nJobs, nWorkers, batchSize int, worker func(workerId, beginJo
 					return
 				}
 			}
-		}(j)
+		})
 	}
 	wg.Wait()
 	// check errors

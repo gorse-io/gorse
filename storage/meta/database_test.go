@@ -15,8 +15,9 @@
 package meta
 
 import (
-	"github.com/stretchr/testify/suite"
 	"time"
+
+	"github.com/stretchr/testify/suite"
 )
 
 type baseTestSuite struct {
@@ -61,4 +62,37 @@ func (suite *baseTestSuite) TestNodes() {
 		suite.Equal("master", nodes[0].Type)
 		suite.Equal("v0.1.1", nodes[0].Version)
 	}
+}
+
+func (suite *baseTestSuite) TestKeyValues() {
+	err := suite.Database.Put("key1", "value1")
+	suite.NoError(err)
+	err = suite.Database.Put("key2", "value2")
+	suite.NoError(err)
+	err = suite.Database.Put("key3", "value3")
+	suite.NoError(err)
+
+	value, err := suite.Database.Get("key1")
+	suite.NoError(err)
+	suite.Equal("value1", *value)
+
+	value, err = suite.Database.Get("key2")
+	suite.NoError(err)
+	suite.Equal("value2", *value)
+
+	value, err = suite.Database.Get("key3")
+	suite.NoError(err)
+	suite.Equal("value3", *value)
+
+	// Test overwrite
+	err = suite.Database.Put("key1", "new_value1")
+	suite.NoError(err)
+	value, err = suite.Database.Get("key1")
+	suite.NoError(err)
+	suite.Equal("new_value1", *value)
+
+	// Test non-existing key
+	value, err = suite.Database.Get("non-existing-key")
+	suite.NoError(err)
+	suite.Nil(value)
 }

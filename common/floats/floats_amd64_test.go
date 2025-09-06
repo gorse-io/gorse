@@ -23,7 +23,20 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/suite"
+	"golang.org/x/sys/cpu"
 )
+
+var supportedFeatures []Feature
+
+func init() {
+	supportedFeatures = []Feature{0}
+	if cpu.X86.HasAVX {
+		supportedFeatures = append(supportedFeatures, AVX)
+	}
+	if cpu.X86.HasAVX && cpu.X86.HasFMA && cpu.X86.HasAVX512F {
+		supportedFeatures = append(supportedFeatures, AVX512)
+	}
+}
 
 func TestAVX(t *testing.T) {
 	suite.Run(t, &SIMDTestSuite{Feature: AVX})
@@ -42,7 +55,7 @@ func initializeFloat32Array(n int) []float32 {
 }
 
 func BenchmarkDot(b *testing.B) {
-	for _, feat := range []Feature{0, AVX512} {
+	for _, feat := range supportedFeatures {
 		b.Run(feat.String(), func(b *testing.B) {
 			for i := 16; i <= 128; i *= 2 {
 				b.Run(strconv.Itoa(i), func(b *testing.B) {
@@ -59,7 +72,7 @@ func BenchmarkDot(b *testing.B) {
 }
 
 func BenchmarkEuclidean(b *testing.B) {
-	for _, feat := range []Feature{0, AVX, AVX512} {
+	for _, feat := range supportedFeatures {
 		b.Run(feat.String(), func(b *testing.B) {
 			for i := 16; i <= 128; i *= 2 {
 				b.Run(strconv.Itoa(i), func(b *testing.B) {
@@ -76,7 +89,7 @@ func BenchmarkEuclidean(b *testing.B) {
 }
 
 func BenchmarkMulConstAddTo(b *testing.B) {
-	for _, feat := range []Feature{0, AVX, AVX512} {
+	for _, feat := range supportedFeatures {
 		b.Run(feat.String(), func(b *testing.B) {
 			for i := 16; i <= 128; i *= 2 {
 				b.Run(strconv.Itoa(i), func(b *testing.B) {
@@ -94,7 +107,7 @@ func BenchmarkMulConstAddTo(b *testing.B) {
 }
 
 func BenchmarkMulConstAdd(b *testing.B) {
-	for _, feat := range []Feature{0, AVX, AVX512} {
+	for _, feat := range supportedFeatures {
 		b.Run(feat.String(), func(b *testing.B) {
 			for i := 16; i <= 128; i *= 2 {
 				b.Run(strconv.Itoa(i), func(b *testing.B) {
@@ -111,7 +124,7 @@ func BenchmarkMulConstAdd(b *testing.B) {
 }
 
 func BenchmarkMulConst(b *testing.B) {
-	for _, feat := range []Feature{0, AVX, AVX512} {
+	for _, feat := range supportedFeatures {
 		b.Run(feat.String(), func(b *testing.B) {
 			for i := 16; i <= 128; i *= 2 {
 				b.Run(strconv.Itoa(i), func(b *testing.B) {
@@ -127,7 +140,7 @@ func BenchmarkMulConst(b *testing.B) {
 }
 
 func BenchmarkMulConstTo(b *testing.B) {
-	for _, feat := range []Feature{0, AVX, AVX512} {
+	for _, feat := range supportedFeatures {
 		b.Run(feat.String(), func(b *testing.B) {
 			for i := 16; i <= 128; i *= 2 {
 				b.Run(strconv.Itoa(i), func(b *testing.B) {
@@ -144,7 +157,7 @@ func BenchmarkMulConstTo(b *testing.B) {
 }
 
 func BenchmarkAddConst(b *testing.B) {
-	for _, feat := range []Feature{0, AVX, AVX512} {
+	for _, feat := range supportedFeatures {
 		b.Run(feat.String(), func(b *testing.B) {
 			for i := 16; i <= 128; i *= 2 {
 				b.Run(strconv.Itoa(i), func(b *testing.B) {
@@ -160,7 +173,7 @@ func BenchmarkAddConst(b *testing.B) {
 }
 
 func BenchmarkSub(b *testing.B) {
-	for _, feat := range []Feature{0, AVX, AVX512} {
+	for _, feat := range supportedFeatures {
 		b.Run(feat.String(), func(b *testing.B) {
 			for i := 16; i <= 128; i *= 2 {
 				b.Run(strconv.Itoa(i), func(b *testing.B) {
@@ -177,7 +190,7 @@ func BenchmarkSub(b *testing.B) {
 }
 
 func BenchmarkSubTo(b *testing.B) {
-	for _, feat := range []Feature{0, AVX, AVX512} {
+	for _, feat := range supportedFeatures {
 		b.Run(feat.String(), func(b *testing.B) {
 			for i := 16; i <= 128; i *= 2 {
 				b.Run(strconv.Itoa(i), func(b *testing.B) {
@@ -195,7 +208,7 @@ func BenchmarkSubTo(b *testing.B) {
 }
 
 func BenchmarkMulTo(b *testing.B) {
-	for _, feat := range []Feature{0, AVX, AVX512} {
+	for _, feat := range supportedFeatures {
 		b.Run(feat.String(), func(b *testing.B) {
 			for i := 16; i <= 128; i *= 2 {
 				b.Run(strconv.Itoa(i), func(b *testing.B) {
@@ -213,7 +226,7 @@ func BenchmarkMulTo(b *testing.B) {
 }
 
 func BenchmarkDivTo(b *testing.B) {
-	for _, feat := range []Feature{0, AVX, AVX512} {
+	for _, feat := range supportedFeatures {
 		b.Run(feat.String(), func(b *testing.B) {
 			for i := 16; i <= 128; i *= 2 {
 				b.Run(strconv.Itoa(i), func(b *testing.B) {
@@ -231,7 +244,7 @@ func BenchmarkDivTo(b *testing.B) {
 }
 
 func BenchmarkSqrtTo(b *testing.B) {
-	for _, feat := range []Feature{0, AVX, AVX512} {
+	for _, feat := range supportedFeatures {
 		b.Run(feat.String(), func(b *testing.B) {
 			for i := 16; i <= 128; i *= 2 {
 				b.Run(strconv.Itoa(i), func(b *testing.B) {
@@ -250,7 +263,7 @@ func BenchmarkSqrtTo(b *testing.B) {
 func BenchmarkMM(b *testing.B) {
 	for _, transA := range []bool{false, true} {
 		for _, transB := range []bool{false, true} {
-			for _, feat := range []Feature{0, AVX, AVX512} {
+			for _, feat := range supportedFeatures {
 				b.Run(fmt.Sprintf("(%v,%v,%v)", transA, transB, feat.String()), func(b *testing.B) {
 					for n := 16; n <= 128; n *= 2 {
 						b.Run(strconv.Itoa(n), func(b *testing.B) {
@@ -259,7 +272,7 @@ func BenchmarkMM(b *testing.B) {
 							matC := make([]float32, n*n)
 							b.ResetTimer()
 							for i := 0; i < b.N; i++ {
-								feat.mm(matA, matB, matC, n, n, n, transA, transB)
+								feat.mm(transA, transB, n, n, n, matA, n, matB, n, matC, n)
 							}
 						})
 					}

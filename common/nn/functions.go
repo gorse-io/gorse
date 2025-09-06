@@ -115,6 +115,10 @@ func Cos(x *Tensor) *Tensor {
 	return apply(&cos{}, x)
 }
 
+func Abs(x *Tensor) *Tensor {
+	return apply(&abs{}, x)
+}
+
 // Sum returns the sum of all elements in a tensor.
 func Sum(x *Tensor, along ...int) *Tensor {
 	if len(along) > 1 {
@@ -130,30 +134,20 @@ func Mean(x *Tensor) *Tensor {
 	return apply(&mean{}, x)
 }
 
-func MatMul(x, y *Tensor, transpose ...bool) *Tensor {
-	op := &matMul{}
-	if len(transpose) > 2 {
-		panic("only two transpose is allowed")
-	}
-	if len(transpose) > 0 {
-		op.transpose1 = transpose[0]
-	}
-	if len(transpose) > 1 {
-		op.transpose2 = transpose[1]
+func MatMul(x, y *Tensor, transpose1, transpose2 bool, jobs int) *Tensor {
+	op := &matMul{
+		transpose1: transpose1,
+		transpose2: transpose2,
+		jobs:       jobs,
 	}
 	return apply(op, x, y)
 }
 
-func BMM(x, y *Tensor, transpose ...bool) *Tensor {
-	op := &batchMatMul{}
-	if len(transpose) > 2 {
-		panic("only two transpose is allowed")
-	}
-	if len(transpose) > 0 {
-		op.transpose1 = transpose[0]
-	}
-	if len(transpose) > 1 {
-		op.transpose2 = transpose[1]
+func BMM(x, y *Tensor, transpose1, transpose2 bool, jobs int) *Tensor {
+	op := &batchMatMul{
+		transpose1: transpose1,
+		transpose2: transpose2,
+		jobs:       jobs,
 	}
 	return apply(op, x, y)
 }
@@ -214,19 +208,36 @@ func SoftmaxCrossEntropy(x, y *Tensor) *Tensor {
 	return apply(&softmaxCrossEntropy{}, x, y)
 }
 
-// BCEWithLogits is equivalent to:
+// BCEWithLogits calculates the binary cross-entropy loss between target and prediction
+// with logits. This implementation is numerically stable.
+// It is equivalent to the formula:
 //
-//	(1 + target) * math32.Log(1+math32.Exp(-prediction)) / 2 + (1 - target) * math32.Log(1+math32.Exp(prediction)) / 2
-func BCEWithLogits(target, prediction *Tensor) *Tensor {
-	return Mean(Add(
-		Div(
-			Mul(
-				Add(NewScalar(1), target),
-				Log(Add(NewScalar(1), Exp(Neg(prediction))))),
-			NewScalar(2)),
-		Div(
-			Mul(
-				Sub(Ones(target.shape...), target),
-				Log(Add(NewScalar(1), Exp(prediction)))),
-			NewScalar(2))))
+//	max(prediction, 0) - prediction*y + log(1 + exp(-|prediction|))
+//
+// where y = (target + 1) / 2, target is -1 or 1.
+func BCEWithLogits(target, prediction, weights *Tensor) *Tensor {
+	// To prevent overflow, we use the mathematically equivalent and more stable formula.
+	// This avoids calculating exp(x) where x is a large positive number.
+
+	// term1 = max(prediction, 0)
+	term1 := ReLu(prediction)
+
+	// y = (target + 1) / 2
+	y := Div(Add(NewScalar(1), target), NewScalar(2))
+
+	// term2 = prediction * y
+	term2 := Mul(prediction, y)
+
+	// term3 = log(1 + exp(-|prediction|))
+	absPrediction := Abs(prediction)
+	expTerm := Exp(Neg(absPrediction))
+	logTerm := Log(Add(NewScalar(1), expTerm))
+
+	// loss = max(prediction, 0) - prediction*y + log(1 + exp(-|prediction|))
+	loss := Add(Sub(term1, term2), logTerm)
+
+	if weights != nil {
+		loss = Mul(loss, weights)
+	}
+	return Mean(loss)
 }

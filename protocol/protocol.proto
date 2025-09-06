@@ -14,7 +14,7 @@
 
 syntax = "proto3";
 
-option go_package = "github.com/zhenghaoz/gorse/protocol";
+option go_package = "github.com/gorse-io/gorse/protocol";
 
 package protocol;
 
@@ -57,30 +57,19 @@ service Master {
 
   /* meta distribute */
   rpc GetMeta(NodeInfo) returns (Meta) {}
-
-  /* data distribute */
-  rpc GetRankingModel(VersionInfo) returns (stream Fragment) {}
-  rpc GetClickModel(VersionInfo) returns (stream Fragment) {}
-
   rpc PushProgress(PushProgressRequest) returns (PushProgressResponse) {}
 }
 
 message Meta {
   string config = 1;
-  int64 ranking_model_version = 3;
-  int64 click_model_version = 4;
+  int64 collaborative_filtering_model_id = 3;
+  int64 click_through_rate_model_id = 4;
   string me = 5;
   repeated string servers = 6;
   repeated string workers = 7;
 }
 
-message Fragment {
-  bytes data = 1;
-}
-
-message VersionInfo {
-  int64 version = 1;
-}
+message Fragment { bytes data = 1; }
 
 message NodeInfo {
   NodeType node_type = 1;
@@ -100,9 +89,7 @@ message Progress {
   int64 finish_time = 8;
 }
 
-message PushProgressRequest {
-  repeated Progress progress = 1;
-}
+message PushProgressRequest { repeated Progress progress = 1; }
 
 message PushProgressResponse {}
 
@@ -118,24 +105,25 @@ message UploadBlobRequest {
 
 message UploadBlobResponse {}
 
-message FetchBlobRequest {
+message DownloadBlobRequest { string name = 1; }
+
+message DownloadBlobResponse { bytes data = 1; }
+
+message ListBlobsRequest {}
+
+message ListBlobsResponse {
+  repeated string names = 1;
+}
+
+message RemoveBlobRequest {
   string name = 1;
 }
 
-message FetchBlobResponse {
-  google.protobuf.Timestamp timestamp = 1;
-}
-
-message DownloadBlobRequest {
-  string name = 1;
-}
-
-message DownloadBlobResponse {
-  bytes data = 1;
-}
+message RemoveBlobResponse {}
 
 service BlobStore {
   rpc UploadBlob(stream UploadBlobRequest) returns (UploadBlobResponse) {}
-  rpc FetchBlob(FetchBlobRequest) returns (FetchBlobResponse) {}
   rpc DownloadBlob(DownloadBlobRequest) returns (stream DownloadBlobResponse) {}
+  rpc ListBlobs(ListBlobsRequest) returns (ListBlobsResponse) {}
+  rpc RemoveBlob(RemoveBlobRequest) returns (RemoveBlobResponse) {}
 }

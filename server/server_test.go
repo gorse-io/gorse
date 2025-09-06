@@ -21,9 +21,9 @@ import (
 	"net"
 	"testing"
 
+	"github.com/gorse-io/gorse/config"
+	"github.com/gorse-io/gorse/protocol"
 	"github.com/stretchr/testify/assert"
-	"github.com/zhenghaoz/gorse/config"
-	"github.com/zhenghaoz/gorse/protocol"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -53,14 +53,6 @@ func newMockMaster(t *testing.T) *mockMaster {
 
 func (m *mockMaster) GetMeta(_ context.Context, _ *protocol.NodeInfo) (*protocol.Meta, error) {
 	return m.meta, nil
-}
-
-func (m *mockMaster) GetRankingModel(_ *protocol.VersionInfo, _ protocol.Master_GetRankingModelServer) error {
-	panic("not implement")
-}
-
-func (m *mockMaster) GetClickModel(_ *protocol.VersionInfo, _ protocol.Master_GetClickModelServer) error {
-	panic("not implement")
 }
 
 func (m *mockMaster) Start(t *testing.T) {

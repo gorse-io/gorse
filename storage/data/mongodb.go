@@ -21,9 +21,9 @@ import (
 	"time"
 
 	mapset "github.com/deckarep/golang-set/v2"
+	"github.com/gorse-io/gorse/common/expression"
+	"github.com/gorse-io/gorse/storage"
 	"github.com/juju/errors"
-	"github.com/zhenghaoz/gorse/common/expression"
-	"github.com/zhenghaoz/gorse/storage"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -648,11 +648,15 @@ func (db *MongoDB) BatchInsertFeedback(ctx context.Context, feedback []Feedback,
 				model.SetUpdate(bson.M{
 					"$setOnInsert": bson.M{
 						"feedbackkey": f.FeedbackKey,
-						"timestamp":   f.Timestamp,
-						"comment":     f.Comment,
 					},
 					"$inc": bson.M{
 						"value": f.Value,
+					},
+					"$min": bson.M{
+						"timestamp": f.Timestamp,
+					},
+					"$set": bson.M{
+						"comment": f.Comment,
 					},
 				})
 			}

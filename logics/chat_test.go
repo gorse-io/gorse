@@ -17,10 +17,10 @@ package logics
 import (
 	"testing"
 
+	"github.com/gorse-io/gorse/common/mock"
+	"github.com/gorse-io/gorse/config"
+	"github.com/gorse-io/gorse/storage/data"
 	"github.com/stretchr/testify/assert"
-	"github.com/zhenghaoz/gorse/common/mock"
-	"github.com/zhenghaoz/gorse/config"
-	"github.com/zhenghaoz/gorse/storage/data"
 )
 
 func TestChatRankerhat(t *testing.T) {

@@ -16,27 +16,15 @@
 
 package floats
 
-import "github.com/zhenghaoz/gorse/common/blas"
+import "github.com/gorse-io/gorse/common/blas"
 
 func init() {
 	feature = feature | CUDA
 }
 
-func mm(a, b, c []float32, m, n, k int, transA, transB bool) {
-	var err *blas.Error
-	if !transA && !transB {
-		err = blas.SGEMM(blas.RowMajor, blas.NoTrans, blas.NoTrans, m, n, k, 1.0,
-			a, k, b, n, 0, c, n)
-	} else if !transA && transB {
-		err = blas.SGEMM(blas.RowMajor, blas.NoTrans, blas.Trans, m, n, k, 1.0,
-			a, k, b, k, 0, c, n)
-	} else if transA && !transB {
-		err = blas.SGEMM(blas.RowMajor, blas.Trans, blas.NoTrans, m, n, k, 1.0,
-			a, m, b, n, 0, c, n)
-	} else {
-		err = blas.SGEMM(blas.RowMajor, blas.Trans, blas.Trans, m, n, k, 1.0,
-			a, m, b, k, 0, c, n)
-	}
+func mm(transA, transB bool, m, n, k int, a []float32, lda int, b []float32, ldb int, c []float32, ldc int) {
+	err := blas.SGEMM(blas.RowMajor, blas.NewTranspose(transA), blas.NewTranspose(transB),
+		m, n, k, 1.0, a, lda, b, ldb, 0, c, ldc)
 	if err != nil {
 		panic(err)
 	}

@@ -18,8 +18,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/stretchr/testify/assert"
-	"github.com/zhenghaoz/gorse/storage/cache"
 )
 
 func TestOnlineEvaluator(t *testing.T) {

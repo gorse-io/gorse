@@ -15,8 +15,8 @@
 package model
 
 import (
+	"github.com/gorse-io/gorse/base"
 	"github.com/c-bata/goptuna"
-	"github.com/zhenghaoz/gorse/base"
 )
 
 // Model is the interface for all models. Any model in this

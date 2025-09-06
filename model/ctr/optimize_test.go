@@ -20,12 +20,12 @@ import (
 
 	"github.com/c-bata/goptuna"
 	"github.com/c-bata/goptuna/tpe"
+	"github.com/gorse-io/gorse/base"
+	"github.com/gorse-io/gorse/base/task"
+	"github.com/gorse-io/gorse/dataset"
+	"github.com/gorse-io/gorse/model"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
-	"github.com/zhenghaoz/gorse/base"
-	"github.com/zhenghaoz/gorse/base/task"
-	"github.com/zhenghaoz/gorse/dataset"
-	"github.com/zhenghaoz/gorse/model"
 )
 
 // NewMapIndexDataset creates a data set.
@@ -63,7 +63,7 @@ func (m *mockFactorizationMachineForSearch) Fit(_ context.Context, _, _ dataset.
 	return Score{AUC: score}
 }
 
-func (m *mockFactorizationMachineForSearch) Predict(_, _ string, _, _ []Feature) float32 {
+func (m *mockFactorizationMachineForSearch) Predict(_, _ string, _, _ []Label) float32 {
 	panic("don't call me")
 }
 

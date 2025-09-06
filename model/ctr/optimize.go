@@ -21,24 +21,24 @@ import (
 	"time"
 
 	"github.com/c-bata/goptuna"
+	"github.com/gorse-io/gorse/base"
+	"github.com/gorse-io/gorse/base/log"
+	"github.com/gorse-io/gorse/base/task"
+	"github.com/gorse-io/gorse/common/monitor"
+	"github.com/gorse-io/gorse/dataset"
+	"github.com/gorse-io/gorse/model"
 	"github.com/juju/errors"
 	"github.com/samber/lo"
-	"github.com/zhenghaoz/gorse/base"
-	"github.com/zhenghaoz/gorse/base/log"
-	"github.com/zhenghaoz/gorse/base/progress"
-	"github.com/zhenghaoz/gorse/base/task"
-	"github.com/zhenghaoz/gorse/dataset"
-	"github.com/zhenghaoz/gorse/model"
 	"go.uber.org/zap"
 )
 
 type ModelSearch struct {
 	trainSet dataset.CTRSplit
 	testSet  dataset.CTRSplit
-	models   []FactorizationMachine
+	models   []FactorizationMachines
 }
 
-func NewModelSearch(trainSet, testSet dataset.CTRSplit, models ...FactorizationMachine) *ModelSearch {
+func NewModelSearch(trainSet, testSet dataset.CTRSplit, models ...FactorizationMachines) *ModelSearch {
 	return &ModelSearch{
 		trainSet: trainSet,
 		testSet:  testSet,
@@ -57,7 +57,7 @@ func (ms *ModelSearch) Objective(trial goptuna.Trial) (float64, error) {
 	return float64(score.AUC), nil
 }
 
-func (ms *ModelSearch) New(p map[string]any) FactorizationMachine {
+func (ms *ModelSearch) New(p map[string]any) FactorizationMachines {
 	if len(ms.models) == 0 {
 		return nil
 	}
@@ -76,7 +76,7 @@ func (ms *ModelSearch) New(p map[string]any) FactorizationMachine {
 // ParamsSearchResult contains the return of grid search.
 type ParamsSearchResult struct {
 	BestScore  Score
-	BestModel  FactorizationMachine
+	BestModel  FactorizationMachines
 	BestParams model.Params
 	BestIndex  int
 	Scores     []Score
@@ -84,7 +84,7 @@ type ParamsSearchResult struct {
 }
 
 // GridSearchCV finds the best parameters for a model.
-func GridSearchCV(ctx context.Context, estimator FactorizationMachine, trainSet, testSet dataset.CTRSplit, paramGrid model.ParamsGrid,
+func GridSearchCV(ctx context.Context, estimator FactorizationMachines, trainSet, testSet dataset.CTRSplit, paramGrid model.ParamsGrid,
 	_ int64, fitConfig *FitConfig) ParamsSearchResult {
 	// Retrieve parameter names and length
 	paramNames := make([]model.ParamName, 0, len(paramGrid))
@@ -99,7 +99,7 @@ func GridSearchCV(ctx context.Context, estimator FactorizationMachine, trainSet,
 		Params: make([]model.Params, 0, total),
 	}
 	var dfs func(deep int, params model.Params)
-	newCtx, span := progress.Start(ctx, "GridSearchCV", total)
+	newCtx, span := monitor.Start(ctx, "GridSearchCV", total)
 	dfs = func(deep int, params model.Params) {
 		if deep == len(paramNames) {
 			log.Logger().Info(fmt.Sprintf("grid search %v/%v", span.Count(), total),
@@ -134,7 +134,7 @@ func GridSearchCV(ctx context.Context, estimator FactorizationMachine, trainSet,
 }
 
 // RandomSearchCV searches hyper-parameters by random.
-func RandomSearchCV(ctx context.Context, estimator FactorizationMachine, trainSet, testSet dataset.CTRSplit, paramGrid model.ParamsGrid,
+func RandomSearchCV(ctx context.Context, estimator FactorizationMachines, trainSet, testSet dataset.CTRSplit, paramGrid model.ParamsGrid,
 	numTrials int, seed int64, fitConfig *FitConfig) ParamsSearchResult {
 	// if the number of combination is less than number of trials, use grid search
 	if paramGrid.NumCombinations() <= numTrials {
@@ -145,7 +145,7 @@ func RandomSearchCV(ctx context.Context, estimator FactorizationMachine, trainSe
 		Scores: make([]Score, 0, numTrials),
 		Params: make([]model.Params, 0, numTrials),
 	}
-	newCtx, span := progress.Start(ctx, "RandomSearchCV", numTrials)
+	newCtx, span := monitor.Start(ctx, "RandomSearchCV", numTrials)
 	for i := 1; i <= numTrials; i++ {
 		// Make parameters
 		params := model.Params{}
@@ -175,21 +175,21 @@ func RandomSearchCV(ctx context.Context, estimator FactorizationMachine, trainSe
 
 // ModelSearcher is a thread-safe click model searcher.
 type ModelSearcher struct {
-	model FactorizationMachine
+	model FactorizationMachines
 	// arguments
 	numEpochs  int
 	numTrials  int
 	searchSize bool
 	// results
 	bestMutex sync.Mutex
-	bestModel FactorizationMachine
+	bestModel FactorizationMachines
 	bestScore Score
 }
 
 // NewModelSearcher creates a thread-safe personal ranking model searcher.
 func NewModelSearcher(nEpoch, nTrials int, searchSize bool) *ModelSearcher {
 	return &ModelSearcher{
-		model:      NewFM(model.Params{model.NEpochs: nEpoch}),
+		model:      NewFMV2(model.Params{model.NEpochs: nEpoch}),
 		numTrials:  nTrials,
 		numEpochs:  nEpoch,
 		searchSize: searchSize,
@@ -197,7 +197,7 @@ func NewModelSearcher(nEpoch, nTrials int, searchSize bool) *ModelSearcher {
 }
 
 // GetBestModel returns the best click model with its score.
-func (searcher *ModelSearcher) GetBestModel() (FactorizationMachine, Score) {
+func (searcher *ModelSearcher) GetBestModel() (FactorizationMachines, Score) {
 	searcher.bestMutex.Lock()
 	defer searcher.bestMutex.Unlock()
 	return searcher.bestModel, searcher.bestScore

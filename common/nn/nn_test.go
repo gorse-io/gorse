@@ -22,18 +22,19 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/chewxy/math32"
-	"github.com/klauspost/cpuid/v2"
+	"github.com/gorse-io/gorse/common/datautil"
+	"github.com/gorse-io/gorse/common/util"
 	"github.com/samber/lo"
 	"github.com/schollz/progressbar/v3"
 	"github.com/stretchr/testify/assert"
-	"github.com/zhenghaoz/gorse/common/datautil"
-	"github.com/zhenghaoz/gorse/common/util"
+	"golang.org/x/sys/cpu"
 )
 
 func TestLinearRegression(t *testing.T) {
@@ -42,7 +43,7 @@ func TestLinearRegression(t *testing.T) {
 
 	w := Zeros(1, 1)
 	b := Zeros(1)
-	predict := func(x *Tensor) *Tensor { return Add(MatMul(x, w), b) }
+	predict := func(x *Tensor) *Tensor { return Add(MatMul(x, w, false, false, 0), b) }
 
 	lr := float32(0.1)
 	for i := 0; i < 100; i++ {
@@ -223,7 +224,7 @@ func accuracy(prediction, target *Tensor) float32 {
 }
 
 func TestMNIST(t *testing.T) {
-	if cpuid.CPU.VendorString != "Apple" && !cpuid.CPU.Supports(cpuid.AVX512F, cpuid.AVX512DQ) {
+	if (runtime.GOOS != "darwin" || runtime.GOARCH != "arm64") && !cpu.X86.HasAVX512F {
 		// Since the test takes a long time, we run the test only in development environment.
 		// 1. Mac with Apple Silicon.
 		// 2. x86 CPU with AVX512 support.
@@ -238,6 +239,7 @@ func TestMNIST(t *testing.T) {
 		NewReLU(),
 		NewLinear(1000, 10),
 	)
+	model.SetJobs(runtime.NumCPU())
 	optimizer := NewAdam(model.Parameters(), 0.001)
 
 	const (

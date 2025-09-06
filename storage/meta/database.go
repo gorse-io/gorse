@@ -15,14 +15,36 @@
 package meta
 
 import (
-	"github.com/XSAM/otelsql"
-	"github.com/juju/errors"
-	"github.com/samber/lo"
-	"github.com/zhenghaoz/gorse/storage"
-	semconv "go.opentelemetry.io/otel/semconv/v1.12.0"
+	"encoding/json"
 	"strings"
 	"time"
+
+	"github.com/XSAM/otelsql"
+	"github.com/gorse-io/gorse/model"
+	"github.com/gorse-io/gorse/storage"
+	"github.com/juju/errors"
+	"github.com/samber/lo"
+	semconv "go.opentelemetry.io/otel/semconv/v1.12.0"
 )
+
+const (
+	COLLABORATIVE_FILTERING_MODEL = "COLLABORATIVE_FILTERING_MODEL"
+	CLICK_THROUGH_RATE_MODEL      = "CLICK_THROUGH_RATE_MODEL"
+)
+
+type Model[T any] struct {
+	ID     int64
+	Params model.Params
+	Score  T
+}
+
+func (m *Model[T]) ToJSON() string {
+	return string(lo.Must1(json.Marshal(m)))
+}
+
+func (m *Model[T]) FromJSON(data string) error {
+	return json.Unmarshal([]byte(data), m)
+}
 
 type Node struct {
 	UUID       string
@@ -37,6 +59,8 @@ type Database interface {
 	Init() error
 	UpdateNode(node *Node) error
 	ListNodes() ([]*Node, error)
+	Put(key, value string) error
+	Get(key string) (*string, error)
 }
 
 // Open a connection to a database.

@@ -16,52 +16,90 @@ package ctr
 import (
 	"encoding/json"
 	"fmt"
+	"testing"
+
+	"github.com/gorse-io/gorse/base"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
-	"github.com/zhenghaoz/gorse/base"
-	"testing"
 )
 
-func TestConvertLabelsToFeatures(t *testing.T) {
-	features := ConvertLabelsToFeatures(nil)
+func TestConvertLabels(t *testing.T) {
+	features := ConvertLabels(nil)
 	assert.Nil(t, features)
 
 	// categorical features
-	features = ConvertLabelsToFeatures("label")
-	assert.ElementsMatch(t, []Feature{{Name: "label", Value: 1}}, features)
-	features = ConvertLabelsToFeatures([]any{"1", "2", "3"})
-	assert.ElementsMatch(t, []Feature{
+	features = ConvertLabels("label")
+	assert.ElementsMatch(t, []Label{{Name: "label", Value: 1}}, features)
+	features = ConvertLabels([]any{"1", "2", "3"})
+	assert.ElementsMatch(t, []Label{
 		{Name: "1", Value: 1},
 		{Name: "2", Value: 1},
 		{Name: "3", Value: 1},
 	}, features)
-	features = ConvertLabelsToFeatures(map[string]any{"city": "wenzhou", "tags": []any{"1", "2", "3"}})
-	assert.ElementsMatch(t, []Feature{
+	features = ConvertLabels(map[string]any{"city": "wenzhou", "tags": []any{"1", "2", "3"}})
+	assert.ElementsMatch(t, []Label{
 		{Name: "city.wenzhou", Value: 1},
 		{Name: "tags.1", Value: 1},
 		{Name: "tags.2", Value: 1},
 		{Name: "tags.3", Value: 1},
 	}, features)
-	features = ConvertLabelsToFeatures(map[string]any{"address": map[string]any{"province": "zhejiang", "city": "wenzhou"}})
-	assert.ElementsMatch(t, []Feature{
+	features = ConvertLabels(map[string]any{"address": map[string]any{"province": "zhejiang", "city": "wenzhou"}})
+	assert.ElementsMatch(t, []Label{
 		{Name: "address.province.zhejiang", Value: 1},
 		{Name: "address.city.wenzhou", Value: 1},
 	}, features)
 
 	// numerical features
-	features = ConvertLabelsToFeatures(json.Number("1"))
-	assert.Equal(t, []Feature{{Name: "", Value: 1}}, features)
-	features = ConvertLabelsToFeatures(map[string]any{"city": "wenzhou", "tags": json.Number("0.5")})
-	assert.ElementsMatch(t, []Feature{
+	features = ConvertLabels(json.Number("1"))
+	assert.Equal(t, []Label{{Name: "", Value: 1}}, features)
+	features = ConvertLabels(map[string]any{"city": "wenzhou", "tags": json.Number("0.5")})
+	assert.ElementsMatch(t, []Label{
 		{Name: "city.wenzhou", Value: 1},
 		{Name: "tags.", Value: 0.5},
 	}, features)
 
 	// not supported
-	features = ConvertLabelsToFeatures([]any{float64(1), float64(2), float64(3)})
+	features = ConvertLabels([]any{float64(1), float64(2), float64(3)})
 	assert.Empty(t, features)
-	features = ConvertLabelsToFeatures(map[string]any{"city": "wenzhou", "tags": []any{float64(1), float64(2), float64(3)}})
-	assert.ElementsMatch(t, []Feature{{Name: "city.wenzhou", Value: 1}}, features)
+	features = ConvertLabels(map[string]any{"city": "wenzhou", "tags": []any{float64(1), float64(2), float64(3)}})
+	assert.ElementsMatch(t, []Label{{Name: "city.wenzhou", Value: 1}}, features)
+}
+
+func TestConvertEmbeddings(t *testing.T) {
+	embeddings := ConvertEmbeddings(nil)
+	assert.Nil(t, embeddings)
+
+	embeddings = ConvertEmbeddings([]float32{1, 2, 3})
+	if assert.Len(t, embeddings, 1) {
+		assert.Equal(t, "", embeddings[0].Name)
+		assert.Equal(t, []float32{1, 2, 3}, embeddings[0].Value)
+	}
+
+	embeddings = ConvertEmbeddings([]float64{1, 2, 3})
+	if assert.Len(t, embeddings, 1) {
+		assert.Equal(t, "", embeddings[0].Name)
+		assert.Equal(t, []float32{1, 2, 3}, embeddings[0].Value)
+	}
+
+	embeddings = ConvertEmbeddings([]any{float64(1), float32(2), float64(3)})
+	if assert.Len(t, embeddings, 1) {
+		assert.Equal(t, "", embeddings[0].Name)
+		assert.Equal(t, []float32{1, 2, 3}, embeddings[0].Value)
+	}
+
+	embeddings = ConvertEmbeddings(map[string]any{
+		"embedding1": []float32{1, 2, 3},
+		"a": map[string]any{
+			"embedding2": []float64{4, 5, 6},
+		},
+		"no_embedding": "test",
+	})
+	if assert.Len(t, embeddings, 2) {
+		assert.ElementsMatch(t, []Embedding{
+			{Name: "embedding1", Value: []float32{1, 2, 3}},
+			{Name: "a.embedding2", Value: []float32{4, 5, 6}},
+		}, embeddings)
+	}
 }
 
 func TestLoadDataFromBuiltIn(t *testing.T) {
@@ -80,7 +118,7 @@ func TestDataset_Split(t *testing.T) {
 		unifiedIndex.AddUser(fmt.Sprintf("user%v", i))
 		unifiedIndex.AddUserLabel(fmt.Sprintf("user_label%v", 2*i))
 		unifiedIndex.AddUserLabel(fmt.Sprintf("user_label%v", 2*i+1))
-		dataset.UserFeatures = append(dataset.UserFeatures, []lo.Tuple2[int32, float32]{
+		dataset.UserLabels = append(dataset.UserLabels, []lo.Tuple2[int32, float32]{
 			{A: int32(2 * i), B: 1},
 			{A: int32(2*i + 1), B: 1},
 		})
@@ -90,7 +128,7 @@ func TestDataset_Split(t *testing.T) {
 		unifiedIndex.AddItemLabel(fmt.Sprintf("item_label%v", 3*i))
 		unifiedIndex.AddItemLabel(fmt.Sprintf("item_label%v", 3*i+1))
 		unifiedIndex.AddItemLabel(fmt.Sprintf("item_label%v", 3*i+2))
-		dataset.ItemFeatures = append(dataset.ItemFeatures, []lo.Tuple2[int32, float32]{
+		dataset.ItemLabels = append(dataset.ItemLabels, []lo.Tuple2[int32, float32]{
 			{A: int32(3 * i), B: 1},
 			{A: int32(3*i + 1), B: 1},
 			{A: int32(3*i + 2), B: 1},
@@ -99,16 +137,16 @@ func TestDataset_Split(t *testing.T) {
 	for i := 0; i < numUsers; i++ {
 		for j := 0; j < numItems; j++ {
 			if i+j > 4 {
-				dataset.Users.Append(int32(i))
-				dataset.Items.Append(int32(j))
-				dataset.ContextFeatures = append(dataset.ContextFeatures, []lo.Tuple2[int32, float32]{{A: int32(i * j), B: 0.5}})
-				dataset.Target.Append(1)
+				dataset.Users = append(dataset.Users, int32(i))
+				dataset.Items = append(dataset.Items, int32(j))
+				dataset.ContextLabels = append(dataset.ContextLabels, []lo.Tuple2[int32, float32]{{A: int32(i * j), B: 0.5}})
+				dataset.Target = append(dataset.Target, 1)
 				dataset.PositiveCount++
 			} else {
-				dataset.Users.Append(int32(i))
-				dataset.Items.Append(int32(j))
-				dataset.ContextFeatures = append(dataset.ContextFeatures, []lo.Tuple2[int32, float32]{{A: int32(i * j), B: 0.5}})
-				dataset.Target.Append(-1)
+				dataset.Users = append(dataset.Users, int32(i))
+				dataset.Items = append(dataset.Items, int32(j))
+				dataset.ContextLabels = append(dataset.ContextLabels, []lo.Tuple2[int32, float32]{{A: int32(i * j), B: 0.5}})
+				dataset.Target = append(dataset.Target, -1)
 				dataset.NegativeCount++
 			}
 		}

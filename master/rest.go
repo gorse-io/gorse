@@ -34,24 +34,24 @@ import (
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/gorilla/securecookie"
 	_ "github.com/gorse-io/dashboard"
+	"github.com/gorse-io/gorse/base"
+	"github.com/gorse-io/gorse/base/log"
+	"github.com/gorse-io/gorse/cmd/version"
+	"github.com/gorse-io/gorse/common/expression"
+	"github.com/gorse-io/gorse/common/monitor"
+	"github.com/gorse-io/gorse/common/util"
+	"github.com/gorse-io/gorse/config"
+	"github.com/gorse-io/gorse/model/cf"
+	"github.com/gorse-io/gorse/model/ctr"
+	"github.com/gorse-io/gorse/protocol"
+	"github.com/gorse-io/gorse/server"
+	"github.com/gorse-io/gorse/storage/cache"
+	"github.com/gorse-io/gorse/storage/data"
+	"github.com/gorse-io/gorse/storage/meta"
 	"github.com/juju/errors"
 	"github.com/rakyll/statik/fs"
 	"github.com/samber/lo"
 	"github.com/sashabaranov/go-openai"
-	"github.com/zhenghaoz/gorse/base"
-	"github.com/zhenghaoz/gorse/base/log"
-	"github.com/zhenghaoz/gorse/base/progress"
-	"github.com/zhenghaoz/gorse/cmd/version"
-	"github.com/zhenghaoz/gorse/common/expression"
-	"github.com/zhenghaoz/gorse/common/util"
-	"github.com/zhenghaoz/gorse/config"
-	"github.com/zhenghaoz/gorse/model/cf"
-	"github.com/zhenghaoz/gorse/model/ctr"
-	"github.com/zhenghaoz/gorse/protocol"
-	"github.com/zhenghaoz/gorse/server"
-	"github.com/zhenghaoz/gorse/storage/cache"
-	"github.com/zhenghaoz/gorse/storage/data"
-	"github.com/zhenghaoz/gorse/storage/meta"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -106,12 +106,19 @@ func (m *Master) CreateWebService() {
 		Doc("Get tasks.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
-		Returns(http.StatusOK, "OK", []progress.Progress{}).
-		Writes([]progress.Progress{}))
+		Returns(http.StatusOK, "OK", []monitor.Progress{}).
+		Writes([]monitor.Progress{}))
 	ws.Route(ws.GET("/dashboard/rates").To(m.getRates).
 		Doc("Get positive feedback rates.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
+		Returns(http.StatusOK, "OK", map[string][]cache.TimeSeriesPoint{}).
+		Writes(map[string][]cache.TimeSeriesPoint{}))
+	ws.Route(ws.GET("/dashboard/timeseries/{name}").To(m.getTimeseries).
+		Doc("Get time series data.").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
+		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
+		Param(ws.PathParameter("name", "name of the time series").DataType("string")).
 		Returns(http.StatusOK, "OK", map[string][]cache.TimeSeriesPoint{}).
 		Writes(map[string][]cache.TimeSeriesPoint{}))
 	// Get a user
@@ -128,8 +135,8 @@ func (m *Master) CreateWebService() {
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
 		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
 		Param(ws.PathParameter("feedback-type", "feedback type").DataType("string")).
-		Returns(http.StatusOK, "OK", []Feedback{}).
-		Writes([]Feedback{}))
+		Returns(http.StatusOK, "OK", []DetailedFeedback{}).
+		Writes([]DetailedFeedback{}))
 	// Get users
 	ws.Route(ws.GET("/dashboard/users").To(m.getUsers).
 		Doc("Get users.").
@@ -576,8 +583,6 @@ func (m *Master) getStats(request *restful.Request, response *restful.Response) 
 	if status.LatestItemsUpdateTime, err = m.CacheClient.Get(ctx, cache.Key(cache.GlobalMeta, cache.LastUpdateLatestItemsTime)).Time(); err != nil {
 		log.ResponseLogger(response).Warn("failed to get latest items update time", zap.Error(err))
 	}
-	status.MatchingModelScore = m.collaborativeFilteringModelScore
-	status.RankingModelScore = m.clickScore
 	// read last fit matching model time
 	if status.MatchingModelFitTime, err = m.CacheClient.Get(ctx, cache.Key(cache.GlobalMeta, cache.LastFitMatchingModelTime)).Time(); err != nil {
 		log.ResponseLogger(response).Warn("failed to get last fit matching model time", zap.Error(err))
@@ -617,7 +622,7 @@ func (m *Master) getTasks(_ *restful.Request, response *restful.Response) {
 	// list remote progress
 	m.remoteProgress.Range(func(key, value interface{}) bool {
 		if workers.Contains(key.(string)) {
-			progressList = append(progressList, value.([]progress.Progress)...)
+			progressList = append(progressList, value.([]monitor.Progress)...)
 		}
 		return true
 	})
@@ -644,6 +649,52 @@ func (m *Master) getRates(request *restful.Request, response *restful.Response) 
 		}
 	}
 	server.Ok(response, measurements)
+}
+
+func (m *Master) getTimeseries(request *restful.Request, response *restful.Response) {
+	ctx := context.Background()
+	if request != nil && request.Request != nil {
+		ctx = request.Request.Context()
+	}
+	// get time series name
+	name := request.PathParameter("name")
+	// get begin time
+	beginStr := request.QueryParameter("begin")
+	if beginStr == "" {
+		beginStr = time.Now().Add(-7 * 24 * time.Hour).Format(time.RFC3339)
+	}
+	begin, err := dateparse.ParseAny(beginStr)
+	if err != nil {
+		server.BadRequest(response, err)
+		return
+	}
+	// get end time
+	endStr := request.QueryParameter("end")
+	if endStr == "" {
+		endStr = time.Now().Format(time.RFC3339)
+	}
+	end, err := dateparse.ParseAny(endStr)
+	if err != nil {
+		server.BadRequest(response, err)
+		return
+	}
+	// get duration
+	durationStr := request.QueryParameter("duration")
+	if durationStr == "" {
+		durationStr = "24h"
+	}
+	duration, err := time.ParseDuration(durationStr)
+	if err != nil {
+		server.BadRequest(response, err)
+		return
+	}
+	// get time series data
+	data, err := m.CacheClient.GetTimeSeriesPoints(ctx, cache.Key(name), begin, end, duration)
+	if err != nil {
+		server.InternalServerError(response, err)
+		return
+	}
+	server.Ok(response, data)
 }
 
 type UserIterator struct {
@@ -727,7 +778,7 @@ func (m *Master) getRecommend(request *restful.Request, response *restful.Respon
 	// parse arguments
 	recommender := request.PathParameter("recommender")
 	userId := request.PathParameter("user-id")
-	categories := server.ReadCategories(request)
+	categories := server.ReadCategories(request, nil)
 	n, err := server.ParseInt(request, "n", m.Config.Server.DefaultN)
 	if err != nil {
 		server.BadRequest(response, err)
@@ -768,22 +819,38 @@ func (m *Master) getRecommend(request *restful.Request, response *restful.Respon
 		server.InternalServerError(response, err)
 		return
 	}
+
+	// Get item details
+	items, err := m.DataClient.BatchGetItems(ctx, lo.Map(results, func(id string, _ int) string {
+		return id
+	}))
+	if err != nil {
+		server.InternalServerError(response, err)
+		return
+	}
+	itemsMap := make(map[string]data.Item, len(items))
+	for _, item := range items {
+		itemsMap[item.ItemId] = item
+	}
+
 	// Send result
 	details := make([]data.Item, len(results))
 	for i := range results {
-		details[i], err = m.DataClient.GetItem(ctx, results[i])
-		if err != nil {
-			server.InternalServerError(response, err)
+		var exist bool
+		details[i], exist = itemsMap[results[i]]
+		if !exist {
+			server.InternalServerError(response, fmt.Errorf("item `%s` not found", results[i]))
 			return
 		}
 	}
 	server.Ok(response, details)
 }
 
-type Feedback struct {
+type DetailedFeedback struct {
 	FeedbackType string
 	UserId       string
 	Item         data.Item
+	Value        float64
 	Timestamp    time.Time
 	Comment      string
 }
@@ -806,18 +873,31 @@ func (m *Master) getTypedFeedbackByUser(request *restful.Request, response *rest
 		server.InternalServerError(response, err)
 		return
 	}
-	details := make([]Feedback, len(feedback))
+
+	// Get item details
+	items, err := m.DataClient.BatchGetItems(ctx, lo.Map(feedback, func(f data.Feedback, _ int) string {
+		return f.ItemId
+	}))
+	if err != nil {
+		server.InternalServerError(response, err)
+		return
+	}
+	itemsMap := make(map[string]data.Item, len(items))
+	for _, item := range items {
+		itemsMap[item.ItemId] = item
+	}
+
+	details := make([]DetailedFeedback, len(feedback))
 	for i := range feedback {
 		details[i].FeedbackType = feedback[i].FeedbackType
 		details[i].UserId = feedback[i].UserId
+		details[i].Value = feedback[i].Value
 		details[i].Timestamp = feedback[i].Timestamp
 		details[i].Comment = feedback[i].Comment
-		details[i].Item, err = m.DataClient.GetItem(ctx, feedback[i].ItemId)
-		if errors.Is(err, errors.NotFound) {
+		var exist bool
+		details[i].Item, exist = itemsMap[feedback[i].ItemId]
+		if !exist {
 			details[i].Item = data.Item{ItemId: feedback[i].ItemId, Comment: "** This item doesn't exist in Gorse **"}
-		} else if err != nil {
-			server.InternalServerError(response, err)
-			return
 		}
 	}
 	server.Ok(response, details)
@@ -857,7 +937,7 @@ func (m *Master) GetUser(score cache.Score) (any, error) {
 
 func (m *Master) getNonPersonalized(request *restful.Request, response *restful.Response) {
 	name := request.PathParameter("name")
-	categories := server.ReadCategories(request)
+	categories := server.ReadCategories(request, []string{""})
 	m.SetLastModified(request, response, cache.Key(cache.NonPersonalizedUpdateTime, name))
 	m.SearchDocuments(cache.NonPersonalized, name, categories, m.GetItem, request, response)
 }

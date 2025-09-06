@@ -6,6 +6,9 @@ ifeq ($(shell uname -m),x86_64)
 else ifeq ($(shell uname -m),aarch64)
 	SOURCES += floats_neon.c floats_sve2.c
 	CFLAGS = -O3 -march=armv8-a+sve
+else ifeq ($(shell uname -m),riscv64)
+	SOURCES += floats_rvv.c
+	CFLAGS = -O3 -march=rv64imafdv
 endif
 
 OBJECTS		= $(SOURCES:.c=.o)

@@ -21,10 +21,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gorse-io/gorse/storage"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-	"github.com/zhenghaoz/gorse/storage"
 )
 
 var (

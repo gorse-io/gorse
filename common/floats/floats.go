@@ -240,9 +240,6 @@ func Euclidean(a, b []float32) float32 {
 	return feature.euclidean(a, b)
 }
 
-func MM(a, b, c []float32, m, n, k int, transA, transB bool) {
-	if len(a) != m*k || len(b) != k*n || len(c) != m*n {
-		panic("floats: matrix dimensions do not match")
-	}
-	feature.mm(a, b, c, m, n, k, transA, transB)
+func MM(transA, transB bool, m, n, k int, a []float32, lda int, b []float32, ldb int, c []float32, ldc int) {
+	feature.mm(transA, transB, m, n, k, a, lda, b, ldb, c, ldc)
 }

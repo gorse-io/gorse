@@ -21,33 +21,31 @@ import (
 	"math/rand"
 	"net"
 	"net/http"
-	"os"
 	"sync"
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/emicklei/go-restful/v3"
+	"github.com/gorse-io/gorse/base"
+	"github.com/gorse-io/gorse/base/log"
+	"github.com/gorse-io/gorse/base/task"
+	"github.com/gorse-io/gorse/common/monitor"
+	"github.com/gorse-io/gorse/common/parallel"
+	"github.com/gorse-io/gorse/common/util"
+	"github.com/gorse-io/gorse/config"
+	"github.com/gorse-io/gorse/dataset"
+	"github.com/gorse-io/gorse/model/cf"
+	"github.com/gorse-io/gorse/model/ctr"
+	"github.com/gorse-io/gorse/protocol"
+	"github.com/gorse-io/gorse/server"
+	"github.com/gorse-io/gorse/storage"
+	"github.com/gorse-io/gorse/storage/blob"
+	"github.com/gorse-io/gorse/storage/cache"
+	"github.com/gorse-io/gorse/storage/data"
+	"github.com/gorse-io/gorse/storage/meta"
 	"github.com/jellydator/ttlcache/v3"
 	"github.com/juju/errors"
 	"github.com/sashabaranov/go-openai"
-	"github.com/zhenghaoz/gorse/base"
-	"github.com/zhenghaoz/gorse/base/encoding"
-	"github.com/zhenghaoz/gorse/base/log"
-	"github.com/zhenghaoz/gorse/base/progress"
-	"github.com/zhenghaoz/gorse/base/task"
-	"github.com/zhenghaoz/gorse/common/parallel"
-	"github.com/zhenghaoz/gorse/common/sizeof"
-	"github.com/zhenghaoz/gorse/common/util"
-	"github.com/zhenghaoz/gorse/config"
-	"github.com/zhenghaoz/gorse/dataset"
-	"github.com/zhenghaoz/gorse/model/cf"
-	"github.com/zhenghaoz/gorse/model/ctr"
-	"github.com/zhenghaoz/gorse/protocol"
-	"github.com/zhenghaoz/gorse/server"
-	"github.com/zhenghaoz/gorse/storage"
-	"github.com/zhenghaoz/gorse/storage/cache"
-	"github.com/zhenghaoz/gorse/storage/data"
-	"github.com/zhenghaoz/gorse/storage/meta"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
 	"go.uber.org/zap"
@@ -67,14 +65,16 @@ type Master struct {
 	server.RestServer
 	grpcServer *grpc.Server
 
-	tracer         *progress.Tracer
+	tracer         *monitor.Monitor
 	remoteProgress sync.Map
 	jobsScheduler  *task.JobsScheduler
-	cacheFile      string
+	cachePath      string
 	openAIClient   *openai.Client
 
 	// cluster meta cache
-	metaStore meta.Database
+	metaStore  meta.Database
+	blobStore  blob.Store
+	blobServer *blob.MasterStoreServer
 
 	// ranking dataset
 	rankingTrainSet  dataset.CFSplit
@@ -88,23 +88,20 @@ type Master struct {
 
 	// collaborative filtering
 	collaborativeFilteringTrainSetSize int
-	collaborativeFilteringModelName    string
-	collaborativeFilteringModelScore   cf.Score
 	collaborativeFilteringModelMutex   sync.RWMutex
 	collaborativeFilteringSearcher     *cf.ModelSearcher
+	collaborativeFilteringMeta         meta.Model[cf.Score]
 
 	// click model
-	clickTrainSetSize  int
-	clickScore         ctr.Score
-	clickModelMutex    sync.RWMutex
-	clickModelSearcher *ctr.ModelSearcher
+	clickTrainSetSize          int
+	clickThroughRateMeta       meta.Model[ctr.Score]
+	clickThroughRateModelMutex sync.RWMutex
+	clickModelSearcher         *ctr.ModelSearcher
 
 	// oauth2
 	oauth2Config oauth2.Config
 	verifier     *oidc.IDTokenVerifier
 	tokenCache   *ttlcache.Cache[string, UserInfo]
-
-	localCache *LocalCache
 
 	// events
 	fitTicker    *time.Ticker
@@ -117,7 +114,7 @@ type Master struct {
 }
 
 // NewMaster creates a master node.
-func NewMaster(cfg *config.Config, cacheFile string) *Master {
+func NewMaster(cfg *config.Config, cacheFolder string) *Master {
 	rand.Seed(time.Now().UnixNano())
 
 	// setup trace provider
@@ -140,12 +137,11 @@ func NewMaster(cfg *config.Config, cacheFile string) *Master {
 
 	m := &Master{
 		// create task monitor
-		cacheFile:     cacheFile,
+		cachePath:     cacheFolder,
 		jobsScheduler: task.NewJobsScheduler(cfg.Master.NumJobs),
-		tracer:        progress.NewTracer("master"),
+		tracer:        monitor.NewTracer("master"),
 		openAIClient:  openai.NewClientWithConfig(clientConfig),
 		// default ranking model
-		collaborativeFilteringModelName: "bpr",
 		collaborativeFilteringSearcher: cf.NewModelSearcher(
 			cfg.Recommend.Collaborative.ModelSearchEpoch,
 			cfg.Recommend.Collaborative.ModelSearchTrials,
@@ -159,14 +155,9 @@ func NewMaster(cfg *config.Config, cacheFile string) *Master {
 		),
 		RestServer: server.RestServer{
 			Settings: &config.Settings{
-				Config:                      cfg,
-				CacheClient:                 cache.NoDatabase{},
-				DataClient:                  data.NoDatabase{},
-				CollaborativeFilteringModel: cf.NewBPR(nil),
-				ClickModel:                  ctr.NewFM(nil),
-				// init versions
-				CollaborativeFilteringModelVersion: rand.Int63(),
-				ClickModelVersion:                  rand.Int63(),
+				Config:      cfg,
+				CacheClient: cache.NoDatabase{},
+				DataClient:  data.NoDatabase{},
 			},
 			HttpHost:   cfg.Master.HttpHost,
 			HttpPort:   cfg.Master.HttpPort,
@@ -188,48 +179,20 @@ func NewMaster(cfg *config.Config, cacheFile string) *Master {
 
 // Serve starts the master node.
 func (m *Master) Serve() {
-
-	// load local cached model
+	// connect blob store
 	var err error
-	m.localCache, err = LoadLocalCache(m.cacheFile)
-	if err != nil {
-		if errors.Is(err, errors.NotFound) {
-			log.Logger().Info("no local cache found, create a new one", zap.String("path", m.cacheFile))
-		} else {
-			log.Logger().Error("failed to load local cache", zap.String("path", m.cacheFile), zap.Error(err))
+	m.blobServer = blob.NewMasterStoreServer(m.cachePath)
+	if m.Config.S3.Endpoint == "" {
+		m.blobStore = blob.NewPOSIX(m.cachePath)
+	} else {
+		m.blobStore, err = blob.NewS3(m.Config.S3)
+		if err != nil {
+			log.Logger().Fatal("failed to create S3 blob store", zap.Error(err))
 		}
-	}
-	if m.localCache.CollaborativeFilteringModel != nil {
-		log.Logger().Info("load cached ranking model",
-			zap.String("model_name", m.localCache.CollaborativeFilteringModelName),
-			zap.String("model_version", encoding.Hex(m.localCache.CollaborativeFilteringModelVersion)),
-			zap.Float32("model_score", m.localCache.CollaborativeFilteringModelScore.NDCG),
-			zap.Any("params", m.localCache.CollaborativeFilteringModel.GetParams()))
-		m.CollaborativeFilteringModel = m.localCache.CollaborativeFilteringModel
-		m.collaborativeFilteringModelName = m.localCache.CollaborativeFilteringModelName
-		m.CollaborativeFilteringModelVersion = m.localCache.CollaborativeFilteringModelVersion
-		m.collaborativeFilteringModelScore = m.localCache.CollaborativeFilteringModelScore
-		CollaborativeFilteringPrecision10.Set(float64(m.collaborativeFilteringModelScore.Precision))
-		CollaborativeFilteringRecall10.Set(float64(m.collaborativeFilteringModelScore.Recall))
-		CollaborativeFilteringNDCG10.Set(float64(m.collaborativeFilteringModelScore.NDCG))
-		MemoryInUseBytesVec.WithLabelValues("collaborative_filtering_model").Set(float64(sizeof.DeepSize(m.CollaborativeFilteringModel)))
-	}
-	if m.localCache.ClickModel != nil {
-		log.Logger().Info("load cached click model",
-			zap.String("model_version", encoding.Hex(m.localCache.ClickModelVersion)),
-			zap.Float32("model_score", m.localCache.ClickModelScore.Precision),
-			zap.Any("params", m.localCache.ClickModel.GetParams()))
-		m.ClickModel = m.localCache.ClickModel
-		m.clickScore = m.localCache.ClickModelScore
-		m.ClickModelVersion = m.localCache.ClickModelVersion
-		RankingPrecision.Set(float64(m.clickScore.Precision))
-		RankingRecall.Set(float64(m.clickScore.Recall))
-		RankingAUC.Set(float64(m.clickScore.AUC))
-		MemoryInUseBytesVec.WithLabelValues("ranking_model").Set(float64(sizeof.DeepSize(m.ClickModel)))
 	}
 
 	// connect meta database
-	m.metaStore, err = meta.Open(fmt.Sprintf("sqlite://%s/gorse_meta.db", os.TempDir()), m.Config.Master.MetaTimeout)
+	m.metaStore, err = meta.Open(fmt.Sprintf("sqlite://%s/meta.sqlite3", m.cachePath), m.Config.Master.MetaTimeout)
 	if err != nil {
 		log.Logger().Fatal("failed to connect meta database", zap.Error(err))
 	}
@@ -257,6 +220,26 @@ func (m *Master) Serve() {
 	}
 	if err = m.CacheClient.Init(); err != nil {
 		log.Logger().Fatal("failed to init database", zap.Error(err))
+	}
+
+	// load collective filtering model meta
+	metaStr, err := m.metaStore.Get(meta.COLLABORATIVE_FILTERING_MODEL)
+	if err != nil && !errors.Is(err, errors.NotFound) {
+		log.Logger().Error("failed to load collaborative filtering meta", zap.Error(err))
+	} else if metaStr != nil {
+		if err = m.collaborativeFilteringMeta.FromJSON(*metaStr); err != nil {
+			log.Logger().Error("failed to unmarshal collaborative filtering meta", zap.Error(err))
+		}
+	}
+
+	// load click-through rate model
+	metaStr, err = m.metaStore.Get(meta.CLICK_THROUGH_RATE_MODEL)
+	if err != nil && !errors.Is(err, errors.NotFound) {
+		log.Logger().Error("failed to load click-through rate meta", zap.Error(err))
+	} else if metaStr != nil {
+		if err = m.clickThroughRateMeta.FromJSON(*metaStr); err != nil {
+			log.Logger().Error("failed to unmarshal click-through rate meta", zap.Error(err))
+		}
 	}
 
 	go m.RunPrivilegedTasksLoop()
@@ -293,6 +276,7 @@ func (m *Master) Serve() {
 		protocol.RegisterMasterServer(m.grpcServer, m)
 		protocol.RegisterCacheStoreServer(m.grpcServer, cache.NewProxyServer(m.CacheClient))
 		protocol.RegisterDataStoreServer(m.grpcServer, data.NewProxyServer(m.DataClient))
+		protocol.RegisterBlobStoreServer(m.grpcServer, m.blobServer)
 		if err = m.grpcServer.Serve(lis); err != nil {
 			log.Logger().Fatal("failed to start rpc server", zap.Error(err))
 		}

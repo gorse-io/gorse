@@ -30,15 +30,15 @@ import (
 	restfulspec "github.com/emicklei/go-restful-openapi/v2"
 	"github.com/emicklei/go-restful/v3"
 	"github.com/google/uuid"
+	"github.com/gorse-io/gorse/base/log"
+	"github.com/gorse-io/gorse/common/expression"
+	"github.com/gorse-io/gorse/common/heap"
+	"github.com/gorse-io/gorse/config"
+	"github.com/gorse-io/gorse/storage/cache"
+	"github.com/gorse-io/gorse/storage/data"
 	"github.com/juju/errors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/samber/lo"
-	"github.com/zhenghaoz/gorse/base/heap"
-	"github.com/zhenghaoz/gorse/base/log"
-	"github.com/zhenghaoz/gorse/common/expression"
-	"github.com/zhenghaoz/gorse/config"
-	"github.com/zhenghaoz/gorse/storage/cache"
-	"github.com/zhenghaoz/gorse/storage/data"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/emicklei/go-restful/otelrestful"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
@@ -412,7 +412,7 @@ func (s *RestServer) CreateWebService() {
 		Writes([]data.Feedback{}))
 
 	// Get collaborative filtering recommendation by user id
-	ws.Route(ws.GET("/intermediate/recommend/{user-id}").To(s.getCollaborative).
+	ws.Route(ws.GET("/collaborative-filtering/{user-id}").To(s.getCollaborativeFiltering).
 		Doc("Get the collaborative filtering recommendation for a user").
 		Metadata(restfulspec.KeyOpenAPITags, []string{DetractedAPITag}).
 		Param(ws.HeaderParameter("X-API-Key", "API key").DataType("string")).
@@ -421,7 +421,7 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.QueryParameter("offset", "Offset of returned items").DataType("integer")).
 		Returns(http.StatusOK, "OK", []cache.Score{}).
 		Writes([]cache.Score{}))
-	ws.Route(ws.GET("/intermediate/recommend/{user-id}/{category}").To(s.getCollaborative).
+	ws.Route(ws.GET("/collaborative-filtering/{user-id}/{category}").To(s.getCollaborativeFiltering).
 		Doc("Get the collaborative filtering recommendation for a user").
 		Metadata(restfulspec.KeyOpenAPITags, []string{DetractedAPITag}).
 		Param(ws.HeaderParameter("X-API-Key", "API key").DataType("string")).
@@ -689,14 +689,14 @@ func (s *RestServer) SearchDocuments(collection, subset string, categories []str
 }
 
 func (s *RestServer) getPopular(request *restful.Request, response *restful.Response) {
-	categories := ReadCategories(request)
+	categories := ReadCategories(request, []string{""})
 	log.ResponseLogger(response).Debug("get category popular items in category", zap.Strings("categories", categories))
 	s.SetLastModified(request, response, cache.Key(cache.NonPersonalizedUpdateTime, cache.Popular))
 	s.SearchDocuments(cache.NonPersonalized, cache.Popular, categories, nil, request, response)
 }
 
 func (s *RestServer) getLatest(request *restful.Request, response *restful.Response) {
-	categories := ReadCategories(request)
+	categories := ReadCategories(request, []string{""})
 	log.ResponseLogger(response).Debug("get category latest items in category", zap.Strings("categories", categories))
 	s.SetLastModified(request, response, cache.Key(cache.NonPersonalizedUpdateTime, cache.Latest))
 	s.SearchDocuments(cache.NonPersonalized, cache.Latest, categories, nil, request, response)
@@ -704,7 +704,7 @@ func (s *RestServer) getLatest(request *restful.Request, response *restful.Respo
 
 func (s *RestServer) getNonPersonalized(request *restful.Request, response *restful.Response) {
 	name := request.PathParameter("name")
-	categories := ReadCategories(request)
+	categories := ReadCategories(request, []string{""})
 	log.ResponseLogger(response).Debug("get leaderboard", zap.String("name", name))
 	s.SetLastModified(request, response, cache.Key(cache.NonPersonalizedUpdateTime, name))
 	s.SearchDocuments(cache.NonPersonalized, name, categories, nil, request, response)
@@ -762,7 +762,7 @@ func (s *RestServer) getFeedbackByItem(request *restful.Request, response *restf
 func (s *RestServer) getItemNeighbors(request *restful.Request, response *restful.Response) {
 	// Get item id
 	itemId := request.PathParameter("item-id")
-	categories := ReadCategories(request)
+	categories := ReadCategories(request, nil)
 	if len(s.Config.Recommend.ItemToItem) == 0 {
 		PageNotFound(response, errors.New("item-to-item recommendation is not enabled"))
 		return
@@ -787,11 +787,11 @@ func (s *RestServer) getUserNeighbors(request *restful.Request, response *restfu
 	}
 }
 
-// getCollaborative gets cached recommended items from database.
-func (s *RestServer) getCollaborative(request *restful.Request, response *restful.Response) {
+// getCollaborativeFiltering gets cached recommended items from database.
+func (s *RestServer) getCollaborativeFiltering(request *restful.Request, response *restful.Response) {
 	// Get user id
 	userId := request.PathParameter("user-id")
-	categories := ReadCategories(request)
+	categories := ReadCategories(request, nil)
 	s.SetLastModified(request, response, cache.Key(cache.OfflineRecommendUpdateTime, userId))
 	s.SearchDocuments(cache.OfflineRecommend, userId, categories, nil, request, response)
 }
@@ -1029,8 +1029,14 @@ func (s *RestServer) RecommendItemBased(ctx *recommendContext) error {
 
 func (s *RestServer) RecommendLatest(ctx *recommendContext) error {
 	if len(ctx.results) < ctx.n {
+		var categories []string
+		if len(ctx.categories) == 0 {
+			categories = []string{""}
+		} else {
+			categories = ctx.categories
+		}
 		start := time.Now()
-		items, err := s.CacheClient.SearchScores(ctx.context, cache.NonPersonalized, cache.Latest, ctx.categories, 0, s.Config.Recommend.CacheSize)
+		items, err := s.CacheClient.SearchScores(ctx.context, cache.NonPersonalized, cache.Latest, categories, 0, s.Config.Recommend.CacheSize)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -1049,8 +1055,14 @@ func (s *RestServer) RecommendLatest(ctx *recommendContext) error {
 
 func (s *RestServer) RecommendPopular(ctx *recommendContext) error {
 	if len(ctx.results) < ctx.n {
+		var categories []string
+		if len(ctx.categories) == 0 {
+			categories = []string{""}
+		} else {
+			categories = ctx.categories
+		}
 		start := time.Now()
-		items, err := s.CacheClient.SearchScores(ctx.context, cache.NonPersonalized, cache.Popular, ctx.categories, 0, s.Config.Recommend.CacheSize)
+		items, err := s.CacheClient.SearchScores(ctx.context, cache.NonPersonalized, cache.Popular, categories, 0, s.Config.Recommend.CacheSize)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -1079,7 +1091,7 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 		BadRequest(response, err)
 		return
 	}
-	categories := ReadCategories(request)
+	categories := ReadCategories(request, nil)
 	offset, err := ParseInt(request, "offset", 0)
 	if err != nil {
 		BadRequest(response, err)
@@ -1764,6 +1776,7 @@ func (s *RestServer) deleteItemCategory(request *restful.Request, response *rest
 // Feedback is the data structure for the feedback but stores the timestamp using string.
 type Feedback struct {
 	data.FeedbackKey
+	Value     float64
 	Timestamp string
 	Comment   string
 }
@@ -1771,6 +1784,7 @@ type Feedback struct {
 func (f Feedback) ToDataFeedback() (data.Feedback, error) {
 	var feedback data.Feedback
 	feedback.FeedbackKey = f.FeedbackKey
+	feedback.Value = f.Value
 	feedback.Comment = f.Comment
 	if f.Timestamp != "" {
 		var err error
@@ -2057,12 +2071,12 @@ func withWildCard(categories []string) []string {
 }
 
 // ReadCategories tries to read categories from the request. If the category is not found, it returns an empty string.
-func ReadCategories(request *restful.Request) []string {
+func ReadCategories(request *restful.Request, defaultCategories []string) []string {
 	if pathValue := request.PathParameter("category"); pathValue != "" {
 		return []string{pathValue}
 	} else if queryValues := request.QueryParameters("category"); len(queryValues) > 0 {
 		return queryValues
 	} else {
-		return []string{""}
+		return defaultCategories
 	}
 }

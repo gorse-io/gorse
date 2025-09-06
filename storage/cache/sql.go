@@ -28,10 +28,10 @@ import (
 	"github.com/araddon/dateparse"
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/go-sql-driver/mysql"
+	"github.com/gorse-io/gorse/storage"
 	"github.com/juju/errors"
 	"github.com/lib/pq"
 	"github.com/samber/lo"
-	"github.com/zhenghaoz/gorse/storage"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 	"modernc.org/sqlite"
@@ -420,11 +420,11 @@ func (db *SQLDatabase) AddScores(ctx context.Context, collection, subset string,
 			}
 		})
 	}
-	db.gormDB.WithContext(ctx).Table(db.DocumentTable()).Clauses(clause.OnConflict{
+	err := db.gormDB.WithContext(ctx).Table(db.DocumentTable()).Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "collection"}, {Name: "subset"}, {Name: "id"}},
 		DoUpdates: clause.AssignmentColumns([]string{"score", "categories", "timestamp"}),
-	}).Create(rows)
-	return nil
+	}).Create(rows).Error
+	return errors.Trace(err)
 }
 
 func (db *SQLDatabase) SearchScores(ctx context.Context, collection, subset string, query []string, begin, end int) ([]Score, error) {
@@ -532,7 +532,12 @@ func (db *SQLDatabase) DeleteScores(ctx context.Context, collections []string, c
 	}
 	if condition.Before != nil {
 		builder.WriteString(" and timestamp < ?")
-		args = append(args, *condition.Before)
+		if db.driver == MySQL {
+			// In MySQL, we need to truncate the time to milliseconds because MySQL will round the time to milliseconds.
+			args = append(args, condition.Before.Truncate(time.Millisecond))
+		} else {
+			args = append(args, *condition.Before)
+		}
 	}
 	return db.gormDB.WithContext(ctx).Delete(&SQLDocument{}, append([]any{builder.String()}, args...)...).Error
 }
@@ -568,7 +573,8 @@ func (db *SQLDatabase) AddTimeSeriesPoints(ctx context.Context, points []TimeSer
 
 func (db *SQLDatabase) GetTimeSeriesPoints(ctx context.Context, name string, begin, end time.Time, duration time.Duration) ([]TimeSeriesPoint, error) {
 	var points []TimeSeriesPoint
-	if db.driver == Postgres {
+	switch db.driver {
+	case Postgres:
 		if err := db.gormDB.WithContext(ctx).
 			Raw(fmt.Sprintf("SELECT name, bucket_timestamp AS timestamp, value FROM ("+
 				"SELECT *, TO_TIMESTAMP((EXTRACT(epoch FROM timestamp)::int / ?) * ?) AS bucket_timestamp,"+
@@ -578,7 +584,7 @@ func (db *SQLDatabase) GetTimeSeriesPoints(ctx context.Context, name string, beg
 			Scan(&points).Error; err != nil {
 			return nil, errors.Trace(err)
 		}
-	} else if db.driver == MySQL {
+	case MySQL:
 		if err := db.gormDB.WithContext(ctx).
 			Raw(fmt.Sprintf("SELECT name, bucket_timestamp AS timestamp, value FROM("+
 				"SELECT *, FROM_UNIXTIME(FLOOR(UNIX_TIMESTAMP(timestamp) / ?) * ?) AS bucket_timestamp,"+
@@ -588,7 +594,7 @@ func (db *SQLDatabase) GetTimeSeriesPoints(ctx context.Context, name string, beg
 			Scan(&points).Error; err != nil {
 			return nil, errors.Trace(err)
 		}
-	} else if db.driver == SQLite {
+	case SQLite:
 		rows, err := db.gormDB.WithContext(ctx).
 			Raw(fmt.Sprintf("select name, bucket_timestamp as timestamp, value from ("+
 				"select *, datetime(strftime('%%s', substr(timestamp, 0, 20)) / ? * ?, 'unixepoch') as bucket_timestamp,"+
