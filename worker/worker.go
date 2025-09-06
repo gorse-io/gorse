@@ -59,10 +59,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-const (
-	batchSize                 = 10000
-	recommendComplexityFactor = 100
-)
+const batchSize = 10000
 
 type ScheduleState struct {
 	IsRunning bool      `json:"is_running"`
@@ -78,6 +75,8 @@ type Worker struct {
 	collaborativeFilteringModelId int64
 	matrixFactorizationItems      *logics.MatrixFactorizationItems
 	matrixFactorizationUsers      *logics.MatrixFactorizationUsers
+	clickThroughRateModelId       int64
+	clickThroughRateModel         ctr.FactorizationMachines
 
 	// spawned rankers
 	rankers []ctr.FactorizationMachines
@@ -254,9 +253,9 @@ func (w *Worker) Sync() {
 
 		// synchronize click-through rate model
 		w.latestClickThroughRateModelId = meta.ClickThroughRateModelId
-		if w.latestClickThroughRateModelId > w.ClickThroughRateModelId {
+		if w.latestClickThroughRateModelId > w.clickThroughRateModelId {
 			log.Logger().Info("new click model found",
-				zap.Int64("old_version", w.ClickThroughRateModelId),
+				zap.Int64("old_version", w.clickThroughRateModelId),
 				zap.Int64("new_version", w.latestClickThroughRateModelId))
 			w.syncedChan.Signal()
 		}
@@ -302,7 +301,7 @@ func (w *Worker) Pull() {
 		}
 
 		// pull click model
-		if w.latestClickThroughRateModelId > w.ClickThroughRateModelId {
+		if w.latestClickThroughRateModelId > w.clickThroughRateModelId {
 			log.Logger().Info("start pull click model")
 			r, err := w.blobStore.Open(strconv.FormatInt(w.latestClickThroughRateModelId, 10))
 			if err != nil {
@@ -312,16 +311,16 @@ func (w *Worker) Pull() {
 				if err != nil {
 					log.Logger().Error("failed to unmarshal click-through rate model", zap.Error(err))
 				} else {
-					w.ClickModel = model
-					w.ClickThroughRateModelId = w.latestClickThroughRateModelId
+					w.clickThroughRateModel = model
+					w.clickThroughRateModelId = w.latestClickThroughRateModelId
 					log.Logger().Info("synced click-through rate model",
-						zap.Int64("version", w.ClickThroughRateModelId))
+						zap.Int64("version", w.clickThroughRateModelId))
 					// spawn rankers
 					for i := 0; i < w.jobs; i++ {
 						if i == 0 {
-							w.rankers[i] = w.ClickModel
+							w.rankers[i] = w.clickThroughRateModel
 						} else {
-							w.rankers[i] = ctr.Spawn(w.ClickModel)
+							w.rankers[i] = ctr.Spawn(w.clickThroughRateModel)
 						}
 					}
 					pulled = true
@@ -508,7 +507,7 @@ func (w *Worker) Recommend(users []data.User) {
 
 	// progress tracker
 	completed := make(chan struct{}, 1000)
-	_, span := w.tracer.Start(context.Background(), "Recommend", len(users))
+	_, span := w.tracer.Start(context.Background(), "Generate Offline Recommend", len(users))
 	defer span.End()
 
 	go func() {

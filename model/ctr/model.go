@@ -27,6 +27,7 @@ import (
 	"github.com/gorse-io/gorse/base/copier"
 	"github.com/gorse-io/gorse/base/log"
 	"github.com/gorse-io/gorse/common/encoding"
+	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/common/nn"
 	"github.com/gorse-io/gorse/dataset"
 	"github.com/gorse-io/gorse/model"
@@ -351,6 +352,7 @@ func (fm *FMV2) Fit(ctx context.Context, trainSet, testSet dataset.CTRSplit, con
 	}
 	optimizer.SetWeightDecay(fm.reg)
 	optimizer.SetJobs(config.Jobs)
+	_, span := monitor.Start(ctx, "FM.Fit", fm.nEpochs)
 	for epoch := 1; epoch <= fm.nEpochs; epoch++ {
 		fitStart := time.Now()
 		cost := float32(0)
@@ -385,7 +387,9 @@ func (fm *FMV2) Fit(ctx context.Context, trainSet, testSet dataset.CTRSplit, con
 				break
 			}
 		}
+		span.Add(1)
 	}
+	span.End()
 	return score
 }
 

@@ -1097,20 +1097,20 @@ func (m *Master) trainClickThroughRatePrediction(trainSet, testSet *ctr.Dataset)
 
 	bestModel, bestScore := m.clickModelSearcher.GetBestModel()
 	m.clickThroughRateModelMutex.Lock()
+	clickThroughRateParams := m.clickThroughRateMeta.Params
 	if bestModel != nil && !bestModel.Invalid() &&
-		bestModel.GetParams().ToString() != m.ClickModel.GetParams().ToString() &&
+		bestModel.GetParams().ToString() != clickThroughRateParams.ToString() &&
 		bestScore.Precision > m.clickThroughRateMeta.Score.Precision {
 		// 1. best click model must have been found.
 		// 2. best click model must be different from current model
 		// 3. best click model must perform better than current model
-		m.ClickModel = bestModel
-		m.clickThroughRateMeta.Score = bestScore
+		clickThroughRateParams = bestModel.GetParams()
 		log.Logger().Info("find better click model",
 			zap.Float32("Precision", bestScore.Precision),
 			zap.Float32("Recall", bestScore.Recall),
-			zap.Any("params", m.ClickModel.GetParams()))
+			zap.Any("params", clickThroughRateParams))
 	}
-	clickModel := ctr.Clone(m.ClickModel)
+	clickModel := ctr.NewFMV2(clickThroughRateParams)
 	m.clickThroughRateModelMutex.Unlock()
 
 	startFitTime := time.Now()
@@ -1119,42 +1119,40 @@ func (m *Master) trainClickThroughRatePrediction(trainSet, testSet *ctr.Dataset)
 
 	// update match model
 	m.clickThroughRateModelMutex.Lock()
-	m.ClickModel = clickModel
 	m.clickTrainSetSize = trainSet.Count()
-	m.ClickThroughRateModelId = time.Now().Unix()
+	clickThroughRateModelId := time.Now().Unix()
 	m.clickThroughRateModelMutex.Unlock()
 	log.Logger().Info("fit click model complete",
-		zap.Int64("id", m.ClickThroughRateModelId))
+		zap.Int64("id", clickThroughRateModelId))
 	RankingPrecision.Set(float64(score.Precision))
 	RankingRecall.Set(float64(score.Recall))
 	RankingAUC.Set(float64(score.AUC))
-	MemoryInUseBytesVec.WithLabelValues("ranking_model").Set(float64(sizeof.DeepSize(m.ClickModel)))
 	if err := m.CacheClient.Set(context.Background(), cache.Time(cache.Key(cache.GlobalMeta, cache.LastFitRankingModelTime), time.Now())); err != nil {
 		log.Logger().Error("failed to write meta", zap.Error(err))
 	}
 
 	// upload model
-	w, done, err := m.blobStore.Create(strconv.FormatInt(m.ClickThroughRateModelId, 10))
+	w, done, err := m.blobStore.Create(strconv.FormatInt(clickThroughRateModelId, 10))
 	if err != nil {
 		log.Logger().Error("failed to create blob for click-through rate model",
-			zap.Int64("id", m.ClickThroughRateModelId), zap.Error(err))
+			zap.Int64("id", clickThroughRateModelId), zap.Error(err))
 		return err
 	}
 	if err = ctr.MarshalModel(w, clickModel); err != nil {
 		log.Logger().Error("failed to marshal click-through rate model",
-			zap.Int64("id", m.ClickThroughRateModelId), zap.Error(err))
+			zap.Int64("id", clickThroughRateModelId), zap.Error(err))
 		return err
 	}
 	if err = w.Close(); err != nil {
 		log.Logger().Error("failed to close blob for click-through rate model",
-			zap.Int64("id", m.ClickThroughRateModelId), zap.Error(err))
+			zap.Int64("id", clickThroughRateModelId), zap.Error(err))
 		return err
 	}
 	<-done
 
 	// update meta
 	m.clickThroughRateModelMutex.RLock()
-	m.clickThroughRateMeta.ID = m.ClickThroughRateModelId
+	m.clickThroughRateMeta.ID = clickThroughRateModelId
 	m.clickThroughRateMeta.Score = score
 	m.clickThroughRateModelMutex.RUnlock()
 	if err = m.metaStore.Put(meta.CLICK_THROUGH_RATE_MODEL, m.clickThroughRateMeta.ToJSON()); err != nil {
@@ -1162,11 +1160,11 @@ func (m *Master) trainClickThroughRatePrediction(trainSet, testSet *ctr.Dataset)
 		return err
 	} else {
 		log.Logger().Info("write click-through rate model meta",
-			zap.Int64("id", m.ClickThroughRateModelId),
+			zap.Int64("id", clickThroughRateModelId),
 			zap.Float32("precision", score.Precision),
 			zap.Float32("recall", score.Recall),
 			zap.Float32("auc", score.AUC),
-			zap.Any("params", m.ClickModel.GetParams()))
+			zap.Any("params", clickThroughRateParams))
 	}
 
 	// update statistics

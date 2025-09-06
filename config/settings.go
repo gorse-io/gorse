@@ -15,7 +15,6 @@
 package config
 
 import (
-	"github.com/gorse-io/gorse/model/ctr"
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
 )
@@ -26,10 +25,6 @@ type Settings struct {
 	// database clients
 	CacheClient cache.Database
 	DataClient  data.Database
-
-	// recommendation models
-	ClickModel              ctr.FactorizationMachines
-	ClickThroughRateModelId int64
 }
 
 func NewSettings() *Settings {
