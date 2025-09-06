@@ -28,7 +28,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/bits-and-blooms/bitset"
 	"github.com/c-bata/goptuna"
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/gorse-io/gorse/base"
