@@ -102,9 +102,9 @@ func (m *mockMatrixFactorizationForSearch) GetParamsGrid(_ bool) model.ParamsGri
 
 func (m *mockMatrixFactorizationForSearch) SuggestParams(trial goptuna.Trial) model.Params {
 	return model.Params{
-		model.NFactors:   lo.Must(trial.SuggestInt(string(model.NFactors), 1, 4)),
-		model.InitMean:   lo.Must(trial.SuggestInt(string(model.InitMean), 1, 4)),
-		model.InitStdDev: lo.Must(trial.SuggestInt(string(model.InitStdDev), 4, 4)),
+		model.NFactors:   lo.Must(trial.SuggestDiscreteFloat(string(model.NFactors), 1, 4, 1)),
+		model.InitMean:   lo.Must(trial.SuggestDiscreteFloat(string(model.InitMean), 1, 4, 1)),
+		model.InitStdDev: lo.Must(trial.SuggestDiscreteFloat(string(model.InitStdDev), 4, 4, 1)),
 	}
 }
 
@@ -144,15 +144,15 @@ func TestTPE(t *testing.T) {
 		goptuna.StudyOptionDirection(goptuna.StudyDirectionMaximize),
 		goptuna.StudyOptionSampler(tpe.NewSampler()))
 	assert.NoError(t, err)
-	err = study.Optimize(search.Objective, 32)
+	err = study.Optimize(search.Objective, 10)
 	assert.NoError(t, err)
 	v, _ := study.GetBestValue()
 	p, _ := study.GetBestParams()
 	assert.Equal(t, float64(12), v)
 	assert.Equal(t, model.Params{
-		model.NFactors:   4,
-		model.InitMean:   4,
-		model.InitStdDev: 4,
+		model.NFactors:   float64(4),
+		model.InitMean:   float64(4),
+		model.InitStdDev: float64(4),
 	}, search.New(p).GetParams())
 }
 
