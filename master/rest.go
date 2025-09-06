@@ -836,9 +836,10 @@ func (m *Master) getRecommend(request *restful.Request, response *restful.Respon
 	// Send result
 	details := make([]data.Item, 0, len(results))
 	for i := range results {
-		var exist bool
-		details = append(details, itemsMap[results[i]])
-		if !exist {
+		detail, exist := itemsMap[results[i]]
+		if exist {
+			details = append(details, detail)
+		} else {
 			log.Logger().Warn("recommended item doesn't exist", zap.String("item_id", results[i]))
 		}
 	}
