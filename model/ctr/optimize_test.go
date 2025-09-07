@@ -18,10 +18,13 @@ import (
 	"io"
 	"testing"
 
+	"github.com/c-bata/goptuna"
+	"github.com/c-bata/goptuna/tpe"
 	"github.com/gorse-io/gorse/base"
 	"github.com/gorse-io/gorse/base/task"
 	"github.com/gorse-io/gorse/dataset"
 	"github.com/gorse-io/gorse/model"
+	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -77,6 +80,14 @@ func (m *mockFactorizationMachineForSearch) GetParamsGrid(_ bool) model.ParamsGr
 		model.NFactors:   []interface{}{1, 2, 3, 4},
 		model.InitMean:   []interface{}{4, 3, 2, 1},
 		model.InitStdDev: []interface{}{4, 4, 4, 4},
+	}
+}
+
+func (m *mockFactorizationMachineForSearch) SuggestParams(trial goptuna.Trial) model.Params {
+	return model.Params{
+		model.NFactors:   lo.Must(trial.SuggestInt(string(model.NFactors), 1, 4)),
+		model.InitMean:   lo.Must(trial.SuggestInt(string(model.InitMean), 1, 4)),
+		model.InitStdDev: lo.Must(trial.SuggestInt(string(model.InitStdDev), 4, 4)),
 	}
 }
 
@@ -138,4 +149,23 @@ func TestModelSearcher_GridSearch(t *testing.T) {
 		model.InitMean:   4,
 		model.InitStdDev: 4,
 	}, m.GetParams())
+}
+
+func TestTPE(t *testing.T) {
+	search := NewModelSearch(nil, nil,
+		&mockFactorizationMachineForSearch{model.BaseModel{Params: model.Params{model.NEpochs: 2}}})
+	study, err := goptuna.CreateStudy("TestTPE",
+		goptuna.StudyOptionDirection(goptuna.StudyDirectionMaximize),
+		goptuna.StudyOptionSampler(tpe.NewSampler()))
+	assert.NoError(t, err)
+	err = study.Optimize(search.Objective, 32)
+	assert.NoError(t, err)
+	v, _ := study.GetBestValue()
+	p, _ := study.GetBestParams()
+	assert.Equal(t, float64(12), v)
+	assert.Equal(t, model.Params{
+		model.NFactors:   4,
+		model.InitMean:   4,
+		model.InitStdDev: 4,
+	}, search.New(p).GetParams())
 }

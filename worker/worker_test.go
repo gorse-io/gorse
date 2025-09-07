@@ -28,6 +28,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/c-bata/goptuna"
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/gorse-io/gorse/base"
 	"github.com/gorse-io/gorse/common/expression"
@@ -707,6 +708,10 @@ func (m mockFactorizationMachine) Complexity() int {
 }
 
 func (m mockFactorizationMachine) GetParamsGrid(_ bool) model.ParamsGrid {
+	panic("implement me")
+}
+
+func (m mockFactorizationMachine) SuggestParams(_ goptuna.Trial) model.Params {
 	panic("implement me")
 }
 
