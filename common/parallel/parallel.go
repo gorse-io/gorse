@@ -18,8 +18,8 @@ import (
 	"sync"
 
 	"github.com/gorse-io/gorse/base"
-
 	"github.com/juju/errors"
+	"github.com/samber/lo"
 	"modernc.org/mathutil"
 )
 
@@ -103,6 +103,34 @@ func For(nJobs, nWorkers int, worker func(int)) {
 			wg.Go(func() {
 				for jobId := range c {
 					worker(jobId)
+				}
+			})
+		}
+		wg.Wait()
+	}
+}
+
+func ForEach[T any](a []T, nWorkers int, worker func(int, T)) {
+	if nWorkers <= 1 {
+		for i, v := range a {
+			worker(i, v)
+		}
+	} else {
+		c := make(chan lo.Tuple2[int, T], chanSize)
+		// producer
+		go func() {
+			for i, v := range a {
+				c <- lo.Tuple2[int, T]{A: i, B: v}
+			}
+			close(c)
+		}()
+		// consumer
+		var wg sync.WaitGroup
+		for j := 0; j < nWorkers; j++ {
+			// start workers
+			wg.Go(func() {
+				for job := range c {
+					worker(job.A, job.B)
 				}
 			})
 		}

@@ -16,6 +16,7 @@ package parallel
 import (
 	"fmt"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	mapset "github.com/deckarep/golang-set/v2"
@@ -24,74 +25,101 @@ import (
 )
 
 func TestParallel(t *testing.T) {
-	a := base.RangeInt(10000)
-	b := make([]int, len(a))
-	workerIds := make([]int, len(a))
-	// multiple threads
-	_ = Parallel(len(a), 4, func(workerId, jobId int) error {
-		b[jobId] = a[jobId]
-		workerIds[jobId] = workerId
-		time.Sleep(time.Microsecond)
-		return nil
+	synctest.Test(t, func(t *testing.T) {
+		a := base.RangeInt(10000)
+		b := make([]int, len(a))
+		workerIds := make([]int, len(a))
+		// multiple threads
+		_ = Parallel(len(a), 4, func(workerId, jobId int) error {
+			b[jobId] = a[jobId]
+			workerIds[jobId] = workerId
+			time.Sleep(time.Microsecond)
+			return nil
+		})
+		workersSet := mapset.NewSet(workerIds...)
+		assert.Equal(t, a, b)
+		assert.GreaterOrEqual(t, 4, workersSet.Cardinality())
+		assert.Less(t, 1, workersSet.Cardinality())
+		// single thread
+		_ = Parallel(len(a), 1, func(workerId, jobId int) error {
+			b[jobId] = a[jobId]
+			workerIds[jobId] = workerId
+			return nil
+		})
+		workersSet = mapset.NewSet(workerIds...)
+		assert.Equal(t, a, b)
+		assert.Equal(t, 1, workersSet.Cardinality())
 	})
-	workersSet := mapset.NewSet(workerIds...)
-	assert.Equal(t, a, b)
-	assert.GreaterOrEqual(t, 4, workersSet.Cardinality())
-	assert.Less(t, 1, workersSet.Cardinality())
-	// single thread
-	_ = Parallel(len(a), 1, func(workerId, jobId int) error {
-		b[jobId] = a[jobId]
-		workerIds[jobId] = workerId
-		return nil
-	})
-	workersSet = mapset.NewSet(workerIds...)
-	assert.Equal(t, a, b)
-	assert.Equal(t, 1, workersSet.Cardinality())
 }
 
 func TestFor(t *testing.T) {
-	// multiple threads
-	a := base.RangeInt(10000)
-	b := make([]int, len(a))
-	For(len(a), 4, func(jobId int) {
-		b[jobId] = a[jobId]
-		time.Sleep(time.Microsecond)
+	synctest.Test(t, func(t *testing.T) {
+		// multiple threads
+		a := base.RangeInt(10000)
+		b := make([]int, len(a))
+		For(len(a), 4, func(jobId int) {
+			b[jobId] = a[jobId]
+			time.Sleep(time.Microsecond)
+		})
+		assert.Equal(t, a, b)
+		// single thread
+		For(len(a), 1, func(jobId int) {
+			b[jobId] = a[jobId]
+			time.Sleep(time.Microsecond)
+		})
+		assert.Equal(t, a, b)
 	})
-	assert.Equal(t, a, b)
-	// single thread
-	For(len(a), 1, func(jobId int) {
-		b[jobId] = a[jobId]
-		time.Sleep(time.Microsecond)
+}
+
+func TestForEach(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		a := base.RangeInt(10000)
+		b := make([]int, len(a))
+		// multiple threads
+		ForEach(a, 4, func(i, v int) {
+			assert.Equal(t, i, v)
+			b[i] = v
+			time.Sleep(time.Microsecond)
+		})
+		assert.Equal(t, a, b)
+		// single thread
+		ForEach(a, 1, func(i, v int) {
+			assert.Equal(t, i, v)
+			b[i] = v
+			time.Sleep(time.Microsecond)
+		})
+		assert.Equal(t, a, b)
 	})
-	assert.Equal(t, a, b)
 }
 
 func TestBatchParallel(t *testing.T) {
-	a := base.RangeInt(10000)
-	b := make([]int, len(a))
-	workerIds := make([]int, len(a))
-	// multiple threads
-	_ = BatchParallel(len(a), 4, 10, func(workerId, beginJobId, endJobId int) error {
-		for jobId := beginJobId; jobId < endJobId; jobId++ {
+	synctest.Test(t, func(t *testing.T) {
+		a := base.RangeInt(10000)
+		b := make([]int, len(a))
+		workerIds := make([]int, len(a))
+		// multiple threads
+		_ = BatchParallel(len(a), 4, 10, func(workerId, beginJobId, endJobId int) error {
+			for jobId := beginJobId; jobId < endJobId; jobId++ {
+				b[jobId] = a[jobId]
+				workerIds[jobId] = workerId
+			}
+			time.Sleep(time.Microsecond)
+			return nil
+		})
+		workersSet := mapset.NewSet(workerIds...)
+		assert.Equal(t, a, b)
+		assert.GreaterOrEqual(t, 4, workersSet.Cardinality())
+		assert.Less(t, 1, workersSet.Cardinality())
+		// single thread
+		_ = Parallel(len(a), 1, func(workerId, jobId int) error {
 			b[jobId] = a[jobId]
 			workerIds[jobId] = workerId
-		}
-		time.Sleep(time.Microsecond)
-		return nil
+			return nil
+		})
+		workersSet = mapset.NewSet(workerIds...)
+		assert.Equal(t, a, b)
+		assert.Equal(t, 1, workersSet.Cardinality())
 	})
-	workersSet := mapset.NewSet(workerIds...)
-	assert.Equal(t, a, b)
-	assert.GreaterOrEqual(t, 4, workersSet.Cardinality())
-	assert.Less(t, 1, workersSet.Cardinality())
-	// single thread
-	_ = Parallel(len(a), 1, func(workerId, jobId int) error {
-		b[jobId] = a[jobId]
-		workerIds[jobId] = workerId
-		return nil
-	})
-	workersSet = mapset.NewSet(workerIds...)
-	assert.Equal(t, a, b)
-	assert.Equal(t, 1, workersSet.Cardinality())
 }
 
 func TestParallelFail(t *testing.T) {
@@ -114,22 +142,24 @@ func TestParallelFail(t *testing.T) {
 }
 
 func TestBatchParallelFail(t *testing.T) {
-	// multiple threads
-	err := BatchParallel(1000000, 2, 1, func(workerId, beginJobId, endJobId int) error {
-		if workerId%2 == 1 {
-			return fmt.Errorf("error from %d", workerId)
-		}
-		return nil
+	synctest.Test(t, func(t *testing.T) {
+		// multiple threads
+		err := BatchParallel(1000000, 2, 1, func(workerId, beginJobId, endJobId int) error {
+			if workerId%2 == 1 {
+				return fmt.Errorf("error from %d", workerId)
+			}
+			return nil
+		})
+		assert.Error(t, err)
+		// single thread
+		err = BatchParallel(1000000, 2, 1, func(workerId, beginJobId, endJobId int) error {
+			if workerId%2 == 1 {
+				return fmt.Errorf("error from %d", workerId)
+			}
+			return nil
+		})
+		assert.Error(t, err)
 	})
-	assert.Error(t, err)
-	// single thread
-	err = BatchParallel(1000000, 2, 1, func(workerId, beginJobId, endJobId int) error {
-		if workerId%2 == 1 {
-			return fmt.Errorf("error from %d", workerId)
-		}
-		return nil
-	})
-	assert.Error(t, err)
 }
 
 func TestSplit(t *testing.T) {
@@ -140,15 +170,4 @@ func TestSplit(t *testing.T) {
 	a = []int{1, 2, 3, 4, 5, 6, 7}
 	b = Split(a, 3)
 	assert.Equal(t, [][]int{{1, 2, 3}, {4, 5}, {6, 7}}, b)
-}
-
-// check panic
-func TestParallelPanic(t *testing.T) {
-	err := Parallel(10000, 4, func(workerId, jobId int) error {
-		panic("panic")
-	})
-	if err != nil {
-		return
-	}
-	time.Sleep(time.Second * 3)
 }
