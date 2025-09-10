@@ -59,9 +59,12 @@ func (items *MatrixFactorizationItems) Add(itemId string, v []float32) {
 		return
 	}
 	// Push item
-	items.items = append(items.items, itemId)
+	items.items = append(items.items, "")
 	items.itemsLock.Unlock()
-	_ = items.index.Add(v)
+	j := items.index.Add(v)
+	items.itemsLock.Lock()
+	items.items[j] = itemId
+	items.itemsLock.Unlock()
 }
 
 func (items *MatrixFactorizationItems) Search(v []float32, n int) []cache.Score {

@@ -149,9 +149,12 @@ func (e *embeddingUserToUser) Push(user *data.User, _ []int32) {
 		return
 	}
 	// Push user
-	e.users = append(e.users, user)
+	e.users = append(e.users, nil)
 	e.usersLock.Unlock()
-	_ = e.index.Add(v)
+	j := e.index.Add(v)
+	e.usersLock.Lock()
+	e.users[j] = user
+	e.usersLock.Unlock()
 }
 
 type tagsUserToUser struct {
@@ -196,9 +199,12 @@ func (t *tagsUserToUser) Push(user *data.User, _ []int32) {
 	})
 	// Push user
 	t.usersLock.Lock()
-	t.users = append(t.users, user)
+	t.users = append(t.users, nil)
 	t.usersLock.Unlock()
-	_ = t.index.Add(v)
+	j := t.index.Add(v)
+	t.usersLock.Lock()
+	t.users[j] = user
+	t.usersLock.Unlock()
 }
 
 type itemsUserToUser struct {
@@ -227,9 +233,12 @@ func (i *itemsUserToUser) Push(user *data.User, feedback []int32) {
 	})
 	// Push user
 	i.usersLock.Lock()
-	i.users = append(i.users, user)
+	i.users = append(i.users, nil)
 	i.usersLock.Unlock()
-	_ = i.index.Add(feedback)
+	j := i.index.Add(feedback)
+	i.usersLock.Lock()
+	i.users[j] = user
+	i.usersLock.Unlock()
 }
 
 type autoUserToUser struct {
@@ -266,9 +275,12 @@ func (a *autoUserToUser) Push(user *data.User, feedback []int32) {
 	})
 	// Push user
 	a.usersLock.Lock()
-	a.users = append(a.users, user)
+	a.users = append(a.users, nil)
 	a.usersLock.Unlock()
-	_ = a.index.Add(lo.Tuple2[[]dataset.ID, []int32]{A: t, B: feedback})
+	j := a.index.Add(lo.Tuple2[[]dataset.ID, []int32]{A: t, B: feedback})
+	a.usersLock.Lock()
+	a.users[j] = user
+	a.usersLock.Unlock()
 }
 
 func (a *autoUserToUser) distance(u, v lo.Tuple2[[]dataset.ID, []int32]) float32 {
