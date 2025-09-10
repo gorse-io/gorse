@@ -20,6 +20,7 @@ import (
 	"errors"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/cenkalti/backoff/v5"
@@ -107,6 +108,7 @@ type baseItemToItem[T any] struct {
 	columnFunc *vm.Program
 	index      *ann.HNSW[T]
 	items      []*data.Item
+	itemsLock  sync.Mutex
 }
 
 func (b *baseItemToItem[T]) Timestamp() time.Time {
@@ -180,6 +182,7 @@ func (e *embeddingItemToItem) Push(item *data.Item, _ []int32) {
 		return
 	}
 	// Check dimension
+	e.itemsLock.Lock()
 	if e.dimension == 0 && len(v) > 0 {
 		e.dimension = len(v)
 	} else if e.dimension != len(v) {
@@ -188,6 +191,7 @@ func (e *embeddingItemToItem) Push(item *data.Item, _ []int32) {
 	}
 	// Push item
 	e.items = append(e.items, item)
+	e.itemsLock.Unlock()
 	_ = e.index.Add(v)
 }
 
@@ -237,7 +241,9 @@ func (t *tagsItemToItem) Push(item *data.Item, _ []int32) {
 		return v[i] < v[j]
 	})
 	// Push item
+	t.itemsLock.Lock()
 	t.items = append(t.items, item)
+	t.itemsLock.Unlock()
 	_ = t.index.Add(v)
 }
 
@@ -270,7 +276,9 @@ func (u *usersItemToItem) Push(item *data.Item, feedback []int32) {
 		return feedback[i] < feedback[j]
 	})
 	// Push item
+	u.itemsLock.Lock()
 	u.items = append(u.items, item)
+	u.itemsLock.Unlock()
 	_ = u.index.Add(feedback)
 }
 
@@ -311,7 +319,9 @@ func (a *autoItemToItem) Push(item *data.Item, feedback []int32) {
 		return feedback[i] < feedback[j]
 	})
 	// Push item
+	a.itemsLock.Lock()
 	a.items = append(a.items, item)
+	a.itemsLock.Unlock()
 	_ = a.index.Add(lo.Tuple2[[]dataset.ID, []int32]{A: v, B: feedback})
 }
 

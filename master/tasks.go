@@ -16,7 +16,6 @@ package master
 
 import (
 	"context"
-	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -749,19 +748,19 @@ func (m *Master) updateItemToItem(dataset *dataset.Dataset) error {
 	}
 
 	// Push items to item-to-item recommenders
-	for i, item := range dataset.GetItems() {
+	parallel.ForEach(dataset.GetItems(), m.Config.Master.NumJobs, func(i int, item data.Item) {
 		if !item.IsHidden {
 			for _, recommender := range itemToItemRecommenders {
 				recommender.Push(&item, dataset.GetItemFeedback()[i])
 				span.Add(1)
 			}
 		}
-	}
+	})
 
 	// Save item-to-item recommendations to cache
 	for i, recommender := range itemToItemRecommenders {
 		pool := recommender.Pool()
-		for j, item := range recommender.Items() {
+		parallel.ForEach(recommender.Items(), m.Config.Master.NumJobs, func(j int, item *data.Item) {
 			itemToItemConfig := m.Config.Recommend.ItemToItem[i]
 			if m.needUpdateItemToItem(item.ItemId, itemToItemConfig) {
 				pool.Run(func() {
@@ -802,7 +801,7 @@ func (m *Master) updateItemToItem(dataset *dataset.Dataset) error {
 			} else {
 				span.Add(1)
 			}
-		}
+		})
 		pool.Wait()
 	}
 	return nil
@@ -867,21 +866,21 @@ func (m *Master) updateUserToUser(dataset *dataset.Dataset) error {
 	}
 
 	// Push users to user-to-user recommender
-	for i, user := range dataset.GetUsers() {
+	parallel.ForEach(dataset.GetUsers(), m.Config.Master.NumJobs, func(i int, user data.User) {
 		for _, recommender := range userToUserRecommenders {
 			recommender.Push(&user, dataset.GetUserFeedback()[i])
 			span.Add(1)
 		}
-	}
+	})
 
 	// Save user-to-user recommendations to cache
 	for i, recommender := range userToUserRecommenders {
-		for j, user := range recommender.Users() {
+		parallel.ForEach(recommender.Users(), m.Config.Master.NumJobs, func(j int, user *data.User) {
 			userToUserConfig := m.Config.Recommend.UserToUser[i]
 			if m.needUpdateUserToUser(user.UserId, userToUserConfig) {
 				score := recommender.PopAll(j)
 				if score == nil {
-					continue
+					return
 				}
 				log.Logger().Debug("update user neighbors",
 					zap.String("user_id", user.UserId),
@@ -889,7 +888,7 @@ func (m *Master) updateUserToUser(dataset *dataset.Dataset) error {
 				// Save user-to-user recommendations to cache
 				if err := m.CacheClient.AddScores(ctx, cache.UserToUser, cache.Key(userToUserConfig.Name, user.UserId), score); err != nil {
 					log.Logger().Error("failed to save user neighbors to cache", zap.String("user_id", user.UserId), zap.Error(err))
-					continue
+					return
 				}
 				// Save user-to-user digest and last update time to cache
 				if err := m.CacheClient.Set(ctx,
@@ -897,7 +896,7 @@ func (m *Master) updateUserToUser(dataset *dataset.Dataset) error {
 					cache.Time(cache.Key(cache.UserToUserUpdateTime, cache.Key(userToUserConfig.Name, user.UserId)), time.Now()),
 				); err != nil {
 					log.Logger().Error("failed to save user neighbors digest to cache", zap.String("user_id", user.UserId), zap.Error(err))
-					continue
+					return
 				}
 				// Delete stale user-to-user recommendations
 				if err := m.CacheClient.DeleteScores(ctx, []string{cache.UserToUser}, cache.ScoreCondition{
@@ -908,7 +907,7 @@ func (m *Master) updateUserToUser(dataset *dataset.Dataset) error {
 				}
 			}
 			span.Add(1)
-		}
+		})
 	}
 	return nil
 }
@@ -986,14 +985,14 @@ func (m *Master) trainCollaborativeFiltering(trainSet, testSet dataset.CFSplit) 
 	startFitTime := time.Now()
 	fitCtx, fitSpan := monitor.Start(newCtx, "Fit", 1)
 	collaborativeFilteringModel := cf.NewBPR(collaborativeFilteringParams)
-	score := collaborativeFilteringModel.Fit(fitCtx, trainSet, testSet, cf.NewFitConfig())
+	score := collaborativeFilteringModel.Fit(fitCtx, trainSet, testSet, cf.NewFitConfig().SetJobs(m.Config.Master.NumJobs))
 	CollaborativeFilteringFitSeconds.Set(time.Since(startFitTime).Seconds())
 	span.Add(1)
 	fitSpan.End()
 
 	_, indexSpan := monitor.Start(newCtx, "Index", trainSet.CountItems())
 	matrixFactorizationItems := logics.NewMatrixFactorizationItems(time.Now())
-	parallel.For(trainSet.CountItems(), runtime.NumCPU(), func(i int) {
+	parallel.For(trainSet.CountItems(), m.Config.Master.NumJobs, func(i int) {
 		defer indexSpan.Add(1)
 		if itemId, ok := trainSet.GetItemDict().String(int32(i)); ok && collaborativeFilteringModel.IsItemPredictable(int32(i)) {
 			matrixFactorizationItems.Add(itemId, collaborativeFilteringModel.GetItemFactor(int32(i)))
@@ -1114,7 +1113,7 @@ func (m *Master) trainClickThroughRatePrediction(trainSet, testSet *ctr.Dataset)
 	m.clickThroughRateModelMutex.Unlock()
 
 	startFitTime := time.Now()
-	score := clickModel.Fit(newCtx, trainSet, testSet, ctr.NewFitConfig())
+	score := clickModel.Fit(newCtx, trainSet, testSet, ctr.NewFitConfig().SetJobs(m.Config.Master.NumJobs))
 	RankingFitSeconds.Set(time.Since(startFitTime).Seconds())
 
 	// update match model
