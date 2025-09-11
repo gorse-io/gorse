@@ -100,8 +100,8 @@ type FactorizationMachines interface {
 }
 
 type BatchInference interface {
-	BatchPredict(inputs []lo.Tuple4[string, string, []Label, []Label]) []float32
-	BatchInternalPredict(x []lo.Tuple2[[]int32, []float32]) []float32
+	BatchPredict(inputs []lo.Tuple4[string, string, []Label, []Label], jobs int) []float32
+	BatchInternalPredict(x []lo.Tuple2[[]int32, []float32], jobs int) []float32
 }
 
 type FactorizationMachineCloner interface {
@@ -267,20 +267,20 @@ func (fm *FMV2) InternalPredict(_ []int32, _ []float32) float32 {
 	panic("InternalPredict is unsupported for deep learning models")
 }
 
-func (fm *FMV2) BatchInternalPredict(x []lo.Tuple2[[]int32, []float32]) []float32 {
+func (fm *FMV2) BatchInternalPredict(x []lo.Tuple2[[]int32, []float32], jobs int) []float32 {
 	fm.mu.RLock()
 	defer fm.mu.RUnlock()
 	indicesTensor, valuesTensor, _ := fm.convertToTensors(x, nil)
 	predictions := make([]float32, 0, len(x))
 	for i := 0; i < len(x); i += fm.batchSize {
 		j := mathutil.Min(i+fm.batchSize, len(x))
-		output := fm.Forward(indicesTensor.Slice(i, j), valuesTensor.Slice(i, j), 0)
+		output := fm.Forward(indicesTensor.Slice(i, j), valuesTensor.Slice(i, j), jobs)
 		predictions = append(predictions, output.Data()...)
 	}
 	return predictions[:len(x)]
 }
 
-func (fm *FMV2) BatchPredict(inputs []lo.Tuple4[string, string, []Label, []Label]) []float32 {
+func (fm *FMV2) BatchPredict(inputs []lo.Tuple4[string, string, []Label, []Label], jobs int) []float32 {
 	x := make([]lo.Tuple2[[]int32, []float32], len(inputs))
 	for i, input := range inputs {
 		// encode user
@@ -308,7 +308,7 @@ func (fm *FMV2) BatchPredict(inputs []lo.Tuple4[string, string, []Label, []Label
 			}
 		}
 	}
-	return fm.BatchInternalPredict(x)
+	return fm.BatchInternalPredict(x, jobs)
 }
 
 func (fm *FMV2) Init(trainSet dataset.CTRSplit) {
@@ -327,7 +327,7 @@ func (fm *FMV2) Init(trainSet dataset.CTRSplit) {
 func (fm *FMV2) Fit(ctx context.Context, trainSet, testSet dataset.CTRSplit, config *FitConfig) Score {
 	fm.Init(trainSet)
 	evalStart := time.Now()
-	score := EvaluateClassification(fm, testSet)
+	score := EvaluateClassification(fm, testSet, config.Jobs)
 	evalTime := time.Since(evalStart)
 	fields := append([]zap.Field{zap.String("eval_time", evalTime.String())}, score.ZapFields()...)
 	log.Logger().Info(fmt.Sprintf("fit DeepFM %v/%v", 0, fm.nEpochs), fields...)
@@ -373,7 +373,7 @@ func (fm *FMV2) Fit(ctx context.Context, trainSet, testSet dataset.CTRSplit, con
 		// Cross validation
 		if epoch%config.Verbose == 0 || epoch == fm.nEpochs {
 			evalStart = time.Now()
-			score = EvaluateClassification(fm, testSet)
+			score = EvaluateClassification(fm, testSet, config.Jobs)
 			evalTime = time.Since(evalStart)
 			fields = append([]zap.Field{
 				zap.String("fit_time", fitTime.String()),

@@ -44,7 +44,7 @@ func EvaluateRegression(estimator FactorizationMachines, testSet *Dataset) Score
 }
 
 // EvaluateClassification evaluates factorization machines in classification task.
-func EvaluateClassification(estimator FactorizationMachines, testSet dataset.CTRSplit) Score {
+func EvaluateClassification(estimator FactorizationMachines, testSet dataset.CTRSplit, jobs int) Score {
 	// For all UserFeedback
 	var posFeatures, negFeatures []lo.Tuple2[[]int32, []float32]
 	for i := 0; i < testSet.Count(); i++ {
@@ -57,8 +57,8 @@ func EvaluateClassification(estimator FactorizationMachines, testSet dataset.CTR
 	}
 	var posPrediction, negPrediction []float32
 	if batchInference, ok := estimator.(BatchInference); ok {
-		posPrediction = batchInference.BatchInternalPredict(posFeatures)
-		negPrediction = batchInference.BatchInternalPredict(negFeatures)
+		posPrediction = batchInference.BatchInternalPredict(posFeatures, jobs)
+		negPrediction = batchInference.BatchInternalPredict(negFeatures, jobs)
 	} else {
 		for _, features := range posFeatures {
 			posPrediction = append(posPrediction, estimator.InternalPredict(features.A, features.B))

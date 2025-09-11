@@ -81,7 +81,7 @@ func TestFactorizationMachines_Classification_Criteo(t *testing.T) {
 	assert.InDelta(t, 0.77, score.Accuracy, 0.025)
 
 	// test prediction
-	assert.Equal(t, m.BatchInternalPredict([]lo.Tuple2[[]int32, []float32]{{A: []int32{1, 2, 3, 4, 5, 6}, B: []float32{1, 1, 0.3, 0.4, 0.5, 0.6}}}),
+	assert.Equal(t, m.BatchInternalPredict([]lo.Tuple2[[]int32, []float32]{{A: []int32{1, 2, 3, 4, 5, 6}, B: []float32{1, 1, 0.3, 0.4, 0.5, 0.6}}}, fitConfig.Jobs),
 		m.BatchPredict([]lo.Tuple4[string, string, []Label, []Label]{{
 			A: "1",
 			B: "2",
@@ -92,7 +92,7 @@ func TestFactorizationMachines_Classification_Criteo(t *testing.T) {
 			D: []Label{
 				{Name: "5", Value: 0.5},
 				{Name: "6", Value: 0.6},
-			}}}))
+			}}}, fitConfig.Jobs))
 
 	// test marshal and unmarshal
 	buf := bytes.NewBuffer(nil)
@@ -100,7 +100,7 @@ func TestFactorizationMachines_Classification_Criteo(t *testing.T) {
 	assert.NoError(t, err)
 	tmp, err := UnmarshalModel(buf)
 	assert.NoError(t, err)
-	scoreClone := EvaluateClassification(tmp, test)
+	scoreClone := EvaluateClassification(tmp, test, fitConfig.Jobs)
 	assert.InDelta(t, 0.77, scoreClone.Accuracy, 0.02)
 
 	// test clear
