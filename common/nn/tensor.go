@@ -386,9 +386,7 @@ func (t *Tensor) bDiv(other *Tensor) *Tensor {
 }
 
 func (t *Tensor) square() *Tensor {
-	for i := range t.data {
-		t.data[i] = t.data[i] * t.data[i]
-	}
+	floats.MulTo(t.data, t.data, t.data)
 	return t
 }
 

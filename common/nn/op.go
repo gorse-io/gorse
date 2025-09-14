@@ -18,6 +18,7 @@ import (
 	"weak"
 
 	"github.com/chewxy/math32"
+	"github.com/gorse-io/gorse/common/floats"
 )
 
 type op interface {
@@ -263,10 +264,8 @@ func (s *square) forward(inputs ...*Tensor) *Tensor {
 
 func (s *square) backward(dy *Tensor) []*Tensor {
 	dx := s.inputs[0].clone()
-	dx.mul(dy)
-	for i := range dx.data {
-		dx.data[i] *= 2
-	}
+	floats.MulTo(dx.data, dy.data, dx.data)
+	floats.MulConst(dx.data, 2)
 	return []*Tensor{dx}
 }
 
