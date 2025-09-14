@@ -77,7 +77,7 @@ func GridSearchCV(ctx context.Context, estimator MatrixFactorization, trainSet, 
 			// Create GridSearch result
 			results.Scores = append(results.Scores, score)
 			results.Params = append(results.Params, params.Copy())
-			if len(results.Scores) == 0 || score.NDCG > results.BestScore.NDCG {
+			if len(results.Scores) == 1 || score.NDCG > results.BestScore.NDCG {
 				results.BestModel = Clone(estimator)
 				results.BestScore = score
 				results.BestParams = params.Copy()
@@ -127,7 +127,7 @@ func RandomSearchCV(ctx context.Context, estimator MatrixFactorization, trainSet
 		score := estimator.Fit(newCtx, trainSet, testSet, fitConfig)
 		results.Scores = append(results.Scores, score)
 		results.Params = append(results.Params, params.Copy())
-		if len(results.Scores) == 0 || score.NDCG > results.BestScore.NDCG {
+		if len(results.Scores) == 1 || score.NDCG > results.BestScore.NDCG {
 			results.BestModel = Clone(estimator)
 			results.BestScore = score
 			results.BestParams = params.Copy()
