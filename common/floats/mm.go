@@ -1,4 +1,4 @@
-//go:build !cgo || (!(darwin && arm64) && !cuda)
+//go:build !cgo || (!(darwin && arm64) && !cuda && !mkl)
 
 // Copyright 2025 gorse Project Authors
 //
