@@ -4,6 +4,7 @@ on:
   push:
     branches:    
       - master
+      - bake  # Remove this before merging
 
 jobs:
   docker_images:
@@ -35,21 +36,14 @@ jobs:
       - name: Pull source
         uses: actions/checkout@v1
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
-
-      - name: Login to DockerHub
-        uses: docker/login-action@v1
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Build windows docker images with Bake
-        uses: docker/bake-action@v2
-        with:
-          files: docker-bake.hcl
-          targets: windows
-          push: true
+      - name: Build docker image
+        run: |
+          docker login -u $env:DOCKERHUB_USERNAME -p $env:DOCKERHUB_TOKEN
+          docker buildx bake -f docker-bake.hcl windows --push
+          docker logout
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
 
   cuda_images:
     name: docker images (cuda)
