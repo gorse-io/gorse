@@ -30,8 +30,11 @@ jobs:
           push: true
 
   windows_images:
-    name: docker images (windows)
+    name: windows images
     runs-on: windows-latest
+    strategy:
+      matrix:
+        image: [gorse-master, gorse-server, gorse-worker, gorse-in-one]
     steps:
       - name: Pull source
         uses: actions/checkout@v1
@@ -44,7 +47,9 @@ jobs:
 
       - name: Build docker image
         run: |
-          docker buildx bake -f docker-bake.hcl windows --push
+          docker build -f cmd/${{ matrix.image }}/Dockerfile.windows `
+            -t zhenghaoz/${{ matrix.image }}:nightly-windowsservercore .
+          docker image push --all-tags zhenghaoz/${{ matrix.image }}
 
   cuda_images:
     name: docker images (cuda)
