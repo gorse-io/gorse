@@ -31,7 +31,7 @@ jobs:
 
   windows_images:
     name: docker images (windows)
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
       - name: Pull source
         uses: actions/checkout@v1
