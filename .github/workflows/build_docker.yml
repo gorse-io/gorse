@@ -4,16 +4,17 @@ on:
   push:
     branches:    
       - master
-      - bake  # Remove this before merging
 
 jobs:
   docker_images:
     name: docker images
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        image: [gorse-master, gorse-server, gorse-worker, gorse-in-one]
     steps:
       - name: Pull source
         uses: actions/checkout@v1
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v1
 
@@ -24,10 +25,26 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Build docker image
-        uses: docker/bake-action@v2
+        uses: docker/build-push-action@v2.6.1
         with:
-          files: docker-bake.hcl
+          context: .
+          platforms: linux/amd64,linux/arm64,linux/riscv64
+          file: cmd/${{ matrix.image }}/Dockerfile
           push: true
+          tags: zhenghaoz/${{ matrix.image }}:nightly
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Resolve Images on Description
+        run: |
+          sed -i -E "s/src=\"assets\//src=\"https:\/\/github.com\/gorse-io\/gorse\/raw\/master\/assets\//" README.md
+          
+      - name: Update DockerHub Description
+        uses: peter-evans/dockerhub-description@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: zhenghaoz/${{ matrix.image }}
 
   windows_images:
     name: windows images
@@ -50,17 +67,6 @@ jobs:
           docker build -f cmd/${{ matrix.image }}/Dockerfile.windows `
             -t zhenghaoz/${{ matrix.image }}:nightly-windowsservercore .
           docker image push --all-tags zhenghaoz/${{ matrix.image }}
-
-      - name: Resolve Images on Description
-        run: |
-          sed -i -E "s/src=\"assets\//src=\"https:\/\/github.com\/gorse-io\/gorse\/raw\/master\/assets\//" README.md
-          
-      - name: Update DockerHub Description
-        uses: peter-evans/dockerhub-description@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-          repository: zhenghaoz/${{ matrix.image }}
 
   cuda_images:
     name: docker images (cuda)
