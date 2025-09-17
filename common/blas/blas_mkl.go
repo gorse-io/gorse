@@ -17,7 +17,7 @@
 package blas
 
 // #cgo CFLAGS: -I/opt/intel/oneapi/mkl/latest/include
-// #cgo LDFLAGS: -L$/opt/intel/oneapi/mkl/latest/lib/intel64 -lmkl_intel_lp64 -lmkl_sequential -lmkl_core -lpthread -lm -ldl
+// #cgo LDFLAGS: -L/opt/intel/oneapi/mkl/latest/lib/intel64 -Wl,--start-group -lmkl_intel_lp64 -lmkl_sequential -lmkl_core -Wl,--end-group -lpthread -lm -ldl -static
 // #include "mkl.h"
 import "C"
 
