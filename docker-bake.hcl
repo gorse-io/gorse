@@ -117,3 +117,43 @@ target "gorse-in-one-cuda" {
   cache-from = ["type=gha"]
   cache-to = ["type=gha,mode=max"]
 }
+
+group "mkl" {
+  targets = ["gorse-master-mkl", "gorse-server-mkl", "gorse-worker-mkl", "gorse-in-one-mkl"]
+}
+
+target "gorse-master-mkl" {
+  context = "."
+  dockerfile = "cmd/gorse-master/Dockerfile.mkl"
+  platforms = ["linux/amd64"]
+  tags = ["zhenghaoz/gorse-master:nightly-mkl"]
+  cache-from = ["type=gha"]
+  cache-to = ["type=gha,mode=max"]
+}
+
+target "gorse-server-mkl" {
+  context = "."
+  dockerfile = "cmd/gorse-server/Dockerfile.mkl"
+  platforms = ["linux/amd64"]
+  tags = ["zhenghaoz/gorse-server:nightly-mkl"]
+  cache-from = ["type=gha"]
+  cache-to = ["type=gha,mode=max"]
+}
+
+target "gorse-worker-mkl" {
+  context = "."
+  dockerfile = "cmd/gorse-worker/Dockerfile.mkl"
+  platforms = ["linux/amd64"]
+  tags = ["zhenghaoz/gorse-worker:nightly-mkl"]
+  cache-from = ["type=gha"]
+  cache-to = ["type=gha,mode=max"]
+}
+
+target "gorse-in-one-mkl" {
+  context = "."
+  dockerfile = "cmd/gorse-in-one/Dockerfile.mkl"
+  platforms = ["linux/amd64"]
+  tags = ["zhenghaoz/gorse-in-one:nightly-mkl"]
+  cache-from = ["type=gha"]
+  cache-to = ["type=gha,mode=max"]
+}

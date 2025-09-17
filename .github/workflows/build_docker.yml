@@ -70,8 +70,11 @@ jobs:
           docker image push --all-tags zhenghaoz/${{ matrix.image }}
 
   cuda_images:
-    name: docker images (cuda)
+    name: docker images
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        targets: [cuda, mkl]
     steps:
       - name: Free Disk Space (Ubuntu)
         uses: jlumbroso/free-disk-space@main
@@ -105,5 +108,5 @@ jobs:
         uses: docker/bake-action@v2
         with:
           files: docker-bake.hcl
-          targets: cuda
+          targets: ${{ matrix.targets }}
           push: true
