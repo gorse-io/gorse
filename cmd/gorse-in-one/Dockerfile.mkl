@@ -47,7 +47,7 @@ RUN /src/cmd/gorse-in-one/gorse-in-one --version
 ############################
 # STEP 2 build runtime image
 ############################
-FROM alpine
+FROM debian:bookworm-slim
 
 COPY --from=0 /src/cmd/gorse-in-one/gorse-in-one /usr/bin/gorse-in-one
 
