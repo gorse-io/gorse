@@ -53,4 +53,4 @@ COPY --from=0 /src/cmd/gorse-server/gorse-server /usr/bin/gorse-server
 
 ENV USER root
 
-ENTRYPOINT ["/usr/bin/gorse-server", "-c", "/etc/gorse/config.toml"]
+ENTRYPOINT ["/usr/bin/gorse-server"]
