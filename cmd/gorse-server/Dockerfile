@@ -33,8 +33,6 @@ COPY --from=0 /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
 COPY --from=0 /src/cmd/gorse-server/gorse-server /usr/bin/gorse-server
 
-RUN /usr/bin/gorse-server --version
-
 ENV USER root
 
 ENTRYPOINT ["/usr/bin/gorse-server"]

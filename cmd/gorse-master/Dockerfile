@@ -33,8 +33,6 @@ COPY --from=0 /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
 COPY --from=0 /src/cmd/gorse-master/gorse-master /usr/bin/gorse-master
 
-RUN /usr/bin/gorse-master --version
-
 ENV USER root
 
 ENTRYPOINT ["/usr/bin/gorse-master", "-c", "/etc/gorse/config.toml"]

@@ -34,8 +34,6 @@ COPY --from=0 /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
 COPY --from=0 /usr/bin/gorse-in-one /usr/bin/gorse-in-one
 
-RUN /usr/bin/gorse-in-one --version
-
 ENV USER root
 
 ENTRYPOINT ["/usr/bin/gorse-in-one", "-c", "/etc/gorse/config.toml"]
