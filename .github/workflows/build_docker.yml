@@ -33,7 +33,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        targets: [default, cuda, mkl]
+        targets: [default, mkl]
     steps:
       - name: Pull source
         uses: actions/checkout@v1
