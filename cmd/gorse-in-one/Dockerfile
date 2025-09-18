@@ -1,18 +1,29 @@
+# syntax = docker/dockerfile:1-experimental
+
 ############################
 # STEP 1 build executable binary
 ############################
-FROM golang:1.25
+FROM --platform=$BUILDPLATFORM golang:1.25
 
-COPY . gorse
+WORKDIR /src
 
-RUN cd gorse/cmd/gorse-in-one && \
-    CGO_ENABLED=0 go build -ldflags=" \
+COPY go.* ./
+
+RUN go mod download
+
+COPY . ./
+
+ARG TARGETOS
+
+ARG TARGETARCH
+
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    cd cmd/gorse-in-one && \
+    GOOS=${TARGETOS} GOARCH=${TARGETARCH} CGO_ENABLED=0 go build -ldflags=" \
     -X 'github.com/gorse-io/gorse/cmd/version.Version=$(git describe --tags $(git rev-parse HEAD))' \
     -X 'github.com/gorse-io/gorse/cmd/version.GitCommit=$(git rev-parse HEAD)' \
     -X 'github.com/gorse-io/gorse/cmd/version.BuildTime=$(date)'" . && \
     mv gorse-in-one /usr/bin
-
-RUN /usr/bin/gorse-in-one --version
 
 ############################
 # STEP 2 build a small image

@@ -6,49 +6,8 @@ on:
       - master
 
 jobs:
-  docker_images:
-    name: docker images
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        image: [gorse-master, gorse-server, gorse-worker, gorse-in-one]
-    steps:
-      - name: Pull source
-        uses: actions/checkout@v1
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
-
-      - name: Login to DockerHub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Build docker image
-        uses: docker/build-push-action@v2.6.1
-        with:
-          context: .
-          platforms: linux/amd64,linux/arm64,linux/riscv64
-          file: cmd/${{ matrix.image }}/Dockerfile
-          push: true
-          tags: zhenghaoz/${{ matrix.image }}:nightly
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Resolve Images on Description
-        run: |
-          sed -i -E "s/src=\"assets\//src=\"https:\/\/github.com\/gorse-io\/gorse\/raw\/master\/assets\//" README.md
-          
-      - name: Update DockerHub Description
-        uses: peter-evans/dockerhub-description@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-          repository: zhenghaoz/${{ matrix.image }}
-
   windows_images:
-    name: windows images
+    name: docker images (windows)
     runs-on: windows-latest
     strategy:
       matrix:
@@ -69,29 +28,13 @@ jobs:
             -t zhenghaoz/${{ matrix.image }}:nightly-windowsservercore .
           docker image push --all-tags zhenghaoz/${{ matrix.image }}
 
-  cuda_images:
+  docker_images:
     name: docker images
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        targets: [cuda, mkl]
+        targets: [default, cuda, mkl]
     steps:
-      - name: Free Disk Space (Ubuntu)
-        uses: jlumbroso/free-disk-space@main
-        with:
-          # this might remove tools that are actually needed,
-          # if set to "true" but frees about 6 GB
-          tool-cache: false
-          
-          # all of these default to true, but feel free to set to
-          # "false" if necessary for your workflow
-          android: true
-          dotnet: true
-          haskell: true
-          large-packages: false
-          docker-images: false
-          swap-storage: false
-
       - name: Pull source
         uses: actions/checkout@v1
 

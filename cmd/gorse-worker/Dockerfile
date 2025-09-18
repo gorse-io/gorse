@@ -3,7 +3,7 @@
 ############################
 # STEP 1 build executable binary
 ############################
-FROM golang:1.25
+FROM --platform=$BUILDPLATFORM golang:1.25
 
 WORKDIR /src
 
@@ -13,14 +13,16 @@ RUN go mod download
 
 COPY . ./
 
+ARG TARGETOS
+
+ARG TARGETARCH
+
 RUN --mount=type=cache,target=/root/.cache/go-build \
     cd cmd/gorse-worker && \
-    CGO_ENABLED=0 go build -ldflags=" \
+    GOOS=${TARGETOS} GOARCH=${TARGETARCH} CGO_ENABLED=0 go build -ldflags=" \
     -X 'github.com/gorse-io/gorse/cmd/version.Version=$(git describe --tags $(git rev-parse HEAD))' \
     -X 'github.com/gorse-io/gorse/cmd/version.GitCommit=$(git rev-parse HEAD)' \
     -X 'github.com/gorse-io/gorse/cmd/version.BuildTime=$(date)'" .
-
-RUN /src/cmd/gorse-worker/gorse-worker --version
 
 ############################
 # STEP 2 build a small image
