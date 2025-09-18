@@ -18,7 +18,7 @@ ARG TARGETOS
 ARG TARGETARCH
 
 RUN --mount=type=cache,target=/root/.cache/go-build \
-    cd cmd/gorse-master && \
+    cd cmd/gorse-worker && \
     GOOS=${TARGETOS} GOARCH=${TARGETARCH} CGO_ENABLED=0 go build -ldflags=" \
     -X 'github.com/gorse-io/gorse/cmd/version.Version=$(git describe --tags $(git rev-parse HEAD))' \
     -X 'github.com/gorse-io/gorse/cmd/version.GitCommit=$(git rev-parse HEAD)' \
