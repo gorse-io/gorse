@@ -14,13 +14,13 @@ RUN cd gorse/cmd/gorse-worker; \
         -X 'github.com/gorse-io/gorse/cmd/version.BuildTime=$(date)'\"" .; \
     mv gorse-worker.exe /gorse-worker.exe
 
-RUN /gorse-worker.exe --version
-
 ############################
 # STEP 2 build a small image
 ############################
 FROM mcr.microsoft.com/windows/servercore:ltsc2022
 
 COPY --from=0 /gorse-worker.exe /gorse-worker.exe
+
+RUN /gorse-worker.exe --version
 
 ENTRYPOINT [ "/gorse-worker.exe" ]
