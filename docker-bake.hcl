@@ -1,5 +1,9 @@
-variable "VERSION" {
+variable "VERSIONS" {
   default = "nightly"
+}
+
+variable versions {
+  default = split(",", VERSIONS)
 }
 
 group "default" {
@@ -15,7 +19,7 @@ target "image" {
   context    = "."
   dockerfile = variant == "default" ? "cmd/${component}/Dockerfile" : "cmd/${component}/Dockerfile.${variant}"
   platforms  = variant == "default" ? ["linux/amd64", "linux/arm64", "linux/riscv64"] : ["linux/amd64"]
-  tags       = variant == "default" ? ["zhenghaoz/${component}:${VERSION}"] : ["zhenghaoz/${component}:${VERSION}-${variant}"]
+  tags       = variant == "default" ? [for v in versions : "zhenghaoz/${component}:${v}"] : [for v in versions : "zhenghaoz/${component}:${v}-${variant}"]
   cache-from = ["type=gha"]
   cache-to   = ["type=gha,mode=max"]
 }
