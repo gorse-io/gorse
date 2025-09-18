@@ -25,8 +25,6 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     -X 'github.com/gorse-io/gorse/cmd/version.BuildTime=$(date)'" . && \
     mv gorse-in-one /usr/bin
 
-RUN /usr/bin/gorse-in-one --version
-
 ############################
 # STEP 2 build a small image
 ############################
@@ -35,6 +33,8 @@ FROM scratch
 COPY --from=0 /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
 COPY --from=0 /usr/bin/gorse-in-one /usr/bin/gorse-in-one
+
+RUN /usr/bin/gorse-in-one --version
 
 ENV USER root
 
