@@ -59,9 +59,6 @@ jobs:
   docker_images:
     name: docker images
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        image: [gorse-master, gorse-server, gorse-worker, gorse-in-one]
     steps:
       - name: Pull source
         uses: actions/checkout@v5
@@ -78,29 +75,23 @@ jobs:
       - id: get_version
         uses: battila7/get-version-action@v2
 
-      - name: Build docker image
-        if: github.event.release.prerelease == false
-        uses: docker/build-push-action@v2
+      - if: github.event.release.prerelease == false
+        name: Build Docker image
+        uses: docker/bake-action@v6
         with:
-          context: .
-          platforms: linux/amd64,linux/arm64,linux/riscv64
-          file: cmd/${{ matrix.image }}/Dockerfile
-          push: true
-          tags: |
-            zhenghaoz/${{ matrix.image }}:latest
-            zhenghaoz/${{ matrix.image }}:${{ steps.get_version.outputs.major }}.${{ steps.get_version.outputs.minor }}
-            zhenghaoz/${{ matrix.image }}:${{ steps.get_version.outputs.version-without-v }}
+          files: docker-bake.hcl
+          targets: default
+        env:
+          VERSIONS: latest,${{ steps.get_version.outputs.major }}.${{ steps.get_version.outputs.version-without-v }},${{ steps.get_version.outputs.version-without-v }}
 
-      - name: Build prerelease docker image
-        if: github.event.release.prerelease == true
-        uses: docker/build-push-action@v2
+      - if: github.event.release.prerelease == true
+        name: Build prerelease Docker image
+        uses: docker/bake-action@v6
         with:
-          context: .
-          platforms: linux/amd64,linux/arm64
-          file: cmd/${{ matrix.image }}/Dockerfile
-          push: true
-          tags: |
-            zhenghaoz/${{ matrix.image }}:${{ steps.get_version.outputs.version-without-v }}
+          files: docker-bake.hcl
+          targets: default
+        env:
+          VERSIONS: ${{ steps.get_version.outputs.version-without-v }}
 
   windows_images:
     name: windows images
