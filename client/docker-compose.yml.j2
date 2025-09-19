@@ -85,6 +85,10 @@ services:
     build:
       context: .
       dockerfile: cmd/gorse-worker/Dockerfile
+      cache_from:
+        - type=gha
+      cache_to:
+        - type=gha,mode=max
     restart: unless-stopped
     ports:
       - 8089:8089
@@ -103,6 +107,10 @@ services:
     build:
       context: .
       dockerfile: cmd/gorse-server/Dockerfile
+      cache_from:
+        - type=gha
+      cache_to:
+        - type=gha,mode=max
     restart: unless-stopped
     ports:
       - 8087:8087
@@ -121,6 +129,10 @@ services:
     build:
       context: .
       dockerfile: cmd/gorse-master/Dockerfile
+      cache_from:
+        - type=gha
+      cache_to:
+        - type=gha,mode=max
     restart: unless-stopped
     ports:
       - 8086:8086
