@@ -48,7 +48,7 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Build docker image
-        uses: docker/bake-action@v2
+        uses: docker/bake-action@v6
         with:
           files: docker-bake.hcl
           targets: ${{ matrix.targets }}
