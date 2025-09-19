@@ -82,7 +82,7 @@ jobs:
           files: docker-bake.hcl
           targets: default
         env:
-          VERSIONS: latest,${{ steps.get_version.outputs.major }}.${{ steps.get_version.outputs.version-without-v }},${{ steps.get_version.outputs.version-without-v }}
+          VERSIONS: latest,${{ steps.get_version.outputs.major }}.${{ steps.get_version.outputs.minor }},${{ steps.get_version.outputs.version-without-v }}
 
       - if: github.event.release.prerelease == true
         name: Build prerelease Docker image
