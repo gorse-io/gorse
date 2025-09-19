@@ -228,7 +228,7 @@ jobs:
       matrix:
         database: [mysql, postgres, mongo, clickhouse]
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v5
 
     - uses: cuchi/jinja2-action@v1.2.0
       with:
