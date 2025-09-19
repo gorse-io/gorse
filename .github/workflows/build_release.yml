@@ -90,6 +90,7 @@ jobs:
         with:
           files: docker-bake.hcl
           targets: default
+          push: true
         env:
           VERSIONS: ${{ steps.get_version.outputs.version-without-v }}
 
