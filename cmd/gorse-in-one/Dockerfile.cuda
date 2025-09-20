@@ -1,4 +1,4 @@
-# syntax = docker/dockerfile:1-experimental
+# syntax = docker/dockerfile:1
 
 ############################
 # STEP 1 build executable binary
@@ -29,8 +29,6 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
        -X 'github.com/gorse-io/gorse/cmd/version.BuildTime=$(date)'" . && \
        mv gorse-in-one /usr/bin
 
-RUN /usr/bin/gorse-in-one --version
-
 ############################
 # STEP 2 build runtime image
 ############################
@@ -39,6 +37,8 @@ FROM nvidia/cuda:12.8.1-runtime-ubuntu24.04
 COPY --from=0 /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
 COPY --from=0 /usr/bin/gorse-in-one /usr/bin/gorse-in-one
+
+RUN /usr/bin/gorse-in-one --version
 
 ENV USER root
 

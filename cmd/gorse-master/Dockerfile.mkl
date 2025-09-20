@@ -3,13 +3,26 @@
 ############################
 # STEP 1 build executable binary
 ############################
-FROM nvidia/cuda:12.8.1-devel-ubuntu24.04
+FROM debian:bookworm
+
+# Install Intel® oneAPI Toolkits
+
+RUN apt update && apt install -y wget gnupg2 git
+
+RUN wget -O- https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB \
+    | gpg --dearmor | tee /usr/share/keyrings/oneapi-archive-keyring.gpg > /dev/null
+
+RUN echo "deb [signed-by=/usr/share/keyrings/oneapi-archive-keyring.gpg] https://apt.repos.intel.com/oneapi all main" | tee /etc/apt/sources.list.d/oneAPI.list
+
+RUN apt update && apt install -y intel-oneapi-base-toolkit
+
+# Install Go
 
 COPY --from=golang:1.25 /usr/local/go/ /usr/local/go/
 
 ENV PATH /usr/local/go/bin:$PATH
 
-RUN apt update && apt install -y git
+# Build Gorse
 
 WORKDIR /src
 
@@ -19,11 +32,10 @@ RUN go mod download
 
 COPY . ./
 
-RUN cd common/blas/cublas && make
-
 RUN --mount=type=cache,target=/root/.cache/go-build \
+    . /opt/intel/oneapi/setvars.sh && \
     cd cmd/gorse-master && \
-    go build -tags cuda -ldflags=" \
+    go build -tags mkl -ldflags=" \
        -X 'github.com/gorse-io/gorse/cmd/version.Version=$(git describe --tags $(git rev-parse HEAD))' \
        -X 'github.com/gorse-io/gorse/cmd/version.GitCommit=$(git rev-parse HEAD)' \
        -X 'github.com/gorse-io/gorse/cmd/version.BuildTime=$(date)'" .
@@ -31,9 +43,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
 ############################
 # STEP 2 build runtime image
 ############################
-FROM nvidia/cuda:12.8.1-runtime-ubuntu24.04
-
-COPY --from=0 /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+FROM debian:bookworm-slim
 
 COPY --from=0 /src/cmd/gorse-master/gorse-master /usr/bin/gorse-master
 

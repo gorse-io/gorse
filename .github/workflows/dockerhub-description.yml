@@ -1,0 +1,27 @@
+name: update
+
+on:
+  push:
+    branches:    
+      - master
+    paths:
+      - 'README.md'
+
+jobs:
+  dockerhub_description:
+    name: dockerHub description
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        image: [gorse-master, gorse-server, gorse-worker, gorse-in-one]
+    steps:
+      - name: Resolve Images on Description
+        run: |
+          sed -i -E "s/src=\"assets\//src=\"https:\/\/github.com\/gorse-io\/gorse\/raw\/master\/assets\//" README.md
+          
+      - name: Update DockerHub Description
+        uses: peter-evans/dockerhub-description@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: zhenghaoz/${{ matrix.image }}

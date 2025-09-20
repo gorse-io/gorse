@@ -16,6 +16,7 @@ package logics
 
 import (
 	"sort"
+	"sync"
 	"time"
 
 	mapset "github.com/deckarep/golang-set/v2"
@@ -75,6 +76,7 @@ type baseUserToUser[T any] struct {
 	columnFunc *vm.Program
 	index      *ann.HNSW[T]
 	users      []*data.User
+	usersLock  sync.Mutex
 }
 
 func (b *baseUserToUser[T]) Users() []*data.User {
@@ -139,6 +141,7 @@ func (e *embeddingUserToUser) Push(user *data.User, _ []int32) {
 		return
 	}
 	// Check dimension
+	e.usersLock.Lock()
 	if e.dimension == 0 && len(v) > 0 {
 		e.dimension = len(v)
 	} else if e.dimension != len(v) {
@@ -146,8 +149,12 @@ func (e *embeddingUserToUser) Push(user *data.User, _ []int32) {
 		return
 	}
 	// Push user
-	e.users = append(e.users, user)
-	_ = e.index.Add(v)
+	e.users = append(e.users, nil)
+	e.usersLock.Unlock()
+	j := e.index.Add(v)
+	e.usersLock.Lock()
+	e.users[j] = user
+	e.usersLock.Unlock()
 }
 
 type tagsUserToUser struct {
@@ -191,8 +198,13 @@ func (t *tagsUserToUser) Push(user *data.User, _ []int32) {
 		return v[i] < v[j]
 	})
 	// Push user
-	t.users = append(t.users, user)
-	_ = t.index.Add(v)
+	t.usersLock.Lock()
+	t.users = append(t.users, nil)
+	t.usersLock.Unlock()
+	j := t.index.Add(v)
+	t.usersLock.Lock()
+	t.users[j] = user
+	t.usersLock.Unlock()
 }
 
 type itemsUserToUser struct {
@@ -220,8 +232,13 @@ func (i *itemsUserToUser) Push(user *data.User, feedback []int32) {
 		return feedback[i] < feedback[j]
 	})
 	// Push user
-	i.users = append(i.users, user)
-	_ = i.index.Add(feedback)
+	i.usersLock.Lock()
+	i.users = append(i.users, nil)
+	i.usersLock.Unlock()
+	j := i.index.Add(feedback)
+	i.usersLock.Lock()
+	i.users[j] = user
+	i.usersLock.Unlock()
 }
 
 type autoUserToUser struct {
@@ -257,8 +274,13 @@ func (a *autoUserToUser) Push(user *data.User, feedback []int32) {
 		return feedback[i] < feedback[j]
 	})
 	// Push user
-	a.users = append(a.users, user)
-	_ = a.index.Add(lo.Tuple2[[]dataset.ID, []int32]{A: t, B: feedback})
+	a.usersLock.Lock()
+	a.users = append(a.users, nil)
+	a.usersLock.Unlock()
+	j := a.index.Add(lo.Tuple2[[]dataset.ID, []int32]{A: t, B: feedback})
+	a.usersLock.Lock()
+	a.users[j] = user
+	a.usersLock.Unlock()
 }
 
 func (a *autoUserToUser) distance(u, v lo.Tuple2[[]dataset.ID, []int32]) float32 {

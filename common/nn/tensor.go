@@ -21,6 +21,7 @@ import (
 	"math/rand"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/chewxy/math32"
 	mapset "github.com/deckarep/golang-set/v2"
@@ -30,6 +31,14 @@ import (
 	"github.com/samber/lo"
 	"golang.org/x/exp/slices"
 )
+
+// inferenceMode disables gradient computation when enabled, improving performance during model evaluation.
+var inferenceMode = atomic.Bool{}
+
+// SetInferenceMode enables or disables inference mode, which disables gradient computation to improve performance during model evaluation.
+func SetInferenceMode(enabled bool) {
+	inferenceMode.Store(enabled)
+}
 
 type Tensor struct {
 	data  []float32
@@ -386,9 +395,7 @@ func (t *Tensor) bDiv(other *Tensor) *Tensor {
 }
 
 func (t *Tensor) square() *Tensor {
-	for i := range t.data {
-		t.data[i] = t.data[i] * t.data[i]
-	}
+	floats.MulTo(t.data, t.data, t.data)
 	return t
 }
 

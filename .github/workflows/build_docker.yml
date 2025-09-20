@@ -6,121 +6,64 @@ on:
       - master
 
 jobs:
-  docker_images:
-    name: docker images
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        image: [gorse-master, gorse-server, gorse-worker, gorse-in-one]
-    steps:
-      - name: Pull source
-        uses: actions/checkout@v1
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
-
-      - name: Login to DockerHub
-        uses: docker/login-action@v1
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Build docker image
-        uses: docker/build-push-action@v2.6.1
-        with:
-          context: .
-          platforms: linux/amd64,linux/arm64,linux/riscv64
-          file: cmd/${{ matrix.image }}/Dockerfile
-          push: true
-          tags: zhenghaoz/${{ matrix.image }}:nightly
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Resolve Images on Description
-        run: |
-          sed -i -E "s/src=\"assets\//src=\"https:\/\/github.com\/gorse-io\/gorse\/raw\/master\/assets\//" README.md
-          
-      - name: Update DockerHub Description
-        uses: peter-evans/dockerhub-description@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-          repository: zhenghaoz/${{ matrix.image }}
-
   windows_images:
-    name: windows images
+    name: docker images (windows)
     runs-on: windows-latest
     strategy:
       matrix:
         image: [gorse-master, gorse-server, gorse-worker, gorse-in-one]
     steps:
       - name: Pull source
-        uses: actions/checkout@v1
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Login to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Build docker image
         run: |
-          docker login -u $env:DOCKERHUB_USERNAME -p $env:DOCKERHUB_TOKEN
           docker build -f cmd/${{ matrix.image }}/Dockerfile.windows `
             -t zhenghaoz/${{ matrix.image }}:nightly-windowsservercore .
           docker image push --all-tags zhenghaoz/${{ matrix.image }}
-          docker logout
-        env:
-          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
 
-  cuda_images:
-    name: cuda images
+  docker_images:
+    name: docker images
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        image: [gorse-master, gorse-server, gorse-worker, gorse-in-one]
+        targets: [default, cuda, mkl]
     steps:
-      - name: Free Disk Space (Ubuntu)
-        uses: jlumbroso/free-disk-space@main
-        with:
-          # this might remove tools that are actually needed,
-          # if set to "true" but frees about 6 GB
-          tool-cache: false
-          
-          # all of these default to true, but feel free to set to
-          # "false" if necessary for your workflow
-          android: true
-          dotnet: true
-          haskell: true
-          large-packages: false
-          docker-images: false
-          swap-storage: false
-
       - name: Pull source
-        uses: actions/checkout@v1
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
+      - if: matrix.targets != 'cuda'
+        name: Set up Docker Buildx (max-parallelism=4)
+        uses: docker/setup-buildx-action@v3
+
+      - if: matrix.targets == 'cuda'
+        name: Set up Docker Buildx (max-parallelism=1)
+        uses: docker/setup-buildx-action@v3
+        with:
+          buildkitd-config: .github/buildkitd.toml
 
       - name: Login to DockerHub
-        uses: docker/login-action@v1
+        uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Build docker image
-        uses: docker/build-push-action@v2.6.1
+        uses: docker/bake-action@v6
         with:
-          context: .
-          platforms: linux/amd64,linux/arm64
-          file: cmd/${{ matrix.image }}/Dockerfile.cuda
+          source: .
+          targets: ${{ matrix.targets }}
           push: true
-          tags: zhenghaoz/${{ matrix.image }}:nightly-cuda12.8
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Resolve Images on Description
-        run: |
-          sed -i -E "s/src=\"assets\//src=\"https:\/\/github.com\/gorse-io\/gorse\/raw\/${{ env.DEFAULT_BRANCH }}\/assets\//" README.md
-          
-      - name: Update DockerHub Description
-        uses: peter-evans/dockerhub-description@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-          repository: zhenghaoz/${{ matrix.image }}
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}

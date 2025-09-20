@@ -20,6 +20,7 @@ import (
 	"errors"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/cenkalti/backoff/v5"
@@ -107,6 +108,7 @@ type baseItemToItem[T any] struct {
 	columnFunc *vm.Program
 	index      *ann.HNSW[T]
 	items      []*data.Item
+	itemsLock  sync.Mutex
 }
 
 func (b *baseItemToItem[T]) Timestamp() time.Time {
@@ -180,6 +182,7 @@ func (e *embeddingItemToItem) Push(item *data.Item, _ []int32) {
 		return
 	}
 	// Check dimension
+	e.itemsLock.Lock()
 	if e.dimension == 0 && len(v) > 0 {
 		e.dimension = len(v)
 	} else if e.dimension != len(v) {
@@ -187,8 +190,12 @@ func (e *embeddingItemToItem) Push(item *data.Item, _ []int32) {
 		return
 	}
 	// Push item
-	e.items = append(e.items, item)
-	_ = e.index.Add(v)
+	e.items = append(e.items, nil)
+	e.itemsLock.Unlock()
+	j := e.index.Add(v)
+	e.itemsLock.Lock()
+	e.items[j] = item
+	e.itemsLock.Unlock()
 }
 
 type tagsItemToItem struct {
@@ -237,8 +244,13 @@ func (t *tagsItemToItem) Push(item *data.Item, _ []int32) {
 		return v[i] < v[j]
 	})
 	// Push item
-	t.items = append(t.items, item)
-	_ = t.index.Add(v)
+	t.itemsLock.Lock()
+	t.items = append(t.items, nil)
+	t.itemsLock.Unlock()
+	j := t.index.Add(v)
+	t.itemsLock.Lock()
+	t.items[j] = item
+	t.itemsLock.Unlock()
 }
 
 type usersItemToItem struct {
@@ -270,8 +282,13 @@ func (u *usersItemToItem) Push(item *data.Item, feedback []int32) {
 		return feedback[i] < feedback[j]
 	})
 	// Push item
-	u.items = append(u.items, item)
-	_ = u.index.Add(feedback)
+	u.itemsLock.Lock()
+	u.items = append(u.items, nil)
+	u.itemsLock.Unlock()
+	j := u.index.Add(feedback)
+	u.itemsLock.Lock()
+	u.items[j] = item
+	u.itemsLock.Unlock()
 }
 
 type autoItemToItem struct {
@@ -311,8 +328,13 @@ func (a *autoItemToItem) Push(item *data.Item, feedback []int32) {
 		return feedback[i] < feedback[j]
 	})
 	// Push item
-	a.items = append(a.items, item)
-	_ = a.index.Add(lo.Tuple2[[]dataset.ID, []int32]{A: v, B: feedback})
+	a.itemsLock.Lock()
+	a.items = append(a.items, nil)
+	a.itemsLock.Unlock()
+	j := a.index.Add(lo.Tuple2[[]dataset.ID, []int32]{A: v, B: feedback})
+	a.itemsLock.Lock()
+	a.items[j] = item
+	a.itemsLock.Unlock()
 }
 
 func (a *autoItemToItem) distance(u, v lo.Tuple2[[]dataset.ID, []int32]) float32 {

@@ -228,7 +228,7 @@ jobs:
       matrix:
         database: [mysql, postgres, mongo, clickhouse]
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v5
 
     - uses: cuchi/jinja2-action@v1.2.0
       with:
@@ -293,9 +293,13 @@ jobs:
         with:
           packages: redis-tools
 
+      - uses: actions/checkout@v5
+        with:
+          repository: gorse-cloud/redis-stack
+          path: redis-stack
+
       - name: Setup Redis cluster
         run: |
-          git clone https://github.com/gorse-cloud/redis-stack.git
           docker compose -f redis-stack/docker-compose.yml --project-directory redis-stack up -d
           for i in {1..5}; do
             redis-cli -p 7005 ping | grep PONG && break

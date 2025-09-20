@@ -901,7 +901,7 @@ func (w *Worker) rankByClickTroughRate(user *data.User, candidates [][]string, i
 			inputs[i].C = ctr.ConvertLabels(user.Labels)
 			inputs[i].D = ctr.ConvertLabels(item.Labels)
 		}
-		output := batchPredictor.BatchPredict(inputs)
+		output := batchPredictor.BatchPredict(inputs, w.jobs)
 		for i, score := range output {
 			topItems = append(topItems, cache.Score{
 				Id:    items[i].ItemId,
