@@ -62,14 +62,14 @@ func apply[T op](f T, inputs ...*Tensor) *Tensor {
 	y := f.forward(inputs...)
 	f.setInputs(inputs...)
 	f.setOutput(y)
-	y.op = f
-
-	// Set generation
-	gen := 0
-	for _, x := range inputs {
-		gen = max(gen, x.generation())
+	if !inferenceMode.Load() {
+		y.op = f
+		gen := 0
+		for _, x := range inputs {
+			gen = max(gen, x.generation())
+		}
+		f.setGeneration(gen + 1)
 	}
-	f.setGeneration(gen + 1)
 	return y
 }
 

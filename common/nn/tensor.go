@@ -21,6 +21,7 @@ import (
 	"math/rand"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/chewxy/math32"
 	mapset "github.com/deckarep/golang-set/v2"
@@ -30,6 +31,12 @@ import (
 	"github.com/samber/lo"
 	"golang.org/x/exp/slices"
 )
+
+var inferenceMode = atomic.Bool{}
+
+func SetInferenceMode(enabled bool) {
+	inferenceMode.Store(enabled)
+}
 
 type Tensor struct {
 	data  []float32
