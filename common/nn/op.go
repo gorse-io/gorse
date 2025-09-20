@@ -69,6 +69,8 @@ func apply[T op](f T, inputs ...*Tensor) *Tensor {
 			gen = max(gen, x.generation())
 		}
 		f.setGeneration(gen + 1)
+	} else {
+		y.op = nil
 	}
 	return y
 }

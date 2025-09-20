@@ -32,8 +32,10 @@ import (
 	"golang.org/x/exp/slices"
 )
 
+// inferenceMode disables gradient computation when enabled, improving performance during model evaluation.
 var inferenceMode = atomic.Bool{}
 
+// SetInferenceMode enables or disables inference mode, which disables gradient computation to improve performance during model evaluation.
 func SetInferenceMode(enabled bool) {
 	inferenceMode.Store(enabled)
 }
