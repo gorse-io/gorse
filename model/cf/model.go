@@ -400,16 +400,6 @@ func (bpr *BPR) SetParams(params model.Params) {
 	bpr.initStdDev = bpr.Params.GetFloat32(model.InitStdDev, 0.001)
 }
 
-func (bpr *BPR) GetParamsGrid(withSize bool) model.ParamsGrid {
-	return model.ParamsGrid{
-		model.NFactors:   lo.If(withSize, []interface{}{8, 16, 32, 64}).Else([]interface{}{16}),
-		model.Lr:         []interface{}{0.001, 0.005, 0.01, 0.05, 0.1},
-		model.Reg:        []interface{}{0.001, 0.005, 0.01, 0.05, 0.1},
-		model.InitMean:   []interface{}{0},
-		model.InitStdDev: []interface{}{0.001, 0.005, 0.01, 0.05, 0.1},
-	}
-}
-
 func (bpr *BPR) SuggestParams(trial goptuna.Trial) model.Params {
 	return model.Params{
 		model.NFactors:   16,
@@ -583,16 +573,6 @@ func (als *ALS) SetParams(params model.Params) {
 	als.initStdDev = als.Params.GetFloat32(model.InitStdDev, 0.1)
 	als.reg = als.Params.GetFloat32(model.Reg, 0.06)
 	als.weight = als.Params.GetFloat32(model.Alpha, 0.001)
-}
-
-func (als *ALS) GetParamsGrid(withSize bool) model.ParamsGrid {
-	return model.ParamsGrid{
-		model.NFactors:   lo.If(withSize, []interface{}{8, 16, 32, 64}).Else([]interface{}{16}),
-		model.InitMean:   []interface{}{0},
-		model.InitStdDev: []interface{}{0.001, 0.005, 0.01, 0.05, 0.1},
-		model.Reg:        []interface{}{0.001, 0.005, 0.01, 0.05, 0.1},
-		model.Alpha:      []interface{}{0.001, 0.005, 0.01, 0.05, 0.1},
-	}
 }
 
 func (als *ALS) SuggestParams(trial goptuna.Trial) model.Params {

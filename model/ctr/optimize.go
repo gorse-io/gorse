@@ -16,212 +16,56 @@ package ctr
 
 import (
 	"context"
-	"fmt"
-	"sync"
-	"time"
 
 	"github.com/c-bata/goptuna"
-	"github.com/gorse-io/gorse/base"
-	"github.com/gorse-io/gorse/base/log"
-	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/dataset"
-	"github.com/gorse-io/gorse/model"
+	"github.com/gorse-io/gorse/storage/meta"
 	"github.com/juju/errors"
-	"github.com/samber/lo"
-	"go.uber.org/zap"
+	"golang.org/x/exp/maps"
 )
 
+type ModelCreator func() FactorizationMachines
+
 type ModelSearch struct {
-	trainSet dataset.CTRSplit
-	testSet  dataset.CTRSplit
-	models   []FactorizationMachines
+	modelCreators map[string]ModelCreator
+	modelTypes    []string
+	trainSet      dataset.CTRSplit
+	testSet       dataset.CTRSplit
+	config        *FitConfig
+	result        meta.Model[Score]
 }
 
-func NewModelSearch(trainSet, testSet dataset.CTRSplit, models ...FactorizationMachines) *ModelSearch {
+func NewModelSearch(models map[string]ModelCreator, trainSet, testSet dataset.CTRSplit, config *FitConfig) *ModelSearch {
 	return &ModelSearch{
-		trainSet: trainSet,
-		testSet:  testSet,
-		models:   models,
+		modelCreators: models,
+		modelTypes:    maps.Keys(models),
+		trainSet:      trainSet,
+		testSet:       testSet,
+		config:        config,
 	}
 }
 
 func (ms *ModelSearch) Objective(trial goptuna.Trial) (float64, error) {
-	if len(ms.models) == 0 {
+	if len(ms.modelCreators) == 0 {
 		return 0, errors.New("no model to search")
 	}
-	m := ms.models[lo.Must(trial.SuggestInt("Model", 0, len(ms.models)-1))]
-	m.Clear()
+	modelType, err := trial.SuggestCategorical("Model", ms.modelTypes)
+	if err != nil {
+		return 0, errors.Trace(err)
+	}
+	m := ms.modelCreators[modelType]()
 	m.SetParams(m.SuggestParams(trial))
-	score := m.Fit(context.Background(), ms.trainSet, ms.testSet, NewFitConfig())
+	score := m.Fit(context.Background(), ms.trainSet, ms.testSet, ms.config)
+	if score.AUC > ms.result.Score.AUC {
+		ms.result = meta.Model[Score]{
+			Type:   modelType,
+			Params: m.GetParams(),
+			Score:  score,
+		}
+	}
 	return float64(score.AUC), nil
 }
 
-func (ms *ModelSearch) New(p map[string]any) FactorizationMachines {
-	if len(ms.models) == 0 {
-		return nil
-	}
-	m := ms.models[p["Model"].(int)]
-	m.Clear()
-	params := model.Params{}
-	for k, v := range p {
-		if k != "Model" {
-			params[model.ParamName(k)] = v
-		}
-	}
-	m.SetParams(params)
-	return m
-}
-
-// ParamsSearchResult contains the return of grid search.
-type ParamsSearchResult struct {
-	BestScore  Score
-	BestModel  FactorizationMachines
-	BestParams model.Params
-	BestIndex  int
-	Scores     []Score
-	Params     []model.Params
-}
-
-// GridSearchCV finds the best parameters for a model.
-func GridSearchCV(ctx context.Context, estimator FactorizationMachines, trainSet, testSet dataset.CTRSplit, paramGrid model.ParamsGrid,
-	_ int64, fitConfig *FitConfig) ParamsSearchResult {
-	// Retrieve parameter names and length
-	paramNames := make([]model.ParamName, 0, len(paramGrid))
-	total := 1
-	for paramName, values := range paramGrid {
-		paramNames = append(paramNames, paramName)
-		total *= len(values)
-	}
-	// Construct DFS procedure
-	results := ParamsSearchResult{
-		Scores: make([]Score, 0, total),
-		Params: make([]model.Params, 0, total),
-	}
-	var dfs func(deep int, params model.Params)
-	newCtx, span := monitor.Start(ctx, "GridSearchCV", total)
-	dfs = func(deep int, params model.Params) {
-		if deep == len(paramNames) {
-			log.Logger().Info(fmt.Sprintf("grid search %v/%v", span.Count(), total),
-				zap.Any("params", params))
-			// Cross validate
-			estimator.Clear()
-			estimator.SetParams(estimator.GetParams().Overwrite(params))
-			score := estimator.Fit(newCtx, trainSet, testSet, fitConfig)
-			// Create GridSearch result
-			results.Scores = append(results.Scores, score)
-			results.Params = append(results.Params, params.Copy())
-			if len(results.Scores) == 0 || score.BetterThan(results.BestScore) {
-				results.BestScore = score
-				results.BestParams = params.Copy()
-				results.BestIndex = len(results.Params) - 1
-				results.BestModel = Clone(estimator)
-			}
-			span.Add(1)
-		} else {
-			paramName := paramNames[deep]
-			values := paramGrid[paramName]
-			for _, val := range values {
-				params[paramName] = val
-				dfs(deep+1, params)
-			}
-		}
-	}
-	params := make(map[model.ParamName]interface{})
-	dfs(0, params)
-	span.End()
-	return results
-}
-
-// RandomSearchCV searches hyper-parameters by random.
-func RandomSearchCV(ctx context.Context, estimator FactorizationMachines, trainSet, testSet dataset.CTRSplit, paramGrid model.ParamsGrid,
-	numTrials int, seed int64, fitConfig *FitConfig) ParamsSearchResult {
-	// if the number of combination is less than number of trials, use grid search
-	if paramGrid.NumCombinations() <= numTrials {
-		return GridSearchCV(ctx, estimator, trainSet, testSet, paramGrid, seed, fitConfig)
-	}
-	rng := base.NewRandomGenerator(seed)
-	results := ParamsSearchResult{
-		Scores: make([]Score, 0, numTrials),
-		Params: make([]model.Params, 0, numTrials),
-	}
-	newCtx, span := monitor.Start(ctx, "RandomSearchCV", numTrials)
-	for i := 1; i <= numTrials; i++ {
-		// Make parameters
-		params := model.Params{}
-		for paramName, values := range paramGrid {
-			value := values[rng.Intn(len(values))]
-			params[paramName] = value
-		}
-		// Cross validate
-		log.Logger().Info(fmt.Sprintf("random search %v/%v", i, numTrials),
-			zap.Any("params", params))
-		estimator.Clear()
-		estimator.SetParams(estimator.GetParams().Overwrite(params))
-		score := estimator.Fit(newCtx, trainSet, testSet, fitConfig)
-		results.Scores = append(results.Scores, score)
-		results.Params = append(results.Params, params.Copy())
-		if len(results.Scores) == 0 || score.BetterThan(results.BestScore) {
-			results.BestScore = score
-			results.BestParams = params.Copy()
-			results.BestIndex = len(results.Params) - 1
-			results.BestModel = Clone(estimator)
-		}
-		span.Add(1)
-	}
-	span.End()
-	return results
-}
-
-// ModelSearcher is a thread-safe click model searcher.
-type ModelSearcher struct {
-	model FactorizationMachines
-	// arguments
-	numEpochs  int
-	numTrials  int
-	searchSize bool
-	// results
-	bestMutex sync.Mutex
-	bestModel FactorizationMachines
-	bestScore Score
-}
-
-// NewModelSearcher creates a thread-safe personal ranking model searcher.
-func NewModelSearcher(nEpoch, nTrials int, searchSize bool) *ModelSearcher {
-	return &ModelSearcher{
-		model:      NewFMV2(model.Params{model.NEpochs: nEpoch}),
-		numTrials:  nTrials,
-		numEpochs:  nEpoch,
-		searchSize: searchSize,
-	}
-}
-
-// GetBestModel returns the best click model with its score.
-func (searcher *ModelSearcher) GetBestModel() (FactorizationMachines, Score) {
-	searcher.bestMutex.Lock()
-	defer searcher.bestMutex.Unlock()
-	return searcher.bestModel, searcher.bestScore
-}
-
-func (searcher *ModelSearcher) Fit(ctx context.Context, trainSet, valSet dataset.CTRSplit) error {
-	log.Logger().Info("click model search",
-		zap.Int("n_users", trainSet.CountUsers()),
-		zap.Int("n_items", trainSet.CountItems()),
-		zap.Int("n_user_labels", trainSet.CountUserLabels()),
-		zap.Int("n_item_labels", trainSet.CountItemLabels()))
-	startTime := time.Now()
-
-	// Random search
-	grid := searcher.model.GetParamsGrid(searcher.searchSize)
-	r := RandomSearchCV(ctx, searcher.model, trainSet, valSet, grid, searcher.numTrials, 0, NewFitConfig())
-	searcher.bestMutex.Lock()
-	defer searcher.bestMutex.Unlock()
-	searcher.bestModel = r.BestModel
-	searcher.bestScore = r.BestScore
-
-	searchTime := time.Since(startTime)
-	log.Logger().Info("complete ranking model search",
-		zap.Float32("auc", searcher.bestScore.AUC),
-		zap.Any("params", searcher.bestModel.GetParams()),
-		zap.String("search_time", searchTime.String()))
-	return nil
+func (ms *ModelSearch) Result() meta.Model[Score] {
+	return ms.result
 }

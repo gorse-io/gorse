@@ -17,11 +17,9 @@ import (
 	"context"
 	"io"
 	"testing"
-	"time"
 
 	"github.com/c-bata/goptuna"
 	"github.com/c-bata/goptuna/tpe"
-	"github.com/gorse-io/gorse/base/task"
 	"github.com/gorse-io/gorse/dataset"
 	"github.com/gorse-io/gorse/model"
 	"github.com/samber/lo"
@@ -92,14 +90,6 @@ func (m *mockMatrixFactorizationForSearch) Clear() {
 	// do nothing
 }
 
-func (m *mockMatrixFactorizationForSearch) GetParamsGrid(_ bool) model.ParamsGrid {
-	return model.ParamsGrid{
-		model.NFactors:   []interface{}{1, 2, 3, 4},
-		model.InitMean:   []interface{}{1, 2, 3, 4},
-		model.InitStdDev: []interface{}{4},
-	}
-}
-
 func (m *mockMatrixFactorizationForSearch) SuggestParams(trial goptuna.Trial) model.Params {
 	return model.Params{
 		model.NFactors:   lo.Must(trial.SuggestDiscreteFloat(string(model.NFactors), 1, 4, 1)),
@@ -108,38 +98,12 @@ func (m *mockMatrixFactorizationForSearch) SuggestParams(trial goptuna.Trial) mo
 	}
 }
 
-func newFitConfigForSearch() *FitConfig {
-	return &FitConfig{
-		Verbose: 1,
-	}
-}
-
-func TestGridSearchCV(t *testing.T) {
-	m := &mockMatrixFactorizationForSearch{}
-	fitConfig := newFitConfigForSearch()
-	r := GridSearchCV(context.Background(), m, nil, nil, m.GetParamsGrid(false), 0, fitConfig)
-	assert.Equal(t, float32(12), r.BestScore.NDCG)
-	assert.Equal(t, model.Params{
-		model.NFactors:   4,
-		model.InitMean:   4,
-		model.InitStdDev: 4,
-	}, r.BestParams)
-}
-
-func TestRandomSearchCV(t *testing.T) {
-	m := &mockMatrixFactorizationForSearch{}
-	fitConfig := newFitConfigForSearch()
-	r := RandomSearchCV(context.Background(), m, nil, nil, m.GetParamsGrid(false), 17, 0, fitConfig)
-	assert.Equal(t, float32(12), r.BestScore.NDCG)
-	assert.Equal(t, model.Params{
-		model.NFactors:   4,
-		model.InitMean:   4,
-		model.InitStdDev: 4,
-	}, r.BestParams)
-}
-
 func TestTPE(t *testing.T) {
-	search := NewModelSearch(nil, nil, &mockMatrixFactorizationForSearch{})
+	search := NewModelSearch(map[string]ModelCreator{
+		"mock": func() MatrixFactorization {
+			return newMockMatrixFactorizationForSearch(10)
+		},
+	}, nil, nil, nil)
 	study, err := goptuna.CreateStudy("TestTPE",
 		goptuna.StudyOptionDirection(goptuna.StudyDirectionMaximize),
 		goptuna.StudyOptionSampler(tpe.NewSampler()))
@@ -147,29 +111,13 @@ func TestTPE(t *testing.T) {
 	err = study.Optimize(search.Objective, 10)
 	assert.NoError(t, err)
 	v, _ := study.GetBestValue()
-	p, _ := study.GetBestParams()
 	assert.Equal(t, float64(12), v)
+	result := search.Result()
+	assert.Equal(t, "mock", result.Type)
 	assert.Equal(t, model.Params{
 		model.NFactors:   float64(4),
 		model.InitMean:   float64(4),
 		model.InitStdDev: float64(4),
-	}, search.New(p).GetParams())
-}
-
-func TestModelSearcher(t *testing.T) {
-	searcher := NewModelSearcher(2, 63, false)
-	searcher.models = []MatrixFactorization{newMockMatrixFactorizationForSearch(2)}
-	err := searcher.Fit(context.Background(),
-		dataset.NewDataset(time.Now(), 0, 0),
-		dataset.NewDataset(time.Now(), 0, 0),
-		task.NewConstantJobsAllocator(1))
-	assert.NoError(t, err)
-	_, m, score := searcher.GetBestModel()
-	assert.Equal(t, float32(12), score.NDCG)
-	assert.Equal(t, model.Params{
-		model.NEpochs:    2,
-		model.NFactors:   4,
-		model.InitMean:   4,
-		model.InitStdDev: 4,
-	}, m.GetParams())
+	}, result.Params)
+	assert.Equal(t, Score{NDCG: 12}, result.Score)
 }

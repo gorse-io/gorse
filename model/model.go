@@ -15,8 +15,8 @@
 package model
 
 import (
-	"github.com/gorse-io/gorse/base"
 	"github.com/c-bata/goptuna"
+	"github.com/gorse-io/gorse/base"
 )
 
 // Model is the interface for all models. Any model in this
@@ -25,7 +25,6 @@ type Model interface {
 	SetParams(params Params)
 	GetParams() Params
 	SuggestParams(trial goptuna.Trial) Params
-	GetParamsGrid(withSize bool) ParamsGrid
 	Clear()
 	Invalid() bool
 }

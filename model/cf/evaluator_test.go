@@ -130,10 +130,6 @@ func (m *mockMatrixFactorizationForEval) Clear() {
 	// do nothing
 }
 
-func (m *mockMatrixFactorizationForEval) GetParamsGrid(_ bool) model.ParamsGrid {
-	panic("don't call me")
-}
-
 func (m *mockMatrixFactorizationForEval) SuggestParams(trial goptuna.Trial) model.Params {
 	panic("not implemented")
 }
