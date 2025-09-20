@@ -9,8 +9,11 @@ jobs:
     name: binaries
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-go@v5
+      - name: Pull source
+        uses: actions/checkout@v5
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
         with:
           go-version-file: ./go.mod
 
@@ -62,6 +65,8 @@ jobs:
     steps:
       - name: Pull source
         uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -103,6 +108,8 @@ jobs:
     steps:
       - name: Pull source
         uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       - id: get_version
         uses: battila7/get-version-action@v2

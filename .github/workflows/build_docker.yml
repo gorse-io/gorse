@@ -15,6 +15,8 @@ jobs:
     steps:
       - name: Pull source
         uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       - name: Login to DockerHub
         uses: docker/login-action@v3
@@ -37,6 +39,8 @@ jobs:
     steps:
       - name: Pull source
         uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       - if: matrix.targets != 'cuda'
         name: Set up Docker Buildx (max-parallelism=4)
