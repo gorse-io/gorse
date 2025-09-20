@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/c-bata/goptuna"
 	"github.com/chewxy/math32"
 	"github.com/gorse-io/gorse/base"
 	"github.com/gorse-io/gorse/base/copier"
@@ -210,6 +211,16 @@ func (fm *FMV2) GetParamsGrid(withSize bool) model.ParamsGrid {
 		model.Reg:        []interface{}{0.001, 0.005, 0.01, 0.05, 0.1},
 		model.InitMean:   []interface{}{0},
 		model.InitStdDev: []interface{}{0.001, 0.005, 0.01, 0.05, 0.1},
+	}
+}
+
+func (fm *FMV2) SuggestParams(trial goptuna.Trial) model.Params {
+	return model.Params{
+		model.NFactors:   16,
+		model.Lr:         lo.Must(trial.SuggestLogFloat(string(model.Lr), 0.001, 0.1)),
+		model.Reg:        lo.Must(trial.SuggestLogFloat(string(model.Reg), 0.001, 0.1)),
+		model.InitMean:   0,
+		model.InitStdDev: lo.Must(trial.SuggestLogFloat(string(model.InitStdDev), 0.001, 0.1)),
 	}
 }
 

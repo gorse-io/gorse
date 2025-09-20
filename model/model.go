@@ -15,6 +15,7 @@
 package model
 
 import (
+	"github.com/c-bata/goptuna"
 	"github.com/gorse-io/gorse/base"
 )
 
@@ -23,7 +24,7 @@ import (
 type Model interface {
 	SetParams(params Params)
 	GetParams() Params
-	GetParamsGrid(withSize bool) ParamsGrid
+	SuggestParams(trial goptuna.Trial) Params
 	Clear()
 	Invalid() bool
 }
