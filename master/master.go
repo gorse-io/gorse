@@ -28,7 +28,6 @@ import (
 	"github.com/emicklei/go-restful/v3"
 	"github.com/gorse-io/gorse/base"
 	"github.com/gorse-io/gorse/base/log"
-	"github.com/gorse-io/gorse/base/task"
 	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/common/parallel"
 	"github.com/gorse-io/gorse/common/util"
@@ -67,7 +66,6 @@ type Master struct {
 
 	tracer         *monitor.Monitor
 	remoteProgress sync.Map
-	jobsScheduler  *task.JobsScheduler
 	cachePath      string
 	openAIClient   *openai.Client
 
@@ -137,10 +135,9 @@ func NewMaster(cfg *config.Config, cacheFolder string) *Master {
 
 	m := &Master{
 		// create task monitor
-		cachePath:     cacheFolder,
-		jobsScheduler: task.NewJobsScheduler(cfg.Master.NumJobs),
-		tracer:        monitor.NewTracer("master"),
-		openAIClient:  openai.NewClientWithConfig(clientConfig),
+		cachePath:    cacheFolder,
+		tracer:       monitor.NewTracer("master"),
+		openAIClient: openai.NewClientWithConfig(clientConfig),
 		// default ranking model
 		collaborativeFilteringSearcher: cf.NewModelSearcher(
 			cfg.Recommend.Collaborative.ModelSearchEpoch,
@@ -242,10 +239,7 @@ func (m *Master) Serve() {
 		}
 	}
 
-	go m.RunPrivilegedTasksLoop()
-	log.Logger().Info("start model fit", zap.Duration("period", m.Config.Recommend.Collaborative.ModelFitPeriod))
-	go m.RunRagtagTasksLoop()
-	log.Logger().Info("start model searcher", zap.Duration("period", m.Config.Recommend.Collaborative.ModelSearchPeriod))
+	go m.RunTasksLoop()
 
 	// start rpc server
 	go func() {
@@ -314,7 +308,7 @@ func (m *Master) Shutdown() {
 	m.grpcServer.GracefulStop()
 }
 
-func (m *Master) RunPrivilegedTasksLoop() {
+func (m *Master) RunTasksLoop() {
 	defer base.CheckPanic()
 	var (
 		err       error
@@ -351,43 +345,6 @@ func (m *Master) RunPrivilegedTasksLoop() {
 			m.loadDataChan.Signal()
 			firstLoop = false
 		}
-	}
-}
-
-// RunRagtagTasksLoop searches optimal recommendation model in background. It never modifies variables other than
-// collaborativeFilteringSearcher, clickSearchedModel and clickSearchedScore.
-func (m *Master) RunRagtagTasksLoop() {
-	defer base.CheckPanic()
-	<-m.loadDataChan.C
-	var (
-		err   error
-		tasks = []Task{
-			NewSearchRankingModelTask(m),
-			NewSearchClickModelTask(m),
-		}
-	)
-	for {
-		if m.rankingTrainSet == nil || m.clickTrainSet == nil {
-			time.Sleep(time.Second)
-			continue
-		}
-		var registeredTask []Task
-		for _, t := range tasks {
-			if m.jobsScheduler.Register(t.name(), t.priority(), false) {
-				registeredTask = append(registeredTask, t)
-			}
-		}
-		for _, t := range registeredTask {
-			go func(task Task) {
-				defer m.jobsScheduler.Unregister(task.name())
-				j := m.jobsScheduler.GetJobsAllocator(task.name())
-				j.Init()
-				if err = task.run(context.Background(), j); err != nil {
-					log.Logger().Error("failed to run task", zap.String("task", task.name()), zap.Error(err))
-				}
-			}(t)
-		}
-		time.Sleep(m.Config.Recommend.Collaborative.ModelSearchPeriod)
 	}
 }
 

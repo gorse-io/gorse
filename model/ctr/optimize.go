@@ -23,7 +23,6 @@ import (
 	"github.com/c-bata/goptuna"
 	"github.com/gorse-io/gorse/base"
 	"github.com/gorse-io/gorse/base/log"
-	"github.com/gorse-io/gorse/base/task"
 	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/dataset"
 	"github.com/gorse-io/gorse/model"
@@ -203,7 +202,7 @@ func (searcher *ModelSearcher) GetBestModel() (FactorizationMachines, Score) {
 	return searcher.bestModel, searcher.bestScore
 }
 
-func (searcher *ModelSearcher) Fit(ctx context.Context, trainSet, valSet dataset.CTRSplit, j *task.JobsAllocator) error {
+func (searcher *ModelSearcher) Fit(ctx context.Context, trainSet, valSet dataset.CTRSplit) error {
 	log.Logger().Info("click model search",
 		zap.Int("n_users", trainSet.CountUsers()),
 		zap.Int("n_items", trainSet.CountItems()),

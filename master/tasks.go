@@ -26,7 +26,6 @@ import (
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/gorse-io/gorse/base"
 	"github.com/gorse-io/gorse/base/log"
-	"github.com/gorse-io/gorse/base/task"
 	"github.com/gorse-io/gorse/common/expression"
 	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/common/parallel"
@@ -47,19 +46,8 @@ import (
 
 const (
 	PositiveFeedbackRate = "PositiveFeedbackRate"
-
-	TaskSearchRankingModel     = "Search collaborative filtering  model"
-	TaskSearchClickModel       = "Search click-through rate prediction model"
-	TaskCacheGarbageCollection = "Collect garbage in cache"
-
-	batchSize = 10000
+	batchSize            = 10000
 )
-
-type Task interface {
-	name() string
-	priority() int
-	run(ctx context.Context, j *task.JobsAllocator) error
-}
 
 func (m *Master) loadDataset() (*ctr.Dataset, *dataset.Dataset, error) {
 	ctx, span := m.tracer.Start(context.Background(), "Load Dataset", 1)
