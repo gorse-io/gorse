@@ -271,7 +271,9 @@ func TestMNIST(t *testing.T) {
 		fmt.Println("Duration:", time.Since(startTime), "Loss:", sumLoss, "Accuracy:", sumAcc)
 	}
 
+	SetInferenceMode(true)
 	testAcc := accuracy(model.Forward(test.A), test.B)
+	SetInferenceMode(false)
 	fmt.Println("Test Accuracy:", testAcc)
 	assert.Greater(t, float64(testAcc), 0.95)
 }

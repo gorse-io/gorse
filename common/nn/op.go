@@ -18,6 +18,7 @@ import (
 	"weak"
 
 	"github.com/chewxy/math32"
+	"github.com/gorse-io/gorse/common/floats"
 )
 
 type op interface {
@@ -61,14 +62,16 @@ func apply[T op](f T, inputs ...*Tensor) *Tensor {
 	y := f.forward(inputs...)
 	f.setInputs(inputs...)
 	f.setOutput(y)
-	y.op = f
-
-	// Set generation
-	gen := 0
-	for _, x := range inputs {
-		gen = max(gen, x.generation())
+	if !inferenceMode.Load() {
+		y.op = f
+		gen := 0
+		for _, x := range inputs {
+			gen = max(gen, x.generation())
+		}
+		f.setGeneration(gen + 1)
+	} else {
+		y.op = nil
 	}
-	f.setGeneration(gen + 1)
 	return y
 }
 
@@ -263,10 +266,8 @@ func (s *square) forward(inputs ...*Tensor) *Tensor {
 
 func (s *square) backward(dy *Tensor) []*Tensor {
 	dx := s.inputs[0].clone()
-	dx.mul(dy)
-	for i := range dx.data {
-		dx.data[i] *= 2
-	}
+	floats.MulTo(dx.data, dy.data, dx.data)
+	floats.MulConst(dx.data, 2)
 	return []*Tensor{dx}
 }
 
