@@ -57,7 +57,7 @@ jobs:
       - name: Build docker image
         uses: docker/bake-action@v6
         with:
-          files: docker-bake.hcl
+          source: .
           targets: ${{ matrix.targets }}
           push: true
         env:
