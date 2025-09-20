@@ -20,7 +20,7 @@ import (
 	"io"
 	"strconv"
 
-	"github.com/gorse-io/gorse/base/log"
+	"github.com/gorse-io/gorse/common/log"
 	"github.com/juju/errors"
 )
 

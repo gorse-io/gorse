@@ -26,8 +26,8 @@ import (
 	"github.com/chewxy/math32"
 	"github.com/gorse-io/gorse/base"
 	"github.com/gorse-io/gorse/base/copier"
-	"github.com/gorse-io/gorse/base/log"
 	"github.com/gorse-io/gorse/common/encoding"
+	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/common/nn"
 	"github.com/gorse-io/gorse/dataset"
@@ -204,16 +204,6 @@ func NewFMV2(params model.Params) *FMV2 {
 	return fm
 }
 
-func (fm *FMV2) GetParamsGrid(withSize bool) model.ParamsGrid {
-	return model.ParamsGrid{
-		model.NFactors:   lo.If(withSize, []interface{}{8, 16, 32, 64}).Else([]interface{}{16}),
-		model.Lr:         []interface{}{0.001, 0.005, 0.01, 0.05, 0.1},
-		model.Reg:        []interface{}{0.001, 0.005, 0.01, 0.05, 0.1},
-		model.InitMean:   []interface{}{0},
-		model.InitStdDev: []interface{}{0.001, 0.005, 0.01, 0.05, 0.1},
-	}
-}
-
 func (fm *FMV2) SuggestParams(trial goptuna.Trial) model.Params {
 	return model.Params{
 		model.NFactors:   16,
@@ -228,7 +218,7 @@ func (fm *FMV2) SetParams(params model.Params) {
 	fm.BaseFactorizationMachines.SetParams(params)
 	fm.batchSize = fm.Params.GetInt(model.BatchSize, 1024)
 	fm.nFactors = fm.Params.GetInt(model.NFactors, 16)
-	fm.nEpochs = fm.Params.GetInt(model.NEpochs, 200)
+	fm.nEpochs = fm.Params.GetInt(model.NEpochs, 50)
 	fm.lr = fm.Params.GetFloat32(model.Lr, 0.01)
 	fm.reg = fm.Params.GetFloat32(model.Reg, 0.0)
 	fm.initMean = fm.Params.GetFloat32(model.InitMean, 0)

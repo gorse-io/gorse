@@ -20,7 +20,7 @@ import (
 	"strings"
 
 	"github.com/go-sql-driver/mysql"
-	"github.com/gorse-io/gorse/base/log"
+	"github.com/gorse-io/gorse/common/log"
 	"github.com/juju/errors"
 	"github.com/samber/lo"
 	"gorm.io/gorm"

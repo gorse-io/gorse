@@ -19,7 +19,7 @@ import (
 	"os"
 	"path"
 
-	"github.com/gorse-io/gorse/base/log"
+	"github.com/gorse-io/gorse/common/log"
 	"go.uber.org/zap"
 )
 

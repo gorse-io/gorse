@@ -28,8 +28,8 @@ import (
 
 	"github.com/emicklei/go-restful/v3"
 	"github.com/gorse-io/gorse/base"
-	"github.com/gorse-io/gorse/base/log"
 	"github.com/gorse-io/gorse/cmd/version"
+	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/common/util"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/protocol"

@@ -707,10 +707,6 @@ func (m mockFactorizationMachine) Complexity() int {
 	panic("implement me")
 }
 
-func (m mockFactorizationMachine) GetParamsGrid(_ bool) model.ParamsGrid {
-	panic("implement me")
-}
-
 func (m mockFactorizationMachine) SuggestParams(_ goptuna.Trial) model.Params {
 	panic("implement me")
 }

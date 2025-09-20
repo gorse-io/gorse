@@ -21,7 +21,7 @@ import (
 	"path"
 	"time"
 
-	"github.com/gorse-io/gorse/base/log"
+	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/protocol"
 	"github.com/juju/errors"
 	"go.uber.org/zap"

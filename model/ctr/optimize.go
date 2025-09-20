@@ -18,6 +18,7 @@ import (
 	"context"
 
 	"github.com/c-bata/goptuna"
+	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/dataset"
 	"github.com/gorse-io/gorse/storage/meta"
 	"github.com/juju/errors"
@@ -32,6 +33,8 @@ type ModelSearch struct {
 	trainSet      dataset.CTRSplit
 	testSet       dataset.CTRSplit
 	config        *FitConfig
+	ctx           context.Context
+	span          *monitor.Span
 	result        meta.Model[Score]
 }
 
@@ -43,6 +46,16 @@ func NewModelSearch(models map[string]ModelCreator, trainSet, testSet dataset.CT
 		testSet:       testSet,
 		config:        config,
 	}
+}
+
+func (ms *ModelSearch) WithContext(ctx context.Context) *ModelSearch {
+	ms.ctx = ctx
+	return ms
+}
+
+func (ms *ModelSearch) WithSpan(span *monitor.Span) *ModelSearch {
+	ms.span = span
+	return ms
 }
 
 func (ms *ModelSearch) Objective(trial goptuna.Trial) (float64, error) {
@@ -62,6 +75,9 @@ func (ms *ModelSearch) Objective(trial goptuna.Trial) (float64, error) {
 			Params: m.GetParams(),
 			Score:  score,
 		}
+	}
+	if ms.span != nil {
+		ms.span.Add(1)
 	}
 	return float64(score.AUC), nil
 }

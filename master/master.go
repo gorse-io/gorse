@@ -27,7 +27,7 @@ import (
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/emicklei/go-restful/v3"
 	"github.com/gorse-io/gorse/base"
-	"github.com/gorse-io/gorse/base/log"
+	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/common/parallel"
 	"github.com/gorse-io/gorse/common/util"
@@ -85,16 +85,16 @@ type Master struct {
 	clickDataMutex sync.RWMutex
 
 	// collaborative filtering
-	collaborativeFilteringTrainSetSize int
 	collaborativeFilteringModelMutex   sync.RWMutex
-	collaborativeFilteringSearcher     *cf.ModelSearcher
+	collaborativeFilteringTrainSetSize int
 	collaborativeFilteringMeta         meta.Model[cf.Score]
+	collaborativeFilteringTarget       meta.Model[cf.Score]
 
 	// click model
-	clickTrainSetSize          int
-	clickThroughRateMeta       meta.Model[ctr.Score]
-	clickThroughRateModelMutex sync.RWMutex
-	clickModelSearcher         *ctr.ModelSearcher
+	clickThroughRateModelMutex   sync.RWMutex
+	clickThroughRateTrainSetSize int
+	clickThroughRateMeta         meta.Model[ctr.Score]
+	clickThroughRateTarget       meta.Model[ctr.Score]
 
 	// oauth2
 	oauth2Config oauth2.Config
@@ -138,18 +138,6 @@ func NewMaster(cfg *config.Config, cacheFolder string) *Master {
 		cachePath:    cacheFolder,
 		tracer:       monitor.NewTracer("master"),
 		openAIClient: openai.NewClientWithConfig(clientConfig),
-		// default ranking model
-		collaborativeFilteringSearcher: cf.NewModelSearcher(
-			cfg.Recommend.Collaborative.ModelSearchEpoch,
-			cfg.Recommend.Collaborative.ModelSearchTrials,
-			cfg.Recommend.Collaborative.EnableModelSizeSearch,
-		),
-		// default click model
-		clickModelSearcher: ctr.NewModelSearcher(
-			cfg.Recommend.Collaborative.ModelSearchEpoch,
-			cfg.Recommend.Collaborative.ModelSearchTrials,
-			cfg.Recommend.Collaborative.EnableModelSizeSearch,
-		),
 		RestServer: server.RestServer{
 			Settings: &config.Settings{
 				Config:      cfg,
@@ -226,6 +214,11 @@ func (m *Master) Serve() {
 	} else if metaStr != nil {
 		if err = m.collaborativeFilteringMeta.FromJSON(*metaStr); err != nil {
 			log.Logger().Error("failed to unmarshal collaborative filtering meta", zap.Error(err))
+		} else {
+			log.Logger().Info("loaded collaborative filtering model",
+				zap.String("type", m.collaborativeFilteringMeta.Type),
+				zap.Any("params", m.collaborativeFilteringMeta.Params),
+				zap.Any("score", m.collaborativeFilteringMeta.Score))
 		}
 	}
 
@@ -236,6 +229,11 @@ func (m *Master) Serve() {
 	} else if metaStr != nil {
 		if err = m.clickThroughRateMeta.FromJSON(*metaStr); err != nil {
 			log.Logger().Error("failed to unmarshal click-through rate meta", zap.Error(err))
+		} else {
+			log.Logger().Info("loaded click-through rate model",
+				zap.String("type", m.clickThroughRateMeta.Type),
+				zap.Any("params", m.clickThroughRateMeta.Params),
+				zap.Any("score", m.clickThroughRateMeta.Score))
 		}
 	}
 
@@ -311,8 +309,8 @@ func (m *Master) Shutdown() {
 func (m *Master) RunTasksLoop() {
 	defer base.CheckPanic()
 	var (
-		err       error
-		firstLoop = true
+		err error
+		//firstLoop = true
 	)
 	go func() {
 		m.importedChan.Signal()
@@ -324,10 +322,10 @@ func (m *Master) RunTasksLoop() {
 		}
 	}()
 	for {
-		select {
-		case <-m.fitTicker.C:
-		case <-m.importedChan.C:
-		}
+		//select {
+		//case <-m.fitTicker.C:
+		//case <-m.importedChan.C:
+		//}
 
 		// download dataset
 		err = m.runLoadDatasetTask()
@@ -341,10 +339,10 @@ func (m *Master) RunTasksLoop() {
 			continue
 		}
 
-		if firstLoop {
-			m.loadDataChan.Signal()
-			firstLoop = false
-		}
+		//if firstLoop {
+		//	m.loadDataChan.Signal()
+		//	firstLoop = false
+		//}
 	}
 }
 

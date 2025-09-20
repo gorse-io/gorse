@@ -15,10 +15,11 @@
 package log
 
 import (
-	"github.com/spf13/pflag"
-	"github.com/stretchr/testify/assert"
 	"os"
 	"testing"
+
+	"github.com/spf13/pflag"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestSetDevelopmentLogger(t *testing.T) {

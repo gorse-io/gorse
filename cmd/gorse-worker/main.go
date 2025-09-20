@@ -17,8 +17,8 @@ import (
 	"fmt"
 	_ "net/http/pprof"
 
-	"github.com/gorse-io/gorse/base/log"
 	"github.com/gorse-io/gorse/cmd/version"
+	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/common/util"
 	"github.com/gorse-io/gorse/worker"
 	"github.com/spf13/cobra"

@@ -25,7 +25,7 @@ import (
 
 	"github.com/XSAM/otelsql"
 	"github.com/araddon/dateparse"
-	"github.com/gorse-io/gorse/base/log"
+	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/storage"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/stdlib"
