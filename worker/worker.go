@@ -723,7 +723,7 @@ func (w *Worker) Recommend(users []data.User) {
 		}
 
 		// Recommender #4: latest items.
-		if w.Config.Recommend.Offline.EnableLatestRecommend {
+		if w.Config.Recommend.Offline.Latest {
 			localStartTime := time.Now()
 			for _, category := range append([]string{""}, itemCategories...) {
 				latestItems, err := w.CacheClient.SearchScores(ctx, cache.NonPersonalized, cache.Latest, []string{category}, 0, w.Config.Recommend.CacheSize)
@@ -743,7 +743,7 @@ func (w *Worker) Recommend(users []data.User) {
 		}
 
 		// Recommender #5: popular items.
-		if w.Config.Recommend.Offline.EnablePopularRecommend {
+		if w.Config.Recommend.Offline.Popular {
 			localStartTime := time.Now()
 			for _, category := range append([]string{""}, itemCategories...) {
 				popularItems, err := w.CacheClient.SearchScores(ctx, cache.NonPersonalized, cache.Popular, []string{category}, 0, w.Config.Recommend.CacheSize)
