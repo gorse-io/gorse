@@ -35,22 +35,15 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        targets: [default, cuda, mkl]
+        targets: [default, mkl]
     steps:
       - name: Pull source
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
-      - if: matrix.targets != 'cuda'
-        name: Set up Docker Buildx (max-parallelism=4)
+      - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-
-      - if: matrix.targets == 'cuda'
-        name: Set up Docker Buildx (max-parallelism=1)
-        uses: docker/setup-buildx-action@v3
-        with:
-          buildkitd-config: .github/buildkitd.toml
 
       - name: Login to DockerHub
         uses: docker/login-action@v3

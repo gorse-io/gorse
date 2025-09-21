@@ -23,12 +23,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/gorse-io/gorse/base/log"
-
-	"go.uber.org/zap"
-
+	"github.com/gorse-io/gorse/common/log"
 	"github.com/haxii/go-swagger-ui/static"
 	jsoniter "github.com/json-iterator/go"
+	"go.uber.org/zap"
 	"gopkg.in/yaml.v2"
 )
 

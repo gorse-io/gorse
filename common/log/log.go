@@ -21,6 +21,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/c-bata/goptuna"
 	"github.com/emicklei/go-restful/v3"
 	"github.com/go-sql-driver/mysql"
 	"github.com/spf13/pflag"
@@ -168,4 +169,28 @@ func InitOpenAILogger(filename string) {
 				}),
 				zap.InfoLevel))
 	}
+}
+
+type OptunaLogger struct {
+	logger *zap.Logger
+}
+
+func NewOptunaLogger(logger *zap.Logger) goptuna.Logger {
+	return &OptunaLogger{logger: logger}
+}
+
+func (o OptunaLogger) Debug(msg string, fields ...interface{}) {
+	o.logger.Debug(msg, zap.Any("fields", fields))
+}
+
+func (o OptunaLogger) Info(msg string, fields ...interface{}) {
+	o.logger.Info(msg, zap.Any("fields", fields))
+}
+
+func (o OptunaLogger) Warn(msg string, fields ...interface{}) {
+	o.logger.Warn(msg, zap.Any("fields", fields))
+}
+
+func (o OptunaLogger) Error(msg string, fields ...interface{}) {
+	o.logger.Error(msg, zap.Any("fields", fields))
 }

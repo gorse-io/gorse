@@ -15,8 +15,11 @@
 package meta
 
 import (
+	"testing"
 	"time"
 
+	"github.com/gorse-io/gorse/model"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -95,4 +98,34 @@ func (suite *baseTestSuite) TestKeyValues() {
 	value, err = suite.Database.Get("non-existing-key")
 	suite.NoError(err)
 	suite.Nil(value)
+}
+
+func TestModel_Equal(t *testing.T) {
+	a := Model[int]{
+		ID:   1,
+		Type: "test",
+		Params: map[model.ParamName]any{
+			"param1": 1,
+			"param2": "value2",
+		},
+		Score: 0,
+	}
+	b := Model[int]{
+		ID:   2,
+		Type: "test",
+		Params: map[model.ParamName]any{
+			"param1": 1,
+			"param2": "value2",
+		},
+		Score: 1,
+	}
+	assert.True(t, a.Equal(b))
+
+	a.Type = "different"
+	assert.False(t, a.Equal(b))
+	a.Type = "test"
+
+	a.Params["param2"] = "different"
+	assert.False(t, a.Equal(b))
+	a.Params["param2"] = "value2"
 }

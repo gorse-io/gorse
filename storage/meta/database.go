@@ -25,6 +25,7 @@ import (
 	"github.com/juju/errors"
 	"github.com/samber/lo"
 	semconv "go.opentelemetry.io/otel/semconv/v1.12.0"
+	"golang.org/x/exp/maps"
 )
 
 const (
@@ -34,6 +35,7 @@ const (
 
 type Model[T any] struct {
 	ID     int64
+	Type   string
 	Params model.Params
 	Score  T
 }
@@ -44,6 +46,11 @@ func (m *Model[T]) ToJSON() string {
 
 func (m *Model[T]) FromJSON(data string) error {
 	return json.Unmarshal([]byte(data), m)
+}
+
+// Equal checks if two models have the same type and parameters.
+func (m *Model[T]) Equal(other Model[T]) bool {
+	return m.Type == other.Type && maps.Equal(m.Params, other.Params)
 }
 
 type Node struct {

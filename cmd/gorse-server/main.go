@@ -18,8 +18,8 @@ import (
 	"os"
 	"os/signal"
 
-	"github.com/gorse-io/gorse/base/log"
 	"github.com/gorse-io/gorse/cmd/version"
+	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/common/util"
 	"github.com/gorse-io/gorse/server"
 	"github.com/spf13/cobra"

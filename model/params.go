@@ -15,10 +15,9 @@
 package model
 
 import (
-	"encoding/json"
 	"reflect"
 
-	"github.com/gorse-io/gorse/base/log"
+	"github.com/gorse-io/gorse/common/log"
 	"go.uber.org/zap"
 )
 
@@ -165,14 +164,6 @@ func (parameters Params) Overwrite(params Params) Params {
 		merged[k] = v
 	}
 	return merged
-}
-
-func (parameters Params) ToString() string {
-	b, err := json.Marshal(parameters)
-	if err != nil {
-		log.Logger().Fatal("failed to convert to string", zap.Error(err))
-	}
-	return string(b)
 }
 
 // ParamsGrid contains candidate for grid search.

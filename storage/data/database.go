@@ -26,8 +26,8 @@ import (
 
 	"github.com/XSAM/otelsql"
 	"github.com/gorse-io/gorse/base/jsonutil"
-	"github.com/gorse-io/gorse/base/log"
 	"github.com/gorse-io/gorse/common/expression"
+	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/storage"
 	"github.com/juju/errors"
 	"github.com/samber/lo"

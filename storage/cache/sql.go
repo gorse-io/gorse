@@ -466,7 +466,7 @@ func (db *SQLDatabase) SearchScores(ctx context.Context, collection, subset stri
 				Id:         document.Id,
 				Score:      document.Score,
 				Categories: document.Categories,
-				Timestamp:  document.Timestamp,
+				Timestamp:  document.Timestamp.In(time.UTC),
 			})
 		case SQLite, MySQL:
 			var document Score
@@ -583,6 +583,9 @@ func (db *SQLDatabase) GetTimeSeriesPoints(ctx context.Context, name string, beg
 				db.PointsTable()), int(duration.Seconds()), int(duration.Seconds()), int(duration.Seconds()), name, begin, end).
 			Scan(&points).Error; err != nil {
 			return nil, errors.Trace(err)
+		}
+		for i := range points {
+			points[i].Timestamp = points[i].Timestamp.In(time.UTC)
 		}
 	case MySQL:
 		if err := db.gormDB.WithContext(ctx).

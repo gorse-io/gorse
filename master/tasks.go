@@ -22,17 +22,19 @@ import (
 	"sync"
 	"time"
 
+	"github.com/c-bata/goptuna"
+	"github.com/c-bata/goptuna/tpe"
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/gorse-io/gorse/base"
-	"github.com/gorse-io/gorse/base/log"
-	"github.com/gorse-io/gorse/base/task"
 	"github.com/gorse-io/gorse/common/expression"
+	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/common/parallel"
 	"github.com/gorse-io/gorse/common/sizeof"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/dataset"
 	"github.com/gorse-io/gorse/logics"
+	"github.com/gorse-io/gorse/model"
 	"github.com/gorse-io/gorse/model/cf"
 	"github.com/gorse-io/gorse/model/ctr"
 	"github.com/gorse-io/gorse/storage/cache"
@@ -46,19 +48,8 @@ import (
 
 const (
 	PositiveFeedbackRate = "PositiveFeedbackRate"
-
-	TaskSearchRankingModel     = "Search collaborative filtering  model"
-	TaskSearchClickModel       = "Search click-through rate prediction model"
-	TaskCacheGarbageCollection = "Collect garbage in cache"
-
-	batchSize = 10000
+	batchSize            = 10000
 )
-
-type Task interface {
-	name() string
-	priority() int
-	run(ctx context.Context, j *task.JobsAllocator) error
-}
 
 func (m *Master) loadDataset() (*ctr.Dataset, *dataset.Dataset, error) {
 	ctx, span := m.tracer.Start(context.Background(), "Load Dataset", 1)
@@ -231,127 +222,12 @@ func (m *Master) runLoadDatasetTask() error {
 	if err = m.collectGarbage(ctx, dataSet); err != nil {
 		log.Logger().Error("failed to collect garbage in cache", zap.Error(err))
 	}
-	return nil
-}
-
-// SearchRankingModelTask searches best hyper-parameters for ranking models.
-// It requires read lock on the ranking dataset.
-type SearchRankingModelTask struct {
-	*Master
-	lastNumUsers    int
-	lastNumItems    int
-	lastNumFeedback int
-}
-
-func NewSearchRankingModelTask(m *Master) *SearchRankingModelTask {
-	return &SearchRankingModelTask{Master: m}
-}
-
-func (t *SearchRankingModelTask) name() string {
-	return TaskSearchRankingModel
-}
-
-func (t *SearchRankingModelTask) priority() int {
-	return -t.rankingTrainSet.CountFeedback()
-}
-
-func (t *SearchRankingModelTask) run(ctx context.Context, j *task.JobsAllocator) error {
-	log.Logger().Info("start searching ranking model")
-	t.rankingDataMutex.RLock()
-	defer t.rankingDataMutex.RUnlock()
-	if t.rankingTrainSet == nil {
-		log.Logger().Debug("dataset has not been loaded")
-		return nil
+	if err = m.optimizeCollaborativeFiltering(m.rankingTrainSet, m.rankingTestSet); err != nil {
+		log.Logger().Error("failed to optimize collaborative filtering model", zap.Error(err))
 	}
-	numUsers := t.rankingTrainSet.CountUsers()
-	numItems := t.rankingTrainSet.CountItems()
-	numFeedback := t.rankingTrainSet.CountFeedback()
-
-	if numUsers == 0 || numItems == 0 || numFeedback == 0 {
-		log.Logger().Warn("empty ranking dataset",
-			zap.Any("positive_feedback_type", t.Config.Recommend.DataSource.PositiveFeedbackTypes))
-		// t.taskMonitor.Fail(TaskSearchRankingModel, "No feedback found.")
-		return nil
-	} else if numUsers == t.lastNumUsers &&
-		numItems == t.lastNumItems &&
-		numFeedback == t.lastNumFeedback {
-		log.Logger().Info("ranking dataset not changed")
-		return nil
+	if err = m.optimizeClickThroughRatePrediction(m.clickTrainSet, m.clickTestSet); err != nil {
+		log.Logger().Error("failed to optimize click-through rate prediction model", zap.Error(err))
 	}
-
-	startTime := time.Now()
-	err := t.collaborativeFilteringSearcher.Fit(ctx, t.rankingTrainSet, t.rankingTestSet, nil)
-	if err != nil {
-		log.Logger().Error("failed to search collaborative filtering model", zap.Error(err))
-		return nil
-	}
-	CollaborativeFilteringSearchSeconds.Set(time.Since(startTime).Seconds())
-	_, _, bestScore := t.collaborativeFilteringSearcher.GetBestModel()
-	CollaborativeFilteringSearchPrecision10.Set(float64(bestScore.Precision))
-
-	t.lastNumItems = numItems
-	t.lastNumUsers = numUsers
-	t.lastNumFeedback = numFeedback
-	return nil
-}
-
-// SearchClickModelTask searches best hyper-parameters for factorization machines.
-// It requires read lock on the click dataset.
-type SearchClickModelTask struct {
-	*Master
-	lastNumUsers    int
-	lastNumItems    int
-	lastNumFeedback int
-}
-
-func NewSearchClickModelTask(m *Master) *SearchClickModelTask {
-	return &SearchClickModelTask{Master: m}
-}
-
-func (t *SearchClickModelTask) name() string {
-	return TaskSearchClickModel
-}
-
-func (t *SearchClickModelTask) priority() int {
-	return -t.clickTrainSet.Count()
-}
-
-func (t *SearchClickModelTask) run(ctx context.Context, j *task.JobsAllocator) error {
-	log.Logger().Info("start searching click model")
-	t.clickDataMutex.RLock()
-	defer t.clickDataMutex.RUnlock()
-	if t.clickTrainSet == nil {
-		log.Logger().Debug("dataset has not been loaded")
-		return nil
-	}
-	numUsers := t.clickTrainSet.CountUsers()
-	numItems := t.clickTrainSet.CountItems()
-	numFeedback := t.clickTrainSet.Count()
-
-	if numUsers == 0 || numItems == 0 || numFeedback == 0 {
-		log.Logger().Warn("empty click dataset",
-			zap.Any("positive_feedback_type", t.Config.Recommend.DataSource.PositiveFeedbackTypes))
-		return nil
-	} else if numUsers == t.lastNumUsers &&
-		numItems == t.lastNumItems &&
-		numFeedback == t.lastNumFeedback {
-		log.Logger().Info("click dataset not changed")
-		return nil
-	}
-
-	startTime := time.Now()
-	err := t.clickModelSearcher.Fit(context.Background(), t.clickTrainSet, t.clickTestSet, j)
-	if err != nil {
-		log.Logger().Error("failed to search ranking model", zap.Error(err))
-		return nil
-	}
-	RankingSearchSeconds.Set(time.Since(startTime).Seconds())
-	_, bestScore := t.clickModelSearcher.GetBestModel()
-	RankingSearchPrecision.Set(float64(bestScore.Precision))
-
-	t.lastNumItems = numItems
-	t.lastNumUsers = numUsers
-	t.lastNumFeedback = numFeedback
 	return nil
 }
 
@@ -965,26 +841,27 @@ func (m *Master) trainCollaborativeFiltering(trainSet, testSet dataset.CFSplit) 
 		return nil
 	}
 
-	bestModelName, bestModel, bestModelScore := m.collaborativeFilteringSearcher.GetBestModel()
 	m.collaborativeFilteringModelMutex.Lock()
+	collaborativeFilteringType := m.collaborativeFilteringMeta.Type
 	collaborativeFilteringParams := m.collaborativeFilteringMeta.Params
-	if bestModel != nil && !bestModel.Invalid() &&
-		(bestModel.GetParams().ToString() != collaborativeFilteringParams.ToString()) &&
-		(bestModelScore.NDCG > m.collaborativeFilteringMeta.Score.NDCG) {
+	if m.collaborativeFilteringTarget.Score.NDCG > 0 &&
+		(!m.collaborativeFilteringTarget.Equal(m.collaborativeFilteringMeta)) &&
+		(m.collaborativeFilteringTarget.Score.NDCG > m.collaborativeFilteringMeta.Score.NDCG) {
 		// 1. best ranking model must have been found.
 		// 2. best ranking model must be different from current model
 		// 3. best ranking model must perform better than current model
-		collaborativeFilteringParams = bestModel.GetParams()
+		collaborativeFilteringType = m.collaborativeFilteringTarget.Type
+		collaborativeFilteringParams = m.collaborativeFilteringTarget.Params
 		log.Logger().Info("find better collaborative filtering model",
-			zap.Any("score", bestModelScore),
-			zap.String("name", bestModelName),
+			zap.Any("score", m.collaborativeFilteringTarget.Score),
+			zap.String("type", collaborativeFilteringType),
 			zap.Any("params", collaborativeFilteringParams))
 	}
 	m.collaborativeFilteringModelMutex.Unlock()
 
 	startFitTime := time.Now()
 	fitCtx, fitSpan := monitor.Start(newCtx, "Fit", 1)
-	collaborativeFilteringModel := cf.NewBPR(collaborativeFilteringParams)
+	collaborativeFilteringModel := m.newCollaborativeFilteringModel(collaborativeFilteringType, collaborativeFilteringParams)
 	score := collaborativeFilteringModel.Fit(fitCtx, trainSet, testSet, cf.NewFitConfig().SetJobs(m.Config.Master.NumJobs))
 	CollaborativeFilteringFitSeconds.Set(time.Since(startFitTime).Seconds())
 	span.Add(1)
@@ -1049,6 +926,8 @@ func (m *Master) trainCollaborativeFiltering(trainSet, testSet dataset.CFSplit) 
 	// update meta
 	m.collaborativeFilteringModelMutex.RLock()
 	m.collaborativeFilteringMeta.ID = collaborativeFilteringModelId
+	m.collaborativeFilteringMeta.Type = collaborativeFilteringType
+	m.collaborativeFilteringMeta.Params = collaborativeFilteringParams
 	m.collaborativeFilteringMeta.Score = score
 	m.collaborativeFilteringModelMutex.RUnlock()
 	if err = m.metaStore.Put(meta.COLLABORATIVE_FILTERING_MODEL, m.collaborativeFilteringMeta.ToJSON()); err != nil {
@@ -1076,6 +955,17 @@ func (m *Master) trainCollaborativeFiltering(trainSet, testSet dataset.CFSplit) 
 	return nil
 }
 
+func (m *Master) newCollaborativeFilteringModel(modelType string, params model.Params) cf.MatrixFactorization {
+	switch modelType {
+	case "BPR":
+		return cf.NewBPR(params)
+	case "ALS":
+		return cf.NewALS(params)
+	default:
+		return cf.NewBPR(params)
+	}
+}
+
 func (m *Master) trainClickThroughRatePrediction(trainSet, testSet *ctr.Dataset) error {
 	newCtx, span := m.tracer.Start(context.Background(), "Train Click-Through Rate Prediction Model", 1)
 	defer span.End()
@@ -1089,24 +979,25 @@ func (m *Master) trainClickThroughRatePrediction(trainSet, testSet *ctr.Dataset)
 	} else if trainSet.Count() == 0 {
 		span.Fail(errors.New("No feedback found."))
 		return nil
-	} else if trainSet.Count() == m.clickTrainSetSize {
+	} else if trainSet.Count() == m.clickThroughRateTrainSetSize {
 		log.Logger().Info("click dataset not changed")
 		return nil
 	}
 
-	bestModel, bestScore := m.clickModelSearcher.GetBestModel()
 	m.clickThroughRateModelMutex.Lock()
+	clickThroughRateType := m.clickThroughRateMeta.Type
 	clickThroughRateParams := m.clickThroughRateMeta.Params
-	if bestModel != nil && !bestModel.Invalid() &&
-		bestModel.GetParams().ToString() != clickThroughRateParams.ToString() &&
-		bestScore.Precision > m.clickThroughRateMeta.Score.Precision {
+	if m.clickThroughRateTarget.Score.AUC > 0 &&
+		(!m.clickThroughRateTarget.Equal(m.clickThroughRateMeta)) &&
+		(m.clickThroughRateTarget.Score.AUC > m.clickThroughRateMeta.Score.AUC) {
 		// 1. best click model must have been found.
 		// 2. best click model must be different from current model
 		// 3. best click model must perform better than current model
-		clickThroughRateParams = bestModel.GetParams()
+		clickThroughRateType = m.clickThroughRateTarget.Type
+		clickThroughRateParams = m.clickThroughRateTarget.Params
 		log.Logger().Info("find better click model",
-			zap.Float32("Precision", bestScore.Precision),
-			zap.Float32("Recall", bestScore.Recall),
+			zap.Float32("Precision", m.clickThroughRateTarget.Score.Precision),
+			zap.Float32("Recall", m.clickThroughRateTarget.Score.Recall),
 			zap.Any("params", clickThroughRateParams))
 	}
 	clickModel := ctr.NewFMV2(clickThroughRateParams)
@@ -1118,7 +1009,7 @@ func (m *Master) trainClickThroughRatePrediction(trainSet, testSet *ctr.Dataset)
 
 	// update match model
 	m.clickThroughRateModelMutex.Lock()
-	m.clickTrainSetSize = trainSet.Count()
+	m.clickThroughRateTrainSetSize = trainSet.Count()
 	clickThroughRateModelId := time.Now().Unix()
 	m.clickThroughRateModelMutex.Unlock()
 	log.Logger().Info("fit click model complete",
@@ -1152,6 +1043,8 @@ func (m *Master) trainClickThroughRatePrediction(trainSet, testSet *ctr.Dataset)
 	// update meta
 	m.clickThroughRateModelMutex.RLock()
 	m.clickThroughRateMeta.ID = clickThroughRateModelId
+	m.clickThroughRateMeta.Type = clickThroughRateType
+	m.clickThroughRateMeta.Params = clickThroughRateParams
 	m.clickThroughRateMeta.Score = score
 	m.clickThroughRateModelMutex.RUnlock()
 	if err = m.metaStore.Put(meta.CLICK_THROUGH_RATE_MODEL, m.clickThroughRateMeta.ToJSON()); err != nil {
@@ -1260,4 +1153,71 @@ func (m *Master) collectGarbage(ctx context.Context, dataSet *dataset.Dataset) e
 		return nil
 	})
 	return errors.Trace(err)
+}
+
+func (m *Master) optimizeCollaborativeFiltering(trainSet, testSet dataset.CFSplit) error {
+	ctx, span := m.tracer.Start(context.Background(), "Optimize Collaborative Filtering Model", m.Config.Recommend.Collaborative.ModelSearchTrials)
+	defer span.End()
+
+	search := cf.NewModelSearch(map[string]cf.ModelCreator{
+		"BPR": func() cf.MatrixFactorization {
+			return cf.NewBPR(nil)
+		},
+		"ALS": func() cf.MatrixFactorization {
+			return cf.NewALS(nil)
+		},
+	}, trainSet, testSet, cf.NewFitConfig().SetJobs(m.Config.Master.NumJobs)).
+		WithContext(ctx).
+		WithSpan(span)
+
+	study, err := goptuna.CreateStudy("optimizeCollaborativeFiltering",
+		goptuna.StudyOptionDirection(goptuna.StudyDirectionMaximize),
+		goptuna.StudyOptionSampler(tpe.NewSampler()),
+		goptuna.StudyOptionLogger(log.NewOptunaLogger(log.Logger())))
+	if err != nil {
+		return errors.Trace(err)
+	}
+	if err = study.Optimize(search.Objective, m.Config.Recommend.Collaborative.ModelSearchTrials); err != nil {
+		return errors.Trace(err)
+	}
+	m.collaborativeFilteringModelMutex.Lock()
+	m.collaborativeFilteringTarget = search.Result()
+	m.collaborativeFilteringModelMutex.Unlock()
+	log.Logger().Info("optimize collaborative filtering model completed",
+		zap.Any("score", m.collaborativeFilteringTarget.Score),
+		zap.String("type", m.collaborativeFilteringTarget.Type),
+		zap.Any("params", m.collaborativeFilteringTarget.Params))
+	return nil
+}
+
+func (m *Master) optimizeClickThroughRatePrediction(trainSet, testSet *ctr.Dataset) error {
+	ctx, span := m.tracer.Start(context.Background(), "Optimize Click-Through Rate Prediction Model", m.Config.Recommend.Collaborative.ModelSearchTrials)
+	defer span.End()
+
+	search := ctr.NewModelSearch(map[string]ctr.ModelCreator{
+		"FM": func() ctr.FactorizationMachines {
+			return ctr.NewFMV2(nil)
+		},
+	}, trainSet, testSet, ctr.NewFitConfig().SetJobs(m.Config.Master.NumJobs)).
+		WithContext(ctx).
+		WithSpan(span)
+
+	study, err := goptuna.CreateStudy("optimizeClickThroughRatePrediction",
+		goptuna.StudyOptionDirection(goptuna.StudyDirectionMaximize),
+		goptuna.StudyOptionSampler(tpe.NewSampler()),
+		goptuna.StudyOptionLogger(log.NewOptunaLogger(log.Logger())))
+	if err != nil {
+		return errors.Trace(err)
+	}
+	if err = study.Optimize(search.Objective, m.Config.Recommend.Collaborative.ModelSearchTrials); err != nil {
+		return errors.Trace(err)
+	}
+	m.clickThroughRateModelMutex.Lock()
+	m.clickThroughRateTarget = search.Result()
+	m.clickThroughRateModelMutex.Unlock()
+	log.Logger().Info("optimize click-through rate model completed",
+		zap.Any("score", m.clickThroughRateTarget.Score),
+		zap.String("type", m.clickThroughRateTarget.Type),
+		zap.Any("params", m.clickThroughRateTarget.Params))
+	return nil
 }

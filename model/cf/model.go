@@ -23,13 +23,14 @@ import (
 	"time"
 
 	"github.com/bits-and-blooms/bitset"
+	"github.com/c-bata/goptuna"
 	"github.com/chewxy/math32"
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/gorse-io/gorse/base"
 	"github.com/gorse-io/gorse/base/copier"
-	"github.com/gorse-io/gorse/base/log"
 	"github.com/gorse-io/gorse/common/encoding"
 	"github.com/gorse-io/gorse/common/floats"
+	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/common/parallel"
 	"github.com/gorse-io/gorse/dataset"
@@ -399,13 +400,13 @@ func (bpr *BPR) SetParams(params model.Params) {
 	bpr.initStdDev = bpr.Params.GetFloat32(model.InitStdDev, 0.001)
 }
 
-func (bpr *BPR) GetParamsGrid(withSize bool) model.ParamsGrid {
-	return model.ParamsGrid{
-		model.NFactors:   lo.If(withSize, []interface{}{8, 16, 32, 64}).Else([]interface{}{16}),
-		model.Lr:         []interface{}{0.001, 0.005, 0.01, 0.05, 0.1},
-		model.Reg:        []interface{}{0.001, 0.005, 0.01, 0.05, 0.1},
-		model.InitMean:   []interface{}{0},
-		model.InitStdDev: []interface{}{0.001, 0.005, 0.01, 0.05, 0.1},
+func (bpr *BPR) SuggestParams(trial goptuna.Trial) model.Params {
+	return model.Params{
+		model.NFactors:   16,
+		model.Lr:         lo.Must(trial.SuggestLogFloat(string(model.Lr), 0.001, 0.1)),
+		model.Reg:        lo.Must(trial.SuggestLogFloat(string(model.Reg), 0.001, 0.1)),
+		model.InitMean:   0,
+		model.InitStdDev: lo.Must(trial.SuggestLogFloat(string(model.InitStdDev), 0.001, 0.1)),
 	}
 }
 
@@ -574,13 +575,13 @@ func (als *ALS) SetParams(params model.Params) {
 	als.weight = als.Params.GetFloat32(model.Alpha, 0.001)
 }
 
-func (als *ALS) GetParamsGrid(withSize bool) model.ParamsGrid {
-	return model.ParamsGrid{
-		model.NFactors:   lo.If(withSize, []interface{}{8, 16, 32, 64}).Else([]interface{}{16}),
-		model.InitMean:   []interface{}{0},
-		model.InitStdDev: []interface{}{0.001, 0.005, 0.01, 0.05, 0.1},
-		model.Reg:        []interface{}{0.001, 0.005, 0.01, 0.05, 0.1},
-		model.Alpha:      []interface{}{0.001, 0.005, 0.01, 0.05, 0.1},
+func (als *ALS) SuggestParams(trial goptuna.Trial) model.Params {
+	return model.Params{
+		model.NFactors:   16,
+		model.InitMean:   0,
+		model.InitStdDev: lo.Must(trial.SuggestLogFloat(string(model.InitStdDev), 0.001, 0.1)),
+		model.Reg:        lo.Must(trial.SuggestLogFloat(string(model.Reg), 0.001, 0.1)),
+		model.Alpha:      lo.Must(trial.SuggestLogFloat(string(model.Alpha), 0.001, 0.1)),
 	}
 }
 

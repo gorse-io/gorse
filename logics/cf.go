@@ -19,10 +19,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gorse-io/gorse/base/log"
 	"github.com/gorse-io/gorse/common/ann"
 	"github.com/gorse-io/gorse/common/encoding"
 	"github.com/gorse-io/gorse/common/floats"
+	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/pkg/errors"
 	"github.com/samber/lo"

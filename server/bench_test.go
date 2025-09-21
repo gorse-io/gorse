@@ -31,8 +31,8 @@ import (
 
 	"github.com/emicklei/go-restful/v3"
 	"github.com/go-resty/resty/v2"
-	"github.com/gorse-io/gorse/base/log"
 	"github.com/gorse-io/gorse/common/expression"
+	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"

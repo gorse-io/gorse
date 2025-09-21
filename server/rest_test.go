@@ -914,7 +914,7 @@ func (suite *ServerTestSuite) TestNonPersonalizedRecommend() {
 				Header("X-API-Key", apiKey).
 				QueryParams(map[string]string{
 					"offset": "0",
-					"n":      "0"}).
+				}).
 				Expect(t).
 				Status(http.StatusOK).
 				HeaderPresent("Last-Modified").
@@ -928,7 +928,7 @@ func (suite *ServerTestSuite) TestNonPersonalizedRecommend() {
 				QueryParams(map[string]string{
 					"user-id": "0",
 					"offset":  "0",
-					"n":       "0"}).
+				}).
 				Expect(t).
 				Status(http.StatusOK).
 				HeaderPresent("Last-Modified").

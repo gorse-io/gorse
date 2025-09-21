@@ -27,8 +27,7 @@ import (
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/emicklei/go-restful/v3"
 	"github.com/gorse-io/gorse/base"
-	"github.com/gorse-io/gorse/base/log"
-	"github.com/gorse-io/gorse/base/task"
+	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/common/parallel"
 	"github.com/gorse-io/gorse/common/util"
@@ -67,7 +66,6 @@ type Master struct {
 
 	tracer         *monitor.Monitor
 	remoteProgress sync.Map
-	jobsScheduler  *task.JobsScheduler
 	cachePath      string
 	openAIClient   *openai.Client
 
@@ -87,16 +85,16 @@ type Master struct {
 	clickDataMutex sync.RWMutex
 
 	// collaborative filtering
-	collaborativeFilteringTrainSetSize int
 	collaborativeFilteringModelMutex   sync.RWMutex
-	collaborativeFilteringSearcher     *cf.ModelSearcher
+	collaborativeFilteringTrainSetSize int
 	collaborativeFilteringMeta         meta.Model[cf.Score]
+	collaborativeFilteringTarget       meta.Model[cf.Score]
 
 	// click model
-	clickTrainSetSize          int
-	clickThroughRateMeta       meta.Model[ctr.Score]
-	clickThroughRateModelMutex sync.RWMutex
-	clickModelSearcher         *ctr.ModelSearcher
+	clickThroughRateModelMutex   sync.RWMutex
+	clickThroughRateTrainSetSize int
+	clickThroughRateMeta         meta.Model[ctr.Score]
+	clickThroughRateTarget       meta.Model[ctr.Score]
 
 	// oauth2
 	oauth2Config oauth2.Config
@@ -137,22 +135,9 @@ func NewMaster(cfg *config.Config, cacheFolder string) *Master {
 
 	m := &Master{
 		// create task monitor
-		cachePath:     cacheFolder,
-		jobsScheduler: task.NewJobsScheduler(cfg.Master.NumJobs),
-		tracer:        monitor.NewTracer("master"),
-		openAIClient:  openai.NewClientWithConfig(clientConfig),
-		// default ranking model
-		collaborativeFilteringSearcher: cf.NewModelSearcher(
-			cfg.Recommend.Collaborative.ModelSearchEpoch,
-			cfg.Recommend.Collaborative.ModelSearchTrials,
-			cfg.Recommend.Collaborative.EnableModelSizeSearch,
-		),
-		// default click model
-		clickModelSearcher: ctr.NewModelSearcher(
-			cfg.Recommend.Collaborative.ModelSearchEpoch,
-			cfg.Recommend.Collaborative.ModelSearchTrials,
-			cfg.Recommend.Collaborative.EnableModelSizeSearch,
-		),
+		cachePath:    cacheFolder,
+		tracer:       monitor.NewTracer("master"),
+		openAIClient: openai.NewClientWithConfig(clientConfig),
 		RestServer: server.RestServer{
 			Settings: &config.Settings{
 				Config:      cfg,
@@ -229,6 +214,11 @@ func (m *Master) Serve() {
 	} else if metaStr != nil {
 		if err = m.collaborativeFilteringMeta.FromJSON(*metaStr); err != nil {
 			log.Logger().Error("failed to unmarshal collaborative filtering meta", zap.Error(err))
+		} else {
+			log.Logger().Info("loaded collaborative filtering model",
+				zap.String("type", m.collaborativeFilteringMeta.Type),
+				zap.Any("params", m.collaborativeFilteringMeta.Params),
+				zap.Any("score", m.collaborativeFilteringMeta.Score))
 		}
 	}
 
@@ -239,13 +229,15 @@ func (m *Master) Serve() {
 	} else if metaStr != nil {
 		if err = m.clickThroughRateMeta.FromJSON(*metaStr); err != nil {
 			log.Logger().Error("failed to unmarshal click-through rate meta", zap.Error(err))
+		} else {
+			log.Logger().Info("loaded click-through rate model",
+				zap.String("type", m.clickThroughRateMeta.Type),
+				zap.Any("params", m.clickThroughRateMeta.Params),
+				zap.Any("score", m.clickThroughRateMeta.Score))
 		}
 	}
 
-	go m.RunPrivilegedTasksLoop()
-	log.Logger().Info("start model fit", zap.Duration("period", m.Config.Recommend.Collaborative.ModelFitPeriod))
-	go m.RunRagtagTasksLoop()
-	log.Logger().Info("start model searcher", zap.Duration("period", m.Config.Recommend.Collaborative.ModelSearchPeriod))
+	go m.RunTasksLoop()
 
 	// start rpc server
 	go func() {
@@ -314,11 +306,11 @@ func (m *Master) Shutdown() {
 	m.grpcServer.GracefulStop()
 }
 
-func (m *Master) RunPrivilegedTasksLoop() {
+func (m *Master) RunTasksLoop() {
 	defer base.CheckPanic()
 	var (
-		err       error
-		firstLoop = true
+		err error
+		//firstLoop = true
 	)
 	go func() {
 		m.importedChan.Signal()
@@ -330,10 +322,10 @@ func (m *Master) RunPrivilegedTasksLoop() {
 		}
 	}()
 	for {
-		select {
-		case <-m.fitTicker.C:
-		case <-m.importedChan.C:
-		}
+		//select {
+		//case <-m.fitTicker.C:
+		//case <-m.importedChan.C:
+		//}
 
 		// download dataset
 		err = m.runLoadDatasetTask()
@@ -347,47 +339,10 @@ func (m *Master) RunPrivilegedTasksLoop() {
 			continue
 		}
 
-		if firstLoop {
-			m.loadDataChan.Signal()
-			firstLoop = false
-		}
-	}
-}
-
-// RunRagtagTasksLoop searches optimal recommendation model in background. It never modifies variables other than
-// collaborativeFilteringSearcher, clickSearchedModel and clickSearchedScore.
-func (m *Master) RunRagtagTasksLoop() {
-	defer base.CheckPanic()
-	<-m.loadDataChan.C
-	var (
-		err   error
-		tasks = []Task{
-			NewSearchRankingModelTask(m),
-			NewSearchClickModelTask(m),
-		}
-	)
-	for {
-		if m.rankingTrainSet == nil || m.clickTrainSet == nil {
-			time.Sleep(time.Second)
-			continue
-		}
-		var registeredTask []Task
-		for _, t := range tasks {
-			if m.jobsScheduler.Register(t.name(), t.priority(), false) {
-				registeredTask = append(registeredTask, t)
-			}
-		}
-		for _, t := range registeredTask {
-			go func(task Task) {
-				defer m.jobsScheduler.Unregister(task.name())
-				j := m.jobsScheduler.GetJobsAllocator(task.name())
-				j.Init()
-				if err = task.run(context.Background(), j); err != nil {
-					log.Logger().Error("failed to run task", zap.String("task", task.name()), zap.Error(err))
-				}
-			}(t)
-		}
-		time.Sleep(m.Config.Recommend.Collaborative.ModelSearchPeriod)
+		//if firstLoop {
+		//	m.loadDataChan.Signal()
+		//	firstLoop = false
+		//}
 	}
 }
 

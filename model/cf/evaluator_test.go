@@ -20,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/c-bata/goptuna"
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/gorse-io/gorse/dataset"
 	"github.com/gorse-io/gorse/model"
@@ -129,8 +130,8 @@ func (m *mockMatrixFactorizationForEval) Clear() {
 	// do nothing
 }
 
-func (m *mockMatrixFactorizationForEval) GetParamsGrid(_ bool) model.ParamsGrid {
-	panic("don't call me")
+func (m *mockMatrixFactorizationForEval) SuggestParams(trial goptuna.Trial) model.Params {
+	panic("not implemented")
 }
 
 func TestEvaluate(t *testing.T) {

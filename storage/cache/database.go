@@ -25,8 +25,10 @@ import (
 
 	"github.com/XSAM/otelsql"
 	"github.com/araddon/dateparse"
-	"github.com/gorse-io/gorse/base/log"
+	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/storage"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/juju/errors"
 	"github.com/redis/go-redis/extra/redisotel/v9"
 	"github.com/redis/go-redis/v9"
@@ -350,12 +352,11 @@ func Open(path, tablePrefix string, opts ...storage.Option) (Database, error) {
 		database := new(SQLDatabase)
 		database.driver = Postgres
 		database.TablePrefix = storage.TablePrefix(tablePrefix)
-		if database.client, err = otelsql.Open("postgres", path,
-			otelsql.WithAttributes(semconv.DBSystemPostgreSQL),
-			otelsql.WithSpanOptions(otelsql.SpanOptions{DisableErrSkip: true}),
-		); err != nil {
+		config, err := pgx.ParseConfig(path)
+		if err != nil {
 			return nil, errors.Trace(err)
 		}
+		database.client = stdlib.OpenDB(*config)
 		database.gormDB, err = gorm.Open(postgres.New(postgres.Config{Conn: database.client}), storage.NewGORMConfig(tablePrefix))
 		if err != nil {
 			return nil, errors.Trace(err)

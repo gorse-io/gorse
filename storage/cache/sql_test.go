@@ -21,7 +21,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gorse-io/gorse/base/log"
+	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/storage"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
