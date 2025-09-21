@@ -63,9 +63,12 @@ func (r *Rc[T]) get() (T, DropFunc) {
 	p := r.pointer
 	p.reference.Add(1)
 	return p.pointer, func() {
-		p.reference.Add(-1)
-		if p.reference.Load() == 0 {
-			_ = p.pointer.Close()
+		// Atomically decrement and check if we are the last to drop
+		if p.reference.Add(-1) == 0 {
+			// Use CAS to ensure only one goroutine calls Close()
+			if p.reference.CompareAndSwap(0, -1) {
+				_ = p.pointer.Close()
+			}
 		}
 	}
 }
