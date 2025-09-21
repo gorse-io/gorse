@@ -147,7 +147,7 @@ func (suite *WorkerTestSuite) TestCheckRecommendCacheTimeout() {
 
 func (suite *WorkerTestSuite) TestRecommendMatrixFactorization() {
 	ctx := context.Background()
-	suite.Config.Recommend.Offline.EnableColRecommend = true
+	suite.Config.Recommend.Offline.Collaborative = true
 	suite.Config.Recommend.Offline.EnableClickThroughPrediction = true
 	// insert feedbacks
 	now := time.Now()
@@ -200,7 +200,7 @@ func (suite *WorkerTestSuite) TestRecommendMatrixFactorization() {
 
 func (suite *WorkerTestSuite) TestRecommendItemBased() {
 	ctx := context.Background()
-	suite.Config.Recommend.Offline.EnableColRecommend = false
+	suite.Config.Recommend.Offline.Collaborative = false
 	suite.Config.Recommend.Offline.EnableItemBasedRecommend = true
 	suite.Config.Recommend.Offline.EnableClickThroughPrediction = true
 	suite.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "default"}}
@@ -278,7 +278,7 @@ func (suite *WorkerTestSuite) TestRecommendItemBased() {
 
 func (suite *WorkerTestSuite) TestRecommendUserBased() {
 	ctx := context.Background()
-	suite.Config.Recommend.Offline.EnableColRecommend = false
+	suite.Config.Recommend.Offline.Collaborative = false
 	suite.Config.Recommend.Offline.EnableUserBasedRecommend = true
 	suite.Config.Recommend.Offline.EnableClickThroughPrediction = true
 	suite.Config.Recommend.UserToUser = []config.UserToUserConfig{{Name: "default"}}
@@ -339,8 +339,8 @@ func (suite *WorkerTestSuite) TestRecommendUserBased() {
 
 func (suite *WorkerTestSuite) TestRecommendPopular() {
 	ctx := context.Background()
-	suite.Config.Recommend.Offline.EnableColRecommend = false
-	suite.Config.Recommend.Offline.EnablePopularRecommend = true
+	suite.Config.Recommend.Offline.Collaborative = false
+	suite.Config.Recommend.Offline.Popular = true
 	suite.Config.Recommend.Offline.EnableClickThroughPrediction = true
 	// insert popular items
 	err := suite.CacheClient.AddScores(ctx, cache.NonPersonalized, cache.Popular, []cache.Score{
@@ -389,8 +389,8 @@ func (suite *WorkerTestSuite) TestRecommendPopular() {
 func (suite *WorkerTestSuite) TestRecommendLatest() {
 	// create mock worker
 	ctx := context.Background()
-	suite.Config.Recommend.Offline.EnableColRecommend = false
-	suite.Config.Recommend.Offline.EnableLatestRecommend = true
+	suite.Config.Recommend.Offline.Collaborative = false
+	suite.Config.Recommend.Offline.Latest = true
 	suite.Config.Recommend.Offline.EnableClickThroughPrediction = true
 	// insert latest items
 	err := suite.CacheClient.AddScores(ctx, cache.NonPersonalized, cache.Latest, []cache.Score{
@@ -438,8 +438,8 @@ func (suite *WorkerTestSuite) TestRecommendLatest() {
 
 func (suite *WorkerTestSuite) TestRecommendColdStart() {
 	ctx := context.Background()
-	suite.Config.Recommend.Offline.EnableColRecommend = true
-	suite.Config.Recommend.Offline.EnableLatestRecommend = true
+	suite.Config.Recommend.Offline.Collaborative = true
+	suite.Config.Recommend.Offline.Latest = true
 	// insert latest items
 	err := suite.CacheClient.AddScores(ctx, cache.NonPersonalized, cache.Latest, []cache.Score{
 		{Id: "11", Score: 11, Categories: []string{""}},
@@ -766,8 +766,8 @@ func (suite *WorkerTestSuite) TestReplacement_ClickThroughRate() {
 		expression.MustParseFeedbackTypeExpression("p")}
 	suite.Config.Recommend.DataSource.ReadFeedbackTypes = []expression.FeedbackTypeExpression{
 		expression.MustParseFeedbackTypeExpression("n")}
-	suite.Config.Recommend.Offline.EnableColRecommend = false
-	suite.Config.Recommend.Offline.EnablePopularRecommend = true
+	suite.Config.Recommend.Offline.Collaborative = false
+	suite.Config.Recommend.Offline.Popular = true
 	suite.Config.Recommend.Replacement.EnableReplacement = true
 	suite.Config.Recommend.Offline.EnableClickThroughPrediction = true
 
@@ -834,8 +834,8 @@ func (suite *WorkerTestSuite) TestReplacement_CollaborativeFiltering() {
 		expression.MustParseFeedbackTypeExpression("p")}
 	suite.Config.Recommend.DataSource.ReadFeedbackTypes = []expression.FeedbackTypeExpression{
 		expression.MustParseFeedbackTypeExpression("n")}
-	suite.Config.Recommend.Offline.EnableColRecommend = false
-	suite.Config.Recommend.Offline.EnablePopularRecommend = true
+	suite.Config.Recommend.Offline.Collaborative = false
+	suite.Config.Recommend.Offline.Popular = true
 	suite.Config.Recommend.Offline.EnableClickThroughPrediction = true
 	suite.Config.Recommend.Replacement.EnableReplacement = true
 

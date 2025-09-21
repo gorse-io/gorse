@@ -218,14 +218,12 @@ type OfflineConfig struct {
 	ExploreRecommend             map[string]float64 `mapstructure:"explore_recommend"`
 	Latest                       bool               `mapstructure:"latest"`
 	Popular                      bool               `mapstructure:"popular"`
-	EnableUserBasedRecommend     bool               `mapstructure:"enable_user_based_recommend"`
-	EnableItemBasedRecommend     bool               `mapstructure:"enable_item_based_recommend"`
-	EnableColRecommend           bool               `mapstructure:"enable_collaborative_recommend"`
+	NonPersonalized              []string           `mapstructure:"non_personalized"`
+	ItemToItem                   []string           `mapstructure:"item_to_item"`
+	UserToUser                   []string           `mapstructure:"user_to_user"`
+	Collaborative                bool               `mapstructure:"collaborative"`
 	EnableClickThroughPrediction bool               `mapstructure:"enable_click_through_prediction"`
 	exploreRecommendLock         sync.RWMutex
-	NonPersonalized              []string `mapstructure:"non_personalized"`
-	ItemToItem                   []string `mapstructure:"item_to_item"`
-	UserToUser                   []string `mapstructure:"user_to_user"`
 }
 
 type OnlineConfig struct {
@@ -325,9 +323,7 @@ func GetDefaultConfig() *Config {
 				RefreshRecommendPeriod:       120 * time.Hour,
 				Latest:                       false,
 				Popular:                      false,
-				EnableUserBasedRecommend:     false,
-				EnableItemBasedRecommend:     false,
-				EnableColRecommend:           true,
+				Collaborative:                true,
 				EnableClickThroughPrediction: false,
 			},
 			Online: OnlineConfig{
@@ -371,7 +367,7 @@ func WithRanking(v bool) DigestOption {
 
 func (config *Config) OfflineRecommendDigest(option ...DigestOption) string {
 	options := digestOptions{
-		enableCollaborative: config.Recommend.Offline.EnableColRecommend,
+		enableCollaborative: config.Recommend.Offline.Collaborative,
 		enableRanking:       config.Recommend.Offline.EnableClickThroughPrediction,
 	}
 	lo.ForEach(option, func(opt DigestOption, _ int) {
@@ -532,7 +528,7 @@ func setDefault() {
 	viper.SetDefault("recommend.offline.enable_popular_recommend", defaultConfig.Recommend.Offline.Popular)
 	viper.SetDefault("recommend.offline.enable_user_based_recommend", defaultConfig.Recommend.Offline.EnableUserBasedRecommend)
 	viper.SetDefault("recommend.offline.enable_item_based_recommend", defaultConfig.Recommend.Offline.EnableItemBasedRecommend)
-	viper.SetDefault("recommend.offline.enable_collaborative_recommend", defaultConfig.Recommend.Offline.EnableColRecommend)
+	viper.SetDefault("recommend.offline.enable_collaborative_recommend", defaultConfig.Recommend.Offline.Collaborative)
 	viper.SetDefault("recommend.offline.enable_click_through_prediction", defaultConfig.Recommend.Offline.EnableClickThroughPrediction)
 	// [recommend.online]
 	viper.SetDefault("recommend.online.fallback_recommend", defaultConfig.Recommend.Online.FallbackRecommend)

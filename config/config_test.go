@@ -129,11 +129,11 @@ func TestUnmarshal(t *testing.T) {
 			// [recommend.offline]
 			assert.Equal(t, time.Minute, config.Recommend.Offline.CheckRecommendPeriod)
 			assert.Equal(t, 24*time.Hour, config.Recommend.Offline.RefreshRecommendPeriod)
-			assert.True(t, config.Recommend.Offline.EnableColRecommend)
+			assert.True(t, config.Recommend.Offline.Collaborative)
 			assert.False(t, config.Recommend.Offline.EnableItemBasedRecommend)
 			assert.True(t, config.Recommend.Offline.EnableUserBasedRecommend)
-			assert.False(t, config.Recommend.Offline.EnablePopularRecommend)
-			assert.True(t, config.Recommend.Offline.EnableLatestRecommend)
+			assert.False(t, config.Recommend.Offline.Popular)
+			assert.True(t, config.Recommend.Offline.Latest)
 			assert.True(t, config.Recommend.Offline.EnableClickThroughPrediction)
 			assert.Equal(t, map[string]float64{"popular": 0.1, "latest": 0.2}, config.Recommend.Offline.ExploreRecommend)
 			value, exist := config.Recommend.Offline.GetExploreRecommend("popular")
@@ -280,26 +280,26 @@ func TestConfig_OfflineRecommendDigest(t *testing.T) {
 
 	// test latest recommendation
 	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
-	cfg1.Recommend.Offline.EnableLatestRecommend = true
-	cfg2.Recommend.Offline.EnableLatestRecommend = false
+	cfg1.Recommend.Offline.Latest = true
+	cfg2.Recommend.Offline.Latest = false
 	assert.NotEqual(t, cfg1.OfflineRecommendDigest(), cfg2.OfflineRecommendDigest())
 
 	// test popular recommendation
 	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
-	cfg1.Recommend.Offline.EnablePopularRecommend = true
-	cfg2.Recommend.Offline.EnablePopularRecommend = false
+	cfg1.Recommend.Offline.Popular = true
+	cfg2.Recommend.Offline.Popular = false
 	assert.NotEqual(t, cfg1.OfflineRecommendDigest(), cfg2.OfflineRecommendDigest())
 
 	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
-	cfg1.Recommend.Offline.EnablePopularRecommend = true
-	cfg2.Recommend.Offline.EnablePopularRecommend = true
+	cfg1.Recommend.Offline.Popular = true
+	cfg2.Recommend.Offline.Popular = true
 	cfg1.Recommend.Popular.PopularWindow = 10
 	cfg2.Recommend.Popular.PopularWindow = 11
 	assert.NotEqual(t, cfg1.OfflineRecommendDigest(), cfg2.OfflineRecommendDigest())
 
 	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
-	cfg1.Recommend.Offline.EnablePopularRecommend = false
-	cfg2.Recommend.Offline.EnablePopularRecommend = false
+	cfg1.Recommend.Offline.Popular = false
+	cfg2.Recommend.Offline.Popular = false
 	cfg1.Recommend.Popular.PopularWindow = 10
 	cfg2.Recommend.Popular.PopularWindow = 11
 	assert.Equal(t, cfg1.OfflineRecommendDigest(), cfg2.OfflineRecommendDigest())
@@ -318,18 +318,18 @@ func TestConfig_OfflineRecommendDigest(t *testing.T) {
 
 	// test collaborative-filtering recommendation
 	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
-	cfg1.Recommend.Offline.EnableColRecommend = true
-	cfg2.Recommend.Offline.EnableColRecommend = false
+	cfg1.Recommend.Offline.Collaborative = true
+	cfg2.Recommend.Offline.Collaborative = false
 	assert.NotEqual(t, cfg1.OfflineRecommendDigest(), cfg2.OfflineRecommendDigest())
 
 	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
-	cfg1.Recommend.Offline.EnableColRecommend = true
-	cfg2.Recommend.Offline.EnableColRecommend = true
+	cfg1.Recommend.Offline.Collaborative = true
+	cfg2.Recommend.Offline.Collaborative = true
 	assert.Equal(t, cfg1.OfflineRecommendDigest(), cfg2.OfflineRecommendDigest())
 
 	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
-	cfg1.Recommend.Offline.EnableColRecommend = false
-	cfg2.Recommend.Offline.EnableColRecommend = false
+	cfg1.Recommend.Offline.Collaborative = false
+	cfg2.Recommend.Offline.Collaborative = false
 	assert.NotEqual(t, cfg1.OfflineRecommendDigest(WithCollaborative(true)), cfg2.OfflineRecommendDigest())
 
 	// test click-through rate prediction recommendation

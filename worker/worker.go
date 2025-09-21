@@ -595,7 +595,7 @@ func (w *Worker) Recommend(users []data.User) {
 
 		// Recommender #1: collaborative filtering.
 		collaborativeUsed := false
-		if w.Config.Recommend.Offline.EnableColRecommend && w.matrixFactorizationItems != nil {
+		if w.Config.Recommend.Offline.Collaborative && w.matrixFactorizationItems != nil {
 			if userEmbedding, ok := w.matrixFactorizationUsers.Get(userId); ok {
 				var recommend map[string][]string
 				var usedTime time.Duration
