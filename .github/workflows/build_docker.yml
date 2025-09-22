@@ -25,7 +25,7 @@ jobs:
         run: |
           foreach ($image in "gorse-master", "gorse-server", "gorse-worker", "gorse-in-one") {
             docker build -f cmd/$image/Dockerfile.windows `
-              -t zhenghaoz/$image:nightly-windowsservercore .
+              -t zhenghaoz/${image}:nightly-windowsservercore .
             docker image push --all-tags zhenghaoz/$image
           }
 
