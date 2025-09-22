@@ -3,16 +3,16 @@
 ############################
 FROM golang:1.25
 
-COPY . gorse
+WORKDIR /src
+
+COPY . ./
 
 ENV CGO_ENABLED 0
 
-RUN cd gorse/cmd/gorse-server; \
-    go build -ldflags="\" \
+RUN go build -o / -ldflags="\" \
         -X 'github.com/gorse-io/gorse/cmd/version.Version=$(git describe --tags $(git rev-parse HEAD))' \
         -X 'github.com/gorse-io/gorse/cmd/version.GitCommit=$(git rev-parse HEAD)' \
-        -X 'github.com/gorse-io/gorse/cmd/version.BuildTime=$(date)'\"" .; \
-    mv gorse-server.exe /gorse-server.exe
+        -X 'github.com/gorse-io/gorse/cmd/version.BuildTime=$(date)'\"" ./cmd/...
 
 ############################
 # STEP 2 build a small image

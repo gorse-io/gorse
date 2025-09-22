@@ -9,9 +9,6 @@ jobs:
   windows_images:
     name: docker images (windows)
     runs-on: windows-latest
-    strategy:
-      matrix:
-        image: [gorse-master, gorse-server, gorse-worker, gorse-in-one]
     steps:
       - name: Pull source
         uses: actions/checkout@v5
@@ -26,9 +23,11 @@ jobs:
 
       - name: Build docker image
         run: |
-          docker build -f cmd/${{ matrix.image }}/Dockerfile.windows `
-            -t zhenghaoz/${{ matrix.image }}:nightly-windowsservercore .
-          docker image push --all-tags zhenghaoz/${{ matrix.image }}
+          foreach ($image in "gorse-master", "gorse-server", "gorse-worker", "gorse-in-one") {
+            docker build -f cmd/$image/Dockerfile.windows `
+              -t zhenghaoz/${image}:nightly-windowsservercore .
+            docker image push --all-tags zhenghaoz/$image
+          }
 
   docker_images:
     name: docker images

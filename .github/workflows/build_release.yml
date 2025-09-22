@@ -100,11 +100,8 @@ jobs:
           VERSIONS: ${{ steps.get_version.outputs.version-without-v }}
 
   windows_images:
-    name: windows images
+    name: docker images (windows)
     runs-on: windows-latest
-    strategy:
-      matrix:
-        image: [gorse-master, gorse-server, gorse-worker, gorse-in-one]
     steps:
       - name: Pull source
         uses: actions/checkout@v5
@@ -114,28 +111,28 @@ jobs:
       - id: get_version
         uses: battila7/get-version-action@v2
 
+      - name: Login to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
       - name: Build docker image
         if: github.event.release.prerelease == false
         run: |
-          docker login -u $env:DOCKERHUB_USERNAME -p $env:DOCKERHUB_TOKEN
-          docker build -f cmd/${{ matrix.image }}/Dockerfile.windows `
-            -t zhenghaoz/${{ matrix.image }}:windowsservercore `
-            -t zhenghaoz/${{ matrix.image }}:${{ steps.get_version.outputs.major }}.${{ steps.get_version.outputs.minor }}-windowsservercore `
-            -t zhenghaoz/${{ matrix.image }}:${{ steps.get_version.outputs.version-without-v }}-windowsservercore .
-          docker image push --all-tags zhenghaoz/${{ matrix.image }}
-          docker logout
-        env:
-          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          foreach ($image in "gorse-master", "gorse-server", "gorse-worker", "gorse-in-one") {
+            docker build -f cmd/${image}/Dockerfile.windows `
+              -t zhenghaoz/${image}:windowsservercore `
+              -t zhenghaoz/${image}:${{ steps.get_version.outputs.major }}.${{ steps.get_version.outputs.minor }}-windowsservercore `
+              -t zhenghaoz/${image}:${{ steps.get_version.outputs.version-without-v }}-windowsservercore .
+            docker image push --all-tags zhenghaoz/$image
+          }
 
       - name: Build prerelease docker image
         if: github.event.release.prerelease == true
         run: |
-          docker login -u $env:DOCKERHUB_USERNAME -p $env:DOCKERHUB_TOKEN
-          docker build -f cmd/${{ matrix.image }}/Dockerfile.windows `
-            -t zhenghaoz/${{ matrix.image }}:${{ steps.get_version.outputs.version-without-v }}-windowsservercore .
-          docker image push --all-tags zhenghaoz/${{ matrix.image }}
-          docker logout
-        env:
-          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          foreach ($image in "gorse-master", "gorse-server", "gorse-worker", "gorse-in-one") {
+            docker build -f cmd/${image}/Dockerfile.windows `
+              -t zhenghaoz/${image}:${{ steps.get_version.outputs.version-without-v }}-windowsservercore .
+            docker image push --all-tags zhenghaoz/$image
+          }
