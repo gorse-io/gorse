@@ -3,7 +3,7 @@
 ############################
 # STEP 1 build executable binary
 ############################
-FROM debian:bookworm
+FROM debian:trixie
 
 # Install OpenBLAS
 
@@ -60,7 +60,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
 ############################
 # STEP 2 build runtime image
 ############################
-FROM debian:bookworm-slim
+FROM debian:trixie-slim
 
 COPY --from=0 /src/cmd/gorse-master/gorse-master /usr/bin/gorse-master
 
