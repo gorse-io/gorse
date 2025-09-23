@@ -3,7 +3,7 @@
 ############################
 # STEP 1 build executable binary
 ############################
-FROM debian:trixie
+FROM --platform=$BUILDPLATFORM debian:trixie
 
 # Install OpenBLAS
 
@@ -11,14 +11,12 @@ ARG BUILDARCH
 
 ARG TARGETARCH
 
-RUN if [ "${TARGETARCH}" = "${BUILDARCH}" ]; then \
-    apt update && apt install -y gcc libopenblas-dev:${TARGETARCH} git; \
-elif [ "${TARGETARCH}" = "amd64" ]; then \
-    dpkg --add-architecture ${TARGETARCH} && apt update && apt install -y x86_64-linux-gnu-gcc libopenblas-dev:${TARGETARCH} git; \
+RUN if [ "${TARGETARCH}" = "amd64" ]; then \
+    dpkg --add-architecture ${TARGETARCH} && apt update && apt install -y gcc-x86-64-linux-gnu libopenblas-dev:${TARGETARCH} git; \
 elif [ "${TARGETARCH}" = "arm64" ]; then \
-    dpkg --add-architecture ${TARGETARCH} && apt update && apt install -y aarch64-linux-gnu-gcc libopenblas-dev:${TARGETARCH} git; \
+    dpkg --add-architecture ${TARGETARCH} && apt update && apt install -y gcc-aarch64-linux-gnu libopenblas-dev:${TARGETARCH} git; \
 elif [ "${TARGETARCH}" = "riscv64" ]; then \
-    dpkg --add-architecture ${TARGETARCH} && apt update && apt install -y riscv64-linux-gnu-gcc libopenblas-dev:${TARGETARCH} git; \
+    dpkg --add-architecture ${TARGETARCH} && apt update && apt install -y gcc-riscv64-linux-gnu libopenblas-dev:${TARGETARCH} git; \
 else \
     echo "Unsupported TARGETARCH ${TARGETARCH}"; exit 1; \
 fi
