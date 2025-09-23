@@ -1,0 +1,71 @@
+# syntax = docker/dockerfile:1
+
+############################
+# STEP 1 build executable binary
+############################
+FROM debian:bookworm
+
+# Install OpenBLAS
+
+ARG BUILDARCH
+
+ARG TARGETARCH
+
+RUN if [ "${TARGETARCH}" = "${BUILDARCH}" ]; then \
+    apt update && apt install -y gcc libopenblas-dev:${TARGETARCH} git; \
+elif [ "${TARGETARCH}" = "amd64" ]; then \
+    dpkg --add-architecture ${TARGETARCH} && apt update && apt install -y x86_64-linux-gnu-gcc libopenblas-dev:${TARGETARCH} git; \
+elif [ "${TARGETARCH}" = "arm64" ]; then \
+    dpkg --add-architecture ${TARGETARCH} && apt update && apt install -y aarch64-linux-gnu-gcc libopenblas-dev:${TARGETARCH} git; \
+elif [ "${TARGETARCH}" = "riscv64" ]; then \
+    dpkg --add-architecture ${TARGETARCH} && apt update && apt install -y riscv64-linux-gnu-gcc libopenblas-dev:${TARGETARCH} git; \
+else \
+    echo "Unsupported TARGETARCH ${TARGETARCH}"; exit 1; \
+fi
+
+# Install Go
+
+COPY --from=golang:1.25 /usr/local/go/ /usr/local/go/
+
+ENV PATH /usr/local/go/bin:$PATH
+
+# Build Gorse
+
+WORKDIR /src
+
+COPY go.* ./
+
+RUN go mod download
+
+COPY . ./
+
+ARG TARGETOS
+
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    if [ "${TARGETARCH}" = "amd64" ]; then \
+        export CC=x86_64-linux-gnu-gcc; \
+    elif [ "${TARGETARCH}" = "arm64" ]; then \
+        export CC=aarch64-linux-gnu-gcc; \
+    elif [ "${TARGETARCH}" = "riscv64" ]; then \
+        export CC=riscv64-linux-gnu-gcc; \
+    else \
+        echo "Unsupported TARGETARCH ${TARGETARCH}"; exit 1; \
+    fi && \
+    cd cmd/gorse-master && \
+    GOOS=${TARGETOS} GOARCH=${TARGETARCH} CGO_ENABLED=1 go build -tags openblas -ldflags=" \
+       -X 'github.com/gorse-io/gorse/cmd/version.Version=$(git describe --tags $(git rev-parse HEAD))' \
+       -X 'github.com/gorse-io/gorse/cmd/version.GitCommit=$(git rev-parse HEAD)' \
+       -X 'github.com/gorse-io/gorse/cmd/version.BuildTime=$(date)'" .
+
+############################
+# STEP 2 build runtime image
+############################
+FROM debian:bookworm-slim
+
+COPY --from=0 /src/cmd/gorse-master/gorse-master /usr/bin/gorse-master
+
+RUN /usr/bin/gorse-master --version
+
+ENV USER root
+
+ENTRYPOINT ["/usr/bin/gorse-master", "-c", "/etc/gorse/config.toml"]

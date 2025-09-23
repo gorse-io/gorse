@@ -14,14 +14,14 @@ group "default" {
   targets = ["gorse-master", "gorse-server", "gorse-worker", "gorse-in-one"]
 }
 
-target "image" {
+target "openblas" {
   matrix = {
-    component = components
+    component = ["gorse-master"]
   }
   name       = component
   context    = "."
-  dockerfile = "cmd/${component}/Dockerfile"
-  platforms  = ["linux/amd64", "linux/arm64", "linux/riscv64"]
+  dockerfile = "cmd/${component}/Dockerfile.openblas"
+  platforms  = ["linux/amd64"]
   tags       = [for v in versions : "zhenghaoz/${component}:${v}"]
   cache-from = ["type=gha"]
   cache-to   = ["type=gha,mode=max"]
