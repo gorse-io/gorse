@@ -11,7 +11,7 @@ variable components {
 }
 
 group "default" {
-  targets = ["gorse-master", "gorse-server", "gorse-worker", "gorse-in-one"]
+  targets = ["gorse-master"]
 }
 
 target "openblas" {
