@@ -21,7 +21,7 @@ target "openblas" {
   name       = component
   context    = "."
   dockerfile = "cmd/${component}/Dockerfile.openblas"
-  platforms  = ["linux/amd64"]
+  platforms  = ["linux/amd64", "linux/arm64", "linux/riscv64"]
   tags       = [for v in versions : "zhenghaoz/${component}:${v}"]
   cache-from = ["type=gha"]
   cache-to   = ["type=gha,mode=max"]
