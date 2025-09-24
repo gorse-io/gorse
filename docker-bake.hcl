@@ -11,12 +11,12 @@ variable components {
 }
 
 group "default" {
-  targets = ["gorse-master"]
+  targets = ["gorse-master", "gorse-server", "gorse-worker", "gorse-in-one"]
 }
 
 target "openblas" {
   matrix = {
-    component = ["gorse-master"]
+    component = components
   }
   name       = component
   context    = "."

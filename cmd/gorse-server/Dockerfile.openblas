@@ -1,0 +1,63 @@
+# syntax = docker/dockerfile:1
+
+############################
+# STEP 1 build executable binary
+############################
+FROM --platform=$BUILDPLATFORM golang:1.25
+
+# Install OpenBLAS
+
+ARG BUILDARCH
+
+ARG TARGETARCH
+
+RUN if [ "${TARGETARCH}" = "amd64" ]; then \
+    dpkg --add-architecture ${TARGETARCH} && apt update && apt install -y gcc-x86-64-linux-gnu libopenblas-dev:${TARGETARCH} git; \
+elif [ "${TARGETARCH}" = "arm64" ]; then \
+    dpkg --add-architecture ${TARGETARCH} && apt update && apt install -y gcc-aarch64-linux-gnu libopenblas-dev:${TARGETARCH} git; \
+elif [ "${TARGETARCH}" = "riscv64" ]; then \
+    dpkg --add-architecture ${TARGETARCH} && apt update && apt install -y gcc-riscv64-linux-gnu libopenblas-dev:${TARGETARCH} git; \
+else \
+    echo "Unsupported TARGETARCH ${TARGETARCH}"; exit 1; \
+fi
+
+# Build Gorse
+
+WORKDIR /src
+
+COPY go.* ./
+
+RUN go mod download
+
+COPY . ./
+
+ARG TARGETOS
+
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    if [ "${TARGETARCH}" = "amd64" ]; then \
+        export CC=x86_64-linux-gnu-gcc; \
+    elif [ "${TARGETARCH}" = "arm64" ]; then \
+        export CC=aarch64-linux-gnu-gcc; \
+    elif [ "${TARGETARCH}" = "riscv64" ]; then \
+        export CC=riscv64-linux-gnu-gcc; \
+    else \
+        echo "Unsupported TARGETARCH ${TARGETARCH}"; exit 1; \
+    fi && \
+    cd cmd/gorse-server && \
+    GOOS=${TARGETOS} GOARCH=${TARGETARCH} CGO_ENABLED=1 go build -tags openblas -ldflags=" \
+       -X 'github.com/gorse-io/gorse/cmd/version.Version=$(git describe --tags $(git rev-parse HEAD))' \
+       -X 'github.com/gorse-io/gorse/cmd/version.GitCommit=$(git rev-parse HEAD)' \
+       -X 'github.com/gorse-io/gorse/cmd/version.BuildTime=$(date)'" .
+
+############################
+# STEP 2 build runtime image
+############################
+FROM debian:trixie-slim
+
+COPY --from=0 /src/cmd/gorse-server/gorse-server /usr/bin/gorse-server
+
+RUN /usr/bin/gorse-server --version
+
+ENV USER root
+
+ENTRYPOINT ["/usr/bin/gorse-server"]
