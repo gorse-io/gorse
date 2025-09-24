@@ -28,6 +28,7 @@ type Feature uint64
 const (
 	AMX Feature = 1 << iota // Apple matrix extension
 	CUDA
+	OPENBLAS
 )
 
 var feature Feature
@@ -89,7 +90,7 @@ func (feature Feature) euclidean(a, b []float32) float32 {
 }
 
 func (feature Feature) mm(transA, transB bool, m, n, k int, a []float32, lda int, b []float32, ldb int, c []float32, ldc int) {
-	if feature&AMX == AMX || feature&CUDA == CUDA {
+	if feature&AMX == AMX || feature&CUDA == CUDA || feature&OPENBLAS == OPENBLAS {
 		mm(transA, transB, m, n, k, a, lda, b, ldb, c, ldc)
 	} else {
 		vmm(transA, transB, int64(m), int64(n), int64(k), unsafe.Pointer(&a[0]), int64(lda), unsafe.Pointer(&b[0]), int64(ldb), unsafe.Pointer(&c[0]), int64(ldc))

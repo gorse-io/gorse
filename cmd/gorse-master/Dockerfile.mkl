@@ -3,7 +3,7 @@
 ############################
 # STEP 1 build executable binary
 ############################
-FROM debian:bookworm
+FROM golang:1.25-bookworm
 
 # Install Intel® oneAPI Toolkits
 
@@ -15,12 +15,6 @@ RUN wget -O- https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRO
 RUN echo "deb [signed-by=/usr/share/keyrings/oneapi-archive-keyring.gpg] https://apt.repos.intel.com/oneapi all main" | tee /etc/apt/sources.list.d/oneAPI.list
 
 RUN apt update && apt install -y intel-oneapi-base-toolkit
-
-# Install Go
-
-COPY --from=golang:1.25 /usr/local/go/ /usr/local/go/
-
-ENV PATH /usr/local/go/bin:$PATH
 
 # Build Gorse
 
