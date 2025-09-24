@@ -23,8 +23,8 @@ target "openblas" {
   dockerfile = "cmd/${component}/Dockerfile.openblas"
   platforms  = ["linux/amd64", "linux/arm64", "linux/riscv64"]
   tags       = [for v in versions : "zhenghaoz/${component}:${v}"]
-  cache-from = ["type=s3,endpoint_url=https://b172f19b7e057975835d8d311a7b0dbd.r2.cloudflarestorage.com,bucket=github,region=auto"]
-  cache-to   = ["type=s3,endpoint_url=https://b172f19b7e057975835d8d311a7b0dbd.r2.cloudflarestorage.com,bucket=github,region=auto,mode=max"]
+  cache-from = ["type=gha"]
+  cache-to   = ["type=gha,mode=max"]
 }
 
 target "cuda" {
