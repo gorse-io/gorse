@@ -3,7 +3,7 @@
 ############################
 # STEP 1 build executable binary
 ############################
-FROM --platform=$BUILDPLATFORM debian:trixie
+FROM --platform=$BUILDPLATFORM golang:1.25
 
 # Install OpenBLAS
 
@@ -20,12 +20,6 @@ elif [ "${TARGETARCH}" = "riscv64" ]; then \
 else \
     echo "Unsupported TARGETARCH ${TARGETARCH}"; exit 1; \
 fi
-
-# Install Go
-
-COPY --from=golang:1.25 /usr/local/go/ /usr/local/go/
-
-ENV PATH /usr/local/go/bin:$PATH
 
 # Build Gorse
 
