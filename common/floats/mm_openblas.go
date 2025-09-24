@@ -19,7 +19,7 @@ package floats
 import "github.com/gorse-io/gorse/common/blas"
 
 func init() {
-	feature = feature | MKL
+	feature = feature | OPENBLAS
 }
 
 func mm(transA, transB bool, m, n, k int, a []float32, lda int, b []float32, ldb int, c []float32, ldc int) {
