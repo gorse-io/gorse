@@ -22,6 +22,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/gorse-io/gorse/config"
 	"github.com/stretchr/testify/assert"
 	"modernc.org/quickjs"
 )
@@ -29,7 +30,7 @@ import (
 func TestEnv(t *testing.T) {
 	t.Setenv("TEST_ENV", "test_value")
 
-	external, err := NewExternal()
+	external, err := NewExternal(config.ExternalConfig{})
 	assert.NoError(t, err)
 	defer external.Close()
 
@@ -52,7 +53,7 @@ func TestFetch(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	external, err := NewExternal()
+	external, err := NewExternal(config.ExternalConfig{})
 	assert.NoError(t, err)
 	defer external.Close()
 
@@ -93,4 +94,27 @@ func TestFetch(t *testing.T) {
 		assert.Equal(t, "application/json", req.Header.Get("Content-Type"))
 		assert.Equal(t, `{"message":"Hello, server"}`, body)
 	}
+}
+
+func TestExternal(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		userId := r.URL.Query().Get("user_id")
+		if userId == "1" {
+			fmt.Fprintln(w, `["item_1", "item_2", "item_3"]`)
+		} else {
+			http.NotFound(w, r)
+		}
+	}))
+	defer ts.Close()
+
+	external, err := NewExternal(config.ExternalConfig{
+		Script: fmt.Sprintf(`fetch("%s?user_id=1").body`, ts.URL),
+		Name:   "test",
+	})
+	assert.NoError(t, err)
+	defer external.Close()
+
+	items, err := external.Pull("1")
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"item_1", "item_2", "item_3"}, items)
 }

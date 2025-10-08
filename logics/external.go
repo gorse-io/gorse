@@ -21,6 +21,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/gorse-io/gorse/config"
 	"github.com/pkg/errors"
 	"github.com/samber/lo"
 	"modernc.org/quickjs"
@@ -29,9 +30,11 @@ import (
 type External struct {
 	vm     *quickjs.VM
 	client *http.Client
+	script string
+	name   string
 }
 
-func NewExternal() (*External, error) {
+func NewExternal(cfg config.ExternalConfig) (*External, error) {
 	vm, err := quickjs.NewVM()
 	if err != nil {
 		return nil, errors.WithStack(err)
@@ -65,7 +68,12 @@ func NewExternal() (*External, error) {
 	}
 
 	// Register fetch function
-	external := &External{vm: vm, client: &http.Client{}}
+	external := &External{
+		vm:     vm,
+		client: &http.Client{},
+		script: cfg.Script,
+		name:   cfg.Name,
+	}
 	if err = vm.RegisterFunc("fetch", external.fetch, false); err != nil {
 		return nil, errors.WithStack(err)
 	}
@@ -75,6 +83,37 @@ func NewExternal() (*External, error) {
 
 func (e *External) Close() error {
 	return e.vm.Close()
+}
+
+func (e *External) Pull(userId string) ([]string, error) {
+	userIdKey, err := e.vm.NewAtom("user_id")
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	err = e.vm.GlobalObject().SetProperty(userIdKey, userId)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	result, err := e.vm.Eval(e.script, quickjs.EvalGlobal)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	switch v := result.(type) {
+	case string:
+		var items []string
+		if err := json.Unmarshal([]byte(v), &items); err != nil {
+			return nil, errors.WithStack(err)
+		}
+		return items, nil
+	case *quickjs.Object:
+		var items []string
+		if err := json.Unmarshal([]byte(v.String()), &items); err != nil {
+			return nil, errors.WithStack(err)
+		}
+		return items, nil
+	default:
+		return nil, errors.New("script must return string or object")
+	}
 }
 
 func (e *External) fetch(args ...quickjs.Value) quickjs.Value {

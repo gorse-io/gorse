@@ -126,6 +126,7 @@ type RecommendConfig struct {
 	ItemToItem      []ItemToItemConfig      `mapstructure:"item-to-item" validate:"dive"`
 	UserToUser      []UserToUserConfig      `mapstructure:"user-to-user" validate:"dive"`
 	Collaborative   CollaborativeConfig     `mapstructure:"collaborative"`
+	External        []ExternalConfig        `mapstructure:"external" validate:"dive"`
 	Replacement     ReplacementConfig       `mapstructure:"replacement"`
 	Offline         OfflineConfig           `mapstructure:"offline"`
 	Online          OnlineConfig            `mapstructure:"online"`
@@ -204,6 +205,11 @@ type CollaborativeConfig struct {
 	ModelSearchEpoch      int           `mapstructure:"model_search_epoch" validate:"gt=0"`
 	ModelSearchTrials     int           `mapstructure:"model_search_trials" validate:"gt=0"`
 	EnableModelSizeSearch bool          `mapstructure:"enable_model_size_search"`
+}
+
+type ExternalConfig struct {
+	Name   string `mapstructure:"name" json:"name"`
+	Script string `mapstructure:"script" json:"script"`
 }
 
 type ReplacementConfig struct {
