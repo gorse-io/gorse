@@ -104,7 +104,6 @@ type Master struct {
 	// events
 	fitTicker    *time.Ticker
 	importedChan *parallel.ConditionChannel // feedback inserted events
-	loadDataChan *parallel.ConditionChannel // dataset loaded events
 	triggerChan  *parallel.ConditionChannel // manually trigger events
 
 	scheduleState         ScheduleState
@@ -150,7 +149,6 @@ func NewMaster(cfg *config.Config, cacheFolder string) *Master {
 		},
 		fitTicker:    time.NewTicker(cfg.Recommend.Collaborative.ModelFitPeriod),
 		importedChan: parallel.NewConditionChannel(),
-		loadDataChan: parallel.NewConditionChannel(),
 		triggerChan:  parallel.NewConditionChannel(),
 	}
 
@@ -322,10 +320,10 @@ func (m *Master) RunTasksLoop() {
 		}
 	}()
 	for {
-		//select {
-		//case <-m.fitTicker.C:
-		//case <-m.importedChan.C:
-		//}
+		select {
+		case <-m.fitTicker.C:
+		case <-m.importedChan.C:
+		}
 
 		// download dataset
 		err = m.runLoadDatasetTask()
@@ -338,11 +336,6 @@ func (m *Master) RunTasksLoop() {
 				zap.Any("positive_feedback_type", m.Config.Recommend.DataSource.PositiveFeedbackTypes))
 			continue
 		}
-
-		//if firstLoop {
-		//	m.loadDataChan.Signal()
-		//	firstLoop = false
-		//}
 	}
 }
 

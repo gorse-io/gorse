@@ -189,6 +189,9 @@ func BatchParallel(nJobs, nWorkers, batchSize int, worker func(workerId, beginJo
 
 // Split a slice into n slices and keep the order of elements.
 func Split[T any](a []T, n int) [][]T {
+	if len(a) == 0 {
+		return nil
+	}
 	if n > len(a) {
 		n = len(a)
 	}
