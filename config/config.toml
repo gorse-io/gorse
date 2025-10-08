@@ -176,6 +176,20 @@ name = "neighbors"
 #   auto: recommend by number of common tags and items.
 type = "items"
 
+[[recommend.external]]
+
+# The name of the external recommender.
+name = "trending"
+
+# The script to fetch external recommended items. The script should return a list of item IDs.
+script = """
+const body = fetch("https://cdn.jsdelivr.net/gh/isboyjc/github-trending-api/data/daily/all.json").body;
+const data = JSON.parse(body);
+data["items"].map((item) => {
+  return item["title"].toLowerCase().replace("/", ":");
+})
+"""
+
 [recommend.collaborative]
 
 # Enable approximate collaborative filtering recommend using vector index. The default value is true.

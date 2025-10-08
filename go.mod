@@ -27,6 +27,7 @@ require (
 	github.com/gorse-io/dashboard v0.0.0-20250824130732-d3f375fc12de
 	github.com/gorse-io/gorse-go v0.5.0-alpha.1
 	github.com/haxii/go-swagger-ui v0.0.0-20210203093335-a63a6bbde946
+	github.com/jackc/pgx/v5 v5.3.1
 	github.com/jaswdr/faker v1.19.1
 	github.com/jellydator/ttlcache/v3 v3.3.0
 	github.com/json-iterator/go v1.1.12
@@ -72,7 +73,7 @@ require (
 	go.uber.org/zap v1.27.0
 	golang.org/x/exp v0.0.0-20250819193227-8b4c13bb791b
 	golang.org/x/oauth2 v0.30.0
-	golang.org/x/sys v0.31.0
+	golang.org/x/sys v0.35.0
 	google.golang.org/grpc v1.67.3
 	google.golang.org/grpc/security/advancedtls v1.0.0
 	google.golang.org/protobuf v1.36.1
@@ -84,6 +85,7 @@ require (
 	gorm.io/driver/sqlite v1.5.3
 	gorm.io/gorm v1.25.7-0.20240204074919-46816ad31dde
 	modernc.org/mathutil v1.7.1
+	modernc.org/quickjs v0.15.8
 	modernc.org/sortutil v1.2.1
 	modernc.org/sqlite v1.37.0
 	modernc.org/strutil v1.2.1
@@ -118,7 +120,6 @@ require (
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20221227161230-091c0ba34f0a // indirect
-	github.com/jackc/pgx/v5 v5.3.1 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
@@ -171,8 +172,9 @@ require (
 	google.golang.org/genproto/googleapis/api v0.0.0-20241209162323-e6fa225c2576 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20241223144023-3abc09e42ca8 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	modernc.org/libc v1.62.1 // indirect
-	modernc.org/memory v1.9.1 // indirect
+	modernc.org/libc v1.66.8 // indirect
+	modernc.org/libquickjs v0.11.4 // indirect
+	modernc.org/memory v1.11.0 // indirect
 )
 
 replace (
