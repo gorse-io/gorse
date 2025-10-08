@@ -15,6 +15,7 @@
 package logics
 
 import (
+	"encoding/json"
 	"io"
 	"net/http"
 	"os"
@@ -26,7 +27,8 @@ import (
 )
 
 type External struct {
-	vm *quickjs.VM
+	vm     *quickjs.VM
+	client *http.Client
 }
 
 func NewExternal() (*External, error) {
@@ -63,7 +65,7 @@ func NewExternal() (*External, error) {
 	}
 
 	// Register fetch function
-	external := &External{vm: vm}
+	external := &External{vm: vm, client: &http.Client{}}
 	if err = vm.RegisterFunc("fetch", external.fetch, false); err != nil {
 		return nil, errors.WithStack(err)
 	}
@@ -75,8 +77,34 @@ func (e *External) Close() error {
 	return e.vm.Close()
 }
 
-func (e *External) fetch(url string) quickjs.Value {
-	resp, err := http.Get(url)
+func (e *External) fetch(args ...quickjs.Value) quickjs.Value {
+	var (
+		url string
+		req quickjs.Value = quickjs.UndefinedValue
+	)
+	if len(args) == 1 {
+		switch v := lo.Must(args[0].Any()).(type) {
+		case string:
+			url = v
+		case *quickjs.Object:
+			req = args[0]
+		default:
+			panic("fetch requires first argument to be string or object")
+		}
+	} else if len(args) == 2 {
+		if _, ok := lo.Must(args[0].Any()).(string); !ok {
+			panic("fetch requires first argument to be string")
+		}
+		if _, ok := lo.Must(args[1].Any()).(*quickjs.Object); !ok {
+			panic("fetch requires second argument to be object")
+		}
+		url = lo.Must(args[0].Any()).(string)
+		req = args[1]
+	} else {
+		panic("fetch requires 1 or 2 arguments")
+	}
+	r := e.parseRequest(url, req)
+	resp, err := e.client.Do(r)
 	if err != nil {
 		panic(err)
 	}
@@ -85,15 +113,44 @@ func (e *External) fetch(url string) quickjs.Value {
 
 // parseRequest parse Fetch API Request.
 func (e *External) parseRequest(url string, req quickjs.Value) *http.Request {
-	// Request.method
 	method := "GET"
-	methodKey := lo.Must(e.vm.NewAtom("method"))
-	methodValue := lo.Must(req.GetPropertyValue(methodKey))
-	if !methodValue.IsUndefined() {
-		method = lo.Must(methodValue.Any()).(string)
+	headers := make(map[string]string)
+	body := ""
+	if !req.IsUndefined() {
+		// Request.method
+		methodKey := lo.Must(e.vm.NewAtom("method"))
+		methodValue := lo.Must(req.GetPropertyValue(methodKey))
+		if !methodValue.IsUndefined() {
+			method = lo.Must(methodValue.Any()).(string)
+		}
+		// Request.headers
+		headersKey := lo.Must(e.vm.NewAtom("headers"))
+		headersValue := lo.Must(req.GetPropertyValue(headersKey))
+		if !headersValue.IsUndefined() {
+			if headersObj, ok := lo.Must(headersValue.Any()).(*quickjs.Object); ok {
+				if err := json.Unmarshal([]byte(headersObj.String()), &headers); err != nil {
+					panic(err)
+				}
+			}
+		}
+		// Request.url
+		urlKey := lo.Must(e.vm.NewAtom("url"))
+		urlValue := lo.Must(req.GetPropertyValue(urlKey))
+		if !urlValue.IsUndefined() {
+			url = lo.Must(urlValue.Any()).(string)
+		}
+		// Request.body
+		bodyKey := lo.Must(e.vm.NewAtom("body"))
+		bodyValue := lo.Must(req.GetPropertyValue(bodyKey))
+		if !bodyValue.IsUndefined() {
+			body = lo.Must(bodyValue.Any()).(string)
+		}
 	}
 
-	r := lo.Must(http.NewRequest(method, url, nil))
+	r := lo.Must(http.NewRequest(method, url, strings.NewReader(body)))
+	for key, value := range headers {
+		r.Header.Add(key, value)
+	}
 	return r
 }
 

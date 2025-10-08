@@ -17,6 +17,7 @@ package logics
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -38,7 +39,15 @@ func TestEnv(t *testing.T) {
 }
 
 func TestFetch(t *testing.T) {
+	var (
+		req  *http.Request
+		body string
+	)
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		req = r
+		b, err := io.ReadAll(r.Body)
+		assert.NoError(t, err)
+		body = string(b)
 		fmt.Fprintln(w, "Hello, client")
 	}))
 	defer ts.Close()
@@ -49,6 +58,9 @@ func TestFetch(t *testing.T) {
 
 	response, err := external.vm.Eval(`fetch("`+ts.URL+`")`, quickjs.EvalGlobal)
 	assert.NoError(t, err)
+	if assert.NotNil(t, req) {
+		assert.Equal(t, "GET", req.Method)
+	}
 	if assert.IsType(t, &quickjs.Object{}, response) {
 		var resp map[string]any
 		err = json.Unmarshal([]byte(response.(*quickjs.Object).String()), &resp)
@@ -60,5 +72,25 @@ func TestFetch(t *testing.T) {
 		headers := resp["headers"].(map[string]any)
 		assert.Contains(t, headers, "Content-Length")
 		assert.Contains(t, headers, "Date")
+	}
+
+	_, err = external.vm.Eval(`fetch({method: "POST", url: "`+ts.URL+`"})`, quickjs.EvalGlobal)
+	assert.NoError(t, err)
+	if assert.NotNil(t, req) {
+		assert.Equal(t, "POST", req.Method)
+	}
+
+	_, err = external.vm.Eval(`fetch("`+ts.URL+`", {
+	method: "PUT",
+	headers: {
+		"Content-Type": "application/json"
+	},
+	body: JSON.stringify({message: "Hello, server"})
+	})`, quickjs.EvalGlobal)
+	assert.NoError(t, err)
+	if assert.NotNil(t, req) {
+		assert.Equal(t, "PUT", req.Method)
+		assert.Equal(t, "application/json", req.Header.Get("Content-Type"))
+		assert.Equal(t, `{"message":"Hello, server"}`, body)
 	}
 }
