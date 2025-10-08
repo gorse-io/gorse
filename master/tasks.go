@@ -1159,6 +1159,17 @@ func (m *Master) optimizeCollaborativeFiltering(trainSet, testSet dataset.CFSpli
 	ctx, span := m.tracer.Start(context.Background(), "Optimize Collaborative Filtering Model", m.Config.Recommend.Collaborative.ModelSearchTrials)
 	defer span.End()
 
+	if trainSet.CountUsers() == 0 {
+		span.Fail(errors.New("No user found."))
+		return nil
+	} else if trainSet.CountItems() == 0 {
+		span.Fail(errors.New("No item found."))
+		return nil
+	} else if trainSet.CountFeedback() == 0 {
+		span.Fail(errors.New("No feedback found."))
+		return nil
+	}
+
 	search := cf.NewModelSearch(map[string]cf.ModelCreator{
 		"BPR": func() cf.MatrixFactorization {
 			return cf.NewBPR(nil)
@@ -1193,6 +1204,17 @@ func (m *Master) optimizeCollaborativeFiltering(trainSet, testSet dataset.CFSpli
 func (m *Master) optimizeClickThroughRatePrediction(trainSet, testSet *ctr.Dataset) error {
 	ctx, span := m.tracer.Start(context.Background(), "Optimize Click-Through Rate Prediction Model", m.Config.Recommend.Collaborative.ModelSearchTrials)
 	defer span.End()
+
+	if trainSet.CountUsers() == 0 {
+		span.Fail(errors.New("No user found."))
+		return nil
+	} else if trainSet.CountItems() == 0 {
+		span.Fail(errors.New("No item found."))
+		return nil
+	} else if trainSet.Count() == 0 {
+		span.Fail(errors.New("No feedback found."))
+		return nil
+	}
 
 	search := ctr.NewModelSearch(map[string]ctr.ModelCreator{
 		"FM": func() ctr.FactorizationMachines {
