@@ -798,6 +798,7 @@ func (m *Master) getRecommend(request *restful.Request, response *restful.Respon
 	case "item_based":
 		results, err = m.Recommend(ctx, response, userId, categories, n, m.RecommendItemBased)
 	case "external":
+		found := false
 		for _, external := range m.Config.Recommend.External {
 			if external.Name == name {
 				e, err := logics.NewExternal(external)
@@ -810,11 +811,14 @@ func (m *Master) getRecommend(request *restful.Request, response *restful.Respon
 					server.InternalServerError(response, err)
 					return
 				}
+				found = true
 				break
 			}
 		}
-		server.BadRequest(response, fmt.Errorf("external recommender `%s` not found", name))
-		return
+		if !found {
+			server.BadRequest(response, fmt.Errorf("external recommender `%s` not found", name))
+			return
+		}
 	case "_":
 		recommenders := []server.Recommender{m.RecommendOffline}
 		for _, recommender := range m.Config.Recommend.Online.FallbackRecommend {
