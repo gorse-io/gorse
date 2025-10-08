@@ -85,7 +85,17 @@ func (e *External) Close() error {
 	return e.vm.Close()
 }
 
-func (e *External) Pull(userId string) ([]string, error) {
+func (e *External) Pull(userId string) (res []string, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			var ok bool
+			err, ok = r.(error)
+			if !ok {
+				err = errors.Errorf("%v", r)
+			}
+		}
+	}()
+
 	userIdKey, err := e.vm.NewAtom("user_id")
 	if err != nil {
 		return nil, errors.WithStack(err)

@@ -118,3 +118,27 @@ func TestExternal(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"item_1", "item_2", "item_3"}, items)
 }
+
+func TestException(t *testing.T) {
+	external, err := NewExternal(config.ExternalConfig{
+		Script: `throw new Error("test error")`,
+		Name:   "test",
+	})
+	assert.NoError(t, err)
+	defer external.Close()
+
+	_, err = external.Pull("1")
+	assert.Error(t, err)
+}
+
+func TestPanic(t *testing.T) {
+	external, err := NewExternal(config.ExternalConfig{
+		Script: `fetch({}, {})`,
+		Name:   "test",
+	})
+	assert.NoError(t, err)
+	defer external.Close()
+
+	_, err = external.Pull("1")
+	assert.Error(t, err)
+}
