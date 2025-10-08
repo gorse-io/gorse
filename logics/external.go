@@ -129,7 +129,7 @@ func (e *External) Pull(userId string) (res []string, err error) {
 func (e *External) fetch(args ...quickjs.Value) quickjs.Value {
 	var (
 		url string
-		req quickjs.Value = quickjs.UndefinedValue
+		req = quickjs.UndefinedValue
 	)
 	if len(args) == 1 {
 		switch v := lo.Must(args[0].Any()).(type) {

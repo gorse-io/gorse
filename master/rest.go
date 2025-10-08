@@ -41,6 +41,7 @@ import (
 	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/common/util"
 	"github.com/gorse-io/gorse/config"
+	"github.com/gorse-io/gorse/logics"
 	"github.com/gorse-io/gorse/model/cf"
 	"github.com/gorse-io/gorse/model/ctr"
 	"github.com/gorse-io/gorse/protocol"
@@ -172,12 +173,13 @@ func (m *Master) CreateWebService() {
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
 		Returns(http.StatusOK, "OK", []data.Item{}).
 		Writes([]data.Item{}))
-	ws.Route(ws.GET("/dashboard/recommend/{user-id}/{recommender}/{category}").To(m.getRecommend).
+	ws.Route(ws.GET("/dashboard/recommend/{user-id}/{recommender}/{name}").To(m.getRecommend).
 		Doc("Get recommendation for user.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
 		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
 		Param(ws.PathParameter("recommender", "one of `final`, `collaborative`, `user_based` and `item_based`").DataType("string")).
-		Param(ws.PathParameter("category", "category of items").DataType("string")).
+		Param(ws.PathParameter("name", "name of the recommender").DataType("string")).
+		Param(ws.QueryParameter("category", "category of items").DataType("string")).
 		Param(ws.QueryParameter("n", "number of returned items").DataType("int")).
 		Returns(http.StatusOK, "OK", []data.Item{}).
 		Writes([]data.Item{}))
@@ -777,6 +779,7 @@ func (m *Master) getRecommend(request *restful.Request, response *restful.Respon
 	}
 	// parse arguments
 	recommender := request.PathParameter("recommender")
+	name := request.PathParameter("name")
 	userId := request.PathParameter("user-id")
 	categories := server.ReadCategories(request, nil)
 	n, err := server.ParseInt(request, "n", m.Config.Server.DefaultN)
@@ -794,6 +797,24 @@ func (m *Master) getRecommend(request *restful.Request, response *restful.Respon
 		results, err = m.Recommend(ctx, response, userId, categories, n, m.RecommendUserBased)
 	case "item_based":
 		results, err = m.Recommend(ctx, response, userId, categories, n, m.RecommendItemBased)
+	case "external":
+		for _, external := range m.Config.Recommend.External {
+			if external.Name == name {
+				e, err := logics.NewExternal(external)
+				if err != nil {
+					server.InternalServerError(response, err)
+					return
+				}
+				results, err = e.Pull(userId)
+				if err != nil {
+					server.InternalServerError(response, err)
+					return
+				}
+				break
+			}
+		}
+		server.BadRequest(response, fmt.Errorf("external recommender `%s` not found", name))
+		return
 	case "_":
 		recommenders := []server.Recommender{m.RecommendOffline}
 		for _, recommender := range m.Config.Recommend.Online.FallbackRecommend {
