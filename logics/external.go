@@ -15,10 +15,13 @@
 package logics
 
 import (
+	"io"
+	"net/http"
 	"os"
 	"strings"
 
 	"github.com/pkg/errors"
+	"github.com/samber/lo"
 	"modernc.org/quickjs"
 )
 
@@ -59,9 +62,67 @@ func NewExternal() (*External, error) {
 		return nil, errors.WithStack(err)
 	}
 
-	return &External{vm: vm}, nil
+	// Register fetch function
+	external := &External{vm: vm}
+	if err = vm.RegisterFunc("fetch", external.fetch, false); err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	return external, nil
 }
 
 func (e *External) Close() error {
 	return e.vm.Close()
+}
+
+func (e *External) fetch(url string) quickjs.Value {
+	resp, err := http.Get(url)
+	if err != nil {
+		panic(err)
+	}
+	return e.newResponse(resp)
+}
+
+// parseRequest parse Fetch API Request.
+func (e *External) parseRequest(url string, req quickjs.Value) *http.Request {
+	// Request.method
+	method := "GET"
+	methodKey := lo.Must(e.vm.NewAtom("method"))
+	methodValue := lo.Must(req.GetPropertyValue(methodKey))
+	if !methodValue.IsUndefined() {
+		method = lo.Must(methodValue.Any()).(string)
+	}
+
+	r := lo.Must(http.NewRequest(method, url, nil))
+	return r
+}
+
+// newResponse convert http.Response to Fetch API Response.
+func (e *External) newResponse(resp *http.Response) quickjs.Value {
+	if resp == nil {
+		return quickjs.UndefinedValue
+	}
+	response := lo.Must(e.vm.NewObjectValue())
+	// Response.ok
+	okKey := lo.Must(e.vm.NewAtom("ok"))
+	lo.Must0(response.SetProperty(okKey, resp.StatusCode >= 200 && resp.StatusCode < 300))
+	// Response.status
+	statusKey := lo.Must(e.vm.NewAtom("status"))
+	lo.Must0(response.SetProperty(statusKey, resp.StatusCode))
+	// Response.statusText
+	statusTextKey := lo.Must(e.vm.NewAtom("statusText"))
+	lo.Must0(response.SetProperty(statusTextKey, resp.Status))
+	// Response.body
+	bodyKey := lo.Must(e.vm.NewAtom("body"))
+	body := lo.Must(io.ReadAll(resp.Body))
+	lo.Must0(response.SetProperty(bodyKey, string(body)))
+	// Response.headers
+	headersKey := lo.Must(e.vm.NewAtom("headers"))
+	headers := lo.Must(e.vm.NewObjectValue())
+	for key, values := range resp.Header {
+		headerKey := lo.Must(e.vm.NewAtom(key))
+		lo.Must0(headers.SetProperty(headerKey, strings.Join(values, ", ")))
+	}
+	lo.Must0(response.SetProperty(headersKey, headers))
+	return response
 }

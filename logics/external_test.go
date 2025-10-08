@@ -15,6 +15,10 @@
 package logics
 
 import (
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -31,4 +35,30 @@ func TestEnv(t *testing.T) {
 	value, err := external.vm.Eval(`env.TEST_ENV`, quickjs.EvalGlobal)
 	assert.NoError(t, err)
 	assert.Equal(t, "test_value", value)
+}
+
+func TestFetch(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintln(w, "Hello, client")
+	}))
+	defer ts.Close()
+
+	external, err := NewExternal()
+	assert.NoError(t, err)
+	defer external.Close()
+
+	response, err := external.vm.Eval(`fetch("`+ts.URL+`")`, quickjs.EvalGlobal)
+	assert.NoError(t, err)
+	if assert.IsType(t, &quickjs.Object{}, response) {
+		var resp map[string]any
+		err = json.Unmarshal([]byte(response.(*quickjs.Object).String()), &resp)
+		assert.NoError(t, err)
+		assert.Equal(t, true, resp["ok"])
+		assert.Equal(t, float64(200), resp["status"])
+		assert.Equal(t, "200 OK", resp["statusText"])
+		assert.Equal(t, "Hello, client\n", resp["body"])
+		headers := resp["headers"].(map[string]any)
+		assert.Contains(t, headers, "Content-Length")
+		assert.Contains(t, headers, "Date")
+	}
 }
