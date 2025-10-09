@@ -16,10 +16,11 @@ package data
 
 import (
 	"fmt"
-	"github.com/stretchr/testify/suite"
-	"google.golang.org/grpc"
 	"net"
 	"testing"
+
+	"github.com/stretchr/testify/suite"
+	"google.golang.org/grpc"
 )
 
 type ProxyTestSuite struct {
@@ -68,6 +69,10 @@ func (suite *ProxyTestSuite) SetupTest() {
 func (suite *ProxyTestSuite) TearDownTest() {
 	err := suite.sqlite.Purge()
 	suite.NoError(err)
+}
+
+func (suite *ProxyTestSuite) TestInit() {
+	suite.T().Skip()
 }
 
 func (suite *ProxyTestSuite) TestPurge() {

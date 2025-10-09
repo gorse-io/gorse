@@ -16,10 +16,11 @@ package cache
 
 import (
 	"fmt"
-	"github.com/stretchr/testify/suite"
-	"google.golang.org/grpc"
 	"net"
 	"testing"
+
+	"github.com/stretchr/testify/suite"
+	"google.golang.org/grpc"
 )
 
 type ProxyTestSuite struct {
