@@ -169,6 +169,11 @@ func (suite *baseTestSuite) TearDownTest() {
 	suite.NoError(err)
 }
 
+func (suite *baseTestSuite) TestInit() {
+	err := suite.Database.Init()
+	suite.NoError(err)
+}
+
 func (suite *baseTestSuite) TestUsers() {
 	ctx := context.Background()
 	// Insert users
