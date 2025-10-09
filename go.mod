@@ -7,7 +7,7 @@ require (
 	github.com/araddon/dateparse v0.0.0-20210429162001-6b43995a97de
 	github.com/benhoyt/goawk v1.20.0
 	github.com/bits-and-blooms/bitset v1.22.0
-	github.com/c-bata/goptuna v0.9.0
+	github.com/c-bata/goptuna v0.8.1
 	github.com/cenkalti/backoff/v5 v5.0.2
 	github.com/chewxy/math32 v1.11.1
 	github.com/coreos/go-oidc/v3 v3.14.1
@@ -27,7 +27,6 @@ require (
 	github.com/gorse-io/dashboard v0.0.0-20250824130732-d3f375fc12de
 	github.com/gorse-io/gorse-go v0.5.0-alpha.1
 	github.com/haxii/go-swagger-ui v0.0.0-20210203093335-a63a6bbde946
-	github.com/jackc/pgx/v5 v5.3.1
 	github.com/jaswdr/faker v1.19.1
 	github.com/jellydator/ttlcache/v3 v3.3.0
 	github.com/json-iterator/go v1.1.12
@@ -73,17 +72,17 @@ require (
 	go.uber.org/zap v1.27.0
 	golang.org/x/exp v0.0.0-20250819193227-8b4c13bb791b
 	golang.org/x/oauth2 v0.30.0
-	golang.org/x/sys v0.35.0
+	golang.org/x/sys v0.37.0
 	google.golang.org/grpc v1.67.3
 	google.golang.org/grpc/security/advancedtls v1.0.0
 	google.golang.org/protobuf v1.36.1
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	gopkg.in/yaml.v2 v2.4.0
 	gorm.io/driver/clickhouse v0.4.2
-	gorm.io/driver/mysql v1.5.1
-	gorm.io/driver/postgres v1.5.2
-	gorm.io/driver/sqlite v1.5.3
-	gorm.io/gorm v1.25.7-0.20240204074919-46816ad31dde
+	gorm.io/driver/mysql v1.3.4
+	gorm.io/driver/postgres v1.3.5
+	gorm.io/driver/sqlite v1.3.4
+	gorm.io/gorm v1.23.6
 	modernc.org/mathutil v1.7.1
 	modernc.org/quickjs v0.15.8
 	modernc.org/sortutil v1.2.1
@@ -118,8 +117,14 @@ require (
 	github.com/hashicorp/go-version v1.6.0 // indirect
 	github.com/hashicorp/hcl v1.0.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
+	github.com/jackc/chunkreader/v2 v2.0.1 // indirect
+	github.com/jackc/pgconn v1.12.0 // indirect
+	github.com/jackc/pgio v1.0.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
-	github.com/jackc/pgservicefile v0.0.0-20221227161230-091c0ba34f0a // indirect
+	github.com/jackc/pgproto3/v2 v2.3.0 // indirect
+	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
+	github.com/jackc/pgtype v1.11.0 // indirect
+	github.com/jackc/pgx/v4 v4.16.0 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
@@ -163,11 +168,11 @@ require (
 	go.opentelemetry.io/otel/metric v1.31.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.3.1 // indirect
 	go.uber.org/multierr v1.10.0 // indirect
-	golang.org/x/crypto v0.36.0 // indirect
-	golang.org/x/net v0.38.0 // indirect
-	golang.org/x/sync v0.16.0 // indirect
-	golang.org/x/term v0.30.0 // indirect
-	golang.org/x/text v0.23.0 // indirect
+	golang.org/x/crypto v0.43.0 // indirect
+	golang.org/x/net v0.45.0 // indirect
+	golang.org/x/sync v0.17.0 // indirect
+	golang.org/x/term v0.36.0 // indirect
+	golang.org/x/text v0.30.0 // indirect
 	gonum.org/v1/gonum v0.14.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20241209162323-e6fa225c2576 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20241223144023-3abc09e42ca8 // indirect
@@ -179,5 +184,5 @@ require (
 
 replace (
 	gorm.io/driver/clickhouse v0.4.2 => github.com/gorse-io/clickhouse v0.3.3-0.20220715124633-688011a495bb
-	gorm.io/driver/sqlite v1.5.3 => github.com/gorse-io/sqlite v1.3.3-0.20250518105304-af0cea70d8f9
+	gorm.io/driver/sqlite v1.3.4 => github.com/gorse-io/sqlite v1.3.3-0.20220713123255-c322aec4e59e
 )
