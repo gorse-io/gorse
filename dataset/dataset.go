@@ -194,10 +194,9 @@ func (d *Dataset) GetItemColumnValuesIDF() []float32 {
 
 func (d *Dataset) AddUser(user data.User) {
 	d.users = append(d.users, data.User{
-		UserId:    user.UserId,
-		Labels:    d.userLabels.processLabels(user.Labels, ""),
-		Subscribe: user.Subscribe,
-		Comment:   user.Comment,
+		UserId:  user.UserId,
+		Labels:  d.userLabels.processLabels(user.Labels, ""),
+		Comment: user.Comment,
 	})
 	d.userDict.AddNoCount(user.UserId)
 	if len(d.userFeedback) < len(d.users) {

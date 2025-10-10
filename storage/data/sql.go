@@ -70,10 +70,9 @@ func NewSQLItem(item Item) (sqlItem SQLItem) {
 }
 
 type SQLUser struct {
-	UserId    string `gorm:"column:user_id;primaryKey"`
-	Labels    string `gorm:"column:labels"`
-	Subscribe string `gorm:"column:subscribe"`
-	Comment   string `gorm:"column:comment"`
+	UserId  string `gorm:"column:user_id;primaryKey"`
+	Labels  string `gorm:"column:labels"`
+	Comment string `gorm:"column:comment"`
 }
 
 func NewSQLUser(user User) (sqlUser SQLUser) {
@@ -81,8 +80,6 @@ func NewSQLUser(user User) (sqlUser SQLUser) {
 	sqlUser.UserId = user.UserId
 	buf, _ = jsonutil.Marshal(user.Labels)
 	sqlUser.Labels = string(buf)
-	buf, _ = jsonutil.Marshal(user.Subscribe)
-	sqlUser.Subscribe = string(buf)
 	sqlUser.Comment = user.Comment
 	return
 }
@@ -161,10 +158,9 @@ func (d *SQLDatabase) Init() error {
 			Comment    string    `gorm:"column:comment;type:text;not null"`
 		}
 		type Users struct {
-			UserId    string   `gorm:"column:user_id;type:varchar(256);not null;primaryKey"`
-			Labels    []string `gorm:"column:labels;type:json;not null"`
-			Subscribe []string `gorm:"column:subscribe;type:json;not null"`
-			Comment   string   `gorm:"column:comment;type:text;not null"`
+			UserId  string   `gorm:"column:user_id;type:varchar(256);not null;primaryKey"`
+			Labels  []string `gorm:"column:labels;type:json;not null"`
+			Comment string   `gorm:"column:comment;type:text;not null"`
 		}
 		type Feedback struct {
 			FeedbackType string    `gorm:"column:feedback_type;type:varchar(256);not null;primaryKey"`
@@ -189,10 +185,9 @@ func (d *SQLDatabase) Init() error {
 			Comment    string    `gorm:"column:comment;type:text;not null;default:''"`
 		}
 		type Users struct {
-			UserId    string `gorm:"column:user_id;type:varchar(256) not null;primaryKey"`
-			Labels    string `gorm:"column:labels;type:json;not null;default:'[]'"`
-			Subscribe string `gorm:"column:subscribe;type:json;not null;default:'[]'"`
-			Comment   string `gorm:"column:comment;type:text;not null;default:''"`
+			UserId  string `gorm:"column:user_id;type:varchar(256) not null;primaryKey"`
+			Labels  string `gorm:"column:labels;type:json;not null;default:'[]'"`
+			Comment string `gorm:"column:comment;type:text;not null;default:''"`
 		}
 		type Feedback struct {
 			FeedbackType string    `gorm:"column:feedback_type;type:varchar(256);not null;primaryKey"`
@@ -217,10 +212,9 @@ func (d *SQLDatabase) Init() error {
 			Comment    string `gorm:"column:comment;type:text;not null;default:''"`
 		}
 		type Users struct {
-			UserId    string `gorm:"column:user_id;type:varchar(256) not null;primaryKey"`
-			Labels    string `gorm:"column:labels;type:json;not null;default:'null'"`
-			Subscribe string `gorm:"column:subscribe;type:json;not null;default:'null'"`
-			Comment   string `gorm:"column:comment;type:text;not null;default:''"`
+			UserId  string `gorm:"column:user_id;type:varchar(256) not null;primaryKey"`
+			Labels  string `gorm:"column:labels;type:json;not null;default:'null'"`
+			Comment string `gorm:"column:comment;type:text;not null;default:''"`
 		}
 		type Feedback struct {
 			FeedbackType string  `gorm:"column:feedback_type;type:varchar(256);not null;primaryKey"`
@@ -250,11 +244,10 @@ func (d *SQLDatabase) Init() error {
 			return errors.Trace(err)
 		}
 		type Users struct {
-			UserId    string   `gorm:"column:user_id;type:String"`
-			Labels    string   `gorm:"column:labels;type:String;default:'[]'"`
-			Subscribe string   `gorm:"column:subscribe;type:String;default:'[]'"`
-			Comment   string   `gorm:"column:comment;type:String"`
-			Version   struct{} `gorm:"column:version;type:DateTime"`
+			UserId  string   `gorm:"column:user_id;type:String"`
+			Labels  string   `gorm:"column:labels;type:String;default:'[]'"`
+			Comment string   `gorm:"column:comment;type:String"`
+			Version struct{} `gorm:"column:version;type:DateTime"`
 		}
 		err = d.gormDB.Set("gorm:table_options", "ENGINE = ReplacingMergeTree(version) ORDER BY user_id").AutoMigrate(Users{})
 		if err != nil {
@@ -636,7 +629,7 @@ func (d *SQLDatabase) BatchInsertUsers(ctx context.Context, users []User) error 
 		}
 		err := d.gormDB.WithContext(ctx).Clauses(clause.OnConflict{
 			Columns:   []clause.Column{{Name: "user_id"}},
-			DoUpdates: clause.AssignmentColumns([]string{"labels", "subscribe", "comment"}),
+			DoUpdates: clause.AssignmentColumns([]string{"labels", "comment"}),
 		}).Create(rows).Error
 		return errors.Trace(err)
 	}
@@ -666,7 +659,7 @@ func (d *SQLDatabase) GetUser(ctx context.Context, userId string) (User, error) 
 	var result *sql.Rows
 	var err error
 	result, err = d.gormDB.WithContext(ctx).Table(d.UsersTable()).
-		Select("user_id, labels, subscribe, comment").
+		Select("user_id, labels, comment").
 		Where("user_id = ?", userId).Rows()
 	if err != nil {
 		return User{}, errors.Trace(err)
@@ -685,7 +678,7 @@ func (d *SQLDatabase) GetUser(ctx context.Context, userId string) (User, error) 
 // ModifyUser modify a user in MySQL.
 func (d *SQLDatabase) ModifyUser(ctx context.Context, userId string, patch UserPatch) error {
 	// ignore empty patch
-	if patch.Labels == nil && patch.Subscribe == nil && patch.Comment == nil {
+	if patch.Labels == nil && patch.Comment == nil {
 		log.Logger().Debug("empty user patch")
 		return nil
 	}
@@ -696,10 +689,6 @@ func (d *SQLDatabase) ModifyUser(ctx context.Context, userId string, patch UserP
 	if patch.Labels != nil {
 		text, _ := jsonutil.Marshal(patch.Labels)
 		attributes["labels"] = string(text)
-	}
-	if patch.Subscribe != nil {
-		text, _ := jsonutil.Marshal(patch.Subscribe)
-		attributes["subscribe"] = string(text)
 	}
 	err := d.gormDB.WithContext(ctx).Model(&SQLUser{UserId: userId}).Updates(attributes).Error
 	return errors.Trace(err)
@@ -714,7 +703,7 @@ func (d *SQLDatabase) GetUsers(ctx context.Context, cursor string, n int) (strin
 	cursorUser := string(buf)
 	tx := d.gormDB.WithContext(ctx).
 		Table(d.UsersTable()).
-		Select("user_id, labels, subscribe, comment")
+		Select("user_id, labels, comment")
 	if cursorUser != "" {
 		tx.Where("user_id >= ?", cursorUser)
 	}
@@ -745,7 +734,7 @@ func (d *SQLDatabase) GetUserStream(ctx context.Context, batchSize int) (chan []
 		defer close(userChan)
 		defer close(errChan)
 		// send query
-		result, err := d.gormDB.WithContext(ctx).Table(d.UsersTable()).Select("user_id, labels, subscribe, comment").Rows()
+		result, err := d.gormDB.WithContext(ctx).Table(d.UsersTable()).Select("user_id, labels, comment").Rows()
 		if err != nil {
 			errChan <- errors.Trace(err)
 			return
@@ -840,9 +829,8 @@ func (d *SQLDatabase) BatchInsertFeedback(ctx context.Context, feedback []Feedba
 			err := tx.Create(lo.Map(userList, func(userId string, _ int) ClickhouseUser {
 				return ClickhouseUser{
 					SQLUser: SQLUser{
-						UserId:    userId,
-						Labels:    "[]",
-						Subscribe: "[]",
+						UserId: userId,
+						Labels: "[]",
 					},
 				}
 			})).Error
@@ -855,9 +843,8 @@ func (d *SQLDatabase) BatchInsertFeedback(ctx context.Context, feedback []Feedba
 				DoNothing: true,
 			}).Create(lo.Map(userList, func(userId string, _ int) SQLUser {
 				return SQLUser{
-					UserId:    userId,
-					Labels:    "null",
-					Subscribe: "null",
+					UserId: userId,
+					Labels: "null",
 				}
 			})).Error
 			if err != nil {

@@ -135,16 +135,16 @@ func (s *MasterTestSuite) TestUserToUser() {
 	s.Config.Master.NumJobs = 4
 	// collect similar
 	users := []data.User{
-		{UserId: "0", Labels: []string{"a", "b", "c", "d"}, Subscribe: nil, Comment: ""},
-		{UserId: "1", Labels: []string{}, Subscribe: nil, Comment: ""},
-		{UserId: "2", Labels: []string{"b", "c", "d"}, Subscribe: nil, Comment: ""},
-		{UserId: "3", Labels: []string{}, Subscribe: nil, Comment: ""},
-		{UserId: "4", Labels: []string{"b", "c"}, Subscribe: nil, Comment: ""},
-		{UserId: "5", Labels: []string{}, Subscribe: nil, Comment: ""},
-		{UserId: "6", Labels: []string{"c"}, Subscribe: nil, Comment: ""},
-		{UserId: "7", Labels: []string{}, Subscribe: nil, Comment: ""},
-		{UserId: "8", Labels: []string{"a", "b", "c", "d", "e"}, Subscribe: nil, Comment: ""},
-		{UserId: "9", Labels: []string{}, Subscribe: nil, Comment: ""},
+		{UserId: "0", Labels: []string{"a", "b", "c", "d"}, Comment: ""},
+		{UserId: "1", Labels: []string{}, Comment: ""},
+		{UserId: "2", Labels: []string{"b", "c", "d"}, Comment: ""},
+		{UserId: "3", Labels: []string{}, Comment: ""},
+		{UserId: "4", Labels: []string{"b", "c"}, Comment: ""},
+		{UserId: "5", Labels: []string{}, Comment: ""},
+		{UserId: "6", Labels: []string{"c"}, Comment: ""},
+		{UserId: "7", Labels: []string{}, Comment: ""},
+		{UserId: "8", Labels: []string{"a", "b", "c", "d", "e"}, Comment: ""},
+		{UserId: "9", Labels: []string{}, Comment: ""},
 	}
 	feedbacks := make([]data.Feedback, 0)
 	for i := 0; i < 10; i++ {
@@ -511,8 +511,8 @@ func (s *MasterTestSuite) TestGarbageCollection() {
 
 	// insert users
 	err = s.DataClient.BatchInsertUsers(ctx, []data.User{
-		{UserId: "1", Labels: []string{"a", "b", "c", "d"}, Subscribe: nil, Comment: ""},
-		{UserId: "2", Labels: []string{}, Subscribe: nil, Comment: ""},
+		{UserId: "1", Labels: []string{"a", "b", "c", "d"}, Comment: ""},
+		{UserId: "2", Labels: []string{}, Comment: ""},
 	})
 	s.NoError(err)
 

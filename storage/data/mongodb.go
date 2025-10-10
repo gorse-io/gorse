@@ -423,9 +423,6 @@ func (db *MongoDB) ModifyUser(ctx context.Context, userId string, patch UserPatc
 	if patch.Comment != nil {
 		update["comment"] = patch.Comment
 	}
-	if patch.Subscribe != nil {
-		update["subscribe"] = patch.Subscribe
-	}
 	// execute
 	c := db.client.Database(db.dbName).Collection(db.UsersTable())
 	_, err := c.UpdateOne(ctx, bson.M{"userid": bson.M{"$eq": userId}}, bson.M{"$set": update})
