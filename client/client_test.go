@@ -207,10 +207,9 @@ func (suite *GorseClientTestSuite) TestNeighbors() {
 func (suite *GorseClientTestSuite) TestUsers() {
 	ctx := context.TODO()
 	user := client.User{
-		UserId:    "100",
-		Labels:    []string{"a", "b", "c"},
-		Subscribe: []string{"d", "e"},
-		Comment:   "comment",
+		UserId:  "100",
+		Labels:  []string{"a", "b", "c"},
+		Comment: "comment",
 	}
 	userPatch := client.UserPatch{
 		Comment: &user.Comment,
