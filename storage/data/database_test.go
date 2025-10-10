@@ -229,15 +229,12 @@ func (suite *baseTestSuite) TestUsers() {
 	suite.NoError(err)
 	err = suite.Database.ModifyUser(ctx, "1", UserPatch{Labels: []string{"a", "b", "c"}})
 	suite.NoError(err)
-	err = suite.Database.ModifyUser(ctx, "1", UserPatch{Subscribe: []string{"d", "e", "f"}})
-	suite.NoError(err)
 	err = suite.Database.Optimize()
 	suite.NoError(err)
 	user, err = suite.Database.GetUser(ctx, "1")
 	suite.NoError(err)
 	suite.Equal("modify", user.Comment)
 	suite.Equal([]any{"a", "b", "c"}, user.Labels)
-	suite.Equal([]string{"d", "e", "f"}, user.Subscribe)
 
 	// test insert empty
 	err = suite.Database.BatchInsertUsers(ctx, nil)
@@ -251,7 +248,7 @@ func (suite *baseTestSuite) TestUsers() {
 func (suite *baseTestSuite) TestFeedback() {
 	ctx := context.Background()
 	// users that already exists
-	err := suite.Database.BatchInsertUsers(ctx, []User{{"0", []string{"a"}, []string{"x"}, "comment"}})
+	err := suite.Database.BatchInsertUsers(ctx, []User{{"0", []string{"a"}, "comment"}})
 	suite.NoError(err)
 	// items that already exists
 	err = suite.Database.BatchInsertItems(ctx, []Item{{ItemId: "0", Labels: []string{"b"}, Timestamp: time.Date(1996, 4, 8, 10, 0, 0, 0, time.UTC)}})
@@ -347,14 +344,13 @@ func (suite *baseTestSuite) TestFeedback() {
 		suite.Equal(strconv.Itoa(i), user.UserId)
 		if user.UserId != "0" {
 			suite.Empty(user.Labels)
-			suite.Empty(user.Subscribe)
 			suite.Empty(user.Comment)
 		}
 	}
 	// check users that already exists
 	user, err := suite.Database.GetUser(ctx, "0")
 	suite.NoError(err)
-	suite.Equal(User{"0", []any{"a"}, []string{"x"}, "comment"}, user)
+	suite.Equal(User{"0", []any{"a"}, "comment"}, user)
 	// check items that already exists
 	item, err := suite.Database.GetItem(ctx, "0")
 	suite.NoError(err)

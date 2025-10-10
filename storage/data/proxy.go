@@ -207,10 +207,9 @@ func (p *ProxyServer) BatchInsertUsers(ctx context.Context, in *protocol.BatchIn
 			return nil, err
 		}
 		users[i] = User{
-			UserId:    user.UserId,
-			Labels:    labels,
-			Comment:   user.Comment,
-			Subscribe: user.Subscribe,
+			UserId:  user.UserId,
+			Labels:  labels,
+			Comment: user.Comment,
 		}
 	}
 	err := p.database.BatchInsertUsers(ctx, users)
@@ -236,10 +235,9 @@ func (p *ProxyServer) GetUser(ctx context.Context, in *protocol.GetUserRequest) 
 	}
 	return &protocol.GetUserResponse{
 		User: &protocol.User{
-			UserId:    user.UserId,
-			Labels:    labels,
-			Comment:   user.Comment,
-			Subscribe: user.Subscribe,
+			UserId:  user.UserId,
+			Labels:  labels,
+			Comment: user.Comment,
 		},
 	}, nil
 }
@@ -253,9 +251,8 @@ func (p *ProxyServer) ModifyUser(ctx context.Context, in *protocol.ModifyUserReq
 		}
 	}
 	err := p.database.ModifyUser(ctx, in.UserId, UserPatch{
-		Labels:    labels,
-		Comment:   in.Patch.Comment,
-		Subscribe: in.Patch.Subscribe,
+		Labels:  labels,
+		Comment: in.Patch.Comment,
 	})
 	return &protocol.ModifyUserResponse{}, err
 }
@@ -272,10 +269,9 @@ func (p *ProxyServer) GetUsers(ctx context.Context, in *protocol.GetUsersRequest
 			return nil, err
 		}
 		pbUsers[i] = &protocol.User{
-			UserId:    user.UserId,
-			Labels:    labels,
-			Comment:   user.Comment,
-			Subscribe: user.Subscribe,
+			UserId:  user.UserId,
+			Labels:  labels,
+			Comment: user.Comment,
 		}
 	}
 	return &protocol.GetUsersResponse{Cursor: cursor, Users: pbUsers}, nil
@@ -394,10 +390,9 @@ func (p *ProxyServer) GetUserStream(in *protocol.GetUserStreamRequest, stream gr
 				return err
 			}
 			pbUsers[i] = &protocol.User{
-				UserId:    user.UserId,
-				Labels:    labels,
-				Comment:   user.Comment,
-				Subscribe: user.Subscribe,
+				UserId:  user.UserId,
+				Labels:  labels,
+				Comment: user.Comment,
 			}
 		}
 		err := stream.Send(&protocol.GetUserStreamResponse{Users: pbUsers})
@@ -696,10 +691,9 @@ func (p ProxyClient) BatchInsertUsers(ctx context.Context, users []User) error {
 			return err
 		}
 		pbUsers[i] = &protocol.User{
-			UserId:    user.UserId,
-			Labels:    labels,
-			Comment:   user.Comment,
-			Subscribe: user.Subscribe,
+			UserId:  user.UserId,
+			Labels:  labels,
+			Comment: user.Comment,
 		}
 	}
 	_, err := p.DataStoreClient.BatchInsertUsers(ctx, &protocol.BatchInsertUsersRequest{Users: pbUsers})
@@ -724,10 +718,9 @@ func (p ProxyClient) GetUser(ctx context.Context, userId string) (User, error) {
 		return User{}, err
 	}
 	return User{
-		UserId:    resp.User.UserId,
-		Labels:    labels,
-		Comment:   resp.User.Comment,
-		Subscribe: resp.User.Subscribe,
+		UserId:  resp.User.UserId,
+		Labels:  labels,
+		Comment: resp.User.Comment,
 	}, nil
 }
 
@@ -743,9 +736,8 @@ func (p ProxyClient) ModifyUser(ctx context.Context, userId string, patch UserPa
 	_, err := p.DataStoreClient.ModifyUser(ctx, &protocol.ModifyUserRequest{
 		UserId: userId,
 		Patch: &protocol.UserPatch{
-			Labels:    labels,
-			Comment:   patch.Comment,
-			Subscribe: patch.Subscribe,
+			Labels:  labels,
+			Comment: patch.Comment,
 		},
 	})
 	return err
@@ -764,10 +756,9 @@ func (p ProxyClient) GetUsers(ctx context.Context, cursor string, n int) (string
 			return "", nil, err
 		}
 		users[i] = User{
-			UserId:    user.UserId,
-			Labels:    labels,
-			Comment:   user.Comment,
-			Subscribe: user.Subscribe,
+			UserId:  user.UserId,
+			Labels:  labels,
+			Comment: user.Comment,
 		}
 	}
 	return resp.Cursor, users, nil
@@ -933,10 +924,9 @@ func (p ProxyClient) GetUserStream(ctx context.Context, batchSize int) (chan []U
 					return
 				}
 				users[i] = User{
-					UserId:    user.UserId,
-					Labels:    labels,
-					Comment:   user.Comment,
-					Subscribe: user.Subscribe,
+					UserId:  user.UserId,
+					Labels:  labels,
+					Comment: user.Comment,
 				}
 			}
 			usersChan <- users

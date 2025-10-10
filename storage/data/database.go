@@ -122,17 +122,15 @@ type ItemPatch struct {
 
 // User stores meta data about user.
 type User struct {
-	UserId    string   `gorm:"primaryKey" mapstructure:"user_id"`
-	Labels    any      `gorm:"serializer:json" mapstructure:"labels"`
-	Subscribe []string `gorm:"serializer:json" mapstructure:"subscribe"`
-	Comment   string   `mapstructure:"comment"`
+	UserId    string `gorm:"primaryKey" mapstructure:"user_id"`
+	Labels    any    `gorm:"serializer:json" mapstructure:"labels"`
+	Comment   string `mapstructure:"comment"`
 }
 
 // UserPatch is the modification on a user.
 type UserPatch struct {
-	Labels    any
-	Subscribe []string
-	Comment   *string
+	Labels  any
+	Comment *string
 }
 
 // FeedbackKey identifies feedback.
