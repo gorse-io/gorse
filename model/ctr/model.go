@@ -317,7 +317,7 @@ func (fm *FMV2) Init(trainSet dataset.CTRSplit) {
 }
 
 func (fm *FMV2) Fit(ctx context.Context, trainSet, testSet dataset.CTRSplit, config *FitConfig) Score {
-	log.Logger().Info("fit DeepFN",
+	log.Logger().Info("fit DeepFM",
 		zap.Int("train_set_size", trainSet.Count()),
 		zap.Int("test_set_size", testSet.Count()),
 		zap.Any("params", fm.GetParams()),
