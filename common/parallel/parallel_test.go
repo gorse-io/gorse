@@ -20,13 +20,13 @@ import (
 	"time"
 
 	mapset "github.com/deckarep/golang-set/v2"
-	"github.com/gorse-io/gorse/base"
+	"github.com/gorse-io/gorse/common/util"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestParallel(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		a := base.RangeInt(10000)
+		a := util.RangeInt(10000)
 		b := make([]int, len(a))
 		workerIds := make([]int, len(a))
 		// multiple threads
@@ -55,7 +55,7 @@ func TestParallel(t *testing.T) {
 func TestFor(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		// multiple threads
-		a := base.RangeInt(10000)
+		a := util.RangeInt(10000)
 		b := make([]int, len(a))
 		For(len(a), 4, func(jobId int) {
 			b[jobId] = a[jobId]
@@ -73,7 +73,7 @@ func TestFor(t *testing.T) {
 
 func TestForEach(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		a := base.RangeInt(10000)
+		a := util.RangeInt(10000)
 		b := make([]int, len(a))
 		// multiple threads
 		ForEach(a, 4, func(i, v int) {
@@ -94,7 +94,7 @@ func TestForEach(t *testing.T) {
 
 func TestBatchParallel(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		a := base.RangeInt(10000)
+		a := util.RangeInt(10000)
 		b := make([]int, len(a))
 		workerIds := make([]int, len(a))
 		// multiple threads

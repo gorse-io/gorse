@@ -27,7 +27,6 @@ import (
 	"time"
 
 	"github.com/emicklei/go-restful/v3"
-	"github.com/gorse-io/gorse/base"
 	"github.com/gorse-io/gorse/cmd/version"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/common/util"
@@ -146,7 +145,7 @@ func (s *Server) Shutdown() {
 
 // Sync this server to the master.
 func (s *Server) Sync() {
-	defer base.CheckPanic()
+	defer util.CheckPanic()
 	log.Logger().Info("start meta sync", zap.Duration("meta_timeout", s.Config.Master.MetaTimeout))
 	for {
 		var meta *protocol.Meta

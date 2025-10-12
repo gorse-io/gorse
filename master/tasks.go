@@ -25,7 +25,6 @@ import (
 	"github.com/c-bata/goptuna"
 	"github.com/c-bata/goptuna/tpe"
 	mapset "github.com/deckarep/golang-set/v2"
-	"github.com/gorse-io/gorse/base"
 	"github.com/gorse-io/gorse/common/expression"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/common/monitor"
@@ -275,7 +274,7 @@ func (m *Master) LoadDataFromDatabase(
 	// STEP 1: pull users
 	userLabelCount := make(map[string]int)
 	userLabelFirst := make(map[string]int32)
-	userLabelIndex := base.NewMapIndex()
+	userLabelIndex := dataset.NewMapIndex()
 	userLabels := make([][]lo.Tuple2[int32, float32], 0, estimatedNumUsers)
 	start := time.Now()
 	userChan, errChan := database.GetUserStream(newCtx, batchSize)
@@ -327,9 +326,9 @@ func (m *Master) LoadDataFromDatabase(
 	var items []data.Item
 	itemLabelCount := make(map[string]int)
 	itemLabelFirst := make(map[string]int32)
-	itemLabelIndex := base.NewMapIndex()
+	itemLabelIndex := dataset.NewMapIndex()
 	itemLabels := make([][]lo.Tuple2[int32, float32], 0, estimatedNumItems)
-	itemEmbeddingIndexer := base.NewMapIndex()
+	itemEmbeddingIndexer := dataset.NewMapIndex()
 	itemEmbeddingDimension := make([]map[int]int, 0)
 	itemEmbeddings := make([][][]float32, 0, estimatedNumItems)
 	start = time.Now()
@@ -429,11 +428,11 @@ func (m *Master) LoadDataFromDatabase(
 			for _, f := range feedback {
 				// convert user and item id to index
 				userIndex := dataSet.GetUserDict().Id(f.UserId)
-				if userIndex == base.NotId {
+				if userIndex == dataset.NotId {
 					continue
 				}
 				itemIndex := dataSet.GetItemDict().Id(f.ItemId)
-				if itemIndex == base.NotId {
+				if itemIndex == dataset.NotId {
 					continue
 				}
 				// insert feedback to positive set
@@ -514,11 +513,11 @@ func (m *Master) LoadDataFromDatabase(
 		for feedback := range feedbackChan {
 			for _, f := range feedback {
 				userIndex := dataSet.GetUserDict().Id(f.UserId)
-				if userIndex == base.NotId {
+				if userIndex == dataset.NotId {
 					continue
 				}
 				itemIndex := dataSet.GetItemDict().Id(f.ItemId)
-				if itemIndex == base.NotId {
+				if itemIndex == dataset.NotId {
 					continue
 				}
 				negativeSet[userIndex].Add(itemIndex)
@@ -544,7 +543,7 @@ func (m *Master) LoadDataFromDatabase(
 
 	// STEP 5: create click-through rate dataset
 	start = time.Now()
-	unifiedIndex := base.NewUnifiedMapIndexBuilder()
+	unifiedIndex := dataset.NewUnifiedMapIndexBuilder()
 	unifiedIndex.ItemIndex = dataSet.GetItemDict().ToIndex()
 	unifiedIndex.UserIndex = dataSet.GetUserDict().ToIndex()
 	unifiedIndex.ItemLabelIndex = itemLabelIndex
@@ -1120,7 +1119,7 @@ func (m *Master) collectGarbage(ctx context.Context, dataSet *dataset.Dataset) e
 				log.Logger().Error("invalid subset", zap.String("subset", subset))
 				return nil
 			}
-			if dataSet.GetUserDict().Id(splits[1]) == base.NotId || !lo.ContainsBy(m.Config.Recommend.UserToUser, func(cfg config.UserToUserConfig) bool {
+			if dataSet.GetUserDict().Id(splits[1]) == dataset.NotId || !lo.ContainsBy(m.Config.Recommend.UserToUser, func(cfg config.UserToUserConfig) bool {
 				return cfg.Name == splits[0]
 			}) {
 				return m.CacheClient.DeleteScores(ctx, []string{cache.UserToUser}, cache.ScoreCondition{
@@ -1134,7 +1133,7 @@ func (m *Master) collectGarbage(ctx context.Context, dataSet *dataset.Dataset) e
 				log.Logger().Error("invalid subset", zap.String("subset", subset))
 				return nil
 			}
-			if dataSet.GetItemDict().Id(splits[1]) == base.NotId || !lo.ContainsBy(m.Config.Recommend.ItemToItem, func(cfg config.ItemToItemConfig) bool {
+			if dataSet.GetItemDict().Id(splits[1]) == dataset.NotId || !lo.ContainsBy(m.Config.Recommend.ItemToItem, func(cfg config.ItemToItemConfig) bool {
 				return cfg.Name == splits[0]
 			}) {
 				return m.CacheClient.DeleteScores(ctx, []string{cache.ItemToItem}, cache.ScoreCondition{
@@ -1143,7 +1142,7 @@ func (m *Master) collectGarbage(ctx context.Context, dataSet *dataset.Dataset) e
 				})
 			}
 		case cache.CollaborativeFiltering:
-			if dataSet.GetUserDict().Id(subset) == base.NotId {
+			if dataSet.GetUserDict().Id(subset) == dataset.NotId {
 				return m.CacheClient.DeleteScores(ctx, []string{cache.CollaborativeFiltering}, cache.ScoreCondition{
 					Subset: lo.ToPtr(subset),
 					Before: lo.ToPtr(dataSet.GetTimestamp()),

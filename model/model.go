@@ -16,7 +16,7 @@ package model
 
 import (
 	"github.com/c-bata/goptuna"
-	"github.com/gorse-io/gorse/base"
+	"github.com/gorse-io/gorse/common/util"
 )
 
 // Model is the interface for all models. Any model in this
@@ -33,7 +33,7 @@ type Model interface {
 // ID sets, random generator and fitting options are managed the BaseModel model.
 type BaseModel struct {
 	Params    Params               // Hyper-parameters
-	rng       base.RandomGenerator // Random generator
+	rng       util.RandomGenerator // Random generator
 	randState int64                // Random seed
 }
 
@@ -41,7 +41,7 @@ type BaseModel struct {
 func (model *BaseModel) SetParams(params Params) {
 	model.Params = params
 	model.randState = model.Params.GetInt64(RandomState, 0)
-	model.rng = base.NewRandomGenerator(model.randState)
+	model.rng = util.NewRandomGenerator(model.randState)
 }
 
 // GetParams returns all hyper-parameters.
@@ -49,6 +49,6 @@ func (model *BaseModel) GetParams() Params {
 	return model.Params
 }
 
-func (model *BaseModel) GetRandomGenerator() base.RandomGenerator {
+func (model *BaseModel) GetRandomGenerator() util.RandomGenerator {
 	return model.rng
 }

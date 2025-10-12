@@ -26,7 +26,6 @@ import (
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/emicklei/go-restful/v3"
-	"github.com/gorse-io/gorse/base"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/common/parallel"
@@ -305,7 +304,7 @@ func (m *Master) Shutdown() {
 }
 
 func (m *Master) RunTasksLoop() {
-	defer base.CheckPanic()
+	defer util.CheckPanic()
 	var (
 		err error
 		//firstLoop = true

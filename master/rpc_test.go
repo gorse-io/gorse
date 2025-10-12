@@ -24,7 +24,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gorse-io/gorse/base"
 	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/common/util"
 	"github.com/gorse-io/gorse/config"
@@ -48,10 +47,10 @@ func newRankingDataset() (*dataset.Dataset, *dataset.Dataset) {
 }
 
 func newClickDataset() (*ctr.Dataset, *ctr.Dataset) {
-	dataset := &ctr.Dataset{
-		Index: base.NewUnifiedMapIndexBuilder().Build(),
+	dataSet := &ctr.Dataset{
+		Index: dataset.NewUnifiedMapIndexBuilder().Build(),
 	}
-	return dataset, dataset
+	return dataSet, dataSet
 }
 
 type mockMasterRPC struct {

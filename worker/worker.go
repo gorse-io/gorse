@@ -30,7 +30,6 @@ import (
 	"time"
 
 	mapset "github.com/deckarep/golang-set/v2"
-	"github.com/gorse-io/gorse/base"
 	"github.com/gorse-io/gorse/cmd/version"
 	"github.com/gorse-io/gorse/common/expression"
 	"github.com/gorse-io/gorse/common/heap"
@@ -136,7 +135,7 @@ func NewWorker(
 	return &Worker{
 		rankers:       make([]ctr.FactorizationMachines, jobs),
 		Settings:      config.NewSettings(),
-		randGenerator: base.NewRand(time.Now().UTC().UnixNano()),
+		randGenerator: util.NewRand(time.Now().UTC().UnixNano()),
 		// config
 		cacheFile:  cacheFile,
 		masterHost: masterHost,
@@ -161,7 +160,7 @@ func (w *Worker) SetOneMode(settings *config.Settings) {
 
 // Sync this worker to the master.
 func (w *Worker) Sync() {
-	defer base.CheckPanic()
+	defer util.CheckPanic()
 	log.Logger().Info("start meta sync", zap.Duration("meta_timeout", w.Config.Master.MetaTimeout))
 	for {
 		var meta *protocol.Meta
@@ -272,7 +271,7 @@ func (w *Worker) Sync() {
 
 // Pull user index and ranking model from master.
 func (w *Worker) Pull() {
-	defer base.CheckPanic()
+	defer util.CheckPanic()
 	for range w.syncedChan.C {
 		pulled := false
 
@@ -511,7 +510,7 @@ func (w *Worker) Recommend(users []data.User) {
 	defer span.End()
 
 	go func() {
-		defer base.CheckPanic()
+		defer util.CheckPanic()
 		completedCount, previousCount := 0, 0
 		ticker := time.NewTicker(10 * time.Second)
 		for {

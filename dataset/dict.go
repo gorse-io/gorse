@@ -14,8 +14,6 @@
 
 package dataset
 
-import "github.com/gorse-io/gorse/base"
-
 type FreqDict struct {
 	si  map[string]int32
 	is  []string
@@ -77,8 +75,8 @@ func (d *FreqDict) Freq(id int32) int32 {
 	return d.cnt[id]
 }
 
-func (d *FreqDict) ToIndex() *base.Index {
-	return &base.Index{
+func (d *FreqDict) ToIndex() *Index {
+	return &Index{
 		Numbers: d.si,
 		Names:   d.is,
 	}

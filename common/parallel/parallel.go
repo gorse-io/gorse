@@ -17,7 +17,7 @@ package parallel
 import (
 	"sync"
 
-	"github.com/gorse-io/gorse/base"
+	"github.com/gorse-io/gorse/common/util"
 	"github.com/juju/errors"
 	"github.com/samber/lo"
 	"modernc.org/mathutil"
@@ -56,7 +56,7 @@ func Parallel(nJobs, nWorkers int, worker func(workerId, jobId int) error) error
 			// start workers
 			workerId := j
 			wg.Go(func() {
-				defer base.CheckPanic()
+				defer util.CheckPanic()
 				for {
 					// read job
 					jobId, ok := <-c

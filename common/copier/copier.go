@@ -16,8 +16,9 @@ package copier
 
 import (
 	"encoding"
-	"github.com/juju/errors"
 	"reflect"
+
+	"github.com/juju/errors"
 )
 
 func Copy(dst, src interface{}) error {
