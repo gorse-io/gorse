@@ -15,10 +15,11 @@
 package copier
 
 import (
+	"testing"
+
 	"github.com/juju/errors"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/protobuf/proto"
-	"testing"
 )
 
 func TestPrimitives(t *testing.T) {

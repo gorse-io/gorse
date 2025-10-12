@@ -34,7 +34,6 @@ import (
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/gorilla/securecookie"
 	_ "github.com/gorse-io/dashboard"
-	"github.com/gorse-io/gorse/base"
 	"github.com/gorse-io/gorse/cmd/version"
 	"github.com/gorse-io/gorse/common/expression"
 	"github.com/gorse-io/gorse/common/log"
@@ -1039,7 +1038,7 @@ func (m *Master) importExportUsers(response http.ResponseWriter, request *http.R
 				return
 			}
 			// validate user id
-			if err = base.ValidateId(user.UserId); err != nil {
+			if err = util.ValidateId(user.UserId); err != nil {
 				server.BadRequest(restful.NewResponse(response),
 					fmt.Errorf("invalid user id `%v` at line %d (%s)", user.UserId, lineCount, err.Error()))
 				return
@@ -1131,14 +1130,14 @@ func (m *Master) importExportItems(response http.ResponseWriter, request *http.R
 				return
 			}
 			// validate item id
-			if err = base.ValidateId(item.ItemId); err != nil {
+			if err = util.ValidateId(item.ItemId); err != nil {
 				server.BadRequest(restful.NewResponse(response),
 					fmt.Errorf("invalid item id `%v` at line %d (%s)", item.ItemId, lineCount, err.Error()))
 				return
 			}
 			// validate categories
 			for _, category := range item.Categories {
-				if err = base.ValidateId(category); err != nil {
+				if err = util.ValidateId(category); err != nil {
 					server.BadRequest(restful.NewResponse(response),
 						fmt.Errorf("invalid category `%v` at line %d (%s)", category, lineCount, err.Error()))
 					return
@@ -1243,19 +1242,19 @@ func (m *Master) importExportFeedback(response http.ResponseWriter, request *htt
 				return
 			}
 			// validate feedback type
-			if err = base.ValidateId(feedback.FeedbackType); err != nil {
+			if err = util.ValidateId(feedback.FeedbackType); err != nil {
 				server.BadRequest(restful.NewResponse(response),
 					fmt.Errorf("invalid feedback type `%v` at line %d (%s)", feedback.FeedbackType, lineCount, err.Error()))
 				return
 			}
 			// validate user id
-			if err = base.ValidateId(feedback.UserId); err != nil {
+			if err = util.ValidateId(feedback.UserId); err != nil {
 				server.BadRequest(restful.NewResponse(response),
 					fmt.Errorf("invalid user id `%v` at line %d (%s)", feedback.UserId, lineCount, err.Error()))
 				return
 			}
 			// validate item id
-			if err = base.ValidateId(feedback.ItemId); err != nil {
+			if err = util.ValidateId(feedback.ItemId); err != nil {
 				server.BadRequest(restful.NewResponse(response),
 					fmt.Errorf("invalid item id `%v` at line %d (%s)", feedback.ItemId, lineCount, err.Error()))
 				return

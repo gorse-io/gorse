@@ -30,7 +30,6 @@ import (
 
 	"github.com/c-bata/goptuna"
 	mapset "github.com/deckarep/golang-set/v2"
-	"github.com/gorse-io/gorse/base"
 	"github.com/gorse-io/gorse/common/expression"
 	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/common/parallel"
@@ -531,10 +530,10 @@ func newRankingDataset() (*dataset.Dataset, *dataset.Dataset) {
 }
 
 func newClickDataset() (*ctr.Dataset, *ctr.Dataset) {
-	dataset := &ctr.Dataset{
-		Index: base.NewUnifiedMapIndexBuilder().Build(),
+	dataSet := &ctr.Dataset{
+		Index: dataset.NewUnifiedMapIndexBuilder().Build(),
 	}
-	return dataset, dataset
+	return dataSet, dataSet
 }
 
 type mockMaster struct {
@@ -572,7 +571,7 @@ func newMockMaster(t *testing.T) *mockMaster {
 
 	// create user index
 	userIndexBuffer := bytes.NewBuffer(nil)
-	err = base.MarshalIndex(userIndexBuffer, base.NewMapIndex())
+	err = dataset.MarshalIndex(userIndexBuffer, dataset.NewMapIndex())
 	assert.NoError(t, err)
 
 	return &mockMaster{

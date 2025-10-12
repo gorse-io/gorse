@@ -18,7 +18,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/gorse-io/gorse/base"
+	"github.com/gorse-io/gorse/dataset"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
 )
@@ -111,14 +111,14 @@ func TestLoadDataFromBuiltIn(t *testing.T) {
 
 func TestDataset_Split(t *testing.T) {
 	// create dataset
-	unifiedIndex := base.NewUnifiedMapIndexBuilder()
-	dataset := NewMapIndexDataset()
+	unifiedIndex := dataset.NewUnifiedMapIndexBuilder()
+	dataSet := NewMapIndexDataset()
 	numUsers, numItems := 5, 6
 	for i := 0; i < numUsers; i++ {
 		unifiedIndex.AddUser(fmt.Sprintf("user%v", i))
 		unifiedIndex.AddUserLabel(fmt.Sprintf("user_label%v", 2*i))
 		unifiedIndex.AddUserLabel(fmt.Sprintf("user_label%v", 2*i+1))
-		dataset.UserLabels = append(dataset.UserLabels, []lo.Tuple2[int32, float32]{
+		dataSet.UserLabels = append(dataSet.UserLabels, []lo.Tuple2[int32, float32]{
 			{A: int32(2 * i), B: 1},
 			{A: int32(2*i + 1), B: 1},
 		})
@@ -128,7 +128,7 @@ func TestDataset_Split(t *testing.T) {
 		unifiedIndex.AddItemLabel(fmt.Sprintf("item_label%v", 3*i))
 		unifiedIndex.AddItemLabel(fmt.Sprintf("item_label%v", 3*i+1))
 		unifiedIndex.AddItemLabel(fmt.Sprintf("item_label%v", 3*i+2))
-		dataset.ItemLabels = append(dataset.ItemLabels, []lo.Tuple2[int32, float32]{
+		dataSet.ItemLabels = append(dataSet.ItemLabels, []lo.Tuple2[int32, float32]{
 			{A: int32(3 * i), B: 1},
 			{A: int32(3*i + 1), B: 1},
 			{A: int32(3*i + 2), B: 1},
@@ -137,44 +137,44 @@ func TestDataset_Split(t *testing.T) {
 	for i := 0; i < numUsers; i++ {
 		for j := 0; j < numItems; j++ {
 			if i+j > 4 {
-				dataset.Users = append(dataset.Users, int32(i))
-				dataset.Items = append(dataset.Items, int32(j))
-				dataset.ContextLabels = append(dataset.ContextLabels, []lo.Tuple2[int32, float32]{{A: int32(i * j), B: 0.5}})
-				dataset.Target = append(dataset.Target, 1)
-				dataset.PositiveCount++
+				dataSet.Users = append(dataSet.Users, int32(i))
+				dataSet.Items = append(dataSet.Items, int32(j))
+				dataSet.ContextLabels = append(dataSet.ContextLabels, []lo.Tuple2[int32, float32]{{A: int32(i * j), B: 0.5}})
+				dataSet.Target = append(dataSet.Target, 1)
+				dataSet.PositiveCount++
 			} else {
-				dataset.Users = append(dataset.Users, int32(i))
-				dataset.Items = append(dataset.Items, int32(j))
-				dataset.ContextLabels = append(dataset.ContextLabels, []lo.Tuple2[int32, float32]{{A: int32(i * j), B: 0.5}})
-				dataset.Target = append(dataset.Target, -1)
-				dataset.NegativeCount++
+				dataSet.Users = append(dataSet.Users, int32(i))
+				dataSet.Items = append(dataSet.Items, int32(j))
+				dataSet.ContextLabels = append(dataSet.ContextLabels, []lo.Tuple2[int32, float32]{{A: int32(i * j), B: 0.5}})
+				dataSet.Target = append(dataSet.Target, -1)
+				dataSet.NegativeCount++
 			}
 		}
 	}
-	dataset.Index = unifiedIndex.Build()
+	dataSet.Index = unifiedIndex.Build()
 
-	assert.Equal(t, numUsers*numItems, dataset.Count())
-	assert.Equal(t, numUsers, dataset.CountUsers())
-	assert.Equal(t, numItems, dataset.CountItems())
-	assert.Equal(t, numUsers*numItems/2, dataset.PositiveCount)
-	assert.Equal(t, numUsers*numItems/2, dataset.NegativeCount)
+	assert.Equal(t, numUsers*numItems, dataSet.Count())
+	assert.Equal(t, numUsers, dataSet.CountUsers())
+	assert.Equal(t, numItems, dataSet.CountItems())
+	assert.Equal(t, numUsers*numItems/2, dataSet.PositiveCount)
+	assert.Equal(t, numUsers*numItems/2, dataSet.NegativeCount)
 
-	features, values, target := dataset.Get(2)
+	features, values, target := dataSet.Get(2)
 	assert.Equal(t, []int32{
 		0,
-		dataset.Index.CountUsers() + 2,
-		dataset.Index.CountUsers() + dataset.Index.CountItems() + 0,
-		dataset.Index.CountUsers() + dataset.Index.CountItems() + 1,
-		dataset.Index.CountUsers() + dataset.Index.CountItems() + dataset.Index.CountUserLabels() + 6,
-		dataset.Index.CountUsers() + dataset.Index.CountItems() + dataset.Index.CountUserLabels() + 7,
-		dataset.Index.CountUsers() + dataset.Index.CountItems() + dataset.Index.CountUserLabels() + 8,
+		dataSet.Index.CountUsers() + 2,
+		dataSet.Index.CountUsers() + dataSet.Index.CountItems() + 0,
+		dataSet.Index.CountUsers() + dataSet.Index.CountItems() + 1,
+		dataSet.Index.CountUsers() + dataSet.Index.CountItems() + dataSet.Index.CountUserLabels() + 6,
+		dataSet.Index.CountUsers() + dataSet.Index.CountItems() + dataSet.Index.CountUserLabels() + 7,
+		dataSet.Index.CountUsers() + dataSet.Index.CountItems() + dataSet.Index.CountUserLabels() + 8,
 		0,
 	}, features)
 	assert.Equal(t, []float32{1, 1, 1, 1, 1, 1, 1, 0.5}, values)
 	assert.Equal(t, float32(-1), target)
 
 	// split
-	train, test := dataset.Split(0.2, 0)
+	train, test := dataSet.Split(0.2, 0)
 	assert.Equal(t, numUsers, train.CountUsers())
 	assert.Equal(t, numItems, train.CountItems())
 	assert.Equal(t, 24, train.Count())

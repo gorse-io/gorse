@@ -22,8 +22,9 @@ import (
 	"strings"
 
 	mapset "github.com/deckarep/golang-set/v2"
-	"github.com/gorse-io/gorse/base"
-	"github.com/gorse-io/gorse/base/jsonutil"
+	"github.com/gorse-io/gorse/common/jsonutil"
+	"github.com/gorse-io/gorse/common/util"
+	"github.com/gorse-io/gorse/dataset"
 	"github.com/gorse-io/gorse/model"
 	"github.com/juju/errors"
 	"github.com/samber/lo"
@@ -139,7 +140,7 @@ func convertEmbeddings(result []Embedding, prefix string, o any) []Embedding {
 
 // Dataset for click-through-rate models.
 type Dataset struct {
-	Index                  base.UnifiedIndex
+	Index                  dataset.UnifiedIndex
 	UserLabels             [][]lo.Tuple2[int32, float32]
 	ItemLabels             [][]lo.Tuple2[int32, float32]
 	ContextLabels          [][]lo.Tuple2[int32, float32]
@@ -148,7 +149,7 @@ type Dataset struct {
 	Target                 []float32
 	ItemEmbeddings         [][][]float32
 	ItemEmbeddingDimension []int
-	ItemEmbeddingIndex     *base.Index
+	ItemEmbeddingIndex     *dataset.Index
 	PositiveCount          int
 	NegativeCount          int
 }
@@ -183,7 +184,7 @@ func (dataset *Dataset) CountNegative() int {
 	return dataset.NegativeCount
 }
 
-func (dataset *Dataset) GetIndex() base.UnifiedIndex {
+func (dataset *Dataset) GetIndex() dataset.UnifiedIndex {
 	return dataset.Index
 }
 
@@ -314,7 +315,7 @@ func LoadDataFromBuiltIn(name string) (train, test *Dataset, err error) {
 	if test.ContextLabels, test.Target, testMaxLabel, err = LoadLibFMFile(testFilePath); err != nil {
 		return nil, nil, err
 	}
-	unifiedIndex := base.NewUnifiedDirectIndex(mathutil.MaxInt32(trainMaxLabel, testMaxLabel) + 1)
+	unifiedIndex := dataset.NewUnifiedDirectIndex(mathutil.MaxInt32(trainMaxLabel, testMaxLabel) + 1)
 	train.Index = unifiedIndex
 	test.Index = unifiedIndex
 	return
@@ -335,7 +336,7 @@ func (dataset *Dataset) Split(ratio float32, seed int64) (*Dataset, *Dataset) {
 	}
 	// split by random
 	numTestSize := int(float32(dataset.Count()) * ratio)
-	rng := base.NewRandomGenerator(seed)
+	rng := util.NewRandomGenerator(seed)
 	sampledIndex := mapset.NewSet(rng.Sample(0, dataset.Count(), numTestSize)...)
 	for i := 0; i < len(dataset.Target); i++ {
 		if sampledIndex.Contains(i) {

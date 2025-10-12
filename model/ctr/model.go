@@ -24,8 +24,6 @@ import (
 
 	"github.com/c-bata/goptuna"
 	"github.com/chewxy/math32"
-	"github.com/gorse-io/gorse/base"
-	"github.com/gorse-io/gorse/base/copier"
 	"github.com/gorse-io/gorse/common/encoding"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/common/monitor"
@@ -115,7 +113,7 @@ type FactorizationMachineSpawner interface {
 
 type BaseFactorizationMachines struct {
 	model.BaseModel
-	Index base.UnifiedIndex
+	Index dataset.UnifiedIndex
 }
 
 func (b *BaseFactorizationMachines) Init(trainSet dataset.CTRSplit) {
@@ -154,20 +152,6 @@ func UnmarshalModel(r io.Reader) (FactorizationMachines, error) {
 		return &fm, nil
 	}
 	return nil, fmt.Errorf("unknown model: %v", header)
-}
-
-// Clone a model with deep copy.
-func Clone(m FactorizationMachines) FactorizationMachines {
-	if cloner, ok := m.(FactorizationMachineCloner); ok {
-		return cloner.Clone()
-	}
-	var copied FactorizationMachines
-	if err := copier.Copy(&copied, m); err != nil {
-		panic(err)
-	} else {
-		copied.SetParams(copied.GetParams())
-		return copied
-	}
 }
 
 func Spawn(m FactorizationMachines) FactorizationMachines {
@@ -285,25 +269,25 @@ func (fm *FMV2) BatchPredict(inputs []lo.Tuple4[string, string, []Label, []Label
 	x := make([]lo.Tuple2[[]int32, []float32], len(inputs))
 	for i, input := range inputs {
 		// encode user
-		if userIndex := fm.Index.EncodeUser(input.A); userIndex != base.NotId {
+		if userIndex := fm.Index.EncodeUser(input.A); userIndex != dataset.NotId {
 			x[i].A = append(x[i].A, userIndex)
 			x[i].B = append(x[i].B, 1)
 		}
 		// encode item
-		if itemIndex := fm.Index.EncodeItem(input.B); itemIndex != base.NotId {
+		if itemIndex := fm.Index.EncodeItem(input.B); itemIndex != dataset.NotId {
 			x[i].A = append(x[i].A, itemIndex)
 			x[i].B = append(x[i].B, 1)
 		}
 		// encode user labels
 		for _, userFeature := range input.C {
-			if userFeatureIndex := fm.Index.EncodeUserLabel(userFeature.Name); userFeatureIndex != base.NotId {
+			if userFeatureIndex := fm.Index.EncodeUserLabel(userFeature.Name); userFeatureIndex != dataset.NotId {
 				x[i].A = append(x[i].A, userFeatureIndex)
 				x[i].B = append(x[i].B, userFeature.Value)
 			}
 		}
 		// encode item labels
 		for _, itemFeature := range input.D {
-			if itemFeatureIndex := fm.Index.EncodeItemLabel(itemFeature.Name); itemFeatureIndex != base.NotId {
+			if itemFeatureIndex := fm.Index.EncodeItemLabel(itemFeature.Name); itemFeatureIndex != dataset.NotId {
 				x[i].A = append(x[i].A, itemFeatureIndex)
 				x[i].B = append(x[i].B, itemFeature.Value)
 			}
@@ -400,7 +384,7 @@ func (fm *FMV2) Marshal(w io.Writer) error {
 		return errors.Trace(err)
 	}
 	// write index
-	if err := base.MarshalUnifiedIndex(w, fm.Index); err != nil {
+	if err := dataset.MarshalUnifiedIndex(w, fm.Index); err != nil {
 		return errors.Trace(err)
 	}
 	// write dataset stats
@@ -425,7 +409,7 @@ func (fm *FMV2) Unmarshal(r io.Reader) error {
 	}
 	fm.SetParams(fm.Params)
 	// read index
-	fm.Index, err = base.UnmarshalUnifiedIndex(r)
+	fm.Index, err = dataset.UnmarshalUnifiedIndex(r)
 	if err != nil {
 		return errors.Trace(err)
 	}

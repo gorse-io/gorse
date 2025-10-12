@@ -24,7 +24,6 @@ import (
 
 	"github.com/chewxy/math32"
 	mapset "github.com/deckarep/golang-set/v2"
-	"github.com/gorse-io/gorse/base"
 	"github.com/gorse-io/gorse/common/util"
 	"github.com/gorse-io/gorse/model"
 	"github.com/gorse-io/gorse/storage/data"
@@ -65,7 +64,7 @@ type CTRSplit interface {
 	CountContextLabels() int
 	CountPositive() int
 	CountNegative() int
-	GetIndex() base.UnifiedIndex
+	GetIndex() UnifiedIndex
 	GetTarget(i int) float32
 	Get(i int) ([]int32, []float32, float32)
 }
@@ -230,7 +229,7 @@ func (d *Dataset) AddFeedback(userId, itemId string) {
 
 func (d *Dataset) SampleUserNegatives(excludeSet CFSplit, numCandidates int) [][]int32 {
 	if len(d.negatives) == 0 {
-		rng := base.NewRandomGenerator(0)
+		rng := util.NewRandomGenerator(0)
 		d.negatives = make([][]int32, d.CountUsers())
 		for userIndex := 0; userIndex < d.CountUsers(); userIndex++ {
 			s1 := mapset.NewSet(d.GetUserFeedback()[userIndex]...)
@@ -252,7 +251,7 @@ func (d *Dataset) SplitCF(numTestUsers int, seed int64) (CFSplit, CFSplit) {
 	trainSet.itemFeedback, testSet.itemFeedback = make([][]int32, d.CountItems()), make([][]int32, d.CountItems())
 	trainSet.userDict, testSet.userDict = d.userDict, d.userDict
 	trainSet.itemDict, testSet.itemDict = d.itemDict, d.itemDict
-	rng := base.NewRandomGenerator(seed)
+	rng := util.NewRandomGenerator(seed)
 	if numTestUsers >= d.CountUsers() || numTestUsers <= 0 {
 		for userIndex := int32(0); userIndex < int32(d.CountUsers()); userIndex++ {
 			if len(d.userFeedback[userIndex]) > 0 {

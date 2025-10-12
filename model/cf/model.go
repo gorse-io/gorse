@@ -26,13 +26,12 @@ import (
 	"github.com/c-bata/goptuna"
 	"github.com/chewxy/math32"
 	mapset "github.com/deckarep/golang-set/v2"
-	"github.com/gorse-io/gorse/base"
-	"github.com/gorse-io/gorse/base/copier"
 	"github.com/gorse-io/gorse/common/encoding"
 	"github.com/gorse-io/gorse/common/floats"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/common/parallel"
+	"github.com/gorse-io/gorse/common/util"
 	"github.com/gorse-io/gorse/dataset"
 	"github.com/gorse-io/gorse/model"
 	"github.com/gorse-io/gorse/protocol"
@@ -301,17 +300,6 @@ func (baseModel *BaseMatrixFactorization) Invalid() bool {
 		baseModel.UserFactor == nil
 }
 
-// Clone a model with deep copy.
-func Clone(m MatrixFactorization) MatrixFactorization {
-	var copied MatrixFactorization
-	if err := copier.Copy(&copied, m); err != nil {
-		panic(err)
-	} else {
-		copied.SetParams(copied.GetParams())
-		return copied
-	}
-}
-
 func GetModelName(m Model) string {
 	switch m.(type) {
 	case *BPR:
@@ -419,13 +407,13 @@ func (bpr *BPR) Fit(ctx context.Context, trainSet, valSet dataset.CFSplit, confi
 		zap.Any("config", config))
 	bpr.Init(trainSet)
 	// Create buffers
-	temp := base.NewMatrix32(config.Jobs, bpr.nFactors)
-	userFactor := base.NewMatrix32(config.Jobs, bpr.nFactors)
-	positiveItemFactor := base.NewMatrix32(config.Jobs, bpr.nFactors)
-	negativeItemFactor := base.NewMatrix32(config.Jobs, bpr.nFactors)
-	rng := make([]base.RandomGenerator, config.Jobs)
+	temp := util.NewMatrix32(config.Jobs, bpr.nFactors)
+	userFactor := util.NewMatrix32(config.Jobs, bpr.nFactors)
+	positiveItemFactor := util.NewMatrix32(config.Jobs, bpr.nFactors)
+	negativeItemFactor := util.NewMatrix32(config.Jobs, bpr.nFactors)
+	rng := make([]util.RandomGenerator, config.Jobs)
 	for i := 0; i < config.Jobs; i++ {
-		rng[i] = base.NewRandomGenerator(bpr.GetRandomGenerator().Int63())
+		rng[i] = util.NewRandomGenerator(bpr.GetRandomGenerator().Int63())
 	}
 	// Convert array to hashmap
 	userFeedback := make([]mapset.Set[int32], trainSet.CountUsers())
@@ -604,7 +592,7 @@ func (als *ALS) Fit(ctx context.Context, trainSet, valSet dataset.CFSplit, confi
 		zap.Any("config", config))
 	als.Init(trainSet)
 	// Create temporary matrix
-	s := base.NewMatrix32(als.nFactors, als.nFactors)
+	s := util.NewMatrix32(als.nFactors, als.nFactors)
 	userPredictions := make([][]float32, config.Jobs)
 	itemPredictions := make([][]float32, config.Jobs)
 	userRes := make([][]float32, config.Jobs)

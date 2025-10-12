@@ -25,8 +25,8 @@ import (
 	"time"
 
 	"github.com/XSAM/otelsql"
-	"github.com/gorse-io/gorse/base/jsonutil"
 	"github.com/gorse-io/gorse/common/expression"
+	"github.com/gorse-io/gorse/common/jsonutil"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/storage"
 	"github.com/juju/errors"
@@ -122,9 +122,9 @@ type ItemPatch struct {
 
 // User stores meta data about user.
 type User struct {
-	UserId    string `gorm:"primaryKey" mapstructure:"user_id"`
-	Labels    any    `gorm:"serializer:json" mapstructure:"labels"`
-	Comment   string `mapstructure:"comment"`
+	UserId  string `gorm:"primaryKey" mapstructure:"user_id"`
+	Labels  any    `gorm:"serializer:json" mapstructure:"labels"`
+	Comment string `mapstructure:"comment"`
 }
 
 // UserPatch is the modification on a user.

@@ -20,7 +20,6 @@ import (
 
 	"github.com/c-bata/goptuna"
 	"github.com/c-bata/goptuna/tpe"
-	"github.com/gorse-io/gorse/base"
 	"github.com/gorse-io/gorse/dataset"
 	"github.com/gorse-io/gorse/model"
 	"github.com/samber/lo"
@@ -30,7 +29,7 @@ import (
 // NewMapIndexDataset creates a data set.
 func NewMapIndexDataset() *Dataset {
 	s := new(Dataset)
-	s.Index = base.NewUnifiedDirectIndex(0)
+	s.Index = dataset.NewUnifiedDirectIndex(0)
 	return s
 }
 
@@ -46,11 +45,11 @@ func (m *mockFactorizationMachineForSearch) Invalid() bool {
 	panic("implement me")
 }
 
-func (m *mockFactorizationMachineForSearch) GetUserIndex() base.Index {
+func (m *mockFactorizationMachineForSearch) GetUserIndex() dataset.Index {
 	panic("don't call me")
 }
 
-func (m *mockFactorizationMachineForSearch) GetItemIndex() base.Index {
+func (m *mockFactorizationMachineForSearch) GetItemIndex() dataset.Index {
 	panic("don't call me")
 }
 
