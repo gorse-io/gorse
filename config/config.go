@@ -200,11 +200,16 @@ func (config *UserToUserConfig) Hash() string {
 }
 
 type CollaborativeConfig struct {
-	ModelFitPeriod        time.Duration `mapstructure:"model_fit_period" validate:"gt=0"`
-	ModelSearchPeriod     time.Duration `mapstructure:"model_search_period" validate:"gt=0"`
-	ModelSearchEpoch      int           `mapstructure:"model_search_epoch" validate:"gt=0"`
-	ModelSearchTrials     int           `mapstructure:"model_search_trials" validate:"gt=0"`
-	EnableModelSizeSearch bool          `mapstructure:"enable_model_size_search"`
+	ModelFitPeriod        time.Duration       `mapstructure:"model_fit_period" validate:"gt=0"`
+	ModelSearchPeriod     time.Duration       `mapstructure:"model_search_period" validate:"gt=0"`
+	ModelSearchEpoch      int                 `mapstructure:"model_search_epoch" validate:"gt=0"`
+	ModelSearchTrials     int                 `mapstructure:"model_search_trials" validate:"gt=0"`
+	EnableModelSizeSearch bool                `mapstructure:"enable_model_size_search"`
+	EarlyStopping         EarlyStoppingConfig `mapstructure:"early_stopping"`
+}
+
+type EarlyStoppingConfig struct {
+	Patience int `mapstructure:"patience"`
 }
 
 type ExternalConfig struct {
@@ -219,15 +224,16 @@ type ReplacementConfig struct {
 }
 
 type OfflineConfig struct {
-	CheckRecommendPeriod         time.Duration      `mapstructure:"check_recommend_period" validate:"gt=0"`
-	RefreshRecommendPeriod       time.Duration      `mapstructure:"refresh_recommend_period" validate:"gt=0"`
-	ExploreRecommend             map[string]float64 `mapstructure:"explore_recommend"`
-	EnableLatestRecommend        bool               `mapstructure:"enable_latest_recommend"`
-	EnablePopularRecommend       bool               `mapstructure:"enable_popular_recommend"`
-	EnableUserBasedRecommend     bool               `mapstructure:"enable_user_based_recommend"`
-	EnableItemBasedRecommend     bool               `mapstructure:"enable_item_based_recommend"`
-	EnableColRecommend           bool               `mapstructure:"enable_collaborative_recommend"`
-	EnableClickThroughPrediction bool               `mapstructure:"enable_click_through_prediction"`
+	CheckRecommendPeriod         time.Duration       `mapstructure:"check_recommend_period" validate:"gt=0"`
+	RefreshRecommendPeriod       time.Duration       `mapstructure:"refresh_recommend_period" validate:"gt=0"`
+	ExploreRecommend             map[string]float64  `mapstructure:"explore_recommend"`
+	EnableLatestRecommend        bool                `mapstructure:"enable_latest_recommend"`
+	EnablePopularRecommend       bool                `mapstructure:"enable_popular_recommend"`
+	EnableUserBasedRecommend     bool                `mapstructure:"enable_user_based_recommend"`
+	EnableItemBasedRecommend     bool                `mapstructure:"enable_item_based_recommend"`
+	EnableColRecommend           bool                `mapstructure:"enable_collaborative_recommend"`
+	EnableClickThroughPrediction bool                `mapstructure:"enable_click_through_prediction"`
+	EarlyStopping                EarlyStoppingConfig `mapstructure:"early_stopping"`
 	exploreRecommendLock         sync.RWMutex
 }
 

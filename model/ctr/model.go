@@ -62,14 +62,16 @@ func (score Score) BetterThan(s Score) bool {
 }
 
 type FitConfig struct {
-	Jobs    int
-	Verbose int
+	Jobs     int
+	Verbose  int
+	Patience int
 }
 
 func NewFitConfig() *FitConfig {
 	return &FitConfig{
-		Jobs:    1,
-		Verbose: 10,
+		Jobs:     1,
+		Verbose:  10,
+		Patience: 10,
 	}
 }
 
@@ -80,6 +82,11 @@ func (config *FitConfig) SetVerbose(verbose int) *FitConfig {
 
 func (config *FitConfig) SetJobs(jobs int) *FitConfig {
 	config.Jobs = jobs
+	return config
+}
+
+func (config *FitConfig) SetPatience(patience int) *FitConfig {
+	config.Patience = patience
 	return config
 }
 
@@ -310,9 +317,15 @@ func (fm *FMV2) Init(trainSet dataset.CTRSplit) {
 }
 
 func (fm *FMV2) Fit(ctx context.Context, trainSet, testSet dataset.CTRSplit, config *FitConfig) Score {
+	log.Logger().Info("fit DeepFM",
+		zap.Int("train_set_size", trainSet.Count()),
+		zap.Int("test_set_size", testSet.Count()),
+		zap.Any("params", fm.GetParams()),
+		zap.Any("config", config))
 	fm.Init(trainSet)
 	evalStart := time.Now()
 	score := EvaluateClassification(fm, testSet, config.Jobs)
+	scores := []lo.Tuple2[int, float32]{{A: 0, B: score.AUC}}
 	evalTime := time.Since(evalStart)
 	fields := append([]zap.Field{zap.String("eval_time", evalTime.String())}, score.ZapFields()...)
 	log.Logger().Info(fmt.Sprintf("fit DeepFM %v/%v", 0, fm.nEpochs), fields...)
@@ -359,6 +372,7 @@ func (fm *FMV2) Fit(ctx context.Context, trainSet, testSet dataset.CTRSplit, con
 		if epoch%config.Verbose == 0 || epoch == fm.nEpochs {
 			evalStart = time.Now()
 			score = EvaluateClassification(fm, testSet, config.Jobs)
+			scores = append(scores, lo.Tuple2[int, float32]{A: epoch, B: score.AUC})
 			evalTime = time.Since(evalStart)
 			fields = append([]zap.Field{
 				zap.String("fit_time", fitTime.String()),
@@ -370,6 +384,17 @@ func (fm *FMV2) Fit(ctx context.Context, trainSet, testSet dataset.CTRSplit, con
 			if math32.IsNaN(cost) || math32.IsNaN(score.GetValue()) {
 				log.Logger().Warn("model diverged", zap.Float32("lr", fm.lr))
 				break
+			}
+			// early stopping if no improvement in last `patience` epochs
+			if config.Patience > 0 && epoch > config.Patience {
+				epochScore := lo.MaxBy(scores, func(a, b lo.Tuple2[int, float32]) bool { return a.B > b.B })
+				if epochScore.A <= epoch-config.Patience {
+					log.Logger().Info("early stopping",
+						zap.Int("best_epoch", epochScore.A),
+						zap.Float32("best_auc", epochScore.B),
+						zap.Int("patience", config.Patience))
+					break
+				}
 			}
 		}
 		span.Add(1)

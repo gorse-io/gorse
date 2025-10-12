@@ -52,6 +52,7 @@ type FitConfig struct {
 	Verbose    int
 	Candidates int
 	TopK       int
+	Patience   int
 }
 
 func NewFitConfig() *FitConfig {
@@ -70,6 +71,11 @@ func (config *FitConfig) SetVerbose(verbose int) *FitConfig {
 
 func (config *FitConfig) SetJobs(jobs int) *FitConfig {
 	config.Jobs = jobs
+	return config
+}
+
+func (config *FitConfig) SetPatience(patience int) *FitConfig {
+	config.Patience = patience
 	return config
 }
 
@@ -424,13 +430,14 @@ func (bpr *BPR) Fit(ctx context.Context, trainSet, valSet dataset.CFSplit, confi
 		}
 	}
 	evalStart := time.Now()
-	scores := Evaluate(bpr, valSet, trainSet, config.TopK, config.Candidates, config.Jobs, NDCG, Precision, Recall)
+	score := Evaluate(bpr, valSet, trainSet, config.TopK, config.Candidates, config.Jobs, NDCG, Precision, Recall)
+	scores := []lo.Tuple2[int, float32]{{A: 0, B: score[0]}}
 	evalTime := time.Since(evalStart)
 	log.Logger().Debug(fmt.Sprintf("fit bpr %v/%v", 0, bpr.nEpochs),
 		zap.String("eval_time", evalTime.String()),
-		zap.Float32(fmt.Sprintf("NDCG@%v", config.TopK), scores[0]),
-		zap.Float32(fmt.Sprintf("Precision@%v", config.TopK), scores[1]),
-		zap.Float32(fmt.Sprintf("Recall@%v", config.TopK), scores[2]))
+		zap.Float32(fmt.Sprintf("NDCG@%v", config.TopK), score[0]),
+		zap.Float32(fmt.Sprintf("Precision@%v", config.TopK), score[1]),
+		zap.Float32(fmt.Sprintf("Recall@%v", config.TopK), score[2]))
 	// Training
 	_, span := monitor.Start(ctx, "BPR.Fit", bpr.nEpochs)
 	for epoch := 1; epoch <= bpr.nEpochs; epoch++ {
@@ -484,26 +491,38 @@ func (bpr *BPR) Fit(ctx context.Context, trainSet, valSet dataset.CFSplit, confi
 		// Cross validation
 		if epoch%config.Verbose == 0 || epoch == bpr.nEpochs {
 			evalStart = time.Now()
-			scores = Evaluate(bpr, valSet, trainSet, config.TopK, config.Candidates, config.Jobs, NDCG, Precision, Recall)
+			score = Evaluate(bpr, valSet, trainSet, config.TopK, config.Candidates, config.Jobs, NDCG, Precision, Recall)
+			scores = append(scores, lo.Tuple2[int, float32]{A: epoch, B: score[0]})
 			evalTime = time.Since(evalStart)
 			log.Logger().Info(fmt.Sprintf("fit bpr %v/%v", epoch, bpr.nEpochs),
 				zap.String("fit_time", fitTime.String()),
 				zap.String("eval_time", evalTime.String()),
-				zap.Float32(fmt.Sprintf("NDCG@%v", config.TopK), scores[0]),
-				zap.Float32(fmt.Sprintf("Precision@%v", config.TopK), scores[1]),
-				zap.Float32(fmt.Sprintf("Recall@%v", config.TopK), scores[2]))
+				zap.Float32(fmt.Sprintf("NDCG@%v", config.TopK), score[0]),
+				zap.Float32(fmt.Sprintf("Precision@%v", config.TopK), score[1]),
+				zap.Float32(fmt.Sprintf("Recall@%v", config.TopK), score[2]))
+			// early stopping if no improvement in last `patience` epochs
+			if config.Patience > 0 && epoch > config.Patience {
+				epochScore := lo.MaxBy(scores, func(a, b lo.Tuple2[int, float32]) bool { return a.B > b.B })
+				if epochScore.A <= epoch-config.Patience {
+					log.Logger().Info("early stopping",
+						zap.Int("best_epoch", epochScore.A),
+						zap.Float32("best_NDCG", epochScore.B),
+						zap.Int("patience", config.Patience))
+					break
+				}
+			}
 		}
 		span.Add(1)
 	}
 	span.End()
 	log.Logger().Info("fit bpr complete",
-		zap.Float32(fmt.Sprintf("NDCG@%v", config.TopK), scores[0]),
-		zap.Float32(fmt.Sprintf("Precision@%v", config.TopK), scores[1]),
-		zap.Float32(fmt.Sprintf("Recall@%v", config.TopK), scores[2]))
+		zap.Float32(fmt.Sprintf("NDCG@%v", config.TopK), score[0]),
+		zap.Float32(fmt.Sprintf("Precision@%v", config.TopK), score[1]),
+		zap.Float32(fmt.Sprintf("Recall@%v", config.TopK), score[2]))
 	return Score{
-		NDCG:      scores[0],
-		Precision: scores[1],
-		Recall:    scores[2],
+		NDCG:      score[0],
+		Precision: score[1],
+		Recall:    score[2],
 	}
 }
 
@@ -605,13 +624,14 @@ func (als *ALS) Fit(ctx context.Context, trainSet, valSet dataset.CFSplit, confi
 	}
 	// evaluate initial model
 	evalStart := time.Now()
-	scores := Evaluate(als, valSet, trainSet, config.TopK, config.Candidates, config.Jobs, NDCG, Precision, Recall)
+	score := Evaluate(als, valSet, trainSet, config.TopK, config.Candidates, config.Jobs, NDCG, Precision, Recall)
+	scores := []lo.Tuple2[int, float32]{{A: 0, B: score[0]}}
 	evalTime := time.Since(evalStart)
 	log.Logger().Debug(fmt.Sprintf("fit als %v/%v", 0, als.nEpochs),
 		zap.String("eval_time", evalTime.String()),
-		zap.Float32(fmt.Sprintf("NDCG@%v", config.TopK), scores[0]),
-		zap.Float32(fmt.Sprintf("Precision@%v", config.TopK), scores[1]),
-		zap.Float32(fmt.Sprintf("Recall@%v", config.TopK), scores[2]))
+		zap.Float32(fmt.Sprintf("NDCG@%v", config.TopK), score[0]),
+		zap.Float32(fmt.Sprintf("Precision@%v", config.TopK), score[1]),
+		zap.Float32(fmt.Sprintf("Recall@%v", config.TopK), score[2]))
 
 	_, span := monitor.Start(ctx, "ALS.Fit", als.nEpochs)
 	for ep := 1; ep <= als.nEpochs; ep++ {
@@ -702,27 +722,39 @@ func (als *ALS) Fit(ctx context.Context, trainSet, valSet dataset.CFSplit, confi
 		// Cross validation
 		if ep%config.Verbose == 0 || ep == als.nEpochs {
 			evalStart = time.Now()
-			scores = Evaluate(als, valSet, trainSet, config.TopK, config.Candidates, config.Jobs, NDCG, Precision, Recall)
+			score = Evaluate(als, valSet, trainSet, config.TopK, config.Candidates, config.Jobs, NDCG, Precision, Recall)
+			scores = append(scores, lo.Tuple2[int, float32]{A: ep, B: score[0]})
 			evalTime = time.Since(evalStart)
 			log.Logger().Debug(fmt.Sprintf("fit als %v/%v", ep, als.nEpochs),
 				zap.String("fit_time", fitTime.String()),
 				zap.String("eval_time", evalTime.String()),
-				zap.Float32(fmt.Sprintf("NDCG@%v", config.TopK), scores[0]),
-				zap.Float32(fmt.Sprintf("Precision@%v", config.TopK), scores[1]),
-				zap.Float32(fmt.Sprintf("Recall@%v", config.TopK), scores[2]))
+				zap.Float32(fmt.Sprintf("NDCG@%v", config.TopK), score[0]),
+				zap.Float32(fmt.Sprintf("Precision@%v", config.TopK), score[1]),
+				zap.Float32(fmt.Sprintf("Recall@%v", config.TopK), score[2]))
+			// early stopping if no improvement in last `patience` epochs
+			if config.Patience > 0 && ep > config.Patience {
+				epochScore := lo.MaxBy(scores, func(a, b lo.Tuple2[int, float32]) bool { return a.B > b.B })
+				if epochScore.A <= ep-config.Patience {
+					log.Logger().Info("early stopping",
+						zap.Int("best_epoch", epochScore.A),
+						zap.Float32("best_NDCG", epochScore.B),
+						zap.Int("patience", config.Patience))
+					break
+				}
+			}
 		}
 		span.Add(1)
 	}
 	span.End()
 
 	log.Logger().Info("fit als complete",
-		zap.Float32(fmt.Sprintf("NDCG@%v", config.TopK), scores[0]),
-		zap.Float32(fmt.Sprintf("Precision@%v", config.TopK), scores[1]),
-		zap.Float32(fmt.Sprintf("Recall@%v", config.TopK), scores[2]))
+		zap.Float32(fmt.Sprintf("NDCG@%v", config.TopK), score[0]),
+		zap.Float32(fmt.Sprintf("Precision@%v", config.TopK), score[1]),
+		zap.Float32(fmt.Sprintf("Recall@%v", config.TopK), score[2]))
 	return Score{
-		NDCG:      scores[0],
-		Precision: scores[1],
-		Recall:    scores[2],
+		NDCG:      score[0],
+		Precision: score[1],
+		Recall:    score[2],
 	}
 }
 
