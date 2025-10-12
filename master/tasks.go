@@ -861,7 +861,10 @@ func (m *Master) trainCollaborativeFiltering(trainSet, testSet dataset.CFSplit) 
 	startFitTime := time.Now()
 	fitCtx, fitSpan := monitor.Start(newCtx, "Fit", 1)
 	collaborativeFilteringModel := m.newCollaborativeFilteringModel(collaborativeFilteringType, collaborativeFilteringParams)
-	score := collaborativeFilteringModel.Fit(fitCtx, trainSet, testSet, cf.NewFitConfig().SetJobs(m.Config.Master.NumJobs))
+	score := collaborativeFilteringModel.Fit(fitCtx, trainSet, testSet,
+		cf.NewFitConfig().
+			SetJobs(m.Config.Master.NumJobs).
+			SetPatience(m.Config.Recommend.Collaborative.EarlyStopping.Patience))
 	CollaborativeFilteringFitSeconds.Set(time.Since(startFitTime).Seconds())
 	span.Add(1)
 	fitSpan.End()
@@ -1003,7 +1006,10 @@ func (m *Master) trainClickThroughRatePrediction(trainSet, testSet *ctr.Dataset)
 	m.clickThroughRateModelMutex.Unlock()
 
 	startFitTime := time.Now()
-	score := clickModel.Fit(newCtx, trainSet, testSet, ctr.NewFitConfig().SetJobs(m.Config.Master.NumJobs))
+	score := clickModel.Fit(newCtx, trainSet, testSet,
+		ctr.NewFitConfig().
+			SetJobs(m.Config.Master.NumJobs).
+			SetPatience(m.Config.Recommend.Offline.EarlyStopping.Patience))
 	RankingFitSeconds.Set(time.Since(startFitTime).Seconds())
 
 	// update match model
@@ -1176,7 +1182,10 @@ func (m *Master) optimizeCollaborativeFiltering(trainSet, testSet dataset.CFSpli
 		"ALS": func() cf.MatrixFactorization {
 			return cf.NewALS(nil)
 		},
-	}, trainSet, testSet, cf.NewFitConfig().SetJobs(m.Config.Master.NumJobs)).
+	}, trainSet, testSet,
+		cf.NewFitConfig().
+			SetJobs(m.Config.Master.NumJobs).
+			SetPatience(m.Config.Recommend.Collaborative.EarlyStopping.Patience)).
 		WithContext(ctx).
 		WithSpan(span)
 
@@ -1219,7 +1228,10 @@ func (m *Master) optimizeClickThroughRatePrediction(trainSet, testSet *ctr.Datas
 		"FM": func() ctr.FactorizationMachines {
 			return ctr.NewFMV2(nil)
 		},
-	}, trainSet, testSet, ctr.NewFitConfig().SetJobs(m.Config.Master.NumJobs)).
+	}, trainSet, testSet,
+		ctr.NewFitConfig().
+			SetJobs(m.Config.Master.NumJobs).
+			SetPatience(m.Config.Recommend.Offline.EarlyStopping.Patience)).
 		WithContext(ctx).
 		WithSpan(span)
 

@@ -183,8 +183,11 @@ name = "trending"
 
 # The script to fetch external recommended items. The script should return a list of item IDs.
 script = """
-const body = fetch("https://cdn.jsdelivr.net/gh/isboyjc/github-trending-api/data/daily/all.json").body;
-const data = JSON.parse(body);
+const response = fetch("https://cdn.jsdelivr.net/gh/isboyjc/github-trending-api/data/daily/all.json");
+if (!response.ok) {
+  throw new Error(`${response.status} ${response.body}`);
+}
+const data = JSON.parse(response.body);
 data["items"].map((item) => {
   return item["title"].toLowerCase().replace("/", ":");
 })
@@ -215,6 +218,11 @@ model_search_trials = 10
 
 # Enable searching models of different sizes, which consume more memory. The default value is false.
 enable_model_size_search = false
+
+[recommend.collaborative.early_stopping]
+
+# Number of epochs to wait if no improvement and then stop the training. The default value is 10.
+patience = 10
 
 [recommend.replacement]
 
@@ -259,6 +267,11 @@ enable_click_through_prediction = true
 #   latest: Recommend latest items to cold-start users.
 # The default values is { popular = 0.0, latest = 0.0 }.
 explore_recommend = { popular = 0.1, latest = 0.2 }
+
+[recommend.offline.early_stopping]
+
+# Number of epochs to wait if no improvement and then stop the training. The default value is 10.
+patience = 10
 
 [recommend.online]
 
