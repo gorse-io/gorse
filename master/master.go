@@ -57,6 +57,15 @@ type ScheduleState struct {
 	StartTime   time.Time `json:"start_time"`
 }
 
+type Datasets struct {
+	rankingDataset  *dataset.Dataset
+	rankingTrainSet dataset.CFSplit
+	rankingTestSet  dataset.CFSplit
+	clickDataset    *ctr.Dataset
+	clickTrainSet   *ctr.Dataset
+	clickTestSet    *ctr.Dataset
+}
+
 // Master is the master node.
 type Master struct {
 	protocol.UnimplementedMasterServer
@@ -72,16 +81,6 @@ type Master struct {
 	metaStore  meta.Database
 	blobStore  blob.Store
 	blobServer *blob.MasterStoreServer
-
-	// ranking dataset
-	rankingTrainSet  dataset.CFSplit
-	rankingTestSet   dataset.CFSplit
-	rankingDataMutex sync.RWMutex
-
-	// click dataset
-	clickTrainSet  *ctr.Dataset
-	clickTestSet   *ctr.Dataset
-	clickDataMutex sync.RWMutex
 
 	// collaborative filtering
 	collaborativeFilteringModelMutex   sync.RWMutex
@@ -328,11 +327,6 @@ func (m *Master) RunTasksLoop() {
 		err = m.runLoadDatasetTask()
 		if err != nil {
 			log.Logger().Error("failed to load ranking dataset", zap.Error(err))
-			continue
-		}
-		if m.rankingTrainSet.CountUsers() == 0 && m.rankingTrainSet.CountItems() == 0 && m.rankingTrainSet.CountFeedback() == 0 {
-			log.Logger().Warn("empty ranking dataset",
-				zap.Any("positive_feedback_type", m.Config.Recommend.DataSource.PositiveFeedbackTypes))
 			continue
 		}
 	}

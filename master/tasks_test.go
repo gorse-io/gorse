@@ -86,7 +86,6 @@ func (s *MasterTestSuite) TestFindItemToItem() {
 		[]expression.FeedbackTypeExpression{expression.MustParseFeedbackTypeExpression("FeedbackType")},
 		nil, 0, 0, NewOnlineEvaluator(), nil)
 	s.NoError(err)
-	s.rankingTrainSet = dataSet
 
 	// similar items (common users)
 	s.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "default", Type: "users"}}
@@ -170,7 +169,6 @@ func (s *MasterTestSuite) TestUserToUser() {
 		[]expression.FeedbackTypeExpression{expression.MustParseFeedbackTypeExpression("FeedbackType")},
 		nil, 0, 0, NewOnlineEvaluator(), nil)
 	s.NoError(err)
-	s.rankingTrainSet = dataSet
 
 	// similar items (common users)
 	s.Config.Recommend.UserToUser = []config.UserToUserConfig{{Name: "default", Type: "items"}}
@@ -280,24 +278,24 @@ func (s *MasterTestSuite) TestLoadDataFromDatabase() {
 	s.NoError(err)
 
 	// load dataset
-	_, _, err = s.loadDataset()
+	datasets, err := s.loadDataset()
 	s.NoError(err)
-	s.Equal(11, s.rankingTrainSet.CountUsers())
-	s.Equal(10, s.rankingTrainSet.CountItems())
-	s.Equal(11, s.rankingTestSet.CountUsers())
-	s.Equal(10, s.rankingTestSet.CountItems())
-	s.Equal(55, s.rankingTrainSet.CountFeedback()+s.rankingTestSet.CountFeedback())
-	s.Equal(11, s.clickTrainSet.CountUsers())
-	s.Equal(10, s.clickTrainSet.CountItems())
-	s.Equal(11, s.clickTestSet.CountUsers())
-	s.Equal(10, s.clickTestSet.CountItems())
-	s.Equal(int32(3), s.clickTrainSet.Index.CountItemLabels())
-	s.Equal(int32(5), s.clickTrainSet.Index.CountUserLabels())
-	s.Equal(int32(3), s.clickTestSet.Index.CountItemLabels())
-	s.Equal(int32(5), s.clickTestSet.Index.CountUserLabels())
-	s.Equal(110, s.clickTrainSet.Count()+s.clickTestSet.Count())
-	s.Equal(55, s.clickTrainSet.PositiveCount+s.clickTestSet.PositiveCount)
-	s.Equal(55, s.clickTrainSet.NegativeCount+s.clickTestSet.NegativeCount)
+	s.Equal(11, datasets.rankingTrainSet.CountUsers())
+	s.Equal(10, datasets.rankingTrainSet.CountItems())
+	s.Equal(11, datasets.rankingTestSet.CountUsers())
+	s.Equal(10, datasets.rankingTestSet.CountItems())
+	s.Equal(55, datasets.rankingTrainSet.CountFeedback()+datasets.rankingTestSet.CountFeedback())
+	s.Equal(11, datasets.clickTrainSet.CountUsers())
+	s.Equal(10, datasets.clickTrainSet.CountItems())
+	s.Equal(11, datasets.clickTestSet.CountUsers())
+	s.Equal(10, datasets.clickTestSet.CountItems())
+	s.Equal(int32(3), datasets.clickTrainSet.Index.CountItemLabels())
+	s.Equal(int32(5), datasets.clickTrainSet.Index.CountUserLabels())
+	s.Equal(int32(3), datasets.clickTestSet.Index.CountItemLabels())
+	s.Equal(int32(5), datasets.clickTestSet.Index.CountUserLabels())
+	s.Equal(110, datasets.clickTrainSet.Count()+datasets.clickTestSet.Count())
+	s.Equal(55, datasets.clickTrainSet.PositiveCount+datasets.clickTestSet.PositiveCount)
+	s.Equal(55, datasets.clickTrainSet.NegativeCount+datasets.clickTestSet.NegativeCount)
 
 	// check latest items
 	latest, err := s.CacheClient.SearchScores(ctx, cache.NonPersonalized, cache.Latest, []string{""}, 0, 100)
@@ -401,7 +399,7 @@ func (s *MasterTestSuite) TestNonPersonalizedRecommend() {
 	s.NoError(err)
 
 	// load dataset
-	_, _, err = s.loadDataset()
+	_, err = s.loadDataset()
 	s.NoError(err)
 
 	// check latest items
@@ -581,9 +579,9 @@ func (s *MasterTestSuite) TestGarbageCollection() {
 	s.NoError(err)
 
 	// load dataset and run garbage collection
-	_, dataSet, err := s.loadDataset()
+	datasets, err := s.loadDataset()
 	s.NoError(err)
-	err = s.collectGarbage(context.Background(), dataSet)
+	err = s.collectGarbage(context.Background(), datasets.rankingDataset)
 	s.NoError(err)
 
 	// check non-personalized cache

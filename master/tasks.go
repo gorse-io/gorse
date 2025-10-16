@@ -50,7 +50,7 @@ const (
 	batchSize            = 10000
 )
 
-func (m *Master) loadDataset() (*ctr.Dataset, *dataset.Dataset, error) {
+func (m *Master) loadDataset() (datasets Datasets, err error) {
 	ctx, span := m.tracer.Start(context.Background(), "Load Dataset", 1)
 	defer span.End()
 
@@ -63,7 +63,7 @@ func (m *Master) loadDataset() (*ctr.Dataset, *dataset.Dataset, error) {
 	for _, cfg := range m.Config.Recommend.NonPersonalized {
 		recommender, err := logics.NewNonPersonalized(cfg, m.Config.Recommend.CacheSize, initialStartTime)
 		if err != nil {
-			return nil, nil, errors.Trace(err)
+			return Datasets{}, errors.Trace(err)
 		}
 		nonPersonalizedRecommenders = append(nonPersonalizedRecommenders, recommender)
 	}
@@ -74,7 +74,7 @@ func (m *Master) loadDataset() (*ctr.Dataset, *dataset.Dataset, error) {
 		zap.Uint("item_ttl", m.Config.Recommend.DataSource.ItemTTL),
 		zap.Uint("feedback_ttl", m.Config.Recommend.DataSource.PositiveFeedbackTTL))
 	evaluator := NewOnlineEvaluator()
-	ctrDataset, dataSet, err := m.LoadDataFromDatabase(ctx, m.DataClient,
+	datasets.clickDataset, datasets.rankingDataset, err = m.LoadDataFromDatabase(ctx, m.DataClient,
 		m.Config.Recommend.DataSource.PositiveFeedbackTypes,
 		m.Config.Recommend.DataSource.ReadFeedbackTypes,
 		m.Config.Recommend.DataSource.ItemTTL,
@@ -82,7 +82,7 @@ func (m *Master) loadDataset() (*ctr.Dataset, *dataset.Dataset, error) {
 		evaluator,
 		nonPersonalizedRecommenders)
 	if err != nil {
-		return nil, nil, errors.Trace(err)
+		return Datasets{}, errors.Trace(err)
 	}
 
 	// save non-personalized recommenders to cache
@@ -105,41 +105,41 @@ func (m *Master) loadDataset() (*ctr.Dataset, *dataset.Dataset, error) {
 
 	// write statistics to database
 	if err = m.CacheClient.AddTimeSeriesPoints(ctx, []cache.TimeSeriesPoint{
-		{Name: cache.NumUsers, Value: float64(dataSet.CountUsers()), Timestamp: dataSet.GetTimestamp()},
-		{Name: cache.NumItems, Value: float64(dataSet.CountItems()), Timestamp: dataSet.GetTimestamp()},
-		{Name: cache.NumFeedback, Value: float64(len(ctrDataset.Target)), Timestamp: dataSet.GetTimestamp()},
-		{Name: cache.NumPosFeedbacks, Value: float64(ctrDataset.PositiveCount), Timestamp: dataSet.GetTimestamp()},
-		{Name: cache.NumNegFeedbacks, Value: float64(ctrDataset.NegativeCount), Timestamp: dataSet.GetTimestamp()},
+		{Name: cache.NumUsers, Value: float64(datasets.rankingDataset.CountUsers()), Timestamp: datasets.rankingDataset.GetTimestamp()},
+		{Name: cache.NumItems, Value: float64(datasets.rankingDataset.CountItems()), Timestamp: datasets.rankingDataset.GetTimestamp()},
+		{Name: cache.NumFeedback, Value: float64(len(datasets.clickDataset.Target)), Timestamp: datasets.rankingDataset.GetTimestamp()},
+		{Name: cache.NumPosFeedbacks, Value: float64(datasets.clickDataset.PositiveCount), Timestamp: datasets.rankingDataset.GetTimestamp()},
+		{Name: cache.NumNegFeedbacks, Value: float64(datasets.clickDataset.NegativeCount), Timestamp: datasets.rankingDataset.GetTimestamp()},
 	}); err != nil {
 		log.Logger().Error("failed to write timeseries points", zap.Error(err))
 	}
-	UsersTotal.Set(float64(dataSet.CountUsers()))
-	if err = m.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.NumUsers), dataSet.CountUsers())); err != nil {
+	UsersTotal.Set(float64(datasets.rankingDataset.CountUsers()))
+	if err = m.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.NumUsers), datasets.rankingDataset.CountUsers())); err != nil {
 		log.Logger().Error("failed to write number of users", zap.Error(err))
 	}
-	ItemsTotal.Set(float64(dataSet.CountItems()))
-	if err = m.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.NumItems), dataSet.CountItems())); err != nil {
+	ItemsTotal.Set(float64(datasets.rankingDataset.CountItems()))
+	if err = m.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.NumItems), datasets.rankingDataset.CountItems())); err != nil {
 		log.Logger().Error("failed to write number of items", zap.Error(err))
 	}
-	ImplicitFeedbacksTotal.Set(float64(dataSet.CountFeedback()))
-	if err = m.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.NumTotalPosFeedbacks), dataSet.CountFeedback())); err != nil {
+	ImplicitFeedbacksTotal.Set(float64(datasets.rankingDataset.CountFeedback()))
+	if err = m.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.NumTotalPosFeedbacks), datasets.rankingDataset.CountFeedback())); err != nil {
 		log.Logger().Error("failed to write number of positive feedbacks", zap.Error(err))
 	}
-	UserLabelsTotal.Set(float64(ctrDataset.Index.CountUserLabels()))
-	if err = m.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.NumUserLabels), int(ctrDataset.Index.CountUserLabels()))); err != nil {
+	UserLabelsTotal.Set(float64(datasets.clickDataset.Index.CountUserLabels()))
+	if err = m.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.NumUserLabels), int(datasets.clickDataset.Index.CountUserLabels()))); err != nil {
 		log.Logger().Error("failed to write number of user labels", zap.Error(err))
 	}
-	ItemLabelsTotal.Set(float64(ctrDataset.Index.CountItemLabels()))
-	if err = m.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.NumItemLabels), int(ctrDataset.Index.CountItemLabels()))); err != nil {
+	ItemLabelsTotal.Set(float64(datasets.clickDataset.Index.CountItemLabels()))
+	if err = m.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.NumItemLabels), int(datasets.clickDataset.Index.CountItemLabels()))); err != nil {
 		log.Logger().Error("failed to write number of item labels", zap.Error(err))
 	}
-	ImplicitFeedbacksTotal.Set(float64(dataSet.CountFeedback()))
-	PositiveFeedbacksTotal.Set(float64(ctrDataset.PositiveCount))
-	if err = m.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.NumValidPosFeedbacks), ctrDataset.PositiveCount)); err != nil {
+	ImplicitFeedbacksTotal.Set(float64(datasets.rankingDataset.CountFeedback()))
+	PositiveFeedbacksTotal.Set(float64(datasets.clickDataset.PositiveCount))
+	if err = m.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.NumValidPosFeedbacks), datasets.clickDataset.PositiveCount)); err != nil {
 		log.Logger().Error("failed to write number of positive feedbacks", zap.Error(err))
 	}
-	NegativeFeedbackTotal.Set(float64(ctrDataset.NegativeCount))
-	if err = m.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.NumValidNegFeedbacks), ctrDataset.NegativeCount)); err != nil {
+	NegativeFeedbackTotal.Set(float64(datasets.clickDataset.NegativeCount))
+	if err = m.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.NumValidNegFeedbacks), datasets.clickDataset.NegativeCount)); err != nil {
 		log.Logger().Error("failed to write number of negative feedbacks", zap.Error(err))
 	}
 
@@ -151,14 +151,14 @@ func (m *Master) loadDataset() (*ctr.Dataset, *dataset.Dataset, error) {
 
 	// collect active users and items
 	activeUsers, activeItems, inactiveUsers, inactiveItems := 0, 0, 0, 0
-	for _, userFeedback := range dataSet.GetUserFeedback() {
+	for _, userFeedback := range datasets.rankingDataset.GetUserFeedback() {
 		if len(userFeedback) > 0 {
 			activeUsers++
 		} else {
 			inactiveUsers++
 		}
 	}
-	for _, itemFeedback := range dataSet.GetItemFeedback() {
+	for _, itemFeedback := range datasets.rankingDataset.GetItemFeedback() {
 		if len(itemFeedback) > 0 {
 			activeItems++
 		} else {
@@ -171,60 +171,56 @@ func (m *Master) loadDataset() (*ctr.Dataset, *dataset.Dataset, error) {
 	InactiveItemsTotal.Set(float64(inactiveItems))
 
 	// write categories to cache
-	if err = m.CacheClient.SetSet(ctx, cache.ItemCategories, dataSet.GetCategories()...); err != nil {
+	if err = m.CacheClient.SetSet(ctx, cache.ItemCategories, datasets.rankingDataset.GetCategories()...); err != nil {
 		log.Logger().Error("failed to write categories to cache", zap.Error(err))
 	}
 
 	// split ranking dataset
 	startTime := time.Now()
-	m.rankingDataMutex.Lock()
-	m.rankingTrainSet, m.rankingTestSet = dataSet.SplitCF(0, 0)
-	m.rankingDataMutex.Unlock()
+	datasets.rankingTrainSet, datasets.rankingTestSet = datasets.rankingDataset.SplitCF(0, 0)
 	LoadDatasetStepSecondsVec.WithLabelValues("split_ranking_dataset").Set(time.Since(startTime).Seconds())
-	MemoryInUseBytesVec.WithLabelValues("collaborative_filtering_train_set").Set(float64(sizeof.DeepSize(m.rankingTrainSet)))
-	MemoryInUseBytesVec.WithLabelValues("collaborative_filtering_test_set").Set(float64(sizeof.DeepSize(m.rankingTestSet)))
+	MemoryInUseBytesVec.WithLabelValues("collaborative_filtering_train_set").Set(float64(sizeof.DeepSize(datasets.rankingTrainSet)))
+	MemoryInUseBytesVec.WithLabelValues("collaborative_filtering_test_set").Set(float64(sizeof.DeepSize(datasets.rankingTestSet)))
 
 	// split click dataset
 	startTime = time.Now()
-	m.clickDataMutex.Lock()
-	m.clickTrainSet, m.clickTestSet = ctrDataset.Split(0.2, 0)
-	ctrDataset = nil
-	m.clickDataMutex.Unlock()
+	datasets.clickTrainSet, datasets.clickTestSet = datasets.clickDataset.Split(0.2, 0)
+	datasets.clickDataset = nil
 	LoadDatasetStepSecondsVec.WithLabelValues("split_click_dataset").Set(time.Since(startTime).Seconds())
-	MemoryInUseBytesVec.WithLabelValues("ranking_train_set").Set(float64(sizeof.DeepSize(m.clickTrainSet)))
-	MemoryInUseBytesVec.WithLabelValues("ranking_test_set").Set(float64(sizeof.DeepSize(m.clickTestSet)))
+	MemoryInUseBytesVec.WithLabelValues("ranking_train_set").Set(float64(sizeof.DeepSize(datasets.clickTrainSet)))
+	MemoryInUseBytesVec.WithLabelValues("ranking_test_set").Set(float64(sizeof.DeepSize(datasets.clickTestSet)))
 
 	LoadDatasetTotalSeconds.Set(time.Since(initialStartTime).Seconds())
-	return ctrDataset, dataSet, nil
+	return
 }
 
 // runLoadDatasetTask loads dataset.
 func (m *Master) runLoadDatasetTask() error {
 	ctx, cancel := context.WithTimeout(context.Background(), m.Config.Recommend.Collaborative.ModelFitPeriod)
 	defer cancel()
-	_, dataSet, err := m.loadDataset()
+	datasets, err := m.loadDataset()
 	if err != nil {
 		return errors.Trace(err)
 	}
-	if err = m.updateUserToUser(dataSet); err != nil {
+	if err = m.updateUserToUser(datasets.rankingDataset); err != nil {
 		log.Logger().Error("failed to update user-to-user recommendation", zap.Error(err))
 	}
-	if err = m.updateItemToItem(dataSet); err != nil {
+	if err = m.updateItemToItem(datasets.rankingDataset); err != nil {
 		log.Logger().Error("failed to update item-to-item recommendation", zap.Error(err))
 	}
-	if err = m.trainCollaborativeFiltering(m.rankingTrainSet, m.rankingTestSet); err != nil {
+	if err = m.trainCollaborativeFiltering(datasets.rankingTrainSet, datasets.rankingTestSet); err != nil {
 		log.Logger().Error("failed to train collaborative filtering model", zap.Error(err))
 	}
-	if err = m.trainClickThroughRatePrediction(m.clickTrainSet, m.clickTestSet); err != nil {
+	if err = m.trainClickThroughRatePrediction(datasets.clickTrainSet, datasets.clickTestSet); err != nil {
 		log.Logger().Error("failed to train click-through rate prediction model", zap.Error(err))
 	}
-	if err = m.collectGarbage(ctx, dataSet); err != nil {
+	if err = m.collectGarbage(ctx, datasets.rankingDataset); err != nil {
 		log.Logger().Error("failed to collect garbage in cache", zap.Error(err))
 	}
-	if err = m.optimizeCollaborativeFiltering(m.rankingTrainSet, m.rankingTestSet); err != nil {
+	if err = m.optimizeCollaborativeFiltering(datasets.rankingTrainSet, datasets.rankingTestSet); err != nil {
 		log.Logger().Error("failed to optimize collaborative filtering model", zap.Error(err))
 	}
-	if err = m.optimizeClickThroughRatePrediction(m.clickTrainSet, m.clickTestSet); err != nil {
+	if err = m.optimizeClickThroughRatePrediction(datasets.clickTrainSet, datasets.clickTestSet); err != nil {
 		log.Logger().Error("failed to optimize click-through rate prediction model", zap.Error(err))
 	}
 	return nil
