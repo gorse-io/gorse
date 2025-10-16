@@ -185,6 +185,8 @@ func (m *Master) loadDataset() (datasets Datasets, err error) {
 	// split click dataset
 	startTime = time.Now()
 	datasets.clickTrainSet, datasets.clickTestSet = datasets.clickDataset.Split(0.2, 0)
+	// After splitting, clickDataset is set to nil to free memory.
+	// WARNING: Do not access datasets.clickDataset after this point; use clickTrainSet and clickTestSet instead.
 	datasets.clickDataset = nil
 	LoadDatasetStepSecondsVec.WithLabelValues("split_click_dataset").Set(time.Since(startTime).Seconds())
 	MemoryInUseBytesVec.WithLabelValues("ranking_train_set").Set(float64(sizeof.DeepSize(datasets.clickTrainSet)))
