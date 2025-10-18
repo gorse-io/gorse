@@ -262,12 +262,6 @@ enable_collaborative_recommend = true
 # would be merged randomly. The default value is false.
 enable_click_through_prediction = true
 
-# The explore recommendation method is used to inject popular items or latest items into recommended result:
-#   popular: Recommend popular items to cold-start users.
-#   latest: Recommend latest items to cold-start users.
-# The default values is { popular = 0.0, latest = 0.0 }.
-explore_recommend = { popular = 0.1, latest = 0.2 }
-
 [recommend.offline.early_stopping]
 
 # Number of epochs to wait if no improvement and then stop the training. The default value is 10.

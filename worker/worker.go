@@ -177,14 +177,11 @@ func (w *Worker) Sync() {
 		}
 
 		// load master config
-		w.Config.Recommend.Offline.Lock()
 		err = json.Unmarshal([]byte(meta.Config), &w.Config)
 		if err != nil {
-			w.Config.Recommend.Offline.UnLock()
 			log.Logger().Error("failed to parse master config", zap.Error(err))
 			goto sleep
 		}
-		w.Config.Recommend.Offline.UnLock()
 
 		// reset ticker
 		if w.tickDuration != w.Config.Recommend.Offline.CheckRecommendPeriod {
@@ -791,10 +788,11 @@ func (w *Worker) Recommend(users []data.User) {
 		recommendTime := time.Now()
 		aggregator := cache.NewDocumentAggregator(recommendTime)
 		for category, result := range results {
-			scores, err := w.exploreRecommend(result, excludeSet, category)
-			if err != nil {
-				log.Logger().Error("failed to explore latest and popular items", zap.Error(err))
-				return errors.Trace(err)
+			scores := make([]cache.Score, 0, len(result))
+			for _, score := range result {
+				if !excludeSet.Contains(score.Id) || w.Config.Recommend.Replacement.EnableReplacement {
+					scores = append(scores, score)
+				}
 			}
 			aggregator.Add(category, lo.Map(scores, func(document cache.Score, _ int) string {
 				return document.Id
@@ -944,67 +942,6 @@ func (w *Worker) mergeAndShuffle(candidates [][]string) []cache.Score {
 		}
 	}
 	return recommend
-}
-
-func (w *Worker) exploreRecommend(exploitRecommend []cache.Score, excludeSet mapset.Set[string], category string) ([]cache.Score, error) {
-	var localExcludeSet mapset.Set[string]
-	ctx := context.Background()
-	if w.Config.Recommend.Replacement.EnableReplacement {
-		localExcludeSet = mapset.NewSet[string]()
-	} else {
-		localExcludeSet = excludeSet.Clone()
-	}
-	// create thresholds
-	explorePopularThreshold := 0.0
-	if threshold, exist := w.Config.Recommend.Offline.GetExploreRecommend("popular"); exist {
-		explorePopularThreshold = threshold
-	}
-	exploreLatestThreshold := explorePopularThreshold
-	if threshold, exist := w.Config.Recommend.Offline.GetExploreRecommend("latest"); exist {
-		exploreLatestThreshold += threshold
-	}
-	// load popular items
-	popularItems, err := w.CacheClient.SearchScores(ctx, cache.NonPersonalized, cache.Popular, []string{category}, 0, w.Config.Recommend.CacheSize)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-	// load the latest items
-	latestItems, err := w.CacheClient.SearchScores(ctx, cache.NonPersonalized, cache.Latest, []string{category}, 0, w.Config.Recommend.CacheSize)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-	// explore recommendation
-	var exploreRecommend []cache.Score
-	score := 1.0
-	if len(exploitRecommend) > 0 {
-		score += exploitRecommend[0].Score
-	}
-	for range exploitRecommend {
-		dice := w.randGenerator.Float64()
-		var recommendItem cache.Score
-		if dice < explorePopularThreshold && len(popularItems) > 0 {
-			score -= 1e-5
-			recommendItem.Id = popularItems[0].Id
-			recommendItem.Score = score
-			popularItems = popularItems[1:]
-		} else if dice < exploreLatestThreshold && len(latestItems) > 0 {
-			score -= 1e-5
-			recommendItem.Id = latestItems[0].Id
-			recommendItem.Score = score
-			latestItems = latestItems[1:]
-		} else if len(exploitRecommend) > 0 {
-			recommendItem = exploitRecommend[0]
-			exploitRecommend = exploitRecommend[1:]
-			score = recommendItem.Score
-		} else {
-			break
-		}
-		if !localExcludeSet.Contains(recommendItem.Id) {
-			localExcludeSet.Add(recommendItem.Id)
-			exploreRecommend = append(exploreRecommend, recommendItem)
-		}
-	}
-	return exploreRecommend, nil
 }
 
 func (w *Worker) checkUserActiveTime(ctx context.Context, userId string) bool {

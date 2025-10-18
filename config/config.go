@@ -23,7 +23,6 @@ import (
 	"os"
 	"reflect"
 	"strings"
-	"sync"
 	"time"
 
 	mapset "github.com/deckarep/golang-set/v2"
@@ -226,7 +225,6 @@ type ReplacementConfig struct {
 type OfflineConfig struct {
 	CheckRecommendPeriod         time.Duration       `mapstructure:"check_recommend_period" validate:"gt=0"`
 	RefreshRecommendPeriod       time.Duration       `mapstructure:"refresh_recommend_period" validate:"gt=0"`
-	ExploreRecommend             map[string]float64  `mapstructure:"explore_recommend"`
 	EnableLatestRecommend        bool                `mapstructure:"enable_latest_recommend"`
 	EnablePopularRecommend       bool                `mapstructure:"enable_popular_recommend"`
 	EnableUserBasedRecommend     bool                `mapstructure:"enable_user_based_recommend"`
@@ -234,7 +232,6 @@ type OfflineConfig struct {
 	EnableColRecommend           bool                `mapstructure:"enable_collaborative_recommend"`
 	EnableClickThroughPrediction bool                `mapstructure:"enable_click_through_prediction"`
 	EarlyStopping                EarlyStoppingConfig `mapstructure:"early_stopping"`
-	exploreRecommendLock         sync.RWMutex
 }
 
 type OnlineConfig struct {
@@ -388,9 +385,7 @@ func (config *Config) OfflineRecommendDigest(option ...DigestOption) string {
 	})
 
 	var builder strings.Builder
-	config.Recommend.Offline.Lock()
-	builder.WriteString(fmt.Sprintf("%v-%v-%v-%v-%v-%v-%v-%v",
-		config.Recommend.Offline.ExploreRecommend,
+	builder.WriteString(fmt.Sprintf("%v-%v-%v-%v-%v-%v-%v",
 		config.Recommend.Offline.EnableLatestRecommend,
 		config.Recommend.Offline.EnablePopularRecommend,
 		config.Recommend.Offline.EnableUserBasedRecommend,
@@ -399,7 +394,6 @@ func (config *Config) OfflineRecommendDigest(option ...DigestOption) string {
 		options.enableRanking,
 		config.Recommend.Replacement.EnableReplacement,
 	))
-	config.Recommend.Offline.UnLock()
 	if config.Recommend.Offline.EnablePopularRecommend {
 		builder.WriteString(fmt.Sprintf("-%v", config.Recommend.Popular.PopularWindow))
 	}
@@ -413,24 +407,6 @@ func (config *Config) OfflineRecommendDigest(option ...DigestOption) string {
 
 	digest := md5.Sum([]byte(builder.String()))
 	return hex.EncodeToString(digest[:])
-}
-
-func (config *OfflineConfig) Lock() {
-	config.exploreRecommendLock.Lock()
-}
-
-func (config *OfflineConfig) UnLock() {
-	config.exploreRecommendLock.Unlock()
-}
-
-func (config *OfflineConfig) GetExploreRecommend(key string) (value float64, exist bool) {
-	if config == nil {
-		return 0.0, false
-	}
-	config.exploreRecommendLock.RLock()
-	defer config.exploreRecommendLock.RUnlock()
-	value, exist = config.ExploreRecommend[key]
-	return
 }
 
 func (config *TracingConfig) NewTracerProvider() (trace.TracerProvider, error) {

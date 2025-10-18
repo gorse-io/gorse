@@ -29,7 +29,6 @@ import (
 	"time"
 
 	"github.com/c-bata/goptuna"
-	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/gorse-io/gorse/common/expression"
 	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/common/parallel"
@@ -486,39 +485,6 @@ func (suite *WorkerTestSuite) TestMergeAndShuffle() {
 	suite.ElementsMatch([]string{"1", "2", "3", "5"}, lo.Map(scores, func(d cache.Score, _ int) string { return d.Id }))
 }
 
-func (suite *WorkerTestSuite) TestExploreRecommend() {
-	ctx := context.Background()
-	suite.Config.Recommend.Offline.ExploreRecommend = map[string]float64{"popular": 0.3, "latest": 0.3}
-	// insert popular items
-	err := suite.CacheClient.AddScores(ctx, cache.NonPersonalized, cache.Popular, []cache.Score{{Id: "popular", Score: 0, Categories: []string{""}, Timestamp: time.Now()}})
-	suite.NoError(err)
-	// insert latest items
-	err = suite.CacheClient.AddScores(ctx, cache.NonPersonalized, cache.Latest, []cache.Score{{Id: "latest", Score: 0, Categories: []string{""}, Timestamp: time.Now()}})
-	suite.NoError(err)
-
-	recommend, err := suite.exploreRecommend([]cache.Score{
-		{Id: "8", Score: 8},
-		{Id: "7", Score: 7},
-		{Id: "6", Score: 6},
-		{Id: "5", Score: 5},
-		{Id: "4", Score: 4},
-		{Id: "3", Score: 3},
-		{Id: "2", Score: 2},
-		{Id: "1", Score: 1},
-	}, mapset.NewSet[string](), "")
-	suite.NoError(err)
-	items := lo.Map(recommend, func(d cache.Score, _ int) string { return d.Id })
-	suite.Contains(items, "latest")
-	suite.Contains(items, "popular")
-	items = lo.Filter(items, func(item string, _ int) bool {
-		return item != "latest" && item != "popular"
-	})
-	suite.IsDecreasing(items)
-	scores := lo.Map(recommend, func(d cache.Score, _ int) float64 { return d.Score })
-	suite.IsDecreasing(scores)
-	suite.Equal(8, len(recommend))
-}
-
 func marshal(t *testing.T, v interface{}) string {
 	s, err := json.Marshal(v)
 	assert.NoError(t, err)
@@ -622,20 +588,6 @@ func TestWorker_Sync(t *testing.T) {
 		ticker:       time.NewTicker(time.Minute),
 	}
 
-	// This clause is used to test race condition.
-	done := make(chan struct{})
-	go func() {
-		for {
-			select {
-			case <-done:
-				return
-			default:
-				p, _ := serv.Config.Recommend.Offline.GetExploreRecommend("popular")
-				assert.Zero(t, p)
-			}
-		}
-	}()
-
 	serv.Sync()
 	assert.Equal(t, master.dataFilePath, serv.dataPath)
 	assert.Equal(t, master.cacheFilePath, serv.cachePath)
@@ -646,12 +598,10 @@ func TestWorker_Sync(t *testing.T) {
 	assert.Zero(t, serv.clickThroughRateModelId)
 	assert.Zero(t, serv.collaborativeFilteringModelId)
 	master.Stop()
-	done <- struct{}{}
 }
 
 func TestWorker_SyncRecommend(t *testing.T) {
 	cfg := config.GetDefaultConfig()
-	cfg.Recommend.Offline.ExploreRecommend = map[string]float64{"popular": 0.5}
 	master := newMockMaster(t)
 	master.meta.Config = marshal(t, cfg)
 	go master.Start(t)
