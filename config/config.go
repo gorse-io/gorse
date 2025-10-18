@@ -127,7 +127,7 @@ type RecommendConfig struct {
 	External        []ExternalConfig        `mapstructure:"external" validate:"dive"`
 	Replacement     ReplacementConfig       `mapstructure:"replacement"`
 	Ranker          RankerConfig            `mapstructure:"ranker"`
-	Online          OnlineConfig            `mapstructure:"online"`
+	Fallback        []string                `mapstructure:"fallback"`
 }
 
 func StringToFeedbackTypeHookFunc() mapstructure.DecodeHookFunc {
@@ -233,11 +233,6 @@ type RankerConfig struct {
 	EarlyStopping                EarlyStoppingConfig `mapstructure:"early_stopping"`
 }
 
-type OnlineConfig struct {
-	FallbackRecommend            []string `mapstructure:"fallback_recommend"`
-	NumFeedbackFallbackItemBased int      `mapstructure:"num_feedback_fallback_item_based" validate:"gt=0"`
-}
-
 type TracingConfig struct {
 	EnableTracing     bool    `mapstructure:"enable_tracing"`
 	Exporter          string  `mapstructure:"exporter" validate:"oneof=jaeger zipkin otlp otlphttp"`
@@ -330,10 +325,7 @@ func GetDefaultConfig() *Config {
 				EnableColRecommend:           true,
 				EnableClickThroughPrediction: false,
 			},
-			Online: OnlineConfig{
-				FallbackRecommend:            []string{"latest"},
-				NumFeedbackFallbackItemBased: 10,
-			},
+			Fallback: []string{"latest"},
 		},
 		Tracing: TracingConfig{
 			Exporter: "jaeger",
@@ -501,7 +493,7 @@ func setDefault() {
 	viper.SetDefault("recommend.replacement.enable_replacement", defaultConfig.Recommend.Replacement.EnableReplacement)
 	viper.SetDefault("recommend.replacement.positive_replacement_decay", defaultConfig.Recommend.Replacement.PositiveReplacementDecay)
 	viper.SetDefault("recommend.replacement.read_replacement_decay", defaultConfig.Recommend.Replacement.ReadReplacementDecay)
-	// [recommend.offline]
+	// [recommend.ranker]
 	viper.SetDefault("recommend.ranker.check_recommend_period", defaultConfig.Recommend.Ranker.CheckRecommendPeriod)
 	viper.SetDefault("recommend.ranker.refresh_recommend_period", defaultConfig.Recommend.Ranker.RefreshRecommendPeriod)
 	viper.SetDefault("recommend.ranker.enable_latest_recommend", defaultConfig.Recommend.Ranker.EnableLatestRecommend)
@@ -510,9 +502,8 @@ func setDefault() {
 	viper.SetDefault("recommend.ranker.enable_item_based_recommend", defaultConfig.Recommend.Ranker.EnableItemBasedRecommend)
 	viper.SetDefault("recommend.ranker.enable_collaborative_recommend", defaultConfig.Recommend.Ranker.EnableColRecommend)
 	viper.SetDefault("recommend.ranker.enable_click_through_prediction", defaultConfig.Recommend.Ranker.EnableClickThroughPrediction)
-	// [recommend.online]
-	viper.SetDefault("recommend.online.fallback_recommend", defaultConfig.Recommend.Online.FallbackRecommend)
-	viper.SetDefault("recommend.online.num_feedback_fallback_item_based", defaultConfig.Recommend.Online.NumFeedbackFallbackItemBased)
+	// [recommend.fallback]
+	viper.SetDefault("recommend.fallback", defaultConfig.Recommend.Fallback)
 	// [tracing]
 	viper.SetDefault("tracing.exporter", defaultConfig.Tracing.Exporter)
 	viper.SetDefault("tracing.sampler", defaultConfig.Tracing.Sampler)

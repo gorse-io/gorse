@@ -831,7 +831,7 @@ func (m *Master) getRecommend(request *restful.Request, response *restful.Respon
 		}
 	case "_":
 		recommenders := []server.Recommender{m.RecommendOffline}
-		for _, recommender := range m.Config.Recommend.Online.FallbackRecommend {
+		for _, recommender := range m.Config.Recommend.Fallback {
 			switch recommender {
 			case "collaborative":
 				recommenders = append(recommenders, m.RecommendCollaborative)

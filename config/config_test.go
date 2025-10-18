@@ -126,7 +126,7 @@ func TestUnmarshal(t *testing.T) {
 			assert.False(t, config.Recommend.Replacement.EnableReplacement)
 			assert.Equal(t, 0.8, config.Recommend.Replacement.PositiveReplacementDecay)
 			assert.Equal(t, 0.6, config.Recommend.Replacement.ReadReplacementDecay)
-			// [recommend.offline]
+			// [recommend.ranker]
 			assert.Equal(t, time.Minute, config.Recommend.Ranker.CheckRecommendPeriod)
 			assert.Equal(t, 24*time.Hour, config.Recommend.Ranker.RefreshRecommendPeriod)
 			assert.True(t, config.Recommend.Ranker.EnableColRecommend)
@@ -135,9 +135,8 @@ func TestUnmarshal(t *testing.T) {
 			assert.False(t, config.Recommend.Ranker.EnablePopularRecommend)
 			assert.True(t, config.Recommend.Ranker.EnableLatestRecommend)
 			assert.True(t, config.Recommend.Ranker.EnableClickThroughPrediction)
-			// [recommend.online]
-			assert.Equal(t, []string{"item_based", "latest"}, config.Recommend.Online.FallbackRecommend)
-			assert.Equal(t, 10, config.Recommend.Online.NumFeedbackFallbackItemBased)
+			// [recommend.fallback]
+			assert.Equal(t, []string{"item_based", "latest"}, config.Recommend.Fallback)
 			// [tracing]
 			assert.False(t, config.Tracing.EnableTracing)
 			assert.Equal(t, "jaeger", config.Tracing.Exporter)
