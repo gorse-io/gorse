@@ -149,12 +149,6 @@ func NewMaster(cfg *config.Config, cacheFolder string) *Master {
 		importedChan: parallel.NewConditionChannel(),
 		triggerChan:  parallel.NewConditionChannel(),
 	}
-
-	// enable deep learning
-	if cfg.Experimental.EnableDeepLearning {
-		log.Logger().Debug("enable deep learning")
-	}
-
 	return m
 }
 

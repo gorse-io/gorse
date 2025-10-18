@@ -59,15 +59,14 @@ func init() {
 
 // Config is the configuration for the engine.
 type Config struct {
-	Database     DatabaseConfig     `mapstructure:"database"`
-	Master       MasterConfig       `mapstructure:"master"`
-	Server       ServerConfig       `mapstructure:"server"`
-	Recommend    RecommendConfig    `mapstructure:"recommend"`
-	Tracing      TracingConfig      `mapstructure:"tracing"`
-	Experimental ExperimentalConfig `mapstructure:"experimental"`
-	OIDC         OIDCConfig         `mapstructure:"oidc"`
-	OpenAI       OpenAIConfig       `mapstructure:"openai"`
-	S3           S3Config           `mapstructure:"s3"`
+	Database  DatabaseConfig  `mapstructure:"database"`
+	Master    MasterConfig    `mapstructure:"master"`
+	Server    ServerConfig    `mapstructure:"server"`
+	Recommend RecommendConfig `mapstructure:"recommend"`
+	Tracing   TracingConfig   `mapstructure:"tracing"`
+	OIDC      OIDCConfig      `mapstructure:"oidc"`
+	OpenAI    OpenAIConfig    `mapstructure:"openai"`
+	S3        S3Config        `mapstructure:"s3"`
 }
 
 // DatabaseConfig is the configuration for the database.
@@ -247,11 +246,6 @@ type TracingConfig struct {
 	Ratio             float64 `mapstructure:"ratio"`
 }
 
-type ExperimentalConfig struct {
-	EnableDeepLearning    bool `mapstructure:"enable_deep_learning"`
-	DeepLearningBatchSize int  `mapstructure:"deep_learning_batch_size"`
-}
-
 type OIDCConfig struct {
 	Enable       bool   `mapstructure:"enable"`
 	Issuer       string `mapstructure:"issuer"`
@@ -344,9 +338,6 @@ func GetDefaultConfig() *Config {
 		Tracing: TracingConfig{
 			Exporter: "jaeger",
 			Sampler:  "always",
-		},
-		Experimental: ExperimentalConfig{
-			DeepLearningBatchSize: 128,
 		},
 	}
 }
@@ -525,8 +516,6 @@ func setDefault() {
 	// [tracing]
 	viper.SetDefault("tracing.exporter", defaultConfig.Tracing.Exporter)
 	viper.SetDefault("tracing.sampler", defaultConfig.Tracing.Sampler)
-	// [experimental]
-	viper.SetDefault("experimental.deep_learning_batch_size", defaultConfig.Experimental.DeepLearningBatchSize)
 }
 
 type configBinding struct {
