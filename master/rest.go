@@ -913,7 +913,7 @@ func (m *Master) getUserFeedback(request *restful.Request, response *restful.Res
 	// parse n
 	nStr := request.QueryParameter("n")
 	n := m.Config.Server.DefaultN
-	if nStr == "" {
+	if nStr != "" {
 		var err error
 		n, err = server.ParseInt(request, "n", m.Config.Server.DefaultN)
 		if err != nil {
