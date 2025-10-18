@@ -126,7 +126,7 @@ type RecommendConfig struct {
 	Collaborative   CollaborativeConfig     `mapstructure:"collaborative"`
 	External        []ExternalConfig        `mapstructure:"external" validate:"dive"`
 	Replacement     ReplacementConfig       `mapstructure:"replacement"`
-	Offline         OfflineConfig           `mapstructure:"offline"`
+	Ranker          RankerConfig            `mapstructure:"ranker"`
 	Online          OnlineConfig            `mapstructure:"online"`
 }
 
@@ -221,7 +221,7 @@ type ReplacementConfig struct {
 	ReadReplacementDecay     float64 `mapstructure:"read_replacement_decay" validate:"gt=0"`
 }
 
-type OfflineConfig struct {
+type RankerConfig struct {
 	CheckRecommendPeriod         time.Duration       `mapstructure:"check_recommend_period" validate:"gt=0"`
 	RefreshRecommendPeriod       time.Duration       `mapstructure:"refresh_recommend_period" validate:"gt=0"`
 	EnableLatestRecommend        bool                `mapstructure:"enable_latest_recommend"`
@@ -320,7 +320,7 @@ func GetDefaultConfig() *Config {
 				PositiveReplacementDecay: 0.8,
 				ReadReplacementDecay:     0.6,
 			},
-			Offline: OfflineConfig{
+			Ranker: RankerConfig{
 				CheckRecommendPeriod:         time.Minute,
 				RefreshRecommendPeriod:       120 * time.Hour,
 				EnableLatestRecommend:        false,
@@ -368,8 +368,8 @@ func WithRanking(v bool) DigestOption {
 
 func (config *Config) OfflineRecommendDigest(option ...DigestOption) string {
 	options := digestOptions{
-		enableCollaborative: config.Recommend.Offline.EnableColRecommend,
-		enableRanking:       config.Recommend.Offline.EnableClickThroughPrediction,
+		enableCollaborative: config.Recommend.Ranker.EnableColRecommend,
+		enableRanking:       config.Recommend.Ranker.EnableClickThroughPrediction,
 	}
 	lo.ForEach(option, func(opt DigestOption, _ int) {
 		opt(&options)
@@ -377,18 +377,18 @@ func (config *Config) OfflineRecommendDigest(option ...DigestOption) string {
 
 	var builder strings.Builder
 	builder.WriteString(fmt.Sprintf("%v-%v-%v-%v-%v-%v-%v",
-		config.Recommend.Offline.EnableLatestRecommend,
-		config.Recommend.Offline.EnablePopularRecommend,
-		config.Recommend.Offline.EnableUserBasedRecommend,
-		config.Recommend.Offline.EnableItemBasedRecommend,
+		config.Recommend.Ranker.EnableLatestRecommend,
+		config.Recommend.Ranker.EnablePopularRecommend,
+		config.Recommend.Ranker.EnableUserBasedRecommend,
+		config.Recommend.Ranker.EnableItemBasedRecommend,
 		options.enableCollaborative,
 		options.enableRanking,
 		config.Recommend.Replacement.EnableReplacement,
 	))
-	if config.Recommend.Offline.EnablePopularRecommend {
+	if config.Recommend.Ranker.EnablePopularRecommend {
 		builder.WriteString(fmt.Sprintf("-%v", config.Recommend.Popular.PopularWindow))
 	}
-	if config.Recommend.Offline.EnableUserBasedRecommend {
+	if config.Recommend.Ranker.EnableUserBasedRecommend {
 		builder.WriteString(fmt.Sprintf("-%v", options.userNeighborDigest))
 	}
 	if config.Recommend.Replacement.EnableReplacement {
@@ -502,14 +502,14 @@ func setDefault() {
 	viper.SetDefault("recommend.replacement.positive_replacement_decay", defaultConfig.Recommend.Replacement.PositiveReplacementDecay)
 	viper.SetDefault("recommend.replacement.read_replacement_decay", defaultConfig.Recommend.Replacement.ReadReplacementDecay)
 	// [recommend.offline]
-	viper.SetDefault("recommend.offline.check_recommend_period", defaultConfig.Recommend.Offline.CheckRecommendPeriod)
-	viper.SetDefault("recommend.offline.refresh_recommend_period", defaultConfig.Recommend.Offline.RefreshRecommendPeriod)
-	viper.SetDefault("recommend.offline.enable_latest_recommend", defaultConfig.Recommend.Offline.EnableLatestRecommend)
-	viper.SetDefault("recommend.offline.enable_popular_recommend", defaultConfig.Recommend.Offline.EnablePopularRecommend)
-	viper.SetDefault("recommend.offline.enable_user_based_recommend", defaultConfig.Recommend.Offline.EnableUserBasedRecommend)
-	viper.SetDefault("recommend.offline.enable_item_based_recommend", defaultConfig.Recommend.Offline.EnableItemBasedRecommend)
-	viper.SetDefault("recommend.offline.enable_collaborative_recommend", defaultConfig.Recommend.Offline.EnableColRecommend)
-	viper.SetDefault("recommend.offline.enable_click_through_prediction", defaultConfig.Recommend.Offline.EnableClickThroughPrediction)
+	viper.SetDefault("recommend.ranker.check_recommend_period", defaultConfig.Recommend.Ranker.CheckRecommendPeriod)
+	viper.SetDefault("recommend.ranker.refresh_recommend_period", defaultConfig.Recommend.Ranker.RefreshRecommendPeriod)
+	viper.SetDefault("recommend.ranker.enable_latest_recommend", defaultConfig.Recommend.Ranker.EnableLatestRecommend)
+	viper.SetDefault("recommend.ranker.enable_popular_recommend", defaultConfig.Recommend.Ranker.EnablePopularRecommend)
+	viper.SetDefault("recommend.ranker.enable_user_based_recommend", defaultConfig.Recommend.Ranker.EnableUserBasedRecommend)
+	viper.SetDefault("recommend.ranker.enable_item_based_recommend", defaultConfig.Recommend.Ranker.EnableItemBasedRecommend)
+	viper.SetDefault("recommend.ranker.enable_collaborative_recommend", defaultConfig.Recommend.Ranker.EnableColRecommend)
+	viper.SetDefault("recommend.ranker.enable_click_through_prediction", defaultConfig.Recommend.Ranker.EnableClickThroughPrediction)
 	// [recommend.online]
 	viper.SetDefault("recommend.online.fallback_recommend", defaultConfig.Recommend.Online.FallbackRecommend)
 	viper.SetDefault("recommend.online.num_feedback_fallback_item_based", defaultConfig.Recommend.Online.NumFeedbackFallbackItemBased)

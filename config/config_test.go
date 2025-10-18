@@ -127,23 +127,14 @@ func TestUnmarshal(t *testing.T) {
 			assert.Equal(t, 0.8, config.Recommend.Replacement.PositiveReplacementDecay)
 			assert.Equal(t, 0.6, config.Recommend.Replacement.ReadReplacementDecay)
 			// [recommend.offline]
-			assert.Equal(t, time.Minute, config.Recommend.Offline.CheckRecommendPeriod)
-			assert.Equal(t, 24*time.Hour, config.Recommend.Offline.RefreshRecommendPeriod)
-			assert.True(t, config.Recommend.Offline.EnableColRecommend)
-			assert.False(t, config.Recommend.Offline.EnableItemBasedRecommend)
-			assert.True(t, config.Recommend.Offline.EnableUserBasedRecommend)
-			assert.False(t, config.Recommend.Offline.EnablePopularRecommend)
-			assert.True(t, config.Recommend.Offline.EnableLatestRecommend)
-			assert.True(t, config.Recommend.Offline.EnableClickThroughPrediction)
-			assert.Equal(t, map[string]float64{"popular": 0.1, "latest": 0.2}, config.Recommend.Offline.ExploreRecommend)
-			value, exist := config.Recommend.Offline.GetExploreRecommend("popular")
-			assert.Equal(t, true, exist)
-			assert.Equal(t, 0.1, value)
-			value, exist = config.Recommend.Offline.GetExploreRecommend("latest")
-			assert.Equal(t, true, exist)
-			assert.Equal(t, 0.2, value)
-			_, exist = config.Recommend.Offline.GetExploreRecommend("unknown")
-			assert.Equal(t, false, exist)
+			assert.Equal(t, time.Minute, config.Recommend.Ranker.CheckRecommendPeriod)
+			assert.Equal(t, 24*time.Hour, config.Recommend.Ranker.RefreshRecommendPeriod)
+			assert.True(t, config.Recommend.Ranker.EnableColRecommend)
+			assert.False(t, config.Recommend.Ranker.EnableItemBasedRecommend)
+			assert.True(t, config.Recommend.Ranker.EnableUserBasedRecommend)
+			assert.False(t, config.Recommend.Ranker.EnablePopularRecommend)
+			assert.True(t, config.Recommend.Ranker.EnableLatestRecommend)
+			assert.True(t, config.Recommend.Ranker.EnableClickThroughPrediction)
 			// [recommend.online]
 			assert.Equal(t, []string{"item_based", "latest"}, config.Recommend.Online.FallbackRecommend)
 			assert.Equal(t, 10, config.Recommend.Online.NumFeedbackFallbackItemBased)
@@ -153,8 +144,6 @@ func TestUnmarshal(t *testing.T) {
 			assert.Equal(t, "http://localhost:14268/api/traces", config.Tracing.CollectorEndpoint)
 			assert.Equal(t, "always", config.Tracing.Sampler)
 			assert.Equal(t, 1.0, config.Tracing.Ratio)
-			// [experimental]
-			assert.Equal(t, 128, config.Experimental.DeepLearningBatchSize)
 			// [oauth2]
 			assert.Equal(t, "https://accounts.google.com", config.OIDC.Issuer)
 			assert.Equal(t, "client_id", config.OIDC.ClientID)
@@ -272,75 +261,69 @@ func TestTablePrefixCompat(t *testing.T) {
 }
 
 func TestConfig_OfflineRecommendDigest(t *testing.T) {
-	// test explore recommendation
-	cfg1, cfg2 := GetDefaultConfig(), GetDefaultConfig()
-	cfg1.Recommend.Offline.ExploreRecommend = map[string]float64{"a": 0.5, "b": 0.6}
-	cfg2.Recommend.Offline.ExploreRecommend = map[string]float64{"a": 0.6, "b": 0.5}
-	assert.NotEqual(t, cfg1.OfflineRecommendDigest(), cfg2.OfflineRecommendDigest())
-
 	// test latest recommendation
-	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
-	cfg1.Recommend.Offline.EnableLatestRecommend = true
-	cfg2.Recommend.Offline.EnableLatestRecommend = false
+	cfg1, cfg2 := GetDefaultConfig(), GetDefaultConfig()
+	cfg1.Recommend.Ranker.EnableLatestRecommend = true
+	cfg2.Recommend.Ranker.EnableLatestRecommend = false
 	assert.NotEqual(t, cfg1.OfflineRecommendDigest(), cfg2.OfflineRecommendDigest())
 
 	// test popular recommendation
 	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
-	cfg1.Recommend.Offline.EnablePopularRecommend = true
-	cfg2.Recommend.Offline.EnablePopularRecommend = false
+	cfg1.Recommend.Ranker.EnablePopularRecommend = true
+	cfg2.Recommend.Ranker.EnablePopularRecommend = false
 	assert.NotEqual(t, cfg1.OfflineRecommendDigest(), cfg2.OfflineRecommendDigest())
 
 	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
-	cfg1.Recommend.Offline.EnablePopularRecommend = true
-	cfg2.Recommend.Offline.EnablePopularRecommend = true
+	cfg1.Recommend.Ranker.EnablePopularRecommend = true
+	cfg2.Recommend.Ranker.EnablePopularRecommend = true
 	cfg1.Recommend.Popular.PopularWindow = 10
 	cfg2.Recommend.Popular.PopularWindow = 11
 	assert.NotEqual(t, cfg1.OfflineRecommendDigest(), cfg2.OfflineRecommendDigest())
 
 	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
-	cfg1.Recommend.Offline.EnablePopularRecommend = false
-	cfg2.Recommend.Offline.EnablePopularRecommend = false
+	cfg1.Recommend.Ranker.EnablePopularRecommend = false
+	cfg2.Recommend.Ranker.EnablePopularRecommend = false
 	cfg1.Recommend.Popular.PopularWindow = 10
 	cfg2.Recommend.Popular.PopularWindow = 11
 	assert.Equal(t, cfg1.OfflineRecommendDigest(), cfg2.OfflineRecommendDigest())
 
 	// test user-based recommendation
 	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
-	cfg1.Recommend.Offline.EnableUserBasedRecommend = true
-	cfg2.Recommend.Offline.EnableUserBasedRecommend = false
+	cfg1.Recommend.Ranker.EnableUserBasedRecommend = true
+	cfg2.Recommend.Ranker.EnableUserBasedRecommend = false
 	assert.NotEqual(t, cfg1.OfflineRecommendDigest(), cfg2.OfflineRecommendDigest())
 
 	// test item-based recommendation
 	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
-	cfg1.Recommend.Offline.EnableItemBasedRecommend = true
-	cfg2.Recommend.Offline.EnableItemBasedRecommend = false
+	cfg1.Recommend.Ranker.EnableItemBasedRecommend = true
+	cfg2.Recommend.Ranker.EnableItemBasedRecommend = false
 	assert.NotEqual(t, cfg1.OfflineRecommendDigest(), cfg2.OfflineRecommendDigest())
 
 	// test collaborative-filtering recommendation
 	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
-	cfg1.Recommend.Offline.EnableColRecommend = true
-	cfg2.Recommend.Offline.EnableColRecommend = false
+	cfg1.Recommend.Ranker.EnableColRecommend = true
+	cfg2.Recommend.Ranker.EnableColRecommend = false
 	assert.NotEqual(t, cfg1.OfflineRecommendDigest(), cfg2.OfflineRecommendDigest())
 
 	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
-	cfg1.Recommend.Offline.EnableColRecommend = true
-	cfg2.Recommend.Offline.EnableColRecommend = true
+	cfg1.Recommend.Ranker.EnableColRecommend = true
+	cfg2.Recommend.Ranker.EnableColRecommend = true
 	assert.Equal(t, cfg1.OfflineRecommendDigest(), cfg2.OfflineRecommendDigest())
 
 	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
-	cfg1.Recommend.Offline.EnableColRecommend = false
-	cfg2.Recommend.Offline.EnableColRecommend = false
+	cfg1.Recommend.Ranker.EnableColRecommend = false
+	cfg2.Recommend.Ranker.EnableColRecommend = false
 	assert.NotEqual(t, cfg1.OfflineRecommendDigest(WithCollaborative(true)), cfg2.OfflineRecommendDigest())
 
 	// test click-through rate prediction recommendation
 	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
-	cfg1.Recommend.Offline.EnableClickThroughPrediction = true
-	cfg2.Recommend.Offline.EnableClickThroughPrediction = false
+	cfg1.Recommend.Ranker.EnableClickThroughPrediction = true
+	cfg2.Recommend.Ranker.EnableClickThroughPrediction = false
 	assert.NotEqual(t, cfg1.OfflineRecommendDigest(), cfg2.OfflineRecommendDigest())
 
 	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
-	cfg1.Recommend.Offline.EnableClickThroughPrediction = false
-	cfg2.Recommend.Offline.EnableClickThroughPrediction = false
+	cfg1.Recommend.Ranker.EnableClickThroughPrediction = false
+	cfg2.Recommend.Ranker.EnableClickThroughPrediction = false
 	assert.NotEqual(t, cfg1.OfflineRecommendDigest(WithRanking(true)), cfg2.OfflineRecommendDigest())
 
 	// test replacement

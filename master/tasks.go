@@ -1007,7 +1007,7 @@ func (m *Master) trainClickThroughRatePrediction(trainSet, testSet *ctr.Dataset)
 	score := clickModel.Fit(newCtx, trainSet, testSet,
 		ctr.NewFitConfig().
 			SetJobs(m.Config.Master.NumJobs).
-			SetPatience(m.Config.Recommend.Offline.EarlyStopping.Patience))
+			SetPatience(m.Config.Recommend.Ranker.EarlyStopping.Patience))
 	RankingFitSeconds.Set(time.Since(startFitTime).Seconds())
 
 	// update match model
@@ -1229,7 +1229,7 @@ func (m *Master) optimizeClickThroughRatePrediction(trainSet, testSet *ctr.Datas
 	}, trainSet, testSet,
 		ctr.NewFitConfig().
 			SetJobs(m.Config.Master.NumJobs).
-			SetPatience(m.Config.Recommend.Offline.EarlyStopping.Patience)).
+			SetPatience(m.Config.Recommend.Ranker.EarlyStopping.Patience)).
 		WithContext(ctx).
 		WithSpan(span)
 

@@ -184,9 +184,9 @@ func (w *Worker) Sync() {
 		}
 
 		// reset ticker
-		if w.tickDuration != w.Config.Recommend.Offline.CheckRecommendPeriod {
-			w.tickDuration = w.Config.Recommend.Offline.CheckRecommendPeriod
-			w.ticker.Reset(w.Config.Recommend.Offline.CheckRecommendPeriod)
+		if w.tickDuration != w.Config.Recommend.Ranker.CheckRecommendPeriod {
+			w.tickDuration = w.Config.Recommend.Ranker.CheckRecommendPeriod
+			w.ticker.Reset(w.Config.Recommend.Ranker.CheckRecommendPeriod)
 		}
 
 		// connect to data store
@@ -453,7 +453,7 @@ func (w *Worker) Serve() {
 	for {
 		select {
 		case tick := <-w.ticker.C:
-			if time.Since(tick) >= w.Config.Recommend.Offline.CheckRecommendPeriod {
+			if time.Since(tick) >= w.Config.Recommend.Ranker.CheckRecommendPeriod {
 				loop()
 			}
 		case <-w.pulledChan.C:
@@ -572,7 +572,7 @@ func (w *Worker) Recommend(users []data.User) {
 
 		// load positive items
 		var positiveItems []string
-		if w.Config.Recommend.Offline.EnableItemBasedRecommend {
+		if w.Config.Recommend.Ranker.EnableItemBasedRecommend {
 			positiveItems, err = userFeedbackCache.GetUserFeedback(ctx, userId)
 			if err != nil {
 				log.Logger().Error("failed to pull user feedback",
@@ -591,7 +591,7 @@ func (w *Worker) Recommend(users []data.User) {
 
 		// Recommender #1: collaborative filtering.
 		collaborativeUsed := false
-		if w.Config.Recommend.Offline.EnableColRecommend && w.matrixFactorizationItems != nil {
+		if w.Config.Recommend.Ranker.EnableColRecommend && w.matrixFactorizationItems != nil {
 			if userEmbedding, ok := w.matrixFactorizationUsers.Get(userId); ok {
 				var recommend map[string][]string
 				var usedTime time.Duration
@@ -615,7 +615,7 @@ func (w *Worker) Recommend(users []data.User) {
 
 		// Recommender #2: item-based.
 		itemNeighborDigests := mapset.NewSet[string]()
-		if w.Config.Recommend.Offline.EnableItemBasedRecommend && len(w.Config.Recommend.ItemToItem) > 0 {
+		if w.Config.Recommend.Ranker.EnableItemBasedRecommend && len(w.Config.Recommend.ItemToItem) > 0 {
 			localStartTime := time.Now()
 			name := w.Config.Recommend.ItemToItem[0].Name
 			// collect candidates
@@ -664,7 +664,7 @@ func (w *Worker) Recommend(users []data.User) {
 
 		// Recommender #3: insert user-based items
 		userNeighborDigests := mapset.NewSet[string]()
-		if w.Config.Recommend.Offline.EnableUserBasedRecommend && len(w.Config.Recommend.UserToUser) > 0 {
+		if w.Config.Recommend.Ranker.EnableUserBasedRecommend && len(w.Config.Recommend.UserToUser) > 0 {
 			localStartTime := time.Now()
 			name := w.Config.Recommend.UserToUser[0].Name
 			scores := make(map[string]float64)
@@ -719,7 +719,7 @@ func (w *Worker) Recommend(users []data.User) {
 		}
 
 		// Recommender #4: latest items.
-		if w.Config.Recommend.Offline.EnableLatestRecommend {
+		if w.Config.Recommend.Ranker.EnableLatestRecommend {
 			localStartTime := time.Now()
 			for _, category := range append([]string{""}, itemCategories...) {
 				latestItems, err := w.CacheClient.SearchScores(ctx, cache.NonPersonalized, cache.Latest, []string{category}, 0, w.Config.Recommend.CacheSize)
@@ -739,7 +739,7 @@ func (w *Worker) Recommend(users []data.User) {
 		}
 
 		// Recommender #5: popular items.
-		if w.Config.Recommend.Offline.EnablePopularRecommend {
+		if w.Config.Recommend.Ranker.EnablePopularRecommend {
 			localStartTime := time.Now()
 			for _, category := range append([]string{""}, itemCategories...) {
 				popularItems, err := w.CacheClient.SearchScores(ctx, cache.NonPersonalized, cache.Popular, []string{category}, 0, w.Config.Recommend.CacheSize)
@@ -764,7 +764,7 @@ func (w *Worker) Recommend(users []data.User) {
 		ctrUsed := false
 		results := make(map[string][]cache.Score)
 		for category, catCandidates := range candidates {
-			if w.Config.Recommend.Offline.EnableClickThroughPrediction && w.rankers[workerId] != nil && !w.rankers[workerId].Invalid() {
+			if w.Config.Recommend.Ranker.EnableClickThroughPrediction && w.rankers[workerId] != nil && !w.rankers[workerId].Invalid() {
 				results[category], err = w.rankByClickTroughRate(&user, catCandidates, itemCache, w.rankers[workerId])
 				if err != nil {
 					log.Logger().Error("failed to rank items", zap.Error(err))
@@ -1022,7 +1022,7 @@ func (w *Worker) checkRecommendCacheOutOfDate(ctx context.Context, userId string
 
 	// 5. If active time > recommend time, not stale.
 	if activeTime.Before(recommendTime) {
-		timeoutTime := recommendTime.Add(w.Config.Recommend.Offline.RefreshRecommendPeriod)
+		timeoutTime := recommendTime.Add(w.Config.Recommend.Ranker.RefreshRecommendPeriod)
 		return timeoutTime.Before(time.Now())
 	}
 	return true
@@ -1128,7 +1128,7 @@ func (w *Worker) replacement(recommend map[string][]cache.Score, user *data.User
 			// 1. If click-through rate prediction model is available, use it.
 			// 2. Otherwise, give a random score.
 			var score float64
-			if w.Config.Recommend.Offline.EnableClickThroughPrediction && predictor != nil {
+			if w.Config.Recommend.Ranker.EnableClickThroughPrediction && predictor != nil {
 				score = float64(predictor.Predict(user.UserId, itemId, ctr.ConvertLabels(user.Labels), ctr.ConvertLabels(item.Labels)))
 			} else {
 				upper := upperBounds[""]
