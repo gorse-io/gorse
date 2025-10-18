@@ -940,6 +940,9 @@ func (m *Master) getUserFeedback(request *restful.Request, response *restful.Res
 		server.InternalServerError(response, err)
 		return
 	}
+	sort.Slice(feedback, func(i, j int) bool {
+		return feedback[i].Timestamp.After(feedback[j].Timestamp)
+	})
 	if offset <= len(feedback) {
 		feedback = feedback[offset:]
 	}
