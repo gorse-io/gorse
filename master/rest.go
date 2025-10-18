@@ -129,12 +129,23 @@ func (m *Master) CreateWebService() {
 		Returns(http.StatusOK, "OK", User{}).
 		Writes(User{}))
 	// Get a user feedback
-	ws.Route(ws.GET("/dashboard/user/{user-id}/feedback/{feedback-type}").To(m.getTypedFeedbackByUser).
+	ws.Route(ws.GET("/dashboard/user/{user-id}/feedback/").To(m.getUserFeedback).
+		Doc("Get feedback by user id.").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"feedback"}).
+		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
+		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
+		Param(ws.QueryParameter("n", "number of returned feedback").DataType("int")).
+		Param(ws.QueryParameter("offset", "offset of returned feedback").DataType("int")).
+		Returns(http.StatusOK, "OK", []DetailedFeedback{}).
+		Writes([]DetailedFeedback{}))
+	ws.Route(ws.GET("/dashboard/user/{user-id}/feedback/{feedback-type}").To(m.getUserFeedback).
 		Doc("Get feedback by user id with feedback type.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"feedback"}).
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
 		Param(ws.PathParameter("user-id", "identifier of the user").DataType("string")).
 		Param(ws.PathParameter("feedback-type", "feedback type").DataType("string")).
+		Param(ws.QueryParameter("n", "number of returned feedback").DataType("int")).
+		Param(ws.QueryParameter("offset", "offset of returned feedback").DataType("int")).
 		Returns(http.StatusOK, "OK", []DetailedFeedback{}).
 		Writes([]DetailedFeedback{}))
 	// Get users
@@ -880,22 +891,63 @@ type DetailedFeedback struct {
 }
 
 // get feedback by user-id with feedback type
-func (m *Master) getTypedFeedbackByUser(request *restful.Request, response *restful.Response) {
+func (m *Master) getUserFeedback(request *restful.Request, response *restful.Response) {
 	ctx := context.Background()
 	if request != nil && request.Request != nil {
 		ctx = request.Request.Context()
 	}
+
+	// parse feedback type
 	feedbackType := request.PathParameter("feedback-type")
-	var feedbackTypeExpr expression.FeedbackTypeExpression
-	if err := feedbackTypeExpr.FromString(feedbackType); err != nil {
-		server.BadRequest(response, fmt.Errorf("invalid feedback type `%s`: %w", feedbackType, err))
-		return
+	var feedbackTypeExpressions []expression.FeedbackTypeExpression
+	if feedbackType != "" {
+		feedbackTypeExpressions = make([]expression.FeedbackTypeExpression, 1)
+		if err := feedbackTypeExpressions[0].FromString(feedbackType); err != nil {
+			server.BadRequest(response, fmt.Errorf("invalid feedback type `%s`: %w", feedbackType, err))
+			return
+		}
+	} else {
+		feedbackTypeExpressions = m.Config.Recommend.DataSource.PositiveFeedbackTypes
 	}
+
+	// parse n
+	nStr := request.QueryParameter("n")
+	n := m.Config.Server.DefaultN
+	if nStr != "" {
+		var err error
+		n, err = server.ParseInt(request, "n", m.Config.Server.DefaultN)
+		if err != nil {
+			server.BadRequest(response, err)
+			return
+		}
+	}
+
+	// parse offset
+	offsetStr := request.QueryParameter("offset")
+	offset := 0
+	if offsetStr != "" {
+		var err error
+		offset, err = server.ParseInt(request, "offset", 0)
+		if err != nil {
+			server.BadRequest(response, err)
+			return
+		}
+	}
+
 	userId := request.PathParameter("user-id")
-	feedback, err := m.DataClient.GetUserFeedback(ctx, userId, m.Config.Now(), feedbackTypeExpr)
+	feedback, err := m.DataClient.GetUserFeedback(ctx, userId, m.Config.Now(), feedbackTypeExpressions...)
 	if err != nil {
 		server.InternalServerError(response, err)
 		return
+	}
+	sort.Slice(feedback, func(i, j int) bool {
+		return feedback[i].Timestamp.After(feedback[j].Timestamp)
+	})
+	if offset <= len(feedback) {
+		feedback = feedback[offset:]
+	}
+	if n < len(feedback) {
+		feedback = feedback[:n]
 	}
 
 	// Get item details
