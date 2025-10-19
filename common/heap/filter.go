@@ -16,6 +16,7 @@ package heap
 
 import (
 	"container/heap"
+
 	"golang.org/x/exp/constraints"
 )
 
@@ -39,13 +40,21 @@ func (filter *TopKFilter[T, W]) Push(item T, weight W) {
 	}
 }
 
-// PopAll pops all items in the filter with decreasing order.
-func (filter *TopKFilter[T, W]) PopAll() ([]T, []W) {
+// PopAllValues pops all values in the filter with decreasing order.
+func (filter *TopKFilter[T, W]) PopAllValues() []T {
 	items := make([]T, filter.Len())
-	weights := make([]W, filter.Len())
 	for i := len(items) - 1; i >= 0; i-- {
 		elem := heap.Pop(&filter._heap).(Elem[T, W])
-		items[i], weights[i] = elem.Value, elem.Weight
+		items[i] = elem.Value
 	}
-	return items, weights
+	return items
+}
+
+// PopAll pops all items in the filter with decreasing order.
+func (filter *TopKFilter[T, W]) PopAll() []Elem[T, W] {
+	results := make([]Elem[T, W], filter.Len())
+	for i := len(results) - 1; i >= 0; i-- {
+		results[i] = heap.Pop(&filter._heap).(Elem[T, W])
+	}
+	return results
 }

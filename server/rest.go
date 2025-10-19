@@ -961,7 +961,7 @@ func (s *RestServer) RecommendUserBased(ctx *recommendContext) error {
 		for id, score := range candidates {
 			filter.Push(id, score)
 		}
-		ids, _ := filter.PopAll()
+		ids := filter.PopAllValues()
 		var results []string
 		for i := 0; i < len(ids) && len(results)+len(ctx.results) < ctx.n; i += 100 {
 			items, err := s.DataClient.BatchGetItems(ctx.context, ids[i:min(i+100, len(ids))])
@@ -1027,7 +1027,7 @@ func (s *RestServer) RecommendItemBased(ctx *recommendContext) error {
 		for id, score := range candidates {
 			filter.Push(id, score)
 		}
-		ids, _ := filter.PopAll()
+		ids := filter.PopAllValues()
 		ctx.results = append(ctx.results, ids...)
 		ctx.excludeSet.Append(ids...)
 		ctx.itemBasedTime = time.Since(start)
@@ -1242,11 +1242,11 @@ func (s *RestServer) sessionRecommend(request *restful.Request, response *restfu
 	for id, score := range candidates {
 		filter.Push(id, score)
 	}
-	names, scores := filter.PopAll()
-	result := lo.Map(names, func(_ string, i int) cache.Score {
+	scores := filter.PopAll()
+	result := lo.Map(scores, func(score heap.Elem[string, float64], _ int) cache.Score {
 		return cache.Score{
-			Id:    names[i],
-			Score: scores[i],
+			Id:    score.Value,
+			Score: score.Weight,
 		}
 	})
 	if len(result) > offset {

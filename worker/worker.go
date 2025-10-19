@@ -648,7 +648,7 @@ func (w *Worker) Recommend(users []data.User) {
 			for id, score := range scores {
 				filter.Push(id, score)
 			}
-			ids, _ := filter.PopAll()
+			ids := filter.PopAllValues()
 			recommend := make(map[string][]string)
 			for _, id := range ids {
 				recommend[""] = append(recommend[""], id)
@@ -712,7 +712,7 @@ func (w *Worker) Recommend(users []data.User) {
 				}
 			}
 			for category, filter := range filters {
-				ids, _ := filter.PopAll()
+				ids := filter.PopAllValues()
 				candidates[category] = append(candidates[category], ids)
 			}
 			userBasedRecommendSeconds.Add(time.Since(localStartTime).Seconds())
