@@ -153,7 +153,7 @@ func (d *SQLDatabase) Init() error {
 			ItemId     string    `gorm:"column:item_id;type:varchar(256) not null;primaryKey"`
 			IsHidden   bool      `gorm:"column:is_hidden;type:bool;not null"`
 			Categories []string  `gorm:"column:categories;type:json;not null"`
-			Timestamp  time.Time `gorm:"column:time_stamp;type:datetime;not null"`
+			Timestamp  time.Time `gorm:"column:time_stamp;type:datetime;not null;index:time_stamp_index"`
 			Labels     []string  `gorm:"column:labels;type:json;not null"`
 			Comment    string    `gorm:"column:comment;type:text;not null"`
 		}
@@ -180,7 +180,7 @@ func (d *SQLDatabase) Init() error {
 			ItemId     string    `gorm:"column:item_id;type:varchar(256);not null;primaryKey"`
 			IsHidden   bool      `gorm:"column:is_hidden;type:bool;not null;default:false"`
 			Categories string    `gorm:"column:categories;type:json;not null;default:'[]'"`
-			Timestamp  time.Time `gorm:"column:time_stamp;type:timestamptz;not null"`
+			Timestamp  time.Time `gorm:"column:time_stamp;type:timestamptz;not null;index:time_stamp_index"`
 			Labels     string    `gorm:"column:labels;type:json;not null;default:'[]'"`
 			Comment    string    `gorm:"column:comment;type:text;not null;default:''"`
 		}
@@ -207,7 +207,7 @@ func (d *SQLDatabase) Init() error {
 			ItemId     string `gorm:"column:item_id;type:varchar(256);not null;primaryKey"`
 			IsHidden   bool   `gorm:"column:is_hidden;type:bool;not null;default:false"`
 			Categories string `gorm:"column:categories;type:json;not null;default:'[]'"`
-			Timestamp  string `gorm:"column:time_stamp;type:datetime;not null;default:'0001-01-01'"`
+			Timestamp  string `gorm:"column:time_stamp;type:datetime;not null;default:'0001-01-01';index:time_stamp_index"`
 			Labels     string `gorm:"column:labels;type:json;not null;default:'[]'"`
 			Comment    string `gorm:"column:comment;type:text;not null;default:''"`
 		}
@@ -515,6 +515,27 @@ func (d *SQLDatabase) GetItems(ctx context.Context, cursor string, n int, timeLi
 		return base64.StdEncoding.EncodeToString([]byte(items[len(items)-1].ItemId)), items[:len(items)-1], nil
 	}
 	return "", items, nil
+}
+
+// GetLatestItems returns the latest items from MySQL.
+func (d *SQLDatabase) GetLatestItems(ctx context.Context, n int) ([]Item, error) {
+	tx := d.gormDB.WithContext(ctx).
+		Table(d.ItemsTable()).
+		Select("item_id, is_hidden, categories, time_stamp, labels, comment")
+	result, err := tx.Order("time_stamp DESC").Limit(n).Rows()
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	items := make([]Item, 0)
+	defer result.Close()
+	for result.Next() {
+		var item Item
+		if err = d.gormDB.ScanRows(result, &item); err != nil {
+			return nil, errors.Trace(err)
+		}
+		items = append(items, item)
+	}
+	return items, nil
 }
 
 // GetItemStream reads items by stream.

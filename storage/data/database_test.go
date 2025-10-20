@@ -479,7 +479,7 @@ func (suite *baseTestSuite) TestItems() {
 		{
 			ItemId:     "2",
 			Categories: []string{"b"},
-			Timestamp:  time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
+			Timestamp:  time.Date(1997, 3, 15, 0, 0, 0, 0, time.UTC),
 			Labels:     []any{"a"},
 			Comment:    "comment 2",
 		},
@@ -487,14 +487,14 @@ func (suite *baseTestSuite) TestItems() {
 			ItemId:     "4",
 			IsHidden:   true,
 			Categories: []string{"a"},
-			Timestamp:  time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
+			Timestamp:  time.Date(1998, 3, 15, 0, 0, 0, 0, time.UTC),
 			Labels:     []any{"a", "b"},
 			Comment:    "comment 4",
 		},
 		{
 			ItemId:     "6",
 			Categories: []string{"b"},
-			Timestamp:  time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
+			Timestamp:  time.Date(1999, 3, 15, 0, 0, 0, 0, time.UTC),
 			Labels:     []any{"b"},
 			Comment:    "comment 6",
 		},
@@ -502,7 +502,7 @@ func (suite *baseTestSuite) TestItems() {
 			ItemId:     "8",
 			IsHidden:   true,
 			Categories: []string{"a"},
-			Timestamp:  time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
+			Timestamp:  time.Date(2000, 3, 15, 0, 0, 0, 0, time.UTC),
 			Labels:     []any{"b"},
 			Comment:    "comment 8",
 		},
@@ -531,6 +531,10 @@ func (suite *baseTestSuite) TestItems() {
 	batchItem, err := suite.Database.BatchGetItems(ctx, []string{"2", "6"})
 	suite.NoError(err)
 	suite.Equal([]Item{items[1], items[3]}, batchItem)
+	// Test GetLatestItems
+	latestItems, err := suite.Database.GetLatestItems(ctx, 3)
+	suite.NoError(err)
+	suite.Equal([]Item{items[4], items[3], items[2]}, latestItems)
 	// Delete item
 	err = suite.Database.DeleteItem(ctx, "0")
 	suite.NoError(err)
