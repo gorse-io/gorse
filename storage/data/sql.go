@@ -134,7 +134,7 @@ type SQLDatabase struct {
 func (d *SQLDatabase) Optimize() error {
 	if d.driver == ClickHouse {
 		for _, tableName := range []string{d.UsersTable(), d.ItemsTable(), d.FeedbackTable(),
-			d.AggregatingFeedbackTable(), d.UserFeedbackTable(), d.ItemFeedbackTable()} {
+			d.AggregatingFeedbackTable(), d.UserFeedbackTable(), d.ItemFeedbackTable(), d.LatestItemsTable()} {
 			_, err := d.client.Exec("OPTIMIZE TABLE " + tableName)
 			if err != nil {
 				return errors.Trace(err)
@@ -153,7 +153,7 @@ func (d *SQLDatabase) Init() error {
 			ItemId     string    `gorm:"column:item_id;type:varchar(256) not null;primaryKey"`
 			IsHidden   bool      `gorm:"column:is_hidden;type:bool;not null"`
 			Categories []string  `gorm:"column:categories;type:json;not null"`
-			Timestamp  time.Time `gorm:"column:time_stamp;type:datetime;not null"`
+			Timestamp  time.Time `gorm:"column:time_stamp;type:datetime;not null;index:time_stamp_index"`
 			Labels     []string  `gorm:"column:labels;type:json;not null"`
 			Comment    string    `gorm:"column:comment;type:text;not null"`
 		}
@@ -180,7 +180,7 @@ func (d *SQLDatabase) Init() error {
 			ItemId     string    `gorm:"column:item_id;type:varchar(256);not null;primaryKey"`
 			IsHidden   bool      `gorm:"column:is_hidden;type:bool;not null;default:false"`
 			Categories string    `gorm:"column:categories;type:json;not null;default:'[]'"`
-			Timestamp  time.Time `gorm:"column:time_stamp;type:timestamptz;not null"`
+			Timestamp  time.Time `gorm:"column:time_stamp;type:timestamptz;not null;index:time_stamp_index"`
 			Labels     string    `gorm:"column:labels;type:json;not null;default:'[]'"`
 			Comment    string    `gorm:"column:comment;type:text;not null;default:''"`
 		}
@@ -207,7 +207,7 @@ func (d *SQLDatabase) Init() error {
 			ItemId     string `gorm:"column:item_id;type:varchar(256);not null;primaryKey"`
 			IsHidden   bool   `gorm:"column:is_hidden;type:bool;not null;default:false"`
 			Categories string `gorm:"column:categories;type:json;not null;default:'[]'"`
-			Timestamp  string `gorm:"column:time_stamp;type:datetime;not null;default:'0001-01-01'"`
+			Timestamp  string `gorm:"column:time_stamp;type:datetime;not null;default:'0001-01-01';index:time_stamp_index"`
 			Labels     string `gorm:"column:labels;type:json;not null;default:'[]'"`
 			Comment    string `gorm:"column:comment;type:text;not null;default:''"`
 		}
@@ -309,6 +309,27 @@ func (d *SQLDatabase) Init() error {
 		if err != nil {
 			return errors.Trace(err)
 		}
+		type LatestItems struct {
+			ItemId     string    `gorm:"column:item_id;type:String"`
+			IsHidden   int       `gorm:"column:is_hidden;type:Boolean;default:0"`
+			Categories string    `gorm:"column:categories;type:String;default:'[]'"`
+			Timestamp  time.Time `gorm:"column:time_stamp;type:Datetime64(9,'UTC')"`
+			Labels     string    `gorm:"column:labels;type:String;default:'[]'"`
+			Comment    string    `gorm:"column:comment;type:String"`
+			Version    time.Time `gorm:"column:version;type:DateTime"`
+		}
+		err = d.gormDB.Set("gorm:table_options", "ENGINE = ReplacingMergeTree(version) ORDER BY (time_stamp, item_id) SETTINGS index_granularity = 8192").AutoMigrate(LatestItems{})
+		if err != nil {
+			return errors.Trace(err)
+		}
+		// Create materialized view for latest items ordered by timestamp
+		err = d.gormDB.Exec(fmt.Sprintf("CREATE MATERIALIZED VIEW IF NOT EXISTS %s_latest_mv TO %s AS "+
+			"SELECT item_id, is_hidden, categories, time_stamp, labels, comment, version "+
+			"FROM %s",
+			d.ItemsTable(), d.LatestItemsTable(), d.ItemsTable())).Error
+		if err != nil {
+			return errors.Trace(err)
+		}
 	}
 	return nil
 }
@@ -324,7 +345,7 @@ func (d *SQLDatabase) Close() error {
 
 func (d *SQLDatabase) Purge() error {
 	if d.driver == ClickHouse {
-		tables := []string{d.ItemsTable(), d.FeedbackTable(), d.UsersTable(), d.UserFeedbackTable(), d.ItemFeedbackTable()}
+		tables := []string{d.ItemsTable(), d.FeedbackTable(), d.UsersTable(), d.UserFeedbackTable(), d.ItemFeedbackTable(), d.LatestItemsTable()}
 		for _, tableName := range tables {
 			err := d.gormDB.Exec(fmt.Sprintf("alter table %s delete where 1=1", tableName)).Error
 			if err != nil {
@@ -515,6 +536,33 @@ func (d *SQLDatabase) GetItems(ctx context.Context, cursor string, n int, timeLi
 		return base64.StdEncoding.EncodeToString([]byte(items[len(items)-1].ItemId)), items[:len(items)-1], nil
 	}
 	return "", items, nil
+}
+
+// GetLatestItems returns the latest items from the database.
+func (d *SQLDatabase) GetLatestItems(ctx context.Context, n int) ([]Item, error) {
+	var tableName string
+	if d.driver == ClickHouse {
+		tableName = d.LatestItemsTable()
+	} else {
+		tableName = d.ItemsTable()
+	}
+	tx := d.gormDB.WithContext(ctx).
+		Table(tableName).
+		Select("item_id, is_hidden, categories, time_stamp, labels, comment")
+	result, err := tx.Order("time_stamp DESC").Limit(n).Rows()
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	items := make([]Item, 0)
+	defer result.Close()
+	for result.Next() {
+		var item Item
+		if err = d.gormDB.ScanRows(result, &item); err != nil {
+			return nil, errors.Trace(err)
+		}
+		items = append(items, item)
+	}
+	return items, nil
 }
 
 // GetItemStream reads items by stream.

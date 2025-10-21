@@ -200,6 +200,14 @@ message CountFeedbackRequest {}
 
 message CountFeedbackResponse { int32 count = 1; }
 
+message GetLatestItemsRequest {
+  int32 n = 1;
+}
+
+message GetLatestItemsResponse {
+  repeated Item items = 1;
+}
+
 service DataStore {
   rpc Ping(PingRequest) returns (PingResponse) {}
   rpc BatchInsertItems(BatchInsertItemsRequest)
@@ -233,4 +241,5 @@ service DataStore {
   rpc CountUsers(CountUsersRequest) returns (CountUsersResponse) {}
   rpc CountItems(CountItemsRequest) returns (CountItemsResponse) {}
   rpc CountFeedback(CountFeedbackRequest) returns (CountFeedbackResponse) {}
+  rpc GetLatestItems(GetLatestItemsRequest) returns (GetLatestItemsResponse) {}
 }

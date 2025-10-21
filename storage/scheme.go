@@ -123,6 +123,11 @@ func (tp TablePrefix) ItemsTable() string {
 	return string(tp) + "items"
 }
 
+// LatestItemsTable returns the materialized view for latest items.
+func (tp TablePrefix) LatestItemsTable() string {
+	return string(tp) + "latest_items"
+}
+
 func (tp TablePrefix) FeedbackTable() string {
 	return string(tp) + "feedback"
 }
