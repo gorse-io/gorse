@@ -17,7 +17,6 @@ package cache
 import (
 	"context"
 	"database/sql"
-	"database/sql/driver"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -34,47 +33,7 @@ import (
 	"github.com/samber/lo"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
-	"modernc.org/sqlite"
 )
-
-func init() {
-	sqlite.MustRegisterDeterministicScalarFunction("json_contains", 2, func(ctx *sqlite.FunctionContext, args []driver.Value) (driver.Value, error) {
-		parse := func(arg driver.Value) (j []any, err error) {
-			var data []byte
-			switch argTyped := arg.(type) {
-			case string:
-				data = []byte(argTyped)
-			case []byte:
-				data = argTyped
-			default:
-				return nil, errors.Errorf("unsupported type %T", arg)
-			}
-			err = json.Unmarshal(data, &j)
-			return
-		}
-		if args[0] == nil || args[1] == nil {
-			return nil, nil
-		}
-		j1, err := parse(args[0])
-		if err != nil {
-			return nil, err
-		}
-		j2, err := parse(args[1])
-		if err != nil {
-			return nil, err
-		}
-		elements := make(map[any]struct{}, len(j1))
-		for _, e := range j1 {
-			elements[e] = struct{}{}
-		}
-		for _, e := range j2 {
-			if _, ok := elements[e]; !ok {
-				return false, nil
-			}
-		}
-		return true, nil
-	})
-}
 
 type SQLDriver int
 

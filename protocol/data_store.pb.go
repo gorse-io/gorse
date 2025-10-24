@@ -2394,6 +2394,7 @@ func (x *CountFeedbackResponse) GetCount() int32 {
 type GetLatestItemsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	N             int32                  `protobuf:"varint,1,opt,name=n,proto3" json:"n,omitempty"`
+	Categories    []string               `protobuf:"bytes,2,rep,name=categories,proto3" json:"categories,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2433,6 +2434,13 @@ func (x *GetLatestItemsRequest) GetN() int32 {
 		return x.N
 	}
 	return 0
+}
+
+func (x *GetLatestItemsRequest) GetCategories() []string {
+	if x != nil {
+		return x.Categories
+	}
+	return nil
 }
 
 type GetLatestItemsResponse struct {
@@ -2633,9 +2641,12 @@ const file_data_store_proto_rawDesc = "" +
 	"\x05count\x18\x01 \x01(\x05R\x05count\"\x16\n" +
 	"\x14CountFeedbackRequest\"-\n" +
 	"\x15CountFeedbackResponse\x12\x14\n" +
-	"\x05count\x18\x01 \x01(\x05R\x05count\"%\n" +
+	"\x05count\x18\x01 \x01(\x05R\x05count\"E\n" +
 	"\x15GetLatestItemsRequest\x12\f\n" +
-	"\x01n\x18\x01 \x01(\x05R\x01n\">\n" +
+	"\x01n\x18\x01 \x01(\x05R\x01n\x12\x1e\n" +
+	"\n" +
+	"categories\x18\x02 \x03(\tR\n" +
+	"categories\">\n" +
 	"\x16GetLatestItemsResponse\x12$\n" +
 	"\x05items\x18\x01 \x03(\v2\x0e.protocol.ItemR\x05items*V\n" +
 	"\x0eExpressionType\x12\b\n" +
