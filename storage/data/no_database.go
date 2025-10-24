@@ -73,7 +73,7 @@ func (NoDatabase) GetItems(_ context.Context, _ string, _ int, _ *time.Time) (st
 }
 
 // GetLatestItems method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) GetLatestItems(_ context.Context, _ int) ([]Item, error) {
+func (NoDatabase) GetLatestItems(_ context.Context, _ int, _ []string) ([]Item, error) {
 	return nil, ErrNoDatabase
 }
 

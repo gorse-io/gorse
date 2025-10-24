@@ -532,9 +532,12 @@ func (suite *baseTestSuite) TestItems() {
 	suite.NoError(err)
 	suite.Equal([]Item{items[1], items[3]}, batchItem)
 	// Test GetLatestItems
-	latestItems, err := suite.Database.GetLatestItems(ctx, 3)
+	latestItems, err := suite.Database.GetLatestItems(ctx, 3, nil)
 	suite.NoError(err)
 	suite.Equal([]Item{items[4], items[3], items[2]}, latestItems)
+	latestItemsWithCategory, err := suite.Database.GetLatestItems(ctx, 3, []string{"b"})
+	suite.NoError(err)
+	suite.Equal([]Item{items[3], items[1]}, latestItemsWithCategory)
 	// Delete item
 	err = suite.Database.DeleteItem(ctx, "0")
 	suite.NoError(err)

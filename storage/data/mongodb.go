@@ -327,12 +327,16 @@ func (db *MongoDB) GetItems(ctx context.Context, cursor string, n int, timeLimit
 }
 
 // GetLatestItems returns the latest items from MongoDB.
-func (db *MongoDB) GetLatestItems(ctx context.Context, n int) ([]Item, error) {
+func (db *MongoDB) GetLatestItems(ctx context.Context, n int, categories []string) ([]Item, error) {
 	c := db.client.Database(db.dbName).Collection(db.ItemsTable())
 	opt := options.Find()
 	opt.SetLimit(int64(n))
 	opt.SetSort(bson.D{{"timestamp", -1}})
-	r, err := c.Find(ctx, bson.M{}, opt)
+	filter := bson.M{}
+	if len(categories) > 0 {
+		filter["categories"] = bson.M{"$all": categories}
+	}
+	r, err := c.Find(ctx, filter, opt)
 	if err != nil {
 		return nil, err
 	}

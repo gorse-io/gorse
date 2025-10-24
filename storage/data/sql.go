@@ -539,7 +539,7 @@ func (d *SQLDatabase) GetItems(ctx context.Context, cursor string, n int, timeLi
 }
 
 // GetLatestItems returns the latest items from the database.
-func (d *SQLDatabase) GetLatestItems(ctx context.Context, n int) ([]Item, error) {
+func (d *SQLDatabase) GetLatestItems(ctx context.Context, n int, categories []string) ([]Item, error) {
 	var tableName string
 	if d.driver == ClickHouse {
 		tableName = d.LatestItemsTable()
@@ -549,6 +549,20 @@ func (d *SQLDatabase) GetLatestItems(ctx context.Context, n int) ([]Item, error)
 	tx := d.gormDB.WithContext(ctx).
 		Table(tableName).
 		Select("item_id, is_hidden, categories, time_stamp, labels, comment")
+	if len(categories) > 0 {
+		q, err := jsonutil.Marshal(categories)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		switch d.driver {
+		case Postgres:
+			tx = tx.Where("categories::jsonb @> ?::jsonb", string(q))
+		case MySQL, SQLite:
+			tx = tx.Where("JSON_CONTAINS(categories,?)", string(q))
+		case ClickHouse:
+			tx = tx.Where("hasAll(JSONExtractArrayRaw(categories),JSONExtractArrayRaw(?))", string(q))
+		}
+	}
 	result, err := tx.Order("time_stamp DESC").Limit(n).Rows()
 	if err != nil {
 		return nil, errors.Trace(err)

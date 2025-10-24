@@ -500,7 +500,7 @@ func (p *ProxyServer) CountFeedback(ctx context.Context, in *protocol.CountFeedb
 }
 
 func (p *ProxyServer) GetLatestItems(ctx context.Context, in *protocol.GetLatestItemsRequest) (*protocol.GetLatestItemsResponse, error) {
-	items, err := p.database.GetLatestItems(ctx, int(in.N))
+	items, err := p.database.GetLatestItems(ctx, int(in.N), in.Categories)
 	if err != nil {
 		return nil, err
 	}
@@ -624,8 +624,8 @@ func (p ProxyClient) GetItem(ctx context.Context, itemId string) (Item, error) {
 	}, nil
 }
 
-func (p ProxyClient) GetLatestItems(ctx context.Context, n int) ([]Item, error) {
-	resp, err := p.DataStoreClient.GetLatestItems(ctx, &protocol.GetLatestItemsRequest{N: int32(n)})
+func (p ProxyClient) GetLatestItems(ctx context.Context, n int, categories []string) ([]Item, error) {
+	resp, err := p.DataStoreClient.GetLatestItems(ctx, &protocol.GetLatestItemsRequest{N: int32(n), Categories: categories})
 	if err != nil {
 		return nil, err
 	}

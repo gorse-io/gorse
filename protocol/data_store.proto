@@ -202,6 +202,7 @@ message CountFeedbackResponse { int32 count = 1; }
 
 message GetLatestItemsRequest {
   int32 n = 1;
+  repeated string categories = 2;
 }
 
 message GetLatestItemsResponse {
