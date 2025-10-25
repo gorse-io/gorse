@@ -72,6 +72,11 @@ func (NoDatabase) GetItems(_ context.Context, _ string, _ int, _ *time.Time) (st
 	return "", nil, ErrNoDatabase
 }
 
+// GetLatestItems method of NoDatabase returns ErrNoDatabase.
+func (NoDatabase) GetLatestItems(_ context.Context, _ int, _ []string) ([]Item, error) {
+	return nil, ErrNoDatabase
+}
+
 // GetItemStream method of NoDatabase returns ErrNoDatabase.
 func (NoDatabase) GetItemStream(_ context.Context, _ int, _ *time.Time) (chan []Item, chan error) {
 	itemChan := make(chan []Item, bufSize)

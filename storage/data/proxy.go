@@ -499,6 +499,29 @@ func (p *ProxyServer) CountFeedback(ctx context.Context, in *protocol.CountFeedb
 	return &protocol.CountFeedbackResponse{Count: int32(count)}, err
 }
 
+func (p *ProxyServer) GetLatestItems(ctx context.Context, in *protocol.GetLatestItemsRequest) (*protocol.GetLatestItemsResponse, error) {
+	items, err := p.database.GetLatestItems(ctx, int(in.N), in.Categories)
+	if err != nil {
+		return nil, err
+	}
+	pbItems := make([]*protocol.Item, len(items))
+	for i, item := range items {
+		labels, err := json.Marshal(item.Labels)
+		if err != nil {
+			return nil, err
+		}
+		pbItems[i] = &protocol.Item{
+			ItemId:     item.ItemId,
+			IsHidden:   item.IsHidden,
+			Categories: item.Categories,
+			Timestamp:  timestamppb.New(item.Timestamp),
+			Labels:     labels,
+			Comment:    item.Comment,
+		}
+	}
+	return &protocol.GetLatestItemsResponse{Items: pbItems}, nil
+}
+
 type ProxyClient struct {
 	protocol.DataStoreClient
 }
@@ -599,6 +622,29 @@ func (p ProxyClient) GetItem(ctx context.Context, itemId string) (Item, error) {
 		Labels:     labels,
 		Comment:    resp.Item.Comment,
 	}, nil
+}
+
+func (p ProxyClient) GetLatestItems(ctx context.Context, n int, categories []string) ([]Item, error) {
+	resp, err := p.DataStoreClient.GetLatestItems(ctx, &protocol.GetLatestItemsRequest{N: int32(n), Categories: categories})
+	if err != nil {
+		return nil, err
+	}
+	items := make([]Item, len(resp.Items))
+	for i, item := range resp.Items {
+		var labels any
+		if err = json.Unmarshal(item.Labels, &labels); err != nil {
+			return nil, err
+		}
+		items[i] = Item{
+			ItemId:     item.ItemId,
+			IsHidden:   item.IsHidden,
+			Categories: item.Categories,
+			Timestamp:  item.Timestamp.AsTime(),
+			Labels:     labels,
+			Comment:    item.Comment,
+		}
+	}
+	return items, nil
 }
 
 func (p ProxyClient) ModifyItem(ctx context.Context, itemId string, patch ItemPatch) error {

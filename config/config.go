@@ -120,7 +120,6 @@ type RecommendConfig struct {
 	ActiveUserTTL   int                     `mapstructure:"active_user_ttl" validate:"gte=0"`
 	DataSource      DataSourceConfig        `mapstructure:"data_source"`
 	NonPersonalized []NonPersonalizedConfig `mapstructure:"non-personalized" validate:"dive"`
-	Popular         PopularConfig           `mapstructure:"popular"`
 	ItemToItem      []ItemToItemConfig      `mapstructure:"item-to-item" validate:"dive"`
 	UserToUser      []UserToUserConfig      `mapstructure:"user-to-user" validate:"dive"`
 	Collaborative   CollaborativeConfig     `mapstructure:"collaborative"`
@@ -158,10 +157,6 @@ type NonPersonalizedConfig struct {
 	Name   string `mapstructure:"name" json:"name"`
 	Score  string `mapstructure:"score" json:"score" validate:"required,item_expr"`
 	Filter string `mapstructure:"filter" json:"filter" validate:"item_expr"`
-}
-
-type PopularConfig struct {
-	PopularWindow time.Duration `mapstructure:"popular_window" validate:"gte=0"`
 }
 
 type ItemToItemConfig struct {
@@ -225,7 +220,6 @@ type RankerConfig struct {
 	CheckRecommendPeriod         time.Duration       `mapstructure:"check_recommend_period" validate:"gt=0"`
 	RefreshRecommendPeriod       time.Duration       `mapstructure:"refresh_recommend_period" validate:"gt=0"`
 	EnableLatestRecommend        bool                `mapstructure:"enable_latest_recommend"`
-	EnablePopularRecommend       bool                `mapstructure:"enable_popular_recommend"`
 	EnableUserBasedRecommend     bool                `mapstructure:"enable_user_based_recommend"`
 	EnableItemBasedRecommend     bool                `mapstructure:"enable_item_based_recommend"`
 	EnableColRecommend           bool                `mapstructure:"enable_collaborative_recommend"`
@@ -301,9 +295,6 @@ func GetDefaultConfig() *Config {
 		Recommend: RecommendConfig{
 			CacheSize:   100,
 			CacheExpire: 72 * time.Hour,
-			Popular: PopularConfig{
-				PopularWindow: 180 * 24 * time.Hour,
-			},
 			Collaborative: CollaborativeConfig{
 				ModelFitPeriod:    60 * time.Minute,
 				ModelSearchPeriod: 180 * time.Minute,
@@ -319,7 +310,6 @@ func GetDefaultConfig() *Config {
 				CheckRecommendPeriod:         time.Minute,
 				RefreshRecommendPeriod:       120 * time.Hour,
 				EnableLatestRecommend:        false,
-				EnablePopularRecommend:       false,
 				EnableUserBasedRecommend:     false,
 				EnableItemBasedRecommend:     false,
 				EnableColRecommend:           true,
@@ -482,8 +472,6 @@ func setDefault() {
 	// [recommend]
 	viper.SetDefault("recommend.cache_size", defaultConfig.Recommend.CacheSize)
 	viper.SetDefault("recommend.cache_expire", defaultConfig.Recommend.CacheExpire)
-	// [recommend.popular]
-	viper.SetDefault("recommend.popular.popular_window", defaultConfig.Recommend.Popular.PopularWindow)
 	// [recommend.collaborative]
 	viper.SetDefault("recommend.collaborative.model_fit_period", defaultConfig.Recommend.Collaborative.ModelFitPeriod)
 	viper.SetDefault("recommend.collaborative.model_search_period", defaultConfig.Recommend.Collaborative.ModelSearchPeriod)

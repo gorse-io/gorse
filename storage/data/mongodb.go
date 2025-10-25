@@ -166,6 +166,14 @@ func (db *MongoDB) Init() error {
 	if err != nil {
 		return errors.Trace(err)
 	}
+	_, err = d.Collection(db.ItemsTable()).Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys: bson.M{
+			"timestamp": 1,
+		},
+	})
+	if err != nil {
+		return errors.Trace(err)
+	}
 	return nil
 }
 
@@ -316,6 +324,33 @@ func (db *MongoDB) GetItems(ctx context.Context, cursor string, n int, timeLimit
 		cursor = ""
 	}
 	return base64.StdEncoding.EncodeToString([]byte(cursor)), items, nil
+}
+
+// GetLatestItems returns the latest items from MongoDB.
+func (db *MongoDB) GetLatestItems(ctx context.Context, n int, categories []string) ([]Item, error) {
+	c := db.client.Database(db.dbName).Collection(db.ItemsTable())
+	opt := options.Find()
+	opt.SetLimit(int64(n))
+	opt.SetSort(bson.D{{"timestamp", -1}})
+	filter := bson.M{"ishidden": bson.M{"$ne": true}}
+	if len(categories) > 0 {
+		filter["categories"] = bson.M{"$all": categories}
+	}
+	r, err := c.Find(ctx, filter, opt)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]Item, 0)
+	defer r.Close(ctx)
+	for r.Next(ctx) {
+		var item Item
+		if err = r.Decode(&item); err != nil {
+			return nil, err
+		}
+		item.Labels = unpack(item.Labels)
+		items = append(items, item)
+	}
+	return items, nil
 }
 
 // GetItemStream read items from MongoDB by stream.

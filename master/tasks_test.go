@@ -218,7 +218,7 @@ func (s *MasterTestSuite) TestLoadDataFromDatabase() {
 		items = append(items, data.Item{
 			ItemId:     strconv.Itoa(i),
 			Timestamp:  time.Date(2000+i, 1, 1, 1, 1, 0, 0, time.UTC),
-			Labels:     []string{strconv.Itoa(i % 3), strconv.Itoa(i*10 + 10)},
+			Labels:     []any{strconv.Itoa(i % 3), strconv.Itoa(i*10 + 10)},
 			Categories: []string{strconv.Itoa(i % 3)},
 		})
 	}
@@ -298,44 +298,20 @@ func (s *MasterTestSuite) TestLoadDataFromDatabase() {
 	s.Equal(55, datasets.clickTrainSet.NegativeCount+datasets.clickTestSet.NegativeCount)
 
 	// check latest items
-	latest, err := s.CacheClient.SearchScores(ctx, cache.NonPersonalized, cache.Latest, []string{""}, 0, 100)
+	latest, err := s.DataClient.GetLatestItems(ctx, 3, nil)
 	s.NoError(err)
-	s.Equal([]cache.Score{
-		{Id: items[8].ItemId, Score: float64(items[8].Timestamp.Unix())},
-		{Id: items[7].ItemId, Score: float64(items[7].Timestamp.Unix())},
-		{Id: items[6].ItemId, Score: float64(items[6].Timestamp.Unix())},
-	}, lo.Map(latest, func(document cache.Score, _ int) cache.Score {
-		return cache.Score{Id: document.Id, Score: document.Score}
-	}))
-	latest, err = s.CacheClient.SearchScores(ctx, cache.NonPersonalized, cache.Latest, []string{"2"}, 0, 100)
+	s.Equal([]data.Item{
+		items[8],
+		items[7],
+		items[6],
+	}, latest)
+	latest, err = s.DataClient.GetLatestItems(ctx, 3, []string{"2"})
 	s.NoError(err)
-	s.Equal([]cache.Score{
-		{Id: items[8].ItemId, Score: float64(items[8].Timestamp.Unix())},
-		{Id: items[5].ItemId, Score: float64(items[5].Timestamp.Unix())},
-		{Id: items[2].ItemId, Score: float64(items[2].Timestamp.Unix())},
-	}, lo.Map(latest, func(document cache.Score, _ int) cache.Score {
-		return cache.Score{Id: document.Id, Score: document.Score}
-	}))
-
-	// check popular items
-	popular, err := s.CacheClient.SearchScores(ctx, cache.NonPersonalized, cache.Popular, []string{""}, 0, 3)
-	s.NoError(err)
-	s.Equal([]cache.Score{
-		{Id: items[8].ItemId, Score: 9},
-		{Id: items[7].ItemId, Score: 8},
-		{Id: items[6].ItemId, Score: 7},
-	}, lo.Map(popular, func(document cache.Score, _ int) cache.Score {
-		return cache.Score{Id: document.Id, Score: document.Score}
-	}))
-	popular, err = s.CacheClient.SearchScores(ctx, cache.NonPersonalized, cache.Popular, []string{"2"}, 0, 3)
-	s.NoError(err)
-	s.Equal([]cache.Score{
-		{Id: items[8].ItemId, Score: 9},
-		{Id: items[5].ItemId, Score: 6},
-		{Id: items[2].ItemId, Score: 3},
-	}, lo.Map(popular, func(document cache.Score, _ int) cache.Score {
-		return cache.Score{Id: document.Id, Score: document.Score}
-	}))
+	s.Equal([]data.Item{
+		items[8],
+		items[5],
+		items[2],
+	}, latest)
 
 	// check categories
 	categories, err := s.CacheClient.GetSet(ctx, cache.ItemCategories)
@@ -352,6 +328,7 @@ func (s *MasterTestSuite) TestNonPersonalizedRecommend() {
 		expression.MustParseFeedbackTypeExpression("positive")}
 	s.Config.Recommend.DataSource.ReadFeedbackTypes = []expression.FeedbackTypeExpression{
 		expression.MustParseFeedbackTypeExpression("negative")}
+	s.Config.Recommend.NonPersonalized = []config.NonPersonalizedConfig{{Name: "latest", Score: "item.Timestamp.Unix()"}}
 	s.Config.Master.NumJobs = runtime.NumCPU()
 
 	// insert items
@@ -403,24 +380,13 @@ func (s *MasterTestSuite) TestNonPersonalizedRecommend() {
 	s.NoError(err)
 
 	// check latest items
-	latest, err := s.CacheClient.SearchScores(ctx, cache.NonPersonalized, cache.Latest, []string{""}, 0, 3)
+	latest, err := s.CacheClient.SearchScores(ctx, cache.NonPersonalized, "latest", []string{""}, 0, 3)
 	s.NoError(err)
 	s.Equal([]cache.Score{
 		{Id: items[9].ItemId, Score: float64(items[9].Timestamp.Unix())},
 		{Id: items[7].ItemId, Score: float64(items[7].Timestamp.Unix())},
 		{Id: items[5].ItemId, Score: float64(items[5].Timestamp.Unix())},
 	}, lo.Map(latest, func(document cache.Score, _ int) cache.Score {
-		return cache.Score{Id: document.Id, Score: document.Score}
-	}))
-
-	// check popular items
-	popular, err := s.CacheClient.SearchScores(ctx, cache.NonPersonalized, cache.Popular, []string{""}, 0, 3)
-	s.NoError(err)
-	s.Equal([]cache.Score{
-		{Id: items[8].ItemId, Score: 9},
-		{Id: items[6].ItemId, Score: 7},
-		{Id: items[4].ItemId, Score: 5},
-	}, lo.Map(popular, func(document cache.Score, _ int) cache.Score {
 		return cache.Score{Id: document.Id, Score: document.Score}
 	}))
 }
@@ -516,11 +482,6 @@ func (s *MasterTestSuite) TestGarbageCollection() {
 
 	// insert non-personalized cache
 	timestamp := time.Now().Add(time.Hour)
-	err = s.CacheClient.AddScores(ctx, cache.NonPersonalized, cache.Latest, []cache.Score{
-		{Id: "1", Score: 1, Categories: []string{""}, Timestamp: timestamp},
-		{Id: "2", Score: 2, Categories: []string{""}, Timestamp: timestamp},
-	})
-	s.NoError(err)
 	err = s.CacheClient.AddScores(ctx, cache.NonPersonalized, "custom", []cache.Score{
 		{Id: "1", Score: 1, Categories: []string{""}, Timestamp: timestamp},
 		{Id: "2", Score: 2, Categories: []string{""}, Timestamp: timestamp},
@@ -585,10 +546,7 @@ func (s *MasterTestSuite) TestGarbageCollection() {
 	s.NoError(err)
 
 	// check non-personalized cache
-	np, err := s.CacheClient.SearchScores(ctx, cache.NonPersonalized, cache.Latest, nil, 0, 100)
-	s.NoError(err)
-	s.Equal([]string{"2", "1"}, cache.ConvertDocumentsToValues(np))
-	np, err = s.CacheClient.SearchScores(ctx, cache.NonPersonalized, "custom", nil, 0, 100)
+	np, err := s.CacheClient.SearchScores(ctx, cache.NonPersonalized, "custom", nil, 0, 100)
 	s.NoError(err)
 	s.Equal([]string{"2", "1"}, cache.ConvertDocumentsToValues(np))
 	np, err = s.CacheClient.SearchScores(ctx, cache.NonPersonalized, "unknown", nil, 0, 100)

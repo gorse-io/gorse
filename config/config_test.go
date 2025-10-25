@@ -109,9 +109,7 @@ func TestUnmarshal(t *testing.T) {
 			}, config.Recommend.DataSource.ReadFeedbackTypes)
 			assert.Equal(t, uint(0), config.Recommend.DataSource.PositiveFeedbackTTL)
 			assert.Equal(t, uint(0), config.Recommend.DataSource.ItemTTL)
-			// [recommend.popular]
-			assert.Equal(t, 30*24*time.Hour, config.Recommend.Popular.PopularWindow)
-			// [recommend.leaderboards]
+			// [recommend.non-personalized]
 			assert.Len(t, config.Recommend.NonPersonalized, 1)
 			assert.Equal(t, "most_starred_weekly", config.Recommend.NonPersonalized[0].Name)
 			assert.Equal(t, "count(feedback, .FeedbackType == 'star')", config.Recommend.NonPersonalized[0].Score)

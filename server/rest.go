@@ -40,7 +40,6 @@ import (
 	"github.com/samber/lo"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/emicklei/go-restful/otelrestful"
 	"go.uber.org/zap"
-	"google.golang.org/protobuf/proto"
 	"modernc.org/mathutil"
 )
 
@@ -431,27 +430,6 @@ func (s *RestServer) CreateWebService() {
 		Returns(http.StatusOK, "OK", []cache.Score{}).
 		Writes([]cache.Score{}))
 
-	// Get popular items
-	ws.Route(ws.GET("/popular").To(s.getPopular).
-		Doc("Get popular items.").
-		Metadata(restfulspec.KeyOpenAPITags, []string{RecommendationAPITag}).
-		Param(ws.HeaderParameter("X-API-Key", "API key").DataType("string")).
-		Param(ws.QueryParameter("category", "Category of returned items").DataType("string")).
-		Param(ws.QueryParameter("n", "Number of returned recommendations").DataType("integer")).
-		Param(ws.QueryParameter("offset", "Offset of returned recommendations").DataType("integer")).
-		Param(ws.QueryParameter("user-id", "Remove read items of a user").DataType("string")).
-		Returns(http.StatusOK, "OK", []cache.Score{}).
-		Writes([]cache.Score{}))
-	ws.Route(ws.GET("/popular/{category}").To(s.getPopular).
-		Doc("Get popular items in category.").
-		Metadata(restfulspec.KeyOpenAPITags, []string{RecommendationAPITag}).
-		Param(ws.HeaderParameter("X-API-Key", "API key").DataType("string")).
-		Param(ws.PathParameter("category", "Category of returned items.").DataType("string")).
-		Param(ws.QueryParameter("n", "Number of returned items").DataType("integer")).
-		Param(ws.QueryParameter("offset", "Offset of returned items").DataType("integer")).
-		Param(ws.QueryParameter("user-id", "Remove read items of a user").DataType("string")).
-		Returns(http.StatusOK, "OK", []cache.Score{}).
-		Writes([]cache.Score{}))
 	// Get latest items
 	ws.Route(ws.GET("/latest").To(s.getLatest).
 		Doc("Get the latest items.").
@@ -687,18 +665,27 @@ func (s *RestServer) SearchDocuments(collection, subset string, categories []str
 	}
 }
 
-func (s *RestServer) getPopular(request *restful.Request, response *restful.Response) {
-	categories := ReadCategories(request, []string{""})
-	log.ResponseLogger(response).Debug("get category popular items in category", zap.Strings("categories", categories))
-	s.SetLastModified(request, response, cache.Key(cache.NonPersonalizedUpdateTime, cache.Popular))
-	s.SearchDocuments(cache.NonPersonalized, cache.Popular, categories, nil, request, response)
-}
-
 func (s *RestServer) getLatest(request *restful.Request, response *restful.Response) {
-	categories := ReadCategories(request, []string{""})
+	n, err := ParseInt(request, "n", s.Config.Server.DefaultN)
+	if err != nil {
+		BadRequest(response, errors.New("invalid n parameter"))
+		return
+	}
+
+	categories := ReadCategories(request, nil)
 	log.ResponseLogger(response).Debug("get category latest items in category", zap.Strings("categories", categories))
-	s.SetLastModified(request, response, cache.Key(cache.NonPersonalizedUpdateTime, cache.Latest))
-	s.SearchDocuments(cache.NonPersonalized, cache.Latest, categories, nil, request, response)
+
+	items, err := s.DataClient.GetLatestItems(request.Request.Context(), n, categories)
+	if err != nil {
+		InternalServerError(response, err)
+		return
+	}
+	Ok(response, lo.Map(items, func(item data.Item, _ int) cache.Score {
+		return cache.Score{
+			Id:    item.ItemId,
+			Score: float64(item.Timestamp.Unix()),
+		}
+	}))
 }
 
 func (s *RestServer) getNonPersonalized(request *restful.Request, response *restful.Response) {
@@ -1039,51 +1026,19 @@ func (s *RestServer) RecommendItemBased(ctx *recommendContext) error {
 
 func (s *RestServer) RecommendLatest(ctx *recommendContext) error {
 	if len(ctx.results) < ctx.n {
-		var categories []string
-		if len(ctx.categories) == 0 {
-			categories = []string{""}
-		} else {
-			categories = ctx.categories
-		}
 		start := time.Now()
-		items, err := s.CacheClient.SearchScores(ctx.context, cache.NonPersonalized, cache.Latest, categories, 0, s.Config.Recommend.CacheSize)
+		items, err := s.DataClient.GetLatestItems(ctx.context, s.Config.Recommend.CacheSize, ctx.categories)
 		if err != nil {
 			return errors.Trace(err)
 		}
 		for _, item := range items {
-			if !ctx.excludeSet.Contains(item.Id) {
-				ctx.results = append(ctx.results, item.Id)
-				ctx.excludeSet.Add(item.Id)
+			if !ctx.excludeSet.Contains(item.ItemId) {
+				ctx.results = append(ctx.results, item.ItemId)
+				ctx.excludeSet.Add(item.ItemId)
 			}
 		}
 		ctx.loadLatestTime = time.Since(start)
 		ctx.numFromLatest = len(ctx.results) - ctx.numPrevStage
-		ctx.numPrevStage = len(ctx.results)
-	}
-	return nil
-}
-
-func (s *RestServer) RecommendPopular(ctx *recommendContext) error {
-	if len(ctx.results) < ctx.n {
-		var categories []string
-		if len(ctx.categories) == 0 {
-			categories = []string{""}
-		} else {
-			categories = ctx.categories
-		}
-		start := time.Now()
-		items, err := s.CacheClient.SearchScores(ctx.context, cache.NonPersonalized, cache.Popular, categories, 0, s.Config.Recommend.CacheSize)
-		if err != nil {
-			return errors.Trace(err)
-		}
-		for _, item := range items {
-			if !ctx.excludeSet.Contains(item.Id) {
-				ctx.results = append(ctx.results, item.Id)
-				ctx.excludeSet.Add(item.Id)
-			}
-		}
-		ctx.loadPopularTime = time.Since(start)
-		ctx.numFromPopular = len(ctx.results) - ctx.numPrevStage
 		ctx.numPrevStage = len(ctx.results)
 	}
 	return nil
@@ -1125,8 +1080,6 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 			recommenders = append(recommenders, s.RecommendUserBased)
 		case "latest":
 			recommenders = append(recommenders, s.RecommendLatest)
-		case "popular":
-			recommenders = append(recommenders, s.RecommendPopular)
 		default:
 			InternalServerError(response, fmt.Errorf("unknown fallback recommendation method `%s`", recommender))
 			return
@@ -1509,16 +1462,6 @@ func (s *RestServer) batchInsertItems(ctx context.Context, response *restful.Res
 			Labels:     item.Labels,
 			Comment:    item.Comment,
 		})
-		// insert to latest items cache
-		if err = s.CacheClient.AddScores(ctx, cache.NonPersonalized, cache.Latest, []cache.Score{{
-			Id:         item.ItemId,
-			Score:      float64(timestamp.Unix()),
-			Categories: withWildCard(item.Categories),
-			Timestamp:  time.Now(),
-		}}); err != nil {
-			InternalServerError(response, err)
-			return
-		}
 		// update items cache
 		if err = s.CacheClient.UpdateScores(ctx, cache.ItemCache, nil, item.ItemId, cache.ScorePatch{
 			Categories: withWildCard(item.Categories),
@@ -1625,13 +1568,6 @@ func (s *RestServer) modifyItem(request *restful.Request, response *restful.Resp
 	// remove hidden item from cache
 	if patch.IsHidden != nil {
 		if err := s.CacheClient.UpdateScores(ctx, cache.ItemCache, nil, itemId, cache.ScorePatch{IsHidden: patch.IsHidden}); err != nil {
-			InternalServerError(response, err)
-			return
-		}
-	}
-	// add item to latest items cache
-	if patch.Timestamp != nil {
-		if err := s.CacheClient.UpdateScores(ctx, []string{cache.NonPersonalized}, proto.String(cache.Latest), itemId, cache.ScorePatch{Score: proto.Float64(float64(patch.Timestamp.Unix()))}); err != nil {
 			InternalServerError(response, err)
 			return
 		}

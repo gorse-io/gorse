@@ -15,7 +15,6 @@
 package logics
 
 import (
-	"fmt"
 	"reflect"
 	"sort"
 	"sync"
@@ -82,25 +81,6 @@ func NewNonPersonalized(cfg config.NonPersonalizedConfig, n int, timestamp time.
 		heapSize:   n,
 		heaps:      heaps,
 	}, nil
-}
-
-func NewLatest(n int, timestamp time.Time) *NonPersonalized {
-	return lo.Must(NewNonPersonalized(config.NonPersonalizedConfig{
-		Name:  "latest",
-		Score: "item.Timestamp.Unix()",
-	}, n, timestamp))
-}
-
-func NewPopular(window time.Duration, n int, timestamp time.Time) *NonPersonalized {
-	var filter string
-	if window > 0 {
-		filter = fmt.Sprintf("(now() - item.Timestamp).Nanoseconds() < %d", window.Nanoseconds())
-	}
-	return lo.Must(NewNonPersonalized(config.NonPersonalizedConfig{
-		Name:   "popular",
-		Score:  "len(feedback)",
-		Filter: filter,
-	}, n, timestamp))
 }
 
 func (l *NonPersonalized) Push(item data.Item, feedback []data.Feedback) {

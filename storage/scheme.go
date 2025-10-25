@@ -16,6 +16,8 @@ package storage
 
 import (
 	"database/sql"
+	"database/sql/driver"
+	"encoding/json"
 	"net/url"
 	"strings"
 
@@ -25,8 +27,48 @@ import (
 	"github.com/samber/lo"
 	"gorm.io/gorm"
 	"gorm.io/gorm/schema"
+	"modernc.org/sqlite"
 	"moul.io/zapgorm2"
 )
+
+func init() {
+	sqlite.MustRegisterDeterministicScalarFunction("json_contains", 2, func(ctx *sqlite.FunctionContext, args []driver.Value) (driver.Value, error) {
+		parse := func(arg driver.Value) (j []any, err error) {
+			var data []byte
+			switch argTyped := arg.(type) {
+			case string:
+				data = []byte(argTyped)
+			case []byte:
+				data = argTyped
+			default:
+				return nil, errors.Errorf("unsupported type %T", arg)
+			}
+			err = json.Unmarshal(data, &j)
+			return
+		}
+		if args[0] == nil || args[1] == nil {
+			return nil, nil
+		}
+		j1, err := parse(args[0])
+		if err != nil {
+			return nil, err
+		}
+		j2, err := parse(args[1])
+		if err != nil {
+			return nil, err
+		}
+		elements := make(map[any]struct{}, len(j1))
+		for _, e := range j1 {
+			elements[e] = struct{}{}
+		}
+		for _, e := range j2 {
+			if _, ok := elements[e]; !ok {
+				return false, nil
+			}
+		}
+		return true, nil
+	})
+}
 
 const (
 	MySQLPrefix         = "mysql://"
@@ -121,6 +163,11 @@ func (tp TablePrefix) UsersTable() string {
 
 func (tp TablePrefix) ItemsTable() string {
 	return string(tp) + "items"
+}
+
+// LatestItemsTable returns the materialized view for latest items.
+func (tp TablePrefix) LatestItemsTable() string {
+	return string(tp) + "latest_items"
 }
 
 func (tp TablePrefix) FeedbackTable() string {

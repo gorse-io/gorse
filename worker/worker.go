@@ -722,15 +722,19 @@ func (w *Worker) Recommend(users []data.User) {
 		if w.Config.Recommend.Ranker.EnableLatestRecommend {
 			localStartTime := time.Now()
 			for _, category := range append([]string{""}, itemCategories...) {
-				latestItems, err := w.CacheClient.SearchScores(ctx, cache.NonPersonalized, cache.Latest, []string{category}, 0, w.Config.Recommend.CacheSize)
+				var categories []string
+				if category != "" {
+					categories = []string{category}
+				}
+				latestItems, err := w.DataClient.GetLatestItems(ctx, w.Config.Recommend.CacheSize, categories)
 				if err != nil {
 					log.Logger().Error("failed to load latest items", zap.Error(err))
 					return errors.Trace(err)
 				}
 				var recommend []string
 				for _, latestItem := range latestItems {
-					if !excludeSet.Contains(latestItem.Id) && itemCache.IsAvailable(latestItem.Id) {
-						recommend = append(recommend, latestItem.Id)
+					if !excludeSet.Contains(latestItem.ItemId) && itemCache.IsAvailable(latestItem.ItemId) {
+						recommend = append(recommend, latestItem.ItemId)
 					}
 				}
 				candidates[category] = append(candidates[category], recommend)

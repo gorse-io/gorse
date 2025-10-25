@@ -841,8 +841,6 @@ func (m *Master) getRecommend(request *restful.Request, response *restful.Respon
 				recommenders = append(recommenders, m.RecommendUserBased)
 			case "latest":
 				recommenders = append(recommenders, m.RecommendLatest)
-			case "popular":
-				recommenders = append(recommenders, m.RecommendPopular)
 			default:
 				server.InternalServerError(response, fmt.Errorf("unknown fallback recommendation method `%s`", recommender))
 				return
