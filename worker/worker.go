@@ -725,40 +725,24 @@ func (w *Worker) Recommend(users []data.User) {
 		if w.Config.Recommend.Offline.EnableLatestRecommend {
 			localStartTime := time.Now()
 			for _, category := range append([]string{""}, itemCategories...) {
-				latestItems, err := w.CacheClient.SearchScores(ctx, cache.NonPersonalized, cache.Latest, []string{category}, 0, w.Config.Recommend.CacheSize)
+				var categories []string
+				if category != "" {
+					categories = []string{category}
+				}
+				latestItems, err := w.DataClient.GetLatestItems(ctx, w.Config.Recommend.CacheSize, categories)
 				if err != nil {
 					log.Logger().Error("failed to load latest items", zap.Error(err))
 					return errors.Trace(err)
 				}
 				var recommend []string
 				for _, latestItem := range latestItems {
-					if !excludeSet.Contains(latestItem.Id) && itemCache.IsAvailable(latestItem.Id) {
-						recommend = append(recommend, latestItem.Id)
+					if !excludeSet.Contains(latestItem.ItemId) && itemCache.IsAvailable(latestItem.ItemId) {
+						recommend = append(recommend, latestItem.ItemId)
 					}
 				}
 				candidates[category] = append(candidates[category], recommend)
 			}
 			latestRecommendSeconds.Add(time.Since(localStartTime).Seconds())
-		}
-
-		// Recommender #5: popular items.
-		if w.Config.Recommend.Offline.EnablePopularRecommend {
-			localStartTime := time.Now()
-			for _, category := range append([]string{""}, itemCategories...) {
-				popularItems, err := w.CacheClient.SearchScores(ctx, cache.NonPersonalized, cache.Popular, []string{category}, 0, w.Config.Recommend.CacheSize)
-				if err != nil {
-					log.Logger().Error("failed to load popular items", zap.Error(err))
-					return errors.Trace(err)
-				}
-				var recommend []string
-				for _, popularItem := range popularItems {
-					if !excludeSet.Contains(popularItem.Id) && itemCache.IsAvailable(popularItem.Id) {
-						recommend = append(recommend, popularItem.Id)
-					}
-				}
-				candidates[category] = append(candidates[category], recommend)
-			}
-			popularRecommendSeconds.Add(time.Since(localStartTime).Seconds())
 		}
 
 		// rank items from different recommenders
@@ -963,13 +947,8 @@ func (w *Worker) exploreRecommend(exploitRecommend []cache.Score, excludeSet map
 	if threshold, exist := w.Config.Recommend.Offline.GetExploreRecommend("latest"); exist {
 		exploreLatestThreshold += threshold
 	}
-	// load popular items
-	popularItems, err := w.CacheClient.SearchScores(ctx, cache.NonPersonalized, cache.Popular, []string{category}, 0, w.Config.Recommend.CacheSize)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
 	// load the latest items
-	latestItems, err := w.CacheClient.SearchScores(ctx, cache.NonPersonalized, cache.Latest, []string{category}, 0, w.Config.Recommend.CacheSize)
+	latestItems, err := w.DataClient.GetLatestItems(ctx, w.Config.Recommend.CacheSize, []string{category})
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -982,14 +961,9 @@ func (w *Worker) exploreRecommend(exploitRecommend []cache.Score, excludeSet map
 	for range exploitRecommend {
 		dice := w.randGenerator.Float64()
 		var recommendItem cache.Score
-		if dice < explorePopularThreshold && len(popularItems) > 0 {
+		if dice < exploreLatestThreshold && len(latestItems) > 0 {
 			score -= 1e-5
-			recommendItem.Id = popularItems[0].Id
-			recommendItem.Score = score
-			popularItems = popularItems[1:]
-		} else if dice < exploreLatestThreshold && len(latestItems) > 0 {
-			score -= 1e-5
-			recommendItem.Id = latestItems[0].Id
+			recommendItem.Id = latestItems[0].ItemId
 			recommendItem.Score = score
 			latestItems = latestItems[1:]
 		} else if len(exploitRecommend) > 0 {
