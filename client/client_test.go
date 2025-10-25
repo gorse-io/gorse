@@ -98,9 +98,14 @@ func (suite *GorseClientTestSuite) TestFeedback() {
 
 func (suite *GorseClientTestSuite) TestRecommend() {
 	ctx := context.TODO()
-	resp, err := suite.client.GetRecommend(ctx, "100", "", 10, 0)
+	suite.hSet("offline_recommend", "100", []client.Score{
+		{Id: "1", Score: 1},
+		{Id: "2", Score: 2},
+		{Id: "3", Score: 3},
+	})
+	resp, err := suite.client.GetRecommend(ctx, "100", "", 3, 0)
 	suite.NoError(err)
-	suite.Equal([]string{"400", "300", "200"}, resp)
+	suite.Equal([]string{"3", "2", "1"}, resp)
 }
 
 func (suite *GorseClientTestSuite) TestSessionRecommend() {
