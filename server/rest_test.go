@@ -27,7 +27,7 @@ import (
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
-	"github.com/samber/lo"
+	"github.com/samber/lo/mutable"
 	"github.com/steinfletcher/apitest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
@@ -243,15 +243,6 @@ func (suite *ServerTestSuite) TestItems() {
 			Comment:   "comment_8",
 		},
 	}
-	// insert popular scores
-	err := suite.CacheClient.AddScores(ctx, cache.NonPersonalized, cache.Popular, []cache.Score{
-		{Id: "0", Score: 10},
-		{Id: "2", Score: 12},
-		{Id: "4", Score: 14},
-		{Id: "6", Score: 16},
-		{Id: "8", Score: 18},
-	})
-	assert.NoError(t, err)
 	// insert items
 	apitest.New().
 		Handler(suite.handler).
@@ -317,35 +308,6 @@ func (suite *ServerTestSuite) TestItems() {
 			{Id: items[1].ItemId, Score: float64(items[1].Timestamp.Unix())},
 		})).
 		End()
-	// get popular items
-	apitest.New().
-		Handler(suite.handler).
-		Get("/api/popular").
-		Header("X-API-Key", apiKey).
-		QueryParams(map[string]string{
-			"n": "3",
-		}).
-		Expect(t).
-		Status(http.StatusOK).
-		Body(suite.marshal([]cache.Score{
-			{Id: items[3].ItemId, Score: 16},
-			{Id: items[1].ItemId, Score: 12},
-		})).
-		End()
-	apitest.New().
-		Handler(suite.handler).
-		Get("/api/popular/*").
-		Header("X-API-Key", apiKey).
-		QueryParams(map[string]string{
-			"n": "3",
-		}).
-		Expect(t).
-		Status(http.StatusOK).
-		Body(suite.marshal([]cache.Score{
-			{Id: items[3].ItemId, Score: 16},
-			{Id: items[1].ItemId, Score: 12},
-		})).
-		End()
 	// get categories
 	categories, err := suite.CacheClient.GetSet(ctx, cache.ItemCategories)
 	assert.NoError(t, err)
@@ -393,33 +355,6 @@ func (suite *ServerTestSuite) TestItems() {
 		Status(http.StatusOK).
 		Body(suite.marshal([]cache.Score{
 			{Id: items[1].ItemId, Score: float64(items[1].Timestamp.Unix())},
-		})).
-		End()
-	// get popular items
-	apitest.New().
-		Handler(suite.handler).
-		Get("/api/popular").
-		Header("X-API-Key", apiKey).
-		QueryParams(map[string]string{
-			"n": "3",
-		}).
-		Expect(t).
-		Status(http.StatusOK).
-		Body(suite.marshal([]cache.Score{
-			{Id: items[1].ItemId, Score: 12},
-		})).
-		End()
-	apitest.New().
-		Handler(suite.handler).
-		Get("/api/popular/*").
-		Header("X-API-Key", apiKey).
-		QueryParams(map[string]string{
-			"n": "3",
-		}).
-		Expect(t).
-		Status(http.StatusOK).
-		Body(suite.marshal([]cache.Score{
-			{Id: items[1].ItemId, Score: 12},
 		})).
 		End()
 
@@ -491,31 +426,6 @@ func (suite *ServerTestSuite) TestItems() {
 		Status(http.StatusOK).
 		Body(suite.marshal([]cache.Score{})).
 		End()
-	// get popular items
-	apitest.New().
-		Handler(suite.handler).
-		Get("/api/popular/-").
-		Header("X-API-Key", apiKey).
-		QueryParams(map[string]string{
-			"n": "1",
-		}).
-		Expect(t).
-		Status(http.StatusOK).
-		Body(suite.marshal([]cache.Score{
-			{Id: "2", Score: 12},
-		})).
-		End()
-	apitest.New().
-		Handler(suite.handler).
-		Get("/api/popular/*").
-		Header("X-API-Key", apiKey).
-		QueryParams(map[string]string{
-			"n": "3",
-		}).
-		Expect(t).
-		Status(http.StatusOK).
-		Body(suite.marshal([]cache.Score{})).
-		End()
 
 	// insert category
 	apitest.New().
@@ -555,20 +465,6 @@ func (suite *ServerTestSuite) TestItems() {
 			{Id: "2", Score: float64(timestamp.Unix())},
 		})).
 		End()
-	// get popular items
-	apitest.New().
-		Handler(suite.handler).
-		Get("/api/popular/@").
-		Header("X-API-Key", apiKey).
-		QueryParams(map[string]string{
-			"n": "1",
-		}).
-		Expect(t).
-		Status(http.StatusOK).
-		Body(suite.marshal([]cache.Score{
-			{Id: "2", Score: 12},
-		})).
-		End()
 
 	// delete category
 	apitest.New().
@@ -598,18 +494,6 @@ func (suite *ServerTestSuite) TestItems() {
 	apitest.New().
 		Handler(suite.handler).
 		Get("/api/latest/@").
-		Header("X-API-Key", apiKey).
-		QueryParams(map[string]string{
-			"n": "1",
-		}).
-		Expect(t).
-		Status(http.StatusOK).
-		Body(suite.marshal([]cache.Score{})).
-		End()
-	// get popular items
-	apitest.New().
-		Handler(suite.handler).
-		Get("/api/popular/@").
 		Header("X-API-Key", apiKey).
 		QueryParams(map[string]string{
 			"n": "1",
@@ -824,10 +708,6 @@ func (suite *ServerTestSuite) TestNonPersonalizedRecommend() {
 		//{"User Neighbors", cache.Collection(cache.UserNeighbors, "0"), "/api/user/0/neighbors"},
 		{"Item Neighbors", cache.ItemToItem, cache.Key("default", "0"), "", "/api/item/0/neighbors"},
 		{"Item Neighbors in Category", cache.ItemToItem, cache.Key("default", "0"), "0", "/api/item/0/neighbors/0"},
-		{"LatestItems", cache.NonPersonalized, cache.Latest, "", "/api/latest/"},
-		{"LatestItemsCategory", cache.NonPersonalized, cache.Latest, "0", "/api/latest/0"},
-		{"PopularItems", cache.NonPersonalized, cache.Popular, "", "/api/popular/"},
-		{"PopularItemsCategory", cache.NonPersonalized, cache.Popular, "0", "/api/popular/0"},
 		{"NonPersonalized", cache.NonPersonalized, "trending", "", "/api/non-personalized/trending"},
 		{"NonPersonalizedCategory", cache.NonPersonalized, "trending", "0", "/api/non-personalized/trending"},
 		{"ItemToItem", cache.ItemToItem, cache.Key("lookalike", "0"), "", "/api/item-to-item/lookalike/0"},
@@ -1426,30 +1306,16 @@ func (suite *ServerTestSuite) TestGetRecommendsFallbackPreCached() {
 		{Id: "4", Score: 96, Categories: []string{"*"}}})
 	assert.NoError(t, err)
 	// insert latest
-	err = suite.CacheClient.AddScores(ctx, cache.NonPersonalized, cache.Latest, []cache.Score{
-		{Id: "5", Score: 95, Categories: []string{""}},
-		{Id: "6", Score: 94, Categories: []string{""}},
-		{Id: "7", Score: 93, Categories: []string{""}},
-		{Id: "8", Score: 92, Categories: []string{""}}})
-	assert.NoError(t, err)
-	err = suite.CacheClient.AddScores(ctx, cache.NonPersonalized, cache.Latest, []cache.Score{
-		{Id: "105", Score: 95, Categories: []string{"*"}},
-		{Id: "106", Score: 94, Categories: []string{"*"}},
-		{Id: "107", Score: 93, Categories: []string{"*"}},
-		{Id: "108", Score: 92, Categories: []string{"*"}}})
-	assert.NoError(t, err)
-	// insert popular
-	err = suite.CacheClient.AddScores(ctx, cache.NonPersonalized, cache.Popular, []cache.Score{
-		{Id: "9", Score: 91, Categories: []string{""}},
-		{Id: "10", Score: 90, Categories: []string{""}},
-		{Id: "11", Score: 89, Categories: []string{""}},
-		{Id: "12", Score: 88, Categories: []string{""}}})
-	assert.NoError(t, err)
-	err = suite.CacheClient.AddScores(ctx, cache.NonPersonalized, cache.Popular, []cache.Score{
-		{Id: "109", Score: 91, Categories: []string{"*"}},
-		{Id: "110", Score: 90, Categories: []string{"*"}},
-		{Id: "111", Score: 89, Categories: []string{"*"}},
-		{Id: "112", Score: 88, Categories: []string{"*"}}})
+	err = suite.DataClient.BatchInsertItems(ctx, []data.Item{
+		{ItemId: "5", Timestamp: time.Unix(95, 0)},
+		{ItemId: "6", Timestamp: time.Unix(94, 0)},
+		{ItemId: "7", Timestamp: time.Unix(93, 0)},
+		{ItemId: "8", Timestamp: time.Unix(92, 0)},
+		{ItemId: "105", Categories: []string{"*"}, Timestamp: time.Unix(85, 0)},
+		{ItemId: "106", Categories: []string{"*"}, Timestamp: time.Unix(84, 0)},
+		{ItemId: "107", Categories: []string{"*"}, Timestamp: time.Unix(83, 0)},
+		{ItemId: "108", Categories: []string{"*"}, Timestamp: time.Unix(82, 0)},
+	})
 	assert.NoError(t, err)
 	// insert collaborative filtering
 	err = suite.CacheClient.AddScores(ctx, cache.CollaborativeFiltering, "0", []cache.Score{
@@ -1458,30 +1324,6 @@ func (suite *ServerTestSuite) TestGetRecommendsFallbackPreCached() {
 		{Id: "15", Score: 77, Categories: []string{"*"}},
 		{Id: "16", Score: 76, Categories: []string{"*"}}})
 	assert.NoError(t, err)
-	// test popular fallback
-	suite.Config.Recommend.Online.FallbackRecommend = []string{"popular"}
-	apitest.New().
-		Handler(suite.handler).
-		Get("/api/recommend/0").
-		Header("X-API-Key", apiKey).
-		QueryParams(map[string]string{
-			"n": "8",
-		}).
-		Expect(t).
-		Status(http.StatusOK).
-		Body(suite.marshal([]string{"1", "2", "3", "4", "9", "10", "11", "12"})).
-		End()
-	apitest.New().
-		Handler(suite.handler).
-		Get("/api/recommend/0/*").
-		Header("X-API-Key", apiKey).
-		QueryParams(map[string]string{
-			"n": "8",
-		}).
-		Expect(t).
-		Status(http.StatusOK).
-		Body(suite.marshal([]string{"1", "2", "3", "4", "109", "110", "111", "112"})).
-		End()
 	// test latest fallback
 	suite.Config.Recommend.Online.FallbackRecommend = []string{"latest"}
 	apitest.New().
@@ -1681,12 +1523,8 @@ func (suite *ServerTestSuite) TestVisibility() {
 			Categories: []string{"", "a"},
 		})
 	}
-	lo.Reverse(documents)
-	err := suite.CacheClient.AddScores(ctx, cache.NonPersonalized, cache.Latest, documents)
-	assert.NoError(t, err)
-	err = suite.CacheClient.AddScores(ctx, cache.NonPersonalized, cache.Popular, documents)
-	assert.NoError(t, err)
-	err = suite.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key("default", "100"), documents)
+	mutable.Reverse(documents)
+	err := suite.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key("default", "100"), documents)
 	assert.NoError(t, err)
 	err = suite.CacheClient.AddScores(ctx, cache.OfflineRecommend, "100", documents)
 	assert.NoError(t, err)
@@ -1720,15 +1558,6 @@ func (suite *ServerTestSuite) TestVisibility() {
 		End()
 
 	// recommend
-	apitest.New().
-		Handler(suite.handler).
-		Get("/api/popular").
-		Header("X-API-Key", apiKey).
-		JSON(items).
-		Expect(t).
-		Status(http.StatusOK).
-		Body(suite.marshal(documents[:2])).
-		End()
 	apitest.New().
 		Handler(suite.handler).
 		Get("/api/latest").
@@ -1788,15 +1617,6 @@ func (suite *ServerTestSuite) TestVisibility() {
 	// recommend
 	apitest.New().
 		Handler(suite.handler).
-		Get("/api/popular").
-		Header("X-API-Key", apiKey).
-		JSON(items).
-		Expect(t).
-		Status(http.StatusOK).
-		Body(suite.marshal(documents[:len(documents)-1])).
-		End()
-	apitest.New().
-		Handler(suite.handler).
 		Get("/api/latest").
 		Header("X-API-Key", apiKey).
 		JSON(items).
@@ -1854,15 +1674,6 @@ func (suite *ServerTestSuite) TestVisibility() {
 	// recommend
 	apitest.New().
 		Handler(suite.handler).
-		Get("/api/popular/a").
-		Header("X-API-Key", apiKey).
-		JSON(items).
-		Expect(t).
-		Status(http.StatusOK).
-		Body(suite.marshal(documents[:2])).
-		End()
-	apitest.New().
-		Handler(suite.handler).
 		Get("/api/latest/a").
 		Header("X-API-Key", apiKey).
 		JSON(items).
@@ -1918,15 +1729,6 @@ func (suite *ServerTestSuite) TestVisibility() {
 		End()
 
 	// recommend
-	apitest.New().
-		Handler(suite.handler).
-		Get("/api/popular/a").
-		Header("X-API-Key", apiKey).
-		JSON(items).
-		Expect(t).
-		Status(http.StatusOK).
-		Body(suite.marshal(documents[:len(documents)-1])).
-		End()
 	apitest.New().
 		Handler(suite.handler).
 		Get("/api/latest/a").

@@ -548,7 +548,8 @@ func (d *SQLDatabase) GetLatestItems(ctx context.Context, n int, categories []st
 	}
 	tx := d.gormDB.WithContext(ctx).
 		Table(tableName).
-		Select("item_id, is_hidden, categories, time_stamp, labels, comment")
+		Select("item_id, is_hidden, categories, time_stamp, labels, comment").
+		Where("is_hidden = ?", false)
 	if len(categories) > 0 {
 		q, err := jsonutil.Marshal(categories)
 		if err != nil {

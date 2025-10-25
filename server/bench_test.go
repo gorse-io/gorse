@@ -38,6 +38,7 @@ import (
 	"github.com/gorse-io/gorse/storage/data"
 	"github.com/redis/go-redis/v9"
 	"github.com/samber/lo"
+	"github.com/samber/lo/mutable"
 	"github.com/stretchr/testify/require"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -806,7 +807,7 @@ func BenchmarkGetRecommendCache(b *testing.B) {
 				documents[i].Categories = []string{""}
 			}
 			lo.Reverse(documents)
-			err := s.CacheClient.AddScores(ctx, cache.NonPersonalized, cache.Popular, documents)
+			err := s.CacheClient.AddScores(ctx, cache.NonPersonalized, "popular", documents)
 			require.NoError(b, err)
 			s.Config.Recommend.CacheSize = len(documents)
 
@@ -814,7 +815,7 @@ func BenchmarkGetRecommendCache(b *testing.B) {
 			client := resty.New()
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				response[i], err = client.R().Get(s.address + fmt.Sprintf("/api/popular?n=%d", batchSize))
+				response[i], err = client.R().Get(s.address + fmt.Sprintf("/api/non-personalized/popular?n=%d", batchSize))
 				require.NoError(b, err)
 			}
 			b.StopTimer()
@@ -843,7 +844,7 @@ func BenchmarkRecommendFromOfflineCache(b *testing.B) {
 			for i := range documents {
 				documents[i].Id = strconv.Itoa(i)
 				documents[i].Score = float64(i)
-				documents[i].Categories = []string{""}
+				documents[i].Categories = []string{"a"}
 				if i%2 == 0 {
 					expects[i/2] = documents[i].Id
 				} else {
@@ -852,8 +853,8 @@ func BenchmarkRecommendFromOfflineCache(b *testing.B) {
 					feedbacks[i/2].ItemId = documents[i].Id
 				}
 			}
-			lo.Reverse(documents)
-			lo.Reverse(expects)
+			mutable.Reverse(documents)
+			mutable.Reverse(expects)
 			err := s.CacheClient.AddScores(ctx, cache.OfflineRecommend, "init_user_1", documents)
 			require.NoError(b, err)
 			err = s.DataClient.BatchInsertFeedback(ctx, feedbacks, true, true, true)
@@ -864,7 +865,7 @@ func BenchmarkRecommendFromOfflineCache(b *testing.B) {
 			client := resty.New()
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
-				response[i], err = client.R().Get(s.address + fmt.Sprintf("/api/recommend/init_user_1?n=%d", batchSize))
+				response[i], err = client.R().Get(s.address + fmt.Sprintf("/api/recommend/init_user_1?n=%d&category=a", batchSize))
 				require.NoError(b, err)
 			}
 			b.StopTimer()
@@ -888,28 +889,27 @@ func BenchmarkRecommendFromLatest(b *testing.B) {
 
 	for batchSize := 10; batchSize <= 1000; batchSize *= 10 {
 		b.Run(strconv.Itoa(batchSize), func(b *testing.B) {
-			documents := make([]cache.Score, batchSize*2)
+			items := make([]data.Item, batchSize*2)
 			expects := make([]string, batchSize)
 			feedbacks := make([]data.Feedback, batchSize)
-			for i := range documents {
-				documents[i].Id = strconv.Itoa(i)
-				documents[i].Score = float64(i)
-				documents[i].Categories = []string{""}
+			for i := range items {
+				items[i].ItemId = strconv.Itoa(i)
+				items[i].Timestamp = time.Unix(int64(i), 0)
 				if i%2 == 0 {
-					expects[i/2] = documents[i].Id
+					expects[i/2] = items[i].ItemId
 				} else {
 					feedbacks[i/2].FeedbackType = "feedback_type"
 					feedbacks[i/2].UserId = "init_user_1"
-					feedbacks[i/2].ItemId = documents[i].Id
+					feedbacks[i/2].ItemId = items[i].ItemId
 				}
 			}
-			lo.Reverse(documents)
+			lo.Reverse(items)
 			lo.Reverse(expects)
-			err := s.CacheClient.AddScores(ctx, cache.NonPersonalized, cache.Latest, documents)
+			err := s.DataClient.BatchInsertItems(ctx, items)
 			require.NoError(b, err)
 			err = s.DataClient.BatchInsertFeedback(ctx, feedbacks, true, true, true)
 			require.NoError(b, err)
-			s.Config.Recommend.CacheSize = len(documents)
+			s.Config.Recommend.CacheSize = len(items)
 
 			response := make([]*resty.Response, b.N)
 			client := resty.New()
