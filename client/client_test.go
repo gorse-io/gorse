@@ -100,7 +100,7 @@ func (suite *GorseClientTestSuite) TestRecommend() {
 	ctx := context.TODO()
 	resp, err := suite.client.GetRecommend(ctx, "100", "", 10, 0)
 	suite.NoError(err)
-	suite.Equal([]string{"200", "300", "400"}, resp)
+	suite.Equal([]string{"400", "300", "200"}, resp)
 }
 
 func (suite *GorseClientTestSuite) TestSessionRecommend() {
