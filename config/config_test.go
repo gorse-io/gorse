@@ -109,9 +109,7 @@ func TestUnmarshal(t *testing.T) {
 			}, config.Recommend.DataSource.ReadFeedbackTypes)
 			assert.Equal(t, uint(0), config.Recommend.DataSource.PositiveFeedbackTTL)
 			assert.Equal(t, uint(0), config.Recommend.DataSource.ItemTTL)
-			// [recommend.popular]
-			assert.Equal(t, 30*24*time.Hour, config.Recommend.Popular.PopularWindow)
-			// [recommend.leaderboards]
+			// [recommend.non-personalized]
 			assert.Len(t, config.Recommend.NonPersonalized, 1)
 			assert.Equal(t, "most_starred_weekly", config.Recommend.NonPersonalized[0].Name)
 			assert.Equal(t, "count(feedback, .FeedbackType == 'star')", config.Recommend.NonPersonalized[0].Score)
@@ -132,14 +130,10 @@ func TestUnmarshal(t *testing.T) {
 			assert.True(t, config.Recommend.Offline.EnableColRecommend)
 			assert.False(t, config.Recommend.Offline.EnableItemBasedRecommend)
 			assert.True(t, config.Recommend.Offline.EnableUserBasedRecommend)
-			assert.False(t, config.Recommend.Offline.EnablePopularRecommend)
 			assert.True(t, config.Recommend.Offline.EnableLatestRecommend)
 			assert.True(t, config.Recommend.Offline.EnableClickThroughPrediction)
-			assert.Equal(t, map[string]float64{"popular": 0.1, "latest": 0.2}, config.Recommend.Offline.ExploreRecommend)
-			value, exist := config.Recommend.Offline.GetExploreRecommend("popular")
-			assert.Equal(t, true, exist)
-			assert.Equal(t, 0.1, value)
-			value, exist = config.Recommend.Offline.GetExploreRecommend("latest")
+			assert.Equal(t, map[string]float64{"latest": 0.2}, config.Recommend.Offline.ExploreRecommend)
+			value, exist := config.Recommend.Offline.GetExploreRecommend("latest")
 			assert.Equal(t, true, exist)
 			assert.Equal(t, 0.2, value)
 			_, exist = config.Recommend.Offline.GetExploreRecommend("unknown")
@@ -283,26 +277,6 @@ func TestConfig_OfflineRecommendDigest(t *testing.T) {
 	cfg1.Recommend.Offline.EnableLatestRecommend = true
 	cfg2.Recommend.Offline.EnableLatestRecommend = false
 	assert.NotEqual(t, cfg1.OfflineRecommendDigest(), cfg2.OfflineRecommendDigest())
-
-	// test popular recommendation
-	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
-	cfg1.Recommend.Offline.EnablePopularRecommend = true
-	cfg2.Recommend.Offline.EnablePopularRecommend = false
-	assert.NotEqual(t, cfg1.OfflineRecommendDigest(), cfg2.OfflineRecommendDigest())
-
-	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
-	cfg1.Recommend.Offline.EnablePopularRecommend = true
-	cfg2.Recommend.Offline.EnablePopularRecommend = true
-	cfg1.Recommend.Popular.PopularWindow = 10
-	cfg2.Recommend.Popular.PopularWindow = 11
-	assert.NotEqual(t, cfg1.OfflineRecommendDigest(), cfg2.OfflineRecommendDigest())
-
-	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
-	cfg1.Recommend.Offline.EnablePopularRecommend = false
-	cfg2.Recommend.Offline.EnablePopularRecommend = false
-	cfg1.Recommend.Popular.PopularWindow = 10
-	cfg2.Recommend.Popular.PopularWindow = 11
-	assert.Equal(t, cfg1.OfflineRecommendDigest(), cfg2.OfflineRecommendDigest())
 
 	// test user-based recommendation
 	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()

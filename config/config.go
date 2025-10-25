@@ -122,7 +122,6 @@ type RecommendConfig struct {
 	ActiveUserTTL   int                     `mapstructure:"active_user_ttl" validate:"gte=0"`
 	DataSource      DataSourceConfig        `mapstructure:"data_source"`
 	NonPersonalized []NonPersonalizedConfig `mapstructure:"non-personalized" validate:"dive"`
-	Popular         PopularConfig           `mapstructure:"popular"`
 	ItemToItem      []ItemToItemConfig      `mapstructure:"item-to-item" validate:"dive"`
 	UserToUser      []UserToUserConfig      `mapstructure:"user-to-user" validate:"dive"`
 	Collaborative   CollaborativeConfig     `mapstructure:"collaborative"`
@@ -160,10 +159,6 @@ type NonPersonalizedConfig struct {
 	Name   string `mapstructure:"name" json:"name"`
 	Score  string `mapstructure:"score" json:"score" validate:"required,item_expr"`
 	Filter string `mapstructure:"filter" json:"filter" validate:"item_expr"`
-}
-
-type PopularConfig struct {
-	PopularWindow time.Duration `mapstructure:"popular_window" validate:"gte=0"`
 }
 
 type ItemToItemConfig struct {
@@ -228,7 +223,6 @@ type OfflineConfig struct {
 	RefreshRecommendPeriod       time.Duration       `mapstructure:"refresh_recommend_period" validate:"gt=0"`
 	ExploreRecommend             map[string]float64  `mapstructure:"explore_recommend"`
 	EnableLatestRecommend        bool                `mapstructure:"enable_latest_recommend"`
-	EnablePopularRecommend       bool                `mapstructure:"enable_popular_recommend"`
 	EnableUserBasedRecommend     bool                `mapstructure:"enable_user_based_recommend"`
 	EnableItemBasedRecommend     bool                `mapstructure:"enable_item_based_recommend"`
 	EnableColRecommend           bool                `mapstructure:"enable_collaborative_recommend"`
@@ -315,9 +309,6 @@ func GetDefaultConfig() *Config {
 		Recommend: RecommendConfig{
 			CacheSize:   100,
 			CacheExpire: 72 * time.Hour,
-			Popular: PopularConfig{
-				PopularWindow: 180 * 24 * time.Hour,
-			},
 			Collaborative: CollaborativeConfig{
 				ModelFitPeriod:    60 * time.Minute,
 				ModelSearchPeriod: 180 * time.Minute,
@@ -333,7 +324,6 @@ func GetDefaultConfig() *Config {
 				CheckRecommendPeriod:         time.Minute,
 				RefreshRecommendPeriod:       120 * time.Hour,
 				EnableLatestRecommend:        false,
-				EnablePopularRecommend:       false,
 				EnableUserBasedRecommend:     false,
 				EnableItemBasedRecommend:     false,
 				EnableColRecommend:           true,
@@ -389,10 +379,9 @@ func (config *Config) OfflineRecommendDigest(option ...DigestOption) string {
 
 	var builder strings.Builder
 	config.Recommend.Offline.Lock()
-	builder.WriteString(fmt.Sprintf("%v-%v-%v-%v-%v-%v-%v-%v",
+	builder.WriteString(fmt.Sprintf("%v-%v-%v-%v-%v-%v-%v",
 		config.Recommend.Offline.ExploreRecommend,
 		config.Recommend.Offline.EnableLatestRecommend,
-		config.Recommend.Offline.EnablePopularRecommend,
 		config.Recommend.Offline.EnableUserBasedRecommend,
 		config.Recommend.Offline.EnableItemBasedRecommend,
 		options.enableCollaborative,
@@ -400,9 +389,6 @@ func (config *Config) OfflineRecommendDigest(option ...DigestOption) string {
 		config.Recommend.Replacement.EnableReplacement,
 	))
 	config.Recommend.Offline.UnLock()
-	if config.Recommend.Offline.EnablePopularRecommend {
-		builder.WriteString(fmt.Sprintf("-%v", config.Recommend.Popular.PopularWindow))
-	}
 	if config.Recommend.Offline.EnableUserBasedRecommend {
 		builder.WriteString(fmt.Sprintf("-%v", options.userNeighborDigest))
 	}
@@ -523,8 +509,6 @@ func setDefault() {
 	// [recommend]
 	viper.SetDefault("recommend.cache_size", defaultConfig.Recommend.CacheSize)
 	viper.SetDefault("recommend.cache_expire", defaultConfig.Recommend.CacheExpire)
-	// [recommend.popular]
-	viper.SetDefault("recommend.popular.popular_window", defaultConfig.Recommend.Popular.PopularWindow)
 	// [recommend.collaborative]
 	viper.SetDefault("recommend.collaborative.model_fit_period", defaultConfig.Recommend.Collaborative.ModelFitPeriod)
 	viper.SetDefault("recommend.collaborative.model_search_period", defaultConfig.Recommend.Collaborative.ModelSearchPeriod)
@@ -538,7 +522,6 @@ func setDefault() {
 	viper.SetDefault("recommend.offline.check_recommend_period", defaultConfig.Recommend.Offline.CheckRecommendPeriod)
 	viper.SetDefault("recommend.offline.refresh_recommend_period", defaultConfig.Recommend.Offline.RefreshRecommendPeriod)
 	viper.SetDefault("recommend.offline.enable_latest_recommend", defaultConfig.Recommend.Offline.EnableLatestRecommend)
-	viper.SetDefault("recommend.offline.enable_popular_recommend", defaultConfig.Recommend.Offline.EnablePopularRecommend)
 	viper.SetDefault("recommend.offline.enable_user_based_recommend", defaultConfig.Recommend.Offline.EnableUserBasedRecommend)
 	viper.SetDefault("recommend.offline.enable_item_based_recommend", defaultConfig.Recommend.Offline.EnableItemBasedRecommend)
 	viper.SetDefault("recommend.offline.enable_collaborative_recommend", defaultConfig.Recommend.Offline.EnableColRecommend)
