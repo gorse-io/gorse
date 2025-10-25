@@ -98,6 +98,7 @@ func TestUnmarshal(t *testing.T) {
 			// [recommend]
 			assert.Equal(t, 100, config.Recommend.CacheSize)
 			assert.Equal(t, 72*time.Hour, config.Recommend.CacheExpire)
+			assert.Equal(t, 100, config.Recommend.ContextSize)
 			// [recommend.data_source]
 			assert.Equal(t, []expression.FeedbackTypeExpression{
 				expression.MustParseFeedbackTypeExpression("star"),
@@ -130,11 +131,10 @@ func TestUnmarshal(t *testing.T) {
 			assert.True(t, config.Recommend.Ranker.EnableColRecommend)
 			assert.False(t, config.Recommend.Ranker.EnableItemBasedRecommend)
 			assert.True(t, config.Recommend.Ranker.EnableUserBasedRecommend)
-			assert.False(t, config.Recommend.Ranker.EnablePopularRecommend)
 			assert.True(t, config.Recommend.Ranker.EnableLatestRecommend)
 			assert.True(t, config.Recommend.Ranker.EnableClickThroughPrediction)
 			// [recommend.fallback]
-			assert.Equal(t, []string{"item_based", "latest"}, config.Recommend.Fallback)
+			assert.Equal(t, []string{"item-to-item/neighbors", "latest"}, config.Recommend.Fallback.Recommenders)
 			// [tracing]
 			assert.False(t, config.Tracing.EnableTracing)
 			assert.Equal(t, "jaeger", config.Tracing.Exporter)
@@ -263,26 +263,6 @@ func TestConfig_OfflineRecommendDigest(t *testing.T) {
 	cfg1.Recommend.Ranker.EnableLatestRecommend = true
 	cfg2.Recommend.Ranker.EnableLatestRecommend = false
 	assert.NotEqual(t, cfg1.OfflineRecommendDigest(), cfg2.OfflineRecommendDigest())
-
-	// test popular recommendation
-	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
-	cfg1.Recommend.Ranker.EnablePopularRecommend = true
-	cfg2.Recommend.Ranker.EnablePopularRecommend = false
-	assert.NotEqual(t, cfg1.OfflineRecommendDigest(), cfg2.OfflineRecommendDigest())
-
-	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
-	cfg1.Recommend.Ranker.EnablePopularRecommend = true
-	cfg2.Recommend.Ranker.EnablePopularRecommend = true
-	cfg1.Recommend.Popular.PopularWindow = 10
-	cfg2.Recommend.Popular.PopularWindow = 11
-	assert.NotEqual(t, cfg1.OfflineRecommendDigest(), cfg2.OfflineRecommendDigest())
-
-	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
-	cfg1.Recommend.Ranker.EnablePopularRecommend = false
-	cfg2.Recommend.Ranker.EnablePopularRecommend = false
-	cfg1.Recommend.Popular.PopularWindow = 10
-	cfg2.Recommend.Popular.PopularWindow = 11
-	assert.Equal(t, cfg1.OfflineRecommendDigest(), cfg2.OfflineRecommendDigest())
 
 	// test user-based recommendation
 	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()

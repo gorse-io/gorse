@@ -117,6 +117,7 @@ type ServerConfig struct {
 type RecommendConfig struct {
 	CacheSize       int                     `mapstructure:"cache_size" validate:"gt=0"`
 	CacheExpire     time.Duration           `mapstructure:"cache_expire" validate:"gt=0"`
+	ContextSize     int                     `mapstructure:"context_size" validate:"gt=0"`
 	ActiveUserTTL   int                     `mapstructure:"active_user_ttl" validate:"gte=0"`
 	DataSource      DataSourceConfig        `mapstructure:"data_source"`
 	NonPersonalized []NonPersonalizedConfig `mapstructure:"non-personalized" validate:"dive"`
@@ -126,7 +127,7 @@ type RecommendConfig struct {
 	External        []ExternalConfig        `mapstructure:"external" validate:"dive"`
 	Replacement     ReplacementConfig       `mapstructure:"replacement"`
 	Ranker          RankerConfig            `mapstructure:"ranker"`
-	Fallback        []string                `mapstructure:"fallback"`
+	Fallback        FallbackConfig          `mapstructure:"fallback"`
 }
 
 func StringToFeedbackTypeHookFunc() mapstructure.DecodeHookFunc {
@@ -227,6 +228,10 @@ type RankerConfig struct {
 	EarlyStopping                EarlyStoppingConfig `mapstructure:"early_stopping"`
 }
 
+type FallbackConfig struct {
+	Recommenders []string `mapstructure:"recommenders"`
+}
+
 type TracingConfig struct {
 	EnableTracing     bool    `mapstructure:"enable_tracing"`
 	Exporter          string  `mapstructure:"exporter" validate:"oneof=jaeger zipkin otlp otlphttp"`
@@ -295,6 +300,7 @@ func GetDefaultConfig() *Config {
 		Recommend: RecommendConfig{
 			CacheSize:   100,
 			CacheExpire: 72 * time.Hour,
+			ContextSize: 100,
 			Collaborative: CollaborativeConfig{
 				ModelFitPeriod:    60 * time.Minute,
 				ModelSearchPeriod: 180 * time.Minute,
@@ -315,7 +321,9 @@ func GetDefaultConfig() *Config {
 				EnableColRecommend:           true,
 				EnableClickThroughPrediction: false,
 			},
-			Fallback: []string{"latest"},
+			Fallback: FallbackConfig{
+				Recommenders: []string{"latest"},
+			},
 		},
 		Tracing: TracingConfig{
 			Exporter: "jaeger",
@@ -358,18 +366,14 @@ func (config *Config) OfflineRecommendDigest(option ...DigestOption) string {
 	})
 
 	var builder strings.Builder
-	builder.WriteString(fmt.Sprintf("%v-%v-%v-%v-%v-%v-%v",
+	builder.WriteString(fmt.Sprintf("%v-%v-%v-%v-%v-%v",
 		config.Recommend.Ranker.EnableLatestRecommend,
-		config.Recommend.Ranker.EnablePopularRecommend,
 		config.Recommend.Ranker.EnableUserBasedRecommend,
 		config.Recommend.Ranker.EnableItemBasedRecommend,
 		options.enableCollaborative,
 		options.enableRanking,
 		config.Recommend.Replacement.EnableReplacement,
 	))
-	if config.Recommend.Ranker.EnablePopularRecommend {
-		builder.WriteString(fmt.Sprintf("-%v", config.Recommend.Popular.PopularWindow))
-	}
 	if config.Recommend.Ranker.EnableUserBasedRecommend {
 		builder.WriteString(fmt.Sprintf("-%v", options.userNeighborDigest))
 	}
@@ -472,6 +476,7 @@ func setDefault() {
 	// [recommend]
 	viper.SetDefault("recommend.cache_size", defaultConfig.Recommend.CacheSize)
 	viper.SetDefault("recommend.cache_expire", defaultConfig.Recommend.CacheExpire)
+	viper.SetDefault("recommend.context_size", defaultConfig.Recommend.ContextSize)
 	// [recommend.collaborative]
 	viper.SetDefault("recommend.collaborative.model_fit_period", defaultConfig.Recommend.Collaborative.ModelFitPeriod)
 	viper.SetDefault("recommend.collaborative.model_search_period", defaultConfig.Recommend.Collaborative.ModelSearchPeriod)
@@ -485,7 +490,6 @@ func setDefault() {
 	viper.SetDefault("recommend.ranker.check_recommend_period", defaultConfig.Recommend.Ranker.CheckRecommendPeriod)
 	viper.SetDefault("recommend.ranker.refresh_recommend_period", defaultConfig.Recommend.Ranker.RefreshRecommendPeriod)
 	viper.SetDefault("recommend.ranker.enable_latest_recommend", defaultConfig.Recommend.Ranker.EnableLatestRecommend)
-	viper.SetDefault("recommend.ranker.enable_popular_recommend", defaultConfig.Recommend.Ranker.EnablePopularRecommend)
 	viper.SetDefault("recommend.ranker.enable_user_based_recommend", defaultConfig.Recommend.Ranker.EnableUserBasedRecommend)
 	viper.SetDefault("recommend.ranker.enable_item_based_recommend", defaultConfig.Recommend.Ranker.EnableItemBasedRecommend)
 	viper.SetDefault("recommend.ranker.enable_collaborative_recommend", defaultConfig.Recommend.Ranker.EnableColRecommend)

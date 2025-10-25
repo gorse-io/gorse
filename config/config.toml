@@ -116,15 +116,13 @@ cache_size = 100
 # Recommended cache expire time. The default value is 72h.
 cache_expire = "72h"
 
+# The context size for online recommendations. Online recommendations can't use all user feedbacks to generate
+# recommendations for efficiency consideration. Instead, only the latest `context_size` feedbacks are used.
+# The default value is 100.
+context_size = 100
+
 # The time-to-live (days) of active users, 0 means disabled. Recommendation won't be cached for inactive users. The default value is 0.
 active_user_ttl = 0
-
-# The fallback recommendation method is used when cached recommendation drained out:
-#   item_based: Recommend similar items to cold-start users.
-#   popular: Recommend popular items to cold-start users.
-#   latest: Recommend latest items to cold-start users.
-# Recommenders are used in order. The default values is ["latest"].
-fallback = ["item_based", "latest"]
 
 [recommend.data_source]
 
@@ -265,6 +263,11 @@ enable_click_through_prediction = true
 
 # Number of epochs to wait if no improvement and then stop the training. The default value is 10.
 patience = 10
+
+[recommend.fallback]
+
+# The fallback recommenders are used when cached recommendation drained out. The default values is ["latest"].
+recommenders = ["item-to-item/neighbors", "latest"]
 
 [tracing]
 
