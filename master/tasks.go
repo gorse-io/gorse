@@ -1107,7 +1107,7 @@ func (m *Master) collectGarbage(ctx context.Context, dataSet *dataset.Dataset) e
 	err := m.CacheClient.ScanScores(ctx, func(collection, id, subset string, timestamp time.Time) error {
 		switch collection {
 		case cache.NonPersonalized:
-			if subset != cache.Popular && subset != cache.Latest && !lo.ContainsBy(m.Config.Recommend.NonPersonalized, func(cfg config.NonPersonalizedConfig) bool {
+			if !lo.ContainsBy(m.Config.Recommend.NonPersonalized, func(cfg config.NonPersonalizedConfig) bool {
 				return cfg.Name == subset
 			}) {
 				return m.CacheClient.DeleteScores(ctx, []string{cache.NonPersonalized}, cache.ScoreCondition{
