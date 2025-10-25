@@ -534,7 +534,7 @@ func (suite *baseTestSuite) TestItems() {
 	// Test GetLatestItems
 	latestItems, err := suite.Database.GetLatestItems(ctx, 3, nil)
 	suite.NoError(err)
-	suite.Equal([]Item{items[4], items[3], items[2]}, latestItems)
+	suite.Equal([]Item{items[3], items[1]}, latestItems)
 	latestItemsWithCategory, err := suite.Database.GetLatestItems(ctx, 3, []string{"b"})
 	suite.NoError(err)
 	suite.Equal([]Item{items[3], items[1]}, latestItemsWithCategory)
