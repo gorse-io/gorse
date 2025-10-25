@@ -502,10 +502,10 @@ func (suite *MasterAPITestSuite) TestSearchDocumentsOfItems() {
 	operators := []ListOperator{
 		{"ItemToItem", cache.ItemToItem, cache.Key("neighbors", "0"), "", "/api/dashboard/item-to-item/neighbors/0"},
 		{"ItemToItemCategory", cache.ItemToItem, cache.Key("neighbors", "0"), "*", "/api/dashboard/item-to-item/neighbors/0"},
-		{"LatestItems", cache.NonPersonalized, cache.Latest, "", "/api/dashboard/non-personalized/latest/"},
-		{"PopularItems", cache.NonPersonalized, cache.Popular, "", "/api/dashboard/non-personalized/popular/"},
-		{"LatestItemsCategory", cache.NonPersonalized, cache.Latest, "*", "/api/dashboard/non-personalized/latest/"},
-		{"PopularItemsCategory", cache.NonPersonalized, cache.Popular, "*", "/api/dashboard/non-personalized/popular/"},
+		{"LatestItems", cache.NonPersonalized, "latest", "", "/api/dashboard/non-personalized/latest/"},
+		{"PopularItems", cache.NonPersonalized, "popular", "", "/api/dashboard/non-personalized/popular/"},
+		{"LatestItemsCategory", cache.NonPersonalized, "latest", "*", "/api/dashboard/non-personalized/latest/"},
+		{"PopularItemsCategory", cache.NonPersonalized, "popular", "*", "/api/dashboard/non-personalized/popular/"},
 	}
 	lastModified := time.Now()
 	for i, operator := range operators {
@@ -659,7 +659,7 @@ func (suite *MasterAPITestSuite) TestGetRecommends() {
 		})).
 		End()
 
-	suite.Config.Recommend.Online.FallbackRecommend = []string{"collaborative", "item_based", "user_based", "latest", "popular"}
+	suite.Config.Recommend.Online.FallbackRecommend = []string{"collaborative", "item_based", "user_based", "latest"}
 	apitest.New().
 		Handler(suite.handler).
 		Get("/api/dashboard/recommend/0/_").

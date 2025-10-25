@@ -15,6 +15,7 @@
 package logics
 
 import (
+	"fmt"
 	"strconv"
 	"testing"
 	"time"
@@ -26,7 +27,11 @@ import (
 
 func TestLatest(t *testing.T) {
 	timestamp := time.Now()
-	latest := NewLatest(10, timestamp)
+	latest, err := NewNonPersonalized(config.NonPersonalizedConfig{
+		Name:  "latest",
+		Score: "item.Timestamp.Unix()",
+	}, 10, timestamp)
+	assert.NoError(t, err)
 	for i := 0; i < 100; i++ {
 		item := data.Item{ItemId: strconv.Itoa(i), Timestamp: timestamp.Add(time.Duration(-i) * time.Second)}
 		latest.Push(item, nil)
@@ -42,7 +47,11 @@ func TestLatest(t *testing.T) {
 
 func TestPopular(t *testing.T) {
 	timestamp := time.Now()
-	popular := NewPopular(0, 10, timestamp)
+	popular, err := NewNonPersonalized(config.NonPersonalizedConfig{
+		Name:  "popular",
+		Score: "len(feedback)",
+	}, 10, timestamp)
+	assert.NoError(t, err)
 	for i := 0; i < 100; i++ {
 		item := data.Item{ItemId: strconv.Itoa(i)}
 		feedback := make([]data.Feedback, i)
@@ -59,8 +68,12 @@ func TestPopular(t *testing.T) {
 func TestPopularWindow(t *testing.T) {
 	// Create popular recommender
 	timestamp := time.Now()
-	popular := NewPopular(time.Hour, 10, timestamp)
-
+	popular, err := NewNonPersonalized(config.NonPersonalizedConfig{
+		Name:   "popular",
+		Score:  "len(feedback)",
+		Filter: fmt.Sprintf("(now() - item.Timestamp).Nanoseconds() < %d", time.Hour.Nanoseconds()),
+	}, 10, timestamp)
+	assert.NoError(t, err)
 	// Add items
 	for i := 0; i < 100; i++ {
 		item := data.Item{ItemId: strconv.Itoa(i), Timestamp: timestamp.Add(time.Second - time.Hour)}
@@ -108,7 +121,11 @@ func TestFilter(t *testing.T) {
 
 func TestHidden(t *testing.T) {
 	timestamp := time.Now()
-	latest := NewLatest(10, timestamp)
+	latest, err := NewNonPersonalized(config.NonPersonalizedConfig{
+		Name:  "latest",
+		Score: "item.Timestamp.Unix()",
+	}, 10, timestamp)
+	assert.NoError(t, err)
 	for i := 0; i < 100; i++ {
 		item := data.Item{ItemId: strconv.Itoa(i), Timestamp: timestamp.Add(time.Duration(-i) * time.Second)}
 		item.IsHidden = i < 10

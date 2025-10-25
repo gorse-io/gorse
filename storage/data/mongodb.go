@@ -332,7 +332,7 @@ func (db *MongoDB) GetLatestItems(ctx context.Context, n int, categories []strin
 	opt := options.Find()
 	opt.SetLimit(int64(n))
 	opt.SetSort(bson.D{{"timestamp", -1}})
-	filter := bson.M{}
+	filter := bson.M{"ishidden": bson.M{"$ne": true}}
 	if len(categories) > 0 {
 		filter["categories"] = bson.M{"$all": categories}
 	}
