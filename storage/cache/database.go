@@ -58,8 +58,6 @@ const (
 
 	NonPersonalized           = "non-personalized"
 	NonPersonalizedUpdateTime = "non-personalized_update_time"
-	Latest                    = "latest"
-	Popular                   = "popular"
 
 	ItemToItem             = "item-to-item"
 	ItemToItemDigest       = "item-to-item_digest"

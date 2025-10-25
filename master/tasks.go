@@ -56,10 +56,7 @@ func (m *Master) loadDataset() (datasets Datasets, err error) {
 
 	// Build non-personalized recommenders
 	initialStartTime := time.Now()
-	nonPersonalizedRecommenders := []*logics.NonPersonalized{
-		logics.NewLatest(m.Config.Recommend.CacheSize, initialStartTime),
-		logics.NewPopular(m.Config.Recommend.Popular.PopularWindow, m.Config.Recommend.CacheSize, initialStartTime),
-	}
+	nonPersonalizedRecommenders := make([]*logics.NonPersonalized, 0, len(m.Config.Recommend.NonPersonalized))
 	for _, cfg := range m.Config.Recommend.NonPersonalized {
 		recommender, err := logics.NewNonPersonalized(cfg, m.Config.Recommend.CacheSize, initialStartTime)
 		if err != nil {
