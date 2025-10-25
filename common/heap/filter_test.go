@@ -14,8 +14,9 @@
 package heap
 
 import (
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestTopKFilter(t *testing.T) {
@@ -24,9 +25,8 @@ func TestTopKFilter(t *testing.T) {
 	a.Push(10, 2)
 	a.Push(20, 8)
 	a.Push(30, 1)
-	elem, scores := a.PopAll()
-	assert.Equal(t, []int32{20, 10, 30}, elem)
-	assert.Equal(t, []float32{8, 2, 1}, scores)
+	values := a.PopAllValues()
+	assert.Equal(t, []int32{20, 10, 30}, values)
 	// Test a full adjacent vec
 	a = NewTopKFilter[int32, float32](3)
 	a.Push(10, 2)
@@ -37,9 +37,12 @@ func TestTopKFilter(t *testing.T) {
 	a.Push(12, 10)
 	a.Push(67, 7)
 	a.Push(32, 9)
-	elem, scores = a.PopAll()
-	assert.Equal(t, []int32{12, 32, 20}, elem)
-	assert.Equal(t, []float32{10, 9, 8}, scores)
+	elems := a.PopAll()
+	assert.Equal(t, []Elem[int32, float32]{
+		{Value: 12, Weight: 10},
+		{Value: 32, Weight: 9},
+		{Value: 20, Weight: 8},
+	}, elems)
 }
 
 func TestTopKStringFilter(t *testing.T) {
@@ -48,9 +51,12 @@ func TestTopKStringFilter(t *testing.T) {
 	a.Push("10", 2)
 	a.Push("20", 8)
 	a.Push("30", 1)
-	elem, scores := a.PopAll()
-	assert.Equal(t, []string{"20", "10", "30"}, elem)
-	assert.Equal(t, []float64{8, 2, 1}, scores)
+	elems := a.PopAll()
+	assert.Equal(t, []Elem[string, float64]{
+		{Value: "20", Weight: 8},
+		{Value: "10", Weight: 2},
+		{Value: "30", Weight: 1},
+	}, elems)
 	// Test a full adjacent vec
 	a = NewTopKFilter[string, float64](3)
 	a.Push("10", 2)
@@ -61,7 +67,10 @@ func TestTopKStringFilter(t *testing.T) {
 	a.Push("12", 10)
 	a.Push("67", 7)
 	a.Push("32", 9)
-	elem, scores = a.PopAll()
-	assert.Equal(t, []string{"12", "32", "20"}, elem)
-	assert.Equal(t, []float64{10, 9, 8}, scores)
+	elems = a.PopAll()
+	assert.Equal(t, []Elem[string, float64]{
+		{Value: "12", Weight: 10},
+		{Value: "32", Weight: 9},
+		{Value: "20", Weight: 8},
+	}, elems)
 }

@@ -948,7 +948,7 @@ func (s *RestServer) RecommendUserBased(ctx *recommendContext) error {
 		for id, score := range candidates {
 			filter.Push(id, score)
 		}
-		ids, _ := filter.PopAll()
+		ids := filter.PopAllValues()
 		var results []string
 		for i := 0; i < len(ids) && len(results)+len(ctx.results) < ctx.n; i += 100 {
 			items, err := s.DataClient.BatchGetItems(ctx.context, ids[i:min(i+100, len(ids))])
@@ -984,9 +984,9 @@ func (s *RestServer) RecommendItemBased(ctx *recommendContext) error {
 		start := time.Now()
 		// truncate user feedback
 		data.SortFeedbacks(ctx.userFeedback)
-		userFeedback := make([]data.Feedback, 0, s.Config.Recommend.Online.NumFeedbackFallbackItemBased)
+		userFeedback := make([]data.Feedback, 0, s.Config.Recommend.CacheSize)
 		for _, feedback := range ctx.userFeedback {
-			if s.Config.Recommend.Online.NumFeedbackFallbackItemBased <= len(userFeedback) {
+			if s.Config.Recommend.CacheSize <= len(userFeedback) {
 				break
 			}
 			if expression.MatchFeedbackTypeExpressions(s.Config.Recommend.DataSource.PositiveFeedbackTypes, feedback.FeedbackType, feedback.Value) {
@@ -1014,7 +1014,7 @@ func (s *RestServer) RecommendItemBased(ctx *recommendContext) error {
 		for id, score := range candidates {
 			filter.Push(id, score)
 		}
-		ids, _ := filter.PopAll()
+		ids := filter.PopAllValues()
 		ctx.results = append(ctx.results, ids...)
 		ctx.excludeSet.Append(ids...)
 		ctx.itemBasedTime = time.Since(start)
@@ -1070,7 +1070,7 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 	}
 	// online recommendation
 	recommenders := []Recommender{s.RecommendOffline}
-	for _, recommender := range s.Config.Recommend.Online.FallbackRecommend {
+	for _, recommender := range s.Config.Recommend.Fallback {
 		switch recommender {
 		case "collaborative":
 			recommenders = append(recommenders, s.RecommendCollaborative)
@@ -1185,7 +1185,7 @@ func (s *RestServer) sessionRecommend(request *restful.Request, response *restfu
 		// finish recommendation if the number of used feedbacks is enough
 		if len(similarItems) > 0 {
 			usedFeedbackCount++
-			if usedFeedbackCount >= s.Config.Recommend.Online.NumFeedbackFallbackItemBased {
+			if usedFeedbackCount >= s.Config.Recommend.CacheSize {
 				break
 			}
 		}
@@ -1195,11 +1195,11 @@ func (s *RestServer) sessionRecommend(request *restful.Request, response *restfu
 	for id, score := range candidates {
 		filter.Push(id, score)
 	}
-	names, scores := filter.PopAll()
-	result := lo.Map(names, func(_ string, i int) cache.Score {
+	scores := filter.PopAll()
+	result := lo.Map(scores, func(score heap.Elem[string, float64], _ int) cache.Score {
 		return cache.Score{
-			Id:    names[i],
-			Score: scores[i],
+			Id:    score.Value,
+			Score: score.Weight,
 		}
 	})
 	if len(result) > offset {
