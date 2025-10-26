@@ -31,7 +31,6 @@ import (
 const (
 	Collaborative              = "collaborative"
 	LatestRecommender          = "latest"
-	PopularRecommender         = "popular"
 	NonPersonalizedRecommender = "non-personalized/"
 	ItemToItemRecommender      = "item-to-item/"
 	UserToUserRecommender      = "user-to-user/"
@@ -50,10 +49,15 @@ type Recommender struct {
 
 type RecommenderFunc func(ctx context.Context) ([]cache.Score, error)
 
-func NewRecommender(config config.Config, cacheClient cache.Database, userId string, categories []string, exclude []string) *Recommender {
+func NewRecommender(config config.Config,
+	cacheClient cache.Database,
+	dataClient data.Database,
+	userId string, categories []string, exclude []string,
+) *Recommender {
 	return &Recommender{
 		config:      config,
 		cacheClient: cacheClient,
+		dataClient:  dataClient,
 		userId:      userId,
 		categories:  categories,
 		excludeSet:  mapset.NewSet(exclude...),
@@ -64,15 +68,27 @@ func (r *Recommender) Parse(fullname string) (RecommenderFunc, error) {
 	if fullname == Collaborative {
 		return r.recommendCollaborative, nil
 	} else if fullname == LatestRecommender {
-		return r.recommendNonPersonalized(cache.Latest), nil
-	} else if fullname == PopularRecommender {
-		return r.recommendNonPersonalized(cache.Popular), nil
+		return r.recommendLatest, nil
 	} else if strings.HasPrefix(fullname, NonPersonalizedRecommender) {
 		name := strings.TrimPrefix(fullname, NonPersonalizedRecommender)
 		return r.recommendNonPersonalized(name), nil
 	} else {
 		return nil, errors.Errorf("unknown recommender: %s", fullname)
 	}
+}
+
+func (r *Recommender) recommendLatest(ctx context.Context) ([]cache.Score, error) {
+	items, err := r.dataClient.GetLatestItems(ctx, r.config.Recommend.CacheSize, r.categories)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	scores := make([]cache.Score, 0, len(items))
+	for _, item := range items {
+		if !r.excludeSet.Contains(item.ItemId) {
+			scores = append(scores, cache.Score{Id: item.ItemId, Score: float64(item.Timestamp.Unix())})
+		}
+	}
+	return scores, nil
 }
 
 func (r *Recommender) recommendNonPersonalized(name string) RecommenderFunc {
