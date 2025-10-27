@@ -314,8 +314,12 @@ func (s *MasterTestSuite) TestLoadDataFromDatabase() {
 	}, latest)
 
 	// check categories
-	categories, err := s.CacheClient.GetSet(ctx, cache.ItemCategories)
+	categoryScores, err := s.CacheClient.SearchScores(ctx, cache.ItemCategories, "", nil, 0, -1)
 	s.NoError(err)
+	categories := make([]string, len(categoryScores))
+	for i, score := range categoryScores {
+		categories[i] = score.Id
+	}
 	s.Equal([]string{"0", "1", "2"}, categories)
 }
 

@@ -64,30 +64,7 @@ message DeleteRequest { string name = 1; }
 
 message DeleteResponse {}
 
-message GetSetRequest { string key = 1; }
 
-message GetSetResponse { repeated string members = 1; }
-
-message SetSetRequest {
-  string key = 1;
-  repeated string members = 2;
-}
-
-message SetSetResponse {}
-
-message AddSetRequest {
-  string key = 1;
-  repeated string members = 2;
-}
-
-message AddSetResponse {}
-
-message RemSetRequest {
-  string key = 1;
-  repeated string members = 2;
-}
-
-message RemSetResponse {}
 
 message PushRequest {
   string name = 1;
@@ -165,10 +142,6 @@ service CacheStore {
   rpc Get(GetRequest) returns (GetResponse) {}
   rpc Set(SetRequest) returns (SetResponse) {}
   rpc Delete(DeleteRequest) returns (DeleteResponse) {}
-  rpc GetSet(GetSetRequest) returns (GetSetResponse) {}
-  rpc SetSet(SetSetRequest) returns (SetSetResponse) {}
-  rpc AddSet(AddSetRequest) returns (AddSetResponse) {}
-  rpc RemSet(RemSetRequest) returns (RemSetResponse) {}
   rpc Push(PushRequest) returns (PushResponse) {}
   rpc Pop(PopRequest) returns (PopResponse) {}
   rpc Remain(RemainRequest) returns (RemainResponse) {}

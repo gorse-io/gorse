@@ -463,10 +463,14 @@ func (m *Master) getCategories(request *restful.Request, response *restful.Respo
 	if request != nil && request.Request != nil {
 		ctx = request.Request.Context()
 	}
-	categories, err := m.CacheClient.GetSet(ctx, cache.ItemCategories)
+	categoryScores, err := m.CacheClient.SearchScores(ctx, cache.ItemCategories, "", nil, 0, -1)
 	if err != nil {
 		server.InternalServerError(response, err)
 		return
+	}
+	categories := make([]string, len(categoryScores))
+	for i, score := range categoryScores {
+		categories[i] = score.Id
 	}
 	server.Ok(response, categories)
 }

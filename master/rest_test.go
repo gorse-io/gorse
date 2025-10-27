@@ -438,7 +438,12 @@ func (suite *MasterAPITestSuite) TestGetRates() {
 func (suite *MasterAPITestSuite) TestGetCategories() {
 	ctx := context.Background()
 	// insert categories
-	err := suite.CacheClient.SetSet(ctx, cache.ItemCategories, "a", "b", "c")
+	categoryScores := []cache.Score{
+		{Id: "a", Score: 3},
+		{Id: "b", Score: 2},
+		{Id: "c", Score: 1},
+	}
+	err := suite.CacheClient.AddScores(ctx, cache.ItemCategories, "", categoryScores)
 	suite.NoError(err)
 	// get categories
 	apitest.New().
@@ -681,12 +686,6 @@ func (suite *MasterAPITestSuite) TestPurge() {
 	suite.NoError(err)
 	suite.Equal("value", ret)
 
-	err = suite.CacheClient.AddSet(ctx, "set", "a", "b", "c")
-	suite.NoError(err)
-	set, err := suite.CacheClient.GetSet(ctx, "set")
-	suite.NoError(err)
-	suite.ElementsMatch([]string{"a", "b", "c"}, set)
-
 	err = suite.CacheClient.AddScores(ctx, "sorted", "", []cache.Score{
 		{Id: "a", Score: 1, Categories: []string{""}},
 		{Id: "b", Score: 2, Categories: []string{""}},
@@ -728,9 +727,6 @@ func (suite *MasterAPITestSuite) TestPurge() {
 
 	_, err = suite.CacheClient.Get(ctx, "key").String()
 	suite.ErrorIs(err, errors.NotFound)
-	set, err = suite.CacheClient.GetSet(ctx, "set")
-	suite.NoError(err)
-	suite.Empty(set)
 	z, err = suite.CacheClient.SearchScores(ctx, "sorted", "", []string{""}, 0, -1)
 	suite.NoError(err)
 	suite.Empty(z)
