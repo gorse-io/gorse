@@ -1484,18 +1484,11 @@ func (s *RestServer) batchInsertItems(ctx context.Context, response *restful.Res
 
 	// insert modify timestamp
 	start = time.Now()
-	categories := mapset.NewSet[string]()
 	values := make([]cache.Value, len(items))
 	for i, item := range items {
 		values[i] = cache.Time(cache.Key(cache.LastModifyItemTime, item.ItemId), time.Now())
-		categories.Append(item.Categories...)
 	}
 	if err = s.CacheClient.Set(ctx, values...); err != nil {
-		InternalServerError(response, err)
-		return
-	}
-	// insert categories
-	if err = s.CacheClient.AddSet(ctx, cache.ItemCategories, categories.ToSlice()...); err != nil {
 		InternalServerError(response, err)
 		return
 	}

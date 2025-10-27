@@ -203,7 +203,6 @@ func (suite *ServerTestSuite) TestUsers() {
 }
 
 func (suite *ServerTestSuite) TestItems() {
-	ctx := context.Background()
 	t := suite.T()
 	// Items
 	items := []data.Item{
@@ -308,10 +307,6 @@ func (suite *ServerTestSuite) TestItems() {
 			{Id: items[1].ItemId, Score: float64(items[1].Timestamp.Unix())},
 		})).
 		End()
-	// get categories
-	categories, err := suite.CacheClient.GetSet(ctx, cache.ItemCategories)
-	assert.NoError(t, err)
-	assert.Equal(t, []string{"*"}, categories)
 
 	// delete item
 	apitest.New().

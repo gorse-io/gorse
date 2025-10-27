@@ -81,7 +81,7 @@ type Dataset struct {
 	userDict     *FreqDict
 	itemDict     *FreqDict
 	numFeedback  int
-	categories   mapset.Set[string]
+	categories   map[string]int
 }
 
 func NewDataset(timestamp time.Time, userCount, itemCount int) *Dataset {
@@ -95,7 +95,7 @@ func NewDataset(timestamp time.Time, userCount, itemCount int) *Dataset {
 		itemFeedback: make([][]int32, itemCount),
 		userDict:     NewFreqDict(),
 		itemDict:     NewFreqDict(),
-		categories:   mapset.NewSet[string](),
+		categories:   make(map[string]int),
 	}
 }
 
@@ -139,8 +139,8 @@ func (d *Dataset) GetItemFeedback() [][]int32 {
 	return d.itemFeedback
 }
 
-func (d *Dataset) GetCategories() []string {
-	return d.categories.ToSlice()
+func (d *Dataset) GetCategories() map[string]int {
+	return d.categories
 }
 
 // GetUserIDF returns the IDF of users.
@@ -216,7 +216,9 @@ func (d *Dataset) AddItem(item data.Item) {
 	if len(d.itemFeedback) < len(d.items) {
 		d.itemFeedback = append(d.itemFeedback, nil)
 	}
-	d.categories.Append(item.Categories...)
+	for _, category := range item.Categories {
+		d.categories[category]++
+	}
 }
 
 func (d *Dataset) AddFeedback(userId, itemId string) {

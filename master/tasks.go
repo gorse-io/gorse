@@ -168,7 +168,15 @@ func (m *Master) loadDataset() (datasets Datasets, err error) {
 	InactiveItemsTotal.Set(float64(inactiveItems))
 
 	// write categories to cache
-	if err = m.CacheClient.SetSet(ctx, cache.ItemCategories, datasets.rankingDataset.GetCategories()...); err != nil {
+	categories := datasets.rankingDataset.GetCategories()
+	categoryScores := make([]cache.Score, 0, len(categories))
+	for category, count := range categories {
+		categoryScores = append(categoryScores, cache.Score{
+			Id:    category,
+			Score: float64(count),
+		})
+	}
+	if err = m.CacheClient.AddScores(ctx, cache.ItemCategories, "", categoryScores); err != nil {
 		log.Logger().Error("failed to write categories to cache", zap.Error(err))
 	}
 
