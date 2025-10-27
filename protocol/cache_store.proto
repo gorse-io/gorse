@@ -142,7 +142,6 @@ service CacheStore {
   rpc Get(GetRequest) returns (GetResponse) {}
   rpc Set(SetRequest) returns (SetResponse) {}
   rpc Delete(DeleteRequest) returns (DeleteResponse) {}
-  
   rpc Push(PushRequest) returns (PushResponse) {}
   rpc Pop(PopRequest) returns (PopResponse) {}
   rpc Remain(RemainRequest) returns (RemainResponse) {}

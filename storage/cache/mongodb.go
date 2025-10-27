@@ -136,7 +136,6 @@ func (m MongoDB) Scan(work func(string) error) error {
 		}
 	}
 
-	
 	return nil
 }
 
