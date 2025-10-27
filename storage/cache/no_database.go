@@ -58,25 +58,7 @@ func (NoDatabase) Delete(_ context.Context, _ string) error {
 	return ErrNoDatabase
 }
 
-// GetSet method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) GetSet(_ context.Context, _ string) ([]string, error) {
-	return nil, ErrNoDatabase
-}
 
-// SetSet method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) SetSet(_ context.Context, _ string, _ ...string) error {
-	return ErrNoDatabase
-}
-
-// AddSet method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) AddSet(_ context.Context, _ string, _ ...string) error {
-	return ErrNoDatabase
-}
-
-// RemSet method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) RemSet(_ context.Context, _ string, _ ...string) error {
-	return ErrNoDatabase
-}
 
 func (NoDatabase) Push(_ context.Context, _, _ string) error {
 	return ErrNoDatabase

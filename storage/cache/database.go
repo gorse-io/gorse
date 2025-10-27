@@ -271,11 +271,6 @@ type Database interface {
 	Get(ctx context.Context, name string) *ReturnValue
 	Delete(ctx context.Context, name string) error
 
-	GetSet(ctx context.Context, key string) ([]string, error)
-	SetSet(ctx context.Context, key string, members ...string) error
-	AddSet(ctx context.Context, key string, members ...string) error
-	RemSet(ctx context.Context, key string, members ...string) error
-
 	Push(ctx context.Context, name, value string) error
 	Pop(ctx context.Context, name string) (string, error)
 	Remain(ctx context.Context, name string) (int64, error)

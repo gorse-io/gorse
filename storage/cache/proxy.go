@@ -77,25 +77,7 @@ func (p *ProxyServer) Delete(ctx context.Context, request *protocol.DeleteReques
 	return &protocol.DeleteResponse{}, p.database.Delete(ctx, request.GetName())
 }
 
-func (p *ProxyServer) GetSet(ctx context.Context, request *protocol.GetSetRequest) (*protocol.GetSetResponse, error) {
-	members, err := p.database.GetSet(ctx, request.GetKey())
-	if err != nil {
-		return nil, err
-	}
-	return &protocol.GetSetResponse{Members: members}, nil
-}
 
-func (p *ProxyServer) SetSet(ctx context.Context, request *protocol.SetSetRequest) (*protocol.SetSetResponse, error) {
-	return &protocol.SetSetResponse{}, p.database.SetSet(ctx, request.GetKey(), request.GetMembers()...)
-}
-
-func (p *ProxyServer) AddSet(ctx context.Context, request *protocol.AddSetRequest) (*protocol.AddSetResponse, error) {
-	return &protocol.AddSetResponse{}, p.database.AddSet(ctx, request.GetKey(), request.GetMembers()...)
-}
-
-func (p *ProxyServer) RemSet(ctx context.Context, request *protocol.RemSetRequest) (*protocol.RemSetResponse, error) {
-	return &protocol.RemSetResponse{}, p.database.RemSet(ctx, request.GetKey(), request.GetMembers()...)
-}
 
 func (p *ProxyServer) Push(ctx context.Context, request *protocol.PushRequest) (*protocol.PushResponse, error) {
 	return &protocol.PushResponse{}, p.database.Push(ctx, request.GetName(), request.GetValue())
@@ -274,39 +256,7 @@ func (p ProxyClient) Delete(ctx context.Context, name string) error {
 	return err
 }
 
-func (p ProxyClient) GetSet(ctx context.Context, key string) ([]string, error) {
-	resp, err := p.CacheStoreClient.GetSet(ctx, &protocol.GetSetRequest{
-		Key: key,
-	})
-	if err != nil {
-		return nil, err
-	}
-	return resp.Members, nil
-}
 
-func (p ProxyClient) SetSet(ctx context.Context, key string, members ...string) error {
-	_, err := p.CacheStoreClient.SetSet(ctx, &protocol.SetSetRequest{
-		Key:     key,
-		Members: members,
-	})
-	return err
-}
-
-func (p ProxyClient) AddSet(ctx context.Context, key string, members ...string) error {
-	_, err := p.CacheStoreClient.AddSet(ctx, &protocol.AddSetRequest{
-		Key:     key,
-		Members: members,
-	})
-	return err
-}
-
-func (p ProxyClient) RemSet(ctx context.Context, key string, members ...string) error {
-	_, err := p.CacheStoreClient.RemSet(ctx, &protocol.RemSetRequest{
-		Key:     key,
-		Members: members,
-	})
-	return err
-}
 
 func (p ProxyClient) Push(ctx context.Context, name, value string) error {
 	_, err := p.CacheStoreClient.Push(ctx, &protocol.PushRequest{

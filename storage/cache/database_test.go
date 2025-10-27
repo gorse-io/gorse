@@ -104,50 +104,9 @@ func (suite *baseTestSuite) TestMeta() {
 	suite.NoError(err)
 }
 
-func (suite *baseTestSuite) TestSet() {
-	ctx := context.Background()
-	err := suite.Database.SetSet(ctx, "set", "1")
-	suite.NoError(err)
-	// test add
-	err = suite.Database.AddSet(ctx, "set", "2")
-	suite.NoError(err)
-	var members []string
-	members, err = suite.Database.GetSet(ctx, "set")
-	suite.NoError(err)
-	suite.Equal([]string{"1", "2"}, members)
-	// test rem
-	err = suite.Database.RemSet(ctx, "set", "1")
-	suite.NoError(err)
-	members, err = suite.Database.GetSet(ctx, "set")
-	suite.NoError(err)
-	suite.Equal([]string{"2"}, members)
-	// test set
-	err = suite.Database.SetSet(ctx, "set", "3")
-	suite.NoError(err)
-	members, err = suite.Database.GetSet(ctx, "set")
-	suite.NoError(err)
-	suite.Equal([]string{"3"}, members)
-
-	// test add empty
-	err = suite.Database.AddSet(ctx, "set")
-	suite.NoError(err)
-	// test set empty
-	err = suite.Database.SetSet(ctx, "set")
-	suite.NoError(err)
-	// test get empty
-	members, err = suite.Database.GetSet(ctx, "unknown_set")
-	suite.NoError(err)
-	suite.Empty(members)
-	// test rem empty
-	err = suite.Database.RemSet(ctx, "set")
-	suite.NoError(err)
-}
-
 func (suite *baseTestSuite) TestScan() {
 	ctx := context.Background()
 	err := suite.Database.Set(ctx, String("1", "1"))
-	suite.NoError(err)
-	err = suite.Database.SetSet(ctx, "2", "21", "22", "23")
 	suite.NoError(err)
 
 	var keys []string
@@ -156,7 +115,7 @@ func (suite *baseTestSuite) TestScan() {
 		return nil
 	})
 	suite.NoError(err)
-	suite.ElementsMatch([]string{"1", "2"}, keys)
+	suite.ElementsMatch([]string{"1"}, keys)
 }
 
 func (suite *baseTestSuite) TestPurge() {
@@ -168,20 +127,11 @@ func (suite *baseTestSuite) TestPurge() {
 	suite.NoError(ret.err)
 	suite.Equal("value", ret.value)
 
-	err = suite.Database.AddSet(ctx, "set", "a", "b", "c")
-	suite.NoError(err)
-	s, err := suite.Database.GetSet(ctx, "set")
-	suite.NoError(err)
-	suite.ElementsMatch([]string{"a", "b", "c"}, s)
-
 	// purge data
 	err = suite.Database.Purge()
 	suite.NoError(err)
 	ret = suite.Database.Get(ctx, "key")
 	suite.ErrorIs(ret.err, errors.NotFound)
-	s, err = suite.Database.GetSet(ctx, "set")
-	suite.NoError(err)
-	suite.Empty(s)
 
 	// purge empty dataset
 	err = suite.Database.Purge()

@@ -36,7 +36,7 @@ func (m MongoDB) Init() error {
 	ctx := context.Background()
 	d := m.client.Database(m.dbName)
 	// list collections
-	var hasValues, hasSets bool
+	var hasValues bool
 	collections, err := d.ListCollectionNames(ctx, bson.M{})
 	if err != nil {
 		return errors.Trace(err)
@@ -45,8 +45,6 @@ func (m MongoDB) Init() error {
 		switch collectionName {
 		case m.ValuesTable():
 			hasValues = true
-		case m.SetsTable():
-			hasSets = true
 		}
 	}
 	// create collections
@@ -54,22 +52,6 @@ func (m MongoDB) Init() error {
 		if err = d.CreateCollection(ctx, m.ValuesTable()); err != nil {
 			return errors.Trace(err)
 		}
-	}
-	if !hasSets {
-		if err = d.CreateCollection(ctx, m.SetsTable()); err != nil {
-			return errors.Trace(err)
-		}
-	}
-	// create index
-	_, err = d.Collection(m.SetsTable()).Indexes().CreateOne(ctx, mongo.IndexModel{
-		Keys: bson.D{
-			{"name", 1},
-			{"member", 1},
-		},
-		Options: options.Index().SetUnique(true),
-	})
-	if err != nil {
-		return errors.Trace(err)
 	}
 	_, err = d.Collection(m.MessageTable()).Indexes().CreateMany(ctx, []mongo.IndexModel{
 		{
@@ -154,32 +136,12 @@ func (m MongoDB) Scan(work func(string) error) error {
 		}
 	}
 
-	// scan sets
-	setCollection := m.client.Database(m.dbName).Collection(m.SetsTable())
-	setIterator, err := setCollection.Find(ctx, bson.M{})
-	if err != nil {
-		return errors.Trace(err)
-	}
-	defer setIterator.Close(ctx)
-	prevKey := ""
-	for setIterator.Next(ctx) {
-		var row bson.Raw
-		if err = setIterator.Decode(&row); err != nil {
-			return errors.Trace(err)
-		}
-		key := row.Lookup("name").StringValue()
-		if key != prevKey {
-			if err = work(key); err != nil {
-				return errors.Trace(err)
-			}
-			prevKey = key
-		}
-	}
+	
 	return nil
 }
 
 func (m MongoDB) Purge() error {
-	tables := []string{m.ValuesTable(), m.SetsTable(), m.DocumentTable()}
+	tables := []string{m.ValuesTable(), m.DocumentTable()}
 	for _, tableName := range tables {
 		c := m.client.Database(m.dbName).Collection(tableName)
 		_, err := c.DeleteMany(context.Background(), bson.D{})
@@ -227,66 +189,7 @@ func (m MongoDB) Delete(ctx context.Context, name string) error {
 	return errors.Trace(err)
 }
 
-func (m MongoDB) GetSet(ctx context.Context, name string) ([]string, error) {
-	c := m.client.Database(m.dbName).Collection(m.SetsTable())
-	r, err := c.Find(ctx, bson.M{"name": name})
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-	var members []string
-	for r.Next(ctx) {
-		var doc bson.Raw
-		if err = r.Decode(&doc); err != nil {
-			return nil, err
-		}
-		members = append(members, doc.Lookup("member").StringValue())
-	}
-	return members, nil
-}
 
-func (m MongoDB) SetSet(ctx context.Context, name string, members ...string) error {
-	c := m.client.Database(m.dbName).Collection(m.SetsTable())
-	var models []mongo.WriteModel
-	models = append(models, mongo.NewDeleteManyModel().SetFilter(bson.M{"name": bson.M{"$eq": name}}))
-	for _, member := range members {
-		models = append(models, mongo.NewUpdateOneModel().
-			SetUpsert(true).
-			SetFilter(bson.M{"name": bson.M{"$eq": name}, "member": bson.M{"$eq": member}}).
-			SetUpdate(bson.M{"$set": bson.M{"name": name, "member": member}}))
-	}
-	_, err := c.BulkWrite(ctx, models)
-	return errors.Trace(err)
-}
-
-func (m MongoDB) AddSet(ctx context.Context, name string, members ...string) error {
-	if len(members) == 0 {
-		return nil
-	}
-	c := m.client.Database(m.dbName).Collection(m.SetsTable())
-	var models []mongo.WriteModel
-	for _, member := range members {
-		models = append(models, mongo.NewUpdateOneModel().
-			SetUpsert(true).
-			SetFilter(bson.M{"name": bson.M{"$eq": name}, "member": bson.M{"$eq": member}}).
-			SetUpdate(bson.M{"$set": bson.M{"name": name, "member": member}}))
-	}
-	_, err := c.BulkWrite(ctx, models)
-	return errors.Trace(err)
-}
-
-func (m MongoDB) RemSet(ctx context.Context, name string, members ...string) error {
-	if len(members) == 0 {
-		return nil
-	}
-	c := m.client.Database(m.dbName).Collection(m.SetsTable())
-	var models []mongo.WriteModel
-	for _, member := range members {
-		models = append(models, mongo.NewDeleteOneModel().
-			SetFilter(bson.M{"name": bson.M{"$eq": name}, "member": bson.M{"$eq": member}}))
-	}
-	_, err := c.BulkWrite(ctx, models)
-	return errors.Trace(err)
-}
 
 func (m MongoDB) Push(ctx context.Context, name, value string) error {
 	_, err := m.client.Database(m.dbName).Collection(m.MessageTable()).UpdateOne(ctx,
