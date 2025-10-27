@@ -664,7 +664,7 @@ func (suite *MasterAPITestSuite) TestGetRecommends() {
 		})).
 		End()
 
-	suite.Config.Recommend.Online.FallbackRecommend = []string{"collaborative", "item_based", "user_based", "latest"}
+	suite.Config.Recommend.Fallback = []string{"collaborative", "item_based", "user_based", "latest", "popular"}
 	apitest.New().
 		Handler(suite.handler).
 		Get("/api/dashboard/recommend/0/_").

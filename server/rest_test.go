@@ -1121,7 +1121,6 @@ func (suite *ServerTestSuite) TestGetRecommendsWithReplacement() {
 func (suite *ServerTestSuite) TestServerGetRecommendsFallbackItemBasedSimilar() {
 	ctx := context.Background()
 	t := suite.T()
-	suite.Config.Recommend.Online.NumFeedbackFallbackItemBased = 4
 	suite.Config.Recommend.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{
 		expression.MustParseFeedbackTypeExpression("a")}
 	suite.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "default"}}
@@ -1187,7 +1186,7 @@ func (suite *ServerTestSuite) TestServerGetRecommendsFallbackItemBasedSimilar() 
 	assert.NoError(t, err)
 
 	// test fallback
-	suite.Config.Recommend.Online.FallbackRecommend = []string{"item_based"}
+	suite.Config.Recommend.Fallback = []string{"item_based"}
 	apitest.New().
 		Handler(suite.handler).
 		Get("/api/recommend/0").
@@ -1199,7 +1198,7 @@ func (suite *ServerTestSuite) TestServerGetRecommendsFallbackItemBasedSimilar() 
 		Status(http.StatusOK).
 		Body(suite.marshal([]string{"9", "8", "7"})).
 		End()
-	suite.Config.Recommend.Online.FallbackRecommend = []string{"item_based"}
+	suite.Config.Recommend.Fallback = []string{"item_based"}
 	apitest.New().
 		Handler(suite.handler).
 		Get("/api/recommend/0/*").
@@ -1265,7 +1264,7 @@ func (suite *ServerTestSuite) TestGetRecommendsFallbackUserBasedSimilar() {
 	})
 	assert.NoError(t, err)
 	// test fallback
-	suite.Config.Recommend.Online.FallbackRecommend = []string{"user_based"}
+	suite.Config.Recommend.Fallback = []string{"user_based"}
 	apitest.New().
 		Handler(suite.handler).
 		Get("/api/recommend/0").
@@ -1320,7 +1319,7 @@ func (suite *ServerTestSuite) TestGetRecommendsFallbackPreCached() {
 		{Id: "16", Score: 76, Categories: []string{"*"}}})
 	assert.NoError(t, err)
 	// test latest fallback
-	suite.Config.Recommend.Online.FallbackRecommend = []string{"latest"}
+	suite.Config.Recommend.Fallback = []string{"latest"}
 	apitest.New().
 		Handler(suite.handler).
 		Get("/api/recommend/0").
@@ -1344,7 +1343,7 @@ func (suite *ServerTestSuite) TestGetRecommendsFallbackPreCached() {
 		Body(suite.marshal([]string{"1", "2", "3", "4", "105", "106", "107", "108"})).
 		End()
 	// test collaborative filtering
-	suite.Config.Recommend.Online.FallbackRecommend = []string{"collaborative"}
+	suite.Config.Recommend.Fallback = []string{"collaborative"}
 	apitest.New().
 		Handler(suite.handler).
 		Get("/api/recommend/0").
@@ -1368,7 +1367,7 @@ func (suite *ServerTestSuite) TestGetRecommendsFallbackPreCached() {
 		Body(suite.marshal([]string{"1", "2", "3", "4", "13", "14", "15", "16"})).
 		End()
 	// test wrong fallback
-	suite.Config.Recommend.Online.FallbackRecommend = []string{""}
+	suite.Config.Recommend.Fallback = []string{""}
 	apitest.New().
 		Handler(suite.handler).
 		Get("/api/recommend/0").
@@ -1384,7 +1383,6 @@ func (suite *ServerTestSuite) TestGetRecommendsFallbackPreCached() {
 func (suite *ServerTestSuite) TestSessionRecommend() {
 	ctx := context.Background()
 	t := suite.T()
-	suite.Config.Recommend.Online.NumFeedbackFallbackItemBased = 4
 	suite.Config.Recommend.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{
 		expression.MustParseFeedbackTypeExpression("a")}
 	suite.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "default"}}
@@ -1455,7 +1453,7 @@ func (suite *ServerTestSuite) TestSessionRecommend() {
 		JSON(feedback).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(suite.marshal([]cache.Score{{Id: "9", Score: 4}, {Id: "8", Score: 3}, {Id: "7", Score: 2}})).
+		Body(suite.marshal([]cache.Score{{Id: "9", Score: 3}, {Id: "8", Score: 2}, {Id: "7", Score: 1}})).
 		End()
 	apitest.New().
 		Handler(suite.handler).
@@ -1469,7 +1467,7 @@ func (suite *ServerTestSuite) TestSessionRecommend() {
 		Status(http.StatusOK).
 		Body(suite.marshal([]cache.Score(nil))).
 		End()
-	suite.Config.Recommend.Online.FallbackRecommend = []string{"item_based"}
+	suite.Config.Recommend.Fallback = []string{"item_based"}
 	apitest.New().
 		Handler(suite.handler).
 		Post("/api/session/recommend/*").
@@ -1480,7 +1478,7 @@ func (suite *ServerTestSuite) TestSessionRecommend() {
 		JSON(feedback).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(suite.marshal([]cache.Score{{Id: "9", Score: 4}, {Id: "7", Score: 2}})).
+		Body(suite.marshal([]cache.Score{{Id: "9", Score: 3}, {Id: "7", Score: 1}})).
 		End()
 }
 

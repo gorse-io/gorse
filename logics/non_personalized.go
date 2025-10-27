@@ -146,17 +146,17 @@ func (l *NonPersonalized) PopAll() []cache.Score {
 	l.Lock()
 	defer l.Unlock()
 	for category, h := range l.heaps {
-		names, values := h.PopAll()
-		for i, name := range names {
-			if _, exist := scores[name]; !exist {
-				scores[name] = &cache.Score{
-					Id:         name,
-					Score:      values[i],
+		elems := h.PopAll()
+		for _, elem := range elems {
+			if _, exist := scores[elem.Value]; !exist {
+				scores[elem.Value] = &cache.Score{
+					Id:         elem.Value,
+					Score:      elem.Weight,
 					Categories: []string{category},
 					Timestamp:  l.timestamp,
 				}
 			} else {
-				scores[name].Categories = append(scores[name].Categories, category)
+				scores[elem.Value].Categories = append(scores[elem.Value].Categories, category)
 			}
 		}
 	}

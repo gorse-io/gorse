@@ -23,7 +23,6 @@ import (
 	"os"
 	"reflect"
 	"strings"
-	"sync"
 	"time"
 
 	mapset "github.com/deckarep/golang-set/v2"
@@ -60,15 +59,14 @@ func init() {
 
 // Config is the configuration for the engine.
 type Config struct {
-	Database     DatabaseConfig     `mapstructure:"database"`
-	Master       MasterConfig       `mapstructure:"master"`
-	Server       ServerConfig       `mapstructure:"server"`
-	Recommend    RecommendConfig    `mapstructure:"recommend"`
-	Tracing      TracingConfig      `mapstructure:"tracing"`
-	Experimental ExperimentalConfig `mapstructure:"experimental"`
-	OIDC         OIDCConfig         `mapstructure:"oidc"`
-	OpenAI       OpenAIConfig       `mapstructure:"openai"`
-	S3           S3Config           `mapstructure:"s3"`
+	Database  DatabaseConfig  `mapstructure:"database"`
+	Master    MasterConfig    `mapstructure:"master"`
+	Server    ServerConfig    `mapstructure:"server"`
+	Recommend RecommendConfig `mapstructure:"recommend"`
+	Tracing   TracingConfig   `mapstructure:"tracing"`
+	OIDC      OIDCConfig      `mapstructure:"oidc"`
+	OpenAI    OpenAIConfig    `mapstructure:"openai"`
+	S3        S3Config        `mapstructure:"s3"`
 }
 
 // DatabaseConfig is the configuration for the database.
@@ -119,6 +117,7 @@ type ServerConfig struct {
 type RecommendConfig struct {
 	CacheSize       int                     `mapstructure:"cache_size" validate:"gt=0"`
 	CacheExpire     time.Duration           `mapstructure:"cache_expire" validate:"gt=0"`
+	ContextSize     int                     `mapstructure:"context_size" validate:"gt=0"`
 	ActiveUserTTL   int                     `mapstructure:"active_user_ttl" validate:"gte=0"`
 	DataSource      DataSourceConfig        `mapstructure:"data_source"`
 	NonPersonalized []NonPersonalizedConfig `mapstructure:"non-personalized" validate:"dive"`
@@ -127,8 +126,8 @@ type RecommendConfig struct {
 	Collaborative   CollaborativeConfig     `mapstructure:"collaborative"`
 	External        []ExternalConfig        `mapstructure:"external" validate:"dive"`
 	Replacement     ReplacementConfig       `mapstructure:"replacement"`
-	Offline         OfflineConfig           `mapstructure:"offline"`
-	Online          OnlineConfig            `mapstructure:"online"`
+	Ranker          RankerConfig            `mapstructure:"ranker"`
+	Fallback        FallbackConfig          `mapstructure:"fallback"`
 }
 
 func StringToFeedbackTypeHookFunc() mapstructure.DecodeHookFunc {
@@ -218,22 +217,19 @@ type ReplacementConfig struct {
 	ReadReplacementDecay     float64 `mapstructure:"read_replacement_decay" validate:"gt=0"`
 }
 
-type OfflineConfig struct {
+type RankerConfig struct {
 	CheckRecommendPeriod         time.Duration       `mapstructure:"check_recommend_period" validate:"gt=0"`
 	RefreshRecommendPeriod       time.Duration       `mapstructure:"refresh_recommend_period" validate:"gt=0"`
-	ExploreRecommend             map[string]float64  `mapstructure:"explore_recommend"`
 	EnableLatestRecommend        bool                `mapstructure:"enable_latest_recommend"`
 	EnableUserBasedRecommend     bool                `mapstructure:"enable_user_based_recommend"`
 	EnableItemBasedRecommend     bool                `mapstructure:"enable_item_based_recommend"`
 	EnableColRecommend           bool                `mapstructure:"enable_collaborative_recommend"`
 	EnableClickThroughPrediction bool                `mapstructure:"enable_click_through_prediction"`
 	EarlyStopping                EarlyStoppingConfig `mapstructure:"early_stopping"`
-	exploreRecommendLock         sync.RWMutex
 }
 
-type OnlineConfig struct {
-	FallbackRecommend            []string `mapstructure:"fallback_recommend"`
-	NumFeedbackFallbackItemBased int      `mapstructure:"num_feedback_fallback_item_based" validate:"gt=0"`
+type FallbackConfig struct {
+	Recommenders []string `mapstructure:"recommenders"`
 }
 
 type TracingConfig struct {
@@ -242,11 +238,6 @@ type TracingConfig struct {
 	CollectorEndpoint string  `mapstructure:"collector_endpoint"`
 	Sampler           string  `mapstructure:"sampler"`
 	Ratio             float64 `mapstructure:"ratio"`
-}
-
-type ExperimentalConfig struct {
-	EnableDeepLearning    bool `mapstructure:"enable_deep_learning"`
-	DeepLearningBatchSize int  `mapstructure:"deep_learning_batch_size"`
 }
 
 type OIDCConfig struct {
@@ -309,6 +300,7 @@ func GetDefaultConfig() *Config {
 		Recommend: RecommendConfig{
 			CacheSize:   100,
 			CacheExpire: 72 * time.Hour,
+			ContextSize: 100,
 			Collaborative: CollaborativeConfig{
 				ModelFitPeriod:    60 * time.Minute,
 				ModelSearchPeriod: 180 * time.Minute,
@@ -320,7 +312,7 @@ func GetDefaultConfig() *Config {
 				PositiveReplacementDecay: 0.8,
 				ReadReplacementDecay:     0.6,
 			},
-			Offline: OfflineConfig{
+			Ranker: RankerConfig{
 				CheckRecommendPeriod:         time.Minute,
 				RefreshRecommendPeriod:       120 * time.Hour,
 				EnableLatestRecommend:        false,
@@ -329,17 +321,13 @@ func GetDefaultConfig() *Config {
 				EnableColRecommend:           true,
 				EnableClickThroughPrediction: false,
 			},
-			Online: OnlineConfig{
-				FallbackRecommend:            []string{"latest"},
-				NumFeedbackFallbackItemBased: 10,
+			Fallback: FallbackConfig{
+				Recommenders: []string{"latest"},
 			},
 		},
 		Tracing: TracingConfig{
 			Exporter: "jaeger",
 			Sampler:  "always",
-		},
-		Experimental: ExperimentalConfig{
-			DeepLearningBatchSize: 128,
 		},
 	}
 }
@@ -370,26 +358,23 @@ func WithRanking(v bool) DigestOption {
 
 func (config *Config) OfflineRecommendDigest(option ...DigestOption) string {
 	options := digestOptions{
-		enableCollaborative: config.Recommend.Offline.EnableColRecommend,
-		enableRanking:       config.Recommend.Offline.EnableClickThroughPrediction,
+		enableCollaborative: config.Recommend.Ranker.EnableColRecommend,
+		enableRanking:       config.Recommend.Ranker.EnableClickThroughPrediction,
 	}
 	lo.ForEach(option, func(opt DigestOption, _ int) {
 		opt(&options)
 	})
 
 	var builder strings.Builder
-	config.Recommend.Offline.Lock()
-	builder.WriteString(fmt.Sprintf("%v-%v-%v-%v-%v-%v-%v",
-		config.Recommend.Offline.ExploreRecommend,
-		config.Recommend.Offline.EnableLatestRecommend,
-		config.Recommend.Offline.EnableUserBasedRecommend,
-		config.Recommend.Offline.EnableItemBasedRecommend,
+	builder.WriteString(fmt.Sprintf("%v-%v-%v-%v-%v-%v",
+		config.Recommend.Ranker.EnableLatestRecommend,
+		config.Recommend.Ranker.EnableUserBasedRecommend,
+		config.Recommend.Ranker.EnableItemBasedRecommend,
 		options.enableCollaborative,
 		options.enableRanking,
 		config.Recommend.Replacement.EnableReplacement,
 	))
-	config.Recommend.Offline.UnLock()
-	if config.Recommend.Offline.EnableUserBasedRecommend {
+	if config.Recommend.Ranker.EnableUserBasedRecommend {
 		builder.WriteString(fmt.Sprintf("-%v", options.userNeighborDigest))
 	}
 	if config.Recommend.Replacement.EnableReplacement {
@@ -399,24 +384,6 @@ func (config *Config) OfflineRecommendDigest(option ...DigestOption) string {
 
 	digest := md5.Sum([]byte(builder.String()))
 	return hex.EncodeToString(digest[:])
-}
-
-func (config *OfflineConfig) Lock() {
-	config.exploreRecommendLock.Lock()
-}
-
-func (config *OfflineConfig) UnLock() {
-	config.exploreRecommendLock.Unlock()
-}
-
-func (config *OfflineConfig) GetExploreRecommend(key string) (value float64, exist bool) {
-	if config == nil {
-		return 0.0, false
-	}
-	config.exploreRecommendLock.RLock()
-	defer config.exploreRecommendLock.RUnlock()
-	value, exist = config.ExploreRecommend[key]
-	return
 }
 
 func (config *TracingConfig) NewTracerProvider() (trace.TracerProvider, error) {
@@ -509,6 +476,7 @@ func setDefault() {
 	// [recommend]
 	viper.SetDefault("recommend.cache_size", defaultConfig.Recommend.CacheSize)
 	viper.SetDefault("recommend.cache_expire", defaultConfig.Recommend.CacheExpire)
+	viper.SetDefault("recommend.context_size", defaultConfig.Recommend.ContextSize)
 	// [recommend.collaborative]
 	viper.SetDefault("recommend.collaborative.model_fit_period", defaultConfig.Recommend.Collaborative.ModelFitPeriod)
 	viper.SetDefault("recommend.collaborative.model_search_period", defaultConfig.Recommend.Collaborative.ModelSearchPeriod)
@@ -518,22 +486,19 @@ func setDefault() {
 	viper.SetDefault("recommend.replacement.enable_replacement", defaultConfig.Recommend.Replacement.EnableReplacement)
 	viper.SetDefault("recommend.replacement.positive_replacement_decay", defaultConfig.Recommend.Replacement.PositiveReplacementDecay)
 	viper.SetDefault("recommend.replacement.read_replacement_decay", defaultConfig.Recommend.Replacement.ReadReplacementDecay)
-	// [recommend.offline]
-	viper.SetDefault("recommend.offline.check_recommend_period", defaultConfig.Recommend.Offline.CheckRecommendPeriod)
-	viper.SetDefault("recommend.offline.refresh_recommend_period", defaultConfig.Recommend.Offline.RefreshRecommendPeriod)
-	viper.SetDefault("recommend.offline.enable_latest_recommend", defaultConfig.Recommend.Offline.EnableLatestRecommend)
-	viper.SetDefault("recommend.offline.enable_user_based_recommend", defaultConfig.Recommend.Offline.EnableUserBasedRecommend)
-	viper.SetDefault("recommend.offline.enable_item_based_recommend", defaultConfig.Recommend.Offline.EnableItemBasedRecommend)
-	viper.SetDefault("recommend.offline.enable_collaborative_recommend", defaultConfig.Recommend.Offline.EnableColRecommend)
-	viper.SetDefault("recommend.offline.enable_click_through_prediction", defaultConfig.Recommend.Offline.EnableClickThroughPrediction)
-	// [recommend.online]
-	viper.SetDefault("recommend.online.fallback_recommend", defaultConfig.Recommend.Online.FallbackRecommend)
-	viper.SetDefault("recommend.online.num_feedback_fallback_item_based", defaultConfig.Recommend.Online.NumFeedbackFallbackItemBased)
+	// [recommend.ranker]
+	viper.SetDefault("recommend.ranker.check_recommend_period", defaultConfig.Recommend.Ranker.CheckRecommendPeriod)
+	viper.SetDefault("recommend.ranker.refresh_recommend_period", defaultConfig.Recommend.Ranker.RefreshRecommendPeriod)
+	viper.SetDefault("recommend.ranker.enable_latest_recommend", defaultConfig.Recommend.Ranker.EnableLatestRecommend)
+	viper.SetDefault("recommend.ranker.enable_user_based_recommend", defaultConfig.Recommend.Ranker.EnableUserBasedRecommend)
+	viper.SetDefault("recommend.ranker.enable_item_based_recommend", defaultConfig.Recommend.Ranker.EnableItemBasedRecommend)
+	viper.SetDefault("recommend.ranker.enable_collaborative_recommend", defaultConfig.Recommend.Ranker.EnableColRecommend)
+	viper.SetDefault("recommend.ranker.enable_click_through_prediction", defaultConfig.Recommend.Ranker.EnableClickThroughPrediction)
+	// [recommend.fallback]
+	viper.SetDefault("recommend.fallback", defaultConfig.Recommend.Fallback)
 	// [tracing]
 	viper.SetDefault("tracing.exporter", defaultConfig.Tracing.Exporter)
 	viper.SetDefault("tracing.sampler", defaultConfig.Tracing.Sampler)
-	// [experimental]
-	viper.SetDefault("experimental.deep_learning_batch_size", defaultConfig.Experimental.DeepLearningBatchSize)
 }
 
 type configBinding struct {
