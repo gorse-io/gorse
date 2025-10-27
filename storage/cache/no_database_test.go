@@ -46,15 +46,6 @@ func TestNoDatabase(t *testing.T) {
 	err = database.Delete(ctx, Key("", ""))
 	assert.ErrorIs(t, err, ErrNoDatabase)
 
-	_, err = database.GetSet(ctx, "")
-	assert.ErrorIs(t, err, ErrNoDatabase)
-	err = database.SetSet(ctx, "")
-	assert.ErrorIs(t, err, ErrNoDatabase)
-	err = database.AddSet(ctx, "")
-	assert.ErrorIs(t, err, ErrNoDatabase)
-	err = database.RemSet(ctx, "", "")
-	assert.ErrorIs(t, err, ErrNoDatabase)
-
 	err = database.Push(ctx, "", "")
 	assert.ErrorIs(t, err, ErrNoDatabase)
 	_, err = database.Pop(ctx, "")

@@ -180,50 +180,7 @@ func (r *Redis) Delete(ctx context.Context, key string) error {
 	return r.client.Del(ctx, r.Key(key)).Err()
 }
 
-// GetSet returns members of a set from Redis.
-func (r *Redis) GetSet(ctx context.Context, key string) ([]string, error) {
-	return r.client.SMembers(ctx, r.Key(key)).Result()
-}
 
-// SetSet overrides a set with members in Redis.
-func (r *Redis) SetSet(ctx context.Context, key string, members ...string) error {
-	if len(members) == 0 {
-		return nil
-	}
-	// convert strings to interfaces
-	values := make([]interface{}, 0, len(members))
-	for _, member := range members {
-		values = append(values, member)
-	}
-	// push set
-	pipeline := r.client.Pipeline()
-	pipeline.Del(ctx, r.Key(key))
-	pipeline.SAdd(ctx, r.Key(key), values...)
-	_, err := pipeline.Exec(ctx)
-	return err
-}
-
-// AddSet adds members to a set in Redis.
-func (r *Redis) AddSet(ctx context.Context, key string, members ...string) error {
-	if len(members) == 0 {
-		return nil
-	}
-	// convert strings to interfaces
-	values := make([]interface{}, 0, len(members))
-	for _, member := range members {
-		values = append(values, member)
-	}
-	// push set
-	return r.client.SAdd(ctx, r.Key(key), values...).Err()
-}
-
-// RemSet removes members from a set in Redis.
-func (r *Redis) RemSet(ctx context.Context, key string, members ...string) error {
-	if len(members) == 0 {
-		return nil
-	}
-	return r.client.SRem(ctx, r.Key(key), members).Err()
-}
 
 func (r *Redis) Push(ctx context.Context, name string, message string) error {
 	_, err := r.client.ZAdd(ctx, r.Key(name), redis.Z{Member: message, Score: float64(time.Now().UnixNano())}).Result()

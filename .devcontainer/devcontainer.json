@@ -3,20 +3,24 @@
 //
 // See https://aka.ms/devcontainer.json for more information.
 {
-	"name": "Gorse",
-	// Use "image": "mcr.microsoft.com/devcontainers/base:ubuntu-24.04",
-	// instead of the build to use a pre-built image.
-	"build": {
-        "context": ".",
-        "dockerfile": "Dockerfile"
+  "name": "Gorse",
+  // Use "image": "mcr.microsoft.com/devcontainers/base:ubuntu-24.04",
+  // instead of the build to use a pre-built image.
+  "build": {
+    "context": ".",
+    "dockerfile": "Dockerfile"
+  },
+  // Features add additional features to your environment. See https://containers.dev/features
+  // Beware: features are not supported on all platforms and may have unintended side-effects.
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker": {
+      "moby": false
     },
-	// Features add additional features to your environment. See https://containers.dev/features
-	// Beware: features are not supported on all platforms and may have unintended side-effects.
-	"features": {
-      "ghcr.io/devcontainers/features/docker-in-docker": {
-        "moby": false
-      },
-      "ghcr.io/devcontainers/features/go": {},
-      "ghcr.io/devcontainers-extra/features/protoc": {}
-    }
+    "ghcr.io/devcontainers/features/go": {},
+    "ghcr.io/devcontainers-extra/features/protoc": {}
+  },
+  "postCreateCommand": [
+    "go install google.golang.org/protobuf/cmd/protoc-gen-go@latest",
+    "go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest"
+  ]
 }

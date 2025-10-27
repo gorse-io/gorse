@@ -48,17 +48,6 @@ type SQLValue struct {
 	Value string `gorm:"type:varchar(256);not null"`
 }
 
-type SQLSet struct {
-	Name   string `gorm:"type:varchar(256);primaryKey"`
-	Member string `gorm:"type:varchar(256);primaryKey"`
-}
-
-type SQLSortedSet struct {
-	Name   string  `gorm:"type:varchar(256);primaryKey;index:name"`
-	Member string  `gorm:"type:varchar(256);primaryKey"`
-	Score  float64 `gorm:"type:double precision;not null;index:name"`
-}
-
 type Message struct {
 	Name      string `gorm:"primaryKey;index:timestamp"`
 	Value     string `gorm:"primaryKey"`
@@ -101,7 +90,7 @@ func (db *SQLDatabase) Ping() error {
 }
 
 func (db *SQLDatabase) Init() error {
-	err := db.gormDB.AutoMigrate(&SQLValue{}, &SQLSet{}, &SQLSortedSet{}, &Message{}, &TimeSeriesPoint{})
+	err := db.gormDB.AutoMigrate(&SQLValue{}, &Message{}, &TimeSeriesPoint{})
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -157,7 +146,6 @@ func (db *SQLDatabase) Init() error {
 func (db *SQLDatabase) Scan(work func(string) error) error {
 	var (
 		valuerRows *sql.Rows
-		setRows    *sql.Rows
 		err        error
 	)
 
@@ -177,30 +165,11 @@ func (db *SQLDatabase) Scan(work func(string) error) error {
 		}
 	}
 
-	// scan sets
-	setRows, err = db.gormDB.Table(db.SetsTable()).Select("name").Rows()
-	if err != nil {
-		return errors.Trace(err)
-	}
-	defer setRows.Close()
-	var prevKey string
-	for setRows.Next() {
-		var key string
-		if err = setRows.Scan(&key); err != nil {
-			return errors.Trace(err)
-		}
-		if key != prevKey {
-			if err = work(key); err != nil {
-				return errors.Trace(err)
-			}
-			prevKey = key
-		}
-	}
 	return nil
 }
 
 func (db *SQLDatabase) Purge() error {
-	tables := []any{SQLValue{}, SQLSet{}, SQLSortedSet{}, Message{}, SQLDocument{}}
+	tables := []any{SQLValue{}, Message{}, SQLDocument{}}
 	for _, table := range tables {
 		err := db.gormDB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&table).Error
 		if err != nil {
@@ -251,70 +220,6 @@ func (db *SQLDatabase) Get(ctx context.Context, name string) *ReturnValue {
 
 func (db *SQLDatabase) Delete(ctx context.Context, name string) error {
 	err := db.gormDB.WithContext(ctx).Delete(&SQLValue{Name: name}).Error
-	return errors.Trace(err)
-}
-
-func (db *SQLDatabase) GetSet(ctx context.Context, key string) ([]string, error) {
-	rs, err := db.gormDB.WithContext(ctx).Table(db.SetsTable()).Select("member").Where("name = ?", key).Rows()
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-	defer rs.Close()
-	var members []string
-	for rs.Next() {
-		var member string
-		if err = rs.Scan(&member); err != nil {
-			return nil, errors.Trace(err)
-		}
-		members = append(members, member)
-	}
-	return members, nil
-}
-
-func (db *SQLDatabase) SetSet(ctx context.Context, key string, members ...string) error {
-	tx := db.gormDB.WithContext(ctx)
-	err := tx.Delete(&SQLSet{}, "name = ?", key).Error
-	if err != nil {
-		return errors.Trace(err)
-	}
-	if len(members) == 0 {
-		return nil
-	}
-	rows := lo.Map(members, func(member string, _ int) SQLSet {
-		return SQLSet{
-			Name:   key,
-			Member: member,
-		}
-	})
-	err = tx.Clauses(clause.OnConflict{DoNothing: true}).Create(rows).Error
-	return errors.Trace(err)
-}
-
-func (db *SQLDatabase) AddSet(ctx context.Context, key string, members ...string) error {
-	if len(members) == 0 {
-		return nil
-	}
-	rows := lo.Map(members, func(member string, _ int) SQLSet {
-		return SQLSet{
-			Name:   key,
-			Member: member,
-		}
-	})
-	err := db.gormDB.WithContext(ctx).Clauses(clause.OnConflict{DoNothing: true}).Create(rows).Error
-	return errors.Trace(err)
-}
-
-func (db *SQLDatabase) RemSet(ctx context.Context, key string, members ...string) error {
-	if len(members) == 0 {
-		return nil
-	}
-	rows := lo.Map(members, func(member string, _ int) SQLSet {
-		return SQLSet{
-			Name:   key,
-			Member: member,
-		}
-	})
-	err := db.gormDB.WithContext(ctx).Delete(rows).Error
 	return errors.Trace(err)
 }
 
