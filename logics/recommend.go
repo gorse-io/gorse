@@ -29,11 +29,11 @@ import (
 )
 
 const (
-	Collaborative              = "collaborative"
 	LatestRecommender          = "latest"
 	NonPersonalizedRecommender = "non-personalized/"
 	ItemToItemRecommender      = "item-to-item/"
 	UserToUserRecommender      = "user-to-user/"
+	CollaborativeRecommender   = "collaborative"
 )
 
 type Recommender struct {
@@ -41,6 +41,7 @@ type Recommender struct {
 	cacheClient cache.Database
 	dataClient  data.Database
 
+	online       bool
 	userId       string
 	userFeedback []data.Feedback
 	categories   []string
@@ -49,23 +50,30 @@ type Recommender struct {
 
 type RecommenderFunc func(ctx context.Context) ([]cache.Score, error)
 
-func NewRecommender(config config.Config,
-	cacheClient cache.Database,
-	dataClient data.Database,
-	userId string, categories []string, exclude []string,
-) *Recommender {
-	return &Recommender{
-		config:      config,
-		cacheClient: cacheClient,
-		dataClient:  dataClient,
-		userId:      userId,
-		categories:  categories,
-		excludeSet:  mapset.NewSet(exclude...),
+func NewRecommender(config config.Config, cacheClient cache.Database, dataClient data.Database, online bool, userId string, categories []string) (*Recommender, error) {
+	// Load user feedback
+	userFeedback, err := dataClient.GetUserFeedback(context.Background(), userId, config.Now())
+	if err != nil {
+		return nil, errors.Trace(err)
 	}
+	excludeSet := mapset.NewSet[string]()
+	for _, feedback := range userFeedback {
+		excludeSet.Add(feedback.ItemId)
+	}
+	return &Recommender{
+		config:       config,
+		cacheClient:  cacheClient,
+		dataClient:   dataClient,
+		userId:       userId,
+		userFeedback: userFeedback,
+		online:       online,
+		categories:   categories,
+		excludeSet:   excludeSet,
+	}, nil
 }
 
 func (r *Recommender) Parse(fullname string) (RecommenderFunc, error) {
-	if fullname == Collaborative {
+	if fullname == CollaborativeRecommender {
 		return r.recommendCollaborative, nil
 	} else if fullname == LatestRecommender {
 		return r.recommendLatest, nil

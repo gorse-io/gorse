@@ -218,14 +218,11 @@ type ReplacementConfig struct {
 }
 
 type RankerConfig struct {
-	CheckRecommendPeriod         time.Duration       `mapstructure:"check_recommend_period" validate:"gt=0"`
-	RefreshRecommendPeriod       time.Duration       `mapstructure:"refresh_recommend_period" validate:"gt=0"`
-	EnableLatestRecommend        bool                `mapstructure:"enable_latest_recommend"`
-	EnableUserBasedRecommend     bool                `mapstructure:"enable_user_based_recommend"`
-	EnableItemBasedRecommend     bool                `mapstructure:"enable_item_based_recommend"`
-	EnableColRecommend           bool                `mapstructure:"enable_collaborative_recommend"`
-	EnableClickThroughPrediction bool                `mapstructure:"enable_click_through_prediction"`
-	EarlyStopping                EarlyStoppingConfig `mapstructure:"early_stopping"`
+	CheckRecommendPeriod   time.Duration       `mapstructure:"check_recommend_period" validate:"gt=0"`
+	RefreshRecommendPeriod time.Duration       `mapstructure:"refresh_recommend_period" validate:"gt=0"`
+	Recommenders           []string            `mapstructure:"recommenders"`
+	Type                   string              `mapstructure:"type" validate:"oneof=none fm"`
+	EarlyStopping          EarlyStoppingConfig `mapstructure:"early_stopping"`
 }
 
 type FallbackConfig struct {
@@ -313,13 +310,9 @@ func GetDefaultConfig() *Config {
 				ReadReplacementDecay:     0.6,
 			},
 			Ranker: RankerConfig{
-				CheckRecommendPeriod:         time.Minute,
-				RefreshRecommendPeriod:       120 * time.Hour,
-				EnableLatestRecommend:        false,
-				EnableUserBasedRecommend:     false,
-				EnableItemBasedRecommend:     false,
-				EnableColRecommend:           true,
-				EnableClickThroughPrediction: false,
+				CheckRecommendPeriod:   time.Minute,
+				RefreshRecommendPeriod: 120 * time.Hour,
+				Type:                   "fm",
 			},
 			Fallback: FallbackConfig{
 				Recommenders: []string{"latest"},
@@ -489,11 +482,7 @@ func setDefault() {
 	// [recommend.ranker]
 	viper.SetDefault("recommend.ranker.check_recommend_period", defaultConfig.Recommend.Ranker.CheckRecommendPeriod)
 	viper.SetDefault("recommend.ranker.refresh_recommend_period", defaultConfig.Recommend.Ranker.RefreshRecommendPeriod)
-	viper.SetDefault("recommend.ranker.enable_latest_recommend", defaultConfig.Recommend.Ranker.EnableLatestRecommend)
-	viper.SetDefault("recommend.ranker.enable_user_based_recommend", defaultConfig.Recommend.Ranker.EnableUserBasedRecommend)
-	viper.SetDefault("recommend.ranker.enable_item_based_recommend", defaultConfig.Recommend.Ranker.EnableItemBasedRecommend)
-	viper.SetDefault("recommend.ranker.enable_collaborative_recommend", defaultConfig.Recommend.Ranker.EnableColRecommend)
-	viper.SetDefault("recommend.ranker.enable_click_through_prediction", defaultConfig.Recommend.Ranker.EnableClickThroughPrediction)
+	viper.SetDefault("recommend.ranker.type", defaultConfig.Recommend.Ranker.Type)
 	// [recommend.fallback]
 	viper.SetDefault("recommend.fallback", defaultConfig.Recommend.Fallback)
 	// [tracing]

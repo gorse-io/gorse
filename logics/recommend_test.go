@@ -15,8 +15,10 @@
 package logics
 
 import (
+	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/storage/cache"
@@ -26,31 +28,166 @@ import (
 
 type RecommenderTestSuite struct {
 	suite.Suite
-	recommender *Recommender
+	dataClient  data.Database
+	cacheClient cache.Database
 }
 
 func (suite *RecommenderTestSuite) SetupSuite() {
+	var err error
 	// open database
-	dataClient, err := data.Open(fmt.Sprintf("sqlite://%s/data.db", suite.T().TempDir()), "")
+	suite.dataClient, err = data.Open(fmt.Sprintf("sqlite://%s/data.db", suite.T().TempDir()), "")
 	suite.NoError(err)
-	cacheClient, err := cache.Open(fmt.Sprintf("sqlite://%s/cache.db", suite.T().TempDir()), "")
+	suite.cacheClient, err = cache.Open(fmt.Sprintf("sqlite://%s/cache.db", suite.T().TempDir()), "")
 	suite.NoError(err)
 	// init database
-	err = dataClient.Init()
+	err = suite.dataClient.Init()
 	suite.NoError(err)
-	err = cacheClient.Init()
+	err = suite.cacheClient.Init()
 	suite.NoError(err)
-	suite.recommender = NewRecommender(config.Config{}, cacheClient, dataClient, "user_1", []string{}, []string{})
 }
 
 func (suite *RecommenderTestSuite) TearDownSuite() {
-	err := suite.recommender.dataClient.Close()
+	err := suite.dataClient.Close()
 	suite.NoError(err)
-	err = suite.recommender.cacheClient.Close()
+	err = suite.cacheClient.Close()
 	suite.NoError(err)
 }
 
 func (suite *RecommenderTestSuite) TestLatest() {
+	items := make([]data.Item, 20)
+	for i := 0; i < 20; i++ {
+		items[i] = data.Item{
+			ItemId:    fmt.Sprintf("item_%d", i),
+			Timestamp: time.Unix(int64(i), 0),
+		}
+		if i%2 == 0 {
+			items[i].Categories = []string{"cat_1"}
+		}
+	}
+	err := suite.dataClient.BatchInsertItems(context.Background(), items)
+	suite.NoError(err)
+
+	exclude := make([]string, 10)
+	for i := 0; i < 10; i++ {
+		exclude[i] = fmt.Sprintf("item_%d", i)
+	}
+
+	recommender := NewRecommender(config.Config{}, suite.cacheClient, suite.dataClient,
+		true, "user_1", nil, exclude)
+	scores, err := recommender.recommendLatest(context.Background())
+	suite.NoError(err)
+	if suite.Equal(10, len(scores)) {
+		for i := 0; i < 10; i++ {
+			suite.Equal(fmt.Sprintf("item_%d", 19-i), scores[i].Id)
+			suite.Equal(float64(19-i), scores[i].Score)
+		}
+	}
+
+	recommender = NewRecommender(config.Config{}, suite.cacheClient, suite.dataClient,
+		true, "user_1", []string{"cat_1"}, exclude)
+	scores, err = recommender.recommendLatest(context.Background())
+	suite.NoError(err)
+	if suite.Equal(5, len(scores)) {
+		for i := 0; i < 5; i++ {
+			suite.Equal(fmt.Sprintf("item_%d", 18-2*i), scores[i].Id)
+			suite.Equal(float64(18-2*i), scores[i].Score)
+		}
+	}
+}
+
+func (suite *RecommenderTestSuite) TestCollaborative() {
+	recommends := make([]cache.Score, 20)
+	for i := 0; i < 20; i++ {
+		recommends[i] = cache.Score{
+			Id:    fmt.Sprintf("item_%d", i),
+			Score: float64(i),
+		}
+		if i%2 == 0 {
+			recommends[i].Categories = []string{"cat_1"}
+		}
+	}
+	err := suite.cacheClient.AddScores(context.Background(), cache.CollaborativeFiltering, "user_1", recommends)
+	suite.NoError(err)
+
+	exclude := make([]string, 10)
+	for i := 0; i < 10; i++ {
+		exclude[i] = fmt.Sprintf("item_%d", i)
+	}
+
+	recommender := NewRecommender(config.Config{}, suite.cacheClient, suite.dataClient,
+		true, "user_1", nil, exclude)
+	scores, err := recommender.recommendCollaborative(context.Background())
+	suite.NoError(err)
+	if suite.Equal(10, len(scores)) {
+		for i := 0; i < 10; i++ {
+			suite.Equal(fmt.Sprintf("item_%d", 19-i), scores[i].Id)
+			suite.Equal(float64(19-i), scores[i].Score)
+		}
+	}
+
+	recommender = NewRecommender(config.Config{}, suite.cacheClient, suite.dataClient,
+		true, "user_1", []string{"cat_1"}, exclude)
+	scores, err = recommender.recommendCollaborative(context.Background())
+	suite.NoError(err)
+	if suite.Equal(5, len(scores)) {
+		for i := 0; i < 5; i++ {
+			suite.Equal(fmt.Sprintf("item_%d", 18-2*i), scores[i].Id)
+			suite.Equal(float64(18-2*i), scores[i].Score)
+		}
+	}
+}
+
+func (suite *RecommenderTestSuite) TestNonPersonalized() {
+	recommends := make([]cache.Score, 20)
+	for i := 0; i < 20; i++ {
+		recommends[i] = cache.Score{
+			Id:    fmt.Sprintf("item_%d", i),
+			Score: float64(i),
+		}
+		if i%2 == 0 {
+			recommends[i].Categories = []string{"", "cat_1"}
+		} else {
+			recommends[i].Categories = []string{""}
+		}
+	}
+	err := suite.cacheClient.AddScores(context.Background(), cache.NonPersonalized, "a", recommends)
+	suite.NoError(err)
+
+	exclude := make([]string, 10)
+	for i := 0; i < 10; i++ {
+		exclude[i] = fmt.Sprintf("item_%d", i)
+	}
+
+	recommender := NewRecommender(config.Config{}, suite.cacheClient, suite.dataClient,
+		true, "user_1", nil, exclude)
+	recommendFunc := recommender.recommendNonPersonalized("a")
+	scores, err := recommendFunc(context.Background())
+	suite.NoError(err)
+	if suite.Equal(10, len(scores)) {
+		for i := 0; i < 10; i++ {
+			suite.Equal(fmt.Sprintf("item_%d", 19-i), scores[i].Id)
+			suite.Equal(float64(19-i), scores[i].Score)
+		}
+	}
+
+	recommender = NewRecommender(config.Config{}, suite.cacheClient, suite.dataClient,
+		true, "user_1", []string{"cat_1"}, exclude)
+	recommendFunc = recommender.recommendNonPersonalized("a")
+	scores, err = recommendFunc(context.Background())
+	suite.NoError(err)
+	if suite.Equal(5, len(scores)) {
+		for i := 0; i < 5; i++ {
+			suite.Equal(fmt.Sprintf("item_%d", 18-2*i), scores[i].Id)
+			suite.Equal(float64(18-2*i), scores[i].Score)
+		}
+	}
+}
+
+func (suite *RecommenderTestSuite) TestItemToItem() {
+
+}
+
+func (suite *RecommenderTestSuite) TestUserToUser() {
 
 }
 
