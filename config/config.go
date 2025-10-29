@@ -19,7 +19,6 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"os"
 	"reflect"
 	"strings"
@@ -160,6 +159,18 @@ type NonPersonalizedConfig struct {
 	Filter string `mapstructure:"filter" json:"filter" validate:"item_expr"`
 }
 
+func (config *NonPersonalizedConfig) FullName() string {
+	return "non-personalized/" + config.Name
+}
+
+func (config *NonPersonalizedConfig) Hash() string {
+	hash := md5.New()
+	hash.Write([]byte(config.Name))
+	hash.Write([]byte(config.Score))
+	hash.Write([]byte(config.Filter))
+	return hex.EncodeToString(hash.Sum(nil)[:])
+}
+
 type ItemToItemConfig struct {
 	Name   string `mapstructure:"name" json:"name"`
 	Type   string `mapstructure:"type" json:"type" validate:"oneof=embedding tags users chat auto"`
@@ -167,14 +178,16 @@ type ItemToItemConfig struct {
 	Prompt string `mapstructure:"prompt" json:"prompt"`
 }
 
+func (config *ItemToItemConfig) FullName() string {
+	return "item-to-item/" + config.Name
+}
+
 func (config *ItemToItemConfig) Hash() string {
 	hash := md5.New()
 	hash.Write([]byte(config.Name))
 	hash.Write([]byte(config.Type))
 	hash.Write([]byte(config.Column))
-
-	digest := hash.Sum(nil)
-	return hex.EncodeToString(digest[:])
+	return hex.EncodeToString(hash.Sum(nil)[:])
 }
 
 type UserToUserConfig struct {
@@ -183,14 +196,16 @@ type UserToUserConfig struct {
 	Column string `mapstructure:"column" json:"column" validate:"item_expr"`
 }
 
+func (config *UserToUserConfig) FullName() string {
+	return "user-to-user/" + config.Name
+}
+
 func (config *UserToUserConfig) Hash() string {
 	hash := md5.New()
 	hash.Write([]byte(config.Name))
 	hash.Write([]byte(config.Type))
 	hash.Write([]byte(config.Column))
-
-	digest := hash.Sum(nil)
-	return hex.EncodeToString(digest[:])
+	return hex.EncodeToString(hash.Sum(nil)[:])
 }
 
 type CollaborativeConfig struct {
@@ -209,6 +224,17 @@ type EarlyStoppingConfig struct {
 type ExternalConfig struct {
 	Name   string `mapstructure:"name" json:"name"`
 	Script string `mapstructure:"script" json:"script"`
+}
+
+func (config *ExternalConfig) FullName() string {
+	return "external/" + config.Name
+}
+
+func (config *ExternalConfig) Hash() string {
+	hash := md5.New()
+	hash.Write([]byte(config.Name))
+	hash.Write([]byte(config.Script))
+	return hex.EncodeToString(hash.Sum(nil)[:])
 }
 
 type ReplacementConfig struct {
@@ -329,56 +355,6 @@ func (config *Config) Now() *time.Time {
 	return lo.ToPtr(time.Now().Add(config.Server.ClockError))
 }
 
-type digestOptions struct {
-	userNeighborDigest  string
-	enableCollaborative bool
-	enableRanking       bool
-}
-
-type DigestOption func(option *digestOptions)
-
-func WithCollaborative(v bool) DigestOption {
-	return func(option *digestOptions) {
-		option.enableCollaborative = v
-	}
-}
-
-func WithRanking(v bool) DigestOption {
-	return func(option *digestOptions) {
-		option.enableRanking = v
-	}
-}
-
-func (config *Config) OfflineRecommendDigest(option ...DigestOption) string {
-	options := digestOptions{
-		enableCollaborative: config.Recommend.Ranker.EnableColRecommend,
-		enableRanking:       config.Recommend.Ranker.EnableClickThroughPrediction,
-	}
-	lo.ForEach(option, func(opt DigestOption, _ int) {
-		opt(&options)
-	})
-
-	var builder strings.Builder
-	builder.WriteString(fmt.Sprintf("%v-%v-%v-%v-%v-%v",
-		config.Recommend.Ranker.EnableLatestRecommend,
-		config.Recommend.Ranker.EnableUserBasedRecommend,
-		config.Recommend.Ranker.EnableItemBasedRecommend,
-		options.enableCollaborative,
-		options.enableRanking,
-		config.Recommend.Replacement.EnableReplacement,
-	))
-	if config.Recommend.Ranker.EnableUserBasedRecommend {
-		builder.WriteString(fmt.Sprintf("-%v", options.userNeighborDigest))
-	}
-	if config.Recommend.Replacement.EnableReplacement {
-		builder.WriteString(fmt.Sprintf("-%v-%v",
-			config.Recommend.Replacement.PositiveReplacementDecay, config.Recommend.Replacement.ReadReplacementDecay))
-	}
-
-	digest := md5.Sum([]byte(builder.String()))
-	return hex.EncodeToString(digest[:])
-}
-
 func (config *TracingConfig) NewTracerProvider() (trace.TracerProvider, error) {
 	if !config.EnableTracing {
 		return trace.NewNoopTracerProvider(), nil
@@ -496,7 +472,7 @@ type configBinding struct {
 }
 
 // LoadConfig loads configuration from toml file.
-func LoadConfig(path string, oneModel bool) (*Config, error) {
+func LoadConfig(path string) (*Config, error) {
 	// set default config
 	setDefault()
 
