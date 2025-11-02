@@ -42,7 +42,7 @@ var masterCommand = &cobra.Command{
 		// Create master
 		configPath, _ := cmd.PersistentFlags().GetString("config")
 		log.Logger().Info("load config", zap.String("config", configPath))
-		conf, err := config.LoadConfig(configPath, false)
+		conf, err := config.LoadConfig(configPath)
 		if err != nil {
 			log.Logger().Fatal("failed to load config", zap.Error(err))
 		}

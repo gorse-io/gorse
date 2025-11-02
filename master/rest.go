@@ -792,8 +792,8 @@ func (m *Master) getRecommend(request *restful.Request, response *restful.Respon
 		ctx = request.Request.Context()
 	}
 	// parse arguments
-	recommender := request.PathParameter("recommender")
-	name := request.PathParameter("name")
+	recommenderType := request.PathParameter("recommender")
+	recommenderName := request.PathParameter("name")
 	userId := request.PathParameter("user-id")
 	categories := server.ReadCategories(request, nil)
 	n, err := server.ParseInt(request, "n", m.Config.Server.DefaultN)
@@ -801,61 +801,31 @@ func (m *Master) getRecommend(request *restful.Request, response *restful.Respon
 		server.BadRequest(response, err)
 		return
 	}
-	var results []string
-	switch recommender {
-	case "offline":
-		results, err = m.Recommend(ctx, response, userId, categories, n, m.RecommendOffline)
-	case "collaborative":
-		results, err = m.Recommend(ctx, response, userId, categories, n, m.RecommendCollaborative)
-	case "user_based":
-		results, err = m.Recommend(ctx, response, userId, categories, n, m.RecommendUserBased)
-	case "item_based":
-		results, err = m.Recommend(ctx, response, userId, categories, n, m.RecommendItemBased)
-	case "external":
-		found := false
-		for _, external := range m.Config.Recommend.External {
-			if external.Name == name {
-				e, err := logics.NewExternal(external)
-				if err != nil {
-					server.InternalServerError(response, err)
-					return
-				}
-				results, err = e.Pull(userId)
-				if err != nil {
-					server.InternalServerError(response, err)
-					return
-				}
-				found = true
-				break
-			}
+
+	recommender, err := logics.NewRecommender(m.Config.Recommend, m.CacheClient, m.DataClient, true, userId, categories)
+	if err != nil {
+		server.InternalServerError(response, err)
+		return
+	}
+	var scores []cache.Score
+	if recommenderType != "" {
+		var name string
+		if recommenderName != "" {
+			name = recommenderType + "/" + recommenderName
+		} else {
+			name = recommenderType
 		}
-		if !found {
-			server.BadRequest(response, fmt.Errorf("external recommender `%s` not found", name))
-			return
-		}
-	case "_":
-		recommenders := []server.Recommender{m.RecommendOffline}
-		for _, recommender := range m.Config.Recommend.Fallback {
-			switch recommender {
-			case "collaborative":
-				recommenders = append(recommenders, m.RecommendCollaborative)
-			case "item_based":
-				recommenders = append(recommenders, m.RecommendItemBased)
-			case "user_based":
-				recommenders = append(recommenders, m.RecommendUserBased)
-			case "latest":
-				recommenders = append(recommenders, m.RecommendLatest)
-			default:
-				server.InternalServerError(response, fmt.Errorf("unknown fallback recommendation method `%s`", recommender))
-				return
-			}
-		}
-		results, err = m.Recommend(ctx, response, userId, categories, n, recommenders...)
+		scores, err = recommender.RecommendSequential(ctx, scores, n, name)
+	} else {
+		scores, err = recommender.Recommend(ctx, n)
 	}
 	if err != nil {
 		server.InternalServerError(response, err)
 		return
 	}
+	results := lo.Map(scores, func(item cache.Score, index int) string {
+		return item.Id
+	})
 
 	// Get item details
 	items, err := m.DataClient.BatchGetItems(ctx, lo.Map(results, func(id string, _ int) string {
