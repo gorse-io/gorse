@@ -565,12 +565,14 @@ func (w *Worker) Recommend(users []data.User) {
 		}
 
 		// Update collaborative filtering recommendation
-		if userEmbedding, ok := w.matrixFactorizationUsers.Get(userId); ok {
-			err = w.updateCollaborativeRecommend(w.matrixFactorizationItems, userId, userEmbedding, recommender.ExcludeSet(), itemCache)
-			if err != nil {
-				log.Logger().Error("failed to recommend by collaborative filtering",
-					zap.String("user_id", userId), zap.Error(err))
-				return errors.Trace(err)
+		if w.matrixFactorizationUsers != nil {
+			if userEmbedding, ok := w.matrixFactorizationUsers.Get(userId); ok {
+				err = w.updateCollaborativeRecommend(w.matrixFactorizationItems, userId, userEmbedding, recommender.ExcludeSet(), itemCache)
+				if err != nil {
+					log.Logger().Error("failed to recommend by collaborative filtering",
+						zap.String("user_id", userId), zap.Error(err))
+					return errors.Trace(err)
+				}
 			}
 		}
 
@@ -580,22 +582,28 @@ func (w *Worker) Recommend(users []data.User) {
 			return errors.Trace(err)
 		}
 
-		// replacement
-		// explore latest and popular
-
-		// for i := range scores {
-		// 	scores[i].Timestamp = recommendTime
-		// }
-		result := make([]cache.Score, 0, len(scores))
+		candidates := make([]cache.Score, 0, len(scores))
 		for _, score := range scores {
 			if itemCache.IsAvailable(score.Id) {
 				score.Timestamp = recommendTime
-				result = append(result, score)
+				candidates = append(candidates, score)
 			}
 		}
 
+		// rank by click-through-rate
+		var results []cache.Score
+		if len(w.rankers) > 0 && w.rankers[workerId] != nil && !w.rankers[workerId].Invalid() {
+			results, err = w.rankByClickTroughRate(w.rankers[workerId], &user, candidates, itemCache)
+			if err != nil {
+				log.Logger().Error("failed to rank items", zap.Error(err))
+				return errors.Trace(err)
+			}
+		} else {
+			results = candidates
+		}
+
 		// cache recommendation
-		if err = w.CacheClient.AddScores(ctx, cache.OfflineRecommend, userId, result); err != nil {
+		if err = w.CacheClient.AddScores(ctx, cache.OfflineRecommend, userId, results); err != nil {
 			log.Logger().Error("failed to cache recommendation", zap.Error(err))
 			return errors.Trace(err)
 		}

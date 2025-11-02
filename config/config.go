@@ -129,6 +129,11 @@ type RecommendConfig struct {
 	Fallback        FallbackConfig          `mapstructure:"fallback"`
 }
 
+func (r *RecommendConfig) Hash() string {
+	hash := md5.New()
+	return hex.EncodeToString(hash.Sum(nil)[:])
+}
+
 func StringToFeedbackTypeHookFunc() mapstructure.DecodeHookFunc {
 	return func(
 		f reflect.Type,
