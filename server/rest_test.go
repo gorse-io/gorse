@@ -1289,6 +1289,53 @@ func (suite *ServerTestSuite) TestGetRecommendsFallbackUserBasedSimilar() {
 		End()
 }
 
+func (suite *ServerTestSuite) TestRecommendFallbackLatest() {
+	ctx := context.Background()
+	// insert offline recommendation
+	err := suite.CacheClient.AddScores(ctx, cache.OfflineRecommend, "0", []cache.Score{
+		{Id: "1", Score: 99, Categories: []string{"*"}},
+		{Id: "2", Score: 98, Categories: []string{"*"}},
+		{Id: "3", Score: 97, Categories: []string{"*"}},
+		{Id: "4", Score: 96, Categories: []string{"*"}}})
+	suite.NoError(err)
+	// insert latest items
+	err = suite.DataClient.BatchInsertItems(ctx, []data.Item{
+		{ItemId: "5", Timestamp: time.Unix(95, 0)},
+		{ItemId: "6", Timestamp: time.Unix(94, 0)},
+		{ItemId: "7", Timestamp: time.Unix(93, 0)},
+		{ItemId: "8", Timestamp: time.Unix(92, 0)},
+		{ItemId: "105", Categories: []string{"*"}, Timestamp: time.Unix(85, 0)},
+		{ItemId: "106", Categories: []string{"*"}, Timestamp: time.Unix(84, 0)},
+		{ItemId: "107", Categories: []string{"*"}, Timestamp: time.Unix(83, 0)},
+		{ItemId: "108", Categories: []string{"*"}, Timestamp: time.Unix(82, 0)},
+	})
+	suite.NoError(err)
+	// test latest fallback
+	suite.Config.Recommend.Fallback.Recommenders = []string{"latest"}
+	apitest.New().
+		Handler(suite.handler).
+		Get("/api/recommend/0").
+		Header("X-API-Key", apiKey).
+		QueryParams(map[string]string{
+			"n": "8",
+		}).
+		Expect(suite.T()).
+		Status(http.StatusOK).
+		Body(suite.marshal([]string{"1", "2", "3", "4", "5", "6", "7", "8"})).
+		End()
+	apitest.New().
+		Handler(suite.handler).
+		Get("/api/recommend/0/*").
+		Header("X-API-Key", apiKey).
+		QueryParams(map[string]string{
+			"n": "8",
+		}).
+		Expect(suite.T()).
+		Status(http.StatusOK).
+		Body(suite.marshal([]string{"1", "2", "3", "4", "105", "106", "107", "108"})).
+		End()
+}
+
 func (suite *ServerTestSuite) TestGetRecommendsFallbackPreCached() {
 	ctx := context.Background()
 	t := suite.T()
