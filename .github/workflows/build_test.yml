@@ -119,9 +119,13 @@ jobs:
         S3_ACCESS_KEY_ID: rustfsadmin
         S3_SECRET_ACCESS_KEY: rustfsadmin
 
-    - name: Upload
+    - name: Upload coverage to Codecov
       if: matrix.os == 'ubuntu-latest'
-      run: bash <(curl -s https://codecov.io/bash)
+      uses: codecov/codecov-action@v5
+      with:
+        files: ./coverage.txt
+        fail_ci_if_error: false
+        token: ${{ secrets.CODECOV_TOKEN }}
 
   unit_test_macos:
     name: unit tests (macos-latest)
