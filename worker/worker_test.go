@@ -29,7 +29,6 @@ import (
 	"time"
 
 	"github.com/c-bata/goptuna"
-	"github.com/gorse-io/gorse/common/expression"
 	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/common/parallel"
 	"github.com/gorse-io/gorse/config"
@@ -46,7 +45,6 @@ import (
 	"github.com/stretchr/testify/suite"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/protobuf/proto"
 )
 
 type WorkerTestSuite struct {
@@ -338,23 +336,7 @@ func (suite *WorkerTestSuite) TestRecommendUserBased() {
 func (suite *WorkerTestSuite) TestRecommendLatest() {
 	// create mock worker
 	ctx := context.Background()
-	suite.Config.Recommend.Offline.EnableColRecommend = false
-	suite.Config.Recommend.Offline.EnableLatestRecommend = true
-	suite.Config.Recommend.Offline.EnableClickThroughPrediction = true
-	suite.Config.Recommend.Ranker.EnableColRecommend = false
-	suite.Config.Recommend.Ranker.EnableLatestRecommend = true
-	suite.Config.Recommend.Ranker.EnableClickThroughPrediction = true
-	// insert latest items
-	err := suite.CacheClient.AddScores(ctx, cache.NonPersonalized, cache.Latest, []cache.Score{
-		{Id: "11", Score: 11, Categories: []string{""}},
-		{Id: "10", Score: 10, Categories: []string{""}},
-		{Id: "9", Score: 9, Categories: []string{""}},
-		{Id: "8", Score: 8, Categories: []string{""}},
-		{Id: "20", Score: 20, Categories: []string{"*"}},
-		{Id: "19", Score: 19, Categories: []string{"*"}},
-		{Id: "18", Score: 18, Categories: []string{"*"}},
-	})
-	suite.NoError(err)
+	suite.Config.Recommend.Ranker.Recommenders = []string{"latest"}
 	// insert items
 	err := suite.DataClient.BatchInsertItems(ctx, []data.Item{
 		{ItemId: "21", Timestamp: time.Unix(21, 0)},
@@ -375,19 +357,19 @@ func (suite *WorkerTestSuite) TestRecommendLatest() {
 	recommendTime, err := suite.CacheClient.Get(ctx, cache.Key(cache.LastUpdateUserRecommendTime, "0")).Time()
 	suite.NoError(err)
 	// read recommend result
-	recommends, err := suite.CacheClient.SearchScores(ctx, cache.OfflineRecommend, "0", []string{""}, 0, 3)
+	recommends, err := suite.CacheClient.SearchScores(ctx, cache.OfflineRecommend, "0", nil, 0, 3)
 	suite.NoError(err)
 	suite.Equal([]cache.Score{
-		{Id: "20", Score: 20, Categories: []string{""}, Timestamp: recommendTime},
-		{Id: "19", Score: 19, Categories: []string{""}, Timestamp: recommendTime},
-		{Id: "18", Score: 18, Categories: []string{""}, Timestamp: recommendTime},
+		{Id: "20", Score: 20, Timestamp: recommendTime},
+		{Id: "19", Score: 19, Timestamp: recommendTime},
+		{Id: "18", Score: 18, Timestamp: recommendTime},
 	}, recommends)
 	recommends, err = suite.CacheClient.SearchScores(ctx, cache.OfflineRecommend, "0", []string{"*"}, 0, -1)
 	suite.NoError(err)
 	suite.Equal([]cache.Score{
-		{Id: "10", Score: 10, Categories: []string{"", "*"}, Timestamp: recommendTime},
-		{Id: "9", Score: 9, Categories: []string{"", "*"}, Timestamp: recommendTime},
-		{Id: "8", Score: 8, Categories: []string{"", "*"}, Timestamp: recommendTime},
+		{Id: "10", Score: 10, Categories: []string{"*"}, Timestamp: recommendTime},
+		{Id: "9", Score: 9, Categories: []string{"*"}, Timestamp: recommendTime},
+		{Id: "8", Score: 8, Categories: []string{"*"}, Timestamp: recommendTime},
 	}, recommends)
 }
 
