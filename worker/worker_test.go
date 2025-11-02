@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/c-bata/goptuna"
+	"github.com/gorse-io/gorse/common/expression"
 	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/common/parallel"
 	"github.com/gorse-io/gorse/config"
@@ -141,10 +142,9 @@ func (suite *WorkerTestSuite) TestCheckRecommendCacheTimeout() {
 	suite.True(suite.checkRecommendCacheOutOfDate(ctx, "0"))
 }
 
-func (suite *WorkerTestSuite) TestRecommendMatrixFactorization() {
+func (suite *WorkerTestSuite) TestRecommendCollaborative() {
 	ctx := context.Background()
-	suite.Config.Recommend.Ranker.EnableColRecommend = true
-	suite.Config.Recommend.Ranker.EnableClickThroughPrediction = true
+	suite.Config.Recommend.Ranker.Recommenders = []string{"collaborative"}
 	// insert feedbacks
 	now := time.Now()
 	err := suite.DataClient.BatchInsertFeedback(ctx, []data.Feedback{
@@ -184,22 +184,21 @@ func (suite *WorkerTestSuite) TestRecommendMatrixFactorization() {
 	recommendTime, err := suite.CacheClient.Get(ctx, cache.Key(cache.LastUpdateUserRecommendTime, "0")).Time()
 	suite.NoError(err)
 
-	recommends, err := suite.CacheClient.SearchScores(ctx, cache.OfflineRecommend, "0", []string{""}, 0, -1)
+	recommends, err := suite.CacheClient.SearchScores(ctx, cache.OfflineRecommend, "0", nil, 0, -1)
 	suite.NoError(err)
 	suite.Equal([]cache.Score{
-		{Id: "3", Score: 3, Categories: []string{"", "*"}, Timestamp: recommendTime},
-		{Id: "2", Score: 2, Categories: []string{""}, Timestamp: recommendTime},
-		{Id: "1", Score: 1, Categories: []string{"", "*"}, Timestamp: recommendTime},
-		{Id: "0", Score: 0, Categories: []string{""}, Timestamp: recommendTime},
+		{Id: "3", Score: 3, Categories: []string{"*"}, Timestamp: recommendTime},
+		{Id: "2", Score: 2, Timestamp: recommendTime},
+		{Id: "1", Score: 1, Categories: []string{"*"}, Timestamp: recommendTime},
+		{Id: "0", Score: 0, Timestamp: recommendTime},
 	}, recommends)
 }
 
-func (suite *WorkerTestSuite) TestRecommendItemBased() {
+func (suite *WorkerTestSuite) TestRecommendItemToItem() {
 	ctx := context.Background()
-	suite.Config.Recommend.Ranker.EnableColRecommend = false
-	suite.Config.Recommend.Ranker.EnableItemBasedRecommend = true
-	suite.Config.Recommend.Ranker.EnableClickThroughPrediction = true
+	suite.Config.Recommend.Ranker.Recommenders = []string{"item-to-item/default"}
 	suite.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "default"}}
+	suite.Config.Recommend.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{expression.MustParseFeedbackTypeExpression("a")}
 	// insert feedback
 	err := suite.DataClient.BatchInsertFeedback(ctx, []data.Feedback{
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "21"}},
@@ -257,27 +256,26 @@ func (suite *WorkerTestSuite) TestRecommendItemBased() {
 	recommendTime, err := suite.CacheClient.Get(ctx, cache.Key(cache.LastUpdateUserRecommendTime, "0")).Time()
 	suite.NoError(err)
 	// read recommend result
-	recommends, err := suite.CacheClient.SearchScores(ctx, cache.OfflineRecommend, "0", []string{""}, 0, 3)
+	recommends, err := suite.CacheClient.SearchScores(ctx, cache.OfflineRecommend, "0", nil, 0, 3)
 	suite.NoError(err)
 	suite.Equal([]cache.Score{
-		{Id: "29", Score: 29, Categories: []string{""}, Timestamp: recommendTime},
-		{Id: "28", Score: 28, Categories: []string{"", "*"}, Timestamp: recommendTime},
-		{Id: "27", Score: 27, Categories: []string{""}, Timestamp: recommendTime},
+		{Id: "29", Score: 4, Timestamp: recommendTime},
+		{Id: "28", Score: 3, Categories: []string{"*"}, Timestamp: recommendTime},
+		{Id: "27", Score: 2, Timestamp: recommendTime},
 	}, recommends)
 	recommends, err = suite.CacheClient.SearchScores(ctx, cache.OfflineRecommend, "0", []string{"*"}, 0, 3)
 	suite.NoError(err)
 	suite.Equal([]cache.Score{
-		{Id: "28", Score: 28, Categories: []string{"", "*"}, Timestamp: recommendTime},
-		{Id: "26", Score: 26, Categories: []string{"", "*"}, Timestamp: recommendTime},
+		{Id: "28", Score: 28, Categories: []string{"*"}, Timestamp: recommendTime},
+		{Id: "26", Score: 26, Categories: []string{"*"}, Timestamp: recommendTime},
 	}, recommends)
 }
 
-func (suite *WorkerTestSuite) TestRecommendUserBased() {
+func (suite *WorkerTestSuite) TestRecommendUserToUser() {
 	ctx := context.Background()
-	suite.Config.Recommend.Ranker.EnableColRecommend = false
-	suite.Config.Recommend.Ranker.EnableUserBasedRecommend = true
-	suite.Config.Recommend.Ranker.EnableClickThroughPrediction = true
+	suite.Config.Recommend.Ranker.Recommenders = []string{"user-to-user/default"}
 	suite.Config.Recommend.UserToUser = []config.UserToUserConfig{{Name: "default"}}
+	suite.Config.Recommend.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{expression.MustParseFeedbackTypeExpression("a")}
 	// insert similar users
 	err := suite.CacheClient.AddScores(ctx, cache.UserToUser, cache.Key("default", "0"), []cache.Score{
 		{Id: "1", Score: 2},
@@ -318,18 +316,18 @@ func (suite *WorkerTestSuite) TestRecommendUserBased() {
 	recommendTime, err := suite.CacheClient.Get(ctx, cache.Key(cache.LastUpdateUserRecommendTime, "0")).Time()
 	suite.NoError(err)
 	// read recommend result
-	recommends, err := suite.CacheClient.SearchScores(ctx, cache.OfflineRecommend, "0", []string{""}, 0, 3)
+	recommends, err := suite.CacheClient.SearchScores(ctx, cache.OfflineRecommend, "0", nil, 0, 3)
 	suite.NoError(err)
 	suite.Equal([]cache.Score{
-		{Id: "48", Score: 48, Categories: []string{"", "*"}, Timestamp: recommendTime},
-		{Id: "13", Score: 13, Categories: []string{""}, Timestamp: recommendTime},
-		{Id: "12", Score: 12, Categories: []string{"", "*"}, Timestamp: recommendTime},
+		{Id: "48", Score: 2.5, Categories: []string{"*"}, Timestamp: recommendTime},
+		{Id: "11", Score: 2, Timestamp: recommendTime},
+		{Id: "12", Score: 1.5, Categories: []string{"*"}, Timestamp: recommendTime},
 	}, recommends)
 	recommends, err = suite.CacheClient.SearchScores(ctx, cache.OfflineRecommend, "0", []string{"*"}, 0, 3)
 	suite.NoError(err)
 	suite.Equal([]cache.Score{
-		{Id: "48", Score: 48, Categories: []string{"", "*"}, Timestamp: recommendTime},
-		{Id: "12", Score: 12, Categories: []string{"", "*"}, Timestamp: recommendTime},
+		{Id: "48", Score: 2.5, Categories: []string{"*"}, Timestamp: recommendTime},
+		{Id: "12", Score: 1.5, Categories: []string{"*"}, Timestamp: recommendTime},
 	}, recommends)
 }
 
@@ -373,51 +371,57 @@ func (suite *WorkerTestSuite) TestRecommendLatest() {
 	}, recommends)
 }
 
-func (suite *WorkerTestSuite) TestRecommendColdStart() {
+func (suite *WorkerTestSuite) TestRecommendNonPersonalized() {
+	// create mock worker
 	ctx := context.Background()
-	suite.Config.Recommend.Ranker.EnableColRecommend = true
-	suite.Config.Recommend.Ranker.EnableLatestRecommend = true
-	// insert latest items
-	err := suite.CacheClient.AddScores(ctx, cache.NonPersonalized, cache.Latest, []cache.Score{
-		{Id: "11", Score: 11, Categories: []string{""}},
-		{Id: "10", Score: 10, Categories: []string{""}},
-		{Id: "9", Score: 9, Categories: []string{""}},
-		{Id: "8", Score: 8, Categories: []string{""}},
-		{Id: "20", Score: 20, Categories: []string{"*"}},
-		{Id: "19", Score: 19, Categories: []string{"*"}},
-		{Id: "18", Score: 18, Categories: []string{"*"}},
-	})
-	suite.NoError(err)
+	suite.Config.Recommend.Ranker.Recommenders = []string{"non-personalized/popular"}
 	// insert items
-	err = suite.DataClient.BatchInsertItems(ctx, []data.Item{
-		{ItemId: "11"}, {ItemId: "10"}, {ItemId: "9"}, {ItemId: "8"},
+	err := suite.DataClient.BatchInsertItems(ctx, []data.Item{
+		{ItemId: "11"},
+		{ItemId: "10"},
+		{ItemId: "9"},
+		{ItemId: "8"},
 		{ItemId: "20", Categories: []string{"*"}},
 		{ItemId: "19", Categories: []string{"*"}},
 		{ItemId: "18", Categories: []string{"*"}},
 	})
 	suite.NoError(err)
+	// insert non-personalized recommendation
+	err = suite.CacheClient.AddScores(ctx, cache.NonPersonalized, "popular", []cache.Score{
+		{Id: "11", Score: 31, Categories: []string{""}},
+		{Id: "10", Score: 30, Categories: []string{""}},
+		{Id: "9", Score: 29, Categories: []string{""}},
+		{Id: "8", Score: 28, Categories: []string{""}},
+		{Id: "20", Score: 20, Categories: []string{"", "*"}},
+		{Id: "19", Score: 19, Categories: []string{"", "*"}},
+		{Id: "18", Score: 18, Categories: []string{"", "*"}},
+	})
+	suite.NoError(err)
 	// insert hidden items
 	err = suite.DataClient.BatchInsertItems(ctx, []data.Item{{ItemId: "11", IsHidden: true}})
 	suite.NoError(err)
-
-	// ranking model not exist
+	suite.rankers = []ctr.FactorizationMachines{&mockFactorizationMachine{}}
 	suite.Recommend([]data.User{{UserId: "0"}})
-	recommends, err := suite.CacheClient.SearchScores(ctx, cache.OfflineRecommend, "0", []string{""}, 0, -1)
+	// read recommend time
+	recommendTime, err := suite.CacheClient.Get(ctx, cache.Key(cache.LastUpdateUserRecommendTime, "0")).Time()
 	suite.NoError(err)
-	suite.Equal([]string{"10", "9", "8"}, lo.Map(recommends, func(d cache.Score, _ int) string { return d.Id }))
+	// read recommend result
+	recommends, err := suite.CacheClient.SearchScores(ctx, cache.OfflineRecommend, "0", nil, 0, 3)
+	suite.NoError(err)
+	suite.Equal([]cache.Score{
+		{Id: "10", Score: 30, Categories: []string{""}, Timestamp: recommendTime},
+		{Id: "9", Score: 29, Categories: []string{""}, Timestamp: recommendTime},
+		{Id: "8", Score: 28, Categories: []string{""}, Timestamp: recommendTime},
+	}, recommends)
 	recommends, err = suite.CacheClient.SearchScores(ctx, cache.OfflineRecommend, "0", []string{"*"}, 0, -1)
 	suite.NoError(err)
-	suite.Equal([]string{"20", "19", "18"}, lo.Map(recommends, func(d cache.Score, _ int) string { return d.Id }))
-
-	// user not predictable
-	suite.Recommend([]data.User{{UserId: "100"}})
-	recommends, err = suite.CacheClient.SearchScores(ctx, cache.OfflineRecommend, "100", []string{""}, 0, -1)
-	suite.NoError(err)
-	suite.Equal([]string{"10", "9", "8"}, lo.Map(recommends, func(d cache.Score, _ int) string { return d.Id }))
-	recommends, err = suite.CacheClient.SearchScores(ctx, cache.OfflineRecommend, "100", []string{"*"}, 0, -1)
-	suite.NoError(err)
-	suite.Equal([]string{"20", "19", "18"}, lo.Map(recommends, func(d cache.Score, _ int) string { return d.Id }))
+	suite.Equal([]cache.Score{
+		{Id: "20", Score: 20, Categories: []string{"", "*"}, Timestamp: recommendTime},
+		{Id: "19", Score: 19, Categories: []string{"", "*"}, Timestamp: recommendTime},
+		{Id: "18", Score: 18, Categories: []string{"", "*"}, Timestamp: recommendTime},
+	}, recommends)
 }
+
 
 func (suite *WorkerTestSuite) TestMergeAndShuffle() {
 	scores := suite.mergeAndShuffle([][]string{{"1", "2", "3"}, {"1", "3", "5"}})

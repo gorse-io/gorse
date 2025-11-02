@@ -75,6 +75,10 @@ func NewRecommender(config config.RecommendConfig, cacheClient cache.Database, d
 	}, nil
 }
 
+func (r *Recommender) ExcludeSet() mapset.Set[string] {
+	return r.excludeSet
+}
+
 func (r *Recommender) Recommend(ctx context.Context, limit int) ([]cache.Score, error) {
 	scores, err := r.cacheClient.SearchScores(ctx, cache.OfflineRecommend, r.userId, r.categories, 0, r.config.CacheSize)
 	if err != nil {
@@ -143,7 +147,11 @@ func (r *Recommender) recommendLatest(ctx context.Context) ([]cache.Score, error
 	scores := make([]cache.Score, 0, len(items))
 	for _, item := range items {
 		if !r.excludeSet.Contains(item.ItemId) {
-			scores = append(scores, cache.Score{Id: item.ItemId, Score: float64(item.Timestamp.Unix())})
+			scores = append(scores, cache.Score{
+				Id:         item.ItemId,
+				Score:      float64(item.Timestamp.Unix()),
+				Categories: item.Categories,
+			})
 		}
 	}
 	return scores, nil
@@ -187,7 +195,7 @@ func (r *Recommender) recommendItemToItem(name string) RecommenderFunc {
 		data.SortFeedbacks(r.userFeedback)
 		userFeedback := make([]data.Feedback, 0, r.config.CacheSize)
 		for _, feedback := range r.userFeedback {
-			if r.config.ContextSize <= len(userFeedback) {
+			if r.online && r.config.ContextSize <= len(userFeedback) {
 				break
 			}
 			if expression.MatchFeedbackTypeExpressions(r.config.DataSource.PositiveFeedbackTypes, feedback.FeedbackType, feedback.Value) {
@@ -196,6 +204,7 @@ func (r *Recommender) recommendItemToItem(name string) RecommenderFunc {
 		}
 		// collect scores
 		scores := make(map[string]float64)
+		categories := make(map[string][]string)
 		for _, feedback := range userFeedback {
 			similarItems, err := r.cacheClient.SearchScores(ctx, cache.ItemToItem, cache.Key(name, feedback.ItemId), r.categories, 0, r.config.CacheSize)
 			if err != nil {
@@ -204,6 +213,7 @@ func (r *Recommender) recommendItemToItem(name string) RecommenderFunc {
 			for _, item := range similarItems {
 				if !r.excludeSet.Contains(item.Id) {
 					scores[item.Id] += item.Score
+					categories[item.Id] = item.Categories
 				}
 			}
 		}
@@ -214,7 +224,11 @@ func (r *Recommender) recommendItemToItem(name string) RecommenderFunc {
 		}
 		elems := filter.PopAll()
 		return lo.Map(elems, func(elem heap.Elem[string, float64], _ int) cache.Score {
-			return cache.Score{Id: elem.Value, Score: elem.Weight}
+			return cache.Score{
+				Id:         elem.Value,
+				Score:      elem.Weight,
+				Categories: categories[elem.Value],
+			}
 		}), nil
 	}
 }
@@ -261,7 +275,11 @@ func (r *Recommender) recommendUserToUser(name string) RecommenderFunc {
 		}
 		for _, elem := range elems {
 			if item, ok := itemsMap[elem.Value]; ok && lo.Every(item.Categories, r.categories) {
-				results = append(results, cache.Score{Id: item.ItemId, Score: elem.Weight})
+				results = append(results, cache.Score{
+					Id:         item.ItemId,
+					Score:      elem.Weight,
+					Categories: item.Categories,
+				})
 			}
 		}
 		return results, nil
