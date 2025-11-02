@@ -264,8 +264,8 @@ func (suite *WorkerTestSuite) TestRecommendItemToItem() {
 	recommends, err = suite.CacheClient.SearchScores(ctx, cache.OfflineRecommend, "0", []string{"*"}, 0, 3)
 	suite.NoError(err)
 	suite.Equal([]cache.Score{
-		{Id: "28", Score: 28, Categories: []string{"*"}, Timestamp: recommendTime},
-		{Id: "26", Score: 26, Categories: []string{"*"}, Timestamp: recommendTime},
+		{Id: "28", Score: 3, Categories: []string{"*"}, Timestamp: recommendTime},
+		{Id: "26", Score: 1, Categories: []string{"*"}, Timestamp: recommendTime},
 	}, recommends)
 }
 

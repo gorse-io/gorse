@@ -565,7 +565,7 @@ func (w *Worker) Recommend(users []data.User) {
 		}
 
 		// Update collaborative filtering recommendation
-		if w.matrixFactorizationUsers != nil {
+		if w.matrixFactorizationUsers != nil && w.matrixFactorizationItems != nil {
 			if userEmbedding, ok := w.matrixFactorizationUsers.Get(userId); ok {
 				err = w.updateCollaborativeRecommend(w.matrixFactorizationItems, userId, userEmbedding, recommender.ExcludeSet(), itemCache)
 				if err != nil {
