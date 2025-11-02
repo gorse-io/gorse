@@ -88,6 +88,7 @@ func (suite *WorkerTestSuite) SetupTest() {
 	suite.randGenerator = rand.New(rand.NewSource(0))
 	// reset index
 	suite.matrixFactorizationItems = nil
+	suite.rankers = nil
 }
 
 func (suite *WorkerTestSuite) TestPullUsers() {
