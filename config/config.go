@@ -129,6 +129,25 @@ type RecommendConfig struct {
 	Fallback        FallbackConfig          `mapstructure:"fallback"`
 }
 
+func (r *RecommendConfig) ListRecommenders() []string {
+	recommenders := make([]string, 0)
+	for _, rec := range r.NonPersonalized {
+		recommenders = append(recommenders, rec.FullName())
+	}
+	for _, rec := range r.ItemToItem {
+		recommenders = append(recommenders, rec.FullName())
+	}
+	for _, rec := range r.UserToUser {
+		recommenders = append(recommenders, rec.FullName())
+	}
+	for _, rec := range r.External {
+		recommenders = append(recommenders, rec.FullName())
+	}
+	recommenders = append(recommenders, r.Collaborative.FullName())
+	recommenders = append(recommenders, "latest")
+	return recommenders
+}
+
 func (r *RecommendConfig) Hash() string {
 	hash := md5.New()
 	return hex.EncodeToString(hash.Sum(nil)[:])
@@ -222,6 +241,10 @@ type CollaborativeConfig struct {
 	EarlyStopping         EarlyStoppingConfig `mapstructure:"early_stopping"`
 }
 
+func (config *CollaborativeConfig) FullName() string {
+	return "collaborative"
+}
+
 type EarlyStoppingConfig struct {
 	Patience int `mapstructure:"patience"`
 }
@@ -252,7 +275,6 @@ type RankerConfig struct {
 	CheckRecommendPeriod   time.Duration       `mapstructure:"check_recommend_period" validate:"gt=0"`
 	RefreshRecommendPeriod time.Duration       `mapstructure:"refresh_recommend_period" validate:"gt=0"`
 	Recommenders           []string            `mapstructure:"recommenders"`
-	Type                   string              `mapstructure:"type" validate:"oneof=none fm"`
 	EarlyStopping          EarlyStoppingConfig `mapstructure:"early_stopping"`
 }
 
@@ -343,7 +365,6 @@ func GetDefaultConfig() *Config {
 			Ranker: RankerConfig{
 				CheckRecommendPeriod:   time.Minute,
 				RefreshRecommendPeriod: 120 * time.Hour,
-				Type:                   "fm",
 			},
 			Fallback: FallbackConfig{
 				Recommenders: []string{"latest"},
@@ -463,7 +484,6 @@ func setDefault() {
 	// [recommend.ranker]
 	viper.SetDefault("recommend.ranker.check_recommend_period", defaultConfig.Recommend.Ranker.CheckRecommendPeriod)
 	viper.SetDefault("recommend.ranker.refresh_recommend_period", defaultConfig.Recommend.Ranker.RefreshRecommendPeriod)
-	viper.SetDefault("recommend.ranker.type", defaultConfig.Recommend.Ranker.Type)
 	// [recommend.fallback]
 	viper.SetDefault("recommend.fallback", defaultConfig.Recommend.Fallback)
 	// [tracing]

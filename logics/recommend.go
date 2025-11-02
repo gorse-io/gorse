@@ -58,7 +58,7 @@ func NewRecommender(config config.RecommendConfig, cacheClient cache.Database, d
 		return nil, errors.Trace(err)
 	}
 	excludeSet := mapset.NewSet[string]()
-	if !config.Replacement.EnableReplacement {
+	if !config.Replacement.EnableReplacement || !online {
 		for _, feedback := range userFeedback {
 			excludeSet.Add(feedback.ItemId)
 		}
@@ -77,6 +77,10 @@ func NewRecommender(config config.RecommendConfig, cacheClient cache.Database, d
 
 func (r *Recommender) ExcludeSet() mapset.Set[string] {
 	return r.excludeSet
+}
+
+func (r *Recommender) UserFeedback() []data.Feedback {
+	return r.userFeedback
 }
 
 func (r *Recommender) Recommend(ctx context.Context, limit int) ([]cache.Score, error) {

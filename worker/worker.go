@@ -20,7 +20,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"math"
 	"math/rand"
 	"net"
 	"net/http"
@@ -564,7 +563,7 @@ func (w *Worker) Recommend(users []data.User) {
 			return errors.Trace(err)
 		}
 
-		// Update collaborative filtering recommendation
+		// Update collaborative filtering recommendation.
 		if w.matrixFactorizationUsers != nil && w.matrixFactorizationItems != nil {
 			if userEmbedding, ok := w.matrixFactorizationUsers.Get(userId); ok {
 				err = w.updateCollaborativeRecommend(w.matrixFactorizationItems, userId, userEmbedding, recommender.ExcludeSet(), itemCache)
@@ -576,8 +575,17 @@ func (w *Worker) Recommend(users []data.User) {
 			}
 		}
 
-		var scores []cache.Score
-		scores, err = recommender.RecommendSequential(context.Background(), scores, 0, w.Config.Recommend.Ranker.Recommenders...)
+		// Generate recommendation from recommenders.
+		var (
+			scores           []cache.Score
+			recommenderNames []string
+		)
+		if len(w.Config.Recommend.Ranker.Recommenders) > 0 {
+			recommenderNames = w.Config.Recommend.Ranker.Recommenders
+		} else {
+			recommenderNames = w.Config.Recommend.ListRecommenders()
+		}
+		scores, err = recommender.RecommendSequential(context.Background(), scores, 0, recommenderNames...)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -593,13 +601,23 @@ func (w *Worker) Recommend(users []data.User) {
 		// rank by click-through-rate
 		var results []cache.Score
 		if len(w.rankers) > 0 && w.rankers[workerId] != nil && !w.rankers[workerId].Invalid() {
-			results, err = w.rankByClickTroughRate(w.rankers[workerId], &user, candidates, itemCache)
+			results, err = w.rankByClickTroughRate(w.rankers[workerId], &user, candidates, itemCache, recommendTime)
 			if err != nil {
 				log.Logger().Error("failed to rank items", zap.Error(err))
 				return errors.Trace(err)
 			}
 		} else {
 			results = candidates
+		}
+
+		if w.Config.Recommend.Replacement.EnableReplacement {
+			results, err = w.replacement(w.rankers[workerId], results, &user,
+				recommender.UserFeedback(), itemCache, recommendTime)
+			if err != nil {
+				log.Logger().Error("failed to insert historical items into recommendation",
+					zap.String("user_id", userId), zap.Error(err))
+				return errors.Trace(err)
+			}
 		}
 
 		// cache recommendation
@@ -664,7 +682,13 @@ func (w *Worker) updateCollaborativeRecommend(
 }
 
 // rankByClickTroughRate ranks items by predicted click-through-rate.
-func (w *Worker) rankByClickTroughRate(predictor ctr.FactorizationMachines, user *data.User, candidates []cache.Score, itemCache *ItemCache) ([]cache.Score, error) {
+func (w *Worker) rankByClickTroughRate(
+	predictor ctr.FactorizationMachines,
+	user *data.User,
+	candidates []cache.Score,
+	itemCache *ItemCache,
+	recommendTime time.Time,
+) ([]cache.Score, error) {
 	// download items
 	items := make([]*data.Item, 0, len(candidates))
 	for _, candidate := range candidates {
@@ -687,15 +711,19 @@ func (w *Worker) rankByClickTroughRate(predictor ctr.FactorizationMachines, user
 		output := batchPredictor.BatchPredict(inputs, w.jobs)
 		for i, score := range output {
 			topItems = append(topItems, cache.Score{
-				Id:    items[i].ItemId,
-				Score: float64(score),
+				Id:         items[i].ItemId,
+				Score:      float64(score),
+				Categories: itemCache.GetCategory(items[i].ItemId),
+				Timestamp:  recommendTime,
 			})
 		}
 	} else {
 		for _, item := range items {
 			topItems = append(topItems, cache.Score{
-				Id:    item.ItemId,
-				Score: float64(predictor.Predict(user.UserId, item.ItemId, ctr.ConvertLabels(user.Labels), ctr.ConvertLabels(item.Labels))),
+				Id:         item.ItemId,
+				Score:      float64(predictor.Predict(user.UserId, item.ItemId, ctr.ConvertLabels(user.Labels), ctr.ConvertLabels(item.Labels))),
+				Categories: itemCache.GetCategory(item.ItemId),
+				Timestamp:  recommendTime,
 			})
 		}
 	}
@@ -782,19 +810,6 @@ func (w *Worker) checkRecommendCacheOutOfDate(ctx context.Context, userId string
 	return true
 }
 
-func (w *Worker) loadUserHistoricalItems(database data.Database, userId string) ([]string, []data.Feedback, error) {
-	items := make([]string, 0)
-	ctx := context.Background()
-	feedbacks, err := database.GetUserFeedback(ctx, userId, w.Config.Now())
-	if err != nil {
-		return nil, nil, err
-	}
-	for _, feedback := range feedbacks {
-		items = append(items, feedback.ItemId)
-	}
-	return items, feedbacks, nil
-}
-
 func (w *Worker) pullItems(ctx context.Context) (*ItemCache, []string, error) {
 	// pull items from database
 	itemCache := NewItemCache()
@@ -844,29 +859,22 @@ func (w *Worker) pullUsers(peers []string, me string) ([]data.User, error) {
 }
 
 // replacement inserts historical items back to recommendation.
-func (w *Worker) replacement(recommend map[string][]cache.Score, user *data.User, feedbacks []data.Feedback, itemCache *ItemCache, predictor ctr.FactorizationMachines) (map[string][]cache.Score, error) {
-	upperBounds := make(map[string]float64)
-	lowerBounds := make(map[string]float64)
-	newRecommend := make(map[string][]cache.Score)
-	for category, scores := range recommend {
-		// find minimal score
-		if len(scores) > 0 {
-			s := lo.Map(scores, func(score cache.Score, _ int) float64 {
-				return score.Score
-			})
-			upperBounds[category] = lo.Max(s)
-			lowerBounds[category] = lo.Min(s)
-		} else {
-			upperBounds[category] = math.Inf(1)
-			lowerBounds[category] = math.Inf(-1)
-		}
-		// add scores to filters
-		newRecommend[category] = append(newRecommend[category], scores...)
-	}
-
-	// remove duplicates
+func (w *Worker) replacement(
+	predictor ctr.FactorizationMachines,
+	recommend []cache.Score,
+	user *data.User,
+	feedbacks []data.Feedback,
+	itemCache *ItemCache,
+	recommendTime time.Time,
+) ([]cache.Score, error) {
+	recommendItems := mapset.NewSet[string]()
 	positiveItems := mapset.NewSet[string]()
 	distinctItems := mapset.NewSet[string]()
+	for _, r := range recommend {
+		recommendItems.Add(r.Id)
+	}
+	newRecommend := make([]cache.Score, 0, len(recommend))
+	newRecommend = append(newRecommend, recommend...)
 	for _, feedback := range feedbacks {
 		if expression.MatchFeedbackTypeExpressions(w.Config.Recommend.DataSource.PositiveFeedbackTypes, feedback.FeedbackType, feedback.Value) {
 			positiveItems.Add(feedback.ItemId)
@@ -875,11 +883,59 @@ func (w *Worker) replacement(recommend map[string][]cache.Score, user *data.User
 			distinctItems.Add(feedback.ItemId)
 		}
 	}
+	negativeItems := distinctItems.Difference(positiveItems)
+
+	items := make([]*data.Item, 0, distinctItems.Cardinality())
+	for itemId := range distinctItems.Iter() {
+		if item, exist := itemCache.Get(itemId); exist {
+			items = append(items, item)
+		}
+	}
+	scoredItems := make([]cache.Score, 0, len(items))
+	if batchPredictor, ok := predictor.(ctr.BatchInference); ok {
+		inputs := make([]lo.Tuple4[string, string, []ctr.Label, []ctr.Label], len(items))
+		for i, item := range items {
+			inputs[i].A = user.UserId
+			inputs[i].B = item.ItemId
+			inputs[i].C = ctr.ConvertLabels(user.Labels)
+			inputs[i].D = ctr.ConvertLabels(item.Labels)
+		}
+		output := batchPredictor.BatchPredict(inputs, w.jobs)
+		for i, score := range output {
+			scoredItems = append(scoredItems, cache.Score{
+				Id:         items[i].ItemId,
+				Score:      float64(score),
+				Categories: itemCache.GetCategory(items[i].ItemId),
+				Timestamp:  recommendTime,
+			})
+		}
+	} else {
+		for _, item := range items {
+			scoredItems = append(scoredItems, cache.Score{
+				Id:         item.ItemId,
+				Score:      float64(predictor.Predict(user.UserId, item.ItemId, ctr.ConvertLabels(user.Labels), ctr.ConvertLabels(item.Labels))),
+				Categories: itemCache.GetCategory(item.ItemId),
+				Timestamp:  recommendTime,
+			})
+		}
+	}
+
+	for _, scoredItem := range scoredItems {
+		if recommendItems.Contains(scoredItem.Id) {
+			continue
+		}
+		if positiveItems.Contains(scoredItem.Id) {
+			scoredItem.Score *= w.Config.Recommend.Replacement.PositiveReplacementDecay
+		} else if negativeItems.Contains(scoredItem.Id) {
+			scoredItem.Score *= w.Config.Recommend.Replacement.ReadReplacementDecay
+		} else {
+			continue
+		}
+		newRecommend = append(newRecommend, scoredItem)
+	}
 
 	// rank items
-	for _, r := range newRecommend {
-		cache.SortDocuments(r)
-	}
+	cache.SortDocuments(newRecommend)
 	return newRecommend, nil
 }
 
