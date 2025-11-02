@@ -909,17 +909,16 @@ func (suite *ServerTestSuite) TestTimeSeries() {
 
 func (suite *ServerTestSuite) TestGetRecommends() {
 	ctx := context.Background()
-	t := suite.T()
 	// insert hidden items
 	err := suite.CacheClient.AddScores(ctx, cache.OfflineRecommend, "0", []cache.Score{{Id: "0", Score: 100, Categories: []string{""}}})
-	assert.NoError(t, err)
+	suite.NoError(err)
 	// hide item
 	apitest.New().
 		Handler(suite.handler).
 		Patch("/api/item/0").
 		Header("X-API-Key", apiKey).
 		JSON(data.ItemPatch{IsHidden: proto.Bool(true)}).
-		Expect(t).
+		Expect(suite.T()).
 		Status(http.StatusOK).
 		End()
 	// insert items
@@ -933,7 +932,7 @@ func (suite *ServerTestSuite) TestGetRecommends() {
 		{ItemId: "7"},
 		{ItemId: "8"},
 	})
-	assert.NoError(t, err)
+	suite.NoError(err)
 	// insert recommendation
 	err = suite.CacheClient.AddScores(ctx, cache.OfflineRecommend, "0", []cache.Score{
 		{Id: "1", Score: 99, Categories: []string{""}},
@@ -945,7 +944,7 @@ func (suite *ServerTestSuite) TestGetRecommends() {
 		{Id: "7", Score: 93, Categories: []string{""}},
 		{Id: "8", Score: 92, Categories: []string{""}},
 	})
-	assert.NoError(t, err)
+	suite.NoError(err)
 	// insert feedback
 	feedback := []data.Feedback{
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "2"}},
@@ -957,7 +956,7 @@ func (suite *ServerTestSuite) TestGetRecommends() {
 		Post("/api/feedback").
 		Header("X-API-Key", apiKey).
 		JSON(feedback).
-		Expect(t).
+		Expect(suite.T()).
 		Status(http.StatusOK).
 		Body(`{"RowAffected": 3}`).
 		End()
@@ -968,7 +967,7 @@ func (suite *ServerTestSuite) TestGetRecommends() {
 		QueryParams(map[string]string{
 			"n": "3",
 		}).
-		Expect(t).
+		Expect(suite.T()).
 		Status(http.StatusOK).
 		Body(suite.marshal([]string{"1", "3", "5"})).
 		End()
@@ -980,7 +979,7 @@ func (suite *ServerTestSuite) TestGetRecommends() {
 			"n":      "3",
 			"offset": "3",
 		}).
-		Expect(t).
+		Expect(suite.T()).
 		Status(http.StatusOK).
 		Body(suite.marshal([]string{"6", "7", "8"})).
 		End()
@@ -992,7 +991,7 @@ func (suite *ServerTestSuite) TestGetRecommends() {
 			"n":      "3",
 			"offset": "10000",
 		}).
-		Expect(t).
+		Expect(suite.T()).
 		Status(http.StatusOK).
 		Body(suite.marshal([]string{})).
 		End()
@@ -1004,7 +1003,7 @@ func (suite *ServerTestSuite) TestGetRecommends() {
 			"n":               "3",
 			"write-back-type": "read",
 		}).
-		Expect(t).
+		Expect(suite.T()).
 		Status(http.StatusOK).
 		Body(suite.marshal([]string{"1", "3", "5"})).
 		End()
@@ -1017,7 +1016,7 @@ func (suite *ServerTestSuite) TestGetRecommends() {
 			"write-back-type":  "read",
 			"write-back-delay": "10m",
 		}).
-		Expect(t).
+		Expect(suite.T()).
 		Status(http.StatusOK).
 		Body(suite.marshal([]string{"6", "7", "8"})).
 		End()
@@ -1028,15 +1027,14 @@ func (suite *ServerTestSuite) TestGetRecommends() {
 		QueryParams(map[string]string{
 			"n": "3",
 		}).
-		Expect(t).
+		Expect(suite.T()).
 		Status(http.StatusOK).
 		Body(suite.marshal([]string{"6", "7", "8"})).
 		End()
 }
 
-func (suite *ServerTestSuite) TestGetRecommendsWithMultiCategories() {
+func (suite *ServerTestSuite) TestGetRecommendsMultiCategories() {
 	ctx := context.Background()
-	t := suite.T()
 	// insert recommendation
 	err := suite.CacheClient.AddScores(ctx, cache.OfflineRecommend, "0", []cache.Score{
 		{Id: "1", Score: 1, Categories: []string{""}},
@@ -1058,15 +1056,14 @@ func (suite *ServerTestSuite) TestGetRecommendsWithMultiCategories() {
 			"n":        {"3"},
 			"category": {"2", "3"},
 		}).
-		Expect(t).
+		Expect(suite.T()).
 		Status(http.StatusOK).
 		Body(suite.marshal([]string{"6"})).
 		End()
 }
 
-func (suite *ServerTestSuite) TestGetRecommendsWithReplacement() {
+func (suite *ServerTestSuite) TestGetRecommendsReplacement() {
 	ctx := context.Background()
-	t := suite.T()
 	suite.Config.Recommend.Replacement.EnableReplacement = true
 	// insert recommendation
 	err := suite.CacheClient.AddScores(ctx, cache.OfflineRecommend, "0", []cache.Score{
@@ -1080,14 +1077,14 @@ func (suite *ServerTestSuite) TestGetRecommendsWithReplacement() {
 		{Id: "7", Score: 93, Categories: []string{""}},
 		{Id: "8", Score: 92, Categories: []string{""}},
 	})
-	assert.NoError(t, err)
+	suite.NoError(err)
 	// hide item
 	apitest.New().
 		Handler(suite.handler).
 		Patch("/api/item/0").
 		Header("X-API-Key", apiKey).
 		JSON(data.ItemPatch{IsHidden: proto.Bool(true)}).
-		Expect(t).
+		Expect(suite.T()).
 		Status(http.StatusOK).
 		End()
 	// insert feedback
@@ -1101,7 +1098,7 @@ func (suite *ServerTestSuite) TestGetRecommendsWithReplacement() {
 		Post("/api/feedback").
 		Header("X-API-Key", apiKey).
 		JSON(feedback).
-		Expect(t).
+		Expect(suite.T()).
 		Status(http.StatusOK).
 		Body(`{"RowAffected": 3}`).
 		End()
@@ -1112,15 +1109,15 @@ func (suite *ServerTestSuite) TestGetRecommendsWithReplacement() {
 		QueryParams(map[string]string{
 			"n": "3",
 		}).
-		Expect(t).
+		Expect(suite.T()).
 		Status(http.StatusOK).
 		Body(suite.marshal([]string{"1", "2", "3"})).
 		End()
 }
 
-func (suite *ServerTestSuite) TestServerGetRecommendsFallbackItemBasedSimilar() {
+func (suite *ServerTestSuite) TestGetRecommendsFallbackItemToItem() {
 	ctx := context.Background()
-	t := suite.T()
+	suite.Config.Recommend.ContextSize = 4
 	suite.Config.Recommend.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{
 		expression.MustParseFeedbackTypeExpression("a")}
 	suite.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "default"}}
@@ -1130,7 +1127,7 @@ func (suite *ServerTestSuite) TestServerGetRecommendsFallbackItemBasedSimilar() 
 		{Id: "2", Score: 98},
 		{Id: "3", Score: 97},
 		{Id: "4", Score: 96}})
-	assert.NoError(t, err)
+	suite.NoError(err)
 	// insert feedback
 	feedback := []data.Feedback{
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "1"}, Timestamp: time.Date(2010, 1, 1, 1, 1, 1, 1, time.UTC)},
@@ -1144,7 +1141,7 @@ func (suite *ServerTestSuite) TestServerGetRecommendsFallbackItemBasedSimilar() 
 		Post("/api/feedback").
 		Header("X-API-Key", apiKey).
 		JSON(feedback).
-		Expect(t).
+		Expect(suite.T()).
 		Status(http.StatusOK).
 		Body(`{"RowAffected": 5}`).
 		End()
@@ -1154,20 +1151,20 @@ func (suite *ServerTestSuite) TestServerGetRecommendsFallbackItemBasedSimilar() 
 		{Id: "2", Score: 100000, Categories: []string{""}},
 		{Id: "9", Score: 1, Categories: []string{"", "*"}},
 	})
-	assert.NoError(t, err)
+	suite.NoError(err)
 	err = suite.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key("default", "2"), []cache.Score{
 		{Id: "3", Score: 100000, Categories: []string{"", "*"}},
 		{Id: "8", Score: 1, Categories: []string{""}},
 		{Id: "9", Score: 1, Categories: []string{"", "*"}},
 	})
-	assert.NoError(t, err)
+	suite.NoError(err)
 	err = suite.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key("default", "3"), []cache.Score{
 		{Id: "4", Score: 100000, Categories: []string{""}},
 		{Id: "7", Score: 1, Categories: []string{"", "*"}},
 		{Id: "8", Score: 1, Categories: []string{""}},
 		{Id: "9", Score: 1, Categories: []string{"", "*"}},
 	})
-	assert.NoError(t, err)
+	suite.NoError(err)
 	err = suite.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key("default", "4"), []cache.Score{
 		{Id: "1", Score: 100000, Categories: []string{"", "*"}},
 		{Id: "6", Score: 1, Categories: []string{""}},
@@ -1175,7 +1172,7 @@ func (suite *ServerTestSuite) TestServerGetRecommendsFallbackItemBasedSimilar() 
 		{Id: "8", Score: 1, Categories: []string{""}},
 		{Id: "9", Score: 1, Categories: []string{"", "*"}},
 	})
-	assert.NoError(t, err)
+	suite.NoError(err)
 	err = suite.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key("default", "5"), []cache.Score{
 		{Id: "1", Score: 1, Categories: []string{""}},
 		{Id: "6", Score: 1, Categories: []string{""}},
@@ -1183,10 +1180,10 @@ func (suite *ServerTestSuite) TestServerGetRecommendsFallbackItemBasedSimilar() 
 		{Id: "8", Score: 100, Categories: []string{""}},
 		{Id: "9", Score: 1, Categories: []string{""}},
 	})
-	assert.NoError(t, err)
+	suite.NoError(err)
 
 	// test fallback
-	suite.Config.Recommend.Fallback = []string{"item_based"}
+	suite.Config.Recommend.Fallback.Recommenders = []string{"item-to-item/default"}
 	apitest.New().
 		Handler(suite.handler).
 		Get("/api/recommend/0").
@@ -1194,11 +1191,11 @@ func (suite *ServerTestSuite) TestServerGetRecommendsFallbackItemBasedSimilar() 
 		QueryParams(map[string]string{
 			"n": "3",
 		}).
-		Expect(t).
+		Expect(suite.T()).
 		Status(http.StatusOK).
 		Body(suite.marshal([]string{"9", "8", "7"})).
 		End()
-	suite.Config.Recommend.Fallback = []string{"item_based"}
+	suite.Config.Recommend.Fallback.Recommenders = []string{"item-to-item/default"}
 	apitest.New().
 		Handler(suite.handler).
 		Get("/api/recommend/0/*").
@@ -1206,20 +1203,19 @@ func (suite *ServerTestSuite) TestServerGetRecommendsFallbackItemBasedSimilar() 
 		QueryParams(map[string]string{
 			"n": "3",
 		}).
-		Expect(t).
+		Expect(suite.T()).
 		Status(http.StatusOK).
 		Body(suite.marshal([]string{"9", "7"})).
 		End()
 }
 
-func (suite *ServerTestSuite) TestGetRecommendsFallbackUserBasedSimilar() {
+func (suite *ServerTestSuite) TestGetRecommendsFallbackUserToUser() {
 	ctx := context.Background()
 	suite.Config.Recommend.UserToUser = []config.UserToUserConfig{{Name: "default"}}
-	t := suite.T()
 	// insert recommendation
 	err := suite.CacheClient.AddScores(ctx, cache.OfflineRecommend, "0",
 		[]cache.Score{{Id: "1", Score: 99}, {Id: "2", Score: 98}, {Id: "3", Score: 97}, {Id: "4", Score: 96}})
-	assert.NoError(t, err)
+	suite.NoError(err)
 	// insert feedback
 	feedback := []data.Feedback{
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "1"}},
@@ -1232,7 +1228,7 @@ func (suite *ServerTestSuite) TestGetRecommendsFallbackUserBasedSimilar() {
 		Post("/api/feedback").
 		Header("X-API-Key", apiKey).
 		JSON(feedback).
-		Expect(t).
+		Expect(suite.T()).
 		Status(http.StatusOK).
 		Body(`{"RowAffected": 4}`).
 		End()
@@ -1242,29 +1238,29 @@ func (suite *ServerTestSuite) TestGetRecommendsFallbackUserBasedSimilar() {
 		{Id: "2", Score: 1.5, Categories: []string{""}},
 		{Id: "3", Score: 1, Categories: []string{""}},
 	})
-	assert.NoError(t, err)
+	suite.NoError(err)
 	err = suite.DataClient.BatchInsertFeedback(ctx, []data.Feedback{
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "1", ItemId: "11"}},
 	}, true, true, true)
-	assert.NoError(t, err)
+	suite.NoError(err)
 	err = suite.DataClient.BatchInsertFeedback(ctx, []data.Feedback{
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "2", ItemId: "12"}},
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "2", ItemId: "48"}},
 	}, true, true, true)
-	assert.NoError(t, err)
+	suite.NoError(err)
 	err = suite.DataClient.BatchInsertFeedback(ctx, []data.Feedback{
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "3", ItemId: "13"}},
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "3", ItemId: "48"}},
 	}, true, true, true)
-	assert.NoError(t, err)
+	suite.NoError(err)
 	// insert categorized items
 	err = suite.DataClient.BatchInsertItems(ctx, []data.Item{
 		{ItemId: "12", Categories: []string{"*"}},
 		{ItemId: "48", Categories: []string{"*"}},
 	})
-	assert.NoError(t, err)
+	suite.NoError(err)
 	// test fallback
-	suite.Config.Recommend.Fallback = []string{"user_based"}
+	suite.Config.Recommend.Fallback.Recommenders = []string{"user-to-user/default"}
 	apitest.New().
 		Handler(suite.handler).
 		Get("/api/recommend/0").
@@ -1272,7 +1268,7 @@ func (suite *ServerTestSuite) TestGetRecommendsFallbackUserBasedSimilar() {
 		QueryParams(map[string]string{
 			"n": "3",
 		}).
-		Expect(t).
+		Expect(suite.T()).
 		Status(http.StatusOK).
 		Body(suite.marshal([]string{"48", "11", "12"})).
 		End()
@@ -1283,7 +1279,7 @@ func (suite *ServerTestSuite) TestGetRecommendsFallbackUserBasedSimilar() {
 		QueryParams(map[string]string{
 			"n": "3",
 		}).
-		Expect(t).
+		Expect(suite.T()).
 		Status(http.StatusOK).
 		Body(suite.marshal([]string{"48", "12"})).
 		End()
@@ -1336,37 +1332,24 @@ func (suite *ServerTestSuite) TestRecommendFallbackLatest() {
 		End()
 }
 
-func (suite *ServerTestSuite) TestGetRecommendsFallbackPreCached() {
+func (suite *ServerTestSuite) TestGetRecommendsFallbackCollaborativeFiltering() {
 	ctx := context.Background()
-	t := suite.T()
 	// insert offline recommendation
 	err := suite.CacheClient.AddScores(ctx, cache.OfflineRecommend, "0", []cache.Score{
 		{Id: "1", Score: 99, Categories: []string{"*"}},
 		{Id: "2", Score: 98, Categories: []string{"*"}},
 		{Id: "3", Score: 97, Categories: []string{"*"}},
 		{Id: "4", Score: 96, Categories: []string{"*"}}})
-	assert.NoError(t, err)
-	// insert latest
-	err = suite.DataClient.BatchInsertItems(ctx, []data.Item{
-		{ItemId: "5", Timestamp: time.Unix(95, 0)},
-		{ItemId: "6", Timestamp: time.Unix(94, 0)},
-		{ItemId: "7", Timestamp: time.Unix(93, 0)},
-		{ItemId: "8", Timestamp: time.Unix(92, 0)},
-		{ItemId: "105", Categories: []string{"*"}, Timestamp: time.Unix(85, 0)},
-		{ItemId: "106", Categories: []string{"*"}, Timestamp: time.Unix(84, 0)},
-		{ItemId: "107", Categories: []string{"*"}, Timestamp: time.Unix(83, 0)},
-		{ItemId: "108", Categories: []string{"*"}, Timestamp: time.Unix(82, 0)},
-	})
-	assert.NoError(t, err)
-	// insert collaborative filtering
+	suite.NoError(err)
+	// insert collaborative filtering recommendation
 	err = suite.CacheClient.AddScores(ctx, cache.CollaborativeFiltering, "0", []cache.Score{
 		{Id: "13", Score: 79, Categories: []string{"*"}},
 		{Id: "14", Score: 78, Categories: []string{"*"}},
 		{Id: "15", Score: 77, Categories: []string{"*"}},
 		{Id: "16", Score: 76, Categories: []string{"*"}}})
-	assert.NoError(t, err)
-	// test latest fallback
-	suite.Config.Recommend.Fallback = []string{"latest"}
+	suite.NoError(err)
+	// test collaborative filtering
+	suite.Config.Recommend.Fallback.Recommenders = []string{"collaborative"}
 	apitest.New().
 		Handler(suite.handler).
 		Get("/api/recommend/0").
@@ -1374,7 +1357,54 @@ func (suite *ServerTestSuite) TestGetRecommendsFallbackPreCached() {
 		QueryParams(map[string]string{
 			"n": "8",
 		}).
-		Expect(t).
+		Expect(suite.T()).
+		Status(http.StatusOK).
+		Body(suite.marshal([]string{"1", "2", "3", "4", "13", "14", "15", "16"})).
+		End()
+	apitest.New().
+		Handler(suite.handler).
+		Get("/api/recommend/0/*").
+		Header("X-API-Key", apiKey).
+		QueryParams(map[string]string{
+			"n": "8",
+		}).
+		Expect(suite.T()).
+		Status(http.StatusOK).
+		Body(suite.marshal([]string{"1", "2", "3", "4", "13", "14", "15", "16"})).
+		End()
+}
+
+func (suite *ServerTestSuite) TestGetRecommendsFallbackNonPersonalized() {
+	ctx := context.Background()
+	// insert offline recommendation
+	err := suite.CacheClient.AddScores(ctx, cache.OfflineRecommend, "0", []cache.Score{
+		{Id: "1", Score: 99, Categories: []string{"*"}},
+		{Id: "2", Score: 98, Categories: []string{"*"}},
+		{Id: "3", Score: 97, Categories: []string{"*"}},
+		{Id: "4", Score: 96, Categories: []string{"*"}}})
+	suite.NoError(err)
+	// insert non-personalized recommendation
+	err = suite.CacheClient.AddScores(ctx, cache.NonPersonalized, "popular", []cache.Score{
+		{Id: "5", Score: 95, Categories: []string{""}},
+		{Id: "6", Score: 94, Categories: []string{""}},
+		{Id: "7", Score: 93, Categories: []string{""}},
+		{Id: "8", Score: 92, Categories: []string{""}},
+		{Id: "105", Score: 91, Categories: []string{"*"}},
+		{Id: "106", Score: 90, Categories: []string{"*"}},
+		{Id: "107", Score: 89, Categories: []string{"*"}},
+		{Id: "108", Score: 88, Categories: []string{"*"}},
+	})
+	suite.NoError(err)
+	// test non-personalized fallback
+	suite.Config.Recommend.Fallback.Recommenders = []string{"non-personalized/popular"}
+	apitest.New().
+		Handler(suite.handler).
+		Get("/api/recommend/0").
+		Header("X-API-Key", apiKey).
+		QueryParams(map[string]string{
+			"n": "8",
+		}).
+		Expect(suite.T()).
 		Status(http.StatusOK).
 		Body(suite.marshal([]string{"1", "2", "3", "4", "5", "6", "7", "8"})).
 		End()
@@ -1385,51 +1415,15 @@ func (suite *ServerTestSuite) TestGetRecommendsFallbackPreCached() {
 		QueryParams(map[string]string{
 			"n": "8",
 		}).
-		Expect(t).
+		Expect(suite.T()).
 		Status(http.StatusOK).
 		Body(suite.marshal([]string{"1", "2", "3", "4", "105", "106", "107", "108"})).
-		End()
-	// test collaborative filtering
-	suite.Config.Recommend.Fallback = []string{"collaborative"}
-	apitest.New().
-		Handler(suite.handler).
-		Get("/api/recommend/0").
-		Header("X-API-Key", apiKey).
-		QueryParams(map[string]string{
-			"n": "8",
-		}).
-		Expect(t).
-		Status(http.StatusOK).
-		Body(suite.marshal([]string{"1", "2", "3", "4", "13", "14", "15", "16"})).
-		End()
-	apitest.New().
-		Handler(suite.handler).
-		Get("/api/recommend/0/*").
-		Header("X-API-Key", apiKey).
-		QueryParams(map[string]string{
-			"n": "8",
-		}).
-		Expect(t).
-		Status(http.StatusOK).
-		Body(suite.marshal([]string{"1", "2", "3", "4", "13", "14", "15", "16"})).
-		End()
-	// test wrong fallback
-	suite.Config.Recommend.Fallback = []string{""}
-	apitest.New().
-		Handler(suite.handler).
-		Get("/api/recommend/0").
-		Header("X-API-Key", apiKey).
-		QueryParams(map[string]string{
-			"n": "8",
-		}).
-		Expect(t).
-		Status(http.StatusInternalServerError).
 		End()
 }
 
 func (suite *ServerTestSuite) TestSessionRecommend() {
 	ctx := context.Background()
-	t := suite.T()
+	suite.Config.Recommend.ContextSize = 4
 	suite.Config.Recommend.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{
 		expression.MustParseFeedbackTypeExpression("a")}
 	suite.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "default"}}
@@ -1440,20 +1434,20 @@ func (suite *ServerTestSuite) TestSessionRecommend() {
 		{Id: "9", Score: 1, Categories: []string{"", "*"}},
 		{Id: "100", Score: 100000, Categories: []string{""}},
 	})
-	assert.NoError(t, err)
+	suite.NoError(err)
 	err = suite.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key("default", "2"), []cache.Score{
 		{Id: "3", Score: 100000, Categories: []string{"", "*"}},
 		{Id: "8", Score: 1, Categories: []string{""}},
 		{Id: "9", Score: 1, Categories: []string{"", "*"}},
 	})
-	assert.NoError(t, err)
+	suite.NoError(err)
 	err = suite.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key("default", "3"), []cache.Score{
 		{Id: "4", Score: 100000, Categories: []string{""}},
 		{Id: "7", Score: 1, Categories: []string{"", "*"}},
 		{Id: "8", Score: 1, Categories: []string{""}},
 		{Id: "9", Score: 1, Categories: []string{"", "*"}},
 	})
-	assert.NoError(t, err)
+	suite.NoError(err)
 	err = suite.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key("default", "4"), []cache.Score{
 		{Id: "1", Score: 100000, Categories: []string{"", "*"}},
 		{Id: "6", Score: 1, Categories: []string{""}},
@@ -1461,7 +1455,7 @@ func (suite *ServerTestSuite) TestSessionRecommend() {
 		{Id: "8", Score: 1, Categories: []string{""}},
 		{Id: "9", Score: 1, Categories: []string{"", "*"}},
 	})
-	assert.NoError(t, err)
+	suite.NoError(err)
 	err = suite.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key("default", "5"), []cache.Score{
 		{Id: "1", Score: 1, Categories: []string{""}},
 		{Id: "6", Score: 1, Categories: []string{""}},
@@ -1469,7 +1463,7 @@ func (suite *ServerTestSuite) TestSessionRecommend() {
 		{Id: "8", Score: 100, Categories: []string{""}},
 		{Id: "9", Score: 1, Categories: []string{""}},
 	})
-	assert.NoError(t, err)
+	suite.NoError(err)
 
 	// hide items
 	apitest.New().
@@ -1477,7 +1471,7 @@ func (suite *ServerTestSuite) TestSessionRecommend() {
 		Post("/api/item").
 		Header("X-API-Key", apiKey).
 		JSON(Item{ItemId: "100", IsHidden: true}).
-		Expect(t).
+		Expect(suite.T()).
 		Status(http.StatusOK).
 		Body(`{"RowAffected": 1}`).
 		End()
@@ -1498,9 +1492,9 @@ func (suite *ServerTestSuite) TestSessionRecommend() {
 			"n": "3",
 		}).
 		JSON(feedback).
-		Expect(t).
+		Expect(suite.T()).
 		Status(http.StatusOK).
-		Body(suite.marshal([]cache.Score{{Id: "9", Score: 3}, {Id: "8", Score: 2}, {Id: "7", Score: 1}})).
+		Body(suite.marshal([]cache.Score{{Id: "9", Score: 4}, {Id: "8", Score: 3}, {Id: "7", Score: 2}})).
 		End()
 	apitest.New().
 		Handler(suite.handler).
@@ -1510,11 +1504,11 @@ func (suite *ServerTestSuite) TestSessionRecommend() {
 			"offset": "100",
 		}).
 		JSON(feedback).
-		Expect(t).
+		Expect(suite.T()).
 		Status(http.StatusOK).
 		Body(suite.marshal([]cache.Score(nil))).
 		End()
-	suite.Config.Recommend.Fallback = []string{"item_based"}
+	suite.Config.Recommend.Fallback.Recommenders = []string{"item_based"}
 	apitest.New().
 		Handler(suite.handler).
 		Post("/api/session/recommend/*").
@@ -1523,16 +1517,15 @@ func (suite *ServerTestSuite) TestSessionRecommend() {
 			"n": "3",
 		}).
 		JSON(feedback).
-		Expect(t).
+		Expect(suite.T()).
 		Status(http.StatusOK).
-		Body(suite.marshal([]cache.Score{{Id: "9", Score: 3}, {Id: "7", Score: 1}})).
+		Body(suite.marshal([]cache.Score{{Id: "9", Score: 4}, {Id: "7", Score: 2}})).
 		End()
 }
 
 func (suite *ServerTestSuite) TestVisibility() {
 	ctx := context.Background()
 	suite.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "default"}}
-	t := suite.T()
 	// insert items: 0, 1, 2, 3, 4
 	var items []Item
 	for i := 0; i < 5; i++ {
@@ -1550,7 +1543,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 			"n": "3",
 		}).
 		JSON(items).
-		Expect(t).
+		Expect(suite.T()).
 		Status(http.StatusOK).
 		End()
 
@@ -1565,9 +1558,9 @@ func (suite *ServerTestSuite) TestVisibility() {
 	}
 	mutable.Reverse(documents)
 	err := suite.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key("default", "100"), documents)
-	assert.NoError(t, err)
+	suite.NoError(err)
 	err = suite.CacheClient.AddScores(ctx, cache.OfflineRecommend, "100", documents)
-	assert.NoError(t, err)
+	suite.NoError(err)
 
 	// delete item
 	apitest.New().
@@ -1575,7 +1568,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		Delete("/api/item/0").
 		Header("X-API-Key", apiKey).
 		JSON(items).
-		Expect(t).
+		Expect(suite.T()).
 		Status(http.StatusOK).
 		End()
 	// modify item
@@ -1584,7 +1577,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		Patch("/api/item/1").
 		Header("X-API-Key", apiKey).
 		JSON(data.ItemPatch{IsHidden: proto.Bool(true)}).
-		Expect(t).
+		Expect(suite.T()).
 		Status(http.StatusOK).
 		End()
 	// overwrite item
@@ -1593,7 +1586,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		Post("/api/item").
 		Header("X-API-Key", apiKey).
 		JSON(Item{ItemId: "2", IsHidden: true}).
-		Expect(t).
+		Expect(suite.T()).
 		Status(http.StatusOK).
 		End()
 
@@ -1603,7 +1596,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		Get("/api/latest").
 		Header("X-API-Key", apiKey).
 		JSON(items).
-		Expect(t).
+		Expect(suite.T()).
 		Status(http.StatusOK).
 		Body(suite.marshal(documents[:2])).
 		End()
@@ -1612,7 +1605,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		Get("/api/item/100/neighbors/").
 		Header("X-API-Key", apiKey).
 		JSON(items).
-		Expect(t).
+		Expect(suite.T()).
 		Status(http.StatusOK).
 		Body(suite.marshal(documents[:2])).
 		End()
@@ -1621,7 +1614,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		Get("/api/recommend/100/").
 		Header("X-API-Key", apiKey).
 		JSON(items).
-		Expect(t).
+		Expect(suite.T()).
 		Status(http.StatusOK).
 		Body(suite.marshal(cache.ConvertDocumentsToValues(documents[:2]))).
 		End()
@@ -1632,7 +1625,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		Post("/api/item").
 		Header("X-API-Key", apiKey).
 		JSON(Item{ItemId: "0", Timestamp: time.Date(1989, 6, 1, 1, 1, 1, 1, time.UTC).String()}).
-		Expect(t).
+		Expect(suite.T()).
 		Status(http.StatusOK).
 		End()
 	// modify item
@@ -1641,7 +1634,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		Patch("/api/item/1").
 		Header("X-API-Key", apiKey).
 		JSON(data.ItemPatch{IsHidden: proto.Bool(false)}).
-		Expect(t).
+		Expect(suite.T()).
 		Status(http.StatusOK).
 		End()
 	// overwrite item
@@ -1650,7 +1643,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		Post("/api/item").
 		Header("X-API-Key", apiKey).
 		JSON(Item{ItemId: "2", IsHidden: false, Timestamp: time.Date(1989, 6, 3, 1, 1, 1, 1, time.UTC).String()}).
-		Expect(t).
+		Expect(suite.T()).
 		Status(http.StatusOK).
 		End()
 
@@ -1660,7 +1653,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		Get("/api/latest").
 		Header("X-API-Key", apiKey).
 		JSON(items).
-		Expect(t).
+		Expect(suite.T()).
 		Status(http.StatusOK).
 		Body(suite.marshal(documents)).
 		End()
@@ -1669,7 +1662,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		Get("/api/item/100/neighbors/").
 		Header("X-API-Key", apiKey).
 		JSON(items).
-		Expect(t).
+		Expect(suite.T()).
 		Status(http.StatusOK).
 		Body(suite.marshal(documents[:len(documents)-1])).
 		End()
@@ -1678,7 +1671,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		Get("/api/recommend/100/").
 		Header("X-API-Key", apiKey).
 		JSON(items).
-		Expect(t).
+		Expect(suite.T()).
 		Status(http.StatusOK).
 		Body(suite.marshal(cache.ConvertDocumentsToValues(documents))).
 		End()
@@ -1689,7 +1682,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		Delete("/api/item/0/category/a").
 		Header("X-API-Key", apiKey).
 		JSON(items).
-		Expect(t).
+		Expect(suite.T()).
 		Status(http.StatusOK).
 		End()
 	// modify category
@@ -1698,7 +1691,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		Patch("/api/item/1").
 		Header("X-API-Key", apiKey).
 		JSON(data.ItemPatch{Categories: []string{}}).
-		Expect(t).
+		Expect(suite.T()).
 		Status(http.StatusOK).
 		End()
 	// overwrite category
@@ -1707,7 +1700,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		Post("/api/item").
 		Header("X-API-Key", apiKey).
 		JSON(Item{ItemId: "2", Categories: []string{}}).
-		Expect(t).
+		Expect(suite.T()).
 		Status(http.StatusOK).
 		End()
 
@@ -1717,7 +1710,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		Get("/api/latest/a").
 		Header("X-API-Key", apiKey).
 		JSON(items).
-		Expect(t).
+		Expect(suite.T()).
 		Status(http.StatusOK).
 		Body(suite.marshal(documents[:2])).
 		End()
@@ -1726,7 +1719,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		Get("/api/item/100/neighbors/a").
 		Header("X-API-Key", apiKey).
 		JSON(items).
-		Expect(t).
+		Expect(suite.T()).
 		Status(http.StatusOK).
 		Body(suite.marshal(documents[:2])).
 		End()
@@ -1735,7 +1728,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		Get("/api/recommend/100/a").
 		Header("X-API-Key", apiKey).
 		JSON(items).
-		Expect(t).
+		Expect(suite.T()).
 		Status(http.StatusOK).
 		Body(suite.marshal(cache.ConvertDocumentsToValues(documents[:2]))).
 		End()
@@ -1746,7 +1739,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		Put("/api/item/0/category/a").
 		Header("X-API-Key", apiKey).
 		JSON(items).
-		Expect(t).
+		Expect(suite.T()).
 		Status(http.StatusOK).
 		End()
 	// modify category
@@ -1755,7 +1748,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		Patch("/api/item/1").
 		Header("X-API-Key", apiKey).
 		JSON(data.ItemPatch{Categories: []string{"a"}}).
-		Expect(t).
+		Expect(suite.T()).
 		Status(http.StatusOK).
 		End()
 	// overwrite category
@@ -1764,7 +1757,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		Post("/api/item").
 		Header("X-API-Key", apiKey).
 		JSON(Item{ItemId: "2", Categories: []string{"a"}, Timestamp: time.Date(1989, 6, 3, 1, 1, 1, 1, time.UTC).String()}).
-		Expect(t).
+		Expect(suite.T()).
 		Status(http.StatusOK).
 		End()
 
@@ -1774,7 +1767,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		Get("/api/latest/a").
 		Header("X-API-Key", apiKey).
 		JSON(items).
-		Expect(t).
+		Expect(suite.T()).
 		Status(http.StatusOK).
 		Body(suite.marshal(documents)).
 		End()
@@ -1783,7 +1776,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		Get("/api/item/100/neighbors/a").
 		Header("X-API-Key", apiKey).
 		JSON(items).
-		Expect(t).
+		Expect(suite.T()).
 		Status(http.StatusOK).
 		Body(suite.marshal(documents[:len(documents)-1])).
 		End()
@@ -1792,7 +1785,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		Get("/api/recommend/100/a").
 		Header("X-API-Key", apiKey).
 		JSON(items).
-		Expect(t).
+		Expect(suite.T()).
 		Status(http.StatusOK).
 		Body(suite.marshal(cache.ConvertDocumentsToValues(documents))).
 		End()

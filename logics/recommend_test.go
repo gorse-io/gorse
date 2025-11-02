@@ -67,13 +67,21 @@ func (suite *RecommenderTestSuite) TestLatest() {
 	err := suite.dataClient.BatchInsertItems(context.Background(), items)
 	suite.NoError(err)
 
-	exclude := make([]string, 10)
+	feedback := make([]data.Feedback, 10)
 	for i := 0; i < 10; i++ {
-		exclude[i] = fmt.Sprintf("item_%d", i)
+		feedback[i] = data.Feedback{
+			FeedbackKey: data.FeedbackKey{
+				FeedbackType: "click",
+				UserId:       "user_1",
+				ItemId:       fmt.Sprintf("item_%d", i),
+			},
+		}
 	}
+	err = suite.dataClient.BatchInsertFeedback(context.Background(), feedback, true, true, false)
+	suite.NoError(err)
 
-	recommender := NewRecommender(config.Config{}, suite.cacheClient, suite.dataClient,
-		true, "user_1", nil, exclude)
+	recommender, err := NewRecommender(config.RecommendConfig{}, suite.cacheClient, suite.dataClient, true, "user_1", nil)
+	suite.NoError(err)
 	scores, err := recommender.recommendLatest(context.Background())
 	suite.NoError(err)
 	if suite.Equal(10, len(scores)) {
@@ -83,8 +91,8 @@ func (suite *RecommenderTestSuite) TestLatest() {
 		}
 	}
 
-	recommender = NewRecommender(config.Config{}, suite.cacheClient, suite.dataClient,
-		true, "user_1", []string{"cat_1"}, exclude)
+	recommender, err = NewRecommender(config.RecommendConfig{}, suite.cacheClient, suite.dataClient, true, "user_1", []string{"cat_1"})
+	suite.NoError(err)
 	scores, err = recommender.recommendLatest(context.Background())
 	suite.NoError(err)
 	if suite.Equal(5, len(scores)) {
@@ -114,8 +122,8 @@ func (suite *RecommenderTestSuite) TestCollaborative() {
 		exclude[i] = fmt.Sprintf("item_%d", i)
 	}
 
-	recommender := NewRecommender(config.Config{}, suite.cacheClient, suite.dataClient,
-		true, "user_1", nil, exclude)
+	recommender, err := NewRecommender(config.RecommendConfig{}, suite.cacheClient, suite.dataClient, true, "user_1", nil)
+	suite.NoError(err)
 	scores, err := recommender.recommendCollaborative(context.Background())
 	suite.NoError(err)
 	if suite.Equal(10, len(scores)) {
@@ -125,8 +133,8 @@ func (suite *RecommenderTestSuite) TestCollaborative() {
 		}
 	}
 
-	recommender = NewRecommender(config.Config{}, suite.cacheClient, suite.dataClient,
-		true, "user_1", []string{"cat_1"}, exclude)
+	recommender, err = NewRecommender(config.RecommendConfig{}, suite.cacheClient, suite.dataClient, true, "user_1", []string{"cat_1"})
+	suite.NoError(err)
 	scores, err = recommender.recommendCollaborative(context.Background())
 	suite.NoError(err)
 	if suite.Equal(5, len(scores)) {
@@ -158,8 +166,8 @@ func (suite *RecommenderTestSuite) TestNonPersonalized() {
 		exclude[i] = fmt.Sprintf("item_%d", i)
 	}
 
-	recommender := NewRecommender(config.Config{}, suite.cacheClient, suite.dataClient,
-		true, "user_1", nil, exclude)
+	recommender, err := NewRecommender(config.RecommendConfig{}, suite.cacheClient, suite.dataClient, true, "user_1", nil)
+	suite.NoError(err)
 	recommendFunc := recommender.recommendNonPersonalized("a")
 	scores, err := recommendFunc(context.Background())
 	suite.NoError(err)
@@ -170,8 +178,8 @@ func (suite *RecommenderTestSuite) TestNonPersonalized() {
 		}
 	}
 
-	recommender = NewRecommender(config.Config{}, suite.cacheClient, suite.dataClient,
-		true, "user_1", []string{"cat_1"}, exclude)
+	recommender, err = NewRecommender(config.RecommendConfig{}, suite.cacheClient, suite.dataClient, true, "user_1", []string{"cat_1"})
+	suite.NoError(err)
 	recommendFunc = recommender.recommendNonPersonalized("a")
 	scores, err = recommendFunc(context.Background())
 	suite.NoError(err)

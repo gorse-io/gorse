@@ -33,6 +33,7 @@ import (
 	"github.com/gorse-io/gorse/common/heap"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/config"
+	"github.com/gorse-io/gorse/logics"
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
 	"github.com/juju/errors"
@@ -40,7 +41,6 @@ import (
 	"github.com/samber/lo"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/emicklei/go-restful/otelrestful"
 	"go.uber.org/zap"
-	"modernc.org/mathutil"
 )
 
 const (
@@ -782,268 +782,6 @@ func (s *RestServer) getCollaborativeFiltering(request *restful.Request, respons
 	s.SearchDocuments(cache.OfflineRecommend, userId, categories, nil, request, response)
 }
 
-// Recommend items to users.
-// 1. If there are recommendations in cache, return cached recommendations.
-// 2. If there are historical interactions of the users, return similar items.
-// 3. Otherwise, return fallback recommendation (popular/latest).
-func (s *RestServer) Recommend(ctx context.Context, response *restful.Response, userId string, categories []string, n int, recommenders ...Recommender) ([]string, error) {
-	initStart := time.Now()
-
-	// create context
-	recommendCtx, err := s.createRecommendContext(ctx, userId, categories, n)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-
-	// execute recommenders
-	for _, recommender := range recommenders {
-		err = recommender(recommendCtx)
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
-	}
-
-	// return recommendations
-	if len(recommendCtx.results) > n {
-		recommendCtx.results = recommendCtx.results[:n]
-	}
-	totalTime := time.Since(initStart)
-	log.ResponseLogger(response).Info("complete recommendation",
-		zap.Int("num_from_final", recommendCtx.numFromOffline),
-		zap.Int("num_from_collaborative", recommendCtx.numFromCollaborative),
-		zap.Int("num_from_item_based", recommendCtx.numFromItemBased),
-		zap.Int("num_from_user_based", recommendCtx.numFromUserBased),
-		zap.Int("num_from_latest", recommendCtx.numFromLatest),
-		zap.Int("num_from_poplar", recommendCtx.numFromPopular),
-		zap.Duration("total_time", totalTime),
-		zap.Duration("load_final_recommend_time", recommendCtx.loadOfflineRecTime),
-		zap.Duration("load_col_recommend_time", recommendCtx.loadColRecTime),
-		zap.Duration("load_hist_time", recommendCtx.loadLoadHistTime),
-		zap.Duration("item_based_recommend_time", recommendCtx.itemBasedTime),
-		zap.Duration("user_based_recommend_time", recommendCtx.userBasedTime),
-		zap.Duration("load_latest_time", recommendCtx.loadLatestTime),
-		zap.Duration("load_popular_time", recommendCtx.loadPopularTime))
-	return recommendCtx.results, nil
-}
-
-type recommendContext struct {
-	context      context.Context
-	userId       string
-	categories   []string
-	userFeedback []data.Feedback
-	n            int
-	results      []string
-	excludeSet   mapset.Set[string]
-
-	numPrevStage         int
-	numFromLatest        int
-	numFromPopular       int
-	numFromUserBased     int
-	numFromItemBased     int
-	numFromCollaborative int
-	numFromOffline       int
-
-	loadOfflineRecTime time.Duration
-	loadColRecTime     time.Duration
-	loadLoadHistTime   time.Duration
-	itemBasedTime      time.Duration
-	userBasedTime      time.Duration
-	loadLatestTime     time.Duration
-	loadPopularTime    time.Duration
-}
-
-func (s *RestServer) createRecommendContext(ctx context.Context, userId string, categories []string, n int) (*recommendContext, error) {
-	// pull historical feedback
-	userFeedback, err := s.DataClient.GetUserFeedback(ctx, userId, s.Config.Now())
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-	excludeSet := mapset.NewSet[string]()
-	for _, item := range userFeedback {
-		if !s.Config.Recommend.Replacement.EnableReplacement {
-			excludeSet.Add(item.ItemId)
-		}
-	}
-	return &recommendContext{
-		userId:       userId,
-		categories:   categories,
-		n:            n,
-		excludeSet:   excludeSet,
-		userFeedback: userFeedback,
-		context:      ctx,
-	}, nil
-}
-
-type Recommender func(ctx *recommendContext) error
-
-func (s *RestServer) RecommendOffline(ctx *recommendContext) error {
-	if len(ctx.results) < ctx.n {
-		start := time.Now()
-		recommendation, err := s.CacheClient.SearchScores(ctx.context, cache.OfflineRecommend, ctx.userId, ctx.categories, 0, s.Config.Recommend.CacheSize)
-		if err != nil {
-			return errors.Trace(err)
-		}
-		for _, item := range recommendation {
-			if !ctx.excludeSet.Contains(item.Id) {
-				ctx.results = append(ctx.results, item.Id)
-				ctx.excludeSet.Add(item.Id)
-			}
-		}
-		ctx.loadOfflineRecTime = time.Since(start)
-		ctx.numFromOffline = len(ctx.results) - ctx.numPrevStage
-		ctx.numPrevStage = len(ctx.results)
-	}
-	return nil
-}
-
-func (s *RestServer) RecommendCollaborative(ctx *recommendContext) error {
-	if len(ctx.results) < ctx.n {
-		start := time.Now()
-		collaborativeRecommendation, err := s.CacheClient.SearchScores(ctx.context, cache.CollaborativeFiltering, ctx.userId, ctx.categories, 0, s.Config.Recommend.CacheSize)
-		if err != nil {
-			return errors.Trace(err)
-		}
-		for _, item := range collaborativeRecommendation {
-			if !ctx.excludeSet.Contains(item.Id) {
-				ctx.results = append(ctx.results, item.Id)
-				ctx.excludeSet.Add(item.Id)
-			}
-		}
-		ctx.loadColRecTime = time.Since(start)
-		ctx.numFromCollaborative = len(ctx.results) - ctx.numPrevStage
-		ctx.numPrevStage = len(ctx.results)
-	}
-	return nil
-}
-
-func (s *RestServer) RecommendUserBased(ctx *recommendContext) error {
-	if len(s.Config.Recommend.UserToUser) == 0 {
-		return nil
-	}
-	name := s.Config.Recommend.UserToUser[0].Name
-	if len(ctx.results) < ctx.n {
-		start := time.Now()
-		candidates := make(map[string]float64)
-		// load similar users
-		similarUsers, err := s.CacheClient.SearchScores(ctx.context, cache.UserToUser, cache.Key(name, ctx.userId), nil, 0, s.Config.Recommend.CacheSize)
-		if err != nil {
-			return errors.Trace(err)
-		}
-		for _, user := range similarUsers {
-			// load historical feedback
-			feedbacks, err := s.DataClient.GetUserFeedback(ctx.context, user.Id, s.Config.Now(), s.Config.Recommend.DataSource.PositiveFeedbackTypes...)
-			if err != nil {
-				return errors.Trace(err)
-			}
-			// add unseen items
-			for _, feedback := range feedbacks {
-				if !ctx.excludeSet.Contains(feedback.ItemId) {
-					candidates[feedback.ItemId] += user.Score
-				}
-			}
-		}
-		// collect top k
-		k := ctx.n - len(ctx.results)
-		filter := heap.NewTopKFilter[string, float64](k)
-		for id, score := range candidates {
-			filter.Push(id, score)
-		}
-		ids := filter.PopAllValues()
-		var results []string
-		for i := 0; i < len(ids) && len(results)+len(ctx.results) < ctx.n; i += 100 {
-			items, err := s.DataClient.BatchGetItems(ctx.context, ids[i:min(i+100, len(ids))])
-			if err != nil {
-				return errors.Trace(err)
-			}
-			itemsMap := make(map[string]data.Item)
-			for _, item := range items {
-				itemsMap[item.ItemId] = item
-			}
-			for _, id := range ids[i:min(i+100, len(ids))] {
-				item, exists := itemsMap[id]
-				if exists && lo.Every(item.Categories, ctx.categories) {
-					results = append(results, id)
-				}
-			}
-		}
-		ctx.results = append(ctx.results, results...)
-		ctx.excludeSet.Append(results...)
-		ctx.userBasedTime = time.Since(start)
-		ctx.numFromUserBased = len(ctx.results) - ctx.numPrevStage
-		ctx.numPrevStage = len(ctx.results)
-	}
-	return nil
-}
-
-func (s *RestServer) RecommendItemBased(ctx *recommendContext) error {
-	if len(s.Config.Recommend.ItemToItem) == 0 {
-		return nil
-	}
-	name := s.Config.Recommend.ItemToItem[0].Name
-	if len(ctx.results) < ctx.n {
-		start := time.Now()
-		// truncate user feedback
-		data.SortFeedbacks(ctx.userFeedback)
-		userFeedback := make([]data.Feedback, 0, s.Config.Recommend.CacheSize)
-		for _, feedback := range ctx.userFeedback {
-			if s.Config.Recommend.CacheSize <= len(userFeedback) {
-				break
-			}
-			if expression.MatchFeedbackTypeExpressions(s.Config.Recommend.DataSource.PositiveFeedbackTypes, feedback.FeedbackType, feedback.Value) {
-				userFeedback = append(userFeedback, feedback)
-			}
-		}
-		// collect candidates
-		candidates := make(map[string]float64)
-		for _, feedback := range userFeedback {
-			// load similar items
-			similarItems, err := s.CacheClient.SearchScores(ctx.context, cache.ItemToItem, cache.Key(name, feedback.ItemId), ctx.categories, 0, s.Config.Recommend.CacheSize)
-			if err != nil {
-				return errors.Trace(err)
-			}
-			// add unseen items
-			for _, item := range similarItems {
-				if !ctx.excludeSet.Contains(item.Id) {
-					candidates[item.Id] += item.Score
-				}
-			}
-		}
-		// collect top k
-		k := ctx.n - len(ctx.results)
-		filter := heap.NewTopKFilter[string, float64](k)
-		for id, score := range candidates {
-			filter.Push(id, score)
-		}
-		ids := filter.PopAllValues()
-		ctx.results = append(ctx.results, ids...)
-		ctx.excludeSet.Append(ids...)
-		ctx.itemBasedTime = time.Since(start)
-		ctx.numFromItemBased = len(ctx.results) - ctx.numPrevStage
-		ctx.numPrevStage = len(ctx.results)
-	}
-	return nil
-}
-
-func (s *RestServer) RecommendLatest(ctx *recommendContext) error {
-	if len(ctx.results) < ctx.n {
-		start := time.Now()
-		items, err := s.DataClient.GetLatestItems(ctx.context, s.Config.Recommend.CacheSize, ctx.categories)
-		if err != nil {
-			return errors.Trace(err)
-		}
-		for _, item := range items {
-			if !ctx.excludeSet.Contains(item.ItemId) {
-				ctx.results = append(ctx.results, item.ItemId)
-				ctx.excludeSet.Add(item.ItemId)
-			}
-		}
-		ctx.loadLatestTime = time.Since(start)
-		ctx.numFromLatest = len(ctx.results) - ctx.numPrevStage
-		ctx.numPrevStage = len(ctx.results)
-	}
-	return nil
-}
-
 func (s *RestServer) getRecommend(request *restful.Request, response *restful.Response) {
 	ctx := context.Background()
 	if request != nil && request.Request != nil {
@@ -1069,28 +807,24 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 		return
 	}
 	// online recommendation
-	recommenders := []Recommender{s.RecommendOffline}
-	for _, recommender := range s.Config.Recommend.Fallback {
-		switch recommender {
-		case "collaborative":
-			recommenders = append(recommenders, s.RecommendCollaborative)
-		case "item_based":
-			recommenders = append(recommenders, s.RecommendItemBased)
-		case "user_based":
-			recommenders = append(recommenders, s.RecommendUserBased)
-		case "latest":
-			recommenders = append(recommenders, s.RecommendLatest)
-		default:
-			InternalServerError(response, fmt.Errorf("unknown fallback recommendation method `%s`", recommender))
-			return
-		}
-	}
-	results, err := s.Recommend(ctx, response, userId, categories, offset+n, recommenders...)
+	recommender, err := logics.NewRecommender(s.Config.Recommend, s.CacheClient, s.DataClient, true, userId, categories)
 	if err != nil {
 		InternalServerError(response, err)
 		return
 	}
-	results = results[mathutil.Min(offset, len(results)):]
+	scores, err := recommender.Recommend(ctx, n+offset)
+	if err != nil {
+		InternalServerError(response, err)
+		return
+	}
+	if len(scores) > offset {
+		scores = scores[offset:]
+	} else {
+		scores = []cache.Score{}
+	}
+	results := lo.Map(scores, func(item cache.Score, index int) string {
+		return item.Id
+	})
 	// write back
 	if writeBackFeedback != "" {
 		startTime := time.Now()
@@ -1185,7 +919,7 @@ func (s *RestServer) sessionRecommend(request *restful.Request, response *restfu
 		// finish recommendation if the number of used feedbacks is enough
 		if len(similarItems) > 0 {
 			usedFeedbackCount++
-			if usedFeedbackCount >= s.Config.Recommend.CacheSize {
+			if usedFeedbackCount >= s.Config.Recommend.ContextSize {
 				break
 			}
 		}
@@ -1417,12 +1151,8 @@ type Item struct {
 
 func (s *RestServer) batchInsertItems(ctx context.Context, response *restful.Response, temp []Item) {
 	var (
-		count int
-		items = make([]data.Item, 0, len(temp))
-		// popularScore = lo.Map(temp, func(item Item, i int) float64 {
-		// 	return s.PopularItemsCache.GetSortedScore(item.ItemId)
-		// })
-
+		count                int
+		items                = make([]data.Item, 0, len(temp))
 		loadExistedItemsTime time.Duration
 		parseTimesatmpTime   time.Duration
 		insertItemsTime      time.Duration
