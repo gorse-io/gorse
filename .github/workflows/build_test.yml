@@ -125,6 +125,7 @@ jobs:
       with:
         files: ./coverage.txt
         fail_ci_if_error: false
+        token: ${{ secrets.CODECOV_TOKEN }}
 
   unit_test_macos:
     name: unit tests (macos-latest)
