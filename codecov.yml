@@ -3,3 +3,6 @@ coverage:
     patch:
       default:
         enabled: no
+
+ignore:
+  - "protocol/*.pb.go"
