@@ -148,7 +148,7 @@ func (r *RecommendConfig) ListRecommenders() []string {
 	return recommenders
 }
 
-func (r *RecommendConfig) Hash() string {
+func (r *RecommendConfig) Hash(cfg *Config) string {
 	hash := md5.New()
 	return hex.EncodeToString(hash.Sum(nil)[:])
 }
@@ -187,7 +187,7 @@ func (config *NonPersonalizedConfig) FullName() string {
 	return "non-personalized/" + config.Name
 }
 
-func (config *NonPersonalizedConfig) Hash() string {
+func (config *NonPersonalizedConfig) Hash(cfg *Config) string {
 	hash := md5.New()
 	hash.Write([]byte(config.Name))
 	hash.Write([]byte(config.Score))
@@ -206,11 +206,16 @@ func (config *ItemToItemConfig) FullName() string {
 	return "item-to-item/" + config.Name
 }
 
-func (config *ItemToItemConfig) Hash() string {
+func (config *ItemToItemConfig) Hash(cfg *Config) string {
 	hash := md5.New()
 	hash.Write([]byte(config.Name))
 	hash.Write([]byte(config.Type))
 	hash.Write([]byte(config.Column))
+	if config.Type == "users" {
+		for _, expr := range cfg.Recommend.DataSource.PositiveFeedbackTypes {
+			hash.Write([]byte(expr.String()))
+		}
+	}
 	return hex.EncodeToString(hash.Sum(nil)[:])
 }
 
@@ -224,11 +229,16 @@ func (config *UserToUserConfig) FullName() string {
 	return "user-to-user/" + config.Name
 }
 
-func (config *UserToUserConfig) Hash() string {
+func (config *UserToUserConfig) Hash(cfg *Config) string {
 	hash := md5.New()
 	hash.Write([]byte(config.Name))
 	hash.Write([]byte(config.Type))
 	hash.Write([]byte(config.Column))
+	if config.Type == "items" {
+		for _, expr := range cfg.Recommend.DataSource.PositiveFeedbackTypes {
+			hash.Write([]byte(expr.String()))
+		}
+	}
 	return hex.EncodeToString(hash.Sum(nil)[:])
 }
 
@@ -258,7 +268,7 @@ func (config *ExternalConfig) FullName() string {
 	return "external/" + config.Name
 }
 
-func (config *ExternalConfig) Hash() string {
+func (config *ExternalConfig) Hash(cfg *Config) string {
 	hash := md5.New()
 	hash.Write([]byte(config.Name))
 	hash.Write([]byte(config.Script))
