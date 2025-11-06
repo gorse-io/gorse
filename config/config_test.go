@@ -63,7 +63,7 @@ func TestUnmarshal(t *testing.T) {
 			err = encoding.Encode(fp, r)
 			assert.NoError(t, err)
 
-			config, err := LoadConfig(filePath, false)
+			config, err := LoadConfig(filePath)
 			assert.NoError(t, err)
 			// [database]
 			assert.Equal(t, "redis://localhost:6379/0", config.Database.CacheStore)
@@ -98,6 +98,7 @@ func TestUnmarshal(t *testing.T) {
 			// [recommend]
 			assert.Equal(t, 100, config.Recommend.CacheSize)
 			assert.Equal(t, 72*time.Hour, config.Recommend.CacheExpire)
+			assert.Equal(t, 100, config.Recommend.ContextSize)
 			// [recommend.data_source]
 			assert.Equal(t, []expression.FeedbackTypeExpression{
 				expression.MustParseFeedbackTypeExpression("star"),
@@ -124,31 +125,17 @@ func TestUnmarshal(t *testing.T) {
 			assert.False(t, config.Recommend.Replacement.EnableReplacement)
 			assert.Equal(t, 0.8, config.Recommend.Replacement.PositiveReplacementDecay)
 			assert.Equal(t, 0.6, config.Recommend.Replacement.ReadReplacementDecay)
-			// [recommend.offline]
-			assert.Equal(t, time.Minute, config.Recommend.Offline.CheckRecommendPeriod)
-			assert.Equal(t, 24*time.Hour, config.Recommend.Offline.RefreshRecommendPeriod)
-			assert.True(t, config.Recommend.Offline.EnableColRecommend)
-			assert.False(t, config.Recommend.Offline.EnableItemBasedRecommend)
-			assert.True(t, config.Recommend.Offline.EnableUserBasedRecommend)
-			assert.True(t, config.Recommend.Offline.EnableLatestRecommend)
-			assert.True(t, config.Recommend.Offline.EnableClickThroughPrediction)
-			assert.Equal(t, map[string]float64{"latest": 0.2}, config.Recommend.Offline.ExploreRecommend)
-			value, exist := config.Recommend.Offline.GetExploreRecommend("latest")
-			assert.Equal(t, true, exist)
-			assert.Equal(t, 0.2, value)
-			_, exist = config.Recommend.Offline.GetExploreRecommend("unknown")
-			assert.Equal(t, false, exist)
-			// [recommend.online]
-			assert.Equal(t, []string{"item_based", "latest"}, config.Recommend.Online.FallbackRecommend)
-			assert.Equal(t, 10, config.Recommend.Online.NumFeedbackFallbackItemBased)
+			// [recommend.ranker]
+			assert.Equal(t, time.Minute, config.Recommend.Ranker.CheckRecommendPeriod)
+			assert.Equal(t, 24*time.Hour, config.Recommend.Ranker.RefreshRecommendPeriod)
+			// [recommend.fallback]
+			assert.Equal(t, []string{"item-to-item/neighbors", "latest"}, config.Recommend.Fallback.Recommenders)
 			// [tracing]
 			assert.False(t, config.Tracing.EnableTracing)
 			assert.Equal(t, "jaeger", config.Tracing.Exporter)
 			assert.Equal(t, "http://localhost:14268/api/traces", config.Tracing.CollectorEndpoint)
 			assert.Equal(t, "always", config.Tracing.Sampler)
 			assert.Equal(t, 1.0, config.Tracing.Ratio)
-			// [experimental]
-			assert.Equal(t, 128, config.Experimental.DeepLearningBatchSize)
 			// [oauth2]
 			assert.Equal(t, "https://accounts.google.com", config.OIDC.Issuer)
 			assert.Equal(t, "client_id", config.OIDC.ClientID)
@@ -216,7 +203,7 @@ func TestBindEnv(t *testing.T) {
 		t.Setenv(variable.key, variable.value)
 	}
 
-	config, err := LoadConfig("config.toml", false)
+	config, err := LoadConfig("config.toml")
 	assert.NoError(t, err)
 	assert.Equal(t, "redis://<cache_store>", config.Database.CacheStore)
 	assert.Equal(t, "mysql://<data_store>", config.Database.DataStore)
@@ -258,102 +245,160 @@ func TestTablePrefixCompat(t *testing.T) {
 	err = os.WriteFile(path, []byte(text), os.ModePerm)
 	assert.NoError(t, err)
 
-	config, err := LoadConfig(path, false)
+	config, err := LoadConfig(path)
 	assert.NoError(t, err)
 	assert.Equal(t, "gorse_", config.Database.TablePrefix)
 	assert.Equal(t, "gorse_", config.Database.CacheTablePrefix)
 	assert.Equal(t, "gorse_", config.Database.DataTablePrefix)
 }
 
-func TestConfig_OfflineRecommendDigest(t *testing.T) {
-	// test explore recommendation
-	cfg1, cfg2 := GetDefaultConfig(), GetDefaultConfig()
-	cfg1.Recommend.Offline.ExploreRecommend = map[string]float64{"a": 0.5, "b": 0.6}
-	cfg2.Recommend.Offline.ExploreRecommend = map[string]float64{"a": 0.6, "b": 0.5}
-	assert.NotEqual(t, cfg1.OfflineRecommendDigest(), cfg2.OfflineRecommendDigest())
+func TestNonPersonalizedConfig(t *testing.T) {
+	a := NonPersonalizedConfig{}
+	b := NonPersonalizedConfig{}
+	assert.Equal(t, a.Hash(), b.Hash())
 
-	// test latest recommendation
-	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
-	cfg1.Recommend.Offline.EnableLatestRecommend = true
-	cfg2.Recommend.Offline.EnableLatestRecommend = false
-	assert.NotEqual(t, cfg1.OfflineRecommendDigest(), cfg2.OfflineRecommendDigest())
+	a = NonPersonalizedConfig{Name: "a"}
+	b = NonPersonalizedConfig{Name: "b"}
+	assert.NotEqual(t, a.Hash(), b.Hash())
+	assert.Equal(t, "non-personalized/a", a.FullName())
+	assert.Equal(t, "non-personalized/b", b.FullName())
 
-	// test user-based recommendation
-	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
-	cfg1.Recommend.Offline.EnableUserBasedRecommend = true
-	cfg2.Recommend.Offline.EnableUserBasedRecommend = false
-	assert.NotEqual(t, cfg1.OfflineRecommendDigest(), cfg2.OfflineRecommendDigest())
+	a = NonPersonalizedConfig{Score: "a"}
+	b = NonPersonalizedConfig{Score: "b"}
+	assert.NotEqual(t, a.Hash(), b.Hash())
 
-	// test item-based recommendation
-	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
-	cfg1.Recommend.Offline.EnableItemBasedRecommend = true
-	cfg2.Recommend.Offline.EnableItemBasedRecommend = false
-	assert.NotEqual(t, cfg1.OfflineRecommendDigest(), cfg2.OfflineRecommendDigest())
-
-	// test collaborative-filtering recommendation
-	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
-	cfg1.Recommend.Offline.EnableColRecommend = true
-	cfg2.Recommend.Offline.EnableColRecommend = false
-	assert.NotEqual(t, cfg1.OfflineRecommendDigest(), cfg2.OfflineRecommendDigest())
-
-	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
-	cfg1.Recommend.Offline.EnableColRecommend = true
-	cfg2.Recommend.Offline.EnableColRecommend = true
-	assert.Equal(t, cfg1.OfflineRecommendDigest(), cfg2.OfflineRecommendDigest())
-
-	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
-	cfg1.Recommend.Offline.EnableColRecommend = false
-	cfg2.Recommend.Offline.EnableColRecommend = false
-	assert.NotEqual(t, cfg1.OfflineRecommendDigest(WithCollaborative(true)), cfg2.OfflineRecommendDigest())
-
-	// test click-through rate prediction recommendation
-	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
-	cfg1.Recommend.Offline.EnableClickThroughPrediction = true
-	cfg2.Recommend.Offline.EnableClickThroughPrediction = false
-	assert.NotEqual(t, cfg1.OfflineRecommendDigest(), cfg2.OfflineRecommendDigest())
-
-	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
-	cfg1.Recommend.Offline.EnableClickThroughPrediction = false
-	cfg2.Recommend.Offline.EnableClickThroughPrediction = false
-	assert.NotEqual(t, cfg1.OfflineRecommendDigest(WithRanking(true)), cfg2.OfflineRecommendDigest())
-
-	// test replacement
-	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
-	cfg1.Recommend.Replacement.EnableReplacement = true
-	cfg2.Recommend.Replacement.EnableReplacement = false
-	assert.NotEqual(t, cfg1.OfflineRecommendDigest(), cfg2.OfflineRecommendDigest())
-
-	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
-	cfg1.Recommend.Replacement.EnableReplacement = true
-	cfg2.Recommend.Replacement.EnableReplacement = true
-	cfg1.Recommend.Replacement.PositiveReplacementDecay = 0.1
-	cfg2.Recommend.Replacement.PositiveReplacementDecay = 0.2
-	assert.NotEqual(t, cfg1.OfflineRecommendDigest(), cfg2.OfflineRecommendDigest())
-
-	cfg1, cfg2 = GetDefaultConfig(), GetDefaultConfig()
-	cfg1.Recommend.Replacement.EnableReplacement = false
-	cfg2.Recommend.Replacement.EnableReplacement = false
-	cfg1.Recommend.Replacement.PositiveReplacementDecay = 0.1
-	cfg2.Recommend.Replacement.PositiveReplacementDecay = 0.2
-	assert.Equal(t, cfg1.OfflineRecommendDigest(), cfg2.OfflineRecommendDigest())
+	a = NonPersonalizedConfig{Filter: "a"}
+	b = NonPersonalizedConfig{Filter: "b"}
+	assert.NotEqual(t, a.Hash(), b.Hash())
 }
 
-func TestItemToItemConfig_Hash(t *testing.T) {
+func TestItemToItemConfig(t *testing.T) {
 	a := ItemToItemConfig{}
 	b := ItemToItemConfig{}
-	assert.Equal(t, a.Hash(), b.Hash())
+	assert.Equal(t, a.Hash(nil), b.Hash(nil))
 
 	a = ItemToItemConfig{Name: "a"}
 	b = ItemToItemConfig{Name: "b"}
-	assert.NotEqual(t, a.Hash(), b.Hash())
+	assert.NotEqual(t, a.Hash(nil), b.Hash(nil))
+	assert.Equal(t, "item-to-item/a", a.FullName())
+	assert.Equal(t, "item-to-item/b", b.FullName())
 
 	a = ItemToItemConfig{Type: "a"}
 	b = ItemToItemConfig{Type: "b"}
-	assert.NotEqual(t, a.Hash(), b.Hash())
+	assert.NotEqual(t, a.Hash(nil), b.Hash(nil))
 
 	a = ItemToItemConfig{Column: "a"}
 	b = ItemToItemConfig{Column: "b"}
+	assert.NotEqual(t, a.Hash(nil), b.Hash(nil))
+
+	c := ItemToItemConfig{Type: "users"}
+	d := RecommendConfig{}
+	e := RecommendConfig{}
+	assert.Equal(t, c.Hash(&d), c.Hash(&e))
+
+	d.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{expression.MustParseFeedbackTypeExpression("like")}
+	e.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{expression.MustParseFeedbackTypeExpression("star")}
+	assert.NotEqual(t, c.Hash(&d), c.Hash(&e))
+}
+
+func TestUserToUserConfig(t *testing.T) {
+	a := UserToUserConfig{}
+	b := UserToUserConfig{}
+	assert.Equal(t, a.Hash(nil), b.Hash(nil))
+
+	a = UserToUserConfig{Name: "a"}
+	b = UserToUserConfig{Name: "b"}
+	assert.NotEqual(t, a.Hash(nil), b.Hash(nil))
+	assert.Equal(t, "user-to-user/a", a.FullName())
+	assert.Equal(t, "user-to-user/b", b.FullName())
+
+	a = UserToUserConfig{Type: "a"}
+	b = UserToUserConfig{Type: "b"}
+	assert.NotEqual(t, a.Hash(nil), b.Hash(nil))
+
+	a = UserToUserConfig{Column: "a"}
+	b = UserToUserConfig{Column: "b"}
+	assert.NotEqual(t, a.Hash(nil), b.Hash(nil))
+
+	c := UserToUserConfig{Type: "items"}
+	d := RecommendConfig{}
+	e := RecommendConfig{}
+	assert.Equal(t, c.Hash(&d), c.Hash(&e))
+
+	d.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{expression.MustParseFeedbackTypeExpression("like")}
+	e.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{expression.MustParseFeedbackTypeExpression("star")}
+	assert.NotEqual(t, c.Hash(&d), c.Hash(&e))
+}
+
+func TestCollaborativeConfig(t *testing.T) {
+	a := RecommendConfig{}
+	b := RecommendConfig{}
+	c := CollaborativeConfig{}
+	assert.Equal(t, c.Hash(&a), c.Hash(&b))
+
+	a.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{expression.MustParseFeedbackTypeExpression("like")}
+	b.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{expression.MustParseFeedbackTypeExpression("star")}
+	assert.NotEqual(t, c.Hash(&a), c.Hash(&b))
+}
+
+func TestExternalConfig(t *testing.T) {
+	a := ExternalConfig{}
+	b := ExternalConfig{}
+	assert.Equal(t, a.Hash(), b.Hash())
+
+	a = ExternalConfig{Name: "a"}
+	b = ExternalConfig{Name: "b"}
 	assert.NotEqual(t, a.Hash(), b.Hash())
+	assert.Equal(t, "external/a", a.FullName())
+	assert.Equal(t, "external/b", b.FullName())
+
+	a = ExternalConfig{Script: "a"}
+	b = ExternalConfig{Script: "b"}
+	assert.NotEqual(t, a.Hash(), b.Hash())
+}
+
+func TestRecommendConfig(t *testing.T) {
+	a := RecommendConfig{}
+	b := RecommendConfig{}
+	assert.Equal(t, a.Hash(), b.Hash())
+
+	a.NonPersonalized = []NonPersonalizedConfig{{Name: "a"}}
+	b.NonPersonalized = []NonPersonalizedConfig{{Name: "b"}}
+	assert.NotEqual(t, a.Hash(), b.Hash())
+	a.NonPersonalized = []NonPersonalizedConfig{}
+	b.NonPersonalized = []NonPersonalizedConfig{}
+
+	a.ItemToItem = []ItemToItemConfig{{Name: "a"}}
+	b.ItemToItem = []ItemToItemConfig{{Name: "b"}}
+	assert.NotEqual(t, a.Hash(), b.Hash())
+	a.ItemToItem = []ItemToItemConfig{}
+	b.ItemToItem = []ItemToItemConfig{}
+
+	a.UserToUser = []UserToUserConfig{{Name: "a"}}
+	b.UserToUser = []UserToUserConfig{{Name: "b"}}
+	assert.NotEqual(t, a.Hash(), b.Hash())
+	a.UserToUser = []UserToUserConfig{}
+	b.UserToUser = []UserToUserConfig{}
+
+	a.External = []ExternalConfig{{Name: "a"}}
+	b.External = []ExternalConfig{{Name: "b"}}
+	assert.NotEqual(t, a.Hash(), b.Hash())
+	a.External = []ExternalConfig{}
+	b.External = []ExternalConfig{}
+
+	a.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{expression.MustParseFeedbackTypeExpression("like")}
+	b.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{expression.MustParseFeedbackTypeExpression("star")}
+	assert.NotEqual(t, a.Hash(), b.Hash())
+
+	a.Ranker.Recommenders = []string{"latest"}
+	b.Ranker.Recommenders = []string{"collaborative"}
+	assert.NotEqual(t, a.Hash(), b.Hash())
+
+	a.UserToUser = []UserToUserConfig{{Name: "a"}}
+	b.UserToUser = []UserToUserConfig{{Name: "a"}}
+	a.Ranker.Recommenders = []string{"user-to-user/a"}
+	b.Ranker.Recommenders = []string{"user-to-user/a"}
+	assert.Equal(t, a.Hash(), b.Hash())
 }
 
 type ValidateTestSuite struct {

@@ -19,11 +19,9 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"os"
 	"reflect"
 	"strings"
-	"sync"
 	"time"
 
 	mapset "github.com/deckarep/golang-set/v2"
@@ -60,15 +58,14 @@ func init() {
 
 // Config is the configuration for the engine.
 type Config struct {
-	Database     DatabaseConfig     `mapstructure:"database"`
-	Master       MasterConfig       `mapstructure:"master"`
-	Server       ServerConfig       `mapstructure:"server"`
-	Recommend    RecommendConfig    `mapstructure:"recommend"`
-	Tracing      TracingConfig      `mapstructure:"tracing"`
-	Experimental ExperimentalConfig `mapstructure:"experimental"`
-	OIDC         OIDCConfig         `mapstructure:"oidc"`
-	OpenAI       OpenAIConfig       `mapstructure:"openai"`
-	S3           S3Config           `mapstructure:"s3"`
+	Database  DatabaseConfig  `mapstructure:"database"`
+	Master    MasterConfig    `mapstructure:"master"`
+	Server    ServerConfig    `mapstructure:"server"`
+	Recommend RecommendConfig `mapstructure:"recommend"`
+	Tracing   TracingConfig   `mapstructure:"tracing"`
+	OIDC      OIDCConfig      `mapstructure:"oidc"`
+	OpenAI    OpenAIConfig    `mapstructure:"openai"`
+	S3        S3Config        `mapstructure:"s3"`
 }
 
 // DatabaseConfig is the configuration for the database.
@@ -119,6 +116,7 @@ type ServerConfig struct {
 type RecommendConfig struct {
 	CacheSize       int                     `mapstructure:"cache_size" validate:"gt=0"`
 	CacheExpire     time.Duration           `mapstructure:"cache_expire" validate:"gt=0"`
+	ContextSize     int                     `mapstructure:"context_size" validate:"gt=0"`
 	ActiveUserTTL   int                     `mapstructure:"active_user_ttl" validate:"gte=0"`
 	DataSource      DataSourceConfig        `mapstructure:"data_source"`
 	NonPersonalized []NonPersonalizedConfig `mapstructure:"non-personalized" validate:"dive"`
@@ -127,8 +125,59 @@ type RecommendConfig struct {
 	Collaborative   CollaborativeConfig     `mapstructure:"collaborative"`
 	External        []ExternalConfig        `mapstructure:"external" validate:"dive"`
 	Replacement     ReplacementConfig       `mapstructure:"replacement"`
-	Offline         OfflineConfig           `mapstructure:"offline"`
-	Online          OnlineConfig            `mapstructure:"online"`
+	Ranker          RankerConfig            `mapstructure:"ranker"`
+	Fallback        FallbackConfig          `mapstructure:"fallback"`
+}
+
+func (r *RecommendConfig) ListRecommenders() []string {
+	recommenders := make([]string, 0)
+	for _, rec := range r.NonPersonalized {
+		recommenders = append(recommenders, rec.FullName())
+	}
+	for _, rec := range r.ItemToItem {
+		recommenders = append(recommenders, rec.FullName())
+	}
+	for _, rec := range r.UserToUser {
+		recommenders = append(recommenders, rec.FullName())
+	}
+	for _, rec := range r.External {
+		recommenders = append(recommenders, rec.FullName())
+	}
+	recommenders = append(recommenders, r.Collaborative.FullName())
+	recommenders = append(recommenders, "latest")
+	return recommenders
+}
+
+func (r *RecommendConfig) Hash() string {
+	recommenders := mapset.NewSet(r.Ranker.Recommenders...)
+	if recommenders.IsEmpty() {
+		recommenders.Append((r.ListRecommenders())...)
+	}
+	hash := md5.New()
+	for _, rec := range r.NonPersonalized {
+		if recommenders.Contains(rec.FullName()) {
+			hash.Write([]byte(rec.Hash()))
+		}
+	}
+	for _, rec := range r.ItemToItem {
+		if recommenders.Contains(rec.FullName()) {
+			hash.Write([]byte(rec.Hash(r)))
+		}
+	}
+	for _, rec := range r.UserToUser {
+		if recommenders.Contains(rec.FullName()) {
+			hash.Write([]byte(rec.Hash(r)))
+		}
+	}
+	for _, rec := range r.External {
+		if recommenders.Contains(rec.FullName()) {
+			hash.Write([]byte(rec.Hash()))
+		}
+	}
+	if recommenders.Contains(r.Collaborative.FullName()) {
+		hash.Write([]byte(r.Collaborative.Hash(r)))
+	}
+	return hex.EncodeToString(hash.Sum(nil)[:])
 }
 
 func StringToFeedbackTypeHookFunc() mapstructure.DecodeHookFunc {
@@ -161,6 +210,18 @@ type NonPersonalizedConfig struct {
 	Filter string `mapstructure:"filter" json:"filter" validate:"item_expr"`
 }
 
+func (config *NonPersonalizedConfig) FullName() string {
+	return "non-personalized/" + config.Name
+}
+
+func (config *NonPersonalizedConfig) Hash() string {
+	hash := md5.New()
+	hash.Write([]byte(config.Name))
+	hash.Write([]byte(config.Score))
+	hash.Write([]byte(config.Filter))
+	return hex.EncodeToString(hash.Sum(nil)[:])
+}
+
 type ItemToItemConfig struct {
 	Name   string `mapstructure:"name" json:"name"`
 	Type   string `mapstructure:"type" json:"type" validate:"oneof=embedding tags users chat auto"`
@@ -168,14 +229,21 @@ type ItemToItemConfig struct {
 	Prompt string `mapstructure:"prompt" json:"prompt"`
 }
 
-func (config *ItemToItemConfig) Hash() string {
+func (config *ItemToItemConfig) FullName() string {
+	return "item-to-item/" + config.Name
+}
+
+func (config *ItemToItemConfig) Hash(cfg *RecommendConfig) string {
 	hash := md5.New()
 	hash.Write([]byte(config.Name))
 	hash.Write([]byte(config.Type))
 	hash.Write([]byte(config.Column))
-
-	digest := hash.Sum(nil)
-	return hex.EncodeToString(digest[:])
+	if config.Type == "users" {
+		for _, expr := range cfg.DataSource.PositiveFeedbackTypes {
+			hash.Write([]byte(expr.String()))
+		}
+	}
+	return hex.EncodeToString(hash.Sum(nil)[:])
 }
 
 type UserToUserConfig struct {
@@ -184,14 +252,21 @@ type UserToUserConfig struct {
 	Column string `mapstructure:"column" json:"column" validate:"item_expr"`
 }
 
-func (config *UserToUserConfig) Hash() string {
+func (config *UserToUserConfig) FullName() string {
+	return "user-to-user/" + config.Name
+}
+
+func (config *UserToUserConfig) Hash(cfg *RecommendConfig) string {
 	hash := md5.New()
 	hash.Write([]byte(config.Name))
 	hash.Write([]byte(config.Type))
 	hash.Write([]byte(config.Column))
-
-	digest := hash.Sum(nil)
-	return hex.EncodeToString(digest[:])
+	if config.Type == "items" {
+		for _, expr := range cfg.DataSource.PositiveFeedbackTypes {
+			hash.Write([]byte(expr.String()))
+		}
+	}
+	return hex.EncodeToString(hash.Sum(nil)[:])
 }
 
 type CollaborativeConfig struct {
@@ -203,6 +278,18 @@ type CollaborativeConfig struct {
 	EarlyStopping         EarlyStoppingConfig `mapstructure:"early_stopping"`
 }
 
+func (config *CollaborativeConfig) FullName() string {
+	return "collaborative"
+}
+
+func (config *CollaborativeConfig) Hash(cfg *RecommendConfig) string {
+	hash := md5.New()
+	for _, expr := range cfg.DataSource.PositiveFeedbackTypes {
+		hash.Write([]byte(expr.String()))
+	}
+	return hex.EncodeToString(hash.Sum(nil)[:])
+}
+
 type EarlyStoppingConfig struct {
 	Patience int `mapstructure:"patience"`
 }
@@ -212,28 +299,32 @@ type ExternalConfig struct {
 	Script string `mapstructure:"script" json:"script"`
 }
 
+func (config *ExternalConfig) FullName() string {
+	return "external/" + config.Name
+}
+
+func (config *ExternalConfig) Hash() string {
+	hash := md5.New()
+	hash.Write([]byte(config.Name))
+	hash.Write([]byte(config.Script))
+	return hex.EncodeToString(hash.Sum(nil)[:])
+}
+
 type ReplacementConfig struct {
 	EnableReplacement        bool    `mapstructure:"enable_replacement"`
 	PositiveReplacementDecay float64 `mapstructure:"positive_replacement_decay" validate:"gt=0"`
 	ReadReplacementDecay     float64 `mapstructure:"read_replacement_decay" validate:"gt=0"`
 }
 
-type OfflineConfig struct {
-	CheckRecommendPeriod         time.Duration       `mapstructure:"check_recommend_period" validate:"gt=0"`
-	RefreshRecommendPeriod       time.Duration       `mapstructure:"refresh_recommend_period" validate:"gt=0"`
-	ExploreRecommend             map[string]float64  `mapstructure:"explore_recommend"`
-	EnableLatestRecommend        bool                `mapstructure:"enable_latest_recommend"`
-	EnableUserBasedRecommend     bool                `mapstructure:"enable_user_based_recommend"`
-	EnableItemBasedRecommend     bool                `mapstructure:"enable_item_based_recommend"`
-	EnableColRecommend           bool                `mapstructure:"enable_collaborative_recommend"`
-	EnableClickThroughPrediction bool                `mapstructure:"enable_click_through_prediction"`
-	EarlyStopping                EarlyStoppingConfig `mapstructure:"early_stopping"`
-	exploreRecommendLock         sync.RWMutex
+type RankerConfig struct {
+	CheckRecommendPeriod   time.Duration       `mapstructure:"check_recommend_period" validate:"gt=0"`
+	RefreshRecommendPeriod time.Duration       `mapstructure:"refresh_recommend_period" validate:"gt=0"`
+	Recommenders           []string            `mapstructure:"recommenders"`
+	EarlyStopping          EarlyStoppingConfig `mapstructure:"early_stopping"`
 }
 
-type OnlineConfig struct {
-	FallbackRecommend            []string `mapstructure:"fallback_recommend"`
-	NumFeedbackFallbackItemBased int      `mapstructure:"num_feedback_fallback_item_based" validate:"gt=0"`
+type FallbackConfig struct {
+	Recommenders []string `mapstructure:"recommenders"`
 }
 
 type TracingConfig struct {
@@ -242,11 +333,6 @@ type TracingConfig struct {
 	CollectorEndpoint string  `mapstructure:"collector_endpoint"`
 	Sampler           string  `mapstructure:"sampler"`
 	Ratio             float64 `mapstructure:"ratio"`
-}
-
-type ExperimentalConfig struct {
-	EnableDeepLearning    bool `mapstructure:"enable_deep_learning"`
-	DeepLearningBatchSize int  `mapstructure:"deep_learning_batch_size"`
 }
 
 type OIDCConfig struct {
@@ -309,6 +395,7 @@ func GetDefaultConfig() *Config {
 		Recommend: RecommendConfig{
 			CacheSize:   100,
 			CacheExpire: 72 * time.Hour,
+			ContextSize: 100,
 			Collaborative: CollaborativeConfig{
 				ModelFitPeriod:    60 * time.Minute,
 				ModelSearchPeriod: 180 * time.Minute,
@@ -320,103 +407,23 @@ func GetDefaultConfig() *Config {
 				PositiveReplacementDecay: 0.8,
 				ReadReplacementDecay:     0.6,
 			},
-			Offline: OfflineConfig{
-				CheckRecommendPeriod:         time.Minute,
-				RefreshRecommendPeriod:       120 * time.Hour,
-				EnableLatestRecommend:        false,
-				EnableUserBasedRecommend:     false,
-				EnableItemBasedRecommend:     false,
-				EnableColRecommend:           true,
-				EnableClickThroughPrediction: false,
+			Ranker: RankerConfig{
+				CheckRecommendPeriod:   time.Minute,
+				RefreshRecommendPeriod: 120 * time.Hour,
 			},
-			Online: OnlineConfig{
-				FallbackRecommend:            []string{"latest"},
-				NumFeedbackFallbackItemBased: 10,
+			Fallback: FallbackConfig{
+				Recommenders: []string{"latest"},
 			},
 		},
 		Tracing: TracingConfig{
 			Exporter: "jaeger",
 			Sampler:  "always",
 		},
-		Experimental: ExperimentalConfig{
-			DeepLearningBatchSize: 128,
-		},
 	}
 }
 
 func (config *Config) Now() *time.Time {
 	return lo.ToPtr(time.Now().Add(config.Server.ClockError))
-}
-
-type digestOptions struct {
-	userNeighborDigest  string
-	enableCollaborative bool
-	enableRanking       bool
-}
-
-type DigestOption func(option *digestOptions)
-
-func WithCollaborative(v bool) DigestOption {
-	return func(option *digestOptions) {
-		option.enableCollaborative = v
-	}
-}
-
-func WithRanking(v bool) DigestOption {
-	return func(option *digestOptions) {
-		option.enableRanking = v
-	}
-}
-
-func (config *Config) OfflineRecommendDigest(option ...DigestOption) string {
-	options := digestOptions{
-		enableCollaborative: config.Recommend.Offline.EnableColRecommend,
-		enableRanking:       config.Recommend.Offline.EnableClickThroughPrediction,
-	}
-	lo.ForEach(option, func(opt DigestOption, _ int) {
-		opt(&options)
-	})
-
-	var builder strings.Builder
-	config.Recommend.Offline.Lock()
-	builder.WriteString(fmt.Sprintf("%v-%v-%v-%v-%v-%v-%v",
-		config.Recommend.Offline.ExploreRecommend,
-		config.Recommend.Offline.EnableLatestRecommend,
-		config.Recommend.Offline.EnableUserBasedRecommend,
-		config.Recommend.Offline.EnableItemBasedRecommend,
-		options.enableCollaborative,
-		options.enableRanking,
-		config.Recommend.Replacement.EnableReplacement,
-	))
-	config.Recommend.Offline.UnLock()
-	if config.Recommend.Offline.EnableUserBasedRecommend {
-		builder.WriteString(fmt.Sprintf("-%v", options.userNeighborDigest))
-	}
-	if config.Recommend.Replacement.EnableReplacement {
-		builder.WriteString(fmt.Sprintf("-%v-%v",
-			config.Recommend.Replacement.PositiveReplacementDecay, config.Recommend.Replacement.ReadReplacementDecay))
-	}
-
-	digest := md5.Sum([]byte(builder.String()))
-	return hex.EncodeToString(digest[:])
-}
-
-func (config *OfflineConfig) Lock() {
-	config.exploreRecommendLock.Lock()
-}
-
-func (config *OfflineConfig) UnLock() {
-	config.exploreRecommendLock.Unlock()
-}
-
-func (config *OfflineConfig) GetExploreRecommend(key string) (value float64, exist bool) {
-	if config == nil {
-		return 0.0, false
-	}
-	config.exploreRecommendLock.RLock()
-	defer config.exploreRecommendLock.RUnlock()
-	value, exist = config.ExploreRecommend[key]
-	return
 }
 
 func (config *TracingConfig) NewTracerProvider() (trace.TracerProvider, error) {
@@ -509,6 +516,7 @@ func setDefault() {
 	// [recommend]
 	viper.SetDefault("recommend.cache_size", defaultConfig.Recommend.CacheSize)
 	viper.SetDefault("recommend.cache_expire", defaultConfig.Recommend.CacheExpire)
+	viper.SetDefault("recommend.context_size", defaultConfig.Recommend.ContextSize)
 	// [recommend.collaborative]
 	viper.SetDefault("recommend.collaborative.model_fit_period", defaultConfig.Recommend.Collaborative.ModelFitPeriod)
 	viper.SetDefault("recommend.collaborative.model_search_period", defaultConfig.Recommend.Collaborative.ModelSearchPeriod)
@@ -518,22 +526,14 @@ func setDefault() {
 	viper.SetDefault("recommend.replacement.enable_replacement", defaultConfig.Recommend.Replacement.EnableReplacement)
 	viper.SetDefault("recommend.replacement.positive_replacement_decay", defaultConfig.Recommend.Replacement.PositiveReplacementDecay)
 	viper.SetDefault("recommend.replacement.read_replacement_decay", defaultConfig.Recommend.Replacement.ReadReplacementDecay)
-	// [recommend.offline]
-	viper.SetDefault("recommend.offline.check_recommend_period", defaultConfig.Recommend.Offline.CheckRecommendPeriod)
-	viper.SetDefault("recommend.offline.refresh_recommend_period", defaultConfig.Recommend.Offline.RefreshRecommendPeriod)
-	viper.SetDefault("recommend.offline.enable_latest_recommend", defaultConfig.Recommend.Offline.EnableLatestRecommend)
-	viper.SetDefault("recommend.offline.enable_user_based_recommend", defaultConfig.Recommend.Offline.EnableUserBasedRecommend)
-	viper.SetDefault("recommend.offline.enable_item_based_recommend", defaultConfig.Recommend.Offline.EnableItemBasedRecommend)
-	viper.SetDefault("recommend.offline.enable_collaborative_recommend", defaultConfig.Recommend.Offline.EnableColRecommend)
-	viper.SetDefault("recommend.offline.enable_click_through_prediction", defaultConfig.Recommend.Offline.EnableClickThroughPrediction)
-	// [recommend.online]
-	viper.SetDefault("recommend.online.fallback_recommend", defaultConfig.Recommend.Online.FallbackRecommend)
-	viper.SetDefault("recommend.online.num_feedback_fallback_item_based", defaultConfig.Recommend.Online.NumFeedbackFallbackItemBased)
+	// [recommend.ranker]
+	viper.SetDefault("recommend.ranker.check_recommend_period", defaultConfig.Recommend.Ranker.CheckRecommendPeriod)
+	viper.SetDefault("recommend.ranker.refresh_recommend_period", defaultConfig.Recommend.Ranker.RefreshRecommendPeriod)
+	// [recommend.fallback]
+	viper.SetDefault("recommend.fallback", defaultConfig.Recommend.Fallback)
 	// [tracing]
 	viper.SetDefault("tracing.exporter", defaultConfig.Tracing.Exporter)
 	viper.SetDefault("tracing.sampler", defaultConfig.Tracing.Sampler)
-	// [experimental]
-	viper.SetDefault("experimental.deep_learning_batch_size", defaultConfig.Experimental.DeepLearningBatchSize)
 }
 
 type configBinding struct {
@@ -542,7 +542,7 @@ type configBinding struct {
 }
 
 // LoadConfig loads configuration from toml file.
-func LoadConfig(path string, oneModel bool) (*Config, error) {
+func LoadConfig(path string) (*Config, error) {
 	// set default config
 	setDefault()
 

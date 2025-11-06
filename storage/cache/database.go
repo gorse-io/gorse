@@ -17,7 +17,6 @@ package cache
 import (
 	"context"
 	"fmt"
-	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -192,46 +191,6 @@ func ConvertDocumentsToValues(documents []Score) []string {
 		values[i] = documents[i].Id
 	}
 	return values
-}
-
-// DocumentAggregator is used to keep the compatibility with the old recommender system and will be removed in the future.
-// In old recommender system, the recommendation is genereated per category.
-// In the new recommender system, the recommendation is generated globally.
-type DocumentAggregator struct {
-	Documents map[string]*Score
-	Timestamp time.Time
-}
-
-func NewDocumentAggregator(timestamp time.Time) *DocumentAggregator {
-	return &DocumentAggregator{
-		Documents: make(map[string]*Score),
-		Timestamp: timestamp,
-	}
-}
-
-func (aggregator *DocumentAggregator) Add(category string, values []string, scores []float64) {
-	for i, value := range values {
-		if _, ok := aggregator.Documents[value]; !ok {
-			aggregator.Documents[value] = &Score{
-				Id:         value,
-				Score:      scores[i],
-				Categories: []string{category},
-				Timestamp:  aggregator.Timestamp,
-			}
-		} else {
-			aggregator.Documents[value].Score = math.Max(aggregator.Documents[value].Score, scores[i])
-			aggregator.Documents[value].Categories = append(aggregator.Documents[value].Categories, category)
-		}
-	}
-}
-
-func (aggregator *DocumentAggregator) ToSlice() []Score {
-	documents := make([]Score, 0, len(aggregator.Documents))
-	for _, document := range aggregator.Documents {
-		sort.Strings(document.Categories)
-		documents = append(documents, *document)
-	}
-	return documents
 }
 
 type ScoreCondition struct {

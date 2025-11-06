@@ -50,7 +50,7 @@ func Evaluate(estimator MatrixFactorization, testSet, trainSet dataset.CFSplit, 
 			candidates = append(candidates, testSet.GetUserFeedback()[userIndex]...)
 			candidates = append(candidates, negativeSample...)
 			// Find top-n ItemFeedback in predictions
-			rankList, _ := Rank(estimator, int32(userIndex), candidates, topK)
+			rankList := Rank(estimator, int32(userIndex), candidates, topK)
 			partCount[workerId]++
 			for i, metric := range scorers {
 				partSum[workerId][i] += metric(targetSet, rankList)
@@ -157,16 +157,11 @@ func MRR(targetSet mapset.Set[int32], rankList []int32) float32 {
 	return 0
 }
 
-func Rank(model MatrixFactorization, userId int32, candidates []int32, topN int) ([]int32, []float32) {
+func Rank(model MatrixFactorization, userId int32, candidates []int32, topN int) []int32 {
 	// Get top-n list
 	itemsHeap := heap.NewTopKFilter[int32, float32](topN)
 	for _, itemId := range candidates {
 		itemsHeap.Push(itemId, model.internalPredict(userId, itemId))
 	}
-	elem, scores := itemsHeap.PopAll()
-	recommends := make([]int32, len(elem))
-	for i := range recommends {
-		recommends[i] = elem[i]
-	}
-	return recommends, scores
+	return itemsHeap.PopAllValues()
 }

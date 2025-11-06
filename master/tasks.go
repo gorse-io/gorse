@@ -659,7 +659,7 @@ func (m *Master) updateItemToItem(dataset *dataset.Dataset) error {
 					}
 					// Save item-to-item digest and last update time to cache
 					if err := m.CacheClient.Set(ctx,
-						cache.String(cache.Key(cache.ItemToItemDigest, itemToItemConfig.Name, item.ItemId), itemToItemConfig.Hash()),
+						cache.String(cache.Key(cache.ItemToItemDigest, itemToItemConfig.Name, item.ItemId), itemToItemConfig.Hash(&m.Config.Recommend)),
 						cache.Time(cache.Key(cache.ItemToItemUpdateTime, itemToItemConfig.Name, item.ItemId), time.Now()),
 					); err != nil {
 						log.Logger().Error("failed to save item-to-item digest to cache",
@@ -708,7 +708,7 @@ func (m *Master) needUpdateItemToItem(itemId string, itemToItemConfig config.Ite
 		}
 		return true
 	}
-	if digest != itemToItemConfig.Hash() {
+	if digest != itemToItemConfig.Hash(&m.Config.Recommend) {
 		return true
 	}
 
@@ -770,7 +770,7 @@ func (m *Master) updateUserToUser(dataset *dataset.Dataset) error {
 				}
 				// Save user-to-user digest and last update time to cache
 				if err := m.CacheClient.Set(ctx,
-					cache.String(cache.Key(cache.UserToUserDigest, cache.Key(userToUserConfig.Name, user.UserId)), userToUserConfig.Hash()),
+					cache.String(cache.Key(cache.UserToUserDigest, cache.Key(userToUserConfig.Name, user.UserId)), userToUserConfig.Hash(&m.Config.Recommend)),
 					cache.Time(cache.Key(cache.UserToUserUpdateTime, cache.Key(userToUserConfig.Name, user.UserId)), time.Now()),
 				); err != nil {
 					log.Logger().Error("failed to save user neighbors digest to cache", zap.String("user_id", user.UserId), zap.Error(err))
@@ -810,7 +810,7 @@ func (m *Master) needUpdateUserToUser(userId string, userToUserConfig config.Use
 		}
 		return true
 	}
-	if cacheDigest != userToUserConfig.Hash() {
+	if cacheDigest != userToUserConfig.Hash(&m.Config.Recommend) {
 		return true
 	}
 
@@ -1012,7 +1012,7 @@ func (m *Master) trainClickThroughRatePrediction(trainSet, testSet *ctr.Dataset)
 	score := clickModel.Fit(newCtx, trainSet, testSet,
 		ctr.NewFitConfig().
 			SetJobs(m.Config.Master.NumJobs).
-			SetPatience(m.Config.Recommend.Offline.EarlyStopping.Patience))
+			SetPatience(m.Config.Recommend.Ranker.EarlyStopping.Patience))
 	RankingFitSeconds.Set(time.Since(startFitTime).Seconds())
 
 	// update match model
@@ -1234,7 +1234,7 @@ func (m *Master) optimizeClickThroughRatePrediction(trainSet, testSet *ctr.Datas
 	}, trainSet, testSet,
 		ctr.NewFitConfig().
 			SetJobs(m.Config.Master.NumJobs).
-			SetPatience(m.Config.Recommend.Offline.EarlyStopping.Patience)).
+			SetPatience(m.Config.Recommend.Ranker.EarlyStopping.Patience)).
 		WithContext(ctx).
 		WithSpan(span)
 

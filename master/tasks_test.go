@@ -415,7 +415,7 @@ func (s *MasterTestSuite) TestNeedUpdateItemToItem() {
 	s.True(s.needUpdateItemToItem("1", recommendConfig))
 
 	// staled cache
-	err = s.CacheClient.Set(ctx, cache.String(cache.Key(cache.ItemToItemDigest, "default", "1"), recommendConfig.Hash()))
+	err = s.CacheClient.Set(ctx, cache.String(cache.Key(cache.ItemToItemDigest, "default", "1"), recommendConfig.Hash(&s.Config.Recommend)))
 	s.NoError(err)
 	s.True(s.needUpdateItemToItem("1", recommendConfig))
 	err = s.CacheClient.Set(ctx, cache.Time(cache.Key(cache.ItemToItemUpdateTime, "default", "1"), time.Now().Add(-s.Config.Recommend.CacheExpire)))
@@ -448,7 +448,7 @@ func (s *MasterTestSuite) TestNeedUpdateUserToUser() {
 	s.True(s.needUpdateUserToUser("1", recommendConfig))
 
 	// staled cache
-	err = s.CacheClient.Set(ctx, cache.String(cache.Key(cache.UserToUserDigest, "default", "1"), recommendConfig.Hash()))
+	err = s.CacheClient.Set(ctx, cache.String(cache.Key(cache.UserToUserDigest, "default", "1"), recommendConfig.Hash(&s.Config.Recommend)))
 	s.NoError(err)
 	s.True(s.needUpdateUserToUser("1", recommendConfig))
 	err = s.CacheClient.Set(ctx, cache.Time(cache.Key(cache.UserToUserUpdateTime, "default", "1"), time.Now().Add(-s.Config.Recommend.CacheExpire)))

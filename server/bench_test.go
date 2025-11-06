@@ -946,7 +946,7 @@ func BenchmarkRecommendFromItemBased(b *testing.B) {
 				documents[i].Id = fmt.Sprintf("init_item_%d", i)
 				documents[i].Score = float64(i)
 				documents[i].Categories = []string{""}
-				if i < s.Config.Recommend.Online.NumFeedbackFallbackItemBased {
+				if i < s.Config.Recommend.ContextSize {
 					err := s.DataClient.BatchInsertFeedback(ctx, []data.Feedback{{
 						FeedbackKey: data.FeedbackKey{
 							FeedbackType: "feedback_type_positive",
@@ -960,7 +960,7 @@ func BenchmarkRecommendFromItemBased(b *testing.B) {
 			}
 
 			// insert user neighbors
-			for i := 0; i < s.Config.Recommend.Online.NumFeedbackFallbackItemBased; i++ {
+			for i := 0; i < s.Config.Recommend.ContextSize; i++ {
 				err := s.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key("default", fmt.Sprintf("init_item_%d", i)), documents)
 				require.NoError(b, err)
 			}
@@ -968,7 +968,7 @@ func BenchmarkRecommendFromItemBased(b *testing.B) {
 			s.Config.Recommend.CacheSize = len(documents)
 			s.Config.Recommend.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{
 				expression.MustParseFeedbackTypeExpression("feedback_type_positive")}
-			s.Config.Recommend.Online.FallbackRecommend = []string{"item_based"}
+			s.Config.Recommend.Fallback.Recommenders = []string{"item_based"}
 
 			response := make([]*resty.Response, b.N)
 			client := resty.New()

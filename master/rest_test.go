@@ -655,7 +655,7 @@ func (suite *MasterAPITestSuite) TestGetRecommends() {
 	}
 	apitest.New().
 		Handler(suite.handler).
-		Get("/api/dashboard/recommend/0/offline").
+		Get("/api/dashboard/recommend/0").
 		Header("Cookie", suite.cookie).
 		Expect(suite.T()).
 		Status(http.StatusOK).
@@ -663,16 +663,44 @@ func (suite *MasterAPITestSuite) TestGetRecommends() {
 			{ItemId: "1"}, {ItemId: "3"}, {ItemId: "5"}, {ItemId: "6"}, {ItemId: "7"}, {ItemId: "8"},
 		})).
 		End()
+}
 
-	suite.Config.Recommend.Online.FallbackRecommend = []string{"collaborative", "item_based", "user_based", "latest"}
+func (suite *MasterAPITestSuite) TestGetNonPersonalizedRecommends() {
+	ctx := context.Background()
+	// insert offline recommendation
+	err := suite.CacheClient.AddScores(ctx, cache.OfflineRecommend, "0", []cache.Score{
+		{Id: "1", Score: 99, Categories: []string{""}},
+		{Id: "2", Score: 98, Categories: []string{""}},
+		{Id: "3", Score: 97, Categories: []string{""}},
+	})
+	suite.NoError(err)
+	// insert non-personalized latest recommendation
+	err = suite.CacheClient.AddScores(ctx, cache.NonPersonalized, "popular", []cache.Score{
+		{Id: "10", Score: 100, Categories: []string{""}},
+		{Id: "20", Score: 99, Categories: []string{""}},
+		{Id: "30", Score: 98, Categories: []string{""}},
+	})
+	suite.NoError(err)
+	// insert items
+	err = suite.DataClient.BatchInsertItems(ctx, []data.Item{
+		{ItemId: "1", Timestamp: time.Date(2020, 1, 1, 1, 1, 1, 1, time.UTC)},
+		{ItemId: "2", Timestamp: time.Date(2021, 1, 1, 1, 1, 1, 1, time.UTC)},
+		{ItemId: "3", Timestamp: time.Date(2022, 1, 1, 1, 1, 1, 1, time.UTC)},
+		{ItemId: "10", Timestamp: time.Date(2020, 1, 1, 1, 1, 1, 1, time.UTC)},
+		{ItemId: "20", Timestamp: time.Date(2021, 1, 1, 1, 1, 1, 1, time.UTC)},
+		{ItemId: "30", Timestamp: time.Date(2022, 1, 1, 1, 1, 1, 1, time.UTC)},
+	})
+	suite.NoError(err)
 	apitest.New().
 		Handler(suite.handler).
-		Get("/api/dashboard/recommend/0/_").
+		Get("/api/dashboard/recommend/0/non-personalized/popular").
 		Header("Cookie", suite.cookie).
 		Expect(suite.T()).
 		Status(http.StatusOK).
 		Body(marshal(suite.T(), []data.Item{
-			{ItemId: "1"}, {ItemId: "3"}, {ItemId: "5"}, {ItemId: "6"}, {ItemId: "7"}, {ItemId: "8"},
+			{ItemId: "10", Timestamp: time.Date(2020, 1, 1, 1, 1, 1, 1, time.UTC)},
+			{ItemId: "20", Timestamp: time.Date(2021, 1, 1, 1, 1, 1, 1, time.UTC)},
+			{ItemId: "30", Timestamp: time.Date(2022, 1, 1, 1, 1, 1, 1, time.UTC)},
 		})).
 		End()
 }
