@@ -117,10 +117,18 @@ func (suite *RecommenderTestSuite) TestCollaborative() {
 	err := suite.cacheClient.AddScores(context.Background(), cache.CollaborativeFiltering, "user_1", recommends)
 	suite.NoError(err)
 
-	exclude := make([]string, 10)
+	feedback := make([]data.Feedback, 10)
 	for i := 0; i < 10; i++ {
-		exclude[i] = fmt.Sprintf("item_%d", i)
+		feedback[i] = data.Feedback{
+			FeedbackKey: data.FeedbackKey{
+				FeedbackType: "click",
+				UserId:       "user_1",
+				ItemId:       fmt.Sprintf("item_%d", i),
+			},
+		}
 	}
+	err = suite.dataClient.BatchInsertFeedback(context.Background(), feedback, true, true, false)
+	suite.NoError(err)
 
 	recommender, err := NewRecommender(config.RecommendConfig{}, suite.cacheClient, suite.dataClient, true, "user_1", nil)
 	suite.NoError(err)
@@ -161,10 +169,18 @@ func (suite *RecommenderTestSuite) TestNonPersonalized() {
 	err := suite.cacheClient.AddScores(context.Background(), cache.NonPersonalized, "a", recommends)
 	suite.NoError(err)
 
-	exclude := make([]string, 10)
+	feedback := make([]data.Feedback, 10)
 	for i := 0; i < 10; i++ {
-		exclude[i] = fmt.Sprintf("item_%d", i)
+		feedback[i] = data.Feedback{
+			FeedbackKey: data.FeedbackKey{
+				FeedbackType: "click",
+				UserId:       "user_1",
+				ItemId:       fmt.Sprintf("item_%d", i),
+			},
+		}
 	}
+	err = suite.dataClient.BatchInsertFeedback(context.Background(), feedback, true, true, false)
+	suite.NoError(err)
 
 	recommender, err := NewRecommender(config.RecommendConfig{}, suite.cacheClient, suite.dataClient, true, "user_1", nil)
 	suite.NoError(err)
@@ -189,14 +205,6 @@ func (suite *RecommenderTestSuite) TestNonPersonalized() {
 			suite.Equal(float64(18-2*i), scores[i].Score)
 		}
 	}
-}
-
-func (suite *RecommenderTestSuite) TestItemToItem() {
-
-}
-
-func (suite *RecommenderTestSuite) TestUserToUser() {
-
 }
 
 func TestRecommenderTestSuite(t *testing.T) {
