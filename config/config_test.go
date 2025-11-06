@@ -394,10 +394,10 @@ func TestRecommendConfig(t *testing.T) {
 	b.Ranker.Recommenders = []string{"collaborative"}
 	assert.NotEqual(t, a.Hash(), b.Hash())
 
-	a.UserToUser = []UserToUserConfig{{Name: "a"}}
-	b.UserToUser = []UserToUserConfig{{Name: "a"}}
-	a.Ranker.Recommenders = []string{"user-to-user/a"}
-	b.Ranker.Recommenders = []string{"user-to-user/a"}
+	a.UserToUser = []UserToUserConfig{{Name: "a"}, {Name: "b"}}
+	b.UserToUser = []UserToUserConfig{{Name: "b"}, {Name: "a"}}
+	a.Ranker.Recommenders = []string{"user-to-user/a", "user-to-user/b"}
+	b.Ranker.Recommenders = []string{"user-to-user/b", "user-to-user/a"}
 	assert.Equal(t, a.Hash(), b.Hash())
 }
 

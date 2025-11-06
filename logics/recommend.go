@@ -16,14 +16,13 @@ package logics
 
 import (
 	"context"
-	"crypto/md5"
-	"encoding/hex"
 	"strings"
 	"time"
 
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/gorse-io/gorse/common/expression"
 	"github.com/gorse-io/gorse/common/heap"
+	"github.com/gorse-io/gorse/common/util"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
@@ -107,7 +106,7 @@ func (r *Recommender) Recommend(ctx context.Context, limit int) ([]cache.Score, 
 // RecommendSequential recommend items from multiple recommenders sequentially util reaching the limit.
 // If limit <= 0, all recommendations are returned.
 func (r *Recommender) RecommendSequential(ctx context.Context, result []cache.Score, limit int, names ...string) ([]cache.Score, string, error) {
-	hash := md5.New()
+	var digests []string
 	for _, name := range names {
 		recommenderFunc, err := r.parse(name)
 		if err != nil {
@@ -121,12 +120,12 @@ func (r *Recommender) RecommendSequential(ctx context.Context, result []cache.Sc
 			r.excludeSet.Add(score.Id)
 		}
 		result = append(result, scores...)
-		hash.Write([]byte(digest))
+		digests = append(digests, digest)
 		if limit > 0 && len(result) >= limit {
-			return result[:limit], hex.EncodeToString(hash.Sum(nil)[:]), nil
+			return result[:limit], util.MD5(digests...), nil
 		}
 	}
-	return result, hex.EncodeToString(hash.Sum(nil)[:]), nil
+	return result, util.MD5(digests...), nil
 }
 
 func (r *Recommender) parse(fullname string) (RecommenderFunc, error) {

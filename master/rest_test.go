@@ -469,7 +469,7 @@ func (suite *MasterAPITestSuite) TestGetUsers() {
 		suite.NoError(err)
 		err = suite.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastModifyUserTime, user.UserId), user.LastActiveTime))
 		suite.NoError(err)
-		err = suite.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastUpdateUserRecommendTime, user.UserId), user.LastUpdateTime))
+		err = suite.CacheClient.Set(ctx, cache.Time(cache.Key(cache.RecommendUpdateTime, user.UserId), user.LastUpdateTime))
 		suite.NoError(err)
 	}
 	// get users

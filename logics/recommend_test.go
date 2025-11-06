@@ -118,7 +118,7 @@ func (suite *RecommenderTestSuite) TestCollaborative() {
 	}
 	err := suite.cacheClient.AddScores(context.Background(), cache.CollaborativeFiltering, "user_1", recommends)
 	suite.NoError(err)
-	err = suite.cacheClient.Set(context.Background(), cache.String(cache.Key(cache.RecommendDigest, "user_1"), "digest"))
+	err = suite.cacheClient.Set(context.Background(), cache.String(cache.Key(cache.CollaborativeFilteringDigest, "user_1"), "digest"))
 	suite.NoError(err)
 
 	feedback := make([]data.Feedback, 10)
@@ -174,7 +174,7 @@ func (suite *RecommenderTestSuite) TestNonPersonalized() {
 	}
 	err := suite.cacheClient.AddScores(context.Background(), cache.NonPersonalized, "a", recommends)
 	suite.NoError(err)
-	err = suite.cacheClient.Set(context.Background(), cache.String(cache.Key(cache.NonPersonalized, "a"), "digest"))
+	err = suite.cacheClient.Set(context.Background(), cache.String(cache.Key(cache.NonPersonalizedDigest, "a"), "digest"))
 	suite.NoError(err)
 
 	feedback := make([]data.Feedback, 10)

@@ -746,7 +746,7 @@ func (m *Master) getUser(request *restful.Request, response *restful.Response) {
 		server.InternalServerError(response, err)
 		return
 	}
-	if detail.LastUpdateTime, err = m.CacheClient.Get(ctx, cache.Key(cache.LastUpdateUserRecommendTime, user.UserId)).Time(); err != nil && !errors.Is(err, errors.NotFound) {
+	if detail.LastUpdateTime, err = m.CacheClient.Get(ctx, cache.Key(cache.RecommendUpdateTime, user.UserId)).Time(); err != nil && !errors.Is(err, errors.NotFound) {
 		server.InternalServerError(response, err)
 		return
 	}
@@ -778,7 +778,7 @@ func (m *Master) getUsers(request *restful.Request, response *restful.Response) 
 			server.InternalServerError(response, err)
 			return
 		}
-		if details[i].LastUpdateTime, err = m.CacheClient.Get(ctx, cache.Key(cache.LastUpdateUserRecommendTime, user.UserId)).Time(); err != nil && !errors.Is(err, errors.NotFound) {
+		if details[i].LastUpdateTime, err = m.CacheClient.Get(ctx, cache.Key(cache.RecommendUpdateTime, user.UserId)).Time(); err != nil && !errors.Is(err, errors.NotFound) {
 			server.InternalServerError(response, err)
 			return
 		}

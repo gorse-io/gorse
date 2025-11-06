@@ -133,10 +133,10 @@ func (suite *WorkerTestSuite) TestCheckRecommendCacheTimeout() {
 	err = suite.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastModifyUserTime, "0"), time.Now().Add(-time.Hour)))
 	suite.NoError(err)
 	suite.True(suite.checkRecommendCacheOutOfDate(ctx, "0"))
-	err = suite.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastUpdateUserRecommendTime, "0"), time.Now().Add(-time.Hour*100)))
+	err = suite.CacheClient.Set(ctx, cache.Time(cache.Key(cache.RecommendUpdateTime, "0"), time.Now().Add(-time.Hour*100)))
 	suite.NoError(err)
 	suite.True(suite.checkRecommendCacheOutOfDate(ctx, "0"))
-	err = suite.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastUpdateUserRecommendTime, "0"), time.Now().Add(time.Hour*100)))
+	err = suite.CacheClient.Set(ctx, cache.Time(cache.Key(cache.RecommendUpdateTime, "0"), time.Now().Add(time.Hour*100)))
 	suite.NoError(err)
 	suite.False(suite.checkRecommendCacheOutOfDate(ctx, "0"))
 	err = suite.CacheClient.DeleteScores(ctx, []string{cache.Recommend}, cache.ScoreCondition{Subset: proto.String("0")})
@@ -182,7 +182,7 @@ func (suite *WorkerTestSuite) TestRecommendCollaborative() {
 	suite.Recommend([]data.User{{UserId: "0"}})
 
 	// read recommend time
-	recommendTime, err := suite.CacheClient.Get(ctx, cache.Key(cache.LastUpdateUserRecommendTime, "0")).Time()
+	recommendTime, err := suite.CacheClient.Get(ctx, cache.Key(cache.RecommendUpdateTime, "0")).Time()
 	suite.NoError(err)
 
 	recommends, err := suite.CacheClient.SearchScores(ctx, cache.Recommend, "0", nil, 0, -1)
@@ -253,7 +253,7 @@ func (suite *WorkerTestSuite) TestRecommendItemToItem() {
 	suite.NoError(err)
 	suite.Recommend([]data.User{{UserId: "0"}})
 	// read recommend time
-	recommendTime, err := suite.CacheClient.Get(ctx, cache.Key(cache.LastUpdateUserRecommendTime, "0")).Time()
+	recommendTime, err := suite.CacheClient.Get(ctx, cache.Key(cache.RecommendUpdateTime, "0")).Time()
 	suite.NoError(err)
 	// read recommend result
 	recommends, err := suite.CacheClient.SearchScores(ctx, cache.Recommend, "0", nil, 0, 3)
@@ -312,7 +312,7 @@ func (suite *WorkerTestSuite) TestRecommendUserToUser() {
 	suite.NoError(err)
 	suite.Recommend([]data.User{{UserId: "0"}})
 	// read recommend time
-	recommendTime, err := suite.CacheClient.Get(ctx, cache.Key(cache.LastUpdateUserRecommendTime, "0")).Time()
+	recommendTime, err := suite.CacheClient.Get(ctx, cache.Key(cache.RecommendUpdateTime, "0")).Time()
 	suite.NoError(err)
 	// read recommend result
 	recommends, err := suite.CacheClient.SearchScores(ctx, cache.Recommend, "0", nil, 0, 3)
@@ -350,7 +350,7 @@ func (suite *WorkerTestSuite) TestRecommendLatest() {
 	suite.NoError(err)
 	suite.Recommend([]data.User{{UserId: "0"}})
 	// read recommend time
-	recommendTime, err := suite.CacheClient.Get(ctx, cache.Key(cache.LastUpdateUserRecommendTime, "0")).Time()
+	recommendTime, err := suite.CacheClient.Get(ctx, cache.Key(cache.RecommendUpdateTime, "0")).Time()
 	suite.NoError(err)
 	// read recommend result
 	recommends, err := suite.CacheClient.SearchScores(ctx, cache.Recommend, "0", nil, 0, 3)
@@ -400,7 +400,7 @@ func (suite *WorkerTestSuite) TestRecommendNonPersonalized() {
 	suite.NoError(err)
 	suite.Recommend([]data.User{{UserId: "0"}})
 	// read recommend time
-	recommendTime, err := suite.CacheClient.Get(ctx, cache.Key(cache.LastUpdateUserRecommendTime, "0")).Time()
+	recommendTime, err := suite.CacheClient.Get(ctx, cache.Key(cache.RecommendUpdateTime, "0")).Time()
 	suite.NoError(err)
 	// read recommend result
 	recommends, err := suite.CacheClient.SearchScores(ctx, cache.Recommend, "0", nil, 0, 3)
@@ -464,7 +464,7 @@ func (suite *WorkerTestSuite) TestRecommend() {
 
 	suite.Recommend([]data.User{{UserId: "0"}})
 	// read recommend time
-	recommendTime, err := suite.CacheClient.Get(ctx, cache.Key(cache.LastUpdateUserRecommendTime, "0")).Time()
+	recommendTime, err := suite.CacheClient.Get(ctx, cache.Key(cache.RecommendUpdateTime, "0")).Time()
 	suite.NoError(err)
 	// read recommend result
 	recommends, err := suite.CacheClient.SearchScores(ctx, cache.Recommend, "0", nil, 0, 5)
@@ -682,7 +682,7 @@ func (suite *WorkerTestSuite) TestReplacement() {
 	suite.NoError(err)
 	suite.Recommend([]data.User{{UserId: "0"}})
 	// read recommend time
-	recommendTime, err := suite.CacheClient.Get(ctx, cache.Key(cache.LastUpdateUserRecommendTime, "0")).Time()
+	recommendTime, err := suite.CacheClient.Get(ctx, cache.Key(cache.RecommendUpdateTime, "0")).Time()
 	suite.NoError(err)
 	// read recommend result
 	recommends, err := suite.CacheClient.SearchScores(ctx, cache.Recommend, "0", nil, 0, 3)
@@ -696,7 +696,7 @@ func (suite *WorkerTestSuite) TestReplacement() {
 	suite.Config.Recommend.Ranker.Recommenders = []string{"latest"}
 	suite.Recommend([]data.User{{UserId: "0"}})
 	// read recommend time
-	recommendTime, err = suite.CacheClient.Get(ctx, cache.Key(cache.LastUpdateUserRecommendTime, "0")).Time()
+	recommendTime, err = suite.CacheClient.Get(ctx, cache.Key(cache.RecommendUpdateTime, "0")).Time()
 	suite.NoError(err)
 	// read recommend result
 	recommends, err = suite.CacheClient.SearchScores(ctx, cache.Recommend, "0", nil, 0, 3)

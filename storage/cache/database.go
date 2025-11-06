@@ -58,16 +58,15 @@ const (
 	CollaborativeFilteringDigest     = "collaborative-filtering_digest"
 	CollaborativeFilteringUpdateTime = "collaborative-filtering_update_time"
 	Recommend                        = "recommend"
-	RecommendUpdateTime              = "recommend_update_time"
 	RecommendDigest                  = "recommend_digest"
+	RecommendUpdateTime              = "recommend_update_time"
 
 	// ItemCategories is the set of item categories. The format of key:
 	//	Global item categories - item_categories
 	ItemCategories = "item_categories"
 
-	LastModifyItemTime          = "last_modify_item_time"           // the latest timestamp that a user related data was modified
-	LastModifyUserTime          = "last_modify_user_time"           // the latest timestamp that an item related data was modified
-	LastUpdateUserRecommendTime = "last_update_user_recommend_time" // the latest timestamp that a user's recommendation was updated
+	LastModifyItemTime = "last_modify_item_time" // the latest timestamp that a user related data was modified
+	LastModifyUserTime = "last_modify_user_time" // the latest timestamp that an item related data was modified
 
 	// GlobalMeta is global meta information
 	GlobalMeta                 = "global_meta"
