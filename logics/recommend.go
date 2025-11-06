@@ -16,6 +16,8 @@ package logics
 
 import (
 	"context"
+	"crypto/md5"
+	"encoding/hex"
 	"strings"
 	"time"
 
@@ -49,7 +51,7 @@ type Recommender struct {
 	excludeSet   mapset.Set[string]
 }
 
-type RecommenderFunc func(ctx context.Context) ([]cache.Score, error)
+type RecommenderFunc func(ctx context.Context) ([]cache.Score, string, error)
 
 func NewRecommender(config config.RecommendConfig, cacheClient cache.Database, dataClient data.Database, online bool, userId string, categories []string) (*Recommender, error) {
 	// Load user feedback
@@ -84,7 +86,7 @@ func (r *Recommender) UserFeedback() []data.Feedback {
 }
 
 func (r *Recommender) Recommend(ctx context.Context, limit int) ([]cache.Score, error) {
-	scores, err := r.cacheClient.SearchScores(ctx, cache.OfflineRecommend, r.userId, r.categories, 0, r.config.CacheSize)
+	scores, err := r.cacheClient.SearchScores(ctx, cache.Recommend, r.userId, r.categories, 0, r.config.CacheSize)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -98,30 +100,33 @@ func (r *Recommender) Recommend(ctx context.Context, limit int) ([]cache.Score, 
 	if len(result) >= limit && limit > 0 {
 		return result[:limit], nil
 	}
-	return r.RecommendSequential(ctx, result, limit, r.config.Fallback.Recommenders...)
+	result, _, err = r.RecommendSequential(ctx, result, limit, r.config.Fallback.Recommenders...)
+	return result, errors.Trace(err)
 }
 
 // RecommendSequential recommend items from multiple recommenders sequentially util reaching the limit.
 // If limit <= 0, all recommendations are returned.
-func (r *Recommender) RecommendSequential(ctx context.Context, result []cache.Score, limit int, names ...string) ([]cache.Score, error) {
+func (r *Recommender) RecommendSequential(ctx context.Context, result []cache.Score, limit int, names ...string) ([]cache.Score, string, error) {
+	hash := md5.New()
 	for _, name := range names {
 		recommenderFunc, err := r.parse(name)
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, "", errors.Trace(err)
 		}
-		scores, err := recommenderFunc(ctx)
+		scores, digest, err := recommenderFunc(ctx)
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, "", errors.Trace(err)
 		}
 		for _, score := range scores {
 			r.excludeSet.Add(score.Id)
 		}
 		result = append(result, scores...)
+		hash.Write([]byte(digest))
 		if limit > 0 && len(result) >= limit {
-			return result[:limit], nil
+			return result[:limit], hex.EncodeToString(hash.Sum(nil)[:]), nil
 		}
 	}
-	return result, nil
+	return result, hex.EncodeToString(hash.Sum(nil)[:]), nil
 }
 
 func (r *Recommender) parse(fullname string) (RecommenderFunc, error) {
@@ -143,10 +148,10 @@ func (r *Recommender) parse(fullname string) (RecommenderFunc, error) {
 	}
 }
 
-func (r *Recommender) recommendLatest(ctx context.Context) ([]cache.Score, error) {
+func (r *Recommender) recommendLatest(ctx context.Context) ([]cache.Score, string, error) {
 	items, err := r.dataClient.GetLatestItems(ctx, r.config.CacheSize, r.categories)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, "", errors.Trace(err)
 	}
 	scores := make([]cache.Score, 0, len(items))
 	for _, item := range items {
@@ -158,11 +163,11 @@ func (r *Recommender) recommendLatest(ctx context.Context) ([]cache.Score, error
 			})
 		}
 	}
-	return scores, nil
+	return scores, "", nil
 }
 
 func (r *Recommender) recommendNonPersonalized(name string) RecommenderFunc {
-	return func(ctx context.Context) ([]cache.Score, error) {
+	return func(ctx context.Context) ([]cache.Score, string, error) {
 		var categories []string
 		if len(r.categories) == 0 {
 			categories = []string{""}
@@ -172,29 +177,39 @@ func (r *Recommender) recommendNonPersonalized(name string) RecommenderFunc {
 		// fetch items from cache
 		items, err := r.cacheClient.SearchScores(ctx, cache.NonPersonalized, name, categories, 0, r.config.CacheSize)
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, "", errors.Trace(err)
+		}
+		// read digest
+		digest, err := r.cacheClient.Get(ctx, cache.Key(cache.NonPersonalizedDigest, name)).String()
+		if err != nil {
+			return nil, "", errors.Trace(err)
 		}
 		// remove excluded items
 		return lo.Filter(items, func(item cache.Score, index int) bool {
 			return !r.excludeSet.Contains(item.Id)
-		}), nil
+		}), digest, nil
 	}
 }
 
-func (r *Recommender) recommendCollaborative(ctx context.Context) ([]cache.Score, error) {
+func (r *Recommender) recommendCollaborative(ctx context.Context) ([]cache.Score, string, error) {
 	// fetch items from cache
 	items, err := r.cacheClient.SearchScores(ctx, cache.CollaborativeFiltering, r.userId, r.categories, 0, r.config.CacheSize)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, "", errors.Trace(err)
+	}
+	// read digest
+	digest, err := r.cacheClient.Get(ctx, cache.Key(cache.CollaborativeFilteringDigest, r.userId)).String()
+	if err != nil {
+		return nil, "", errors.Trace(err)
 	}
 	// remove excluded items
 	return lo.Filter(items, func(item cache.Score, index int) bool {
 		return !r.excludeSet.Contains(item.Id)
-	}), nil
+	}), digest, nil
 }
 
 func (r *Recommender) recommendItemToItem(name string) RecommenderFunc {
-	return func(ctx context.Context) ([]cache.Score, error) {
+	return func(ctx context.Context) ([]cache.Score, string, error) {
 		// filter positive feedbacks
 		data.SortFeedbacks(r.userFeedback)
 		userFeedback := make([]data.Feedback, 0, r.config.CacheSize)
@@ -209,15 +224,21 @@ func (r *Recommender) recommendItemToItem(name string) RecommenderFunc {
 		// collect scores
 		scores := make(map[string]float64)
 		categories := make(map[string][]string)
+		digests := mapset.NewSet[string]()
 		for _, feedback := range userFeedback {
 			similarItems, err := r.cacheClient.SearchScores(ctx, cache.ItemToItem, cache.Key(name, feedback.ItemId), r.categories, 0, r.config.CacheSize)
 			if err != nil {
-				return nil, errors.Trace(err)
+				return nil, "", errors.Trace(err)
+			}
+			digest, err := r.cacheClient.Get(ctx, cache.Key(cache.ItemToItemDigest, name, feedback.ItemId)).String()
+			if err != nil {
+				return nil, "", errors.Trace(err)
 			}
 			for _, item := range similarItems {
 				if !r.excludeSet.Contains(item.Id) {
 					scores[item.Id] += item.Score
 					categories[item.Id] = item.Categories
+					digests.Add(digest)
 				}
 			}
 		}
@@ -233,23 +254,29 @@ func (r *Recommender) recommendItemToItem(name string) RecommenderFunc {
 				Score:      elem.Weight,
 				Categories: categories[elem.Value],
 			}
-		}), nil
+		}), strings.Join(digests.ToSlice(), ""), nil
 	}
 }
 
 func (r *Recommender) recommendUserToUser(name string) RecommenderFunc {
-	return func(ctx context.Context) ([]cache.Score, error) {
+	return func(ctx context.Context) ([]cache.Score, string, error) {
 		scores := make(map[string]float64)
 		// load similar users
 		similarUsers, err := r.cacheClient.SearchScores(ctx, cache.UserToUser, cache.Key(name, r.userId), nil, 0, r.config.CacheSize)
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, "", errors.Trace(err)
 		}
+		// read digest
+		digest, err := r.cacheClient.Get(ctx, cache.Key(cache.UserToUserDigest, name, r.userId)).String()
+		if err != nil {
+			return nil, "", errors.Trace(err)
+		}
+		// aggregate scores
 		for _, user := range similarUsers {
 			// load historical feedback
 			feedbacks, err := r.dataClient.GetUserFeedback(ctx, user.Id, lo.ToPtr(time.Now()), r.config.DataSource.PositiveFeedbackTypes...)
 			if err != nil {
-				return nil, errors.Trace(err)
+				return nil, "", errors.Trace(err)
 			}
 			// add unseen items
 			for _, feedback := range feedbacks {
@@ -271,7 +298,7 @@ func (r *Recommender) recommendUserToUser(name string) RecommenderFunc {
 		})
 		items, err := r.dataClient.BatchGetItems(ctx, ids)
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, "", errors.Trace(err)
 		}
 		itemsMap := make(map[string]data.Item)
 		for _, item := range items {
@@ -286,6 +313,6 @@ func (r *Recommender) recommendUserToUser(name string) RecommenderFunc {
 				})
 			}
 		}
-		return results, nil
+		return results, digest, nil
 	}
 }

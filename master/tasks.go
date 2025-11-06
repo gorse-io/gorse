@@ -83,7 +83,7 @@ func (m *Master) loadDataset() (datasets Datasets, err error) {
 	}
 
 	// save non-personalized recommenders to cache
-	for _, recommender := range nonPersonalizedRecommenders {
+	for i, recommender := range nonPersonalizedRecommenders {
 		scores := recommender.PopAll()
 		if err = m.CacheClient.AddScores(ctx, cache.NonPersonalized, recommender.Name(), scores); err != nil {
 			log.Logger().Error("failed to cache non-personalized recommenders", zap.Error(err))
@@ -95,7 +95,10 @@ func (m *Master) loadDataset() (datasets Datasets, err error) {
 			}); err != nil {
 			log.Logger().Error("failed to reclaim outdated items", zap.Error(err))
 		}
-		if err = m.CacheClient.Set(ctx, cache.Time(cache.Key(cache.NonPersonalizedUpdateTime, recommender.Name()), recommender.Timestamp())); err != nil {
+		if err = m.CacheClient.Set(ctx,
+			cache.Time(cache.Key(cache.NonPersonalizedUpdateTime, recommender.Name()), recommender.Timestamp()),
+			cache.String(cache.Key(cache.NonPersonalizedDigest, recommender.Name()), m.Config.Recommend.NonPersonalized[i].Hash()),
+		); err != nil {
 			log.Logger().Error("failed to write meta", zap.Error(err))
 		}
 	}

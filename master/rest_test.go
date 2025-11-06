@@ -639,7 +639,7 @@ func (suite *MasterAPITestSuite) TestGetRecommends() {
 		{Id: "8", Score: 92, Categories: []string{""}},
 	}
 	ctx := context.Background()
-	err := suite.CacheClient.AddScores(ctx, cache.OfflineRecommend, "0", itemIds)
+	err := suite.CacheClient.AddScores(ctx, cache.Recommend, "0", itemIds)
 	suite.NoError(err)
 	// insert feedback
 	feedback := []data.Feedback{
@@ -668,7 +668,7 @@ func (suite *MasterAPITestSuite) TestGetRecommends() {
 func (suite *MasterAPITestSuite) TestGetNonPersonalizedRecommends() {
 	ctx := context.Background()
 	// insert offline recommendation
-	err := suite.CacheClient.AddScores(ctx, cache.OfflineRecommend, "0", []cache.Score{
+	err := suite.CacheClient.AddScores(ctx, cache.Recommend, "0", []cache.Score{
 		{Id: "1", Score: 99, Categories: []string{""}},
 		{Id: "2", Score: 98, Categories: []string{""}},
 		{Id: "3", Score: 97, Categories: []string{""}},

@@ -82,8 +82,9 @@ func (suite *RecommenderTestSuite) TestLatest() {
 
 	recommender, err := NewRecommender(config.RecommendConfig{}, suite.cacheClient, suite.dataClient, true, "user_1", nil)
 	suite.NoError(err)
-	scores, err := recommender.recommendLatest(context.Background())
+	scores, digest, err := recommender.recommendLatest(context.Background())
 	suite.NoError(err)
+	suite.Empty(digest)
 	if suite.Equal(10, len(scores)) {
 		for i := 0; i < 10; i++ {
 			suite.Equal(fmt.Sprintf("item_%d", 19-i), scores[i].Id)
@@ -93,8 +94,9 @@ func (suite *RecommenderTestSuite) TestLatest() {
 
 	recommender, err = NewRecommender(config.RecommendConfig{}, suite.cacheClient, suite.dataClient, true, "user_1", []string{"cat_1"})
 	suite.NoError(err)
-	scores, err = recommender.recommendLatest(context.Background())
+	scores, digest, err = recommender.recommendLatest(context.Background())
 	suite.NoError(err)
+	suite.Empty(digest)
 	if suite.Equal(5, len(scores)) {
 		for i := 0; i < 5; i++ {
 			suite.Equal(fmt.Sprintf("item_%d", 18-2*i), scores[i].Id)
@@ -116,6 +118,8 @@ func (suite *RecommenderTestSuite) TestCollaborative() {
 	}
 	err := suite.cacheClient.AddScores(context.Background(), cache.CollaborativeFiltering, "user_1", recommends)
 	suite.NoError(err)
+	err = suite.cacheClient.Set(context.Background(), cache.String(cache.Key(cache.RecommendDigest, "user_1"), "digest"))
+	suite.NoError(err)
 
 	feedback := make([]data.Feedback, 10)
 	for i := 0; i < 10; i++ {
@@ -132,8 +136,9 @@ func (suite *RecommenderTestSuite) TestCollaborative() {
 
 	recommender, err := NewRecommender(config.RecommendConfig{}, suite.cacheClient, suite.dataClient, true, "user_1", nil)
 	suite.NoError(err)
-	scores, err := recommender.recommendCollaborative(context.Background())
+	scores, digest, err := recommender.recommendCollaborative(context.Background())
 	suite.NoError(err)
+	suite.Equal("digest", digest)
 	if suite.Equal(10, len(scores)) {
 		for i := 0; i < 10; i++ {
 			suite.Equal(fmt.Sprintf("item_%d", 19-i), scores[i].Id)
@@ -143,8 +148,9 @@ func (suite *RecommenderTestSuite) TestCollaborative() {
 
 	recommender, err = NewRecommender(config.RecommendConfig{}, suite.cacheClient, suite.dataClient, true, "user_1", []string{"cat_1"})
 	suite.NoError(err)
-	scores, err = recommender.recommendCollaborative(context.Background())
+	scores, digest, err = recommender.recommendCollaborative(context.Background())
 	suite.NoError(err)
+	suite.Equal("digest", digest)
 	if suite.Equal(5, len(scores)) {
 		for i := 0; i < 5; i++ {
 			suite.Equal(fmt.Sprintf("item_%d", 18-2*i), scores[i].Id)
@@ -168,6 +174,8 @@ func (suite *RecommenderTestSuite) TestNonPersonalized() {
 	}
 	err := suite.cacheClient.AddScores(context.Background(), cache.NonPersonalized, "a", recommends)
 	suite.NoError(err)
+	err = suite.cacheClient.Set(context.Background(), cache.String(cache.Key(cache.NonPersonalized, "a"), "digest"))
+	suite.NoError(err)
 
 	feedback := make([]data.Feedback, 10)
 	for i := 0; i < 10; i++ {
@@ -185,8 +193,9 @@ func (suite *RecommenderTestSuite) TestNonPersonalized() {
 	recommender, err := NewRecommender(config.RecommendConfig{}, suite.cacheClient, suite.dataClient, true, "user_1", nil)
 	suite.NoError(err)
 	recommendFunc := recommender.recommendNonPersonalized("a")
-	scores, err := recommendFunc(context.Background())
+	scores, digest, err := recommendFunc(context.Background())
 	suite.NoError(err)
+	suite.Equal("digest", digest)
 	if suite.Equal(10, len(scores)) {
 		for i := 0; i < 10; i++ {
 			suite.Equal(fmt.Sprintf("item_%d", 19-i), scores[i].Id)
@@ -197,8 +206,9 @@ func (suite *RecommenderTestSuite) TestNonPersonalized() {
 	recommender, err = NewRecommender(config.RecommendConfig{}, suite.cacheClient, suite.dataClient, true, "user_1", []string{"cat_1"})
 	suite.NoError(err)
 	recommendFunc = recommender.recommendNonPersonalized("a")
-	scores, err = recommendFunc(context.Background())
+	scores, digest, err = recommendFunc(context.Background())
 	suite.NoError(err)
+	suite.Equal("digest", digest)
 	if suite.Equal(5, len(scores)) {
 		for i := 0; i < 5; i++ {
 			suite.Equal(fmt.Sprintf("item_%d", 18-2*i), scores[i].Id)

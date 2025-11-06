@@ -815,7 +815,7 @@ func (m *Master) getRecommend(request *restful.Request, response *restful.Respon
 		} else {
 			name = recommenderType
 		}
-		scores, err = recommender.RecommendSequential(ctx, scores, n, name)
+		scores, _, err = recommender.RecommendSequential(ctx, scores, n, name)
 	} else {
 		scores, err = recommender.Recommend(ctx, n)
 	}

@@ -15,6 +15,8 @@ jobs:
       matrix:
         image: [gorse-master, gorse-server, gorse-worker, gorse-in-one]
     steps:
+      - uses: actions/checkout@v5
+
       - name: Resolve Images on Description
         run: |
           sed -i -E "s/src=\"assets\//src=\"https:\/\/github.com\/gorse-io\/gorse\/raw\/master\/assets\//" README.md

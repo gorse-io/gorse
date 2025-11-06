@@ -97,6 +97,10 @@ func (s *MasterTestSuite) TestFindItemToItem() {
 	similar, err = s.CacheClient.SearchScores(ctx, cache.ItemToItem, cache.Key("default", "9"), []string{"*"}, 0, 100)
 	s.NoError(err)
 	s.Equal([]string{"7", "5"}, cache.ConvertDocumentsToValues(similar))
+	// digest
+	digest, err := s.CacheClient.Get(ctx, cache.Key(cache.ItemToItemDigest, "default", "9")).String()
+	s.NoError(err)
+	s.Equal(s.Config.Recommend.ItemToItem[0].Hash(&s.Config.Recommend), digest)
 
 	// similar items (common labels)
 	err = s.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastModifyItemTime, "8"), time.Now()))
@@ -176,6 +180,9 @@ func (s *MasterTestSuite) TestUserToUser() {
 	similar, err := s.CacheClient.SearchScores(ctx, cache.UserToUser, cache.Key("default", "9"), nil, 0, 100)
 	s.NoError(err)
 	s.Equal([]string{"7", "5", "3"}, cache.ConvertDocumentsToValues(similar))
+	digest, err := s.CacheClient.Get(ctx, cache.Key(cache.UserToUserDigest, "default", "9")).String()
+	s.NoError(err)
+	s.Equal(s.Config.Recommend.UserToUser[0].Hash(&s.Config.Recommend), digest)
 
 	// similar items (common labels)
 	err = s.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastModifyUserTime, "8"), time.Now()))
@@ -393,6 +400,11 @@ func (s *MasterTestSuite) TestNonPersonalizedRecommend() {
 	}, lo.Map(latest, func(document cache.Score, _ int) cache.Score {
 		return cache.Score{Id: document.Id, Score: document.Score}
 	}))
+
+	// check digest
+	digest, err := s.CacheClient.Get(ctx, cache.Key(cache.NonPersonalizedDigest, "latest")).String()
+	s.NoError(err)
+	s.Equal(s.Config.Recommend.NonPersonalized[0].Hash(), digest)
 }
 
 func (s *MasterTestSuite) TestNeedUpdateItemToItem() {

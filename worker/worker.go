@@ -585,7 +585,7 @@ func (w *Worker) Recommend(users []data.User) {
 		} else {
 			recommenderNames = w.Config.Recommend.ListRecommenders()
 		}
-		scores, err = recommender.RecommendSequential(context.Background(), scores, 0, recommenderNames...)
+		scores, _, err = recommender.RecommendSequential(context.Background(), scores, 0, recommenderNames...)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -621,7 +621,7 @@ func (w *Worker) Recommend(users []data.User) {
 		}
 
 		// cache recommendation
-		if err = w.CacheClient.AddScores(ctx, cache.OfflineRecommend, userId, results); err != nil {
+		if err = w.CacheClient.AddScores(ctx, cache.Recommend, userId, results); err != nil {
 			log.Logger().Error("failed to cache recommendation", zap.Error(err))
 			return errors.Trace(err)
 		}
@@ -748,7 +748,7 @@ func (w *Worker) checkUserActiveTime(ctx context.Context, userId string) bool {
 		return true
 	}
 	// remove recommend cache for inactive users
-	if err := w.CacheClient.DeleteScores(ctx, []string{cache.OfflineRecommend, cache.CollaborativeFiltering},
+	if err := w.CacheClient.DeleteScores(ctx, []string{cache.Recommend, cache.CollaborativeFiltering},
 		cache.ScoreCondition{Subset: proto.String(userId)}); err != nil {
 		log.Logger().Error("failed to delete recommend cache", zap.String("user_id", userId), zap.Error(err))
 	}
@@ -764,7 +764,7 @@ func (w *Worker) checkRecommendCacheOutOfDate(ctx context.Context, userId string
 	)
 
 	// 1. If cache is empty, stale.
-	items, err := w.CacheClient.SearchScores(ctx, cache.OfflineRecommend, userId, nil, 0, -1)
+	items, err := w.CacheClient.SearchScores(ctx, cache.Recommend, userId, nil, 0, -1)
 	if err != nil {
 		log.Logger().Error("failed to load offline recommendation", zap.String("user_id", userId), zap.Error(err))
 		return true
@@ -773,7 +773,7 @@ func (w *Worker) checkRecommendCacheOutOfDate(ctx context.Context, userId string
 	}
 
 	// 2. If digest is empty or not match, stale.
-	_, err = w.CacheClient.Get(ctx, cache.Key(cache.OfflineRecommendDigest, userId)).String()
+	_, err = w.CacheClient.Get(ctx, cache.Key(cache.RecommendDigest, userId)).String()
 	if err != nil {
 		if !errors.Is(err, errors.NotFound) {
 			log.Logger().Error("failed to load offline recommendation digest", zap.String("user_id", userId), zap.Error(err))
