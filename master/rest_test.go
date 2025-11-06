@@ -655,18 +655,7 @@ func (suite *MasterAPITestSuite) TestGetRecommends() {
 	}
 	apitest.New().
 		Handler(suite.handler).
-		Get("/api/dashboard/recommend/0/offline").
-		Header("Cookie", suite.cookie).
-		Expect(suite.T()).
-		Status(http.StatusOK).
-		Body(marshal(suite.T(), []data.Item{
-			{ItemId: "1"}, {ItemId: "3"}, {ItemId: "5"}, {ItemId: "6"}, {ItemId: "7"}, {ItemId: "8"},
-		})).
-		End()
-
-	apitest.New().
-		Handler(suite.handler).
-		Get("/api/dashboard/recommend/0/_").
+		Get("/api/dashboard/recommend/0").
 		Header("Cookie", suite.cookie).
 		Expect(suite.T()).
 		Status(http.StatusOK).

@@ -275,41 +275,70 @@ func TestNonPersonalizedConfig(t *testing.T) {
 func TestItemToItemConfig(t *testing.T) {
 	a := ItemToItemConfig{}
 	b := ItemToItemConfig{}
-	assert.Equal(t, a.Hash(), b.Hash())
+	assert.Equal(t, a.Hash(nil), b.Hash(nil))
 
 	a = ItemToItemConfig{Name: "a"}
 	b = ItemToItemConfig{Name: "b"}
-	assert.NotEqual(t, a.Hash(), b.Hash())
+	assert.NotEqual(t, a.Hash(nil), b.Hash(nil))
 	assert.Equal(t, "item-to-item/a", a.FullName())
 	assert.Equal(t, "item-to-item/b", b.FullName())
 
 	a = ItemToItemConfig{Type: "a"}
 	b = ItemToItemConfig{Type: "b"}
-	assert.NotEqual(t, a.Hash(), b.Hash())
+	assert.NotEqual(t, a.Hash(nil), b.Hash(nil))
 
 	a = ItemToItemConfig{Column: "a"}
 	b = ItemToItemConfig{Column: "b"}
-	assert.NotEqual(t, a.Hash(), b.Hash())
+	assert.NotEqual(t, a.Hash(nil), b.Hash(nil))
+
+	c := ItemToItemConfig{Type: "users"}
+	d := RecommendConfig{}
+	e := RecommendConfig{}
+	assert.Equal(t, c.Hash(&d), c.Hash(&e))
+
+	d.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{expression.MustParseFeedbackTypeExpression("like")}
+	e.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{expression.MustParseFeedbackTypeExpression("star")}
+	assert.NotEqual(t, c.Hash(&d), c.Hash(&e))
 }
 
 func TestUserToUserConfig(t *testing.T) {
 	a := UserToUserConfig{}
 	b := UserToUserConfig{}
-	assert.Equal(t, a.Hash(), b.Hash())
+	assert.Equal(t, a.Hash(nil), b.Hash(nil))
 
 	a = UserToUserConfig{Name: "a"}
 	b = UserToUserConfig{Name: "b"}
-	assert.NotEqual(t, a.Hash(), b.Hash())
+	assert.NotEqual(t, a.Hash(nil), b.Hash(nil))
 	assert.Equal(t, "user-to-user/a", a.FullName())
 	assert.Equal(t, "user-to-user/b", b.FullName())
 
 	a = UserToUserConfig{Type: "a"}
 	b = UserToUserConfig{Type: "b"}
-	assert.NotEqual(t, a.Hash(), b.Hash())
+	assert.NotEqual(t, a.Hash(nil), b.Hash(nil))
 
 	a = UserToUserConfig{Column: "a"}
 	b = UserToUserConfig{Column: "b"}
-	assert.NotEqual(t, a.Hash(), b.Hash())
+	assert.NotEqual(t, a.Hash(nil), b.Hash(nil))
+
+	c := UserToUserConfig{Type: "items"}
+	d := RecommendConfig{}
+	e := RecommendConfig{}
+	assert.Equal(t, c.Hash(&d), c.Hash(&e))
+
+	d.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{expression.MustParseFeedbackTypeExpression("like")}
+	e.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{expression.MustParseFeedbackTypeExpression("star")}
+	assert.NotEqual(t, c.Hash(&d), c.Hash(&e))
+}
+
+func TestCollaborativeConfig(t *testing.T) {
+	a := RecommendConfig{}
+	b := RecommendConfig{}
+	c := CollaborativeConfig{}
+	assert.Equal(t, c.Hash(&a), c.Hash(&b))
+
+	a.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{expression.MustParseFeedbackTypeExpression("like")}
+	b.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{expression.MustParseFeedbackTypeExpression("star")}
+	assert.NotEqual(t, c.Hash(&a), c.Hash(&b))
 }
 
 func TestExternalConfig(t *testing.T) {
@@ -326,6 +355,50 @@ func TestExternalConfig(t *testing.T) {
 	a = ExternalConfig{Script: "a"}
 	b = ExternalConfig{Script: "b"}
 	assert.NotEqual(t, a.Hash(), b.Hash())
+}
+
+func TestRecommendConfig(t *testing.T) {
+	a := RecommendConfig{}
+	b := RecommendConfig{}
+	assert.Equal(t, a.Hash(), b.Hash())
+
+	a.NonPersonalized = []NonPersonalizedConfig{{Name: "a"}}
+	b.NonPersonalized = []NonPersonalizedConfig{{Name: "b"}}
+	assert.NotEqual(t, a.Hash(), b.Hash())
+	a.NonPersonalized = []NonPersonalizedConfig{}
+	b.NonPersonalized = []NonPersonalizedConfig{}
+
+	a.ItemToItem = []ItemToItemConfig{{Name: "a"}}
+	b.ItemToItem = []ItemToItemConfig{{Name: "b"}}
+	assert.NotEqual(t, a.Hash(), b.Hash())
+	a.ItemToItem = []ItemToItemConfig{}
+	b.ItemToItem = []ItemToItemConfig{}
+
+	a.UserToUser = []UserToUserConfig{{Name: "a"}}
+	b.UserToUser = []UserToUserConfig{{Name: "b"}}
+	assert.NotEqual(t, a.Hash(), b.Hash())
+	a.UserToUser = []UserToUserConfig{}
+	b.UserToUser = []UserToUserConfig{}
+
+	a.External = []ExternalConfig{{Name: "a"}}
+	b.External = []ExternalConfig{{Name: "b"}}
+	assert.NotEqual(t, a.Hash(), b.Hash())
+	a.External = []ExternalConfig{}
+	b.External = []ExternalConfig{}
+
+	a.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{expression.MustParseFeedbackTypeExpression("like")}
+	b.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{expression.MustParseFeedbackTypeExpression("star")}
+	assert.NotEqual(t, a.Hash(), b.Hash())
+
+	a.Ranker.Recommenders = []string{"latest"}
+	b.Ranker.Recommenders = []string{"collaborative"}
+	assert.NotEqual(t, a.Hash(), b.Hash())
+
+	a.UserToUser = []UserToUserConfig{{Name: "a"}}
+	b.UserToUser = []UserToUserConfig{{Name: "a"}}
+	a.Ranker.Recommenders = []string{"user-to-user/a"}
+	b.Ranker.Recommenders = []string{"user-to-user/a"}
+	assert.Equal(t, a.Hash(), b.Hash())
 }
 
 type ValidateTestSuite struct {
