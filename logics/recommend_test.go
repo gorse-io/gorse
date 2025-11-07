@@ -17,6 +17,8 @@ package logics
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -215,6 +217,36 @@ func (suite *RecommenderTestSuite) TestNonPersonalized() {
 			suite.Equal(float64(18-2*i), scores[i].Score)
 		}
 	}
+}
+
+func (suite *RecommenderTestSuite) TestExternal() {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		userId := r.URL.Query().Get("user_id")
+		if userId == "user_1" {
+			fmt.Fprintln(w, `["item_1", "item_2", "item_3"]`)
+		} else {
+			http.NotFound(w, r)
+		}
+	}))
+	defer ts.Close()
+
+	cfg := config.RecommendConfig{
+		External: []config.ExternalConfig{{
+			Script: fmt.Sprintf(`fetch("%s?user_id=user_1").body`, ts.URL),
+			Name:   "test",
+		}},
+	}
+	recommender, err := NewRecommender(cfg, suite.cacheClient, suite.dataClient, true, "user_1", nil)
+	suite.NoError(err)
+	recommendFunc := recommender.recommendExternal("test")
+	scores, digest, err := recommendFunc(context.Background())
+	suite.NoError(err)
+	suite.Equal(cfg.External[0].Hash(), digest)
+	suite.Equal([]cache.Score{
+		{Id: "item_1", Score: 0},
+		{Id: "item_2", Score: 0},
+		{Id: "item_3", Score: 0},
+	}, scores)
 }
 
 func TestRecommenderTestSuite(t *testing.T) {

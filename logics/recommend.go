@@ -35,6 +35,7 @@ const (
 	NonPersonalizedRecommender = "non-personalized/"
 	ItemToItemRecommender      = "item-to-item/"
 	UserToUserRecommender      = "user-to-user/"
+	ExternalRecommender        = "external/"
 	CollaborativeRecommender   = "collaborative"
 )
 
@@ -162,7 +163,7 @@ func (r *Recommender) recommendLatest(ctx context.Context) ([]cache.Score, strin
 			})
 		}
 	}
-	return scores, "", nil
+	return scores, "latest", nil
 }
 
 func (r *Recommender) recommendNonPersonalized(name string) RecommenderFunc {
@@ -313,5 +314,41 @@ func (r *Recommender) recommendUserToUser(name string) RecommenderFunc {
 			}
 		}
 		return results, digest, nil
+	}
+}
+
+func (r *Recommender) recommendExternal(name string) RecommenderFunc {
+	return func(ctx context.Context) ([]cache.Score, string, error) {
+		var externlConfig config.ExternalConfig
+		for _, extConfig := range r.config.External {
+			if extConfig.Name == name {
+				externlConfig = extConfig
+				break
+			}
+		}
+
+		if len(r.categories) > 0 {
+			// external recommenders do not support categories
+			return nil, externlConfig.Hash(), nil
+		}
+
+		external, err := NewExternal(externlConfig)
+		if err != nil {
+			return nil, "", errors.Trace(err)
+		}
+		defer external.Close()
+		items, err := external.Pull(r.userId)
+		if err != nil {
+			return nil, "", errors.Trace(err)
+		}
+		scores := make([]cache.Score, 0, len(items))
+		for _, itemId := range items {
+			if !r.excludeSet.Contains(itemId) {
+				scores = append(scores, cache.Score{
+					Id: itemId,
+				})
+			}
+		}
+		return scores, externlConfig.Hash(), nil
 	}
 }

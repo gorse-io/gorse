@@ -32,6 +32,7 @@ import (
 	"github.com/gorse-io/gorse/common/expression"
 	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/common/parallel"
+	"github.com/gorse-io/gorse/common/util"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/dataset"
 	"github.com/gorse-io/gorse/logics"
@@ -367,6 +368,10 @@ func (suite *WorkerTestSuite) TestRecommendLatest() {
 		{Id: "9", Score: 9, Categories: []string{"*"}, Timestamp: recommendTime},
 		{Id: "8", Score: 8, Categories: []string{"*"}, Timestamp: recommendTime},
 	}, recommends)
+	// read recommend digest
+	digest, err := suite.CacheClient.Get(ctx, cache.Key(cache.RecommendDigest, "0")).String()
+	suite.NoError(err)
+	suite.Equal(util.MD5("latest"), digest)
 }
 
 func (suite *WorkerTestSuite) TestRecommendNonPersonalized() {
