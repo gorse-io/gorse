@@ -151,12 +151,18 @@ type ReturnValue struct {
 }
 
 func (r *ReturnValue) String() (string, error) {
-	return r.value, r.err
+	if r.err != nil {
+		return "", r.err
+	}
+	return r.value, nil
 }
 
 func (r *ReturnValue) Integer() (int, error) {
 	if r.err != nil {
 		return 0, r.err
+	}
+	if !r.exists {
+		return 0, nil
 	}
 	return strconv.Atoi(r.value)
 }
@@ -164,6 +170,9 @@ func (r *ReturnValue) Integer() (int, error) {
 func (r *ReturnValue) Time() (time.Time, error) {
 	if r.err != nil {
 		return time.Time{}, r.err
+	}
+	if !r.exists {
+		return time.Time{}, nil
 	}
 	t, err := dateparse.ParseAny(r.value)
 	if err != nil {

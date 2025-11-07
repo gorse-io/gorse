@@ -144,11 +144,12 @@ func (suite *baseTestSuite) TestExists() {
 	suite.NoError(err)
 	suite.Equal(42, intVal)
 	
-	// Test non-existent integer
+	// Test non-existent integer - should return 0 with no error
 	ret = suite.Database.Get(ctx, Key("test", "noint"))
 	suite.False(ret.Exists())
 	intVal, err = ret.Integer()
-	suite.Error(err) // Should error when parsing empty string to int
+	suite.NoError(err)
+	suite.Equal(0, intVal)
 }
 
 func (suite *baseTestSuite) TestScan() {
