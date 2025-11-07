@@ -45,34 +45,28 @@ import (
 )
 
 const (
-	// OfflineRecommend is sorted set of offline recommendation for each user.
-	//  Global recommendation      - offline_recommend/{user_id}
-	//  Categorized recommendation - offline_recommend/{user_id}/{category}
-	OfflineRecommend           = "offline_recommend"
-	OfflineRecommendUpdateTime = "offline_recommend_update_time"
-
-	// OfflineRecommendDigest is digest of offline recommendation configuration.
-	//	Recommendation digest      - offline_recommend_digest/{user_id}
-	OfflineRecommendDigest = "offline_recommend_digest"
-
-	NonPersonalized           = "non-personalized"
-	NonPersonalizedUpdateTime = "non-personalized_update_time"
-
-	ItemToItem             = "item-to-item"
-	ItemToItemDigest       = "item-to-item_digest"
-	ItemToItemUpdateTime   = "item-to-item_update_time"
-	UserToUser             = "user-to-user"
-	UserToUserDigest       = "user-to-user_digest"
-	UserToUserUpdateTime   = "user-to-user_update_time"
-	CollaborativeFiltering = "collaborative-filtering"
+	NonPersonalized                  = "non-personalized"
+	NonPersonalizedDigest            = "non-personalized_digest"
+	NonPersonalizedUpdateTime        = "non-personalized_update_time"
+	ItemToItem                       = "item-to-item"
+	ItemToItemDigest                 = "item-to-item_digest"
+	ItemToItemUpdateTime             = "item-to-item_update_time"
+	UserToUser                       = "user-to-user"
+	UserToUserDigest                 = "user-to-user_digest"
+	UserToUserUpdateTime             = "user-to-user_update_time"
+	CollaborativeFiltering           = "collaborative-filtering"
+	CollaborativeFilteringDigest     = "collaborative-filtering_digest"
+	CollaborativeFilteringUpdateTime = "collaborative-filtering_update_time"
+	Recommend                        = "recommend"
+	RecommendDigest                  = "recommend_digest"
+	RecommendUpdateTime              = "recommend_update_time"
 
 	// ItemCategories is the set of item categories. The format of key:
 	//	Global item categories - item_categories
 	ItemCategories = "item_categories"
 
-	LastModifyItemTime          = "last_modify_item_time"           // the latest timestamp that a user related data was modified
-	LastModifyUserTime          = "last_modify_user_time"           // the latest timestamp that an item related data was modified
-	LastUpdateUserRecommendTime = "last_update_user_recommend_time" // the latest timestamp that a user's recommendation was updated
+	LastModifyItemTime = "last_modify_item_time" // the latest timestamp that a user related data was modified
+	LastModifyUserTime = "last_modify_user_time" // the latest timestamp that an item related data was modified
 
 	// GlobalMeta is global meta information
 	GlobalMeta                 = "global_meta"
@@ -103,7 +97,7 @@ const (
 var ItemCache = []string{
 	NonPersonalized,
 	ItemToItem,
-	OfflineRecommend,
+	Recommend,
 }
 
 var (

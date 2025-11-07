@@ -15,7 +15,10 @@
 package util
 
 import (
+	"crypto/md5"
+	"encoding/hex"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/gorse-io/gorse/common/log"
@@ -83,4 +86,14 @@ func ValidateId(text string) error {
 		return fmt.Errorf("id cannot contain `/`")
 	}
 	return nil
+}
+
+// MD5 computes the MD5 hash of unordered strings.
+func MD5(s ...string) string {
+	hash := md5.New()
+	sort.Strings(s)
+	for _, str := range s {
+		hash.Write([]byte(str))
+	}
+	return hex.EncodeToString(hash.Sum(nil)[:])
 }

@@ -778,8 +778,8 @@ func (s *RestServer) getCollaborativeFiltering(request *restful.Request, respons
 	// Get user id
 	userId := request.PathParameter("user-id")
 	categories := ReadCategories(request, nil)
-	s.SetLastModified(request, response, cache.Key(cache.OfflineRecommendUpdateTime, userId))
-	s.SearchDocuments(cache.OfflineRecommend, userId, categories, nil, request, response)
+	s.SetLastModified(request, response, cache.Key(cache.RecommendUpdateTime, userId))
+	s.SearchDocuments(cache.Recommend, userId, categories, nil, request, response)
 }
 
 func (s *RestServer) getRecommend(request *restful.Request, response *restful.Response) {

@@ -855,7 +855,7 @@ func BenchmarkRecommendFromOfflineCache(b *testing.B) {
 			}
 			mutable.Reverse(documents)
 			mutable.Reverse(expects)
-			err := s.CacheClient.AddScores(ctx, cache.OfflineRecommend, "init_user_1", documents)
+			err := s.CacheClient.AddScores(ctx, cache.Recommend, "init_user_1", documents)
 			require.NoError(b, err)
 			err = s.DataClient.BatchInsertFeedback(ctx, feedbacks, true, true, true)
 			require.NoError(b, err)

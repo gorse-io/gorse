@@ -707,8 +707,8 @@ func (suite *ServerTestSuite) TestNonPersonalizedRecommend() {
 		{"NonPersonalizedCategory", cache.NonPersonalized, "trending", "0", "/api/non-personalized/trending"},
 		{"ItemToItem", cache.ItemToItem, cache.Key("lookalike", "0"), "", "/api/item-to-item/lookalike/0"},
 		{"ItemToItemCategory", cache.ItemToItem, cache.Key("lookalike", "0"), "0", "/api/item-to-item/lookalike/0"},
-		{"CollaborativeFiltering", cache.OfflineRecommend, "0", "", "/api/collaborative-filtering/0"},
-		{"CollaborativeFilteringCategory", cache.OfflineRecommend, "0", "0", "/api/collaborative-filtering/0/0"},
+		{"CollaborativeFiltering", cache.Recommend, "0", "", "/api/collaborative-filtering/0"},
+		{"CollaborativeFilteringCategory", cache.Recommend, "0", "0", "/api/collaborative-filtering/0/0"},
 	}
 	lastModified := time.Now()
 
@@ -910,7 +910,7 @@ func (suite *ServerTestSuite) TestTimeSeries() {
 func (suite *ServerTestSuite) TestGetRecommends() {
 	ctx := context.Background()
 	// insert hidden items
-	err := suite.CacheClient.AddScores(ctx, cache.OfflineRecommend, "0", []cache.Score{{Id: "0", Score: 100, Categories: []string{""}}})
+	err := suite.CacheClient.AddScores(ctx, cache.Recommend, "0", []cache.Score{{Id: "0", Score: 100, Categories: []string{""}}})
 	suite.NoError(err)
 	// hide item
 	apitest.New().
@@ -934,7 +934,7 @@ func (suite *ServerTestSuite) TestGetRecommends() {
 	})
 	suite.NoError(err)
 	// insert recommendation
-	err = suite.CacheClient.AddScores(ctx, cache.OfflineRecommend, "0", []cache.Score{
+	err = suite.CacheClient.AddScores(ctx, cache.Recommend, "0", []cache.Score{
 		{Id: "1", Score: 99, Categories: []string{""}},
 		{Id: "2", Score: 98, Categories: []string{""}},
 		{Id: "3", Score: 97, Categories: []string{""}},
@@ -1036,7 +1036,7 @@ func (suite *ServerTestSuite) TestGetRecommends() {
 func (suite *ServerTestSuite) TestGetRecommendsMultiCategories() {
 	ctx := context.Background()
 	// insert recommendation
-	err := suite.CacheClient.AddScores(ctx, cache.OfflineRecommend, "0", []cache.Score{
+	err := suite.CacheClient.AddScores(ctx, cache.Recommend, "0", []cache.Score{
 		{Id: "1", Score: 1, Categories: []string{""}},
 		{Id: "2", Score: 2, Categories: []string{"", "2"}},
 		{Id: "3", Score: 3, Categories: []string{"", "3"}},
@@ -1066,7 +1066,7 @@ func (suite *ServerTestSuite) TestGetRecommendsReplacement() {
 	ctx := context.Background()
 	suite.Config.Recommend.Replacement.EnableReplacement = true
 	// insert recommendation
-	err := suite.CacheClient.AddScores(ctx, cache.OfflineRecommend, "0", []cache.Score{
+	err := suite.CacheClient.AddScores(ctx, cache.Recommend, "0", []cache.Score{
 		{Id: "0", Score: 100, Categories: []string{""}},
 		{Id: "1", Score: 99, Categories: []string{""}},
 		{Id: "2", Score: 98, Categories: []string{""}},
@@ -1122,7 +1122,7 @@ func (suite *ServerTestSuite) TestGetRecommendsFallbackItemToItem() {
 		expression.MustParseFeedbackTypeExpression("a")}
 	suite.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "default"}}
 	// insert recommendation
-	err := suite.CacheClient.AddScores(ctx, cache.OfflineRecommend, "0", []cache.Score{
+	err := suite.CacheClient.AddScores(ctx, cache.Recommend, "0", []cache.Score{
 		{Id: "1", Score: 99},
 		{Id: "2", Score: 98},
 		{Id: "3", Score: 97},
@@ -1213,7 +1213,7 @@ func (suite *ServerTestSuite) TestGetRecommendsFallbackUserToUser() {
 	ctx := context.Background()
 	suite.Config.Recommend.UserToUser = []config.UserToUserConfig{{Name: "default"}}
 	// insert recommendation
-	err := suite.CacheClient.AddScores(ctx, cache.OfflineRecommend, "0",
+	err := suite.CacheClient.AddScores(ctx, cache.Recommend, "0",
 		[]cache.Score{{Id: "1", Score: 99}, {Id: "2", Score: 98}, {Id: "3", Score: 97}, {Id: "4", Score: 96}})
 	suite.NoError(err)
 	// insert feedback
@@ -1288,7 +1288,7 @@ func (suite *ServerTestSuite) TestGetRecommendsFallbackUserToUser() {
 func (suite *ServerTestSuite) TestRecommendFallbackLatest() {
 	ctx := context.Background()
 	// insert offline recommendation
-	err := suite.CacheClient.AddScores(ctx, cache.OfflineRecommend, "0", []cache.Score{
+	err := suite.CacheClient.AddScores(ctx, cache.Recommend, "0", []cache.Score{
 		{Id: "1", Score: 99, Categories: []string{"*"}},
 		{Id: "2", Score: 98, Categories: []string{"*"}},
 		{Id: "3", Score: 97, Categories: []string{"*"}},
@@ -1335,7 +1335,7 @@ func (suite *ServerTestSuite) TestRecommendFallbackLatest() {
 func (suite *ServerTestSuite) TestGetRecommendsFallbackCollaborativeFiltering() {
 	ctx := context.Background()
 	// insert offline recommendation
-	err := suite.CacheClient.AddScores(ctx, cache.OfflineRecommend, "0", []cache.Score{
+	err := suite.CacheClient.AddScores(ctx, cache.Recommend, "0", []cache.Score{
 		{Id: "1", Score: 99, Categories: []string{"*"}},
 		{Id: "2", Score: 98, Categories: []string{"*"}},
 		{Id: "3", Score: 97, Categories: []string{"*"}},
@@ -1377,7 +1377,7 @@ func (suite *ServerTestSuite) TestGetRecommendsFallbackCollaborativeFiltering() 
 func (suite *ServerTestSuite) TestGetRecommendsFallbackNonPersonalized() {
 	ctx := context.Background()
 	// insert offline recommendation
-	err := suite.CacheClient.AddScores(ctx, cache.OfflineRecommend, "0", []cache.Score{
+	err := suite.CacheClient.AddScores(ctx, cache.Recommend, "0", []cache.Score{
 		{Id: "1", Score: 99, Categories: []string{"*"}},
 		{Id: "2", Score: 98, Categories: []string{"*"}},
 		{Id: "3", Score: 97, Categories: []string{"*"}},
@@ -1559,7 +1559,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 	mutable.Reverse(documents)
 	err := suite.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key("default", "100"), documents)
 	suite.NoError(err)
-	err = suite.CacheClient.AddScores(ctx, cache.OfflineRecommend, "100", documents)
+	err = suite.CacheClient.AddScores(ctx, cache.Recommend, "100", documents)
 	suite.NoError(err)
 
 	// delete item

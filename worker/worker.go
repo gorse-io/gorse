@@ -578,6 +578,7 @@ func (w *Worker) Recommend(users []data.User) {
 		// Generate recommendation from recommenders.
 		var (
 			scores           []cache.Score
+			digest           string
 			recommenderNames []string
 		)
 		if len(w.Config.Recommend.Ranker.Recommenders) > 0 {
@@ -585,7 +586,7 @@ func (w *Worker) Recommend(users []data.User) {
 		} else {
 			recommenderNames = w.Config.Recommend.ListRecommenders()
 		}
-		scores, err = recommender.RecommendSequential(context.Background(), scores, 0, recommenderNames...)
+		scores, digest, err = recommender.RecommendSequential(context.Background(), scores, 0, recommenderNames...)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -621,13 +622,14 @@ func (w *Worker) Recommend(users []data.User) {
 		}
 
 		// cache recommendation
-		if err = w.CacheClient.AddScores(ctx, cache.OfflineRecommend, userId, results); err != nil {
+		if err = w.CacheClient.AddScores(ctx, cache.Recommend, userId, results); err != nil {
 			log.Logger().Error("failed to cache recommendation", zap.Error(err))
 			return errors.Trace(err)
 		}
-		if err = w.CacheClient.Set(
-			ctx,
-			cache.Time(cache.Key(cache.LastUpdateUserRecommendTime, userId), recommendTime)); err != nil {
+		if err = w.CacheClient.Set(ctx,
+			cache.Time(cache.Key(cache.RecommendUpdateTime, userId), recommendTime),
+			cache.String(cache.Key(cache.RecommendDigest, userId), digest),
+		); err != nil {
 			log.Logger().Error("failed to cache recommendation time", zap.Error(err))
 		}
 		return nil
@@ -749,7 +751,7 @@ func (w *Worker) checkUserActiveTime(ctx context.Context, userId string) bool {
 		return true
 	}
 	// remove recommend cache for inactive users
-	if err := w.CacheClient.DeleteScores(ctx, []string{cache.OfflineRecommend, cache.CollaborativeFiltering},
+	if err := w.CacheClient.DeleteScores(ctx, []string{cache.Recommend, cache.CollaborativeFiltering},
 		cache.ScoreCondition{Subset: proto.String(userId)}); err != nil {
 		log.Logger().Error("failed to delete recommend cache", zap.String("user_id", userId), zap.Error(err))
 	}
@@ -765,7 +767,7 @@ func (w *Worker) checkRecommendCacheOutOfDate(ctx context.Context, userId string
 	)
 
 	// 1. If cache is empty, stale.
-	items, err := w.CacheClient.SearchScores(ctx, cache.OfflineRecommend, userId, nil, 0, -1)
+	items, err := w.CacheClient.SearchScores(ctx, cache.Recommend, userId, nil, 0, -1)
 	if err != nil {
 		log.Logger().Error("failed to load offline recommendation", zap.String("user_id", userId), zap.Error(err))
 		return true
@@ -774,7 +776,7 @@ func (w *Worker) checkRecommendCacheOutOfDate(ctx context.Context, userId string
 	}
 
 	// 2. If digest is empty or not match, stale.
-	digest, err := w.CacheClient.Get(ctx, cache.Key(cache.OfflineRecommendDigest, userId)).String()
+	digest, err := w.CacheClient.Get(ctx, cache.Key(cache.RecommendDigest, userId)).String()
 	if err != nil {
 		log.Logger().Error("failed to read offline recommendation digest", zap.String("user_id", userId), zap.Error(err))
 		return true
@@ -793,7 +795,7 @@ func (w *Worker) checkRecommendCacheOutOfDate(ctx context.Context, userId string
 	}
 
 	// 3. If update time is empty, stale.
-	recommendTime, err = w.CacheClient.Get(ctx, cache.Key(cache.LastUpdateUserRecommendTime, userId)).Time()
+	recommendTime, err = w.CacheClient.Get(ctx, cache.Key(cache.RecommendUpdateTime, userId)).Time()
 	if err != nil {
 		if !errors.Is(err, errors.NotFound) {
 			log.Logger().Error("failed to read last update user recommend time", zap.Error(err))

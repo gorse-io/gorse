@@ -98,7 +98,7 @@ func (suite *GorseClientTestSuite) TestFeedback() {
 
 func (suite *GorseClientTestSuite) TestRecommend() {
 	ctx := context.TODO()
-	suite.hSet("offline_recommend", "100", []client.Score{
+	suite.hSet("recommend", "100", []client.Score{
 		{Id: "1", Score: 1},
 		{Id: "2", Score: 2},
 		{Id: "3", Score: 3},

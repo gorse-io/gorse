@@ -33,6 +33,7 @@ import (
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/gorse-io/gorse/common/expression"
 	"github.com/gorse-io/gorse/common/log"
+	"github.com/gorse-io/gorse/common/util"
 	"github.com/gorse-io/gorse/storage"
 	"github.com/juju/errors"
 	"github.com/samber/lo"
@@ -153,31 +154,34 @@ func (r *RecommendConfig) Hash() string {
 	if recommenders.IsEmpty() {
 		recommenders.Append((r.ListRecommenders())...)
 	}
-	hash := md5.New()
+	var digests []string
 	for _, rec := range r.NonPersonalized {
 		if recommenders.Contains(rec.FullName()) {
-			hash.Write([]byte(rec.Hash()))
+			digests = append(digests, rec.Hash())
 		}
 	}
 	for _, rec := range r.ItemToItem {
 		if recommenders.Contains(rec.FullName()) {
-			hash.Write([]byte(rec.Hash(r)))
+			digests = append(digests, rec.Hash(r))
 		}
 	}
 	for _, rec := range r.UserToUser {
 		if recommenders.Contains(rec.FullName()) {
-			hash.Write([]byte(rec.Hash(r)))
+			digests = append(digests, rec.Hash(r))
 		}
 	}
 	for _, rec := range r.External {
 		if recommenders.Contains(rec.FullName()) {
-			hash.Write([]byte(rec.Hash()))
+			digests = append(digests, rec.Hash())
 		}
 	}
 	if recommenders.Contains(r.Collaborative.FullName()) {
-		hash.Write([]byte(r.Collaborative.Hash(r)))
+		digests = append(digests, r.Collaborative.Hash(r))
 	}
-	return hex.EncodeToString(hash.Sum(nil)[:])
+	if recommenders.Contains("latest") {
+		digests = append(digests, "latest")
+	}
+	return util.MD5(digests...)
 }
 
 func StringToFeedbackTypeHookFunc() mapstructure.DecodeHookFunc {

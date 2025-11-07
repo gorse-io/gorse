@@ -61,3 +61,9 @@ func TestValidateId(t *testing.T) {
 	assert.NotNil(t, ValidateId("/"))
 	assert.Nil(t, ValidateId("abc"))
 }
+
+func TestMD5(t *testing.T) {
+	hash1 := MD5("b", "a", "c")
+	hash2 := MD5("c", "b", "a")
+	assert.Equal(t, hash1, hash2)
+}
