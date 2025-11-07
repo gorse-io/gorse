@@ -171,14 +171,14 @@ func (m MongoDB) Get(ctx context.Context, name string) *ReturnValue {
 	c := m.client.Database(m.dbName).Collection(m.ValuesTable())
 	r := c.FindOne(ctx, bson.M{"_id": bson.M{"$eq": name}})
 	if err := r.Err(); err == mongo.ErrNoDocuments {
-		return &ReturnValue{err: errors.Annotate(ErrObjectNotExist, name)}
+		return &ReturnValue{value: "", exists: false}
 	} else if err != nil {
-		return &ReturnValue{err: errors.Trace(err)}
+		return &ReturnValue{err: errors.Trace(err), exists: false}
 	}
 	if raw, err := r.DecodeBytes(); err != nil {
-		return &ReturnValue{err: errors.Trace(err)}
+		return &ReturnValue{err: errors.Trace(err), exists: false}
 	} else {
-		return &ReturnValue{value: raw.Lookup("value").StringValue()}
+		return &ReturnValue{value: raw.Lookup("value").StringValue(), exists: true}
 	}
 }
 

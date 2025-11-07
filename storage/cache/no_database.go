@@ -50,7 +50,7 @@ func (NoDatabase) Set(_ context.Context, _ ...Value) error {
 
 // Get method of NoDatabase returns ErrNoDatabase.
 func (NoDatabase) Get(_ context.Context, _ string) *ReturnValue {
-	return &ReturnValue{err: ErrNoDatabase}
+	return &ReturnValue{err: ErrNoDatabase, exists: false}
 }
 
 // Delete method of NoDatabase returns ErrNoDatabase.

@@ -204,18 +204,18 @@ func (db *SQLDatabase) Set(ctx context.Context, values ...Value) error {
 func (db *SQLDatabase) Get(ctx context.Context, name string) *ReturnValue {
 	rs, err := db.gormDB.WithContext(ctx).Table(db.ValuesTable()).Where("name = ?", name).Select("value").Rows()
 	if err != nil {
-		return &ReturnValue{err: errors.Trace(err)}
+		return &ReturnValue{err: errors.Trace(err), exists: false}
 	}
 	defer rs.Close()
 	if rs.Next() {
 		var value string
 		err := rs.Scan(&value)
 		if err != nil {
-			return &ReturnValue{err: errors.Trace(err)}
+			return &ReturnValue{err: errors.Trace(err), exists: false}
 		}
-		return &ReturnValue{value: value}
+		return &ReturnValue{value: value, exists: true}
 	}
-	return &ReturnValue{err: errors.Annotate(ErrObjectNotExist, name)}
+	return &ReturnValue{value: "", exists: false}
 }
 
 func (db *SQLDatabase) Delete(ctx context.Context, name string) error {

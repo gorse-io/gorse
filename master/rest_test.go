@@ -37,7 +37,6 @@ import (
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
 	"github.com/gorse-io/gorse/storage/meta"
-	"github.com/juju/errors"
 	"github.com/samber/lo"
 	"github.com/sashabaranov/go-openai"
 	"github.com/steinfletcher/apitest"
@@ -753,8 +752,8 @@ func (suite *MasterAPITestSuite) TestPurge() {
 	suite.purge(w, req)
 	suite.Equal(http.StatusOK, w.Code)
 
-	_, err = suite.CacheClient.Get(ctx, "key").String()
-	suite.ErrorIs(err, errors.NotFound)
+	v := suite.CacheClient.Get(ctx, "key")
+	suite.False(v.Exists())
 	z, err = suite.CacheClient.SearchScores(ctx, "sorted", "", []string{""}, 0, -1)
 	suite.NoError(err)
 	suite.Empty(z)

@@ -738,9 +738,10 @@ func (w *Worker) checkUserActiveTime(ctx context.Context, userId string) bool {
 	// read active time
 	activeTime, err := w.CacheClient.Get(ctx, cache.Key(cache.LastModifyUserTime, userId)).Time()
 	if err != nil {
-		if !errors.Is(err, errors.NotFound) {
-			log.Logger().Error("failed to read last modify user time", zap.Error(err))
-		}
+		log.Logger().Error("failed to read last modify user time", zap.String("user_id", userId), zap.Error(err))
+		return true
+	}
+	if activeTime.IsZero() {
 		return true
 	}
 	// check active time
@@ -773,19 +774,22 @@ func (w *Worker) checkRecommendCacheOutOfDate(ctx context.Context, userId string
 	}
 
 	// 2. If digest is empty or not match, stale.
-	_, err = w.CacheClient.Get(ctx, cache.Key(cache.OfflineRecommendDigest, userId)).String()
+	digest, err := w.CacheClient.Get(ctx, cache.Key(cache.OfflineRecommendDigest, userId)).String()
 	if err != nil {
-		if !errors.Is(err, errors.NotFound) {
-			log.Logger().Error("failed to load offline recommendation digest", zap.String("user_id", userId), zap.Error(err))
-		}
+		log.Logger().Error("failed to read offline recommendation digest", zap.String("user_id", userId), zap.Error(err))
+		return true
+	}
+	if digest == "" {
 		return true
 	}
 	// read active time
 	activeTime, err = w.CacheClient.Get(ctx, cache.Key(cache.LastModifyUserTime, userId)).Time()
 	if err != nil {
-		if !errors.Is(err, errors.NotFound) {
-			log.Logger().Error("failed to read last modify user time", zap.Error(err))
-		}
+		log.Logger().Error("failed to read last modify user time", zap.String("user_id", userId), zap.Error(err))
+		return true
+	}
+	if activeTime.IsZero() {
+		return true
 	}
 
 	// 3. If update time is empty, stale.
