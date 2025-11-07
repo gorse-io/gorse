@@ -86,7 +86,7 @@ func (suite *RecommenderTestSuite) TestLatest() {
 	suite.NoError(err)
 	scores, digest, err := recommender.recommendLatest(context.Background())
 	suite.NoError(err)
-	suite.Empty(digest)
+	suite.Equal("latest", digest)
 	if suite.Equal(10, len(scores)) {
 		for i := 0; i < 10; i++ {
 			suite.Equal(fmt.Sprintf("item_%d", 19-i), scores[i].Id)
@@ -223,12 +223,25 @@ func (suite *RecommenderTestSuite) TestExternal() {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		userId := r.URL.Query().Get("user_id")
 		if userId == "user_1" {
-			fmt.Fprintln(w, `["item_1", "item_2", "item_3"]`)
+			fmt.Fprintln(w, `["item_1", "item_2", "item_3", "item_100", "item_200", "item_300"]`)
 		} else {
 			http.NotFound(w, r)
 		}
 	}))
 	defer ts.Close()
+
+	feedback := make([]data.Feedback, 10)
+	for i := 0; i < 10; i++ {
+		feedback[i] = data.Feedback{
+			FeedbackKey: data.FeedbackKey{
+				FeedbackType: "click",
+				UserId:       "user_1",
+				ItemId:       fmt.Sprintf("item_%d", i),
+			},
+		}
+	}
+	err := suite.dataClient.BatchInsertFeedback(context.Background(), feedback, true, true, false)
+	suite.NoError(err)
 
 	cfg := config.RecommendConfig{
 		External: []config.ExternalConfig{{
@@ -243,9 +256,9 @@ func (suite *RecommenderTestSuite) TestExternal() {
 	suite.NoError(err)
 	suite.Equal(cfg.External[0].Hash(), digest)
 	suite.Equal([]cache.Score{
-		{Id: "item_1", Score: 0},
-		{Id: "item_2", Score: 0},
-		{Id: "item_3", Score: 0},
+		{Id: "item_100", Score: 0},
+		{Id: "item_200", Score: 0},
+		{Id: "item_300", Score: 0},
 	}, scores)
 }
 
