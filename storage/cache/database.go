@@ -145,8 +145,9 @@ func Time(name string, value time.Time) Value {
 }
 
 type ReturnValue struct {
-	value string
-	err   error
+	value  string
+	err    error
+	exists bool
 }
 
 func (r *ReturnValue) String() (string, error) {
@@ -169,6 +170,10 @@ func (r *ReturnValue) Time() (time.Time, error) {
 		return time.Time{}, errors.Trace(err)
 	}
 	return t.In(time.UTC), nil
+}
+
+func (r *ReturnValue) Exists() bool {
+	return r.exists
 }
 
 type Score struct {

@@ -168,11 +168,11 @@ func (r *Redis) Get(ctx context.Context, key string) *ReturnValue {
 	val, err := r.client.Get(ctx, r.Key(key)).Result()
 	if err != nil {
 		if err == redis.Nil {
-			return &ReturnValue{err: errors.Annotate(ErrObjectNotExist, key)}
+			return &ReturnValue{value: "", exists: false}
 		}
-		return &ReturnValue{err: err}
+		return &ReturnValue{err: err, exists: false}
 	}
-	return &ReturnValue{value: val}
+	return &ReturnValue{value: val, exists: true}
 }
 
 // Delete object from Redis.

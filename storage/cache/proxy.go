@@ -241,12 +241,12 @@ func (p ProxyClient) Get(ctx context.Context, name string) *ReturnValue {
 		Name: name,
 	})
 	if err != nil {
-		return &ReturnValue{err: err}
+		return &ReturnValue{err: err, exists: false}
 	}
 	if resp.Value == nil {
-		return &ReturnValue{err: errors.NotFound}
+		return &ReturnValue{value: "", exists: false}
 	}
-	return &ReturnValue{value: resp.GetValue(), err: err}
+	return &ReturnValue{value: resp.GetValue(), err: err, exists: true}
 }
 
 func (p ProxyClient) Delete(ctx context.Context, name string) error {
