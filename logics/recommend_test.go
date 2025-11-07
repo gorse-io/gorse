@@ -98,7 +98,7 @@ func (suite *RecommenderTestSuite) TestLatest() {
 	suite.NoError(err)
 	scores, digest, err = recommender.recommendLatest(context.Background())
 	suite.NoError(err)
-	suite.Empty(digest)
+	suite.Equal("latest", digest)
 	if suite.Equal(5, len(scores)) {
 		for i := 0; i < 5; i++ {
 			suite.Equal(fmt.Sprintf("item_%d", 18-2*i), scores[i].Id)

@@ -319,20 +319,20 @@ func (r *Recommender) recommendUserToUser(name string) RecommenderFunc {
 
 func (r *Recommender) recommendExternal(name string) RecommenderFunc {
 	return func(ctx context.Context) ([]cache.Score, string, error) {
-		var externlConfig config.ExternalConfig
+		var externalConfig config.ExternalConfig
 		for _, extConfig := range r.config.External {
 			if extConfig.Name == name {
-				externlConfig = extConfig
+				externalConfig = extConfig
 				break
 			}
 		}
 
 		if len(r.categories) > 0 {
 			// external recommenders do not support categories
-			return nil, externlConfig.Hash(), nil
+			return nil, externalConfig.Hash(), nil
 		}
 
-		external, err := NewExternal(externlConfig)
+		external, err := NewExternal(externalConfig)
 		if err != nil {
 			return nil, "", errors.Trace(err)
 		}
@@ -349,6 +349,6 @@ func (r *Recommender) recommendExternal(name string) RecommenderFunc {
 				})
 			}
 		}
-		return scores, externlConfig.Hash(), nil
+		return scores, externalConfig.Hash(), nil
 	}
 }
