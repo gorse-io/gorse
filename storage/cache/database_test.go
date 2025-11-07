@@ -76,8 +76,10 @@ func (suite *baseTestSuite) TestMeta() {
 	err = suite.Database.Delete(ctx, Key("meta", "1"))
 	suite.NoError(err)
 	// Get meta not existed
-	value, err = suite.Database.Get(ctx, Key("meta", "1")).String()
-	suite.True(errors.Is(err, errors.NotFound), err)
+	ret := suite.Database.Get(ctx, Key("meta", "1"))
+	suite.False(ret.Exists())
+	value, err = ret.String()
+	suite.NoError(err)
 	suite.Equal("", value)
 	// Set meta int
 	err = suite.Database.Set(ctx, Integer(Key("meta", "1"), 2))
@@ -104,6 +106,52 @@ func (suite *baseTestSuite) TestMeta() {
 	suite.NoError(err)
 }
 
+func (suite *baseTestSuite) TestExists() {
+	ctx := context.Background()
+	
+	// Test non-existent key
+	ret := suite.Database.Get(ctx, Key("test", "nonexistent"))
+	suite.False(ret.Exists())
+	value, err := ret.String()
+	suite.NoError(err)
+	suite.Equal("", value)
+	
+	// Set a value
+	err = suite.Database.Set(ctx, String(Key("test", "exists"), "somevalue"))
+	suite.NoError(err)
+	
+	// Test existing key
+	ret = suite.Database.Get(ctx, Key("test", "exists"))
+	suite.True(ret.Exists())
+	value, err = ret.String()
+	suite.NoError(err)
+	suite.Equal("somevalue", value)
+	
+	// Delete the key
+	err = suite.Database.Delete(ctx, Key("test", "exists"))
+	suite.NoError(err)
+	
+	// Test deleted key no longer exists
+	ret = suite.Database.Get(ctx, Key("test", "exists"))
+	suite.False(ret.Exists())
+	
+	// Test with integer values
+	err = suite.Database.Set(ctx, Integer(Key("test", "int"), 42))
+	suite.NoError(err)
+	ret = suite.Database.Get(ctx, Key("test", "int"))
+	suite.True(ret.Exists())
+	intVal, err := ret.Integer()
+	suite.NoError(err)
+	suite.Equal(42, intVal)
+	
+	// Test non-existent integer - should return 0 with no error
+	ret = suite.Database.Get(ctx, Key("test", "noint"))
+	suite.False(ret.Exists())
+	intVal, err = ret.Integer()
+	suite.NoError(err)
+	suite.Equal(0, intVal)
+}
+
 func (suite *baseTestSuite) TestScan() {
 	ctx := context.Background()
 	err := suite.Database.Set(ctx, String("1", "1"))
@@ -126,12 +174,13 @@ func (suite *baseTestSuite) TestPurge() {
 	ret := suite.Database.Get(ctx, "key")
 	suite.NoError(ret.err)
 	suite.Equal("value", ret.value)
+	suite.True(ret.Exists())
 
 	// purge data
 	err = suite.Database.Purge()
 	suite.NoError(err)
 	ret = suite.Database.Get(ctx, "key")
-	suite.ErrorIs(ret.err, errors.NotFound)
+	suite.False(ret.Exists())
 
 	// purge empty dataset
 	err = suite.Database.Purge()

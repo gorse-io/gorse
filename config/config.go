@@ -178,6 +178,9 @@ func (r *RecommendConfig) Hash() string {
 	if recommenders.Contains(r.Collaborative.FullName()) {
 		digests = append(digests, r.Collaborative.Hash(r))
 	}
+	if recommenders.Contains("latest") {
+		digests = append(digests, "latest")
+	}
 	return util.MD5(digests...)
 }
 
