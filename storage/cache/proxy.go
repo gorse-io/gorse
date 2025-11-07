@@ -56,7 +56,7 @@ func (p *ProxyServer) Ping(context.Context, *protocol.PingRequest) (*protocol.Pi
 
 func (p *ProxyServer) Get(ctx context.Context, request *protocol.GetRequest) (*protocol.GetResponse, error) {
 	value := p.database.Get(ctx, request.GetName())
-	if errors.Is(value.err, errors.NotFound) {
+	if !value.Exists() {
 		return &protocol.GetResponse{}, nil
 	}
 	return &protocol.GetResponse{Value: proto.String(value.value)}, value.err

@@ -154,6 +154,9 @@ func (r *ReturnValue) String() (string, error) {
 	if r.err != nil {
 		return "", r.err
 	}
+	if !r.exists {
+		return "", nil
+	}
 	return r.value, nil
 }
 
