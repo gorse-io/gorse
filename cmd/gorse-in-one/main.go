@@ -124,7 +124,6 @@ var oneCommand = &cobra.Command{
 			close(done)
 		}()
 		// Start master
-		m.SetOneMode(w.ScheduleAPIHandler)
 		m.Serve()
 		<-done
 		log.Logger().Info("stop gorse-in-one successfully")

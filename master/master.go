@@ -20,7 +20,6 @@ import (
 	"math"
 	"math/rand"
 	"net"
-	"net/http"
 	"sync"
 	"time"
 
@@ -50,12 +49,6 @@ import (
 	"golang.org/x/oauth2"
 	"google.golang.org/grpc"
 )
-
-type ScheduleState struct {
-	IsRunning   bool      `json:"is_running"`
-	SearchModel bool      `json:"search_model"`
-	StartTime   time.Time `json:"start_time"`
-}
 
 type Datasets struct {
 	rankingDataset  *dataset.Dataset
@@ -103,9 +96,6 @@ type Master struct {
 	fitTicker    *time.Ticker
 	importedChan *parallel.ConditionChannel // feedback inserted events
 	triggerChan  *parallel.ConditionChannel // manually trigger events
-
-	scheduleState         ScheduleState
-	workerScheduleHandler http.HandlerFunc
 }
 
 // NewMaster creates a master node.
