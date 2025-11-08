@@ -57,11 +57,6 @@ import (
 
 const batchSize = 10000
 
-type ScheduleState struct {
-	IsRunning bool      `json:"is_running"`
-	StartTime time.Time `json:"start_time"`
-}
-
 // Worker manages states of a worker node.
 type Worker struct {
 	tracer   *monitor.Monitor
@@ -107,9 +102,6 @@ type Worker struct {
 	// peers
 	peers []string
 	me    string
-
-	// scheduler state
-	scheduleState ScheduleState
 
 	// events
 	tickDuration time.Duration
@@ -334,43 +326,10 @@ func (w *Worker) Pull() {
 func (w *Worker) ServeHTTP() {
 	http.Handle("/metrics", promhttp.Handler())
 	http.HandleFunc("/api/health/live", w.checkLive)
-	http.HandleFunc("/api/admin/schedule", w.ScheduleAPIHandler)
 	err := http.ListenAndServe(fmt.Sprintf("%s:%d", w.httpHost, w.httpPort), nil)
 	if err != nil {
 		log.Logger().Fatal("failed to start http server", zap.Error(err))
 	}
-}
-
-func (w *Worker) ScheduleAPIHandler(writer http.ResponseWriter, request *http.Request) {
-	if !w.checkAdmin(request) {
-		writeError(writer, "unauthorized", http.StatusMethodNotAllowed)
-		return
-	}
-	switch request.Method {
-	case http.MethodGet:
-		writer.WriteHeader(http.StatusOK)
-		bytes, err := json.Marshal(w.scheduleState)
-		if err != nil {
-			writeError(writer, err.Error(), http.StatusInternalServerError)
-		}
-		if _, err = writer.Write(bytes); err != nil {
-			writeError(writer, err.Error(), http.StatusInternalServerError)
-		}
-	case http.MethodPost:
-		w.triggerChan.Signal()
-	default:
-		writeError(writer, "method not allowed", http.StatusMethodNotAllowed)
-	}
-}
-
-func (w *Worker) checkAdmin(request *http.Request) bool {
-	if w.Config.Master.AdminAPIKey == "" {
-		return true
-	}
-	if request.FormValue("X-API-Key") == w.Config.Master.AdminAPIKey {
-		return true
-	}
-	return false
 }
 
 func writeJSON(w http.ResponseWriter, content any) {
@@ -427,13 +386,6 @@ func (w *Worker) Serve() {
 	}
 
 	loop := func() {
-		w.scheduleState.IsRunning = true
-		w.scheduleState.StartTime = time.Now()
-		defer func() {
-			w.scheduleState.IsRunning = false
-			w.scheduleState.StartTime = time.Time{}
-		}()
-
 		// pull users
 		workingUsers, err := w.pullUsers(w.peers, w.me)
 		if err != nil {

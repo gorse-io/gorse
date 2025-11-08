@@ -23,7 +23,6 @@ import (
 	"net/http"
 	"os"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -225,10 +224,6 @@ func (fs *SinglePageAppFileSystem) Open(name string) (http.File, error) {
 	return f, err
 }
 
-func (m *Master) SetOneMode(workerScheduleHandler http.HandlerFunc) {
-	m.workerScheduleHandler = workerScheduleHandler
-}
-
 func (m *Master) StartHttpServer() {
 	m.CreateWebService()
 	container := restful.NewContainer()
@@ -243,12 +238,6 @@ func (m *Master) StartHttpServer() {
 	container.Handle("/api/dump", http.HandlerFunc(m.dump))
 	container.Handle("/api/restore", http.HandlerFunc(m.restore))
 	container.Handle("/api/chat", http.HandlerFunc(m.chat))
-	if m.workerScheduleHandler == nil {
-		container.Handle("/api/admin/schedule", http.HandlerFunc(m.scheduleAPIHandler))
-	} else {
-		container.Handle("/api/admin/schedule/master", http.HandlerFunc(m.scheduleAPIHandler))
-		container.Handle("/api/admin/schedule/worker", m.workerScheduleHandler)
-	}
 	m.RestServer.StartHttpServer(container)
 }
 
@@ -1375,36 +1364,6 @@ func (m *Master) purge(response http.ResponseWriter, request *http.Request) {
 	if err := m.CacheClient.Purge(); err != nil {
 		writeError(response, http.StatusInternalServerError, err.Error())
 		return
-	}
-}
-
-func (m *Master) scheduleAPIHandler(writer http.ResponseWriter, request *http.Request) {
-	if !m.checkAdmin(request) {
-		writeError(writer, http.StatusUnauthorized, "unauthorized")
-		return
-	}
-	switch request.Method {
-	case http.MethodGet:
-		writer.WriteHeader(http.StatusOK)
-		bytes, err := json.Marshal(m.scheduleState)
-		if err != nil {
-			writeError(writer, http.StatusInternalServerError, err.Error())
-		}
-		if _, err = writer.Write(bytes); err != nil {
-			writeError(writer, http.StatusInternalServerError, err.Error())
-		}
-	case http.MethodPost:
-		s := request.FormValue("search_model")
-		if s != "" {
-			if searchModel, err := strconv.ParseBool(s); err != nil {
-				writeError(writer, http.StatusBadRequest, err.Error())
-			} else {
-				m.scheduleState.SearchModel = searchModel
-			}
-		}
-		m.triggerChan.Signal()
-	default:
-		writeError(writer, http.StatusMethodNotAllowed, "method not allowed")
 	}
 }
 
