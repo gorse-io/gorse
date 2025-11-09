@@ -535,7 +535,7 @@ func (g *chatItemToItem) PopAll(i int) []cache.Score {
 		}
 	}
 	scores := make([]cache.Score, pq.Len())
-	for i := 9; i >= 0; i-- {
+	for i := pq.Len() - 1; i >= 0; i-- {
 		id, score := pq.Pop()
 		scores[i] = cache.Score{
 			Id:         g.items[id].ItemId,
