@@ -60,7 +60,6 @@ const batchSize = 10000
 // Worker manages states of a worker node.
 type Worker struct {
 	tracer   *monitor.Monitor
-	oneMode  bool
 	testMode bool
 	*config.Settings
 	collaborativeFilteringModelId int64
@@ -140,11 +139,6 @@ func NewWorker(
 		pulledChan:   parallel.NewConditionChannel(),
 		triggerChan:  parallel.NewConditionChannel(),
 	}
-}
-
-func (w *Worker) SetOneMode(settings *config.Settings) {
-	w.oneMode = true
-	w.Settings = settings
 }
 
 // Sync this worker to the master.
@@ -376,14 +370,9 @@ func (w *Worker) Serve() {
 	}
 	w.masterClient = protocol.NewMasterClient(w.conn)
 
-	if w.oneMode {
-		w.peers = []string{w.workerName}
-		w.me = w.workerName
-	} else {
-		go w.Sync()
-		go w.Pull()
-		go w.ServeHTTP()
-	}
+	go w.Sync()
+	go w.Pull()
+	go w.ServeHTTP()
 
 	loop := func() {
 		// pull users

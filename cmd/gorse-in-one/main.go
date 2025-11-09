@@ -36,7 +36,6 @@ import (
 	"github.com/gorse-io/gorse/master"
 	"github.com/gorse-io/gorse/storage"
 	"github.com/gorse-io/gorse/storage/data"
-	"github.com/gorse-io/gorse/worker"
 	"github.com/juju/errors"
 	"github.com/schollz/progressbar/v3"
 	"github.com/spf13/cobra"
@@ -106,14 +105,6 @@ var oneCommand = &cobra.Command{
 		// create master
 		cachePath, _ := cmd.PersistentFlags().GetString("cache-path")
 		m := master.NewMaster(conf, cachePath)
-		// Start worker
-		workerJobs, _ := cmd.PersistentFlags().GetInt("recommend-jobs")
-		w := worker.NewWorker(conf.Master.Host, conf.Master.Port, conf.Master.Host,
-			0, workerJobs, "", nil)
-		go func() {
-			w.SetOneMode(m.Settings)
-			w.Serve()
-		}()
 		// Stop master
 		done := make(chan struct{})
 		go func() {
