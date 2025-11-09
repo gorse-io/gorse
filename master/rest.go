@@ -156,12 +156,20 @@ func (m *Master) CreateWebService() {
 		Returns(http.StatusOK, "OK", UserIterator{}).
 		Writes(UserIterator{}))
 	// Get non-personalized recommendation
+	ws.Route(ws.GET("/dashboard/latest").To(m.getLatest).
+		Doc("Get latest items.").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
+		Param(ws.QueryParameter("category", "Category of returned items.").DataType("string")).
+		Param(ws.QueryParameter("n", "Number of returned items").DataType("integer")).
+		Param(ws.QueryParameter("offset", "Offset of returned items").DataType("integer")).
+		Returns(http.StatusOK, "OK", []data.Item{}).
+		Writes([]ScoredItem{}))
 	ws.Route(ws.GET("/dashboard/non-personalized/{name}").To(m.getNonPersonalized).
 		Doc("Get non-personalized recommendations.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
 		Param(ws.QueryParameter("category", "Category of returned items.").DataType("string")).
-		Param(ws.QueryParameter("n", "Number of returned users").DataType("integer")).
-		Param(ws.QueryParameter("offset", "Offset of returned users").DataType("integer")).
+		Param(ws.QueryParameter("n", "Number of returned items").DataType("integer")).
+		Param(ws.QueryParameter("offset", "Offset of returned items").DataType("integer")).
 		Param(ws.QueryParameter("user-id", "Remove read items of a user").DataType("string")).
 		Returns(http.StatusOK, "OK", []cache.Score{}).
 		Writes([]cache.Score{}))
@@ -830,11 +838,11 @@ func (m *Master) getRecommend(request *restful.Request, response *restful.Respon
 	}
 
 	// Send result
-	details := make([]data.Item, 0, len(results))
+	details := make([]ScoredItem, 0, len(results))
 	for i := range results {
 		detail, exist := itemsMap[results[i]]
 		if exist {
-			details = append(details, detail)
+			details = append(details, ScoredItem{Item: detail, Score: scores[i].Score})
 		} else {
 			log.Logger().Warn("recommended item doesn't exist", zap.String("item_id", results[i]))
 		}
@@ -970,6 +978,40 @@ func (m *Master) GetUser(score cache.Score) (any, error) {
 		return nil, err
 	}
 	return user, nil
+}
+
+func (m *Master) getLatest(request *restful.Request, response *restful.Response) {
+	var (
+		offset int
+		n      int
+		err    error
+	)
+	categories := server.ReadCategories(request, nil)
+	if offset, err = server.ParseInt(request, "offset", 0); err != nil {
+		server.BadRequest(response, err)
+		return
+	}
+	if n, err = server.ParseInt(request, "n", m.Config.Server.DefaultN); err != nil {
+		server.BadRequest(response, err)
+		return
+	}
+	items, err := m.DataClient.GetLatestItems(context.Background(), offset+n, categories)
+	if err != nil {
+		server.InternalServerError(response, err)
+		return
+	}
+	if offset < len(items) {
+		items = items[offset:]
+	}
+	if n < len(items) {
+		items = items[:n]
+	}
+	scores := make([]ScoredItem, len(items))
+	for i := range items {
+		scores[i] = ScoredItem{Item: items[i], Score: float64(items[i].Timestamp.Unix())}
+	}
+	m.SetLastModified(request, response, time.Now().String())
+	server.Ok(response, scores)
 }
 
 func (m *Master) getNonPersonalized(request *restful.Request, response *restful.Response) {
@@ -1284,6 +1326,7 @@ func (m *Master) importExportFeedback(response http.ResponseWriter, request *htt
 			}
 			feedbacks = append(feedbacks, data.Feedback{
 				FeedbackKey: feedback.FeedbackKey,
+				Value:       feedback.Value,
 				Timestamp:   timestamp,
 				Comment:     feedback.Comment,
 			})

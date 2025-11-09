@@ -898,6 +898,7 @@ func (suite *MasterAPITestSuite) TestExportAndImport() {
 				UserId:       fmt.Sprintf("%05d", i),
 				ItemId:       fmt.Sprintf("%05d", i),
 			},
+			Value: 1.0,
 		}
 	}
 	err = suite.DataClient.BatchInsertFeedback(ctx, feedback, true, true, true)
