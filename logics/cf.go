@@ -45,7 +45,7 @@ func NewMatrixFactorizationItems(timestamp time.Time) *MatrixFactorizationItems 
 	return &MatrixFactorizationItems{
 		timestamp: timestamp,
 		items:     make([]string, 0),
-		index:     ann.NewHNSW[[]float32](distance),
+		index:     ann.NewHNSW(distance),
 	}
 }
 
