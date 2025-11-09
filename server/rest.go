@@ -1744,7 +1744,9 @@ func ReadCategories(request *restful.Request, defaultCategories []string) []stri
 	if pathValue := request.PathParameter("category"); pathValue != "" {
 		return []string{pathValue}
 	} else if queryValues := request.QueryParameters("category"); len(queryValues) > 0 {
-		return queryValues
+		return lo.Filter(queryValues, func(cat string, _ int) bool {
+			return len(cat) > 0
+		})
 	} else {
 		return defaultCategories
 	}

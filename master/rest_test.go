@@ -494,6 +494,30 @@ func (suite *MasterAPITestSuite) TestGetUsers() {
 		End()
 }
 
+func (suite *MasterAPITestSuite) TestGetLatestItems() {
+	ctx := context.Background()
+	// add items
+	items := []data.Item{
+		{ItemId: "0", Timestamp: time.Date(2025, 1, 1, 1, 1, 1, 1, time.UTC)},
+		{ItemId: "1", Timestamp: time.Date(2024, 1, 1, 1, 1, 1, 1, time.UTC)},
+		{ItemId: "2", Timestamp: time.Date(2023, 1, 1, 1, 1, 1, 1, time.UTC)},
+	}
+	err := suite.DataClient.BatchInsertItems(ctx, items)
+	suite.NoError(err)
+	// get latest items
+	scores := lo.Map(items, func(item data.Item, _ int) ScoredItem {
+		return ScoredItem{Item: item, Score: float64(item.Timestamp.Unix())}
+	})
+	apitest.New().
+		Handler(suite.handler).
+		Get("/api/dashboard/latest").
+		Header("Cookie", suite.cookie).
+		Expect(suite.T()).
+		Status(http.StatusOK).
+		Body(marshal(suite.T(), scores)).
+		End()
+}
+
 func (suite *MasterAPITestSuite) TestSearchDocumentsOfItems() {
 	type ListOperator struct {
 		Name       string
@@ -658,8 +682,13 @@ func (suite *MasterAPITestSuite) TestGetRecommends() {
 		Header("Cookie", suite.cookie).
 		Expect(suite.T()).
 		Status(http.StatusOK).
-		Body(marshal(suite.T(), []data.Item{
-			{ItemId: "1"}, {ItemId: "3"}, {ItemId: "5"}, {ItemId: "6"}, {ItemId: "7"}, {ItemId: "8"},
+		Body(marshal(suite.T(), []ScoredItem{
+			{data.Item{ItemId: "1"}, 99},
+			{data.Item{ItemId: "3"}, 97},
+			{data.Item{ItemId: "5"}, 95},
+			{data.Item{ItemId: "6"}, 94},
+			{data.Item{ItemId: "7"}, 93},
+			{data.Item{ItemId: "8"}, 92},
 		})).
 		End()
 }
@@ -696,10 +725,10 @@ func (suite *MasterAPITestSuite) TestGetNonPersonalizedRecommends() {
 		Header("Cookie", suite.cookie).
 		Expect(suite.T()).
 		Status(http.StatusOK).
-		Body(marshal(suite.T(), []data.Item{
-			{ItemId: "10", Timestamp: time.Date(2020, 1, 1, 1, 1, 1, 1, time.UTC)},
-			{ItemId: "20", Timestamp: time.Date(2021, 1, 1, 1, 1, 1, 1, time.UTC)},
-			{ItemId: "30", Timestamp: time.Date(2022, 1, 1, 1, 1, 1, 1, time.UTC)},
+		Body(marshal(suite.T(), []ScoredItem{
+			{data.Item{ItemId: "10", Timestamp: time.Date(2020, 1, 1, 1, 1, 1, 1, time.UTC)}, 100},
+			{data.Item{ItemId: "20", Timestamp: time.Date(2021, 1, 1, 1, 1, 1, 1, time.UTC)}, 99},
+			{data.Item{ItemId: "30", Timestamp: time.Date(2022, 1, 1, 1, 1, 1, 1, time.UTC)}, 98},
 		})).
 		End()
 }
@@ -898,6 +927,7 @@ func (suite *MasterAPITestSuite) TestExportAndImport() {
 				UserId:       fmt.Sprintf("%05d", i),
 				ItemId:       fmt.Sprintf("%05d", i),
 			},
+			Value: 1.0,
 		}
 	}
 	err = suite.DataClient.BatchInsertFeedback(ctx, feedback, true, true, true)

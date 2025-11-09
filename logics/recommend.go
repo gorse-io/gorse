@@ -243,7 +243,7 @@ func (r *Recommender) recommendItemToItem(name string) RecommenderFunc {
 			}
 		}
 		// collect top scores
-		filter := heap.NewTopKFilter[string, float64](10)
+		filter := heap.NewTopKFilter[string, float64](r.config.CacheSize)
 		for id, score := range scores {
 			filter.Push(id, score)
 		}
@@ -286,7 +286,7 @@ func (r *Recommender) recommendUserToUser(name string) RecommenderFunc {
 			}
 		}
 		// collect top k
-		filter := heap.NewTopKFilter[string, float64](10)
+		filter := heap.NewTopKFilter[string, float64](r.config.CacheSize)
 		for id, score := range scores {
 			filter.Push(id, score)
 		}
