@@ -698,6 +698,7 @@ func (suite *WorkerTestSuite) TestReplacement() {
 	}, recommends)
 
 	// 2. Insert historical items into non-empty recommendation.
+	suite.Config.Recommend.CacheExpire = 0
 	suite.Config.Recommend.Ranker.Recommenders = []string{"latest"}
 	suite.Recommend([]data.User{{UserId: "0"}})
 	// read recommend time

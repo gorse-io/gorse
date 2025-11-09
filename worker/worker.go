@@ -740,18 +740,12 @@ func (w *Worker) checkRecommendCacheOutOfDate(ctx context.Context, userId string
 	activeTime, err = w.CacheClient.Get(ctx, cache.Key(cache.LastModifyUserTime, userId)).Time()
 	if err != nil {
 		log.Logger().Error("failed to read last modify user time", zap.String("user_id", userId), zap.Error(err))
-		return true
-	}
-	if activeTime.IsZero() {
-		return true
 	}
 
 	// 3. If update time is empty, stale.
 	recommendTime, err = w.CacheClient.Get(ctx, cache.Key(cache.RecommendUpdateTime, userId)).Time()
 	if err != nil {
-		if !errors.Is(err, errors.NotFound) {
-			log.Logger().Error("failed to read last update user recommend time", zap.Error(err))
-		}
+		log.Logger().Error("failed to read last update user recommend time", zap.Error(err))
 		return true
 	}
 

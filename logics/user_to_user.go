@@ -96,7 +96,7 @@ func (b *baseUserToUser[T]) PopAll(i int) []cache.Score {
 	return lo.Map(scores, func(v lo.Tuple2[int, float32], _ int) cache.Score {
 		return cache.Score{
 			Id:        b.users[v.A].UserId,
-			Score:     -float64(v.B),
+			Score:     1.0 / (1.0 + float64(v.B)),
 			Timestamp: b.timestamp,
 		}
 	})

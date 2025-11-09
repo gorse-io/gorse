@@ -129,7 +129,7 @@ func (b *baseItemToItem[T]) PopAll(i int) []cache.Score {
 		return cache.Score{
 			Id:         b.items[v.A].ItemId,
 			Categories: b.items[v.A].Categories,
-			Score:      -float64(v.B),
+			Score:      1.0 / (1.0 + float64(v.B)),
 			Timestamp:  b.timestamp,
 		}
 	})
@@ -157,7 +157,7 @@ func newEmbeddingItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.T
 		n:          n,
 		timestamp:  timestamp,
 		columnFunc: columnFunc,
-		index:      ann.NewHNSW[[]float32](floats.Euclidean),
+		index:      ann.NewHNSW(floats.Euclidean),
 	}}, nil
 }
 
@@ -535,12 +535,12 @@ func (g *chatItemToItem) PopAll(i int) []cache.Score {
 		}
 	}
 	scores := make([]cache.Score, pq.Len())
-	for i := 9; i >= 0; i-- {
+	for i := pq.Len() - 1; i >= 0; i-- {
 		id, score := pq.Pop()
 		scores[i] = cache.Score{
 			Id:         g.items[id].ItemId,
 			Categories: g.items[id].Categories,
-			Score:      -float64(score),
+			Score:      1.0 / (1.0 + float64(score)),
 			Timestamp:  g.timestamp,
 		}
 	}
