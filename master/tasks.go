@@ -1260,3 +1260,7 @@ func (m *Master) optimizeClickThroughRatePrediction(trainSet, testSet *ctr.Datas
 		zap.Any("params", m.clickThroughRateTarget.Params))
 	return nil
 }
+
+func (m *Master) updateRecommend() error {
+	return nil
+}

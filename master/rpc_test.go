@@ -76,11 +76,9 @@ func newMockMasterRPC(t *testing.T) *mockMasterRPC {
 	return &mockMasterRPC{
 		Master: Master{
 			RestServer: server.RestServer{
-				Settings: &config.Settings{
-					Config:      config.GetDefaultConfig(),
-					CacheClient: cache.NoDatabase{},
-					DataClient:  data.NoDatabase{},
-				},
+				Config:      config.GetDefaultConfig(),
+				CacheClient: cache.NoDatabase{},
+				DataClient:  data.NoDatabase{},
 			},
 			metaStore:                  metaStore,
 			collaborativeFilteringMeta: meta.Model[cf.Score]{ID: 123},

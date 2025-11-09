@@ -59,9 +59,12 @@ const batchSize = 10000
 
 // Worker manages states of a worker node.
 type Worker struct {
-	tracer   *monitor.Monitor
-	testMode bool
-	*config.Settings
+	tracer      *monitor.Monitor
+	testMode    bool
+	Config      *config.Config
+	CacheClient cache.Database
+	DataClient  data.Database
+
 	collaborativeFilteringModelId int64
 	matrixFactorizationItems      *logics.MatrixFactorizationItems
 	matrixFactorizationUsers      *logics.MatrixFactorizationUsers
@@ -122,7 +125,9 @@ func NewWorker(
 ) *Worker {
 	return &Worker{
 		rankers:       make([]ctr.FactorizationMachines, jobs),
-		Settings:      config.NewSettings(),
+		Config:        config.GetDefaultConfig(),
+		CacheClient:   new(cache.NoDatabase),
+		DataClient:    new(data.NoDatabase),
 		randGenerator: util.NewRand(time.Now().UTC().UnixNano()),
 		// config
 		cacheFile:  cacheFile,

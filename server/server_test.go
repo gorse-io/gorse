@@ -23,6 +23,8 @@ import (
 
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/protocol"
+	"github.com/gorse-io/gorse/storage/cache"
+	"github.com/gorse-io/gorse/storage/data"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -80,7 +82,9 @@ func TestServer_Sync(t *testing.T) {
 		testMode:     true,
 		masterClient: protocol.NewMasterClient(conn),
 		RestServer: RestServer{
-			Settings: config.NewSettings(),
+			Config:      config.GetDefaultConfig(),
+			CacheClient: new(cache.NoDatabase),
+			DataClient:  new(data.NoDatabase),
 		},
 	}
 	serv.Sync()

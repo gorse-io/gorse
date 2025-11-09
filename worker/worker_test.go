@@ -59,7 +59,7 @@ func (suite *WorkerTestSuite) SetupSuite() {
 	// open database
 	var err error
 	suite.tracer = monitor.NewTracer("test")
-	suite.Settings = config.NewSettings()
+	suite.Config = config.GetDefaultConfig()
 	suite.DataClient, err = data.Open(fmt.Sprintf("sqlite://%s/data.db", suite.T().TempDir()), "")
 	suite.NoError(err)
 	suite.CacheClient, err = cache.Open(fmt.Sprintf("sqlite://%s/cache.db", suite.T().TempDir()), "")
@@ -579,7 +579,9 @@ func TestWorker_Sync(t *testing.T) {
 	conn, err := grpc.Dial(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	assert.NoError(t, err)
 	serv := &Worker{
-		Settings:     config.NewSettings(),
+		Config:       config.GetDefaultConfig(),
+		CacheClient:  new(cache.NoDatabase),
+		DataClient:   new(data.NoDatabase),
 		testMode:     true,
 		masterClient: protocol.NewMasterClient(conn),
 		syncedChan:   parallel.NewConditionChannel(),

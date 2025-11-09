@@ -46,7 +46,7 @@ func (suite *ServerTestSuite) SetupSuite() {
 	// create mock redis server
 	var err error
 	// open database
-	suite.Settings = config.NewSettings()
+	suite.Config = config.GetDefaultConfig()
 	suite.DataClient, err = data.Open(fmt.Sprintf("sqlite://%s/data.db", suite.T().TempDir()), "")
 	suite.NoError(err)
 	suite.CacheClient, err = cache.Open(fmt.Sprintf("sqlite://%s/cache.db", suite.T().TempDir()), "")

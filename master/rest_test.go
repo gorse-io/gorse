@@ -84,7 +84,7 @@ type MasterAPITestSuite struct {
 func (suite *MasterAPITestSuite) SetupTest() {
 	// open database
 	var err error
-	suite.Settings = config.NewSettings()
+	suite.Config = config.GetDefaultConfig()
 	suite.metaStore, err = meta.Open(fmt.Sprintf("sqlite://%s/meta.db", suite.T().TempDir()), suite.Config.Master.MetaTimeout)
 	suite.NoError(err)
 	suite.DataClient, err = data.Open(fmt.Sprintf("sqlite://%s/data.db", suite.T().TempDir()), "")
