@@ -454,7 +454,7 @@ func (w *Worker) Recommend(users []data.User) {
 						zap.Int("n_working_users", len(users)),
 						zap.Int("throughput", throughput))
 				}
-				if _, err := w.masterClient.PushProgress(context.Background(), protocol.EncodeProgress(w.tracer.List())); err != nil {
+				if _, err := w.masterClient.PushProgress(context.Background(), monitor.EncodeProgress(w.tracer.List())); err != nil {
 					log.Logger().Error("failed to report update task", zap.Error(err))
 				}
 			}
