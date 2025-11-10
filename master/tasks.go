@@ -39,6 +39,7 @@ import (
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
 	"github.com/gorse-io/gorse/storage/meta"
+	"github.com/gorse-io/gorse/worker"
 	"github.com/juju/errors"
 	"github.com/samber/lo"
 	"go.uber.org/zap"
@@ -223,6 +224,11 @@ func (m *Master) runLoadDatasetTask() error {
 	}
 	if err = m.trainClickThroughRatePrediction(datasets.clickTrainSet, datasets.clickTestSet); err != nil {
 		log.Logger().Error("failed to train click-through rate prediction model", zap.Error(err))
+	}
+	if m.standalone {
+		if err = m.updateRecommend(); err != nil {
+			log.Logger().Error("failed to update recommendation", zap.Error(err))
+		}
 	}
 	if err = m.collectGarbage(ctx, datasets.rankingDataset); err != nil {
 		log.Logger().Error("failed to collect garbage in cache", zap.Error(err))
@@ -1261,6 +1267,36 @@ func (m *Master) optimizeClickThroughRatePrediction(trainSet, testSet *ctr.Datas
 	return nil
 }
 
+// updateRecommend updates recommendations for all users.
 func (m *Master) updateRecommend() error {
+	ctx := context.Background()
+
+	// Pull all users from database
+	users, err := m.pullAllUsers(ctx)
+	if err != nil {
+		log.Logger().Error("failed to pull users", zap.Error(err))
+		return errors.Trace(err)
+	}
+
+	recommender := &worker.Pipeline{
+		Config:      m.Config,
+		DataClient:  m.DataClient,
+		CacheClient: m.CacheClient,
+	}
+
+	// pull items from database
+	itemCache, _, err := recommender.PullItems(ctx)
+	if err != nil {
+		log.Logger().Error("failed to pull items", zap.Error(err))
+		return errors.Trace(err)
+	}
+
+	// Call the recommendation logic directly
+	err = recommender.RecommendForUsers(ctx, users, itemCache, m.Config.Master.NumJobs, m.tracer)
+	if err != nil {
+		log.Logger().Error("failed to generate recommendations for all users", zap.Error(err))
+		return errors.Trace(err)
+	}
+
 	return nil
 }

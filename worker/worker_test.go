@@ -579,9 +579,11 @@ func TestWorker_Sync(t *testing.T) {
 	conn, err := grpc.Dial(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	assert.NoError(t, err)
 	serv := &Worker{
-		Config:       config.GetDefaultConfig(),
-		CacheClient:  new(cache.NoDatabase),
-		DataClient:   new(data.NoDatabase),
+		Pipeline: Pipeline{
+			Config:      config.GetDefaultConfig(),
+			CacheClient: new(cache.NoDatabase),
+			DataClient:  new(data.NoDatabase),
+		},
 		testMode:     true,
 		masterClient: protocol.NewMasterClient(conn),
 		syncedChan:   parallel.NewConditionChannel(),

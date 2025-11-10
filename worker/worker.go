@@ -59,11 +59,9 @@ const batchSize = 10000
 
 // Worker manages states of a worker node.
 type Worker struct {
-	tracer      *monitor.Monitor
-	testMode    bool
-	Config      *config.Config
-	CacheClient cache.Database
-	DataClient  data.Database
+	Pipeline
+	tracer   *monitor.Monitor
+	testMode bool
 
 	collaborativeFilteringModelId int64
 	matrixFactorizationItems      *logics.MatrixFactorizationItems
@@ -124,10 +122,12 @@ func NewWorker(
 	tlsConfig *util.TLSConfig,
 ) *Worker {
 	return &Worker{
+		Pipeline: Pipeline{
+			Config:      config.GetDefaultConfig(),
+			CacheClient: new(cache.NoDatabase),
+			DataClient:  new(data.NoDatabase),
+		},
 		rankers:       make([]ctr.FactorizationMachines, jobs),
-		Config:        config.GetDefaultConfig(),
-		CacheClient:   new(cache.NoDatabase),
-		DataClient:    new(data.NoDatabase),
 		randGenerator: util.NewRand(time.Now().UTC().UnixNano()),
 		// config
 		cacheFile:  cacheFile,
@@ -679,83 +679,6 @@ func (w *Worker) rankByClickTroughRate(
 	return topItems, nil
 }
 
-func (w *Worker) checkUserActiveTime(ctx context.Context, userId string) bool {
-	if w.Config.Recommend.ActiveUserTTL == 0 {
-		return true
-	}
-	// read active time
-	activeTime, err := w.CacheClient.Get(ctx, cache.Key(cache.LastModifyUserTime, userId)).Time()
-	if err != nil {
-		log.Logger().Error("failed to read last modify user time", zap.String("user_id", userId), zap.Error(err))
-		return true
-	}
-	if activeTime.IsZero() {
-		return true
-	}
-	// check active time
-	if time.Since(activeTime) < time.Duration(w.Config.Recommend.ActiveUserTTL*24)*time.Hour {
-		return true
-	}
-	// remove recommend cache for inactive users
-	if err := w.CacheClient.DeleteScores(ctx, []string{cache.Recommend, cache.CollaborativeFiltering},
-		cache.ScoreCondition{Subset: proto.String(userId)}); err != nil {
-		log.Logger().Error("failed to delete recommend cache", zap.String("user_id", userId), zap.Error(err))
-	}
-	return false
-}
-
-// checkRecommendCacheOutOfDate checks if recommend cache stale.
-func (w *Worker) checkRecommendCacheOutOfDate(ctx context.Context, userId string) bool {
-	var (
-		activeTime    time.Time
-		recommendTime time.Time
-		err           error
-	)
-
-	// 1. If cache is empty, stale.
-	items, err := w.CacheClient.SearchScores(ctx, cache.Recommend, userId, nil, 0, -1)
-	if err != nil {
-		log.Logger().Error("failed to load offline recommendation", zap.String("user_id", userId), zap.Error(err))
-		return true
-	} else if len(items) == 0 {
-		return true
-	}
-
-	// 2. If digest is empty or not match, stale.
-	digest, err := w.CacheClient.Get(ctx, cache.Key(cache.RecommendDigest, userId)).String()
-	if err != nil {
-		log.Logger().Error("failed to read offline recommendation digest", zap.String("user_id", userId), zap.Error(err))
-		return true
-	}
-	if digest == "" {
-		return true
-	}
-	// read active time
-	activeTime, err = w.CacheClient.Get(ctx, cache.Key(cache.LastModifyUserTime, userId)).Time()
-	if err != nil {
-		log.Logger().Error("failed to read last modify user time", zap.String("user_id", userId), zap.Error(err))
-	}
-
-	// 3. If update time is empty, stale.
-	recommendTime, err = w.CacheClient.Get(ctx, cache.Key(cache.RecommendUpdateTime, userId)).Time()
-	if err != nil {
-		log.Logger().Error("failed to read last update user recommend time", zap.Error(err))
-		return true
-	}
-
-	// 4. If update time + cache expire > current time, not stale.
-	if recommendTime.Before(time.Now().Add(-w.Config.Recommend.CacheExpire)) {
-		return true
-	}
-
-	// 5. If active time > recommend time, not stale.
-	if activeTime.Before(recommendTime) {
-		timeoutTime := recommendTime.Add(w.Config.Recommend.Ranker.RefreshRecommendPeriod)
-		return timeoutTime.Before(time.Now())
-	}
-	return true
-}
-
 func (w *Worker) pullItems(ctx context.Context) (*ItemCache, []string, error) {
 	// pull items from database
 	itemCache := NewItemCache()
@@ -904,45 +827,4 @@ func (w *Worker) checkHealth() HealthStatus {
 func (w *Worker) checkLive(writer http.ResponseWriter, _ *http.Request) {
 	healthStatus := w.checkHealth()
 	writeJSON(writer, healthStatus)
-}
-
-// ItemCache is alias of map[string]data.Item.
-type ItemCache struct {
-	Data map[string]*data.Item
-}
-
-func NewItemCache() *ItemCache {
-	return &ItemCache{Data: make(map[string]*data.Item)}
-}
-
-func (c *ItemCache) Len() int {
-	return len(c.Data)
-}
-
-func (c *ItemCache) Set(itemId string, item data.Item) {
-	if _, exist := c.Data[itemId]; !exist {
-		c.Data[itemId] = &item
-	}
-}
-
-func (c *ItemCache) Get(itemId string) (*data.Item, bool) {
-	item, exist := c.Data[itemId]
-	return item, exist
-}
-
-func (c *ItemCache) GetCategory(itemId string) []string {
-	if item, exist := c.Data[itemId]; exist {
-		return item.Categories
-	} else {
-		return nil
-	}
-}
-
-// IsAvailable means the item exists in database and is not hidden.
-func (c *ItemCache) IsAvailable(itemId string) bool {
-	if item, exist := c.Data[itemId]; exist {
-		return !item.IsHidden
-	} else {
-		return false
-	}
 }

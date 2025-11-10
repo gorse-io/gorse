@@ -68,6 +68,7 @@ type Master struct {
 	tracer         *monitor.Monitor
 	remoteProgress sync.Map
 	cachePath      string
+	standalone     bool
 	openAIClient   *openai.Client
 
 	// cluster meta cache
