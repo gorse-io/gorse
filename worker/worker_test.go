@@ -89,8 +89,8 @@ func (suite *WorkerTestSuite) SetupTest() {
 	// reset random generator
 	suite.randGenerator = rand.New(rand.NewSource(0))
 	// reset index
-	suite.matrixFactorizationItems = nil
-	suite.rankers = nil
+	suite.MatrixFactorizationItems = nil
+	suite.ClickThroughRateModel = nil
 }
 
 func (suite *WorkerTestSuite) TestPullUsers() {
@@ -174,12 +174,12 @@ func (suite *WorkerTestSuite) TestRecommendCollaborative() {
 	suite.NoError(err)
 
 	// create mock model
-	suite.matrixFactorizationItems = logics.NewMatrixFactorizationItems(time.Time{})
+	suite.MatrixFactorizationItems = logics.NewMatrixFactorizationItems(time.Time{})
 	for i := 0; i < 10; i++ {
-		suite.matrixFactorizationItems.Add(strconv.Itoa(i), []float32{float32(i)})
+		suite.MatrixFactorizationItems.Add(strconv.Itoa(i), []float32{float32(i)})
 	}
-	suite.matrixFactorizationUsers = logics.NewMatrixFactorizationUsers()
-	suite.matrixFactorizationUsers.Add("0", []float32{1})
+	suite.MatrixFactorizationUsers = logics.NewMatrixFactorizationUsers()
+	suite.MatrixFactorizationUsers.Add("0", []float32{1})
 	suite.Recommend([]data.User{{UserId: "0"}})
 
 	// read recommend time
@@ -431,11 +431,11 @@ func (suite *WorkerTestSuite) TestRecommend() {
 	suite.Config.Recommend.NonPersonalized = []config.NonPersonalizedConfig{{Name: "popular"}}
 	suite.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "default"}}
 	suite.Config.Recommend.UserToUser = []config.UserToUserConfig{{Name: "default"}}
-	suite.rankers = []ctr.FactorizationMachines{new(mockFactorizationMachine)}
-	suite.matrixFactorizationItems = logics.NewMatrixFactorizationItems(time.Time{})
-	suite.matrixFactorizationItems.Add("4", []float32{4})
-	suite.matrixFactorizationUsers = logics.NewMatrixFactorizationUsers()
-	suite.matrixFactorizationUsers.Add("0", []float32{1})
+	suite.MatrixFactorizationItems = logics.NewMatrixFactorizationItems(time.Time{})
+	suite.MatrixFactorizationItems.Add("4", []float32{4})
+	suite.MatrixFactorizationUsers = logics.NewMatrixFactorizationUsers()
+	suite.MatrixFactorizationUsers.Add("0", []float32{1})
+	suite.ClickThroughRateModel = new(mockFactorizationMachine)
 
 	// insert items
 	err := suite.DataClient.BatchInsertItems(ctx, []data.Item{
@@ -674,7 +674,7 @@ func (suite *WorkerTestSuite) TestReplacement() {
 	suite.Config.Recommend.Replacement.EnableReplacement = true
 	suite.Config.Recommend.Replacement.PositiveReplacementDecay = 0.8
 	suite.Config.Recommend.Replacement.ReadReplacementDecay = 0.7
-	suite.rankers = []ctr.FactorizationMachines{new(mockFactorizationMachine)}
+	suite.ClickThroughRateModel = new(mockFactorizationMachine)
 
 	// 1. Insert historical items into empty recommendation.
 	// insert items

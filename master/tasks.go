@@ -1267,9 +1267,39 @@ func (m *Master) optimizeClickThroughRatePrediction(trainSet, testSet *ctr.Datas
 	return nil
 }
 
-// updateRecommend updates recommendations for all users.
+// updateRecommend updates recommendations for all user in standalone mode.
 func (m *Master) updateRecommend() error {
 	ctx := context.Background()
+	pipeline := &worker.Pipeline{
+		Config:      m.Config,
+		DataClient:  m.DataClient,
+		CacheClient: m.CacheClient,
+		Jobs:        m.Config.Master.NumJobs,
+	}
+
+	// load matrix factorization model
+	r, err := m.blobStore.Open(strconv.FormatInt(m.collaborativeFilteringMeta.ID, 10))
+	if err != nil {
+		log.Logger().Error("failed to load collaborative filtering model from blob store",
+			zap.Int64("id", m.collaborativeFilteringMeta.ID), zap.Error(err))
+		return errors.Trace(err)
+	}
+	if err = pipeline.MatrixFactorizationItems.Unmarshal(r); err != nil {
+		log.Logger().Error("failed to unmarshal matrix factorization items", zap.Error(err))
+	} else if err = pipeline.MatrixFactorizationUsers.Unmarshal(r); err != nil {
+		log.Logger().Error("failed to unmarshal matrix factorization users", zap.Error(err))
+	}
+
+	// load click-through rate model
+	r, err = m.blobStore.Open(strconv.FormatInt(m.clickThroughRateMeta.ID, 10))
+	if err != nil {
+		log.Logger().Error("failed to open click-through rate model", zap.Error(err))
+	}
+	pipeline.ClickThroughRateModel, err = ctr.UnmarshalModel(r)
+	if err != nil {
+		log.Logger().Error("failed to unmarshal click-through rate model", zap.Error(err))
+		return errors.Trace(err)
+	}
 
 	// Pull all users from database
 	users, err := m.pullAllUsers(ctx)
@@ -1278,21 +1308,15 @@ func (m *Master) updateRecommend() error {
 		return errors.Trace(err)
 	}
 
-	recommender := &worker.Pipeline{
-		Config:      m.Config,
-		DataClient:  m.DataClient,
-		CacheClient: m.CacheClient,
-	}
-
 	// pull items from database
-	itemCache, _, err := recommender.PullItems(ctx)
+	itemCache, _, err := pipeline.PullItems(ctx)
 	if err != nil {
 		log.Logger().Error("failed to pull items", zap.Error(err))
 		return errors.Trace(err)
 	}
 
 	// Call the recommendation logic directly
-	err = recommender.RecommendForUsers(ctx, users, itemCache, m.Config.Master.NumJobs, m.tracer)
+	err = pipeline.RecommendForUsers(ctx, users, itemCache, m.Config.Master.NumJobs, m.tracer)
 	if err != nil {
 		log.Logger().Error("failed to generate recommendations for all users", zap.Error(err))
 		return errors.Trace(err)

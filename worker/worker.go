@@ -28,7 +28,6 @@ import (
 	"strings"
 	"time"
 
-	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/gorse-io/gorse/cmd/version"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/common/monitor"
@@ -62,13 +61,7 @@ type Worker struct {
 	testMode bool
 
 	collaborativeFilteringModelId int64
-	matrixFactorizationItems      *logics.MatrixFactorizationItems
-	matrixFactorizationUsers      *logics.MatrixFactorizationUsers
 	clickThroughRateModelId       int64
-	clickThroughRateModel         ctr.FactorizationMachines
-
-	// spawned rankers
-	rankers []ctr.FactorizationMachines
 
 	// worker config
 	jobs       int
@@ -125,7 +118,6 @@ func NewWorker(
 			CacheClient: new(cache.NoDatabase),
 			DataClient:  new(data.NoDatabase),
 		},
-		rankers:       make([]ctr.FactorizationMachines, jobs),
 		randGenerator: util.NewRand(time.Now().UTC().UnixNano()),
 		// config
 		cacheFile:  cacheFile,
@@ -272,8 +264,8 @@ func (w *Worker) Pull() {
 				} else if err = users.Unmarshal(r); err != nil {
 					log.Logger().Error("failed to unmarshal matrix factorization users", zap.Error(err))
 				} else {
-					w.matrixFactorizationItems = items
-					w.matrixFactorizationUsers = users
+					w.MatrixFactorizationItems = items
+					w.MatrixFactorizationUsers = users
 					w.collaborativeFilteringModelId = w.latestCollaborativeFilteringModelId
 					log.Logger().Info("synced collaborative filtering model",
 						zap.Int64("id", w.collaborativeFilteringModelId))
@@ -293,18 +285,10 @@ func (w *Worker) Pull() {
 				if err != nil {
 					log.Logger().Error("failed to unmarshal click-through rate model", zap.Error(err))
 				} else {
-					w.clickThroughRateModel = model
+					w.ClickThroughRateModel = model
 					w.clickThroughRateModelId = w.latestClickThroughRateModelId
 					log.Logger().Info("synced click-through rate model",
 						zap.Int64("version", w.clickThroughRateModelId))
-					// spawn rankers
-					for i := 0; i < w.jobs; i++ {
-						if i == 0 {
-							w.rankers[i] = w.clickThroughRateModel
-						} else {
-							w.rankers[i] = ctr.Spawn(w.clickThroughRateModel)
-						}
-					}
 					pulled = true
 				}
 			}
@@ -434,7 +418,7 @@ func (w *Worker) Recommend(users []data.User) {
 		zap.Int("cache_size", w.Config.Recommend.CacheSize))
 
 	// pull items from database
-	itemCache, _, err := w.pullItems(ctx)
+	itemCache, _, err := w.PullItems(ctx)
 	if err != nil {
 		log.Logger().Error("failed to pull items", zap.Error(err))
 		return
@@ -508,9 +492,9 @@ func (w *Worker) Recommend(users []data.User) {
 		}
 
 		// Update collaborative filtering recommendation.
-		if w.matrixFactorizationUsers != nil && w.matrixFactorizationItems != nil {
-			if userEmbedding, ok := w.matrixFactorizationUsers.Get(userId); ok {
-				err = w.updateCollaborativeRecommend(w.matrixFactorizationItems, userId, userEmbedding, recommender.ExcludeSet(), itemCache)
+		if w.MatrixFactorizationUsers != nil && w.MatrixFactorizationItems != nil {
+			if userEmbedding, ok := w.MatrixFactorizationUsers.Get(userId); ok {
+				err = w.updateCollaborativeRecommend(w.MatrixFactorizationItems, userId, userEmbedding, recommender.ExcludeSet(), itemCache)
 				if err != nil {
 					log.Logger().Error("failed to recommend by collaborative filtering",
 						zap.String("user_id", userId), zap.Error(err))
@@ -545,8 +529,8 @@ func (w *Worker) Recommend(users []data.User) {
 
 		// rank by click-through-rate
 		var results []cache.Score
-		if len(w.rankers) > 0 && w.rankers[workerId] != nil && !w.rankers[workerId].Invalid() {
-			results, err = w.rankByClickTroughRate(w.rankers[workerId], &user, candidates, itemCache, recommendTime)
+		if w.ClickThroughRateModel != nil && !w.ClickThroughRateModel.Invalid() {
+			results, err = w.rankByClickTroughRate(w.ClickThroughRateModel, &user, candidates, itemCache, recommendTime)
 			if err != nil {
 				log.Logger().Error("failed to rank items", zap.Error(err))
 				return errors.Trace(err)
@@ -556,7 +540,7 @@ func (w *Worker) Recommend(users []data.User) {
 		}
 
 		if w.Config.Recommend.Replacement.EnableReplacement {
-			results, err = w.replacement(w.rankers[workerId], results, &user,
+			results, err = w.replacement(w.ClickThroughRateModel, results, &user,
 				recommender.UserFeedback(), itemCache, recommendTime)
 			if err != nil {
 				log.Logger().Error("failed to insert historical items into recommendation",
@@ -592,23 +576,6 @@ func (w *Worker) Recommend(users []data.User) {
 	OfflineRecommendStepSecondsVec.WithLabelValues("user_based_recommend").Set(userBasedRecommendSeconds.Load())
 	OfflineRecommendStepSecondsVec.WithLabelValues("latest_recommend").Set(latestRecommendSeconds.Load())
 	OfflineRecommendStepSecondsVec.WithLabelValues("popular_recommend").Set(popularRecommendSeconds.Load())
-}
-
-func (w *Worker) pullItems(ctx context.Context) (*ItemCache, []string, error) {
-	// pull items from database
-	itemCache := NewItemCache()
-	itemCategories := mapset.NewSet[string]()
-	itemChan, errChan := w.DataClient.GetItemStream(ctx, batchSize, nil)
-	for batchItems := range itemChan {
-		for _, item := range batchItems {
-			itemCache.Set(item.ItemId, item)
-			itemCategories.Append(item.Categories...)
-		}
-	}
-	if err := <-errChan; err != nil {
-		return nil, nil, errors.Trace(err)
-	}
-	return itemCache, itemCategories.ToSlice(), nil
 }
 
 func (w *Worker) pullUsers(peers []string, me string) ([]data.User, error) {

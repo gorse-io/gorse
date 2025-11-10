@@ -42,10 +42,13 @@ type Tracer interface {
 }
 
 type Pipeline struct {
-	Config      *config.Config
-	CacheClient cache.Database
-	DataClient  data.Database
-	jobs        int
+	Config                   *config.Config
+	CacheClient              cache.Database
+	DataClient               data.Database
+	Jobs                     int
+	MatrixFactorizationItems *logics.MatrixFactorizationItems
+	MatrixFactorizationUsers *logics.MatrixFactorizationUsers
+	ClickThroughRateModel    ctr.FactorizationMachines
 }
 
 // RecommendForUsers generates recommendations for a list of users.
@@ -305,7 +308,7 @@ func (p *Pipeline) rankByClickTroughRate(
 			inputs[i].C = ctr.ConvertLabels(user.Labels)
 			inputs[i].D = ctr.ConvertLabels(item.Labels)
 		}
-		output := batchPredictor.BatchPredict(inputs, p.jobs)
+		output := batchPredictor.BatchPredict(inputs, p.Jobs)
 		for i, score := range output {
 			topItems = append(topItems, cache.Score{
 				Id:         items[i].ItemId,
@@ -370,7 +373,7 @@ func (p *Pipeline) replacement(
 			inputs[i].C = ctr.ConvertLabels(user.Labels)
 			inputs[i].D = ctr.ConvertLabels(item.Labels)
 		}
-		output := batchPredictor.BatchPredict(inputs, p.jobs)
+		output := batchPredictor.BatchPredict(inputs, p.Jobs)
 		for i, score := range output {
 			scoredItems = append(scoredItems, cache.Score{
 				Id:         items[i].ItemId,
