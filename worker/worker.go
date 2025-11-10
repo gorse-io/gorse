@@ -30,7 +30,6 @@ import (
 
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/gorse-io/gorse/cmd/version"
-	"github.com/gorse-io/gorse/common/expression"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/common/parallel"
@@ -52,7 +51,6 @@ import (
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/protobuf/proto"
 )
 
 const batchSize = 10000
@@ -596,89 +594,6 @@ func (w *Worker) Recommend(users []data.User) {
 	OfflineRecommendStepSecondsVec.WithLabelValues("popular_recommend").Set(popularRecommendSeconds.Load())
 }
 
-func (w *Worker) updateCollaborativeRecommend(
-	items *logics.MatrixFactorizationItems,
-	userId string,
-	userEmbedding []float32,
-	excludeSet mapset.Set[string],
-	itemCache *ItemCache,
-) error {
-	ctx := context.Background()
-	localStartTime := time.Now()
-	scores := items.Search(userEmbedding, w.Config.Recommend.CacheSize+excludeSet.Cardinality())
-	// remove excluded items
-	scores = lo.Filter(scores, func(score cache.Score, _ int) bool {
-		return !excludeSet.Contains(score.Id)
-	})
-	// update categories
-	for i := range scores {
-		scores[i].Categories = itemCache.GetCategory(scores[i].Id)
-		// the scores use the timestamp of the ranking index, which is only refreshed every so often.
-		// if we don't overwrite the timestamp here, the code below will delete all scores that were
-		// just written.
-		scores[i].Timestamp = localStartTime
-	}
-	if err := w.CacheClient.AddScores(ctx, cache.CollaborativeFiltering, userId, scores); err != nil {
-		log.Logger().Error("failed to cache collaborative filtering recommendation result", zap.String("user_id", userId), zap.Error(err))
-		return errors.Trace(err)
-	}
-	if err := w.CacheClient.DeleteScores(ctx, []string{cache.CollaborativeFiltering}, cache.ScoreCondition{Before: &localStartTime, Subset: proto.String(userId)}); err != nil {
-		log.Logger().Error("failed to delete stale collaborative filtering recommendation result", zap.String("user_id", userId), zap.Error(err))
-		return errors.Trace(err)
-	}
-	return nil
-}
-
-// rankByClickTroughRate ranks items by predicted click-through-rate.
-func (w *Worker) rankByClickTroughRate(
-	predictor ctr.FactorizationMachines,
-	user *data.User,
-	candidates []cache.Score,
-	itemCache *ItemCache,
-	recommendTime time.Time,
-) ([]cache.Score, error) {
-	// download items
-	items := make([]*data.Item, 0, len(candidates))
-	for _, candidate := range candidates {
-		if item, exist := itemCache.Get(candidate.Id); exist {
-			items = append(items, item)
-		} else {
-			log.Logger().Warn("item doesn't exists in database", zap.String("item_id", candidate.Id))
-		}
-	}
-	// rank by CTR
-	topItems := make([]cache.Score, 0, len(items))
-	if batchPredictor, ok := predictor.(ctr.BatchInference); ok {
-		inputs := make([]lo.Tuple4[string, string, []ctr.Label, []ctr.Label], len(items))
-		for i, item := range items {
-			inputs[i].A = user.UserId
-			inputs[i].B = item.ItemId
-			inputs[i].C = ctr.ConvertLabels(user.Labels)
-			inputs[i].D = ctr.ConvertLabels(item.Labels)
-		}
-		output := batchPredictor.BatchPredict(inputs, w.jobs)
-		for i, score := range output {
-			topItems = append(topItems, cache.Score{
-				Id:         items[i].ItemId,
-				Score:      float64(score),
-				Categories: itemCache.GetCategory(items[i].ItemId),
-				Timestamp:  recommendTime,
-			})
-		}
-	} else {
-		for _, item := range items {
-			topItems = append(topItems, cache.Score{
-				Id:         item.ItemId,
-				Score:      float64(predictor.Predict(user.UserId, item.ItemId, ctr.ConvertLabels(user.Labels), ctr.ConvertLabels(item.Labels))),
-				Categories: itemCache.GetCategory(item.ItemId),
-				Timestamp:  recommendTime,
-			})
-		}
-	}
-	cache.SortDocuments(topItems)
-	return topItems, nil
-}
-
 func (w *Worker) pullItems(ctx context.Context) (*ItemCache, []string, error) {
 	// pull items from database
 	itemCache := NewItemCache()
@@ -725,87 +640,6 @@ func (w *Worker) pullUsers(peers []string, me string) ([]data.User, error) {
 		return nil, errors.Trace(err)
 	}
 	return users, nil
-}
-
-// replacement inserts historical items back to recommendation.
-func (w *Worker) replacement(
-	predictor ctr.FactorizationMachines,
-	recommend []cache.Score,
-	user *data.User,
-	feedbacks []data.Feedback,
-	itemCache *ItemCache,
-	recommendTime time.Time,
-) ([]cache.Score, error) {
-	recommendItems := mapset.NewSet[string]()
-	positiveItems := mapset.NewSet[string]()
-	distinctItems := mapset.NewSet[string]()
-	for _, r := range recommend {
-		recommendItems.Add(r.Id)
-	}
-	newRecommend := make([]cache.Score, 0, len(recommend))
-	newRecommend = append(newRecommend, recommend...)
-	for _, feedback := range feedbacks {
-		if expression.MatchFeedbackTypeExpressions(w.Config.Recommend.DataSource.PositiveFeedbackTypes, feedback.FeedbackType, feedback.Value) {
-			positiveItems.Add(feedback.ItemId)
-			distinctItems.Add(feedback.ItemId)
-		} else if expression.MatchFeedbackTypeExpressions(w.Config.Recommend.DataSource.ReadFeedbackTypes, feedback.FeedbackType, feedback.Value) {
-			distinctItems.Add(feedback.ItemId)
-		}
-	}
-	negativeItems := distinctItems.Difference(positiveItems)
-
-	items := make([]*data.Item, 0, distinctItems.Cardinality())
-	for itemId := range distinctItems.Iter() {
-		if item, exist := itemCache.Get(itemId); exist {
-			items = append(items, item)
-		}
-	}
-	scoredItems := make([]cache.Score, 0, len(items))
-	if batchPredictor, ok := predictor.(ctr.BatchInference); ok {
-		inputs := make([]lo.Tuple4[string, string, []ctr.Label, []ctr.Label], len(items))
-		for i, item := range items {
-			inputs[i].A = user.UserId
-			inputs[i].B = item.ItemId
-			inputs[i].C = ctr.ConvertLabels(user.Labels)
-			inputs[i].D = ctr.ConvertLabels(item.Labels)
-		}
-		output := batchPredictor.BatchPredict(inputs, w.jobs)
-		for i, score := range output {
-			scoredItems = append(scoredItems, cache.Score{
-				Id:         items[i].ItemId,
-				Score:      float64(score),
-				Categories: itemCache.GetCategory(items[i].ItemId),
-				Timestamp:  recommendTime,
-			})
-		}
-	} else {
-		for _, item := range items {
-			scoredItems = append(scoredItems, cache.Score{
-				Id:         item.ItemId,
-				Score:      float64(predictor.Predict(user.UserId, item.ItemId, ctr.ConvertLabels(user.Labels), ctr.ConvertLabels(item.Labels))),
-				Categories: itemCache.GetCategory(item.ItemId),
-				Timestamp:  recommendTime,
-			})
-		}
-	}
-
-	for _, scoredItem := range scoredItems {
-		if recommendItems.Contains(scoredItem.Id) {
-			continue
-		}
-		if positiveItems.Contains(scoredItem.Id) {
-			scoredItem.Score *= w.Config.Recommend.Replacement.PositiveReplacementDecay
-		} else if negativeItems.Contains(scoredItem.Id) {
-			scoredItem.Score *= w.Config.Recommend.Replacement.ReadReplacementDecay
-		} else {
-			continue
-		}
-		newRecommend = append(newRecommend, scoredItem)
-	}
-
-	// rank items
-	cache.SortDocuments(newRecommend)
-	return newRecommend, nil
 }
 
 type HealthStatus struct {

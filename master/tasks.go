@@ -1300,3 +1300,16 @@ func (m *Master) updateRecommend() error {
 
 	return nil
 }
+
+// pullAllUsers pulls all users from the data store.
+func (m *Master) pullAllUsers(ctx context.Context) ([]data.User, error) {
+	var users []data.User
+	userChan, errChan := m.DataClient.GetUserStream(ctx, batchSize)
+	for batchUsers := range userChan {
+		users = append(users, batchUsers...)
+	}
+	if err := <-errChan; err != nil {
+		return nil, errors.Trace(err)
+	}
+	return users, nil
+}
