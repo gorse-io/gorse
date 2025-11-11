@@ -104,7 +104,7 @@ var oneCommand = &cobra.Command{
 
 		// create master
 		cachePath, _ := cmd.PersistentFlags().GetString("cache-path")
-		m := master.NewMaster(conf, cachePath)
+		m := master.NewMaster(conf, cachePath, true)
 		// Stop master
 		done := make(chan struct{})
 		go func() {

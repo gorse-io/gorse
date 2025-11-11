@@ -1271,11 +1271,13 @@ func (m *Master) optimizeClickThroughRatePrediction(trainSet, testSet *ctr.Datas
 func (m *Master) updateRecommend() error {
 	ctx := context.Background()
 	pipeline := &worker.Pipeline{
-		Config:      m.Config,
-		DataClient:  m.DataClient,
-		CacheClient: m.CacheClient,
-		Tracer:      m.tracer,
-		Jobs:        m.Config.Master.NumJobs,
+		Config:                   m.Config,
+		DataClient:               m.DataClient,
+		CacheClient:              m.CacheClient,
+		Tracer:                   m.tracer,
+		Jobs:                     m.Config.Master.NumJobs,
+		MatrixFactorizationItems: logics.NewMatrixFactorizationItems(time.Time{}),
+		MatrixFactorizationUsers: logics.NewMatrixFactorizationUsers(),
 	}
 
 	// load matrix factorization model
