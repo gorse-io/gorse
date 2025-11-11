@@ -1274,6 +1274,7 @@ func (m *Master) updateRecommend() error {
 		Config:      m.Config,
 		DataClient:  m.DataClient,
 		CacheClient: m.CacheClient,
+		Tracer:      m.tracer,
 		Jobs:        m.Config.Master.NumJobs,
 	}
 
@@ -1308,20 +1309,7 @@ func (m *Master) updateRecommend() error {
 		return errors.Trace(err)
 	}
 
-	// pull items from database
-	itemCache, _, err := pipeline.PullItems(ctx)
-	if err != nil {
-		log.Logger().Error("failed to pull items", zap.Error(err))
-		return errors.Trace(err)
-	}
-
-	// Call the recommendation logic directly
-	err = pipeline.RecommendForUsers(ctx, users, itemCache, m.Config.Master.NumJobs, m.tracer)
-	if err != nil {
-		log.Logger().Error("failed to generate recommendations for all users", zap.Error(err))
-		return errors.Trace(err)
-	}
-
+	pipeline.Recommend(users, nil)
 	return nil
 }
 

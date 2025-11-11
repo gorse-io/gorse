@@ -32,7 +32,6 @@ import (
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/common/parallel"
-	"github.com/gorse-io/gorse/common/sizeof"
 	"github.com/gorse-io/gorse/common/util"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/logics"
@@ -46,7 +45,6 @@ import (
 	"github.com/lafikl/consistent"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/samber/lo"
-	"go.uber.org/atomic"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -57,14 +55,12 @@ const batchSize = 10000
 // Worker manages states of a worker node.
 type Worker struct {
 	Pipeline
-	tracer   *monitor.Monitor
 	testMode bool
 
 	collaborativeFilteringModelId int64
 	clickThroughRateModelId       int64
 
 	// worker config
-	jobs       int
 	workerName string
 	httpHost   string
 	httpPort   int
@@ -117,6 +113,7 @@ func NewWorker(
 			Config:      config.GetDefaultConfig(),
 			CacheClient: new(cache.NoDatabase),
 			DataClient:  new(data.NoDatabase),
+			Jobs:        jobs,
 		},
 		randGenerator: util.NewRand(time.Now().UTC().UnixNano()),
 		// config
@@ -126,7 +123,6 @@ func NewWorker(
 		tlsConfig:  tlsConfig,
 		httpHost:   httpHost,
 		httpPort:   httpPort,
-		jobs:       jobs,
 		// events
 		tickDuration: time.Minute,
 		ticker:       time.NewTicker(time.Minute),
@@ -337,7 +333,7 @@ func (w *Worker) Serve() {
 	}
 
 	// create progress tracer
-	w.tracer = monitor.NewTracer(w.workerName)
+	w.Tracer = monitor.NewTracer(w.workerName)
 
 	// connect to master
 	var opts []grpc.DialOption
@@ -372,7 +368,16 @@ func (w *Worker) Serve() {
 		}
 
 		// recommendation
-		w.Recommend(workingUsers)
+		w.Recommend(workingUsers, func(completed, throughput int) {
+			log.Logger().Info("ranking recommendation",
+				zap.Int("n_complete_users", completed),
+				zap.Int("throughput", throughput))
+			if w.masterClient != nil {
+				if _, err := w.masterClient.PushProgress(context.Background(), monitor.EncodeProgress(w.Tracer.List())); err != nil {
+					log.Logger().Error("failed to report update task", zap.Error(err))
+				}
+			}
+		})
 	}
 
 	for {
@@ -398,184 +403,6 @@ func (w *Worker) WorkerName() (string, error) {
 	hash.Write([]byte(strconv.Itoa(w.httpPort)))
 	b := hash.Sum(nil)
 	return hex.EncodeToString(b), nil
-}
-
-// Recommend items to users. The workflow of recommendation is:
-// 1. Skip inactive users.
-// 2. Load historical items.
-// 3. Load positive items if KNN used.
-// 4. Generate recommendation.
-// 5. Save result.
-// 6. Insert cold-start items into results.
-// 7. Rank items in results by click-through-rate.
-// 8. Refresh cache.
-func (w *Worker) Recommend(users []data.User) {
-	ctx := context.Background()
-	startRecommendTime := time.Now()
-	log.Logger().Info("ranking recommendation",
-		zap.Int("n_working_users", len(users)),
-		zap.Int("n_jobs", w.jobs),
-		zap.Int("cache_size", w.Config.Recommend.CacheSize))
-
-	// pull items from database
-	itemCache, _, err := w.PullItems(ctx)
-	if err != nil {
-		log.Logger().Error("failed to pull items", zap.Error(err))
-		return
-	}
-	MemoryInuseBytesVec.WithLabelValues("item_cache").Set(float64(sizeof.DeepSize(itemCache)))
-	defer MemoryInuseBytesVec.WithLabelValues("item_cache").Set(0)
-
-	// progress tracker
-	completed := make(chan struct{}, 1000)
-	_, span := w.tracer.Start(context.Background(), "Generate Offline Recommend", len(users))
-	defer span.End()
-
-	go func() {
-		defer util.CheckPanic()
-		completedCount, previousCount := 0, 0
-		ticker := time.NewTicker(10 * time.Second)
-		for {
-			select {
-			case _, ok := <-completed:
-				if !ok {
-					return
-				}
-				completedCount++
-			case <-ticker.C:
-				throughput := completedCount - previousCount
-				previousCount = completedCount
-				if throughput > 0 {
-					if w.masterClient != nil {
-						span.Add(throughput)
-					}
-					log.Logger().Info("ranking recommendation",
-						zap.Int("n_complete_users", completedCount),
-						zap.Int("n_working_users", len(users)),
-						zap.Int("throughput", throughput))
-				}
-				if _, err := w.masterClient.PushProgress(context.Background(), monitor.EncodeProgress(w.tracer.List())); err != nil {
-					log.Logger().Error("failed to report update task", zap.Error(err))
-				}
-			}
-		}
-	}()
-
-	// recommendation
-	startTime := time.Now()
-	var (
-		updateUserCount               atomic.Float64
-		collaborativeRecommendSeconds atomic.Float64
-		userBasedRecommendSeconds     atomic.Float64
-		itemBasedRecommendSeconds     atomic.Float64
-		latestRecommendSeconds        atomic.Float64
-		popularRecommendSeconds       atomic.Float64
-	)
-
-	defer MemoryInuseBytesVec.WithLabelValues("user_feedback_cache").Set(0)
-	err = parallel.Parallel(len(users), w.jobs, func(workerId, jobId int) error {
-		defer func() {
-			completed <- struct{}{}
-		}()
-		user := users[jobId]
-		userId := user.UserId
-		// skip inactive users before max recommend period
-		if !w.checkUserActiveTime(ctx, userId) || !w.checkRecommendCacheOutOfDate(ctx, userId) {
-			return nil
-		}
-		updateUserCount.Add(1)
-
-		recommendTime := time.Now()
-		recommender, err := logics.NewRecommender(w.Config.Recommend, w.CacheClient, w.DataClient, false, userId, nil)
-		if err != nil {
-			return errors.Trace(err)
-		}
-
-		// Update collaborative filtering recommendation.
-		if w.MatrixFactorizationUsers != nil && w.MatrixFactorizationItems != nil {
-			if userEmbedding, ok := w.MatrixFactorizationUsers.Get(userId); ok {
-				err = w.updateCollaborativeRecommend(w.MatrixFactorizationItems, userId, userEmbedding, recommender.ExcludeSet(), itemCache)
-				if err != nil {
-					log.Logger().Error("failed to recommend by collaborative filtering",
-						zap.String("user_id", userId), zap.Error(err))
-					return errors.Trace(err)
-				}
-			}
-		}
-
-		// Generate recommendation from recommenders.
-		var (
-			scores           []cache.Score
-			digest           string
-			recommenderNames []string
-		)
-		if len(w.Config.Recommend.Ranker.Recommenders) > 0 {
-			recommenderNames = w.Config.Recommend.Ranker.Recommenders
-		} else {
-			recommenderNames = w.Config.Recommend.ListRecommenders()
-		}
-		scores, digest, err = recommender.RecommendSequential(context.Background(), scores, 0, recommenderNames...)
-		if err != nil {
-			return errors.Trace(err)
-		}
-
-		candidates := make([]cache.Score, 0, len(scores))
-		for _, score := range scores {
-			if itemCache.IsAvailable(score.Id) {
-				score.Timestamp = recommendTime
-				candidates = append(candidates, score)
-			}
-		}
-
-		// rank by click-through-rate
-		var results []cache.Score
-		if w.ClickThroughRateModel != nil && !w.ClickThroughRateModel.Invalid() {
-			results, err = w.rankByClickTroughRate(w.ClickThroughRateModel, &user, candidates, itemCache, recommendTime)
-			if err != nil {
-				log.Logger().Error("failed to rank items", zap.Error(err))
-				return errors.Trace(err)
-			}
-		} else {
-			results = candidates
-		}
-
-		if w.Config.Recommend.Replacement.EnableReplacement {
-			results, err = w.replacement(w.ClickThroughRateModel, results, &user,
-				recommender.UserFeedback(), itemCache, recommendTime)
-			if err != nil {
-				log.Logger().Error("failed to insert historical items into recommendation",
-					zap.String("user_id", userId), zap.Error(err))
-				return errors.Trace(err)
-			}
-		}
-
-		// cache recommendation
-		if err = w.CacheClient.AddScores(ctx, cache.Recommend, userId, results); err != nil {
-			log.Logger().Error("failed to cache recommendation", zap.Error(err))
-			return errors.Trace(err)
-		}
-		if err = w.CacheClient.Set(ctx,
-			cache.Time(cache.Key(cache.RecommendUpdateTime, userId), recommendTime),
-			cache.String(cache.Key(cache.RecommendDigest, userId), digest),
-		); err != nil {
-			log.Logger().Error("failed to cache recommendation time", zap.Error(err))
-		}
-		return nil
-	})
-	close(completed)
-	if err != nil {
-		log.Logger().Error("failed to continue offline recommendation", zap.Error(err))
-		return
-	}
-	log.Logger().Info("complete ranking recommendation",
-		zap.String("used_time", time.Since(startTime).String()))
-	UpdateUserRecommendTotal.Set(updateUserCount.Load())
-	OfflineRecommendTotalSeconds.Set(time.Since(startRecommendTime).Seconds())
-	OfflineRecommendStepSecondsVec.WithLabelValues("collaborative_recommend").Set(collaborativeRecommendSeconds.Load())
-	OfflineRecommendStepSecondsVec.WithLabelValues("item_based_recommend").Set(itemBasedRecommendSeconds.Load())
-	OfflineRecommendStepSecondsVec.WithLabelValues("user_based_recommend").Set(userBasedRecommendSeconds.Load())
-	OfflineRecommendStepSecondsVec.WithLabelValues("latest_recommend").Set(latestRecommendSeconds.Load())
-	OfflineRecommendStepSecondsVec.WithLabelValues("popular_recommend").Set(popularRecommendSeconds.Load())
 }
 
 func (w *Worker) pullUsers(peers []string, me string) ([]data.User, error) {

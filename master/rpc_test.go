@@ -139,7 +139,7 @@ func TestRPC(t *testing.T) {
 		StartTime:  time.Date(2018, time.January, 1, 0, 0, 0, 0, time.Local),
 		FinishTime: time.Date(2018, time.January, 2, 0, 0, 0, 0, time.Local),
 	}}
-	_, err = client.PushProgress(ctx, protocol.EncodeProgress(progressList))
+	_, err = client.PushProgress(ctx, monitor.EncodeProgress(progressList))
 	assert.NoError(t, err)
 	i, ok := rpcServer.remoteProgress.Load("tracer")
 	assert.True(t, ok)

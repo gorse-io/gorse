@@ -24,6 +24,7 @@ import (
 	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/common/parallel"
 	"github.com/gorse-io/gorse/common/sizeof"
+	"github.com/gorse-io/gorse/common/util"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/logics"
 	"github.com/gorse-io/gorse/model/ctr"
@@ -45,36 +46,39 @@ type Pipeline struct {
 	Config                   *config.Config
 	CacheClient              cache.Database
 	DataClient               data.Database
+	Tracer                   *monitor.Monitor
 	Jobs                     int
 	MatrixFactorizationItems *logics.MatrixFactorizationItems
 	MatrixFactorizationUsers *logics.MatrixFactorizationUsers
 	ClickThroughRateModel    ctr.FactorizationMachines
 }
 
-// RecommendForUsers generates recommendations for a list of users.
-func (p *Pipeline) RecommendForUsers(ctx context.Context, users []data.User, itemCache *ItemCache, jobs int, tracer Tracer) error {
+func (p *Pipeline) Recommend(users []data.User, progress func(completed, throughput int)) {
+	ctx := context.Background()
+	startRecommendTime := time.Now()
 	log.Logger().Info("ranking recommendation",
-		zap.Int("n_users", len(users)),
-		zap.Int("n_jobs", jobs),
+		zap.Int("n_working_users", len(users)),
+		zap.Int("n_jobs", p.Jobs),
 		zap.Int("cache_size", p.Config.Recommend.CacheSize))
 
+	// pull items from database
+	itemCache, _, err := p.PullItems(ctx)
+	if err != nil {
+		log.Logger().Error("failed to pull items", zap.Error(err))
+		return
+	}
 	MemoryInuseBytesVec.WithLabelValues("item_cache").Set(float64(sizeof.DeepSize(itemCache)))
 	defer MemoryInuseBytesVec.WithLabelValues("item_cache").Set(0)
 
 	// progress tracker
 	completed := make(chan struct{}, 1000)
-	_, span := tracer.Start(context.Background(), "Generate Offline Recommend", len(users))
+	_, span := p.Tracer.Start(context.Background(), "Generate recommendation", len(users))
 	defer span.End()
 
 	go func() {
-		defer func() {
-			if err := recover(); err != nil {
-				log.Logger().Error("panic in progress tracker", zap.Any("error", err))
-			}
-		}()
+		defer util.CheckPanic()
 		completedCount, previousCount := 0, 0
 		ticker := time.NewTicker(10 * time.Second)
-		defer ticker.Stop()
 		for {
 			select {
 			case _, ok := <-completed:
@@ -84,24 +88,28 @@ func (p *Pipeline) RecommendForUsers(ctx context.Context, users []data.User, ite
 				completedCount++
 			case <-ticker.C:
 				throughput := completedCount - previousCount
-				previousCount = completedCount
-				if throughput > 0 {
-					span.Add(throughput)
-					log.Logger().Info("ranking recommendation",
-						zap.Int("n_complete_users", completedCount),
-						zap.Int("n_users", len(users)),
-						zap.Int("throughput", throughput))
+				span.Add(throughput)
+				if progress != nil {
+					progress(completedCount, completedCount-previousCount)
 				}
+				previousCount = completedCount
 			}
 		}
 	}()
 
 	// recommendation
 	startTime := time.Now()
-	var updateUserCount atomic.Float64
+	var (
+		updateUserCount               atomic.Float64
+		collaborativeRecommendSeconds atomic.Float64
+		userBasedRecommendSeconds     atomic.Float64
+		itemBasedRecommendSeconds     atomic.Float64
+		latestRecommendSeconds        atomic.Float64
+		popularRecommendSeconds       atomic.Float64
+	)
 
 	defer MemoryInuseBytesVec.WithLabelValues("user_feedback_cache").Set(0)
-	err := parallel.Parallel(len(users), jobs, func(workerId, jobId int) error {
+	err = parallel.Parallel(len(users), p.Jobs, func(workerId, jobId int) error {
 		defer func() {
 			completed <- struct{}{}
 		}()
@@ -117,6 +125,18 @@ func (p *Pipeline) RecommendForUsers(ctx context.Context, users []data.User, ite
 		recommender, err := logics.NewRecommender(p.Config.Recommend, p.CacheClient, p.DataClient, false, userId, nil)
 		if err != nil {
 			return errors.Trace(err)
+		}
+
+		// Update collaborative filtering recommendation.
+		if p.MatrixFactorizationUsers != nil && p.MatrixFactorizationItems != nil {
+			if userEmbedding, ok := p.MatrixFactorizationUsers.Get(userId); ok {
+				err = p.updateCollaborativeRecommend(p.MatrixFactorizationItems, userId, userEmbedding, recommender.ExcludeSet(), itemCache)
+				if err != nil {
+					log.Logger().Error("failed to recommend by collaborative filtering",
+						zap.String("user_id", userId), zap.Error(err))
+					return errors.Trace(err)
+				}
+			}
 		}
 
 		// Generate recommendation from recommenders.
@@ -143,8 +163,27 @@ func (p *Pipeline) RecommendForUsers(ctx context.Context, users []data.User, ite
 			}
 		}
 
-		// rank by click-through-rate (simplified version without model)
-		results := candidates
+		// rank by click-through-rate
+		var results []cache.Score
+		if p.ClickThroughRateModel != nil && !p.ClickThroughRateModel.Invalid() {
+			results, err = p.rankByClickTroughRate(p.ClickThroughRateModel, &user, candidates, itemCache, recommendTime)
+			if err != nil {
+				log.Logger().Error("failed to rank items", zap.Error(err))
+				return errors.Trace(err)
+			}
+		} else {
+			results = candidates
+		}
+
+		if p.Config.Recommend.Replacement.EnableReplacement {
+			results, err = p.replacement(p.ClickThroughRateModel, results, &user,
+				recommender.UserFeedback(), itemCache, recommendTime)
+			if err != nil {
+				log.Logger().Error("failed to insert historical items into recommendation",
+					zap.String("user_id", userId), zap.Error(err))
+				return errors.Trace(err)
+			}
+		}
 
 		// cache recommendation
 		if err = p.CacheClient.AddScores(ctx, cache.Recommend, userId, results); err != nil {
@@ -162,12 +201,17 @@ func (p *Pipeline) RecommendForUsers(ctx context.Context, users []data.User, ite
 	close(completed)
 	if err != nil {
 		log.Logger().Error("failed to continue offline recommendation", zap.Error(err))
-		return errors.Trace(err)
+		return
 	}
 	log.Logger().Info("complete ranking recommendation",
 		zap.String("used_time", time.Since(startTime).String()))
 	UpdateUserRecommendTotal.Set(updateUserCount.Load())
-	return nil
+	OfflineRecommendTotalSeconds.Set(time.Since(startRecommendTime).Seconds())
+	OfflineRecommendStepSecondsVec.WithLabelValues("collaborative_recommend").Set(collaborativeRecommendSeconds.Load())
+	OfflineRecommendStepSecondsVec.WithLabelValues("item_based_recommend").Set(itemBasedRecommendSeconds.Load())
+	OfflineRecommendStepSecondsVec.WithLabelValues("user_based_recommend").Set(userBasedRecommendSeconds.Load())
+	OfflineRecommendStepSecondsVec.WithLabelValues("latest_recommend").Set(latestRecommendSeconds.Load())
+	OfflineRecommendStepSecondsVec.WithLabelValues("popular_recommend").Set(popularRecommendSeconds.Load())
 }
 
 // checkUserActiveTime checks if a user is active based on their last modification time.
