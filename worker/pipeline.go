@@ -79,6 +79,7 @@ func (p *Pipeline) Recommend(users []data.User, progress func(completed, through
 		defer util.CheckPanic()
 		completedCount, previousCount := 0, 0
 		ticker := time.NewTicker(10 * time.Second)
+		defer ticker.Stop()
 		for {
 			select {
 			case _, ok := <-completed:

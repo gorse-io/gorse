@@ -1297,6 +1297,7 @@ func (m *Master) updateRecommend() error {
 	r, err = m.blobStore.Open(strconv.FormatInt(m.clickThroughRateMeta.ID, 10))
 	if err != nil {
 		log.Logger().Error("failed to open click-through rate model", zap.Error(err))
+		return errors.Trace(err)
 	}
 	pipeline.ClickThroughRateModel, err = ctr.UnmarshalModel(r)
 	if err != nil {
