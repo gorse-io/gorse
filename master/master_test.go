@@ -33,7 +33,7 @@ func (s *MasterTestSuite) SetupTest() {
 	// open database
 	var err error
 	s.tracer = monitor.NewTracer("test")
-	s.Settings = config.NewSettings()
+	s.Config = config.GetDefaultConfig()
 	s.DataClient, err = data.Open(fmt.Sprintf("sqlite://%s/data.db", s.T().TempDir()), "")
 	s.NoError(err)
 	s.CacheClient, err = cache.Open(fmt.Sprintf("sqlite://%s/cache.db", s.T().TempDir()), "")

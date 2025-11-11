@@ -76,10 +76,12 @@ func NewServer(
 		tlsConfig:  tlsConfig,
 		cacheFile:  cacheFile,
 		RestServer: RestServer{
-			Settings:   config.NewSettings(),
-			HttpHost:   serverHost,
-			HttpPort:   serverPort,
-			WebService: new(restful.WebService),
+			Config:      config.GetDefaultConfig(),
+			CacheClient: new(cache.NoDatabase),
+			DataClient:  new(data.NoDatabase),
+			HttpHost:    serverHost,
+			HttpPort:    serverPort,
+			WebService:  new(restful.WebService),
 		},
 	}
 	return s

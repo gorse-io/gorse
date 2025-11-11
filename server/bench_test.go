@@ -88,7 +88,6 @@ func newBenchServer(b *testing.B) *benchServer {
 
 	// configuration
 	s := &benchServer{}
-	s.Settings = &config.Settings{}
 	s.Config = config.GetDefaultConfig()
 	s.DisableLog = true
 	s.WebService = new(restful.WebService)

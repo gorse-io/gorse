@@ -39,6 +39,7 @@ import (
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
 	"github.com/gorse-io/gorse/storage/meta"
+	"github.com/gorse-io/gorse/worker"
 	"github.com/juju/errors"
 	"github.com/samber/lo"
 	"go.uber.org/zap"
@@ -223,6 +224,11 @@ func (m *Master) runLoadDatasetTask() error {
 	}
 	if err = m.trainClickThroughRatePrediction(datasets.clickTrainSet, datasets.clickTestSet); err != nil {
 		log.Logger().Error("failed to train click-through rate prediction model", zap.Error(err))
+	}
+	if m.standalone {
+		if err = m.updateRecommend(); err != nil {
+			log.Logger().Error("failed to update recommendation", zap.Error(err))
+		}
 	}
 	if err = m.collectGarbage(ctx, datasets.rankingDataset); err != nil {
 		log.Logger().Error("failed to collect garbage in cache", zap.Error(err))
@@ -1259,4 +1265,66 @@ func (m *Master) optimizeClickThroughRatePrediction(trainSet, testSet *ctr.Datas
 		zap.String("type", m.clickThroughRateTarget.Type),
 		zap.Any("params", m.clickThroughRateTarget.Params))
 	return nil
+}
+
+// updateRecommend updates recommendations for all user in standalone mode.
+func (m *Master) updateRecommend() error {
+	ctx := context.Background()
+	pipeline := &worker.Pipeline{
+		Config:                   m.Config,
+		DataClient:               m.DataClient,
+		CacheClient:              m.CacheClient,
+		Tracer:                   m.tracer,
+		Jobs:                     m.Config.Master.NumJobs,
+		MatrixFactorizationItems: logics.NewMatrixFactorizationItems(time.Time{}),
+		MatrixFactorizationUsers: logics.NewMatrixFactorizationUsers(),
+	}
+
+	// load matrix factorization model
+	r, err := m.blobStore.Open(strconv.FormatInt(m.collaborativeFilteringMeta.ID, 10))
+	if err != nil {
+		log.Logger().Error("failed to load collaborative filtering model from blob store",
+			zap.Int64("id", m.collaborativeFilteringMeta.ID), zap.Error(err))
+		return errors.Trace(err)
+	}
+	if err = pipeline.MatrixFactorizationItems.Unmarshal(r); err != nil {
+		log.Logger().Error("failed to unmarshal matrix factorization items", zap.Error(err))
+	} else if err = pipeline.MatrixFactorizationUsers.Unmarshal(r); err != nil {
+		log.Logger().Error("failed to unmarshal matrix factorization users", zap.Error(err))
+	}
+
+	// load click-through rate model
+	r, err = m.blobStore.Open(strconv.FormatInt(m.clickThroughRateMeta.ID, 10))
+	if err != nil {
+		log.Logger().Error("failed to open click-through rate model", zap.Error(err))
+		return errors.Trace(err)
+	}
+	pipeline.ClickThroughRateModel, err = ctr.UnmarshalModel(r)
+	if err != nil {
+		log.Logger().Error("failed to unmarshal click-through rate model", zap.Error(err))
+		return errors.Trace(err)
+	}
+
+	// Pull all users from database
+	users, err := m.pullAllUsers(ctx)
+	if err != nil {
+		log.Logger().Error("failed to pull users", zap.Error(err))
+		return errors.Trace(err)
+	}
+
+	pipeline.Recommend(users, nil)
+	return nil
+}
+
+// pullAllUsers pulls all users from the data store.
+func (m *Master) pullAllUsers(ctx context.Context) ([]data.User, error) {
+	var users []data.User
+	userChan, errChan := m.DataClient.GetUserStream(ctx, batchSize)
+	for batchUsers := range userChan {
+		users = append(users, batchUsers...)
+	}
+	if err := <-errChan; err != nil {
+		return nil, errors.Trace(err)
+	}
+	return users, nil
 }

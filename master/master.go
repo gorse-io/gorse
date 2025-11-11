@@ -68,6 +68,7 @@ type Master struct {
 	tracer         *monitor.Monitor
 	remoteProgress sync.Map
 	cachePath      string
+	standalone     bool
 	openAIClient   *openai.Client
 
 	// cluster meta cache
@@ -99,7 +100,7 @@ type Master struct {
 }
 
 // NewMaster creates a master node.
-func NewMaster(cfg *config.Config, cacheFolder string) *Master {
+func NewMaster(cfg *config.Config, cacheFolder string, standalone bool) *Master {
 	rand.Seed(time.Now().UnixNano())
 
 	// setup trace provider
@@ -123,17 +124,16 @@ func NewMaster(cfg *config.Config, cacheFolder string) *Master {
 	m := &Master{
 		// create task monitor
 		cachePath:    cacheFolder,
+		standalone:   standalone,
 		tracer:       monitor.NewTracer("master"),
 		openAIClient: openai.NewClientWithConfig(clientConfig),
 		RestServer: server.RestServer{
-			Settings: &config.Settings{
-				Config:      cfg,
-				CacheClient: cache.NoDatabase{},
-				DataClient:  data.NoDatabase{},
-			},
-			HttpHost:   cfg.Master.HttpHost,
-			HttpPort:   cfg.Master.HttpPort,
-			WebService: new(restful.WebService),
+			Config:      cfg,
+			CacheClient: cache.NoDatabase{},
+			DataClient:  data.NoDatabase{},
+			HttpHost:    cfg.Master.HttpHost,
+			HttpPort:    cfg.Master.HttpPort,
+			WebService:  new(restful.WebService),
 		},
 		fitTicker:    time.NewTicker(cfg.Recommend.Collaborative.ModelFitPeriod),
 		importedChan: parallel.NewConditionChannel(),

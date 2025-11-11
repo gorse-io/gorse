@@ -14,46 +14,7 @@
 
 package protocol
 
-import (
-	"github.com/gorse-io/gorse/common/monitor"
-	"time"
-)
-
 //go:generate protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative cache_store.proto
 //go:generate protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative data_store.proto
 //go:generate protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative encoding.proto
 //go:generate protoc --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative protocol.proto
-
-func DecodeProgress(in *PushProgressRequest) []monitor.Progress {
-	var progressList []monitor.Progress
-	for _, p := range in.Progress {
-		progressList = append(progressList, monitor.Progress{
-			Tracer:     p.GetTracer(),
-			Name:       p.GetName(),
-			Status:     monitor.Status(p.GetStatus()),
-			Count:      int(p.GetCount()),
-			Total:      int(p.GetTotal()),
-			StartTime:  time.UnixMilli(p.GetStartTime()),
-			FinishTime: time.UnixMilli(p.GetFinishTime()),
-		})
-	}
-	return progressList
-}
-
-func EncodeProgress(progressList []monitor.Progress) *PushProgressRequest {
-	var pbList []*Progress
-	for _, p := range progressList {
-		pbList = append(pbList, &Progress{
-			Tracer:     p.Tracer,
-			Name:       p.Name,
-			Status:     string(p.Status),
-			Count:      int64(p.Count),
-			Total:      int64(p.Total),
-			StartTime:  p.StartTime.UnixMilli(),
-			FinishTime: p.FinishTime.UnixMilli(),
-		})
-	}
-	return &PushProgressRequest{
-		Progress: pbList,
-	}
-}

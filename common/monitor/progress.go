@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/gorse-io/gorse/protocol"
 	"modernc.org/mathutil"
 )
 
@@ -188,4 +189,38 @@ type Progress struct {
 	Total      int
 	StartTime  time.Time
 	FinishTime time.Time
+}
+
+func DecodeProgress(in *protocol.PushProgressRequest) []Progress {
+	var progressList []Progress
+	for _, p := range in.Progress {
+		progressList = append(progressList, Progress{
+			Tracer:     p.GetTracer(),
+			Name:       p.GetName(),
+			Status:     Status(p.GetStatus()),
+			Count:      int(p.GetCount()),
+			Total:      int(p.GetTotal()),
+			StartTime:  time.UnixMilli(p.GetStartTime()),
+			FinishTime: time.UnixMilli(p.GetFinishTime()),
+		})
+	}
+	return progressList
+}
+
+func EncodeProgress(progressList []Progress) *protocol.PushProgressRequest {
+	var pbList []*protocol.Progress
+	for _, p := range progressList {
+		pbList = append(pbList, &protocol.Progress{
+			Tracer:     p.Tracer,
+			Name:       p.Name,
+			Status:     string(p.Status),
+			Count:      int64(p.Count),
+			Total:      int64(p.Total),
+			StartTime:  p.StartTime.UnixMilli(),
+			FinishTime: p.FinishTime.UnixMilli(),
+		})
+	}
+	return &protocol.PushProgressRequest{
+		Progress: pbList,
+	}
 }

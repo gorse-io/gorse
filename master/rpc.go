@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/protocol"
 	"github.com/gorse-io/gorse/storage/meta"
 	"github.com/juju/errors"
@@ -90,6 +91,6 @@ func (m *Master) PushProgress(
 		}
 	}
 	// store progress
-	m.remoteProgress.Store(tracer, protocol.DecodeProgress(in))
+	m.remoteProgress.Store(tracer, monitor.DecodeProgress(in))
 	return &protocol.PushProgressResponse{}, nil
 }

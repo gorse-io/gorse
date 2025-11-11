@@ -16,7 +16,9 @@ package monitor
 
 import (
 	"testing"
+	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -31,4 +33,29 @@ func (suite *ProgressTestSuite) SetupTest() {
 
 func TestProgressTestSuite(t *testing.T) {
 	suite.Run(t, new(ProgressTestSuite))
+}
+
+func TestEncodeDecode(t *testing.T) {
+	progressList := []Progress{
+		{
+			Tracer:     "tracer",
+			Name:       "a",
+			Total:      100,
+			Count:      50,
+			Status:     StatusRunning,
+			StartTime:  time.Date(2018, time.January, 1, 0, 0, 0, 0, time.Local),
+			FinishTime: time.Date(2018, time.January, 2, 0, 0, 0, 0, time.Local),
+		},
+		{
+			Tracer:     "tracer",
+			Name:       "b",
+			Total:      100,
+			Count:      50,
+			Status:     StatusRunning,
+			StartTime:  time.Date(2018, time.January, 1, 0, 0, 0, 0, time.Local),
+			FinishTime: time.Date(2018, time.January, 2, 0, 0, 0, 0, time.Local),
+		},
+	}
+	pb := EncodeProgress(progressList)
+	assert.Equal(t, progressList, DecodeProgress(pb))
 }
