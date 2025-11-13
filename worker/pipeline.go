@@ -16,6 +16,7 @@ package worker
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	mapset "github.com/deckarep/golang-set/v2"
@@ -23,7 +24,6 @@ import (
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/common/parallel"
-	"github.com/gorse-io/gorse/common/sizeof"
 	"github.com/gorse-io/gorse/common/util"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/logics"
@@ -56,19 +56,11 @@ type Pipeline struct {
 func (p *Pipeline) Recommend(users []data.User, progress func(completed, throughput int)) {
 	ctx := context.Background()
 	startRecommendTime := time.Now()
+	itemCache := NewItemCache(p.DataClient)
 	log.Logger().Info("ranking recommendation",
 		zap.Int("n_working_users", len(users)),
 		zap.Int("n_jobs", p.Jobs),
 		zap.Int("cache_size", p.Config.Recommend.CacheSize))
-
-	// pull items from database
-	itemCache, _, err := p.PullItems(ctx)
-	if err != nil {
-		log.Logger().Error("failed to pull items", zap.Error(err))
-		return
-	}
-	MemoryInuseBytesVec.WithLabelValues("item_cache").Set(float64(sizeof.DeepSize(itemCache)))
-	defer MemoryInuseBytesVec.WithLabelValues("item_cache").Set(0)
 
 	// progress tracker
 	completed := make(chan struct{}, 1000)
@@ -110,7 +102,7 @@ func (p *Pipeline) Recommend(users []data.User, progress func(completed, through
 	)
 
 	defer MemoryInuseBytesVec.WithLabelValues("user_feedback_cache").Set(0)
-	err = parallel.Parallel(len(users), p.Jobs, func(workerId, jobId int) error {
+	err := parallel.Parallel(len(users), p.Jobs, func(workerId, jobId int) error {
 		defer func() {
 			completed <- struct{}{}
 		}()
@@ -157,8 +149,14 @@ func (p *Pipeline) Recommend(users []data.User, progress func(completed, through
 		}
 
 		candidates := make([]cache.Score, 0, len(scores))
+		items, err := itemCache.GetMap(lo.Map(scores, func(score cache.Score, _ int) string {
+			return score.Id
+		}))
+		if err != nil {
+			return errors.Trace(err)
+		}
 		for _, score := range scores {
-			if itemCache.IsAvailable(score.Id) {
+			if _, exist := items[score.Id]; exist {
 				score.Timestamp = recommendTime
 				candidates = append(candidates, score)
 			}
@@ -303,19 +301,29 @@ func (p *Pipeline) updateCollaborativeRecommend(
 	ctx := context.Background()
 	localStartTime := time.Now()
 	scores := items.Search(userEmbedding, p.Config.Recommend.CacheSize+excludeSet.Cardinality())
-	// remove excluded items
-	scores = lo.Filter(scores, func(score cache.Score, _ int) bool {
-		return !excludeSet.Contains(score.Id)
-	})
 	// update categories
-	for i := range scores {
-		scores[i].Categories = itemCache.GetCategory(scores[i].Id)
-		// the scores use the timestamp of the ranking index, which is only refreshed every so often.
-		// if we don't overwrite the timestamp here, the code below will delete all scores that were
-		// just written.
-		scores[i].Timestamp = localStartTime
+	itemsMap, err := itemCache.GetMap(lo.Map(scores, func(score cache.Score, _ int) string {
+		return score.Id
+	}))
+	if err != nil {
+		return errors.Trace(err)
 	}
-	if err := p.CacheClient.AddScores(ctx, cache.CollaborativeFiltering, userId, scores); err != nil {
+	// remove excluded items and non-existing items
+	recommend := make([]cache.Score, 0, len(scores))
+	for i := range scores {
+		if item, exist := itemsMap[scores[i].Id]; exist && !excludeSet.Contains(item.ItemId) {
+			recommend = append(recommend, cache.Score{
+				Id:         scores[i].Id,
+				Score:      scores[i].Score,
+				Categories: item.Categories,
+				// the scores use the timestamp of the ranking index, which is only refreshed every so often.
+				// if we don't overwrite the timestamp here, the code below will delete all scores that were
+				// just written.
+				Timestamp: localStartTime,
+			})
+		}
+	}
+	if err := p.CacheClient.AddScores(ctx, cache.CollaborativeFiltering, userId, recommend); err != nil {
 		log.Logger().Error("failed to cache collaborative filtering recommendation result", zap.String("user_id", userId), zap.Error(err))
 		return errors.Trace(err)
 	}
@@ -335,13 +343,11 @@ func (p *Pipeline) rankByClickTroughRate(
 	recommendTime time.Time,
 ) ([]cache.Score, error) {
 	// download items
-	items := make([]*data.Item, 0, len(candidates))
-	for _, candidate := range candidates {
-		if item, exist := itemCache.Get(candidate.Id); exist {
-			items = append(items, item)
-		} else {
-			log.Logger().Warn("item doesn't exists in database", zap.String("item_id", candidate.Id))
-		}
+	items, err := itemCache.GetSlice(lo.Map(candidates, func(score cache.Score, _ int) string {
+		return score.Id
+	}))
+	if err != nil {
+		return nil, errors.Trace(err)
 	}
 	// rank by CTR
 	topItems := make([]cache.Score, 0, len(items))
@@ -358,7 +364,7 @@ func (p *Pipeline) rankByClickTroughRate(
 			topItems = append(topItems, cache.Score{
 				Id:         items[i].ItemId,
 				Score:      float64(score),
-				Categories: itemCache.GetCategory(items[i].ItemId),
+				Categories: items[i].Categories,
 				Timestamp:  recommendTime,
 			})
 		}
@@ -367,7 +373,7 @@ func (p *Pipeline) rankByClickTroughRate(
 			topItems = append(topItems, cache.Score{
 				Id:         item.ItemId,
 				Score:      float64(predictor.Predict(user.UserId, item.ItemId, ctr.ConvertLabels(user.Labels), ctr.ConvertLabels(item.Labels))),
-				Categories: itemCache.GetCategory(item.ItemId),
+				Categories: item.Categories,
 				Timestamp:  recommendTime,
 			})
 		}
@@ -403,11 +409,9 @@ func (p *Pipeline) replacement(
 	}
 	negativeItems := distinctItems.Difference(positiveItems)
 
-	items := make([]*data.Item, 0, distinctItems.Cardinality())
-	for itemId := range distinctItems.Iter() {
-		if item, exist := itemCache.Get(itemId); exist {
-			items = append(items, item)
-		}
+	items, err := itemCache.GetSlice(distinctItems.ToSlice())
+	if err != nil {
+		return nil, errors.Trace(err)
 	}
 	scoredItems := make([]cache.Score, 0, len(items))
 	if batchPredictor, ok := predictor.(ctr.BatchInference); ok {
@@ -423,7 +427,7 @@ func (p *Pipeline) replacement(
 			scoredItems = append(scoredItems, cache.Score{
 				Id:         items[i].ItemId,
 				Score:      float64(score),
-				Categories: itemCache.GetCategory(items[i].ItemId),
+				Categories: items[i].Categories,
 				Timestamp:  recommendTime,
 			})
 		}
@@ -432,7 +436,7 @@ func (p *Pipeline) replacement(
 			scoredItems = append(scoredItems, cache.Score{
 				Id:         item.ItemId,
 				Score:      float64(predictor.Predict(user.UserId, item.ItemId, ctr.ConvertLabels(user.Labels), ctr.ConvertLabels(item.Labels))),
-				Categories: itemCache.GetCategory(item.ItemId),
+				Categories: item.Categories,
 				Timestamp:  recommendTime,
 			})
 		}
@@ -459,64 +463,50 @@ func (p *Pipeline) replacement(
 
 // ItemCache is alias of map[string]data.Item.
 type ItemCache struct {
-	Data map[string]*data.Item
+	Client data.Database
+	Data   sync.Map
 }
 
 // NewItemCache creates a new ItemCache.
-func NewItemCache() *ItemCache {
-	return &ItemCache{Data: make(map[string]*data.Item)}
-}
-
-// Len returns the number of items in the cache.
-func (c *ItemCache) Len() int {
-	return len(c.Data)
-}
-
-// Set adds an item to the cache.
-func (c *ItemCache) Set(itemId string, item data.Item) {
-	if _, exist := c.Data[itemId]; !exist {
-		c.Data[itemId] = &item
+func NewItemCache(client data.Database) *ItemCache {
+	return &ItemCache{
+		Client: client,
+		Data:   sync.Map{},
 	}
 }
 
-// Get retrieves an item from the cache.
-func (c *ItemCache) Get(itemId string) (*data.Item, bool) {
-	item, exist := c.Data[itemId]
-	return item, exist
-}
-
-// GetCategory gets the categories of an item.
-func (c *ItemCache) GetCategory(itemId string) []string {
-	if item, exist := c.Data[itemId]; exist {
-		return item.Categories
-	} else {
-		return nil
-	}
-}
-
-// IsAvailable means the item exists in database and is not hidden.
-func (c *ItemCache) IsAvailable(itemId string) bool {
-	if item, exist := c.Data[itemId]; exist {
-		return !item.IsHidden
-	} else {
-		return false
-	}
-}
-
-// PullItems pulls all items from the data store.
-func (p *Pipeline) PullItems(ctx context.Context) (*ItemCache, []string, error) {
-	// pull items from database
-	itemCache := NewItemCache()
-	itemCategories := mapset.NewSet[string]()
-	itemChan, errChan := p.DataClient.GetItemStream(ctx, batchSize, nil)
-	for batchItems := range itemChan {
-		for _, item := range batchItems {
-			itemCache.Set(item.ItemId, item)
-			itemCategories.Append(item.Categories...)
+func (c *ItemCache) GetSlice(itemIds []string) ([]*data.Item, error) {
+	requests := make([]string, 0, len(itemIds))
+	for _, itemId := range itemIds {
+		if _, exist := c.Data.Load(itemId); !exist {
+			requests = append(requests, itemId)
 		}
 	}
-	if err := <-errChan; err != nil {
-		return nil, nil, errors.Trace(err)
+	response, err := c.Client.BatchGetItems(context.Background(), requests)
+	if err != nil {
+		return nil, errors.Trace(err)
 	}
-	return itemCache, itemCategories.ToSlice(), nil
+	for _, item := range response {
+		c.Data.Store(item.ItemId, &item)
+	}
+	items := make([]*data.Item, 0, len(itemIds))
+	for _, itemId := range itemIds {
+		if val, exist := c.Data.Load(itemId); exist {
+			item := val.(*data.Item)
+			if !item.IsHidden {
+				items = append(items, item)
+			}
+		}
+	}
+	return items, nil
+}
+
+func (c *ItemCache) GetMap(itemIds []string) (map[string]*data.Item, error) {
+	items, err := c.GetSlice(itemIds)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	return lo.SliceToMap(items, func(item *data.Item) (string, *data.Item) {
+		return item.ItemId, item
+	}), nil
 }

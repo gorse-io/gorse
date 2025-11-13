@@ -648,11 +648,16 @@ func (suite *WorkerTestSuite) TestRankByClickTroughRate() {
 	err := suite.DataClient.BatchInsertUsers(ctx, []data.User{{UserId: "1"}})
 	suite.NoError(err)
 	// insert items
-	itemCache := NewItemCache()
-	for i := 1; i <= 5; i++ {
-		itemCache.Set(strconv.Itoa(i), data.Item{ItemId: strconv.Itoa(i)})
-	}
+	err = suite.DataClient.BatchInsertItems(ctx, []data.Item{
+		{ItemId: "1"},
+		{ItemId: "2"},
+		{ItemId: "3"},
+		{ItemId: "4"},
+		{ItemId: "5"},
+	})
+	suite.NoError(err)
 	// rank items
+	itemCache := NewItemCache(suite.DataClient)
 	result, err := suite.rankByClickTroughRate(new(mockFactorizationMachine), &data.User{UserId: "1"},
 		[]cache.Score{{Id: "1"}, {Id: "2"}, {Id: "3"}, {Id: "4"}, {Id: "5"}}, itemCache, time.Now())
 	suite.NoError(err)
