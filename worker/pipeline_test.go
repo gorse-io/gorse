@@ -35,7 +35,7 @@ func (suite *PipelineTestSuite) SetupSuite() {
 	suite.NoError(err)
 
 	// insert items
-	err = suite.dataClient.BatchInsertItems(nil, []data.Item{
+	err = suite.dataClient.BatchInsertItems(context.Background(), []data.Item{
 		{ItemId: "1"},
 		{ItemId: "2"},
 		{ItemId: "3"},
