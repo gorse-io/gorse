@@ -37,11 +37,6 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-// Tracer is an alias for monitor.Monitor to avoid circular dependencies.
-type Tracer interface {
-	Start(context.Context, string, int) (context.Context, *monitor.Span)
-}
-
 type Pipeline struct {
 	Config                   *config.Config
 	CacheClient              cache.Database
@@ -51,6 +46,7 @@ type Pipeline struct {
 	MatrixFactorizationItems *logics.MatrixFactorizationItems
 	MatrixFactorizationUsers *logics.MatrixFactorizationUsers
 	ClickThroughRateModel    ctr.FactorizationMachines
+	dontskipColdStartUsers   bool
 }
 
 func (p *Pipeline) Recommend(users []data.User, progress func(completed, throughput int)) {
@@ -119,7 +115,7 @@ func (p *Pipeline) Recommend(users []data.User, progress func(completed, through
 		if err != nil {
 			return errors.Trace(err)
 		}
-		if recommender.IsColdStart() {
+		if !p.dontskipColdStartUsers && recommender.IsColdStart() {
 			// skip cold-start users without any positive feedback
 			return nil
 		}
@@ -133,7 +129,7 @@ func (p *Pipeline) Recommend(users []data.User, progress func(completed, through
 						zap.String("user_id", userId), zap.Error(err))
 					return errors.Trace(err)
 				}
-			} else {
+			} else if !p.dontskipColdStartUsers {
 				// skip cold-start users with too few positive feedback
 				return nil
 			}

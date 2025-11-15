@@ -86,6 +86,7 @@ func (suite *WorkerTestSuite) SetupTest() {
 	// configuration
 	suite.Config = config.GetDefaultConfig()
 	suite.Jobs = 1
+	suite.dontskipColdStartUsers = true
 	// reset random generator
 	suite.randGenerator = rand.New(rand.NewSource(0))
 	// reset index
