@@ -31,9 +31,7 @@ import (
 )
 
 func TestUnmarshal(t *testing.T) {
-	data, err := os.ReadFile("config.toml")
-	assert.NoError(t, err)
-	text := string(data)
+	text := ConfigTOML
 	text = strings.Replace(text, "ssl_mode = false", "ssl_mode = true", -1)
 	text = strings.Replace(text, "ssl_ca = \"\"", "ssl_ca = \"ca.pem\"", -1)
 	text = strings.Replace(text, "ssl_cert = \"\"", "ssl_cert = \"cert.pem\"", -1)

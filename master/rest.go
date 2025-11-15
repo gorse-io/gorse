@@ -1583,29 +1583,10 @@ func (m *Master) dump(response http.ResponseWriter, request *http.Request) {
 	server.Ok(restful.NewResponse(response), stats)
 }
 
-func (m *Master) restore(response http.ResponseWriter, request *http.Request) {
-	if !m.checkAdmin(request) {
-		writeError(response, http.StatusUnauthorized, "unauthorized")
+func (m *Master) Restore(r io.ReadCloser) (stats DumpStats, err error) {
+	flag := EOF
+	if err = binary.Read(r, binary.LittleEndian, &flag); err != nil {
 		return
-	}
-	if request.Method != http.MethodPost {
-		writeError(response, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-	var (
-		flag  int64
-		err   error
-		stats DumpStats
-		start = time.Now()
-	)
-	if err = binary.Read(request.Body, binary.LittleEndian, &flag); err != nil {
-		if errors.Is(err, io.EOF) {
-			server.Ok(restful.NewResponse(response), struct{}{})
-			return
-		} else {
-			writeError(response, http.StatusInternalServerError, err.Error())
-			return
-		}
 	}
 	for flag != EOF {
 		switch flag {
@@ -1613,16 +1594,14 @@ func (m *Master) restore(response http.ResponseWriter, request *http.Request) {
 			users := make([]data.User, 0, batchSize)
 			for {
 				var user protocol.User
-				if flag, err = readDump(request.Body, &user); err != nil {
-					writeError(response, http.StatusInternalServerError, err.Error())
+				if flag, err = readDump(r, &user); err != nil {
 					return
 				}
 				if flag <= 0 {
 					break
 				}
 				var labels any
-				if err := json.Unmarshal(user.Labels, &labels); err != nil {
-					writeError(response, http.StatusInternalServerError, err.Error())
+				if err = json.Unmarshal(user.Labels, &labels); err != nil {
 					return
 				}
 				users = append(users, data.User{
@@ -1632,16 +1611,14 @@ func (m *Master) restore(response http.ResponseWriter, request *http.Request) {
 				})
 				stats.Users++
 				if len(users) == batchSize {
-					if err := m.DataClient.BatchInsertUsers(context.Background(), users); err != nil {
-						writeError(response, http.StatusInternalServerError, err.Error())
+					if err = m.DataClient.BatchInsertUsers(context.Background(), users); err != nil {
 						return
 					}
 					users = users[:0]
 				}
 			}
 			if len(users) > 0 {
-				if err := m.DataClient.BatchInsertUsers(context.Background(), users); err != nil {
-					writeError(response, http.StatusInternalServerError, err.Error())
+				if err = m.DataClient.BatchInsertUsers(context.Background(), users); err != nil {
 					return
 				}
 			}
@@ -1649,16 +1626,14 @@ func (m *Master) restore(response http.ResponseWriter, request *http.Request) {
 			items := make([]data.Item, 0, batchSize)
 			for {
 				var item protocol.Item
-				if flag, err = readDump(request.Body, &item); err != nil {
-					writeError(response, http.StatusInternalServerError, err.Error())
+				if flag, err = readDump(r, &item); err != nil {
 					return
 				}
 				if flag <= 0 {
 					break
 				}
 				var labels any
-				if err := json.Unmarshal(item.Labels, &labels); err != nil {
-					writeError(response, http.StatusInternalServerError, err.Error())
+				if err = json.Unmarshal(item.Labels, &labels); err != nil {
 					return
 				}
 				items = append(items, data.Item{
@@ -1671,16 +1646,14 @@ func (m *Master) restore(response http.ResponseWriter, request *http.Request) {
 				})
 				stats.Items++
 				if len(items) == batchSize {
-					if err := m.DataClient.BatchInsertItems(context.Background(), items); err != nil {
-						writeError(response, http.StatusInternalServerError, err.Error())
+					if err = m.DataClient.BatchInsertItems(context.Background(), items); err != nil {
 						return
 					}
 					items = items[:0]
 				}
 			}
 			if len(items) > 0 {
-				if err := m.DataClient.BatchInsertItems(context.Background(), items); err != nil {
-					writeError(response, http.StatusInternalServerError, err.Error())
+				if err = m.DataClient.BatchInsertItems(context.Background(), items); err != nil {
 					return
 				}
 			}
@@ -1688,8 +1661,7 @@ func (m *Master) restore(response http.ResponseWriter, request *http.Request) {
 			feedbacks := make([]data.Feedback, 0, batchSize)
 			for {
 				var feedback protocol.Feedback
-				if flag, err = readDump(request.Body, &feedback); err != nil {
-					writeError(response, http.StatusInternalServerError, err.Error())
+				if flag, err = readDump(r, &feedback); err != nil {
 					return
 				}
 				if flag <= 0 {
@@ -1707,23 +1679,39 @@ func (m *Master) restore(response http.ResponseWriter, request *http.Request) {
 				})
 				stats.Feedback++
 				if len(feedbacks) == batchSize {
-					if err := m.DataClient.BatchInsertFeedback(context.Background(), feedbacks, true, true, true); err != nil {
-						writeError(response, http.StatusInternalServerError, err.Error())
+					if err = m.DataClient.BatchInsertFeedback(context.Background(), feedbacks, true, true, true); err != nil {
 						return
 					}
 					feedbacks = feedbacks[:0]
 				}
 			}
 			if len(feedbacks) > 0 {
-				if err := m.DataClient.BatchInsertFeedback(context.Background(), feedbacks, true, true, true); err != nil {
-					writeError(response, http.StatusInternalServerError, err.Error())
+				if err = m.DataClient.BatchInsertFeedback(context.Background(), feedbacks, true, true, true); err != nil {
 					return
 				}
 			}
 		default:
-			writeError(response, http.StatusInternalServerError, fmt.Sprintf("unknown flag %v", flag))
+			err = fmt.Errorf("unknown flag %v", flag)
 			return
 		}
+	}
+	return
+}
+
+func (m *Master) restore(response http.ResponseWriter, request *http.Request) {
+	if !m.checkAdmin(request) {
+		writeError(response, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	if request.Method != http.MethodPost {
+		writeError(response, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	start := time.Now()
+	stats, err := m.Restore(request.Body)
+	if err != nil {
+		writeError(response, http.StatusInternalServerError, err.Error())
+		return
 	}
 	stats.Duration = time.Since(start)
 	log.Logger().Info("complete restore",

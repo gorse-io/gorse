@@ -76,7 +76,6 @@ func init() {
 	workerCommand.PersistentFlags().String("http-host", "127.0.0.1", "host for Prometheus metrics export")
 	workerCommand.PersistentFlags().Int("http-port", 8089, "port for Prometheus metrics export")
 	workerCommand.PersistentFlags().Bool("debug", false, "use debug log mode")
-	workerCommand.PersistentFlags().Bool("managed", false, "enable managed mode")
 	workerCommand.PersistentFlags().IntP("jobs", "j", 1, "number of working jobs.")
 	workerCommand.PersistentFlags().String("cache-path", "worker_cache.data", "path of cache file")
 	workerCommand.PersistentFlags().String("ssl-ca", "", "path of SSL CA")
