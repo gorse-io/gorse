@@ -67,7 +67,6 @@ var masterCommand = &cobra.Command{
 func init() {
 	log.AddFlags(masterCommand.PersistentFlags())
 	masterCommand.PersistentFlags().Bool("debug", false, "use debug log mode")
-	masterCommand.PersistentFlags().Bool("managed", false, "enable managed mode")
 	masterCommand.PersistentFlags().StringP("config", "c", "", "configuration file path")
 	masterCommand.PersistentFlags().BoolP("version", "v", false, "gorse version")
 	masterCommand.PersistentFlags().String("cache-path", "master_cache.data", "path of cache file")
