@@ -5,7 +5,6 @@ go 1.25
 require (
 	github.com/XSAM/otelsql v0.35.0
 	github.com/araddon/dateparse v0.0.0-20210429162001-6b43995a97de
-	github.com/benhoyt/goawk v1.20.0
 	github.com/bits-and-blooms/bitset v1.24.2
 	github.com/c-bata/goptuna v0.8.1
 	github.com/cenkalti/backoff/v5 v5.0.2
