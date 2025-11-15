@@ -16,19 +16,14 @@ package main
 
 import (
 	"bufio"
-	"bytes"
 	"compress/gzip"
 	"database/sql"
 	_ "embed"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 
-	"github.com/benhoyt/goawk/interp"
-	"github.com/benhoyt/goawk/parser"
 	"github.com/gorse-io/gorse/cmd/version"
 	"github.com/gorse-io/gorse/common/expression"
 	"github.com/gorse-io/gorse/common/log"
@@ -41,9 +36,6 @@ import (
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 )
-
-//go:embed mysql2sqlite
-var mysql2SQLite string
 
 const playgroundDataFile = "https://cdn.gorse.io/example/github.sql.gz"
 
@@ -169,12 +161,6 @@ func initializeDatabase(path string) error {
 		return errors.Trace(err)
 	}
 
-	// create converter
-	converter, err := NewMySQLToSQLiteConverter(mysql2SQLite)
-	if err != nil {
-		return errors.Trace(err)
-	}
-
 	// load mysqldump file
 	pbReader := progressbar.NewReader(resp.Body, progressbar.DefaultBytes(
 		resp.ContentLength,
@@ -184,58 +170,7 @@ func initializeDatabase(path string) error {
 	if err != nil {
 		return errors.Trace(err)
 	}
-	reader := bufio.NewReader(gzipReader)
-	var builder strings.Builder
-	for {
-		line, isPrefix, err := reader.ReadLine()
-		if err == io.EOF {
-			break
-		} else if err != nil {
-			return errors.Trace(err)
-		}
-		builder.Write(line)
-		if !isPrefix {
-			text := builder.String()
-			if strings.HasPrefix(text, "INSERT INTO ") {
-				// convert to SQLite sql
-				sqliteSQL, err := converter.Convert(text)
-				if err != nil {
-					return errors.Trace(err)
-				}
-				if _, err = db.Exec(sqliteSQL); err != nil {
-					return errors.Trace(err)
-				}
-			}
-			builder.Reset()
-		}
-	}
+	bufio.NewReader(gzipReader)
+
 	return nil
-}
-
-type MySQLToSQLiteConverter struct {
-	interpreter *interp.Interpreter
-}
-
-func NewMySQLToSQLiteConverter(source string) (*MySQLToSQLiteConverter, error) {
-	converter := &MySQLToSQLiteConverter{}
-	program, err := parser.ParseProgram([]byte(source), nil)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-	converter.interpreter, err = interp.New(program)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-	return converter, nil
-}
-
-func (converter *MySQLToSQLiteConverter) Convert(sql string) (string, error) {
-	input := strings.NewReader(sql)
-	output := bytes.NewBuffer(nil)
-	if _, err := converter.interpreter.Execute(&interp.Config{
-		Stdin: input, Output: output, Args: []string{"-"},
-	}); err != nil {
-		return "", errors.Trace(err)
-	}
-	return output.String(), nil
 }
