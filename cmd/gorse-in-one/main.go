@@ -68,7 +68,7 @@ var oneCommand = &cobra.Command{
 			if err = os.WriteFile(configPath, []byte(config.ConfigTOML), 0644); err != nil {
 				log.Logger().Fatal("failed to write playground config", zap.Error(err))
 			}
-			cachePath := filepath.Join(userHomeDir, ".gorse", "tmp")
+			cachePath = filepath.Join(userHomeDir, ".gorse", "tmp")
 			if err = os.MkdirAll(cachePath, os.ModePerm); err != nil {
 				log.Logger().Fatal("failed to create tmp directory", zap.Error(err))
 			}

@@ -1691,7 +1691,7 @@ func (m *Master) Restore(r io.ReadCloser) (stats DumpStats, err error) {
 				}
 			}
 		default:
-			err = errors.New(fmt.Sprintf("unknown flag %v", flag))
+			err = fmt.Errorf("unknown flag %v", flag)
 			return
 		}
 	}
