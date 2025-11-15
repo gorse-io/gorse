@@ -1312,7 +1312,11 @@ func (m *Master) updateRecommend() error {
 		return errors.Trace(err)
 	}
 
-	pipeline.Recommend(users, nil)
+	pipeline.Recommend(users, func(completed, throughput int) {
+		log.Logger().Info("ranking recommendation",
+			zap.Int("n_complete_users", completed),
+			zap.Int("throughput", throughput))
+	})
 	return nil
 }
 

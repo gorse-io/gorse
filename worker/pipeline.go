@@ -119,6 +119,10 @@ func (p *Pipeline) Recommend(users []data.User, progress func(completed, through
 		if err != nil {
 			return errors.Trace(err)
 		}
+		if recommender.IsColdStart() {
+			// skip cold-start users without any positive feedback
+			return nil
+		}
 
 		// Update collaborative filtering recommendation.
 		if p.MatrixFactorizationUsers != nil && p.MatrixFactorizationItems != nil {
@@ -129,6 +133,9 @@ func (p *Pipeline) Recommend(users []data.User, progress func(completed, through
 						zap.String("user_id", userId), zap.Error(err))
 					return errors.Trace(err)
 				}
+			} else {
+				// skip cold-start users with too few positive feedback
+				return nil
 			}
 		}
 
@@ -265,6 +272,10 @@ func (p *Pipeline) checkRecommendCacheOutOfDate(ctx context.Context, userId stri
 	if digest == "" {
 		return true
 	}
+	if digest != p.Config.Recommend.Hash() {
+		return true
+	}
+
 	// read active time
 	activeTime, err = p.CacheClient.Get(ctx, cache.Key(cache.LastModifyUserTime, userId)).Time()
 	if err != nil {
@@ -325,6 +336,13 @@ func (p *Pipeline) updateCollaborativeRecommend(
 	}
 	if err := p.CacheClient.AddScores(ctx, cache.CollaborativeFiltering, userId, recommend); err != nil {
 		log.Logger().Error("failed to cache collaborative filtering recommendation result", zap.String("user_id", userId), zap.Error(err))
+		return errors.Trace(err)
+	}
+	if err := p.CacheClient.Set(ctx,
+		cache.Time(cache.Key(cache.CollaborativeFilteringUpdateTime, userId), localStartTime),
+		cache.String(cache.Key(cache.CollaborativeFilteringDigest, userId), p.Config.Recommend.Collaborative.Hash(&p.Config.Recommend)),
+	); err != nil {
+		log.Logger().Error("failed to cache collaborative filtering recommendation time", zap.String("user_id", userId), zap.Error(err))
 		return errors.Trace(err)
 	}
 	if err := p.CacheClient.DeleteScores(ctx, []string{cache.CollaborativeFiltering}, cache.ScoreCondition{Before: &localStartTime, Subset: proto.String(userId)}); err != nil {
