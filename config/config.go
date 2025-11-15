@@ -17,6 +17,7 @@ package config
 import (
 	"context"
 	"crypto/md5"
+	_ "embed"
 	"encoding/hex"
 	"encoding/json"
 	"os"
@@ -425,6 +426,9 @@ func GetDefaultConfig() *Config {
 		},
 	}
 }
+
+//go:embed config.toml
+var ConfigTOML string
 
 func (config *Config) Now() *time.Time {
 	return lo.ToPtr(time.Now().Add(config.Server.ClockError))

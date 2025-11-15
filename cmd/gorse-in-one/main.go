@@ -15,12 +15,8 @@
 package main
 
 import (
-	"bufio"
 	"compress/gzip"
-	"database/sql"
-	_ "embed"
 	"fmt"
-	"net/http"
 	"os"
 	"os/signal"
 
@@ -31,7 +27,6 @@ import (
 	"github.com/gorse-io/gorse/master"
 	"github.com/gorse-io/gorse/storage"
 	"github.com/gorse-io/gorse/storage/data"
-	"github.com/juju/errors"
 	"github.com/schollz/progressbar/v3"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
@@ -76,10 +71,6 @@ var oneCommand = &cobra.Command{
 
 			fmt.Printf("Welcome to Gorse %s Playground\n", version.Version)
 
-			if err = initializeDatabase("data.db"); err != nil {
-				log.Logger().Fatal("failed to initialize database", zap.Error(err))
-			}
-
 			fmt.Println()
 			fmt.Printf("    Dashboard:     http://127.0.0.1:%d/overview\n", conf.Master.HttpPort)
 			fmt.Printf("    RESTful APIs:  http://127.0.0.1:%d/apidocs\n", conf.Master.HttpPort)
@@ -97,6 +88,45 @@ var oneCommand = &cobra.Command{
 		// create master
 		cachePath, _ := cmd.PersistentFlags().GetString("cache-path")
 		m := master.NewMaster(conf, cachePath, true)
+
+		if playgroundMode {
+			// connect data database
+			m.DataClient, err = data.Open(m.Config.Database.DataStore, m.Config.Database.DataTablePrefix,
+				storage.WithIsolationLevel(m.Config.Database.MySQL.IsolationLevel))
+			if err != nil {
+				log.Logger().Fatal("failed to connect data database", zap.Error(err),
+					zap.String("database", log.RedactDBURL(m.Config.Database.DataStore)))
+			}
+			if err = m.DataClient.Init(); err != nil {
+				log.Logger().Fatal("failed to init database", zap.Error(err))
+			}
+
+			// import playground data
+			fileInfo, err := os.Stat("C:\\Users\\zhang\\Downloads\\github.bin.gz")
+			if err != nil {
+				log.Logger().Fatal("failed to stat dump file", zap.Error(err))
+			}
+			bar := progressbar.DefaultBytes(
+				fileInfo.Size(),
+				"Importing playground data",
+			)
+			f, err := os.Open("C:\\Users\\zhang\\Downloads\\github.bin.gz")
+			if err != nil {
+				log.Logger().Fatal("failed to open playground data", zap.Error(err))
+			}
+			p := progressbar.NewReader(f, bar)
+			d, err := gzip.NewReader(&p)
+			if err != nil {
+				log.Logger().Fatal("failed to read playground data", zap.Error(err))
+			}
+			_, err = m.Restore(d)
+			if err != nil {
+				log.Logger().Fatal("failed to import playground data", zap.Error(err))
+			}
+			fmt.Println("setting up playground data...")
+			os.Exit(0)
+		}
+
 		// Stop master
 		done := make(chan struct{})
 		go func() {
@@ -128,49 +158,4 @@ func main() {
 	if err := oneCommand.Execute(); err != nil {
 		log.Logger().Fatal("failed to execute", zap.Error(err))
 	}
-}
-
-func initializeDatabase(path string) error {
-	// skip initialization if file exists
-	if _, err := os.Stat(path); err == nil {
-		return nil
-	}
-
-	// init database
-	databaseClient, err := data.Open(storage.SQLitePrefix+path, "")
-	if err != nil {
-		return errors.Trace(err)
-	}
-	if err = databaseClient.Init(); err != nil {
-		return errors.Trace(err)
-	}
-	if err = databaseClient.Close(); err != nil {
-		return errors.Trace(err)
-	}
-
-	// open database
-	db, err := sql.Open("sqlite", path)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	defer db.Close()
-
-	// download mysqldump file
-	resp, err := http.Get(playgroundDataFile)
-	if err != nil {
-		return errors.Trace(err)
-	}
-
-	// load mysqldump file
-	pbReader := progressbar.NewReader(resp.Body, progressbar.DefaultBytes(
-		resp.ContentLength,
-		"Downloading playground dataset",
-	))
-	gzipReader, err := gzip.NewReader(&pbReader)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	bufio.NewReader(gzipReader)
-
-	return nil
 }
