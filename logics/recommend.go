@@ -62,12 +62,12 @@ func NewRecommender(config config.RecommendConfig, cacheClient cache.Database, d
 	}
 	excludeSet := mapset.NewSet[string]()
 	coldstart := true
-	if !config.Replacement.EnableReplacement || !online {
-		for _, feedback := range userFeedback {
+	for _, feedback := range userFeedback {
+		if !config.Replacement.EnableReplacement || !online {
 			excludeSet.Add(feedback.ItemId)
-			if expression.MatchFeedbackTypeExpressions(config.DataSource.PositiveFeedbackTypes, feedback.FeedbackType, feedback.Value) {
-				coldstart = false
-			}
+		}
+		if expression.MatchFeedbackTypeExpressions(config.DataSource.PositiveFeedbackTypes, feedback.FeedbackType, feedback.Value) {
+			coldstart = false
 		}
 	}
 	return &Recommender{

@@ -130,7 +130,7 @@ func (p *Pipeline) Recommend(users []data.User, progress func(completed, through
 					return errors.Trace(err)
 				}
 			} else if !p.dontskipColdStartUsers {
-				// skip cold-start users with too few positive feedback
+				// skip users without collaborative filtering embeddings
 				return nil
 			}
 		}
