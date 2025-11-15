@@ -45,6 +45,7 @@ type Recommender struct {
 	dataClient  data.Database
 
 	online       bool
+	coldstart    bool
 	userId       string
 	userFeedback []data.Feedback
 	categories   []string
@@ -60,9 +61,13 @@ func NewRecommender(config config.RecommendConfig, cacheClient cache.Database, d
 		return nil, errors.Trace(err)
 	}
 	excludeSet := mapset.NewSet[string]()
+	coldstart := true
 	if !config.Replacement.EnableReplacement || !online {
 		for _, feedback := range userFeedback {
 			excludeSet.Add(feedback.ItemId)
+			if expression.MatchFeedbackTypeExpressions(config.DataSource.PositiveFeedbackTypes, feedback.FeedbackType, feedback.Value) {
+				coldstart = false
+			}
 		}
 	}
 	return &Recommender{
@@ -72,6 +77,7 @@ func NewRecommender(config config.RecommendConfig, cacheClient cache.Database, d
 		userId:       userId,
 		userFeedback: userFeedback,
 		online:       online,
+		coldstart:    coldstart,
 		categories:   categories,
 		excludeSet:   excludeSet,
 	}, nil
@@ -83,6 +89,10 @@ func (r *Recommender) ExcludeSet() mapset.Set[string] {
 
 func (r *Recommender) UserFeedback() []data.Feedback {
 	return r.userFeedback
+}
+
+func (r *Recommender) IsColdStart() bool {
+	return r.coldstart
 }
 
 func (r *Recommender) Recommend(ctx context.Context, limit int) ([]cache.Score, error) {
@@ -143,6 +153,9 @@ func (r *Recommender) parse(fullname string) (RecommenderFunc, error) {
 	} else if strings.HasPrefix(fullname, UserToUserRecommender) {
 		name := strings.TrimPrefix(fullname, UserToUserRecommender)
 		return r.recommendUserToUser(name), nil
+	} else if strings.HasPrefix(fullname, ExternalRecommender) {
+		name := strings.TrimPrefix(fullname, ExternalRecommender)
+		return r.recommendExternal(name), nil
 	} else {
 		return nil, errors.Errorf("unknown recommender: %s", fullname)
 	}

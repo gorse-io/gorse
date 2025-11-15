@@ -243,21 +243,8 @@ check_recommend_period = "1m"
 # The time period to refresh recommendation for inactive users. The default values is 120h.
 refresh_recommend_period = "24h"
 
-# Enable latest recommendation during offline recommendation. The default value is false.
-enable_latest_recommend = true
-
-# Enable user-based similarity recommendation during offline recommendation. The default value is false.
-enable_user_based_recommend = true
-
-# Enable item-based similarity recommendation during offline recommendation. The default value is false.
-enable_item_based_recommend = false
-
-# Enable collaborative filtering recommendation during offline recommendation. The default value is true.
-enable_collaborative_recommend = true
-
-# Enable click-though rate prediction during offline recommendation. Otherwise, results from multi-way recommendation
-# would be merged randomly. The default value is false.
-enable_click_through_prediction = true
+# The recommenders used to fetch candidate items before ranking. The default values is all recommenders.
+recommenders = ["latest", "collaborative", "non-personalized/most_starred_weekly", "item-to-item/neighbors", "user-to-user/neighbors"]
 
 [recommend.ranker.early_stopping]
 
@@ -285,14 +272,6 @@ sampler = "always"
 
 # The ratio of ratio based sampler. The default value is 1.
 ratio = 1
-
-[experimental]
-
-# Enable deep learning recommenders. The default value is false.
-enable_deep_learning = false
-
-# Batch size for deep learning recommenders. The default value is 128.
-deep_learning_batch_size = 128
 
 [oidc]
 
