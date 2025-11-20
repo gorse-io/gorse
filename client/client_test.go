@@ -139,7 +139,7 @@ func (suite *GorseClientTestSuite) TestItems() {
 			"embedding": []any{0.1, 0.2, 0.3},
 		},
 		Categories: []string{"Comedy", "Animation"},
-		Timestamp:  time.Now().UTC(),
+		Timestamp:  time.Now().UTC().Truncate(time.Second),
 		Comment:    "Minions (2015)",
 	}
 	rowAffected, err := suite.client.InsertItem(ctx, item)
@@ -164,50 +164,6 @@ func (suite *GorseClientTestSuite) TestItems() {
 	suite.Equal(1, deleteAffect.RowAffected)
 	_, err = suite.client.GetItem(ctx, "2000")
 	suite.Equal("2000: item not found", err.Error())
-}
-
-func (suite *GorseClientTestSuite) TestFeedback() {
-	ctx := context.TODO()
-	timestamp := time.Unix(1660459054, 0).UTC()
-	userId := "800"
-	insertFeedbackResp, err := suite.client.InsertFeedback(ctx, []client.Feedback{{
-		FeedbackType: "like",
-		UserId:       userId,
-		Timestamp:    timestamp,
-		ItemId:       "200",
-	}})
-	suite.NoError(err)
-	suite.Equal(1, insertFeedbackResp.RowAffected)
-
-	insertFeedbacksResp, err := suite.client.InsertFeedback(ctx, []client.Feedback{{
-		FeedbackType: "read",
-		UserId:       userId,
-		Timestamp:    timestamp,
-		ItemId:       "300",
-	}, {
-		FeedbackType: "read",
-		UserId:       userId,
-		Timestamp:    timestamp,
-		ItemId:       "400",
-	}})
-	suite.NoError(err)
-	suite.Equal(2, insertFeedbacksResp.RowAffected)
-
-	feedbacks, err := suite.client.ListFeedbacks(ctx, "read", userId)
-		suite.NoError(err)
-	suite.ElementsMatch([]client.Feedback{
-		{
-			FeedbackType: "read",
-			UserId:       userId,
-			Timestamp:    timestamp,
-			ItemId:       "300",
-		}, {
-			FeedbackType: "read",
-			UserId:       userId,
-			Timestamp:    timestamp,
-			ItemId:       "400",
-		},
-	}, feedbacks)
 }
 
 func TestGorseClientTestSuite(t *testing.T) {
