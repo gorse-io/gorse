@@ -230,16 +230,14 @@ jobs:
       with:
         go-version-file: ./go.mod
 
+    - name: Download and import dataset
+      run: |
+        wget https://cdn.gorse.io/example/ml-100k.bin.gz
+        gzip -d ml-100k.bin.gz
+        curl -X POST --data-binary @ml-100k.bin http://localhost:8088/restore
+
     - name: Test
-      run: go test -tags='integrate_test' ./client/
-
-    - name: Download dataset
-      if: ${{ matrix.database == 'mysql' }}
-      run: wget https://cdn.gorse.io/example/github.sql
-
-    - name: Import dataset
-      if: ${{ matrix.database == 'mysql' }}
-      run: mysql -h 127.0.0.1 -u gorse -pgorse_pass gorse < github.sql
+      run: go test ./client/
 
   compat_test:
     name: compatibility tests

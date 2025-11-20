@@ -152,7 +152,8 @@ services:
       --log-path /var/log/gorse/master.log 
       --cache-path /var/lib/gorse
     volumes:
-      - ./config/config.toml:/etc/gorse/config.toml
+      - ./client/config.toml:/etc/gorse/config.toml
+    {%if database != 'sqlite' %}
     depends_on:
       {% if database == 'mysql' %}
       mysql:
@@ -169,3 +170,4 @@ services:
       redis:
         condition: service_healthy
       {% endif %}
+    {% endif %}
