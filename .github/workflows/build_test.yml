@@ -197,9 +197,11 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        database: [mysql, postgres, mongo, clickhouse]
+        database: [mysql, postgres, mongo, sqlite]
     steps:
     - uses: actions/checkout@v5
+      with:
+        fetch-depth: 0
 
     - uses: cuchi/jinja2-action@v1.2.0
       with:
@@ -230,16 +232,18 @@ jobs:
       with:
         go-version-file: ./go.mod
 
+    - name: Download and import dataset
+      run: |
+        wget https://cdn.gorse.io/example/ml-100k.bin.gz
+        gzip -d ml-100k.bin.gz
+        curl -X POST --data-binary @ml-100k.bin http://localhost:8088/api/restore
+        docker compose -f client/docker-compose.yml --project-directory . restart master
+
     - name: Test
-      run: go test -tags='integrate_test' ./client/
-
-    - name: Download dataset
-      if: ${{ matrix.database == 'mysql' }}
-      run: wget https://cdn.gorse.io/example/github.sql
-
-    - name: Import dataset
-      if: ${{ matrix.database == 'mysql' }}
-      run: mysql -h 127.0.0.1 -u gorse -pgorse_pass gorse < github.sql
+      run: go test ./client/
+      env:
+        GORSE_SERVER_ENDPOINT: http://localhost:8087
+        GORSE_DASHBOARD_ENDPOINT: http://localhost:8088
 
   compat_test:
     name: compatibility tests

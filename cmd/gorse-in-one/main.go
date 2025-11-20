@@ -21,6 +21,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 
 	"github.com/gorse-io/gorse/cmd/version"
 	"github.com/gorse-io/gorse/common/log"
@@ -28,6 +29,7 @@ import (
 	"github.com/gorse-io/gorse/master"
 	"github.com/gorse-io/gorse/storage"
 	"github.com/gorse-io/gorse/storage/data"
+	"github.com/klauspost/cpuid/v2"
 	"github.com/schollz/progressbar/v3"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
@@ -68,10 +70,12 @@ var oneCommand = &cobra.Command{
 			if err = os.WriteFile(configPath, []byte(config.ConfigTOML), 0644); err != nil {
 				log.Logger().Fatal("failed to write playground config", zap.Error(err))
 			}
+			fmt.Println("Generated config file:", configPath)
 			cachePath = filepath.Join(userHomeDir, ".gorse", "tmp")
 			if err = os.MkdirAll(cachePath, os.ModePerm); err != nil {
 				log.Logger().Fatal("failed to create tmp directory", zap.Error(err))
 			}
+			fmt.Println("Using cache directory:", cachePath)
 		} else {
 			configPath, _ = cmd.PersistentFlags().GetString("config")
 			cachePath, _ = cmd.PersistentFlags().GetString("cache-path")
@@ -133,7 +137,11 @@ func setup(m *master.Master) {
 		log.Logger().Fatal("failed to create lib directory", zap.Error(err))
 	}
 	m.Config.Database.DataStore = "sqlite://" + filepath.Join(libDir, "data.db")
+	fmt.Println("Using database:", m.Config.Database.DataStore)
 	m.Config.Database.CacheStore = "sqlite://" + filepath.Join(libDir, "cache.db")
+	fmt.Println("Using cache:", m.Config.Database.CacheStore)
+	m.Config.Master.NumJobs = runtime.NumCPU()
+	fmt.Printf("Using %d CPU cores: %s\n", m.Config.Master.NumJobs, cpuid.CPU.BrandName)
 
 	// connect database
 	m.DataClient, err = data.Open(m.Config.Database.DataStore, m.Config.Database.DataTablePrefix,
@@ -155,7 +163,7 @@ func setup(m *master.Master) {
 	defer req.Body.Close()
 	bar := progressbar.DefaultBytes(
 		req.ContentLength,
-		"Importing playground data",
+		"Importing data",
 	)
 	p := progressbar.NewReader(req.Body, bar)
 	d, err := gzip.NewReader(&p)
@@ -168,7 +176,7 @@ func setup(m *master.Master) {
 	}
 
 	// show info
-	fmt.Printf("Welcome to Gorse %s Playground\n", version.Version)
+	fmt.Printf("Welcome to Gorse Playground\n")
 	fmt.Println()
 	fmt.Printf("    Dashboard:     http://127.0.0.1:%d/overview\n", m.Config.Master.HttpPort)
 	fmt.Printf("    RESTful APIs:  http://127.0.0.1:%d/apidocs\n", m.Config.Master.HttpPort)

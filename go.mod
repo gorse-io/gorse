@@ -24,13 +24,14 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/securecookie v1.1.2
 	github.com/gorse-io/dashboard v0.0.0-20251109051441-b3cb7def0563
-	github.com/gorse-io/gorse-go v0.5.0-alpha.1
+	github.com/gorse-io/gorse-go v0.5.0-alpha.2.0.20251120130213-a52ce12122f9
 	github.com/haxii/go-swagger-ui v0.0.0-20210203093335-a63a6bbde946
 	github.com/jaswdr/faker v1.19.1
 	github.com/jellydator/ttlcache/v3 v3.4.0
 	github.com/json-iterator/go v1.1.12
 	github.com/juju/errors v1.0.0
 	github.com/juju/ratelimit v1.0.2
+	github.com/klauspost/cpuid/v2 v2.3.0
 	github.com/lafikl/consistent v0.0.0-20220512074542-bdd3606bfc3e
 	github.com/lib/pq v1.10.6
 	github.com/madflojo/testcerts v1.4.0
@@ -127,7 +128,6 @@ require (
 	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/klauspost/compress v1.18.1 // indirect
-	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
