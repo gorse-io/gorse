@@ -16,6 +16,7 @@ package client
 
 import (
 	"context"
+	"os"
 	"testing"
 	"time"
 
