@@ -200,6 +200,8 @@ jobs:
         database: [mysql, postgres, mongo, clickhouse+redis, sqlite]
     steps:
     - uses: actions/checkout@v5
+      with:
+        fetch-depth: 0
 
     - uses: cuchi/jinja2-action@v1.2.0
       with:
@@ -234,10 +236,13 @@ jobs:
       run: |
         wget https://cdn.gorse.io/example/ml-100k.bin.gz
         gzip -d ml-100k.bin.gz
-        curl -X POST --data-binary @ml-100k.bin http://localhost:8088/restore
+        curl -X POST --data-binary @ml-100k.bin http://localhost:8088/api/restore
 
     - name: Test
       run: go test ./client/
+      env:
+        GORSE_SERVER_ENDPOINT: http://localhost:8087
+        GORSE_DASHBOARD_ENDPOINT: http://localhost:8088
 
   compat_test:
     name: compatibility tests

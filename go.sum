@@ -306,8 +306,8 @@ github.com/gorse-io/clickhouse v0.3.3-0.20220715124633-688011a495bb h1:z/oOWE+Vy
 github.com/gorse-io/clickhouse v0.3.3-0.20220715124633-688011a495bb/go.mod h1:iILWzbul8U+gsf4kqbheF2QzBmdvVp63mloGGK8emDI=
 github.com/gorse-io/dashboard v0.0.0-20251109051441-b3cb7def0563 h1:jvRZZvs9irRte+DvSEszdw4mFcwo3mRtBKf92vgnBuE=
 github.com/gorse-io/dashboard v0.0.0-20251109051441-b3cb7def0563/go.mod h1:FXmOxnPaRiYIHBqvFBsYmLKlGCkhFy6na52YzLyf5bo=
-github.com/gorse-io/gorse-go v0.5.0-alpha.1 h1:QBWKGAbSKNAWnieXVIdQiE0lLGvKXfFFAFPOQEkPW/E=
-github.com/gorse-io/gorse-go v0.5.0-alpha.1/go.mod h1:rNZ9RCZDAiJjpfoOabZicLkgSsfy0fu1TDvriL2JqkE=
+github.com/gorse-io/gorse-go v0.5.0-alpha.2.0.20251120130213-a52ce12122f9 h1:LmR6GeH9/WNg27Y+Sr5lVco/eF+EMzFKC0zzV1KYMEI=
+github.com/gorse-io/gorse-go v0.5.0-alpha.2.0.20251120130213-a52ce12122f9/go.mod h1:BLwJz0RFdG12tKctGRWtqHKMQSBqawlCxB12xqcy9Ks=
 github.com/gorse-io/sqlite v1.3.3-0.20220713123255-c322aec4e59e h1:uPQtYQzG1QcC3Qbv+tuEe8Q2l++V4KEcqYSSwB9qobg=
 github.com/gorse-io/sqlite v1.3.3-0.20220713123255-c322aec4e59e/go.mod h1:PmIOwYnI+F1lRKd6F/PdLXGgI8GZ5H8x8z1yx0+0bmQ=
 github.com/grpc-ecosystem/go-grpc-middleware v1.0.0/go.mod h1:FiyG127CGDf3tlThmgyCl78X/SZQqEOJBCDaAfeWzPs=
@@ -694,8 +694,6 @@ github.com/subosito/gotenv v1.2.0/go.mod h1:N0PQaV/YGNqwC0u51sEeR/aUtSLEXKX9iv69
 github.com/subosito/gotenv v1.6.0 h1:9NlTDc1FTs4qu0DDq7AEtTPNw6SVm7uBMsUCUjABIf8=
 github.com/subosito/gotenv v1.6.0/go.mod h1:Dk4QP5c2W3ibzajGcXpNraDfq2IrhjMIvMSWPKKo0FU=
 github.com/takama/daemon v0.0.0-20180403113744-aa76b0035d12/go.mod h1:So5Nv647d/sgbZNAfiWtw6egowH8vNNrPXAwooWeElk=
-github.com/thoas/go-funk v0.9.2 h1:oKlNYv0AY5nyf9g+/GhMgS/UO2ces0QRdPKwkhY3VCk=
-github.com/thoas/go-funk v0.9.2/go.mod h1:+IWnUfUmFO1+WVYQWQtIJHeRRdaIyyYglZN7xzUPe4Q=
 github.com/tiktoken-go/tokenizer v0.7.0 h1:VMu6MPT0bXFDHr7UPh9uii7CNItVt3X9K90omxL54vw=
 github.com/tiktoken-go/tokenizer v0.7.0/go.mod h1:6UCYI/DtOallbmL7sSy30p6YQv60qNyU/4aVigPOx6w=
 github.com/tinylib/msgp v1.5.0 h1:GWnqAE54wmnlFazjq2+vgr736Akg58iiHImh+kPY2pc=
