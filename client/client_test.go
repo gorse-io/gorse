@@ -1,5 +1,3 @@
-//go:build integrate_test
-
 // Copyright 2022 gorse Project Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -19,6 +17,7 @@ package client
 import (
 	"context"
 	"encoding/base64"
+	"os"
 	"testing"
 	"time"
 
@@ -28,11 +27,15 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
-const (
-	RedisEndpoint = "redis://127.0.0.1:6379/0"
-	GorseEndpoint = "http://127.0.0.1:8087"
-	GorseApiKey   = ""
+var (
+	serverEndpoint    string
+	dashboardEndpoint string
 )
+
+func init() {
+	serverEndpoint = os.Getenv("GORSE_SERVER_ENDPOINT")
+	dashboardEndpoint = os.Getenv("GORSE_DASHBOARD_ENDPOINT")
+}
 
 type GorseClientTestSuite struct {
 	suite.Suite
@@ -41,10 +44,9 @@ type GorseClientTestSuite struct {
 }
 
 func (suite *GorseClientTestSuite) SetupSuite() {
-	suite.client = client.NewGorseClient(GorseEndpoint, GorseApiKey)
-	options, err := redis.ParseURL(RedisEndpoint)
-	suite.NoError(err)
-	suite.redis = redis.NewClient(options)
+	if serverEndpoint == "" || dashboardEndpoint == "" {
+		suite.T().Skip("GORSE_SERVER_ENDPOINT or GORSE_DASHBOARD_ENDPOINT is not set")
+	}
 }
 
 func (suite *GorseClientTestSuite) TearDownSuite() {

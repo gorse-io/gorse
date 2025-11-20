@@ -13,8 +13,6 @@ services:
       MYSQL_DATABASE: gorse
       MYSQL_USER: gorse
       MYSQL_PASSWORD: gorse_pass
-    volumes:
-      - mysql_data:/var/lib/mysql
     healthcheck:
       test: mysqladmin ping
       interval: 10s
@@ -98,9 +96,6 @@ services:
       --http-host 0.0.0.0 --http-port 8089
       --log-path /var/log/gorse/worker.log 
       --cache-path /var/lib/gorse/worker_cache.data
-    volumes:
-      - gorse_log:/var/log/gorse
-      - worker_data:/var/lib/gorse
     depends_on:
       - master
 
