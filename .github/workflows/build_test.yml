@@ -203,6 +203,10 @@ jobs:
       with:
         fetch-depth: 0
 
+    - uses: actions/setup-go@v5
+      with:
+        go-version-file: ./go.mod
+
     - uses: cuchi/jinja2-action@v1.2.0
       with:
         template: client/docker-compose.yml.j2
@@ -227,10 +231,6 @@ jobs:
         retry-delay: 5s
         # Retry all errors, including 404. This option might trigger curl upgrade.
         retry-all: true
-
-    - uses: actions/setup-go@v5
-      with:
-        go-version-file: ./go.mod
 
     - name: Download and import dataset
       run: |
