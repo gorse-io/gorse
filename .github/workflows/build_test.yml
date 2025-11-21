@@ -221,10 +221,10 @@ jobs:
         DOCKER_BUILDKIT: 1
 
     - name: Check the deployed service URL
-      uses: jtalk/url-health-check-action@v2
+      uses: jtalk/url-health-check-action@v4
       with:
         # Check the following URLs one by one sequentially
-        url: http://127.0.0.1:8088/metrics|http://127.0.0.1:8087/metrics|http://127.0.0.1:8089/metrics
+        url: http://127.0.0.1:8088/api/health/ready|http://127.0.0.1:8087/api/health/ready
         # Fail this action after this many failed attempts
         max-attempts: 5
         # Delay between retries
