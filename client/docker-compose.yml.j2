@@ -54,7 +54,7 @@ services:
   {% elif database == 'clickhouse+redis' %}
 
   clickhouse:
-    image: clickhouse/clickhouse-server:22
+    image: clickhouse/clickhouse-server:23
     ports:
       - 8123:8123
     environment:
