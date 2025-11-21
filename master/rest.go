@@ -1679,14 +1679,14 @@ func (m *Master) Restore(r io.ReadCloser) (stats DumpStats, err error) {
 				})
 				stats.Feedback++
 				if len(feedbacks) == batchSize {
-					if err = m.DataClient.BatchInsertFeedback(context.Background(), feedbacks, true, true, true); err != nil {
+					if err = m.DataClient.BatchInsertFeedback(context.Background(), feedbacks, false, false, true); err != nil {
 						return
 					}
 					feedbacks = feedbacks[:0]
 				}
 			}
 			if len(feedbacks) > 0 {
-				if err = m.DataClient.BatchInsertFeedback(context.Background(), feedbacks, true, true, true); err != nil {
+				if err = m.DataClient.BatchInsertFeedback(context.Background(), feedbacks, false, false, true); err != nil {
 					return
 				}
 			}
