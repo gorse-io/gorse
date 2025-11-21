@@ -54,7 +54,7 @@ jobs:
           --health-retries 5
 
       clickhouse:
-        image: clickhouse/clickhouse-server:22
+        image: clickhouse/clickhouse-server:23
         ports:
           - 8123
         options: >-
@@ -197,11 +197,15 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        database: [mysql, postgres, mongo, sqlite]
+        database: [mysql, postgres, mongo, sqlite, clickhouse+redis]
     steps:
     - uses: actions/checkout@v5
       with:
         fetch-depth: 0
+
+    - uses: actions/setup-go@v5
+      with:
+        go-version-file: ./go.mod
 
     - uses: cuchi/jinja2-action@v1.2.0
       with:
@@ -217,10 +221,10 @@ jobs:
         DOCKER_BUILDKIT: 1
 
     - name: Check the deployed service URL
-      uses: jtalk/url-health-check-action@v2
+      uses: jtalk/url-health-check-action@v4
       with:
         # Check the following URLs one by one sequentially
-        url: http://127.0.0.1:8088/metrics|http://127.0.0.1:8087/metrics|http://127.0.0.1:8089/metrics
+        url: http://127.0.0.1:8088/api/health/ready|http://127.0.0.1:8087/api/health/ready
         # Fail this action after this many failed attempts
         max-attempts: 5
         # Delay between retries
@@ -228,16 +232,11 @@ jobs:
         # Retry all errors, including 404. This option might trigger curl upgrade.
         retry-all: true
 
-    - uses: actions/setup-go@v5
-      with:
-        go-version-file: ./go.mod
-
     - name: Download and import dataset
       run: |
         wget https://cdn.gorse.io/example/ml-100k.bin.gz
         gzip -d ml-100k.bin.gz
         curl -X POST --data-binary @ml-100k.bin http://localhost:8088/api/restore
-        docker compose -f client/docker-compose.yml --project-directory . restart master
 
     - name: Test
       run: go test ./client/

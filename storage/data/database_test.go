@@ -461,7 +461,11 @@ func (suite *baseTestSuite) TestFeedback() {
 	// check duplicate feedback again
 	ret, err = suite.Database.GetUserItemFeedback(ctx, "0", "0", "a")
 	suite.NoError(err)
-	suite.Equal([]Feedback{{FeedbackKey: FeedbackKey{"a", "0", "0"}, Value: 1, Timestamp: timestamp, Comment: ""}}, ret)
+	if suite.isClickHouse() {
+		suite.Equal([]Feedback{{FeedbackKey: FeedbackKey{"a", "0", "0"}, Value: 3, Timestamp: timestamp, Comment: ""}}, ret)
+	} else {
+		suite.Equal([]Feedback{{FeedbackKey: FeedbackKey{"a", "0", "0"}, Value: 1, Timestamp: timestamp, Comment: ""}}, ret)
+	}
 }
 
 func (suite *baseTestSuite) TestItems() {

@@ -981,11 +981,6 @@ func (d *SQLDatabase) BatchInsertFeedback(ctx context.Context, feedback []Feedba
 					memo[lo.Tuple3[string, string, string]{f.FeedbackType, f.UserId, f.ItemId}] = struct{}{}
 					f.Timestamp = f.Timestamp.In(time.UTC)
 					rows = append(rows, f)
-					if overwrite {
-						if _, err := d.DeleteUserItemFeedback(ctx, f.UserId, f.ItemId, f.FeedbackType); err != nil {
-							return errors.Trace(err)
-						}
-					}
 				}
 			}
 		}

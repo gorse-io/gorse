@@ -17,6 +17,7 @@
       "moby": false
     },
     "ghcr.io/devcontainers/features/go": {},
+    "ghcr.io/devcontainers/features/python": {},
     "ghcr.io/devcontainers-extra/features/protoc": {}
   },
   "postCreateCommand": [

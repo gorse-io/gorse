@@ -54,7 +54,7 @@ services:
   {% elif database == 'clickhouse+redis' %}
 
   clickhouse:
-    image: clickhouse/clickhouse-server:22
+    image: clickhouse/clickhouse-server:23
     ports:
       - 8123:8123
     environment:
@@ -153,7 +153,7 @@ services:
       --cache-path /var/lib/gorse
     volumes:
       - ./client/config.toml:/etc/gorse/config.toml
-    {%if database != 'sqlite' %}
+    {% if database != 'sqlite' %}
     depends_on:
       {% if database == 'mysql' %}
       mysql:
