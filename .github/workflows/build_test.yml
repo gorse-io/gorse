@@ -237,7 +237,6 @@ jobs:
         wget https://cdn.gorse.io/example/ml-100k.bin.gz
         gzip -d ml-100k.bin.gz
         curl -X POST --data-binary @ml-100k.bin http://localhost:8088/api/restore
-        docker compose -f client/docker-compose.yml --project-directory . restart master
 
     - name: Test
       run: go test ./client/
