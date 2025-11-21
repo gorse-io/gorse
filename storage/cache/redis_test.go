@@ -110,6 +110,18 @@ func TestRedis(t *testing.T) {
 	suite.Run(t, new(RedisTestSuite))
 }
 
+func TestEncodeDecodeCategories(t *testing.T) {
+	encoded := encodeCategories([]string{"z", "h"})
+	decoded, err := decodeCategories(encoded)
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"z", "h"}, decoded)
+
+	encoded = encodeCategories(nil)
+	decoded, err = decodeCategories(encoded)
+	assert.NoError(t, err)
+	assert.Equal(t, []string{}, decoded)
+}
+
 func BenchmarkRedis(b *testing.B) {
 	log.CloseLogger()
 	// open db

@@ -180,8 +180,6 @@ func (r *Redis) Delete(ctx context.Context, key string) error {
 	return r.client.Del(ctx, r.Key(key)).Err()
 }
 
-
-
 func (r *Redis) Push(ctx context.Context, name string, message string) error {
 	_, err := r.client.ZAdd(ctx, r.Key(name), redis.Z{Member: message, Score: float64(time.Now().UnixNano())}).Result()
 	return err
@@ -465,6 +463,9 @@ func encodeCategories(categories []string) string {
 }
 
 func decodeCategories(s string) ([]string, error) {
+	if s == "" {
+		return []string{}, nil
+	}
 	var categories []string
 	for _, category := range strings.Split(s, ";") {
 		category, err := decodeCategory(category)
