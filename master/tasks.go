@@ -176,8 +176,9 @@ func (m *Master) loadDataset() (datasets Datasets, err error) {
 	categoryScores := make([]cache.Score, 0, len(categories))
 	for category, count := range categories {
 		categoryScores = append(categoryScores, cache.Score{
-			Id:    category,
-			Score: float64(count),
+			Id:        category,
+			Score:     float64(count),
+			Timestamp: initialStartTime,
 		})
 	}
 	if err = m.CacheClient.AddScores(ctx, cache.ItemCategories, "", categoryScores); err != nil {
