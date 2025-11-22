@@ -303,6 +303,7 @@ func (w *Worker) Pull() {
 func (w *Worker) ServeHTTP() {
 	http.Handle("/metrics", promhttp.Handler())
 	http.HandleFunc("/api/health/live", w.checkLive)
+	http.HandleFunc("/api/health/ready", w.checkReady)
 	err := http.ListenAndServe(fmt.Sprintf("%s:%d", w.httpHost, w.httpPort), nil)
 	if err != nil {
 		log.Logger().Fatal("failed to start http server", zap.Error(err))
@@ -437,6 +438,7 @@ func (w *Worker) pullUsers(peers []string, me string) ([]data.User, error) {
 }
 
 type HealthStatus struct {
+	Ready               bool
 	DataStoreError      error
 	CacheStoreError     error
 	DataStoreConnected  bool
@@ -449,10 +451,25 @@ func (w *Worker) checkHealth() HealthStatus {
 	healthStatus.CacheStoreError = w.CacheClient.Ping()
 	healthStatus.DataStoreConnected = healthStatus.DataStoreError == nil
 	healthStatus.CacheStoreConnected = healthStatus.CacheStoreError == nil
+	healthStatus.Ready = healthStatus.DataStoreConnected && healthStatus.CacheStoreConnected
 	return healthStatus
 }
 
 func (w *Worker) checkLive(writer http.ResponseWriter, _ *http.Request) {
 	healthStatus := w.checkHealth()
 	writeJSON(writer, healthStatus)
+}
+
+func (w *Worker) checkReady(writer http.ResponseWriter, _ *http.Request) {
+	healthStatus := w.checkHealth()
+	if healthStatus.Ready {
+		writeJSON(writer, healthStatus)
+	} else {
+		errReason, err := json.Marshal(healthStatus)
+		if err != nil {
+			writeError(writer, err.Error(), http.StatusInternalServerError)
+		} else {
+			writeError(writer, string(errReason), http.StatusServiceUnavailable)
+		}
+	}
 }

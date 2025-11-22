@@ -766,30 +766,45 @@ func (suite *WorkerTestSuite) TestUserActivity() {
 }
 
 func (suite *WorkerTestSuite) TestHealth() {
-	// ready
 	req := httptest.NewRequest("GET", "https://example.com/", nil)
 	w := httptest.NewRecorder()
 	suite.checkLive(w, req)
 	suite.Equal(http.StatusOK, w.Code)
 	suite.Equal(marshal(suite.T(), HealthStatus{
+		Ready:               true,
 		DataStoreError:      nil,
 		CacheStoreError:     nil,
 		DataStoreConnected:  true,
 		CacheStoreConnected: true,
 	}), w.Body.String())
 
-	// not ready
+	w = httptest.NewRecorder()
+	suite.checkReady(w, req)
+	suite.Equal(http.StatusOK, w.Code)
+	suite.Equal(marshal(suite.T(), HealthStatus{
+		Ready:               true,
+		DataStoreError:      nil,
+		CacheStoreError:     nil,
+		DataStoreConnected:  true,
+		CacheStoreConnected: true,
+	}), w.Body.String())
+
 	dataClient, cacheClient := suite.DataClient, suite.CacheClient
 	suite.DataClient, suite.CacheClient = data.NoDatabase{}, cache.NoDatabase{}
 	w = httptest.NewRecorder()
 	suite.checkLive(w, req)
 	suite.Equal(http.StatusOK, w.Code)
 	suite.Equal(marshal(suite.T(), HealthStatus{
+		Ready:               false,
 		DataStoreError:      data.ErrNoDatabase,
 		CacheStoreError:     cache.ErrNoDatabase,
 		DataStoreConnected:  false,
 		CacheStoreConnected: false,
 	}), w.Body.String())
+
+	w = httptest.NewRecorder()
+	suite.checkReady(w, req)
+	suite.Equal(http.StatusServiceUnavailable, w.Code)
 	suite.DataClient, suite.CacheClient = dataClient, cacheClient
 }
 
