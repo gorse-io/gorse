@@ -215,28 +215,11 @@ jobs:
         variables: |
           database=${{ matrix.database }}
 
-    - name: Build the stack
-      run: docker compose -f client/docker-compose.yml --project-directory . up -d
+    - name: Setup and start Gorse
+      working-directory: ./client
+      run: ./setup-test.sh
       env:
         DOCKER_BUILDKIT: 1
-
-    - name: Check the deployed service URL
-      uses: jtalk/url-health-check-action@v4
-      with:
-        # Check the following URLs one by one sequentially
-        url: http://127.0.0.1:8088/api/health/ready|http://127.0.0.1:8087/api/health/ready
-        # Fail this action after this many failed attempts
-        max-attempts: 5
-        # Delay between retries
-        retry-delay: 5s
-        # Retry all errors, including 404. This option might trigger curl upgrade.
-        retry-all: true
-
-    - name: Download and import dataset
-      run: |
-        wget https://cdn.gorse.io/example/ml-100k.bin.gz
-        gzip -d ml-100k.bin.gz
-        curl -X POST --data-binary @ml-100k.bin http://localhost:8088/api/restore
 
     - name: Test
       run: go test ./client/

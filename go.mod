@@ -24,7 +24,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/securecookie v1.1.2
 	github.com/gorse-io/dashboard v0.0.0-20251109051441-b3cb7def0563
-	github.com/gorse-io/gorse-go v0.5.0-alpha.2.0.20251120130213-a52ce12122f9
+	github.com/gorse-io/gorse-go v0.5.0-alpha.2.0.20251123072753-3b145349a880
 	github.com/haxii/go-swagger-ui v0.0.0-20210203093335-a63a6bbde946
 	github.com/jaswdr/faker v1.19.1
 	github.com/jellydator/ttlcache/v3 v3.4.0
@@ -87,7 +87,6 @@ require (
 	modernc.org/sortutil v1.2.1
 	modernc.org/sqlite v1.37.0
 	modernc.org/strutil v1.2.1
-	moul.io/zapgorm2 v1.1.3
 )
 
 require (
