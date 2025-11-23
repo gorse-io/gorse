@@ -166,6 +166,88 @@ func (suite *GorseClientTestSuite) TestItems() {
 	suite.Equal("2000: item not found", err.Error())
 }
 
+func (suite *GorseClientTestSuite) TestFeedback() {
+	ctx := context.Background()
+	_, err := suite.client.InsertUser(ctx, client.User{UserId: "2000"})
+	suite.NoError(err)
+
+	feedback := []client.Feedback{
+		{
+			FeedbackType: "watch",
+			UserId:       "2000",
+			ItemId:       "1",
+			Value:        1.0,
+			Timestamp:    time.Now().UTC().Truncate(time.Second),
+		},
+		{
+			FeedbackType: "watch",
+			UserId:       "2000",
+			ItemId:       "1060",
+			Value:        2.0,
+			Timestamp:    time.Now().UTC().Truncate(time.Second),
+		},
+		{
+			FeedbackType: "watch",
+			UserId:       "2000",
+			ItemId:       "11",
+			Value:        3.0,
+			Timestamp:    time.Now().UTC().Truncate(time.Second),
+		},
+	}
+	for _, fb := range feedback {
+		_, err := suite.client.DeleteFeedbacks(ctx, fb.UserId, fb.ItemId)
+		suite.NoError(err)
+	}
+	_, err = suite.client.InsertFeedback(ctx, feedback)
+	suite.NoError(err)
+
+	userFeedback, err := suite.client.ListFeedbacks(ctx, "watch", "2000")
+	suite.NoError(err)
+	suite.Equal(feedback, userFeedback)
+
+	_, err = suite.client.DeleteFeedback(ctx, "watch", "2000", "1")
+	suite.NoError(err)
+	userFeedback, err = suite.client.ListFeedbacks(ctx, "watch", "2000")
+	suite.NoError(err)
+	suite.Equal([]client.Feedback{feedback[1], feedback[2]}, userFeedback)
+}
+
+func (suite *GorseClientTestSuite) TestLatest() {
+	ctx := context.Background()
+	items, err := suite.client.GetLatestItems(ctx, "", "", 3, 0)
+	suite.NoError(err)
+	if suite.Len(items, 3) {
+		suite.Equal("315", items[0].Id)
+		suite.Equal("1432", items[1].Id)
+		suite.Equal("918", items[2].Id)
+	}
+}
+
+func (suite *GorseClientTestSuite) TestItemToItem() {
+	ctx := context.Background()
+	neighbors, err := suite.client.GetNeighbors(ctx, "1", 3)
+	suite.NoError(err)
+	if suite.Len(neighbors, 3) {
+		suite.Equal("1060", neighbors[0].Id)
+		suite.Equal("404", neighbors[1].Id)
+		suite.Equal("1219", neighbors[2].Id)
+	}
+}
+
+func (suite *GorseClientTestSuite) TestRecommend() {
+	ctx := context.Background()
+	_, err := suite.client.InsertUser(ctx, client.User{UserId: "3000"})
+	suite.NoError(err)
+	recommendations, err := suite.client.GetRecommend(ctx, "3000", "", 3, 0)
+	suite.NoError(err)
+	suite.Len(recommendations, 3)
+	if suite.Len(recommendations, 3) {
+		suite.Equal("315", recommendations[0])
+		suite.Equal("1432", recommendations[1])
+		suite.Equal("918", recommendations[2])
+	}
+}
+
 func TestGorseClientTestSuite(t *testing.T) {
 	suite.Run(t, new(GorseClientTestSuite))
 }
