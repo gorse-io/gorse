@@ -223,8 +223,6 @@ jobs:
     - name: Setup test
       working-directory: ./client
       run: ./setup-test.sh
-      env:
-        DOCKER_BUILDKIT: 1
 
     - name: Test
       run: go test ./client/
