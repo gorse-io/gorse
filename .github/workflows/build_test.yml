@@ -210,19 +210,15 @@ jobs:
     - uses: cuchi/jinja2-action@v1.2.0
       with:
         template: client/docker-compose.yml.j2
-        output_file: client/docker-compose.yml
+        output_file: docker-compose.yml
         strict: true
         variables: |
           database=${{ matrix.database }}
 
-    - name: Build the stack
-      run: docker compose -f client/docker-compose.yml --project-directory . up -d
+    - name: Setup test
+      run: ./client/setup-test.sh
       env:
         DOCKER_BUILDKIT: 1
-
-    - name: Setup test
-      working-directory: ./client
-      run: ./setup-test.sh
 
     - name: Test
       run: go test ./client/
