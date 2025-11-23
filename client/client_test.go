@@ -177,21 +177,21 @@ func (suite *GorseClientTestSuite) TestFeedback() {
 			UserId:       "2000",
 			ItemId:       "1",
 			Value:        1.0,
-			Timestamp:    time.Now().UTC(),
+			Timestamp:    time.Now().UTC().Truncate(time.Second),
 		},
 		{
 			FeedbackType: "watch",
 			UserId:       "2000",
 			ItemId:       "1060",
 			Value:        2.0,
-			Timestamp:    time.Now().UTC(),
+			Timestamp:    time.Now().UTC().Truncate(time.Second),
 		},
 		{
 			FeedbackType: "watch",
 			UserId:       "2000",
 			ItemId:       "11",
 			Value:        3.0,
-			Timestamp:    time.Now().UTC(),
+			Timestamp:    time.Now().UTC().Truncate(time.Second),
 		},
 	}
 	for _, fb := range feedback {

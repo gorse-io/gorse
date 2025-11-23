@@ -25,9 +25,7 @@ EOF
 fi
 
 # Start Gorse
-if [ "$(docker compose ps -q master | xargs docker inspect -f '{{.State.Running}}')" != "true" ]; then
-    docker compose up -d
-fi
+docker compose up -d
 
 # Download MovieLens 100k dataset
 if [ ! -f ./ml-100k.bin ]; then
@@ -52,7 +50,7 @@ curl -X POST "http://localhost:8088/api/restore" --data-binary "@./ml-100k.bin"
 
 # Restart Gorse to apply changes
 docker compose restart master
-max_attempts=6
+max_attempts=18
 attempt=0
 until curl -s "http://localhost:8088/api/dashboard/tasks" | grep -q "Train Collaborative Filtering Model" || [ $attempt -ge $max_attempts ]; do
     echo "Waiting for recommendation... (attempt $((attempt+1))/$max_attempts)"
