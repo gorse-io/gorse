@@ -90,6 +90,7 @@ jobs:
         with:
           source: .
           targets: default
+          push: true
         env:
           VERSIONS: latest,${{ steps.get_version.outputs.major }}.${{ steps.get_version.outputs.minor }},${{ steps.get_version.outputs.version-without-v }}
 
