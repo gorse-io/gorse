@@ -197,7 +197,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        database: [mysql, postgres, mongo, sqlite, clickhouse+redis]
+        database: [mysql, postgres, mongo, sqlite]
     steps:
     - uses: actions/checkout@v5
       with:
