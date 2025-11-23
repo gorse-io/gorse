@@ -1,12 +1,12 @@
 #!/bin/bash
 set -e
 
-# Download config if not exists
+# Download config
 if [ ! -f ./config.toml ]; then
     wget https://github.com/gorse-io/gorse/raw/refs/heads/master/client/config.toml
 fi
 
-# Create docker-compose.yml if not exists
+# Create docker-compose.yml
 if [ ! -f ./docker-compose.yml ]; then
     cat > docker-compose.yml <<EOF
 version: '3'
@@ -25,7 +25,9 @@ EOF
 fi
 
 # Start Gorse
-docker compose up -d
+if [ "$(docker compose ps -q master | xargs docker inspect -f '{{.State.Running}}')" != "true" ]; then
+    docker compose up -d
+fi
 
 # Download MovieLens 100k dataset
 if [ ! -f ./ml-100k.bin ]; then
