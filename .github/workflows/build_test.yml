@@ -220,6 +220,8 @@ jobs:
 
     - name: Build Docker image
       uses: docker/bake-action@v6
+      with:
+        files: docker-compose.yml
 
     - name: Setup test
       run: ./client/setup-test.sh
