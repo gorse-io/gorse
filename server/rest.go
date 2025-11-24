@@ -349,8 +349,8 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.HeaderParameter("X-API-Key", "API key").DataType("string")).
 		Param(ws.PathParameter("user-id", "User ID of returned feedbacks").DataType("string")).
 		Param(ws.PathParameter("item-id", "Item ID of returned feedbacks").DataType("string")).
-		Returns(http.StatusOK, "OK", []data.Feedback{}).
-		Writes([]data.Feedback{}))
+		Returns(http.StatusOK, "OK", Success{}).
+		Writes(Success{}))
 	ws.Route(ws.GET("/feedback/{feedback-type}").To(s.getTypedFeedback).
 		Doc("Get feedbacks with feedback type.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{FeedbackAPITag}).
@@ -376,8 +376,8 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.PathParameter("feedback-type", "Type of returned feedbacks").DataType("string")).
 		Param(ws.PathParameter("user-id", "User ID of returned feedbacks").DataType("string")).
 		Param(ws.PathParameter("item-id", "Item ID of returned feedbacks").DataType("string")).
-		Returns(http.StatusOK, "OK", data.Feedback{}).
-		Writes(data.Feedback{}))
+		Returns(http.StatusOK, "OK", Success{}).
+		Writes(Success{}))
 	// Get feedback by user id
 	ws.Route(ws.GET("/user/{user-id}/feedback/{feedback-type}").To(s.getTypedFeedbackByUser).
 		Doc("Get feedbacks by user id with feedback type.").
