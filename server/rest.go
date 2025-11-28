@@ -476,7 +476,7 @@ func (s *RestServer) CreateWebService() {
 		Returns(http.StatusOK, "OK", []cache.Score{}).
 		Writes([]cache.Score{}))
 	// Get user-to-user recommendation
-	ws.Route(ws.GET("/user-to-user/neighbors/{user-id}").To(s.getUserNeighbors).
+	ws.Route(ws.GET("/user-to-user/{name}/{user-id}").To(s.getUserToUser).
 		Doc("Get user-to-user recommendation.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{RecommendationAPITag}).
 		Param(ws.HeaderParameter("X-API-Key", "API key").DataType("string")).
@@ -706,6 +706,13 @@ func (s *RestServer) getItemToItem(request *restful.Request, response *restful.R
 	s.SearchDocuments(cache.ItemToItem, cache.Key(name, itemId), categories, nil, request, response)
 }
 
+func (s *RestServer) getUserToUser(request *restful.Request, response *restful.Response) {
+	name := request.PathParameter("name")
+	userId := request.PathParameter("user-id")
+	s.SetLastModified(request, response, cache.Key(cache.UserToUserUpdateTime, name, userId))
+	s.SearchDocuments(cache.UserToUser, cache.Key(name, userId), nil, nil, request, response)
+}
+
 func (s *RestServer) SetLastModified(request *restful.Request, response *restful.Response, key string) {
 	lastModified, err := s.CacheClient.Get(request.Request.Context(), key).Time()
 	if err != nil {
@@ -771,7 +778,7 @@ func (s *RestServer) getUserNeighbors(request *restful.Request, response *restfu
 	} else {
 		name := s.Config.Recommend.UserToUser[0].Name
 		s.SetLastModified(request, response, cache.Key(cache.UserToUserUpdateTime, name, userId))
-		s.SearchDocuments(cache.UserToUser, cache.Key(name, userId), []string{""}, nil, request, response)
+		s.SearchDocuments(cache.UserToUser, cache.Key(name, userId), nil, nil, request, response)
 	}
 }
 
