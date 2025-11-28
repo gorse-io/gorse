@@ -813,6 +813,49 @@ func (suite *ServerTestSuite) TestNonPersonalizedRecommend() {
 	}
 }
 
+func (suite *ServerTestSuite) TestUserToUser() {
+	ctx := context.Background()
+	suite.Config.Recommend.UserToUser = []config.UserToUserConfig{{Name: "default"}}
+	err := suite.CacheClient.AddScores(ctx, cache.UserToUser, cache.Key("default", "0"), []cache.Score{
+		{Id: "1", Score: 100},
+		{Id: "2", Score: 99},
+		{Id: "3", Score: 98},
+		{Id: "4", Score: 97},
+		{Id: "5", Score: 96},
+	})
+	suite.NoError(err)
+
+	apitest.New().
+		Handler(suite.handler).
+		Get("/api/user-to-user/default/0").
+		Header("X-API-Key", apiKey).
+		Expect(suite.T()).
+		Status(http.StatusOK).
+		Body(suite.marshal([]cache.Score{
+			{Id: "1", Score: 100},
+			{Id: "2", Score: 99},
+			{Id: "3", Score: 98},
+			{Id: "4", Score: 97},
+			{Id: "5", Score: 96},
+		})).
+		End()
+
+	apitest.New().
+		Handler(suite.handler).
+		Get("/api/user/0/neighbors").
+		Header("X-API-Key", apiKey).
+		Expect(suite.T()).
+		Status(http.StatusOK).
+		Body(suite.marshal([]cache.Score{
+			{Id: "1", Score: 100},
+			{Id: "2", Score: 99},
+			{Id: "3", Score: 98},
+			{Id: "4", Score: 97},
+			{Id: "5", Score: 96},
+		})).
+		End()
+}
+
 func (suite *ServerTestSuite) TestDeleteFeedback() {
 	t := suite.T()
 	// Insert feedback
