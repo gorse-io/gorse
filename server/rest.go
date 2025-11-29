@@ -39,6 +39,7 @@ import (
 	"github.com/juju/errors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/samber/lo"
+	"github.com/swaggest/swgui/v5emb"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/emicklei/go-restful/otelrestful"
 	"go.uber.org/zap"
 )
@@ -51,6 +52,7 @@ const (
 	RecommendationAPITag = "recommendation"
 	MeasurementsAPITag   = "measurements"
 	DetractedAPITag      = "deprecated"
+	apiDocsPath          = "/apidocs/"
 )
 
 // RestServer implements a REST-ful API server.
@@ -78,8 +80,11 @@ func (s *RestServer) StartHttpServer(container *restful.Container) {
 		APIPath:     "/apidocs.json",
 	}
 	container.Add(restfulspec.NewOpenAPIService(specConfig))
-	swaggerFile = specConfig.APIPath
-	container.Handle(apiDocsPath, http.HandlerFunc(handler))
+	container.Handle(apiDocsPath, v5emb.New(
+		"Gorse REST API",
+		"/apidocs.json",
+		apiDocsPath,
+	))
 	// register prometheus
 	container.Handle("/metrics", promhttp.Handler())
 	// register pprof
