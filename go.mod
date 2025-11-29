@@ -25,10 +25,8 @@ require (
 	github.com/gorilla/securecookie v1.1.2
 	github.com/gorse-io/dashboard v0.0.0-20251109051441-b3cb7def0563
 	github.com/gorse-io/gorse-go v0.5.0-alpha.2.0.20251123072753-3b145349a880
-	github.com/haxii/go-swagger-ui v0.0.0-20210203093335-a63a6bbde946
 	github.com/jaswdr/faker v1.19.1
 	github.com/jellydator/ttlcache/v3 v3.4.0
-	github.com/json-iterator/go v1.1.12
 	github.com/juju/errors v1.0.0
 	github.com/juju/ratelimit v1.0.2
 	github.com/klauspost/cpuid/v2 v2.3.0
@@ -54,6 +52,7 @@ require (
 	github.com/spf13/viper v1.21.0
 	github.com/steinfletcher/apitest v1.6.0
 	github.com/stretchr/testify v1.11.1
+	github.com/swaggest/swgui v1.8.5
 	github.com/tiktoken-go/tokenizer v0.7.0
 	github.com/yuin/goldmark v1.7.8
 	go.mongodb.org/mongo-driver v1.17.6
@@ -76,7 +75,6 @@ require (
 	google.golang.org/grpc/security/advancedtls v1.0.0
 	google.golang.org/protobuf v1.36.1
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
-	gopkg.in/yaml.v2 v2.4.0
 	gorm.io/driver/clickhouse v0.4.2
 	gorm.io/driver/mysql v1.3.4
 	gorm.io/driver/postgres v1.3.5
@@ -126,6 +124,7 @@ require (
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
+	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/compress v1.18.1 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
@@ -156,6 +155,7 @@ require (
 	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
 	github.com/tinylib/msgp v1.5.0 // indirect
+	github.com/vearutop/statigz v1.4.0 // indirect
 	github.com/xdg-go/pbkdf2 v1.0.0 // indirect
 	github.com/xdg-go/scram v1.1.2 // indirect
 	github.com/xdg-go/stringprep v1.0.4 // indirect
