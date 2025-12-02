@@ -256,11 +256,11 @@ func (suite *baseTestSuite) TestFeedback() {
 	// insert feedbacks
 	timestamp := time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC)
 	feedback := []Feedback{
-		{FeedbackKey{positiveFeedbackType1, "0", "8"}, 1, timestamp, "comment"},
-		{FeedbackKey{positiveFeedbackType1, "1", "6"}, 1, timestamp, "comment"},
-		{FeedbackKey{positiveFeedbackType2, "2", "4"}, 1, timestamp, "comment"},
-		{FeedbackKey{positiveFeedbackType2, "3", "2"}, 1, timestamp, "comment"},
-		{FeedbackKey{positiveFeedbackType2, "4", "0"}, 1, timestamp, "comment"},
+		{FeedbackKey: FeedbackKey{positiveFeedbackType1, "0", "8"}, Value: 1, Timestamp: timestamp, Comment: "comment"},
+		{FeedbackKey: FeedbackKey{positiveFeedbackType1, "1", "6"}, Value: 1, Timestamp: timestamp, Comment: "comment"},
+		{FeedbackKey: FeedbackKey{positiveFeedbackType2, "2", "4"}, Value: 1, Timestamp: timestamp, Comment: "comment"},
+		{FeedbackKey: FeedbackKey{positiveFeedbackType2, "3", "2"}, Value: 1, Timestamp: timestamp, Comment: "comment"},
+		{FeedbackKey: FeedbackKey{positiveFeedbackType2, "4", "0"}, Value: 1, Timestamp: timestamp, Comment: "comment"},
 	}
 	err = suite.Database.BatchInsertFeedback(ctx, feedback, true, true, true)
 	suite.NoError(err)
@@ -271,11 +271,11 @@ func (suite *baseTestSuite) TestFeedback() {
 	suite.NoError(err)
 	// future feedback
 	futureFeedback := []Feedback{
-		{FeedbackKey{duplicateFeedbackType, "0", "0"}, 0, time.Now().Add(time.Hour), "comment"},
-		{FeedbackKey{duplicateFeedbackType, "1", "2"}, 0, time.Now().Add(time.Hour), "comment"},
-		{FeedbackKey{duplicateFeedbackType, "2", "4"}, 0, time.Now().Add(time.Hour), "comment"},
-		{FeedbackKey{duplicateFeedbackType, "3", "6"}, 0, time.Now().Add(time.Hour), "comment"},
-		{FeedbackKey{duplicateFeedbackType, "4", "8"}, 0, time.Now().Add(time.Hour), "comment"},
+		{FeedbackKey: FeedbackKey{duplicateFeedbackType, "0", "0"}, Value: 0, Timestamp: time.Now().Add(time.Hour), Comment: "comment"},
+		{FeedbackKey: FeedbackKey{duplicateFeedbackType, "1", "2"}, Value: 0, Timestamp: time.Now().Add(time.Hour), Comment: "comment"},
+		{FeedbackKey: FeedbackKey{duplicateFeedbackType, "2", "4"}, Value: 0, Timestamp: time.Now().Add(time.Hour), Comment: "comment"},
+		{FeedbackKey: FeedbackKey{duplicateFeedbackType, "3", "6"}, Value: 0, Timestamp: time.Now().Add(time.Hour), Comment: "comment"},
+		{FeedbackKey: FeedbackKey{duplicateFeedbackType, "4", "8"}, Value: 0, Timestamp: time.Now().Add(time.Hour), Comment: "comment"},
 	}
 	err = suite.Database.BatchInsertFeedback(ctx, futureFeedback, true, true, true)
 	suite.NoError(err)
@@ -452,7 +452,7 @@ func (suite *baseTestSuite) TestFeedback() {
 	// check duplicate feedback
 	ret, err = suite.Database.GetUserItemFeedback(ctx, "0", "0", "a")
 	suite.NoError(err)
-	suite.Equal([]Feedback{{FeedbackKey: FeedbackKey{"a", "0", "0"}, Value: 2, Timestamp: timestamp, Comment: ""}}, ret)
+	suite.Equal([]Feedback{{FeedbackKey: FeedbackKey{"a", "0", "0"}, Value: 2, Timestamp: timestamp, UpdatedAt: timestamp, Comment: ""}}, ret)
 	// put duplicate feedback
 	err = suite.Database.BatchInsertFeedback(ctx, []Feedback{
 		{FeedbackKey: FeedbackKey{"a", "0", "0"}, Value: 1, Timestamp: timestamp},
@@ -462,9 +462,9 @@ func (suite *baseTestSuite) TestFeedback() {
 	ret, err = suite.Database.GetUserItemFeedback(ctx, "0", "0", "a")
 	suite.NoError(err)
 	if suite.isClickHouse() {
-		suite.Equal([]Feedback{{FeedbackKey: FeedbackKey{"a", "0", "0"}, Value: 3, Timestamp: timestamp, Comment: ""}}, ret)
+		suite.Equal([]Feedback{{FeedbackKey: FeedbackKey{"a", "0", "0"}, Value: 3, Timestamp: timestamp, UpdatedAt: timestamp, Comment: ""}}, ret)
 	} else {
-		suite.Equal([]Feedback{{FeedbackKey: FeedbackKey{"a", "0", "0"}, Value: 1, Timestamp: timestamp, Comment: ""}}, ret)
+		suite.Equal([]Feedback{{FeedbackKey: FeedbackKey{"a", "0", "0"}, Value: 1, Timestamp: timestamp, UpdatedAt: timestamp, Comment: ""}}, ret)
 	}
 }
 
@@ -599,11 +599,11 @@ func (suite *baseTestSuite) TestDeleteUser() {
 	ctx := context.Background()
 	// Insert ret
 	feedback := []Feedback{
-		{FeedbackKey{positiveFeedbackType, "a", "0"}, 0, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
-		{FeedbackKey{positiveFeedbackType, "a", "2"}, 0, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
-		{FeedbackKey{positiveFeedbackType, "a", "4"}, 0, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
-		{FeedbackKey{positiveFeedbackType, "a", "6"}, 0, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
-		{FeedbackKey{positiveFeedbackType, "a", "8"}, 0, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey: FeedbackKey{positiveFeedbackType, "a", "0"}, Value: 0, Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), Comment: "comment"},
+		{FeedbackKey: FeedbackKey{positiveFeedbackType, "a", "2"}, Value: 0, Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), Comment: "comment"},
+		{FeedbackKey: FeedbackKey{positiveFeedbackType, "a", "4"}, Value: 0, Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), Comment: "comment"},
+		{FeedbackKey: FeedbackKey{positiveFeedbackType, "a", "6"}, Value: 0, Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), Comment: "comment"},
+		{FeedbackKey: FeedbackKey{positiveFeedbackType, "a", "8"}, Value: 0, Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), Comment: "comment"},
 	}
 	err := suite.Database.BatchInsertFeedback(ctx, feedback, true, true, true)
 	suite.NoError(err)
@@ -624,11 +624,11 @@ func (suite *baseTestSuite) TestDeleteItem() {
 	ctx := context.Background()
 	// Insert ret
 	feedbacks := []Feedback{
-		{FeedbackKey{positiveFeedbackType, "0", "b"}, 0, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
-		{FeedbackKey{positiveFeedbackType, "1", "b"}, 0, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
-		{FeedbackKey{positiveFeedbackType, "2", "b"}, 0, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
-		{FeedbackKey{positiveFeedbackType, "3", "b"}, 0, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
-		{FeedbackKey{positiveFeedbackType, "4", "b"}, 0, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey: FeedbackKey{positiveFeedbackType, "0", "b"}, Value: 0, Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), Comment: "comment"},
+		{FeedbackKey: FeedbackKey{positiveFeedbackType, "1", "b"}, Value: 0, Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), Comment: "comment"},
+		{FeedbackKey: FeedbackKey{positiveFeedbackType, "2", "b"}, Value: 0, Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), Comment: "comment"},
+		{FeedbackKey: FeedbackKey{positiveFeedbackType, "3", "b"}, Value: 0, Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), Comment: "comment"},
+		{FeedbackKey: FeedbackKey{positiveFeedbackType, "4", "b"}, Value: 0, Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), Comment: "comment"},
 	}
 	err := suite.Database.BatchInsertFeedback(ctx, feedbacks, true, true, true)
 	suite.NoError(err)
@@ -648,11 +648,11 @@ func (suite *baseTestSuite) TestDeleteItem() {
 func (suite *baseTestSuite) TestDeleteFeedback() {
 	ctx := context.Background()
 	feedbacks := []Feedback{
-		{FeedbackKey{"type1", "2", "3"}, 0, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
-		{FeedbackKey{"type2", "2", "3"}, 0, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
-		{FeedbackKey{"type3", "2", "3"}, 0, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
-		{FeedbackKey{"type1", "2", "4"}, 0, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
-		{FeedbackKey{"type1", "1", "3"}, 0, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey: FeedbackKey{"type1", "2", "3"}, Value: 0, Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), Comment: "comment"},
+		{FeedbackKey: FeedbackKey{"type2", "2", "3"}, Value: 0, Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), Comment: "comment"},
+		{FeedbackKey: FeedbackKey{"type3", "2", "3"}, Value: 0, Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), Comment: "comment"},
+		{FeedbackKey: FeedbackKey{"type1", "2", "4"}, Value: 0, Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), Comment: "comment"},
+		{FeedbackKey: FeedbackKey{"type1", "1", "3"}, Value: 0, Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), Comment: "comment"},
 	}
 	err := suite.Database.BatchInsertFeedback(ctx, feedbacks, true, true, true)
 	suite.NoError(err)
@@ -732,11 +732,11 @@ func (suite *baseTestSuite) TestTimeLimit() {
 
 	// insert feedback
 	feedbacks := []Feedback{
-		{FeedbackKey{"type1", "2", "3"}, 0, time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
-		{FeedbackKey{"type2", "2", "3"}, 0, time.Date(1997, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
-		{FeedbackKey{"type3", "2", "3"}, 0, time.Date(1998, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
-		{FeedbackKey{"type1", "2", "4"}, 0, time.Date(1999, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
-		{FeedbackKey{"type1", "1", "3"}, 0, time.Date(2000, 3, 15, 0, 0, 0, 0, time.UTC), "comment"},
+		{FeedbackKey: FeedbackKey{"type1", "2", "3"}, Value: 0, Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), Comment: "comment"},
+		{FeedbackKey: FeedbackKey{"type2", "2", "3"}, Value: 0, Timestamp: time.Date(1997, 3, 15, 0, 0, 0, 0, time.UTC), Comment: "comment"},
+		{FeedbackKey: FeedbackKey{"type3", "2", "3"}, Value: 0, Timestamp: time.Date(1998, 3, 15, 0, 0, 0, 0, time.UTC), Comment: "comment"},
+		{FeedbackKey: FeedbackKey{"type1", "2", "4"}, Value: 0, Timestamp: time.Date(1999, 3, 15, 0, 0, 0, 0, time.UTC), Comment: "comment"},
+		{FeedbackKey: FeedbackKey{"type1", "1", "3"}, Value: 0, Timestamp: time.Date(2000, 3, 15, 0, 0, 0, 0, time.UTC), Comment: "comment"},
 	}
 	err = suite.Database.BatchInsertFeedback(ctx, feedbacks, true, true, true)
 	suite.NoError(err)

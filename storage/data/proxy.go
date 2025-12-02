@@ -477,7 +477,7 @@ func (p *ProxyServer) GetFeedbackStream(in *protocol.GetFeedbackStreamRequest, s
 				ItemId:       f.ItemId,
 				Value:        f.Value,
 				Timestamp:    timestamppb.New(f.Timestamp),
-			UpdatedAt:    timestamppb.New(f.UpdatedAt),
+				UpdatedAt:    timestamppb.New(f.UpdatedAt),
 				Comment:      f.Comment,
 			}
 		}

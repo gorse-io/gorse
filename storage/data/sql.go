@@ -985,6 +985,7 @@ func (d *SQLDatabase) BatchInsertFeedback(ctx context.Context, feedback []Feedba
 				if _, exist := memo[lo.Tuple3[string, string, string]{f.FeedbackType, f.UserId, f.ItemId}]; !exist {
 					memo[lo.Tuple3[string, string, string]{f.FeedbackType, f.UserId, f.ItemId}] = struct{}{}
 					f.Timestamp = f.Timestamp.In(time.UTC)
+					f.UpdatedAt = f.Timestamp
 					rows = append(rows, f)
 				}
 			}
@@ -1004,6 +1005,10 @@ func (d *SQLDatabase) BatchInsertFeedback(ctx context.Context, feedback []Feedba
 					if d.driver == SQLite {
 						f.Timestamp = f.Timestamp.In(time.UTC)
 					}
+					f.UpdatedAt = f.Timestamp
+					if d.driver == SQLite {
+						f.UpdatedAt = f.UpdatedAt.In(time.UTC)
+					}
 					rows = append(rows, f)
 				}
 			}
@@ -1013,21 +1018,24 @@ func (d *SQLDatabase) BatchInsertFeedback(ctx context.Context, feedback []Feedba
 		}
 		var updates clause.Set
 		if overwrite {
-			updates = clause.AssignmentColumns([]string{"time_stamp", "comment", "value"})
+			updates = clause.AssignmentColumns([]string{"time_stamp", "updated_at", "comment", "value"})
 		} else {
 			values := make(map[string]any)
 			switch d.driver {
 			case MySQL:
 				values["value"] = clause.Column{Raw: true, Name: "value + VALUES(value)"}
 				values["time_stamp"] = clause.Column{Raw: true, Name: "LEAST(time_stamp, VALUES(time_stamp))"}
+				values["updated_at"] = clause.Column{Raw: true, Name: "GREATEST(updated_at, VALUES(updated_at))"}
 				values["comment"] = clause.Column{Raw: true, Name: "VALUES(comment)"}
 			case Postgres:
 				values["value"] = clause.Column{Raw: true, Name: fmt.Sprintf("%s.value + EXCLUDED.value", d.FeedbackTable())}
 				values["time_stamp"] = clause.Column{Raw: true, Name: fmt.Sprintf("LEAST(%s.time_stamp, EXCLUDED.time_stamp)", d.FeedbackTable())}
+				values["updated_at"] = clause.Column{Raw: true, Name: fmt.Sprintf("GREATEST(%s.updated_at, EXCLUDED.updated_at)", d.FeedbackTable())}
 				values["comment"] = clause.Column{Raw: true, Name: "EXCLUDED.comment"}
 			case SQLite:
 				values["value"] = clause.Column{Raw: true, Name: "value + excluded.value"}
 				values["time_stamp"] = clause.Column{Raw: true, Name: "MIN(time_stamp, excluded.time_stamp)"}
+				values["updated_at"] = clause.Column{Raw: true, Name: "MAX(updated_at, excluded.updated_at)"}
 				values["comment"] = clause.Column{Raw: true, Name: "excluded.comment"}
 			}
 			updates = clause.Assignments(values)
