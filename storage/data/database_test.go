@@ -264,6 +264,10 @@ func (suite *baseTestSuite) TestFeedback() {
 	}
 	err = suite.Database.BatchInsertFeedback(ctx, feedback, true, true, true)
 	suite.NoError(err)
+	// set Updated for comparison
+	for i := range feedback {
+		feedback[i].Updated = feedback[i].Timestamp
+	}
 	// other type
 	err = suite.Database.BatchInsertFeedback(ctx, []Feedback{{FeedbackKey: FeedbackKey{negativeFeedbackType, "0", "2"}}}, true, true, true)
 	suite.NoError(err)
@@ -452,7 +456,7 @@ func (suite *baseTestSuite) TestFeedback() {
 	// check duplicate feedback
 	ret, err = suite.Database.GetUserItemFeedback(ctx, "0", "0", "a")
 	suite.NoError(err)
-	suite.Equal([]Feedback{{FeedbackKey: FeedbackKey{"a", "0", "0"}, Value: 2, Timestamp: timestamp, UpdatedAt: timestamp, Comment: ""}}, ret)
+	suite.Equal([]Feedback{{FeedbackKey: FeedbackKey{"a", "0", "0"}, Value: 2, Timestamp: timestamp, Updated: timestamp, Comment: ""}}, ret)
 	// put duplicate feedback
 	err = suite.Database.BatchInsertFeedback(ctx, []Feedback{
 		{FeedbackKey: FeedbackKey{"a", "0", "0"}, Value: 1, Timestamp: timestamp},
@@ -462,9 +466,9 @@ func (suite *baseTestSuite) TestFeedback() {
 	ret, err = suite.Database.GetUserItemFeedback(ctx, "0", "0", "a")
 	suite.NoError(err)
 	if suite.isClickHouse() {
-		suite.Equal([]Feedback{{FeedbackKey: FeedbackKey{"a", "0", "0"}, Value: 3, Timestamp: timestamp, UpdatedAt: timestamp, Comment: ""}}, ret)
+		suite.Equal([]Feedback{{FeedbackKey: FeedbackKey{"a", "0", "0"}, Value: 3, Timestamp: timestamp, Updated: timestamp, Comment: ""}}, ret)
 	} else {
-		suite.Equal([]Feedback{{FeedbackKey: FeedbackKey{"a", "0", "0"}, Value: 1, Timestamp: timestamp, UpdatedAt: timestamp, Comment: ""}}, ret)
+		suite.Equal([]Feedback{{FeedbackKey: FeedbackKey{"a", "0", "0"}, Value: 1, Timestamp: timestamp, Updated: timestamp, Comment: ""}}, ret)
 	}
 }
 
@@ -656,6 +660,10 @@ func (suite *baseTestSuite) TestDeleteFeedback() {
 	}
 	err := suite.Database.BatchInsertFeedback(ctx, feedbacks, true, true, true)
 	suite.NoError(err)
+	// set Updated for comparison
+	for i := range feedbacks {
+		feedbacks[i].Updated = feedbacks[i].Timestamp
+	}
 	// get user-item feedback
 	ret, err := suite.Database.GetUserItemFeedback(ctx, "2", "3")
 	suite.NoError(err)
@@ -740,6 +748,10 @@ func (suite *baseTestSuite) TestTimeLimit() {
 	}
 	err = suite.Database.BatchInsertFeedback(ctx, feedbacks, true, true, true)
 	suite.NoError(err)
+	// set Updated for comparison
+	for i := range feedbacks {
+		feedbacks[i].Updated = feedbacks[i].Timestamp
+	}
 	_, retFeedback, err := suite.Database.GetFeedback(ctx, "", 100, &timeLimit, lo.ToPtr(time.Now()))
 	suite.NoError(err)
 	suite.Equal([]Feedback{feedbacks[4], feedbacks[3], feedbacks[2]}, retFeedback)

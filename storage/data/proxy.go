@@ -192,7 +192,7 @@ func (p *ProxyServer) GetItemFeedback(ctx context.Context, in *protocol.GetItemF
 			ItemId:       f.ItemId,
 			Value:        f.Value,
 			Timestamp:    timestamppb.New(f.Timestamp),
-			UpdatedAt:    timestamppb.New(f.UpdatedAt),
+			Updated:      timestamppb.New(f.Updated),
 			Comment:      f.Comment,
 		}
 	}
@@ -299,7 +299,7 @@ func (p *ProxyServer) GetUserFeedback(ctx context.Context, in *protocol.GetUserF
 			ItemId:       f.ItemId,
 			Value:        f.Value,
 			Timestamp:    timestamppb.New(f.Timestamp),
-			UpdatedAt:    timestamppb.New(f.UpdatedAt),
+			Updated:      timestamppb.New(f.Updated),
 			Comment:      f.Comment,
 		}
 	}
@@ -323,7 +323,7 @@ func (p *ProxyServer) GetUserItemFeedback(ctx context.Context, in *protocol.GetU
 			ItemId:       f.ItemId,
 			Value:        f.Value,
 			Timestamp:    timestamppb.New(f.Timestamp),
-			UpdatedAt:    timestamppb.New(f.UpdatedAt),
+			Updated:      timestamppb.New(f.Updated),
 			Comment:      f.Comment,
 		}
 	}
@@ -377,7 +377,7 @@ func (p *ProxyServer) GetFeedback(ctx context.Context, in *protocol.GetFeedbackR
 			ItemId:       f.ItemId,
 			Value:        f.Value,
 			Timestamp:    timestamppb.New(f.Timestamp),
-			UpdatedAt:    timestamppb.New(f.UpdatedAt),
+			Updated:      timestamppb.New(f.Updated),
 			Comment:      f.Comment,
 		}
 	}
@@ -477,7 +477,7 @@ func (p *ProxyServer) GetFeedbackStream(in *protocol.GetFeedbackStreamRequest, s
 				ItemId:       f.ItemId,
 				Value:        f.Value,
 				Timestamp:    timestamppb.New(f.Timestamp),
-				UpdatedAt:    timestamppb.New(f.UpdatedAt),
+				Updated:      timestamppb.New(f.Updated),
 				Comment:      f.Comment,
 			}
 		}
@@ -728,7 +728,7 @@ func (p ProxyClient) GetItemFeedback(ctx context.Context, itemId string, feedbac
 			},
 			Value:     f.Value,
 			Timestamp: f.Timestamp.AsTime(),
-			UpdatedAt: f.UpdatedAt.AsTime(),
+			Updated:   f.Updated.AsTime(),
 			Comment:   f.Comment,
 		}
 	}
@@ -842,7 +842,7 @@ func (p ProxyClient) GetUserFeedback(ctx context.Context, userId string, endTime
 			},
 			Value:     f.Value,
 			Timestamp: f.Timestamp.AsTime(),
-			UpdatedAt: f.UpdatedAt.AsTime(),
+			Updated:   f.Updated.AsTime(),
 			Comment:   f.Comment,
 		}
 	}
@@ -872,7 +872,7 @@ func (p ProxyClient) GetUserItemFeedback(ctx context.Context, userId, itemId str
 			},
 			Value:     f.Value,
 			Timestamp: f.Timestamp.AsTime(),
-			UpdatedAt: f.UpdatedAt.AsTime(),
+			Updated:   f.Updated.AsTime(),
 			Comment:   f.Comment,
 		}
 	}
@@ -944,7 +944,7 @@ func (p ProxyClient) GetFeedback(ctx context.Context, cursor string, n int, begi
 			},
 			Value:     f.Value,
 			Timestamp: f.Timestamp.AsTime(),
-			UpdatedAt: f.UpdatedAt.AsTime(),
+			Updated:   f.Updated.AsTime(),
 			Comment:   f.Comment,
 		}
 	}
@@ -1090,7 +1090,7 @@ func (p ProxyClient) GetFeedbackStream(ctx context.Context, batchSize int, optio
 					},
 					Value:     f.Value,
 					Timestamp: f.Timestamp.AsTime(),
-					UpdatedAt: f.UpdatedAt.AsTime(),
+					Updated:   f.Updated.AsTime(),
 					Comment:   f.Comment,
 				}
 			}

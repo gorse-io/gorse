@@ -669,7 +669,7 @@ func (db *MongoDB) BatchInsertFeedback(ctx context.Context, feedback []Feedback,
 	var models []mongo.WriteModel
 	for _, f := range feedback {
 		if users.Contains(f.UserId) && items.Contains(f.ItemId) {
-			f.UpdatedAt = f.Timestamp
+			f.Updated = f.Timestamp
 			model := mongo.NewUpdateOneModel().
 				SetUpsert(true).
 				SetFilter(bson.M{
@@ -689,7 +689,7 @@ func (db *MongoDB) BatchInsertFeedback(ctx context.Context, feedback []Feedback,
 						"timestamp": f.Timestamp,
 					},
 					"$max": bson.M{
-						"updatedat": f.UpdatedAt,
+						"updated": f.Updated,
 					},
 					"$set": bson.M{
 						"comment": f.Comment,

@@ -254,7 +254,7 @@ type Feedback struct {
 	Value         float64                `protobuf:"fixed64,5,opt,name=value,proto3" json:"value,omitempty"`
 	Timestamp     *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
 	Comment       string                 `protobuf:"bytes,7,opt,name=comment,proto3" json:"comment,omitempty"`
-	UpdatedAt     *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	Updated       *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=updated,proto3" json:"updated,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -338,9 +338,9 @@ func (x *Feedback) GetComment() string {
 	return ""
 }
 
-func (x *Feedback) GetUpdatedAt() *timestamppb.Timestamp {
+func (x *Feedback) GetUpdated() *timestamppb.Timestamp {
 	if x != nil {
-		return x.UpdatedAt
+		return x.Updated
 	}
 	return nil
 }
@@ -1156,7 +1156,7 @@ const file_protocol_proto_rawDesc = "" +
 	"categories\x128\n" +
 	"\ttimestamp\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\ttimestamp\x12\x16\n" +
 	"\x06labels\x18\x06 \x01(\fR\x06labels\x12\x18\n" +
-	"\acomment\x18\a \x01(\tR\acomment\"\xa4\x02\n" +
+	"\acomment\x18\a \x01(\tR\acomment\"\x9f\x02\n" +
 	"\bFeedback\x12\x1c\n" +
 	"\tnamespace\x18\x01 \x01(\tR\tnamespace\x12#\n" +
 	"\rfeedback_type\x18\x02 \x01(\tR\ffeedbackType\x12\x17\n" +
@@ -1164,9 +1164,8 @@ const file_protocol_proto_rawDesc = "" +
 	"\aitem_id\x18\x04 \x01(\tR\x06itemId\x12\x14\n" +
 	"\x05value\x18\x05 \x01(\x01R\x05value\x128\n" +
 	"\ttimestamp\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\ttimestamp\x12\x18\n" +
-	"\acomment\x18\a \x01(\tR\acomment\x129\n" +
-	"\n" +
-	"updated_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\xe9\x01\n" +
+	"\acomment\x18\a \x01(\tR\acomment\x124\n" +
+	"\aupdated\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\aupdated\"\xe9\x01\n" +
 	"\x04Meta\x12\x16\n" +
 	"\x06config\x18\x01 \x01(\tR\x06config\x12G\n" +
 	" collaborative_filtering_model_id\x18\x03 \x01(\x03R\x1dcollaborativeFilteringModelId\x12<\n" +
@@ -1270,7 +1269,7 @@ var file_protocol_proto_goTypes = []any{
 var file_protocol_proto_depIdxs = []int32{
 	20, // 0: protocol.Item.timestamp:type_name -> google.protobuf.Timestamp
 	20, // 1: protocol.Feedback.timestamp:type_name -> google.protobuf.Timestamp
-	20, // 2: protocol.Feedback.updated_at:type_name -> google.protobuf.Timestamp
+	20, // 2: protocol.Feedback.updated:type_name -> google.protobuf.Timestamp
 	0,  // 3: protocol.NodeInfo.node_type:type_name -> protocol.NodeType
 	7,  // 4: protocol.PushProgressRequest.progress:type_name -> protocol.Progress
 	20, // 5: protocol.UploadBlobRequest.timestamp:type_name -> google.protobuf.Timestamp
