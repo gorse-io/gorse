@@ -168,6 +168,7 @@ func (d *SQLDatabase) Init() error {
 			ItemId       string    `gorm:"column:item_id;type:varchar(256);not null;primaryKey;index:item_id"`
 			Value        float64   `gorm:"column:value;type:float;not null;default:0"`
 			Timestamp    time.Time `gorm:"column:time_stamp;type:datetime;not null"`
+			Updated      time.Time `gorm:"column:updated;type:datetime;not null;default:'2000-01-01 00:00:00'"`
 			Comment      string    `gorm:"column:comment;type:text;not null"`
 		}
 		err := d.gormDB.Set("gorm:table_options", "ENGINE=InnoDB").AutoMigrate(Users{}, Items{}, Feedback{})
@@ -195,6 +196,7 @@ func (d *SQLDatabase) Init() error {
 			ItemId       string    `gorm:"column:item_id;type:varchar(256);not null;primaryKey;index:item_id_index"`
 			Value        float64   `gorm:"column:value;type:float8;not null;default:0"`
 			Timestamp    time.Time `gorm:"column:time_stamp;type:timestamptz;not null"`
+			Updated      time.Time `gorm:"column:updated;type:timestamptz;not null;default:'2000-01-01 00:00:00'"`
 			Comment      string    `gorm:"column:comment;type:text;not null;default:''"`
 		}
 		err := d.gormDB.AutoMigrate(Users{}, Items{}, Feedback{})
@@ -222,6 +224,7 @@ func (d *SQLDatabase) Init() error {
 			ItemId       string  `gorm:"column:item_id;type:varchar(256);not null;primaryKey;index:item_id_index"`
 			Value        float64 `gorm:"column:value;type:real;not null;default:0"`
 			Timestamp    string  `gorm:"column:time_stamp;type:datetime;not null;default:'0001-01-01'"`
+			Updated      string  `gorm:"column:updated;type:datetime;not null;default:'0001-01-01'"`
 			Comment      string  `gorm:"column:comment;type:text;not null;default:''"`
 		}
 		err := d.gormDB.AutoMigrate(Users{}, Items{}, Feedback{})
@@ -259,6 +262,7 @@ func (d *SQLDatabase) Init() error {
 			ItemId       string    `gorm:"column:item_id;type:String"`
 			Value        float64   `gorm:"column:value;type:Float64;default:0"`
 			Timestamp    time.Time `gorm:"column:time_stamp;type:DateTime64(9,'UTC')"`
+			Updated      time.Time `gorm:"column:updated;type:DateTime64(9,'UTC')"`
 			Comment      string    `gorm:"column:comment;type:String"`
 		}
 		err = d.gormDB.Set("gorm:table_options", "ENGINE = MergeTree ORDER BY (feedback_type, user_id, item_id)").AutoMigrate(Feedback{})
@@ -272,6 +276,7 @@ func (d *SQLDatabase) Init() error {
 			ItemId       string    `gorm:"column:item_id;type:String"`
 			Value        float64   `gorm:"column:value;type:SimpleAggregateFunction(sum, Float64)"`
 			Timestamp    time.Time `gorm:"column:time_stamp;type:SimpleAggregateFunction(min, DateTime64(9,'UTC'))"`
+			Updated      time.Time `gorm:"column:updated;type:SimpleAggregateFunction(max, DateTime64(9,'UTC'))"`
 			Comment      string    `gorm:"column:comment;type:SimpleAggregateFunction(anyLast, String)"`
 		}
 		err = d.gormDB.Set("gorm:table_options", "ENGINE = AggregatingMergeTree() ORDER BY (user_id, item_id, feedback_type)").AutoMigrate(AggregatingFeedback{})
@@ -279,7 +284,7 @@ func (d *SQLDatabase) Init() error {
 			return errors.Trace(err)
 		}
 		err = d.gormDB.Exec(fmt.Sprintf("CREATE MATERIALIZED VIEW IF NOT EXISTS %s_mv TO %s AS "+
-			"SELECT feedback_type, user_id, item_id, sum(value) AS value, min(time_stamp) AS time_stamp, anyLast(comment) AS comment "+
+			"SELECT feedback_type, user_id, item_id, sum(value) AS value, min(time_stamp) AS time_stamp, max(updated) AS updated, anyLast(comment) AS comment "+
 			"FROM %s GROUP BY feedback_type, user_id, item_id",
 			d.AggregatingFeedbackTable(), d.AggregatingFeedbackTable(), d.FeedbackTable())).Error
 		if err != nil {
@@ -291,7 +296,7 @@ func (d *SQLDatabase) Init() error {
 			return errors.Trace(err)
 		}
 		err = d.gormDB.Exec(fmt.Sprintf("CREATE MATERIALIZED VIEW IF NOT EXISTS %s_mv TO %s AS "+
-			"SELECT feedback_type, user_id, item_id, sum(value) AS value, min(time_stamp) AS time_stamp, anyLast(comment) AS comment "+
+			"SELECT feedback_type, user_id, item_id, sum(value) AS value, min(time_stamp) AS time_stamp, max(updated) AS updated, anyLast(comment) AS comment "+
 			"FROM %s GROUP BY feedback_type, user_id, item_id",
 			d.UserFeedbackTable(), d.UserFeedbackTable(), d.FeedbackTable())).Error
 		if err != nil {
@@ -303,7 +308,7 @@ func (d *SQLDatabase) Init() error {
 			return errors.Trace(err)
 		}
 		err = d.gormDB.Exec(fmt.Sprintf("CREATE MATERIALIZED VIEW IF NOT EXISTS %s_mv TO %s AS "+
-			"SELECT feedback_type, user_id, item_id, sum(value) AS value, min(time_stamp) AS time_stamp, anyLast(comment) AS comment "+
+			"SELECT feedback_type, user_id, item_id, sum(value) AS value, min(time_stamp) AS time_stamp, max(updated) AS updated, anyLast(comment) AS comment "+
 			"FROM %s GROUP BY feedback_type, user_id, item_id",
 			d.ItemFeedbackTable(), d.ItemFeedbackTable(), d.FeedbackTable())).Error
 		if err != nil {
@@ -627,11 +632,11 @@ func (d *SQLDatabase) GetItemFeedback(ctx context.Context, itemId string, feedba
 	tx := d.gormDB.WithContext(ctx)
 	if d.driver == ClickHouse {
 		tx = tx.Table(d.ItemFeedbackTable()).
-			Select("user_id, item_id, feedback_type, sum(value) AS value, min(time_stamp) AS time_stamp, anyLast(comment) AS comment").
+			Select("user_id, item_id, feedback_type, sum(value) AS value, min(time_stamp) AS time_stamp, max(updated) AS updated, anyLast(comment) AS comment").
 			Group("user_id, item_id, feedback_type")
 	} else {
 		tx = tx.Table(d.FeedbackTable()).
-			Select("user_id, item_id, feedback_type, value, time_stamp, comment")
+			Select("user_id, item_id, feedback_type, value, time_stamp, updated, comment")
 	}
 	switch d.driver {
 	case SQLite:
@@ -834,13 +839,13 @@ func (d *SQLDatabase) GetUserFeedback(ctx context.Context, userId string, endTim
 		tx = tx.Table(d.FeedbackTable())
 	}
 	if d.driver == ClickHouse {
-		tx.Select("feedback_type, user_id, item_id, sum(value) AS value, min(time_stamp) AS time_stamp, anyLast(comment) AS comment").
+		tx.Select("feedback_type, user_id, item_id, sum(value) AS value, min(time_stamp) AS time_stamp, max(updated) AS updated, anyLast(comment) AS comment").
 			Group("feedback_type, user_id, item_id")
 		if endTime != nil {
 			tx.Having("time_stamp <= ?", d.convertTimeZone(endTime))
 		}
 	} else {
-		tx.Select("feedback_type, user_id, item_id, value, time_stamp, comment")
+		tx.Select("feedback_type, user_id, item_id, value, time_stamp, updated, comment")
 		if endTime != nil {
 			tx.Where("time_stamp <= ?", d.convertTimeZone(endTime))
 		}
@@ -980,6 +985,7 @@ func (d *SQLDatabase) BatchInsertFeedback(ctx context.Context, feedback []Feedba
 				if _, exist := memo[lo.Tuple3[string, string, string]{f.FeedbackType, f.UserId, f.ItemId}]; !exist {
 					memo[lo.Tuple3[string, string, string]{f.FeedbackType, f.UserId, f.ItemId}] = struct{}{}
 					f.Timestamp = f.Timestamp.In(time.UTC)
+					f.Updated = f.Timestamp
 					rows = append(rows, f)
 				}
 			}
@@ -999,6 +1005,10 @@ func (d *SQLDatabase) BatchInsertFeedback(ctx context.Context, feedback []Feedba
 					if d.driver == SQLite {
 						f.Timestamp = f.Timestamp.In(time.UTC)
 					}
+					f.Updated = f.Timestamp
+					if d.driver == SQLite {
+						f.Updated = f.Updated.In(time.UTC)
+					}
 					rows = append(rows, f)
 				}
 			}
@@ -1008,21 +1018,24 @@ func (d *SQLDatabase) BatchInsertFeedback(ctx context.Context, feedback []Feedba
 		}
 		var updates clause.Set
 		if overwrite {
-			updates = clause.AssignmentColumns([]string{"time_stamp", "comment", "value"})
+			updates = clause.AssignmentColumns([]string{"time_stamp", "updated", "comment", "value"})
 		} else {
 			values := make(map[string]any)
 			switch d.driver {
 			case MySQL:
 				values["value"] = clause.Column{Raw: true, Name: "value + VALUES(value)"}
 				values["time_stamp"] = clause.Column{Raw: true, Name: "LEAST(time_stamp, VALUES(time_stamp))"}
+				values["updated"] = clause.Column{Raw: true, Name: "GREATEST(updated, VALUES(updated))"}
 				values["comment"] = clause.Column{Raw: true, Name: "VALUES(comment)"}
 			case Postgres:
 				values["value"] = clause.Column{Raw: true, Name: fmt.Sprintf("%s.value + EXCLUDED.value", d.FeedbackTable())}
 				values["time_stamp"] = clause.Column{Raw: true, Name: fmt.Sprintf("LEAST(%s.time_stamp, EXCLUDED.time_stamp)", d.FeedbackTable())}
+				values["updated"] = clause.Column{Raw: true, Name: fmt.Sprintf("GREATEST(%s.updated, EXCLUDED.updated)", d.FeedbackTable())}
 				values["comment"] = clause.Column{Raw: true, Name: "EXCLUDED.comment"}
 			case SQLite:
 				values["value"] = clause.Column{Raw: true, Name: "value + excluded.value"}
 				values["time_stamp"] = clause.Column{Raw: true, Name: "MIN(time_stamp, excluded.time_stamp)"}
+				values["updated"] = clause.Column{Raw: true, Name: "MAX(updated, excluded.updated)"}
 				values["comment"] = clause.Column{Raw: true, Name: "excluded.comment"}
 			}
 			updates = clause.Assignments(values)
@@ -1041,7 +1054,7 @@ func (d *SQLDatabase) GetFeedback(ctx context.Context, cursor string, n int, beg
 	if err != nil {
 		return "", nil, errors.Trace(err)
 	}
-	tx := d.gormDB.WithContext(ctx).Table(d.FeedbackTable()).Select("feedback_type, user_id, item_id, value, time_stamp, comment")
+	tx := d.gormDB.WithContext(ctx).Table(d.FeedbackTable()).Select("feedback_type, user_id, item_id, value, time_stamp, updated, comment")
 	if len(buf) > 0 {
 		var cursorKey FeedbackKey
 		if err := jsonutil.Unmarshal(buf, &cursorKey); err != nil {
@@ -1098,7 +1111,7 @@ func (d *SQLDatabase) GetFeedbackStream(ctx context.Context, batchSize int, scan
 		// send query
 		tx := d.gormDB.WithContext(ctx).
 			Table(d.FeedbackTable()).
-			Select("feedback_type, user_id, item_id, value, time_stamp, comment")
+			Select("feedback_type, user_id, item_id, value, time_stamp, updated, comment")
 		if len(scan.FeedbackTypes) > 0 {
 			db := d.gormDB
 			for _, feedbackType := range scan.FeedbackTypes {
@@ -1162,11 +1175,11 @@ func (d *SQLDatabase) GetUserItemFeedback(ctx context.Context, userId, itemId st
 	tx := d.gormDB.WithContext(ctx)
 	if d.driver == ClickHouse {
 		tx = tx.Table(d.UserFeedbackTable()).
-			Select("feedback_type, user_id, item_id, sum(value) AS value, any(time_stamp) AS time_stamp, any(comment) AS comment").
+			Select("feedback_type, user_id, item_id, sum(value) AS value, any(time_stamp) AS time_stamp, max(updated) AS updated, any(comment) AS comment").
 			Group("feedback_type, user_id, item_id")
 	} else {
 		tx = tx.Table(d.FeedbackTable()).
-			Select("feedback_type, user_id, item_id, value, time_stamp, comment")
+			Select("feedback_type, user_id, item_id, value, time_stamp, updated, comment")
 	}
 	tx.Where("user_id = ? AND item_id = ?", userId, itemId)
 	if len(feedbackTypes) > 0 {

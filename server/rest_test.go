@@ -631,7 +631,7 @@ func (suite *ServerTestSuite) TestFeedback() {
 		Header("X-API-Key", apiKey).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(`[{"FeedbackType":"click", "UserId": "2", "ItemId": "4", "Timestamp":"0001-01-01T00:00:00Z", "Comment":"", "Value":1}]`).
+		Body(`[{"FeedbackType":"click", "UserId": "2", "ItemId": "4", "Timestamp":"0001-01-01T00:00:00Z", "Updated":"0001-01-01T00:00:00Z", "Comment":"", "Value":1}]`).
 		End()
 	apitest.New().
 		Handler(suite.handler).
@@ -639,7 +639,7 @@ func (suite *ServerTestSuite) TestFeedback() {
 		Header("X-API-Key", apiKey).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(`[{"FeedbackType":"click", "UserId": "2", "ItemId": "4", "Timestamp":"0001-01-01T00:00:00Z", "Comment":"", "Value":1}]`).
+		Body(`[{"FeedbackType":"click", "UserId": "2", "ItemId": "4", "Timestamp":"0001-01-01T00:00:00Z", "Updated":"0001-01-01T00:00:00Z", "Comment":"", "Value":1}]`).
 		End()
 	// test overwrite
 	apitest.New().
