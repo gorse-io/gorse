@@ -47,6 +47,7 @@ import (
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
 	"github.com/gorse-io/gorse/storage/meta"
+	"github.com/invopop/jsonschema"
 	"github.com/juju/errors"
 	"github.com/rakyll/statik/fs"
 	"github.com/samber/lo"
@@ -95,6 +96,11 @@ func (m *Master) CreateWebService() {
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
 		Returns(http.StatusOK, "OK", config.Config{}).
 		Writes(config.Config{}))
+	ws.Route(ws.GET("/dashboard/config/schema").To(m.getConfigSchema).
+		Doc("Get config schema.").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
+		Returns(http.StatusOK, "OK", config.Config{}).
+		Writes(jsonschema.Schema{}))
 	ws.Route(ws.GET("/dashboard/stats").To(m.getStats).
 		Doc("Get global status.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
@@ -515,6 +521,10 @@ func (m *Master) getConfig(_ *restful.Request, response *restful.Response) {
 		delete(configMap, "database")
 	}
 	server.Ok(response, formatConfig(configMap))
+}
+
+func (m *Master) getConfigSchema(_ *restful.Request, response *restful.Response) {
+	server.Ok(response, jsonschema.Reflect(m.Config))
 }
 
 type Status struct {

@@ -37,6 +37,7 @@ import (
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
 	"github.com/gorse-io/gorse/storage/meta"
+	"github.com/invopop/jsonschema"
 	"github.com/samber/lo"
 	"github.com/sashabaranov/go-openai"
 	"github.com/steinfletcher/apitest"
@@ -822,6 +823,17 @@ func (suite *MasterAPITestSuite) TestGetConfig() {
 		Expect(suite.T()).
 		Status(http.StatusOK).
 		Body(marshal(suite.T(), redactedConfig)).
+		End()
+}
+
+func (suite *MasterAPITestSuite) TestGetConfigSchema() {
+	apitest.New().
+		Handler(suite.handler).
+		Get("/api/dashboard/config/schema").
+		Header("Cookie", suite.cookie).
+		Expect(suite.T()).
+		Status(http.StatusOK).
+		Body(marshal(suite.T(), jsonschema.Reflect(suite.Config))).
 		End()
 }
 
