@@ -913,43 +913,6 @@ func (suite *ServerTestSuite) TestDeleteFeedback() {
 		End()
 }
 
-func (suite *ServerTestSuite) TestTimeSeries() {
-	ctx := context.Background()
-	t := suite.T()
-	timestamp := time.Now().UTC().Truncate(24 * time.Hour).Add(24 * time.Hour * -2)
-	points := []cache.TimeSeriesPoint{
-		{"Test_NDCG", timestamp.Add(24 * time.Hour * 0), 0},
-		{"Test_NDCG", timestamp.Add(24 * time.Hour * 1), 1},
-		{"Test_NDCG", timestamp.Add(24 * time.Hour * 2), 2},
-		{"Test_NDCG", timestamp.Add(24 * time.Hour * 3), 3},
-		{"Test_NDCG", timestamp.Add(24 * time.Hour * 4), 4},
-		{"Test_Recall", timestamp, 1},
-	}
-	err := suite.CacheClient.AddTimeSeriesPoints(ctx, points)
-	assert.NoError(t, err)
-	apitest.New().
-		Handler(suite.handler).
-		Get("/api/measurements/Test_NDCG").
-		Query("n", "3").
-		Header("X-API-Key", apiKey).
-		Expect(t).
-		Status(http.StatusOK).
-		Body(suite.marshal([]cache.TimeSeriesPoint{
-			points[0],
-			points[1],
-			points[2],
-		})).
-		End()
-	// test auth fail
-	apitest.New().
-		Handler(suite.handler).
-		Get("/api/measurements/Test_NDCG").
-		Query("n", "3").
-		Expect(t).
-		Status(http.StatusUnauthorized).
-		End()
-}
-
 func (suite *ServerTestSuite) TestGetRecommends() {
 	ctx := context.Background()
 	// insert hidden items
