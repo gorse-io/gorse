@@ -426,6 +426,7 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.QueryParameter("n", "Number of returned items").DataType("integer")).
 		Param(ws.QueryParameter("offset", "Offset of returned items").DataType("integer")).
 		Param(ws.QueryParameter("category", "Category of returned items.").DataType("string")).
+		Param(ws.QueryParameter("user-id", "Remove read items of a user").DataType("string")).
 		Returns(http.StatusOK, "OK", []cache.Score{}).
 		Writes([]cache.Score{}))
 	ws.Route(ws.GET("/collaborative-filtering/{user-id}/{category}").To(s.getCollaborativeFiltering).
@@ -436,6 +437,7 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.PathParameter("category", "Category of returned items.").DataType("string")).
 		Param(ws.QueryParameter("n", "Number of returned items").DataType("integer")).
 		Param(ws.QueryParameter("offset", "Offset of returned items").DataType("integer")).
+		Param(ws.QueryParameter("user-id", "Remove read items of a user").DataType("string")).
 		Returns(http.StatusOK, "OK", []cache.Score{}).
 		Writes([]cache.Score{}))
 	// Get latest items
@@ -480,6 +482,8 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.PathParameter("item-id", "Item ID").DataType("string")).
 		Param(ws.QueryParameter("n", "Number of returned items").DataType("integer")).
 		Param(ws.QueryParameter("offset", "Offset of returned items").DataType("integer")).
+		Param(ws.QueryParameter("category", "Category of returned items").DataType("string")).
+		Param(ws.QueryParameter("user-id", "Remove read items of a user").DataType("string")).
 		Returns(http.StatusOK, "OK", []cache.Score{}).
 		Writes([]cache.Score{}))
 	// Get user-to-user recommendation
@@ -501,6 +505,8 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.PathParameter("item-id", "Item ID").DataType("string")).
 		Param(ws.QueryParameter("n", "Number of returned items").DataType("integer")).
 		Param(ws.QueryParameter("offset", "Offset of returned items").DataType("integer")).
+		Param(ws.QueryParameter("category", "Category of returned items").DataType("string")).
+		Param(ws.QueryParameter("user-id", "Remove read items of a user").DataType("string")).
 		Returns(http.StatusOK, "OK", []cache.Score{}).
 		Writes([]cache.Score{}))
 	ws.Route(ws.GET("/item/{item-id}/neighbors/{category}").To(s.getItemNeighbors).
@@ -511,6 +517,7 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.PathParameter("category", "Category of returned items").DataType("string")).
 		Param(ws.QueryParameter("n", "Number of returned items").DataType("integer")).
 		Param(ws.QueryParameter("offset", "Offset of returned items").DataType("integer")).
+		Param(ws.QueryParameter("user-id", "Remove read items of a user").DataType("string")).
 		Returns(http.StatusOK, "OK", []cache.Score{}).
 		Writes([]cache.Score{}))
 	ws.Route(ws.GET("/user/{user-id}/neighbors/").To(s.getUserNeighbors).
