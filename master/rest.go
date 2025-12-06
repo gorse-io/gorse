@@ -528,25 +528,22 @@ func (m *Master) getConfigSchema(_ *restful.Request, response *restful.Response)
 }
 
 type Status struct {
-	BinaryVersion           string
-	NumServers              int
-	NumWorkers              int
-	NumUsers                int
-	NumItems                int
-	NumUserLabels           int
-	NumItemLabels           int
-	NumTotalPosFeedback     int
-	NumValidPosFeedback     int
-	NumValidNegFeedback     int
-	PopularItemsUpdateTime  time.Time
-	LatestItemsUpdateTime   time.Time
-	MatchingModelFitTime    time.Time
-	MatchingModelScore      cf.Score
-	RankingModelFitTime     time.Time
-	RankingModelScore       ctr.Score
-	UserNeighborIndexRecall float32
-	ItemNeighborIndexRecall float32
-	MatchingIndexRecall     float32
+	BinaryVersion          string
+	NumServers             int
+	NumWorkers             int
+	NumUsers               int
+	NumItems               int
+	NumUserLabels          int
+	NumItemLabels          int
+	NumTotalPosFeedback    int
+	NumValidPosFeedback    int
+	NumValidNegFeedback    int
+	PopularItemsUpdateTime time.Time
+	LatestItemsUpdateTime  time.Time
+	MatchingModelFitTime   time.Time
+	MatchingModelScore     cf.Score
+	RankingModelFitTime    time.Time
+	RankingModelScore      ctr.Score
 }
 
 func (m *Master) getStats(request *restful.Request, response *restful.Response) {
@@ -613,16 +610,6 @@ func (m *Master) getStats(request *restful.Request, response *restful.Response) 
 	// read last fit ranking model time
 	if status.RankingModelFitTime, err = m.CacheClient.Get(ctx, cache.Key(cache.GlobalMeta, cache.LastFitRankingModelTime)).Time(); err != nil {
 		log.ResponseLogger(response).Warn("failed to get last fit ranking model time", zap.Error(err))
-	}
-	// read matching index recall
-	var temp string
-	if temp, err = m.CacheClient.Get(ctx, cache.Key(cache.GlobalMeta, cache.MatchingIndexRecall)).String(); err != nil {
-		log.ResponseLogger(response).Warn("failed to get matching index recall", zap.Error(err))
-	} else {
-		status.MatchingIndexRecall, err = util.ParseFloat[float32](temp)
-		if err != nil {
-			log.ResponseLogger(response).Warn("failed to parse matching index recall", zap.Error(err))
-		}
 	}
 	server.Ok(response, status)
 }

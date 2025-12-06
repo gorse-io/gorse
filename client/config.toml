@@ -134,15 +134,6 @@ type = "items"
 
 [recommend.collaborative]
 
-# Enable approximate collaborative filtering recommend using vector index. The default value is true.
-enable_index = true
-
-# Minimal recall for approximate collaborative filtering recommend. The default value is 0.9.
-index_recall = 0.9
-
-# Maximal number of fit epochs for approximate collaborative filtering recommend vector index. The default value is 3.
-index_fit_epoch = 3
-
 # The time period for model fitting. The default value is "60m".
 model_fit_period = "60m"
 

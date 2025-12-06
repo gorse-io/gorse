@@ -147,16 +147,6 @@ var (
 		Subsystem: "master",
 		Name:      "ranking_search_precision",
 	})
-	UserNeighborIndexRecall = promauto.NewGauge(prometheus.GaugeOpts{
-		Namespace: "gorse",
-		Subsystem: "master",
-		Name:      "user_neighbor_index_recall",
-	})
-	ItemNeighborIndexRecall = promauto.NewGauge(prometheus.GaugeOpts{
-		Namespace: "gorse",
-		Subsystem: "master",
-		Name:      "item_neighbor_index_recall",
-	})
 
 	UsersTotal = promauto.NewGauge(prometheus.GaugeOpts{
 		Namespace: "gorse",
