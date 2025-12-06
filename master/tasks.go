@@ -208,7 +208,7 @@ func (m *Master) loadDataset() (datasets Datasets, err error) {
 
 // runLoadDatasetTask loads dataset.
 func (m *Master) runLoadDatasetTask() error {
-	ctx, cancel := context.WithTimeout(context.Background(), m.Config.Recommend.Collaborative.ModelFitPeriod)
+	ctx, cancel := context.WithTimeout(context.Background(), m.Config.Recommend.Collaborative.FitPeriod)
 	defer cancel()
 	datasets, err := m.loadDataset()
 	if err != nil {
@@ -1174,7 +1174,7 @@ func (m *Master) collectGarbage(ctx context.Context, dataSet *dataset.Dataset) e
 }
 
 func (m *Master) optimizeCollaborativeFiltering(trainSet, testSet dataset.CFSplit) error {
-	ctx, span := m.tracer.Start(context.Background(), "Optimize Collaborative Filtering Model", m.Config.Recommend.Collaborative.ModelSearchTrials)
+	ctx, span := m.tracer.Start(context.Background(), "Optimize Collaborative Filtering Model", m.Config.Recommend.Collaborative.OptimizeTrials)
 	defer span.End()
 
 	if trainSet.CountUsers() == 0 {
@@ -1209,7 +1209,7 @@ func (m *Master) optimizeCollaborativeFiltering(trainSet, testSet dataset.CFSpli
 	if err != nil {
 		return errors.Trace(err)
 	}
-	if err = study.Optimize(search.Objective, m.Config.Recommend.Collaborative.ModelSearchTrials); err != nil {
+	if err = study.Optimize(search.Objective, m.Config.Recommend.Collaborative.OptimizeTrials); err != nil {
 		return errors.Trace(err)
 	}
 	m.collaborativeFilteringModelMutex.Lock()
@@ -1223,7 +1223,7 @@ func (m *Master) optimizeCollaborativeFiltering(trainSet, testSet dataset.CFSpli
 }
 
 func (m *Master) optimizeClickThroughRatePrediction(trainSet, testSet *ctr.Dataset) error {
-	ctx, span := m.tracer.Start(context.Background(), "Optimize Click-Through Rate Prediction Model", m.Config.Recommend.Collaborative.ModelSearchTrials)
+	ctx, span := m.tracer.Start(context.Background(), "Optimize Click-Through Rate Prediction Model", m.Config.Recommend.Collaborative.OptimizeTrials)
 	defer span.End()
 
 	if trainSet.CountUsers() == 0 {
@@ -1255,7 +1255,7 @@ func (m *Master) optimizeClickThroughRatePrediction(trainSet, testSet *ctr.Datas
 	if err != nil {
 		return errors.Trace(err)
 	}
-	if err = study.Optimize(search.Objective, m.Config.Recommend.Collaborative.ModelSearchTrials); err != nil {
+	if err = study.Optimize(search.Objective, m.Config.Recommend.Collaborative.OptimizeTrials); err != nil {
 		return errors.Trace(err)
 	}
 	m.clickThroughRateModelMutex.Lock()

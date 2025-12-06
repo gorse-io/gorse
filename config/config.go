@@ -275,12 +275,11 @@ func (config *UserToUserConfig) Hash(cfg *RecommendConfig) string {
 }
 
 type CollaborativeConfig struct {
-	ModelFitPeriod        time.Duration       `mapstructure:"model_fit_period" validate:"gt=0"`
-	ModelSearchPeriod     time.Duration       `mapstructure:"model_search_period" validate:"gt=0"`
-	ModelSearchEpoch      int                 `mapstructure:"model_search_epoch" validate:"gt=0"`
-	ModelSearchTrials     int                 `mapstructure:"model_search_trials" validate:"gt=0"`
-	EnableModelSizeSearch bool                `mapstructure:"enable_model_size_search"`
-	EarlyStopping         EarlyStoppingConfig `mapstructure:"early_stopping"`
+	FitPeriod      time.Duration       `mapstructure:"fit_period" validate:"gt=0"`
+	FitEpoch       int                 `mapstructure:"fit_epoch" validate:"gt=0"`
+	OptimizePeriod time.Duration       `mapstructure:"optimize_period" validate:"gt=0"`
+	OptimizeTrials int                 `mapstructure:"optimize_trials" validate:"gt=0"`
+	EarlyStopping  EarlyStoppingConfig `mapstructure:"early_stopping"`
 }
 
 func (config *CollaborativeConfig) FullName() string {
@@ -402,10 +401,10 @@ func GetDefaultConfig() *Config {
 			CacheExpire: 72 * time.Hour,
 			ContextSize: 100,
 			Collaborative: CollaborativeConfig{
-				ModelFitPeriod:    60 * time.Minute,
-				ModelSearchPeriod: 180 * time.Minute,
-				ModelSearchEpoch:  100,
-				ModelSearchTrials: 10,
+				FitPeriod:      60 * time.Minute,
+				OptimizePeriod: 180 * time.Minute,
+				FitEpoch:       100,
+				OptimizeTrials: 10,
 			},
 			Replacement: ReplacementConfig{
 				EnableReplacement:        false,
@@ -526,10 +525,10 @@ func setDefault() {
 	viper.SetDefault("recommend.cache_expire", defaultConfig.Recommend.CacheExpire)
 	viper.SetDefault("recommend.context_size", defaultConfig.Recommend.ContextSize)
 	// [recommend.collaborative]
-	viper.SetDefault("recommend.collaborative.model_fit_period", defaultConfig.Recommend.Collaborative.ModelFitPeriod)
-	viper.SetDefault("recommend.collaborative.model_search_period", defaultConfig.Recommend.Collaborative.ModelSearchPeriod)
-	viper.SetDefault("recommend.collaborative.model_search_epoch", defaultConfig.Recommend.Collaborative.ModelSearchEpoch)
-	viper.SetDefault("recommend.collaborative.model_search_trials", defaultConfig.Recommend.Collaborative.ModelSearchTrials)
+	viper.SetDefault("recommend.collaborative.fit_period", defaultConfig.Recommend.Collaborative.FitPeriod)
+	viper.SetDefault("recommend.collaborative.fit_epoch", defaultConfig.Recommend.Collaborative.FitEpoch)
+	viper.SetDefault("recommend.collaborative.optimize_period", defaultConfig.Recommend.Collaborative.OptimizePeriod)
+	viper.SetDefault("recommend.collaborative.optimize_trials", defaultConfig.Recommend.Collaborative.OptimizeTrials)
 	// [recommend.replacement]
 	viper.SetDefault("recommend.replacement.enable_replacement", defaultConfig.Recommend.Replacement.EnableReplacement)
 	viper.SetDefault("recommend.replacement.positive_replacement_decay", defaultConfig.Recommend.Replacement.PositiveReplacementDecay)

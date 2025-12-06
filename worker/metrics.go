@@ -40,11 +40,6 @@ var (
 		Subsystem: "worker",
 		Name:      "offline_recommend_total_seconds",
 	})
-	CollaborativeFilteringIndexRecall = promauto.NewGauge(prometheus.GaugeOpts{
-		Namespace: "gorse",
-		Subsystem: "worker",
-		Name:      "collaborative_filtering_index_recall",
-	})
 	MemoryInuseBytesVec = promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: "gorse",
 		Subsystem: "worker",
