@@ -135,7 +135,7 @@ func NewMaster(cfg *config.Config, cacheFolder string, standalone bool) *Master 
 			HttpPort:    cfg.Master.HttpPort,
 			WebService:  new(restful.WebService),
 		},
-		fitTicker:    time.NewTicker(cfg.Recommend.Collaborative.ModelFitPeriod),
+		fitTicker:    time.NewTicker(cfg.Recommend.Collaborative.FitPeriod),
 		importedChan: parallel.NewConditionChannel(),
 		triggerChan:  parallel.NewConditionChannel(),
 	}

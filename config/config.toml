@@ -169,11 +169,10 @@ column = "item.Labels.embedding"
 # The name of the user-to-user recommender.
 name = "neighbors"
 
-# The type of the item-to-item recommender. There are three types:
+# The type of the user-to-user recommender. There are three types:
 #   embedding: recommend by Euclidean distance of embeddings.
 #   tags: recommend by number of common tags.
 #   items: recommend by number of common items.
-#   auto: recommend by number of common tags and items.
 type = "items"
 
 [[recommend.external]]
@@ -196,19 +195,16 @@ data["items"].map((item) => {
 [recommend.collaborative]
 
 # The time period for model fitting. The default value is "60m".
-model_fit_period = "60m"
+fit_period = "60m"
 
-# The time period for model searching. The default value is "360m".
-model_search_period = "360m"
+# The number of epochs for model fitting. The default value is 100.
+fit_epoch = 100
 
-# The number of epochs for model searching. The default value is 100.
-model_search_epoch = 100
+# The time period for hyperparamter ooptimization. The default value is "360m".
+optimize_period = "360m"
 
-# The number of trials for model searching. The default value is 10.
-model_search_trials = 10
-
-# Enable searching models of different sizes, which consume more memory. The default value is false.
-enable_model_size_search = false
+# The number of trials for hyperparamter ooptimization. The default value is 10.
+optimize_trials = 10
 
 [recommend.collaborative.early_stopping]
 

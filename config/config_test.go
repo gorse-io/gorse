@@ -114,11 +114,10 @@ func TestUnmarshal(t *testing.T) {
 			assert.Equal(t, "count(feedback, .FeedbackType == 'star')", config.Recommend.NonPersonalized[0].Score)
 			assert.Equal(t, "(now() - item.Timestamp).Hours() < 168", config.Recommend.NonPersonalized[0].Filter)
 			// [recommend.collaborative]
-			assert.Equal(t, 60*time.Minute, config.Recommend.Collaborative.ModelFitPeriod)
-			assert.Equal(t, 360*time.Minute, config.Recommend.Collaborative.ModelSearchPeriod)
-			assert.Equal(t, 100, config.Recommend.Collaborative.ModelSearchEpoch)
-			assert.Equal(t, 10, config.Recommend.Collaborative.ModelSearchTrials)
-			assert.False(t, config.Recommend.Collaborative.EnableModelSizeSearch)
+			assert.Equal(t, 60*time.Minute, config.Recommend.Collaborative.FitPeriod)
+			assert.Equal(t, 100, config.Recommend.Collaborative.FitEpoch)
+			assert.Equal(t, 360*time.Minute, config.Recommend.Collaborative.OptimizePeriod)
+			assert.Equal(t, 10, config.Recommend.Collaborative.OptimizeTrials)
 			// [recommend.replacement]
 			assert.False(t, config.Recommend.Replacement.EnableReplacement)
 			assert.Equal(t, 0.8, config.Recommend.Replacement.PositiveReplacementDecay)
