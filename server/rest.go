@@ -319,7 +319,7 @@ func (s *RestServer) CreateWebService() {
 
 	// Insert feedback
 	ws.Route(ws.POST("/feedback").To(s.insertFeedback(false)).
-		Doc("Insert feedbacks. Accumate value if feedback already exists.").
+		Doc("Insert feedbacks. Accumulate value if feedback already exists.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{FeedbackAPITag}).
 		Param(ws.HeaderParameter("X-API-Key", "API key").DataType("string")).
 		Reads([]data.Feedback{}).
@@ -449,7 +449,6 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.QueryParameter("n", "Number of returned items").DataType("integer")).
 		Param(ws.QueryParameter("offset", "Offset of returned items").DataType("integer")).
 		Param(ws.QueryParameter("user-id", "Remove read items of a user").DataType("string")).
-		Param(ws.QueryParameter("category", "Category of returned items.").DataType("string")).
 		Returns(http.StatusOK, "OK", []cache.Score{}).
 		Writes([]cache.Score{}))
 	ws.Route(ws.GET("/latest/{category}").To(s.getLatest).
