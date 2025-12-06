@@ -139,10 +139,10 @@ fit_period = "60m"
 # The number of epochs for model fitting. The default value is 100.
 fit_epoch = 100
 
-# The time period for hyperparamter ooptimization. The default value is "360m".
+# The time period for hyperparameter optimization. The default value is "360m".
 optimize_period = "360m"
 
-# The number of trials for hyperparamter ooptimization. The default value is 10.
+# The number of trials for hyperparameter optimization. The default value is 10.
 optimize_trials = 10
 
 [recommend.collaborative.early_stopping]

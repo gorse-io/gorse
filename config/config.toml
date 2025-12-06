@@ -12,6 +12,7 @@
 #   mongodb+srv://[username:password@]host1[:port1][,...hostN[:portN]][/[defaultauthdb][?options]]
 #   sqlite://<path>
 cache_store = "redis://localhost:6379/0"
+# cache_store = "sqlite://tmp/cache.db"
 
 # The database for persist data, support MySQL, Postgres, ClickHouse and MongoDB:
 #   mysql://[username[:password]@][protocol[(address)]]/dbname[?param1=value1&...&paramN=valueN]
@@ -24,6 +25,7 @@ cache_store = "redis://localhost:6379/0"
 #   mongodb+srv://[username:password@]host1[:port1][,...hostN[:portN]][/[defaultauthdb][?options]]
 #   sqlite://<path>
 data_store = "mysql://gorse:gorse_pass@tcp(localhost:3306)/gorse"
+# data_store = "sqlite://tmp/data.db"
 
 # The naming prefix for tables (collections, keys) in databases. The default value is empty.
 table_prefix = ""
@@ -200,10 +202,10 @@ fit_period = "60m"
 # The number of epochs for model fitting. The default value is 100.
 fit_epoch = 100
 
-# The time period for hyperparamter ooptimization. The default value is "360m".
+# The time period for hyperparameter optimization. The default value is "360m".
 optimize_period = "360m"
 
-# The number of trials for hyperparamter ooptimization. The default value is 10.
+# The number of trials for hyperparameter optimization. The default value is 10.
 optimize_trials = 10
 
 [recommend.collaborative.early_stopping]
