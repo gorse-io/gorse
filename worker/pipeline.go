@@ -167,7 +167,7 @@ func (p *Pipeline) Recommend(users []data.User, progress func(completed, through
 
 		// rank by click-through-rate
 		var results []cache.Score
-		if p.ClickThroughRateModel != nil && !p.ClickThroughRateModel.Invalid() {
+		if p.Config.Recommend.Ranker.Type == "fm" && p.ClickThroughRateModel != nil && !p.ClickThroughRateModel.Invalid() {
 			results, err = p.rankByClickTroughRate(p.ClickThroughRateModel, &user, candidates, itemCache, recommendTime)
 			if err != nil {
 				log.Logger().Error("failed to rank items", zap.Error(err))
@@ -177,7 +177,8 @@ func (p *Pipeline) Recommend(users []data.User, progress func(completed, through
 			results = candidates
 		}
 
-		if p.Config.Recommend.Replacement.EnableReplacement {
+		if p.Config.Recommend.Replacement.EnableReplacement && p.Config.Recommend.Ranker.Type == "fm" &&
+			p.ClickThroughRateModel != nil && !p.ClickThroughRateModel.Invalid() {
 			results, err = p.replacement(p.ClickThroughRateModel, results, &user,
 				recommender.UserFeedback(), itemCache, recommendTime)
 			if err != nil {

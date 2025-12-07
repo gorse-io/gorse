@@ -321,6 +321,7 @@ type ReplacementConfig struct {
 }
 
 type RankerConfig struct {
+	Type                   string              `mapstructure:"type" validate:"oneof=none fm"`
 	CheckRecommendPeriod   time.Duration       `mapstructure:"check_recommend_period" validate:"gt=0"`
 	RefreshRecommendPeriod time.Duration       `mapstructure:"refresh_recommend_period" validate:"gt=0"`
 	Recommenders           []string            `mapstructure:"recommenders"`
@@ -412,6 +413,7 @@ func GetDefaultConfig() *Config {
 				ReadReplacementDecay:     0.6,
 			},
 			Ranker: RankerConfig{
+				Type:                   "none",
 				CheckRecommendPeriod:   time.Minute,
 				RefreshRecommendPeriod: 120 * time.Hour,
 			},
@@ -534,6 +536,7 @@ func setDefault() {
 	viper.SetDefault("recommend.replacement.positive_replacement_decay", defaultConfig.Recommend.Replacement.PositiveReplacementDecay)
 	viper.SetDefault("recommend.replacement.read_replacement_decay", defaultConfig.Recommend.Replacement.ReadReplacementDecay)
 	// [recommend.ranker]
+	viper.SetDefault("recommend.ranker.type", defaultConfig.Recommend.Ranker.Type)
 	viper.SetDefault("recommend.ranker.check_recommend_period", defaultConfig.Recommend.Ranker.CheckRecommendPeriod)
 	viper.SetDefault("recommend.ranker.refresh_recommend_period", defaultConfig.Recommend.Ranker.RefreshRecommendPeriod)
 	// [recommend.fallback]

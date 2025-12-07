@@ -163,6 +163,11 @@ read_replacement_decay = 0.6
 
 [recommend.ranker]
 
+# The type of the ranker. There are two types:
+#   none: no ranking.
+#   fm: factorization machines.
+type = "fm"
+
 # The time period to check recommendation for users. The default values is 1m.
 check_recommend_period = "1m"
 
