@@ -321,6 +321,7 @@ type ReplacementConfig struct {
 }
 
 type RankerConfig struct {
+	Type                   string              `mapstructure:"type" validate:"oneof=none fm"`
 	CheckRecommendPeriod   time.Duration       `mapstructure:"check_recommend_period" validate:"gt=0"`
 	RefreshRecommendPeriod time.Duration       `mapstructure:"refresh_recommend_period" validate:"gt=0"`
 	Recommenders           []string            `mapstructure:"recommenders"`
@@ -412,6 +413,7 @@ func GetDefaultConfig() *Config {
 				ReadReplacementDecay:     0.6,
 			},
 			Ranker: RankerConfig{
+				Type:                   "none",
 				CheckRecommendPeriod:   time.Minute,
 				RefreshRecommendPeriod: 120 * time.Hour,
 			},

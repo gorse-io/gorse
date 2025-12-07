@@ -12,7 +12,6 @@
 #   mongodb+srv://[username:password@]host1[:port1][,...hostN[:portN]][/[defaultauthdb][?options]]
 #   sqlite://<path>
 cache_store = "redis://localhost:6379/0"
-# cache_store = "sqlite://tmp/cache.db"
 
 # The database for persist data, support MySQL, Postgres, ClickHouse and MongoDB:
 #   mysql://[username[:password]@][protocol[(address)]]/dbname[?param1=value1&...&paramN=valueN]
@@ -25,7 +24,6 @@ cache_store = "redis://localhost:6379/0"
 #   mongodb+srv://[username:password@]host1[:port1][,...hostN[:portN]][/[defaultauthdb][?options]]
 #   sqlite://<path>
 data_store = "mysql://gorse:gorse_pass@tcp(localhost:3306)/gorse"
-# data_store = "sqlite://tmp/data.db"
 
 # The naming prefix for tables (collections, keys) in databases. The default value is empty.
 table_prefix = ""
@@ -225,6 +223,11 @@ positive_replacement_decay = 0.8
 read_replacement_decay = 0.6
 
 [recommend.ranker]
+
+# The type of the ranker. There are two types:
+#   none: no ranking.
+#   fm: factorization machines.
+type = "fm"
 
 # The time period to check recommendation for users. The default values is 1m.
 check_recommend_period = "1m"

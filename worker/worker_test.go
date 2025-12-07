@@ -427,6 +427,7 @@ func (suite *WorkerTestSuite) TestRecommendNonPersonalized() {
 
 func (suite *WorkerTestSuite) TestRecommend() {
 	ctx := context.Background()
+	suite.Config.Recommend.Ranker.Type = "fm"
 	suite.Config.Recommend.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{expression.MustParseFeedbackTypeExpression("a")}
 	suite.Config.Recommend.CacheSize = 1
 	suite.Config.Recommend.NonPersonalized = []config.NonPersonalizedConfig{{Name: "popular"}}
@@ -476,6 +477,66 @@ func (suite *WorkerTestSuite) TestRecommend() {
 	recommends, err := suite.CacheClient.SearchScores(ctx, cache.Recommend, "0", nil, 0, 5)
 	suite.NoError(err)
 	suite.Equal([]cache.Score{
+		{Id: "5", Score: 5, Timestamp: recommendTime, Categories: []string{"a"}},
+		{Id: "4", Score: 4, Timestamp: recommendTime},
+		{Id: "3", Score: 3, Timestamp: recommendTime},
+		{Id: "2", Score: 2, Timestamp: recommendTime},
+		{Id: "1", Score: 1, Timestamp: recommendTime},
+	}, recommends)
+}
+
+func (suite *WorkerTestSuite) TestRecommendRankerNone() {
+	ctx := context.Background()
+	suite.Config.Recommend.Ranker.Type = "none"
+	suite.Config.Recommend.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{expression.MustParseFeedbackTypeExpression("a")}
+	suite.Config.Recommend.CacheSize = 1
+	suite.Config.Recommend.NonPersonalized = []config.NonPersonalizedConfig{{Name: "popular"}}
+	suite.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "default"}}
+	suite.Config.Recommend.UserToUser = []config.UserToUserConfig{{Name: "default"}}
+	suite.MatrixFactorizationItems = logics.NewMatrixFactorizationItems(time.Time{})
+	suite.MatrixFactorizationItems.Add("4", []float32{4})
+	suite.MatrixFactorizationUsers = logics.NewMatrixFactorizationUsers()
+	suite.MatrixFactorizationUsers.Add("0", []float32{1})
+	suite.ClickThroughRateModel = new(mockFactorizationMachine)
+
+	// insert items
+	err := suite.DataClient.BatchInsertItems(ctx, []data.Item{
+		{ItemId: "0", Timestamp: time.Unix(0, 0)},
+		{ItemId: "1", Timestamp: time.Unix(1, 0)},
+		{ItemId: "2", Timestamp: time.Unix(2, 0)},
+		{ItemId: "3", Timestamp: time.Unix(3, 0)},
+		{ItemId: "4", Timestamp: time.Unix(4, 0)},
+		{ItemId: "5", Categories: []string{"a"}, Timestamp: time.Unix(5, 0)},
+	})
+	suite.NoError(err)
+
+	// insert feedback
+	err = suite.DataClient.BatchInsertFeedback(ctx, []data.Feedback{
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "0"}},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "1", ItemId: "1"}},
+	}, true, true, true)
+	suite.NoError(err)
+
+	// insert non-personalized recommendation
+	err = suite.CacheClient.AddScores(ctx, cache.NonPersonalized, "popular", []cache.Score{{Id: "3", Categories: []string{""}}})
+	suite.NoError(err)
+
+	// insert item-to-item recommendation
+	err = suite.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key("default", "0"), []cache.Score{{Id: "2"}})
+	suite.NoError(err)
+
+	// insert user-to-user recommendation
+	err = suite.CacheClient.AddScores(ctx, cache.UserToUser, cache.Key("default", "0"), []cache.Score{{Id: "1"}})
+	suite.NoError(err)
+
+	suite.Recommend([]data.User{{UserId: "0"}}, nil)
+	// read recommend time
+	recommendTime, err := suite.CacheClient.Get(ctx, cache.Key(cache.RecommendUpdateTime, "0")).Time()
+	suite.NoError(err)
+	// read recommend result
+	recommends, err := suite.CacheClient.SearchScores(ctx, cache.Recommend, "0", nil, 0, 5)
+	suite.NoError(err)
+	suite.NotEqual([]cache.Score{
 		{Id: "5", Score: 5, Timestamp: recommendTime, Categories: []string{"a"}},
 		{Id: "4", Score: 4, Timestamp: recommendTime},
 		{Id: "3", Score: 3, Timestamp: recommendTime},
