@@ -737,6 +737,7 @@ func (suite *WorkerTestSuite) TestReplacement() {
 		expression.MustParseFeedbackTypeExpression("p")}
 	suite.Config.Recommend.DataSource.ReadFeedbackTypes = []expression.FeedbackTypeExpression{
 		expression.MustParseFeedbackTypeExpression("n")}
+	suite.Config.Recommend.Ranker.Type = "fm"
 	suite.Config.Recommend.Ranker.Recommenders = []string{"collaborative"}
 	suite.Config.Recommend.Replacement.EnableReplacement = true
 	suite.Config.Recommend.Replacement.PositiveReplacementDecay = 0.8
