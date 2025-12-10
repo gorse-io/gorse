@@ -19,8 +19,11 @@ import (
 	"database/sql"
 	"encoding/base64"
 	"fmt"
+	"net/url"
+	"strings"
 	"time"
 
+	"github.com/XSAM/otelsql"
 	mapset "github.com/deckarep/golang-set/v2"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/gorse-io/gorse/common/expression"
@@ -31,12 +34,130 @@ import (
 	_ "github.com/lib/pq"
 	_ "github.com/mailru/go-clickhouse/v2"
 	"github.com/samber/lo"
+	semconv "go.opentelemetry.io/otel/semconv/v1.12.0"
+	"gorm.io/driver/clickhouse"
+	"gorm.io/driver/mysql"
+	"gorm.io/driver/postgres"
+	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 	_ "modernc.org/sqlite"
 )
 
-const bufSize = 1
+const (
+	bufSize      = 1
+	maxIdleConns = 64
+	maxOpenConns = 64
+	maxLifetime  = time.Minute
+)
+
+func init() {
+	Register([]string{storage.MySQLPrefix}, func(path, tablePrefix string, opts ...storage.Option) (Database, error) {
+		name := path[len(storage.MySQLPrefix):]
+		option := storage.NewOptions(opts...)
+		// probe isolation variable name
+		isolationVarName, err := storage.ProbeMySQLIsolationVariableName(name)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		// append parameters
+		if name, err = storage.AppendMySQLParams(name, map[string]string{
+			"sql_mode":       "'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'",
+			isolationVarName: fmt.Sprintf("'%s'", option.IsolationLevel),
+			"parseTime":      "true",
+		}); err != nil {
+			return nil, errors.Trace(err)
+		}
+		// connect to database
+		database := new(SQLDatabase)
+		database.driver = MySQL
+		database.TablePrefix = storage.TablePrefix(tablePrefix)
+		if database.client, err = otelsql.Open("mysql", name,
+			otelsql.WithAttributes(semconv.DBSystemMySQL),
+			otelsql.WithSpanOptions(otelsql.SpanOptions{DisableErrSkip: true}),
+		); err != nil {
+			return nil, errors.Trace(err)
+		}
+		database.gormDB, err = gorm.Open(mysql.New(mysql.Config{Conn: database.client}), storage.NewGORMConfig(tablePrefix))
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		return database, nil
+	})
+	Register([]string{storage.PostgresPrefix, storage.PostgreSQLPrefix}, func(path, tablePrefix string, opts ...storage.Option) (Database, error) {
+		database := new(SQLDatabase)
+		database.driver = Postgres
+		database.TablePrefix = storage.TablePrefix(tablePrefix)
+		var err error
+		if database.client, err = otelsql.Open("postgres", path,
+			otelsql.WithAttributes(semconv.DBSystemPostgreSQL),
+			otelsql.WithSpanOptions(otelsql.SpanOptions{DisableErrSkip: true}),
+		); err != nil {
+			return nil, errors.Trace(err)
+		}
+		database.client.SetMaxIdleConns(maxIdleConns)
+		database.client.SetMaxOpenConns(maxOpenConns)
+		database.client.SetConnMaxLifetime(maxLifetime)
+		database.gormDB, err = gorm.Open(postgres.New(postgres.Config{Conn: database.client}), storage.NewGORMConfig(tablePrefix))
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		return database, nil
+	})
+	Register([]string{storage.ClickhousePrefix, storage.CHHTTPPrefix, storage.CHHTTPSPrefix}, func(path, tablePrefix string, opts ...storage.Option) (Database, error) {
+		// replace schema
+		parsed, err := url.Parse(path)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		if strings.HasPrefix(path, storage.CHHTTPSPrefix) {
+			parsed.Scheme = "https"
+		} else {
+			parsed.Scheme = "http"
+		}
+		uri := parsed.String()
+		database := new(SQLDatabase)
+		database.driver = ClickHouse
+		database.TablePrefix = storage.TablePrefix(tablePrefix)
+		if database.client, err = otelsql.Open("chhttp", uri,
+			otelsql.WithAttributes(semconv.DBSystemKey.String("clickhouse")),
+			otelsql.WithSpanOptions(otelsql.SpanOptions{DisableErrSkip: true}),
+		); err != nil {
+			return nil, errors.Trace(err)
+		}
+		database.gormDB, err = gorm.Open(clickhouse.New(clickhouse.Config{Conn: database.client}), storage.NewGORMConfig(tablePrefix))
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		return database, nil
+	})
+	Register([]string{storage.SQLitePrefix}, func(path, tablePrefix string, opts ...storage.Option) (Database, error) {
+		dataSourceName := path[len(storage.SQLitePrefix):]
+		// append parameters
+		var err error
+		if dataSourceName, err = storage.AppendURLParams(dataSourceName, []lo.Tuple2[string, string]{
+			{"_pragma", "busy_timeout(10000)"},
+			{"_pragma", "journal_mode(wal)"},
+		}); err != nil {
+			return nil, errors.Trace(err)
+		}
+		// connect to database
+		database := new(SQLDatabase)
+		database.driver = SQLite
+		database.TablePrefix = storage.TablePrefix(tablePrefix)
+		if database.client, err = otelsql.Open("sqlite", dataSourceName,
+			otelsql.WithAttributes(semconv.DBSystemSqlite),
+			otelsql.WithSpanOptions(otelsql.SpanOptions{DisableErrSkip: true}),
+		); err != nil {
+			return nil, errors.Trace(err)
+		}
+		database.gormDB, err = gorm.Open(sqlite.Dialector{Conn: database.client}, storage.NewGORMConfig(tablePrefix))
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		return database, nil
+	})
+}
 
 type SQLDriver int
 

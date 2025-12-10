@@ -17,35 +17,15 @@ package data
 import (
 	"context"
 	"encoding/json"
-	"fmt"
-	"net/url"
 	"reflect"
 	"sort"
 	"strings"
 	"time"
 
-	"github.com/XSAM/otelsql"
 	"github.com/gorse-io/gorse/common/expression"
 	"github.com/gorse-io/gorse/common/jsonutil"
 	"github.com/gorse-io/gorse/storage"
 	"github.com/juju/errors"
-	"github.com/samber/lo"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
-	"go.mongodb.org/mongo-driver/x/mongo/driver/connstring"
-	"go.opentelemetry.io/contrib/instrumentation/go.mongodb.org/mongo-driver/mongo/otelmongo"
-	semconv "go.opentelemetry.io/otel/semconv/v1.12.0"
-	"gorm.io/driver/clickhouse"
-	"gorm.io/driver/mysql"
-	"gorm.io/driver/postgres"
-	"gorm.io/driver/sqlite"
-	"gorm.io/gorm"
-)
-
-const (
-	maxIdleConns = 64
-	maxOpenConns = 64
-	maxLifetime  = time.Minute
 )
 
 var (
@@ -280,125 +260,24 @@ type Database interface {
 	CountFeedback(ctx context.Context) (int, error)
 }
 
+// Creator creates a database instance.
+type Creator func(path, tablePrefix string, opts ...storage.Option) (Database, error)
+
+var creators = make(map[string]Creator)
+
+// Register a database creator.
+func Register(prefixes []string, creator Creator) {
+	for _, p := range prefixes {
+		creators[p] = creator
+	}
+}
+
 // Open a connection to a database.
 func Open(path, tablePrefix string, opts ...storage.Option) (Database, error) {
-	var err error
-	if strings.HasPrefix(path, storage.MySQLPrefix) {
-		name := path[len(storage.MySQLPrefix):]
-		option := storage.NewOptions(opts...)
-		// probe isolation variable name
-		isolationVarName, err := storage.ProbeMySQLIsolationVariableName(name)
-		if err != nil {
-			return nil, errors.Trace(err)
+	for prefix, creator := range creators {
+		if strings.HasPrefix(path, prefix) {
+			return creator(path, tablePrefix, opts...)
 		}
-		// append parameters
-		if name, err = storage.AppendMySQLParams(name, map[string]string{
-			"sql_mode":       "'ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'",
-			isolationVarName: fmt.Sprintf("'%s'", option.IsolationLevel),
-			"parseTime":      "true",
-		}); err != nil {
-			return nil, errors.Trace(err)
-		}
-		// connect to database
-		database := new(SQLDatabase)
-		database.driver = MySQL
-		database.TablePrefix = storage.TablePrefix(tablePrefix)
-		if database.client, err = otelsql.Open("mysql", name,
-			otelsql.WithAttributes(semconv.DBSystemMySQL),
-			otelsql.WithSpanOptions(otelsql.SpanOptions{DisableErrSkip: true}),
-		); err != nil {
-			return nil, errors.Trace(err)
-		}
-		database.gormDB, err = gorm.Open(mysql.New(mysql.Config{Conn: database.client}), storage.NewGORMConfig(tablePrefix))
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
-		return database, nil
-	} else if strings.HasPrefix(path, storage.PostgresPrefix) || strings.HasPrefix(path, storage.PostgreSQLPrefix) {
-		database := new(SQLDatabase)
-		database.driver = Postgres
-		database.TablePrefix = storage.TablePrefix(tablePrefix)
-		if database.client, err = otelsql.Open("postgres", path,
-			otelsql.WithAttributes(semconv.DBSystemPostgreSQL),
-			otelsql.WithSpanOptions(otelsql.SpanOptions{DisableErrSkip: true}),
-		); err != nil {
-			return nil, errors.Trace(err)
-		}
-		database.client.SetMaxIdleConns(maxIdleConns)
-		database.client.SetMaxOpenConns(maxOpenConns)
-		database.client.SetConnMaxLifetime(maxLifetime)
-		database.gormDB, err = gorm.Open(postgres.New(postgres.Config{Conn: database.client}), storage.NewGORMConfig(tablePrefix))
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
-		return database, nil
-	} else if strings.HasPrefix(path, storage.ClickhousePrefix) || strings.HasPrefix(path, storage.CHHTTPPrefix) || strings.HasPrefix(path, storage.CHHTTPSPrefix) {
-		// replace schema
-		parsed, err := url.Parse(path)
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
-		if strings.HasPrefix(path, storage.CHHTTPSPrefix) {
-			parsed.Scheme = "https"
-		} else {
-			parsed.Scheme = "http"
-		}
-		uri := parsed.String()
-		database := new(SQLDatabase)
-		database.driver = ClickHouse
-		database.TablePrefix = storage.TablePrefix(tablePrefix)
-		if database.client, err = otelsql.Open("chhttp", uri,
-			otelsql.WithAttributes(semconv.DBSystemKey.String("clickhouse")),
-			otelsql.WithSpanOptions(otelsql.SpanOptions{DisableErrSkip: true}),
-		); err != nil {
-			return nil, errors.Trace(err)
-		}
-		database.gormDB, err = gorm.Open(clickhouse.New(clickhouse.Config{Conn: database.client}), storage.NewGORMConfig(tablePrefix))
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
-		return database, nil
-	} else if strings.HasPrefix(path, storage.MongoPrefix) || strings.HasPrefix(path, storage.MongoSrvPrefix) {
-		// connect to database
-		database := new(MongoDB)
-		opts := options.Client()
-		opts.Monitor = otelmongo.NewMonitor()
-		opts.ApplyURI(path)
-		if database.client, err = mongo.Connect(context.Background(), opts); err != nil {
-			return nil, errors.Trace(err)
-		}
-		// parse DSN and extract database name
-		if cs, err := connstring.ParseAndValidate(path); err != nil {
-			return nil, errors.Trace(err)
-		} else {
-			database.dbName = cs.Database
-			database.TablePrefix = storage.TablePrefix(tablePrefix)
-		}
-		return database, nil
-	} else if strings.HasPrefix(path, storage.SQLitePrefix) {
-		dataSourceName := path[len(storage.SQLitePrefix):]
-		// append parameters
-		if dataSourceName, err = storage.AppendURLParams(dataSourceName, []lo.Tuple2[string, string]{
-			{"_pragma", "busy_timeout(10000)"},
-			{"_pragma", "journal_mode(wal)"},
-		}); err != nil {
-			return nil, errors.Trace(err)
-		}
-		// connect to database
-		database := new(SQLDatabase)
-		database.driver = SQLite
-		database.TablePrefix = storage.TablePrefix(tablePrefix)
-		if database.client, err = otelsql.Open("sqlite", dataSourceName,
-			otelsql.WithAttributes(semconv.DBSystemSqlite),
-			otelsql.WithSpanOptions(otelsql.SpanOptions{DisableErrSkip: true}),
-		); err != nil {
-			return nil, errors.Trace(err)
-		}
-		database.gormDB, err = gorm.Open(sqlite.Dialector{Conn: database.client}, storage.NewGORMConfig(tablePrefix))
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
-		return database, nil
 	}
 	return nil, errors.Errorf("Unknown database: %s", path)
 }
