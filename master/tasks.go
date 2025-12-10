@@ -1223,7 +1223,7 @@ func (m *Master) optimizeCollaborativeFiltering(trainSet, testSet dataset.CFSpli
 }
 
 func (m *Master) optimizeClickThroughRatePrediction(trainSet, testSet *ctr.Dataset) error {
-	ctx, span := m.tracer.Start(context.Background(), "Optimize Click-Through Rate Prediction Model", m.Config.Recommend.Collaborative.OptimizeTrials)
+	ctx, span := m.tracer.Start(context.Background(), "Optimize Click-Through Rate Prediction Model", m.Config.Recommend.Ranker.OptimizeTrials)
 	defer span.End()
 
 	if trainSet.CountUsers() == 0 {
@@ -1255,7 +1255,7 @@ func (m *Master) optimizeClickThroughRatePrediction(trainSet, testSet *ctr.Datas
 	if err != nil {
 		return errors.Trace(err)
 	}
-	if err = study.Optimize(search.Objective, m.Config.Recommend.Collaborative.OptimizeTrials); err != nil {
+	if err = study.Optimize(search.Objective, m.Config.Recommend.Ranker.OptimizeTrials); err != nil {
 		return errors.Trace(err)
 	}
 	m.clickThroughRateModelMutex.Lock()

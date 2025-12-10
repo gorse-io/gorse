@@ -121,6 +121,7 @@ func NewMaster(cfg *config.Config, cacheFolder string, standalone bool) *Master 
 	parallel.InitChatCompletionLimiters(cfg.OpenAI.ChatCompletionRPM, cfg.OpenAI.ChatCompletionTPM)
 	parallel.InitEmbeddingLimiters(cfg.OpenAI.EmbeddingRPM, cfg.OpenAI.EmbeddingTPM)
 
+	duration := min(cfg.Recommend.Collaborative.FitPeriod, cfg.Recommend.Ranker.FitPeriod)
 	m := &Master{
 		// create task monitor
 		cachePath:    cacheFolder,
@@ -135,7 +136,7 @@ func NewMaster(cfg *config.Config, cacheFolder string, standalone bool) *Master 
 			HttpPort:    cfg.Master.HttpPort,
 			WebService:  new(restful.WebService),
 		},
-		fitTicker:    time.NewTicker(cfg.Recommend.Collaborative.FitPeriod),
+		fitTicker:    time.NewTicker(duration),
 		importedChan: parallel.NewConditionChannel(),
 		triggerChan:  parallel.NewConditionChannel(),
 	}
