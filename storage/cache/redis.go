@@ -23,12 +23,55 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/common/util"
 	"github.com/gorse-io/gorse/storage"
 	"github.com/juju/errors"
+	"github.com/redis/go-redis/extra/redisotel/v9"
 	"github.com/redis/go-redis/v9"
 	"github.com/samber/lo"
+	semconv "go.opentelemetry.io/otel/semconv/v1.8.0"
+	"go.uber.org/zap"
 )
+
+func init() {
+	Register([]string{storage.RedisPrefix, storage.RedissPrefix}, func(path, tablePrefix string, opts ...storage.Option) (Database, error) {
+		opt, err := redis.ParseURL(path)
+		if err != nil {
+			return nil, err
+		}
+		opt.Protocol = 2
+		database := new(Redis)
+		database.client = redis.NewClient(opt)
+		database.TablePrefix = storage.TablePrefix(tablePrefix)
+		if err = redisotel.InstrumentTracing(database.client, redisotel.WithAttributes(semconv.DBSystemRedis)); err != nil {
+			log.Logger().Error("failed to add tracing for redis", zap.Error(err))
+			return nil, errors.Trace(err)
+		}
+		return database, nil
+	})
+	Register([]string{storage.RedisClusterPrefix, storage.RedissClusterPrefix}, func(path, tablePrefix string, opts ...storage.Option) (Database, error) {
+		var newURL string
+		if strings.HasPrefix(path, storage.RedisClusterPrefix) {
+			newURL = strings.Replace(path, storage.RedisClusterPrefix, storage.RedisPrefix, 1)
+		} else if strings.HasPrefix(path, storage.RedissClusterPrefix) {
+			newURL = strings.Replace(path, storage.RedissClusterPrefix, storage.RedissPrefix, 1)
+		}
+		opt, err := redis.ParseClusterURL(newURL)
+		if err != nil {
+			return nil, err
+		}
+		opt.Protocol = 2
+		database := new(Redis)
+		database.client = redis.NewClusterClient(opt)
+		database.TablePrefix = storage.TablePrefix(tablePrefix)
+		if err = redisotel.InstrumentTracing(database.client, redisotel.WithAttributes(semconv.DBSystemRedis)); err != nil {
+			log.Logger().Error("failed to add tracing for redis", zap.Error(err))
+			return nil, errors.Trace(err)
+		}
+		return database, nil
+	})
+}
 
 // Redis cache storage.
 type Redis struct {

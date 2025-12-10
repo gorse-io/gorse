@@ -24,7 +24,31 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/x/mongo/driver/connstring"
+	"go.opentelemetry.io/contrib/instrumentation/go.mongodb.org/mongo-driver/mongo/otelmongo"
 )
+
+func init() {
+	Register([]string{storage.MongoPrefix, storage.MongoSrvPrefix}, func(path, tablePrefix string, opts ...storage.Option) (Database, error) {
+		// connect to database
+		database := new(MongoDB)
+		clientOpts := options.Client()
+		clientOpts.Monitor = otelmongo.NewMonitor()
+		clientOpts.ApplyURI(path)
+		var err error
+		if database.client, err = mongo.Connect(context.Background(), clientOpts); err != nil {
+			return nil, errors.Trace(err)
+		}
+		// parse DSN and extract database name
+		if cs, err := connstring.ParseAndValidate(path); err != nil {
+			return nil, errors.Trace(err)
+		} else {
+			database.dbName = cs.Database
+			database.TablePrefix = storage.TablePrefix(tablePrefix)
+		}
+		return database, nil
+	})
+}
 
 type MongoDB struct {
 	storage.TablePrefix
@@ -187,8 +211,6 @@ func (m MongoDB) Delete(ctx context.Context, name string) error {
 	_, err := c.DeleteOne(ctx, bson.M{"_id": bson.M{"$eq": name}})
 	return errors.Trace(err)
 }
-
-
 
 func (m MongoDB) Push(ctx context.Context, name, value string) error {
 	_, err := m.client.Database(m.dbName).Collection(m.MessageTable()).UpdateOne(ctx,
