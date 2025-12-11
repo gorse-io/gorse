@@ -123,8 +123,13 @@ func TestUnmarshal(t *testing.T) {
 			assert.Equal(t, 0.8, config.Recommend.Replacement.PositiveReplacementDecay)
 			assert.Equal(t, 0.6, config.Recommend.Replacement.ReadReplacementDecay)
 			// [recommend.ranker]
-			assert.Equal(t, time.Minute, config.Recommend.Ranker.CheckRecommendPeriod)
-			assert.Equal(t, 24*time.Hour, config.Recommend.Ranker.RefreshRecommendPeriod)
+			assert.Equal(t, "fm", config.Recommend.Ranker.Type)
+			assert.Equal(t, 120*time.Hour, config.Recommend.Ranker.CacheExpire)
+			assert.Equal(t, []string{"latest", "collaborative", "non-personalized/most_starred_weekly", "item-to-item/neighbors", "user-to-user/neighbors"}, config.Recommend.Ranker.Recommenders)
+			assert.Equal(t, 60*time.Minute, config.Recommend.Ranker.FitPeriod)
+			assert.Equal(t, 100, config.Recommend.Ranker.FitEpoch)
+			assert.Equal(t, 360*time.Minute, config.Recommend.Ranker.OptimizePeriod)
+			assert.Equal(t, 10, config.Recommend.Ranker.OptimizeTrials)
 			// [recommend.fallback]
 			assert.Equal(t, []string{"item-to-item/neighbors", "latest"}, config.Recommend.Fallback.Recommenders)
 			// [tracing]

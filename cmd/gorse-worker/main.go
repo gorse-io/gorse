@@ -16,6 +16,7 @@ package main
 import (
 	"fmt"
 	_ "net/http/pprof"
+	"time"
 
 	"github.com/gorse-io/gorse/cmd/version"
 	"github.com/gorse-io/gorse/common/log"
@@ -63,7 +64,8 @@ var workerCommand = &cobra.Command{
 				zap.String("ssl_cert", certFile),
 				zap.String("ssl_key", keyFile))
 		}
-		w := worker.NewWorker(masterHost, masterPort, httpHost, httpPort, workingJobs, cachePath, tlsConfig)
+		interval, _ := cmd.PersistentFlags().GetDuration("interval")
+		w := worker.NewWorker(masterHost, masterPort, httpHost, httpPort, workingJobs, cachePath, tlsConfig, interval)
 		w.Serve()
 	},
 }
@@ -81,6 +83,7 @@ func init() {
 	workerCommand.PersistentFlags().String("ssl-ca", "", "path of SSL CA")
 	workerCommand.PersistentFlags().String("ssl-cert", "", "path to SSL certificate")
 	workerCommand.PersistentFlags().String("ssl-key", "", "path to SSL key")
+	workerCommand.PersistentFlags().Duration("interval", time.Minute, "interval between checking users")
 }
 
 func main() {

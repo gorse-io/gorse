@@ -107,6 +107,7 @@ func NewWorker(
 	jobs int,
 	cacheFile string,
 	tlsConfig *util.TLSConfig,
+	interval time.Duration,
 ) *Worker {
 	return &Worker{
 		Pipeline: Pipeline{
@@ -124,8 +125,8 @@ func NewWorker(
 		httpHost:   httpHost,
 		httpPort:   httpPort,
 		// events
-		tickDuration: time.Minute,
-		ticker:       time.NewTicker(time.Minute),
+		tickDuration: interval,
+		ticker:       time.NewTicker(interval),
 		syncedChan:   parallel.NewConditionChannel(),
 		pulledChan:   parallel.NewConditionChannel(),
 		triggerChan:  parallel.NewConditionChannel(),
@@ -156,12 +157,6 @@ func (w *Worker) Sync() {
 		if err != nil {
 			log.Logger().Error("failed to parse master config", zap.Error(err))
 			goto sleep
-		}
-
-		// reset ticker
-		if w.tickDuration != w.Config.Recommend.Ranker.CheckRecommendPeriod {
-			w.tickDuration = w.Config.Recommend.Ranker.CheckRecommendPeriod
-			w.ticker.Reset(w.Config.Recommend.Ranker.CheckRecommendPeriod)
 		}
 
 		// connect to data store
@@ -398,7 +393,7 @@ func (w *Worker) Serve() {
 	for {
 		select {
 		case tick := <-w.ticker.C:
-			if time.Since(tick) >= w.Config.Recommend.Ranker.CheckRecommendPeriod {
+			if time.Since(tick) <= w.tickDuration {
 				loop()
 			}
 		case <-w.pulledChan.C:
