@@ -83,7 +83,7 @@ func init() {
 	workerCommand.PersistentFlags().String("ssl-ca", "", "path of SSL CA")
 	workerCommand.PersistentFlags().String("ssl-cert", "", "path to SSL certificate")
 	workerCommand.PersistentFlags().String("ssl-key", "", "path to SSL key")
-	workerCommand.PersistentFlags().Duration("interval", time.Minute, "interval between checking for new tasks")
+	workerCommand.PersistentFlags().Duration("interval", time.Minute, "interval between checking users")
 }
 
 func main() {

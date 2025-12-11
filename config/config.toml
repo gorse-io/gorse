@@ -230,7 +230,7 @@ read_replacement_decay = 0.6
 type = "fm"
 
 # The time period to refresh recommendation for inactive users. The default values is 120h.
-cache_expire = "24h"
+cache_expire = "120h"
 
 # The recommenders used to fetch candidate items before ranking. The default values is all recommenders.
 recommenders = ["latest", "collaborative", "non-personalized/most_starred_weekly", "item-to-item/neighbors", "user-to-user/neighbors"]

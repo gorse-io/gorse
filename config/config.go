@@ -420,7 +420,7 @@ func GetDefaultConfig() *Config {
 				CacheExpire:    120 * time.Hour,
 				FitPeriod:      60 * time.Minute,
 				FitEpoch:       100,
-				OptimizePeriod: 180 * time.Minute,
+				OptimizePeriod: 360 * time.Minute,
 				OptimizeTrials: 10,
 			},
 			Fallback: FallbackConfig{

@@ -124,7 +124,7 @@ func TestUnmarshal(t *testing.T) {
 			assert.Equal(t, 0.6, config.Recommend.Replacement.ReadReplacementDecay)
 			// [recommend.ranker]
 			assert.Equal(t, "fm", config.Recommend.Ranker.Type)
-			assert.Equal(t, 24*time.Hour, config.Recommend.Ranker.CacheExpire)
+			assert.Equal(t, 120*time.Hour, config.Recommend.Ranker.CacheExpire)
 			assert.Equal(t, []string{"latest", "collaborative", "non-personalized/most_starred_weekly", "item-to-item/neighbors", "user-to-user/neighbors"}, config.Recommend.Ranker.Recommenders)
 			assert.Equal(t, 60*time.Minute, config.Recommend.Ranker.FitPeriod)
 			assert.Equal(t, 100, config.Recommend.Ranker.FitEpoch)
