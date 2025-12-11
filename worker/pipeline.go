@@ -293,7 +293,7 @@ func (p *Pipeline) checkRecommendCacheOutOfDate(ctx context.Context, userId stri
 
 	// 5. If active time > recommend time, not stale.
 	if activeTime.Before(recommendTime) {
-		timeoutTime := recommendTime.Add(p.Config.Recommend.Ranker.RefreshRecommendPeriod)
+		timeoutTime := recommendTime.Add(p.Config.Recommend.Ranker.CacheExpire)
 		return timeoutTime.Before(time.Now())
 	}
 	return true
