@@ -68,6 +68,7 @@ type Config struct {
 	OIDC      OIDCConfig      `mapstructure:"oidc"`
 	OpenAI    OpenAIConfig    `mapstructure:"openai"`
 	S3        S3Config        `mapstructure:"s3"`
+	GCS       GCSConfig       `mapstructure:"gcs"`
 }
 
 // DatabaseConfig is the configuration for the database.
@@ -371,6 +372,16 @@ type S3Config struct {
 
 func (s *S3Config) ToJSON() string {
 	return string(lo.Must1(json.Marshal(s)))
+}
+
+type GCSConfig struct {
+	CredentialsFile string `mapstructure:"credentials_file"`
+	Bucket          string `mapstructure:"bucket"`
+	Prefix          string `mapstructure:"prefix"`
+}
+
+func (g *GCSConfig) ToJSON() string {
+	return string(lo.Must1(json.Marshal(g)))
 }
 
 func GetDefaultConfig() *Config {

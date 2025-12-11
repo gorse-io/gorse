@@ -147,13 +147,18 @@ func (m *Master) Serve() {
 	// connect blob store
 	var err error
 	m.blobServer = blob.NewMasterStoreServer(m.cachePath)
-	if m.Config.S3.Endpoint == "" {
-		m.blobStore = blob.NewPOSIX(m.cachePath)
-	} else {
+	if m.Config.S3.Endpoint != "" {
 		m.blobStore, err = blob.NewS3(m.Config.S3)
 		if err != nil {
 			log.Logger().Fatal("failed to create S3 blob store", zap.Error(err))
 		}
+	} else if m.Config.GCS.Bucket != "" {
+		m.blobStore, err = blob.NewGCS(m.Config.GCS)
+		if err != nil {
+			log.Logger().Fatal("failed to create GCS blob store", zap.Error(err))
+		}
+	} else {
+		m.blobStore = blob.NewPOSIX(m.cachePath)
 	}
 
 	// connect meta database
