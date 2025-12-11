@@ -84,7 +84,7 @@ func (s *MasterTestSuite) TestFindItemToItem() {
 	// load mock dataset
 	_, dataSet, err := s.LoadDataFromDatabase(context.Background(), s.DataClient,
 		[]expression.FeedbackTypeExpression{expression.MustParseFeedbackTypeExpression("FeedbackType")},
-		nil, 0, 0, NewOnlineEvaluator(), nil)
+		nil, 0, 0, NewOnlineEvaluator(nil, nil), nil)
 	s.NoError(err)
 
 	// similar items (common users)
@@ -171,7 +171,7 @@ func (s *MasterTestSuite) TestUserToUser() {
 	s.NoError(err)
 	_, dataSet, err := s.LoadDataFromDatabase(context.Background(), s.DataClient,
 		[]expression.FeedbackTypeExpression{expression.MustParseFeedbackTypeExpression("FeedbackType")},
-		nil, 0, 0, NewOnlineEvaluator(), nil)
+		nil, 0, 0, NewOnlineEvaluator(nil, nil), nil)
 	s.NoError(err)
 
 	// similar items (common users)
