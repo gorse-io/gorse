@@ -17,17 +17,22 @@ package blob
 import (
 	"context"
 	"io"
-	"os"
 	"testing"
 
+	"github.com/fsouza/fake-gcs-server/fakestorage"
 	"github.com/gorse-io/gorse/config"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestGCS(t *testing.T) {
-	if os.Getenv("GCS_EMULATOR_EDNPOINT") == "" {
-		t.Skip("GCS emulator not configured")
-	}
+	server, err := fakestorage.NewServerWithOptions(fakestorage.Options{
+		Scheme:     "http",
+		Port:       5050,
+		PublicHost: "localhost:5050",
+	})
+	assert.NoError(t, err)
+	defer server.Stop()
+	t.Setenv("GCS_EMULATOR_ENDPOINT", "http://localhost:5050/storage/v1/")
 
 	// create client
 	client, err := NewGCS(config.GCSConfig{

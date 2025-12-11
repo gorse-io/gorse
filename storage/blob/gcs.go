@@ -34,8 +34,8 @@ type GCS struct {
 
 func NewGCS(cfg config.GCSConfig) (*GCS, error) {
 	var opts []option.ClientOption
-	if os.Getenv("GCS_EMULATOR_EDNPOINT") != "" {
-		opts = append(opts, option.WithEndpoint(os.Getenv("GCS_EMULATOR_EDNPOINT")))
+	if os.Getenv("GCS_EMULATOR_ENDPOINT") != "" {
+		opts = append(opts, option.WithEndpoint(os.Getenv("GCS_EMULATOR_ENDPOINT")))
 		opts = append(opts, option.WithoutAuthentication())
 	}
 	if cfg.CredentialsFile != "" {

@@ -76,12 +76,6 @@ jobs:
           RUSTFS_ACCESS_KEY: rustfsadmin
           RUSTFS_SECRET_KEY: rustfsadmin
 
-      gcs:
-        image: fsouza/fake-gcs-server
-        ports:
-          - 5050
-        command: ["-scheme", "http", "-port", "5050", "-public-host", "localhost:5050"]
-
     steps:
     - name: Set up dataset
       run: |
@@ -124,8 +118,6 @@ jobs:
         S3_ENDPOINT: localhost:${{ job.services.rustfs.ports[9000] }}
         S3_ACCESS_KEY_ID: rustfsadmin
         S3_SECRET_ACCESS_KEY: rustfsadmin
-        # GCS
-        GCS_EMULATOR_EDNPOINT: http://localhost:${{ job.services.gcs.ports[5050] }}/storage/v1/
 
     - name: Upload coverage to Codecov
       if: matrix.os == 'ubuntu-latest'
