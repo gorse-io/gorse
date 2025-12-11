@@ -35,3 +35,11 @@ services:
     image: clickhouse/clickhouse-server:23
     ports:
       - 8123:8123
+  
+  rustfs:
+    image: rustfs/rustfs:alpha
+    ports:
+      - 9000:9000
+    environment:
+      RUSTFS_ACCESS_KEY: rustfsadmin
+      RUSTFS_SECRET_KEY: rustfsadmin

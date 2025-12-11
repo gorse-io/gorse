@@ -134,6 +134,7 @@ func NewWorker(
 
 // Sync this worker to the master.
 func (w *Worker) Sync() {
+	var nextBlobConfig string
 	defer util.CheckPanic()
 	log.Logger().Info("start meta sync", zap.Duration("meta_timeout", w.Config.Master.MetaTimeout))
 	for {
@@ -198,18 +199,31 @@ func (w *Worker) Sync() {
 		}
 
 		// connect to blob store
-		if w.blobConfig != w.Config.S3.ToJSON() {
-			if w.Config.S3.Endpoint == "" {
-				log.Logger().Info("connect blob store via master")
-				w.blobStore = blob.NewMasterStoreClient(w.conn)
-			} else {
+		if w.Config.S3.Endpoint != "" {
+			nextBlobConfig = w.Config.S3.ToJSON()
+		} else if w.Config.GCS.Bucket != "" {
+			nextBlobConfig = w.Config.GCS.ToJSON()
+		} else {
+			nextBlobConfig = ""
+		}
+		if w.blobConfig != nextBlobConfig {
+			if w.Config.S3.Endpoint != "" {
 				log.Logger().Info("connect s3 endpoint", zap.String("endpoint", w.Config.S3.Endpoint))
 				if w.blobStore, err = blob.NewS3(w.Config.S3); err != nil {
 					log.Logger().Error("failed to connect s3 endpoint", zap.Error(err))
 					goto sleep
 				}
+			} else if w.Config.GCS.Bucket != "" {
+				log.Logger().Info("connect gcs bucket", zap.String("bucket", w.Config.GCS.Bucket))
+				if w.blobStore, err = blob.NewGCS(w.Config.GCS); err != nil {
+					log.Logger().Error("failed to connect gcs bucket", zap.Error(err))
+					goto sleep
+				}
+			} else {
+				log.Logger().Info("connect blob store via master")
+				w.blobStore = blob.NewMasterStoreClient(w.conn)
 			}
-			w.blobConfig = w.Config.S3.ToJSON()
+			w.blobConfig = nextBlobConfig
 		}
 
 		// synchronize collaborative filtering model
