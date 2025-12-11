@@ -89,7 +89,7 @@ func (g *GCS) List() ([]string, error) {
 			return nil, err
 		}
 		name := attrs.Name[len(g.prefix):]
-		if len(name) > 0 && name[0] == '/' {
+		if len(name) > 0 && name[0] == os.PathSeparator {
 			name = name[1:]
 		}
 		names = append(names, name)
