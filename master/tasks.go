@@ -46,10 +46,7 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
-const (
-	PositiveFeedbackRate = "PositiveFeedbackRate"
-	batchSize            = 10000
-)
+const batchSize = 10000
 
 func (m *Master) loadDataset() (datasets Datasets, err error) {
 	ctx, span := m.tracer.Start(context.Background(), "Load Dataset", 1)
@@ -71,7 +68,9 @@ func (m *Master) loadDataset() (datasets Datasets, err error) {
 		zap.Any("read_feedback_types", m.Config.Recommend.DataSource.ReadFeedbackTypes),
 		zap.Uint("item_ttl", m.Config.Recommend.DataSource.ItemTTL),
 		zap.Uint("feedback_ttl", m.Config.Recommend.DataSource.PositiveFeedbackTTL))
-	evaluator := NewOnlineEvaluator()
+	evaluator := NewOnlineEvaluator(
+		m.Config.Recommend.DataSource.PositiveFeedbackTypes,
+		m.Config.Recommend.DataSource.ReadFeedbackTypes)
 	datasets.clickDataset, datasets.rankingDataset, err = m.LoadDataFromDatabase(ctx, m.DataClient,
 		m.Config.Recommend.DataSource.PositiveFeedbackTypes,
 		m.Config.Recommend.DataSource.ReadFeedbackTypes,
@@ -454,7 +453,7 @@ func (m *Master) LoadDataFromDatabase(
 				mu.Lock()
 				posFeedbackCount++
 				// insert feedback to evaluator
-				evaluator.Positive(f.FeedbackType, userIndex, itemIndex, f.Timestamp)
+				evaluator.Add(f.FeedbackType, f.Value, userIndex, itemIndex, f.Timestamp)
 				mu.Unlock()
 
 				// append item feedback
@@ -536,7 +535,7 @@ func (m *Master) LoadDataFromDatabase(
 				negativeSet[userIndex].Add(itemIndex)
 				mu.Lock()
 				negativeFeedbackCount++
-				evaluator.Read(userIndex, itemIndex, f.Timestamp)
+				evaluator.Add(f.FeedbackType, f.Value, userIndex, itemIndex, f.Timestamp)
 				mu.Unlock()
 			}
 			span.Add(len(feedback))

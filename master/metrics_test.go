@@ -18,40 +18,37 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gorse-io/gorse/common/expression"
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestOnlineEvaluator(t *testing.T) {
-	evaluator1 := NewOnlineEvaluator()
-	result := evaluator1.Evaluate()
+	positiveTypes := []expression.FeedbackTypeExpression{expression.MustParseFeedbackTypeExpression("read>=100")}
+	readTypes := []expression.FeedbackTypeExpression{expression.MustParseFeedbackTypeExpression("read")}
+
+	evaluator := NewOnlineEvaluator(positiveTypes, readTypes)
+	result := evaluator.Evaluate()
 	assert.Empty(t, result)
 
-	evaluator2 := NewOnlineEvaluator()
-	evaluator2.TruncatedDateToday = time.Date(2005, 6, 16, 0, 0, 0, 0, time.UTC)
-	evaluator2.EvaluateDays = 2
-	evaluator2.Read(1, 1, time.Date(2005, 6, 15, 0, 0, 0, 0, time.UTC))
-	evaluator2.Read(1, 2, time.Date(2005, 6, 15, 0, 0, 0, 0, time.UTC))
-	evaluator2.Read(1, 3, time.Date(2005, 6, 15, 0, 0, 0, 0, time.UTC))
-	evaluator2.Read(1, 4, time.Date(2005, 6, 15, 0, 0, 0, 0, time.UTC))
-	evaluator2.Read(1, 5, time.Date(2005, 6, 15, 0, 0, 0, 0, time.UTC))
-	evaluator2.Positive("star", 1, 1, time.Date(2005, 6, 15, 0, 0, 0, 0, time.UTC))
-	evaluator2.Positive("like", 1, 1, time.Date(2005, 6, 15, 0, 0, 0, 0, time.UTC))
-	evaluator2.Read(2, 1, time.Date(2005, 6, 15, 0, 0, 0, 0, time.UTC))
-	evaluator2.Read(2, 2, time.Date(2005, 6, 15, 0, 0, 0, 0, time.UTC))
-	evaluator2.Read(2, 3, time.Date(2005, 6, 15, 0, 0, 0, 0, time.UTC))
-	evaluator2.Read(2, 4, time.Date(2005, 6, 15, 0, 0, 0, 0, time.UTC))
-	evaluator2.Positive("like", 2, 1, time.Date(2005, 6, 15, 0, 0, 0, 0, time.UTC))
-	evaluator2.Positive("star", 2, 1, time.Date(2005, 6, 15, 0, 0, 0, 0, time.UTC))
-	evaluator2.Positive("star", 2, 3, time.Date(2005, 6, 16, 0, 0, 0, 0, time.UTC))
-	evaluator2.Positive("fork", 3, 3, time.Date(2005, 6, 16, 0, 0, 0, 0, time.UTC))
-	result = evaluator2.Evaluate()
+	evaluator = NewOnlineEvaluator(positiveTypes, readTypes)
+	evaluator.WindowEnd = time.Date(2005, 6, 16, 0, 0, 0, 0, time.UTC)
+	evaluator.WindowSize = 2
+	evaluator.Add("read", 0, 1, 1, time.Date(2005, 6, 15, 0, 0, 0, 0, time.UTC))
+	evaluator.Add("read", 0, 1, 2, time.Date(2005, 6, 15, 0, 0, 0, 0, time.UTC))
+	evaluator.Add("read", 0, 1, 3, time.Date(2005, 6, 15, 0, 0, 0, 0, time.UTC))
+	evaluator.Add("read", 100, 1, 4, time.Date(2005, 6, 15, 0, 0, 0, 0, time.UTC))
+	evaluator.Add("read", 100, 2, 1, time.Date(2005, 6, 15, 0, 0, 0, 0, time.UTC))
+	evaluator.Add("read", 0, 2, 2, time.Date(2005, 6, 15, 0, 0, 0, 0, time.UTC))
+	evaluator.Add("read", 0, 2, 3, time.Date(2005, 6, 15, 0, 0, 0, 0, time.UTC))
+	evaluator.Add("read", 0, 2, 4, time.Date(2005, 6, 15, 0, 0, 0, 0, time.UTC))
+	evaluator.Add("read", 0, 2, 3, time.Date(2005, 6, 16, 0, 0, 0, 0, time.UTC))
+	evaluator.Add("read", 100, 3, 3, time.Date(2005, 6, 16, 0, 0, 0, 0, time.UTC))
+	result = evaluator.Evaluate()
 	assert.ElementsMatch(t, []cache.TimeSeriesPoint{
-		{"PositiveFeedbackRate/star", time.Date(2005, 6, 16, 0, 0, 0, 0, time.UTC), 0},
-		{"PositiveFeedbackRate/star", time.Date(2005, 6, 15, 0, 0, 0, 0, time.UTC), 0.35},
-		{"PositiveFeedbackRate/like", time.Date(2005, 6, 16, 0, 0, 0, 0, time.UTC), 0},
-		{"PositiveFeedbackRate/like", time.Date(2005, 6, 15, 0, 0, 0, 0, time.UTC), 0.225},
-		{"PositiveFeedbackRate/fork", time.Date(2005, 6, 16, 0, 0, 0, 0, time.UTC), 0},
-		{"PositiveFeedbackRate/fork", time.Date(2005, 6, 15, 0, 0, 0, 0, time.UTC), 0},
+		{Name: "positive_feedback_ratio_read", Timestamp: time.Date(2005, 6, 16, 0, 0, 0, 0, time.UTC), Value: 0.5},
+		{Name: "positive_feedback_ratio_read", Timestamp: time.Date(2005, 6, 15, 0, 0, 0, 0, time.UTC), Value: 0.25},
+		{Name: "positive_feedback_ratio", Timestamp: time.Date(2005, 6, 16, 0, 0, 0, 0, time.UTC), Value: 0.5},
+		{Name: "positive_feedback_ratio", Timestamp: time.Date(2005, 6, 15, 0, 0, 0, 0, time.UTC), Value: 0.25},
 	}, result)
 }

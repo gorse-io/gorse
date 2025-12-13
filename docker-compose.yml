@@ -1,11 +1,5 @@
 version: "3"
 services:
-  redis:
-    image: redis/redis-stack
-    restart: unless-stopped
-    ports:
-      - 6379:6379
-
   mysql:
     image: mysql/mysql-server
     restart: unless-stopped
@@ -52,6 +46,12 @@ services:
   #   volumes:
   #     - clickhouse_data:/var/lib/clickhouse
 
+  # redis:
+  #   image: redis/redis-stack
+  #   restart: unless-stopped
+  #   ports:
+  #     - 6379:6379
+
   worker:
     image: zhenghaoz/gorse-worker
     restart: unless-stopped
@@ -91,7 +91,10 @@ services:
       - 8086:8086
       - 8088:8088
     environment:
-      GORSE_CACHE_STORE: redis://redis:6379
+      GORSE_CACHE_STORE: mysql://gorse:gorse_pass@tcp(mysql:3306)/gorse
+      # GORSE_CACHE_STORE: postgres://gorse:gorse_pass@postgres/gorse?sslmode=disable
+      # GORSE_CACHE_STORE: mongodb://root:password@mongo:27017/gorse?authSource=admin&connect=direct
+      # GORSE_CACHE_STORE: redis://redis:6379
       GORSE_DATA_STORE: mysql://gorse:gorse_pass@tcp(mysql:3306)/gorse
       # GORSE_DATA_STORE: postgres://gorse:gorse_pass@postgres/gorse?sslmode=disable
       # GORSE_DATA_STORE: mongodb://root:password@mongo:27017/gorse?authSource=admin&connect=direct
@@ -105,11 +108,11 @@ services:
       - gorse_log:/var/log/gorse
       - master_data:/var/lib/gorse
     depends_on:
-      - redis
       - mysql
       # - postgres
       # - mongo
       # - clickhouse
+      # - redis
 
 volumes:
   worker_data:

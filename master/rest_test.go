@@ -393,48 +393,6 @@ func (suite *MasterAPITestSuite) TestGetStats() {
 		End()
 }
 
-func (suite *MasterAPITestSuite) TestGetRates() {
-	ctx := context.Background()
-	// write rates
-	suite.Config.Recommend.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{
-		expression.MustParseFeedbackTypeExpression("a"),
-		expression.MustParseFeedbackTypeExpression("b"),
-	}
-	// This first measurement should be overwritten.
-	baseTimestamp := time.Now().UTC().Truncate(24 * time.Hour)
-	err := suite.CacheClient.AddTimeSeriesPoints(ctx, []cache.TimeSeriesPoint{
-		{Name: cache.Key(PositiveFeedbackRate, "a"), Value: 100.0, Timestamp: baseTimestamp.Add(-2 * 24 * time.Hour)},
-		{Name: cache.Key(PositiveFeedbackRate, "a"), Value: 2.0, Timestamp: baseTimestamp.Add(-2 * 24 * time.Hour)},
-		{Name: cache.Key(PositiveFeedbackRate, "a"), Value: 2.0, Timestamp: baseTimestamp.Add(-1 * 24 * time.Hour)},
-		{Name: cache.Key(PositiveFeedbackRate, "a"), Value: 3.0, Timestamp: baseTimestamp.Add(-0 * 24 * time.Hour)},
-		{Name: cache.Key(PositiveFeedbackRate, "b"), Value: 20.0, Timestamp: baseTimestamp.Add(-2 * 24 * time.Hour)},
-		{Name: cache.Key(PositiveFeedbackRate, "b"), Value: 20.0, Timestamp: baseTimestamp.Add(-1 * 24 * time.Hour)},
-		{Name: cache.Key(PositiveFeedbackRate, "b"), Value: 30.0, Timestamp: baseTimestamp.Add(-0 * 24 * time.Hour)},
-	})
-	suite.NoError(err)
-
-	// get rates
-	apitest.New().
-		Handler(suite.handler).
-		Get("/api/dashboard/rates").
-		Header("Cookie", suite.cookie).
-		Expect(suite.T()).
-		Status(http.StatusOK).
-		Body(marshal(suite.T(), map[string][]cache.TimeSeriesPoint{
-			"a": {
-				{Name: cache.Key(PositiveFeedbackRate, "a"), Value: 2.0, Timestamp: baseTimestamp.Add(-2 * 24 * time.Hour)},
-				{Name: cache.Key(PositiveFeedbackRate, "a"), Value: 2.0, Timestamp: baseTimestamp.Add(-1 * 24 * time.Hour)},
-				{Name: cache.Key(PositiveFeedbackRate, "a"), Value: 3.0, Timestamp: baseTimestamp.Add(-0 * 24 * time.Hour)},
-			},
-			"b": {
-				{Name: cache.Key(PositiveFeedbackRate, "b"), Value: 20.0, Timestamp: baseTimestamp.Add(-2 * 24 * time.Hour)},
-				{Name: cache.Key(PositiveFeedbackRate, "b"), Value: 20.0, Timestamp: baseTimestamp.Add(-1 * 24 * time.Hour)},
-				{Name: cache.Key(PositiveFeedbackRate, "b"), Value: 30.0, Timestamp: baseTimestamp.Add(-0 * 24 * time.Hour)},
-			},
-		})).
-		End()
-}
-
 func (suite *MasterAPITestSuite) TestGetCategories() {
 	ctx := context.Background()
 	// insert categories
@@ -835,6 +793,26 @@ func (suite *MasterAPITestSuite) TestGetConfigSchema() {
 		Status(http.StatusOK).
 		Body(marshal(suite.T(), jsonschema.Reflect(suite.Config))).
 		End()
+}
+
+func (suite *MasterAPITestSuite) TestGetTimeseries() {
+	ctx := context.Background()
+	err := suite.CacheClient.AddTimeSeriesPoints(ctx, []cache.TimeSeriesPoint{
+		{Name: "test_timeseries", Timestamp: time.Now().Add(-24 * time.Hour), Value: 1},
+		{Name: "test_timeseries", Timestamp: time.Now().Add(-48 * time.Hour), Value: 2},
+		{Name: "test_timeseries", Timestamp: time.Now().Add(-72 * time.Hour), Value: 3},
+	})
+	suite.NoError(err)
+
+	req := httptest.NewRequest("GET", "/api/dashboard/timeseries/test_timeseries", nil)
+	req.Header.Set("Cookie", suite.cookie)
+	w := httptest.NewRecorder()
+	suite.handler.ServeHTTP(w, req)
+	suite.Equal(http.StatusOK, w.Code, w.Body.String())
+	var got []cache.TimeSeriesPoint
+	err = json.Unmarshal(w.Body.Bytes(), &got)
+	suite.NoError(err)
+	suite.Len(got, 3)
 }
 
 func (suite *MasterAPITestSuite) TestDumpAndRestore() {
