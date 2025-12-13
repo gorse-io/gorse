@@ -285,8 +285,12 @@ func (evaluator *OnlineEvaluator) Evaluate() []cache.TimeSeriesPoint {
 				}
 			}
 			if userCount > 0 {
+				name := cache.CTR
+				if feedbackType != "" {
+					name += "_" + feedbackType
+				}
 				points = append(points, cache.TimeSeriesPoint{
-					Name:      cache.Key(cache.CTR, feedbackType),
+					Name:      name,
 					Timestamp: date,
 					Value:     ratioSum / float64(userCount),
 				})

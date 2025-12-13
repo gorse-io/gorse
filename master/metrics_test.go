@@ -46,8 +46,8 @@ func TestOnlineEvaluator(t *testing.T) {
 	evaluator.Add("read", 100, 3, 3, time.Date(2005, 6, 16, 0, 0, 0, 0, time.UTC))
 	result = evaluator.Evaluate()
 	assert.ElementsMatch(t, []cache.TimeSeriesPoint{
-		{Name: "ctr/read", Timestamp: time.Date(2005, 6, 16, 0, 0, 0, 0, time.UTC), Value: 0.5},
-		{Name: "ctr/read", Timestamp: time.Date(2005, 6, 15, 0, 0, 0, 0, time.UTC), Value: 0.25},
+		{Name: "ctr_read", Timestamp: time.Date(2005, 6, 16, 0, 0, 0, 0, time.UTC), Value: 0.5},
+		{Name: "ctr_read", Timestamp: time.Date(2005, 6, 15, 0, 0, 0, 0, time.UTC), Value: 0.25},
 		{Name: "ctr", Timestamp: time.Date(2005, 6, 16, 0, 0, 0, 0, time.UTC), Value: 0.5},
 		{Name: "ctr", Timestamp: time.Date(2005, 6, 15, 0, 0, 0, 0, time.UTC), Value: 0.25},
 	}, result)
