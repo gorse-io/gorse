@@ -285,7 +285,7 @@ func (evaluator *OnlineEvaluator) Evaluate() []cache.TimeSeriesPoint {
 				}
 			}
 			if userCount > 0 {
-				name := cache.CTR
+				name := cache.PositiveFeedbackRatio
 				if feedbackType != "" {
 					name += "_" + feedbackType
 				}

@@ -89,7 +89,7 @@ const (
 	CTRPrecision               = "ctr_precision"
 	CTRRecall                  = "ctr_recall"
 	CTRAUC                     = "ctr_auc"
-	CTR                        = "ctr"
+	PositiveFeedbackRatio      = "positive_feedback_ratio"
 )
 
 var ItemCache = []string{

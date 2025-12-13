@@ -393,48 +393,6 @@ func (suite *MasterAPITestSuite) TestGetStats() {
 		End()
 }
 
-func (suite *MasterAPITestSuite) TestGetRates() {
-	ctx := context.Background()
-	// write rates
-	suite.Config.Recommend.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{
-		expression.MustParseFeedbackTypeExpression("a"),
-		expression.MustParseFeedbackTypeExpression("b"),
-	}
-	// This first measurement should be overwritten.
-	baseTimestamp := time.Now().UTC().Truncate(24 * time.Hour)
-	err := suite.CacheClient.AddTimeSeriesPoints(ctx, []cache.TimeSeriesPoint{
-		{Name: cache.Key(cache.CTR, "a"), Value: 100.0, Timestamp: baseTimestamp.Add(-2 * 24 * time.Hour)},
-		{Name: cache.Key(cache.CTR, "a"), Value: 2.0, Timestamp: baseTimestamp.Add(-2 * 24 * time.Hour)},
-		{Name: cache.Key(cache.CTR, "a"), Value: 2.0, Timestamp: baseTimestamp.Add(-1 * 24 * time.Hour)},
-		{Name: cache.Key(cache.CTR, "a"), Value: 3.0, Timestamp: baseTimestamp.Add(-0 * 24 * time.Hour)},
-		{Name: cache.Key(cache.CTR, "b"), Value: 20.0, Timestamp: baseTimestamp.Add(-2 * 24 * time.Hour)},
-		{Name: cache.Key(cache.CTR, "b"), Value: 20.0, Timestamp: baseTimestamp.Add(-1 * 24 * time.Hour)},
-		{Name: cache.Key(cache.CTR, "b"), Value: 30.0, Timestamp: baseTimestamp.Add(-0 * 24 * time.Hour)},
-	})
-	suite.NoError(err)
-
-	// get rates
-	apitest.New().
-		Handler(suite.handler).
-		Get("/api/dashboard/rates").
-		Header("Cookie", suite.cookie).
-		Expect(suite.T()).
-		Status(http.StatusOK).
-		Body(marshal(suite.T(), map[string][]cache.TimeSeriesPoint{
-			"a": {
-				{Name: cache.Key(cache.CTR, "a"), Value: 2.0, Timestamp: baseTimestamp.Add(-2 * 24 * time.Hour)},
-				{Name: cache.Key(cache.CTR, "a"), Value: 2.0, Timestamp: baseTimestamp.Add(-1 * 24 * time.Hour)},
-				{Name: cache.Key(cache.CTR, "a"), Value: 3.0, Timestamp: baseTimestamp.Add(-0 * 24 * time.Hour)},
-			},
-			"b": {
-				{Name: cache.Key(cache.CTR, "b"), Value: 20.0, Timestamp: baseTimestamp.Add(-2 * 24 * time.Hour)},
-				{Name: cache.Key(cache.CTR, "b"), Value: 20.0, Timestamp: baseTimestamp.Add(-1 * 24 * time.Hour)},
-				{Name: cache.Key(cache.CTR, "b"), Value: 30.0, Timestamp: baseTimestamp.Add(-0 * 24 * time.Hour)},
-			},
-		})).
-		End()
-}
-
 func (suite *MasterAPITestSuite) TestGetCategories() {
 	ctx := context.Background()
 	// insert categories

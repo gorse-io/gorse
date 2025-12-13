@@ -113,12 +113,6 @@ func (m *Master) CreateWebService() {
 		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
 		Returns(http.StatusOK, "OK", []monitor.Progress{}).
 		Writes([]monitor.Progress{}))
-	ws.Route(ws.GET("/dashboard/rates").To(m.getRates).
-		Doc("Get positive feedback rates.").
-		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
-		Param(ws.HeaderParameter("X-API-Key", "secret key for RESTful API")).
-		Returns(http.StatusOK, "OK", map[string][]cache.TimeSeriesPoint{}).
-		Writes(map[string][]cache.TimeSeriesPoint{}))
 	ws.Route(ws.GET("/dashboard/timeseries/{name}").To(m.getTimeseries).
 		Doc("Get time series data.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
@@ -637,28 +631,6 @@ func (m *Master) getTasks(_ *restful.Request, response *restful.Response) {
 		return true
 	})
 	server.Ok(response, progressList)
-}
-
-func (m *Master) getRates(request *restful.Request, response *restful.Response) {
-	ctx := context.Background()
-	if request != nil && request.Request != nil {
-		ctx = request.Request.Context()
-	}
-	// Parse parameters
-	n, err := server.ParseInt(request, "n", 100)
-	if err != nil {
-		server.BadRequest(response, err)
-		return
-	}
-	measurements := make(map[string][]cache.TimeSeriesPoint, len(m.Config.Recommend.DataSource.PositiveFeedbackTypes))
-	for _, feedbackType := range m.Config.Recommend.DataSource.PositiveFeedbackTypes {
-		measurements[feedbackType.String()], err = m.CacheClient.GetTimeSeriesPoints(ctx, cache.Key(cache.CTR, feedbackType.String()), time.Now().Add(-24*time.Hour*time.Duration(n)), time.Now(), 24*time.Hour)
-		if err != nil {
-			server.InternalServerError(response, err)
-			return
-		}
-	}
-	server.Ok(response, measurements)
 }
 
 func (m *Master) getTimeseries(request *restful.Request, response *restful.Response) {
