@@ -795,6 +795,26 @@ func (suite *MasterAPITestSuite) TestGetConfigSchema() {
 		End()
 }
 
+func (suite *MasterAPITestSuite) TestGetTimeseries() {
+	ctx := context.Background()
+	err := suite.CacheClient.AddTimeSeriesPoints(ctx, []cache.TimeSeriesPoint{
+		{Name: "test_timeseries", Timestamp: time.Now().Add(-24 * time.Hour), Value: 1},
+		{Name: "test_timeseries", Timestamp: time.Now().Add(-48 * time.Hour), Value: 2},
+		{Name: "test_timeseries", Timestamp: time.Now().Add(-72 * time.Hour), Value: 3},
+	})
+	suite.NoError(err)
+
+	req := httptest.NewRequest("GET", "/api/dashboard/timeseries/test_timeseries", nil)
+	req.Header.Set("Cookie", suite.cookie)
+	w := httptest.NewRecorder()
+	suite.handler.ServeHTTP(w, req)
+	suite.Equal(http.StatusOK, w.Code, w.Body.String())
+	var got []cache.TimeSeriesPoint
+	err = json.Unmarshal(w.Body.Bytes(), &got)
+	suite.NoError(err)
+	suite.Len(got, 3)
+}
+
 func (suite *MasterAPITestSuite) TestDumpAndRestore() {
 	ctx := context.Background()
 	// insert users
