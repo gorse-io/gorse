@@ -762,7 +762,7 @@ func (suite *WorkerTestSuite) TestRankByLLM() {
 
 	itemCache := NewItemCache(suite.DataClient)
 	recommendTime := time.Now()
-	result, err := suite.rankByLLM(ranker, &data.User{UserId: "u1"}, []data.Feedback{
+	result, err := suite.rankByLLM(nil, ranker, &data.User{UserId: "u1"}, []data.Feedback{
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "like", UserId: "u1", ItemId: "4"}},
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "like", UserId: "u1", ItemId: "5"}},
 	}, []cache.Score{{Id: "1"}, {Id: "2"}, {Id: "3"}}, itemCache, recommendTime)

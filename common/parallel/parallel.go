@@ -216,7 +216,7 @@ type Context struct {
 }
 
 func (ctx *Context) Detach() {
-	if ctx.detached {
+	if ctx == nil || ctx.detached {
 		return
 	}
 	ctx.detachedSem <- struct{}{}
@@ -225,7 +225,7 @@ func (ctx *Context) Detach() {
 }
 
 func (ctx *Context) Attach() {
-	if !ctx.detached {
+	if ctx == nil || !ctx.detached {
 		return
 	}
 	ctx.detached = false

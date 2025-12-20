@@ -471,7 +471,7 @@ func (g *chatItemToItem) PopAll(i int) []cache.Score {
 		if err == nil {
 			return resp, nil
 		}
-		if throttled(err) {
+		if isThrottled(err) {
 			return openai.ChatCompletionResponse{}, err
 		}
 		return openai.ChatCompletionResponse{}, backoff.Permanent(err)
@@ -505,7 +505,7 @@ func (g *chatItemToItem) PopAll(i int) []cache.Score {
 			if err == nil {
 				return resp, nil
 			}
-			if throttled(err) {
+			if isThrottled(err) {
 				return openai.EmbeddingResponse{}, err
 			}
 			return openai.EmbeddingResponse{}, backoff.Permanent(err)
@@ -556,13 +556,4 @@ func stripThinkInCompletion(s string) string {
 		return s
 	}
 	return s[end+8:]
-}
-
-func throttled(err error) bool {
-	if requestErr, ok := err.(*openai.APIError); ok {
-		if requestErr.HTTPStatusCode == 429 {
-			return true
-		}
-	}
-	return false
 }

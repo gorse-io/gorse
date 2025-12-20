@@ -83,9 +83,9 @@ func TestParseArrayFromCompletion(t *testing.T) {
 	assert.Equal(t, []string{"1", "2", "3"}, parsed)
 
 	// parse text
-	completion = "Hello, world!"
+	completion = "Hello, world!\nThis is a test."
 	parsed = parseArrayFromCompletion(completion)
-	assert.Equal(t, []string{"Hello, world!"}, parsed)
+	assert.Equal(t, []string{"Hello, world!", "This is a test."}, parsed)
 
 	// strip think
 	completion = "<think>hello</think>World!"

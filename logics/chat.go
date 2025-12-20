@@ -20,6 +20,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cenkalti/backoff/v5"
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/config"
@@ -74,13 +75,22 @@ func (r *ChatRanker) Rank(user *data.User, feedback []*FeedbackItem, items []*da
 	}
 	// chat completion
 	start := time.Now()
-	resp, err := r.client.CreateChatCompletion(context.Background(), openai.ChatCompletionRequest{
-		Model: r.model,
-		Messages: []openai.ChatCompletionMessage{{
-			Role:    openai.ChatMessageRoleUser,
-			Content: buf.String(),
-		}},
-	})
+	resp, err := backoff.Retry(context.Background(), func() (openai.ChatCompletionResponse, error) {
+		resp, err := r.client.CreateChatCompletion(context.Background(), openai.ChatCompletionRequest{
+			Model: r.model,
+			Messages: []openai.ChatCompletionMessage{{
+				Role:    openai.ChatMessageRoleUser,
+				Content: buf.String(),
+			}},
+		})
+		if err == nil {
+			return resp, nil
+		}
+		if isThrottled(err) {
+			return openai.ChatCompletionResponse{}, err
+		}
+		return openai.ChatCompletionResponse{}, backoff.Permanent(err)
+	}, backoff.WithBackOff(backoff.NewConstantBackOff(time.Minute)))
 	if err != nil {
 		return nil, err
 	}
@@ -161,5 +171,24 @@ func parseArrayFromCompletion(completion string) []string {
 			}
 		}
 	}
-	return []string{string(source)}
+	var result []string
+	for _, line := range strings.Split(string(source), "\n") {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			result = append(result, line)
+		}
+	}
+	return result
+}
+
+func isThrottled(err error) bool {
+	switch e := err.(type) {
+	case *openai.APIError:
+		if e.HTTPStatusCode == 429 {
+			return true
+		}
+	case *openai.RequestError:
+		return e.HTTPStatusCode == 504 || e.HTTPStatusCode == 520
+	}
+	return false
 }

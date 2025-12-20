@@ -98,7 +98,7 @@ func (p *Pipeline) Recommend(users []data.User, progress func(completed, through
 	)
 
 	defer MemoryInuseBytesVec.WithLabelValues("user_feedback_cache").Set(0)
-	err := parallel.Parallel(len(users), p.Jobs, func(workerId, jobId int) error {
+	parallel.Detachable(len(users), p.Jobs, p.Config.OpenAI.ChatCompletionRPM, func(pCtx *parallel.Context, jobId int) {
 		defer func() {
 			completed <- struct{}{}
 		}()
@@ -106,18 +106,19 @@ func (p *Pipeline) Recommend(users []data.User, progress func(completed, through
 		userId := user.UserId
 		// skip inactive users before max recommend period
 		if !p.checkUserActiveTime(ctx, userId) || !p.checkRecommendCacheOutOfDate(ctx, userId) {
-			return nil
+			return
 		}
 		updateUserCount.Add(1)
 
 		recommendTime := time.Now()
 		recommender, err := logics.NewRecommender(p.Config.Recommend, p.CacheClient, p.DataClient, false, userId, nil)
 		if err != nil {
-			return errors.Trace(err)
+			log.Logger().Error("failed to create recommender", zap.String("user_id", userId), zap.Error(err))
+			return
 		}
 		if !p.dontskipColdStartUsers && recommender.IsColdStart() {
 			// skip cold-start users without any positive feedback
-			return nil
+			return
 		}
 
 		// Update collaborative filtering recommendation.
@@ -127,11 +128,11 @@ func (p *Pipeline) Recommend(users []data.User, progress func(completed, through
 				if err != nil {
 					log.Logger().Error("failed to recommend by collaborative filtering",
 						zap.String("user_id", userId), zap.Error(err))
-					return errors.Trace(err)
+					return
 				}
 			} else if !p.dontskipColdStartUsers {
 				// skip users without collaborative filtering embeddings
-				return nil
+				return
 			}
 		}
 
@@ -148,7 +149,8 @@ func (p *Pipeline) Recommend(users []data.User, progress func(completed, through
 		}
 		scores, digest, err = recommender.RecommendSequential(context.Background(), scores, 0, recommenderNames...)
 		if err != nil {
-			return errors.Trace(err)
+			log.Logger().Error("failed to recommend items", zap.String("user_id", userId), zap.Error(err))
+			return
 		}
 
 		candidates := make([]cache.Score, 0, len(scores))
@@ -157,7 +159,8 @@ func (p *Pipeline) Recommend(users []data.User, progress func(completed, through
 			return score.Id
 		}))
 		if err != nil {
-			return errors.Trace(err)
+			log.Logger().Error("failed to download items", zap.String("user_id", userId), zap.Error(err))
+			return
 		}
 		for _, score := range scores {
 			if _, exist := items[score.Id]; exist {
@@ -175,7 +178,7 @@ func (p *Pipeline) Recommend(users []data.User, progress func(completed, through
 			)
 			if err != nil {
 				log.Logger().Error("failed to prepare replacement candidates", zap.Error(err))
-				return errors.Trace(err)
+				return
 			}
 		}
 
@@ -185,18 +188,18 @@ func (p *Pipeline) Recommend(users []data.User, progress func(completed, through
 			results, err = p.rankByClickTroughRate(p.ClickThroughRateModel, &user, candidates, itemCache, recommendTime)
 			if err != nil {
 				log.Logger().Error("failed to rank items", zap.Error(err))
-				return errors.Trace(err)
+				return
 			}
 		} else if p.Config.Recommend.Ranker.Type == "llm" && p.Config.Recommend.Ranker.Prompt != "" && p.Config.OpenAI.ChatCompletionModel != "" {
 			ranker, err := logics.NewChatRanker(p.Config.OpenAI, p.Config.Recommend.Ranker.Prompt)
 			if err != nil {
 				log.Logger().Error("failed to create LLM ranker", zap.Error(err))
-				return errors.Trace(err)
+				return
 			}
-			results, err = p.rankByLLM(ranker, &user, recommender.UserFeedback(), candidates, itemCache, recommendTime)
+			results, err = p.rankByLLM(pCtx, ranker, &user, recommender.UserFeedback(), candidates, itemCache, recommendTime)
 			if err != nil {
 				log.Logger().Error("failed to rank items by LLM", zap.Error(err))
-				return errors.Trace(err)
+				return
 			}
 		} else {
 			results = candidates
@@ -210,7 +213,7 @@ func (p *Pipeline) Recommend(users []data.User, progress func(completed, through
 		// cache recommendation
 		if err = p.CacheClient.AddScores(ctx, cache.Recommend, userId, results); err != nil {
 			log.Logger().Error("failed to cache recommendation", zap.Error(err))
-			return errors.Trace(err)
+			return
 		}
 		if err = p.CacheClient.Set(ctx,
 			cache.Time(cache.Key(cache.RecommendUpdateTime, userId), recommendTime),
@@ -218,13 +221,8 @@ func (p *Pipeline) Recommend(users []data.User, progress func(completed, through
 		); err != nil {
 			log.Logger().Error("failed to cache recommendation time", zap.Error(err))
 		}
-		return nil
 	})
 	close(completed)
-	if err != nil {
-		log.Logger().Error("failed to continue offline recommendation", zap.Error(err))
-		return
-	}
 	log.Logger().Info("complete ranking recommendation",
 		zap.String("used_time", time.Since(startTime).String()))
 	UpdateUserRecommendTotal.Set(updateUserCount.Load())
@@ -417,6 +415,7 @@ func (p *Pipeline) rankByClickTroughRate(
 }
 
 func (p *Pipeline) rankByLLM(
+	pCtx *parallel.Context,
 	ranker *logics.ChatRanker,
 	user *data.User,
 	feedback []data.Feedback,
@@ -458,7 +457,9 @@ func (p *Pipeline) rankByLLM(
 		}
 	}
 	// rank by LLM
+	pCtx.Detach()
 	parsed, err := ranker.Rank(user, feedbackItems, items)
+	pCtx.Attach()
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
