@@ -173,6 +173,17 @@ func (p *Pipeline) Recommend(users []data.User, progress func(completed, through
 				log.Logger().Error("failed to rank items", zap.Error(err))
 				return errors.Trace(err)
 			}
+		} else if p.Config.Recommend.Ranker.Type == "llm" && p.Config.Recommend.Ranker.Prompt != "" && p.Config.OpenAI.ChatCompletionModel != "" {
+			ranker, err := logics.NewChatRanker(p.Config.OpenAI, p.Config.Recommend.Ranker.Prompt)
+			if err != nil {
+				log.Logger().Error("failed to create LLM ranker", zap.Error(err))
+				return errors.Trace(err)
+			}
+			results, err = p.rankByLLM(ranker, &user, recommender.UserFeedback(), candidates, itemCache, recommendTime)
+			if err != nil {
+				log.Logger().Error("failed to rank items by LLM", zap.Error(err))
+				return errors.Trace(err)
+			}
 		} else {
 			results = candidates
 		}
@@ -394,6 +405,54 @@ func (p *Pipeline) rankByClickTroughRate(
 		}
 	}
 	cache.SortDocuments(topItems)
+	return topItems, nil
+}
+
+func (p *Pipeline) rankByLLM(
+	ranker *logics.ChatRanker,
+	user *data.User,
+	feedback []data.Feedback,
+	candidates []cache.Score,
+	itemCache *ItemCache,
+	recommendTime time.Time,
+) ([]cache.Score, error) {
+	// download items
+	items, err := itemCache.GetSlice(lo.Map(candidates, func(score cache.Score, _ int) string {
+		return score.Id
+	}))
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	// convert feedback
+	itemMap, err := itemCache.GetMap(lo.Map(feedback, func(fb data.Feedback, _ int) string {
+		return fb.ItemId
+	}))
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	feedbackItems := make([]*logics.FeedbackItem, 0, len(feedback))
+	for _, fb := range feedback {
+		if item, exist := itemMap[fb.ItemId]; exist {
+			feedbackItems = append(feedbackItems, &logics.FeedbackItem{
+				FeedbackType: fb.FeedbackType,
+				Item:         *item,
+			})
+		}
+	}
+	// rank by LLM
+	parsed, err := ranker.Rank(user, feedbackItems, items)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	// construct scores
+	var topItems []cache.Score
+	for rank, itemId := range parsed {
+		topItems = append(topItems, cache.Score{
+			Id:        itemId,
+			Score:     float64(len(parsed)-rank) / float64(len(parsed)), // normalize score to [0, 1]
+			Timestamp: recommendTime,
+		})
+	}
 	return topItems, nil
 }
 
