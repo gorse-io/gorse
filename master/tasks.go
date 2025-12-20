@@ -213,6 +213,7 @@ func (m *Master) runLoadDatasetTask() error {
 	if err != nil {
 		return errors.Trace(err)
 	}
+	useClickThroughRateTasks := strings.EqualFold(m.Config.Recommend.Ranker.Type, "fm")
 	if err = m.updateUserToUser(datasets.rankingDataset); err != nil {
 		log.Logger().Error("failed to update user-to-user recommendation", zap.Error(err))
 	}
@@ -222,8 +223,10 @@ func (m *Master) runLoadDatasetTask() error {
 	if err = m.trainCollaborativeFiltering(datasets.rankingTrainSet, datasets.rankingTestSet); err != nil {
 		log.Logger().Error("failed to train collaborative filtering model", zap.Error(err))
 	}
+	if useClickThroughRateTasks {
 	if err = m.trainClickThroughRatePrediction(datasets.clickTrainSet, datasets.clickTestSet); err != nil {
 		log.Logger().Error("failed to train click-through rate prediction model", zap.Error(err))
+		}
 	}
 	if m.standalone {
 		if err = m.updateRecommend(); err != nil {
@@ -236,8 +239,10 @@ func (m *Master) runLoadDatasetTask() error {
 	if err = m.optimizeCollaborativeFiltering(datasets.rankingTrainSet, datasets.rankingTestSet); err != nil {
 		log.Logger().Error("failed to optimize collaborative filtering model", zap.Error(err))
 	}
+	if useClickThroughRateTasks {
 	if err = m.optimizeClickThroughRatePrediction(datasets.clickTrainSet, datasets.clickTestSet); err != nil {
 		log.Logger().Error("failed to optimize click-through rate prediction model", zap.Error(err))
+		}
 	}
 	return nil
 }
@@ -1293,7 +1298,8 @@ func (m *Master) updateRecommend() error {
 		log.Logger().Error("failed to unmarshal matrix factorization users", zap.Error(err))
 	}
 
-	// load click-through rate model
+	// load click-through rate model when FM ranker is enabled
+	if strings.EqualFold(m.Config.Recommend.Ranker.Type, "fm") {
 	r, err = m.blobStore.Open(strconv.FormatInt(m.clickThroughRateMeta.ID, 10))
 	if err != nil {
 		log.Logger().Error("failed to open click-through rate model", zap.Error(err))
@@ -1303,6 +1309,7 @@ func (m *Master) updateRecommend() error {
 	if err != nil {
 		log.Logger().Error("failed to unmarshal click-through rate model", zap.Error(err))
 		return errors.Trace(err)
+		}
 	}
 
 	// Pull all users from database
