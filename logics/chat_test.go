@@ -23,7 +23,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestChatRankerhat(t *testing.T) {
+func TestChatRanker(t *testing.T) {
 	mockAI := mock.NewOpenAIServer()
 	go func() {
 		_ = mockAI.Start()
@@ -64,4 +64,30 @@ Return IDs as a JSON array. For example:
 	})
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"tt1233227", "tt0926084", "tt0890870", "tt1132626", "tt0435761"}, items)
+}
+
+func TestParseArrayFromCompletion(t *testing.T) {
+	// parse JSON object
+	completion := "```json\n{\"a\": 1, \"b\": 2}\n```"
+	parsed := parseArrayFromCompletion(completion)
+	assert.Equal(t, []string{"{\"a\": 1, \"b\": 2}\n"}, parsed)
+
+	// parse JSON array
+	completion = "```json\n[1, 2]\n```"
+	parsed = parseArrayFromCompletion(completion)
+	assert.Equal(t, []string{"1", "2"}, parsed)
+
+	// parse CSV
+	completion = "```csv\n1\n2\n3\n```"
+	parsed = parseArrayFromCompletion(completion)
+	assert.Equal(t, []string{"1", "2", "3"}, parsed)
+
+	// parse text
+	completion = "Hello, world!"
+	parsed = parseArrayFromCompletion(completion)
+	assert.Equal(t, []string{"Hello, world!"}, parsed)
+
+	// strip think
+	completion = "<think>hello</think>World!"
+	assert.Equal(t, "World!", stripThinkInCompletion(completion))
 }

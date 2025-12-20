@@ -25,7 +25,6 @@ import (
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/dataset"
 	"github.com/gorse-io/gorse/storage/data"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -244,25 +243,4 @@ func (suite *ItemToItemTestSuite) TestChat() {
 
 func TestItemToItem(t *testing.T) {
 	suite.Run(t, new(ItemToItemTestSuite))
-}
-
-func TestParseJSONArrayFromCompletion(t *testing.T) {
-	// parse JSON object
-	completion := "```json\n{\"a\": 1, \"b\": 2}\n```"
-	parsed := parseJSONArrayFromCompletion(completion)
-	assert.Equal(t, []string{"{\"a\": 1, \"b\": 2}\n"}, parsed)
-
-	// parse JSON array
-	completion = "```json\n[1, 2]\n```"
-	parsed = parseJSONArrayFromCompletion(completion)
-	assert.Equal(t, []string{"1", "2"}, parsed)
-
-	// parse text
-	completion = "Hello, world!"
-	parsed = parseJSONArrayFromCompletion(completion)
-	assert.Equal(t, []string{"Hello, world!"}, parsed)
-
-	// strip think
-	completion = "<think>hello</think>World!"
-	assert.Equal(t, "World!", stripThinkInCompletion(completion))
 }

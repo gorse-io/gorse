@@ -322,13 +322,14 @@ type ReplacementConfig struct {
 }
 
 type RankerConfig struct {
-	Type           string              `mapstructure:"type" validate:"oneof=none fm"`
+	Type           string              `mapstructure:"type" validate:"oneof=none fm llm"`
 	Recommenders   []string            `mapstructure:"recommenders"`
 	CacheExpire    time.Duration       `mapstructure:"cache_expire" validate:"gt=0"`
 	FitPeriod      time.Duration       `mapstructure:"fit_period" validate:"gt=0"`
 	FitEpoch       int                 `mapstructure:"fit_epoch" validate:"gt=0"`
 	OptimizePeriod time.Duration       `mapstructure:"optimize_period" validate:"gt=0"`
 	OptimizeTrials int                 `mapstructure:"optimize_trials" validate:"gt=0"`
+	Prompt         string              `mapstructure:"prompt"`
 	EarlyStopping  EarlyStoppingConfig `mapstructure:"early_stopping"`
 }
 
