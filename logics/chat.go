@@ -157,7 +157,7 @@ func parseArrayFromCompletion(completion string) []string {
 				}
 				return []string{string(bytes)}
 			} else if string(codeBlock.Language(source)) == "csv" {
-				// If the code block is CSV, retrive 1st column as IDs.
+				// If the code block is CSV, retrieve 1st column as IDs.
 				bytes := codeBlock.Text(source)
 				lines := strings.Split(string(bytes), "\n")
 				var result []string

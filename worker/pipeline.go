@@ -465,11 +465,19 @@ func (p *Pipeline) rankByLLM(
 	}
 	// construct scores
 	var topItems []cache.Score
+	itemCategories := make(map[string][]string, len(items))
+	for _, item := range items {
+		if item == nil {
+			continue
+		}
+		itemCategories[item.ItemId] = item.Categories
+	}
 	for rank, itemId := range parsed {
 		topItems = append(topItems, cache.Score{
-			Id:        itemId,
-			Score:     float64(len(parsed)-rank) / float64(len(parsed)), // normalize score to [0, 1]
-			Timestamp: recommendTime,
+			Id:         itemId,
+			Score:      float64(len(parsed)-rank) / float64(len(parsed)), // normalize score to [0, 1]
+			Timestamp:  recommendTime,
+			Categories: itemCategories[itemId],
 		})
 	}
 	return topItems, nil

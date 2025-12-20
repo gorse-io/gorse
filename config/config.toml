@@ -250,7 +250,7 @@ optimize_trials = 10
 
 # The prompt template for LLM ranker. The default value is empty.
 prompt = """
-You are a GitHub respository recommender system. Given a user is interested in the following repositories:
+You are a GitHub repository recommender system. Given a user is interested in the following repositories:
 {% for repo in feedback -%}
 - {{ repo.Comment }}
 {% endfor -%}
