@@ -199,7 +199,7 @@ func (w *Worker) Sync() {
 		} else if w.Config.GCS.Bucket != "" {
 			nextBlobConfig = w.Config.GCS.ToJSON()
 		} else {
-			nextBlobConfig = ""
+			nextBlobConfig = "{}"
 		}
 		if w.blobConfig != nextBlobConfig {
 			if w.Config.S3.Endpoint != "" {
