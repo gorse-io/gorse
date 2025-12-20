@@ -208,3 +208,46 @@ func Split[T any](a []T, n int) [][]T {
 	}
 	return chunks
 }
+
+type Context struct {
+	sem         chan struct{}
+	detachedSem chan struct{}
+	detached    bool
+}
+
+func (ctx *Context) Detach() {
+	if ctx == nil || ctx.detached {
+		return
+	}
+	ctx.detachedSem <- struct{}{}
+	ctx.detached = true
+	<-ctx.sem
+}
+
+func (ctx *Context) Attach() {
+	if ctx == nil || !ctx.detached {
+		return
+	}
+	ctx.detached = false
+	<-ctx.detachedSem
+	ctx.sem <- struct{}{}
+}
+
+func Detachable(nJobs, nWorkers, nMaxDetached int, worker func(*Context, int)) {
+	sem := make(chan struct{}, nWorkers)
+	detachedSem := make(chan struct{}, nMaxDetached)
+	var wg sync.WaitGroup
+	for i := 0; i < nJobs; i++ {
+		sem <- struct{}{}
+		wg.Go(func() {
+			ctx := &Context{sem: sem, detachedSem: detachedSem}
+			worker(ctx, i)
+			if ctx.detached {
+				<-ctx.detachedSem
+			} else {
+				<-sem
+			}
+		})
+	}
+	wg.Wait()
+}

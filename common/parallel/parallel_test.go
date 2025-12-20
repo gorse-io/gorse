@@ -171,3 +171,25 @@ func TestSplit(t *testing.T) {
 	b = Split(a, 3)
 	assert.Equal(t, [][]int{{1, 2, 3}, {4, 5}, {6, 7}}, b)
 }
+
+func TestDetachable(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		start := time.Now()
+		Detachable(100, 1, 100, func(ctx *Context, jobId int) {
+			ctx.Detach()
+			time.Sleep(time.Second)
+			ctx.Attach()
+		})
+		assert.Less(t, time.Since(start), time.Second*2)
+	})
+
+	synctest.Test(t, func(t *testing.T) {
+		start := time.Now()
+		Detachable(100, 1, 10, func(ctx *Context, jobId int) {
+			ctx.Detach()
+			time.Sleep(time.Second)
+			ctx.Attach()
+		})
+		assert.Less(t, time.Since(start), time.Second*11)
+	})
+}

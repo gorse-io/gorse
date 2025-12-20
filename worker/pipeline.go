@@ -98,7 +98,7 @@ func (p *Pipeline) Recommend(users []data.User, progress func(completed, through
 	)
 
 	defer MemoryInuseBytesVec.WithLabelValues("user_feedback_cache").Set(0)
-	err := parallel.Parallel(len(users), p.Jobs, func(workerId, jobId int) error {
+	parallel.Detachable(len(users), p.Jobs, p.Config.OpenAI.ChatCompletionRPM, func(pCtx *parallel.Context, jobId int) {
 		defer func() {
 			completed <- struct{}{}
 		}()
@@ -106,18 +106,19 @@ func (p *Pipeline) Recommend(users []data.User, progress func(completed, through
 		userId := user.UserId
 		// skip inactive users before max recommend period
 		if !p.checkUserActiveTime(ctx, userId) || !p.checkRecommendCacheOutOfDate(ctx, userId) {
-			return nil
+			return
 		}
 		updateUserCount.Add(1)
 
 		recommendTime := time.Now()
 		recommender, err := logics.NewRecommender(p.Config.Recommend, p.CacheClient, p.DataClient, false, userId, nil)
 		if err != nil {
-			return errors.Trace(err)
+			log.Logger().Error("failed to create recommender", zap.String("user_id", userId), zap.Error(err))
+			return
 		}
 		if !p.dontskipColdStartUsers && recommender.IsColdStart() {
 			// skip cold-start users without any positive feedback
-			return nil
+			return
 		}
 
 		// Update collaborative filtering recommendation.
@@ -127,11 +128,11 @@ func (p *Pipeline) Recommend(users []data.User, progress func(completed, through
 				if err != nil {
 					log.Logger().Error("failed to recommend by collaborative filtering",
 						zap.String("user_id", userId), zap.Error(err))
-					return errors.Trace(err)
+					return
 				}
 			} else if !p.dontskipColdStartUsers {
 				// skip users without collaborative filtering embeddings
-				return nil
+				return
 			}
 		}
 
@@ -148,20 +149,36 @@ func (p *Pipeline) Recommend(users []data.User, progress func(completed, through
 		}
 		scores, digest, err = recommender.RecommendSequential(context.Background(), scores, 0, recommenderNames...)
 		if err != nil {
-			return errors.Trace(err)
+			log.Logger().Error("failed to recommend items", zap.String("user_id", userId), zap.Error(err))
+			return
 		}
 
 		candidates := make([]cache.Score, 0, len(scores))
+		candidateSet := mapset.NewSet[string]()
 		items, err := itemCache.GetMap(lo.Map(scores, func(score cache.Score, _ int) string {
 			return score.Id
 		}))
 		if err != nil {
-			return errors.Trace(err)
+			log.Logger().Error("failed to download items", zap.String("user_id", userId), zap.Error(err))
+			return
 		}
 		for _, score := range scores {
 			if _, exist := items[score.Id]; exist {
 				score.Timestamp = recommendTime
 				candidates = append(candidates, score)
+				candidateSet.Add(score.Id)
+			}
+		}
+
+		// Insert replacement items into the candidate set before ranking so all rankers (including LLM) can order them.
+		var replacementPositiveItems, replacementNegativeItems mapset.Set[string]
+		if p.Config.Recommend.Replacement.EnableReplacement && p.Config.Recommend.Ranker.Type != "none" {
+			candidates, replacementPositiveItems, replacementNegativeItems, err = p.addReplacementCandidates(
+				candidates, candidateSet, recommender.UserFeedback(), itemCache, recommendTime,
+			)
+			if err != nil {
+				log.Logger().Error("failed to prepare replacement candidates", zap.Error(err))
+				return
 			}
 		}
 
@@ -171,27 +188,32 @@ func (p *Pipeline) Recommend(users []data.User, progress func(completed, through
 			results, err = p.rankByClickTroughRate(p.ClickThroughRateModel, &user, candidates, itemCache, recommendTime)
 			if err != nil {
 				log.Logger().Error("failed to rank items", zap.Error(err))
-				return errors.Trace(err)
+				return
+			}
+		} else if p.Config.Recommend.Ranker.Type == "llm" && p.Config.Recommend.Ranker.Prompt != "" && p.Config.OpenAI.ChatCompletionModel != "" {
+			ranker, err := logics.NewChatRanker(p.Config.OpenAI, p.Config.Recommend.Ranker.Prompt)
+			if err != nil {
+				log.Logger().Error("failed to create LLM ranker", zap.Error(err))
+				return
+			}
+			results, err = p.rankByLLM(pCtx, ranker, &user, recommender.UserFeedback(), candidates, itemCache, recommendTime)
+			if err != nil {
+				log.Logger().Error("failed to rank items by LLM", zap.Error(err))
+				return
 			}
 		} else {
 			results = candidates
 		}
 
-		if p.Config.Recommend.Replacement.EnableReplacement && p.Config.Recommend.Ranker.Type == "fm" &&
-			p.ClickThroughRateModel != nil && !p.ClickThroughRateModel.Invalid() {
-			results, err = p.replacement(p.ClickThroughRateModel, results, &user,
-				recommender.UserFeedback(), itemCache, recommendTime)
-			if err != nil {
-				log.Logger().Error("failed to insert historical items into recommendation",
-					zap.String("user_id", userId), zap.Error(err))
-				return errors.Trace(err)
-			}
+		// Apply replacement decay after ranking so weights don't bypass the ranker ordering.
+		if p.Config.Recommend.Replacement.EnableReplacement && p.Config.Recommend.Ranker.Type != "none" {
+			results = p.applyReplacementDecay(results, replacementPositiveItems, replacementNegativeItems)
 		}
 
 		// cache recommendation
 		if err = p.CacheClient.AddScores(ctx, cache.Recommend, userId, results); err != nil {
 			log.Logger().Error("failed to cache recommendation", zap.Error(err))
-			return errors.Trace(err)
+			return
 		}
 		if err = p.CacheClient.Set(ctx,
 			cache.Time(cache.Key(cache.RecommendUpdateTime, userId), recommendTime),
@@ -199,13 +221,8 @@ func (p *Pipeline) Recommend(users []data.User, progress func(completed, through
 		); err != nil {
 			log.Logger().Error("failed to cache recommendation time", zap.Error(err))
 		}
-		return nil
 	})
 	close(completed)
-	if err != nil {
-		log.Logger().Error("failed to continue offline recommendation", zap.Error(err))
-		return
-	}
 	log.Logger().Info("complete ranking recommendation",
 		zap.String("used_time", time.Since(startTime).String()))
 	UpdateUserRecommendTotal.Set(updateUserCount.Load())
@@ -397,23 +414,86 @@ func (p *Pipeline) rankByClickTroughRate(
 	return topItems, nil
 }
 
-// replacement inserts historical items back to recommendation.
-func (p *Pipeline) replacement(
-	predictor ctr.FactorizationMachines,
-	recommend []cache.Score,
+func (p *Pipeline) rankByLLM(
+	pCtx *parallel.Context,
+	ranker *logics.ChatRanker,
 	user *data.User,
-	feedbacks []data.Feedback,
+	feedback []data.Feedback,
+	candidates []cache.Score,
 	itemCache *ItemCache,
 	recommendTime time.Time,
 ) ([]cache.Score, error) {
-	recommendItems := mapset.NewSet[string]()
+	// download items
+	items, err := itemCache.GetSlice(lo.Map(candidates, func(score cache.Score, _ int) string {
+		return score.Id
+	}))
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	// convert feedback
+	data.SortFeedbacks(feedback)
+	contextUserFeedback := make([]data.Feedback, 0, p.Config.Recommend.ContextSize)
+	for _, f := range feedback {
+		if p.Config.Recommend.ContextSize <= len(contextUserFeedback) {
+			break
+		}
+		if expression.MatchFeedbackTypeExpressions(p.Config.Recommend.DataSource.PositiveFeedbackTypes, f.FeedbackType, f.Value) {
+			contextUserFeedback = append(contextUserFeedback, f)
+		}
+	}
+	itemMap, err := itemCache.GetMap(lo.Map(contextUserFeedback, func(fb data.Feedback, _ int) string {
+		return fb.ItemId
+	}))
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	feedbackItems := make([]*logics.FeedbackItem, 0, len(contextUserFeedback))
+	for _, fb := range contextUserFeedback {
+		if item, exist := itemMap[fb.ItemId]; exist {
+			feedbackItems = append(feedbackItems, &logics.FeedbackItem{
+				FeedbackType: fb.FeedbackType,
+				Item:         *item,
+			})
+		}
+	}
+	// rank by LLM
+	pCtx.Detach()
+	parsed, err := ranker.Rank(user, feedbackItems, items)
+	pCtx.Attach()
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	// construct scores
+	var topItems []cache.Score
+	itemCategories := make(map[string][]string, len(items))
+	for _, item := range items {
+		if item == nil {
+			continue
+		}
+		itemCategories[item.ItemId] = item.Categories
+	}
+	for rank, itemId := range parsed {
+		topItems = append(topItems, cache.Score{
+			Id:         itemId,
+			Score:      float64(len(parsed)-rank) / float64(len(parsed)), // normalize score to [0, 1]
+			Timestamp:  recommendTime,
+			Categories: itemCategories[itemId],
+		})
+	}
+	return topItems, nil
+}
+
+// replacement inserts historical items back to recommendation.
+// It now adds the replacement items before ranking, then applies decay after ranking.
+func (p *Pipeline) addReplacementCandidates(
+	candidates []cache.Score,
+	candidateSet mapset.Set[string],
+	feedbacks []data.Feedback,
+	itemCache *ItemCache,
+	recommendTime time.Time,
+) ([]cache.Score, mapset.Set[string], mapset.Set[string], error) {
 	positiveItems := mapset.NewSet[string]()
 	distinctItems := mapset.NewSet[string]()
-	for _, r := range recommend {
-		recommendItems.Add(r.Id)
-	}
-	newRecommend := make([]cache.Score, 0, len(recommend))
-	newRecommend = append(newRecommend, recommend...)
 	for _, feedback := range feedbacks {
 		if expression.MatchFeedbackTypeExpressions(p.Config.Recommend.DataSource.PositiveFeedbackTypes, feedback.FeedbackType, feedback.Value) {
 			positiveItems.Add(feedback.ItemId)
@@ -422,58 +502,58 @@ func (p *Pipeline) replacement(
 			distinctItems.Add(feedback.ItemId)
 		}
 	}
-	negativeItems := distinctItems.Difference(positiveItems)
+
+	if distinctItems.Cardinality() == 0 {
+		return candidates, positiveItems, mapset.NewSet[string](), nil
+	}
 
 	items, err := itemCache.GetSlice(distinctItems.ToSlice())
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, nil, nil, errors.Trace(err)
 	}
-	scoredItems := make([]cache.Score, 0, len(items))
-	if batchPredictor, ok := predictor.(ctr.BatchInference); ok {
-		inputs := make([]lo.Tuple4[string, string, []ctr.Label, []ctr.Label], len(items))
-		for i, item := range items {
-			inputs[i].A = user.UserId
-			inputs[i].B = item.ItemId
-			inputs[i].C = ctr.ConvertLabels(user.Labels)
-			inputs[i].D = ctr.ConvertLabels(item.Labels)
-		}
-		output := batchPredictor.BatchPredict(inputs, p.Jobs)
-		for i, score := range output {
-			scoredItems = append(scoredItems, cache.Score{
-				Id:         items[i].ItemId,
-				Score:      float64(score),
-				Categories: items[i].Categories,
-				Timestamp:  recommendTime,
-			})
-		}
-	} else {
-		for _, item := range items {
-			scoredItems = append(scoredItems, cache.Score{
-				Id:         item.ItemId,
-				Score:      float64(predictor.Predict(user.UserId, item.ItemId, ctr.ConvertLabels(user.Labels), ctr.ConvertLabels(item.Labels))),
-				Categories: item.Categories,
-				Timestamp:  recommendTime,
-			})
-		}
-	}
-
-	for _, scoredItem := range scoredItems {
-		if recommendItems.Contains(scoredItem.Id) {
+	// Only keep items that exist and aren't hidden in the cache.
+	for _, item := range items {
+		if candidateSet.Contains(item.ItemId) {
 			continue
 		}
-		if positiveItems.Contains(scoredItem.Id) {
-			scoredItem.Score *= p.Config.Recommend.Replacement.PositiveReplacementDecay
-		} else if negativeItems.Contains(scoredItem.Id) {
-			scoredItem.Score *= p.Config.Recommend.Replacement.ReadReplacementDecay
-		} else {
-			continue
-		}
-		newRecommend = append(newRecommend, scoredItem)
+		candidates = append(candidates, cache.Score{Id: item.ItemId, Categories: item.Categories, Timestamp: recommendTime})
+		candidateSet.Add(item.ItemId)
 	}
 
-	// rank items
-	cache.SortDocuments(newRecommend)
-	return newRecommend, nil
+	// Build negative items set from distinct minus positive, filtered by existence.
+	existingSet := mapset.NewSet(lo.Map(items, func(it *data.Item, _ int) string { return it.ItemId })...)
+	positiveExisting := positiveItems.Intersect(existingSet)
+	negativeItems := distinctItems.Difference(positiveItems).Intersect(existingSet)
+
+	return candidates, positiveExisting, negativeItems, nil
+}
+
+func (p *Pipeline) applyReplacementDecay(
+	results []cache.Score,
+	positiveItems mapset.Set[string],
+	negativeItems mapset.Set[string],
+) []cache.Score {
+	if (positiveItems == nil || positiveItems.Cardinality() == 0) && (negativeItems == nil || negativeItems.Cardinality() == 0) {
+		return results
+	}
+
+	updated := make([]cache.Score, len(results))
+	copy(updated, results)
+	changed := false
+	for i := range updated {
+		switch {
+		case positiveItems != nil && positiveItems.Contains(updated[i].Id):
+			updated[i].Score *= p.Config.Recommend.Replacement.PositiveReplacementDecay
+			changed = true
+		case negativeItems != nil && negativeItems.Contains(updated[i].Id):
+			updated[i].Score *= p.Config.Recommend.Replacement.ReadReplacementDecay
+			changed = true
+		}
+	}
+	if changed {
+		cache.SortDocuments(updated)
+	}
+	return updated
 }
 
 // ItemCache is alias of map[string]data.Item.

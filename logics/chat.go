@@ -16,9 +16,11 @@ package logics
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"time"
 
+	"github.com/cenkalti/backoff/v5"
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/config"
@@ -26,6 +28,9 @@ import (
 	"github.com/nikolalohinski/gonja/v2"
 	"github.com/nikolalohinski/gonja/v2/exec"
 	"github.com/sashabaranov/go-openai"
+	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/ast"
+	"github.com/yuin/goldmark/text"
 	"go.uber.org/zap"
 )
 
@@ -70,19 +75,28 @@ func (r *ChatRanker) Rank(user *data.User, feedback []*FeedbackItem, items []*da
 	}
 	// chat completion
 	start := time.Now()
-	resp, err := r.client.CreateChatCompletion(context.Background(), openai.ChatCompletionRequest{
-		Model: r.model,
-		Messages: []openai.ChatCompletionMessage{{
-			Role:    openai.ChatMessageRoleUser,
-			Content: buf.String(),
-		}},
-	})
+	resp, err := backoff.Retry(context.Background(), func() (openai.ChatCompletionResponse, error) {
+		resp, err := r.client.CreateChatCompletion(context.Background(), openai.ChatCompletionRequest{
+			Model: r.model,
+			Messages: []openai.ChatCompletionMessage{{
+				Role:    openai.ChatMessageRoleUser,
+				Content: buf.String(),
+			}},
+		})
+		if err == nil {
+			return resp, nil
+		}
+		if isThrottled(err) {
+			return openai.ChatCompletionResponse{}, err
+		}
+		return openai.ChatCompletionResponse{}, backoff.Permanent(err)
+	}, backoff.WithBackOff(backoff.NewConstantBackOff(time.Minute)))
 	if err != nil {
 		return nil, err
 	}
 	duration := time.Since(start)
 	// parse response
-	parsed := parseJSONArrayFromCompletion(resp.Choices[0].Message.Content)
+	parsed := parseArrayFromCompletion(resp.Choices[0].Message.Content)
 	log.OpenAILogger().Info("chat completion",
 		zap.String("prompt", buf.String()),
 		zap.String("completion", resp.Choices[0].Message.Content),
@@ -103,4 +117,78 @@ func (r *ChatRanker) Rank(user *data.User, feedback []*FeedbackItem, items []*da
 		}
 	}
 	return result, nil
+}
+
+// parseArrayFromCompletion parse JSON array from completion.
+// If the completion contains a JSON array, it will return each element in the array.
+// If the completion contains a JSON object, it will return the object as a string.
+// Otherwise, it will return the completion as a string.
+func parseArrayFromCompletion(completion string) []string {
+	source := []byte(stripThinkInCompletion(completion))
+	root := goldmark.DefaultParser().Parse(text.NewReader(source))
+	for n := root.FirstChild(); n != nil; n = n.NextSibling() {
+		if n.Kind() != ast.KindFencedCodeBlock {
+			continue
+		}
+		if codeBlock, ok := n.(*ast.FencedCodeBlock); ok {
+			if string(codeBlock.Language(source)) == "json" {
+				bytes := codeBlock.Text(source)
+				if bytes[0] == '[' {
+					var temp []any
+					err := json.Unmarshal(bytes, &temp)
+					if err != nil {
+						return []string{string(bytes)}
+					}
+					var result []string
+					for _, v := range temp {
+						var bytes []byte
+						switch typed := v.(type) {
+						case string:
+							bytes = []byte(typed)
+						default:
+							bytes, err = json.Marshal(v)
+							if err != nil {
+								return []string{string(bytes)}
+							}
+						}
+						result = append(result, string(bytes))
+					}
+					return result
+				}
+				return []string{string(bytes)}
+			} else if string(codeBlock.Language(source)) == "csv" {
+				// If the code block is CSV, retrieve 1st column as IDs.
+				bytes := codeBlock.Text(source)
+				lines := strings.Split(string(bytes), "\n")
+				var result []string
+				for _, line := range lines {
+					fields := strings.Split(line, ",")
+					if len(fields) > 0 && strings.TrimSpace(fields[0]) != "" {
+						result = append(result, strings.TrimSpace(fields[0]))
+					}
+				}
+				return result
+			}
+		}
+	}
+	var result []string
+	for _, line := range strings.Split(string(source), "\n") {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			result = append(result, line)
+		}
+	}
+	return result
+}
+
+func isThrottled(err error) bool {
+	switch e := err.(type) {
+	case *openai.APIError:
+		if e.HTTPStatusCode == 429 {
+			return true
+		}
+	case *openai.RequestError:
+		return e.HTTPStatusCode == 504 || e.HTTPStatusCode == 520
+	}
+	return false
 }

@@ -16,7 +16,6 @@ package logics
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"sort"
 	"strings"
@@ -42,9 +41,6 @@ import (
 	"github.com/samber/lo"
 	"github.com/sashabaranov/go-openai"
 	"github.com/tiktoken-go/tokenizer"
-	"github.com/yuin/goldmark"
-	"github.com/yuin/goldmark/ast"
-	"github.com/yuin/goldmark/text"
 	"go.uber.org/zap"
 )
 
@@ -475,7 +471,7 @@ func (g *chatItemToItem) PopAll(i int) []cache.Score {
 		if err == nil {
 			return resp, nil
 		}
-		if throttled(err) {
+		if isThrottled(err) {
 			return openai.ChatCompletionResponse{}, err
 		}
 		return openai.ChatCompletionResponse{}, backoff.Permanent(err)
@@ -485,7 +481,7 @@ func (g *chatItemToItem) PopAll(i int) []cache.Score {
 		return nil
 	}
 	duration := time.Since(start)
-	parsed := parseJSONArrayFromCompletion(resp.Choices[0].Message.Content)
+	parsed := parseArrayFromCompletion(resp.Choices[0].Message.Content)
 	log.OpenAILogger().Info("chat completion",
 		zap.String("prompt", buf.String()),
 		zap.String("completion", resp.Choices[0].Message.Content),
@@ -509,7 +505,7 @@ func (g *chatItemToItem) PopAll(i int) []cache.Score {
 			if err == nil {
 				return resp, nil
 			}
-			if throttled(err) {
+			if isThrottled(err) {
 				return openai.EmbeddingResponse{}, err
 			}
 			return openai.EmbeddingResponse{}, backoff.Permanent(err)
@@ -560,56 +556,4 @@ func stripThinkInCompletion(s string) string {
 		return s
 	}
 	return s[end+8:]
-}
-
-// parseJSONArrayFromCompletion parse JSON array from completion.
-// If the completion contains a JSON array, it will return each element in the array.
-// If the completion contains a JSON object, it will return the object as a string.
-// Otherwise, it will return the completion as a string.
-func parseJSONArrayFromCompletion(completion string) []string {
-	source := []byte(stripThinkInCompletion(completion))
-	root := goldmark.DefaultParser().Parse(text.NewReader(source))
-	for n := root.FirstChild(); n != nil; n = n.NextSibling() {
-		if n.Kind() != ast.KindFencedCodeBlock {
-			continue
-		}
-		if codeBlock, ok := n.(*ast.FencedCodeBlock); ok {
-			if string(codeBlock.Language(source)) == "json" {
-				bytes := codeBlock.Text(source)
-				if bytes[0] == '[' {
-					var temp []any
-					err := json.Unmarshal(bytes, &temp)
-					if err != nil {
-						return []string{string(bytes)}
-					}
-					var result []string
-					for _, v := range temp {
-						var bytes []byte
-						switch typed := v.(type) {
-						case string:
-							bytes = []byte(typed)
-						default:
-							bytes, err = json.Marshal(v)
-							if err != nil {
-								return []string{string(bytes)}
-							}
-						}
-						result = append(result, string(bytes))
-					}
-					return result
-				}
-				return []string{string(bytes)}
-			}
-		}
-	}
-	return []string{string(source)}
-}
-
-func throttled(err error) bool {
-	if requestErr, ok := err.(*openai.APIError); ok {
-		if requestErr.HTTPStatusCode == 429 {
-			return true
-		}
-	}
-	return false
 }

@@ -30,6 +30,7 @@ import (
 
 	"github.com/c-bata/goptuna"
 	"github.com/gorse-io/gorse/common/expression"
+	"github.com/gorse-io/gorse/common/mock"
 	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/common/parallel"
 	"github.com/gorse-io/gorse/common/util"
@@ -729,6 +730,52 @@ func (suite *WorkerTestSuite) TestRankByClickTroughRate() {
 	suite.IsDecreasing(lo.Map(result, func(d cache.Score, _ int) float64 {
 		return d.Score
 	}))
+}
+
+func (suite *WorkerTestSuite) TestRankByLLM() {
+	ctx := context.Background()
+	mockAI := mock.NewOpenAIServer()
+	go func() {
+		_ = mockAI.Start()
+	}()
+	mockAI.Ready()
+	defer mockAI.Close()
+
+	// insert a user
+	err := suite.DataClient.BatchInsertUsers(ctx, []data.User{{UserId: "u1"}})
+	suite.NoError(err)
+	// insert items used by candidates and feedback
+	err = suite.DataClient.BatchInsertItems(ctx, []data.Item{{ItemId: "1"}, {ItemId: "2"}, {ItemId: "3"}, {ItemId: "4"}, {ItemId: "5"}})
+	suite.NoError(err)
+
+	suite.Config.OpenAI = config.OpenAIConfig{
+		BaseURL:             mockAI.BaseURL(),
+		AuthToken:           mockAI.AuthToken(),
+		ChatCompletionModel: "deepseek-r1",
+	}
+	ranker, err := logics.NewChatRanker(suite.Config.OpenAI, "```csv"+`
+	{% for item in items %}
+	{{item.ItemId}}
+	{% endfor %}
+	`+"```")
+	suite.NoError(err)
+
+	itemCache := NewItemCache(suite.DataClient)
+	recommendTime := time.Now()
+	result, err := suite.rankByLLM(nil, ranker, &data.User{UserId: "u1"}, []data.Feedback{
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "like", UserId: "u1", ItemId: "4"}},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "like", UserId: "u1", ItemId: "5"}},
+	}, []cache.Score{{Id: "1"}, {Id: "2"}, {Id: "3"}}, itemCache, recommendTime)
+	suite.NoError(err)
+	suite.Equal([]string{"1", "2", "3"}, lo.Map(result, func(d cache.Score, _ int) string {
+		return d.Id
+	}))
+	suite.Equal([]float64{1, float64(2) / 3, float64(1) / 3}, lo.Map(result, func(d cache.Score, _ int) float64 {
+		return d.Score
+	}))
+	for _, scored := range result {
+		suite.Equal(recommendTime, scored.Timestamp)
+	}
 }
 
 func (suite *WorkerTestSuite) TestReplacement() {

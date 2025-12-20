@@ -136,7 +136,6 @@ func NewWorker(
 // Sync this worker to the master.
 func (w *Worker) Sync() {
 	var nextBlobConfig string
-	defer util.CheckPanic()
 	log.Logger().Info("start meta sync", zap.Duration("meta_timeout", w.Config.Master.MetaTimeout))
 	for {
 		var meta *protocol.Meta
@@ -251,7 +250,6 @@ func (w *Worker) Sync() {
 
 // Pull user index and ranking model from master.
 func (w *Worker) Pull() {
-	defer util.CheckPanic()
 	for range w.syncedChan.C {
 		pulled := false
 

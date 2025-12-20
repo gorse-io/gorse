@@ -227,6 +227,7 @@ read_replacement_decay = 0.6
 # The type of the ranker. There are two types:
 #   none: no ranking.
 #   fm: factorization machines.
+#   llm: large language model.
 type = "fm"
 
 # The time period to refresh recommendation for inactive users. The default values is 120h.
@@ -246,6 +247,27 @@ optimize_period = "360m"
 
 # The number of trials for hyperparameter optimization. The default value is 10.
 optimize_trials = 10
+
+# The prompt template for LLM ranker. The default value is empty.
+prompt = """
+You are a GitHub repository recommender system. Given a user is interested in the following repositories:
+{% for repo in feedback -%}
+- {{ repo.Comment }}
+{% endfor -%}
+Please sort the following repositories by the user's interests:
+```csv
+item_id,description
+{% for repo in items -%}
+{{ repo.ItemId }},{{ repo.Comment | replace(",", " ") | replace("\n", " ") }}
+{% endfor -%}
+```
+Return the sorted list of repository IDs in CSV format. For example:
+```csv
+{% for repo in items[:3] -%}
+{{ repo.ItemId }}
+{% endfor -%}
+```
+"""
 
 [recommend.ranker.early_stopping]
 
