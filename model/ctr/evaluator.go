@@ -17,9 +17,8 @@ package ctr
 import (
 	"sort"
 
-	"github.com/gorse-io/gorse/dataset"
-
 	"github.com/chewxy/math32"
+	"github.com/gorse-io/gorse/dataset"
 	"github.com/samber/lo"
 	"modernc.org/sortutil"
 )

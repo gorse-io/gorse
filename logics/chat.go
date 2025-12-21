@@ -111,9 +111,11 @@ func (r *ChatRanker) Rank(user *data.User, feedback []*FeedbackItem, items []*da
 		s.Add(item.ItemId)
 	}
 	var result []string
+	m := mapset.NewSet[string]()
 	for _, itemId := range parsed {
-		if s.Contains(itemId) {
+		if s.Contains(itemId) && !m.Contains(itemId) {
 			result = append(result, itemId)
+			m.Add(itemId)
 		}
 	}
 	return result, nil
