@@ -40,6 +40,7 @@ require (
 	github.com/minio/minio-go/v7 v7.0.97
 	github.com/modern-go/reflect2 v1.0.2
 	github.com/nikolalohinski/gonja/v2 v2.5.0
+	github.com/philippgille/chromem-go v0.7.0
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.13.0
 	github.com/rakyll/statik v0.1.7
