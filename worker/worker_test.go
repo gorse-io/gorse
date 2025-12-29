@@ -32,7 +32,6 @@ import (
 	"github.com/gorse-io/gorse/common/expression"
 	"github.com/gorse-io/gorse/common/mock"
 	"github.com/gorse-io/gorse/common/monitor"
-	"github.com/gorse-io/gorse/common/parallel"
 	"github.com/gorse-io/gorse/common/util"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/dataset"
@@ -649,7 +648,7 @@ func TestWorker_Sync(t *testing.T) {
 		},
 		testMode:     true,
 		masterClient: protocol.NewMasterClient(conn),
-		syncedChan:   parallel.NewConditionChannel(),
+		syncedChan:   make(chan struct{}, 1),
 		ticker:       time.NewTicker(time.Minute),
 	}
 

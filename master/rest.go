@@ -1735,6 +1735,9 @@ func (m *Master) restore(response http.ResponseWriter, request *http.Request) {
 		zap.Int("feedback", stats.Feedback),
 		zap.Duration("duration", stats.Duration))
 	server.Ok(restful.NewResponse(response), stats)
+
+	// restart tasks
+	m.cancel()
 }
 
 func (m *Master) handleOAuth2Callback(w http.ResponseWriter, r *http.Request) {

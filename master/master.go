@@ -96,8 +96,9 @@ type Master struct {
 
 	// events
 	fitTicker    *time.Ticker
-	importedChan *parallel.ConditionChannel // feedback inserted events
-	triggerChan  *parallel.ConditionChannel // manually trigger events
+	importedChan chan struct{} // feedback inserted events
+	triggerChan  chan struct{} // manually trigger events
+	cancel       context.CancelFunc
 }
 
 // NewMaster creates a master node.
@@ -138,8 +139,9 @@ func NewMaster(cfg *config.Config, cacheFolder string, standalone bool) *Master 
 			WebService:  new(restful.WebService),
 		},
 		fitTicker:    time.NewTicker(duration),
-		importedChan: parallel.NewConditionChannel(),
-		triggerChan:  parallel.NewConditionChannel(),
+		importedChan: make(chan struct{}, 1),
+		triggerChan:  make(chan struct{}, 1),
+		cancel:       func() {},
 	}
 	return m
 }
@@ -311,10 +313,16 @@ func (m *Master) RunTasksLoop() {
 		//firstLoop = true
 	)
 	go func() {
-		m.importedChan.Signal()
+		select {
+		case m.triggerChan <- struct{}{}:
+		default:
+		}
 		for {
 			if m.checkDataImported() {
-				m.importedChan.Signal()
+				select {
+				case m.triggerChan <- struct{}{}:
+				default:
+				}
 			}
 			time.Sleep(time.Second)
 		}
@@ -322,13 +330,13 @@ func (m *Master) RunTasksLoop() {
 	for {
 		select {
 		case <-m.fitTicker.C:
-		case <-m.importedChan.C:
+		case <-m.importedChan:
 		}
 
 		// download dataset
-		ctx, cancel := context.WithCancel(context.Background())
+		var ctx context.Context
+		ctx, m.cancel = context.WithCancel(context.Background())
 		err = m.runLoadDatasetTask(ctx)
-		cancel()
 		if err != nil {
 			log.Logger().Error("failed to load ranking dataset", zap.Error(err))
 			continue
