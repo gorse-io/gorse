@@ -31,7 +31,6 @@ import (
 	"github.com/gorse-io/gorse/cmd/version"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/common/monitor"
-	"github.com/gorse-io/gorse/common/parallel"
 	"github.com/gorse-io/gorse/common/util"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/logics"
@@ -93,9 +92,9 @@ type Worker struct {
 	// events
 	tickDuration time.Duration
 	ticker       *time.Ticker
-	syncedChan   *parallel.ConditionChannel // meta synced events
-	pulledChan   *parallel.ConditionChannel // model pulled events
-	triggerChan  *parallel.ConditionChannel // manually triggered events
+	syncedChan   chan struct{} // meta synced events
+	pulledChan   chan struct{} // model pulled events
+	triggerChan  chan struct{} // manually triggered events
 }
 
 // NewWorker creates a new worker node.
@@ -127,9 +126,9 @@ func NewWorker(
 		// events
 		tickDuration: interval,
 		ticker:       time.NewTicker(interval),
-		syncedChan:   parallel.NewConditionChannel(),
-		pulledChan:   parallel.NewConditionChannel(),
-		triggerChan:  parallel.NewConditionChannel(),
+		syncedChan:   make(chan struct{}, 1),
+		pulledChan:   make(chan struct{}, 1),
+		triggerChan:  make(chan struct{}, 1),
 	}
 }
 
@@ -226,7 +225,11 @@ func (w *Worker) Sync() {
 			log.Logger().Info("new ranking model found",
 				zap.Int64("old_version", w.collaborativeFilteringModelId),
 				zap.Int64("new_version", w.latestCollaborativeFilteringModelId))
-			w.syncedChan.Signal()
+
+			select {
+			case w.triggerChan <- struct{}{}:
+			default:
+			}
 		}
 
 		// synchronize click-through rate model
@@ -235,7 +238,11 @@ func (w *Worker) Sync() {
 			log.Logger().Info("new click model found",
 				zap.Int64("old_version", w.clickThroughRateModelId),
 				zap.Int64("new_version", w.latestClickThroughRateModelId))
-			w.syncedChan.Signal()
+
+			select {
+			case w.triggerChan <- struct{}{}:
+			default:
+			}
 		}
 
 		w.peers = meta.Workers
@@ -250,7 +257,7 @@ func (w *Worker) Sync() {
 
 // Pull user index and ranking model from master.
 func (w *Worker) Pull() {
-	for range w.syncedChan.C {
+	for range w.syncedChan {
 		pulled := false
 
 		// pull ranking model
@@ -301,7 +308,10 @@ func (w *Worker) Pull() {
 			return
 		}
 		if pulled {
-			w.pulledChan.Signal()
+			select {
+			case w.triggerChan <- struct{}{}:
+			default:
+			}
 		}
 	}
 }
@@ -394,7 +404,7 @@ func (w *Worker) Serve() {
 			if time.Since(tick) <= w.tickDuration {
 				loop()
 			}
-		case <-w.pulledChan.C:
+		case <-w.pulledChan:
 			loop()
 		}
 	}
