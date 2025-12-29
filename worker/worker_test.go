@@ -182,7 +182,7 @@ func (suite *WorkerTestSuite) TestRecommendCollaborative() {
 	}
 	suite.MatrixFactorizationUsers = logics.NewMatrixFactorizationUsers()
 	suite.MatrixFactorizationUsers.Add("0", []float32{1})
-	suite.Recommend([]data.User{{UserId: "0"}}, nil)
+	suite.Recommend(ctx, []data.User{{UserId: "0"}}, nil)
 
 	// read recommend time
 	recommendTime, err := suite.CacheClient.Get(ctx, cache.Key(cache.RecommendUpdateTime, "0")).Time()
@@ -254,7 +254,7 @@ func (suite *WorkerTestSuite) TestRecommendItemToItem() {
 	// insert categorized items
 	err = suite.DataClient.BatchInsertItems(ctx, []data.Item{{ItemId: "26", Categories: []string{"*"}}, {ItemId: "28", Categories: []string{"*"}}})
 	suite.NoError(err)
-	suite.Recommend([]data.User{{UserId: "0"}}, nil)
+	suite.Recommend(ctx, []data.User{{UserId: "0"}}, nil)
 	// read recommend time
 	recommendTime, err := suite.CacheClient.Get(ctx, cache.Key(cache.RecommendUpdateTime, "0")).Time()
 	suite.NoError(err)
@@ -313,7 +313,7 @@ func (suite *WorkerTestSuite) TestRecommendUserToUser() {
 		{ItemId: "48", Categories: []string{"*"}},
 	})
 	suite.NoError(err)
-	suite.Recommend([]data.User{{UserId: "0"}}, nil)
+	suite.Recommend(ctx, []data.User{{UserId: "0"}}, nil)
 	// read recommend time
 	recommendTime, err := suite.CacheClient.Get(ctx, cache.Key(cache.RecommendUpdateTime, "0")).Time()
 	suite.NoError(err)
@@ -351,7 +351,7 @@ func (suite *WorkerTestSuite) TestRecommendLatest() {
 	// insert hidden items
 	err = suite.DataClient.BatchInsertItems(ctx, []data.Item{{ItemId: "21", IsHidden: true}})
 	suite.NoError(err)
-	suite.Recommend([]data.User{{UserId: "0"}}, nil)
+	suite.Recommend(ctx, []data.User{{UserId: "0"}}, nil)
 	// read recommend time
 	recommendTime, err := suite.CacheClient.Get(ctx, cache.Key(cache.RecommendUpdateTime, "0")).Time()
 	suite.NoError(err)
@@ -405,7 +405,7 @@ func (suite *WorkerTestSuite) TestRecommendNonPersonalized() {
 	// insert hidden items
 	err = suite.DataClient.BatchInsertItems(ctx, []data.Item{{ItemId: "11", IsHidden: true}})
 	suite.NoError(err)
-	suite.Recommend([]data.User{{UserId: "0"}}, nil)
+	suite.Recommend(ctx, []data.User{{UserId: "0"}}, nil)
 	// read recommend time
 	recommendTime, err := suite.CacheClient.Get(ctx, cache.Key(cache.RecommendUpdateTime, "0")).Time()
 	suite.NoError(err)
@@ -470,7 +470,7 @@ func (suite *WorkerTestSuite) TestRecommend() {
 	err = suite.CacheClient.AddScores(ctx, cache.UserToUser, cache.Key("default", "0"), []cache.Score{{Id: "1"}})
 	suite.NoError(err)
 
-	suite.Recommend([]data.User{{UserId: "0"}}, nil)
+	suite.Recommend(ctx, []data.User{{UserId: "0"}}, nil)
 	// read recommend time
 	recommendTime, err := suite.CacheClient.Get(ctx, cache.Key(cache.RecommendUpdateTime, "0")).Time()
 	suite.NoError(err)
@@ -530,7 +530,7 @@ func (suite *WorkerTestSuite) TestRecommendRankerNone() {
 	err = suite.CacheClient.AddScores(ctx, cache.UserToUser, cache.Key("default", "0"), []cache.Score{{Id: "1"}})
 	suite.NoError(err)
 
-	suite.Recommend([]data.User{{UserId: "0"}}, nil)
+	suite.Recommend(ctx, []data.User{{UserId: "0"}}, nil)
 	// read recommend time
 	recommendTime, err := suite.CacheClient.Get(ctx, cache.Key(cache.RecommendUpdateTime, "0")).Time()
 	suite.NoError(err)
@@ -721,7 +721,7 @@ func (suite *WorkerTestSuite) TestRankByClickTroughRate() {
 	suite.NoError(err)
 	// rank items
 	itemCache := NewItemCache(suite.DataClient)
-	result, err := suite.rankByClickTroughRate(new(mockFactorizationMachine), &data.User{UserId: "1"},
+	result, err := suite.rankByClickTroughRate(ctx, new(mockFactorizationMachine), &data.User{UserId: "1"},
 		[]cache.Score{{Id: "1"}, {Id: "2"}, {Id: "3"}, {Id: "4"}, {Id: "5"}}, itemCache, time.Now())
 	suite.NoError(err)
 	suite.Equal([]string{"5", "4", "3", "2", "1"}, lo.Map(result, func(d cache.Score, _ int) string {
@@ -762,7 +762,7 @@ func (suite *WorkerTestSuite) TestRankByLLM() {
 
 	itemCache := NewItemCache(suite.DataClient)
 	recommendTime := time.Now()
-	result, err := suite.rankByLLM(nil, ranker, &data.User{UserId: "u1"}, []data.Feedback{
+	result, err := suite.rankByLLM(ctx, nil, ranker, &data.User{UserId: "u1"}, []data.Feedback{
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "like", UserId: "u1", ItemId: "4"}},
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "like", UserId: "u1", ItemId: "5"}},
 	}, []cache.Score{{Id: "1"}, {Id: "2"}, {Id: "3"}}, itemCache, recommendTime)
@@ -804,7 +804,7 @@ func (suite *WorkerTestSuite) TestReplacement() {
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "i", UserId: "0", ItemId: "8"}},
 	}, true, false, true)
 	suite.NoError(err)
-	suite.Recommend([]data.User{{UserId: "0"}}, nil)
+	suite.Recommend(ctx, []data.User{{UserId: "0"}}, nil)
 	// read recommend time
 	recommendTime, err := suite.CacheClient.Get(ctx, cache.Key(cache.RecommendUpdateTime, "0")).Time()
 	suite.NoError(err)
@@ -819,7 +819,7 @@ func (suite *WorkerTestSuite) TestReplacement() {
 	// 2. Insert historical items into non-empty recommendation.
 	suite.Config.Recommend.CacheExpire = 0
 	suite.Config.Recommend.Ranker.Recommenders = []string{"latest"}
-	suite.Recommend([]data.User{{UserId: "0"}}, nil)
+	suite.Recommend(ctx, []data.User{{UserId: "0"}}, nil)
 	// read recommend time
 	recommendTime, err = suite.CacheClient.Get(ctx, cache.Key(cache.RecommendUpdateTime, "0")).Time()
 	suite.NoError(err)

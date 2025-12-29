@@ -49,8 +49,7 @@ type Pipeline struct {
 	dontskipColdStartUsers   bool
 }
 
-func (p *Pipeline) Recommend(users []data.User, progress func(completed, throughput int)) {
-	ctx := context.Background()
+func (p *Pipeline) Recommend(ctx context.Context, users []data.User, progress func(completed, throughput int)) {
 	startRecommendTime := time.Now()
 	itemCache := NewItemCache(p.DataClient)
 	log.Logger().Info("ranking recommendation",
@@ -60,7 +59,7 @@ func (p *Pipeline) Recommend(users []data.User, progress func(completed, through
 
 	// progress tracker
 	completed := make(chan struct{}, 1000)
-	_, span := p.Tracer.Start(context.Background(), "Generate recommendation", len(users))
+	_, span := p.Tracer.Start(ctx, "Generate recommendation", len(users))
 	defer span.End()
 
 	go func() {
@@ -82,6 +81,8 @@ func (p *Pipeline) Recommend(users []data.User, progress func(completed, through
 					progress(completedCount, completedCount-previousCount)
 				}
 				previousCount = completedCount
+			case <-ctx.Done():
+				return
 			}
 		}
 	}()
@@ -99,6 +100,11 @@ func (p *Pipeline) Recommend(users []data.User, progress func(completed, through
 
 	defer MemoryInuseBytesVec.WithLabelValues("user_feedback_cache").Set(0)
 	parallel.Detachable(len(users), p.Jobs, p.Config.OpenAI.ChatCompletionRPM, func(pCtx *parallel.Context, jobId int) {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
 		defer func() {
 			completed <- struct{}{}
 		}()
@@ -124,7 +130,7 @@ func (p *Pipeline) Recommend(users []data.User, progress func(completed, through
 		// Update collaborative filtering recommendation.
 		if p.MatrixFactorizationUsers != nil && p.MatrixFactorizationItems != nil {
 			if userEmbedding, ok := p.MatrixFactorizationUsers.Get(userId); ok {
-				err = p.updateCollaborativeRecommend(p.MatrixFactorizationItems, userId, userEmbedding, recommender.ExcludeSet(), itemCache)
+				err = p.updateCollaborativeRecommend(ctx, p.MatrixFactorizationItems, userId, userEmbedding, recommender.ExcludeSet(), itemCache)
 				if err != nil {
 					log.Logger().Error("failed to recommend by collaborative filtering",
 						zap.String("user_id", userId), zap.Error(err))
@@ -147,7 +153,7 @@ func (p *Pipeline) Recommend(users []data.User, progress func(completed, through
 		} else {
 			recommenderNames = p.Config.Recommend.ListRecommenders()
 		}
-		scores, digest, err = recommender.RecommendSequential(context.Background(), scores, 0, recommenderNames...)
+		scores, digest, err = recommender.RecommendSequential(ctx, scores, 0, recommenderNames...)
 		if err != nil {
 			log.Logger().Error("failed to recommend items", zap.String("user_id", userId), zap.Error(err))
 			return
@@ -155,7 +161,7 @@ func (p *Pipeline) Recommend(users []data.User, progress func(completed, through
 
 		candidates := make([]cache.Score, 0, len(scores))
 		candidateSet := mapset.NewSet[string]()
-		items, err := itemCache.GetMap(lo.Map(scores, func(score cache.Score, _ int) string {
+		items, err := itemCache.GetMap(ctx, lo.Map(scores, func(score cache.Score, _ int) string {
 			return score.Id
 		}))
 		if err != nil {
@@ -174,7 +180,7 @@ func (p *Pipeline) Recommend(users []data.User, progress func(completed, through
 		var replacementPositiveItems, replacementNegativeItems mapset.Set[string]
 		if p.Config.Recommend.Replacement.EnableReplacement && p.Config.Recommend.Ranker.Type != "none" {
 			candidates, replacementPositiveItems, replacementNegativeItems, err = p.addReplacementCandidates(
-				candidates, candidateSet, recommender.UserFeedback(), itemCache, recommendTime,
+				ctx, candidates, candidateSet, recommender.UserFeedback(), itemCache, recommendTime,
 			)
 			if err != nil {
 				log.Logger().Error("failed to prepare replacement candidates", zap.Error(err))
@@ -185,7 +191,7 @@ func (p *Pipeline) Recommend(users []data.User, progress func(completed, through
 		// rank by click-through-rate
 		var results []cache.Score
 		if p.Config.Recommend.Ranker.Type == "fm" && p.ClickThroughRateModel != nil && !p.ClickThroughRateModel.Invalid() {
-			results, err = p.rankByClickTroughRate(p.ClickThroughRateModel, &user, candidates, itemCache, recommendTime)
+			results, err = p.rankByClickTroughRate(ctx, p.ClickThroughRateModel, &user, candidates, itemCache, recommendTime)
 			if err != nil {
 				log.Logger().Error("failed to rank items", zap.Error(err))
 				return
@@ -196,7 +202,7 @@ func (p *Pipeline) Recommend(users []data.User, progress func(completed, through
 				log.Logger().Error("failed to create LLM ranker", zap.Error(err))
 				return
 			}
-			results, err = p.rankByLLM(pCtx, ranker, &user, recommender.UserFeedback(), candidates, itemCache, recommendTime)
+			results, err = p.rankByLLM(ctx, pCtx, ranker, &user, recommender.UserFeedback(), candidates, itemCache, recommendTime)
 			if err != nil {
 				log.Logger().Error("failed to rank items by LLM", zap.Error(err))
 				return
@@ -317,17 +323,20 @@ func (p *Pipeline) checkRecommendCacheOutOfDate(ctx context.Context, userId stri
 }
 
 func (p *Pipeline) updateCollaborativeRecommend(
+	ctx context.Context,
 	items *logics.MatrixFactorizationItems,
 	userId string,
 	userEmbedding []float32,
 	excludeSet mapset.Set[string],
 	itemCache *ItemCache,
 ) error {
-	ctx := context.Background()
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	localStartTime := time.Now()
 	scores := items.Search(userEmbedding, p.Config.Recommend.CacheSize+excludeSet.Cardinality())
 	// update categories
-	itemsMap, err := itemCache.GetMap(lo.Map(scores, func(score cache.Score, _ int) string {
+	itemsMap, err := itemCache.GetMap(ctx, lo.Map(scores, func(score cache.Score, _ int) string {
 		return score.Id
 	}))
 	if err != nil {
@@ -367,7 +376,9 @@ func (p *Pipeline) updateCollaborativeRecommend(
 }
 
 // rankByClickTroughRate ranks items by predicted click-through-rate.
+
 func (p *Pipeline) rankByClickTroughRate(
+	ctx context.Context,
 	predictor ctr.FactorizationMachines,
 	user *data.User,
 	candidates []cache.Score,
@@ -375,7 +386,7 @@ func (p *Pipeline) rankByClickTroughRate(
 	recommendTime time.Time,
 ) ([]cache.Score, error) {
 	// download items
-	items, err := itemCache.GetSlice(lo.Map(candidates, func(score cache.Score, _ int) string {
+	items, err := itemCache.GetSlice(ctx, lo.Map(candidates, func(score cache.Score, _ int) string {
 		return score.Id
 	}))
 	if err != nil {
@@ -415,6 +426,7 @@ func (p *Pipeline) rankByClickTroughRate(
 }
 
 func (p *Pipeline) rankByLLM(
+	ctx context.Context,
 	pCtx *parallel.Context,
 	ranker *logics.ChatRanker,
 	user *data.User,
@@ -424,7 +436,7 @@ func (p *Pipeline) rankByLLM(
 	recommendTime time.Time,
 ) ([]cache.Score, error) {
 	// download items
-	items, err := itemCache.GetSlice(lo.Map(candidates, func(score cache.Score, _ int) string {
+	items, err := itemCache.GetSlice(ctx, lo.Map(candidates, func(score cache.Score, _ int) string {
 		return score.Id
 	}))
 	if err != nil {
@@ -441,7 +453,7 @@ func (p *Pipeline) rankByLLM(
 			contextUserFeedback = append(contextUserFeedback, f)
 		}
 	}
-	itemMap, err := itemCache.GetMap(lo.Map(contextUserFeedback, func(fb data.Feedback, _ int) string {
+	itemMap, err := itemCache.GetMap(ctx, lo.Map(contextUserFeedback, func(fb data.Feedback, _ int) string {
 		return fb.ItemId
 	}))
 	if err != nil {
@@ -486,6 +498,7 @@ func (p *Pipeline) rankByLLM(
 // replacement inserts historical items back to recommendation.
 // It now adds the replacement items before ranking, then applies decay after ranking.
 func (p *Pipeline) addReplacementCandidates(
+	ctx context.Context,
 	candidates []cache.Score,
 	candidateSet mapset.Set[string],
 	feedbacks []data.Feedback,
@@ -507,7 +520,7 @@ func (p *Pipeline) addReplacementCandidates(
 		return candidates, positiveItems, mapset.NewSet[string](), nil
 	}
 
-	items, err := itemCache.GetSlice(distinctItems.ToSlice())
+	items, err := itemCache.GetSlice(ctx, distinctItems.ToSlice())
 	if err != nil {
 		return nil, nil, nil, errors.Trace(err)
 	}
@@ -570,14 +583,17 @@ func NewItemCache(client data.Database) *ItemCache {
 	}
 }
 
-func (c *ItemCache) GetSlice(itemIds []string) ([]*data.Item, error) {
+func (c *ItemCache) GetSlice(ctx context.Context, itemIds []string) ([]*data.Item, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	requests := make([]string, 0, len(itemIds))
 	for _, itemId := range itemIds {
 		if _, exist := c.Data.Load(itemId); !exist {
 			requests = append(requests, itemId)
 		}
 	}
-	response, err := c.Client.BatchGetItems(context.Background(), requests)
+	response, err := c.Client.BatchGetItems(ctx, requests)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -596,8 +612,8 @@ func (c *ItemCache) GetSlice(itemIds []string) ([]*data.Item, error) {
 	return items, nil
 }
 
-func (c *ItemCache) GetMap(itemIds []string) (map[string]*data.Item, error) {
-	items, err := c.GetSlice(itemIds)
+func (c *ItemCache) GetMap(ctx context.Context, itemIds []string) (map[string]*data.Item, error) {
+	items, err := c.GetSlice(ctx, itemIds)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
