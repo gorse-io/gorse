@@ -53,14 +53,14 @@ func (suite *PipelineTestSuite) TearDownSuite() {
 
 func (suite *PipelineTestSuite) TestGetSlice() {
 	c := NewItemCache(suite.dataClient)
-	items, err := c.GetSlice([]string{"1", "2", "3", "4", "5", "6"})
+	items, err := c.GetSlice(context.Background(), []string{"1", "2", "3", "4", "5", "6"})
 	suite.NoError(err)
 	suite.Equal(5, len(items))
 }
 
 func (suite *PipelineTestSuite) TestGetMap() {
 	c := NewItemCache(suite.dataClient)
-	items, err := c.GetMap([]string{"1", "2", "3", "4", "5", "6"})
+	items, err := c.GetMap(context.Background(), []string{"1", "2", "3", "4", "5", "6"})
 	suite.NoError(err)
 	suite.Equal(5, len(items))
 }

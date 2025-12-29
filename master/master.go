@@ -326,7 +326,9 @@ func (m *Master) RunTasksLoop() {
 		}
 
 		// download dataset
-		err = m.runLoadDatasetTask()
+		ctx, cancel := context.WithCancel(context.Background())
+		err = m.runLoadDatasetTask(ctx)
+		cancel()
 		if err != nil {
 			log.Logger().Error("failed to load ranking dataset", zap.Error(err))
 			continue

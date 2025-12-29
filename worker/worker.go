@@ -376,7 +376,7 @@ func (w *Worker) Serve() {
 		}
 
 		// recommendation
-		w.Recommend(workingUsers, func(completed, throughput int) {
+		w.Recommend(context.Background(), workingUsers, func(completed, throughput int) {
 			log.Logger().Info("ranking recommendation",
 				zap.Int("n_complete_users", completed),
 				zap.Int("throughput", throughput))
