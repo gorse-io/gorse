@@ -15,6 +15,7 @@
 package logics
 
 import (
+	"context"
 	"testing"
 
 	"github.com/gorse-io/gorse/common/mock"
@@ -48,7 +49,7 @@ Please sort the following movies based on his or her preference:
 Return IDs as a JSON array. For example:
 `+"```json\n"+`["tt1233227", "tt0926084", "tt0890870", "tt1132626", "tt0435761"]`+"\n```")
 	assert.NoError(t, err)
-	items, err := ranker.Rank(&data.User{
+	items, err := ranker.Rank(context.Background(), &data.User{
 		UserId:  "Tom",
 		Comment: "horror movie enthusiast",
 	}, []*FeedbackItem{
