@@ -89,7 +89,7 @@ func (s *MasterTestSuite) TestFindItemToItem() {
 
 	// similar items (common users)
 	s.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "default", Type: "users"}}
-	s.NoError(s.updateItemToItem(dataSet))
+	s.NoError(s.updateItemToItem(context.Background(), dataSet))
 	similar, err := s.CacheClient.SearchScores(ctx, cache.ItemToItem, cache.Key("default", "9"), nil, 0, 100)
 	s.NoError(err)
 	s.Equal([]string{"7", "5", "3"}, cache.ConvertDocumentsToValues(similar))
@@ -106,7 +106,7 @@ func (s *MasterTestSuite) TestFindItemToItem() {
 	err = s.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastModifyItemTime, "8"), time.Now()))
 	s.NoError(err)
 	s.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "default", Type: "tags", Column: "item.Labels"}}
-	s.NoError(s.updateItemToItem(dataSet))
+	s.NoError(s.updateItemToItem(context.Background(), dataSet))
 	similar, err = s.CacheClient.SearchScores(ctx, cache.ItemToItem, cache.Key("default", "8"), nil, 0, 100)
 	s.NoError(err)
 	s.Equal([]string{"0", "2", "4"}, cache.ConvertDocumentsToValues(similar))
@@ -121,7 +121,7 @@ func (s *MasterTestSuite) TestFindItemToItem() {
 	err = s.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastModifyItemTime, "9"), time.Now()))
 	s.NoError(err)
 	s.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "default", Type: "auto"}}
-	s.NoError(s.updateItemToItem(dataSet))
+	s.NoError(s.updateItemToItem(context.Background(), dataSet))
 	similar, err = s.CacheClient.SearchScores(ctx, cache.ItemToItem, cache.Key("default", "8"), nil, 0, 100)
 	s.NoError(err)
 	s.Equal([]string{"0", "2", "4"}, cache.ConvertDocumentsToValues(similar))
@@ -176,7 +176,7 @@ func (s *MasterTestSuite) TestUserToUser() {
 
 	// similar items (common users)
 	s.Config.Recommend.UserToUser = []config.UserToUserConfig{{Name: "default", Type: "items"}}
-	s.NoError(s.updateUserToUser(dataSet))
+	s.NoError(s.updateUserToUser(context.Background(), dataSet))
 	similar, err := s.CacheClient.SearchScores(ctx, cache.UserToUser, cache.Key("default", "9"), nil, 0, 100)
 	s.NoError(err)
 	s.Equal([]string{"7", "5", "3"}, cache.ConvertDocumentsToValues(similar))
@@ -188,7 +188,7 @@ func (s *MasterTestSuite) TestUserToUser() {
 	err = s.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastModifyUserTime, "8"), time.Now()))
 	s.NoError(err)
 	s.Config.Recommend.UserToUser = []config.UserToUserConfig{{Name: "default", Type: "tags", Column: "user.Labels"}}
-	s.NoError(s.updateUserToUser(dataSet))
+	s.NoError(s.updateUserToUser(context.Background(), dataSet))
 	similar, err = s.CacheClient.SearchScores(ctx, cache.UserToUser, cache.Key("default", "8"), nil, 0, 100)
 	s.NoError(err)
 	s.Equal([]string{"0", "2", "4"}, cache.ConvertDocumentsToValues(similar))
@@ -199,7 +199,7 @@ func (s *MasterTestSuite) TestUserToUser() {
 	err = s.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastModifyUserTime, "9"), time.Now()))
 	s.NoError(err)
 	s.Config.Recommend.UserToUser = []config.UserToUserConfig{{Name: "default", Type: "auto"}}
-	s.NoError(s.updateUserToUser(dataSet))
+	s.NoError(s.updateUserToUser(context.Background(), dataSet))
 	similar, err = s.CacheClient.SearchScores(ctx, cache.UserToUser, cache.Key("default", "8"), nil, 0, 100)
 	s.NoError(err)
 	s.Equal([]string{"0", "2", "4"}, cache.ConvertDocumentsToValues(similar))
@@ -285,7 +285,7 @@ func (s *MasterTestSuite) TestLoadDataFromDatabase() {
 	s.NoError(err)
 
 	// load dataset
-	datasets, err := s.loadDataset()
+	datasets, err := s.loadDataset(ctx)
 	s.NoError(err)
 	s.Equal(11, datasets.rankingTrainSet.CountUsers())
 	s.Equal(10, datasets.rankingTrainSet.CountItems())
@@ -387,7 +387,7 @@ func (s *MasterTestSuite) TestNonPersonalizedRecommend() {
 	s.NoError(err)
 
 	// load dataset
-	_, err = s.loadDataset()
+	_, err = s.loadDataset(ctx)
 	s.NoError(err)
 
 	// check latest items
@@ -413,7 +413,7 @@ func (s *MasterTestSuite) TestNeedUpdateItemToItem() {
 	ctx := context.Background()
 
 	// empty cache
-	s.True(s.needUpdateItemToItem("1", recommendConfig))
+	s.True(s.needUpdateItemToItem(ctx, "1", recommendConfig))
 	err := s.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key("default", "1"), []cache.Score{
 		{Id: "2", Score: 1, Categories: []string{""}},
 		{Id: "3", Score: 2, Categories: []string{""}},
@@ -424,20 +424,20 @@ func (s *MasterTestSuite) TestNeedUpdateItemToItem() {
 	// digest mismatch
 	err = s.CacheClient.Set(ctx, cache.String(cache.Key(cache.ItemToItemDigest, "default", "1"), "digest"))
 	s.NoError(err)
-	s.True(s.needUpdateItemToItem("1", recommendConfig))
+	s.True(s.needUpdateItemToItem(ctx, "1", recommendConfig))
 
 	// staled cache
 	err = s.CacheClient.Set(ctx, cache.String(cache.Key(cache.ItemToItemDigest, "default", "1"), recommendConfig.Hash(&s.Config.Recommend)))
 	s.NoError(err)
-	s.True(s.needUpdateItemToItem("1", recommendConfig))
+	s.True(s.needUpdateItemToItem(ctx, "1", recommendConfig))
 	err = s.CacheClient.Set(ctx, cache.Time(cache.Key(cache.ItemToItemUpdateTime, "default", "1"), time.Now().Add(-s.Config.Recommend.CacheExpire)))
 	s.NoError(err)
-	s.True(s.needUpdateItemToItem("1", recommendConfig))
+	s.True(s.needUpdateItemToItem(ctx, "1", recommendConfig))
 
 	// not staled cache
 	err = s.CacheClient.Set(ctx, cache.Time(cache.Key(cache.ItemToItemUpdateTime, "default", "1"), time.Now()))
 	s.NoError(err)
-	s.False(s.needUpdateItemToItem("1", recommendConfig))
+	s.False(s.needUpdateItemToItem(ctx, "1", recommendConfig))
 }
 
 func (s *MasterTestSuite) TestNeedUpdateUserToUser() {
@@ -446,7 +446,7 @@ func (s *MasterTestSuite) TestNeedUpdateUserToUser() {
 	recommendConfig := config.UserToUserConfig{Name: "default"}
 
 	// empty cache
-	s.True(s.needUpdateUserToUser("1", recommendConfig))
+	s.True(s.needUpdateUserToUser(ctx, "1", recommendConfig))
 	err := s.CacheClient.AddScores(ctx, cache.UserToUser, cache.Key("default", "1"), []cache.Score{
 		{Id: "1", Score: 1, Categories: []string{""}},
 		{Id: "2", Score: 2, Categories: []string{""}},
@@ -457,20 +457,20 @@ func (s *MasterTestSuite) TestNeedUpdateUserToUser() {
 	// digest mismatch
 	err = s.CacheClient.Set(ctx, cache.String(cache.Key(cache.UserToUserDigest, "default", "1"), "digest"))
 	s.NoError(err)
-	s.True(s.needUpdateUserToUser("1", recommendConfig))
+	s.True(s.needUpdateUserToUser(ctx, "1", recommendConfig))
 
 	// staled cache
 	err = s.CacheClient.Set(ctx, cache.String(cache.Key(cache.UserToUserDigest, "default", "1"), recommendConfig.Hash(&s.Config.Recommend)))
 	s.NoError(err)
-	s.True(s.needUpdateUserToUser("1", recommendConfig))
+	s.True(s.needUpdateUserToUser(ctx, "1", recommendConfig))
 	err = s.CacheClient.Set(ctx, cache.Time(cache.Key(cache.UserToUserUpdateTime, "default", "1"), time.Now().Add(-s.Config.Recommend.CacheExpire)))
 	s.NoError(err)
-	s.True(s.needUpdateUserToUser("1", recommendConfig))
+	s.True(s.needUpdateUserToUser(ctx, "1", recommendConfig))
 
 	// not staled cache
 	err = s.CacheClient.Set(ctx, cache.Time(cache.Key(cache.UserToUserUpdateTime, "default", "1"), time.Now()))
 	s.NoError(err)
-	s.False(s.needUpdateUserToUser("1", recommendConfig))
+	s.False(s.needUpdateUserToUser(ctx, "1", recommendConfig))
 }
 
 func (s *MasterTestSuite) TestGarbageCollection() {
@@ -556,9 +556,9 @@ func (s *MasterTestSuite) TestGarbageCollection() {
 	s.NoError(err)
 
 	// load dataset and run garbage collection
-	datasets, err := s.loadDataset()
+	datasets, err := s.loadDataset(ctx)
 	s.NoError(err)
-	err = s.collectGarbage(context.Background(), datasets.rankingDataset)
+	err = s.collectGarbage(ctx, datasets.rankingDataset)
 	s.NoError(err)
 
 	// check non-personalized cache

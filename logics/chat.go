@@ -62,21 +62,21 @@ func NewChatRanker(cfg config.OpenAIConfig, prompt string) (*ChatRanker, error) 
 	}, nil
 }
 
-func (r *ChatRanker) Rank(user *data.User, feedback []*FeedbackItem, items []*data.Item) ([]string, error) {
+func (r *ChatRanker) Rank(ctx context.Context, user *data.User, feedback []*FeedbackItem, items []*data.Item) ([]string, error) {
 	// render template
 	var buf strings.Builder
-	ctx := exec.NewContext(map[string]any{
+	tplCtx := exec.NewContext(map[string]any{
 		"user":     user,
 		"feedback": feedback,
 		"items":    items,
 	})
-	if err := r.template.Execute(&buf, ctx); err != nil {
+	if err := r.template.Execute(&buf, tplCtx); err != nil {
 		return nil, err
 	}
 	// chat completion
 	start := time.Now()
-	resp, err := backoff.Retry(context.Background(), func() (openai.ChatCompletionResponse, error) {
-		resp, err := r.client.CreateChatCompletion(context.Background(), openai.ChatCompletionRequest{
+	resp, err := backoff.Retry(ctx, func() (openai.ChatCompletionResponse, error) {
+		resp, err := r.client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
 			Model: r.model,
 			Messages: []openai.ChatCompletionMessage{{
 				Role:    openai.ChatMessageRoleUser,
