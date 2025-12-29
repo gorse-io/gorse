@@ -68,7 +68,7 @@ func (ms *ModelSearch) Objective(trial goptuna.Trial) (float64, error) {
 	}
 	m := ms.modelCreators[modelType]()
 	m.SetParams(m.SuggestParams(trial))
-	score := m.Fit(context.Background(), ms.trainSet, ms.testSet, ms.config)
+	score := m.Fit(ms.ctx, ms.trainSet, ms.testSet, ms.config)
 	if score.AUC > ms.result.Score.AUC {
 		ms.result = meta.Model[Score]{
 			Type:   modelType,

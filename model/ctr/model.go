@@ -351,10 +351,17 @@ func (fm *FMV2) Fit(ctx context.Context, trainSet, testSet dataset.CTRSplit, con
 	optimizer.SetWeightDecay(fm.reg)
 	optimizer.SetJobs(config.Jobs)
 	_, span := monitor.Start(ctx, "FM.Fit", fm.nEpochs)
+	defer span.End()
 	for epoch := 1; epoch <= fm.nEpochs; epoch++ {
 		fitStart := time.Now()
 		cost := float32(0)
 		for i := 0; i < trainSet.Count(); i += fm.batchSize {
+			select {
+			case <-ctx.Done():
+				log.Logger().Info("fit DeepFM canceled", zap.Int("epoch", epoch), zap.Error(ctx.Err()))
+				return score
+			default:
+			}
 			j := mathutil.Min(i+fm.batchSize, trainSet.Count())
 			batchIndices := indices.Slice(i, j)
 			batchValues := values.Slice(i, j)
@@ -399,7 +406,6 @@ func (fm *FMV2) Fit(ctx context.Context, trainSet, testSet dataset.CTRSplit, con
 		}
 		span.Add(1)
 	}
-	span.End()
 	return score
 }
 

@@ -470,7 +470,7 @@ func (p *Pipeline) rankByLLM(
 	}
 	// rank by LLM
 	pCtx.Detach()
-	parsed, err := ranker.Rank(user, feedbackItems, items)
+	parsed, err := ranker.Rank(ctx, user, feedbackItems, items)
 	pCtx.Attach()
 	if err != nil {
 		return nil, errors.Trace(err)

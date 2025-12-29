@@ -1207,6 +1207,7 @@ func (m *Master) optimizeCollaborativeFiltering(parent context.Context, trainSet
 	if err != nil {
 		return errors.Trace(err)
 	}
+	study.WithContext(ctx)
 	if err = study.Optimize(search.Objective, m.Config.Recommend.Collaborative.OptimizeTrials); err != nil {
 		return errors.Trace(err)
 	}
@@ -1220,8 +1221,8 @@ func (m *Master) optimizeCollaborativeFiltering(parent context.Context, trainSet
 	return nil
 }
 
-func (m *Master) optimizeClickThroughRatePrediction(ctx context.Context, trainSet, testSet *ctr.Dataset) error {
-	traceCtx, span := m.tracer.Start(ctx, "Optimize Click-Through Rate Prediction Model", m.Config.Recommend.Ranker.OptimizeTrials)
+func (m *Master) optimizeClickThroughRatePrediction(parent context.Context, trainSet, testSet *ctr.Dataset) error {
+	ctx, span := m.tracer.Start(parent, "Optimize Click-Through Rate Prediction Model", m.Config.Recommend.Ranker.OptimizeTrials)
 	defer span.End()
 
 	if trainSet.CountUsers() == 0 {
@@ -1243,7 +1244,7 @@ func (m *Master) optimizeClickThroughRatePrediction(ctx context.Context, trainSe
 		ctr.NewFitConfig().
 			SetJobs(m.Config.Master.NumJobs).
 			SetPatience(m.Config.Recommend.Ranker.EarlyStopping.Patience)).
-		WithContext(traceCtx).
+		WithContext(ctx).
 		WithSpan(span)
 
 	study, err := goptuna.CreateStudy("optimizeClickThroughRatePrediction",
@@ -1253,6 +1254,7 @@ func (m *Master) optimizeClickThroughRatePrediction(ctx context.Context, trainSe
 	if err != nil {
 		return errors.Trace(err)
 	}
+	study.WithContext(ctx)
 	if err = study.Optimize(search.Objective, m.Config.Recommend.Ranker.OptimizeTrials); err != nil {
 		return errors.Trace(err)
 	}
