@@ -510,8 +510,24 @@ func formatConfig(configMap map[string]interface{}) map[string]interface{} {
 }
 
 func (m *Master) postConfig(request *restful.Request, response *restful.Response) {
+	var newConfigMap map[string]any
+	if err := request.ReadEntity(&newConfigMap); err != nil {
+		server.BadRequest(response, err)
+		return
+	}
 	var newConfig config.Config
-	if err := request.ReadEntity(&newConfig); err != nil {
+	decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
+		DecodeHook: mapstructure.ComposeDecodeHookFunc(
+			mapstructure.StringToTimeDurationHookFunc(),
+			config.StringToFeedbackTypeHookFunc(),
+		),
+		Result: &newConfig,
+	})
+	if err != nil {
+		server.InternalServerError(response, err)
+		return
+	}
+	if err = decoder.Decode(newConfigMap); err != nil {
 		server.BadRequest(response, err)
 		return
 	}

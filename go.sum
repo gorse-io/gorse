@@ -363,8 +363,8 @@ github.com/gorilla/securecookie v1.1.2/go.mod h1:NfCASbcHqRSY+3a8tlWJwsQap2VX5pw
 github.com/gorilla/websocket v1.4.2/go.mod h1:YR8l580nyteQvAITg2hZ9XVh4b55+EU/adAjf1fMHhE=
 github.com/gorse-io/clickhouse v0.3.3-0.20251121080503-d578f146896d h1:s6U3e1W7NdviEq12zOisra1cAaG9+fkL6jnMK8sok/Y=
 github.com/gorse-io/clickhouse v0.3.3-0.20251121080503-d578f146896d/go.mod h1:iILWzbul8U+gsf4kqbheF2QzBmdvVp63mloGGK8emDI=
-github.com/gorse-io/dashboard v0.0.0-20251213025824-604323db6bd9 h1:wK921dhJywlMqpiikgBROq1Po6EHOsNFoVsGDcZ+BIg=
-github.com/gorse-io/dashboard v0.0.0-20251213025824-604323db6bd9/go.mod h1:MdBWrLSpKA9ZdVCqN6i/n8mtTU2zoLYxqsTuR9HYDs0=
+github.com/gorse-io/dashboard v0.0.0-20260103052112-637feaebf8d4 h1:i75dY927cTblpw3AB+o0lX244LBYBWsL8rfwqiCwwZk=
+github.com/gorse-io/dashboard v0.0.0-20260103052112-637feaebf8d4/go.mod h1:MdBWrLSpKA9ZdVCqN6i/n8mtTU2zoLYxqsTuR9HYDs0=
 github.com/gorse-io/gorse-go v0.5.0-alpha.3 h1:GR/OWzq016VyFyTTxgQWeayGahRVzB1cGFIW/AaShC4=
 github.com/gorse-io/gorse-go v0.5.0-alpha.3/go.mod h1:ZxmVHzZPKm5pmEIlqaRDwK0rkfTRHlfziO033XZ+RW0=
 github.com/gorse-io/sqlite v1.3.3-0.20220713123255-c322aec4e59e h1:uPQtYQzG1QcC3Qbv+tuEe8Q2l++V4KEcqYSSwB9qobg=
