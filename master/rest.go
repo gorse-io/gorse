@@ -91,6 +91,11 @@ func (m *Master) CreateWebService() {
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
 		Returns(http.StatusOK, "OK", []string{}).
 		Writes([]string{}))
+	ws.Route(ws.POST("/dashboard/config").To(m.postConfig).
+		Doc("Update config.").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
+		Returns(http.StatusOK, "OK", config.Config{}).
+		Writes(config.Config{}))
 	ws.Route(ws.GET("/dashboard/config").To(m.getConfig).
 		Doc("Get config.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
@@ -502,6 +507,47 @@ func formatConfig(configMap map[string]interface{}) map[string]interface{} {
 			return v
 		}
 	})
+}
+
+func (m *Master) postConfig(request *restful.Request, response *restful.Response) {
+	var newConfigMap map[string]any
+	if err := request.ReadEntity(&newConfigMap); err != nil {
+		server.BadRequest(response, err)
+		return
+	}
+	var newConfig config.Config
+	decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
+		DecodeHook: mapstructure.ComposeDecodeHookFunc(
+			mapstructure.StringToTimeDurationHookFunc(),
+			config.StringToFeedbackTypeHookFunc(),
+		),
+		Result: &newConfig,
+	})
+	if err != nil {
+		server.InternalServerError(response, err)
+		return
+	}
+	if err = decoder.Decode(newConfigMap); err != nil {
+		server.BadRequest(response, err)
+		return
+	}
+	configForValidation := *m.Config
+	configForValidation.Recommend = newConfig.Recommend
+	if err = configForValidation.Validate(); err != nil {
+		server.BadRequest(response, err)
+		return
+	}
+	recommendConfigBytes, err := json.Marshal(newConfig.Recommend)
+	if err != nil {
+		server.InternalServerError(response, err)
+		return
+	}
+	if err = m.metaStore.Put(meta.RECOMMEND_CONFIG, string(recommendConfigBytes)); err != nil {
+		server.InternalServerError(response, err)
+		return
+	}
+	m.Config.Recommend = newConfig.Recommend
+	server.Ok(response, newConfig)
 }
 
 func (m *Master) getConfig(_ *restful.Request, response *restful.Response) {

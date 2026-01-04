@@ -86,11 +86,13 @@ func (suite *MasterAPITestSuite) SetupTest() {
 	// open database
 	var err error
 	suite.Config = config.GetDefaultConfig()
+	suite.Config.Database.DataStore = fmt.Sprintf("sqlite://%s/data.db", suite.T().TempDir())
+	suite.Config.Database.CacheStore = fmt.Sprintf("sqlite://%s/cache.db", suite.T().TempDir())
 	suite.metaStore, err = meta.Open(fmt.Sprintf("sqlite://%s/meta.db", suite.T().TempDir()), suite.Config.Master.MetaTimeout)
 	suite.NoError(err)
-	suite.DataClient, err = data.Open(fmt.Sprintf("sqlite://%s/data.db", suite.T().TempDir()), "")
+	suite.DataClient, err = data.Open(suite.Config.Database.DataStore, "")
 	suite.NoError(err)
-	suite.CacheClient, err = cache.Open(fmt.Sprintf("sqlite://%s/cache.db", suite.T().TempDir()), "")
+	suite.CacheClient, err = cache.Open(suite.Config.Database.CacheStore, "")
 	suite.NoError(err)
 	// init database
 	err = suite.metaStore.Init()
@@ -100,7 +102,6 @@ func (suite *MasterAPITestSuite) SetupTest() {
 	err = suite.CacheClient.Init()
 	suite.NoError(err)
 	// create server
-	suite.Config = config.GetDefaultConfig()
 	suite.Config.Master.DashboardUserName = mockMasterUsername
 	suite.Config.Master.DashboardPassword = mockMasterPassword
 	suite.WebService = new(restful.WebService)
@@ -757,7 +758,7 @@ func (suite *MasterAPITestSuite) TestPurge() {
 	suite.Empty(feedbacks)
 }
 
-func (suite *MasterAPITestSuite) TestGetConfig() {
+func (suite *MasterAPITestSuite) TestConfig() {
 	suite.Config.Recommend.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{
 		expression.MustParseFeedbackTypeExpression("a")}
 	suite.Config.Recommend.DataSource.ReadFeedbackTypes = []expression.FeedbackTypeExpression{
@@ -782,6 +783,31 @@ func (suite *MasterAPITestSuite) TestGetConfig() {
 		Status(http.StatusOK).
 		Body(marshal(suite.T(), redactedConfig)).
 		End()
+
+	suite.Config.Master.DashboardRedacted = false
+	newConfig := *suite.Config
+	newConfig.Recommend.Ranker.Type = "llm"
+	apitest.New().
+		Handler(suite.handler).
+		Post("/api/dashboard/config").
+		Header("Cookie", suite.cookie).
+		Header("Content-Type", "application/json").
+		Body(marshal(suite.T(), formatConfig(convertToMapStructure(suite.T(), newConfig)))).
+		Expect(suite.T()).
+		Status(http.StatusOK).
+		End()
+	suite.Equal("llm", suite.Config.Recommend.Ranker.Type)
+
+	newConfig.Recommend.Ranker.Type = "xxx"
+	apitest.New().
+		Handler(suite.handler).
+		Post("/api/dashboard/config").
+		Header("Cookie", suite.cookie).
+		JSON(newConfig).
+		Expect(suite.T()).
+		Status(http.StatusBadRequest).
+		End()
+	suite.Equal("llm", suite.Config.Recommend.Ranker.Type)
 }
 
 func (suite *MasterAPITestSuite) TestGetConfigSchema() {

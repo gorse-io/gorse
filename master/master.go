@@ -16,6 +16,7 @@ package master
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math"
 	"math/rand"
@@ -193,8 +194,19 @@ func (m *Master) Serve() {
 		log.Logger().Fatal("failed to init database", zap.Error(err))
 	}
 
+	// load recommend config
+	metaStr, err := m.metaStore.Get(meta.RECOMMEND_CONFIG)
+	if err != nil && !errors.Is(err, errors.NotFound) {
+		log.Logger().Error("failed to load recommend config", zap.Error(err))
+	} else if metaStr != nil {
+		err = json.Unmarshal([]byte(*metaStr), &m.Config.Recommend)
+		if err != nil {
+			log.Logger().Error("failed to unmarshal recommend config", zap.Error(err))
+		}
+	}
+
 	// load collective filtering model meta
-	metaStr, err := m.metaStore.Get(meta.COLLABORATIVE_FILTERING_MODEL)
+	metaStr, err = m.metaStore.Get(meta.COLLABORATIVE_FILTERING_MODEL)
 	if err != nil && !errors.Is(err, errors.NotFound) {
 		log.Logger().Error("failed to load collaborative filtering meta", zap.Error(err))
 	} else if metaStr != nil {
