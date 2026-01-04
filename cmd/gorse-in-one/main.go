@@ -23,6 +23,7 @@ import (
 	"path/filepath"
 	"runtime"
 
+	"github.com/fsnotify/fsnotify"
 	"github.com/gorse-io/gorse/cmd/version"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/config"
@@ -32,6 +33,7 @@ import (
 	"github.com/klauspost/cpuid/v2"
 	"github.com/schollz/progressbar/v3"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 	"go.uber.org/zap"
 )
 
@@ -104,6 +106,19 @@ var oneCommand = &cobra.Command{
 			m.Shutdown()
 			close(done)
 		}()
+
+		// Watch config file change
+		viper.WatchConfig()
+		viper.OnConfigChange(func(e fsnotify.Event) {
+			log.Logger().Info("reload config", zap.String("config", e.Name))
+			cfg, err := config.LoadConfig(e.Name)
+			if err != nil {
+				log.Logger().Error("failed to reload config", zap.Error(err))
+				return
+			}
+			m.Reload(cfg)
+		})
+
 		// Start master
 		m.Serve()
 		<-done

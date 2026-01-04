@@ -304,6 +304,10 @@ func (m *Master) Shutdown() {
 	m.grpcServer.GracefulStop()
 }
 
+func (m *Master) Reload(cfg *config.Config) {
+	m.Config.Recommend = cfg.Recommend
+}
+
 func (m *Master) RunTasksLoop() {
 	defer util.CheckPanic()
 	var (
