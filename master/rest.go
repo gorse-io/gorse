@@ -531,6 +531,12 @@ func (m *Master) postConfig(request *restful.Request, response *restful.Response
 		server.BadRequest(response, err)
 		return
 	}
+	configForValidation := *m.Config
+	configForValidation.Recommend = newConfig.Recommend
+	if err = configForValidation.Validate(); err != nil {
+		server.BadRequest(response, err)
+		return
+	}
 	recommendConfigBytes, err := json.Marshal(newConfig.Recommend)
 	if err != nil {
 		server.InternalServerError(response, err)
