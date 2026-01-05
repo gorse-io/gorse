@@ -100,10 +100,8 @@ func (p *Pipeline) Recommend(ctx context.Context, users []data.User, progress fu
 
 	defer MemoryInuseBytesVec.WithLabelValues("user_feedback_cache").Set(0)
 	parallel.Detachable(len(users), p.Jobs, p.Config.OpenAI.ChatCompletionRPM, func(pCtx *parallel.Context, jobId int) {
-		select {
-		case <-ctx.Done():
+		if ctx.Err() != nil {
 			return
-		default:
 		}
 		defer func() {
 			completed <- struct{}{}
@@ -330,9 +328,6 @@ func (p *Pipeline) updateCollaborativeRecommend(
 	excludeSet mapset.Set[string],
 	itemCache *ItemCache,
 ) error {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	localStartTime := time.Now()
 	scores := items.Search(userEmbedding, p.Config.Recommend.CacheSize+excludeSet.Cardinality())
 	// update categories

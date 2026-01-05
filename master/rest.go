@@ -547,6 +547,12 @@ func (m *Master) postConfig(request *restful.Request, response *restful.Response
 		return
 	}
 	m.Config.Recommend = newConfig.Recommend
+
+	m.cancel()
+	select {
+	case m.scheduled <- struct{}{}:
+	default:
+	}
 	server.Ok(response, newConfig)
 }
 
@@ -1132,6 +1138,13 @@ func (m *Master) importExportUsers(response http.ResponseWriter, request *http.R
 				return
 			}
 		}
+
+		m.cancel()
+		select {
+		case m.scheduled <- struct{}{}:
+		default:
+		}
+
 		timeUsed := time.Since(timeStart)
 		log.Logger().Info("complete import users",
 			zap.Duration("time_used", timeUsed),
@@ -1248,6 +1261,13 @@ func (m *Master) importExportItems(response http.ResponseWriter, request *http.R
 				return
 			}
 		}
+
+		m.cancel()
+		select {
+		case m.scheduled <- struct{}{}:
+		default:
+		}
+
 		timeUsed := time.Since(timeStart)
 		log.Logger().Info("complete import items",
 			zap.Duration("time_used", timeUsed),
@@ -1368,6 +1388,13 @@ func (m *Master) importExportFeedback(response http.ResponseWriter, request *htt
 				return
 			}
 		}
+
+		m.cancel()
+		select {
+		case m.scheduled <- struct{}{}:
+		default:
+		}
+
 		timeUsed := time.Since(timeStart)
 		log.Logger().Info("complete import feedback",
 			zap.Duration("time_used", timeUsed),
@@ -1725,6 +1752,13 @@ func (m *Master) restore(response http.ResponseWriter, request *http.Request) {
 		writeError(response, http.StatusInternalServerError, err.Error())
 		return
 	}
+
+	m.cancel()
+	select {
+	case m.scheduled <- struct{}{}:
+	default:
+	}
+
 	stats.Duration = time.Since(start)
 	log.Logger().Info("complete restore",
 		zap.Int("users", stats.Users),
@@ -1732,9 +1766,6 @@ func (m *Master) restore(response http.ResponseWriter, request *http.Request) {
 		zap.Int("feedback", stats.Feedback),
 		zap.Duration("duration", stats.Duration))
 	server.Ok(restful.NewResponse(response), stats)
-
-	// restart tasks
-	m.cancel()
 }
 
 func (m *Master) handleOAuth2Callback(w http.ResponseWriter, r *http.Request) {

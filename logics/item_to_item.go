@@ -65,7 +65,6 @@ type ItemToItem interface {
 	Items() []*data.Item
 	Push(item *data.Item, feedback []int32)
 	PopAll(i int) []cache.Score
-	Pool() parallel.Pool
 }
 
 func NewItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time, opts *ItemToItemOptions) (ItemToItem, error) {
@@ -129,10 +128,6 @@ func (b *baseItemToItem[T]) PopAll(i int) []cache.Score {
 			Timestamp:  b.timestamp,
 		}
 	})
-}
-
-func (b *baseItemToItem[T]) Pool() parallel.Pool {
-	return parallel.NewSequentialPool()
 }
 
 type embeddingItemToItem struct {
@@ -541,10 +536,6 @@ func (g *chatItemToItem) PopAll(i int) []cache.Score {
 		}
 	}
 	return scores
-}
-
-func (g *chatItemToItem) Pool() parallel.Pool {
-	return parallel.NewConcurrentPool(g.poolSize)
 }
 
 func stripThinkInCompletion(s string) string {

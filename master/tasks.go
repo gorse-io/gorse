@@ -429,6 +429,9 @@ func (m *Master) LoadDataFromDatabase(
 	var posFeedbackCount int
 	start = time.Now()
 	err = parallel.Parallel(len(itemGroups), m.Config.Master.NumJobs, func(_, i int) error {
+		if newCtx.Err() != nil {
+			return newCtx.Err()
+		}
 		var itemFeedback []data.Feedback
 		var itemGroupIndex int
 		itemHasFeedback := make([]bool, len(itemGroups[i]))
@@ -519,6 +522,9 @@ func (m *Master) LoadDataFromDatabase(
 	start = time.Now()
 	var negativeFeedbackCount float64
 	err = parallel.Parallel(len(itemGroups), m.Config.Master.NumJobs, func(_, i int) error {
+		if newCtx.Err() != nil {
+			return newCtx.Err()
+		}
 		feedbackChan, errChan := database.GetFeedbackStream(newCtx, batchSize,
 			data.WithBeginItemId(itemGroups[i][0].ItemId),
 			data.WithEndItemId(itemGroups[i][len(itemGroups[i])-1].ItemId),
@@ -649,50 +655,46 @@ func (m *Master) updateItemToItem(parent context.Context, dataset *dataset.Datas
 
 	// Save item-to-item recommendations to cache
 	for i, recommender := range itemToItemRecommenders {
-		pool := recommender.Pool()
 		parallel.ForEach(recommender.Items(), m.Config.Master.NumJobs, func(j int, item *data.Item) {
 			itemToItemConfig := m.Config.Recommend.ItemToItem[i]
 			if m.needUpdateItemToItem(ctx, item.ItemId, itemToItemConfig) {
-				pool.Run(func() {
-					defer span.Add(1)
-					score := recommender.PopAll(j)
-					if score == nil {
-						return
-					}
-					log.Logger().Debug("update item-to-item recommendation",
-						zap.String("item_id", item.ItemId),
-						zap.String("name", itemToItemConfig.Name),
-						zap.Int("n_recommendations", len(score)))
-					// Save item-to-item recommendation to cache
-					if err := m.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key(itemToItemConfig.Name, item.ItemId), score); err != nil {
-						log.Logger().Error("failed to save item-to-item recommendation to cache",
-							zap.String("item_id", item.ItemId), zap.Error(err))
-						return
-					}
-					// Save item-to-item digest and last update time to cache
-					if err := m.CacheClient.Set(ctx,
-						cache.String(cache.Key(cache.ItemToItemDigest, itemToItemConfig.Name, item.ItemId), itemToItemConfig.Hash(&m.Config.Recommend)),
-						cache.Time(cache.Key(cache.ItemToItemUpdateTime, itemToItemConfig.Name, item.ItemId), time.Now()),
-					); err != nil {
-						log.Logger().Error("failed to save item-to-item digest to cache",
-							zap.String("item_id", item.ItemId), zap.Error(err))
-						return
-					}
-					// Remove stale item-to-item recommendation
-					if err := m.CacheClient.DeleteScores(ctx, []string{cache.ItemToItem}, cache.ScoreCondition{
-						Subset: lo.ToPtr(cache.Key(itemToItemConfig.Name, item.ItemId)),
-						Before: lo.ToPtr(recommender.Timestamp()),
-					}); err != nil {
-						log.Logger().Error("failed to remove stale item-to-item recommendation",
-							zap.String("item_id", item.ItemId), zap.Error(err))
-						return
-					}
-				})
+				defer span.Add(1)
+				score := recommender.PopAll(j)
+				if score == nil {
+					return
+				}
+				log.Logger().Debug("update item-to-item recommendation",
+					zap.String("item_id", item.ItemId),
+					zap.String("name", itemToItemConfig.Name),
+					zap.Int("n_recommendations", len(score)))
+				// Save item-to-item recommendation to cache
+				if err := m.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key(itemToItemConfig.Name, item.ItemId), score); err != nil {
+					log.Logger().Error("failed to save item-to-item recommendation to cache",
+						zap.String("item_id", item.ItemId), zap.Error(err))
+					return
+				}
+				// Save item-to-item digest and last update time to cache
+				if err := m.CacheClient.Set(ctx,
+					cache.String(cache.Key(cache.ItemToItemDigest, itemToItemConfig.Name, item.ItemId), itemToItemConfig.Hash(&m.Config.Recommend)),
+					cache.Time(cache.Key(cache.ItemToItemUpdateTime, itemToItemConfig.Name, item.ItemId), time.Now()),
+				); err != nil {
+					log.Logger().Error("failed to save item-to-item digest to cache",
+						zap.String("item_id", item.ItemId), zap.Error(err))
+					return
+				}
+				// Remove stale item-to-item recommendation
+				if err := m.CacheClient.DeleteScores(ctx, []string{cache.ItemToItem}, cache.ScoreCondition{
+					Subset: lo.ToPtr(cache.Key(itemToItemConfig.Name, item.ItemId)),
+					Before: lo.ToPtr(recommender.Timestamp()),
+				}); err != nil {
+					log.Logger().Error("failed to remove stale item-to-item recommendation",
+						zap.String("item_id", item.ItemId), zap.Error(err))
+					return
+				}
 			} else {
 				span.Add(1)
 			}
 		})
-		pool.Wait()
 	}
 	return nil
 }
