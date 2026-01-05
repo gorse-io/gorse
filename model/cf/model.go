@@ -446,10 +446,8 @@ func (bpr *BPR) Fit(ctx context.Context, trainSet, valSet dataset.CFSplit, confi
 		// Training epoch
 		cost := make([]float32, config.Jobs)
 		if err := parallel.Parallel(trainSet.CountFeedback(), config.Jobs, func(workerId, _ int) error {
-			select {
-			case <-ctx.Done():
+			if ctx.Err() != nil {
 				return ctx.Err()
-			default:
 			}
 			// Select a user
 			var userIndex int32
@@ -494,7 +492,7 @@ func (bpr *BPR) Fit(ctx context.Context, trainSet, valSet dataset.CFSplit, confi
 			return nil
 		}); err != nil {
 			log.Logger().Info("fit bpr canceled", zap.Int("epoch", epoch), zap.Error(err))
-			return Score{NDCG: score[0], Precision: score[1], Recall: score[2]}
+			return Score{}
 		}
 		fitTime := time.Since(fitStart)
 		// Cross validation
@@ -651,7 +649,7 @@ func (als *ALS) Fit(ctx context.Context, trainSet, valSet dataset.CFSplit, confi
 		for itemIndex := 0; itemIndex < trainSet.CountItems(); itemIndex++ {
 			if err := ctx.Err(); err != nil {
 				log.Logger().Info("fit als canceled", zap.Int("epoch", ep), zap.Error(err))
-				return Score{NDCG: score[0], Precision: score[1], Recall: score[2]}
+				return Score{}
 			}
 			if len(trainSet.GetItemFeedback()[itemIndex]) > 0 {
 				for i := 0; i < als.nFactors; i++ {
@@ -662,10 +660,8 @@ func (als *ALS) Fit(ctx context.Context, trainSet, valSet dataset.CFSplit, confi
 			}
 		}
 		if err := parallel.Parallel(trainSet.CountUsers(), config.Jobs, func(workerId, userIndex int) error {
-			select {
-			case <-ctx.Done():
+			if ctx.Err() != nil {
 				return ctx.Err()
-			default:
 			}
 			userFeedback := trainSet.GetUserFeedback()[userIndex]
 			for _, i := range userFeedback {
@@ -696,15 +692,15 @@ func (als *ALS) Fit(ctx context.Context, trainSet, valSet dataset.CFSplit, confi
 			return nil
 		}); err != nil {
 			log.Logger().Info("fit als canceled", zap.Int("epoch", ep), zap.Error(err))
-			return Score{NDCG: score[0], Precision: score[1], Recall: score[2]}
+			return Score{}
 		}
 		// Update item factors
 		// S^p <- P^T P
 		floats.MatZero(s)
 		for userIndex := 0; userIndex < trainSet.CountUsers(); userIndex++ {
-			if err := ctx.Err(); err != nil {
-				log.Logger().Info("fit als canceled", zap.Int("epoch", ep), zap.Error(err))
-				return Score{NDCG: score[0], Precision: score[1], Recall: score[2]}
+			if ctx.Err() != nil {
+				log.Logger().Info("fit als canceled", zap.Int("epoch", ep), zap.Error(ctx.Err()))
+				return Score{}
 			}
 			if len(trainSet.GetUserFeedback()[userIndex]) > 0 {
 				for i := 0; i < als.nFactors; i++ {
@@ -715,10 +711,8 @@ func (als *ALS) Fit(ctx context.Context, trainSet, valSet dataset.CFSplit, confi
 			}
 		}
 		if err := parallel.Parallel(trainSet.CountItems(), config.Jobs, func(workerId, itemIndex int) error {
-			select {
-			case <-ctx.Done():
+			if ctx.Err() != nil {
 				return ctx.Err()
-			default:
 			}
 			itemFeedback := trainSet.GetItemFeedback()[itemIndex]
 			for _, u := range itemFeedback {
@@ -748,8 +742,8 @@ func (als *ALS) Fit(ctx context.Context, trainSet, valSet dataset.CFSplit, confi
 			}
 			return nil
 		}); err != nil {
-			log.Logger().Info("fit als canceled", zap.Int("epoch", ep), zap.Error(err))
-			return Score{NDCG: score[0], Precision: score[1], Recall: score[2]}
+			log.Logger().Info("fit als canceled", zap.Int("epoch", ep), zap.Error(ctx.Err()))
+			return Score{}
 		}
 		fitTime := time.Since(fitStart)
 		// Cross validation

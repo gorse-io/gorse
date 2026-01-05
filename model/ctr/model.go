@@ -356,11 +356,9 @@ func (fm *FMV2) Fit(ctx context.Context, trainSet, testSet dataset.CTRSplit, con
 		fitStart := time.Now()
 		cost := float32(0)
 		for i := 0; i < trainSet.Count(); i += fm.batchSize {
-			select {
-			case <-ctx.Done():
-				log.Logger().Info("fit DeepFM canceled", zap.Int("epoch", epoch), zap.Error(ctx.Err()))
-				return score
-			default:
+			if ctx.Err() != nil {
+				log.Logger().Info("fit DeepFM canceled", zap.Error(ctx.Err()))
+				return Score{}
 			}
 			j := mathutil.Min(i+fm.batchSize, trainSet.Count())
 			batchIndices := indices.Slice(i, j)

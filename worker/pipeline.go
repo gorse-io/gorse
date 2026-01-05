@@ -376,7 +376,6 @@ func (p *Pipeline) updateCollaborativeRecommend(
 }
 
 // rankByClickTroughRate ranks items by predicted click-through-rate.
-
 func (p *Pipeline) rankByClickTroughRate(
 	ctx context.Context,
 	predictor ctr.FactorizationMachines,

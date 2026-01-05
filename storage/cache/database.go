@@ -52,7 +52,6 @@ const (
 
 	// GlobalMeta is global meta information
 	GlobalMeta                 = "global_meta"
-	DataImported               = "data_imported"
 	NumUsers                   = "num_users"
 	NumItems                   = "num_items"
 	NumFeedback                = "num_feedback"

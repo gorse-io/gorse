@@ -1132,7 +1132,6 @@ func (m *Master) importExportUsers(response http.ResponseWriter, request *http.R
 				return
 			}
 		}
-		m.notifyDataImported()
 		timeUsed := time.Since(timeStart)
 		log.Logger().Info("complete import users",
 			zap.Duration("time_used", timeUsed),
@@ -1249,7 +1248,6 @@ func (m *Master) importExportItems(response http.ResponseWriter, request *http.R
 				return
 			}
 		}
-		m.notifyDataImported()
 		timeUsed := time.Since(timeStart)
 		log.Logger().Info("complete import items",
 			zap.Duration("time_used", timeUsed),
@@ -1370,7 +1368,6 @@ func (m *Master) importExportFeedback(response http.ResponseWriter, request *htt
 				return
 			}
 		}
-		m.notifyDataImported()
 		timeUsed := time.Since(timeStart)
 		log.Logger().Info("complete import feedback",
 			zap.Duration("time_used", timeUsed),
