@@ -166,7 +166,7 @@ func Start(ctx context.Context, name string, total int) (context.Context, *Span)
 	}
 	span, ok := (ctx).Value(spanKeyName).(*Span)
 	if !ok {
-		return nil, childSpan
+		return ctx, childSpan
 	}
 	span.children.Store(name, childSpan)
 	return context.WithValue(ctx, spanKeyName, childSpan), childSpan
