@@ -445,10 +445,7 @@ func (bpr *BPR) Fit(ctx context.Context, trainSet, valSet dataset.CFSplit, confi
 		fitStart := time.Now()
 		// Training epoch
 		cost := make([]float32, config.Jobs)
-		if err := parallel.Parallel(trainSet.CountFeedback(), config.Jobs, func(workerId, _ int) error {
-			if ctx.Err() != nil {
-				return ctx.Err()
-			}
+		if err := parallel.Parallel(ctx, trainSet.CountFeedback(), config.Jobs, func(workerId, _ int) error {
 			// Select a user
 			var userIndex int32
 			var ratingCount int
@@ -659,10 +656,7 @@ func (als *ALS) Fit(ctx context.Context, trainSet, valSet dataset.CFSplit, confi
 				}
 			}
 		}
-		if err := parallel.Parallel(trainSet.CountUsers(), config.Jobs, func(workerId, userIndex int) error {
-			if ctx.Err() != nil {
-				return ctx.Err()
-			}
+		if err := parallel.Parallel(ctx, trainSet.CountUsers(), config.Jobs, func(workerId, userIndex int) error {
 			userFeedback := trainSet.GetUserFeedback()[userIndex]
 			for _, i := range userFeedback {
 				userPredictions[workerId][i] = als.internalPredict(int32(userIndex), i)
@@ -710,10 +704,7 @@ func (als *ALS) Fit(ctx context.Context, trainSet, valSet dataset.CFSplit, confi
 				}
 			}
 		}
-		if err := parallel.Parallel(trainSet.CountItems(), config.Jobs, func(workerId, itemIndex int) error {
-			if ctx.Err() != nil {
-				return ctx.Err()
-			}
+		if err := parallel.Parallel(ctx, trainSet.CountItems(), config.Jobs, func(workerId, itemIndex int) error {
 			itemFeedback := trainSet.GetItemFeedback()[itemIndex]
 			for _, u := range itemFeedback {
 				itemPredictions[workerId][u] = als.internalPredict(u, int32(itemIndex))

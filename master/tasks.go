@@ -428,10 +428,7 @@ func (m *Master) LoadDataFromDatabase(
 	var mu sync.Mutex
 	var posFeedbackCount int
 	start = time.Now()
-	err = parallel.Parallel(len(itemGroups), m.Config.Master.NumJobs, func(_, i int) error {
-		if newCtx.Err() != nil {
-			return newCtx.Err()
-		}
+	err = parallel.Parallel(newCtx, len(itemGroups), m.Config.Master.NumJobs, func(_, i int) error {
 		var itemFeedback []data.Feedback
 		var itemGroupIndex int
 		itemHasFeedback := make([]bool, len(itemGroups[i]))
@@ -521,10 +518,7 @@ func (m *Master) LoadDataFromDatabase(
 	// STEP 4: pull negative feedback
 	start = time.Now()
 	var negativeFeedbackCount float64
-	err = parallel.Parallel(len(itemGroups), m.Config.Master.NumJobs, func(_, i int) error {
-		if newCtx.Err() != nil {
-			return newCtx.Err()
-		}
+	err = parallel.Parallel(newCtx, len(itemGroups), m.Config.Master.NumJobs, func(_, i int) error {
 		feedbackChan, errChan := database.GetFeedbackStream(newCtx, batchSize,
 			data.WithBeginItemId(itemGroups[i][0].ItemId),
 			data.WithEndItemId(itemGroups[i][len(itemGroups[i])-1].ItemId),
