@@ -638,18 +638,20 @@ func (m *Master) updateItemToItem(parent context.Context, dataset *dataset.Datas
 	}
 
 	// Push items to item-to-item recommenders
-	parallel.ForEach(dataset.GetItems(), m.Config.Master.NumJobs, func(i int, item data.Item) {
+	if err := parallel.ForEach(ctx, dataset.GetItems(), m.Config.Master.NumJobs, func(i int, item data.Item) {
 		if !item.IsHidden {
 			for _, recommender := range itemToItemRecommenders {
 				recommender.Push(&item, dataset.GetItemFeedback()[i])
 				span.Add(1)
 			}
 		}
-	})
+	}); err != nil {
+		return errors.Trace(err)
+	}
 
 	// Save item-to-item recommendations to cache
 	for i, recommender := range itemToItemRecommenders {
-		parallel.ForEach(recommender.Items(), m.Config.Master.NumJobs, func(j int, item *data.Item) {
+		if err := parallel.ForEach(ctx, recommender.Items(), m.Config.Master.NumJobs, func(j int, item *data.Item) {
 			itemToItemConfig := m.Config.Recommend.ItemToItem[i]
 			if m.needUpdateItemToItem(ctx, item.ItemId, itemToItemConfig) {
 				defer span.Add(1)
@@ -688,7 +690,9 @@ func (m *Master) updateItemToItem(parent context.Context, dataset *dataset.Datas
 			} else {
 				span.Add(1)
 			}
-		})
+		}); err != nil {
+			return errors.Trace(err)
+		}
 	}
 	return nil
 }
@@ -750,16 +754,18 @@ func (m *Master) updateUserToUser(parent context.Context, dataset *dataset.Datas
 	}
 
 	// Push users to user-to-user recommender
-	parallel.ForEach(dataset.GetUsers(), m.Config.Master.NumJobs, func(i int, user data.User) {
+	if err := parallel.ForEach(ctx, dataset.GetUsers(), m.Config.Master.NumJobs, func(i int, user data.User) {
 		for _, recommender := range userToUserRecommenders {
 			recommender.Push(&user, dataset.GetUserFeedback()[i])
 			span.Add(1)
 		}
-	})
+	}); err != nil {
+		return errors.Trace(err)
+	}
 
 	// Save user-to-user recommendations to cache
 	for i, recommender := range userToUserRecommenders {
-		parallel.ForEach(recommender.Users(), m.Config.Master.NumJobs, func(j int, user *data.User) {
+		if err := parallel.ForEach(ctx, recommender.Users(), m.Config.Master.NumJobs, func(j int, user *data.User) {
 			userToUserConfig := m.Config.Recommend.UserToUser[i]
 			if m.needUpdateUserToUser(ctx, user.UserId, userToUserConfig) {
 				score := recommender.PopAll(j)
@@ -791,7 +797,9 @@ func (m *Master) updateUserToUser(parent context.Context, dataset *dataset.Datas
 				}
 			}
 			span.Add(1)
-		})
+		}); err != nil {
+			return errors.Trace(err)
+		}
 	}
 	return nil
 }
@@ -878,12 +886,14 @@ func (m *Master) trainCollaborativeFiltering(parent context.Context, trainSet, t
 
 	_, indexSpan := monitor.Start(ctx, "Index", trainSet.CountItems())
 	matrixFactorizationItems := logics.NewMatrixFactorizationItems(time.Now())
-	parallel.For(trainSet.CountItems(), m.Config.Master.NumJobs, func(i int) {
+	if err := parallel.For(ctx, trainSet.CountItems(), m.Config.Master.NumJobs, func(i int) {
 		defer indexSpan.Add(1)
 		if itemId, ok := trainSet.GetItemDict().String(int32(i)); ok && collaborativeFilteringModel.IsItemPredictable(int32(i)) {
 			matrixFactorizationItems.Add(itemId, collaborativeFilteringModel.GetItemFactor(int32(i)))
 		}
-	})
+	}); err != nil {
+		return errors.Trace(err)
+	}
 	span.Add(1)
 	indexSpan.End()
 

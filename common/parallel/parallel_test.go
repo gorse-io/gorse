@@ -59,17 +59,37 @@ func TestFor(t *testing.T) {
 		// multiple threads
 		a := util.RangeInt(10000)
 		b := make([]int, len(a))
-		For(len(a), 4, func(jobId int) {
+		err := For(context.Background(), len(a), 4, func(jobId int) {
 			b[jobId] = a[jobId]
 			time.Sleep(time.Microsecond)
 		})
+		assert.NoError(t, err)
 		assert.Equal(t, a, b)
 		// single thread
-		For(len(a), 1, func(jobId int) {
+		err = For(context.Background(), len(a), 1, func(jobId int) {
 			b[jobId] = a[jobId]
 			time.Sleep(time.Microsecond)
 		})
+		assert.NoError(t, err)
 		assert.Equal(t, a, b)
+	})
+}
+
+func TestForCancel(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		var count atomic.Int32
+
+		err := For(ctx, 1000, 4, func(jobId int) {
+			if jobId == 0 {
+				cancel()
+			}
+			count.Add(1)
+			time.Sleep(100 * time.Microsecond)
+		})
+
+		assert.ErrorIs(t, err, context.Canceled)
+		assert.Less(t, int(count.Load()), 1000)
 	})
 }
 
@@ -78,19 +98,39 @@ func TestForEach(t *testing.T) {
 		a := util.RangeInt(10000)
 		b := make([]int, len(a))
 		// multiple threads
-		ForEach(a, 4, func(i, v int) {
+		err := ForEach(context.Background(), a, 4, func(i, v int) {
 			assert.Equal(t, i, v)
 			b[i] = v
 			time.Sleep(time.Microsecond)
 		})
+		assert.NoError(t, err)
 		assert.Equal(t, a, b)
 		// single thread
-		ForEach(a, 1, func(i, v int) {
+		err = ForEach(context.Background(), a, 1, func(i, v int) {
 			assert.Equal(t, i, v)
 			b[i] = v
 			time.Sleep(time.Microsecond)
 		})
+		assert.NoError(t, err)
 		assert.Equal(t, a, b)
+	})
+}
+
+func TestForEachCancel(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		var count atomic.Int32
+
+		err := ForEach(ctx, util.RangeInt(1000), 4, func(i, v int) {
+			if i == 0 {
+				cancel()
+			}
+			count.Add(1)
+			time.Sleep(100 * time.Microsecond)
+		})
+
+		assert.ErrorIs(t, err, context.Canceled)
+		assert.Less(t, int(count.Load()), 1000)
 	})
 }
 

@@ -93,60 +93,98 @@ func Parallel(ctx context.Context, nJobs, nWorkers int, worker func(workerId, jo
 	return nil
 }
 
-func For(nJobs, nWorkers int, worker func(int)) {
+func For(ctx context.Context, nJobs, nWorkers int, worker func(int)) error {
 	if nWorkers <= 1 {
 		for i := 0; i < nJobs; i++ {
+			if err := ctx.Err(); err != nil {
+				return errors.Trace(err)
+			}
 			worker(i)
 		}
 	} else {
 		c := make(chan int, chanSize)
 		// producer
 		go func() {
+			defer close(c)
 			for i := 0; i < nJobs; i++ {
-				c <- i
+				select {
+				case <-ctx.Done():
+					return
+				case c <- i:
+				}
 			}
-			close(c)
 		}()
 		// consumer
 		var wg sync.WaitGroup
 		for j := 0; j < nWorkers; j++ {
 			// start workers
 			wg.Go(func() {
-				for jobId := range c {
-					worker(jobId)
+				for {
+					select {
+					case <-ctx.Done():
+						return
+					case jobId, ok := <-c:
+						if !ok {
+							return
+						}
+						if err := ctx.Err(); err != nil {
+							return
+						}
+						worker(jobId)
+					}
 				}
 			})
 		}
 		wg.Wait()
 	}
+	return ctx.Err()
 }
 
-func ForEach[T any](a []T, nWorkers int, worker func(int, T)) {
+func ForEach[T any](ctx context.Context, a []T, nWorkers int, worker func(int, T)) error {
 	if nWorkers <= 1 {
 		for i, v := range a {
+			if err := ctx.Err(); err != nil {
+				return errors.Trace(err)
+			}
 			worker(i, v)
 		}
 	} else {
 		c := make(chan lo.Tuple2[int, T], chanSize)
 		// producer
 		go func() {
+			defer close(c)
 			for i, v := range a {
-				c <- lo.Tuple2[int, T]{A: i, B: v}
+				select {
+				case <-ctx.Done():
+					return
+				case c <- lo.Tuple2[int, T]{A: i, B: v}:
+				}
 			}
-			close(c)
 		}()
 		// consumer
 		var wg sync.WaitGroup
 		for j := 0; j < nWorkers; j++ {
 			// start workers
 			wg.Go(func() {
-				for job := range c {
-					worker(job.A, job.B)
+				for {
+					select {
+					case <-ctx.Done():
+						return
+					case job, ok := <-c:
+						if !ok {
+							return
+						}
+						if err := ctx.Err(); err != nil {
+							return
+						}
+						worker(job.A, job.B)
+					}
 				}
 			})
 		}
 		wg.Wait()
 	}
+	return ctx.Err()
 }
 
 // Split a slice into n slices and keep the order of elements.

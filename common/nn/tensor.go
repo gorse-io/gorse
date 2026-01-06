@@ -16,6 +16,7 @@ package nn
 
 import (
 	"container/heap"
+	"context"
 	"fmt"
 	"math"
 	"math/rand"
@@ -561,7 +562,7 @@ func (t *Tensor) batchMatMul(other *Tensor, transpose1, transpose2 bool, jobs in
 		}
 		b, m, n, k = t.shape[0], t.shape[1], other.shape[2], t.shape[2]
 		result = make([]float32, b*m*n)
-		parallel.For(b, jobs, func(i int) {
+		_ = parallel.For(context.Background(), b, jobs, func(i int) {
 			floats.MM(transpose1, transpose2, m, n, k, t.data[i*m*k:(i+1)*m*k], k, other.data[i*n*k:(i+1)*n*k], n, result[i*m*n:(i+1)*m*n], n)
 		})
 	} else if transpose1 && !transpose2 {
@@ -570,7 +571,7 @@ func (t *Tensor) batchMatMul(other *Tensor, transpose1, transpose2 bool, jobs in
 		}
 		b, m, n, k = t.shape[0], t.shape[2], other.shape[2], t.shape[1]
 		result = make([]float32, b*m*n)
-		parallel.For(b, jobs, func(i int) {
+		_ = parallel.For(context.Background(), b, jobs, func(i int) {
 			floats.MM(transpose1, transpose2, m, n, k, t.data[i*m*k:(i+1)*m*k], m, other.data[i*n*k:(i+1)*n*k], n, result[i*m*n:(i+1)*m*n], n)
 		})
 	} else if !transpose1 && transpose2 {
@@ -579,7 +580,7 @@ func (t *Tensor) batchMatMul(other *Tensor, transpose1, transpose2 bool, jobs in
 		}
 		b, m, n, k = t.shape[0], t.shape[1], other.shape[1], t.shape[2]
 		result = make([]float32, b*m*n)
-		parallel.For(b, jobs, func(i int) {
+		_ = parallel.For(context.Background(), b, jobs, func(i int) {
 			floats.MM(transpose1, transpose2, m, n, k, t.data[i*m*k:(i+1)*m*k], k, other.data[i*n*k:(i+1)*n*k], k, result[i*m*n:(i+1)*m*n], n)
 		})
 	} else {
@@ -588,7 +589,7 @@ func (t *Tensor) batchMatMul(other *Tensor, transpose1, transpose2 bool, jobs in
 		}
 		b, m, n, k = t.shape[0], t.shape[2], other.shape[1], t.shape[1]
 		result = make([]float32, b*m*n)
-		parallel.For(b, jobs, func(i int) {
+		_ = parallel.For(context.Background(), b, jobs, func(i int) {
 			floats.MM(transpose1, transpose2, m, n, k, t.data[i*m*k:(i+1)*m*k], m, other.data[i*n*k:(i+1)*n*k], k, result[i*m*n:(i+1)*m*n], n)
 		})
 	}
