@@ -195,21 +195,32 @@ func (ctx *Context) Attach() {
 	ctx.sem <- struct{}{}
 }
 
-func Detachable(nJobs, nWorkers, nMaxDetached int, worker func(*Context, int)) {
+func Detachable(ctx context.Context, nJobs, nWorkers, nMaxDetached int, worker func(*Context, int)) error {
 	sem := make(chan struct{}, nWorkers)
 	detachedSem := make(chan struct{}, nMaxDetached)
 	var wg sync.WaitGroup
 	for i := 0; i < nJobs; i++ {
-		sem <- struct{}{}
+		select {
+		case <-ctx.Done():
+			wg.Wait()
+			return ctx.Err()
+		case sem <- struct{}{}:
+		}
+
 		wg.Go(func() {
-			ctx := &Context{sem: sem, detachedSem: detachedSem}
-			worker(ctx, i)
-			if ctx.detached {
-				<-ctx.detachedSem
+			if ctx.Err() != nil {
+				<-sem
+				return
+			}
+			c := &Context{sem: sem, detachedSem: detachedSem}
+			worker(c, i)
+			if c.detached {
+				<-c.detachedSem
 			} else {
 				<-sem
 			}
 		})
 	}
 	wg.Wait()
+	return ctx.Err()
 }

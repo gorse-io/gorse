@@ -145,7 +145,7 @@ func TestSplit(t *testing.T) {
 func TestDetachable(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		start := time.Now()
-		Detachable(100, 1, 100, func(ctx *Context, jobId int) {
+		Detachable(context.Background(), 100, 1, 100, func(ctx *Context, jobId int) {
 			ctx.Detach()
 			time.Sleep(time.Second)
 			ctx.Attach()
@@ -155,11 +155,29 @@ func TestDetachable(t *testing.T) {
 
 	synctest.Test(t, func(t *testing.T) {
 		start := time.Now()
-		Detachable(100, 1, 10, func(ctx *Context, jobId int) {
+		Detachable(context.Background(), 100, 1, 10, func(ctx *Context, jobId int) {
 			ctx.Detach()
 			time.Sleep(time.Second)
 			ctx.Attach()
 		})
 		assert.Less(t, time.Since(start), time.Second*11)
+	})
+}
+
+func TestDetachableCancel(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		var count atomic.Int32
+
+		err := Detachable(ctx, 100, 4, 10, func(c *Context, jobId int) {
+			if jobId == 0 {
+				cancel()
+			}
+			count.Add(1)
+			time.Sleep(10 * time.Millisecond)
+		})
+
+		assert.ErrorIs(t, err, context.Canceled)
+		assert.Less(t, int(count.Load()), 20)
 	})
 }

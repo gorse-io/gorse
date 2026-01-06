@@ -99,10 +99,7 @@ func (p *Pipeline) Recommend(ctx context.Context, users []data.User, progress fu
 	)
 
 	defer MemoryInuseBytesVec.WithLabelValues("user_feedback_cache").Set(0)
-	parallel.Detachable(len(users), p.Jobs, p.Config.OpenAI.ChatCompletionRPM, func(pCtx *parallel.Context, jobId int) {
-		if ctx.Err() != nil {
-			return
-		}
+	if err := parallel.Detachable(ctx, len(users), p.Jobs, p.Config.OpenAI.ChatCompletionRPM, func(pCtx *parallel.Context, jobId int) {
 		defer func() {
 			completed <- struct{}{}
 		}()
@@ -225,7 +222,9 @@ func (p *Pipeline) Recommend(ctx context.Context, users []data.User, progress fu
 		); err != nil {
 			log.Logger().Error("failed to cache recommendation time", zap.Error(err))
 		}
-	})
+	}); err != nil {
+		log.Logger().Error("recommendation was cancelled", zap.Error(err))
+	}
 	close(completed)
 	log.Logger().Info("complete ranking recommendation",
 		zap.String("used_time", time.Since(startTime).String()))
