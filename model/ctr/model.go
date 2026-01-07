@@ -131,7 +131,7 @@ func MarshalModel(w io.Writer, m FactorizationMachines) error {
 	// write header
 	var err error
 	switch m.(type) {
-	case *FMV2:
+	case *AFM:
 		err = encoding.WriteString(w, headerFMV2)
 	default:
 		return fmt.Errorf("unknown model: %v", reflect.TypeOf(m))
@@ -152,7 +152,7 @@ func UnmarshalModel(r io.Reader) (FactorizationMachines, error) {
 	}
 	switch header {
 	case headerFMV2:
-		var fm FMV2
+		var fm AFM
 		if err := fm.Unmarshal(r); err != nil {
 			return nil, errors.Trace(err)
 		}
@@ -161,14 +161,7 @@ func UnmarshalModel(r io.Reader) (FactorizationMachines, error) {
 	return nil, fmt.Errorf("unknown model: %v", header)
 }
 
-func Spawn(m FactorizationMachines) FactorizationMachines {
-	if cloner, ok := m.(FactorizationMachineSpawner); ok {
-		return cloner.Spawn()
-	}
-	return m
-}
-
-type FMV2 struct {
+type AFM struct {
 	BaseFactorizationMachines
 	mu sync.RWMutex
 	// parameters
@@ -189,13 +182,13 @@ type FMV2 struct {
 	numDimension int
 }
 
-func NewFMV2(params model.Params) *FMV2 {
-	fm := new(FMV2)
+func NewFMV2(params model.Params) *AFM {
+	fm := new(AFM)
 	fm.SetParams(params)
 	return fm
 }
 
-func (fm *FMV2) SuggestParams(trial goptuna.Trial) model.Params {
+func (fm *AFM) SuggestParams(trial goptuna.Trial) model.Params {
 	return model.Params{
 		model.NFactors:   16,
 		model.Lr:         lo.Must(trial.SuggestLogFloat(string(model.Lr), 0.001, 0.1)),
@@ -205,7 +198,7 @@ func (fm *FMV2) SuggestParams(trial goptuna.Trial) model.Params {
 	}
 }
 
-func (fm *FMV2) SetParams(params model.Params) {
+func (fm *AFM) SetParams(params model.Params) {
 	fm.BaseFactorizationMachines.SetParams(params)
 	fm.batchSize = fm.Params.GetInt(model.BatchSize, 1024)
 	fm.nFactors = fm.Params.GetInt(model.NFactors, 16)
@@ -217,15 +210,15 @@ func (fm *FMV2) SetParams(params model.Params) {
 	fm.optimizer = fm.Params.GetString(model.Optimizer, model.Adam)
 }
 
-func (fm *FMV2) Clear() {
+func (fm *AFM) Clear() {
 	fm.Index = nil
 }
 
-func (fm *FMV2) Invalid() bool {
+func (fm *AFM) Invalid() bool {
 	return fm == nil || fm.Index == nil
 }
 
-func (fm *FMV2) Forward(indices, values *nn.Tensor, jobs int) *nn.Tensor {
+func (fm *AFM) Forward(indices, values *nn.Tensor, jobs int) *nn.Tensor {
 	batchSize := indices.Shape()[0]
 	v := fm.V.Forward(indices)
 	x := nn.Reshape(values, batchSize, fm.numDimension, 1)
@@ -243,7 +236,7 @@ func (fm *FMV2) Forward(indices, values *nn.Tensor, jobs int) *nn.Tensor {
 	return nn.Flatten(fmOutput)
 }
 
-func (fm *FMV2) Parameters() []*nn.Tensor {
+func (fm *AFM) Parameters() []*nn.Tensor {
 	var params []*nn.Tensor
 	params = append(params, fm.B)
 	params = append(params, fm.V.Parameters()...)
@@ -251,15 +244,15 @@ func (fm *FMV2) Parameters() []*nn.Tensor {
 	return params
 }
 
-func (fm *FMV2) Predict(_, _ string, _, _ []Label) float32 {
+func (fm *AFM) Predict(_, _ string, _, _ []Label) float32 {
 	panic("Predict is unsupported for deep learning models")
 }
 
-func (fm *FMV2) InternalPredict(_ []int32, _ []float32) float32 {
+func (fm *AFM) InternalPredict(_ []int32, _ []float32) float32 {
 	panic("InternalPredict is unsupported for deep learning models")
 }
 
-func (fm *FMV2) BatchInternalPredict(x []lo.Tuple2[[]int32, []float32], jobs int) []float32 {
+func (fm *AFM) BatchInternalPredict(x []lo.Tuple2[[]int32, []float32], jobs int) []float32 {
 	fm.mu.RLock()
 	defer fm.mu.RUnlock()
 	indicesTensor, valuesTensor, _ := fm.convertToTensors(x, nil)
@@ -272,7 +265,7 @@ func (fm *FMV2) BatchInternalPredict(x []lo.Tuple2[[]int32, []float32], jobs int
 	return predictions[:len(x)]
 }
 
-func (fm *FMV2) BatchPredict(inputs []lo.Tuple4[string, string, []Label, []Label], jobs int) []float32 {
+func (fm *AFM) BatchPredict(inputs []lo.Tuple4[string, string, []Label, []Label], jobs int) []float32 {
 	x := make([]lo.Tuple2[[]int32, []float32], len(inputs))
 	for i, input := range inputs {
 		// encode user
@@ -303,7 +296,7 @@ func (fm *FMV2) BatchPredict(inputs []lo.Tuple4[string, string, []Label, []Label
 	return fm.BatchInternalPredict(x, jobs)
 }
 
-func (fm *FMV2) Init(trainSet dataset.CTRSplit) {
+func (fm *AFM) Init(trainSet dataset.CTRSplit) {
 	fm.numFeatures = int(trainSet.GetIndex().Len())
 	fm.numDimension = 0
 	for i := 0; i < trainSet.Count(); i++ {
@@ -316,7 +309,7 @@ func (fm *FMV2) Init(trainSet dataset.CTRSplit) {
 	fm.BaseFactorizationMachines.Init(trainSet)
 }
 
-func (fm *FMV2) Fit(ctx context.Context, trainSet, testSet dataset.CTRSplit, config *FitConfig) Score {
+func (fm *AFM) Fit(ctx context.Context, trainSet, testSet dataset.CTRSplit, config *FitConfig) Score {
 	log.Logger().Info("fit DeepFM",
 		zap.Int("train_set_size", trainSet.Count()),
 		zap.Int("test_set_size", testSet.Count()),
@@ -407,7 +400,7 @@ func (fm *FMV2) Fit(ctx context.Context, trainSet, testSet dataset.CTRSplit, con
 	return score
 }
 
-func (fm *FMV2) Marshal(w io.Writer) error {
+func (fm *AFM) Marshal(w io.Writer) error {
 	// write params
 	if err := encoding.WriteGob(w, fm.Params); err != nil {
 		return errors.Trace(err)
@@ -430,7 +423,7 @@ func (fm *FMV2) Marshal(w io.Writer) error {
 	return nil
 }
 
-func (fm *FMV2) Unmarshal(r io.Reader) error {
+func (fm *AFM) Unmarshal(r io.Reader) error {
 	// read params
 	err := encoding.ReadGob(r, &fm.Params)
 	if err != nil {
@@ -459,7 +452,7 @@ func (fm *FMV2) Unmarshal(r io.Reader) error {
 	return nil
 }
 
-func (fm *FMV2) convertToTensors(x []lo.Tuple2[[]int32, []float32], y []float32) (indicesTensor, valuesTensor, targetTensor *nn.Tensor) {
+func (fm *AFM) convertToTensors(x []lo.Tuple2[[]int32, []float32], y []float32) (indicesTensor, valuesTensor, targetTensor *nn.Tensor) {
 	if y != nil && len(x) != len(y) {
 		panic("length of x and y must be equal")
 	}

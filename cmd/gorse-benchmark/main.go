@@ -115,7 +115,7 @@ func EvaluateLLM(cfg *config.Config, train, test dataset.CTRSplit, items []data.
 
 	var sumAUC atomic.Float32
 	var validUsers atomic.Float32
-	parallel.Detachable(len(userTest), runtime.NumCPU(), 100, func(pCtx *parallel.Context, userIdx int) {
+	parallel.Detachable(context.Background(), len(userTest), runtime.NumCPU(), 100, func(pCtx *parallel.Context, userIdx int) {
 		userId := int32(userIdx)
 		testItems := userTest[userId]
 		if len(userTrain[userId]) > 100 || len(userTrain[userId]) == 0 {
@@ -139,7 +139,7 @@ func EvaluateLLM(cfg *config.Config, train, test dataset.CTRSplit, items []data.
 			})
 		}
 		pCtx.Detach()
-		result, err := chat.Rank(&data.User{}, feedback, candidates)
+		result, err := chat.Rank(context.Background(), &data.User{}, feedback, candidates)
 		if err != nil {
 			if apiError, ok := err.(*openai.APIError); ok && apiError.HTTPStatusCode == 421 {
 				return
