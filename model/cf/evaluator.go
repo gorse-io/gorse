@@ -15,6 +15,8 @@
 package cf
 
 import (
+	"context"
+
 	"github.com/chewxy/math32"
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/gorse-io/gorse/common/floats"
@@ -39,7 +41,7 @@ func Evaluate(estimator MatrixFactorization, testSet, trainSet dataset.CFSplit, 
 	//rng := NewRandomGenerator(0)
 	// For all UserFeedback
 	negatives := testSet.SampleUserNegatives(trainSet, numCandidates)
-	_ = parallel.Parallel(testSet.CountUsers(), nJobs, func(workerId, userIndex int) error {
+	_ = parallel.Parallel(context.Background(), testSet.CountUsers(), nJobs, func(workerId, userIndex int) error {
 		// Find top-n ItemFeedback in test set
 		targetSet := mapset.NewSet(testSet.GetUserFeedback()[userIndex]...)
 		if targetSet.Cardinality() > 0 {

@@ -14,7 +14,9 @@
 package parallel
 
 import (
+	"context"
 	"fmt"
+	"sync/atomic"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -30,7 +32,7 @@ func TestParallel(t *testing.T) {
 		b := make([]int, len(a))
 		workerIds := make([]int, len(a))
 		// multiple threads
-		_ = Parallel(len(a), 4, func(workerId, jobId int) error {
+		_ = Parallel(context.Background(), len(a), 4, func(workerId, jobId int) error {
 			b[jobId] = a[jobId]
 			workerIds[jobId] = workerId
 			time.Sleep(time.Microsecond)
@@ -41,7 +43,7 @@ func TestParallel(t *testing.T) {
 		assert.GreaterOrEqual(t, 4, workersSet.Cardinality())
 		assert.Less(t, 1, workersSet.Cardinality())
 		// single thread
-		_ = Parallel(len(a), 1, func(workerId, jobId int) error {
+		_ = Parallel(context.Background(), len(a), 1, func(workerId, jobId int) error {
 			b[jobId] = a[jobId]
 			workerIds[jobId] = workerId
 			return nil
@@ -57,17 +59,37 @@ func TestFor(t *testing.T) {
 		// multiple threads
 		a := util.RangeInt(10000)
 		b := make([]int, len(a))
-		For(len(a), 4, func(jobId int) {
+		err := For(context.Background(), len(a), 4, func(jobId int) {
 			b[jobId] = a[jobId]
 			time.Sleep(time.Microsecond)
 		})
+		assert.NoError(t, err)
 		assert.Equal(t, a, b)
 		// single thread
-		For(len(a), 1, func(jobId int) {
+		err = For(context.Background(), len(a), 1, func(jobId int) {
 			b[jobId] = a[jobId]
 			time.Sleep(time.Microsecond)
 		})
+		assert.NoError(t, err)
 		assert.Equal(t, a, b)
+	})
+}
+
+func TestForCancel(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		var count atomic.Int32
+
+		err := For(ctx, 1000, 4, func(jobId int) {
+			if jobId == 0 {
+				cancel()
+			}
+			count.Add(1)
+			time.Sleep(100 * time.Microsecond)
+		})
+
+		assert.ErrorIs(t, err, context.Canceled)
+		assert.Less(t, int(count.Load()), 1000)
 	})
 }
 
@@ -76,55 +98,45 @@ func TestForEach(t *testing.T) {
 		a := util.RangeInt(10000)
 		b := make([]int, len(a))
 		// multiple threads
-		ForEach(a, 4, func(i, v int) {
+		err := ForEach(context.Background(), a, 4, func(i, v int) {
 			assert.Equal(t, i, v)
 			b[i] = v
 			time.Sleep(time.Microsecond)
 		})
+		assert.NoError(t, err)
 		assert.Equal(t, a, b)
 		// single thread
-		ForEach(a, 1, func(i, v int) {
+		err = ForEach(context.Background(), a, 1, func(i, v int) {
 			assert.Equal(t, i, v)
 			b[i] = v
 			time.Sleep(time.Microsecond)
 		})
+		assert.NoError(t, err)
 		assert.Equal(t, a, b)
 	})
 }
 
-func TestBatchParallel(t *testing.T) {
+func TestForEachCancel(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		a := util.RangeInt(10000)
-		b := make([]int, len(a))
-		workerIds := make([]int, len(a))
-		// multiple threads
-		_ = BatchParallel(len(a), 4, 10, func(workerId, beginJobId, endJobId int) error {
-			for jobId := beginJobId; jobId < endJobId; jobId++ {
-				b[jobId] = a[jobId]
-				workerIds[jobId] = workerId
+		ctx, cancel := context.WithCancel(context.Background())
+		var count atomic.Int32
+
+		err := ForEach(ctx, util.RangeInt(1000), 4, func(i, v int) {
+			if i == 0 {
+				cancel()
 			}
-			time.Sleep(time.Microsecond)
-			return nil
+			count.Add(1)
+			time.Sleep(100 * time.Microsecond)
 		})
-		workersSet := mapset.NewSet(workerIds...)
-		assert.Equal(t, a, b)
-		assert.GreaterOrEqual(t, 4, workersSet.Cardinality())
-		assert.Less(t, 1, workersSet.Cardinality())
-		// single thread
-		_ = Parallel(len(a), 1, func(workerId, jobId int) error {
-			b[jobId] = a[jobId]
-			workerIds[jobId] = workerId
-			return nil
-		})
-		workersSet = mapset.NewSet(workerIds...)
-		assert.Equal(t, a, b)
-		assert.Equal(t, 1, workersSet.Cardinality())
+
+		assert.ErrorIs(t, err, context.Canceled)
+		assert.Less(t, int(count.Load()), 1000)
 	})
 }
 
 func TestParallelFail(t *testing.T) {
 	// multiple threads
-	err := Parallel(10000, 4, func(workerId, jobId int) error {
+	err := Parallel(context.Background(), 10000, 4, func(workerId, jobId int) error {
 		if jobId%2 == 1 {
 			return fmt.Errorf("error from %d", jobId)
 		}
@@ -132,7 +144,7 @@ func TestParallelFail(t *testing.T) {
 	})
 	assert.Error(t, err)
 	// single thread
-	err = Parallel(10000, 1, func(workerId, jobId int) error {
+	err = Parallel(context.Background(), 10000, 1, func(workerId, jobId int) error {
 		if jobId%2 == 1 {
 			return fmt.Errorf("error from %d", jobId)
 		}
@@ -141,24 +153,22 @@ func TestParallelFail(t *testing.T) {
 	assert.Error(t, err)
 }
 
-func TestBatchParallelFail(t *testing.T) {
+func TestParallelCancel(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		// multiple threads
-		err := BatchParallel(1000000, 2, 1, func(workerId, beginJobId, endJobId int) error {
-			if workerId%2 == 1 {
-				return fmt.Errorf("error from %d", workerId)
+		ctx, cancel := context.WithCancel(context.Background())
+		var count atomic.Int32
+
+		err := Parallel(ctx, 100, 4, func(_, jobId int) error {
+			if jobId == 0 {
+				cancel()
 			}
+			count.Add(1)
+			time.Sleep(time.Millisecond)
 			return nil
 		})
-		assert.Error(t, err)
-		// single thread
-		err = BatchParallel(1000000, 2, 1, func(workerId, beginJobId, endJobId int) error {
-			if workerId%2 == 1 {
-				return fmt.Errorf("error from %d", workerId)
-			}
-			return nil
-		})
-		assert.Error(t, err)
+
+		assert.ErrorIs(t, err, context.Canceled)
+		assert.Less(t, int(count.Load()), 100)
 	})
 }
 
@@ -175,21 +185,41 @@ func TestSplit(t *testing.T) {
 func TestDetachable(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		start := time.Now()
-		Detachable(100, 1, 100, func(ctx *Context, jobId int) {
+		err := Detachable(context.Background(), 100, 1, 100, func(ctx *Context, jobId int) {
 			ctx.Detach()
 			time.Sleep(time.Second)
 			ctx.Attach()
 		})
+		assert.NoError(t, err)
 		assert.Less(t, time.Since(start), time.Second*2)
 	})
 
 	synctest.Test(t, func(t *testing.T) {
 		start := time.Now()
-		Detachable(100, 1, 10, func(ctx *Context, jobId int) {
+		err := Detachable(context.Background(), 100, 1, 10, func(ctx *Context, jobId int) {
 			ctx.Detach()
 			time.Sleep(time.Second)
 			ctx.Attach()
 		})
+		assert.NoError(t, err)
 		assert.Less(t, time.Since(start), time.Second*11)
+	})
+}
+
+func TestDetachableCancel(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		var count atomic.Int32
+
+		err := Detachable(ctx, 100, 4, 10, func(c *Context, jobId int) {
+			if jobId == 0 {
+				cancel()
+			}
+			count.Add(1)
+			time.Sleep(10 * time.Millisecond)
+		})
+
+		assert.ErrorIs(t, err, context.Canceled)
+		assert.Less(t, int(count.Load()), 20)
 	})
 }

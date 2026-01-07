@@ -15,27 +15,27 @@
 package parallel
 
 import (
+	"context"
 	"sync"
 
 	"github.com/gorse-io/gorse/common/util"
 	"github.com/juju/errors"
 	"github.com/samber/lo"
-	"modernc.org/mathutil"
 )
 
-const (
-	chanSize    = 1024
-	allocPeriod = 128
-)
+const chanSize = 1024
 
 /* Parallel Schedulers */
 
 // Parallel schedules and runs tasks in parallel. nTask is the number of tasks. nJob is
 // the number of executors. worker is the executed function which passed a range of task
-// Names (begin, end).
-func Parallel(nJobs, nWorkers int, worker func(workerId, jobId int) error) error {
+// Names (begin, end). The ctx argument allows callers to cancel outstanding work.
+func Parallel(ctx context.Context, nJobs, nWorkers int, worker func(workerId, jobId int) error) error {
 	if nWorkers <= 1 {
 		for i := 0; i < nJobs; i++ {
+			if err := ctx.Err(); err != nil {
+				return errors.Trace(err)
+			}
 			if err := worker(0, i); err != nil {
 				return errors.Trace(err)
 			}
@@ -44,10 +44,14 @@ func Parallel(nJobs, nWorkers int, worker func(workerId, jobId int) error) error
 		c := make(chan int, chanSize)
 		// producer
 		go func() {
+			defer close(c)
 			for i := 0; i < nJobs; i++ {
-				c <- i
+				select {
+				case <-ctx.Done():
+					return
+				case c <- i:
+				}
 			}
-			close(c)
 		}()
 		// consumer
 		var wg sync.WaitGroup
@@ -58,15 +62,22 @@ func Parallel(nJobs, nWorkers int, worker func(workerId, jobId int) error) error
 			wg.Go(func() {
 				defer util.CheckPanic()
 				for {
-					// read job
-					jobId, ok := <-c
-					if !ok {
+					select {
+					case <-ctx.Done():
 						return
-					}
-					// run job
-					if err := worker(workerId, jobId); err != nil {
-						errs[jobId] = err
-						return
+					case jobId, ok := <-c:
+						if !ok {
+							return
+						}
+						if err := ctx.Err(); err != nil {
+							errs[jobId] = err
+							return
+						}
+						// run job
+						if err := worker(workerId, jobId); err != nil {
+							errs[jobId] = err
+							return
+						}
 					}
 				}
 			})
@@ -82,109 +93,98 @@ func Parallel(nJobs, nWorkers int, worker func(workerId, jobId int) error) error
 	return nil
 }
 
-func For(nJobs, nWorkers int, worker func(int)) {
+func For(ctx context.Context, nJobs, nWorkers int, worker func(int)) error {
 	if nWorkers <= 1 {
 		for i := 0; i < nJobs; i++ {
+			if err := ctx.Err(); err != nil {
+				return errors.Trace(err)
+			}
 			worker(i)
 		}
 	} else {
 		c := make(chan int, chanSize)
 		// producer
 		go func() {
+			defer close(c)
 			for i := 0; i < nJobs; i++ {
-				c <- i
+				select {
+				case <-ctx.Done():
+					return
+				case c <- i:
+				}
 			}
-			close(c)
 		}()
 		// consumer
 		var wg sync.WaitGroup
 		for j := 0; j < nWorkers; j++ {
 			// start workers
 			wg.Go(func() {
-				for jobId := range c {
-					worker(jobId)
+				for {
+					select {
+					case <-ctx.Done():
+						return
+					case jobId, ok := <-c:
+						if !ok {
+							return
+						}
+						if err := ctx.Err(); err != nil {
+							return
+						}
+						worker(jobId)
+					}
 				}
 			})
 		}
 		wg.Wait()
 	}
+	return ctx.Err()
 }
 
-func ForEach[T any](a []T, nWorkers int, worker func(int, T)) {
+func ForEach[T any](ctx context.Context, a []T, nWorkers int, worker func(int, T)) error {
 	if nWorkers <= 1 {
 		for i, v := range a {
+			if err := ctx.Err(); err != nil {
+				return errors.Trace(err)
+			}
 			worker(i, v)
 		}
 	} else {
 		c := make(chan lo.Tuple2[int, T], chanSize)
 		// producer
 		go func() {
+			defer close(c)
 			for i, v := range a {
-				c <- lo.Tuple2[int, T]{A: i, B: v}
+				select {
+				case <-ctx.Done():
+					return
+				case c <- lo.Tuple2[int, T]{A: i, B: v}:
+				}
 			}
-			close(c)
 		}()
 		// consumer
 		var wg sync.WaitGroup
 		for j := 0; j < nWorkers; j++ {
 			// start workers
 			wg.Go(func() {
-				for job := range c {
-					worker(job.A, job.B)
+				for {
+					select {
+					case <-ctx.Done():
+						return
+					case job, ok := <-c:
+						if !ok {
+							return
+						}
+						if err := ctx.Err(); err != nil {
+							return
+						}
+						worker(job.A, job.B)
+					}
 				}
 			})
 		}
 		wg.Wait()
 	}
-}
-
-type batchJob struct {
-	beginId int
-	endId   int
-}
-
-// BatchParallel run parallel jobs in batches to reduce the cost of context switch.
-func BatchParallel(nJobs, nWorkers, batchSize int, worker func(workerId, beginJobId, endJobId int) error) error {
-	if nWorkers == 1 {
-		return worker(0, 0, nJobs)
-	}
-	c := make(chan batchJob, chanSize)
-	// producer
-	go func() {
-		for i := 0; i < nJobs; i += batchSize {
-			c <- batchJob{beginId: i, endId: mathutil.Min(i+batchSize, nJobs)}
-		}
-		close(c)
-	}()
-	// consumer
-	var wg sync.WaitGroup
-	errs := make([]error, nJobs)
-	for j := 0; j < nWorkers; j++ {
-		// start workers
-		workerId := j
-		wg.Go(func() {
-			for {
-				// read job
-				job, ok := <-c
-				if !ok {
-					return
-				}
-				// run job
-				if err := worker(workerId, job.beginId, job.endId); err != nil {
-					errs[job.beginId] = err
-					return
-				}
-			}
-		})
-	}
-	wg.Wait()
-	// check errors
-	for _, err := range errs {
-		if err != nil {
-			return errors.Trace(err)
-		}
-	}
-	return nil
+	return ctx.Err()
 }
 
 // Split a slice into n slices and keep the order of elements.
@@ -233,21 +233,32 @@ func (ctx *Context) Attach() {
 	ctx.sem <- struct{}{}
 }
 
-func Detachable(nJobs, nWorkers, nMaxDetached int, worker func(*Context, int)) {
+func Detachable(ctx context.Context, nJobs, nWorkers, nMaxDetached int, worker func(*Context, int)) error {
 	sem := make(chan struct{}, nWorkers)
 	detachedSem := make(chan struct{}, nMaxDetached)
 	var wg sync.WaitGroup
 	for i := 0; i < nJobs; i++ {
-		sem <- struct{}{}
+		select {
+		case <-ctx.Done():
+			wg.Wait()
+			return ctx.Err()
+		case sem <- struct{}{}:
+		}
+
 		wg.Go(func() {
-			ctx := &Context{sem: sem, detachedSem: detachedSem}
-			worker(ctx, i)
-			if ctx.detached {
-				<-ctx.detachedSem
+			if ctx.Err() != nil {
+				<-sem
+				return
+			}
+			c := &Context{sem: sem, detachedSem: detachedSem}
+			worker(c, i)
+			if c.detached {
+				<-c.detachedSem
 			} else {
 				<-sem
 			}
 		})
 	}
 	wg.Wait()
+	return ctx.Err()
 }

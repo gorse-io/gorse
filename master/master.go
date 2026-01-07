@@ -95,9 +95,9 @@ type Master struct {
 	tokenCache   *ttlcache.Cache[string, UserInfo]
 
 	// events
-	fitTicker    *time.Ticker
-	importedChan *parallel.ConditionChannel // feedback inserted events
-	triggerChan  *parallel.ConditionChannel // manually trigger events
+	ticker    *time.Ticker
+	scheduled chan struct{}
+	cancel    context.CancelFunc
 }
 
 // NewMaster creates a master node.
@@ -137,9 +137,9 @@ func NewMaster(cfg *config.Config, cacheFolder string, standalone bool) *Master 
 			HttpPort:    cfg.Master.HttpPort,
 			WebService:  new(restful.WebService),
 		},
-		fitTicker:    time.NewTicker(duration),
-		importedChan: parallel.NewConditionChannel(),
-		triggerChan:  parallel.NewConditionChannel(),
+		ticker:    time.NewTicker(duration),
+		scheduled: make(chan struct{}, 1),
+		cancel:    func() {},
 	}
 	return m
 }
@@ -306,57 +306,23 @@ func (m *Master) Shutdown() {
 
 func (m *Master) RunTasksLoop() {
 	defer util.CheckPanic()
-	var (
-		err error
-		//firstLoop = true
-	)
-	go func() {
-		m.importedChan.Signal()
-		for {
-			if m.checkDataImported() {
-				m.importedChan.Signal()
-			}
-			time.Sleep(time.Second)
-		}
-	}()
+	select {
+	case m.scheduled <- struct{}{}:
+	default:
+	}
 	for {
 		select {
-		case <-m.fitTicker.C:
-		case <-m.importedChan.C:
+		case <-m.ticker.C:
+		case <-m.scheduled:
 		}
 
 		// download dataset
-		err = m.runLoadDatasetTask()
+		var ctx context.Context
+		ctx, m.cancel = context.WithCancel(context.Background())
+		err := m.runLoadDatasetTask(ctx)
 		if err != nil {
 			log.Logger().Error("failed to load ranking dataset", zap.Error(err))
 			continue
 		}
-	}
-}
-
-func (m *Master) checkDataImported() bool {
-	ctx := context.Background()
-	isDataImported, err := m.CacheClient.Get(ctx, cache.Key(cache.GlobalMeta, cache.DataImported)).Integer()
-	if err != nil {
-		if !errors.Is(err, errors.NotFound) {
-			log.Logger().Error("failed to read meta", zap.Error(err))
-		}
-		return false
-	}
-	if isDataImported > 0 {
-		err = m.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.DataImported), 0))
-		if err != nil {
-			log.Logger().Error("failed to write meta", zap.Error(err))
-		}
-		return true
-	}
-	return false
-}
-
-func (m *Master) notifyDataImported() {
-	ctx := context.Background()
-	err := m.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.DataImported), 1))
-	if err != nil {
-		log.Logger().Error("failed to write meta", zap.Error(err))
 	}
 }

@@ -107,6 +107,8 @@ func (suite *MasterAPITestSuite) SetupTest() {
 	suite.WebService = new(restful.WebService)
 	suite.CreateWebService()
 	suite.RestServer.CreateWebService()
+	suite.cancel = func() {}
+	suite.scheduled = make(chan struct{}, 1)
 	// create handler
 	suite.handler = restful.NewContainer()
 	suite.handler.Add(suite.WebService)
@@ -253,6 +255,7 @@ func (suite *MasterAPITestSuite) TestImportUsers() {
 		{UserId: "2", Labels: map[string]any{"性别": "男", "职业": "律师"}},
 		{UserId: "3", Labels: map[string]any{"性别": "女", "职业": "教师"}},
 	}, items)
+	suite.NotEmpty(suite.scheduled)
 }
 
 func (suite *MasterAPITestSuite) TestImportItems() {
@@ -303,6 +306,7 @@ func (suite *MasterAPITestSuite) TestImportItems() {
 			Comment:    "three",
 		},
 	}, items)
+	suite.NotEmpty(suite.scheduled)
 }
 
 func (suite *MasterAPITestSuite) TestImportFeedback() {
@@ -333,6 +337,7 @@ func (suite *MasterAPITestSuite) TestImportFeedback() {
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "read", UserId: "2", ItemId: "6"}},
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "share", UserId: "1", ItemId: "4"}},
 	}, feedback)
+	suite.NotEmpty(suite.scheduled)
 }
 
 func (suite *MasterAPITestSuite) TestGetCluster() {
@@ -797,6 +802,7 @@ func (suite *MasterAPITestSuite) TestConfig() {
 		Status(http.StatusOK).
 		End()
 	suite.Equal("llm", suite.Config.Recommend.Ranker.Type)
+	suite.NotEmpty(suite.scheduled)
 
 	newConfig.Recommend.Ranker.Type = "xxx"
 	apitest.New().
@@ -910,6 +916,7 @@ func (suite *MasterAPITestSuite) TestDumpAndRestore() {
 	if suite.Equal(len(feedback), len(returnFeedback)) {
 		suite.Equal(feedback, returnFeedback)
 	}
+	suite.NotEmpty(suite.scheduled)
 }
 
 func (suite *MasterAPITestSuite) TestExportAndImport() {
