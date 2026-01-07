@@ -369,3 +369,10 @@ func (dataset *Dataset) Split(ratio float32, seed int64) (*Dataset, *Dataset) {
 	}
 	return trainSet, testSet
 }
+
+func (dataset *Dataset) GetItemEmbeddingDim() int {
+	if len(dataset.ItemEmbeddingDimension) == 0 {
+		return 0
+	}
+	return dataset.ItemEmbeddingDimension[0]
+}

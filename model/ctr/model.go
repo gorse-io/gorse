@@ -160,6 +160,8 @@ type AFM struct {
 	B *nn.Tensor
 	W nn.Layer
 	V nn.Layer
+	A nn.Layer
+	E nn.Layer
 	// hyper parameters
 	batchSize  int
 	nFactors   int
@@ -210,7 +212,7 @@ func (fm *AFM) Invalid() bool {
 	return fm == nil || fm.Index == nil
 }
 
-func (fm *AFM) Forward(indices, values *nn.Tensor, jobs int) *nn.Tensor {
+func (fm *AFM) Forward(indices, values, embedding *nn.Tensor, jobs int) *nn.Tensor {
 	batchSize := indices.Shape()[0]
 	v := fm.V.Forward(indices)
 	x := nn.Reshape(values, batchSize, fm.numDimension, 1)
@@ -225,6 +227,10 @@ func (fm *AFM) Forward(indices, values *nn.Tensor, jobs int) *nn.Tensor {
 	w := fm.W.Forward(indices)
 	linear := nn.BMM(w, x, true, false, jobs)
 	fmOutput := nn.Add(nn.Reshape(linear, batchSize), nn.Reshape(sum, batchSize), fm.B)
+	// Encode the embedding
+	// encodedNorm := fm.E.Forward(fm.A.Forward(embedding))
+	// encodedNorm = nn.Reshape(encodedNorm, batchSize, fm.nFactors, 1)
+	// fmOutput = nn.Add(fmOutput, nn.Reshape(nn.BMM(vx, encodedNorm, true, false, jobs), batchSize))
 	return nn.Flatten(fmOutput)
 }
 
@@ -247,11 +253,11 @@ func (fm *AFM) InternalPredict(_ []int32, _ []float32) float32 {
 func (fm *AFM) BatchInternalPredict(x []lo.Tuple2[[]int32, []float32], jobs int) []float32 {
 	fm.mu.RLock()
 	defer fm.mu.RUnlock()
-	indicesTensor, valuesTensor, _ := fm.convertToTensors(x, nil)
+	indicesTensor, valuesTensor, _, _ := fm.convertToTensors(x, nil)
 	predictions := make([]float32, 0, len(x))
 	for i := 0; i < len(x); i += fm.batchSize {
 		j := mathutil.Min(i+fm.batchSize, len(x))
-		output := fm.Forward(indicesTensor.Slice(i, j), valuesTensor.Slice(i, j), jobs)
+		output := fm.Forward(indicesTensor.Slice(i, j), valuesTensor.Slice(i, j), nil /*embeddingTensor.Slice(i, j)*/, jobs)
 		predictions = append(predictions, output.Data()...)
 	}
 	return predictions[:len(x)]
@@ -298,6 +304,8 @@ func (fm *AFM) Init(trainSet dataset.CTRSplit) {
 	fm.B = nn.Zeros()
 	fm.W = nn.NewEmbedding(int(trainSet.GetIndex().Len()), 1)
 	fm.V = nn.NewEmbedding(int(trainSet.GetIndex().Len()), fm.nFactors)
+	fm.A = nn.NewAttention(trainSet.GetItemEmbeddingDim(), fm.nFactors)
+	fm.E = nn.NewLinear(trainSet.GetItemEmbeddingDim(), fm.nFactors)
 	fm.BaseFactorizationMachines.Init(trainSet)
 }
 
@@ -322,7 +330,7 @@ func (fm *AFM) Fit(ctx context.Context, trainSet, testSet dataset.CTRSplit, conf
 		x = append(x, lo.Tuple2[[]int32, []float32]{A: indices, B: values})
 		y = append(y, target)
 	}
-	indices, values, target := fm.convertToTensors(x, y)
+	indices, values, _, target := fm.convertToTensors(x, y)
 
 	var optimizer nn.Optimizer
 	switch fm.optimizer {
@@ -348,8 +356,9 @@ func (fm *AFM) Fit(ctx context.Context, trainSet, testSet dataset.CTRSplit, conf
 			j := mathutil.Min(i+fm.batchSize, trainSet.Count())
 			batchIndices := indices.Slice(i, j)
 			batchValues := values.Slice(i, j)
+			// batchEmbedding := embeddings.Slice(i, j)
 			batchTarget := target.Slice(i, j)
-			batchOutput := fm.Forward(batchIndices, batchValues, config.Jobs)
+			batchOutput := fm.Forward(batchIndices, batchValues, nil /*batchEmbedding*/, config.Jobs)
 			batchLoss := nn.BCEWithLogits(batchTarget, batchOutput, nil)
 			cost += batchLoss.Data()[0]
 			optimizer.ZeroGrad()
@@ -444,7 +453,7 @@ func (fm *AFM) Unmarshal(r io.Reader) error {
 	return nil
 }
 
-func (fm *AFM) convertToTensors(x []lo.Tuple2[[]int32, []float32], y []float32) (indicesTensor, valuesTensor, targetTensor *nn.Tensor) {
+func (fm *AFM) convertToTensors(x []lo.Tuple2[[]int32, []float32], y []float32) (indicesTensor, valuesTensor, embeddingTensor, targetTensor *nn.Tensor) {
 	if y != nil && len(x) != len(y) {
 		panic("length of x and y must be equal")
 	}

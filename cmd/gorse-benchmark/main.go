@@ -69,8 +69,10 @@ var llmCmd = &cobra.Command{
 		fmt.Printf("  Negative Feedbacks: %d\n", dataset.CountNegative())
 		// Split dataset
 		train, test := dataset.Split(0.8, 42)
-		// EvaluateFM(train, test)
-		EvaluateLLM(cfg, train, test, aux.GetItems())
+		EvaluateFM(train, test)
+		// EvaluateLLM(cfg, train, test, aux.GetItems())
+		_ = aux
+		fmt.Println(len(dataset.ItemEmbeddings), len(dataset.ItemEmbeddings[0]), len(dataset.ItemEmbeddings[0][0]))
 	},
 }
 
@@ -179,7 +181,7 @@ func EvaluateLLM(cfg *config.Config, train, test dataset.CTRSplit, items []data.
 func EvaluateFM(train, test dataset.CTRSplit) float32 {
 	PrintHorizontalLine("-")
 	fmt.Println("Training FM...")
-	ml := ctr.NewFMV2(nil)
+	ml := ctr.NewAFM(nil)
 	ml.Fit(context.Background(), train, test,
 		ctr.NewFitConfig().
 			SetVerbose(10).
