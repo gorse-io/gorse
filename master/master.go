@@ -306,6 +306,10 @@ func (m *Master) Shutdown() {
 
 func (m *Master) RunTasksLoop() {
 	defer util.CheckPanic()
+	select {
+	case m.scheduled <- struct{}{}:
+	default:
+	}
 	for {
 		select {
 		case <-m.ticker.C:

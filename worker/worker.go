@@ -309,7 +309,7 @@ func (w *Worker) Pull() {
 		}
 		if pulled {
 			select {
-			case w.triggerChan <- struct{}{}:
+			case w.pulledChan <- struct{}{}:
 			default:
 			}
 		}

@@ -185,21 +185,23 @@ func TestSplit(t *testing.T) {
 func TestDetachable(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		start := time.Now()
-		Detachable(context.Background(), 100, 1, 100, func(ctx *Context, jobId int) {
+		err := Detachable(context.Background(), 100, 1, 100, func(ctx *Context, jobId int) {
 			ctx.Detach()
 			time.Sleep(time.Second)
 			ctx.Attach()
 		})
+		assert.NoError(t, err)
 		assert.Less(t, time.Since(start), time.Second*2)
 	})
 
 	synctest.Test(t, func(t *testing.T) {
 		start := time.Now()
-		Detachable(context.Background(), 100, 1, 10, func(ctx *Context, jobId int) {
+		err := Detachable(context.Background(), 100, 1, 10, func(ctx *Context, jobId int) {
 			ctx.Detach()
 			time.Sleep(time.Second)
 			ctx.Attach()
 		})
+		assert.NoError(t, err)
 		assert.Less(t, time.Since(start), time.Second*11)
 	})
 }

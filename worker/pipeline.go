@@ -577,9 +577,6 @@ func NewItemCache(client data.Database) *ItemCache {
 }
 
 func (c *ItemCache) GetSlice(ctx context.Context, itemIds []string) ([]*data.Item, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	requests := make([]string, 0, len(itemIds))
 	for _, itemId := range itemIds {
 		if _, exist := c.Data.Load(itemId); !exist {
