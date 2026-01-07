@@ -110,14 +110,6 @@ type BatchInference interface {
 	BatchInternalPredict(x []lo.Tuple2[[]int32, []float32], jobs int) []float32
 }
 
-type FactorizationMachineCloner interface {
-	Clone() FactorizationMachines
-}
-
-type FactorizationMachineSpawner interface {
-	Spawn() FactorizationMachines
-}
-
 type BaseFactorizationMachines struct {
 	model.BaseModel
 	Index dataset.UnifiedIndex
@@ -182,7 +174,7 @@ type AFM struct {
 	numDimension int
 }
 
-func NewFMV2(params model.Params) *AFM {
+func NewAFM(params model.Params) *AFM {
 	fm := new(AFM)
 	fm.SetParams(params)
 	return fm

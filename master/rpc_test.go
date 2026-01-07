@@ -67,7 +67,7 @@ func newMockMasterRPC(t *testing.T) *mockMasterRPC {
 	assert.NoError(t, err)
 	// create click model
 	train, test := newClickDataset()
-	fm := ctr.NewFMV2(model.Params{model.NEpochs: 0})
+	fm := ctr.NewAFM(model.Params{model.NEpochs: 0})
 	fm.Fit(context.Background(), train, test, &ctr.FitConfig{})
 	// create ranking model
 	trainSet, testSet := newRankingDataset()

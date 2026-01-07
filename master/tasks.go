@@ -1019,7 +1019,7 @@ func (m *Master) trainClickThroughRatePrediction(parent context.Context, trainSe
 			zap.Float32("Recall", m.clickThroughRateTarget.Score.Recall),
 			zap.Any("params", clickThroughRateParams))
 	}
-	clickModel := ctr.NewFMV2(clickThroughRateParams)
+	clickModel := ctr.NewAFM(clickThroughRateParams)
 	m.clickThroughRateModelMutex.Unlock()
 
 	startFitTime := time.Now()
@@ -1244,7 +1244,7 @@ func (m *Master) optimizeClickThroughRatePrediction(parent context.Context, trai
 
 	search := ctr.NewModelSearch(map[string]ctr.ModelCreator{
 		"FM": func() ctr.FactorizationMachines {
-			return ctr.NewFMV2(nil)
+			return ctr.NewAFM(nil)
 		},
 	}, trainSet, testSet,
 		ctr.NewFitConfig().

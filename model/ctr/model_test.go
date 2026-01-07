@@ -35,7 +35,7 @@ func TestFactorizationMachines_Classification_Frappe(t *testing.T) {
 	// python .\model.py frappe -dim 8 -iter 10 -learn_rate 0.01 -regular 0.0001
 	train, test, err := LoadDataFromBuiltIn("frappe")
 	assert.NoError(t, err)
-	m := NewFMV2(model.Params{
+	m := NewAFM(model.Params{
 		model.NFactors:  8,
 		model.NEpochs:   10,
 		model.Lr:        0.01,
@@ -52,7 +52,7 @@ func TestFactorizationMachines_Classification_MovieLens(t *testing.T) {
 	// python .\model.py ml-tag -dim 8 -iter 10 -learn_rate 0.01 -regular 0.0001
 	train, test, err := LoadDataFromBuiltIn("ml-tag")
 	assert.NoError(t, err)
-	m := NewFMV2(model.Params{
+	m := NewAFM(model.Params{
 		model.InitStdDev: 0.01,
 		model.NFactors:   8,
 		model.NEpochs:    10,
@@ -69,7 +69,7 @@ func TestFactorizationMachines_Classification_Criteo(t *testing.T) {
 	// python .\model.py criteo -dim 8 -iter 10 -learn_rate 0.01 -regular 0.0001
 	train, test, err := LoadDataFromBuiltIn("criteo")
 	assert.NoError(t, err)
-	m := NewFMV2(model.Params{
+	m := NewAFM(model.Params{
 		model.NFactors:  8,
 		model.NEpochs:   10,
 		model.Lr:        0.01,
