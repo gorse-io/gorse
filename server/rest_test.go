@@ -295,6 +295,20 @@ func (suite *ServerTestSuite) TestItems() {
 		End()
 	apitest.New().
 		Handler(suite.handler).
+		Get("/api/latest/").
+		Header("X-API-Key", apiKey).
+		QueryParams(map[string]string{
+			"n":      "3",
+			"offset": "1",
+		}).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(suite.marshal([]cache.Score{
+			{Id: items[1].ItemId, Score: float64(items[1].Timestamp.Unix())},
+		})).
+		End()
+	apitest.New().
+		Handler(suite.handler).
 		Get("/api/latest/*").
 		Header("X-API-Key", apiKey).
 		QueryParams(map[string]string{
@@ -304,6 +318,25 @@ func (suite *ServerTestSuite) TestItems() {
 		Status(http.StatusOK).
 		Body(suite.marshal([]cache.Score{
 			{Id: items[3].ItemId, Score: float64(items[3].Timestamp.Unix())},
+			{Id: items[1].ItemId, Score: float64(items[1].Timestamp.Unix())},
+		})).
+		End()
+	err := suite.DataClient.BatchInsertFeedback(context.Background(), []data.Feedback{{
+		FeedbackKey: data.FeedbackKey{FeedbackType: "read", UserId: "0", ItemId: "6"},
+		Timestamp:   time.Now().Truncate(time.Hour),
+	}}, true, true, true)
+	suite.NoError(err)
+	apitest.New().
+		Handler(suite.handler).
+		Get("/api/latest").
+		Header("X-API-Key", apiKey).
+		QueryParams(map[string]string{
+			"n":       "3",
+			"user-id": "0",
+		}).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(suite.marshal([]cache.Score{
 			{Id: items[1].ItemId, Score: float64(items[1].Timestamp.Unix())},
 		})).
 		End()

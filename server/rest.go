@@ -672,20 +672,61 @@ func (s *RestServer) SearchDocuments(collection, subset string, categories []str
 }
 
 func (s *RestServer) getLatest(request *restful.Request, response *restful.Response) {
-	n, err := ParseInt(request, "n", s.Config.Server.DefaultN)
-	if err != nil {
+	var (
+		offset int
+		n      int
+		err    error
+	)
+	ctx := request.Request.Context()
+	if offset, err = ParseInt(request, "offset", 0); err != nil {
+		BadRequest(response, errors.New("invalid offset parameter"))
+		return
+	}
+	if n, err = ParseInt(request, "n", s.Config.Server.DefaultN); err != nil {
 		BadRequest(response, errors.New("invalid n parameter"))
 		return
 	}
-
 	categories := ReadCategories(request, nil)
-	log.ResponseLogger(response).Debug("get category latest items in category", zap.Strings("categories", categories))
+	userId := request.QueryParameter("user-id")
 
-	items, err := s.DataClient.GetLatestItems(request.Request.Context(), n, categories)
+	readItems := mapset.NewSet[string]()
+	if userId != "" {
+		feedback, err := s.DataClient.GetUserFeedback(ctx, userId, s.Config.Now())
+		if err != nil {
+			InternalServerError(response, err)
+			return
+		}
+		for _, f := range feedback {
+			readItems.Add(f.ItemId)
+		}
+	}
+
+	limit := offset + n
+	if readItems.Cardinality() > 0 {
+		limit += readItems.Cardinality()
+	}
+
+	items, err := s.DataClient.GetLatestItems(ctx, limit, categories)
 	if err != nil {
 		InternalServerError(response, err)
 		return
 	}
+
+	if readItems.Cardinality() > 0 {
+		filtered := make([]data.Item, 0, len(items))
+		for _, item := range items {
+			if !readItems.Contains(item.ItemId) {
+				filtered = append(filtered, item)
+			}
+		}
+		items = filtered
+	}
+
+	items = items[min(offset, len(items)):]
+	if n > 0 && len(items) > n {
+		items = items[:n]
+	}
+
 	Ok(response, lo.Map(items, func(item data.Item, _ int) cache.Score {
 		return cache.Score{
 			Id:    item.ItemId,
