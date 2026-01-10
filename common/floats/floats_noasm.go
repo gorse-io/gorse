@@ -18,6 +18,8 @@ package floats
 
 type Feature uint64
 
+const OPENBLAS Feature = 1 << iota
+
 var feature Feature
 
 func (Feature) String() string {
