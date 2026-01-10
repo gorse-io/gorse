@@ -679,11 +679,11 @@ func (s *RestServer) getLatest(request *restful.Request, response *restful.Respo
 	)
 	ctx := request.Request.Context()
 	if offset, err = ParseInt(request, "offset", 0); err != nil {
-		BadRequest(response, errors.New("invalid offset parameter"))
+		BadRequest(response, errors.Errorf("invalid offset parameter: %v", err))
 		return
 	}
 	if n, err = ParseInt(request, "n", s.Config.Server.DefaultN); err != nil {
-		BadRequest(response, errors.New("invalid n parameter"))
+		BadRequest(response, errors.Errorf("invalid n parameter: %v", err))
 		return
 	}
 	categories := ReadCategories(request, nil)
