@@ -395,7 +395,7 @@ func (p *Pipeline) rankByClickTroughRate(
 			inputs[i].C = ctr.ConvertLabels(user.Labels)
 			inputs[i].D = ctr.ConvertLabels(item.Labels)
 		}
-		output := batchPredictor.BatchPredict(inputs, p.Jobs)
+		output := batchPredictor.BatchPredict(inputs, nil, p.Jobs)
 		for i, score := range output {
 			topItems = append(topItems, cache.Score{
 				Id:         items[i].ItemId,

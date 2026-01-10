@@ -207,11 +207,12 @@ func (dataset *Dataset) GetTarget(i int) float32 {
 }
 
 // Get returns the i-th sample.
-func (dataset *Dataset) Get(i int) ([]int32, []float32, float32) {
+func (dataset *Dataset) Get(i int) ([]int32, []float32, []float32, float32) {
 	var (
-		indices  []int32
-		values   []float32
-		position int32
+		indices   []int32
+		values    []float32
+		embedding []float32
+		position  int32
 	)
 	// append user id
 	if len(dataset.Users) > 0 {
@@ -224,6 +225,9 @@ func (dataset *Dataset) Get(i int) ([]int32, []float32, float32) {
 		indices = append(indices, position+dataset.Items[i])
 		values = append(values, 1)
 		position += int32(dataset.CountItems())
+		if len(dataset.ItemEmbeddings) > 0 && len(dataset.ItemEmbeddings[dataset.Items[i]]) > 0 {
+			embedding = dataset.ItemEmbeddings[dataset.Items[i]][0]
+		}
 	}
 	// append user indices
 	if len(dataset.Users) > 0 {
@@ -248,7 +252,7 @@ func (dataset *Dataset) Get(i int) ([]int32, []float32, float32) {
 		indices = append(indices, contextIndices...)
 		values = append(values, contextValues...)
 	}
-	return indices, values, dataset.Target[i]
+	return indices, values, embedding, dataset.Target[i]
 }
 
 // LoadLibFMFile loads libFM format file.
@@ -325,14 +329,20 @@ func LoadDataFromBuiltIn(name string) (train, test *Dataset, err error) {
 func (dataset *Dataset) Split(ratio float32, seed int64) (*Dataset, *Dataset) {
 	// create train/test dataset
 	trainSet := &Dataset{
-		Index:      dataset.Index,
-		UserLabels: dataset.UserLabels,
-		ItemLabels: dataset.ItemLabels,
+		Index:                  dataset.Index,
+		UserLabels:             dataset.UserLabels,
+		ItemLabels:             dataset.ItemLabels,
+		ItemEmbeddings:         dataset.ItemEmbeddings,
+		ItemEmbeddingIndex:     dataset.ItemEmbeddingIndex,
+		ItemEmbeddingDimension: dataset.ItemEmbeddingDimension,
 	}
 	testSet := &Dataset{
-		Index:      dataset.Index,
-		UserLabels: dataset.UserLabels,
-		ItemLabels: dataset.ItemLabels,
+		Index:                  dataset.Index,
+		UserLabels:             dataset.UserLabels,
+		ItemLabels:             dataset.ItemLabels,
+		ItemEmbeddings:         dataset.ItemEmbeddings,
+		ItemEmbeddingIndex:     dataset.ItemEmbeddingIndex,
+		ItemEmbeddingDimension: dataset.ItemEmbeddingDimension,
 	}
 	// split by random
 	numTestSize := int(float32(dataset.Count()) * ratio)
@@ -375,4 +385,8 @@ func (dataset *Dataset) GetItemEmbeddingDim() int {
 		return 0
 	}
 	return dataset.ItemEmbeddingDimension[0]
+}
+
+func (dataset *Dataset) GetItemEmbeddingIndex() *dataset.Index {
+	return dataset.ItemEmbeddingIndex
 }

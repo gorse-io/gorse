@@ -79,7 +79,7 @@ func EvaluateFM(train, test dataset.CTRSplit) float32 {
 
 	userTrain := make(map[int32]int, train.CountUsers())
 	for i := 0; i < train.Count(); i++ {
-		indices, _, target := train.Get(i)
+		indices, _, _, target := train.Get(i)
 		userId := indices[0]
 		if target > 0 {
 			userTrain[userId]++
@@ -87,20 +87,23 @@ func EvaluateFM(train, test dataset.CTRSplit) float32 {
 	}
 
 	var posFeatures, negFeatures []lo.Tuple2[[]int32, []float32]
+	var posEmbeddings, negEmbeddings [][]float32
 	var posUsers, negUsers []int32
 	for i := 0; i < test.Count(); i++ {
-		indices, values, target := test.Get(i)
+		indices, values, embeddings, target := test.Get(i)
 		userId := indices[0]
 		if target > 0 {
 			posFeatures = append(posFeatures, lo.Tuple2[[]int32, []float32]{A: indices, B: values})
+			posEmbeddings = append(posEmbeddings, embeddings)
 			posUsers = append(posUsers, userId)
 		} else {
 			negFeatures = append(negFeatures, lo.Tuple2[[]int32, []float32]{A: indices, B: values})
+			negEmbeddings = append(negEmbeddings, embeddings)
 			negUsers = append(negUsers, userId)
 		}
 	}
-	posPrediction := ml.BatchInternalPredict(posFeatures, runtime.NumCPU())
-	negPrediction := ml.BatchInternalPredict(negFeatures, runtime.NumCPU())
+	posPrediction := ml.BatchInternalPredict(posFeatures, posEmbeddings, runtime.NumCPU())
+	negPrediction := ml.BatchInternalPredict(negFeatures, negEmbeddings, runtime.NumCPU())
 
 	userPosPrediction := make(map[int32][]float32)
 	userNegPrediction := make(map[int32][]float32)
