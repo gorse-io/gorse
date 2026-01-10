@@ -73,7 +73,6 @@ require (
 	golang.org/x/exp v0.0.0-20251125195548-87e1e737ad39
 	golang.org/x/oauth2 v0.34.0
 	golang.org/x/sys v0.39.0
-	golang.org/x/term v0.38.0
 	google.golang.org/api v0.257.0
 	google.golang.org/grpc v1.77.0
 	google.golang.org/grpc/security/advancedtls v1.0.0
@@ -203,6 +202,7 @@ require (
 	golang.org/x/crypto v0.45.0 // indirect
 	golang.org/x/net v0.47.0 // indirect
 	golang.org/x/sync v0.18.0 // indirect
+	golang.org/x/term v0.38.0 // indirect
 	golang.org/x/text v0.31.0 // indirect
 	golang.org/x/time v0.14.0 // indirect
 	gonum.org/v1/gonum v0.16.0 // indirect
