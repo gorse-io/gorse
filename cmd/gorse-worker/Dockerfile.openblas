@@ -17,6 +17,12 @@ elif [ "${TARGETARCH}" = "arm64" ]; then \
     dpkg --add-architecture ${TARGETARCH} && apt update && apt install -y gcc-aarch64-linux-gnu libopenblas-dev:${TARGETARCH} git; \
 elif [ "${TARGETARCH}" = "riscv64" ]; then \
     dpkg --add-architecture ${TARGETARCH} && apt update && apt install -y gcc-riscv64-linux-gnu libopenblas-dev:${TARGETARCH} git; \
+elif [ "${TARGETARCH}" = "ppc64le" ]; then \
+    dpkg --add-architecture ppc64el && apt update && apt install -y gcc-powerpc64le-linux-gnu libopenblas-dev:ppc64el git; \
+elif [ "${TARGETARCH}" = "s390x" ]; then \
+    dpkg --add-architecture ${TARGETARCH} && apt update && apt install -y gcc-s390x-linux-gnu libopenblas-dev:${TARGETARCH} git; \
+elif [ "${TARGETARCH}" = "loong64" ]; then \
+    dpkg --add-architecture ${TARGETARCH} && apt update && apt install -y gcc-loongarch64-linux-gnu libopenblas-dev:${TARGETARCH} git; \
 else \
     echo "Unsupported TARGETARCH ${TARGETARCH}"; exit 1; \
 fi
@@ -40,6 +46,12 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
         export CC=aarch64-linux-gnu-gcc; \
     elif [ "${TARGETARCH}" = "riscv64" ]; then \
         export CC=riscv64-linux-gnu-gcc; \
+    elif [ "${TARGETARCH}" = "ppc64le" ]; then \
+        export CC=powerpc64le-linux-gnu-gcc; \
+    elif [ "${TARGETARCH}" = "s390x" ]; then \
+        export CC=s390x-linux-gnu-gcc; \
+    elif [ "${TARGETARCH}" = "loong64" ]; then \
+        export CC=loongarch64-linux-gnu-gcc; \
     else \
         echo "Unsupported TARGETARCH ${TARGETARCH}"; exit 1; \
     fi && \
