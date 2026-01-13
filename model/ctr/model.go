@@ -267,7 +267,7 @@ func (fm *AFM) BatchInternalPredict(x []lo.Tuple2[[]int32, []float32], e [][][]f
 		j := mathutil.Min(i+fm.batchSize, len(x))
 		embeddingTensorSlice := make([]*nn.Tensor, len(fm.embeddingDim))
 		for k := range fm.embeddingDim {
-			embeddingTensorSlice[k] = embeddingTensor[i].Slice(i, j)
+			embeddingTensorSlice[k] = embeddingTensor[k].Slice(i, j)
 		}
 		output := fm.Forward(indicesTensor.Slice(i, j), valuesTensor.Slice(i, j), embeddingTensorSlice, jobs)
 		predictions = append(predictions, output.Data()...)

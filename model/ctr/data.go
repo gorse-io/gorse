@@ -147,7 +147,7 @@ type Dataset struct {
 	Users                  []int32
 	Items                  []int32
 	Target                 []float32
-	ItemEmbeddings         [][][]float32
+	ItemEmbeddings         [][][]float32 // Index by row id, embedding id, embedding dimension
 	ItemEmbeddingDimension []int
 	ItemEmbeddingIndex     *dataset.Index
 	PositiveCount          int
