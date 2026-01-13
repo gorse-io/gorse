@@ -1014,6 +1014,18 @@ func (suite *ServerTestSuite) TestGetRecommends() {
 		Handler(suite.handler).
 		Get("/api/recommend/0").
 		Header("X-API-Key", apiKey).
+		Header("X-API-Version", "2").
+		QueryParams(map[string]string{
+			"n": "3",
+		}).
+		Expect(suite.T()).
+		Status(http.StatusOK).
+		Body(suite.marshal([]cache.Score{{Id: "1", Score: 99}, {Id: "3", Score: 97}, {Id: "5", Score: 95}})).
+		End()
+	apitest.New().
+		Handler(suite.handler).
+		Get("/api/recommend/0").
+		Header("X-API-Key", apiKey).
 		QueryParams(map[string]string{
 			"n":      "3",
 			"offset": "3",
