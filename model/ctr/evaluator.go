@@ -15,6 +15,7 @@
 package ctr
 
 import (
+	"fmt"
 	"sort"
 
 	"github.com/chewxy/math32"
@@ -46,7 +47,7 @@ func EvaluateRegression(estimator FactorizationMachines, testSet *Dataset) Score
 func EvaluateClassification(estimator FactorizationMachines, testSet dataset.CTRSplit, jobs int) Score {
 	// For all UserFeedback
 	var posFeatures, negFeatures []lo.Tuple2[[]int32, []float32]
-	var posEmbeddings, negEmbeddings [][]float32
+	var posEmbeddings, negEmbeddings [][][]float32
 	for i := 0; i < testSet.Count(); i++ {
 		indices, values, embeddings, target := testSet.Get(i)
 		if target > 0 {
@@ -59,6 +60,7 @@ func EvaluateClassification(estimator FactorizationMachines, testSet dataset.CTR
 	}
 	var posPrediction, negPrediction []float32
 	if batchInference, ok := estimator.(BatchInference); ok {
+		fmt.Println(len(posEmbeddings), len(posEmbeddings[0]), len(posEmbeddings[0][0]))
 		posPrediction = batchInference.BatchInternalPredict(posFeatures, posEmbeddings, jobs)
 		negPrediction = batchInference.BatchInternalPredict(negFeatures, negEmbeddings, jobs)
 	} else {

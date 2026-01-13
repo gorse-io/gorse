@@ -207,11 +207,11 @@ func (dataset *Dataset) GetTarget(i int) float32 {
 }
 
 // Get returns the i-th sample.
-func (dataset *Dataset) Get(i int) ([]int32, []float32, []float32, float32) {
+func (dataset *Dataset) Get(i int) ([]int32, []float32, [][]float32, float32) {
 	var (
 		indices   []int32
 		values    []float32
-		embedding []float32
+		embedding [][]float32
 		position  int32
 	)
 	// append user id
@@ -225,8 +225,8 @@ func (dataset *Dataset) Get(i int) ([]int32, []float32, []float32, float32) {
 		indices = append(indices, position+dataset.Items[i])
 		values = append(values, 1)
 		position += int32(dataset.CountItems())
-		if len(dataset.ItemEmbeddings) > 0 && len(dataset.ItemEmbeddings[dataset.Items[i]]) > 0 {
-			embedding = dataset.ItemEmbeddings[dataset.Items[i]][0]
+		if len(dataset.ItemEmbeddings) > 0 {
+			embedding = dataset.ItemEmbeddings[dataset.Items[i]]
 		}
 	}
 	// append user indices
@@ -380,11 +380,8 @@ func (dataset *Dataset) Split(ratio float32, seed int64) (*Dataset, *Dataset) {
 	return trainSet, testSet
 }
 
-func (dataset *Dataset) GetItemEmbeddingDim() int {
-	if len(dataset.ItemEmbeddingDimension) == 0 {
-		return 0
-	}
-	return dataset.ItemEmbeddingDimension[0]
+func (dataset *Dataset) GetItemEmbeddingDim() []int {
+	return dataset.ItemEmbeddingDimension
 }
 
 func (dataset *Dataset) GetItemEmbeddingIndex() *dataset.Index {

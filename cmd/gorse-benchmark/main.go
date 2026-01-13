@@ -87,7 +87,7 @@ func EvaluateFM(train, test dataset.CTRSplit) float32 {
 	}
 
 	var posFeatures, negFeatures []lo.Tuple2[[]int32, []float32]
-	var posEmbeddings, negEmbeddings [][]float32
+	var posEmbeddings, negEmbeddings [][][]float32
 	var posUsers, negUsers []int32
 	for i := 0; i < test.Count(); i++ {
 		indices, values, embeddings, target := test.Get(i)

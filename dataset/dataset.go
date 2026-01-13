@@ -66,8 +66,8 @@ type CTRSplit interface {
 	CountNegative() int
 	GetIndex() UnifiedIndex
 	GetTarget(i int) float32
-	Get(i int) ([]int32, []float32, []float32, float32)
-	GetItemEmbeddingDim() int
+	Get(i int) ([]int32, []float32, [][]float32, float32)
+	GetItemEmbeddingDim() []int
 	GetItemEmbeddingIndex() *Index
 }
 
