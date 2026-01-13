@@ -529,9 +529,10 @@ func (s *RestServer) CreateWebService() {
 		Returns(http.StatusOK, "OK", []cache.Score{}).
 		Writes([]cache.Score{}))
 	ws.Route(ws.GET("/recommend/{user-id}").To(s.getRecommend).
-		Doc("Get recommendation for user.").
+		Doc("Get recommendation for user. Set X-API-Version: 2 to return scores.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{RecommendationAPITag}).
 		Param(ws.HeaderParameter("X-API-Key", "API key").DataType("string")).
+		Param(ws.HeaderParameter("X-API-Version", "API version (set to 2 to return scores)").DataType("string")).
 		Param(ws.PathParameter("user-id", "User ID").DataType("string")).
 		Param(ws.QueryParameter("category", "Category of the returned items (support multi-categories filtering)").DataType("string")).
 		Param(ws.QueryParameter("write-back-type", "Type of write back feedback").DataType("string")).
@@ -541,9 +542,10 @@ func (s *RestServer) CreateWebService() {
 		Returns(http.StatusOK, "OK", []string{}).
 		Writes([]string{}))
 	ws.Route(ws.GET("/recommend/{user-id}/{category}").To(s.getRecommend).
-		Deprecate().Doc("Get recommendation for user.").
+		Deprecate().Doc("Get recommendation for user. Set X-API-Version: 2 to return scores.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{RecommendationAPITag}).
 		Param(ws.HeaderParameter("X-API-Key", "API key").DataType("string")).
+		Param(ws.HeaderParameter("X-API-Version", "API version (set to 2 to return scores)").DataType("string")).
 		Param(ws.PathParameter("user-id", "User ID").DataType("string")).
 		Param(ws.PathParameter("category", "Category of the returned items").DataType("string")).
 		Param(ws.QueryParameter("write-back-type", "Type of write back feedback").DataType("string")).
@@ -843,6 +845,7 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 	}
 	// parse arguments
 	userId := request.PathParameter("user-id")
+	apiVersion := strings.TrimSpace(request.HeaderParameter("X-API-Version"))
 	n, err := ParseInt(request, "n", s.Config.Server.DefaultN)
 	if err != nil {
 		BadRequest(response, err)
@@ -900,6 +903,10 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 		}
 	}
 	// Send result
+	if apiVersion == "2" {
+		Ok(response, scores)
+		return
+	}
 	Ok(response, results)
 }
 
