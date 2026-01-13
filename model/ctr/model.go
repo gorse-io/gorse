@@ -124,7 +124,7 @@ func MarshalModel(w io.Writer, m FactorizationMachines) error {
 	var err error
 	switch m.(type) {
 	case *AFM:
-		err = encoding.WriteString(w, headerFMV2)
+		err = encoding.WriteString(w, headerAFM)
 	default:
 		return fmt.Errorf("unknown model: %v", reflect.TypeOf(m))
 	}
@@ -134,7 +134,7 @@ func MarshalModel(w io.Writer, m FactorizationMachines) error {
 	return m.Marshal(w)
 }
 
-const headerFMV2 = "FM2"
+const headerAFM = "AFM"
 
 func UnmarshalModel(r io.Reader) (FactorizationMachines, error) {
 	// read header
@@ -143,7 +143,7 @@ func UnmarshalModel(r io.Reader) (FactorizationMachines, error) {
 		return nil, err
 	}
 	switch header {
-	case headerFMV2:
+	case headerAFM:
 		var fm AFM
 		if err := fm.Unmarshal(r); err != nil {
 			return nil, errors.Trace(err)
@@ -451,6 +451,14 @@ func (fm *AFM) Marshal(w io.Writer) error {
 	if err := encoding.WriteGob(w, fm.numDimension); err != nil {
 		return errors.Trace(err)
 	}
+	if err := encoding.WriteGob(w, fm.embeddingDim); err != nil {
+		return errors.Trace(err)
+	}
+	if len(fm.embeddingDim) > 0 {
+		if err := dataset.MarshalIndex(w, fm.embeddingIndex); err != nil {
+			return errors.Trace(err)
+		}
+	}
 	// write parameters
 	if err := nn.Save(fm.Parameters(), w); err != nil {
 		return errors.Trace(err)
@@ -477,10 +485,25 @@ func (fm *AFM) Unmarshal(r io.Reader) error {
 	if err = encoding.ReadGob(r, &fm.numDimension); err != nil {
 		return errors.Trace(err)
 	}
+	if err = encoding.ReadGob(r, &fm.embeddingDim); err != nil {
+		return errors.Trace(err)
+	}
+	if len(fm.embeddingDim) > 0 {
+		fm.embeddingIndex, err = dataset.UnmarshalIndex(r)
+		if err != nil {
+			return errors.Trace(err)
+		}
+	}
 	// read parameters
 	fm.B = nn.Zeros()
 	fm.W = nn.NewEmbedding(fm.numFeatures, 1)
 	fm.V = nn.NewEmbedding(fm.numFeatures, fm.nFactors)
+	fm.A = make([]nn.Layer, len(fm.embeddingDim))
+	fm.E = make([]nn.Layer, len(fm.embeddingDim))
+	for i, dim := range fm.embeddingDim {
+		fm.A[i] = nn.NewAttention(dim, fm.nFactors)
+		fm.E[i] = nn.NewLinear(dim, fm.nFactors)
+	}
 	if err = nn.Load(fm.Parameters(), r); err != nil {
 		return errors.Trace(err)
 	}

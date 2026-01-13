@@ -15,7 +15,6 @@
 package ctr
 
 import (
-	"fmt"
 	"sort"
 
 	"github.com/chewxy/math32"
@@ -60,7 +59,6 @@ func EvaluateClassification(estimator FactorizationMachines, testSet dataset.CTR
 	}
 	var posPrediction, negPrediction []float32
 	if batchInference, ok := estimator.(BatchInference); ok {
-		fmt.Println(len(posEmbeddings), len(posEmbeddings[0]), len(posEmbeddings[0][0]))
 		posPrediction = batchInference.BatchInternalPredict(posFeatures, posEmbeddings, jobs)
 		negPrediction = batchInference.BatchInternalPredict(negFeatures, negEmbeddings, jobs)
 	} else {

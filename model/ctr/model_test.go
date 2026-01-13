@@ -83,8 +83,7 @@ func TestFactorizationMachines_Classification_Criteo(t *testing.T) {
 	// test prediction
 	assert.Equal(t, m.BatchInternalPredict(
 		[]lo.Tuple2[[]int32, []float32]{{A: []int32{1, 2, 3, 4, 5, 6}, B: []float32{1, 1, 0.3, 0.4, 0.5, 0.6}}},
-		[][][]float32{{}},
-		fitConfig.Jobs),
+		nil, fitConfig.Jobs),
 		m.BatchPredict([]lo.Tuple4[string, string, []Label, []Label]{{
 			A: "1",
 			B: "2",
