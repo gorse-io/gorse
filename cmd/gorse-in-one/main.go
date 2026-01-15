@@ -145,7 +145,10 @@ func setup(m *master.Master) {
 
 	// connect database
 	m.DataClient, err = data.Open(m.Config.Database.DataStore, m.Config.Database.DataTablePrefix,
-		storage.WithIsolationLevel(m.Config.Database.MySQL.IsolationLevel))
+		storage.WithIsolationLevel(m.Config.Database.MySQL.IsolationLevel),
+		storage.WithMaxOpenConns(m.Config.Database.MySQL.MaxOpenConns),
+		storage.WithMaxIdleConns(m.Config.Database.MySQL.MaxIdleConns),
+		storage.WithConnMaxLifetime(m.Config.Database.MySQL.ConnMaxLifetime))
 	if err != nil {
 		log.Logger().Fatal("failed to connect data database", zap.Error(err),
 			zap.String("database", log.RedactDBURL(m.Config.Database.DataStore)))

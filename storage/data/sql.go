@@ -78,6 +78,7 @@ func init() {
 		); err != nil {
 			return nil, errors.Trace(err)
 		}
+		storage.ApplySQLPool(database.client, option)
 		database.gormDB, err = gorm.Open(mysql.New(mysql.Config{Conn: database.client}), storage.NewGORMConfig(tablePrefix))
 		if err != nil {
 			return nil, errors.Trace(err)
