@@ -82,9 +82,10 @@ func TestFactorizationMachines_Classification_Criteo(t *testing.T) {
 	assert.InDelta(t, 0.77, score.Accuracy, 0.025)
 
 	// test prediction
-	assert.Equal(t, m.BatchInternalPredict(
-		[]lo.Tuple2[[]int32, []float32]{{A: []int32{1, 2, 3, 4, 5, 6}, B: []float32{1, 1, 0.3, 0.4, 0.5, 0.6}}},
-		nil, fitConfig.Jobs),
+	assert.Equal(t,
+		m.BatchInternalPredict(
+			[]lo.Tuple2[[]int32, []float32]{{A: []int32{1, 2, 3, 4, 5, 6}, B: []float32{1, 1, 0.3, 0.4, 0.5, 0.6}}},
+			make([][][]float32, 2), fitConfig.Jobs),
 		m.BatchPredict([]lo.Tuple4[string, string, []Label, []Label]{{
 			A: "1",
 			B: "2",
@@ -95,7 +96,7 @@ func TestFactorizationMachines_Classification_Criteo(t *testing.T) {
 			D: []Label{
 				{Name: "5", Value: 0.5},
 				{Name: "6", Value: 0.6},
-			}}}, nil, fitConfig.Jobs))
+			}}}, make([][]Embedding, 2), fitConfig.Jobs))
 
 	// test marshal and unmarshal
 	buf := bytes.NewBuffer(nil)
@@ -169,36 +170,60 @@ func TestFactorizationMachines_Classification_Synthesis(t *testing.T) {
 
 	indicesPos, valuesPos, embeddingsPos, _ := dataSet.Get(0)
 	indicesNeg, valuesNeg, embeddingsNeg, _ := dataSet.Get(1)
-	internalPrediction := m.BatchInternalPredict(
-		[]lo.Tuple2[[]int32, []float32]{
-			{A: indicesPos, B: valuesPos},
-			{A: indicesNeg, B: valuesNeg},
-		},
-		[][][]float32{embeddingsPos, embeddingsNeg},
-		fitConfig.Jobs,
-	)
-	batchedPrediction := m.BatchPredict(
+	assert.Equal(t,
+		m.BatchInternalPredict(
+			[]lo.Tuple2[[]int32, []float32]{
+				{A: indicesPos, B: valuesPos},
+				{A: indicesNeg, B: valuesNeg},
+			},
+			[][][]float32{embeddingsPos, embeddingsNeg},
+			fitConfig.Jobs,
+		),
+		m.BatchPredict(
+			[]lo.Tuple4[string, string, []Label, []Label]{
+				{
+					A: "u0",
+					B: "i0",
+					C: []Label{{Name: "ul0", Value: 1.0}, {Name: "ul1", Value: 0.5}, {Name: "ul2", Value: -1.0}},
+					D: []Label{{Name: "il0", Value: 1.0}, {Name: "il1", Value: 0.5}, {Name: "il2", Value: -1.0}},
+				},
+				{
+					A: "u0",
+					B: "i1",
+					C: []Label{{Name: "ul0", Value: 1.0}, {Name: "ul1", Value: 0.5}, {Name: "ul2", Value: -1.0}},
+					D: []Label{{Name: "il0", Value: -1.0}, {Name: "il1", Value: -0.5}, {Name: "il2", Value: 1.0}},
+				},
+			},
+			[][]Embedding{
+				{{Name: "e1", Value: embeddingsPos[0]}, {Name: "e2", Value: embeddingsPos[1]}},
+				{{Name: "e1", Value: embeddingsNeg[0]}, {Name: "e2", Value: embeddingsNeg[1]}},
+			},
+			fitConfig.Jobs,
+		))
+
+	assert.Len(t, m.BatchPredict(
 		[]lo.Tuple4[string, string, []Label, []Label]{
+			{A: "u0", B: "i0"},
+			{A: "u0", B: "i1"},
 			{
 				A: "u0",
 				B: "i0",
-				C: []Label{{Name: "ul0", Value: 1.0}, {Name: "ul1", Value: 0.5}, {Name: "ul2", Value: -1.0}},
-				D: []Label{{Name: "il0", Value: 1.0}, {Name: "il1", Value: 0.5}, {Name: "il2", Value: -1.0}},
+				C: []Label{{Name: "ul_unknown", Value: 1}},
+				D: []Label{{Name: "il_unknown", Value: 1}},
 			},
 			{
 				A: "u0",
 				B: "i1",
-				C: []Label{{Name: "ul0", Value: 1.0}, {Name: "ul1", Value: 0.5}, {Name: "ul2", Value: -1.0}},
-				D: []Label{{Name: "il0", Value: -1.0}, {Name: "il1", Value: -0.5}, {Name: "il2", Value: 1.0}},
+				C: []Label{{Name: "ul_unknown", Value: 1}},
+				D: []Label{{Name: "il_unknown", Value: 1}},
 			},
 		},
 		[][]Embedding{
-			{{Name: "e1", Value: embeddingsPos[0]}, {Name: "e2", Value: embeddingsPos[1]}},
-			{{Name: "e1", Value: embeddingsNeg[0]}, {Name: "e2", Value: embeddingsNeg[1]}},
+			{},
+			{},
+			{{Name: "unknown_embedding", Value: make([]float32, 3)}},
+			{{Name: "unknown_embedding", Value: make([]float32, 3)}},
 		},
 		fitConfig.Jobs,
-	)
-	assert.Len(t, internalPrediction, 2)
-	assert.Len(t, batchedPrediction, 2)
-	assert.InDeltaSlice(t, internalPrediction, batchedPrediction, 1e-6)
+	), 4)
 }

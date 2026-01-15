@@ -389,13 +389,15 @@ func (p *Pipeline) rankByClickTroughRate(
 	topItems := make([]cache.Score, 0, len(items))
 	if batchPredictor, ok := predictor.(ctr.BatchInference); ok {
 		inputs := make([]lo.Tuple4[string, string, []ctr.Label, []ctr.Label], len(items))
+		embeddings := make([][]ctr.Embedding, len(items))
 		for i, item := range items {
 			inputs[i].A = user.UserId
 			inputs[i].B = item.ItemId
 			inputs[i].C = ctr.ConvertLabels(user.Labels)
 			inputs[i].D = ctr.ConvertLabels(item.Labels)
+			embeddings[i] = ctr.ConvertEmbeddings(item.Labels)
 		}
-		output := batchPredictor.BatchPredict(inputs, nil, p.Jobs)
+		output := batchPredictor.BatchPredict(inputs, embeddings, p.Jobs)
 		for i, score := range output {
 			topItems = append(topItems, cache.Score{
 				Id:         items[i].ItemId,
