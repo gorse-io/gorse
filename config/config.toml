@@ -39,6 +39,15 @@ data_table_prefix = ""
 # Transaction isolation level. The default value is "READ-UNCOMMITTED".
 isolation_level = "READ-UNCOMMITTED"
 
+# Maximum number of open connections to the database. Set to 0 to keep the driver default.
+max_open_conns = 0
+
+# Maximum number of idle connections to the database. Set to 0 to keep the driver default.
+max_idle_conns = 0
+
+# Maximum amount of time a connection may be reused. Set to "0s" to keep the driver default.
+conn_max_lifetime = "0s"
+
 [master]
 
 # GRPC port of the master node. The default value is 8086.

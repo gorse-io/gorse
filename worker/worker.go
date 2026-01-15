@@ -165,7 +165,11 @@ func (w *Worker) Sync() {
 			} else {
 				log.Logger().Info("connect data store",
 					zap.String("database", log.RedactDBURL(w.Config.Database.DataStore)))
-				if w.DataClient, err = data.Open(w.Config.Database.DataStore, w.Config.Database.DataTablePrefix); err != nil {
+				if w.DataClient, err = data.Open(w.Config.Database.DataStore, w.Config.Database.DataTablePrefix,
+					storage.WithIsolationLevel(w.Config.Database.MySQL.IsolationLevel),
+					storage.WithMaxOpenConns(w.Config.Database.MySQL.MaxOpenConns),
+					storage.WithMaxIdleConns(w.Config.Database.MySQL.MaxIdleConns),
+					storage.WithConnMaxLifetime(w.Config.Database.MySQL.ConnMaxLifetime)); err != nil {
 					log.Logger().Error("failed to connect data store", zap.Error(err))
 					goto sleep
 				}
@@ -182,7 +186,11 @@ func (w *Worker) Sync() {
 			} else {
 				log.Logger().Info("connect cache store",
 					zap.String("database", log.RedactDBURL(w.Config.Database.CacheStore)))
-				if w.CacheClient, err = cache.Open(w.Config.Database.CacheStore, w.Config.Database.CacheTablePrefix); err != nil {
+				if w.CacheClient, err = cache.Open(w.Config.Database.CacheStore, w.Config.Database.CacheTablePrefix,
+					storage.WithIsolationLevel(w.Config.Database.MySQL.IsolationLevel),
+					storage.WithMaxOpenConns(w.Config.Database.MySQL.MaxOpenConns),
+					storage.WithMaxIdleConns(w.Config.Database.MySQL.MaxIdleConns),
+					storage.WithConnMaxLifetime(w.Config.Database.MySQL.ConnMaxLifetime)); err != nil {
 					log.Logger().Error("failed to connect cache store", zap.Error(err))
 					goto sleep
 				}

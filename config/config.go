@@ -82,7 +82,10 @@ type DatabaseConfig struct {
 }
 
 type MySQLConfig struct {
-	IsolationLevel string `mapstructure:"isolation_level" validate:"oneof=READ-UNCOMMITTED READ-COMMITTED REPEATABLE-READ SERIALIZABLE"`
+	IsolationLevel  string        `mapstructure:"isolation_level" validate:"oneof=READ-UNCOMMITTED READ-COMMITTED REPEATABLE-READ SERIALIZABLE"`
+	MaxOpenConns    int           `mapstructure:"max_open_conns" validate:"gte=0"`
+	MaxIdleConns    int           `mapstructure:"max_idle_conns" validate:"gte=0"`
+	ConnMaxLifetime time.Duration `mapstructure:"conn_max_lifetime" validate:"gte=0"`
 }
 
 // MasterConfig is the configuration for the master.
@@ -392,7 +395,10 @@ func GetDefaultConfig() *Config {
 	return &Config{
 		Database: DatabaseConfig{
 			MySQL: MySQLConfig{
-				IsolationLevel: "READ-UNCOMMITTED",
+				IsolationLevel:  "READ-UNCOMMITTED",
+				MaxOpenConns:    0,
+				MaxIdleConns:    0,
+				ConnMaxLifetime: 0,
 			},
 		},
 		Master: MasterConfig{
@@ -524,6 +530,9 @@ func setDefault() {
 	defaultConfig := GetDefaultConfig()
 	// [database.mysql]
 	viper.SetDefault("database.mysql.isolation_level", defaultConfig.Database.MySQL.IsolationLevel)
+	viper.SetDefault("database.mysql.max_open_conns", defaultConfig.Database.MySQL.MaxOpenConns)
+	viper.SetDefault("database.mysql.max_idle_conns", defaultConfig.Database.MySQL.MaxIdleConns)
+	viper.SetDefault("database.mysql.conn_max_lifetime", defaultConfig.Database.MySQL.ConnMaxLifetime)
 	// [master]
 	viper.SetDefault("master.port", defaultConfig.Master.Port)
 	viper.SetDefault("master.host", defaultConfig.Master.Host)

@@ -70,6 +70,9 @@ func TestUnmarshal(t *testing.T) {
 			assert.Equal(t, "gorse_cache_", config.Database.CacheTablePrefix)
 			assert.Equal(t, "gorse_data_", config.Database.DataTablePrefix)
 			assert.Equal(t, "READ-UNCOMMITTED", config.Database.MySQL.IsolationLevel)
+			assert.Equal(t, 0, config.Database.MySQL.MaxOpenConns)
+			assert.Equal(t, 0, config.Database.MySQL.MaxIdleConns)
+			assert.Equal(t, time.Duration(0), config.Database.MySQL.ConnMaxLifetime)
 			// [master]
 			assert.Equal(t, 8086, config.Master.Port)
 			assert.Equal(t, "0.0.0.0", config.Master.Host)
