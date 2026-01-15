@@ -179,7 +179,7 @@ func (a *Attention) Parameters() []*Tensor {
 
 func (a *Attention) Forward(x *Tensor) *Tensor {
 	return Mul(
-		Softmax(MatMul(ReLu(a.W.Forward(x)), a.H, false, false, 0), 1),
+		Softmax(MatMul(ReLu(a.W.Forward(x)), a.H, false, false, a.jobs), 1),
 		x,
 	)
 }

@@ -1,3 +1,17 @@
+// Copyright 2026 gorse Project Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package main
 
 import (
@@ -44,7 +58,7 @@ var llmCmd = &cobra.Command{
 		evaluator := master.NewOnlineEvaluator(
 			m.Config.Recommend.DataSource.PositiveFeedbackTypes,
 			m.Config.Recommend.DataSource.ReadFeedbackTypes)
-		dataset, aux, err := m.LoadDataFromDatabase(context.Background(), m.DataClient,
+		dataset, _, err := m.LoadDataFromDatabase(context.Background(), m.DataClient,
 			m.Config.Recommend.DataSource.PositiveFeedbackTypes,
 			m.Config.Recommend.DataSource.ReadFeedbackTypes,
 			m.Config.Recommend.DataSource.ItemTTL,
@@ -63,8 +77,6 @@ var llmCmd = &cobra.Command{
 		train, test := dataset.Split(0.8, 42)
 		EvaluateFM(train, test)
 		// EvaluateLLM(cfg, train, test, aux.GetItems())
-		_ = aux
-		fmt.Println(len(dataset.ItemEmbeddings), len(dataset.ItemEmbeddings[0]), len(dataset.ItemEmbeddings[0][0]))
 	},
 }
 

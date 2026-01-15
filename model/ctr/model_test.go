@@ -19,6 +19,7 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/gorse-io/gorse/dataset"
 	"github.com/gorse-io/gorse/model"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
@@ -109,4 +110,95 @@ func TestFactorizationMachines_Classification_Criteo(t *testing.T) {
 	assert.False(t, m.Invalid())
 	m.Clear()
 	assert.True(t, m.Invalid())
+}
+
+func newSynthesisDataset() *Dataset {
+	builder := dataset.NewUnifiedMapIndexBuilder()
+	builder.AddUser("u0")
+	builder.AddUser("u1")
+	builder.AddUserLabel("ul0")
+	builder.AddUserLabel("ul1")
+	builder.AddUserLabel("ul2")
+	builder.AddItem("i0")
+	builder.AddItem("i1")
+	builder.AddItemLabel("il0")
+	builder.AddItemLabel("il1")
+	builder.AddItemLabel("il2")
+
+	dataSet := NewMapIndexDataset()
+	dataSet.Index = builder.Build()
+	dataSet.UserLabels = [][]lo.Tuple2[int32, float32]{
+		{{A: 0, B: 1.0}, {A: 1, B: 0.5}, {A: 2, B: -1.0}},
+		{{A: 0, B: -1.0}, {A: 1, B: -0.5}, {A: 2, B: 1.0}},
+	}
+	dataSet.ItemLabels = [][]lo.Tuple2[int32, float32]{
+		{{A: 0, B: 1.0}, {A: 1, B: 0.5}, {A: 2, B: -1.0}},
+		{{A: 0, B: -1.0}, {A: 1, B: -0.5}, {A: 2, B: 1.0}},
+	}
+	dataSet.ItemEmbeddingIndex = dataset.NewMapIndex()
+	dataSet.ItemEmbeddingIndex.Add("e1")
+	dataSet.ItemEmbeddingIndex.Add("e2")
+	dataSet.ItemEmbeddingDimension = []int{3, 4}
+	dataSet.ItemEmbeddings = [][][]float32{
+		{{0.8, 0.8, 0.8}, {0.1, 0.1, 0.1, 0.1}},
+		{{-0.8, -0.8, -0.8}, {-0.1, -0.1, -0.1, -0.1}},
+	}
+
+	dataSet.Users = []int32{0, 0, 1, 1}
+	dataSet.Items = []int32{0, 1, 0, 1}
+	dataSet.Target = []float32{1, -1, -1, 1}
+	dataSet.PositiveCount = 2
+	dataSet.NegativeCount = 2
+	return dataSet
+}
+
+func TestFactorizationMachines_Classification_Synthesis(t *testing.T) {
+	dataSet := newSynthesisDataset()
+	fitConfig := newFitConfigWithTestTracker()
+	m := NewAFM(nil)
+	score := m.Fit(context.Background(), dataSet, dataSet, fitConfig)
+	assert.GreaterOrEqual(t, score.Accuracy, float32(0.5))
+
+	buf := bytes.NewBuffer(nil)
+	err := MarshalModel(buf, m)
+	assert.NoError(t, err)
+	clone, err := UnmarshalModel(buf)
+	assert.NoError(t, err)
+	cloneScore := EvaluateClassification(clone, dataSet, fitConfig.Jobs)
+	assert.InDelta(t, score.Accuracy, cloneScore.Accuracy, 0.05)
+
+	indicesPos, valuesPos, embeddingsPos, _ := dataSet.Get(0)
+	indicesNeg, valuesNeg, embeddingsNeg, _ := dataSet.Get(1)
+	internalPrediction := m.BatchInternalPredict(
+		[]lo.Tuple2[[]int32, []float32]{
+			{A: indicesPos, B: valuesPos},
+			{A: indicesNeg, B: valuesNeg},
+		},
+		[][][]float32{embeddingsPos, embeddingsNeg},
+		fitConfig.Jobs,
+	)
+	batchedPrediction := m.BatchPredict(
+		[]lo.Tuple4[string, string, []Label, []Label]{
+			{
+				A: "u0",
+				B: "i0",
+				C: []Label{{Name: "ul0", Value: 1.0}, {Name: "ul1", Value: 0.5}, {Name: "ul2", Value: -1.0}},
+				D: []Label{{Name: "il0", Value: 1.0}, {Name: "il1", Value: 0.5}, {Name: "il2", Value: -1.0}},
+			},
+			{
+				A: "u0",
+				B: "i1",
+				C: []Label{{Name: "ul0", Value: 1.0}, {Name: "ul1", Value: 0.5}, {Name: "ul2", Value: -1.0}},
+				D: []Label{{Name: "il0", Value: -1.0}, {Name: "il1", Value: -0.5}, {Name: "il2", Value: 1.0}},
+			},
+		},
+		[][]Embedding{
+			{{Name: "e1", Value: embeddingsPos[0]}, {Name: "e2", Value: embeddingsPos[1]}},
+			{{Name: "e1", Value: embeddingsNeg[0]}, {Name: "e2", Value: embeddingsNeg[1]}},
+		},
+		fitConfig.Jobs,
+	)
+	assert.Len(t, internalPrediction, 2)
+	assert.Len(t, batchedPrediction, 2)
+	assert.InDeltaSlice(t, internalPrediction, batchedPrediction, 1e-6)
 }

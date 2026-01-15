@@ -303,15 +303,21 @@ func (fm *AFM) BatchPredict(inputs []lo.Tuple4[string, string, []Label, []Label]
 			}
 		}
 	}
-	e := make([][][]float32, len(fm.embeddingDim))
-	for i := range fm.embeddingDim {
-		e[i] = make([][]float32, len(inputs))
-		for j, embedding := range embeddings {
-			if itemIndex := fm.embeddingIndex.ToNumber(embedding[i].Name); itemIndex != dataset.NotId {
-				e[i][j] = embedding[i].Value
-			} else {
-				e[i][j] = nil
+	e := make([][][]float32, len(inputs))
+	for i := range inputs {
+		e[i] = make([][]float32, len(fm.embeddingDim))
+		for _, embedding := range embeddings[i] {
+			itemIndex := fm.embeddingIndex.ToNumber(embedding.Name)
+			if itemIndex == dataset.NotId {
+				// unknown embedding
+				continue
 			}
+			index := int(itemIndex)
+			if len(embedding.Value) != fm.embeddingDim[index] {
+				// dimension mismatch
+				continue
+			}
+			e[i][index] = embedding.Value
 		}
 	}
 	return fm.BatchInternalPredict(x, e, jobs)
