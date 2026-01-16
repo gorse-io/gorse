@@ -74,7 +74,7 @@ var llmCmd = &cobra.Command{
 		fmt.Printf("  Positive Feedbacks: %d\n", dataset.CountPositive())
 		fmt.Printf("  Negative Feedbacks: %d\n", dataset.CountNegative())
 		// Split dataset
-		train, test := dataset.Split(0.8, 42)
+		train, test := dataset.Split(0.2, 42)
 		EvaluateFM(train, test)
 		// EvaluateLLM(cfg, train, test, aux.GetItems())
 	},

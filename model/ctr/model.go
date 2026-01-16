@@ -345,18 +345,25 @@ func (fm *AFM) Init(trainSet dataset.CTRSplit) {
 }
 
 func (fm *AFM) Fit(ctx context.Context, trainSet, testSet dataset.CTRSplit, config *FitConfig) Score {
-	log.Logger().Info("fit DeepFM",
+	log.Logger().Info("fit AFM",
 		zap.Int("train_set_size", trainSet.Count()),
 		zap.Int("test_set_size", testSet.Count()),
 		zap.Any("params", fm.GetParams()),
 		zap.Any("config", config))
 	fm.Init(trainSet)
+	fm.W.SetJobs(config.Jobs)
+	fm.V.SetJobs(config.Jobs)
+	for i := range fm.embeddingDim {
+		fm.A[i].SetJobs(config.Jobs)
+		fm.E[i].SetJobs(config.Jobs)
+	}
+
 	evalStart := time.Now()
 	score := EvaluateClassification(fm, testSet, config.Jobs)
 	scores := []lo.Tuple2[int, float32]{{A: 0, B: score.AUC}}
 	evalTime := time.Since(evalStart)
 	fields := append([]zap.Field{zap.String("eval_time", evalTime.String())}, score.ZapFields()...)
-	log.Logger().Info(fmt.Sprintf("fit DeepFM %v/%v", 0, fm.nEpochs), fields...)
+	log.Logger().Info(fmt.Sprintf("fit AFM %v/%v", 0, fm.nEpochs), fields...)
 
 	var x []lo.Tuple2[[]int32, []float32]
 	var e [][][]float32
@@ -387,7 +394,7 @@ func (fm *AFM) Fit(ctx context.Context, trainSet, testSet dataset.CTRSplit, conf
 		cost := float32(0)
 		for i := 0; i < trainSet.Count(); i += fm.batchSize {
 			if ctx.Err() != nil {
-				log.Logger().Info("fit DeepFM canceled", zap.Error(ctx.Err()))
+				log.Logger().Info("fit AFM canceled", zap.Error(ctx.Err()))
 				return Score{}
 			}
 			j := mathutil.Min(i+fm.batchSize, trainSet.Count())
@@ -418,7 +425,7 @@ func (fm *AFM) Fit(ctx context.Context, trainSet, testSet dataset.CTRSplit, conf
 				zap.String("eval_time", evalTime.String()),
 				zap.Float32("loss", cost),
 			}, score.ZapFields()...)
-			log.Logger().Info(fmt.Sprintf("fit DeepFM %v/%v", epoch, fm.nEpochs), fields...)
+			log.Logger().Info(fmt.Sprintf("fit AFM %v/%v", epoch, fm.nEpochs), fields...)
 			// check NaN
 			if math32.IsNaN(cost) || math32.IsNaN(score.GetValue()) {
 				log.Logger().Warn("model diverged", zap.Float32("lr", fm.lr))

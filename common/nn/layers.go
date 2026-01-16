@@ -185,6 +185,7 @@ func (a *Attention) Forward(x *Tensor) *Tensor {
 }
 
 func (a *Attention) SetJobs(jobs int) {
+	a.W.SetJobs(jobs)
 	a.jobs = max(1, jobs)
 }
 
