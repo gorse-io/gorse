@@ -17,9 +17,8 @@ package ctr
 import (
 	"sort"
 
-	"github.com/gorse-io/gorse/dataset"
-
 	"github.com/chewxy/math32"
+	"github.com/gorse-io/gorse/dataset"
 	"github.com/samber/lo"
 	"modernc.org/sortutil"
 )
@@ -29,7 +28,7 @@ func EvaluateRegression(estimator FactorizationMachines, testSet *Dataset) Score
 	sum := float32(0)
 	// For all UserFeedback
 	for i := 0; i < testSet.Count(); i++ {
-		features, values, target := testSet.Get(i)
+		features, values, _, target := testSet.Get(i)
 		prediction := estimator.InternalPredict(features, values)
 		sum += (target - prediction) * (target - prediction)
 	}
@@ -47,18 +46,21 @@ func EvaluateRegression(estimator FactorizationMachines, testSet *Dataset) Score
 func EvaluateClassification(estimator FactorizationMachines, testSet dataset.CTRSplit, jobs int) Score {
 	// For all UserFeedback
 	var posFeatures, negFeatures []lo.Tuple2[[]int32, []float32]
+	var posEmbeddings, negEmbeddings [][][]float32
 	for i := 0; i < testSet.Count(); i++ {
-		indices, values, target := testSet.Get(i)
+		indices, values, embeddings, target := testSet.Get(i)
 		if target > 0 {
 			posFeatures = append(posFeatures, lo.Tuple2[[]int32, []float32]{A: indices, B: values})
+			posEmbeddings = append(posEmbeddings, embeddings)
 		} else {
 			negFeatures = append(negFeatures, lo.Tuple2[[]int32, []float32]{A: indices, B: values})
+			negEmbeddings = append(negEmbeddings, embeddings)
 		}
 	}
 	var posPrediction, negPrediction []float32
 	if batchInference, ok := estimator.(BatchInference); ok {
-		posPrediction = batchInference.BatchInternalPredict(posFeatures, jobs)
-		negPrediction = batchInference.BatchInternalPredict(negFeatures, jobs)
+		posPrediction = batchInference.BatchInternalPredict(posFeatures, posEmbeddings, jobs)
+		negPrediction = batchInference.BatchInternalPredict(negFeatures, negEmbeddings, jobs)
 	} else {
 		for _, features := range posFeatures {
 			posPrediction = append(posPrediction, estimator.InternalPredict(features.A, features.B))

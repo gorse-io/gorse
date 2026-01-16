@@ -157,6 +157,38 @@ func (s *Sequential) SetJobs(jobs int) {
 	}
 }
 
+type Attention struct {
+	W    Layer
+	H    *Tensor
+	jobs int
+}
+
+func NewAttention(dimensions, k int) *Attention {
+	return &Attention{
+		W: NewLinear(dimensions, k),
+		H: Normal(0, 0.01, k, dimensions),
+	}
+}
+
+func (a *Attention) Parameters() []*Tensor {
+	var params []*Tensor
+	params = append(params, a.H)
+	params = append(params, a.W.Parameters()...)
+	return params
+}
+
+func (a *Attention) Forward(x *Tensor) *Tensor {
+	return Mul(
+		Softmax(MatMul(ReLu(a.W.Forward(x)), a.H, false, false, a.jobs), 1),
+		x,
+	)
+}
+
+func (a *Attention) SetJobs(jobs int) {
+	a.W.SetJobs(jobs)
+	a.jobs = max(1, jobs)
+}
+
 func Save(o any, w io.Writer) error {
 	var save func(o any, key []string) error
 	save = func(o any, key []string) error {

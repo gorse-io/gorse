@@ -106,16 +106,8 @@ type FactorizationMachines interface {
 }
 
 type BatchInference interface {
-	BatchPredict(inputs []lo.Tuple4[string, string, []Label, []Label], jobs int) []float32
-	BatchInternalPredict(x []lo.Tuple2[[]int32, []float32], jobs int) []float32
-}
-
-type FactorizationMachineCloner interface {
-	Clone() FactorizationMachines
-}
-
-type FactorizationMachineSpawner interface {
-	Spawn() FactorizationMachines
+	BatchPredict(inputs []lo.Tuple4[string, string, []Label, []Label], e [][]Embedding, jobs int) []float32
+	BatchInternalPredict(x []lo.Tuple2[[]int32, []float32], e [][][]float32, jobs int) []float32
 }
 
 type BaseFactorizationMachines struct {
@@ -131,8 +123,8 @@ func MarshalModel(w io.Writer, m FactorizationMachines) error {
 	// write header
 	var err error
 	switch m.(type) {
-	case *FMV2:
-		err = encoding.WriteString(w, headerFMV2)
+	case *AFM:
+		err = encoding.WriteString(w, headerAFM)
 	default:
 		return fmt.Errorf("unknown model: %v", reflect.TypeOf(m))
 	}
@@ -142,7 +134,7 @@ func MarshalModel(w io.Writer, m FactorizationMachines) error {
 	return m.Marshal(w)
 }
 
-const headerFMV2 = "FM2"
+const headerAFM = "AFM"
 
 func UnmarshalModel(r io.Reader) (FactorizationMachines, error) {
 	// read header
@@ -151,8 +143,8 @@ func UnmarshalModel(r io.Reader) (FactorizationMachines, error) {
 		return nil, err
 	}
 	switch header {
-	case headerFMV2:
-		var fm FMV2
+	case headerAFM:
+		var fm AFM
 		if err := fm.Unmarshal(r); err != nil {
 			return nil, errors.Trace(err)
 		}
@@ -161,20 +153,15 @@ func UnmarshalModel(r io.Reader) (FactorizationMachines, error) {
 	return nil, fmt.Errorf("unknown model: %v", header)
 }
 
-func Spawn(m FactorizationMachines) FactorizationMachines {
-	if cloner, ok := m.(FactorizationMachineSpawner); ok {
-		return cloner.Spawn()
-	}
-	return m
-}
-
-type FMV2 struct {
+type AFM struct {
 	BaseFactorizationMachines
 	mu sync.RWMutex
 	// parameters
 	B *nn.Tensor
 	W nn.Layer
 	V nn.Layer
+	A []nn.Layer
+	E []nn.Layer
 	// hyper parameters
 	batchSize  int
 	nFactors   int
@@ -185,17 +172,19 @@ type FMV2 struct {
 	initStdDev float32
 	optimizer  string
 	// dataset stats
-	numFeatures  int
-	numDimension int
+	numFeatures    int
+	numDimension   int
+	embeddingDim   []int
+	embeddingIndex *dataset.Index
 }
 
-func NewFMV2(params model.Params) *FMV2 {
-	fm := new(FMV2)
+func NewAFM(params model.Params) *AFM {
+	fm := new(AFM)
 	fm.SetParams(params)
 	return fm
 }
 
-func (fm *FMV2) SuggestParams(trial goptuna.Trial) model.Params {
+func (fm *AFM) SuggestParams(trial goptuna.Trial) model.Params {
 	return model.Params{
 		model.NFactors:   16,
 		model.Lr:         lo.Must(trial.SuggestLogFloat(string(model.Lr), 0.001, 0.1)),
@@ -205,27 +194,27 @@ func (fm *FMV2) SuggestParams(trial goptuna.Trial) model.Params {
 	}
 }
 
-func (fm *FMV2) SetParams(params model.Params) {
+func (fm *AFM) SetParams(params model.Params) {
 	fm.BaseFactorizationMachines.SetParams(params)
 	fm.batchSize = fm.Params.GetInt(model.BatchSize, 1024)
 	fm.nFactors = fm.Params.GetInt(model.NFactors, 16)
 	fm.nEpochs = fm.Params.GetInt(model.NEpochs, 50)
-	fm.lr = fm.Params.GetFloat32(model.Lr, 0.01)
-	fm.reg = fm.Params.GetFloat32(model.Reg, 0.0)
+	fm.lr = fm.Params.GetFloat32(model.Lr, 0.001)
+	fm.reg = fm.Params.GetFloat32(model.Reg, 0.0002)
 	fm.initMean = fm.Params.GetFloat32(model.InitMean, 0)
 	fm.initStdDev = fm.Params.GetFloat32(model.InitStdDev, 0.01)
 	fm.optimizer = fm.Params.GetString(model.Optimizer, model.Adam)
 }
 
-func (fm *FMV2) Clear() {
+func (fm *AFM) Clear() {
 	fm.Index = nil
 }
 
-func (fm *FMV2) Invalid() bool {
+func (fm *AFM) Invalid() bool {
 	return fm == nil || fm.Index == nil
 }
 
-func (fm *FMV2) Forward(indices, values *nn.Tensor, jobs int) *nn.Tensor {
+func (fm *AFM) Forward(indices, values *nn.Tensor, embeddings []*nn.Tensor, jobs int) *nn.Tensor {
 	batchSize := indices.Shape()[0]
 	v := fm.V.Forward(indices)
 	x := nn.Reshape(values, batchSize, fm.numDimension, 1)
@@ -240,39 +229,53 @@ func (fm *FMV2) Forward(indices, values *nn.Tensor, jobs int) *nn.Tensor {
 	w := fm.W.Forward(indices)
 	linear := nn.BMM(w, x, true, false, jobs)
 	fmOutput := nn.Add(nn.Reshape(linear, batchSize), nn.Reshape(sum, batchSize), fm.B)
+	// Encode the embedding
+	for i, embedding := range embeddings {
+		encodedNorm := fm.E[i].Forward(fm.A[i].Forward(embedding))
+		encodedNorm = nn.Reshape(encodedNorm, batchSize, fm.nFactors, 1)
+		fmOutput = nn.Add(fmOutput, nn.Reshape(nn.BMM(vx, encodedNorm, true, false, jobs), batchSize))
+	}
 	return nn.Flatten(fmOutput)
 }
 
-func (fm *FMV2) Parameters() []*nn.Tensor {
+func (fm *AFM) Parameters() []*nn.Tensor {
 	var params []*nn.Tensor
 	params = append(params, fm.B)
 	params = append(params, fm.V.Parameters()...)
 	params = append(params, fm.W.Parameters()...)
+	for i := range fm.embeddingDim {
+		params = append(params, fm.A[i].Parameters()...)
+		params = append(params, fm.E[i].Parameters()...)
+	}
 	return params
 }
 
-func (fm *FMV2) Predict(_, _ string, _, _ []Label) float32 {
+func (fm *AFM) Predict(_, _ string, _, _ []Label) float32 {
 	panic("Predict is unsupported for deep learning models")
 }
 
-func (fm *FMV2) InternalPredict(_ []int32, _ []float32) float32 {
+func (fm *AFM) InternalPredict(_ []int32, _ []float32) float32 {
 	panic("InternalPredict is unsupported for deep learning models")
 }
 
-func (fm *FMV2) BatchInternalPredict(x []lo.Tuple2[[]int32, []float32], jobs int) []float32 {
+func (fm *AFM) BatchInternalPredict(x []lo.Tuple2[[]int32, []float32], e [][][]float32, jobs int) []float32 {
 	fm.mu.RLock()
 	defer fm.mu.RUnlock()
-	indicesTensor, valuesTensor, _ := fm.convertToTensors(x, nil)
+	indicesTensor, valuesTensor, embeddingTensor, _ := fm.convertToTensors(x, e, nil)
 	predictions := make([]float32, 0, len(x))
 	for i := 0; i < len(x); i += fm.batchSize {
 		j := mathutil.Min(i+fm.batchSize, len(x))
-		output := fm.Forward(indicesTensor.Slice(i, j), valuesTensor.Slice(i, j), jobs)
+		embeddingTensorSlice := make([]*nn.Tensor, len(fm.embeddingDim))
+		for k := range fm.embeddingDim {
+			embeddingTensorSlice[k] = embeddingTensor[k].Slice(i, j)
+		}
+		output := fm.Forward(indicesTensor.Slice(i, j), valuesTensor.Slice(i, j), embeddingTensorSlice, jobs)
 		predictions = append(predictions, output.Data()...)
 	}
 	return predictions[:len(x)]
 }
 
-func (fm *FMV2) BatchPredict(inputs []lo.Tuple4[string, string, []Label, []Label], jobs int) []float32 {
+func (fm *AFM) BatchPredict(inputs []lo.Tuple4[string, string, []Label, []Label], embeddings [][]Embedding, jobs int) []float32 {
 	x := make([]lo.Tuple2[[]int32, []float32], len(inputs))
 	for i, input := range inputs {
 		// encode user
@@ -300,44 +303,78 @@ func (fm *FMV2) BatchPredict(inputs []lo.Tuple4[string, string, []Label, []Label
 			}
 		}
 	}
-	return fm.BatchInternalPredict(x, jobs)
+	e := make([][][]float32, len(inputs))
+	for i := range inputs {
+		e[i] = make([][]float32, len(fm.embeddingDim))
+		for _, embedding := range embeddings[i] {
+			itemIndex := fm.embeddingIndex.ToNumber(embedding.Name)
+			if itemIndex == dataset.NotId {
+				// unknown embedding
+				continue
+			}
+			index := int(itemIndex)
+			if len(embedding.Value) != fm.embeddingDim[index] {
+				// dimension mismatch
+				continue
+			}
+			e[i][index] = embedding.Value
+		}
+	}
+	return fm.BatchInternalPredict(x, e, jobs)
 }
 
-func (fm *FMV2) Init(trainSet dataset.CTRSplit) {
+func (fm *AFM) Init(trainSet dataset.CTRSplit) {
 	fm.numFeatures = int(trainSet.GetIndex().Len())
 	fm.numDimension = 0
 	for i := 0; i < trainSet.Count(); i++ {
-		_, x, _ := trainSet.Get(i)
+		_, x, _, _ := trainSet.Get(i)
 		fm.numDimension = mathutil.MaxVal(fm.numDimension, len(x))
 	}
 	fm.B = nn.Zeros()
 	fm.W = nn.NewEmbedding(int(trainSet.GetIndex().Len()), 1)
 	fm.V = nn.NewEmbedding(int(trainSet.GetIndex().Len()), fm.nFactors)
+	fm.embeddingDim = trainSet.GetItemEmbeddingDim()
+	fm.embeddingIndex = trainSet.GetItemEmbeddingIndex()
+	fm.A = make([]nn.Layer, len(fm.embeddingDim))
+	fm.E = make([]nn.Layer, len(fm.embeddingDim))
+	for i, dim := range fm.embeddingDim {
+		fm.A[i] = nn.NewAttention(dim, fm.nFactors)
+		fm.E[i] = nn.NewLinear(dim, fm.nFactors)
+	}
 	fm.BaseFactorizationMachines.Init(trainSet)
 }
 
-func (fm *FMV2) Fit(ctx context.Context, trainSet, testSet dataset.CTRSplit, config *FitConfig) Score {
-	log.Logger().Info("fit DeepFM",
+func (fm *AFM) Fit(ctx context.Context, trainSet, testSet dataset.CTRSplit, config *FitConfig) Score {
+	log.Logger().Info("fit AFM",
 		zap.Int("train_set_size", trainSet.Count()),
 		zap.Int("test_set_size", testSet.Count()),
 		zap.Any("params", fm.GetParams()),
 		zap.Any("config", config))
 	fm.Init(trainSet)
+	fm.W.SetJobs(config.Jobs)
+	fm.V.SetJobs(config.Jobs)
+	for i := range fm.embeddingDim {
+		fm.A[i].SetJobs(config.Jobs)
+		fm.E[i].SetJobs(config.Jobs)
+	}
+
 	evalStart := time.Now()
 	score := EvaluateClassification(fm, testSet, config.Jobs)
 	scores := []lo.Tuple2[int, float32]{{A: 0, B: score.AUC}}
 	evalTime := time.Since(evalStart)
 	fields := append([]zap.Field{zap.String("eval_time", evalTime.String())}, score.ZapFields()...)
-	log.Logger().Info(fmt.Sprintf("fit DeepFM %v/%v", 0, fm.nEpochs), fields...)
+	log.Logger().Info(fmt.Sprintf("fit AFM %v/%v", 0, fm.nEpochs), fields...)
 
 	var x []lo.Tuple2[[]int32, []float32]
+	var e [][][]float32
 	var y []float32
 	for i := 0; i < trainSet.Count(); i++ {
-		indices, values, target := trainSet.Get(i)
+		indices, values, embeddings, target := trainSet.Get(i)
 		x = append(x, lo.Tuple2[[]int32, []float32]{A: indices, B: values})
+		e = append(e, embeddings)
 		y = append(y, target)
 	}
-	indices, values, target := fm.convertToTensors(x, y)
+	indices, values, embeddings, target := fm.convertToTensors(x, e, y)
 
 	var optimizer nn.Optimizer
 	switch fm.optimizer {
@@ -357,14 +394,18 @@ func (fm *FMV2) Fit(ctx context.Context, trainSet, testSet dataset.CTRSplit, con
 		cost := float32(0)
 		for i := 0; i < trainSet.Count(); i += fm.batchSize {
 			if ctx.Err() != nil {
-				log.Logger().Info("fit DeepFM canceled", zap.Error(ctx.Err()))
+				log.Logger().Info("fit AFM canceled", zap.Error(ctx.Err()))
 				return Score{}
 			}
 			j := mathutil.Min(i+fm.batchSize, trainSet.Count())
 			batchIndices := indices.Slice(i, j)
 			batchValues := values.Slice(i, j)
+			batchEmbedding := make([]*nn.Tensor, len(fm.embeddingDim))
+			for k := range fm.embeddingDim {
+				batchEmbedding[k] = embeddings[k].Slice(i, j)
+			}
 			batchTarget := target.Slice(i, j)
-			batchOutput := fm.Forward(batchIndices, batchValues, config.Jobs)
+			batchOutput := fm.Forward(batchIndices, batchValues, batchEmbedding, config.Jobs)
 			batchLoss := nn.BCEWithLogits(batchTarget, batchOutput, nil)
 			cost += batchLoss.Data()[0]
 			optimizer.ZeroGrad()
@@ -384,7 +425,7 @@ func (fm *FMV2) Fit(ctx context.Context, trainSet, testSet dataset.CTRSplit, con
 				zap.String("eval_time", evalTime.String()),
 				zap.Float32("loss", cost),
 			}, score.ZapFields()...)
-			log.Logger().Info(fmt.Sprintf("fit DeepFM %v/%v", epoch, fm.nEpochs), fields...)
+			log.Logger().Info(fmt.Sprintf("fit AFM %v/%v", epoch, fm.nEpochs), fields...)
 			// check NaN
 			if math32.IsNaN(cost) || math32.IsNaN(score.GetValue()) {
 				log.Logger().Warn("model diverged", zap.Float32("lr", fm.lr))
@@ -407,7 +448,7 @@ func (fm *FMV2) Fit(ctx context.Context, trainSet, testSet dataset.CTRSplit, con
 	return score
 }
 
-func (fm *FMV2) Marshal(w io.Writer) error {
+func (fm *AFM) Marshal(w io.Writer) error {
 	// write params
 	if err := encoding.WriteGob(w, fm.Params); err != nil {
 		return errors.Trace(err)
@@ -423,6 +464,14 @@ func (fm *FMV2) Marshal(w io.Writer) error {
 	if err := encoding.WriteGob(w, fm.numDimension); err != nil {
 		return errors.Trace(err)
 	}
+	if err := encoding.WriteGob(w, fm.embeddingDim); err != nil {
+		return errors.Trace(err)
+	}
+	if len(fm.embeddingDim) > 0 {
+		if err := dataset.MarshalIndex(w, fm.embeddingIndex); err != nil {
+			return errors.Trace(err)
+		}
+	}
 	// write parameters
 	if err := nn.Save(fm.Parameters(), w); err != nil {
 		return errors.Trace(err)
@@ -430,7 +479,7 @@ func (fm *FMV2) Marshal(w io.Writer) error {
 	return nil
 }
 
-func (fm *FMV2) Unmarshal(r io.Reader) error {
+func (fm *AFM) Unmarshal(r io.Reader) error {
 	// read params
 	err := encoding.ReadGob(r, &fm.Params)
 	if err != nil {
@@ -449,23 +498,46 @@ func (fm *FMV2) Unmarshal(r io.Reader) error {
 	if err = encoding.ReadGob(r, &fm.numDimension); err != nil {
 		return errors.Trace(err)
 	}
+	if err = encoding.ReadGob(r, &fm.embeddingDim); err != nil {
+		return errors.Trace(err)
+	}
+	if len(fm.embeddingDim) > 0 {
+		fm.embeddingIndex, err = dataset.UnmarshalIndex(r)
+		if err != nil {
+			return errors.Trace(err)
+		}
+	}
 	// read parameters
 	fm.B = nn.Zeros()
 	fm.W = nn.NewEmbedding(fm.numFeatures, 1)
 	fm.V = nn.NewEmbedding(fm.numFeatures, fm.nFactors)
+	fm.A = make([]nn.Layer, len(fm.embeddingDim))
+	fm.E = make([]nn.Layer, len(fm.embeddingDim))
+	for i, dim := range fm.embeddingDim {
+		fm.A[i] = nn.NewAttention(dim, fm.nFactors)
+		fm.E[i] = nn.NewLinear(dim, fm.nFactors)
+	}
 	if err = nn.Load(fm.Parameters(), r); err != nil {
 		return errors.Trace(err)
 	}
 	return nil
 }
 
-func (fm *FMV2) convertToTensors(x []lo.Tuple2[[]int32, []float32], y []float32) (indicesTensor, valuesTensor, targetTensor *nn.Tensor) {
+func (fm *AFM) convertToTensors(x []lo.Tuple2[[]int32, []float32], e [][][]float32, y []float32) (
+	indicesTensor, valuesTensor *nn.Tensor,
+	embeddingTensor []*nn.Tensor,
+	targetTensor *nn.Tensor,
+) {
 	if y != nil && len(x) != len(y) {
 		panic("length of x and y must be equal")
 	}
 
 	alignedIndices := make([]float32, len(x)*fm.numDimension)
 	alignedValues := make([]float32, len(x)*fm.numDimension)
+	alignedEmbeddings := make([][]float32, len(fm.embeddingDim))
+	for i := range fm.embeddingDim {
+		alignedEmbeddings[i] = make([]float32, 0, len(x)*fm.embeddingDim[i])
+	}
 	alignedTarget := make([]float32, len(x))
 	for i := range x {
 		if len(x[i].A) != len(x[i].B) {
@@ -475,6 +547,13 @@ func (fm *FMV2) convertToTensors(x []lo.Tuple2[[]int32, []float32], y []float32)
 			alignedIndices[i*fm.numDimension+j] = float32(x[i].A[j])
 			alignedValues[i*fm.numDimension+j] = x[i].B[j]
 		}
+		for j := range fm.embeddingDim {
+			if len(e[i]) > j && len(e[i][j]) == fm.embeddingDim[j] {
+				alignedEmbeddings[j] = append(alignedEmbeddings[j], e[i][j]...)
+			} else {
+				alignedEmbeddings[j] = append(alignedEmbeddings[j], make([]float32, fm.embeddingDim[j])...)
+			}
+		}
 		if y != nil {
 			alignedTarget[i] = y[i]
 		}
@@ -482,6 +561,10 @@ func (fm *FMV2) convertToTensors(x []lo.Tuple2[[]int32, []float32], y []float32)
 
 	indicesTensor = nn.NewTensor(alignedIndices, len(x), fm.numDimension)
 	valuesTensor = nn.NewTensor(alignedValues, len(x), fm.numDimension)
+	embeddingTensor = make([]*nn.Tensor, len(fm.embeddingDim))
+	for i := range fm.embeddingDim {
+		embeddingTensor[i] = nn.NewTensor(alignedEmbeddings[i], len(x), fm.embeddingDim[i])
+	}
 	if y != nil {
 		targetTensor = nn.NewTensor(alignedTarget, len(x))
 	}
