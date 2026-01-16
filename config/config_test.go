@@ -73,6 +73,9 @@ func TestUnmarshal(t *testing.T) {
 			assert.Equal(t, 0, config.Database.MySQL.MaxOpenConns)
 			assert.Equal(t, 0, config.Database.MySQL.MaxIdleConns)
 			assert.Equal(t, time.Duration(0), config.Database.MySQL.ConnMaxLifetime)
+			assert.Equal(t, 64, config.Database.Postgres.MaxOpenConns)
+			assert.Equal(t, 64, config.Database.Postgres.MaxIdleConns)
+			assert.Equal(t, time.Minute, config.Database.Postgres.ConnMaxLifetime)
 			// [master]
 			assert.Equal(t, 8086, config.Master.Port)
 			assert.Equal(t, "0.0.0.0", config.Master.Host)

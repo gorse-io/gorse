@@ -27,7 +27,6 @@ import (
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/master"
-	"github.com/gorse-io/gorse/storage"
 	"github.com/gorse-io/gorse/storage/data"
 	"github.com/klauspost/cpuid/v2"
 	"github.com/schollz/progressbar/v3"
@@ -144,11 +143,8 @@ func setup(m *master.Master) {
 	fmt.Printf("Using %d CPU cores: %s\n", m.Config.Master.NumJobs, cpuid.CPU.BrandName)
 
 	// connect database
-	m.DataClient, err = data.Open(m.Config.Database.DataStore, m.Config.Database.DataTablePrefix,
-		storage.WithIsolationLevel(m.Config.Database.MySQL.IsolationLevel),
-		storage.WithMaxOpenConns(m.Config.Database.MySQL.MaxOpenConns),
-		storage.WithMaxIdleConns(m.Config.Database.MySQL.MaxIdleConns),
-		storage.WithConnMaxLifetime(m.Config.Database.MySQL.ConnMaxLifetime))
+	dataOpts := m.Config.Database.StorageOptions(m.Config.Database.DataStore)
+	m.DataClient, err = data.Open(m.Config.Database.DataStore, m.Config.Database.DataTablePrefix, dataOpts...)
 	if err != nil {
 		log.Logger().Fatal("failed to connect data database", zap.Error(err),
 			zap.String("database", log.RedactDBURL(m.Config.Database.DataStore)))

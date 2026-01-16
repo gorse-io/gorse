@@ -36,7 +36,6 @@ import (
 	"github.com/gorse-io/gorse/model/ctr"
 	"github.com/gorse-io/gorse/protocol"
 	"github.com/gorse-io/gorse/server"
-	"github.com/gorse-io/gorse/storage"
 	"github.com/gorse-io/gorse/storage/blob"
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
@@ -173,11 +172,8 @@ func (m *Master) Serve() {
 	}
 
 	// connect data database
-	m.DataClient, err = data.Open(m.Config.Database.DataStore, m.Config.Database.DataTablePrefix,
-		storage.WithIsolationLevel(m.Config.Database.MySQL.IsolationLevel),
-		storage.WithMaxOpenConns(m.Config.Database.MySQL.MaxOpenConns),
-		storage.WithMaxIdleConns(m.Config.Database.MySQL.MaxIdleConns),
-		storage.WithConnMaxLifetime(m.Config.Database.MySQL.ConnMaxLifetime))
+	dataOpts := m.Config.Database.StorageOptions(m.Config.Database.DataStore)
+	m.DataClient, err = data.Open(m.Config.Database.DataStore, m.Config.Database.DataTablePrefix, dataOpts...)
 	if err != nil {
 		log.Logger().Fatal("failed to connect data database", zap.Error(err),
 			zap.String("database", log.RedactDBURL(m.Config.Database.DataStore)))
@@ -187,11 +183,8 @@ func (m *Master) Serve() {
 	}
 
 	// connect cache database
-	m.CacheClient, err = cache.Open(m.Config.Database.CacheStore, m.Config.Database.CacheTablePrefix,
-		storage.WithIsolationLevel(m.Config.Database.MySQL.IsolationLevel),
-		storage.WithMaxOpenConns(m.Config.Database.MySQL.MaxOpenConns),
-		storage.WithMaxIdleConns(m.Config.Database.MySQL.MaxIdleConns),
-		storage.WithConnMaxLifetime(m.Config.Database.MySQL.ConnMaxLifetime))
+	cacheOpts := m.Config.Database.StorageOptions(m.Config.Database.CacheStore)
+	m.CacheClient, err = cache.Open(m.Config.Database.CacheStore, m.Config.Database.CacheTablePrefix, cacheOpts...)
 	if err != nil {
 		log.Logger().Fatal("failed to connect cache database", zap.Error(err),
 			zap.String("database", log.RedactDBURL(m.Config.Database.CacheStore)))

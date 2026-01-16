@@ -44,12 +44,7 @@ import (
 	_ "modernc.org/sqlite"
 )
 
-const (
-	bufSize      = 1
-	maxIdleConns = 64
-	maxOpenConns = 64
-	maxLifetime  = time.Minute
-)
+const bufSize = 1
 
 func init() {
 	Register([]string{storage.MySQLPrefix}, func(path, tablePrefix string, opts ...storage.Option) (Database, error) {
@@ -89,6 +84,7 @@ func init() {
 		database := new(SQLDatabase)
 		database.driver = Postgres
 		database.TablePrefix = storage.TablePrefix(tablePrefix)
+		option := storage.NewOptions(opts...)
 		var err error
 		if database.client, err = otelsql.Open("postgres", path,
 			otelsql.WithAttributes(semconv.DBSystemPostgreSQL),
@@ -96,9 +92,7 @@ func init() {
 		); err != nil {
 			return nil, errors.Trace(err)
 		}
-		database.client.SetMaxIdleConns(maxIdleConns)
-		database.client.SetMaxOpenConns(maxOpenConns)
-		database.client.SetConnMaxLifetime(maxLifetime)
+		storage.ApplySQLPool(database.client, option)
 		database.gormDB, err = gorm.Open(postgres.New(postgres.Config{Conn: database.client}), storage.NewGORMConfig(tablePrefix))
 		if err != nil {
 			return nil, errors.Trace(err)

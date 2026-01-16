@@ -48,6 +48,17 @@ max_idle_conns = 0
 # Maximum amount of time a connection may be reused. Set to "0s" to keep the driver default.
 conn_max_lifetime = "0s"
 
+[database.postgres]
+
+# Maximum number of open connections to the database. The default value is 64.
+max_open_conns = 64
+
+# Maximum number of idle connections to the database. The default value is 64.
+max_idle_conns = 64
+
+# Maximum amount of time a connection may be reused. The default value is "1m".
+conn_max_lifetime = "1m"
+
 [master]
 
 # GRPC port of the master node. The default value is 8086.

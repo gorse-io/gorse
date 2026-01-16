@@ -45,6 +45,7 @@ func init() {
 		database := new(SQLDatabase)
 		database.driver = Postgres
 		database.TablePrefix = storage.TablePrefix(tablePrefix)
+		option := storage.NewOptions(opts...)
 		var err error
 		if database.client, err = otelsql.Open("postgres", path,
 			otelsql.WithAttributes(semconv.DBSystemPostgreSQL),
@@ -52,6 +53,7 @@ func init() {
 		); err != nil {
 			return nil, errors.Trace(err)
 		}
+		storage.ApplySQLPool(database.client, option)
 		database.gormDB, err = gorm.Open(postgres.New(postgres.Config{Conn: database.client}), storage.NewGORMConfig(tablePrefix))
 		if err != nil {
 			return nil, errors.Trace(err)

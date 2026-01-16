@@ -79,6 +79,7 @@ type DatabaseConfig struct {
 	DataTablePrefix  string      `mapstructure:"data_table_prefix"`
 	CacheTablePrefix string      `mapstructure:"cache_table_prefix"`
 	MySQL            MySQLConfig `mapstructure:"mysql"`
+	Postgres         SQLConfig   `mapstructure:"postgres"`
 }
 
 type MySQLConfig struct {
@@ -86,6 +87,31 @@ type MySQLConfig struct {
 	MaxOpenConns    int           `mapstructure:"max_open_conns" validate:"gte=0"`
 	MaxIdleConns    int           `mapstructure:"max_idle_conns" validate:"gte=0"`
 	ConnMaxLifetime time.Duration `mapstructure:"conn_max_lifetime" validate:"gte=0"`
+}
+
+type SQLConfig struct {
+	MaxOpenConns    int           `mapstructure:"max_open_conns" validate:"gte=0"`
+	MaxIdleConns    int           `mapstructure:"max_idle_conns" validate:"gte=0"`
+	ConnMaxLifetime time.Duration `mapstructure:"conn_max_lifetime" validate:"gte=0"`
+}
+
+func (db *DatabaseConfig) StorageOptions(path string) []storage.Option {
+	if strings.HasPrefix(path, storage.MySQLPrefix) {
+		return []storage.Option{
+			storage.WithIsolationLevel(db.MySQL.IsolationLevel),
+			storage.WithMaxOpenConns(db.MySQL.MaxOpenConns),
+			storage.WithMaxIdleConns(db.MySQL.MaxIdleConns),
+			storage.WithConnMaxLifetime(db.MySQL.ConnMaxLifetime),
+		}
+	}
+	if strings.HasPrefix(path, storage.PostgresPrefix) || strings.HasPrefix(path, storage.PostgreSQLPrefix) {
+		return []storage.Option{
+			storage.WithMaxOpenConns(db.Postgres.MaxOpenConns),
+			storage.WithMaxIdleConns(db.Postgres.MaxIdleConns),
+			storage.WithConnMaxLifetime(db.Postgres.ConnMaxLifetime),
+		}
+	}
+	return nil
 }
 
 // MasterConfig is the configuration for the master.
@@ -400,6 +426,11 @@ func GetDefaultConfig() *Config {
 				MaxIdleConns:    0,
 				ConnMaxLifetime: 0,
 			},
+			Postgres: SQLConfig{
+				MaxOpenConns:    64,
+				MaxIdleConns:    64,
+				ConnMaxLifetime: time.Minute,
+			},
 		},
 		Master: MasterConfig{
 			Port:            8086,
@@ -533,6 +564,10 @@ func setDefault() {
 	viper.SetDefault("database.mysql.max_open_conns", defaultConfig.Database.MySQL.MaxOpenConns)
 	viper.SetDefault("database.mysql.max_idle_conns", defaultConfig.Database.MySQL.MaxIdleConns)
 	viper.SetDefault("database.mysql.conn_max_lifetime", defaultConfig.Database.MySQL.ConnMaxLifetime)
+	// [database.postgres]
+	viper.SetDefault("database.postgres.max_open_conns", defaultConfig.Database.Postgres.MaxOpenConns)
+	viper.SetDefault("database.postgres.max_idle_conns", defaultConfig.Database.Postgres.MaxIdleConns)
+	viper.SetDefault("database.postgres.conn_max_lifetime", defaultConfig.Database.Postgres.ConnMaxLifetime)
 	// [master]
 	viper.SetDefault("master.port", defaultConfig.Master.Port)
 	viper.SetDefault("master.host", defaultConfig.Master.Host)
