@@ -94,7 +94,6 @@ type Worker struct {
 	ticker       *time.Ticker
 	syncedChan   chan struct{} // meta synced events
 	pulledChan   chan struct{} // model pulled events
-	triggerChan  chan struct{} // manually triggered events
 }
 
 // NewWorker creates a new worker node.
@@ -128,7 +127,6 @@ func NewWorker(
 		ticker:       time.NewTicker(interval),
 		syncedChan:   make(chan struct{}, 1),
 		pulledChan:   make(chan struct{}, 1),
-		triggerChan:  make(chan struct{}, 1),
 	}
 }
 
@@ -227,7 +225,7 @@ func (w *Worker) Sync() {
 				zap.Int64("new_version", w.latestCollaborativeFilteringModelId))
 
 			select {
-			case w.triggerChan <- struct{}{}:
+			case w.syncedChan <- struct{}{}:
 			default:
 			}
 		}
@@ -240,7 +238,7 @@ func (w *Worker) Sync() {
 				zap.Int64("new_version", w.latestClickThroughRateModelId))
 
 			select {
-			case w.triggerChan <- struct{}{}:
+			case w.syncedChan <- struct{}{}:
 			default:
 			}
 		}
