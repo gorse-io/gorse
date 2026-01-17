@@ -178,7 +178,6 @@ name = "neighbors"
 #   embedding: recommend by Euclidean distance of embeddings.
 #   tags: recommend by number of common tags.
 #   users: recommend by number of common users.
-#   chat: recommend by chat completion model.
 type = "embedding"
 
 # The column of the item embeddings. Leave blank if type is "users".
@@ -245,9 +244,8 @@ read_replacement_decay = 0.6
 [recommend.ranker]
 
 # The type of the ranker. There are two types:
-#   none: no ranking.
+#   none: no ranking (default).
 #   fm: factorization machines.
-#   llm: large language model.
 type = "fm"
 
 # The time period to refresh recommendation for inactive users. The default values is 120h.
