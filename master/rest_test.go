@@ -768,6 +768,7 @@ func (suite *MasterAPITestSuite) TestConfig() {
 		expression.MustParseFeedbackTypeExpression("a")}
 	suite.Config.Recommend.DataSource.ReadFeedbackTypes = []expression.FeedbackTypeExpression{
 		expression.MustParseFeedbackTypeExpression("b")}
+	suite.Config.Recommend.Ranker.Recommenders = []string{"latest"}
 	apitest.New().
 		Handler(suite.handler).
 		Get("/api/dashboard/config").
