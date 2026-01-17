@@ -307,7 +307,7 @@ func (config *UserToUserConfig) Hash(cfg *RecommendConfig) string {
 type CollaborativeConfig struct {
 	FitPeriod      time.Duration       `mapstructure:"fit_period" validate:"gt=0"`
 	FitEpoch       int                 `mapstructure:"fit_epoch" validate:"gt=0"`
-	OptimizePeriod time.Duration       `mapstructure:"optimize_period" validate:"gt=0"`
+	OptimizePeriod time.Duration       `mapstructure:"optimize_period" validate:"gte=0"`
 	OptimizeTrials int                 `mapstructure:"optimize_trials" validate:"gt=0"`
 	EarlyStopping  EarlyStoppingConfig `mapstructure:"early_stopping"`
 }
@@ -356,7 +356,7 @@ type RankerConfig struct {
 	CacheExpire    time.Duration       `mapstructure:"cache_expire" validate:"gt=0"`
 	FitPeriod      time.Duration       `mapstructure:"fit_period" validate:"gt=0"`
 	FitEpoch       int                 `mapstructure:"fit_epoch" validate:"gt=0"`
-	OptimizePeriod time.Duration       `mapstructure:"optimize_period" validate:"gt=0"`
+	OptimizePeriod time.Duration       `mapstructure:"optimize_period" validate:"gte=0"`
 	OptimizeTrials int                 `mapstructure:"optimize_trials" validate:"gt=0"`
 	Prompt         string              `mapstructure:"prompt"`
 	EarlyStopping  EarlyStoppingConfig `mapstructure:"early_stopping"`
@@ -456,7 +456,7 @@ func GetDefaultConfig() *Config {
 			Collaborative: CollaborativeConfig{
 				FitPeriod:      60 * time.Minute,
 				FitEpoch:       100,
-				OptimizePeriod: 180 * time.Minute,
+				OptimizePeriod: 0,
 				OptimizeTrials: 10,
 			},
 			Replacement: ReplacementConfig{
@@ -469,7 +469,7 @@ func GetDefaultConfig() *Config {
 				CacheExpire:    120 * time.Hour,
 				FitPeriod:      60 * time.Minute,
 				FitEpoch:       100,
-				OptimizePeriod: 360 * time.Minute,
+				OptimizePeriod: 0,
 				OptimizeTrials: 10,
 			},
 			Fallback: FallbackConfig{
