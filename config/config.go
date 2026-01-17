@@ -798,5 +798,12 @@ func (config *Config) Validate() error {
 			return errors.New(e.Translate(trans))
 		}
 	}
+
+	if len(config.Recommend.Ranker.Recommenders) == 0 {
+		return errors.New("ranker.recommenders must not be empty")
+	}
+	if config.Recommend.Ranker.Type == "none" && len(config.Recommend.Ranker.Recommenders) > 1 {
+		return errors.New("ranker.recommenders must contain at most one recommender when ranker.type is none")
+	}
 	return nil
 }
