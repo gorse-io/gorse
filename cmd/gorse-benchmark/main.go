@@ -82,7 +82,7 @@ var llmCmd = &cobra.Command{
 		fmt.Printf("  Positive Feedbacks: %d\n", dataset.CountPositive())
 		fmt.Printf("  Negative Feedbacks: %d\n", dataset.CountNegative())
 		// Split dataset
-		train, test := dataset.Split(0.8, 42)
+		train, test := dataset.Split(0.2, 42)
 		// EvaluateFM(train, test)
 		EvaluateLLM(cfg, train, test, aux.GetItems())
 	},
@@ -129,7 +129,7 @@ func EvaluateLLM(cfg *config.Config, train, test dataset.CTRSplit, items []data.
 
 	var sumAUC atomic.Float32
 	var validUsers atomic.Float32
-	parallel.Detachable(len(userTest), runtime.NumCPU(), 100, func(pCtx *parallel.Context, userIdx int) {
+	parallel.Detachable(context.Background(), len(userTest), runtime.NumCPU(), 100, func(pCtx *parallel.Context, userIdx int) {
 		userId := int32(userIdx)
 		testItems := userTest[userId]
 		if len(userTrain[userId]) > 100 || len(userTrain[userId]) == 0 {
@@ -202,7 +202,7 @@ func EvaluateFM(train, test dataset.CTRSplit) float32 {
 
 	userTrain := make(map[int32]int, train.CountUsers())
 	for i := 0; i < train.Count(); i++ {
-		indices, _, target := train.Get(i)
+		indices, _, _, target := train.Get(i)
 		userId := indices[0]
 		if target > 0 {
 			userTrain[userId]++
