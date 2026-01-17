@@ -457,6 +457,10 @@ func (suite *WorkerTestSuite) TestRecommend() {
 	}, true, true, true)
 	suite.NoError(err)
 
+	// insert stale recommendation
+	err = suite.CacheClient.AddScores(ctx, cache.Recommend, "0", []cache.Score{{Id: "999", Score: 999}})
+	suite.NoError(err)
+
 	// insert non-personalized recommendation
 	err = suite.CacheClient.AddScores(ctx, cache.NonPersonalized, "popular", []cache.Score{{Id: "3", Categories: []string{""}}})
 	suite.NoError(err)
