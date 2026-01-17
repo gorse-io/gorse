@@ -234,10 +234,12 @@ func (m *Master) runLoadDatasetTask(ctx context.Context) error {
 	if err = m.collectGarbage(ctx, datasets.rankingDataset); err != nil {
 		log.Logger().Error("failed to collect garbage in cache", zap.Error(err))
 	}
-	if err = m.optimizeCollaborativeFiltering(ctx, datasets.rankingTrainSet, datasets.rankingTestSet); err != nil {
-		log.Logger().Error("failed to optimize collaborative filtering model", zap.Error(err))
+	if m.Config.Recommend.Collaborative.OptimizePeriod > 0 {
+		if err = m.optimizeCollaborativeFiltering(ctx, datasets.rankingTrainSet, datasets.rankingTestSet); err != nil {
+			log.Logger().Error("failed to optimize collaborative filtering model", zap.Error(err))
+		}
 	}
-	if useClickThroughRateTasks {
+	if useClickThroughRateTasks && m.Config.Recommend.Ranker.OptimizePeriod > 0 {
 		if err = m.optimizeClickThroughRatePrediction(ctx, datasets.clickTrainSet, datasets.clickTestSet); err != nil {
 			log.Logger().Error("failed to optimize click-through rate prediction model", zap.Error(err))
 		}
