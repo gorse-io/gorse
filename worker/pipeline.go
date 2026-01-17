@@ -216,6 +216,13 @@ func (p *Pipeline) Recommend(ctx context.Context, users []data.User, progress fu
 			log.Logger().Error("failed to cache recommendation", zap.Error(err))
 			return
 		}
+		if err = p.CacheClient.DeleteScores(ctx, []string{cache.Recommend}, cache.ScoreCondition{
+			Before: &recommendTime,
+			Subset: proto.String(userId),
+		}); err != nil {
+			log.Logger().Error("failed to delete stale recommendation", zap.Error(err))
+			return
+		}
 		if err = p.CacheClient.Set(ctx,
 			cache.Time(cache.Key(cache.RecommendUpdateTime, userId), recommendTime),
 			cache.String(cache.Key(cache.RecommendDigest, userId), digest),
