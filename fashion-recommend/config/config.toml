@@ -1,0 +1,101 @@
+# Gorse 时尚品牌推荐系统配置文件
+
+[database]
+# 数据库配置
+data_store = "postgres://gorse:gorse_pass@postgres:5432/gorse?sslmode=disable"
+cache_store = "redis://redis:6379/0"
+
+[master]
+# Master 节点配置
+port = 8086
+host = "0.0.0.0"
+n_jobs = 4
+meta_timeout = 60
+
+[server]
+# Server 节点配置
+api_key = ""
+default_n = 10
+
+[recommend]
+# 推荐配置
+cache_size = 100
+cache_expire = "72h"
+context_size = 20
+active_user_ttl = 30
+
+[recommend.data_source]
+# 数据源配置 - 定义正向反馈类型
+positive_feedback_types = ["purchase", "favorite", "add_to_cart"]
+read_feedback_types = ["view"]
+positive_feedback_ttl = 0
+item_ttl = 0
+
+# 非个性化推荐配置
+[[recommend.non-personalized]]
+name = "trending"
+score = "len(filter(feedback, {.FeedbackType == 'purchase' && .Timestamp > now() - duration('7d')}))"
+filter = ""
+
+[[recommend.non-personalized]]
+name = "new_arrivals"
+score = "float(now() - item.Timestamp) * -1"
+filter = "item.Timestamp > now() - duration('30d')"
+
+[[recommend.non-personalized]]
+name = "popular"
+score = "len(filter(feedback, {.FeedbackType == 'purchase'}))"
+filter = ""
+
+# 物品相似度推荐配置
+[[recommend.item-to-item]]
+name = "style_similarity"
+type = "tags"
+column = "Labels"
+
+[[recommend.item-to-item]]
+name = "behavior_similarity"
+type = "users"
+column = ""
+
+# 用户相似度推荐配置
+[[recommend.user-to-user]]
+name = "style_match"
+type = "tags"
+column = "Labels"
+
+[[recommend.user-to-user]]
+name = "purchase_pattern"
+type = "items"
+column = ""
+
+# 协同过滤配置
+[recommend.collaborative]
+fit_period = "24h"
+fit_epoch = 50
+optimize_period = "168h"
+optimize_trials = 100
+
+[recommend.collaborative.early_stopping]
+patience = 5
+
+# 推荐替换配置
+[recommend.replacement]
+enable_replacement = true
+positive_replacement_decay = 0.8
+read_replacement_decay = 0.5
+
+# 推荐排序配置
+[recommend.ranker]
+recommenders = ["collaborative"]
+
+# 降级推荐配置
+[recommend.fallback]
+recommenders = [
+    "collaborative",
+    "item-to-item/style_similarity",
+    "user-to-user/style_match",
+    "non-personalized/popular",
+    "non-personalized/new_arrivals",
+    "latest"
+]

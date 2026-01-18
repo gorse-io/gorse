@@ -1,0 +1,54 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply antialiased;
+  }
+  
+  body {
+    @apply m-0 bg-gray-50;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Helvetica Neue', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    letter-spacing: -0.01em;
+    line-height: 1.6;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-semibold;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+  }
+  
+  p {
+    letter-spacing: -0.005em;
+    line-height: 1.65;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply px-6 py-3 bg-black text-white rounded-full font-medium transition-all duration-200 hover:bg-gray-800 active:scale-95;
+    letter-spacing: -0.01em;
+  }
+  
+  .btn-secondary {
+    @apply px-6 py-3 bg-white text-black border border-gray-200 rounded-full font-medium transition-all duration-200 hover:bg-gray-50 active:scale-95;
+    letter-spacing: -0.01em;
+  }
+  
+  .input-field {
+    @apply w-full px-4 py-3 bg-white border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent transition-all;
+    letter-spacing: -0.005em;
+  }
+  
+  .card {
+    @apply bg-white rounded-3xl overflow-hidden transition-all duration-300;
+  }
+  
+  .product-card {
+    @apply card overflow-hidden cursor-pointer transform hover:scale-105 transition-transform duration-300;
+  }
+}

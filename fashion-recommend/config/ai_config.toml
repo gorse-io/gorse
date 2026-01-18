@@ -1,0 +1,8 @@
+# AI 大模型配置
+[ai]
+# 阿里云 DashScope API 配置
+api_key = "sk-7fe1db8b36914b26b64555375d58ab7d"
+base_url = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+model = "qwen-plus"  # 可选: qwen-turbo, qwen-plus, qwen-max
+max_tokens = 2000
+temperature = 0.7
