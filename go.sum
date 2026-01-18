@@ -363,8 +363,8 @@ github.com/gorilla/securecookie v1.1.2/go.mod h1:NfCASbcHqRSY+3a8tlWJwsQap2VX5pw
 github.com/gorilla/websocket v1.4.2/go.mod h1:YR8l580nyteQvAITg2hZ9XVh4b55+EU/adAjf1fMHhE=
 github.com/gorse-io/clickhouse v0.3.3-0.20251121080503-d578f146896d h1:s6U3e1W7NdviEq12zOisra1cAaG9+fkL6jnMK8sok/Y=
 github.com/gorse-io/clickhouse v0.3.3-0.20251121080503-d578f146896d/go.mod h1:iILWzbul8U+gsf4kqbheF2QzBmdvVp63mloGGK8emDI=
-github.com/gorse-io/dashboard v0.0.0-20260103052112-637feaebf8d4 h1:i75dY927cTblpw3AB+o0lX244LBYBWsL8rfwqiCwwZk=
-github.com/gorse-io/dashboard v0.0.0-20260103052112-637feaebf8d4/go.mod h1:MdBWrLSpKA9ZdVCqN6i/n8mtTU2zoLYxqsTuR9HYDs0=
+github.com/gorse-io/dashboard v0.0.0-20260118100729-5f6ea965997a h1:HbcWC+nhXJckOX+FA1pOjCfFLDysE8JS2wGD7dxB3Dw=
+github.com/gorse-io/dashboard v0.0.0-20260118100729-5f6ea965997a/go.mod h1:7qnavTWvhgu7VFllEg36WN0VsDWMouM9mcSHskNveNo=
 github.com/gorse-io/gorse-go v0.5.0-alpha.3 h1:GR/OWzq016VyFyTTxgQWeayGahRVzB1cGFIW/AaShC4=
 github.com/gorse-io/gorse-go v0.5.0-alpha.3/go.mod h1:ZxmVHzZPKm5pmEIlqaRDwK0rkfTRHlfziO033XZ+RW0=
 github.com/gorse-io/sqlite v1.3.3-0.20220713123255-c322aec4e59e h1:uPQtYQzG1QcC3Qbv+tuEe8Q2l++V4KEcqYSSwB9qobg=
@@ -665,8 +665,9 @@ github.com/prometheus/procfs v0.7.3/go.mod h1:cz+aTbrPOrUb4q7XlbU9ygM+/jj0fzG6c1
 github.com/prometheus/procfs v0.8.0 h1:ODq8ZFEaYeCaZOJlZZdJA2AbQR98dSHSM1KW/You5mo=
 github.com/prometheus/procfs v0.8.0/go.mod h1:z7EfXMXOkbkqb9IINtpCn86r/to3BnA0uaxHdg830/4=
 github.com/prometheus/tsdb v0.7.1/go.mod h1:qhTCs0VvXwvX/y3TZrWD7rabWM+ijKTux40TwIPHuXU=
-github.com/rakyll/statik v0.1.7 h1:OF3QCZUuyPxuGEP7B4ypUa7sB/iHtqOTDYZXGM8KOdQ=
 github.com/rakyll/statik v0.1.7/go.mod h1:AlZONWzMtEnMs7W4e/1LURLiI49pIMmp6V9Unghqrcc=
+github.com/rakyll/statik v0.1.8 h1:Fe7egWVZbW/2vlPUY8P/aL9o6qbtrBn71uIztkdafMU=
+github.com/rakyll/statik v0.1.8/go.mod h1:AlZONWzMtEnMs7W4e/1LURLiI49pIMmp6V9Unghqrcc=
 github.com/redis/go-redis/extra/rediscmd/v9 v9.5.3 h1:1/BDligzCa40GTllkDnY3Y5DTHuKCONbB2JcRyIfl20=
 github.com/redis/go-redis/extra/rediscmd/v9 v9.5.3/go.mod h1:3dZmcLn3Qw6FLlWASn1g4y+YO9ycEFUOM+bhBmzLVKQ=
 github.com/redis/go-redis/extra/redisotel/v9 v9.5.3 h1:kuvuJL/+MZIEdvtb/kTBRiRgYaOmx1l+lYJyVdrRUOs=

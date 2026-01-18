@@ -1072,10 +1072,6 @@ func (m *Master) getExternal(request *restful.Request, response *restful.Respons
 		return
 	}
 	userId := request.QueryParameter("user-id")
-	if userId == "" {
-		server.BadRequest(response, fmt.Errorf("user-id is required"))
-		return
-	}
 
 	scriptBytes, err := base64.StdEncoding.DecodeString(scriptBase64)
 	if err != nil {

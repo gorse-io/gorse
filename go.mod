@@ -24,7 +24,7 @@ require (
 	github.com/go-viper/mapstructure/v2 v2.4.0
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/securecookie v1.1.2
-	github.com/gorse-io/dashboard v0.0.0-20260103052112-637feaebf8d4
+	github.com/gorse-io/dashboard v0.0.0-20260118100729-5f6ea965997a
 	github.com/gorse-io/gorse-go v0.5.0-alpha.3
 	github.com/invopop/jsonschema v0.13.0
 	github.com/jaswdr/faker v1.19.1
@@ -42,7 +42,7 @@ require (
 	github.com/nikolalohinski/gonja/v2 v2.5.0
 	github.com/pkg/errors v0.9.1
 	github.com/prometheus/client_golang v1.13.0
-	github.com/rakyll/statik v0.1.7
+	github.com/rakyll/statik v0.1.8
 	github.com/redis/go-redis/extra/redisotel/v9 v9.5.3
 	github.com/redis/go-redis/v9 v9.17.2
 	github.com/samber/lo v1.52.0
