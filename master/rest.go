@@ -16,6 +16,7 @@ package master
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -221,6 +222,13 @@ func (m *Master) CreateWebService() {
 		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
 		Returns(http.StatusOK, "OK", []ScoreUser{}).
 		Writes([]ScoreUser{}))
+	ws.Route(ws.GET("/dashboard/external").To(m.getExternal).
+		Doc("get external recommendations preview").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
+		Param(ws.QueryParameter("script", "external script").DataType("string")).
+		Param(ws.QueryParameter("user-id", "identifier of the user").DataType("string")).
+		Returns(http.StatusOK, "OK", []string{}).
+		Writes([]string{}))
 }
 
 // SinglePageAppFileSystem is the file system for single page app.
@@ -1055,6 +1063,40 @@ func (m *Master) getUserToUser(request *restful.Request, response *restful.Respo
 	name := request.PathParameter("name")
 	m.SetLastModified(request, response, cache.Key(cache.UserToUserUpdateTime, name, userId))
 	m.SearchDocuments(cache.UserToUser, cache.Key(name, userId), nil, m.GetUser, request, response)
+}
+
+func (m *Master) getExternal(request *restful.Request, response *restful.Response) {
+	scriptBase64 := request.QueryParameter("script")
+	if scriptBase64 == "" {
+		server.BadRequest(response, fmt.Errorf("script is required"))
+		return
+	}
+	userId := request.QueryParameter("user-id")
+
+	scriptBytes, err := base64.StdEncoding.DecodeString(scriptBase64)
+	if err != nil {
+		server.BadRequest(response, fmt.Errorf("invalid script encoding: %w", err))
+		return
+	}
+
+	external, err := logics.NewExternal(config.ExternalConfig{
+		Name:   "preview",
+		Script: string(scriptBytes),
+	})
+	if err != nil {
+		server.InternalServerError(response, err)
+		return
+	}
+	defer external.Close()
+
+	items, err := external.Pull(userId)
+	if err != nil {
+		server.InternalServerError(response, err)
+		return
+	}
+
+	m.SetLastModified(request, response, time.Now().String())
+	server.Ok(response, items)
 }
 
 func (m *Master) importExportUsers(response http.ResponseWriter, request *http.Request) {
