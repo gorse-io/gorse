@@ -20,7 +20,6 @@ import (
 	"log"
 	"os"
 	"runtime"
-	"sort"
 	"strings"
 
 	mapset "github.com/deckarep/golang-set/v2"
@@ -38,7 +37,6 @@ import (
 	"github.com/spf13/cobra"
 	"go.uber.org/atomic"
 	"golang.org/x/term"
-	"modernc.org/sortutil"
 )
 
 var rootCmd = &cobra.Command{
@@ -66,7 +64,7 @@ var llmCmd = &cobra.Command{
 		evaluator := master.NewOnlineEvaluator(
 			m.Config.Recommend.DataSource.PositiveFeedbackTypes,
 			m.Config.Recommend.DataSource.ReadFeedbackTypes)
-		dataset, aux, err := m.LoadDataFromDatabase(context.Background(), m.DataClient,
+		dataset, _, err := m.LoadDataFromDatabase(context.Background(), m.DataClient,
 			m.Config.Recommend.DataSource.PositiveFeedbackTypes,
 			m.Config.Recommend.DataSource.ReadFeedbackTypes,
 			m.Config.Recommend.DataSource.ItemTTL,
@@ -83,8 +81,8 @@ var llmCmd = &cobra.Command{
 		fmt.Printf("  Negative Feedbacks: %d\n", dataset.CountNegative())
 		// Split dataset
 		train, test := dataset.Split(0.2, 42)
-		// EvaluateFM(train, test)
-		EvaluateLLM(cfg, train, test, aux.GetItems())
+		EvaluateAFM(train, test)
+		// EvaluateLLM(cfg, train, test, aux.GetItems())
 	},
 }
 
@@ -175,9 +173,9 @@ func EvaluateLLM(cfg *config.Config, train, test dataset.CTRSplit, items []data.
 		if len(negPredictions) == 0 || len(posPredictions) == 0 {
 			return
 		}
-		sumAUC.Add(AUC(posPredictions, negPredictions) * float32(len(posPredictions)))
+		sumAUC.Add(ctr.AUC(posPredictions, negPredictions) * float32(len(posPredictions)))
 		validUsers.Add(float32(len(posPredictions)))
-		fmt.Printf("User %d AUC: %f pos: %d/%d, neg: %d/%d\n", userId, AUC(posPredictions, negPredictions),
+		fmt.Printf("User %d AUC: %f pos: %d/%d, neg: %d/%d\n", userId, ctr.AUC(posPredictions, negPredictions),
 			len(posPredictions), userPositive[userId].Cardinality(),
 			len(negPredictions), userNegative[userId].Cardinality())
 	})
@@ -190,9 +188,7 @@ func EvaluateLLM(cfg *config.Config, train, test dataset.CTRSplit, items []data.
 	return score
 }
 
-func EvaluateFM(train, test dataset.CTRSplit) float32 {
-	PrintHorizontalLine("-")
-	fmt.Println("Training FM...")
+func EvaluateAFM(train, test dataset.CTRSplit) float32 {
 	ml := ctr.NewAFM(nil)
 	ml.Fit(context.Background(), train, test,
 		ctr.NewFitConfig().
@@ -200,50 +196,54 @@ func EvaluateFM(train, test dataset.CTRSplit) float32 {
 			SetJobs(runtime.NumCPU()).
 			SetPatience(10))
 
-	userTrain := make(map[int32]int, train.CountUsers())
+	userPositiveCount := make(map[int32]int, train.CountUsers())
+	userNegativeCount := make(map[int32]int, train.CountUsers())
 	for i := 0; i < train.Count(); i++ {
 		indices, _, _, target := train.Get(i)
 		userId := indices[0]
 		if target > 0 {
-			userTrain[userId]++
+			userPositiveCount[userId]++
+		} else {
+			userNegativeCount[userId]++
 		}
 	}
 
 	var posFeatures, negFeatures []lo.Tuple2[[]int32, []float32]
-	var posUsers, negUsers []int32
 	var posEmbeddings, negEmbeddings [][][]float32
+	var posUsers, negUsers []int32
 	for i := 0; i < test.Count(); i++ {
 		indices, values, embeddings, target := test.Get(i)
 		userId := indices[0]
 		if target > 0 {
 			posFeatures = append(posFeatures, lo.Tuple2[[]int32, []float32]{A: indices, B: values})
-			posUsers = append(posUsers, userId)
 			posEmbeddings = append(posEmbeddings, embeddings)
+			posUsers = append(posUsers, userId)
 		} else {
 			negFeatures = append(negFeatures, lo.Tuple2[[]int32, []float32]{A: indices, B: values})
-			negUsers = append(negUsers, userId)
 			negEmbeddings = append(negEmbeddings, embeddings)
+			negUsers = append(negUsers, userId)
 		}
 	}
 	posPrediction := ml.BatchInternalPredict(posFeatures, posEmbeddings, runtime.NumCPU())
 	negPrediction := ml.BatchInternalPredict(negFeatures, negEmbeddings, runtime.NumCPU())
 
 	userPosPrediction := make(map[int32][]float32)
-	userNegPrediction := make(map[int32][]float32)
 	for i, p := range posPrediction {
 		userPosPrediction[posUsers[i]] = append(userPosPrediction[posUsers[i]], p)
 	}
+	userNegPrediction := make(map[int32][]float32)
 	for i, p := range negPrediction {
 		userNegPrediction[negUsers[i]] = append(userNegPrediction[negUsers[i]], p)
 	}
+
 	var sumAUC float32
 	var validUsers float32
 	for user, pos := range userPosPrediction {
-		if userTrain[user] > 100 || userTrain[user] == 0 {
+		if userPositiveCount[user] == 0 || userNegativeCount[user] == 0 {
 			continue
 		}
 		if neg, ok := userNegPrediction[user]; ok {
-			sumAUC += AUC(pos, neg) * float32(len(pos))
+			sumAUC += ctr.AUC(pos, neg) * float32(len(pos))
 			validUsers += float32(len(pos))
 		}
 	}
@@ -252,27 +252,8 @@ func EvaluateFM(train, test dataset.CTRSplit) float32 {
 	}
 	score := sumAUC / validUsers
 
-	fmt.Println("FM GAUC:", score)
+	fmt.Println("AFM GAUC:", score)
 	return score
-}
-
-func AUC(posPrediction, negPrediction []float32) float32 {
-	sort.Sort(sortutil.Float32Slice(posPrediction))
-	sort.Sort(sortutil.Float32Slice(negPrediction))
-	var sum float32
-	var nPos int
-	for pPos := range posPrediction {
-		// find the negative sample with the greatest prediction less than current positive sample
-		for nPos < len(negPrediction) && negPrediction[nPos] < posPrediction[pPos] {
-			nPos++
-		}
-		// add the number of negative samples have less prediction than current positive sample
-		sum += float32(nPos)
-	}
-	if len(posPrediction)*len(negPrediction) == 0 {
-		return 0
-	}
-	return sum / float32(len(posPrediction)*len(negPrediction))
 }
 
 func PrintHorizontalLine(char string) {
