@@ -17,6 +17,7 @@ package master
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"mime/multipart"
@@ -695,6 +696,31 @@ func (suite *MasterAPITestSuite) TestGetNonPersonalizedRecommends() {
 			{data.Item{ItemId: "20", Timestamp: time.Date(2021, 1, 1, 1, 1, 1, 1, time.UTC)}, 99},
 			{data.Item{ItemId: "30", Timestamp: time.Date(2022, 1, 1, 1, 1, 1, 1, time.UTC)}, 98},
 		})).
+		End()
+}
+
+func (suite *MasterAPITestSuite) TestGetExternal() {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("user_id") == "1" {
+			fmt.Fprintln(w, `["x","y"]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer ts.Close()
+
+	script := fmt.Sprintf(`fetch("%s?user_id=" + user_id).body`, ts.URL)
+	scriptBase64 := base64.StdEncoding.EncodeToString([]byte(script))
+
+	apitest.New().
+		Handler(suite.handler).
+		Get("/api/dashboard/external").
+		Header("Cookie", suite.cookie).
+		Query("script", scriptBase64).
+		Query("user-id", "1").
+		Expect(suite.T()).
+		Status(http.StatusOK).
+		Body(marshal(suite.T(), []string{"x", "y"})).
 		End()
 }
 
