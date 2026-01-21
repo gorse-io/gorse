@@ -42,6 +42,8 @@ type CFSplit interface {
 	CountItems() int
 	// CountFeedback returns the number of (positive) feedback.
 	CountFeedback() int
+	// GetItems returns the items.
+	GetItems() []data.Item
 	// GetUserDict returns the frequency dictionary of users.
 	GetUserDict() *FreqDict
 	// GetItemDict returns the frequency dictionary of items.
