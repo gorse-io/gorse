@@ -23,6 +23,7 @@ import (
 	"sort"
 	"strconv"
 	"sync"
+	"time"
 
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/gorse-io/gorse/common/log"
@@ -225,7 +226,7 @@ func EvaluateAFM(ctrDataset *ctr.Dataset, train, test dataset.CFSplit, scores *s
 	if ndcgUsers > 0 {
 		ndcg = sumNDCG / ndcgUsers
 	}
-	scores.Store("AFM", ndcg)
+	scores.Store("AFM", cf.Score{NDCG: ndcg})
 }
 
 func SplitCTRDataset(ctrDataset *ctr.Dataset, train, test dataset.CFSplit) (*ctr.Dataset, *ctr.Dataset) {
@@ -299,12 +300,15 @@ func EvaluateLLM(cfg *config.Config, train, test dataset.CFSplit, scores *sync.M
 	var sum atomic.Float32
 	var count atomic.Float32
 	negatives := test.SampleUserNegatives(train, 99)
-	lo.Must0(parallel.Detachable(context.Background(), test.CountUsers(), runtime.NumCPU(), 100, func(pCtx *parallel.Context, userIdx int) {
+	lo.Must0(parallel.Detachable(context.Background(), test.CountUsers(), runtime.NumCPU(), 10, func(pCtx *parallel.Context, userIdx int) {
 		targetSet := mapset.NewSet(test.GetUserFeedback()[userIdx]...)
 		negativeSample := negatives[userIdx]
 		candidates := make([]*data.Item, 0, targetSet.Cardinality()+len(negativeSample))
 		for _, itemIdx := range negativeSample {
 			candidates = append(candidates, &test.GetItems()[itemIdx])
+		}
+		if len(test.GetUserFeedback()[userIdx]) == 0 {
+			return
 		}
 		for _, itemIdx := range test.GetUserFeedback()[userIdx] {
 			candidates = append(candidates, &test.GetItems()[itemIdx])
@@ -316,6 +320,7 @@ func EvaluateLLM(cfg *config.Config, train, test dataset.CFSplit, scores *sync.M
 			})
 		}
 		pCtx.Detach()
+		start := time.Now()
 		result, err := chat.Rank(context.Background(), &data.User{}, feedback, candidates)
 		if err != nil {
 			if apiError, ok := err.(*openai.APIError); ok && apiError.HTTPStatusCode == 421 {
@@ -323,10 +328,16 @@ func EvaluateLLM(cfg *config.Config, train, test dataset.CFSplit, scores *sync.M
 			}
 			log.Logger().Fatal("failed to rank items for user", zap.Int("user", userIdx), zap.Error(err))
 		}
+		duration := time.Since(start)
 		pCtx.Attach()
-		score := cf.NDCG(targetSet, lo.Map(result, func(itemId string, _ int) int32 {
-			return train.GetItemDict().Id(itemId)
-		}))
+		var score float32
+		if len(result) > 0 {
+			score = cf.NDCG(targetSet, lo.Map(result, func(itemId string, _ int) int32 {
+				return train.GetItemDict().Id(itemId)
+			}))
+		} else {
+			score = 0
+		}
 		sum.Add(score)
 		count.Add(1)
 		log.Logger().Info("LLM ranking result",
@@ -334,7 +345,9 @@ func EvaluateLLM(cfg *config.Config, train, test dataset.CFSplit, scores *sync.M
 			zap.Int("feedback", len(feedback)),
 			zap.Int("candidates", len(candidates)),
 			zap.Int("results", len(result)),
-			zap.Float32("NDCG", score),
+			zap.Float32("user_NDCG", score),
+			zap.Float32("avg_NDCG", sum.Load()/count.Load()),
+			zap.Duration("duration", duration),
 		)
 	}))
 
