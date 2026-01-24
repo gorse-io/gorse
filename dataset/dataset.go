@@ -18,6 +18,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -318,7 +319,7 @@ func (d *Dataset) SplitCF(numTestUsers int, seed int64) (CFSplit, CFSplit) {
 }
 
 // SplitLatest splits dataset by moving the most recent feedback of all users into the test set to avoid leakage.
-func (d *Dataset) SplitLatest() (CFSplit, CFSplit) {
+func (d *Dataset) SplitLatest(shots int) (CFSplit, CFSplit) {
 	trainSet, testSet := new(Dataset), new(Dataset)
 	trainSet.users, testSet.users = d.users, d.users
 	trainSet.items, testSet.items = d.items, d.items
@@ -331,20 +332,20 @@ func (d *Dataset) SplitLatest() (CFSplit, CFSplit) {
 		if len(d.userFeedback[userIndex]) == 0 {
 			continue
 		}
-		_, latestIdx := lo.MaxIndexBy(d.timestamps[userIndex], func(a, b time.Time) bool {
-			return a.After(b)
+		idxs := lo.Range(len(d.userFeedback[userIndex]))
+		sort.Slice(idxs, func(i, j int) bool {
+			return d.timestamps[userIndex][idxs[i]].After(d.timestamps[userIndex][idxs[j]])
 		})
-		testSet.timestamps[userIndex] = append(testSet.timestamps[userIndex], d.timestamps[userIndex][latestIdx])
-		testSet.itemFeedback[d.userFeedback[userIndex][latestIdx]] = append(testSet.itemFeedback[d.userFeedback[userIndex][latestIdx]], userIndex)
-		testSet.userFeedback[userIndex] = append(testSet.userFeedback[userIndex], d.userFeedback[userIndex][latestIdx])
+		testSet.timestamps[userIndex] = append(testSet.timestamps[userIndex], d.timestamps[userIndex][idxs[0]])
+		testSet.itemFeedback[d.userFeedback[userIndex][idxs[0]]] = append(testSet.itemFeedback[d.userFeedback[userIndex][idxs[0]]], userIndex)
+		testSet.userFeedback[userIndex] = append(testSet.userFeedback[userIndex], d.userFeedback[userIndex][idxs[0]])
 		testSet.numFeedback++
-		for i, itemIndex := range d.userFeedback[userIndex] {
-			if i != latestIdx {
-				trainSet.userFeedback[userIndex] = append(trainSet.userFeedback[userIndex], itemIndex)
-				trainSet.itemFeedback[itemIndex] = append(trainSet.itemFeedback[itemIndex], userIndex)
-				trainSet.timestamps[userIndex] = append(trainSet.timestamps[userIndex], d.timestamps[userIndex][i])
-				trainSet.numFeedback++
-			}
+		for i := 1; i < len(d.userFeedback[userIndex]) && i <= shots; i++ {
+			itemIndex := d.userFeedback[userIndex][idxs[i]]
+			trainSet.userFeedback[userIndex] = append(trainSet.userFeedback[userIndex], itemIndex)
+			trainSet.itemFeedback[itemIndex] = append(trainSet.itemFeedback[itemIndex], userIndex)
+			trainSet.timestamps[userIndex] = append(trainSet.timestamps[userIndex], d.timestamps[userIndex][i])
+			trainSet.numFeedback++
 		}
 	}
 	return trainSet, testSet

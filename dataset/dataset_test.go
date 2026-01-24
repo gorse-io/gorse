@@ -16,6 +16,7 @@ package dataset
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"testing"
 	"time"
@@ -224,7 +225,7 @@ func TestDataset_SplitLatest(t *testing.T) {
 	}
 	assert.Equal(t, 9, dataset.CountFeedback())
 	// split
-	train, test := dataset.SplitLatest()
+	train, test := dataset.SplitLatest(math.MaxInt)
 	assert.Equal(t, numUsers, train.CountUsers())
 	assert.Equal(t, numItems, train.CountItems())
 	assert.Equal(t, numUsers, test.CountUsers())
