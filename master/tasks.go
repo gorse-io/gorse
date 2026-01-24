@@ -479,7 +479,7 @@ func (m *Master) LoadDataFromDatabase(
 						break
 					}
 				}
-				dataSet.AddFeedback(f.UserId, f.ItemId)
+				dataSet.AddFeedback(f.UserId, f.ItemId, f.Timestamp)
 			}
 			span.Add(len(feedback))
 		}

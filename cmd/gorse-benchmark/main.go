@@ -17,20 +17,31 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
+	"math"
 	"os"
 	"runtime"
 	"sort"
+	"strconv"
+	"sync"
+	"time"
 
+	mapset "github.com/deckarep/golang-set/v2"
+	"github.com/gorse-io/gorse/common/log"
+	"github.com/gorse-io/gorse/common/parallel"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/dataset"
+	"github.com/gorse-io/gorse/logics"
 	"github.com/gorse-io/gorse/master"
+	"github.com/gorse-io/gorse/model/cf"
 	"github.com/gorse-io/gorse/model/ctr"
 	"github.com/gorse-io/gorse/storage"
 	"github.com/gorse-io/gorse/storage/data"
+	"github.com/olekukonko/tablewriter"
 	"github.com/samber/lo"
+	"github.com/sashabaranov/go-openai"
 	"github.com/spf13/cobra"
-	"modernc.org/sortutil"
+	"go.uber.org/atomic"
+	"go.uber.org/zap"
 )
 
 var rootCmd = &cobra.Command{
@@ -46,19 +57,21 @@ var llmCmd = &cobra.Command{
 		configPath, _ := cmd.Flags().GetString("config")
 		cfg, err := config.LoadConfig(configPath)
 		if err != nil {
-			log.Fatalf("failed to load config: %v", err)
+			log.Logger().Fatal("failed to load config", zap.Error(err))
 		}
+		shots, _ := cmd.Flags().GetInt("shots")
+
 		// Load dataset
 		m := master.NewMaster(cfg, os.TempDir(), false)
 		m.DataClient, err = data.Open(m.Config.Database.DataStore, m.Config.Database.DataTablePrefix,
 			storage.WithIsolationLevel(m.Config.Database.MySQL.IsolationLevel))
 		if err != nil {
-			log.Fatalf("failed to open data client: %v", err)
+			log.Logger().Fatal("failed to open data client", zap.Error(err))
 		}
 		evaluator := master.NewOnlineEvaluator(
 			m.Config.Recommend.DataSource.PositiveFeedbackTypes,
 			m.Config.Recommend.DataSource.ReadFeedbackTypes)
-		dataset, _, err := m.LoadDataFromDatabase(context.Background(), m.DataClient,
+		ctrDataset, dataset, err := m.LoadDataFromDatabase(context.Background(), m.DataClient,
 			m.Config.Recommend.DataSource.PositiveFeedbackTypes,
 			m.Config.Recommend.DataSource.ReadFeedbackTypes,
 			m.Config.Recommend.DataSource.ItemTTL,
@@ -66,111 +79,290 @@ var llmCmd = &cobra.Command{
 			evaluator,
 			nil)
 		if err != nil {
-			log.Fatalf("failed to load dataset: %v", err)
+			log.Logger().Fatal("failed to load dataset", zap.Error(err))
 		}
-		fmt.Println("Dataset loaded:")
-		fmt.Printf("  Users: %d\n", dataset.CountUsers())
-		fmt.Printf("  Items: %d\n", dataset.CountItems())
-		fmt.Printf("  Positive Feedbacks: %d\n", dataset.CountPositive())
-		fmt.Printf("  Negative Feedbacks: %d\n", dataset.CountNegative())
+
 		// Split dataset
-		train, test := dataset.Split(0.2, 42)
-		EvaluateFM(train, test)
-		// EvaluateLLM(cfg, train, test, aux.GetItems())
+		var scores sync.Map
+		train, test := dataset.SplitLatest(shots)
+		test.SampleUserNegatives(dataset, 99)
+
+		table := tablewriter.NewWriter(os.Stdout)
+		table.Header([]string{"", "#users", "#items", "#interactions"})
+		lo.Must0(table.Bulk([][]string{
+			{"total", strconv.Itoa(dataset.CountUsers()), strconv.Itoa(dataset.CountItems()), strconv.Itoa(dataset.CountFeedback())},
+			{"train", strconv.Itoa(train.CountUsers()), strconv.Itoa(train.CountItems()), strconv.Itoa(train.CountFeedback())},
+			{"test", strconv.Itoa(test.CountUsers()), strconv.Itoa(test.CountItems()), strconv.Itoa(test.CountFeedback())},
+		}))
+		lo.Must0(table.Render())
+
+		go EvaluateCF(train, test, &scores)
+		go EvaluateAFM(ctrDataset, train, test, &scores)
+		EvaluateLLM(cfg, train, test, &scores)
+		data := [][]string{{"Model", "NDCG"}}
+		scores.Range(func(key, value any) bool {
+			score := value.(cf.Score)
+			data = append(data, []string{key.(string), fmt.Sprintf("%.4f", score.NDCG)})
+			return true
+		})
+		table = tablewriter.NewWriter(os.Stdout)
+		table.Header(data[0])
+		lo.Must0(table.Bulk(data[1:]))
+		lo.Must0(table.Render())
 	},
 }
 
-func EvaluateFM(train, test dataset.CTRSplit) float32 {
-	fmt.Println("Training FM...")
+func EvaluateCF(train, test dataset.CFSplit, scores *sync.Map) {
+	for name, model := range map[string]cf.MatrixFactorization{
+		"ALS": cf.NewALS(nil),
+		"BPR": cf.NewBPR(nil),
+	} {
+		score := model.Fit(context.Background(), train, test,
+			cf.NewFitConfig().
+				SetVerbose(10).
+				SetJobs(runtime.NumCPU()).
+				SetPatience(10))
+		scores.Store(name, score)
+	}
+}
+
+func EvaluateAFM(ctrDataset *ctr.Dataset, train, test dataset.CFSplit, scores *sync.Map) {
+	ctrTrain, ctrTest := SplitCTRDataset(ctrDataset, train, test)
 	ml := ctr.NewAFM(nil)
-	ml.Fit(context.Background(), train, test,
+	ml.Fit(context.Background(), ctrTrain, ctrTest,
 		ctr.NewFitConfig().
 			SetVerbose(10).
 			SetJobs(runtime.NumCPU()).
 			SetPatience(10))
 
-	userTrain := make(map[int32]int, train.CountUsers())
-	for i := 0; i < train.Count(); i++ {
-		indices, _, _, target := train.Get(i)
-		userId := indices[0]
-		if target > 0 {
-			userTrain[userId]++
+	buildCTRInput := func(user, item int32) ([]int32, []float32, [][]float32) {
+		var (
+			indices   []int32
+			values    []float32
+			embedding [][]float32
+			position  int32
+		)
+		if ctrDataset.CountUsers() > 0 {
+			indices = append(indices, user)
+			values = append(values, 1)
+			position += int32(ctrDataset.CountUsers())
 		}
+		if ctrDataset.CountItems() > 0 {
+			indices = append(indices, position+item)
+			values = append(values, 1)
+			position += int32(ctrDataset.CountItems())
+			if len(ctrDataset.ItemEmbeddings) > 0 && int(item) < len(ctrDataset.ItemEmbeddings) {
+				embedding = ctrDataset.ItemEmbeddings[item]
+			}
+		}
+		if ctrDataset.CountUsers() > 0 {
+			if int(user) < len(ctrDataset.UserLabels) {
+				for _, feature := range ctrDataset.UserLabels[user] {
+					indices = append(indices, position+feature.A)
+					values = append(values, feature.B)
+				}
+			}
+			position += int32(ctrDataset.Index.CountUserLabels())
+		}
+		if ctrDataset.CountItems() > 0 {
+			if int(item) < len(ctrDataset.ItemLabels) {
+				for _, feature := range ctrDataset.ItemLabels[item] {
+					indices = append(indices, position+feature.A)
+					values = append(values, feature.B)
+				}
+			}
+		}
+		return indices, values, embedding
 	}
 
-	var posFeatures, negFeatures []lo.Tuple2[[]int32, []float32]
-	var posEmbeddings, negEmbeddings [][][]float32
-	var posUsers, negUsers []int32
-	for i := 0; i < test.Count(); i++ {
-		indices, values, embeddings, target := test.Get(i)
-		userId := indices[0]
-		if target > 0 {
-			posFeatures = append(posFeatures, lo.Tuple2[[]int32, []float32]{A: indices, B: values})
-			posEmbeddings = append(posEmbeddings, embeddings)
-			posUsers = append(posUsers, userId)
-		} else {
-			negFeatures = append(negFeatures, lo.Tuple2[[]int32, []float32]{A: indices, B: values})
-			negEmbeddings = append(negEmbeddings, embeddings)
-			negUsers = append(negUsers, userId)
-		}
-	}
-	posPrediction := ml.BatchInternalPredict(posFeatures, posEmbeddings, runtime.NumCPU())
-	negPrediction := ml.BatchInternalPredict(negFeatures, negEmbeddings, runtime.NumCPU())
+	negatives := test.SampleUserNegatives(train, 99)
+	userFeedback := test.GetUserFeedback()
 
-	userPosPrediction := make(map[int32][]float32)
-	userNegPrediction := make(map[int32][]float32)
-	for i, p := range posPrediction {
-		userPosPrediction[posUsers[i]] = append(userPosPrediction[posUsers[i]], p)
-	}
-	for i, p := range negPrediction {
-		userNegPrediction[negUsers[i]] = append(userNegPrediction[negUsers[i]], p)
-	}
-	var sumAUC float32
-	var validUsers float32
-	for user, pos := range userPosPrediction {
-		if userTrain[user] > 100 || userTrain[user] == 0 {
+	var sumNDCG float32
+	var ndcgUsers float32
+	for userIdx := 0; userIdx < test.CountUsers(); userIdx++ {
+		positives := userFeedback[userIdx]
+		if len(positives) == 0 {
 			continue
 		}
-		if neg, ok := userNegPrediction[user]; ok {
-			sumAUC += AUC(pos, neg) * float32(len(pos))
-			validUsers += float32(len(pos))
+		targetSet := mapset.NewSet(positives...)
+		candidatesSet := mapset.NewSet(positives...)
+		for _, item := range negatives[userIdx] {
+			candidatesSet.Add(item)
 		}
-	}
-	if validUsers == 0 {
-		return 0
-	}
-	score := sumAUC / validUsers
+		candidates := candidatesSet.ToSlice()
+		if len(candidates) == 0 {
+			continue
+		}
+		features := make([]lo.Tuple2[[]int32, []float32], len(candidates))
+		embeddings := make([][][]float32, len(candidates))
+		for i, item := range candidates {
+			indices, values, embedding := buildCTRInput(int32(userIdx), item)
+			features[i] = lo.Tuple2[[]int32, []float32]{A: indices, B: values}
+			embeddings[i] = embedding
+		}
+		predictions := ml.BatchInternalPredict(features, embeddings, runtime.NumCPU())
 
-	fmt.Println("FM GAUC:", score)
-	return score
+		type scoredItem struct {
+			item  int32
+			score float32
+		}
+		scored := make([]scoredItem, 0, len(candidates))
+		for i, item := range candidates {
+			scored = append(scored, scoredItem{item: item, score: predictions[i]})
+		}
+		sort.Slice(scored, func(i, j int) bool {
+			return scored[i].score > scored[j].score
+		})
+		rankList := make([]int32, 0, len(scored))
+		for _, s := range scored {
+			rankList = append(rankList, s.item)
+		}
+		sumNDCG += cf.NDCG(targetSet, rankList)
+		ndcgUsers++
+	}
+
+	ndcg := float32(0)
+	if ndcgUsers > 0 {
+		ndcg = sumNDCG / ndcgUsers
+	}
+	scores.Store("AFM", cf.Score{NDCG: ndcg})
 }
 
-func AUC(posPrediction, negPrediction []float32) float32 {
-	sort.Sort(sortutil.Float32Slice(posPrediction))
-	sort.Sort(sortutil.Float32Slice(negPrediction))
-	var sum float32
-	var nPos int
-	for pPos := range posPrediction {
-		// find the negative sample with the greatest prediction less than current positive sample
-		for nPos < len(negPrediction) && negPrediction[nPos] < posPrediction[pPos] {
-			nPos++
+func SplitCTRDataset(ctrDataset *ctr.Dataset, train, test dataset.CFSplit) (*ctr.Dataset, *ctr.Dataset) {
+	makeKey := func(user, item int32) uint64 {
+		return (uint64(uint32(user)) << 32) | uint64(uint32(item))
+	}
+	newSubset := func(capacity int) *ctr.Dataset {
+		return &ctr.Dataset{
+			Index:                  ctrDataset.Index,
+			UserLabels:             ctrDataset.UserLabels,
+			ItemLabels:             ctrDataset.ItemLabels,
+			ItemEmbeddings:         ctrDataset.ItemEmbeddings,
+			ItemEmbeddingIndex:     ctrDataset.ItemEmbeddingIndex,
+			ItemEmbeddingDimension: ctrDataset.ItemEmbeddingDimension,
+			Users:                  make([]int32, 0, capacity),
+			Items:                  make([]int32, 0, capacity),
+			Target:                 make([]float32, 0, capacity),
 		}
-		// add the number of negative samples have less prediction than current positive sample
-		sum += float32(nPos)
 	}
-	if len(posPrediction)*len(negPrediction) == 0 {
-		return 0
+	appendSample := func(dataSet *ctr.Dataset, user, item int32, target float32) {
+		dataSet.Users = append(dataSet.Users, user)
+		dataSet.Items = append(dataSet.Items, item)
+		dataSet.Target = append(dataSet.Target, target)
+		if target > 0 {
+			dataSet.PositiveCount++
+		} else {
+			dataSet.NegativeCount++
+		}
 	}
-	return sum / float32(len(posPrediction)*len(negPrediction))
+
+	trainSet := newSubset(ctrDataset.Count())
+	testSet := newSubset(test.CountFeedback() + test.CountUsers()*100)
+
+	testPositive := mapset.NewSet[uint64]()
+	for userIdx, items := range test.GetUserFeedback() {
+		for _, itemIdx := range items {
+			testPositive.Add(makeKey(int32(userIdx), itemIdx))
+		}
+	}
+	negatives := test.SampleUserNegatives(train, 99)
+	testNegative := mapset.NewSet[uint64]()
+	for userIdx, items := range negatives {
+		for _, itemIdx := range items {
+			testNegative.Add(makeKey(int32(userIdx), itemIdx))
+		}
+	}
+	addedNegative := make(map[int32]bool)
+	for i := 0; i < ctrDataset.Count(); i++ {
+		user := ctrDataset.Users[i]
+		item := ctrDataset.Items[i]
+		target := ctrDataset.Target[i]
+		key := makeKey(user, item)
+		if target > 0 && testPositive.Contains(key) {
+			appendSample(testSet, user, item, target)
+		} else if target <= 0 && !addedNegative[user] {
+			appendSample(testSet, user, item, target)
+			addedNegative[user] = true
+		} else if !testPositive.Contains(key) && !testNegative.Contains(key) {
+			appendSample(trainSet, user, item, target)
+		}
+	}
+	return trainSet, testSet
+}
+
+func EvaluateLLM(cfg *config.Config, train, test dataset.CFSplit, scores *sync.Map) {
+	chat, err := logics.NewChatRanker(cfg.OpenAI, cfg.Recommend.Ranker.Prompt)
+	if err != nil {
+		log.Logger().Fatal("failed to create chat ranker", zap.Error(err))
+	}
+
+	var sum atomic.Float32
+	var count atomic.Float32
+	negatives := test.SampleUserNegatives(train, 99)
+	lo.Must0(parallel.Detachable(context.Background(), test.CountUsers(), runtime.NumCPU(), 10, func(pCtx *parallel.Context, userIdx int) {
+		targetSet := mapset.NewSet(test.GetUserFeedback()[userIdx]...)
+		negativeSample := negatives[userIdx]
+		candidates := make([]*data.Item, 0, targetSet.Cardinality()+len(negativeSample))
+		for _, itemIdx := range negativeSample {
+			candidates = append(candidates, &test.GetItems()[itemIdx])
+		}
+		if len(test.GetUserFeedback()[userIdx]) == 0 {
+			return
+		}
+		for _, itemIdx := range test.GetUserFeedback()[userIdx] {
+			candidates = append(candidates, &test.GetItems()[itemIdx])
+		}
+		feedback := make([]*logics.FeedbackItem, 0, len(train.GetUserFeedback()[int32(userIdx)]))
+		for _, itemIdx := range train.GetUserFeedback()[int32(userIdx)] {
+			feedback = append(feedback, &logics.FeedbackItem{
+				Item: train.GetItems()[itemIdx],
+			})
+		}
+		pCtx.Detach()
+		start := time.Now()
+		result, err := chat.Rank(context.Background(), &data.User{}, feedback, candidates)
+		if err != nil {
+			if apiError, ok := err.(*openai.APIError); ok && apiError.HTTPStatusCode == 421 {
+				return
+			}
+			log.Logger().Fatal("failed to rank items for user", zap.Int("user", userIdx), zap.Error(err))
+		}
+		duration := time.Since(start)
+		pCtx.Attach()
+		var score float32
+		if len(result) > 0 {
+			score = cf.NDCG(targetSet, lo.Map(result, func(itemId string, _ int) int32 {
+				return train.GetItemDict().Id(itemId)
+			}))
+		} else {
+			score = 0
+		}
+		sum.Add(score)
+		count.Add(1)
+		log.Logger().Info("LLM ranking result",
+			zap.Int("user", userIdx),
+			zap.Int("feedback", len(feedback)),
+			zap.Int("candidates", len(candidates)),
+			zap.Int("results", len(result)),
+			zap.Float32("user_NDCG", score),
+			zap.Float32("avg_NDCG", sum.Load()/count.Load()),
+			zap.Duration("duration", duration),
+		)
+	}))
+
+	score := sum.Load() / count.Load()
+	scores.Store(cfg.OpenAI.ChatCompletionModel, cf.Score{NDCG: score})
 }
 
 func init() {
 	rootCmd.PersistentFlags().StringP("config", "c", "", "Path to configuration file")
 	rootCmd.AddCommand(llmCmd)
+	llmCmd.PersistentFlags().IntP("shots", "s", math.MaxInt, "Number of shots for each user")
 }
 
 func main() {
 	if err := rootCmd.Execute(); err != nil {
-		log.Fatal(err)
+		log.Logger().Fatal("failed to execute command", zap.Error(err))
 	}
 }

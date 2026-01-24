@@ -163,7 +163,7 @@ func TestParallelCancel(t *testing.T) {
 				cancel()
 			}
 			count.Add(1)
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(time.Second)
 			return nil
 		})
 

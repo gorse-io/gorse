@@ -16,6 +16,7 @@ package dataset
 
 import (
 	"fmt"
+	"math"
 	"strconv"
 	"testing"
 	"time"
@@ -159,7 +160,7 @@ func TestDataset_AddFeedback(t *testing.T) {
 	}
 	for i := 0; i < 10; i++ {
 		for j := i; j < 10; j++ {
-			dataSet.AddFeedback(strconv.Itoa(i), strconv.Itoa(j))
+			dataSet.AddFeedback(strconv.Itoa(i), strconv.Itoa(j), time.Unix(int64(i*10+j), 0))
 		}
 	}
 	userIDF := dataSet.GetUserIDF()
@@ -167,6 +168,7 @@ func TestDataset_AddFeedback(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		assert.Len(t, dataSet.GetUserFeedback()[i], 10-i)
 		assert.Len(t, dataSet.GetItemFeedback()[i], i+1)
+		assert.Len(t, dataSet.timestamps[i], 10-i)
 		assert.InDelta(t, math32.Log(float32(10)/float32(10-i)), userIDF[i], 1e-2)
 		assert.InDelta(t, math32.Log(float32(10)/float32(i+1)), itemIDF[i], 1e-2)
 	}
@@ -184,7 +186,7 @@ func TestDataset_Split(t *testing.T) {
 	}
 	for i := 0; i < numUsers; i++ {
 		for j := i + 1; j < numItems; j++ {
-			dataset.AddFeedback(fmt.Sprintf("user%v", i), fmt.Sprintf("item%v", j))
+			dataset.AddFeedback(fmt.Sprintf("user%v", i), fmt.Sprintf("item%v", j), time.Time{})
 		}
 	}
 	assert.Equal(t, 9, dataset.CountFeedback())
@@ -204,6 +206,37 @@ func TestDataset_Split(t *testing.T) {
 	assert.Equal(t, numUsers, test2.CountUsers())
 	assert.Equal(t, numItems, test2.CountItems())
 	assert.Equal(t, 2, test2.CountFeedback())
+}
+
+func TestDataset_SplitLatest(t *testing.T) {
+	const numUsers, numItems = 3, 5
+	// create dataset
+	dataset := NewDataset(time.Now(), numUsers, numItems)
+	for i := 0; i < numUsers; i++ {
+		dataset.AddUser(data.User{UserId: fmt.Sprintf("user%v", i)})
+	}
+	for i := 0; i < numItems; i++ {
+		dataset.AddItem(data.Item{ItemId: fmt.Sprintf("item%v", i)})
+	}
+	for i := 0; i < numUsers; i++ {
+		for j := i + 1; j < numItems; j++ {
+			dataset.AddFeedback(fmt.Sprintf("user%v", i), fmt.Sprintf("item%v", j), time.Unix(int64(j), 0))
+		}
+	}
+	assert.Equal(t, 9, dataset.CountFeedback())
+	// split
+	train, test := dataset.SplitLatest(math.MaxInt)
+	assert.Equal(t, numUsers, train.CountUsers())
+	assert.Equal(t, numItems, train.CountItems())
+	assert.Equal(t, numUsers, test.CountUsers())
+	assert.Equal(t, numItems, test.CountItems())
+	assert.Equal(t, 6, train.CountFeedback())
+	assert.Equal(t, 3, test.CountFeedback())
+	for i := 0; i < numUsers; i++ {
+		assert.Len(t, train.GetUserFeedback()[i], numItems-i-2)
+		assert.Len(t, test.GetUserFeedback()[i], 1)
+		assert.Equal(t, 4, int(test.GetUserFeedback()[i][0]))
+	}
 }
 
 func TestDataset_LoadMovieLens1M(t *testing.T) {

@@ -82,6 +82,9 @@ func (r *ChatRanker) Rank(ctx context.Context, user *data.User, feedback []*Feed
 				Role:    openai.ChatMessageRoleUser,
 				Content: buf.String(),
 			}},
+			ChatTemplateKwargs: map[string]any{
+				"enable_thinking": false,
+			},
 		})
 		if err == nil {
 			return resp, nil

@@ -18,6 +18,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -42,6 +43,8 @@ type CFSplit interface {
 	CountItems() int
 	// CountFeedback returns the number of (positive) feedback.
 	CountFeedback() int
+	// GetItems returns the items.
+	GetItems() []data.Item
 	// GetUserDict returns the frequency dictionary of users.
 	GetUserDict() *FreqDict
 	// GetItemDict returns the frequency dictionary of items.
@@ -79,6 +82,7 @@ type Dataset struct {
 	itemLabels   *Labels
 	userFeedback [][]int32
 	itemFeedback [][]int32
+	timestamps   [][]time.Time
 	negatives    [][]int32
 	userDict     *FreqDict
 	itemDict     *FreqDict
@@ -95,6 +99,7 @@ func NewDataset(timestamp time.Time, userCount, itemCount int) *Dataset {
 		itemLabels:   NewLabels(),
 		userFeedback: make([][]int32, userCount),
 		itemFeedback: make([][]int32, itemCount),
+		timestamps:   make([][]time.Time, userCount),
 		userDict:     NewFreqDict(),
 		itemDict:     NewFreqDict(),
 		categories:   make(map[string]int),
@@ -203,6 +208,9 @@ func (d *Dataset) AddUser(user data.User) {
 	if len(d.userFeedback) < len(d.users) {
 		d.userFeedback = append(d.userFeedback, nil)
 	}
+	if len(d.timestamps) < len(d.users) {
+		d.timestamps = append(d.timestamps, nil)
+	}
 }
 
 func (d *Dataset) AddItem(item data.Item) {
@@ -223,11 +231,12 @@ func (d *Dataset) AddItem(item data.Item) {
 	}
 }
 
-func (d *Dataset) AddFeedback(userId, itemId string) {
+func (d *Dataset) AddFeedback(userId, itemId string, timestamp time.Time) {
 	userIndex := d.userDict.Add(userId)
 	itemIndex := d.itemDict.Add(itemId)
 	d.userFeedback[userIndex] = append(d.userFeedback[userIndex], itemIndex)
 	d.itemFeedback[itemIndex] = append(d.itemFeedback[itemIndex], userIndex)
+	d.timestamps[userIndex] = append(d.timestamps[userIndex], timestamp)
 	d.numFeedback++
 }
 
@@ -253,6 +262,7 @@ func (d *Dataset) SplitCF(numTestUsers int, seed int64) (CFSplit, CFSplit) {
 	trainSet.items, testSet.items = d.items, d.items
 	trainSet.userFeedback, testSet.userFeedback = make([][]int32, d.CountUsers()), make([][]int32, d.CountUsers())
 	trainSet.itemFeedback, testSet.itemFeedback = make([][]int32, d.CountItems()), make([][]int32, d.CountItems())
+	trainSet.timestamps, testSet.timestamps = make([][]time.Time, d.CountUsers()), make([][]time.Time, d.CountUsers())
 	trainSet.userDict, testSet.userDict = d.userDict, d.userDict
 	trainSet.itemDict, testSet.itemDict = d.itemDict, d.itemDict
 	rng := util.NewRandomGenerator(seed)
@@ -262,11 +272,13 @@ func (d *Dataset) SplitCF(numTestUsers int, seed int64) (CFSplit, CFSplit) {
 				k := rng.Intn(len(d.userFeedback[userIndex]))
 				testSet.userFeedback[userIndex] = append(testSet.userFeedback[userIndex], d.userFeedback[userIndex][k])
 				testSet.itemFeedback[d.userFeedback[userIndex][k]] = append(testSet.itemFeedback[d.userFeedback[userIndex][k]], userIndex)
+				testSet.timestamps[userIndex] = append(testSet.timestamps[userIndex], d.timestamps[userIndex][k])
 				testSet.numFeedback++
 				for i, itemIndex := range d.userFeedback[userIndex] {
 					if i != k {
 						trainSet.userFeedback[userIndex] = append(trainSet.userFeedback[userIndex], itemIndex)
 						trainSet.itemFeedback[itemIndex] = append(trainSet.itemFeedback[itemIndex], userIndex)
+						trainSet.timestamps[userIndex] = append(trainSet.timestamps[userIndex], d.timestamps[userIndex][i])
 						trainSet.numFeedback++
 					}
 				}
@@ -279,11 +291,13 @@ func (d *Dataset) SplitCF(numTestUsers int, seed int64) (CFSplit, CFSplit) {
 				k := rng.Intn(len(d.userFeedback[userIndex]))
 				testSet.userFeedback[userIndex] = append(testSet.userFeedback[userIndex], d.userFeedback[userIndex][k])
 				testSet.itemFeedback[d.userFeedback[userIndex][k]] = append(testSet.itemFeedback[d.userFeedback[userIndex][k]], userIndex)
+				testSet.timestamps[userIndex] = append(testSet.timestamps[userIndex], d.timestamps[userIndex][k])
 				testSet.numFeedback++
 				for i, itemIndex := range d.userFeedback[userIndex] {
 					if i != k {
 						trainSet.userFeedback[userIndex] = append(trainSet.userFeedback[userIndex], itemIndex)
 						trainSet.itemFeedback[itemIndex] = append(trainSet.itemFeedback[itemIndex], userIndex)
+						trainSet.timestamps[userIndex] = append(trainSet.timestamps[userIndex], d.timestamps[userIndex][i])
 						trainSet.numFeedback++
 					}
 				}
@@ -292,12 +306,46 @@ func (d *Dataset) SplitCF(numTestUsers int, seed int64) (CFSplit, CFSplit) {
 		testUserSet := mapset.NewSet(testUsers...)
 		for userIndex := int32(0); userIndex < int32(d.CountUsers()); userIndex++ {
 			if !testUserSet.Contains(userIndex) {
-				for _, itemIndex := range d.userFeedback[userIndex] {
+				for idx, itemIndex := range d.userFeedback[userIndex] {
 					trainSet.userFeedback[userIndex] = append(trainSet.userFeedback[userIndex], itemIndex)
 					trainSet.itemFeedback[itemIndex] = append(trainSet.itemFeedback[itemIndex], userIndex)
+					trainSet.timestamps[userIndex] = append(trainSet.timestamps[userIndex], d.timestamps[userIndex][idx])
 					trainSet.numFeedback++
 				}
 			}
+		}
+	}
+	return trainSet, testSet
+}
+
+// SplitLatest splits dataset by moving the most recent feedback of all users into the test set to avoid leakage.
+func (d *Dataset) SplitLatest(shots int) (CFSplit, CFSplit) {
+	trainSet, testSet := new(Dataset), new(Dataset)
+	trainSet.users, testSet.users = d.users, d.users
+	trainSet.items, testSet.items = d.items, d.items
+	trainSet.userFeedback, testSet.userFeedback = make([][]int32, d.CountUsers()), make([][]int32, d.CountUsers())
+	trainSet.itemFeedback, testSet.itemFeedback = make([][]int32, d.CountItems()), make([][]int32, d.CountItems())
+	trainSet.timestamps, testSet.timestamps = make([][]time.Time, d.CountUsers()), make([][]time.Time, d.CountUsers())
+	trainSet.userDict, testSet.userDict = d.userDict, d.userDict
+	trainSet.itemDict, testSet.itemDict = d.itemDict, d.itemDict
+	for userIndex := int32(0); userIndex < int32(d.CountUsers()); userIndex++ {
+		if len(d.userFeedback[userIndex]) == 0 {
+			continue
+		}
+		idxs := lo.Range(len(d.userFeedback[userIndex]))
+		sort.Slice(idxs, func(i, j int) bool {
+			return d.timestamps[userIndex][idxs[i]].After(d.timestamps[userIndex][idxs[j]])
+		})
+		testSet.timestamps[userIndex] = append(testSet.timestamps[userIndex], d.timestamps[userIndex][idxs[0]])
+		testSet.itemFeedback[d.userFeedback[userIndex][idxs[0]]] = append(testSet.itemFeedback[d.userFeedback[userIndex][idxs[0]]], userIndex)
+		testSet.userFeedback[userIndex] = append(testSet.userFeedback[userIndex], d.userFeedback[userIndex][idxs[0]])
+		testSet.numFeedback++
+		for i := 1; i < len(d.userFeedback[userIndex]) && i <= shots; i++ {
+			itemIndex := d.userFeedback[userIndex][idxs[i]]
+			trainSet.userFeedback[userIndex] = append(trainSet.userFeedback[userIndex], itemIndex)
+			trainSet.itemFeedback[itemIndex] = append(trainSet.itemFeedback[itemIndex], userIndex)
+			trainSet.timestamps[userIndex] = append(trainSet.timestamps[userIndex], d.timestamps[userIndex][idxs[i]])
+			trainSet.numFeedback++
 		}
 	}
 	return trainSet, testSet
@@ -366,6 +414,7 @@ func LoadDataFromBuiltIn(dataSetName string) (*Dataset, *Dataset, error) {
 	test.userDict, test.itemDict = train.userDict, train.itemDict
 	test.userFeedback = make([][]int32, len(train.userFeedback))
 	test.itemFeedback = make([][]int32, len(train.itemFeedback))
+	test.timestamps = make([][]time.Time, len(train.userFeedback))
 	test.negatives = make([][]int32, len(train.userFeedback))
 	err = loadTest(test, testFilePath)
 	if err != nil {
@@ -404,7 +453,7 @@ func loadTrain(path string) (*Dataset, error) {
 			dataset.AddItem(data.Item{ItemId: util.FormatInt(i)})
 		}
 		// add feedback
-		dataset.AddFeedback(fields[0], fields[1])
+		dataset.AddFeedback(fields[0], fields[1], time.Time{})
 	}
 	return dataset, scanner.Err()
 }
@@ -429,7 +478,7 @@ func loadTest(dataset *Dataset, path string) error {
 		positive = positive[1 : len(positive)-1]
 		fields = strings.Split(positive, ",")
 		// add feedback
-		dataset.AddFeedback(fields[0], fields[1])
+		dataset.AddFeedback(fields[0], fields[1], time.Time{})
 		// add negatives
 		userId, err := strconv.Atoi(fields[0])
 		if err != nil {
