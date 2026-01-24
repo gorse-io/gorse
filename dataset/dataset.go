@@ -289,9 +289,9 @@ func (d *Dataset) SplitCF(numTestUsers int, seed int64) (CFSplit, CFSplit) {
 		for _, userIndex := range testUsers {
 			if len(d.userFeedback[userIndex]) > 0 {
 				k := rng.Intn(len(d.userFeedback[userIndex]))
-				testSet.timestamps[userIndex] = append(testSet.timestamps[userIndex], d.timestamps[userIndex][k])
-				testSet.itemFeedback[d.userFeedback[userIndex][k]] = append(testSet.itemFeedback[d.userFeedback[userIndex][k]], userIndex)
 				testSet.userFeedback[userIndex] = append(testSet.userFeedback[userIndex], d.userFeedback[userIndex][k])
+				testSet.itemFeedback[d.userFeedback[userIndex][k]] = append(testSet.itemFeedback[d.userFeedback[userIndex][k]], userIndex)
+				testSet.timestamps[userIndex] = append(testSet.timestamps[userIndex], d.timestamps[userIndex][k])
 				testSet.numFeedback++
 				for i, itemIndex := range d.userFeedback[userIndex] {
 					if i != k {
@@ -344,7 +344,7 @@ func (d *Dataset) SplitLatest(shots int) (CFSplit, CFSplit) {
 			itemIndex := d.userFeedback[userIndex][idxs[i]]
 			trainSet.userFeedback[userIndex] = append(trainSet.userFeedback[userIndex], itemIndex)
 			trainSet.itemFeedback[itemIndex] = append(trainSet.itemFeedback[itemIndex], userIndex)
-			trainSet.timestamps[userIndex] = append(trainSet.timestamps[userIndex], d.timestamps[userIndex][i])
+			trainSet.timestamps[userIndex] = append(trainSet.timestamps[userIndex], d.timestamps[userIndex][idxs[i]])
 			trainSet.numFeedback++
 		}
 	}
