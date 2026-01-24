@@ -88,15 +88,15 @@ var llmCmd = &cobra.Command{
 
 		table := tablewriter.NewWriter(os.Stdout)
 		table.Header([]string{"", "#users", "#items", "#interactions"})
-		table.Bulk([][]string{
+		lo.Must0(table.Bulk([][]string{
 			{"total", strconv.Itoa(dataset.CountUsers()), strconv.Itoa(dataset.CountItems()), strconv.Itoa(dataset.CountFeedback())},
 			{"train", strconv.Itoa(train.CountUsers()), strconv.Itoa(train.CountItems()), strconv.Itoa(train.CountFeedback())},
 			{"test", strconv.Itoa(test.CountUsers()), strconv.Itoa(test.CountItems()), strconv.Itoa(test.CountFeedback())},
-		})
-		table.Render()
+		}))
+		lo.Must0(table.Render())
 
 		go EvaluateCF(train, test, &scores)
-		go EvaluateAFM(ctrDataset, train, test)
+		go EvaluateAFM(ctrDataset, train, test, &scores)
 		EvaluateLLM(cfg, train, test, &scores)
 		data := [][]string{{"Model", "NDCG"}}
 		scores.Range(func(key, value any) bool {
@@ -106,8 +106,8 @@ var llmCmd = &cobra.Command{
 		})
 		table = tablewriter.NewWriter(os.Stdout)
 		table.Header(data[0])
-		table.Bulk(data[1:])
-		table.Render()
+		lo.Must0(table.Bulk(data[1:]))
+		lo.Must0(table.Render())
 	},
 }
 
@@ -125,10 +125,8 @@ func EvaluateCF(train, test dataset.CFSplit, scores *sync.Map) {
 	}
 }
 
-func EvaluateAFM(ctrDataset *ctr.Dataset, train, test dataset.CFSplit) float32 {
+func EvaluateAFM(ctrDataset *ctr.Dataset, train, test dataset.CFSplit, scores *sync.Map) {
 	ctrTrain, ctrTest := SplitCTRDataset(ctrDataset, train, test)
-	fmt.Println(ctrTrain.PositiveCount, ctrTrain.NegativeCount)
-	fmt.Println(ctrTest.PositiveCount, ctrTest.NegativeCount)
 	ml := ctr.NewAFM(nil)
 	ml.Fit(context.Background(), ctrTrain, ctrTest,
 		ctr.NewFitConfig().
@@ -227,9 +225,7 @@ func EvaluateAFM(ctrDataset *ctr.Dataset, train, test dataset.CFSplit) float32 {
 	if ndcgUsers > 0 {
 		ndcg = sumNDCG / ndcgUsers
 	}
-
-	fmt.Println("AFM NDCG:", ndcg)
-	return ndcg
+	scores.Store("AFM", ndcg)
 }
 
 func SplitCTRDataset(ctrDataset *ctr.Dataset, train, test dataset.CFSplit) (*ctr.Dataset, *ctr.Dataset) {
@@ -303,7 +299,7 @@ func EvaluateLLM(cfg *config.Config, train, test dataset.CFSplit, scores *sync.M
 	var sum atomic.Float32
 	var count atomic.Float32
 	negatives := test.SampleUserNegatives(train, 99)
-	parallel.Detachable(context.Background(), test.CountUsers(), runtime.NumCPU(), 100, func(pCtx *parallel.Context, userIdx int) {
+	lo.Must0(parallel.Detachable(context.Background(), test.CountUsers(), runtime.NumCPU(), 100, func(pCtx *parallel.Context, userIdx int) {
 		targetSet := mapset.NewSet(test.GetUserFeedback()[userIdx]...)
 		negativeSample := negatives[userIdx]
 		candidates := make([]*data.Item, 0, targetSet.Cardinality()+len(negativeSample))
@@ -340,7 +336,7 @@ func EvaluateLLM(cfg *config.Config, train, test dataset.CFSplit, scores *sync.M
 			zap.Int("results", len(result)),
 			zap.Float32("NDCG", score),
 		)
-	})
+	}))
 
 	score := sum.Load() / count.Load()
 	scores.Store(cfg.OpenAI.ChatCompletionModel, cf.Score{NDCG: score})
