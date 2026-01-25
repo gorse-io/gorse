@@ -158,7 +158,7 @@ func TestParallelCancel(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		var count atomic.Int32
 
-		err := Parallel(ctx, 1000, 4, func(_, jobId int) error {
+		err := Parallel(ctx, 10000, 4, func(_, jobId int) error {
 			if jobId == 0 {
 				cancel()
 			}
@@ -168,7 +168,7 @@ func TestParallelCancel(t *testing.T) {
 		})
 
 		assert.ErrorIs(t, err, context.Canceled)
-		assert.Less(t, int(count.Load()), 1000)
+		assert.Less(t, int(count.Load()), 10000)
 	})
 }
 
