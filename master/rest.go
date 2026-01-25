@@ -50,6 +50,8 @@ import (
 	"github.com/gorse-io/gorse/storage/meta"
 	"github.com/invopop/jsonschema"
 	"github.com/juju/errors"
+	"github.com/nikolalohinski/gonja/v2"
+	"github.com/nikolalohinski/gonja/v2/exec"
 	"github.com/rakyll/statik/fs"
 	"github.com/samber/lo"
 	"github.com/sashabaranov/go-openai"
@@ -229,6 +231,13 @@ func (m *Master) CreateWebService() {
 		Param(ws.QueryParameter("user-id", "identifier of the user").DataType("string")).
 		Returns(http.StatusOK, "OK", []string{}).
 		Writes([]string{}))
+	ws.Route(ws.GET("/dashboard/ranker/prompt").To(m.getRankerPrompt).
+		Doc("Get ranker prompt.").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
+		Param(ws.QueryParameter("prompt", "prompt template").DataType("string")).
+		Param(ws.QueryParameter("user-id", "identifier of the user").DataType("string")).
+		Returns(http.StatusOK, "OK", "").
+		Writes(""))
 }
 
 // SinglePageAppFileSystem is the file system for single page app.
@@ -1097,6 +1106,94 @@ func (m *Master) getExternal(request *restful.Request, response *restful.Respons
 
 	m.SetLastModified(request, response, time.Now().String())
 	server.Ok(response, items)
+}
+
+func (m *Master) getRankerPrompt(request *restful.Request, response *restful.Response) {
+	ctx := context.Background()
+	if request != nil && request.Request != nil {
+		ctx = request.Request.Context()
+	}
+	promptBase64 := request.QueryParameter("prompt")
+	if promptBase64 == "" {
+		server.BadRequest(response, fmt.Errorf("prompt is required"))
+		return
+	}
+	userId := request.QueryParameter("user-id")
+	if userId == "" {
+		server.BadRequest(response, fmt.Errorf("user-id is required"))
+		return
+	}
+	promptBytes, err := base64.StdEncoding.DecodeString(promptBase64)
+	if err != nil {
+		server.BadRequest(response, fmt.Errorf("invalid prompt encoding: %w", err))
+		return
+	}
+	template, err := gonja.FromString(string(promptBytes))
+	if err != nil {
+		server.BadRequest(response, err)
+		return
+	}
+
+	user, err := m.DataClient.GetUser(ctx, userId)
+	if err != nil {
+		if errors.Is(err, errors.NotFound) {
+			server.PageNotFound(response, err)
+		} else {
+			server.InternalServerError(response, err)
+		}
+		return
+	}
+	feedbacks, err := m.DataClient.GetUserFeedback(ctx, userId, m.Config.Now(), m.Config.Recommend.DataSource.PositiveFeedbackTypes...)
+	if err != nil {
+		server.InternalServerError(response, err)
+		return
+	}
+	data.SortFeedbacks(feedbacks)
+	if len(feedbacks) > 10 {
+		feedbacks = feedbacks[:10]
+	}
+	itemsById := map[string]data.Item{}
+	if len(feedbacks) > 0 {
+		feedbackItemIds := lo.Map(feedbacks, func(fb data.Feedback, _ int) string {
+			return fb.ItemId
+		})
+		feedbackItems, err := m.DataClient.BatchGetItems(ctx, feedbackItemIds)
+		if err != nil {
+			server.InternalServerError(response, err)
+			return
+		}
+		itemsById = make(map[string]data.Item, len(feedbackItems))
+		for _, item := range feedbackItems {
+			itemsById[item.ItemId] = item
+		}
+	}
+	feedbackItems := make([]*logics.FeedbackItem, 0, len(feedbacks))
+	for _, fb := range feedbacks {
+		if item, exist := itemsById[fb.ItemId]; exist {
+			feedbackItems = append(feedbackItems, &logics.FeedbackItem{
+				FeedbackType: fb.FeedbackType,
+				Item:         item,
+			})
+		}
+	}
+
+	latestItems, err := m.DataClient.GetLatestItems(ctx, 100, nil)
+	if err != nil {
+		server.InternalServerError(response, err)
+		return
+	}
+
+	var buf strings.Builder
+	tplCtx := exec.NewContext(map[string]any{
+		"user":     &user,
+		"feedback": feedbackItems,
+		"items":    latestItems,
+	})
+	if err := template.Execute(&buf, tplCtx); err != nil {
+		server.InternalServerError(response, err)
+		return
+	}
+	server.Text(response, buf.String())
 }
 
 func (m *Master) importExportUsers(response http.ResponseWriter, request *http.Request) {

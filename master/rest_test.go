@@ -874,6 +874,74 @@ func (suite *MasterAPITestSuite) TestGetTimeseries() {
 	suite.Len(got, 3)
 }
 
+func (suite *MasterAPITestSuite) TestGetRankerPrompt() {
+	ctx := context.Background()
+	// insert user
+	user := data.User{UserId: "u1"}
+	err := suite.DataClient.BatchInsertUsers(ctx, []data.User{user})
+	suite.NoError(err)
+
+	// insert items for feedback (hidden items)
+	feedbackItems := make([]data.Item, 12)
+	feedbacks := make([]data.Feedback, 12)
+	for i := 0; i < 12; i++ {
+		itemId := fmt.Sprintf("fb-%02d", i)
+		feedbackItems[i] = data.Item{
+			ItemId:    itemId,
+			IsHidden:  true,
+			Timestamp: time.Date(2020, 1, 1, 0, 0, i, 0, time.UTC),
+		}
+		feedbacks[i] = data.Feedback{
+			FeedbackKey: data.FeedbackKey{
+				FeedbackType: "click",
+				UserId:       user.UserId,
+				ItemId:       itemId,
+			},
+			Timestamp: time.Date(2021, 1, 1, 0, 0, i, 0, time.UTC),
+		}
+	}
+	err = suite.DataClient.BatchInsertItems(ctx, feedbackItems)
+	suite.NoError(err)
+	err = suite.DataClient.BatchInsertFeedback(ctx, feedbacks, true, true, true)
+	suite.NoError(err)
+
+	// insert latest items (visible)
+	latestItems := []data.Item{
+		{ItemId: "lt-1", IsHidden: false, Timestamp: time.Date(2024, 1, 1, 0, 0, 1, 0, time.UTC)},
+		{ItemId: "lt-2", IsHidden: false, Timestamp: time.Date(2024, 1, 1, 0, 0, 2, 0, time.UTC)},
+		{ItemId: "lt-3", IsHidden: false, Timestamp: time.Date(2024, 1, 1, 0, 0, 3, 0, time.UTC)},
+	}
+	err = suite.DataClient.BatchInsertItems(ctx, latestItems)
+	suite.NoError(err)
+
+	// render template
+	template := "user={{ user.UserId }}\n" +
+		"feedback={% for f in feedback %}{{ f.Item.ItemId }}{% if not loop.last %}, {% endif %}{% endfor %}\n" +
+		"items={% for i in items %}{{ i.ItemId }}{% if not loop.last %}, {% endif %}{% endfor %}"
+	promptBase64 := base64.StdEncoding.EncodeToString([]byte(template))
+	// latest 10 feedback items: fb-11 to fb-02
+	feedbackList := []string{}
+	for i := 11; i >= 2; i-- {
+		feedbackList = append(feedbackList, fmt.Sprintf("fb-%02d", i))
+	}
+	expected := fmt.Sprintf(
+		"user=%s\nfeedback=%s\nitems=lt-3, lt-2, lt-1",
+		user.UserId,
+		strings.Join(feedbackList, ", "),
+	)
+
+	apitest.New().
+		Handler(suite.handler).
+		Get("/api/dashboard/ranker/prompt").
+		Header("Cookie", suite.cookie).
+		Query("prompt", promptBase64).
+		Query("user-id", user.UserId).
+		Expect(suite.T()).
+		Status(http.StatusOK).
+		Body(expected).
+		End()
+}
+
 func (suite *MasterAPITestSuite) TestDumpAndRestore() {
 	ctx := context.Background()
 	// insert users
