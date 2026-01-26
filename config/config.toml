@@ -302,11 +302,11 @@ recommenders = ["item-to-item/neighbors", "latest"]
 # Enable tracing for REST APIs. The default value is false.
 enable_tracing = false
 
-# The type of tracing exporters should be one of "jaeger", "zipkin", "otlp" and "otlphttp". The default value is "jaeger".
-exporter = "jaeger"
+# The type of tracing exporters should be one of "zipkin", "otlp" and "otlphttp". The default value is "otlp".
+exporter = "otlp"
 
 # The endpoint of tracing collector.
-collector_endpoint = "http://localhost:14268/api/traces"
+collector_endpoint = "http://localhost:4317"
 
 # The type of tracing sampler should be one of "always", "never" and "ratio". The default value is "always".
 sampler = "always"

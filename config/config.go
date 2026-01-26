@@ -21,6 +21,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"time"
@@ -39,7 +40,6 @@ import (
 	"github.com/juju/errors"
 	"github.com/samber/lo"
 	"github.com/spf13/viper"
-	"go.opentelemetry.io/otel/exporters/jaeger"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
@@ -368,7 +368,7 @@ type FallbackConfig struct {
 
 type TracingConfig struct {
 	EnableTracing     bool    `mapstructure:"enable_tracing"`
-	Exporter          string  `mapstructure:"exporter" validate:"oneof=jaeger zipkin otlp otlphttp"`
+	Exporter          string  `mapstructure:"exporter" validate:"oneof=zipkin otlp otlphttp"`
 	CollectorEndpoint string  `mapstructure:"collector_endpoint"`
 	Sampler           string  `mapstructure:"sampler"`
 	Ratio             float64 `mapstructure:"ratio"`
@@ -420,6 +420,8 @@ func (g *GCSConfig) ToJSON() string {
 func GetDefaultConfig() *Config {
 	return &Config{
 		Database: DatabaseConfig{
+			DataStore:  "sqlite://" + filepath.Join(MkDir("var", "lib"), "data.sqlite"),
+			CacheStore: "sqlite://" + filepath.Join(MkDir("var", "lib"), "cache.sqlite"),
 			MySQL: MySQLConfig{
 				IsolationLevel:  "READ-UNCOMMITTED",
 				MaxOpenConns:    0,
@@ -471,13 +473,14 @@ func GetDefaultConfig() *Config {
 				FitEpoch:       100,
 				OptimizePeriod: 0,
 				OptimizeTrials: 10,
+				Recommenders:   []string{"latest"},
 			},
 			Fallback: FallbackConfig{
 				Recommenders: []string{"latest"},
 			},
 		},
 		Tracing: TracingConfig{
-			Exporter: "jaeger",
+			Exporter: "otlp",
 			Sampler:  "always",
 		},
 	}
@@ -498,11 +501,6 @@ func (config *TracingConfig) NewTracerProvider() (trace.TracerProvider, error) {
 	var exporter tracesdk.SpanExporter
 	var err error
 	switch config.Exporter {
-	case "jaeger":
-		exporter, err = jaeger.New(jaeger.WithCollectorEndpoint(jaeger.WithEndpoint(config.CollectorEndpoint)))
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
 	case "zipkin":
 		exporter, err = zipkin.New(config.CollectorEndpoint)
 		if err != nil {
@@ -559,6 +557,9 @@ func (config *TracingConfig) Equal(other TracingConfig) bool {
 
 func setDefault() {
 	defaultConfig := GetDefaultConfig()
+	// [database]
+	viper.SetDefault("database.data_store", defaultConfig.Database.DataStore)
+	viper.SetDefault("database.cache_store", defaultConfig.Database.CacheStore)
 	// [database.mysql]
 	viper.SetDefault("database.mysql.isolation_level", defaultConfig.Database.MySQL.IsolationLevel)
 	viper.SetDefault("database.mysql.max_open_conns", defaultConfig.Database.MySQL.MaxOpenConns)
@@ -604,6 +605,7 @@ func setDefault() {
 	viper.SetDefault("recommend.ranker.fit_epoch", defaultConfig.Recommend.Ranker.FitEpoch)
 	viper.SetDefault("recommend.ranker.optimize_period", defaultConfig.Recommend.Ranker.OptimizePeriod)
 	viper.SetDefault("recommend.ranker.optimize_trials", defaultConfig.Recommend.Ranker.OptimizeTrials)
+	viper.SetDefault("recommend.ranker.recommenders", defaultConfig.Recommend.Ranker.Recommenders)
 	// [recommend.fallback]
 	viper.SetDefault("recommend.fallback", defaultConfig.Recommend.Fallback)
 	// [tracing]
@@ -656,15 +658,20 @@ func LoadConfig(path string) (*Config, error) {
 		}
 	}
 
-	// check if file exist
-	if _, err := os.Stat(path); err != nil {
-		return nil, errors.Trace(err)
-	}
+	// load config file if provided
+	if path != "" {
+		// check if file exist
+		if _, err := os.Stat(path); err != nil {
+			return nil, errors.Trace(err)
+		}
 
-	// load config file
-	viper.SetConfigFile(path)
-	if err := viper.ReadInConfig(); err != nil {
-		return nil, errors.Trace(err)
+		// load config file
+		viper.SetConfigFile(path)
+		if err := viper.ReadInConfig(); err != nil {
+			return nil, errors.Trace(err)
+		}
+	} else {
+		log.Logger().Info("no config file provided, use defaults and environment variables")
 	}
 
 	// unmarshal config file
@@ -806,4 +813,12 @@ func (config *Config) Validate() error {
 		return errors.New("ranker.recommenders must contain at most one recommender when ranker.type is none")
 	}
 	return nil
+}
+
+// MkDir creates a directory under Gorse home directory.
+func MkDir(elem ...string) string {
+	path := filepath.Join(elem...)
+	path = filepath.Join(lo.Must(os.UserHomeDir()), ".gorse", path)
+	lo.Must0(os.MkdirAll(path, 0755))
+	return path
 }

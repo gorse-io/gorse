@@ -140,8 +140,8 @@ func TestUnmarshal(t *testing.T) {
 			assert.Equal(t, []string{"item-to-item/neighbors", "latest"}, config.Recommend.Fallback.Recommenders)
 			// [tracing]
 			assert.False(t, config.Tracing.EnableTracing)
-			assert.Equal(t, "jaeger", config.Tracing.Exporter)
-			assert.Equal(t, "http://localhost:14268/api/traces", config.Tracing.CollectorEndpoint)
+			assert.Equal(t, "otlp", config.Tracing.Exporter)
+			assert.Equal(t, "http://localhost:4317", config.Tracing.CollectorEndpoint)
 			assert.Equal(t, "always", config.Tracing.Sampler)
 			assert.Equal(t, 1.0, config.Tracing.Ratio)
 			// [oauth2]
