@@ -1990,6 +1990,9 @@ func (m *Master) chat(response http.ResponseWriter, request *http.Request) {
 			writeError(response, http.StatusInternalServerError, err.Error())
 			return
 		}
+		if len(resp.Choices) == 0 {
+			continue
+		}
 		if _, err = response.Write([]byte(resp.Choices[0].Delta.Content)); err != nil {
 			log.Logger().Error("failed to write response", zap.Error(err))
 			return
