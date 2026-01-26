@@ -650,6 +650,14 @@ func LoadConfig(path string) (*Config, error) {
 		{"oidc.client_id", "GORSE_OIDC_CLIENT_ID"},
 		{"oidc.client_secret", "GORSE_OIDC_CLIENT_SECRET"},
 		{"oidc.redirect_url", "GORSE_OIDC_REDIRECT_URL"},
+		{"s3.endpoint", "S3_ENDPOINT"},
+		{"s3.access_key_id", "S3_ACCESS_KEY_ID"},
+		{"s3.secret_access_key", "S3_SECRET_ACCESS_KEY"},
+		{"s3.bucket", "S3_BUCKET"},
+		{"s3.prefix", "S3_PREFIX"},
+		{"gcs.credentials_file", "GCS_CREDENTIALS_FILE"},
+		{"gcs.bucket", "GCS_BUCKET"},
+		{"gcs.prefix", "GCS_PREFIX"},
 	}
 	for _, binding := range bindings {
 		err := viper.BindEnv(binding.key, binding.env)
