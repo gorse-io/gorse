@@ -35,10 +35,7 @@ func TestGCS(t *testing.T) {
 	t.Setenv("GCS_EMULATOR_ENDPOINT", "http://localhost:5050/storage/v1/")
 
 	// create client
-	client, err := NewGCS(config.GCSConfig{
-		Bucket: "gorse-test",
-		Prefix: "blob",
-	})
+	client, err := NewGCS(config.GCSConfig{}, "gorse-test", "blob")
 	assert.NoError(t, err)
 
 	// create bucket if not exists

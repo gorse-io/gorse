@@ -125,7 +125,9 @@ func SetLogger(flagSet *pflag.FlagSet, debug bool) {
 const mysqlPrefix = "mysql://"
 
 func RedactDBURL(rawURL string) string {
-	if strings.HasPrefix(rawURL, mysqlPrefix) {
+	if strings.HasPrefix(rawURL, "sqlite://") {
+		return rawURL
+	} else if strings.HasPrefix(rawURL, mysqlPrefix) {
 		parsed, err := mysql.ParseDSN(rawURL[len(mysqlPrefix):])
 		if err != nil {
 			return rawURL

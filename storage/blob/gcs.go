@@ -32,7 +32,7 @@ type GCS struct {
 	prefix string
 }
 
-func NewGCS(cfg config.GCSConfig) (*GCS, error) {
+func NewGCS(cfg config.GCSConfig, bucket string, prefix string) (*GCS, error) {
 	var opts []option.ClientOption
 	if os.Getenv("GCS_EMULATOR_ENDPOINT") != "" {
 		opts = append(opts, option.WithEndpoint(os.Getenv("GCS_EMULATOR_ENDPOINT")))
@@ -47,8 +47,8 @@ func NewGCS(cfg config.GCSConfig) (*GCS, error) {
 	}
 	return &GCS{
 		client: client,
-		bucket: cfg.Bucket,
-		prefix: cfg.Prefix,
+		bucket: bucket,
+		prefix: prefix,
 	}, nil
 }
 

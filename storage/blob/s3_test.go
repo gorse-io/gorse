@@ -41,9 +41,7 @@ func TestS3(t *testing.T) {
 		Endpoint:        endpoint,
 		AccessKeyID:     accessKeyID,
 		SecretAccessKey: secretAccessKey,
-		Bucket:          "gorse-test",
-		Prefix:          "blob",
-	})
+	}, "gorse-test", "blob")
 	assert.NoError(t, err)
 
 	// create bucket if not exists

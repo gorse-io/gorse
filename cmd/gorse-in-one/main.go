@@ -116,7 +116,7 @@ func init() {
 	oneCommand.PersistentFlags().BoolP("version", "v", false, "gorse version")
 	oneCommand.PersistentFlags().Bool("playground", false, "playground mode (setup a recommender system for GitHub repositories)")
 	oneCommand.PersistentFlags().StringP("config", "c", "", "configuration file path")
-	oneCommand.PersistentFlags().String("cache-path", "one_cache.data", "path of cache file")
+	oneCommand.PersistentFlags().String("cache-path", config.MkDir("var", "lib", "master"), "path of cache folder")
 }
 
 func main() {
@@ -127,22 +127,13 @@ func main() {
 
 func setup(m *master.Master) {
 	// set database to user home directory
-	userHomeDir, err := os.UserHomeDir()
-	if err != nil {
-		log.Logger().Fatal("failed to get user home directory", zap.Error(err))
-	}
-	libDir := filepath.Join(userHomeDir, ".gorse", "lib")
-	if err = os.MkdirAll(libDir, os.ModePerm); err != nil {
-		log.Logger().Fatal("failed to create lib directory", zap.Error(err))
-	}
-	m.Config.Database.DataStore = "sqlite://" + filepath.Join(libDir, "data.db")
 	fmt.Println("Using database:", m.Config.Database.DataStore)
-	m.Config.Database.CacheStore = "sqlite://" + filepath.Join(libDir, "cache.db")
 	fmt.Println("Using cache:", m.Config.Database.CacheStore)
 	m.Config.Master.NumJobs = runtime.NumCPU()
 	fmt.Printf("Using %d CPU cores: %s\n", m.Config.Master.NumJobs, cpuid.CPU.BrandName)
 
 	// connect database
+	var err error
 	dataOpts := m.Config.Database.StorageOptions(m.Config.Database.DataStore)
 	m.DataClient, err = data.Open(m.Config.Database.DataStore, m.Config.Database.DataTablePrefix, dataOpts...)
 	if err != nil {

@@ -1289,21 +1289,23 @@ func (m *Master) updateRecommend(ctx context.Context) error {
 	}
 
 	// load matrix factorization model
-	r, err := m.blobStore.Open(strconv.FormatInt(m.collaborativeFilteringMeta.ID, 10))
-	if err != nil {
-		log.Logger().Error("failed to load collaborative filtering model from blob store",
-			zap.Int64("id", m.collaborativeFilteringMeta.ID), zap.Error(err))
-		return errors.Trace(err)
-	}
-	if err = pipeline.MatrixFactorizationItems.Unmarshal(r); err != nil {
-		log.Logger().Error("failed to unmarshal matrix factorization items", zap.Error(err))
-	} else if err = pipeline.MatrixFactorizationUsers.Unmarshal(r); err != nil {
-		log.Logger().Error("failed to unmarshal matrix factorization users", zap.Error(err))
+	if m.collaborativeFilteringMeta.ID > 0 {
+		r, err := m.blobStore.Open(strconv.FormatInt(m.collaborativeFilteringMeta.ID, 10))
+		if err != nil {
+			log.Logger().Error("failed to load collaborative filtering model from blob store",
+				zap.Int64("id", m.collaborativeFilteringMeta.ID), zap.Error(err))
+			return errors.Trace(err)
+		}
+		if err = pipeline.MatrixFactorizationItems.Unmarshal(r); err != nil {
+			log.Logger().Error("failed to unmarshal matrix factorization items", zap.Error(err))
+		} else if err = pipeline.MatrixFactorizationUsers.Unmarshal(r); err != nil {
+			log.Logger().Error("failed to unmarshal matrix factorization users", zap.Error(err))
+		}
 	}
 
 	// load click-through rate model when FM ranker is enabled
-	if strings.EqualFold(m.Config.Recommend.Ranker.Type, "fm") {
-		r, err = m.blobStore.Open(strconv.FormatInt(m.clickThroughRateMeta.ID, 10))
+	if strings.EqualFold(m.Config.Recommend.Ranker.Type, "fm") && m.clickThroughRateMeta.ID > 0 {
+		r, err := m.blobStore.Open(strconv.FormatInt(m.clickThroughRateMeta.ID, 10))
 		if err != nil {
 			log.Logger().Error("failed to open click-through rate model", zap.Error(err))
 			return errors.Trace(err)

@@ -21,6 +21,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"time"
@@ -39,7 +40,6 @@ import (
 	"github.com/juju/errors"
 	"github.com/samber/lo"
 	"github.com/spf13/viper"
-	"go.opentelemetry.io/otel/exporters/jaeger"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
@@ -67,8 +67,7 @@ type Config struct {
 	Tracing   TracingConfig   `mapstructure:"tracing"`
 	OIDC      OIDCConfig      `mapstructure:"oidc"`
 	OpenAI    OpenAIConfig    `mapstructure:"openai"`
-	S3        S3Config        `mapstructure:"s3"`
-	GCS       GCSConfig       `mapstructure:"gcs"`
+	Blob      BlobConfig      `mapstructure:"blob"`
 }
 
 // DatabaseConfig is the configuration for the database.
@@ -368,7 +367,7 @@ type FallbackConfig struct {
 
 type TracingConfig struct {
 	EnableTracing     bool    `mapstructure:"enable_tracing"`
-	Exporter          string  `mapstructure:"exporter" validate:"oneof=jaeger zipkin otlp otlphttp"`
+	Exporter          string  `mapstructure:"exporter" validate:"oneof=zipkin otlp otlphttp"`
 	CollectorEndpoint string  `mapstructure:"collector_endpoint"`
 	Sampler           string  `mapstructure:"sampler"`
 	Ratio             float64 `mapstructure:"ratio"`
@@ -395,12 +394,16 @@ type OpenAIConfig struct {
 	LogFile             string `mapstructure:"log_file"`
 }
 
+type BlobConfig struct {
+	URI string    `mapstructure:"uri"`
+	S3  S3Config  `mapstructure:"s3"`
+	GCS GCSConfig `mapstructure:"gcs"`
+}
+
 type S3Config struct {
 	Endpoint        string `mapstructure:"endpoint"`
 	AccessKeyID     string `mapstructure:"access_key_id"`
 	SecretAccessKey string `mapstructure:"secret_access_key"`
-	Bucket          string `mapstructure:"bucket"`
-	Prefix          string `mapstructure:"prefix"`
 }
 
 func (s *S3Config) ToJSON() string {
@@ -409,8 +412,6 @@ func (s *S3Config) ToJSON() string {
 
 type GCSConfig struct {
 	CredentialsFile string `mapstructure:"credentials_file"`
-	Bucket          string `mapstructure:"bucket"`
-	Prefix          string `mapstructure:"prefix"`
 }
 
 func (g *GCSConfig) ToJSON() string {
@@ -420,6 +421,8 @@ func (g *GCSConfig) ToJSON() string {
 func GetDefaultConfig() *Config {
 	return &Config{
 		Database: DatabaseConfig{
+			DataStore:  "sqlite://" + filepath.Join(MkDir("var", "lib"), "data.sqlite"),
+			CacheStore: "sqlite://" + filepath.Join(MkDir("var", "lib"), "cache.sqlite"),
 			MySQL: MySQLConfig{
 				IsolationLevel:  "READ-UNCOMMITTED",
 				MaxOpenConns:    0,
@@ -471,14 +474,18 @@ func GetDefaultConfig() *Config {
 				FitEpoch:       100,
 				OptimizePeriod: 0,
 				OptimizeTrials: 10,
+				Recommenders:   []string{"latest"},
 			},
 			Fallback: FallbackConfig{
 				Recommenders: []string{"latest"},
 			},
 		},
 		Tracing: TracingConfig{
-			Exporter: "jaeger",
+			Exporter: "otlp",
 			Sampler:  "always",
+		},
+		Blob: BlobConfig{
+			URI: MkDir("var", "lib", "blob"),
 		},
 	}
 }
@@ -498,11 +505,6 @@ func (config *TracingConfig) NewTracerProvider() (trace.TracerProvider, error) {
 	var exporter tracesdk.SpanExporter
 	var err error
 	switch config.Exporter {
-	case "jaeger":
-		exporter, err = jaeger.New(jaeger.WithCollectorEndpoint(jaeger.WithEndpoint(config.CollectorEndpoint)))
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
 	case "zipkin":
 		exporter, err = zipkin.New(config.CollectorEndpoint)
 		if err != nil {
@@ -559,6 +561,9 @@ func (config *TracingConfig) Equal(other TracingConfig) bool {
 
 func setDefault() {
 	defaultConfig := GetDefaultConfig()
+	// [database]
+	viper.SetDefault("database.data_store", defaultConfig.Database.DataStore)
+	viper.SetDefault("database.cache_store", defaultConfig.Database.CacheStore)
 	// [database.mysql]
 	viper.SetDefault("database.mysql.isolation_level", defaultConfig.Database.MySQL.IsolationLevel)
 	viper.SetDefault("database.mysql.max_open_conns", defaultConfig.Database.MySQL.MaxOpenConns)
@@ -604,16 +609,52 @@ func setDefault() {
 	viper.SetDefault("recommend.ranker.fit_epoch", defaultConfig.Recommend.Ranker.FitEpoch)
 	viper.SetDefault("recommend.ranker.optimize_period", defaultConfig.Recommend.Ranker.OptimizePeriod)
 	viper.SetDefault("recommend.ranker.optimize_trials", defaultConfig.Recommend.Ranker.OptimizeTrials)
+	viper.SetDefault("recommend.ranker.recommenders", defaultConfig.Recommend.Ranker.Recommenders)
 	// [recommend.fallback]
 	viper.SetDefault("recommend.fallback", defaultConfig.Recommend.Fallback)
 	// [tracing]
 	viper.SetDefault("tracing.exporter", defaultConfig.Tracing.Exporter)
 	viper.SetDefault("tracing.sampler", defaultConfig.Tracing.Sampler)
+	// [blob]
+	viper.SetDefault("blob.uri", defaultConfig.Blob.URI)
 }
 
 type configBinding struct {
 	key string
 	env string
+}
+
+var bindings = []configBinding{
+	{"database.cache_store", "GORSE_CACHE_STORE"},
+	{"database.data_store", "GORSE_DATA_STORE"},
+	{"database.table_prefix", "GORSE_TABLE_PREFIX"},
+	{"database.cache_table_prefix", "GORSE_CACHE_TABLE_PREFIX"},
+	{"database.data_table_prefix", "GORSE_DATA_TABLE_PREFIX"},
+	{"master.port", "GORSE_MASTER_PORT"},
+	{"master.host", "GORSE_MASTER_HOST"},
+	{"master.ssl_mode", "GORSE_MASTER_SSL_MODE"},
+	{"master.ssl_ca", "GORSE_MASTER_SSL_CA"},
+	{"master.ssl_cert", "GORSE_MASTER_SSL_CERT"},
+	{"master.ssl_key", "GORSE_MASTER_SSL_KEY"},
+	{"master.http_port", "GORSE_MASTER_HTTP_PORT"},
+	{"master.http_host", "GORSE_MASTER_HTTP_HOST"},
+	{"master.n_jobs", "GORSE_MASTER_JOBS"},
+	{"master.dashboard_user_name", "GORSE_DASHBOARD_USER_NAME"},
+	{"master.dashboard_password", "GORSE_DASHBOARD_PASSWORD"},
+	{"master.dashboard_auth_server", "GORSE_DASHBOARD_AUTH_SERVER"},
+	{"master.dashboard_redacted", "GORSE_DASHBOARD_REDACTED"},
+	{"master.admin_api_key", "GORSE_ADMIN_API_KEY"},
+	{"server.api_key", "GORSE_SERVER_API_KEY"},
+	{"oidc.enable", "GORSE_OIDC_ENABLE"},
+	{"oidc.issuer", "GORSE_OIDC_ISSUER"},
+	{"oidc.client_id", "GORSE_OIDC_CLIENT_ID"},
+	{"oidc.client_secret", "GORSE_OIDC_CLIENT_SECRET"},
+	{"oidc.redirect_url", "GORSE_OIDC_REDIRECT_URL"},
+	{"blob.uri", "GORSE_BLOB_URI"},
+	{"blob.s3.endpoint", "S3_ENDPOINT"},
+	{"blob.s3.access_key_id", "S3_ACCESS_KEY_ID"},
+	{"blob.s3.secret_access_key", "S3_SECRET_ACCESS_KEY"},
+	{"blob.gcs.credentials_file", "GCS_CREDENTIALS_FILE"},
 }
 
 // LoadConfig loads configuration from toml file.
@@ -622,33 +663,6 @@ func LoadConfig(path string) (*Config, error) {
 	setDefault()
 
 	// bind environment bindings
-	bindings := []configBinding{
-		{"database.cache_store", "GORSE_CACHE_STORE"},
-		{"database.data_store", "GORSE_DATA_STORE"},
-		{"database.table_prefix", "GORSE_TABLE_PREFIX"},
-		{"database.cache_table_prefix", "GORSE_CACHE_TABLE_PREFIX"},
-		{"database.data_table_prefix", "GORSE_DATA_TABLE_PREFIX"},
-		{"master.port", "GORSE_MASTER_PORT"},
-		{"master.host", "GORSE_MASTER_HOST"},
-		{"master.ssl_mode", "GORSE_MASTER_SSL_MODE"},
-		{"master.ssl_ca", "GORSE_MASTER_SSL_CA"},
-		{"master.ssl_cert", "GORSE_MASTER_SSL_CERT"},
-		{"master.ssl_key", "GORSE_MASTER_SSL_KEY"},
-		{"master.http_port", "GORSE_MASTER_HTTP_PORT"},
-		{"master.http_host", "GORSE_MASTER_HTTP_HOST"},
-		{"master.n_jobs", "GORSE_MASTER_JOBS"},
-		{"master.dashboard_user_name", "GORSE_DASHBOARD_USER_NAME"},
-		{"master.dashboard_password", "GORSE_DASHBOARD_PASSWORD"},
-		{"master.dashboard_auth_server", "GORSE_DASHBOARD_AUTH_SERVER"},
-		{"master.dashboard_redacted", "GORSE_DASHBOARD_REDACTED"},
-		{"master.admin_api_key", "GORSE_ADMIN_API_KEY"},
-		{"server.api_key", "GORSE_SERVER_API_KEY"},
-		{"oidc.enable", "GORSE_OIDC_ENABLE"},
-		{"oidc.issuer", "GORSE_OIDC_ISSUER"},
-		{"oidc.client_id", "GORSE_OIDC_CLIENT_ID"},
-		{"oidc.client_secret", "GORSE_OIDC_CLIENT_SECRET"},
-		{"oidc.redirect_url", "GORSE_OIDC_REDIRECT_URL"},
-	}
 	for _, binding := range bindings {
 		err := viper.BindEnv(binding.key, binding.env)
 		if err != nil {
@@ -656,15 +670,20 @@ func LoadConfig(path string) (*Config, error) {
 		}
 	}
 
-	// check if file exist
-	if _, err := os.Stat(path); err != nil {
-		return nil, errors.Trace(err)
-	}
+	// load config file if provided
+	if path != "" {
+		// check if file exist
+		if _, err := os.Stat(path); err != nil {
+			return nil, errors.Trace(err)
+		}
 
-	// load config file
-	viper.SetConfigFile(path)
-	if err := viper.ReadInConfig(); err != nil {
-		return nil, errors.Trace(err)
+		// load config file
+		viper.SetConfigFile(path)
+		if err := viper.ReadInConfig(); err != nil {
+			return nil, errors.Trace(err)
+		}
+	} else {
+		log.Logger().Info("no config file provided, use defaults and environment variables")
 	}
 
 	// unmarshal config file
@@ -806,4 +825,16 @@ func (config *Config) Validate() error {
 		return errors.New("ranker.recommenders must contain at most one recommender when ranker.type is none")
 	}
 	return nil
+}
+
+var RootDir string
+
+// MkDir creates a directory under Gorse home directory.
+func MkDir(elem ...string) string {
+	if RootDir == "" {
+		RootDir = filepath.Join(lo.Must(os.UserHomeDir()), ".gorse")
+	}
+	path := filepath.Join(RootDir, filepath.Join(elem...))
+	lo.Must0(os.MkdirAll(path, 0755))
+	return path
 }
