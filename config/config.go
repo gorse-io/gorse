@@ -624,44 +624,45 @@ type configBinding struct {
 	env string
 }
 
+var bindings = []configBinding{
+	{"database.cache_store", "GORSE_CACHE_STORE"},
+	{"database.data_store", "GORSE_DATA_STORE"},
+	{"database.table_prefix", "GORSE_TABLE_PREFIX"},
+	{"database.cache_table_prefix", "GORSE_CACHE_TABLE_PREFIX"},
+	{"database.data_table_prefix", "GORSE_DATA_TABLE_PREFIX"},
+	{"master.port", "GORSE_MASTER_PORT"},
+	{"master.host", "GORSE_MASTER_HOST"},
+	{"master.ssl_mode", "GORSE_MASTER_SSL_MODE"},
+	{"master.ssl_ca", "GORSE_MASTER_SSL_CA"},
+	{"master.ssl_cert", "GORSE_MASTER_SSL_CERT"},
+	{"master.ssl_key", "GORSE_MASTER_SSL_KEY"},
+	{"master.http_port", "GORSE_MASTER_HTTP_PORT"},
+	{"master.http_host", "GORSE_MASTER_HTTP_HOST"},
+	{"master.n_jobs", "GORSE_MASTER_JOBS"},
+	{"master.dashboard_user_name", "GORSE_DASHBOARD_USER_NAME"},
+	{"master.dashboard_password", "GORSE_DASHBOARD_PASSWORD"},
+	{"master.dashboard_auth_server", "GORSE_DASHBOARD_AUTH_SERVER"},
+	{"master.dashboard_redacted", "GORSE_DASHBOARD_REDACTED"},
+	{"master.admin_api_key", "GORSE_ADMIN_API_KEY"},
+	{"server.api_key", "GORSE_SERVER_API_KEY"},
+	{"oidc.enable", "GORSE_OIDC_ENABLE"},
+	{"oidc.issuer", "GORSE_OIDC_ISSUER"},
+	{"oidc.client_id", "GORSE_OIDC_CLIENT_ID"},
+	{"oidc.client_secret", "GORSE_OIDC_CLIENT_SECRET"},
+	{"oidc.redirect_url", "GORSE_OIDC_REDIRECT_URL"},
+	{"blob.uri", "GORSE_BLOB_URI"},
+	{"blob.s3.endpoint", "S3_ENDPOINT"},
+	{"blob.s3.access_key_id", "S3_ACCESS_KEY_ID"},
+	{"blob.s3.secret_access_key", "S3_SECRET_ACCESS_KEY"},
+	{"blob.gcs.credentials_file", "GCS_CREDENTIALS_FILE"},
+}
+
 // LoadConfig loads configuration from toml file.
 func LoadConfig(path string) (*Config, error) {
 	// set default config
 	setDefault()
 
 	// bind environment bindings
-	bindings := []configBinding{
-		{"database.cache_store", "GORSE_CACHE_STORE"},
-		{"database.data_store", "GORSE_DATA_STORE"},
-		{"database.table_prefix", "GORSE_TABLE_PREFIX"},
-		{"database.cache_table_prefix", "GORSE_CACHE_TABLE_PREFIX"},
-		{"database.data_table_prefix", "GORSE_DATA_TABLE_PREFIX"},
-		{"master.port", "GORSE_MASTER_PORT"},
-		{"master.host", "GORSE_MASTER_HOST"},
-		{"master.ssl_mode", "GORSE_MASTER_SSL_MODE"},
-		{"master.ssl_ca", "GORSE_MASTER_SSL_CA"},
-		{"master.ssl_cert", "GORSE_MASTER_SSL_CERT"},
-		{"master.ssl_key", "GORSE_MASTER_SSL_KEY"},
-		{"master.http_port", "GORSE_MASTER_HTTP_PORT"},
-		{"master.http_host", "GORSE_MASTER_HTTP_HOST"},
-		{"master.n_jobs", "GORSE_MASTER_JOBS"},
-		{"master.dashboard_user_name", "GORSE_DASHBOARD_USER_NAME"},
-		{"master.dashboard_password", "GORSE_DASHBOARD_PASSWORD"},
-		{"master.dashboard_auth_server", "GORSE_DASHBOARD_AUTH_SERVER"},
-		{"master.dashboard_redacted", "GORSE_DASHBOARD_REDACTED"},
-		{"master.admin_api_key", "GORSE_ADMIN_API_KEY"},
-		{"server.api_key", "GORSE_SERVER_API_KEY"},
-		{"oidc.enable", "GORSE_OIDC_ENABLE"},
-		{"oidc.issuer", "GORSE_OIDC_ISSUER"},
-		{"oidc.client_id", "GORSE_OIDC_CLIENT_ID"},
-		{"oidc.client_secret", "GORSE_OIDC_CLIENT_SECRET"},
-		{"oidc.redirect_url", "GORSE_OIDC_REDIRECT_URL"},
-		{"blob.uri", "GORSE_BLOB_URI"},
-		{"blob.s3.endpoint", "S3_ENDPOINT"},
-		{"blob.s3.access_key_id", "S3_ACCESS_KEY_ID"},
-		{"blob.s3.secret_access_key", "S3_SECRET_ACCESS_KEY"},
-		{"blob.gcs.credentials_file", "GCS_CREDENTIALS_FILE"},
-	}
 	for _, binding := range bindings {
 		err := viper.BindEnv(binding.key, binding.env)
 		if err != nil {

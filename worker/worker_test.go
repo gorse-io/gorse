@@ -428,6 +428,7 @@ func (suite *WorkerTestSuite) TestRecommendNonPersonalized() {
 func (suite *WorkerTestSuite) TestRecommend() {
 	ctx := context.Background()
 	suite.Config.Recommend.Ranker.Type = "fm"
+	suite.Config.Recommend.Ranker.Recommenders = nil
 	suite.Config.Recommend.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{expression.MustParseFeedbackTypeExpression("a")}
 	suite.Config.Recommend.CacheSize = 1
 	suite.Config.Recommend.NonPersonalized = []config.NonPersonalizedConfig{{Name: "popular"}}
