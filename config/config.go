@@ -484,6 +484,9 @@ func GetDefaultConfig() *Config {
 			Exporter: "otlp",
 			Sampler:  "always",
 		},
+		Blob: BlobConfig{
+			URI: MkDir("var", "lib", "blob"),
+		},
 	}
 }
 
@@ -612,6 +615,8 @@ func setDefault() {
 	// [tracing]
 	viper.SetDefault("tracing.exporter", defaultConfig.Tracing.Exporter)
 	viper.SetDefault("tracing.sampler", defaultConfig.Tracing.Sampler)
+	// [blob]
+	viper.SetDefault("blob.uri", defaultConfig.Blob.URI)
 }
 
 type configBinding struct {
@@ -821,10 +826,14 @@ func (config *Config) Validate() error {
 	return nil
 }
 
+var RootDir string
+
 // MkDir creates a directory under Gorse home directory.
 func MkDir(elem ...string) string {
-	path := filepath.Join(elem...)
-	path = filepath.Join(lo.Must(os.UserHomeDir()), ".gorse", path)
+	if RootDir == "" {
+		RootDir = filepath.Join(lo.Must(os.UserHomeDir()), ".gorse")
+	}
+	path := filepath.Join(RootDir, filepath.Join(elem...))
 	lo.Must0(os.MkdirAll(path, 0755))
 	return path
 }
