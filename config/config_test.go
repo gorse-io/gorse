@@ -165,7 +165,7 @@ func TestUnmarshal(t *testing.T) {
 
 func TestSetDefault(t *testing.T) {
 	for _, binding := range bindings {
-		t.Setenv(binding.key, "")
+		t.Setenv(binding.env, "")
 	}
 	setDefault()
 	viper.SetConfigType("toml")
