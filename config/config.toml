@@ -334,6 +334,30 @@ client_secret = ""
 # http://localhost:8088, the redirect URL should be: http://localhost:8088/callback/oauth2
 redirect_url = ""
 
+[blob]
+
+# Blob storage URI.
+#   - S3: s3://bucket/path
+#   - GCS: gs://my-bucket/my-database
+#   - Local: /path/without/prefix
+uri = ""
+
+[blob.s3]
+
+# S3 endpoint.
+endpoint = ""
+
+# S3 access key ID.
+access_key_id = ""
+
+# S3 secret access key.
+secret_access_key = ""
+
+[blob.gcs]
+
+# GCS credentials file.
+credentials_file = ""
+
 [openai]
 
 # Base URL of OpenAI API.

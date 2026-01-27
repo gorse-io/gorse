@@ -17,11 +17,14 @@ package blob
 import (
 	"context"
 	"io"
+	"net/url"
 	"os"
 	"path"
+	"strings"
 	"time"
 
 	"github.com/gorse-io/gorse/common/log"
+	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/protocol"
 	"github.com/juju/errors"
 	"go.uber.org/zap"
@@ -34,6 +37,41 @@ type Store interface {
 	Create(name string) (io.WriteCloser, chan struct{}, error)
 	List() ([]string, error)
 	Remove(name string) error
+}
+
+func NewStore(cfg config.BlobConfig, masterConn *grpc.ClientConn) (Store, error) {
+	if strings.Contains(cfg.URI, "://") {
+		parsed, err := url.Parse(cfg.URI)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		switch parsed.Scheme {
+		case "s3":
+			if parsed.Host == "" {
+				return nil, errors.New("blob.uri must include bucket for s3://")
+			}
+			store, err := NewS3(cfg.S3, parsed.Host, strings.TrimPrefix(parsed.Path, "/"))
+			if err != nil {
+				return nil, err
+			}
+			return store, nil
+		case "gs":
+			if parsed.Host == "" {
+				return nil, errors.New("blob.uri must include bucket for gs://")
+			}
+			store, err := NewGCS(cfg.GCS, parsed.Host, strings.TrimPrefix(parsed.Path, "/"))
+			if err != nil {
+				return nil, err
+			}
+			return store, nil
+		default:
+			return nil, errors.Errorf("unsupported blob.uri scheme: %s", parsed.Scheme)
+		}
+	}
+	if masterConn != nil {
+		return NewMasterStoreClient(masterConn), nil
+	}
+	return NewPOSIX(cfg.URI), nil
 }
 
 type MasterStoreServer struct {

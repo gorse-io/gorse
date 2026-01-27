@@ -67,8 +67,7 @@ type Config struct {
 	Tracing   TracingConfig   `mapstructure:"tracing"`
 	OIDC      OIDCConfig      `mapstructure:"oidc"`
 	OpenAI    OpenAIConfig    `mapstructure:"openai"`
-	S3        S3Config        `mapstructure:"s3"`
-	GCS       GCSConfig       `mapstructure:"gcs"`
+	Blob      BlobConfig      `mapstructure:"blob"`
 }
 
 // DatabaseConfig is the configuration for the database.
@@ -395,12 +394,16 @@ type OpenAIConfig struct {
 	LogFile             string `mapstructure:"log_file"`
 }
 
+type BlobConfig struct {
+	URI string    `mapstructure:"uri"`
+	S3  S3Config  `mapstructure:"s3"`
+	GCS GCSConfig `mapstructure:"gcs"`
+}
+
 type S3Config struct {
 	Endpoint        string `mapstructure:"endpoint"`
 	AccessKeyID     string `mapstructure:"access_key_id"`
 	SecretAccessKey string `mapstructure:"secret_access_key"`
-	Bucket          string `mapstructure:"bucket"`
-	Prefix          string `mapstructure:"prefix"`
 }
 
 func (s *S3Config) ToJSON() string {
@@ -409,8 +412,6 @@ func (s *S3Config) ToJSON() string {
 
 type GCSConfig struct {
 	CredentialsFile string `mapstructure:"credentials_file"`
-	Bucket          string `mapstructure:"bucket"`
-	Prefix          string `mapstructure:"prefix"`
 }
 
 func (g *GCSConfig) ToJSON() string {
@@ -650,14 +651,11 @@ func LoadConfig(path string) (*Config, error) {
 		{"oidc.client_id", "GORSE_OIDC_CLIENT_ID"},
 		{"oidc.client_secret", "GORSE_OIDC_CLIENT_SECRET"},
 		{"oidc.redirect_url", "GORSE_OIDC_REDIRECT_URL"},
-		{"s3.endpoint", "S3_ENDPOINT"},
-		{"s3.access_key_id", "S3_ACCESS_KEY_ID"},
-		{"s3.secret_access_key", "S3_SECRET_ACCESS_KEY"},
-		{"s3.bucket", "S3_BUCKET"},
-		{"s3.prefix", "S3_PREFIX"},
-		{"gcs.credentials_file", "GCS_CREDENTIALS_FILE"},
-		{"gcs.bucket", "GCS_BUCKET"},
-		{"gcs.prefix", "GCS_PREFIX"},
+		{"blob.uri", "GORSE_BLOB_URI"},
+		{"blob.s3.endpoint", "S3_ENDPOINT"},
+		{"blob.s3.access_key_id", "S3_ACCESS_KEY_ID"},
+		{"blob.s3.secret_access_key", "S3_SECRET_ACCESS_KEY"},
+		{"blob.gcs.credentials_file", "GCS_CREDENTIALS_FILE"},
 	}
 	for _, binding := range bindings {
 		err := viper.BindEnv(binding.key, binding.env)
