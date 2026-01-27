@@ -23,7 +23,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     -X 'github.com/gorse-io/gorse/cmd/version.Version=$(git describe --tags $(git rev-parse HEAD))' \
     -X 'github.com/gorse-io/gorse/cmd/version.GitCommit=$(git rev-parse HEAD)' \
     -X 'github.com/gorse-io/gorse/cmd/version.BuildTime=$(date)' \
-    -X 'github.com/gorse-io/gorse/config.RootDir=/'" .
+    -X 'github.com/gorse-io/gorse/config.RootDir=/var/lib/gorse'" .
 
 ############################
 # STEP 2 build a small image
@@ -36,4 +36,4 @@ COPY --from=0 /src/cmd/gorse-master/gorse-master /usr/bin/gorse-master
 
 ENV USER root
 
-ENTRYPOINT ["/usr/bin/gorse-master", "-c", "/etc/gorse/config.toml"]
+ENTRYPOINT ["/usr/bin/gorse-master"]

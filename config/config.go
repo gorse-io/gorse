@@ -421,8 +421,8 @@ func (g *GCSConfig) ToJSON() string {
 func GetDefaultConfig() *Config {
 	return &Config{
 		Database: DatabaseConfig{
-			DataStore:  "sqlite://" + filepath.Join(MkDir("var", "lib"), "data.sqlite"),
-			CacheStore: "sqlite://" + filepath.Join(MkDir("var", "lib"), "cache.sqlite"),
+			DataStore:  "sqlite://" + filepath.Join(MkDir(), "data.sqlite"),
+			CacheStore: "sqlite://" + filepath.Join(MkDir(), "cache.sqlite"),
 			MySQL: MySQLConfig{
 				IsolationLevel:  "READ-UNCOMMITTED",
 				MaxOpenConns:    0,
@@ -485,7 +485,7 @@ func GetDefaultConfig() *Config {
 			Sampler:  "always",
 		},
 		Blob: BlobConfig{
-			URI: MkDir("var", "lib", "blob"),
+			URI: MkDir("blob"),
 		},
 	}
 }
@@ -832,7 +832,7 @@ var RootDir string
 // MkDir creates a directory under Gorse home directory.
 func MkDir(elem ...string) string {
 	if RootDir == "" {
-		RootDir = filepath.Join(lo.Must(os.UserHomeDir()), ".gorse")
+		RootDir = filepath.Join(lo.Must(os.UserHomeDir()), ".gorse", "var", "lib")
 	}
 	path := filepath.Join(RootDir, filepath.Join(elem...))
 	lo.Must0(os.MkdirAll(path, 0755))

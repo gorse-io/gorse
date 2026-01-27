@@ -23,7 +23,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     -X 'github.com/gorse-io/gorse/cmd/version.Version=$(git describe --tags $(git rev-parse HEAD))' \
     -X 'github.com/gorse-io/gorse/cmd/version.GitCommit=$(git rev-parse HEAD)' \
     -X 'github.com/gorse-io/gorse/cmd/version.BuildTime=$(date)' \
-    -X 'github.com/gorse-io/gorse/config.RootDir=/'" . && \
+    -X 'github.com/gorse-io/gorse/config.RootDir=/var/lib/gorse'" . && \
     mv gorse-in-one /usr/bin
 
 ############################
@@ -37,4 +37,4 @@ COPY --from=0 /usr/bin/gorse-in-one /usr/bin/gorse-in-one
 
 ENV USER root
 
-ENTRYPOINT ["/usr/bin/gorse-in-one", "-c", "/etc/gorse/config.toml"]
+ENTRYPOINT ["/usr/bin/gorse-in-one"]
