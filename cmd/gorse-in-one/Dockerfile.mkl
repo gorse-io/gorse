@@ -46,4 +46,4 @@ RUN /usr/bin/gorse-in-one --version
 
 ENV USER root
 
-ENTRYPOINT ["/usr/bin/gorse-in-one", "-c", "/etc/gorse/config.toml"]
+ENTRYPOINT ["/usr/bin/gorse-in-one"]
