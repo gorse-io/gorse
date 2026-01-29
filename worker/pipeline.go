@@ -16,6 +16,7 @@ package worker
 
 import (
 	"context"
+	"strings"
 	"sync"
 	"time"
 
@@ -123,7 +124,7 @@ func (p *Pipeline) Recommend(ctx context.Context, users []data.User, progress fu
 		}
 
 		// Update collaborative filtering recommendation.
-		if p.MatrixFactorizationUsers != nil && p.MatrixFactorizationItems != nil {
+		if !strings.EqualFold(p.Config.Recommend.Collaborative.Type, "none") && p.MatrixFactorizationUsers != nil && p.MatrixFactorizationItems != nil {
 			if userEmbedding, ok := p.MatrixFactorizationUsers.Get(userId); ok {
 				err = p.updateCollaborativeRecommend(ctx, p.MatrixFactorizationItems, userId, userEmbedding, recommender.ExcludeSet(), itemCache)
 				if err != nil {

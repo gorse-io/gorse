@@ -211,6 +211,7 @@ func (m *Master) runLoadDatasetTask(ctx context.Context) error {
 	if err != nil {
 		return errors.Trace(err)
 	}
+	useCollaborativeFilteringTasks := !strings.EqualFold(m.Config.Recommend.Collaborative.Type, "none")
 	useClickThroughRateTasks := strings.EqualFold(m.Config.Recommend.Ranker.Type, "fm")
 	if err = m.updateUserToUser(ctx, datasets.rankingDataset); err != nil {
 		log.Logger().Error("failed to update user-to-user recommendation", zap.Error(err))
@@ -218,8 +219,10 @@ func (m *Master) runLoadDatasetTask(ctx context.Context) error {
 	if err = m.updateItemToItem(ctx, datasets.rankingDataset); err != nil {
 		log.Logger().Error("failed to update item-to-item recommendation", zap.Error(err))
 	}
-	if err = m.trainCollaborativeFiltering(ctx, datasets.rankingTrainSet, datasets.rankingTestSet); err != nil {
-		log.Logger().Error("failed to train collaborative filtering model", zap.Error(err))
+	if useCollaborativeFilteringTasks {
+		if err = m.trainCollaborativeFiltering(ctx, datasets.rankingTrainSet, datasets.rankingTestSet); err != nil {
+			log.Logger().Error("failed to train collaborative filtering model", zap.Error(err))
+		}
 	}
 	if useClickThroughRateTasks {
 		if err = m.trainClickThroughRatePrediction(ctx, datasets.clickTrainSet, datasets.clickTestSet); err != nil {
@@ -234,7 +237,7 @@ func (m *Master) runLoadDatasetTask(ctx context.Context) error {
 	if err = m.collectGarbage(ctx, datasets.rankingDataset); err != nil {
 		log.Logger().Error("failed to collect garbage in cache", zap.Error(err))
 	}
-	if m.Config.Recommend.Collaborative.OptimizePeriod > 0 {
+	if useCollaborativeFilteringTasks && m.Config.Recommend.Collaborative.OptimizePeriod > 0 {
 		if err = m.optimizeCollaborativeFiltering(ctx, datasets.rankingTrainSet, datasets.rankingTestSet); err != nil {
 			log.Logger().Error("failed to optimize collaborative filtering model", zap.Error(err))
 		}

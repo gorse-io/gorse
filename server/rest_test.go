@@ -79,6 +79,8 @@ func (suite *ServerTestSuite) SetupTest() {
 	// configuration
 	suite.Config = config.GetDefaultConfig()
 	suite.Config.Server.APIKey = apiKey
+	suite.Config.Recommend.Collaborative.Type = "mf"
+	suite.Config.Recommend.Fallback.Recommenders = []string{"latest"}
 }
 
 func (suite *ServerTestSuite) marshal(v interface{}) string {

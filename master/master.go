@@ -21,6 +21,7 @@ import (
 	"math"
 	"math/rand"
 	"net"
+	"strings"
 	"sync"
 	"time"
 
@@ -121,7 +122,13 @@ func NewMaster(cfg *config.Config, cacheFolder string, standalone bool) *Master 
 	parallel.InitChatCompletionLimiters(cfg.OpenAI.ChatCompletionRPM, cfg.OpenAI.ChatCompletionTPM)
 	parallel.InitEmbeddingLimiters(cfg.OpenAI.EmbeddingRPM, cfg.OpenAI.EmbeddingTPM)
 
-	duration := min(cfg.Recommend.Collaborative.FitPeriod, cfg.Recommend.Ranker.FitPeriod)
+	duration := time.Duration(math.MaxInt64)
+	if !strings.EqualFold(cfg.Recommend.Collaborative.Type, "none") {
+		duration = min(cfg.Recommend.Collaborative.FitPeriod, cfg.Recommend.Ranker.FitPeriod)
+	}
+	if strings.EqualFold(cfg.Recommend.Ranker.Type, "fm") {
+		duration = min(cfg.Recommend.Collaborative.FitPeriod, cfg.Recommend.Ranker.FitPeriod)
+	}
 	m := &Master{
 		// create task monitor
 		cachePath:    cacheFolder,

@@ -304,6 +304,7 @@ func (config *UserToUserConfig) Hash(cfg *RecommendConfig) string {
 }
 
 type CollaborativeConfig struct {
+	Type           string              `mapstructure:"type" validate:"oneof=none mf"`
 	FitPeriod      time.Duration       `mapstructure:"fit_period" validate:"gt=0"`
 	FitEpoch       int                 `mapstructure:"fit_epoch" validate:"gt=0"`
 	OptimizePeriod time.Duration       `mapstructure:"optimize_period" validate:"gte=0"`
@@ -457,6 +458,7 @@ func GetDefaultConfig() *Config {
 			CacheExpire: 72 * time.Hour,
 			ContextSize: 100,
 			Collaborative: CollaborativeConfig{
+				Type:           "none",
 				FitPeriod:      60 * time.Minute,
 				FitEpoch:       100,
 				OptimizePeriod: 0,
@@ -475,9 +477,6 @@ func GetDefaultConfig() *Config {
 				OptimizePeriod: 0,
 				OptimizeTrials: 10,
 				Recommenders:   []string{"latest"},
-			},
-			Fallback: FallbackConfig{
-				Recommenders: []string{"latest"},
 			},
 		},
 		Tracing: TracingConfig{
@@ -594,6 +593,7 @@ func setDefault() {
 	viper.SetDefault("recommend.cache_expire", defaultConfig.Recommend.CacheExpire)
 	viper.SetDefault("recommend.context_size", defaultConfig.Recommend.ContextSize)
 	// [recommend.collaborative]
+	viper.SetDefault("recommend.collaborative.type", defaultConfig.Recommend.Collaborative.Type)
 	viper.SetDefault("recommend.collaborative.fit_period", defaultConfig.Recommend.Collaborative.FitPeriod)
 	viper.SetDefault("recommend.collaborative.fit_epoch", defaultConfig.Recommend.Collaborative.FitEpoch)
 	viper.SetDefault("recommend.collaborative.optimize_period", defaultConfig.Recommend.Collaborative.OptimizePeriod)
@@ -726,6 +726,36 @@ func (config *Config) Validate() error {
 		itemToItemNames.Add(itemToItem.Name)
 	}
 
+	// Check recommender existence and collaborative enabled
+	availableRecommenders := mapset.NewSet[string]()
+	for _, rec := range config.Recommend.NonPersonalized {
+		availableRecommenders.Add(rec.FullName())
+	}
+	for _, rec := range config.Recommend.ItemToItem {
+		availableRecommenders.Add(rec.FullName())
+	}
+	for _, rec := range config.Recommend.UserToUser {
+		availableRecommenders.Add(rec.FullName())
+	}
+	for _, rec := range config.Recommend.External {
+		availableRecommenders.Add(rec.FullName())
+	}
+	availableRecommenders.Add("latest")
+	if config.Recommend.Collaborative.Type != "none" {
+		availableRecommenders.Add(config.Recommend.Collaborative.FullName())
+	}
+	checkRecommenders := func(recommenders []string) error {
+		for _, recommender := range recommenders {
+			if recommender == config.Recommend.Collaborative.FullName() && config.Recommend.Collaborative.Type == "none" {
+				return errors.New("collaborative recommender is disabled")
+			}
+			if !availableRecommenders.Contains(recommender) {
+				return errors.Errorf("recommender %v doesn't exist", recommender)
+			}
+		}
+		return nil
+	}
+
 	validate := validator.New()
 	if err := validate.RegisterValidation("data_store", func(fl validator.FieldLevel) bool {
 		prefixes := []string{
@@ -823,6 +853,12 @@ func (config *Config) Validate() error {
 	}
 	if config.Recommend.Ranker.Type == "none" && len(config.Recommend.Ranker.Recommenders) > 1 {
 		return errors.New("ranker.recommenders must contain at most one recommender when ranker.type is none")
+	}
+	if err := checkRecommenders(config.Recommend.Ranker.Recommenders); err != nil {
+		return err
+	}
+	if err := checkRecommenders(config.Recommend.Fallback.Recommenders); err != nil {
+		return err
 	}
 	return nil
 }
