@@ -180,7 +180,7 @@ check_recommend_period = "1m"
 refresh_recommend_period = "24h"
 
 # The recommenders used to fetch candidate items before ranking. The default values is all recommenders.
-recommenders = ["latest", "collaborative", "non-personalized/most_starred_weekly", "item-to-item/neighbors", "user-to-user/neighbors"]
+recommenders = ["latest", "collaborative", "item-to-item/neighbors", "user-to-user/neighbors"]
 
 [recommend.ranker.early_stopping]
 
