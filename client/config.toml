@@ -133,6 +133,11 @@ type = "items"
 
 [recommend.collaborative]
 
+# The type of collaborative filtering. Supported values:
+#   none: disable collaborative filtering.
+#   mf: matrix factorization.
+type = "mf"
+
 # The time period for model fitting. The default value is "60m".
 fit_period = "60m"
 
