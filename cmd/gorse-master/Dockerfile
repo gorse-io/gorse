@@ -36,4 +36,4 @@ COPY --from=0 /src/cmd/gorse-master/gorse-master /usr/bin/gorse-master
 
 ENV USER root
 
-ENTRYPOINT ["/usr/bin/gorse-master"]
+ENTRYPOINT ["/usr/bin/gorse-master", "-c", "/etc/gorse/config.toml"]

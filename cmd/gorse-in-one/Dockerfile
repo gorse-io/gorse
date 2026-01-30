@@ -37,4 +37,4 @@ COPY --from=0 /usr/bin/gorse-in-one /usr/bin/gorse-in-one
 
 ENV USER root
 
-ENTRYPOINT ["/usr/bin/gorse-in-one"]
+ENTRYPOINT ["/usr/bin/gorse-in-one", "-c", "/etc/gorse/config.toml"]

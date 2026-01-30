@@ -674,13 +674,17 @@ func LoadConfig(path string) (*Config, error) {
 	if path != "" {
 		// check if file exist
 		if _, err := os.Stat(path); err != nil {
-			return nil, errors.Trace(err)
-		}
-
-		// load config file
-		viper.SetConfigFile(path)
-		if err := viper.ReadInConfig(); err != nil {
-			return nil, errors.Trace(err)
+			if os.IsNotExist(err) {
+				log.Logger().Warn("config file not found, use default config", zap.String("path", path))
+			} else {
+				return nil, errors.Trace(err)
+			}
+		} else {
+			// load config file
+			viper.SetConfigFile(path)
+			if err := viper.ReadInConfig(); err != nil {
+				return nil, errors.Trace(err)
+			}
 		}
 	} else {
 		log.Logger().Info("no config file provided, use defaults and environment variables")
