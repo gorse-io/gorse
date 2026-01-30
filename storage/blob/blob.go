@@ -64,6 +64,15 @@ func NewStore(cfg config.BlobConfig, masterConn *grpc.ClientConn) (Store, error)
 				return nil, err
 			}
 			return store, nil
+		case "az":
+			if parsed.Host == "" {
+				return nil, errors.New("blob.uri must include container for az://")
+			}
+			store, err := NewAzureBlob(cfg.Azure, parsed.Host, strings.TrimPrefix(parsed.Path, "/"))
+			if err != nil {
+				return nil, err
+			}
+			return store, nil
 		default:
 			return nil, errors.Errorf("unsupported blob.uri scheme: %s", parsed.Scheme)
 		}

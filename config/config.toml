@@ -339,6 +339,7 @@ redirect_url = ""
 # Blob storage URI.
 #   - S3: s3://bucket/path
 #   - GCS: gs://my-bucket/my-database
+#   - Azure Blob: az://container/path
 #   - Local: /path/without/prefix
 uri = ""
 
@@ -357,6 +358,20 @@ secret_access_key = ""
 
 # GCS credentials file.
 credentials_file = ""
+
+[blob.azure]
+
+# Azure Blob endpoint. Leave empty to use https://<account_name>.blob.core.windows.net/.
+endpoint = ""
+
+# Azure storage account name.
+account_name = ""
+
+# Azure storage account key.
+account_key = ""
+
+# Azure storage connection string (takes precedence over account_name/account_key).
+connection_string = ""
 
 [openai]
 

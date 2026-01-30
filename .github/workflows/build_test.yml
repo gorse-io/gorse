@@ -101,6 +101,9 @@ jobs:
       with:
         go-version-file: ./go.mod
 
+    - name: Install and start Azurite
+      uses: potatoqualitee/azuright@v1
+
     - name: Test
       run: go test -timeout 30m -v ./... -coverprofile=coverage.txt -covermode=atomic -coverpkg=./...
       env:
@@ -118,6 +121,8 @@ jobs:
         S3_ENDPOINT: localhost:${{ job.services.rustfs.ports[9000] }}
         S3_ACCESS_KEY_ID: rustfsadmin
         S3_SECRET_ACCESS_KEY: rustfsadmin
+        # Azure Blob (Azurite)
+        AZURE_STORAGE_CONNECTION_STRING: DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://127.0.0.1:${{ job.services.azurite.ports[10000] }}/devstoreaccount1;
 
     - name: Upload coverage to Codecov
       if: matrix.os == 'ubuntu-latest'
