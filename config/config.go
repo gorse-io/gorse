@@ -19,7 +19,6 @@ import (
 	"crypto/md5"
 	_ "embed"
 	"encoding/hex"
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -395,9 +394,10 @@ type OpenAIConfig struct {
 }
 
 type BlobConfig struct {
-	URI string    `mapstructure:"uri"`
-	S3  S3Config  `mapstructure:"s3"`
-	GCS GCSConfig `mapstructure:"gcs"`
+	URI   string          `mapstructure:"uri"`
+	S3    S3Config        `mapstructure:"s3"`
+	GCS   GCSConfig       `mapstructure:"gcs"`
+	Azure AzureBlobConfig `mapstructure:"azure"`
 }
 
 type S3Config struct {
@@ -406,16 +406,15 @@ type S3Config struct {
 	SecretAccessKey string `mapstructure:"secret_access_key"`
 }
 
-func (s *S3Config) ToJSON() string {
-	return string(lo.Must1(json.Marshal(s)))
-}
-
 type GCSConfig struct {
 	CredentialsFile string `mapstructure:"credentials_file"`
 }
 
-func (g *GCSConfig) ToJSON() string {
-	return string(lo.Must1(json.Marshal(g)))
+type AzureBlobConfig struct {
+	Endpoint         string `mapstructure:"endpoint"`
+	AccountName      string `mapstructure:"account_name"`
+	AccountKey       string `mapstructure:"account_key"`
+	ConnectionString string `mapstructure:"connection_string"`
 }
 
 func GetDefaultConfig() *Config {
@@ -655,6 +654,10 @@ var bindings = []configBinding{
 	{"blob.s3.access_key_id", "S3_ACCESS_KEY_ID"},
 	{"blob.s3.secret_access_key", "S3_SECRET_ACCESS_KEY"},
 	{"blob.gcs.credentials_file", "GCS_CREDENTIALS_FILE"},
+	{"blob.azure.endpoint", "AZURE_STORAGE_ENDPOINT"},
+	{"blob.azure.account_name", "AZURE_STORAGE_ACCOUNT_NAME"},
+	{"blob.azure.account_key", "AZURE_STORAGE_ACCOUNT_KEY"},
+	{"blob.azure.connection_string", "AZURE_STORAGE_CONNECTION_STRING"},
 }
 
 // LoadConfig loads configuration from toml file.
