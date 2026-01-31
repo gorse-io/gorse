@@ -346,7 +346,7 @@ redirect_url = ""
 #   - GCS: gs://my-bucket/my-database
 #   - Azure Blob: az://container/path
 #   - Local: /path/without/prefix
-uri = ""
+uri = "/var/lib/gorse/blob"
 
 [blob.s3]
 
