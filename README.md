@@ -1,4 +1,4 @@
-# Gorse Recommender System Engine
+# Gorse Open-source Recommender System Engine
 
 <img width=160 src="assets/gorse.png"/>
 
@@ -9,16 +9,15 @@
 [![Twitter Follow](https://img.shields.io/twitter/follow/gorse_io?label=Follow&style=social)](https://twitter.com/gorse_io)
 [![Gurubase](https://img.shields.io/badge/Gurubase-Ask%20Gorse%20Guru-006BFF)](https://gurubase.io/g/gorse)
 
-Gorse is an open-source recommendation system engine written in Go. Gorse aims to be a universal open-source recommender system that can be quickly introduced into a wide variety of online services. By importing items, users, and interaction data into Gorse, the system will automatically train models to generate recommendations for each user. Project features are as follows.
+Gorse is an AI powered open-source recommender system written in Go. Gorse aims to be a universal open-source recommender system that can be quickly integrated into a wide variety of online services. By importing items, users, and interaction data into Gorse, the system will automatically train models to generate recommendations for each user. Project features are as follows.
 
-<img width=520 src="https://github.com/gorse-io/docs/blob/main/src/img/pipeline.drawio.svg?raw=true"/>
+![](https://github.com/gorse-io/docs/blob/main/src/img/dashboard/recflow.png?raw=true)
 
 - **Multi-source:** Recommend items from latest, user-to-user, item-to-item, collaborative filtering and etc.
-- **AutoML:** Search the best recommendation model automatically in the background.
-- **Distributed prediction:** Support horizontal scaling in the recommendation stage after single node training.
+- **Multimodal:** Support multimodal content (text, image, videos, etc.) via embedding.
+- **AI-powered:** Support both classical recommenders and LLM-based recommenders.
+- **GUI Dashboard:** Provide GUI dashboard for recommendation pipeline editing, system monitoring, and data management.
 - **RESTful APIs:** Expose RESTful APIs for data CRUD and recommendation requests.
-- **Online evaluation:** Analyze online recommendation performance from recently inserted feedback.
-- **GUI Dashboard:** Provide GUI dashboard for data management and system monitoring.
 
 ## Quick Start
 
@@ -30,7 +29,7 @@ docker run -p 8088:8088 zhenghaoz/gorse-in-one --playground
 
 The playground mode will download data from [GitRec](https://gitrec.gorse.io/) and import it into Gorse. The dashboard is available at `http://localhost:8088`.
 
-<img width=720 src="https://github.com/gorse-io/dashboard/blob/master/assets/dashboard.png?raw=true"/>
+![](https://github.com/gorse-io/docs/blob/main/src/img/dashboard/overview.png?raw=true)
 
 After the "Generate item-to-item recommendation" task is completed on the "Tasks" page, try to insert several feedbacks into Gorse. Suppose Bob is a developer who interested in LLM related repositories. We insert his star feedback to Gorse.
 
