@@ -149,7 +149,7 @@ func NewMaster(cfg *config.Config, cacheFolder string, standalone bool, configPa
 func (m *Master) Serve() {
 	// connect blob store
 	var err error
-	m.blobServer = blob.NewMasterStoreServer(m.cachePath)
+	m.blobServer = blob.NewMasterStoreServer(m.Config.Blob.URI)
 	m.blobStore, err = blob.NewStore(m.Config.Blob, nil)
 	if err != nil {
 		log.Logger().Fatal("failed to create blob store", zap.Error(err))
