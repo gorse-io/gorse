@@ -104,6 +104,10 @@ func (m *Master) CreateWebService() {
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
 		Returns(http.StatusOK, "OK", config.Config{}).
 		Writes(config.Config{}))
+	ws.Route(ws.DELETE("/dashboard/config").To(m.deleteConfig).
+		Doc("Delete config.").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
+		Returns(http.StatusOK, "OK", struct{}{}))
 	ws.Route(ws.GET("/dashboard/config/schema").To(m.getConfigSchema).
 		Doc("Get config schema.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
@@ -584,6 +588,14 @@ func (m *Master) getConfig(_ *restful.Request, response *restful.Response) {
 		delete(configMap, "database")
 	}
 	server.Ok(response, formatConfig(configMap))
+}
+
+func (m *Master) deleteConfig(_request *restful.Request, response *restful.Response) {
+	if err := m.metaStore.Delete(meta.RECOMMEND_CONFIG); err != nil {
+		server.InternalServerError(response, err)
+		return
+	}
+	server.Ok(response, struct{}{})
 }
 
 func (m *Master) getConfigSchema(_ *restful.Request, response *restful.Response) {
