@@ -47,7 +47,7 @@ var masterCommand = &cobra.Command{
 			log.Logger().Fatal("failed to load config", zap.Error(err))
 		}
 		cachePath, _ := cmd.PersistentFlags().GetString("cache-path")
-		m := master.NewMaster(conf, cachePath, false)
+		m := master.NewMaster(conf, cachePath, false, configPath)
 		// Stop master
 		done := make(chan struct{})
 		go func() {

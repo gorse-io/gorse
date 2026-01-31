@@ -595,6 +595,18 @@ func (m *Master) deleteConfig(_request *restful.Request, response *restful.Respo
 		server.InternalServerError(response, err)
 		return
 	}
+	newConfig, err := config.LoadConfig(m.configPath)
+	if err != nil {
+		server.InternalServerError(response, err)
+		return
+	}
+	m.Config.Recommend = newConfig.Recommend
+
+	m.cancel()
+	select {
+	case m.scheduled <- struct{}{}:
+	default:
+	}
 	server.Ok(response, struct{}{})
 }
 

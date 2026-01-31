@@ -21,7 +21,6 @@ import (
 	"math"
 	"math/rand"
 	"net"
-	"strings"
 	"sync"
 	"time"
 
@@ -69,6 +68,7 @@ type Master struct {
 	tracer         *monitor.Monitor
 	remoteProgress sync.Map
 	cachePath      string
+	configPath     string
 	standalone     bool
 	openAIClient   *openai.Client
 
@@ -101,7 +101,7 @@ type Master struct {
 }
 
 // NewMaster creates a master node.
-func NewMaster(cfg *config.Config, cacheFolder string, standalone bool) *Master {
+func NewMaster(cfg *config.Config, cacheFolder string, standalone bool, configPath string) *Master {
 	rand.Seed(time.Now().UnixNano())
 
 	// setup trace provider
@@ -122,16 +122,11 @@ func NewMaster(cfg *config.Config, cacheFolder string, standalone bool) *Master 
 	parallel.InitChatCompletionLimiters(cfg.OpenAI.ChatCompletionRPM, cfg.OpenAI.ChatCompletionTPM)
 	parallel.InitEmbeddingLimiters(cfg.OpenAI.EmbeddingRPM, cfg.OpenAI.EmbeddingTPM)
 
-	duration := time.Duration(math.MaxInt64)
-	if !strings.EqualFold(cfg.Recommend.Collaborative.Type, "none") {
-		duration = min(cfg.Recommend.Collaborative.FitPeriod, cfg.Recommend.Ranker.FitPeriod)
-	}
-	if strings.EqualFold(cfg.Recommend.Ranker.Type, "fm") {
-		duration = min(cfg.Recommend.Collaborative.FitPeriod, cfg.Recommend.Ranker.FitPeriod)
-	}
+	duration := min(cfg.Recommend.Collaborative.FitPeriod, cfg.Recommend.Ranker.FitPeriod)
 	m := &Master{
 		// create task monitor
 		cachePath:    cacheFolder,
+		configPath:   configPath,
 		standalone:   standalone,
 		tracer:       monitor.NewTracer("master"),
 		openAIClient: openai.NewClientWithConfig(clientConfig),

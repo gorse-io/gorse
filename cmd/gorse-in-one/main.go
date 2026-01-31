@@ -88,7 +88,7 @@ var oneCommand = &cobra.Command{
 		}
 
 		// create master
-		m := master.NewMaster(conf, cachePath, true)
+		m := master.NewMaster(conf, cachePath, true, configPath)
 
 		if playground {
 			setup(m)
