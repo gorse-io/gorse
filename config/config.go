@@ -395,7 +395,7 @@ type OpenAIConfig struct {
 }
 
 type BlobConfig struct {
-	URI   string          `mapstructure:"uri"`
+	URI   string          `mapstructure:"uri" validate:"required"`
 	S3    S3Config        `mapstructure:"s3"`
 	GCS   GCSConfig       `mapstructure:"gcs"`
 	Azure AzureBlobConfig `mapstructure:"azure"`
