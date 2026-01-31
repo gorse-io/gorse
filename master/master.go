@@ -68,6 +68,7 @@ type Master struct {
 	tracer         *monitor.Monitor
 	remoteProgress sync.Map
 	cachePath      string
+	configPath     string
 	standalone     bool
 	openAIClient   *openai.Client
 
@@ -100,7 +101,7 @@ type Master struct {
 }
 
 // NewMaster creates a master node.
-func NewMaster(cfg *config.Config, cacheFolder string, standalone bool) *Master {
+func NewMaster(cfg *config.Config, cacheFolder string, standalone bool, configPath string) *Master {
 	rand.Seed(time.Now().UnixNano())
 
 	// setup trace provider
@@ -125,6 +126,7 @@ func NewMaster(cfg *config.Config, cacheFolder string, standalone bool) *Master 
 	m := &Master{
 		// create task monitor
 		cachePath:    cacheFolder,
+		configPath:   configPath,
 		standalone:   standalone,
 		tracer:       monitor.NewTracer("master"),
 		openAIClient: openai.NewClientWithConfig(clientConfig),

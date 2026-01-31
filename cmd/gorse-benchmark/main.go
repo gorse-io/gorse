@@ -62,7 +62,7 @@ var llmCmd = &cobra.Command{
 		shots, _ := cmd.Flags().GetInt("shots")
 
 		// Load dataset
-		m := master.NewMaster(cfg, os.TempDir(), false)
+		m := master.NewMaster(cfg, os.TempDir(), false, configPath)
 		m.DataClient, err = data.Open(m.Config.Database.DataStore, m.Config.Database.DataTablePrefix,
 			storage.WithIsolationLevel(m.Config.Database.MySQL.IsolationLevel))
 		if err != nil {

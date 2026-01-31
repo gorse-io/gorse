@@ -120,6 +120,7 @@ func TestUnmarshal(t *testing.T) {
 			assert.Equal(t, "count(feedback, .FeedbackType == 'star')", config.Recommend.NonPersonalized[0].Score)
 			assert.Equal(t, "(now() - item.Timestamp).Hours() < 168", config.Recommend.NonPersonalized[0].Filter)
 			// [recommend.collaborative]
+			assert.Equal(t, "mf", config.Recommend.Collaborative.Type)
 			assert.Equal(t, 60*time.Minute, config.Recommend.Collaborative.FitPeriod)
 			assert.Equal(t, 100, config.Recommend.Collaborative.FitEpoch)
 			assert.Equal(t, 360*time.Minute, config.Recommend.Collaborative.OptimizePeriod)
@@ -442,6 +443,15 @@ func (s *ValidateTestSuite) TestDuplicateItemToItem() {
 		Name: "item_to_item",
 		Type: "users",
 	}}
+	s.Error(s.Validate())
+}
+
+func (s *ValidateTestSuite) TestRecommendersExistence() {
+	s.Recommend.Ranker.Recommenders = []string{"not_exist"}
+	s.Error(s.Validate())
+
+	s.Recommend.Collaborative.Type = "none"
+	s.Recommend.Ranker.Recommenders = []string{"collaborative"}
 	s.Error(s.Validate())
 }
 

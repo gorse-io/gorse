@@ -831,6 +831,10 @@ func (s *RestServer) getUserNeighbors(request *restful.Request, response *restfu
 
 // getCollaborativeFiltering gets cached recommended items from database.
 func (s *RestServer) getCollaborativeFiltering(request *restful.Request, response *restful.Response) {
+	if strings.EqualFold(s.Config.Recommend.Collaborative.Type, "none") {
+		PageNotFound(response, errors.New("collaborative filtering recommendation is disabled"))
+		return
+	}
 	// Get user id
 	userId := request.PathParameter("user-id")
 	categories := ReadCategories(request, nil)

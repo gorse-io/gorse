@@ -85,6 +85,8 @@ func (suite *WorkerTestSuite) SetupTest() {
 	suite.NoError(err)
 	// configuration
 	suite.Config = config.GetDefaultConfig()
+	suite.Config.Recommend.Collaborative.Type = "mf"
+	suite.Config.Recommend.Fallback.Recommenders = []string{"latest"}
 	suite.Jobs = 1
 	suite.dontskipColdStartUsers = true
 	// reset random generator

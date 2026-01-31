@@ -98,6 +98,17 @@ func (suite *baseTestSuite) TestKeyValues() {
 	value, err = suite.Database.Get("non-existing-key")
 	suite.NoError(err)
 	suite.Nil(value)
+
+	// Test delete existing key
+	err = suite.Database.Delete("key2")
+	suite.NoError(err)
+	value, err = suite.Database.Get("key2")
+	suite.NoError(err)
+	suite.Nil(value)
+
+	// Test delete non-existing key
+	err = suite.Database.Delete("non-existing-key")
+	suite.NoError(err)
 }
 
 func TestModel_Equal(t *testing.T) {

@@ -841,6 +841,23 @@ func (suite *MasterAPITestSuite) TestConfig() {
 		Status(http.StatusBadRequest).
 		End()
 	suite.Equal("llm", suite.Config.Recommend.Ranker.Type)
+
+	configBytes, err := json.Marshal(suite.Config.Recommend)
+	suite.NoError(err)
+	err = suite.metaStore.Put(meta.RECOMMEND_CONFIG, string(configBytes))
+	suite.NoError(err)
+
+	apitest.New().
+		Handler(suite.handler).
+		Delete("/api/dashboard/config").
+		Header("Cookie", suite.cookie).
+		Expect(suite.T()).
+		Status(http.StatusOK).
+		End()
+
+	value, err := suite.metaStore.Get(meta.RECOMMEND_CONFIG)
+	suite.NoError(err)
+	suite.Nil(value)
 }
 
 func (suite *MasterAPITestSuite) TestGetConfigSchema() {
