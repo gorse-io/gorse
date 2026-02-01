@@ -87,6 +87,7 @@ func (suite *MasterAPITestSuite) SetupTest() {
 	// open database
 	var err error
 	suite.Config = config.GetDefaultConfig()
+	suite.Config.Recommend.Ranker.Type = "fm"
 	suite.Config.Database.DataStore = fmt.Sprintf("sqlite://%s/data.db", suite.T().TempDir())
 	suite.Config.Database.CacheStore = fmt.Sprintf("sqlite://%s/cache.db", suite.T().TempDir())
 	suite.metaStore, err = meta.Open(fmt.Sprintf("sqlite://%s/meta.db", suite.T().TempDir()), suite.Config.Master.MetaTimeout)

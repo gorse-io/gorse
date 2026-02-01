@@ -80,6 +80,7 @@ func (suite *ServerTestSuite) SetupTest() {
 	suite.Config = config.GetDefaultConfig()
 	suite.Config.Server.APIKey = apiKey
 	suite.Config.Recommend.Collaborative.Type = "mf"
+	suite.Config.Recommend.Ranker.Type = "fm"
 	suite.Config.Recommend.Fallback.Recommenders = []string{"latest"}
 }
 
