@@ -144,50 +144,17 @@ fit_period = "60m"
 # The number of epochs for model fitting. The default value is 100.
 fit_epoch = 100
 
-# The time period for hyperparameter optimization. The default value is "360m".
-optimize_period = "360m"
-
-# The number of trials for hyperparameter optimization. The default value is 10.
-optimize_trials = 10
-
 [recommend.collaborative.early_stopping]
 
 # Number of epochs to wait if no improvement and then stop the training. The default value is 10.
 patience = 10
-
-[recommend.replacement]
-
-# Replace historical items back to recommendations. The default value is false.
-enable_replacement = false
-
-# Decay the weights of replaced items from positive feedbacks. The default value is 0.8.
-positive_replacement_decay = 0.8
-
-# Decay the weights of replaced items from read feedbacks. The default value is 0.6.
-read_replacement_decay = 0.6
 
 [recommend.ranker]
 
 # The type of the ranker. There are two types:
 #   none: no ranking.
 #   fm: factorization machines.
-type = "fm"
-
-# The time period to check recommendation for users. The default values is 1m.
-check_recommend_period = "1m"
-
-# The time period to refresh recommendation for inactive users. The default values is 120h.
-refresh_recommend_period = "24h"
+type = "none"
 
 # The recommenders used to fetch candidate items before ranking. The default values is all recommenders.
-recommenders = ["latest", "collaborative", "item-to-item/neighbors", "user-to-user/neighbors"]
-
-[recommend.ranker.early_stopping]
-
-# Number of epochs to wait if no improvement and then stop the training. The default value is 10.
-patience = 10
-
-[recommend.fallback]
-
-# The fallback recommenders are used when cached recommendation drained out. The default values is ["latest"].
 recommenders = ["latest"]
