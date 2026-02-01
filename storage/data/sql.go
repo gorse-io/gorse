@@ -972,7 +972,11 @@ func (d *SQLDatabase) GetUserFeedback(ctx context.Context, userId string, endTim
 		for _, feedbackType := range feedbackTypes {
 			db = FeedbackTypeExpressionToSQL(db, feedbackType)
 		}
-		tx.Where(db)
+		if d.driver == ClickHouse {
+			tx.Having(db)
+		} else {
+			tx.Where(db)
+		}
 	}
 	result, err := tx.Rows()
 	if err != nil {
