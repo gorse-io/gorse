@@ -1474,6 +1474,31 @@ func (suite *ServerTestSuite) TestGetRecommendsFallbackNonPersonalized() {
 		End()
 }
 
+func (suite *ServerTestSuite) TestGetRecommendsLatest() {
+	ctx := context.Background()
+	err := suite.DataClient.BatchInsertItems(ctx, []data.Item{
+		{ItemId: "5", Timestamp: time.Unix(95, 0)},
+		{ItemId: "6", Timestamp: time.Unix(94, 0)},
+		{ItemId: "7", Timestamp: time.Unix(93, 0)},
+		{ItemId: "8", Timestamp: time.Unix(92, 0)},
+	})
+	suite.NoError(err)
+	suite.Config.Recommend.Ranker.Type = "none"
+	suite.Config.Recommend.Ranker.Recommenders = []string{"latest"}
+	suite.Config.Recommend.Fallback.Recommenders = []string{}
+	apitest.New().
+		Handler(suite.handler).
+		Get("/api/recommend/0").
+		Header("X-API-Key", apiKey).
+		QueryParams(map[string]string{
+			"n": "4",
+		}).
+		Expect(suite.T()).
+		Status(http.StatusOK).
+		Body(suite.marshal([]string{"5", "6", "7", "8"})).
+		End()
+}
+
 func (suite *ServerTestSuite) TestSessionRecommend() {
 	ctx := context.Background()
 	suite.Config.Recommend.ContextSize = 4
