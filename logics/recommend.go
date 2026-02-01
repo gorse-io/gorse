@@ -96,7 +96,15 @@ func (r *Recommender) IsColdStart() bool {
 }
 
 func (r *Recommender) Recommend(ctx context.Context, limit int) ([]cache.Score, error) {
-	scores, err := r.cacheClient.SearchScores(ctx, cache.Recommend, r.userId, r.categories, 0, r.config.CacheSize)
+	var (
+		scores []cache.Score
+		err    error
+	)
+	if !strings.EqualFold(r.config.Ranker.Type, "none") {
+		scores, err = r.cacheClient.SearchScores(ctx, cache.Recommend, r.userId, r.categories, 0, r.config.CacheSize)
+	} else {
+		scores, _, err = r.RecommendSequential(ctx, nil, r.config.CacheSize, r.config.Ranker.Recommenders...)
+	}
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
