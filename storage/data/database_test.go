@@ -392,6 +392,12 @@ func (suite *baseTestSuite) TestFeedback() {
 	suite.NoError(err)
 	err = suite.Database.Optimize()
 	suite.NoError(err)
+	// Get feedback by user with value filter
+	ret, err = suite.Database.GetUserFeedback(ctx, "0", lo.ToPtr(time.Now()),
+		expression.FeedbackTypeExpression{FeedbackType: positiveFeedbackType, Value: 50, ExprType: expression.Greater})
+	suite.NoError(err)
+	suite.Equal(1, len(ret))
+	suite.Equal(float64(100), ret[0].Value)
 	ret, err = suite.Database.GetUserFeedback(ctx, "0", lo.ToPtr(time.Now()), expression.MustParseFeedbackTypeExpression(positiveFeedbackType))
 	suite.NoError(err)
 	suite.Equal(1, len(ret))
