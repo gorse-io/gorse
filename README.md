@@ -58,7 +58,8 @@ curl http://127.0.0.1:8088/api/recommend/bob?n=10
 For more information：
 
 - Read [official documents](https://gorse.io/docs/)
-- Visit [official demo](https://gitrec.gorse.io/)
+- Visit [playground](https://play.gorse.io/) of Gorse dashboard
+- Explore [live demo](https://gitrec.gorse.io/), a recommender system for GitHub repositories
 - Discuss on [Discord](https://discord.gg/x6gAtNNkAE) or [GitHub Discussion](https://github.com/gorse-io/gorse/discussions)
 
 ## Architecture

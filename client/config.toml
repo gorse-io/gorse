@@ -157,4 +157,4 @@ patience = 10
 type = "none"
 
 # The recommenders used to fetch candidate items before ranking. The default values is all recommenders.
-recommenders = ["collaborative"]
+recommenders = ["latest"]
