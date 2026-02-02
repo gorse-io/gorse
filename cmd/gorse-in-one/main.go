@@ -125,7 +125,9 @@ func main() {
 
 func setup(m *master.Master, playground string) {
 	// set database to user home directory
+	m.Config.Database.DataStore = config.GetDefaultConfig().Database.DataStore
 	fmt.Println("Using database:", m.Config.Database.DataStore)
+	m.Config.Database.CacheStore = config.GetDefaultConfig().Database.CacheStore
 	fmt.Println("Using cache:", m.Config.Database.CacheStore)
 	m.Config.Master.NumJobs = runtime.NumCPU()
 	fmt.Printf("Using %d CPU cores: %s\n", m.Config.Master.NumJobs, cpuid.CPU.BrandName)
