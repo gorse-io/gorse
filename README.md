@@ -32,7 +32,7 @@ Run locally using go & idea
 ```bash
 cd gorse # root of repo
 podman-compose up -d # may need to delete previous gorse_server_1 container
-http://localhost:8088 # brings up the Gorse Dashboard
+http://localhost:8088/tasks # brings up the Gorse Dashboard
 http://localhost:8087/api/health/live # server health
 http://localhost:8087/api/latest # get latest items
 ```
