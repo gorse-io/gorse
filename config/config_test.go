@@ -210,6 +210,18 @@ func TestBindEnv(t *testing.T) {
 		{"GORSE_OIDC_CLIENT_ID", "client_id"},
 		{"GORSE_OIDC_CLIENT_SECRET", "client_secret"},
 		{"GORSE_OIDC_REDIRECT_URL", "http://localhost:8088/callback/oauth2"},
+		{"GORSE_BLOB_URI", "s3://<bucket>/path"},
+		{"S3_ENDPOINT", "https://s3.example.com"},
+		{"S3_ACCESS_KEY_ID", "<access_key_id>"},
+		{"S3_SECRET_ACCESS_KEY", "<secret_access_key>"},
+		{"GCS_CREDENTIALS_FILE", "/path/to/credentials.json"},
+		{"AZURE_STORAGE_ENDPOINT", "https://<account>.blob.core.windows.net"},
+		{"AZURE_STORAGE_ACCOUNT_NAME", "<account_name>"},
+		{"AZURE_STORAGE_ACCOUNT_KEY", "<account_key>"},
+		{"AZURE_STORAGE_CONNECTION_STRING", "DefaultEndpointsProtocol=https;AccountName=<account>;AccountKey=<key>"},
+		{"OPENAI_BASE_URL", "https://api.openai.com/v1"},
+		{"OPENAI_AUTH_TOKEN", "<auth_token>"},
+		{"OPENAI_CHAT_COMPLETION_MODEL", "gpt-4"},
 	}
 	for _, variable := range variables {
 		t.Setenv(variable.key, variable.value)
@@ -241,6 +253,18 @@ func TestBindEnv(t *testing.T) {
 	assert.Equal(t, "client_id", config.OIDC.ClientID)
 	assert.Equal(t, "client_secret", config.OIDC.ClientSecret)
 	assert.Equal(t, "http://localhost:8088/callback/oauth2", config.OIDC.RedirectURL)
+	assert.Equal(t, "s3://<bucket>/path", config.Blob.URI)
+	assert.Equal(t, "https://s3.example.com", config.Blob.S3.Endpoint)
+	assert.Equal(t, "<access_key_id>", config.Blob.S3.AccessKeyID)
+	assert.Equal(t, "<secret_access_key>", config.Blob.S3.SecretAccessKey)
+	assert.Equal(t, "/path/to/credentials.json", config.Blob.GCS.CredentialsFile)
+	assert.Equal(t, "https://<account>.blob.core.windows.net", config.Blob.Azure.Endpoint)
+	assert.Equal(t, "<account_name>", config.Blob.Azure.AccountName)
+	assert.Equal(t, "<account_key>", config.Blob.Azure.AccountKey)
+	assert.Equal(t, "DefaultEndpointsProtocol=https;AccountName=<account>;AccountKey=<key>", config.Blob.Azure.ConnectionString)
+	assert.Equal(t, "https://api.openai.com/v1", config.OpenAI.BaseURL)
+	assert.Equal(t, "<auth_token>", config.OpenAI.AuthToken)
+	assert.Equal(t, "gpt-4", config.OpenAI.ChatCompletionModel)
 
 	// check default values
 	assert.Equal(t, 100, config.Recommend.CacheSize)
