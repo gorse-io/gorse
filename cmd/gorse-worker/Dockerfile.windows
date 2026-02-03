@@ -7,7 +7,7 @@ WORKDIR /src
 
 COPY . ./
 
-ENV CGO_ENABLED 0
+ENV CGO_ENABLED=0
 
 RUN go build -o / -ldflags="\" \
         -X 'github.com/gorse-io/gorse/cmd/version.Version=$(git describe --tags $(git rev-parse HEAD))' \

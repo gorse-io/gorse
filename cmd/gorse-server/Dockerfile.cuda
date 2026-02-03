@@ -7,7 +7,7 @@ FROM nvidia/cuda:12.8.1-devel-ubuntu24.04
 
 COPY --from=golang:1.25 /usr/local/go/ /usr/local/go/
 
-ENV PATH /usr/local/go/bin:$PATH
+ENV PATH=/usr/local/go/bin:$PATH
 
 RUN apt update && apt install -y git
 
@@ -40,6 +40,6 @@ COPY --from=0 /src/cmd/gorse-server/gorse-server /usr/bin/gorse-server
 
 RUN /usr/bin/gorse-server --version
 
-ENV USER root
+ENV USER=root
 
 ENTRYPOINT ["/usr/bin/gorse-server"]
