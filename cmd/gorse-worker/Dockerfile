@@ -34,6 +34,6 @@ COPY --from=0 /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
 COPY --from=0 /src/cmd/gorse-worker/gorse-worker /usr/bin/gorse-worker
 
-ENV USER root
+ENV USER=root
 
 ENTRYPOINT ["/usr/bin/gorse-worker"]

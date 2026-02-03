@@ -40,10 +40,12 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
 ############################
 FROM debian:bookworm-slim
 
+RUN apt update && apt install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+
 COPY --from=0 /src/cmd/gorse-in-one/gorse-in-one /usr/bin/gorse-in-one
 
 RUN /usr/bin/gorse-in-one --version
 
-ENV USER root
+ENV USER=root
 
 ENTRYPOINT ["/usr/bin/gorse-in-one", "-c", "/etc/gorse/config.toml"]

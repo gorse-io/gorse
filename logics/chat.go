@@ -83,7 +83,8 @@ func (r *ChatRanker) Rank(ctx context.Context, user *data.User, feedback []*Feed
 				Content: buf.String(),
 			}},
 			ChatTemplateKwargs: map[string]any{
-				"enable_thinking": false,
+				"enable_thinking": false, // Ollama, Alibaba Cloud
+				"thinking":        false, // NVIDIA NIM
 			},
 		})
 		if err == nil {

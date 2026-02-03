@@ -292,6 +292,23 @@ jobs:
         env:
           REDIS_URI: redis+cluster://localhost:7000?addr=localhost:7001&addr=localhost:7002&addr=localhost:7003&addr=localhost:7004&addr=localhost:7005
 
+  playground:
+    name: playground
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Build Docker image
+        run: docker build -t zhenghaoz/gorse-in-one -f ./cmd/gorse-in-one/Dockerfile .
+      - name: Run playground
+        run: docker run -d -p 8088:8088 --name playground zhenghaoz/gorse-in-one --playground
+      - name: Check dashboard URL
+        run: |
+          for i in {1..10}; do
+            curl -sSf http://localhost:8088 && break
+            docker logs playground
+            sleep 10
+          done
+
   golangci:
     name: lint
     runs-on: ubuntu-latest
