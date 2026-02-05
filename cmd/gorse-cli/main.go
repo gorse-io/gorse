@@ -45,13 +45,16 @@ import (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "gorse-benchmark",
-	Short: "Gorse Benchmarking Tool",
+	Use:   "gorse-cli",
+	Short: "Gorse command line tool",
+	Run: func(cmd *cobra.Command, args []string) {
+		_ = cmd.Help()
+	},
 }
 
-var llmCmd = &cobra.Command{
-	Use:   "llm",
-	Short: "Benchmark LLM models",
+var benchLLMCmd = &cobra.Command{
+	Use:   "bench-llm",
+	Short: "Benchmark LLM models for ranking",
 	Run: func(cmd *cobra.Command, args []string) {
 		// Load configuration
 		configPath, _ := cmd.Flags().GetString("config")
@@ -357,8 +360,8 @@ func EvaluateLLM(cfg *config.Config, train, test dataset.CFSplit, scores *sync.M
 
 func init() {
 	rootCmd.PersistentFlags().StringP("config", "c", "", "Path to configuration file")
-	rootCmd.AddCommand(llmCmd)
-	llmCmd.PersistentFlags().IntP("shots", "s", math.MaxInt, "Number of shots for each user")
+	rootCmd.AddCommand(benchLLMCmd)
+	benchLLMCmd.PersistentFlags().IntP("shots", "s", math.MaxInt, "Number of shots for each user")
 }
 
 func main() {
