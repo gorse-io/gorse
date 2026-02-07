@@ -76,6 +76,11 @@ jobs:
           RUSTFS_ACCESS_KEY: rustfsadmin
           RUSTFS_SECRET_KEY: rustfsadmin
 
+      qdrant:
+        image: qdrant/qdrant:latest
+        ports:
+          - 6334
+
     steps:
     - name: Set up dataset
       run: |
@@ -123,6 +128,8 @@ jobs:
         S3_SECRET_ACCESS_KEY: rustfsadmin
         # Azure Blob (Azurite)
         AZURE_STORAGE_CONNECTION_STRING: DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://127.0.0.1:10000/devstoreaccount1;
+        # Qdrant
+        QDRANT_URI: qdrant://localhost:${{ job.services.qdrant.ports[6334] }}/
 
     - name: Upload coverage to Codecov
       if: matrix.os == 'ubuntu-latest'

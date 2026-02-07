@@ -49,3 +49,9 @@ services:
     ports:
       - 10000:10000
     command: azurite-blob --blobHost 0.0.0.0 --blobPort 10000
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    ports:
+      - 6333:6333
+      - 6334:6334
