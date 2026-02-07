@@ -1668,7 +1668,7 @@ func (s *RestServer) getTypedUserItemFeedback(request *restful.Request, response
 	itemId := request.PathParameter("item-id")
 	if feedback, err := s.DataClient.GetUserItemFeedback(ctx, userId, itemId, feedbackType); err != nil {
 		InternalServerError(response, err)
-	} else if feedbackType == "" {
+	} else if feedbackType == "" || len(feedback) == 0 {
 		Text(response, "{}")
 	} else {
 		Ok(response, feedback[0])
