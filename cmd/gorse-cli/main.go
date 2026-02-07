@@ -25,7 +25,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cenkalti/backoff/v5"
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/expr-lang/expr"
 	"github.com/expr-lang/expr/vm"
@@ -374,22 +373,20 @@ func EvaluateEmbedding(cfg *config.Config, train, test dataset.CFSplit, embeddin
 		if err != nil {
 			log.Logger().Fatal("failed to compile embedding expression", zap.Error(err))
 		}
-	}
-	if textExpr != "" {
+	} else if textExpr != "" {
 		textProgram, err = expr.Compile(textExpr, expr.Env(map[string]any{
 			"item": data.Item{},
 		}))
 		if err != nil {
 			log.Logger().Fatal("failed to compile text expression", zap.Error(err))
 		}
+	} else {
+		log.Logger().Fatal("one of embedding-column or text-column is required")
 	}
 
 	// Extract embeddings
 	embeddings := make([][]float32, test.CountItems())
 	if textExpr != "" {
-		// Initialize limiters
-		parallel.InitEmbeddingLimiters(cfg.OpenAI.EmbeddingRPM, cfg.OpenAI.EmbeddingTPM)
-		// Initialize OpenAI client
 		clientConfig := openai.DefaultConfig(cfg.OpenAI.AuthToken)
 		clientConfig.BaseURL = cfg.OpenAI.BaseURL
 		client := openai.NewClientWithConfig(clientConfig)
@@ -410,20 +407,11 @@ func EvaluateEmbedding(cfg *config.Config, train, test dataset.CFSplit, embeddin
 			}
 
 			// Generate embedding
-			resp, err := backoff.Retry(context.Background(), func() (openai.EmbeddingResponse, error) {
-				resp, err := client.CreateEmbeddings(context.Background(), openai.EmbeddingRequest{
-					Input:      text,
-					Model:      openai.EmbeddingModel(cfg.OpenAI.EmbeddingModel),
-					Dimensions: cfg.OpenAI.EmbeddingDimensions,
-				})
-				if err == nil {
-					return resp, nil
-				}
-				if isThrottled(err) {
-					return openai.EmbeddingResponse{}, err
-				}
-				return openai.EmbeddingResponse{}, backoff.Permanent(err)
-			}, backoff.WithBackOff(backoff.NewExponentialBackOff()))
+			resp, err := client.CreateEmbeddings(context.Background(), openai.EmbeddingRequest{
+				Input:      text,
+				Model:      openai.EmbeddingModel(cfg.OpenAI.EmbeddingModel),
+				Dimensions: cfg.OpenAI.EmbeddingDimensions,
+			})
 			if err != nil {
 				log.Logger().Error("failed to create embeddings", zap.String("item_id", item.ItemId), zap.Error(err))
 				return
@@ -509,7 +497,7 @@ func EvaluateEmbedding(cfg *config.Config, train, test dataset.CFSplit, embeddin
 	if count.Load() > 0 {
 		score = sum.Load() / count.Load()
 	}
-	scores.Store("Embedding", cf.Score{NDCG: score})
+	scores.Store(cfg.OpenAI.EmbeddingModel, cf.Score{NDCG: score})
 }
 
 var benchEmbeddingCmd = &cobra.Command{
@@ -550,6 +538,15 @@ var benchEmbeddingCmd = &cobra.Command{
 			log.Logger().Fatal("failed to load dataset", zap.Error(err))
 		}
 
+		// Override config
+		if cmd.Flags().Changed("embedding-model") {
+			cfg.OpenAI.EmbeddingModel = cmd.Flag("embedding-model").Value.String()
+		}
+		if cmd.Flags().Changed("embedding-dimensions") {
+			dimensions, _ := cmd.Flags().GetInt("embedding-dimensions")
+			cfg.OpenAI.EmbeddingDimensions = dimensions
+		}
+
 		// Split dataset
 		var scores sync.Map
 		train, test := dataset.SplitLatest(shots)
@@ -565,7 +562,6 @@ var benchEmbeddingCmd = &cobra.Command{
 		lo.Must0(table.Render())
 
 		jobs, _ := cmd.Flags().GetInt("jobs")
-		go EvaluateCF(train, test, &scores)
 		EvaluateEmbedding(cfg, train, test, embeddingColumn, textColumn, jobs, &scores)
 		data := [][]string{{"Model", "NDCG"}}
 		scores.Range(func(key, value any) bool {
@@ -582,11 +578,13 @@ var benchEmbeddingCmd = &cobra.Command{
 
 func init() {
 	rootCmd.PersistentFlags().StringP("config", "c", "", "Path to configuration file")
-	rootCmd.PersistentFlags().IntP("jobs", "j", 1, "Number of jobs to run in parallel")
+	rootCmd.PersistentFlags().IntP("jobs", "j", runtime.NumCPU(), "Number of jobs to run in parallel")
 	rootCmd.AddCommand(benchLLMCmd)
 	rootCmd.AddCommand(benchEmbeddingCmd)
 	benchLLMCmd.PersistentFlags().IntP("shots", "s", math.MaxInt, "Number of shots for each user")
 	benchEmbeddingCmd.PersistentFlags().IntP("shots", "s", math.MaxInt, "Number of shots for each user")
+	benchEmbeddingCmd.PersistentFlags().Int("embedding-dimensions", 0, "Embedding dimensions")
+	benchEmbeddingCmd.PersistentFlags().String("embedding-model", "", "Embedding model")
 	benchEmbeddingCmd.PersistentFlags().String("embedding-column", "", "Column name of embedding in item label")
 	benchEmbeddingCmd.PersistentFlags().String("text-column", "", "Column name of text in item label")
 }
@@ -595,16 +593,4 @@ func main() {
 	if err := rootCmd.Execute(); err != nil {
 		log.Logger().Fatal("failed to execute command", zap.Error(err))
 	}
-}
-
-func isThrottled(err error) bool {
-	switch e := err.(type) {
-	case *openai.APIError:
-		if e.HTTPStatusCode == 429 {
-			return true
-		}
-	case *openai.RequestError:
-		return e.HTTPStatusCode == 504 || e.HTTPStatusCode == 520
-	}
-	return false
 }
