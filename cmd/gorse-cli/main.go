@@ -385,6 +385,7 @@ func EvaluateEmbedding(cfg *config.Config, train, test dataset.CFSplit, embeddin
 	}
 
 	// Extract embeddings
+	var dimensions atomic.Int64
 	embeddings := make([][]float32, test.CountItems())
 	if textExpr != "" {
 		clientConfig := openai.DefaultConfig(cfg.OpenAI.AuthToken)
@@ -417,6 +418,9 @@ func EvaluateEmbedding(cfg *config.Config, train, test dataset.CFSplit, embeddin
 				return
 			}
 			embeddings[i] = resp.Data[0].Embedding
+			if dimensions.Load() == 0 {
+				dimensions.Store(int64(len(resp.Data[0].Embedding)))
+			}
 		}))
 	} else {
 		lo.Must0(parallel.For(context.Background(), test.CountItems(), jobs, func(i int) {
@@ -427,6 +431,13 @@ func EvaluateEmbedding(cfg *config.Config, train, test dataset.CFSplit, embeddin
 			if err == nil {
 				if e, ok := result.([]float32); ok {
 					embeddings[i] = e
+					if dim := dimensions.Swap(int64(len(e))); dim == 0 {
+						dimensions.Store(int64(len(e)))
+					} else if dim != int64(len(e)) {
+						log.Logger().Fatal("inconsistent embedding dimensions",
+							zap.Int64("expected", dim),
+							zap.Int64("got", int64(len(e))))
+					}
 				}
 			}
 		}))
@@ -497,7 +508,7 @@ func EvaluateEmbedding(cfg *config.Config, train, test dataset.CFSplit, embeddin
 	if count.Load() > 0 {
 		score = sum.Load() / count.Load()
 	}
-	scores.Store(cfg.OpenAI.EmbeddingModel, cf.Score{NDCG: score})
+	scores.Store(fmt.Sprintf("%s (%d)", cfg.OpenAI.EmbeddingModel, dimensions.Load()), cf.Score{NDCG: score})
 }
 
 var benchEmbeddingCmd = &cobra.Command{
@@ -542,10 +553,8 @@ var benchEmbeddingCmd = &cobra.Command{
 		if cmd.Flags().Changed("embedding-model") {
 			cfg.OpenAI.EmbeddingModel = cmd.Flag("embedding-model").Value.String()
 		}
-		if cmd.Flags().Changed("embedding-dimensions") {
-			dimensions, _ := cmd.Flags().GetInt("embedding-dimensions")
-			cfg.OpenAI.EmbeddingDimensions = dimensions
-		}
+		dimensions, _ := cmd.Flags().GetInt("embedding-dimensions")
+		cfg.OpenAI.EmbeddingDimensions = dimensions
 
 		// Split dataset
 		var scores sync.Map
