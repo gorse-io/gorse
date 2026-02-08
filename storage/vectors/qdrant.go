@@ -5,13 +5,16 @@ import (
 	"net/url"
 	"strconv"
 
+	"github.com/google/uuid"
 	"github.com/gorse-io/gorse/storage"
 	"github.com/juju/errors"
 	"github.com/qdrant/go-client/qdrant"
 )
 
 const (
-	defaultVectorSize = 100
+	defaultVectorSize          = 100
+	qdrantPayloadCategoriesKey = "categories"
+	qdrantPayloadIdKey         = "id"
 )
 
 func init() {
@@ -75,4 +78,138 @@ func (db *Qdrant) AddCollection(ctx context.Context, name string) error {
 
 func (db *Qdrant) DeleteCollection(ctx context.Context, name string) error {
 	return db.client.DeleteCollection(ctx, name)
+}
+
+func (db *Qdrant) AddVectors(ctx context.Context, collection string, vectors []Vector) error {
+	if len(vectors) == 0 {
+		return nil
+	}
+	points := make([]*qdrant.PointStruct, 0, len(vectors))
+	for _, vector := range vectors {
+		points = append(points, &qdrant.PointStruct{
+			Id: &qdrant.PointId{
+				PointIdOptions: &qdrant.PointId_Uuid{Uuid: uuid.NewMD5(uuid.NameSpaceURL, []byte(vector.Id)).String()},
+			},
+			Payload: map[string]*qdrant.Value{
+				qdrantPayloadCategoriesKey: qdrantListValue(vector.Categories),
+				qdrantPayloadIdKey:         {Kind: &qdrant.Value_StringValue{StringValue: vector.Id}},
+			},
+			Vectors: &qdrant.Vectors{
+				VectorsOptions: &qdrant.Vectors_Vector{
+					Vector: &qdrant.Vector{
+						Vector: &qdrant.Vector_Dense{
+							Dense: &qdrant.DenseVector{Data: vector.Vector},
+						},
+					},
+				},
+			},
+		})
+	}
+	_, err := db.client.Upsert(ctx, &qdrant.UpsertPoints{
+		CollectionName: collection,
+		Points:         points,
+	})
+	return errors.Trace(err)
+}
+
+func (db *Qdrant) QueryVectors(ctx context.Context, collection string, q []float32, categories []string, topK int) ([]Vector, error) {
+	if topK <= 0 {
+		return []Vector{}, nil
+	}
+	request := &qdrant.SearchPoints{
+		CollectionName: collection,
+		Vector:         q,
+		Limit:          uint64(topK),
+		WithPayload: &qdrant.WithPayloadSelector{
+			SelectorOptions: &qdrant.WithPayloadSelector_Enable{Enable: true},
+		},
+		WithVectors: &qdrant.WithVectorsSelector{
+			SelectorOptions: &qdrant.WithVectorsSelector_Enable{Enable: true},
+		},
+	}
+	if len(categories) > 0 {
+		request.Filter = &qdrant.Filter{
+			Must: []*qdrant.Condition{
+				{
+					ConditionOneOf: &qdrant.Condition_Field{
+						Field: &qdrant.FieldCondition{
+							Key: qdrantPayloadCategoriesKey,
+							Match: &qdrant.Match{
+								MatchValue: &qdrant.Match_Keywords{
+									Keywords: &qdrant.RepeatedStrings{Strings: categories},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+	}
+	response, err := db.client.GetPointsClient().Search(ctx, request)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	results := make([]Vector, 0, len(response.GetResult()))
+	for _, scored := range response.GetResult() {
+		results = append(results, Vector{
+			Id:         qdrantId(scored.GetPayload()),
+			Vector:     qdrantVectorOutput(scored.GetVectors()),
+			Categories: qdrantCategories(scored.GetPayload()),
+		})
+	}
+	return results, nil
+}
+
+func qdrantId(payload map[string]*qdrant.Value) string {
+	if payload == nil {
+		return ""
+	}
+	if value, ok := payload[qdrantPayloadIdKey]; ok {
+		return value.GetStringValue()
+	}
+	return ""
+}
+
+func qdrantListValue(items []string) *qdrant.Value {
+	values := make([]*qdrant.Value, 0, len(items))
+	for _, item := range items {
+		values = append(values, &qdrant.Value{Kind: &qdrant.Value_StringValue{StringValue: item}})
+	}
+	return &qdrant.Value{Kind: &qdrant.Value_ListValue{ListValue: &qdrant.ListValue{Values: values}}}
+}
+
+func qdrantCategories(payload map[string]*qdrant.Value) []string {
+	if payload == nil {
+		return []string{}
+	}
+	value, ok := payload[qdrantPayloadCategoriesKey]
+	if !ok || value == nil {
+		return []string{}
+	}
+	list := value.GetListValue()
+	if list == nil {
+		return []string{}
+	}
+	categories := make([]string, 0, len(list.GetValues()))
+	for _, item := range list.GetValues() {
+		if item == nil {
+			continue
+		}
+		categories = append(categories, item.GetStringValue())
+	}
+	return categories
+}
+
+func qdrantVectorOutput(output *qdrant.VectorsOutput) []float32 {
+	if output == nil {
+		return nil
+	}
+	vector := output.GetVector()
+	if vector == nil {
+		return nil
+	}
+	if dense := vector.GetDense(); dense != nil {
+		return dense.GetData()
+	}
+	return vector.GetData()
 }

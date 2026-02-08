@@ -80,6 +80,11 @@ jobs:
         image: qdrant/qdrant:latest
         ports:
           - 6334
+      
+      weaviate:
+        image: cr.weaviate.io/semitechnologies/weaviate:1.35.7
+        ports:
+          - 8080
 
     steps:
     - name: Set up dataset
@@ -130,6 +135,8 @@ jobs:
         AZURE_STORAGE_CONNECTION_STRING: DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://127.0.0.1:10000/devstoreaccount1;
         # Qdrant
         QDRANT_URI: qdrant://localhost:${{ job.services.qdrant.ports[6334] }}/
+        # Weaviate
+        WEAVIATE_URI: http://localhost:${{ job.services.weaviate.ports[8080] }}/
 
     - name: Upload coverage to Codecov
       if: matrix.os == 'ubuntu-latest'

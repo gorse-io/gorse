@@ -46,3 +46,53 @@ func (suite *vectorsTestSuite) TestCollections() {
 	err = suite.Database.DeleteCollection(ctx, "non-existent")
 	suite.Error(err)
 }
+
+func (suite *vectorsTestSuite) TestVectors() {
+	ctx := context.Background()
+	err := suite.Database.AddCollection(ctx, "test")
+	suite.NoError(err)
+
+	vectorA := make([]float32, defaultVectorSize)
+	vectorA[0] = 1
+	vectorB := make([]float32, defaultVectorSize)
+	vectorB[0] = 0.9
+	vectorB[1] = 0.1
+
+	err = suite.Database.AddVectors(ctx, "test", []Vector{
+		{
+			Id:         "a",
+			Vector:     vectorA,
+			Categories: []string{"cat-a", "common"},
+		},
+		{
+			Id:         "b",
+			Vector:     vectorB,
+			Categories: []string{"cat-b", "common"},
+		},
+	})
+	suite.NoError(err)
+
+	results, err := suite.Database.QueryVectors(ctx, "test", vectorA, []string{"cat-a"}, 10)
+	suite.NoError(err)
+	suite.Len(results, 1)
+	suite.Equal("a", results[0].Id)
+	suite.NotEmpty(results[0].Categories)
+
+	results, err = suite.Database.QueryVectors(ctx, "test", vectorA, []string{"common"}, 10)
+	suite.NoError(err)
+	suite.Len(results, 2)
+	ids := map[string]bool{}
+	for _, result := range results {
+		ids[result.Id] = true
+		suite.NotEmpty(result.Categories)
+	}
+	suite.True(ids["a"])
+	suite.True(ids["b"])
+
+	results, err = suite.Database.QueryVectors(ctx, "test", vectorA, nil, 1)
+	suite.NoError(err)
+	suite.NotEmpty(results)
+	for _, result := range results {
+		suite.NotEmpty(result.Categories)
+	}
+}

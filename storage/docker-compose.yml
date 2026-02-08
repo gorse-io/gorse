@@ -55,3 +55,8 @@ services:
     ports:
       - 6333:6333
       - 6334:6334
+
+  weaviate:
+    image: cr.weaviate.io/semitechnologies/weaviate:1.35.7
+    ports:
+      - 8080:8080

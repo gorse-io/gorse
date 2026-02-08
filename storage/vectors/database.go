@@ -3,10 +3,19 @@ package vectors
 import (
 	"context"
 	"strings"
+	"time"
 
 	"github.com/gorse-io/gorse/storage"
 	"github.com/juju/errors"
 )
+
+type Vector struct {
+	Id         string
+	Vector     []float32
+	IsHidden   bool      `json:"-"`
+	Categories []string  `json:"-" gorm:"type:text;serializer:json"`
+	Timestamp  time.Time `json:"-"`
+}
 
 type Database interface {
 	Init() error
@@ -14,6 +23,8 @@ type Database interface {
 	ListCollections(ctx context.Context) ([]string, error)
 	AddCollection(ctx context.Context, name string) error
 	DeleteCollection(ctx context.Context, name string) error
+	AddVectors(ctx context.Context, collection string, vectors []Vector) error
+	QueryVectors(ctx context.Context, collection string, q []float32, categories []string, topK int) ([]Vector, error)
 }
 
 // Creator creates a database instance.

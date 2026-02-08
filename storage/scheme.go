@@ -84,6 +84,8 @@ const (
 	RedisClusterPrefix  = "redis+cluster://"
 	RedissClusterPrefix = "rediss+cluster://"
 	QdrantPrefix        = "qdrant://"
+	WeaviatePrefix      = "weaviate://"
+	WeaviatesPrefix     = "weaviates://"
 )
 
 func AppendURLParams(rawURL string, params []lo.Tuple2[string, string]) (string, error) {
