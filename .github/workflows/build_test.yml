@@ -114,6 +114,11 @@ jobs:
     - name: Install and start Azurite
       uses: potatoqualitee/azuright@v1
 
+    - name: Setup Milvus
+      run: |
+        curl -sfL https://raw.githubusercontent.com/milvus-io/milvus/master/scripts/standalone_embed.sh -o standalone_embed.sh
+        bash standalone_embed.sh start
+
     - name: Test
       run: go test -timeout 30m -v ./... -coverprofile=coverage.txt -covermode=atomic -coverpkg=./...
       env:
