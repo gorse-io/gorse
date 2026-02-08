@@ -118,6 +118,7 @@ jobs:
       run: |
         curl -sfL https://raw.githubusercontent.com/milvus-io/milvus/master/scripts/standalone_embed.sh -o standalone_embed.sh
         bash standalone_embed.sh start
+      working-directory: ${{ runner.temp }}
 
     - name: Test
       run: go test -timeout 30m -v ./... -coverprofile=coverage.txt -covermode=atomic -coverpkg=./...
@@ -141,7 +142,7 @@ jobs:
         # Qdrant
         QDRANT_URI: qdrant://localhost:${{ job.services.qdrant.ports[6334] }}/
         # Weaviate
-        WEAVIATE_URI: http://localhost:${{ job.services.weaviate.ports[8080] }}/
+        WEAVIATE_URI: weaviate://localhost:${{ job.services.weaviate.ports[8080] }}/
 
     - name: Upload coverage to Codecov
       if: matrix.os == 'ubuntu-latest'
