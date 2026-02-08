@@ -29,6 +29,7 @@ import (
 	"github.com/expr-lang/expr"
 	"github.com/expr-lang/expr/vm"
 	"github.com/gorse-io/gorse/common/floats"
+	"github.com/gorse-io/gorse/common/heap"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/common/parallel"
 	"github.com/gorse-io/gorse/config"
@@ -103,13 +104,24 @@ var benchLLMCmd = &cobra.Command{
 		}))
 		lo.Must0(table.Render())
 
+		topK, _ := cmd.Flags().GetInt("top")
 		go EvaluateCF(train, test, &scores)
 		go EvaluateAFM(ctrDataset, train, test, &scores)
-		EvaluateLLM(cfg, train, test, &scores)
-		data := [][]string{{"Model", "NDCG"}}
+		EvaluateLLM(cfg, train, test, topK, &scores)
+		data := [][]string{{
+			"Ranker",
+			fmt.Sprintf("NDCG@%d", topK),
+			fmt.Sprintf("Precision@%d", topK),
+			fmt.Sprintf("Recall@%d", topK),
+		}}
 		scores.Range(func(key, value any) bool {
 			score := value.(cf.Score)
-			data = append(data, []string{key.(string), fmt.Sprintf("%.4f", score.NDCG)})
+			data = append(data, []string{
+				key.(string),
+				fmt.Sprintf("%.4f", score.NDCG),
+				fmt.Sprintf("%.4f", score.Precision),
+				fmt.Sprintf("%.4f", score.Recall),
+			})
 			return true
 		})
 		table = tablewriter.NewWriter(os.Stdout)
@@ -298,7 +310,7 @@ func SplitCTRDataset(ctrDataset *ctr.Dataset, train, test dataset.CFSplit) (*ctr
 	return trainSet, testSet
 }
 
-func EvaluateLLM(cfg *config.Config, train, test dataset.CFSplit, scores *sync.Map) {
+func EvaluateLLM(cfg *config.Config, train, test dataset.CFSplit, topK int, scores *sync.Map) {
 	chat, err := logics.NewChatRanker(cfg.OpenAI, cfg.Recommend.Ranker.Prompt)
 	if err != nil {
 		log.Logger().Fatal("failed to create chat ranker", zap.Error(err))
@@ -339,9 +351,13 @@ func EvaluateLLM(cfg *config.Config, train, test dataset.CFSplit, scores *sync.M
 		pCtx.Attach()
 		var score float32
 		if len(result) > 0 {
-			score = cf.NDCG(targetSet, lo.Map(result, func(itemId string, _ int) int32 {
-				return train.GetItemDict().Id(itemId)
-			}))
+			rankList := make([]int32, 0, len(result))
+			for i, itemId := range result {
+				if i < topK {
+					rankList = append(rankList, train.GetItemDict().Id(itemId))
+				}
+			}
+			score = cf.NDCG(targetSet, rankList)
 		} else {
 			score = 0
 		}
@@ -362,7 +378,7 @@ func EvaluateLLM(cfg *config.Config, train, test dataset.CFSplit, scores *sync.M
 	scores.Store(cfg.OpenAI.ChatCompletionModel, cf.Score{NDCG: score})
 }
 
-func EvaluateEmbedding(cfg *config.Config, train, test dataset.CFSplit, embeddingExpr, textExpr string, jobs int, scores *sync.Map) {
+func EvaluateEmbedding(cfg *config.Config, train, test dataset.CFSplit, embeddingExpr, textExpr string, topK, jobs int, scores *sync.Map) {
 	// Compile expression
 	var embeddingProgram, textProgram *vm.Program
 	var err error
@@ -443,8 +459,12 @@ func EvaluateEmbedding(cfg *config.Config, train, test dataset.CFSplit, embeddin
 		}))
 	}
 
-	var sum atomic.Float32
-	var count atomic.Float32
+	var (
+		ndcg      atomic.Float32
+		precision atomic.Float32
+		recall    atomic.Float32
+		count     atomic.Float32
+	)
 	negatives := test.SampleUserNegatives(train, 99)
 	lo.Must0(parallel.For(context.Background(), test.CountUsers(), jobs, func(userIdx int) {
 		targetSet := mapset.NewSet(test.GetUserFeedback()[userIdx]...)
@@ -462,11 +482,7 @@ func EvaluateEmbedding(cfg *config.Config, train, test dataset.CFSplit, embeddin
 			return
 		}
 
-		type scoredItem struct {
-			item  int32
-			score float32
-		}
-		scored := make([]scoredItem, 0, len(candidates))
+		h := heap.NewTopKFilter[int32, float32](topK)
 		for _, candidateIdx := range candidates {
 			candidateEmbedding := embeddings[candidateIdx]
 			if candidateEmbedding == nil {
@@ -479,36 +495,34 @@ func EvaluateEmbedding(cfg *config.Config, train, test dataset.CFSplit, embeddin
 				if shotEmbedding == nil {
 					continue
 				}
-				totalDistance += floats.Euclidean(candidateEmbedding, shotEmbedding)
+				totalDistance -= floats.Euclidean(candidateEmbedding, shotEmbedding)
 				validShots++
 			}
 			if validShots > 0 {
-				scored = append(scored, scoredItem{item: candidateIdx, score: totalDistance})
+				h.Push(candidateIdx, totalDistance)
 			}
 		}
 
-		if len(scored) == 0 {
+		if h.Len() == 0 {
 			return
 		}
 
-		sort.Slice(scored, func(i, j int) bool {
-			return scored[i].score < scored[j].score // Smaller distance is better
-		})
-
-		rankList := make([]int32, 0, len(scored))
-		for _, s := range scored {
-			rankList = append(rankList, s.item)
-		}
-
-		sum.Add(cf.NDCG(targetSet, rankList))
+		rankList := h.PopAllValues()
+		ndcg.Add(cf.NDCG(targetSet, rankList))
+		precision.Add(cf.Precision(targetSet, rankList))
+		recall.Add(cf.Recall(targetSet, rankList))
 		count.Add(1)
 	}))
 
-	score := float32(0)
+	var score cf.Score
 	if count.Load() > 0 {
-		score = sum.Load() / count.Load()
+		score = cf.Score{
+			NDCG:      ndcg.Load() / count.Load(),
+			Precision: precision.Load() / count.Load(),
+			Recall:    recall.Load() / count.Load(),
+		}
 	}
-	scores.Store(fmt.Sprintf("%s (%d)", cfg.OpenAI.EmbeddingModel, dimensions.Load()), cf.Score{NDCG: score})
+	scores.Store(fmt.Sprintf("%s (%d)", cfg.OpenAI.EmbeddingModel, dimensions.Load()), score)
 }
 
 var benchEmbeddingCmd = &cobra.Command{
@@ -570,12 +584,23 @@ var benchEmbeddingCmd = &cobra.Command{
 		}))
 		lo.Must0(table.Render())
 
+		topK, _ := cmd.Flags().GetInt("top")
 		jobs, _ := cmd.Flags().GetInt("jobs")
-		EvaluateEmbedding(cfg, train, test, embeddingColumn, textColumn, jobs, &scores)
-		data := [][]string{{"Model", "NDCG"}}
+		EvaluateEmbedding(cfg, train, test, embeddingColumn, textColumn, topK, jobs, &scores)
+		data := [][]string{{
+			"Embedding Model",
+			fmt.Sprintf("NDCG@%d", topK),
+			fmt.Sprintf("Precision@%d", topK),
+			fmt.Sprintf("Recall@%d", topK),
+		}}
 		scores.Range(func(key, value any) bool {
 			score := value.(cf.Score)
-			data = append(data, []string{key.(string), fmt.Sprintf("%.4f", score.NDCG)})
+			data = append(data, []string{
+				key.(string),
+				fmt.Sprintf("%.4f", score.NDCG),
+				fmt.Sprintf("%.4f", score.Precision),
+				fmt.Sprintf("%.4f", score.Recall),
+			})
 			return true
 		})
 		table = tablewriter.NewWriter(os.Stdout)
@@ -588,6 +613,7 @@ var benchEmbeddingCmd = &cobra.Command{
 func init() {
 	rootCmd.PersistentFlags().StringP("config", "c", "", "Path to configuration file")
 	rootCmd.PersistentFlags().IntP("jobs", "j", runtime.NumCPU(), "Number of jobs to run in parallel")
+	rootCmd.PersistentFlags().IntP("top", "k", 10, "Number of top items to evaluate for each user")
 	rootCmd.AddCommand(benchLLMCmd)
 	rootCmd.AddCommand(benchEmbeddingCmd)
 	benchLLMCmd.PersistentFlags().IntP("shots", "s", math.MaxInt, "Number of shots for each user")
