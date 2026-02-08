@@ -26,6 +26,10 @@ import (
 	"time"
 
 	mapset "github.com/deckarep/golang-set/v2"
+	"github.com/expr-lang/expr"
+	"github.com/expr-lang/expr/vm"
+	"github.com/gorse-io/gorse/common/floats"
+	"github.com/gorse-io/gorse/common/heap"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/common/parallel"
 	"github.com/gorse-io/gorse/config"
@@ -39,6 +43,7 @@ import (
 	"github.com/olekukonko/tablewriter"
 	"github.com/samber/lo"
 	"github.com/sashabaranov/go-openai"
+	"github.com/schollz/progressbar/v3"
 	"github.com/spf13/cobra"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
@@ -99,13 +104,24 @@ var benchLLMCmd = &cobra.Command{
 		}))
 		lo.Must0(table.Render())
 
+		topK, _ := cmd.Flags().GetInt("top")
 		go EvaluateCF(train, test, &scores)
 		go EvaluateAFM(ctrDataset, train, test, &scores)
-		EvaluateLLM(cfg, train, test, &scores)
-		data := [][]string{{"Model", "NDCG"}}
+		EvaluateLLM(cfg, train, test, topK, &scores)
+		data := [][]string{{
+			"Ranker",
+			fmt.Sprintf("NDCG@%d", topK),
+			fmt.Sprintf("Precision@%d", topK),
+			fmt.Sprintf("Recall@%d", topK),
+		}}
 		scores.Range(func(key, value any) bool {
 			score := value.(cf.Score)
-			data = append(data, []string{key.(string), fmt.Sprintf("%.4f", score.NDCG)})
+			data = append(data, []string{
+				key.(string),
+				fmt.Sprintf("%.4f", score.NDCG),
+				fmt.Sprintf("%.4f", score.Precision),
+				fmt.Sprintf("%.4f", score.Recall),
+			})
 			return true
 		})
 		table = tablewriter.NewWriter(os.Stdout)
@@ -294,7 +310,7 @@ func SplitCTRDataset(ctrDataset *ctr.Dataset, train, test dataset.CFSplit) (*ctr
 	return trainSet, testSet
 }
 
-func EvaluateLLM(cfg *config.Config, train, test dataset.CFSplit, scores *sync.Map) {
+func EvaluateLLM(cfg *config.Config, train, test dataset.CFSplit, topK int, scores *sync.Map) {
 	chat, err := logics.NewChatRanker(cfg.OpenAI, cfg.Recommend.Ranker.Prompt)
 	if err != nil {
 		log.Logger().Fatal("failed to create chat ranker", zap.Error(err))
@@ -335,9 +351,13 @@ func EvaluateLLM(cfg *config.Config, train, test dataset.CFSplit, scores *sync.M
 		pCtx.Attach()
 		var score float32
 		if len(result) > 0 {
-			score = cf.NDCG(targetSet, lo.Map(result, func(itemId string, _ int) int32 {
-				return train.GetItemDict().Id(itemId)
-			}))
+			rankList := make([]int32, 0, len(result))
+			for i, itemId := range result {
+				if i < topK {
+					rankList = append(rankList, train.GetItemDict().Id(itemId))
+				}
+			}
+			score = cf.NDCG(targetSet, rankList)
 		} else {
 			score = 0
 		}
@@ -358,10 +378,250 @@ func EvaluateLLM(cfg *config.Config, train, test dataset.CFSplit, scores *sync.M
 	scores.Store(cfg.OpenAI.ChatCompletionModel, cf.Score{NDCG: score})
 }
 
+func EvaluateEmbedding(cfg *config.Config, train, test dataset.CFSplit, embeddingExpr, textExpr string, topK, jobs int, scores *sync.Map) {
+	// Compile expression
+	var embeddingProgram, textProgram *vm.Program
+	var err error
+	if embeddingExpr != "" {
+		embeddingProgram, err = expr.Compile(embeddingExpr, expr.Env(map[string]any{
+			"item": data.Item{},
+		}))
+		if err != nil {
+			log.Logger().Fatal("failed to compile embedding expression", zap.Error(err))
+		}
+	} else if textExpr != "" {
+		textProgram, err = expr.Compile(textExpr, expr.Env(map[string]any{
+			"item": data.Item{},
+		}))
+		if err != nil {
+			log.Logger().Fatal("failed to compile text expression", zap.Error(err))
+		}
+	} else {
+		log.Logger().Fatal("one of embedding-column or text-column is required")
+	}
+
+	// Extract embeddings
+	var dimensions atomic.Int64
+	embeddings := make([][]float32, test.CountItems())
+	if textExpr != "" {
+		clientConfig := openai.DefaultConfig(cfg.OpenAI.AuthToken)
+		clientConfig.BaseURL = cfg.OpenAI.BaseURL
+		client := openai.NewClientWithConfig(clientConfig)
+		// Generate embeddings
+		bar := progressbar.Default(int64(test.CountItems()))
+		lo.Must0(parallel.For(context.Background(), test.CountItems(), jobs, func(i int) {
+			_ = bar.Add(1)
+			item := &test.GetItems()[i]
+			result, err := expr.Run(textProgram, map[string]any{
+				"item": *item,
+			})
+			if err != nil {
+				return
+			}
+			text, ok := result.(string)
+			if !ok {
+				return
+			}
+
+			// Generate embedding
+			resp, err := client.CreateEmbeddings(context.Background(), openai.EmbeddingRequest{
+				Input:      text,
+				Model:      openai.EmbeddingModel(cfg.OpenAI.EmbeddingModel),
+				Dimensions: cfg.OpenAI.EmbeddingDimensions,
+			})
+			if err != nil {
+				log.Logger().Error("failed to create embeddings", zap.String("item_id", item.ItemId), zap.Error(err))
+				return
+			}
+			embeddings[i] = resp.Data[0].Embedding
+			if dimensions.Load() == 0 {
+				dimensions.Store(int64(len(resp.Data[0].Embedding)))
+			}
+		}))
+	} else {
+		lo.Must0(parallel.For(context.Background(), test.CountItems(), jobs, func(i int) {
+			item := test.GetItems()[i]
+			result, err := expr.Run(embeddingProgram, map[string]any{
+				"item": item,
+			})
+			if err == nil {
+				if e, ok := result.([]float32); ok {
+					embeddings[i] = e
+					if dim := dimensions.Swap(int64(len(e))); dim == 0 {
+						dimensions.Store(int64(len(e)))
+					} else if dim != int64(len(e)) {
+						log.Logger().Fatal("inconsistent embedding dimensions",
+							zap.Int64("expected", dim),
+							zap.Int64("got", int64(len(e))))
+					}
+				}
+			}
+		}))
+	}
+
+	var (
+		ndcg      atomic.Float32
+		precision atomic.Float32
+		recall    atomic.Float32
+		count     atomic.Float32
+	)
+	negatives := test.SampleUserNegatives(train, 99)
+	lo.Must0(parallel.For(context.Background(), test.CountUsers(), jobs, func(userIdx int) {
+		targetSet := mapset.NewSet(test.GetUserFeedback()[userIdx]...)
+		negativeSample := negatives[userIdx]
+		if len(test.GetUserFeedback()[userIdx]) == 0 {
+			return
+		}
+
+		candidates := make([]int32, 0, targetSet.Cardinality()+len(negativeSample))
+		candidates = append(candidates, test.GetUserFeedback()[userIdx]...)
+		candidates = append(candidates, negativeSample...)
+
+		feedback := train.GetUserFeedback()[userIdx]
+		if len(feedback) == 0 {
+			return
+		}
+
+		h := heap.NewTopKFilter[int32, float32](topK)
+		for _, candidateIdx := range candidates {
+			candidateEmbedding := embeddings[candidateIdx]
+			if candidateEmbedding == nil {
+				continue
+			}
+			var totalDistance float32
+			var validShots int
+			for _, shotIdx := range feedback {
+				shotEmbedding := embeddings[shotIdx]
+				if shotEmbedding == nil {
+					continue
+				}
+				totalDistance -= floats.Euclidean(candidateEmbedding, shotEmbedding)
+				validShots++
+			}
+			if validShots > 0 {
+				h.Push(candidateIdx, totalDistance)
+			}
+		}
+
+		if h.Len() == 0 {
+			return
+		}
+
+		rankList := h.PopAllValues()
+		ndcg.Add(cf.NDCG(targetSet, rankList))
+		precision.Add(cf.Precision(targetSet, rankList))
+		recall.Add(cf.Recall(targetSet, rankList))
+		count.Add(1)
+	}))
+
+	var score cf.Score
+	if count.Load() > 0 {
+		score = cf.Score{
+			NDCG:      ndcg.Load() / count.Load(),
+			Precision: precision.Load() / count.Load(),
+			Recall:    recall.Load() / count.Load(),
+		}
+	}
+	scores.Store(fmt.Sprintf("%s (%d)", cfg.OpenAI.EmbeddingModel, dimensions.Load()), score)
+}
+
+var benchEmbeddingCmd = &cobra.Command{
+	Use:   "bench-embedding",
+	Short: "Benchmark embedding models for item-to-item",
+	Run: func(cmd *cobra.Command, args []string) {
+		// Load configuration
+		configPath, _ := cmd.Flags().GetString("config")
+		cfg, err := config.LoadConfig(configPath)
+		if err != nil {
+			log.Logger().Fatal("failed to load config", zap.Error(err))
+		}
+		shots, _ := cmd.Flags().GetInt("shots")
+		embeddingColumn, _ := cmd.Flags().GetString("embedding-column")
+		textColumn, _ := cmd.Flags().GetString("text-column")
+		if embeddingColumn == "" && textColumn == "" {
+			log.Logger().Fatal("one of embedding-column or text-column is required")
+		}
+
+		// Load dataset
+		m := master.NewMaster(cfg, os.TempDir(), false, configPath)
+		m.DataClient, err = data.Open(m.Config.Database.DataStore, m.Config.Database.DataTablePrefix,
+			storage.WithIsolationLevel(m.Config.Database.MySQL.IsolationLevel))
+		if err != nil {
+			log.Logger().Fatal("failed to open data client", zap.Error(err))
+		}
+		evaluator := master.NewOnlineEvaluator(
+			m.Config.Recommend.DataSource.PositiveFeedbackTypes,
+			m.Config.Recommend.DataSource.ReadFeedbackTypes)
+		_, dataset, err := m.LoadDataFromDatabase(context.Background(), m.DataClient,
+			m.Config.Recommend.DataSource.PositiveFeedbackTypes,
+			m.Config.Recommend.DataSource.ReadFeedbackTypes,
+			m.Config.Recommend.DataSource.ItemTTL,
+			m.Config.Recommend.DataSource.PositiveFeedbackTTL,
+			evaluator,
+			nil)
+		if err != nil {
+			log.Logger().Fatal("failed to load dataset", zap.Error(err))
+		}
+
+		// Override config
+		if cmd.Flags().Changed("embedding-model") {
+			cfg.OpenAI.EmbeddingModel = cmd.Flag("embedding-model").Value.String()
+		}
+		dimensions, _ := cmd.Flags().GetInt("embedding-dimensions")
+		cfg.OpenAI.EmbeddingDimensions = dimensions
+
+		// Split dataset
+		var scores sync.Map
+		train, test := dataset.SplitLatest(shots)
+		test.SampleUserNegatives(dataset, 99)
+
+		table := tablewriter.NewWriter(os.Stdout)
+		table.Header([]string{"", "#users", "#items", "#interactions"})
+		lo.Must0(table.Bulk([][]string{
+			{"total", strconv.Itoa(dataset.CountUsers()), strconv.Itoa(dataset.CountItems()), strconv.Itoa(dataset.CountFeedback())},
+			{"train", strconv.Itoa(train.CountUsers()), strconv.Itoa(train.CountItems()), strconv.Itoa(train.CountFeedback())},
+			{"test", strconv.Itoa(test.CountUsers()), strconv.Itoa(test.CountItems()), strconv.Itoa(test.CountFeedback())},
+		}))
+		lo.Must0(table.Render())
+
+		topK, _ := cmd.Flags().GetInt("top")
+		jobs, _ := cmd.Flags().GetInt("jobs")
+		EvaluateEmbedding(cfg, train, test, embeddingColumn, textColumn, topK, jobs, &scores)
+		data := [][]string{{
+			"Embedding Model",
+			fmt.Sprintf("NDCG@%d", topK),
+			fmt.Sprintf("Precision@%d", topK),
+			fmt.Sprintf("Recall@%d", topK),
+		}}
+		scores.Range(func(key, value any) bool {
+			score := value.(cf.Score)
+			data = append(data, []string{
+				key.(string),
+				fmt.Sprintf("%.4f", score.NDCG),
+				fmt.Sprintf("%.4f", score.Precision),
+				fmt.Sprintf("%.4f", score.Recall),
+			})
+			return true
+		})
+		table = tablewriter.NewWriter(os.Stdout)
+		table.Header(data[0])
+		lo.Must0(table.Bulk(data[1:]))
+		lo.Must0(table.Render())
+	},
+}
+
 func init() {
 	rootCmd.PersistentFlags().StringP("config", "c", "", "Path to configuration file")
+	rootCmd.PersistentFlags().IntP("jobs", "j", runtime.NumCPU(), "Number of jobs to run in parallel")
+	rootCmd.PersistentFlags().IntP("top", "k", 10, "Number of top items to evaluate for each user")
 	rootCmd.AddCommand(benchLLMCmd)
+	rootCmd.AddCommand(benchEmbeddingCmd)
 	benchLLMCmd.PersistentFlags().IntP("shots", "s", math.MaxInt, "Number of shots for each user")
+	benchEmbeddingCmd.PersistentFlags().IntP("shots", "s", math.MaxInt, "Number of shots for each user")
+	benchEmbeddingCmd.PersistentFlags().Int("embedding-dimensions", 0, "Embedding dimensions")
+	benchEmbeddingCmd.PersistentFlags().String("embedding-model", "", "Embedding model")
+	benchEmbeddingCmd.PersistentFlags().String("embedding-column", "", "Column name of embedding in item label")
+	benchEmbeddingCmd.PersistentFlags().String("text-column", "", "Column name of text in item label")
 }
 
 func main() {
