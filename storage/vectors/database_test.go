@@ -6,6 +6,8 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
+const defaultVectorSize = 4
+
 type vectorsTestSuite struct {
 	suite.Suite
 	Database
@@ -29,7 +31,7 @@ func (suite *vectorsTestSuite) TestCollections() {
 	suite.NoError(err)
 	suite.Empty(collections)
 	// create collection
-	err = suite.Database.AddCollection(ctx, "test")
+	err = suite.Database.AddCollection(ctx, "test", defaultVectorSize, Cosine)
 	suite.NoError(err)
 	// list collections
 	collections, err = suite.Database.ListCollections(ctx)
@@ -49,7 +51,7 @@ func (suite *vectorsTestSuite) TestCollections() {
 
 func (suite *vectorsTestSuite) TestVectors() {
 	ctx := context.Background()
-	err := suite.Database.AddCollection(ctx, "test")
+	err := suite.Database.AddCollection(ctx, "test", defaultVectorSize, Cosine)
 	suite.NoError(err)
 
 	vectorA := make([]float32, defaultVectorSize)

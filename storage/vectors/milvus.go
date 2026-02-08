@@ -73,11 +73,11 @@ func (db *Milvus) ListCollections(ctx context.Context) ([]string, error) {
 	return names, nil
 }
 
-func (db *Milvus) AddCollection(ctx context.Context, name string) error {
+func (db *Milvus) AddCollection(ctx context.Context, name string, dimensions int, distance Distance) error {
 	schema := entity.NewSchema().WithName(name).WithDescription("gorse collection").
 		WithField(entity.NewField().WithName(milvusIdField).WithDataType(entity.FieldTypeVarChar).WithMaxLength(65535).WithIsPrimaryKey(true)).
 		WithField(entity.NewField().WithName(milvusCategoriesField).WithDataType(entity.FieldTypeArray).WithElementType(entity.FieldTypeVarChar).WithMaxCapacity(100).WithMaxLength(65535)).
-		WithField(entity.NewField().WithName(milvusVectorField).WithDataType(entity.FieldTypeFloatVector).WithDim(defaultVectorSize))
+		WithField(entity.NewField().WithName(milvusVectorField).WithDataType(entity.FieldTypeFloatVector).WithDim(int64(dimensions)))
 
 	err := db.client.CreateCollection(ctx, schema, entity.DefaultShardNumber)
 	if err != nil {
@@ -85,7 +85,18 @@ func (db *Milvus) AddCollection(ctx context.Context, name string) error {
 	}
 
 	// Create index
-	idx, err := entity.NewIndexHNSW(entity.COSINE, 8, 200)
+	var metricType entity.MetricType
+	switch distance {
+	case Cosine:
+		metricType = entity.COSINE
+	case Euclidean:
+		metricType = entity.L2
+	case Dot:
+		metricType = entity.IP
+	default:
+		return errors.NotSupportedf("distance method")
+	}
+	idx, err := entity.NewIndexHNSW(metricType, 8, 200)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -126,7 +137,7 @@ func (db *Milvus) AddVectors(ctx context.Context, collection string, vectors []V
 
 	idCol := entity.NewColumnVarChar(milvusIdField, ids)
 	categoriesCol := entity.NewColumnVarCharArray(milvusCategoriesField, milvusStringsToBytes(categories))
-	vectorCol := entity.NewColumnFloatVector(milvusVectorField, defaultVectorSize, data)
+	vectorCol := entity.NewColumnFloatVector(milvusVectorField, len(data[0]), data)
 
 	_, err := db.client.Upsert(ctx, collection, "", idCol, categoriesCol, vectorCol)
 	return errors.Trace(err)

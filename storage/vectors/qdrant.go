@@ -12,7 +12,6 @@ import (
 )
 
 const (
-	defaultVectorSize          = 100
 	qdrantPayloadCategoriesKey = "categories"
 	qdrantPayloadIdKey         = "id"
 )
@@ -54,23 +53,26 @@ func (db *Qdrant) Close() error {
 }
 
 func (db *Qdrant) ListCollections(ctx context.Context) ([]string, error) {
-	collections, err := db.client.ListCollections(ctx)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-	var names []string
-	for _, collection := range collections {
-		names = append(names, collection)
-	}
-	return names, nil
+	return db.client.ListCollections(ctx)
 }
 
-func (db *Qdrant) AddCollection(ctx context.Context, name string) error {
+func (db *Qdrant) AddCollection(ctx context.Context, name string, dimensions int, distance Distance) error {
+	var qdrantDistance qdrant.Distance
+	switch distance {
+	case Cosine:
+		qdrantDistance = qdrant.Distance_Cosine
+	case Euclidean:
+		qdrantDistance = qdrant.Distance_Euclid
+	case Dot:
+		qdrantDistance = qdrant.Distance_Dot
+	default:
+		return errors.NotSupportedf("distance method")
+	}
 	err := db.client.CreateCollection(ctx, &qdrant.CreateCollection{
 		CollectionName: name,
 		VectorsConfig: qdrant.NewVectorsConfig(&qdrant.VectorParams{
-			Size:     defaultVectorSize,
-			Distance: qdrant.Distance_Cosine,
+			Size:     uint64(dimensions),
+			Distance: qdrantDistance,
 		}),
 	})
 	return errors.Trace(err)

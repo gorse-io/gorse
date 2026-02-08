@@ -181,7 +181,7 @@ jobs:
         go-version-file: ./go.mod
 
     - name: Test
-      run: go test -timeout 20m -v ./... -skip "TestPostgres|TestMySQL|TestMongo|TestRedis|TestClickHouse"
+      run: go test -timeout 20m -v ./... -skip "TestPostgres|TestMySQL|TestMongo|TestRedis|TestClickHouse|TestMilvus|TestQdrant|TestWeaviate"
 
   unit_test_windows:
     strategy:
@@ -215,7 +215,7 @@ jobs:
         go-version-file: ./go.mod
 
     - name: Test
-      run: go test -timeout 20m -v ./... -skip "TestPostgres|TestMySQL|TestMongo|TestRedis|TestClickHouse"
+      run: go test -timeout 20m -v ./... -skip "TestPostgres|TestMySQL|TestMongo|TestRedis|TestClickHouse|TestMilvus|TestQdrant|TestWeaviate"
 
   integrate_test:
     name: integrate tests

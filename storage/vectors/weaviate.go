@@ -66,7 +66,18 @@ func (db *Weaviate) ListCollections(ctx context.Context) ([]string, error) {
 	return names, nil
 }
 
-func (db *Weaviate) AddCollection(ctx context.Context, name string) error {
+func (db *Weaviate) AddCollection(ctx context.Context, name string, dimensions int, distance Distance) error {
+	var weaviateDistance string
+	switch distance {
+	case Cosine:
+		weaviateDistance = "cosine"
+	case Euclidean:
+		weaviateDistance = "l2-squared"
+	case Dot:
+		weaviateDistance = "dot"
+	default:
+		return errors.NotSupportedf("distance method")
+	}
 	class := &models.Class{
 		Class:      capitalize(name),
 		Vectorizer: "none",
@@ -81,7 +92,7 @@ func (db *Weaviate) AddCollection(ctx context.Context, name string) error {
 			},
 		},
 		VectorIndexConfig: map[string]interface{}{
-			"distance": "cosine",
+			"distance": weaviateDistance,
 		},
 	}
 	err := db.client.Schema().ClassCreator().WithClass(class).Do(ctx)

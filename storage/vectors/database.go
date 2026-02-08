@@ -9,6 +9,14 @@ import (
 	"github.com/juju/errors"
 )
 
+type Distance int
+
+const (
+	Cosine Distance = iota
+	Euclidean
+	Dot
+)
+
 type Vector struct {
 	Id         string
 	Vector     []float32
@@ -21,7 +29,7 @@ type Database interface {
 	Init() error
 	Close() error
 	ListCollections(ctx context.Context) ([]string, error)
-	AddCollection(ctx context.Context, name string) error
+	AddCollection(ctx context.Context, name string, dimensions int, distance Distance) error
 	DeleteCollection(ctx context.Context, name string) error
 	AddVectors(ctx context.Context, collection string, vectors []Vector) error
 	QueryVectors(ctx context.Context, collection string, q []float32, categories []string, topK int) ([]Vector, error)
