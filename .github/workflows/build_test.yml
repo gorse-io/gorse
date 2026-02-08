@@ -76,6 +76,16 @@ jobs:
           RUSTFS_ACCESS_KEY: rustfsadmin
           RUSTFS_SECRET_KEY: rustfsadmin
 
+      qdrant:
+        image: qdrant/qdrant:latest
+        ports:
+          - 6334
+      
+      weaviate:
+        image: cr.weaviate.io/semitechnologies/weaviate:1.35.7
+        ports:
+          - 8080
+
     steps:
     - name: Set up dataset
       run: |
@@ -104,6 +114,12 @@ jobs:
     - name: Install and start Azurite
       uses: potatoqualitee/azuright@v1
 
+    - name: Setup Milvus
+      run: |
+        curl -sfL https://raw.githubusercontent.com/milvus-io/milvus/master/scripts/standalone_embed.sh -o standalone_embed.sh
+        bash standalone_embed.sh start
+      working-directory: ${{ runner.temp }}
+
     - name: Test
       run: go test -timeout 30m -v ./... -coverprofile=coverage.txt -covermode=atomic -coverpkg=./...
       env:
@@ -123,6 +139,10 @@ jobs:
         S3_SECRET_ACCESS_KEY: rustfsadmin
         # Azure Blob (Azurite)
         AZURE_STORAGE_CONNECTION_STRING: DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://127.0.0.1:10000/devstoreaccount1;
+        # Qdrant
+        QDRANT_URI: qdrant://localhost:${{ job.services.qdrant.ports[6334] }}/
+        # Weaviate
+        WEAVIATE_URI: weaviate://localhost:${{ job.services.weaviate.ports[8080] }}/
 
     - name: Upload coverage to Codecov
       if: matrix.os == 'ubuntu-latest'
@@ -161,7 +181,7 @@ jobs:
         go-version-file: ./go.mod
 
     - name: Test
-      run: go test -timeout 20m -v ./... -skip "TestPostgres|TestMySQL|TestMongo|TestRedis|TestClickHouse"
+      run: go test -timeout 20m -v ./... -skip "TestPostgres|TestMySQL|TestMongo|TestRedis|TestClickHouse|TestMilvus|TestQdrant|TestWeaviate"
 
   unit_test_windows:
     strategy:
@@ -195,7 +215,7 @@ jobs:
         go-version-file: ./go.mod
 
     - name: Test
-      run: go test -timeout 20m -v ./... -skip "TestPostgres|TestMySQL|TestMongo|TestRedis|TestClickHouse"
+      run: go test -timeout 20m -v ./... -skip "TestPostgres|TestMySQL|TestMongo|TestRedis|TestClickHouse|TestMilvus|TestQdrant|TestWeaviate"
 
   integrate_test:
     name: integrate tests
