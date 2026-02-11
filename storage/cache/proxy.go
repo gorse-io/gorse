@@ -88,7 +88,7 @@ func (p *ProxyServer) Pop(ctx context.Context, request *protocol.PopRequest) (*p
 		}
 		return nil, err
 	}
-	return &protocol.PopResponse{Value: new(value)}, nil
+	return &protocol.PopResponse{Value: &value}, nil
 }
 
 func (p *ProxyServer) Remain(ctx context.Context, request *protocol.RemainRequest) (*protocol.RemainResponse, error) {
