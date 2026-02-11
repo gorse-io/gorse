@@ -30,7 +30,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-	"google.golang.org/protobuf/proto"
 )
 
 var (
@@ -225,7 +224,7 @@ func (suite *baseTestSuite) TestUsers() {
 	suite.NoError(err)
 	suite.Equal("override", user.Comment)
 	// test modify
-	err = suite.Database.ModifyUser(ctx, "1", UserPatch{Comment: proto.String("modify")})
+	err = suite.Database.ModifyUser(ctx, "1", UserPatch{Comment: new("modify")})
 	suite.NoError(err)
 	err = suite.Database.ModifyUser(ctx, "1", UserPatch{Labels: []string{"a", "b", "c"}})
 	suite.NoError(err)
@@ -572,11 +571,11 @@ func (suite *baseTestSuite) TestItems() {
 
 	// test modify
 	timestamp := time.Date(2000, 1, 1, 1, 1, 1, 0, time.UTC)
-	err = suite.Database.ModifyItem(ctx, "2", ItemPatch{IsHidden: proto.Bool(true)})
+	err = suite.Database.ModifyItem(ctx, "2", ItemPatch{IsHidden: new(true)})
 	suite.NoError(err)
 	err = suite.Database.ModifyItem(ctx, "2", ItemPatch{Categories: []string{"a"}})
 	suite.NoError(err)
-	err = suite.Database.ModifyItem(ctx, "2", ItemPatch{Comment: proto.String("modify")})
+	err = suite.Database.ModifyItem(ctx, "2", ItemPatch{Comment: new("modify")})
 	suite.NoError(err)
 	err = suite.Database.ModifyItem(ctx, "2", ItemPatch{Labels: []string{"a", "b", "c"}})
 	suite.NoError(err)

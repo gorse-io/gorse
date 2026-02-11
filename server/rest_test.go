@@ -31,7 +31,6 @@ import (
 	"github.com/steinfletcher/apitest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
-	"google.golang.org/protobuf/proto"
 )
 
 const apiKey = "test_api_key"
@@ -160,7 +159,7 @@ func (suite *ServerTestSuite) TestUsers() {
 		Handler(suite.handler).
 		Patch("/api/user/1").
 		Header("X-API-Key", apiKey).
-		JSON(data.UserPatch{Labels: []string{"a", "b", "c"}, Comment: proto.String("modified")}).
+		JSON(data.UserPatch{Labels: []string{"a", "b", "c"}, Comment: new("modified")}).
 		Expect(t).
 		Status(http.StatusOK).
 		Body(`{"RowAffected": 1}`).
@@ -396,10 +395,10 @@ func (suite *ServerTestSuite) TestItems() {
 		Patch("/api/item/2").
 		Header("X-API-Key", apiKey).
 		JSON(data.ItemPatch{
-			IsHidden:   proto.Bool(true),
+			IsHidden:   new(true),
 			Categories: []string{"-"},
 			Labels:     []string{"a", "b", "c"},
-			Comment:    proto.String("modified"),
+			Comment:    new("modified"),
 			Timestamp:  &timestamp,
 		}).
 		Expect(t).
@@ -426,7 +425,7 @@ func (suite *ServerTestSuite) TestItems() {
 		Patch("/api/item/2").
 		Header("X-API-Key", apiKey).
 		JSON(data.ItemPatch{
-			IsHidden: proto.Bool(false),
+			IsHidden: new(false),
 		}).
 		Expect(t).
 		Status(http.StatusOK).
@@ -767,7 +766,7 @@ func (suite *ServerTestSuite) TestNonPersonalizedRecommend() {
 				Handler(suite.handler).
 				Patch("/api/item/"+strconv.Itoa(i)+"3").
 				Header("X-API-Key", apiKey).
-				JSON(data.ItemPatch{IsHidden: proto.Bool(true)}).
+				JSON(data.ItemPatch{IsHidden: new(true)}).
 				Expect(t).
 				Status(http.StatusOK).
 				End()
@@ -959,7 +958,7 @@ func (suite *ServerTestSuite) TestGetRecommends() {
 		Handler(suite.handler).
 		Patch("/api/item/0").
 		Header("X-API-Key", apiKey).
-		JSON(data.ItemPatch{IsHidden: proto.Bool(true)}).
+		JSON(data.ItemPatch{IsHidden: new(true)}).
 		Expect(suite.T()).
 		Status(http.StatusOK).
 		End()
@@ -1137,7 +1136,7 @@ func (suite *ServerTestSuite) TestGetRecommendsReplacement() {
 		Handler(suite.handler).
 		Patch("/api/item/0").
 		Header("X-API-Key", apiKey).
-		JSON(data.ItemPatch{IsHidden: proto.Bool(true)}).
+		JSON(data.ItemPatch{IsHidden: new(true)}).
 		Expect(suite.T()).
 		Status(http.StatusOK).
 		End()
@@ -1655,7 +1654,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		Handler(suite.handler).
 		Patch("/api/item/1").
 		Header("X-API-Key", apiKey).
-		JSON(data.ItemPatch{IsHidden: proto.Bool(true)}).
+		JSON(data.ItemPatch{IsHidden: new(true)}).
 		Expect(suite.T()).
 		Status(http.StatusOK).
 		End()
@@ -1712,7 +1711,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		Handler(suite.handler).
 		Patch("/api/item/1").
 		Header("X-API-Key", apiKey).
-		JSON(data.ItemPatch{IsHidden: proto.Bool(false)}).
+		JSON(data.ItemPatch{IsHidden: new(false)}).
 		Expect(suite.T()).
 		Status(http.StatusOK).
 		End()

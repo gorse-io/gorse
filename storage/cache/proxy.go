@@ -26,7 +26,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -59,7 +58,7 @@ func (p *ProxyServer) Get(ctx context.Context, request *protocol.GetRequest) (*p
 	if !value.Exists() {
 		return &protocol.GetResponse{}, nil
 	}
-	return &protocol.GetResponse{Value: proto.String(value.value)}, value.err
+	return &protocol.GetResponse{Value: new(value.value)}, value.err
 }
 
 func (p *ProxyServer) Set(ctx context.Context, request *protocol.SetRequest) (*protocol.SetResponse, error) {
@@ -77,8 +76,6 @@ func (p *ProxyServer) Delete(ctx context.Context, request *protocol.DeleteReques
 	return &protocol.DeleteResponse{}, p.database.Delete(ctx, request.GetName())
 }
 
-
-
 func (p *ProxyServer) Push(ctx context.Context, request *protocol.PushRequest) (*protocol.PushResponse, error) {
 	return &protocol.PushResponse{}, p.database.Push(ctx, request.GetName(), request.GetValue())
 }
@@ -91,7 +88,7 @@ func (p *ProxyServer) Pop(ctx context.Context, request *protocol.PopRequest) (*p
 		}
 		return nil, err
 	}
-	return &protocol.PopResponse{Value: proto.String(value)}, nil
+	return &protocol.PopResponse{Value: new(value)}, nil
 }
 
 func (p *ProxyServer) Remain(ctx context.Context, request *protocol.RemainRequest) (*protocol.RemainResponse, error) {
@@ -255,8 +252,6 @@ func (p ProxyClient) Delete(ctx context.Context, name string) error {
 	})
 	return err
 }
-
-
 
 func (p ProxyClient) Push(ctx context.Context, name, value string) error {
 	_, err := p.CacheStoreClient.Push(ctx, &protocol.PushRequest{

@@ -44,7 +44,6 @@ import (
 	"github.com/steinfletcher/apitest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
-	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -528,7 +527,7 @@ func (suite *MasterAPITestSuite) TestSearchDocumentsOfItems() {
 				Handler(suite.handler).
 				Patch("/api/item/"+strconv.Itoa(i)+"3").
 				Header("Cookie", suite.cookie).
-				JSON(data.ItemPatch{IsHidden: proto.Bool(true)}).
+				JSON(data.ItemPatch{IsHidden: new(true)}).
 				Expect(t).
 				Status(http.StatusOK).
 				End()

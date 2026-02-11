@@ -43,7 +43,6 @@ import (
 	"github.com/juju/errors"
 	"github.com/samber/lo"
 	"go.uber.org/zap"
-	"google.golang.org/protobuf/proto"
 )
 
 const batchSize = 10000
@@ -90,7 +89,7 @@ func (m *Master) loadDataset(parent context.Context) (datasets Datasets, err err
 		}
 		if err = m.CacheClient.DeleteScores(ctx, []string{cache.NonPersonalized},
 			cache.ScoreCondition{
-				Subset: proto.String(recommender.Name()),
+				Subset: new(recommender.Name()),
 				Before: lo.ToPtr(recommender.Timestamp()),
 			}); err != nil {
 			log.Logger().Error("failed to reclaim outdated items", zap.Error(err))
