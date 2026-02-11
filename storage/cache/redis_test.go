@@ -26,7 +26,6 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
-	"google.golang.org/protobuf/proto"
 )
 
 var (
@@ -88,15 +87,15 @@ func (suite *RedisTestSuite) TestEscapeCharacters() {
 			suite.NoError(err)
 			suite.Equal([]Score{{Id: id, Score: math.MaxFloat64, Categories: []string{"a", "b"}, Timestamp: ts}}, documents)
 
-			err = suite.UpdateScores(ctx, []string{collection}, nil, id, ScorePatch{Score: proto.Float64(1)})
+			err = suite.UpdateScores(ctx, []string{collection}, nil, id, ScorePatch{Score: new(float64(1))})
 			suite.NoError(err)
 			documents, err = suite.SearchScores(ctx, collection, subset, []string{"b"}, 0, -1)
 			suite.NoError(err)
 			suite.Equal([]Score{{Id: id, Score: 1, Categories: []string{"a", "b"}, Timestamp: ts}}, documents)
 
 			err = suite.DeleteScores(ctx, []string{collection}, ScoreCondition{
-				Subset: proto.String(subset),
-				Id:     proto.String(id),
+				Subset: new(subset),
+				Id:     new(id),
 			})
 			suite.NoError(err)
 			documents, err = suite.SearchScores(ctx, collection, subset, []string{"b"}, 0, -1)

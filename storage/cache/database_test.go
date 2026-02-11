@@ -30,7 +30,6 @@ import (
 	"github.com/stretchr/testify/suite"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/proto"
 )
 
 type baseTestSuite struct {
@@ -108,33 +107,33 @@ func (suite *baseTestSuite) TestMeta() {
 
 func (suite *baseTestSuite) TestExists() {
 	ctx := context.Background()
-	
+
 	// Test non-existent key
 	ret := suite.Database.Get(ctx, Key("test", "nonexistent"))
 	suite.False(ret.Exists())
 	value, err := ret.String()
 	suite.NoError(err)
 	suite.Equal("", value)
-	
+
 	// Set a value
 	err = suite.Database.Set(ctx, String(Key("test", "exists"), "somevalue"))
 	suite.NoError(err)
-	
+
 	// Test existing key
 	ret = suite.Database.Get(ctx, Key("test", "exists"))
 	suite.True(ret.Exists())
 	value, err = ret.String()
 	suite.NoError(err)
 	suite.Equal("somevalue", value)
-	
+
 	// Delete the key
 	err = suite.Database.Delete(ctx, Key("test", "exists"))
 	suite.NoError(err)
-	
+
 	// Test deleted key no longer exists
 	ret = suite.Database.Get(ctx, Key("test", "exists"))
 	suite.False(ret.Exists())
-	
+
 	// Test with integer values
 	err = suite.Database.Set(ctx, Integer(Key("test", "int"), 42))
 	suite.NoError(err)
@@ -143,7 +142,7 @@ func (suite *baseTestSuite) TestExists() {
 	intVal, err := ret.Integer()
 	suite.NoError(err)
 	suite.Equal(42, intVal)
-	
+
 	// Test non-existent integer - should return 0 with no error
 	ret = suite.Database.Get(ctx, Key("test", "noint"))
 	suite.False(ret.Exists())
@@ -321,7 +320,7 @@ func (suite *baseTestSuite) TestDocument() {
 	err = suite.DeleteScores(ctx, []string{"a"}, ScoreCondition{})
 	suite.ErrorIs(err, errors.NotValid)
 	// delete by value
-	err = suite.DeleteScores(ctx, []string{"a"}, ScoreCondition{Id: proto.String("5")})
+	err = suite.DeleteScores(ctx, []string{"a"}, ScoreCondition{Id: new("5")})
 	suite.NoError(err)
 	documents, err = suite.SearchScores(ctx, "a", "", []string{"b"}, 0, 1)
 	suite.NoError(err)
@@ -349,7 +348,7 @@ func (suite *baseTestSuite) TestDocument() {
 	suite.Empty(documents)
 
 	// update is hidden
-	err = suite.UpdateScores(ctx, []string{"a"}, nil, "0", ScorePatch{IsHidden: proto.Bool(false)})
+	err = suite.UpdateScores(ctx, []string{"a"}, nil, "0", ScorePatch{IsHidden: new(false)})
 	suite.NoError(err)
 	documents, err = suite.SearchScores(ctx, "a", "", []string{"b"}, 0, 1)
 	suite.NoError(err)
@@ -425,7 +424,7 @@ func (suite *baseTestSuite) TestSubsetDocument() {
 	suite.Equal("2", documents[0].Id)
 
 	// update categories in subset
-	err = suite.UpdateScores(ctx, []string{"a", "b"}, proto.String("a"), "2", ScorePatch{Categories: []string{"b", "x"}})
+	err = suite.UpdateScores(ctx, []string{"a", "b"}, new("a"), "2", ScorePatch{Categories: []string{"b", "x"}})
 	suite.NoError(err)
 	documents, err = suite.SearchScores(ctx, "a", "a", []string{"x"}, 0, 1)
 	suite.NoError(err)
@@ -436,7 +435,7 @@ func (suite *baseTestSuite) TestSubsetDocument() {
 	suite.Empty(documents)
 
 	// delete by value
-	err = suite.DeleteScores(ctx, []string{"a", "b"}, ScoreCondition{Id: proto.String("3")})
+	err = suite.DeleteScores(ctx, []string{"a", "b"}, ScoreCondition{Id: new("3")})
 	suite.NoError(err)
 	documents, err = suite.SearchScores(ctx, "a", "a", []string{"b"}, 0, 1)
 	suite.NoError(err)
@@ -449,8 +448,8 @@ func (suite *baseTestSuite) TestSubsetDocument() {
 
 	// delete in subset
 	err = suite.DeleteScores(ctx, []string{"a", "b"}, ScoreCondition{
-		Subset: proto.String("a"),
-		Id:     proto.String("2"),
+		Subset: new("a"),
+		Id:     new("2"),
 	})
 	suite.NoError(err)
 	documents, err = suite.SearchScores(ctx, "a", "a", []string{"b"}, 0, 1)
@@ -553,7 +552,7 @@ func (suite *baseTestSuite) TestTimestampPrecision() {
 	suite.NoError(err)
 	// remove by timestamp
 	err = suite.Database.DeleteScores(ctx, []string{"a"}, ScoreCondition{
-		Subset: proto.String("s"),
+		Subset: new("s"),
 		Before: lo.ToPtr(timestamp)})
 	suite.NoError(err)
 	// search scores
@@ -654,7 +653,7 @@ func benchmarkUpdateDocuments(b *testing.B, database Database) {
 		n := rand.Intn(benchmarkDataSize) + 1
 		// update documents
 		err := database.UpdateScores(ctx, []string{"a"}, nil, strconv.Itoa(n), ScorePatch{
-			Score: proto.Float64(float64(n)),
+			Score: new(float64(n)),
 		})
 		assert.NoError(b, err)
 	}

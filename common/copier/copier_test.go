@@ -19,7 +19,6 @@ import (
 
 	"github.com/juju/errors"
 	"github.com/stretchr/testify/assert"
-	"google.golang.org/protobuf/proto"
 )
 
 func TestPrimitives(t *testing.T) {
@@ -157,12 +156,12 @@ func (ps *PrivateStruct) MarshalBinary() (data []byte, err error) {
 }
 
 func (ps *PrivateStruct) UnmarshalBinary(data []byte) error {
-	ps.text = proto.String(string(data))
+	ps.text = new(string(data))
 	return nil
 }
 
 func TestPrivate(t *testing.T) {
-	var a = PrivateStruct{proto.String("hello")}
+	var a = PrivateStruct{new("hello")}
 	var b PrivateStruct
 	err := Copy(&b, a)
 	assert.NoError(t, err)

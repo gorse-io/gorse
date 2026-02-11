@@ -22,7 +22,6 @@ import (
 
 	client "github.com/gorse-io/gorse-go"
 	"github.com/stretchr/testify/suite"
-	"google.golang.org/protobuf/proto"
 )
 
 var (
@@ -96,7 +95,7 @@ func (suite *GorseClientTestSuite) TestUsers() {
 	suite.Equal(user, resp)
 
 	patch := client.UserPatch{
-		Comment: proto.String("hongmi"),
+		Comment: new("hongmi"),
 	}
 	rowAffected, err = suite.client.UpdateUser(ctx, user.UserId, patch)
 	suite.NoError(err)
@@ -150,7 +149,7 @@ func (suite *GorseClientTestSuite) TestItems() {
 	suite.Equal(item, resp)
 
 	patch := client.ItemPatch{
-		Comment: proto.String("小黄人 (2015)"),
+		Comment: new("小黄人 (2015)"),
 	}
 	rowAffected, err = suite.client.UpdateItem(ctx, item.ItemId, patch)
 	suite.NoError(err)

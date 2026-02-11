@@ -35,7 +35,6 @@ import (
 	"github.com/samber/lo"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
-	"google.golang.org/protobuf/proto"
 )
 
 type Pipeline struct {
@@ -219,7 +218,7 @@ func (p *Pipeline) Recommend(ctx context.Context, users []data.User, progress fu
 		}
 		if err = p.CacheClient.DeleteScores(ctx, []string{cache.Recommend}, cache.ScoreCondition{
 			Before: &recommendTime,
-			Subset: proto.String(userId),
+			Subset: new(userId),
 		}); err != nil {
 			log.Logger().Error("failed to delete stale recommendation", zap.Error(err))
 			return
@@ -265,7 +264,7 @@ func (p *Pipeline) checkUserActiveTime(ctx context.Context, userId string) bool 
 	}
 	// remove recommend cache for inactive users
 	if err := p.CacheClient.DeleteScores(ctx, []string{cache.Recommend},
-		cache.ScoreCondition{Subset: proto.String(userId)}); err != nil {
+		cache.ScoreCondition{Subset: new(userId)}); err != nil {
 		log.Logger().Error("failed to delete recommend cache", zap.String("user_id", userId), zap.Error(err))
 	}
 	return false
@@ -370,7 +369,7 @@ func (p *Pipeline) updateCollaborativeRecommend(
 		log.Logger().Error("failed to cache collaborative filtering recommendation time", zap.String("user_id", userId), zap.Error(err))
 		return errors.Trace(err)
 	}
-	if err := p.CacheClient.DeleteScores(ctx, []string{cache.CollaborativeFiltering}, cache.ScoreCondition{Before: &localStartTime, Subset: proto.String(userId)}); err != nil {
+	if err := p.CacheClient.DeleteScores(ctx, []string{cache.CollaborativeFiltering}, cache.ScoreCondition{Before: &localStartTime, Subset: new(userId)}); err != nil {
 		log.Logger().Error("failed to delete stale collaborative filtering recommendation result", zap.String("user_id", userId), zap.Error(err))
 		return errors.Trace(err)
 	}
