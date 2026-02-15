@@ -1,4 +1,4 @@
-//go:build !cgo || (!(darwin && arm64) && !cuda && !mkl && !openblas)
+//go:build !cgo || (!(darwin && arm64) && !mkl && !openblas)
 
 // Copyright 2025 gorse Project Authors
 //

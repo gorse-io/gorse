@@ -31,6 +31,7 @@ import (
 	"github.com/gomlx/gomlx/pkg/core/shapes"
 	"github.com/gomlx/gomlx/pkg/core/tensors"
 	mlx_context "github.com/gomlx/gomlx/pkg/ml/context"
+	"github.com/gomlx/gomlx/pkg/ml/context/initializers"
 	"github.com/gomlx/gomlx/pkg/ml/layers"
 	"github.com/gomlx/gomlx/pkg/ml/layers/activations"
 	"github.com/gomlx/gomlx/pkg/ml/train"
@@ -51,8 +52,9 @@ const headerAFM = "AFM"
 
 type AFM struct {
 	BaseFactorizationMachines
-	mu  sync.RWMutex
-	ctx *mlx_context.Context
+	mu      sync.RWMutex
+	ctx     *mlx_context.Context
+	backend backends.Backend
 	// hyper parameters
 	batchSize  int
 	nFactors   int
@@ -140,6 +142,8 @@ func (fm *AFM) attentionForward(ctx *mlx_context.Context, x *graph.Node, dimensi
 }
 
 func (fm *AFM) forwardGraph(ctx *mlx_context.Context, indices, values *graph.Node, additionalEmbeddings []*graph.Node) *graph.Node {
+	// Disable variable checks to allow reuse
+	ctx = ctx.Checked(false)
 	g := indices.Graph()
 	batchSize := indices.Shape().Dimensions[0]
 
@@ -173,6 +177,7 @@ func (fm *AFM) forwardGraph(ctx *mlx_context.Context, indices, values *graph.Nod
 	bCtx := ctx.In("B")
 	bVar := bCtx.VariableWithShape("bias", shapes.Make(dtypes.F32, 1))
 	bias := bVar.ValueGraph(g)
+	bias = graph.Reshape(bias, 1, 1) // Reshape to [1, 1] for broadcasting with [batchSize, 1]
 
 	fmOutput := graph.Add(graph.Add(linear, interaction), bias) // [batchSize, 1]
 
@@ -202,18 +207,10 @@ func (fm *AFM) BatchInternalPredict(x []lo.Tuple2[[]int32, []float32], e [][][]f
 	defer fm.mu.RUnlock()
 
 	if fm.predictExecutor == nil {
-		backend, err := backends.New()
-		if err != nil {
-			panic(err)
-		}
-		fm.predictExecutor, err = mlx_context.NewExec(backend, fm.ctx, func(ctx *mlx_context.Context, nodes []*graph.Node) *graph.Node {
-			indices := nodes[0]
-			values := nodes[1]
-			var additionalEmbeddings []*graph.Node
-			for i := 2; i < len(nodes); i++ {
-				additionalEmbeddings = append(additionalEmbeddings, nodes[i])
-			}
-			return fm.forwardGraph(ctx, indices, values, additionalEmbeddings)
+		var err error
+		fm.predictExecutor, err = mlx_context.NewExec(fm.backend, fm.ctx, func(ctx *mlx_context.Context, nodes []*graph.Node) *graph.Node {
+			res := fm.forwardGraph(ctx, nodes[0], nodes[1], nodes[2:])
+			return res
 		})
 		if err != nil {
 			panic(err)
@@ -250,11 +247,11 @@ func (fm *AFM) BatchInternalPredict(x []lo.Tuple2[[]int32, []float32], e [][][]f
 		}
 
 		inputs := []any{
-			indicesData,
-			valuesData,
+			tensors.FromFlatDataAndDimensions(indicesData, batchSize, fm.numDimension),
+			tensors.FromFlatDataAndDimensions(valuesData, batchSize, fm.numDimension),
 		}
 		for i := range additionalData {
-			inputs = append(inputs, additionalData[i])
+			inputs = append(inputs, tensors.FromFlatDataAndDimensions(additionalData[i], batchSize, fm.embeddingDim[i]))
 		}
 
 		outputs := fm.predictExecutor.MustExec(inputs...)
@@ -325,6 +322,16 @@ func (fm *AFM) Init(trainSet dataset.CTRSplit) {
 
 	if fm.ctx == nil {
 		fm.ctx = mlx_context.New()
+		fm.ctx.SetParam("initializers_seed", int64(42))
+		// Set default initializer to Normal(0, 0.01) to match nn package
+		fm.ctx = fm.ctx.WithInitializer(initializers.RandomNormalFn(fm.ctx, float64(fm.initStdDev)))
+	}
+	if fm.backend == nil {
+		var err error
+		fm.backend, err = backends.New()
+		if err != nil {
+			panic(err)
+		}
 	}
 	fm.BaseFactorizationMachines.Init(trainSet)
 }
@@ -365,7 +372,8 @@ func (d *ctrDataset) Yield() (spec any, inputs []*tensors.Tensor, labels []*tens
 				copy(additionalData[j][i*d.embeddingDim[j]:], embeddings[j])
 			}
 		}
-		labelsData[i] = target
+		// Convert target from {-1, 1} to {0, 1} for GoMLX BinaryCrossentropy
+		labelsData[i] = (target + 1) / 2
 	}
 
 	d.currentOffset += batchSize
@@ -396,19 +404,15 @@ func (fm *AFM) Fit(ctx std_context.Context, trainSet, testSet dataset.CTRSplit, 
 	fields := append([]zap.Field{zap.String("eval_time", evalTime.String())}, score.ZapFields()...)
 	log.Logger().Info(fmt.Sprintf("fit AFM %v/%v", 0, fm.nEpochs), fields...)
 
-	backend, err := backends.New()
-	if err != nil {
-		panic(err)
-	}
 	modelFn := func(ctx *mlx_context.Context, spec any, inputs []*graph.Node) []*graph.Node {
 		return []*graph.Node{fm.forwardGraph(ctx, inputs[0], inputs[1], inputs[2:])}
 	}
 	lossFn := func(labels, predictions []*graph.Node) *graph.Node {
-		return graph.ReduceMean(losses.BinaryCrossentropyLogits(labels, predictions), 0)
+		return graph.ReduceAllMean(losses.BinaryCrossentropyLogits(labels, predictions))
 	}
 
 	optimizer := optimizers.Adam().LearningRate(float64(fm.lr)).Done()
-	trainer := train.NewTrainer(backend, fm.ctx, modelFn, lossFn, optimizer, nil, nil)
+	trainer := train.NewTrainer(fm.backend, fm.ctx, modelFn, lossFn, optimizer, nil, nil)
 	loop := train.NewLoop(trainer)
 
 	ds := &ctrDataset{
@@ -437,7 +441,7 @@ func (fm *AFM) Fit(ctx std_context.Context, trainSet, testSet dataset.CTRSplit, 
 			score = EvaluateClassification(fm, testSet, config.Jobs)
 			scores = append(scores, lo.Tuple2[int, float32]{A: epoch, B: score.AUC})
 			evalTime = time.Since(evalStart)
-			fields = append([]zap.Field{
+			fields := append([]zap.Field{
 				zap.String("fit_time", fitTime.String()),
 				zap.String("eval_time", evalTime.String()),
 			}, score.ZapFields()...)
@@ -458,6 +462,11 @@ func (fm *AFM) Fit(ctx std_context.Context, trainSet, testSet dataset.CTRSplit, 
 	}
 
 	return score
+}
+
+type savedVariable struct {
+	Dimensions []int
+	Data       any
 }
 
 func (fm *AFM) Marshal(w io.Writer) error {
@@ -485,20 +494,20 @@ func (fm *AFM) Marshal(w io.Writer) error {
 		}
 	}
 	// write parameters (GoMLX variables)
-	variables := make(map[string]lo.Tuple2[[]int, []float32])
+	variables := make(map[string]savedVariable)
 	fm.ctx.EnumerateVariables(func(v *mlx_context.Variable) {
 		val, err := v.Value()
 		if err != nil {
 			log.Logger().Error("failed to get variable value", zap.Error(err))
 			return
 		}
-		var flatData []float32
+		var flatData any
 		val.MustConstFlatData(func(flat any) {
-			flatData = flat.([]float32)
+			flatData = flat
 		})
-		variables[v.Name()] = lo.Tuple2[[]int, []float32]{
-			A: val.Shape().Dimensions,
-			B: flatData,
+		variables[v.Name()] = savedVariable{
+			Dimensions: val.Shape().Dimensions,
+			Data:       flatData,
 		}
 	})
 	if err := encoding.WriteGob(w, variables); err != nil {
@@ -536,15 +545,38 @@ func (fm *AFM) Unmarshal(r io.Reader) error {
 		}
 	}
 	// read parameters
-	var variables map[string]lo.Tuple2[[]int, []float32]
+	var variables map[string]savedVariable
 	if err = encoding.ReadGob(r, &variables); err != nil {
 		return errors.Trace(err)
 	}
 	if fm.ctx == nil {
 		fm.ctx = mlx_context.New()
 	}
+	if fm.backend == nil {
+		var err error
+		fm.backend, err = backends.New()
+		if err != nil {
+			return errors.Trace(err)
+		}
+	}
 	for name, data := range variables {
-		t := tensors.FromFlatDataAndDimensions(data.B, data.A...)
+		// Use a type switch to handle different data types in tensors
+		var t *tensors.Tensor
+		switch d := data.Data.(type) {
+		case []float32:
+			t = tensors.FromFlatDataAndDimensions(d, data.Dimensions...)
+		case []float64:
+			t = tensors.FromFlatDataAndDimensions(d, data.Dimensions...)
+		case []int32:
+			t = tensors.FromFlatDataAndDimensions(d, data.Dimensions...)
+		case []int64:
+			t = tensors.FromFlatDataAndDimensions(d, data.Dimensions...)
+		case []uint64:
+			t = tensors.FromFlatDataAndDimensions(d, data.Dimensions...)
+		default:
+			log.Logger().Warn("unknown variable type", zap.String("name", name), zap.Any("type", fmt.Sprintf("%T", d)))
+			continue
+		}
 		fm.ctx.VariableWithValue(name, t)
 	}
 	return nil

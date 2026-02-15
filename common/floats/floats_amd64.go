@@ -32,7 +32,6 @@ const (
 	AVX Feature = 1 << iota
 	FMA
 	AVX512F
-	CUDA
 	MKL
 	OPENBLAS
 )
@@ -187,11 +186,10 @@ func (feature Feature) euclidean(a, b []float32) float32 {
 }
 
 func (feature Feature) mm(transA, transB bool, m, n, k int, a []float32, lda int, b []float32, ldb int, c []float32, ldc int) {
-	// Bypass AVX512 optimizations when CUDA is enabled to avoid potential conflicts
-	// between CUDA-based and AVX512-based matrix multiplication implementations.
-	if feature&AVX512 == AVX512 && feature&CUDA == 0 && feature&MKL == 0 && feature&OPENBLAS == 0 {
+	// Bypass AVX512 optimizations when MKL or OpenBLAS is enabled.
+	if feature&AVX512 == AVX512 && feature&MKL == 0 && feature&OPENBLAS == 0 {
 		_mm512_mm(transA, transB, int64(m), int64(n), int64(k), unsafe.Pointer(&a[0]), int64(lda), unsafe.Pointer(&b[0]), int64(ldb), unsafe.Pointer(&c[0]), int64(ldc))
-	} else if feature&AVX == AVX && feature&CUDA == 0 && feature&MKL == 0 && feature&OPENBLAS == 0 {
+	} else if feature&AVX == AVX && feature&MKL == 0 && feature&OPENBLAS == 0 {
 		_mm256_mm(transA, transB, int64(m), int64(n), int64(k), unsafe.Pointer(&a[0]), int64(lda), unsafe.Pointer(&b[0]), int64(ldb), unsafe.Pointer(&c[0]), int64(ldc))
 	} else {
 		mm(transA, transB, m, n, k, a, lda, b, ldb, c, ldc)
