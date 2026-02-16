@@ -20,7 +20,6 @@ import (
 	"math"
 	"os"
 	"runtime"
-	"sort"
 	"strconv"
 	"sync"
 	"time"
@@ -106,7 +105,7 @@ var benchLLMCmd = &cobra.Command{
 
 		topK, _ := cmd.Flags().GetInt("top")
 		go EvaluateCF(train, test, &scores)
-		go EvaluateAFM(ctrDataset, train, test, &scores)
+		go EvaluateAFM(ctrDataset, train, test, topK, &scores)
 		EvaluateLLM(cfg, train, test, topK, &scores)
 		data := [][]string{{
 			"Ranker",
@@ -145,7 +144,7 @@ func EvaluateCF(train, test dataset.CFSplit, scores *sync.Map) {
 	}
 }
 
-func EvaluateAFM(ctrDataset *ctr.Dataset, train, test dataset.CFSplit, scores *sync.Map) {
+func EvaluateAFM(ctrDataset *ctr.Dataset, train, test dataset.CFSplit, topK int, scores *sync.Map) {
 	ctrTrain, ctrTest := SplitCTRDataset(ctrDataset, train, test)
 	ml := ctr.NewAFM(nil)
 	ml.Fit(context.Background(), ctrTrain, ctrTest,
@@ -197,8 +196,12 @@ func EvaluateAFM(ctrDataset *ctr.Dataset, train, test dataset.CFSplit, scores *s
 	negatives := test.SampleUserNegatives(train, 99)
 	userFeedback := test.GetUserFeedback()
 
-	var sumNDCG float32
-	var ndcgUsers float32
+	var (
+		sumNDCG      float32
+		sumPrecision float32
+		sumRecall    float32
+		count        float32
+	)
 	for userIdx := 0; userIdx < test.CountUsers(); userIdx++ {
 		positives := userFeedback[userIdx]
 		if len(positives) == 0 {
@@ -222,30 +225,26 @@ func EvaluateAFM(ctrDataset *ctr.Dataset, train, test dataset.CFSplit, scores *s
 		}
 		predictions := ml.BatchInternalPredict(features, embeddings, runtime.NumCPU())
 
-		type scoredItem struct {
-			item  int32
-			score float32
-		}
-		scored := make([]scoredItem, 0, len(candidates))
+		filter := heap.NewTopKFilter[int32, float32](topK)
 		for i, item := range candidates {
-			scored = append(scored, scoredItem{item: item, score: predictions[i]})
+			filter.Push(item, predictions[i])
 		}
-		sort.Slice(scored, func(i, j int) bool {
-			return scored[i].score > scored[j].score
-		})
-		rankList := make([]int32, 0, len(scored))
-		for _, s := range scored {
-			rankList = append(rankList, s.item)
-		}
+		rankList := filter.PopAllValues()
 		sumNDCG += cf.NDCG(targetSet, rankList)
-		ndcgUsers++
+		sumPrecision += cf.Precision(targetSet, rankList)
+		sumRecall += cf.Recall(targetSet, rankList)
+		count++
 	}
 
-	ndcg := float32(0)
-	if ndcgUsers > 0 {
-		ndcg = sumNDCG / ndcgUsers
+	var score cf.Score
+	if count > 0 {
+		score = cf.Score{
+			NDCG:      sumNDCG / count,
+			Precision: sumPrecision / count,
+			Recall:    sumRecall / count,
+		}
 	}
-	scores.Store("AFM", cf.Score{NDCG: ndcg})
+	scores.Store("AFM", score)
 }
 
 func SplitCTRDataset(ctrDataset *ctr.Dataset, train, test dataset.CFSplit) (*ctr.Dataset, *ctr.Dataset) {

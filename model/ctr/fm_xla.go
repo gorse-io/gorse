@@ -346,7 +346,7 @@ type ctrDataset struct {
 }
 
 func (d *ctrDataset) Name() string { return "CTRDataset" }
-func (d *ctrDataset) Reset()      { d.currentOffset = 0 }
+func (d *ctrDataset) Reset()       { d.currentOffset = 0 }
 func (d *ctrDataset) Yield() (spec any, inputs []*tensors.Tensor, labels []*tensors.Tensor, err error) {
 	if d.currentOffset >= d.trainSet.Count() {
 		return nil, nil, nil, io.EOF
@@ -431,8 +431,7 @@ func (fm *AFM) Fit(ctx std_context.Context, trainSet, testSet dataset.CTRSplit, 
 		ds.Reset()
 		_, err := loop.RunSteps(ds, (trainSet.Count()+fm.batchSize-1)/fm.batchSize)
 		if err != nil {
-			log.Logger().Error("fit AFM failed", zap.Error(err))
-			break
+			panic(err)
 		}
 		fitTime := time.Since(fitStart)
 
@@ -467,6 +466,8 @@ func (fm *AFM) Fit(ctx std_context.Context, trainSet, testSet dataset.CTRSplit, 
 type savedVariable struct {
 	Dimensions []int
 	Data       any
+	Scope      string
+	Name       string
 }
 
 func (fm *AFM) Marshal(w io.Writer) error {
@@ -498,16 +499,17 @@ func (fm *AFM) Marshal(w io.Writer) error {
 	fm.ctx.EnumerateVariables(func(v *mlx_context.Variable) {
 		val, err := v.Value()
 		if err != nil {
-			log.Logger().Error("failed to get variable value", zap.Error(err))
-			return
+			panic(err)
 		}
 		var flatData any
 		val.MustConstFlatData(func(flat any) {
 			flatData = flat
 		})
-		variables[v.Name()] = savedVariable{
+		variables[v.ScopeAndName()] = savedVariable{
 			Dimensions: val.Shape().Dimensions,
 			Data:       flatData,
+			Scope:      v.Scope(),
+			Name:       v.Name(),
 		}
 	})
 	if err := encoding.WriteGob(w, variables); err != nil {
@@ -559,7 +561,7 @@ func (fm *AFM) Unmarshal(r io.Reader) error {
 			return errors.Trace(err)
 		}
 	}
-	for name, data := range variables {
+	for _, data := range variables {
 		// Use a type switch to handle different data types in tensors
 		var t *tensors.Tensor
 		switch d := data.Data.(type) {
@@ -574,10 +576,10 @@ func (fm *AFM) Unmarshal(r io.Reader) error {
 		case []uint64:
 			t = tensors.FromFlatDataAndDimensions(d, data.Dimensions...)
 		default:
-			log.Logger().Warn("unknown variable type", zap.String("name", name), zap.Any("type", fmt.Sprintf("%T", d)))
+			log.Logger().Warn("unknown variable type", zap.String("scope", data.Scope), zap.String("name", data.Name), zap.Any("type", fmt.Sprintf("%T", d)))
 			continue
 		}
-		fm.ctx.VariableWithValue(name, t)
+		fm.ctx.InAbsPath(data.Scope).VariableWithValue(data.Name, t)
 	}
 	return nil
 }
