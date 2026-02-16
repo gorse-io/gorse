@@ -208,6 +208,14 @@ func (dataset *Dataset) GetTarget(i int) float32 {
 
 // Get returns the i-th sample.
 func (dataset *Dataset) Get(i int) ([]int32, []float32, [][]float32, float32) {
+	var itemIndex int32
+	if len(dataset.Items) > 0 {
+		itemIndex = dataset.Items[i]
+	}
+	return dataset.getWithItem(i, itemIndex, dataset.Target[i])
+}
+
+func (dataset *Dataset) getWithItem(i int, itemIndex int32, target float32) ([]int32, []float32, [][]float32, float32) {
 	var (
 		indices   []int32
 		values    []float32
@@ -222,11 +230,11 @@ func (dataset *Dataset) Get(i int) ([]int32, []float32, [][]float32, float32) {
 	}
 	// append item id
 	if len(dataset.Items) > 0 {
-		indices = append(indices, position+dataset.Items[i])
+		indices = append(indices, position+itemIndex)
 		values = append(values, 1)
 		position += int32(dataset.CountItems())
 		if len(dataset.ItemEmbeddings) > 0 {
-			embedding = dataset.ItemEmbeddings[dataset.Items[i]]
+			embedding = dataset.ItemEmbeddings[itemIndex]
 		}
 	}
 	// append user indices
@@ -240,7 +248,7 @@ func (dataset *Dataset) Get(i int) ([]int32, []float32, [][]float32, float32) {
 	}
 	// append item indices
 	if len(dataset.Items) > 0 {
-		itemFeatures := dataset.ItemLabels[dataset.Items[i]]
+		itemFeatures := dataset.ItemLabels[itemIndex]
 		for _, feature := range itemFeatures {
 			indices = append(indices, position+feature.A)
 			values = append(values, feature.B)
@@ -252,7 +260,7 @@ func (dataset *Dataset) Get(i int) ([]int32, []float32, [][]float32, float32) {
 		indices = append(indices, contextIndices...)
 		values = append(values, contextValues...)
 	}
-	return indices, values, embedding, dataset.Target[i]
+	return indices, values, embedding, target
 }
 
 // LoadLibFMFile loads libFM format file.

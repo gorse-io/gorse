@@ -41,6 +41,7 @@ const (
 	BatchSize    ParamName = "BatchSize"
 	HiddenLayers ParamName = "HiddenLayers"
 	Optimizer    ParamName = "Optimizer"
+	NegRatio     ParamName = "NegRatio"
 
 	SGD  = "sgd"
 	Adam = "adam"

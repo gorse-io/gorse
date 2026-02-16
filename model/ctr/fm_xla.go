@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/c-bata/goptuna"
+	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/gomlx/gomlx/backends"
 	_ "github.com/gomlx/gomlx/backends/xla"
 	"github.com/gomlx/gomlx/pkg/core/dtypes"
@@ -63,6 +64,7 @@ type AFM struct {
 	reg        float32
 	initMean   float32
 	initStdDev float32
+	negRatio   float32
 	optimizer  string
 	// dataset stats
 	numFeatures    int
@@ -87,6 +89,7 @@ func (fm *AFM) SuggestParams(trial goptuna.Trial) model.Params {
 		model.Reg:        lo.Must(trial.SuggestLogFloat(string(model.Reg), 0.001, 0.1)),
 		model.InitMean:   0,
 		model.InitStdDev: lo.Must(trial.SuggestLogFloat(string(model.InitStdDev), 0.001, 0.1)),
+		model.NegRatio:   lo.Must(trial.SuggestFloat(string(model.NegRatio), 3, 10)),
 	}
 }
 
@@ -99,6 +102,7 @@ func (fm *AFM) SetParams(params model.Params) {
 	fm.reg = fm.Params.GetFloat32(model.Reg, 0.0002)
 	fm.initMean = fm.Params.GetFloat32(model.InitMean, 0)
 	fm.initStdDev = fm.Params.GetFloat32(model.InitStdDev, 0.01)
+	fm.negRatio = fm.Params.GetFloat32(model.NegRatio, 0)
 	fm.optimizer = fm.Params.GetString(model.Optimizer, model.Adam)
 }
 
@@ -337,17 +341,104 @@ func (fm *AFM) Init(trainSet dataset.CTRSplit) {
 }
 
 type ctrDataset struct {
+	fm            *AFM
 	trainSet      dataset.CTRSplit
 	numFeatures   int
 	numDimension  int
 	embeddingDim  []int
 	batchSize     int
 	currentOffset int
+	// negative sampling
+	positiveIndices []int
+	userFeedback    []mapset.Set[int32]
+	// sampled data
+	sampledX []lo.Tuple2[[]int32, []float32]
+	sampledE [][][]float32
+	sampledY []float32
+}
+
+func (d *ctrDataset) Sample() {
+	d.sampledX = d.sampledX[:0]
+	d.sampledE = d.sampledE[:0]
+	d.sampledY = d.sampledY[:0]
+	if ctrDataset, ok := d.trainSet.(*Dataset); ok {
+		for _, i := range d.positiveIndices {
+			// Add positive sample
+			indices, values, embs, t := d.trainSet.Get(i)
+			d.sampledX = append(d.sampledX, lo.Tuple2[[]int32, []float32]{A: indices, B: values})
+			d.sampledE = append(d.sampledE, embs)
+			d.sampledY = append(d.sampledY, t)
+
+			// Sample negatives
+			u := ctrDataset.Users[i]
+			for n := 0; n < int(d.fm.negRatio); n++ {
+				var j int32
+				for {
+					j = d.fm.GetRandomGenerator().Int31n(int32(d.trainSet.CountItems()))
+					if !d.userFeedback[u].Contains(j) {
+						break
+					}
+				}
+				negIndices, negValues, negEmbs, negTarget := ctrDataset.getWithItem(i, j, -1)
+				d.sampledX = append(d.sampledX, lo.Tuple2[[]int32, []float32]{A: negIndices, B: negValues})
+				d.sampledE = append(d.sampledE, negEmbs)
+				d.sampledY = append(d.sampledY, negTarget)
+			}
+		}
+	}
+	// Shuffle
+	d.fm.GetRandomGenerator().Shuffle(len(d.sampledY), func(i, j int) {
+		d.sampledX[i], d.sampledX[j] = d.sampledX[j], d.sampledX[i]
+		d.sampledE[i], d.sampledE[j] = d.sampledE[j], d.sampledE[i]
+		d.sampledY[i], d.sampledY[j] = d.sampledY[j], d.sampledY[i]
+	})
 }
 
 func (d *ctrDataset) Name() string { return "CTRDataset" }
 func (d *ctrDataset) Reset()       { d.currentOffset = 0 }
 func (d *ctrDataset) Yield() (spec any, inputs []*tensors.Tensor, labels []*tensors.Tensor, err error) {
+	if d.fm.negRatio > 0 {
+		if d.currentOffset >= len(d.sampledY) {
+			return nil, nil, nil, io.EOF
+		}
+
+		batchSize := mathutil.Min(d.batchSize, len(d.sampledY)-d.currentOffset)
+		indicesData := make([]int32, batchSize*d.numDimension)
+		valuesData := make([]float32, batchSize*d.numDimension)
+		additionalData := make([][]float32, len(d.embeddingDim))
+		for i := range additionalData {
+			additionalData[i] = make([]float32, batchSize*d.embeddingDim[i])
+		}
+		labelsData := make([]float32, batchSize)
+
+		for i := 0; i < batchSize; i++ {
+			row := d.sampledX[d.currentOffset+i]
+			for j := 0; j < len(row.A); j++ {
+				indicesData[i*d.numDimension+j] = row.A[j]
+				valuesData[i*d.numDimension+j] = row.B[j]
+			}
+			for j := range d.embeddingDim {
+				if len(d.sampledE[d.currentOffset+i]) > j && len(d.sampledE[d.currentOffset+i][j]) == d.embeddingDim[j] {
+					copy(additionalData[j][i*d.embeddingDim[j]:], d.sampledE[d.currentOffset+i][j])
+				}
+			}
+			// Convert target from {-1, 1} to {0, 1} for GoMLX BinaryCrossentropy
+			labelsData[i] = (d.sampledY[d.currentOffset+i] + 1) / 2
+		}
+
+		d.currentOffset += batchSize
+
+		inputs = []*tensors.Tensor{
+			tensors.FromFlatDataAndDimensions(indicesData, batchSize, d.numDimension),
+			tensors.FromFlatDataAndDimensions(valuesData, batchSize, d.numDimension),
+		}
+		for i := range additionalData {
+			inputs = append(inputs, tensors.FromFlatDataAndDimensions(additionalData[i], batchSize, d.embeddingDim[i]))
+		}
+		labels = []*tensors.Tensor{tensors.FromFlatDataAndDimensions(labelsData, batchSize)}
+		return nil, inputs, labels, nil
+	}
+
 	if d.currentOffset >= d.trainSet.Count() {
 		return nil, nil, nil, io.EOF
 	}
@@ -416,11 +507,27 @@ func (fm *AFM) Fit(ctx std_context.Context, trainSet, testSet dataset.CTRSplit, 
 	loop := train.NewLoop(trainer)
 
 	ds := &ctrDataset{
+		fm:           fm,
 		trainSet:     trainSet,
 		numFeatures:  fm.numFeatures,
 		numDimension: fm.numDimension,
 		embeddingDim: fm.embeddingDim,
 		batchSize:    fm.batchSize,
+	}
+
+	if fm.negRatio > 0 {
+		if ctrDataset, ok := trainSet.(*Dataset); ok {
+			ds.userFeedback = make([]mapset.Set[int32], trainSet.CountUsers())
+			for i := range ds.userFeedback {
+				ds.userFeedback[i] = mapset.NewSet[int32]()
+			}
+			for i := 0; i < trainSet.Count(); i++ {
+				if trainSet.GetTarget(i) > 0 {
+					ds.positiveIndices = append(ds.positiveIndices, i)
+					ds.userFeedback[ctrDataset.Users[i]].Add(ctrDataset.Items[i])
+				}
+			}
+		}
 	}
 
 	_, span := monitor.Start(ctx, "FM.Fit", fm.nEpochs)
@@ -429,7 +536,12 @@ func (fm *AFM) Fit(ctx std_context.Context, trainSet, testSet dataset.CTRSplit, 
 	for epoch := 1; epoch <= fm.nEpochs; epoch++ {
 		fitStart := time.Now()
 		ds.Reset()
-		_, err := loop.RunSteps(ds, (trainSet.Count()+fm.batchSize-1)/fm.batchSize)
+		count := trainSet.Count()
+		if fm.negRatio > 0 {
+			ds.Sample()
+			count = len(ds.sampledY)
+		}
+		_, err := loop.RunSteps(ds, (count+fm.batchSize-1)/fm.batchSize)
 		if err != nil {
 			panic(err)
 		}
@@ -440,7 +552,7 @@ func (fm *AFM) Fit(ctx std_context.Context, trainSet, testSet dataset.CTRSplit, 
 			score = EvaluateClassification(fm, testSet, config.Jobs)
 			scores = append(scores, lo.Tuple2[int, float32]{A: epoch, B: score.AUC})
 			evalTime = time.Since(evalStart)
-			fields := append([]zap.Field{
+			fields = append([]zap.Field{
 				zap.String("fit_time", fitTime.String()),
 				zap.String("eval_time", evalTime.String()),
 			}, score.ZapFields()...)

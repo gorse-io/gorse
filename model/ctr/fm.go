@@ -25,6 +25,7 @@ import (
 
 	"github.com/c-bata/goptuna"
 	"github.com/chewxy/math32"
+	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/gorse-io/gorse/common/encoding"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/common/monitor"
@@ -56,6 +57,7 @@ type AFM struct {
 	reg        float32
 	initMean   float32
 	initStdDev float32
+	negRatio   float32
 	optimizer  string
 	// dataset stats
 	numFeatures    int
@@ -77,6 +79,7 @@ func (fm *AFM) SuggestParams(trial goptuna.Trial) model.Params {
 		model.Reg:        lo.Must(trial.SuggestLogFloat(string(model.Reg), 0.001, 0.1)),
 		model.InitMean:   0,
 		model.InitStdDev: lo.Must(trial.SuggestLogFloat(string(model.InitStdDev), 0.001, 0.1)),
+		model.NegRatio:   lo.Must(trial.SuggestFloat(string(model.NegRatio), 3, 10)),
 	}
 }
 
@@ -89,6 +92,7 @@ func (fm *AFM) SetParams(params model.Params) {
 	fm.reg = fm.Params.GetFloat32(model.Reg, 0.0002)
 	fm.initMean = fm.Params.GetFloat32(model.InitMean, 0)
 	fm.initStdDev = fm.Params.GetFloat32(model.InitStdDev, 0.01)
+	fm.negRatio = fm.Params.GetFloat32(model.NegRatio, 0)
 	fm.optimizer = fm.Params.GetString(model.Optimizer, model.Adam)
 }
 
@@ -251,16 +255,38 @@ func (fm *AFM) Fit(ctx context.Context, trainSet, testSet dataset.CTRSplit, conf
 	fields := append([]zap.Field{zap.String("eval_time", evalTime.String())}, score.ZapFields()...)
 	log.Logger().Info(fmt.Sprintf("fit AFM %v/%v", 0, fm.nEpochs), fields...)
 
+	var positiveIndices []int
+	var userFeedback []mapset.Set[int32]
+	if fm.negRatio > 0 {
+		userFeedback = make([]mapset.Set[int32], trainSet.CountUsers())
+		for i := range userFeedback {
+			userFeedback[i] = mapset.NewSet[int32]()
+		}
+		if ctrDataset, ok := trainSet.(*Dataset); ok {
+			for i := 0; i < trainSet.Count(); i++ {
+				if trainSet.GetTarget(i) > 0 {
+					positiveIndices = append(positiveIndices, i)
+					userFeedback[ctrDataset.Users[i]].Add(ctrDataset.Items[i])
+				}
+			}
+		}
+	}
+
 	var x []lo.Tuple2[[]int32, []float32]
 	var e [][][]float32
 	var y []float32
-	for i := 0; i < trainSet.Count(); i++ {
-		indices, values, embeddings, target := trainSet.Get(i)
-		x = append(x, lo.Tuple2[[]int32, []float32]{A: indices, B: values})
-		e = append(e, embeddings)
-		y = append(y, target)
+	var indices, values, target *nn.Tensor
+	var embeddings []*nn.Tensor
+
+	if fm.negRatio == 0 {
+		for i := 0; i < trainSet.Count(); i++ {
+			indices, values, embeddings, target := trainSet.Get(i)
+			x = append(x, lo.Tuple2[[]int32, []float32]{A: indices, B: values})
+			e = append(e, embeddings)
+			y = append(y, target)
+		}
+		indices, values, embeddings, target = fm.convertToTensors(x, e, y)
 	}
-	indices, values, embeddings, target := fm.convertToTensors(x, e, y)
 
 	var optimizer nn.Optimizer
 	switch fm.optimizer {
@@ -278,12 +304,53 @@ func (fm *AFM) Fit(ctx context.Context, trainSet, testSet dataset.CTRSplit, conf
 	for epoch := 1; epoch <= fm.nEpochs; epoch++ {
 		fitStart := time.Now()
 		cost := float32(0)
-		for i := 0; i < trainSet.Count(); i += fm.batchSize {
+
+		trainSetCount := trainSet.Count()
+		if fm.negRatio > 0 {
+			x = x[:0]
+			e = e[:0]
+			y = y[:0]
+			if ctrDataset, ok := trainSet.(*Dataset); ok {
+				for _, i := range positiveIndices {
+					// Add positive sample
+					indices, values, embs, t := trainSet.Get(i)
+					x = append(x, lo.Tuple2[[]int32, []float32]{A: indices, B: values})
+					e = append(e, embs)
+					y = append(y, t)
+
+					// Sample negatives
+					u := ctrDataset.Users[i]
+					for n := 0; n < int(fm.negRatio); n++ {
+						var j int32
+						for {
+							j = fm.GetRandomGenerator().Int31n(int32(trainSet.CountItems()))
+							if !userFeedback[u].Contains(j) {
+								break
+							}
+						}
+						negIndices, negValues, negEmbs, negTarget := ctrDataset.getWithItem(i, j, -1)
+						x = append(x, lo.Tuple2[[]int32, []float32]{A: negIndices, B: negValues})
+						e = append(e, negEmbs)
+						y = append(y, negTarget)
+					}
+				}
+			}
+			// Shuffle
+			fm.GetRandomGenerator().Shuffle(len(y), func(i, j int) {
+				x[i], x[j] = x[j], x[i]
+				e[i], e[j] = e[j], e[i]
+				y[i], y[j] = y[j], y[i]
+			})
+			indices, values, embeddings, target = fm.convertToTensors(x, e, y)
+			trainSetCount = len(y)
+		}
+
+		for i := 0; i < trainSetCount; i += fm.batchSize {
 			if ctx.Err() != nil {
 				log.Logger().Info("fit AFM canceled", zap.Error(ctx.Err()))
 				return Score{}
 			}
-			j := mathutil.Min(i+fm.batchSize, trainSet.Count())
+			j := mathutil.Min(i+fm.batchSize, trainSetCount)
 			batchIndices := indices.Slice(i, j)
 			batchValues := values.Slice(i, j)
 			batchEmbedding := make([]*nn.Tensor, len(fm.embeddingDim))
