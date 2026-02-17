@@ -21,6 +21,7 @@ import (
 
 	"github.com/gorse-io/gorse/common/dashscope"
 	"github.com/gorse-io/gorse/config"
+	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
 	"github.com/stretchr/testify/assert"
 )
@@ -60,7 +61,13 @@ func TestChatReranker(t *testing.T) {
 		{ItemId: "tt0435761", Comment: "Saw V"},
 	})
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"tt1233227", "tt0926084", "tt0890870", "tt1132626", "tt0435761"}, items)
+	assert.Equal(t, []cache.Score{
+		{Id: "tt1233227", Score: 1},
+		{Id: "tt0926084", Score: 0.5},
+		{Id: "tt0890870", Score: 0.3333333333333333},
+		{Id: "tt1132626", Score: 0.25},
+		{Id: "tt0435761", Score: 0.2},
+	}, items)
 }
 
 func TestParseArrayFromCompletion(t *testing.T) {

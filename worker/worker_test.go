@@ -772,7 +772,7 @@ func (suite *WorkerTestSuite) TestRankByLLM() {
 	suite.Equal([]string{"1", "2", "3"}, lo.Map(result, func(d cache.Score, _ int) string {
 		return d.Id
 	}))
-	suite.Equal([]float64{1, float64(2) / 3, float64(1) / 3}, lo.Map(result, func(d cache.Score, _ int) float64 {
+	suite.Equal([]float64{1, 0.5, float64(1) / 3}, lo.Map(result, func(d cache.Score, _ int) float64 {
 		return d.Score
 	}))
 	for _, scored := range result {
