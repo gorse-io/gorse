@@ -357,7 +357,6 @@ type RankerConfig struct {
 	FitEpoch         int                 `mapstructure:"fit_epoch" validate:"gt=0"`
 	OptimizePeriod   time.Duration       `mapstructure:"optimize_period" validate:"gte=0"`
 	OptimizeTrials   int                 `mapstructure:"optimize_trials" validate:"gt=0"`
-	Prompt           string              `mapstructure:"prompt"`
 	QueryTemplate    string              `mapstructure:"query_template"`
 	DocumentTemplate string              `mapstructure:"document_template"`
 	EarlyStopping    EarlyStoppingConfig `mapstructure:"early_stopping"`
@@ -387,6 +386,7 @@ type OIDCConfig struct {
 type DashScopeConfig struct {
 	APIKey        string `mapstructure:"api_key"`
 	RerankerModel string `mapstructure:"reranker_model"`
+	BaseURL       string `mapstructure:"base_url"`
 }
 
 type OpenAIConfig struct {

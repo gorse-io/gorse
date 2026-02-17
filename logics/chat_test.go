@@ -16,8 +16,10 @@ package logics
 
 import (
 	"context"
+	"net/http"
 	"testing"
 
+	"github.com/gorse-io/gorse/common/dashscope"
 	"github.com/gorse-io/gorse/common/mock"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/storage/data"
@@ -50,6 +52,44 @@ Return IDs as a JSON array. For example:
 `+"```json\n"+`["tt1233227", "tt0926084", "tt0890870", "tt1132626", "tt0435761"]`+"\n```")
 	assert.NoError(t, err)
 	items, err := ranker.Rank(context.Background(), &data.User{
+		UserId:  "Tom",
+		Comment: "horror movie enthusiast",
+	}, []*FeedbackItem{
+		{Item: data.Item{ItemId: "tt0387564", Comment: "Saw"}},
+		{Item: data.Item{ItemId: "tt0432348", Comment: "Saw II"}},
+		{Item: data.Item{ItemId: "tt0435761", Comment: "Saw III"}},
+	}, []*data.Item{
+		{ItemId: "tt1233227", Comment: "Harry Potter and the Half-Blood Prince"},
+		{ItemId: "tt0926084", Comment: "Harry Potter and the Deathly Hallows: Part 1"},
+		{ItemId: "tt0890870", Comment: "Saw IV"},
+		{ItemId: "tt1132626", Comment: "Saw VI"},
+		{ItemId: "tt0435761", Comment: "Saw V"},
+	})
+	assert.NoError(t, err)
+	assert.Equal(t, []string{"tt1233227", "tt0926084", "tt0890870", "tt1132626", "tt0435761"}, items)
+}
+
+func TestChatReranker(t *testing.T) {
+	s := dashscope.NewMockServer()
+	go func() {
+		err := s.Start()
+		if err != nil && err != http.ErrServerClosed {
+			panic(err)
+		}
+	}()
+	s.Ready()
+	defer s.Close()
+
+	reranker, err := NewChatReranker(config.DashScopeConfig{
+		APIKey:        s.APIKey(),
+		BaseURL:       s.URL(),
+		RerankerModel: "gte-rerank",
+	},
+		"{{ user.UserId }} is a {{ user.Comment }} watched the following movies recently: {% for item in feedback %}{{ item.Comment }}, {% endfor %}",
+		"{{ item.Comment }}")
+	assert.NoError(t, err)
+
+	items, err := reranker.Rank(context.Background(), &data.User{
 		UserId:  "Tom",
 		Comment: "horror movie enthusiast",
 	}, []*FeedbackItem{

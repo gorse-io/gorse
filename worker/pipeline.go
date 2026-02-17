@@ -191,8 +191,11 @@ func (p *Pipeline) Recommend(ctx context.Context, users []data.User, progress fu
 				log.Logger().Error("failed to rank items", zap.Error(err))
 				return
 			}
-		} else if p.Config.Recommend.Ranker.Type == "llm" && p.Config.Recommend.Ranker.Prompt != "" && p.Config.OpenAI.ChatCompletionModel != "" {
-			ranker, err := logics.NewChatRanker(p.Config.OpenAI, p.Config.Recommend.Ranker.Prompt)
+		} else if p.Config.Recommend.Ranker.Type == "llm" && p.Config.OpenAI.ChatCompletionModel != "" {
+			ranker, err := logics.NewChatReranker(
+				p.Config.Recommend.Ranker.DashScope,
+				p.Config.Recommend.Ranker.QueryTemplate,
+				p.Config.Recommend.Ranker.DocumentTemplate)
 			if err != nil {
 				log.Logger().Error("failed to create LLM ranker", zap.Error(err))
 				return
@@ -430,7 +433,7 @@ func (p *Pipeline) rankByClickTroughRate(
 func (p *Pipeline) rankByLLM(
 	ctx context.Context,
 	pCtx *parallel.Context,
-	ranker *logics.ChatRanker,
+	ranker *logics.ChatReranker,
 	user *data.User,
 	feedback []data.Feedback,
 	candidates []cache.Score,

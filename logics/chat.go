@@ -136,6 +136,9 @@ type ChatReranker struct {
 func NewChatReranker(cfg config.DashScopeConfig, queryTemplate, docTemplate string) (*ChatReranker, error) {
 	// create DashScope client
 	client := dashscope.NewClient(cfg.APIKey)
+	if cfg.BaseURL != "" {
+		client.SetBaseURL(cfg.BaseURL)
+	}
 	// create templates
 	qTpl, err := gonja.FromString(queryTemplate)
 	if err != nil {

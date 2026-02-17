@@ -271,27 +271,6 @@ optimize_period = "360m"
 # The number of trials for hyperparameter optimization. The default value is 10.
 optimize_trials = 10
 
-# The prompt template for LLM ranker. The default value is empty.
-prompt = """
-You are a GitHub repository recommender system. Given a user is interested in the following repositories:
-{% for repo in feedback -%}
-- {{ repo.Comment }}
-{% endfor -%}
-Please sort the following repositories by the user's interests:
-```csv
-item_id,description
-{% for repo in items -%}
-{{ repo.ItemId }},{{ repo.Comment | replace(",", " ") | replace("\n", " ") }}
-{% endfor -%}
-```
-Return the sorted list of repository IDs in CSV format. For example:
-```csv
-{% for repo in items[:3] -%}
-{{ repo.ItemId }}
-{% endfor -%}
-```
-"""
-
 # The prompt template for query.
 query_template = """
 You are a GitHub repository recommender system. Given a user is interested in the following repositories:

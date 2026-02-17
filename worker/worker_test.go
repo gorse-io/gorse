@@ -29,8 +29,8 @@ import (
 	"time"
 
 	"github.com/c-bata/goptuna"
+	"github.com/gorse-io/gorse/common/dashscope"
 	"github.com/gorse-io/gorse/common/expression"
-	"github.com/gorse-io/gorse/common/mock"
 	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/common/util"
 	"github.com/gorse-io/gorse/config"
@@ -739,7 +739,7 @@ func (suite *WorkerTestSuite) TestRankByClickTroughRate() {
 
 func (suite *WorkerTestSuite) TestRankByLLM() {
 	ctx := context.Background()
-	mockAI := mock.NewOpenAIServer()
+	mockAI := dashscope.NewMockServer()
 	go func() {
 		_ = mockAI.Start()
 	}()
@@ -753,16 +753,13 @@ func (suite *WorkerTestSuite) TestRankByLLM() {
 	err = suite.DataClient.BatchInsertItems(ctx, []data.Item{{ItemId: "1"}, {ItemId: "2"}, {ItemId: "3"}, {ItemId: "4"}, {ItemId: "5"}})
 	suite.NoError(err)
 
-	suite.Config.OpenAI = config.OpenAIConfig{
-		BaseURL:             mockAI.BaseURL(),
-		AuthToken:           mockAI.AuthToken(),
-		ChatCompletionModel: "deepseek-r1",
+	suite.Config.Recommend.Ranker.DashScope = config.DashScopeConfig{
+		BaseURL:       mockAI.URL(),
+		APIKey:        mockAI.APIKey(),
+		RerankerModel: "v1",
 	}
-	ranker, err := logics.NewChatRanker(suite.Config.OpenAI, "```csv"+`
-	{% for item in items %}
-	{{item.ItemId}}
-	{% endfor %}
-	`+"```")
+	ranker, err := logics.NewChatReranker(suite.Config.Recommend.Ranker.DashScope,
+		"{{user.UserId}}", "{{item.ItemId}}")
 	suite.NoError(err)
 
 	itemCache := NewItemCache(suite.DataClient)

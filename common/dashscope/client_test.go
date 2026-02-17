@@ -16,92 +16,11 @@ package dashscope
 
 import (
 	"context"
-	"fmt"
-	"net"
 	"net/http"
 	"testing"
 
-	"github.com/emicklei/go-restful/v3"
 	"github.com/stretchr/testify/assert"
 )
-
-type MockServer struct {
-	listener   net.Listener
-	httpServer *http.Server
-	apiKey     string
-	ready      chan struct{}
-}
-
-func NewMockServer() *MockServer {
-	s := &MockServer{}
-	ws := new(restful.WebService)
-	ws.Path("/api/v1/services/rerank/text-rerank/text-rerank").
-		Consumes(restful.MIME_JSON).
-		Produces(restful.MIME_JSON)
-	ws.Route(ws.POST("").
-		Reads(RerankRequest{}).
-		Writes(RerankResponse{}).
-		To(s.rerank))
-	container := restful.NewContainer()
-	container.Add(ws)
-	s.httpServer = &http.Server{Handler: container}
-	s.apiKey = "dashscope"
-	s.ready = make(chan struct{})
-	return s
-}
-
-func (s *MockServer) Start() error {
-	var err error
-	s.listener, err = net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		return err
-	}
-	close(s.ready)
-	return s.httpServer.Serve(s.listener)
-}
-
-func (s *MockServer) URL() string {
-	return fmt.Sprintf("http://%s/api/v1/services/rerank/text-rerank/text-rerank", s.listener.Addr().String())
-}
-
-func (s *MockServer) APIKey() string {
-	return s.apiKey
-}
-
-func (s *MockServer) Ready() {
-	<-s.ready
-}
-
-func (s *MockServer) Close() error {
-	return s.httpServer.Close()
-}
-
-func (s *MockServer) rerank(req *restful.Request, resp *restful.Response) {
-	var r RerankRequest
-	err := req.ReadEntity(&r)
-	if err != nil {
-		_ = resp.WriteError(http.StatusBadRequest, err)
-		return
-	}
-
-	results := make([]RerankResult, len(r.Input.Documents))
-	for i := range r.Input.Documents {
-		results[i] = RerankResult{
-			Index:          i,
-			RelevanceScore: 1.0 / float64(i+1),
-		}
-	}
-
-	_ = resp.WriteEntity(RerankResponse{
-		Output: RerankOutput{
-			Results: results,
-		},
-		Usage: Usage{
-			TotalTokens: 100,
-		},
-		RequestID: "test-request-id",
-	})
-}
 
 func TestClient_Rerank(t *testing.T) {
 	s := NewMockServer()
