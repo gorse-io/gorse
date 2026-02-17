@@ -350,15 +350,18 @@ type ReplacementConfig struct {
 }
 
 type RankerConfig struct {
-	Type           string              `mapstructure:"type" validate:"oneof=none fm llm"`
-	Recommenders   []string            `mapstructure:"recommenders"`
-	CacheExpire    time.Duration       `mapstructure:"cache_expire" validate:"gt=0"`
-	FitPeriod      time.Duration       `mapstructure:"fit_period" validate:"gt=0"`
-	FitEpoch       int                 `mapstructure:"fit_epoch" validate:"gt=0"`
-	OptimizePeriod time.Duration       `mapstructure:"optimize_period" validate:"gte=0"`
-	OptimizeTrials int                 `mapstructure:"optimize_trials" validate:"gt=0"`
-	Prompt         string              `mapstructure:"prompt"`
-	EarlyStopping  EarlyStoppingConfig `mapstructure:"early_stopping"`
+	Type             string              `mapstructure:"type" validate:"oneof=none fm llm"`
+	Recommenders     []string            `mapstructure:"recommenders"`
+	CacheExpire      time.Duration       `mapstructure:"cache_expire" validate:"gt=0"`
+	FitPeriod        time.Duration       `mapstructure:"fit_period" validate:"gt=0"`
+	FitEpoch         int                 `mapstructure:"fit_epoch" validate:"gt=0"`
+	OptimizePeriod   time.Duration       `mapstructure:"optimize_period" validate:"gte=0"`
+	OptimizeTrials   int                 `mapstructure:"optimize_trials" validate:"gt=0"`
+	Prompt           string              `mapstructure:"prompt"`
+	QueryTemplate    string              `mapstructure:"query_template"`
+	DocumentTemplate string              `mapstructure:"document_template"`
+	EarlyStopping    EarlyStoppingConfig `mapstructure:"early_stopping"`
+	DashScope        DashScopeConfig     `mapstructure:"dashscope"`
 }
 
 type FallbackConfig struct {
@@ -379,6 +382,11 @@ type OIDCConfig struct {
 	ClientID     string `mapstructure:"client_id"`
 	ClientSecret string `mapstructure:"client_secret"`
 	RedirectURL  string `mapstructure:"redirect_url" validate:"omitempty,endswith=/callback/oauth2"`
+}
+
+type DashScopeConfig struct {
+	APIKey        string `mapstructure:"api_key"`
+	RerankerModel string `mapstructure:"reranker_model"`
 }
 
 type OpenAIConfig struct {
@@ -661,6 +669,7 @@ var bindings = []configBinding{
 	{"openai.base_url", "OPENAI_BASE_URL"},
 	{"openai.auth_token", "OPENAI_AUTH_TOKEN"},
 	{"openai.chat_completion_model", "OPENAI_CHAT_COMPLETION_MODEL"},
+	{"recommend.ranker.dashscope.api_key", "DASHSCOPE_API_KEY"},
 }
 
 // LoadConfig loads configuration from toml file.

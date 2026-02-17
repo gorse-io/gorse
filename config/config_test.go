@@ -222,6 +222,7 @@ func TestBindEnv(t *testing.T) {
 		{"OPENAI_BASE_URL", "https://api.openai.com/v1"},
 		{"OPENAI_AUTH_TOKEN", "<auth_token>"},
 		{"OPENAI_CHAT_COMPLETION_MODEL", "gpt-4"},
+		{"DASHSCOPE_API_KEY", "<dashscope_api_key>"},
 	}
 	for _, variable := range variables {
 		t.Setenv(variable.key, variable.value)
@@ -265,6 +266,7 @@ func TestBindEnv(t *testing.T) {
 	assert.Equal(t, "https://api.openai.com/v1", config.OpenAI.BaseURL)
 	assert.Equal(t, "<auth_token>", config.OpenAI.AuthToken)
 	assert.Equal(t, "gpt-4", config.OpenAI.ChatCompletionModel)
+	assert.Equal(t, "<dashscope_api_key>", config.Recommend.Ranker.DashScope.APIKey)
 
 	// check default values
 	assert.Equal(t, 100, config.Recommend.CacheSize)

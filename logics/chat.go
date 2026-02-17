@@ -22,6 +22,7 @@ import (
 
 	"github.com/cenkalti/backoff/v5"
 	mapset "github.com/deckarep/golang-set/v2"
+	"github.com/gorse-io/gorse/common/dashscope"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/storage/data"
@@ -121,6 +122,74 @@ func (r *ChatRanker) Rank(ctx context.Context, user *data.User, feedback []*Feed
 			result = append(result, itemId)
 			m.Add(itemId)
 		}
+	}
+	return result, nil
+}
+
+type ChatReranker struct {
+	queryTemplate *exec.Template
+	docTemplate   *exec.Template
+	client        *dashscope.Client
+	model         string
+}
+
+func NewChatReranker(cfg config.DashScopeConfig, queryTemplate, docTemplate string) (*ChatReranker, error) {
+	// create DashScope client
+	client := dashscope.NewClient(cfg.APIKey)
+	// create templates
+	qTpl, err := gonja.FromString(queryTemplate)
+	if err != nil {
+		return nil, err
+	}
+	dTpl, err := gonja.FromString(docTemplate)
+	if err != nil {
+		return nil, err
+	}
+	return &ChatReranker{
+		queryTemplate: qTpl,
+		docTemplate:   dTpl,
+		client:        client,
+		model:         cfg.RerankerModel,
+	}, nil
+}
+
+func (r *ChatReranker) Rank(ctx context.Context, user *data.User, feedback []*FeedbackItem, items []*data.Item) ([]string, error) {
+	// render query
+	var queryBuf strings.Builder
+	queryCtx := exec.NewContext(map[string]any{
+		"user":     user,
+		"feedback": feedback,
+	})
+	if err := r.queryTemplate.Execute(&queryBuf, queryCtx); err != nil {
+		return nil, err
+	}
+	// render documents
+	documents := make([]string, len(items))
+	for i, item := range items {
+		var docBuf strings.Builder
+		docCtx := exec.NewContext(map[string]any{
+			"item": item,
+		})
+		if err := r.docTemplate.Execute(&docBuf, docCtx); err != nil {
+			return nil, err
+		}
+		documents[i] = docBuf.String()
+	}
+	// rerank
+	resp, err := r.client.Rerank(ctx, dashscope.RerankRequest{
+		Model: r.model,
+		Input: dashscope.Input{
+			Query:     queryBuf.String(),
+			Documents: documents,
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+	// sort items
+	result := make([]string, len(resp.Output.Results))
+	for i, rerankResult := range resp.Output.Results {
+		result[i] = items[rerankResult.Index].ItemId
 	}
 	return result, nil
 }

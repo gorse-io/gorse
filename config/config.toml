@@ -292,10 +292,30 @@ Return the sorted list of repository IDs in CSV format. For example:
 ```
 """
 
+# The prompt template for query.
+query_template = """
+You are a GitHub repository recommender system. Given a user is interested in the following repositories:
+{% for repo in feedback -%}
+- {{ repo.Comment }}
+{% endfor -%}
+Please sort repositories by the user's interests.
+"""
+
+# The prompt template for documents.
+document_template = '{{ item.Comment | replace(",", " ") | replace("\n", " ") }}'
+
 [recommend.ranker.early_stopping]
 
 # Number of epochs to wait if no improvement and then stop the training. The default value is 10.
 patience = 10
+
+[recommend.ranker.dashscope]
+
+# The API key for DashScope. The default value is empty.
+api_key = ""
+
+# The reranker model for DashScope.
+reranker_model = "qwen3-rerank"
 
 [recommend.fallback]
 
