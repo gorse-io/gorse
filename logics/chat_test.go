@@ -20,54 +20,10 @@ import (
 	"testing"
 
 	"github.com/gorse-io/gorse/common/dashscope"
-	"github.com/gorse-io/gorse/common/mock"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/storage/data"
 	"github.com/stretchr/testify/assert"
 )
-
-func TestChatRanker(t *testing.T) {
-	mockAI := mock.NewOpenAIServer()
-	go func() {
-		_ = mockAI.Start()
-	}()
-	mockAI.Ready()
-	defer mockAI.Close()
-
-	ranker, err := NewChatRanker(config.OpenAIConfig{
-		BaseURL:             mockAI.BaseURL(),
-		AuthToken:           mockAI.AuthToken(),
-		ChatCompletionModel: "deepseek-r1",
-		EmbeddingModel:      "text-similarity-ada-001",
-	}, `{{ user.UserId }} is a {{ user.Comment }} watched the following movies recently:
-{% for item in feedback -%}
-- {{ item.Comment }}
-{% endfor -%}
-Please sort the following movies based on his or her preference:
-| ID | Title |
-{% for item in items -%}
-| {{ item.ItemId }} | {{ item.Comment }} |
-{% endfor -%}
-Return IDs as a JSON array. For example:
-`+"```json\n"+`["tt1233227", "tt0926084", "tt0890870", "tt1132626", "tt0435761"]`+"\n```")
-	assert.NoError(t, err)
-	items, err := ranker.Rank(context.Background(), &data.User{
-		UserId:  "Tom",
-		Comment: "horror movie enthusiast",
-	}, []*FeedbackItem{
-		{Item: data.Item{ItemId: "tt0387564", Comment: "Saw"}},
-		{Item: data.Item{ItemId: "tt0432348", Comment: "Saw II"}},
-		{Item: data.Item{ItemId: "tt0435761", Comment: "Saw III"}},
-	}, []*data.Item{
-		{ItemId: "tt1233227", Comment: "Harry Potter and the Half-Blood Prince"},
-		{ItemId: "tt0926084", Comment: "Harry Potter and the Deathly Hallows: Part 1"},
-		{ItemId: "tt0890870", Comment: "Saw IV"},
-		{ItemId: "tt1132626", Comment: "Saw VI"},
-		{ItemId: "tt0435761", Comment: "Saw V"},
-	})
-	assert.NoError(t, err)
-	assert.Equal(t, []string{"tt1233227", "tt0926084", "tt0890870", "tt1132626", "tt0435761"}, items)
-}
 
 func TestChatReranker(t *testing.T) {
 	s := dashscope.NewMockServer()

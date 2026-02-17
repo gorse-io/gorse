@@ -355,9 +355,9 @@ func EvaluateLLM(cfg *config.Config, train, test dataset.CFSplit, topK int, scor
 		var score float32
 		if len(result) > 0 {
 			rankList := make([]int32, 0, len(result))
-			for i, itemId := range result {
+			for i, item := range result {
 				if i < topK {
-					rankList = append(rankList, train.GetItemDict().Id(itemId))
+					rankList = append(rankList, train.GetItemDict().Id(item.Id))
 				}
 			}
 			score = cf.NDCG(targetSet, rankList)

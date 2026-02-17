@@ -18,13 +18,10 @@ import (
 	"context"
 	"encoding/json"
 	"strings"
-	"time"
 
-	"github.com/cenkalti/backoff/v5"
-	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/gorse-io/gorse/common/dashscope"
-	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/config"
+	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
 	"github.com/nikolalohinski/gonja/v2"
 	"github.com/nikolalohinski/gonja/v2/exec"
@@ -32,98 +29,11 @@ import (
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/text"
-	"go.uber.org/zap"
 )
 
 type FeedbackItem struct {
 	FeedbackType string
 	data.Item
-}
-
-type ChatRanker struct {
-	template *exec.Template
-	client   *openai.Client
-	model    string
-}
-
-func NewChatRanker(cfg config.OpenAIConfig, prompt string) (*ChatRanker, error) {
-	// create OpenAI client
-	clientConfig := openai.DefaultConfig(cfg.AuthToken)
-	clientConfig.BaseURL = cfg.BaseURL
-	client := openai.NewClientWithConfig(clientConfig)
-	// create template
-	template, err := gonja.FromString(prompt)
-	if err != nil {
-		return nil, err
-	}
-	return &ChatRanker{
-		template: template,
-		client:   client,
-		model:    cfg.ChatCompletionModel,
-	}, nil
-}
-
-func (r *ChatRanker) Rank(ctx context.Context, user *data.User, feedback []*FeedbackItem, items []*data.Item) ([]string, error) {
-	// render template
-	var buf strings.Builder
-	tplCtx := exec.NewContext(map[string]any{
-		"user":     user,
-		"feedback": feedback,
-		"items":    items,
-	})
-	if err := r.template.Execute(&buf, tplCtx); err != nil {
-		return nil, err
-	}
-	// chat completion
-	start := time.Now()
-	resp, err := backoff.Retry(ctx, func() (openai.ChatCompletionResponse, error) {
-		resp, err := r.client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
-			Model: r.model,
-			Messages: []openai.ChatCompletionMessage{{
-				Role:    openai.ChatMessageRoleUser,
-				Content: buf.String(),
-			}},
-			ChatTemplateKwargs: map[string]any{
-				"enable_thinking": false, // Ollama, Alibaba Cloud
-				"thinking":        false, // NVIDIA NIM
-			},
-		})
-		if err == nil {
-			return resp, nil
-		}
-		if isThrottled(err) {
-			return openai.ChatCompletionResponse{}, err
-		}
-		return openai.ChatCompletionResponse{}, backoff.Permanent(err)
-	}, backoff.WithBackOff(backoff.NewConstantBackOff(time.Minute)))
-	if err != nil {
-		return nil, err
-	}
-	duration := time.Since(start)
-	// parse response
-	parsed := parseArrayFromCompletion(resp.Choices[0].Message.Content)
-	log.OpenAILogger().Info("chat completion",
-		zap.String("prompt", buf.String()),
-		zap.String("completion", resp.Choices[0].Message.Content),
-		zap.Strings("parsed", parsed),
-		zap.Int("prompt_tokens", resp.Usage.PromptTokens),
-		zap.Int("completion_tokens", resp.Usage.CompletionTokens),
-		zap.Int("total_tokens", resp.Usage.TotalTokens),
-		zap.Duration("duration", duration))
-	// filter items
-	s := mapset.NewSet[string]()
-	for _, item := range items {
-		s.Add(item.ItemId)
-	}
-	var result []string
-	m := mapset.NewSet[string]()
-	for _, itemId := range parsed {
-		if s.Contains(itemId) && !m.Contains(itemId) {
-			result = append(result, itemId)
-			m.Add(itemId)
-		}
-	}
-	return result, nil
 }
 
 type ChatReranker struct {
@@ -156,7 +66,7 @@ func NewChatReranker(cfg config.DashScopeConfig, queryTemplate, docTemplate stri
 	}, nil
 }
 
-func (r *ChatReranker) Rank(ctx context.Context, user *data.User, feedback []*FeedbackItem, items []*data.Item) ([]string, error) {
+func (r *ChatReranker) Rank(ctx context.Context, user *data.User, feedback []*FeedbackItem, items []*data.Item) ([]cache.Score, error) {
 	// render query
 	var queryBuf strings.Builder
 	queryCtx := exec.NewContext(map[string]any{
@@ -190,9 +100,10 @@ func (r *ChatReranker) Rank(ctx context.Context, user *data.User, feedback []*Fe
 		return nil, err
 	}
 	// sort items
-	result := make([]string, len(resp.Output.Results))
+	result := make([]cache.Score, len(resp.Output.Results))
 	for i, rerankResult := range resp.Output.Results {
-		result[i] = items[rerankResult.Index].ItemId
+		result[i].Id = items[rerankResult.Index].ItemId
+		result[i].Score = rerankResult.RelevanceScore
 	}
 	return result, nil
 }
