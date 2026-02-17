@@ -89,22 +89,12 @@ func (db *Qdrant) AddVectors(ctx context.Context, collection string, vectors []V
 	points := make([]*qdrant.PointStruct, 0, len(vectors))
 	for _, vector := range vectors {
 		points = append(points, &qdrant.PointStruct{
-			Id: &qdrant.PointId{
-				PointIdOptions: &qdrant.PointId_Uuid{Uuid: uuid.NewMD5(uuid.NameSpaceURL, []byte(vector.Id)).String()},
-			},
+			Id: qdrant.NewID(uuid.NewMD5(uuid.NameSpaceURL, []byte(vector.Id)).String()),
 			Payload: map[string]*qdrant.Value{
 				qdrantPayloadCategoriesKey: qdrantListValue(vector.Categories),
-				qdrantPayloadIdKey:         {Kind: &qdrant.Value_StringValue{StringValue: vector.Id}},
+				qdrantPayloadIdKey:         qdrant.NewValueString(vector.Id),
 			},
-			Vectors: &qdrant.Vectors{
-				VectorsOptions: &qdrant.Vectors_Vector{
-					Vector: &qdrant.Vector{
-						Vector: &qdrant.Vector_Dense{
-							Dense: &qdrant.DenseVector{Data: vector.Vector},
-						},
-					},
-				},
-			},
+			Vectors: qdrant.NewVectorsDense(vector.Vector),
 		})
 	}
 	_, err := db.client.Upsert(ctx, &qdrant.UpsertPoints{
@@ -118,41 +108,26 @@ func (db *Qdrant) QueryVectors(ctx context.Context, collection string, q []float
 	if topK <= 0 {
 		return []Vector{}, nil
 	}
-	request := &qdrant.SearchPoints{
+	request := &qdrant.QueryPoints{
 		CollectionName: collection,
-		Vector:         q,
-		Limit:          uint64(topK),
-		WithPayload: &qdrant.WithPayloadSelector{
-			SelectorOptions: &qdrant.WithPayloadSelector_Enable{Enable: true},
-		},
-		WithVectors: &qdrant.WithVectorsSelector{
-			SelectorOptions: &qdrant.WithVectorsSelector_Enable{Enable: true},
-		},
+		Query:          qdrant.NewQueryDense(q),
+		Limit:          qdrant.PtrOf(uint64(topK)),
+		WithPayload:    qdrant.NewWithPayloadEnable(true),
+		WithVectors:    qdrant.NewWithVectorsEnable(true),
 	}
 	if len(categories) > 0 {
 		request.Filter = &qdrant.Filter{
 			Must: []*qdrant.Condition{
-				{
-					ConditionOneOf: &qdrant.Condition_Field{
-						Field: &qdrant.FieldCondition{
-							Key: qdrantPayloadCategoriesKey,
-							Match: &qdrant.Match{
-								MatchValue: &qdrant.Match_Keywords{
-									Keywords: &qdrant.RepeatedStrings{Strings: categories},
-								},
-							},
-						},
-					},
-				},
+				qdrant.NewMatchKeywords(qdrantPayloadCategoriesKey, categories...),
 			},
 		}
 	}
-	response, err := db.client.GetPointsClient().Search(ctx, request)
+	response, err := db.client.Query(ctx, request)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	results := make([]Vector, 0, len(response.GetResult()))
-	for _, scored := range response.GetResult() {
+	results := make([]Vector, 0, len(response))
+	for _, scored := range response {
 		results = append(results, Vector{
 			Id:         qdrantId(scored.GetPayload()),
 			Vector:     qdrantVectorOutput(scored.GetVectors()),
@@ -175,9 +150,9 @@ func qdrantId(payload map[string]*qdrant.Value) string {
 func qdrantListValue(items []string) *qdrant.Value {
 	values := make([]*qdrant.Value, 0, len(items))
 	for _, item := range items {
-		values = append(values, &qdrant.Value{Kind: &qdrant.Value_StringValue{StringValue: item}})
+		values = append(values, qdrant.NewValueString(item))
 	}
-	return &qdrant.Value{Kind: &qdrant.Value_ListValue{ListValue: &qdrant.ListValue{Values: values}}}
+	return qdrant.NewValueFromList(values...)
 }
 
 func qdrantCategories(payload map[string]*qdrant.Value) []string {
@@ -206,12 +181,10 @@ func qdrantVectorOutput(output *qdrant.VectorsOutput) []float32 {
 	if output == nil {
 		return nil
 	}
+
 	vector := output.GetVector()
 	if vector == nil {
 		return nil
 	}
-	if dense := vector.GetDense(); dense != nil {
-		return dense.GetData()
-	}
-	return vector.GetData()
+	return vector.GetDenseVector().GetData()
 }
