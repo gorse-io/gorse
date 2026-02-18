@@ -59,6 +59,13 @@ max_idle_conns = 64
 # Maximum amount of time a connection may be reused. The default value is "1m".
 conn_max_lifetime = "1m"
 
+[database.redis]
+
+# Maximum number of documents fetched per FT.SEARCH page when updating score documents.
+# Increasing this may reduce round trips but increase per-call load; decreasing this may reduce peak latency spikes.
+# The default value is 10000.
+update_scores_search_limit = 10000
+
 [master]
 
 # GRPC port of the master node. The default value is 8086.

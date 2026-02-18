@@ -105,6 +105,113 @@ func (suite *RedisTestSuite) TestEscapeCharacters() {
 	}
 }
 
+func (suite *RedisTestSuite) TestUpdateScoresWithPagination() {
+	ctx := context.Background()
+	db, ok := suite.Database.(*Redis)
+	suite.True(ok)
+	limit := db.updateScoresSearchLimit
+	db.updateScoresSearchLimit = 2
+	defer func() {
+		db.updateScoresSearchLimit = limit
+	}()
+
+	for i := 0; i < 5; i++ {
+		subset := fmt.Sprintf("subset-%d", i)
+		err := suite.AddScores(ctx, "collection-a", subset, []Score{{
+			Id:         "shared-item",
+			Score:      float64(i),
+			Categories: []string{"old"},
+			Timestamp:  time.Now().UTC(),
+		}})
+		suite.NoError(err)
+	}
+
+	err := suite.UpdateScores(ctx, []string{"collection-a"}, nil, "shared-item", ScorePatch{
+		Categories: []string{"new"},
+	})
+	suite.NoError(err)
+
+	for i := 0; i < 5; i++ {
+		subset := fmt.Sprintf("subset-%d", i)
+		docs, err := suite.SearchScores(ctx, "collection-a", subset, []string{"new"}, 0, -1)
+		suite.NoError(err)
+		suite.Len(docs, 1)
+		suite.Equal("shared-item", docs[0].Id)
+	}
+}
+
+func (suite *RedisTestSuite) TestUpdateScoresWithPaginationAndScorePatch() {
+	ctx := context.Background()
+	db, ok := suite.Database.(*Redis)
+	suite.True(ok)
+	limit := db.updateScoresSearchLimit
+	db.updateScoresSearchLimit = 1
+	defer func() {
+		db.updateScoresSearchLimit = limit
+	}()
+
+	initialScores := []float64{3, 2, 1}
+	for i, score := range initialScores {
+		subset := fmt.Sprintf("score-subset-%d", i)
+		err := suite.AddScores(ctx, "collection-b", subset, []Score{{
+			Id:         "shared-item",
+			Score:      score,
+			Categories: []string{"score-old"},
+			Timestamp:  time.Now().UTC(),
+		}})
+		suite.NoError(err)
+	}
+
+	targetScore := float64(0)
+	err := suite.UpdateScores(ctx, []string{"collection-b"}, nil, "shared-item", ScorePatch{
+		Score: &targetScore,
+	})
+	suite.NoError(err)
+
+	for i := range initialScores {
+		subset := fmt.Sprintf("score-subset-%d", i)
+		docs, err := suite.SearchScores(ctx, "collection-b", subset, nil, 0, -1)
+		suite.NoError(err)
+		suite.Len(docs, 1)
+		suite.Equal(targetScore, docs[0].Score)
+	}
+}
+
+func (suite *RedisTestSuite) TestUpdateScoresWithPaginationAndTiedScores() {
+	ctx := context.Background()
+	db, ok := suite.Database.(*Redis)
+	suite.True(ok)
+	limit := db.updateScoresSearchLimit
+	db.updateScoresSearchLimit = 2
+	defer func() {
+		db.updateScoresSearchLimit = limit
+	}()
+
+	for i := 0; i < 5; i++ {
+		subset := fmt.Sprintf("tie-subset-%d", i)
+		err := suite.AddScores(ctx, "collection-c", subset, []Score{{
+			Id:         "shared-item",
+			Score:      1,
+			Categories: []string{"tie-old"},
+			Timestamp:  time.Now().UTC(),
+		}})
+		suite.NoError(err)
+	}
+
+	err := suite.UpdateScores(ctx, []string{"collection-c"}, nil, "shared-item", ScorePatch{
+		Categories: []string{"tie-new"},
+	})
+	suite.NoError(err)
+
+	for i := 0; i < 5; i++ {
+		subset := fmt.Sprintf("tie-subset-%d", i)
+		docs, err := suite.SearchScores(ctx, "collection-c", subset, []string{"tie-new"}, 0, -1)
+		suite.NoError(err)
+		suite.Len(docs, 1)
+		suite.Equal("shared-item", docs[0].Id)
+	}
+}
+
 func TestRedis(t *testing.T) {
 	suite.Run(t, new(RedisTestSuite))
 }
