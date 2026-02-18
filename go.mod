@@ -259,7 +259,7 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260120174246-409b4a993575 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	k8s.io/klog/v2 v2.130.1 // indirect
-	modernc.org/libc v1.67.1 // indirect
+	modernc.org/libc v1.68.0 // indirect
 	modernc.org/libquickjs v0.12.3 // indirect
 	modernc.org/memory v1.11.0 // indirect
 )
@@ -267,4 +267,5 @@ require (
 replace (
 	gorm.io/driver/clickhouse v0.4.2 => github.com/gorse-io/clickhouse v0.3.3-0.20251121080503-d578f146896d
 	gorm.io/driver/sqlite v1.3.4 => github.com/gorse-io/sqlite v1.3.3-0.20220713123255-c322aec4e59e
+	modernc.org/sqlite v1.37.0 => gitlab.com/zhenghaoz/sqlite v0.0.0-20260218035130-e4288716defa
 )

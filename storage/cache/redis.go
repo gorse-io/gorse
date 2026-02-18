@@ -265,12 +265,12 @@ func (r *Redis) AddScores(ctx context.Context, collection, subset string, docume
 
 func (r *Redis) SearchScores(ctx context.Context, collection, subset string, query []string, begin, end int) ([]Score, error) {
 	var builder strings.Builder
-	builder.WriteString(fmt.Sprintf("@collection:{ %s } @is_hidden:[0 0]", escape(collection)))
+	fmt.Fprintf(&builder, "@collection:{ %s } @is_hidden:[0 0]", escape(collection))
 	if subset != "" {
-		builder.WriteString(fmt.Sprintf(" @subset:{ %s }", escape(subset)))
+		fmt.Fprintf(&builder, " @subset:{ %s }", escape(subset))
 	}
 	for _, q := range query {
-		builder.WriteString(fmt.Sprintf(" @categories:{ %s }", escape(encdodeCategory(q))))
+		fmt.Fprintf(&builder, " @categories:{ %s }", escape(encodeCategory(q)))
 	}
 	options := &redis.FTSearchOptions{
 		SortBy:      []redis.FTSearchSortBy{{FieldName: "score", Desc: true}},
@@ -322,10 +322,10 @@ func (r *Redis) UpdateScores(ctx context.Context, collections []string, subset *
 		return nil
 	}
 	var builder strings.Builder
-	builder.WriteString(fmt.Sprintf("@collection:{ %s }", escape(strings.Join(collections, " | "))))
-	builder.WriteString(fmt.Sprintf(" @id:{ %s }", escape(id)))
+	fmt.Fprintf(&builder, "@collection:{ %s }", escape(strings.Join(collections, " | ")))
+	fmt.Fprintf(&builder, " @id:{ %s }", escape(id))
 	if subset != nil {
-		builder.WriteString(fmt.Sprintf(" @subset:{ %s }", escape(*subset)))
+		fmt.Fprintf(&builder, " @subset:{ %s }", escape(*subset))
 	}
 	for {
 		// search documents
@@ -374,15 +374,15 @@ func (r *Redis) DeleteScores(ctx context.Context, collections []string, conditio
 		return errors.Trace(err)
 	}
 	var builder strings.Builder
-	builder.WriteString(fmt.Sprintf("@collection:{ %s }", escape(strings.Join(collections, " | "))))
+	fmt.Fprintf(&builder, "@collection:{ %s }", escape(strings.Join(collections, " | ")))
 	if condition.Subset != nil {
-		builder.WriteString(fmt.Sprintf(" @subset:{ %s }", escape(*condition.Subset)))
+		fmt.Fprintf(&builder, " @subset:{ %s }", escape(*condition.Subset))
 	}
 	if condition.Id != nil {
-		builder.WriteString(fmt.Sprintf(" @id:{ %s }", escape(*condition.Id)))
+		fmt.Fprintf(&builder, " @id:{ %s }", escape(*condition.Id))
 	}
 	if condition.Before != nil {
-		builder.WriteString(fmt.Sprintf(" @timestamp:[-inf (%d]", condition.Before.UnixMicro()))
+		fmt.Fprintf(&builder, " @timestamp:[-inf (%d]", condition.Before.UnixMicro())
 	}
 	for {
 		// search documents
@@ -482,7 +482,7 @@ func (r *Redis) GetTimeSeriesPoints(ctx context.Context, name string, begin, end
 	return points, nil
 }
 
-func encdodeCategory(category string) string {
+func encodeCategory(category string) string {
 	return base64.RawStdEncoding.EncodeToString([]byte("_" + category))
 }
 
@@ -500,7 +500,7 @@ func encodeCategories(categories []string) string {
 		if i > 0 {
 			builder.WriteByte(';')
 		}
-		builder.WriteString(encdodeCategory(category))
+		builder.WriteString(encodeCategory(category))
 	}
 	return builder.String()
 }
