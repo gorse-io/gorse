@@ -6,11 +6,11 @@ import (
 )
 
 type Options struct {
-	IsolationLevel          string
-	MaxOpenConns            int
-	MaxIdleConns            int
-	ConnMaxLifetime         time.Duration
-	UpdateScoresSearchLimit int
+	IsolationLevel   string
+	MaxOpenConns     int
+	MaxIdleConns     int
+	ConnMaxLifetime  time.Duration
+	MaxSearchResults int
 }
 
 type Option func(*Options)
@@ -39,9 +39,9 @@ func WithConnMaxLifetime(connMaxLifetime time.Duration) Option {
 	}
 }
 
-func WithUpdateScoresSearchLimit(limit int) Option {
+func WithMaxSearchResults(limit int) Option {
 	return func(o *Options) {
-		o.UpdateScoresSearchLimit = limit
+		o.MaxSearchResults = limit
 	}
 }
 
@@ -59,8 +59,8 @@ func ApplySQLPool(db *sql.DB, opt Options) {
 
 func NewOptions(opts ...Option) Options {
 	opt := Options{
-		IsolationLevel:          "READ-UNCOMMITTED",
-		UpdateScoresSearchLimit: 10000,
+		IsolationLevel:   "READ-UNCOMMITTED",
+		MaxSearchResults: 10000,
 	}
 	for _, o := range opts {
 		o(&opt)

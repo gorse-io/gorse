@@ -95,7 +95,7 @@ type SQLConfig struct {
 }
 
 type RedisConfig struct {
-	UpdateScoresSearchLimit int `mapstructure:"update_scores_search_limit" validate:"gt=0"`
+	MaxSearchResults int `mapstructure:"max_search_results" validate:"gt=0"`
 }
 
 func (db *DatabaseConfig) StorageOptions(path string) []storage.Option {
@@ -117,7 +117,7 @@ func (db *DatabaseConfig) StorageOptions(path string) []storage.Option {
 	if strings.HasPrefix(path, storage.RedisPrefix) || strings.HasPrefix(path, storage.RedissPrefix) ||
 		strings.HasPrefix(path, storage.RedisClusterPrefix) || strings.HasPrefix(path, storage.RedissClusterPrefix) {
 		return []storage.Option{
-			storage.WithUpdateScoresSearchLimit(db.Redis.UpdateScoresSearchLimit),
+			storage.WithMaxSearchResults(db.Redis.MaxSearchResults),
 		}
 	}
 	return nil
@@ -454,7 +454,7 @@ func GetDefaultConfig() *Config {
 				ConnMaxLifetime: time.Minute,
 			},
 			Redis: RedisConfig{
-				UpdateScoresSearchLimit: 10000,
+				MaxSearchResults: 10000,
 			},
 		},
 		Master: MasterConfig{
@@ -594,7 +594,7 @@ func setDefault() {
 	viper.SetDefault("database.postgres.max_idle_conns", defaultConfig.Database.Postgres.MaxIdleConns)
 	viper.SetDefault("database.postgres.conn_max_lifetime", defaultConfig.Database.Postgres.ConnMaxLifetime)
 	// [database.redis]
-	viper.SetDefault("database.redis.update_scores_search_limit", defaultConfig.Database.Redis.UpdateScoresSearchLimit)
+	viper.SetDefault("database.redis.max_search_results", defaultConfig.Database.Redis.MaxSearchResults)
 	// [master]
 	viper.SetDefault("master.port", defaultConfig.Master.Port)
 	viper.SetDefault("master.host", defaultConfig.Master.Host)

@@ -61,10 +61,8 @@ conn_max_lifetime = "1m"
 
 [database.redis]
 
-# Maximum number of documents fetched per FT.SEARCH page when updating score documents.
-# Increasing this may reduce round trips but increase per-call load; decreasing this may reduce peak latency spikes.
-# The default value is 10000.
-update_scores_search_limit = 10000
+# The maximum number of results to be returned by the FT.SEARCH command if LIMIT is used
+max_search_results = 10000
 
 [master]
 
@@ -340,8 +338,8 @@ client_id = ""
 client_secret = ""
 
 # URL used by the OAuth provider to redirect users after they are successfully authenticated
-# (also referred to as the callback URL). You should set this to the concatenation of the 
-# Gorse dashboard URL and "/callback/oauth2". For example, if the Gorse dashboard URL is 
+# (also referred to as the callback URL). You should set this to the concatenation of the
+# Gorse dashboard URL and "/callback/oauth2". For example, if the Gorse dashboard URL is
 # http://localhost:8088, the redirect URL should be: http://localhost:8088/callback/oauth2
 redirect_url = ""
 

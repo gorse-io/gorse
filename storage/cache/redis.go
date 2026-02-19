@@ -44,7 +44,7 @@ func init() {
 		database := new(Redis)
 		database.client = redis.NewClient(opt)
 		database.TablePrefix = storage.TablePrefix(tablePrefix)
-		database.updateScoresSearchLimit = storage.NewOptions(opts...).UpdateScoresSearchLimit
+		database.maxSearchResults = storage.NewOptions(opts...).MaxSearchResults
 		if err = redisotel.InstrumentTracing(database.client, redisotel.WithAttributes(semconv.DBSystemRedis)); err != nil {
 			log.Logger().Error("failed to add tracing for redis", zap.Error(err))
 			return nil, errors.Trace(err)
@@ -66,7 +66,7 @@ func init() {
 		database := new(Redis)
 		database.client = redis.NewClusterClient(opt)
 		database.TablePrefix = storage.TablePrefix(tablePrefix)
-		database.updateScoresSearchLimit = storage.NewOptions(opts...).UpdateScoresSearchLimit
+		database.maxSearchResults = storage.NewOptions(opts...).MaxSearchResults
 		if err = redisotel.InstrumentTracing(database.client, redisotel.WithAttributes(semconv.DBSystemRedis)); err != nil {
 			log.Logger().Error("failed to add tracing for redis", zap.Error(err))
 			return nil, errors.Trace(err)
@@ -78,8 +78,8 @@ func init() {
 // Redis cache storage.
 type Redis struct {
 	storage.TablePrefix
-	client                  redis.UniversalClient
-	updateScoresSearchLimit int
+	client           redis.UniversalClient
+	maxSearchResults int
 }
 
 // Close redis connection.
@@ -330,7 +330,7 @@ func (r *Redis) UpdateScores(ctx context.Context, collections []string, subset *
 	if subset != nil {
 		fmt.Fprintf(&builder, " @subset:{ %s }", escape(*subset))
 	}
-	limit := r.updateScoresSearchLimit
+	limit := r.maxSearchResults
 	if limit <= 0 {
 		limit = 10000
 	}
@@ -355,15 +355,19 @@ func (r *Redis) UpdateScores(ctx context.Context, collections []string, subset *
 		if len(result.Docs) == 0 {
 			break
 		}
+		newKeys := 0
 		for _, doc := range result.Docs {
 			if _, exists := keySet[doc.ID]; !exists {
 				keySet[doc.ID] = struct{}{}
 				keys = append(keys, doc.ID)
+				newKeys++
 			}
 		}
 		offset += len(result.Docs)
-		// break if no more documents
-		if offset >= result.Total {
+		// Stop when:
+		// 1) the last page is shorter than the limit (common Redis behavior), or
+		// 2) no new keys are discovered (defensive for engines with non-standard total/offset semantics).
+		if len(result.Docs) < limit || newKeys == 0 {
 			break
 		}
 	}

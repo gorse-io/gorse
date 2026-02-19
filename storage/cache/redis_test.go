@@ -109,10 +109,10 @@ func (suite *RedisTestSuite) TestUpdateScoresWithPagination() {
 	ctx := context.Background()
 	db, ok := suite.Database.(*Redis)
 	suite.True(ok)
-	limit := db.updateScoresSearchLimit
-	db.updateScoresSearchLimit = 2
+	limit := db.maxSearchResults
+	db.maxSearchResults = 2
 	defer func() {
-		db.updateScoresSearchLimit = limit
+		db.maxSearchResults = limit
 	}()
 
 	for i := 0; i < 5; i++ {
@@ -135,7 +135,7 @@ func (suite *RedisTestSuite) TestUpdateScoresWithPagination() {
 		subset := fmt.Sprintf("subset-%d", i)
 		docs, err := suite.SearchScores(ctx, "collection-a", subset, []string{"new"}, 0, -1)
 		suite.NoError(err)
-		suite.Len(docs, 1)
+		suite.Require().Len(docs, 1)
 		suite.Equal("shared-item", docs[0].Id)
 	}
 }
@@ -144,10 +144,10 @@ func (suite *RedisTestSuite) TestUpdateScoresWithPaginationAndScorePatch() {
 	ctx := context.Background()
 	db, ok := suite.Database.(*Redis)
 	suite.True(ok)
-	limit := db.updateScoresSearchLimit
-	db.updateScoresSearchLimit = 1
+	limit := db.maxSearchResults
+	db.maxSearchResults = 1
 	defer func() {
-		db.updateScoresSearchLimit = limit
+		db.maxSearchResults = limit
 	}()
 
 	initialScores := []float64{3, 2, 1}
@@ -172,7 +172,7 @@ func (suite *RedisTestSuite) TestUpdateScoresWithPaginationAndScorePatch() {
 		subset := fmt.Sprintf("score-subset-%d", i)
 		docs, err := suite.SearchScores(ctx, "collection-b", subset, nil, 0, -1)
 		suite.NoError(err)
-		suite.Len(docs, 1)
+		suite.Require().Len(docs, 1)
 		suite.Equal(targetScore, docs[0].Score)
 	}
 }
@@ -181,10 +181,10 @@ func (suite *RedisTestSuite) TestUpdateScoresWithPaginationAndTiedScores() {
 	ctx := context.Background()
 	db, ok := suite.Database.(*Redis)
 	suite.True(ok)
-	limit := db.updateScoresSearchLimit
-	db.updateScoresSearchLimit = 2
+	limit := db.maxSearchResults
+	db.maxSearchResults = 2
 	defer func() {
-		db.updateScoresSearchLimit = limit
+		db.maxSearchResults = limit
 	}()
 
 	for i := 0; i < 5; i++ {
@@ -207,7 +207,7 @@ func (suite *RedisTestSuite) TestUpdateScoresWithPaginationAndTiedScores() {
 		subset := fmt.Sprintf("tie-subset-%d", i)
 		docs, err := suite.SearchScores(ctx, "collection-c", subset, []string{"tie-new"}, 0, -1)
 		suite.NoError(err)
-		suite.Len(docs, 1)
+		suite.Require().Len(docs, 1)
 		suite.Equal("shared-item", docs[0].Id)
 	}
 }

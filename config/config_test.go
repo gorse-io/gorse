@@ -76,7 +76,7 @@ func TestUnmarshal(t *testing.T) {
 			assert.Equal(t, 64, config.Database.Postgres.MaxOpenConns)
 			assert.Equal(t, 64, config.Database.Postgres.MaxIdleConns)
 			assert.Equal(t, time.Minute, config.Database.Postgres.ConnMaxLifetime)
-			assert.Equal(t, 10000, config.Database.Redis.UpdateScoresSearchLimit)
+			assert.Equal(t, 10000, config.Database.Redis.MaxSearchResults)
 			// [master]
 			assert.Equal(t, 8086, config.Master.Port)
 			assert.Equal(t, "0.0.0.0", config.Master.Host)
