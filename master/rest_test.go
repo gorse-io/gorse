@@ -32,6 +32,7 @@ import (
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/gorse-io/gorse/common/expression"
 	"github.com/gorse-io/gorse/common/mock"
+	"github.com/gorse-io/gorse/common/reranker"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/protocol"
 	"github.com/gorse-io/gorse/server"
@@ -932,30 +933,37 @@ func (suite *MasterAPITestSuite) TestGetRankerPrompt() {
 	suite.NoError(err)
 
 	// render template
-	template := "user={{ user.UserId }}\n" +
-		"feedback={% for f in feedback %}{{ f.Item.ItemId }}{% if not loop.last %}, {% endif %}{% endfor %}\n" +
-		"items={% for i in items %}{{ i.ItemId }}{% if not loop.last %}, {% endif %}{% endfor %}"
-	promptBase64 := base64.StdEncoding.EncodeToString([]byte(template))
+	queryTpl := "user={{ user.UserId }}\n" +
+		"feedback={% for f in feedback %}{{ f.Item.ItemId }}{% if not loop.last %}, {% endif %}{% endfor %}"
+	documentTpl := "item={{ item.ItemId }}"
+	queryTplBase64 := base64.StdEncoding.EncodeToString([]byte(queryTpl))
+	documentTplBase64 := base64.StdEncoding.EncodeToString([]byte(documentTpl))
+
 	// latest 10 feedback items: fb-11 to fb-02
 	feedbackList := []string{}
 	for i := 11; i >= 2; i-- {
 		feedbackList = append(feedbackList, fmt.Sprintf("fb-%02d", i))
 	}
-	expected := fmt.Sprintf(
-		"user=%s\nfeedback=%s\nitems=lt-3, lt-2, lt-1",
+	expectedQuery := fmt.Sprintf(
+		"user=%s\nfeedback=%s",
 		user.UserId,
 		strings.Join(feedbackList, ", "),
 	)
+	expectedDocuments := []string{"item=lt-3", "item=lt-2", "item=lt-1"}
 
 	apitest.New().
 		Handler(suite.handler).
 		Get("/api/dashboard/ranker/prompt").
 		Header("Cookie", suite.cookie).
-		Query("prompt", promptBase64).
+		Query("query-template", queryTplBase64).
+		Query("document-template", documentTplBase64).
 		Query("user-id", user.UserId).
 		Expect(suite.T()).
 		Status(http.StatusOK).
-		Body(expected).
+		Body(marshal(suite.T(), RerankerPrompt{
+			Query:     expectedQuery,
+			Documents: expectedDocuments,
+		})).
 		End()
 }
 
@@ -1167,6 +1175,39 @@ func (suite *MasterAPITestSuite) TestChat() {
 	suite.chat(w, req)
 	suite.Equal(http.StatusOK, w.Code, w.Body.String())
 	suite.Equal(content, w.Body.String())
+}
+
+func (suite *MasterAPITestSuite) TestRerank() {
+	// setup mock server
+	s := reranker.NewMockServer()
+	go func() {
+		_ = s.Start()
+	}()
+	defer s.Close()
+	s.Ready()
+
+	// setup master
+	suite.Config.Recommend.Ranker.RerankerAPI.BaseURL = s.URL()
+	suite.Config.Recommend.Ranker.RerankerAPI.APIKey = s.APIKey()
+	suite.Config.Recommend.Ranker.RerankerAPI.Model = "test"
+
+	// test rerank
+	rerankReq := reranker.RerankRequest{
+		Model:     "test",
+		Query:     "test",
+		Documents: []string{"test1", "test2"},
+	}
+	buf := strings.NewReader(marshal(suite.T(), rerankReq))
+	req := httptest.NewRequest("POST", "https://example.com/", buf)
+	req.Header.Set("Cookie", suite.cookie)
+	w := httptest.NewRecorder()
+	suite.rerank(w, req)
+	suite.Equal(http.StatusOK, w.Code, w.Body.String())
+
+	var rerankResp reranker.RerankResponse
+	err := json.Unmarshal(w.Body.Bytes(), &rerankResp)
+	suite.NoError(err)
+	suite.Equal(len(rerankReq.Documents), len(rerankResp.Results))
 }
 
 func TestMasterAPI(t *testing.T) {

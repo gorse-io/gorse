@@ -102,7 +102,7 @@ var benchLLMCmd = &cobra.Command{
 		}))
 		lo.Must0(table.Render())
 
-		// go EvaluateAFM(train, test, &scores)
+		go EvaluateAFM(cfg, train, test, &scores)
 		EvaluateLLM(cfg, train, test, cfDataset.GetItems(), &scores)
 		data := [][]string{{"Ranker", "GAUC"}}
 		scores.Range(func(key, value any) bool {
@@ -119,13 +119,22 @@ var benchLLMCmd = &cobra.Command{
 	},
 }
 
-func EvaluateAFM(train, test *ctr.Dataset, scores *sync.Map) {
+func EvaluateAFM(cfg *config.Config, train, test *ctr.Dataset, scores *sync.Map) {
 	ml := ctr.NewAFM(nil)
 	ml.Fit(context.Background(), train, test,
 		ctr.NewFitConfig().
 			SetVerbose(10).
 			SetJobs(runtime.NumCPU()).
 			SetPatience(10))
+
+	feedbackCount := make(map[int32]int)
+	for i := 0; i < train.Count(); i++ {
+		indices, _, _, target := train.Get(i)
+		if target > 0 {
+			userIndex := indices[0]
+			feedbackCount[userIndex]++
+		}
+	}
 
 	var features []lo.Tuple2[[]int32, []float32]
 	var embeddings [][][]float32
@@ -148,7 +157,7 @@ func EvaluateAFM(train, test *ctr.Dataset, scores *sync.Map) {
 	var count float32
 	for userIndex, posIndices := range positives {
 		negIndices := negatives[userIndex]
-		if len(negIndices) == 0 {
+		if len(negIndices) == 0 || feedbackCount[userIndex] == 0 || feedbackCount[userIndex] > cfg.Recommend.ContextSize {
 			continue
 		}
 		var posPredictions, negPredictions []float32
@@ -228,7 +237,7 @@ func EvaluateLLM(cfg *config.Config, train, test *ctr.Dataset, items []data.Item
 			positiveItems.Add(item.ItemId)
 		}
 		feedback := feedbacks[int32(userIndex)]
-		if len(feedback) == 0 {
+		if len(feedback) == 0 || len(feedback) > cfg.Recommend.ContextSize {
 			return
 		}
 		result, err := chat.Rank(context.Background(), &data.User{}, feedback, candidates)
