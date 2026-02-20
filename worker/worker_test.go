@@ -29,9 +29,9 @@ import (
 	"time"
 
 	"github.com/c-bata/goptuna"
-	"github.com/gorse-io/gorse/common/dashscope"
 	"github.com/gorse-io/gorse/common/expression"
 	"github.com/gorse-io/gorse/common/monitor"
+	"github.com/gorse-io/gorse/common/reranker"
 	"github.com/gorse-io/gorse/common/util"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/dataset"
@@ -739,7 +739,7 @@ func (suite *WorkerTestSuite) TestRankByClickTroughRate() {
 
 func (suite *WorkerTestSuite) TestRankByLLM() {
 	ctx := context.Background()
-	mockAI := dashscope.NewMockServer()
+	mockAI := reranker.NewMockServer()
 	go func() {
 		_ = mockAI.Start()
 	}()
@@ -753,12 +753,12 @@ func (suite *WorkerTestSuite) TestRankByLLM() {
 	err = suite.DataClient.BatchInsertItems(ctx, []data.Item{{ItemId: "1"}, {ItemId: "2"}, {ItemId: "3"}, {ItemId: "4"}, {ItemId: "5"}})
 	suite.NoError(err)
 
-	suite.Config.Recommend.Ranker.DashScope = config.DashScopeConfig{
-		BaseURL:       mockAI.URL(),
-		APIKey:        mockAI.APIKey(),
-		RerankerModel: "v1",
+	suite.Config.Recommend.Ranker.RerankerAPI = config.RerankerAPIConfig{
+		BaseURL: mockAI.DashScopeURL(),
+		APIKey:  mockAI.APIKey(),
+		Model:   "v1",
 	}
-	ranker, err := logics.NewChatReranker(suite.Config.Recommend.Ranker.DashScope,
+	ranker, err := logics.NewChatReranker(suite.Config.Recommend.Ranker.RerankerAPI,
 		"{{user.UserId}}", "{{item.ItemId}}")
 	suite.NoError(err)
 

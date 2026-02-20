@@ -360,7 +360,7 @@ type RankerConfig struct {
 	QueryTemplate    string              `mapstructure:"query_template"`
 	DocumentTemplate string              `mapstructure:"document_template"`
 	EarlyStopping    EarlyStoppingConfig `mapstructure:"early_stopping"`
-	DashScope        DashScopeConfig     `mapstructure:"dashscope"`
+	RerankerAPI      RerankerAPIConfig   `mapstructure:"reranker_api"`
 }
 
 type FallbackConfig struct {
@@ -383,10 +383,10 @@ type OIDCConfig struct {
 	RedirectURL  string `mapstructure:"redirect_url" validate:"omitempty,endswith=/callback/oauth2"`
 }
 
-type DashScopeConfig struct {
-	APIKey        string `mapstructure:"api_key"`
-	RerankerModel string `mapstructure:"reranker_model"`
-	BaseURL       string `mapstructure:"base_url"`
+type RerankerAPIConfig struct {
+	APIKey  string `mapstructure:"api_key"`
+	Model   string `mapstructure:"model"`
+	BaseURL string `mapstructure:"base_url"`
 }
 
 type OpenAIConfig struct {
@@ -669,7 +669,7 @@ var bindings = []configBinding{
 	{"openai.base_url", "OPENAI_BASE_URL"},
 	{"openai.auth_token", "OPENAI_AUTH_TOKEN"},
 	{"openai.chat_completion_model", "OPENAI_CHAT_COMPLETION_MODEL"},
-	{"recommend.ranker.dashscope.api_key", "DASHSCOPE_API_KEY"},
+	{"recommend.ranker.reranker_api.api_key", "RERANKER_API_KEY"},
 }
 
 // LoadConfig loads configuration from toml file.

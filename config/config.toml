@@ -288,13 +288,16 @@ document_template = '{{ item.Comment | replace(",", " ") | replace("\n", " ") }}
 # Number of epochs to wait if no improvement and then stop the training. The default value is 10.
 patience = 10
 
-[recommend.ranker.dashscope]
+[recommend.ranker.reranker_api]
 
-# The API key for DashScope. The default value is empty.
+# The API key for the reranker API.
 api_key = ""
 
-# The reranker model for DashScope.
-reranker_model = "qwen3-rerank"
+# The reranker model.
+model = "qwen3-rerank"
+
+# Base URL for the reranker API, supports Jina style and DashScope.
+base_url = "https://dashscope.aliyuncs.com/api/v1/services/rerank/text-rerank/text-rerank"
 
 [recommend.fallback]
 

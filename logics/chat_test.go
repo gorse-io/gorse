@@ -19,7 +19,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/gorse-io/gorse/common/dashscope"
+	"github.com/gorse-io/gorse/common/reranker"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
@@ -27,7 +27,7 @@ import (
 )
 
 func TestChatReranker(t *testing.T) {
-	s := dashscope.NewMockServer()
+	s := reranker.NewMockServer()
 	go func() {
 		err := s.Start()
 		if err != nil && err != http.ErrServerClosed {
@@ -37,10 +37,10 @@ func TestChatReranker(t *testing.T) {
 	s.Ready()
 	defer s.Close()
 
-	reranker, err := NewChatReranker(config.DashScopeConfig{
-		APIKey:        s.APIKey(),
-		BaseURL:       s.URL(),
-		RerankerModel: "gte-rerank",
+	reranker, err := NewChatReranker(config.RerankerAPIConfig{
+		APIKey:  s.APIKey(),
+		BaseURL: s.DashScopeURL(),
+		Model:   "gte-rerank",
 	},
 		"{{ user.UserId }} is a {{ user.Comment }} watched the following movies recently: {% for item in feedback %}{{ item.Comment }}, {% endfor %}",
 		"{{ item.Comment }}")

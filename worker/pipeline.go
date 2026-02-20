@@ -193,7 +193,7 @@ func (p *Pipeline) Recommend(ctx context.Context, users []data.User, progress fu
 			}
 		} else if p.Config.Recommend.Ranker.Type == "llm" && p.Config.OpenAI.ChatCompletionModel != "" {
 			ranker, err := logics.NewChatReranker(
-				p.Config.Recommend.Ranker.DashScope,
+				p.Config.Recommend.Ranker.RerankerAPI,
 				p.Config.Recommend.Ranker.QueryTemplate,
 				p.Config.Recommend.Ranker.DocumentTemplate)
 			if err != nil {

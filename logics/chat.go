@@ -19,7 +19,7 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/gorse-io/gorse/common/dashscope"
+	"github.com/gorse-io/gorse/common/reranker"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
@@ -39,16 +39,13 @@ type FeedbackItem struct {
 type ChatReranker struct {
 	queryTemplate *exec.Template
 	docTemplate   *exec.Template
-	client        *dashscope.Client
+	client        *reranker.Client
 	model         string
 }
 
-func NewChatReranker(cfg config.DashScopeConfig, queryTemplate, docTemplate string) (*ChatReranker, error) {
+func NewChatReranker(cfg config.RerankerAPIConfig, queryTemplate, docTemplate string) (*ChatReranker, error) {
 	// create DashScope client
-	client := dashscope.NewClient(cfg.APIKey)
-	if cfg.BaseURL != "" {
-		client.SetBaseURL(cfg.BaseURL)
-	}
+	client := reranker.NewClient(cfg.APIKey, cfg.BaseURL)
 	// create templates
 	qTpl, err := gonja.FromString(queryTemplate)
 	if err != nil {
@@ -62,7 +59,7 @@ func NewChatReranker(cfg config.DashScopeConfig, queryTemplate, docTemplate stri
 		queryTemplate: qTpl,
 		docTemplate:   dTpl,
 		client:        client,
-		model:         cfg.RerankerModel,
+		model:         cfg.Model,
 	}, nil
 }
 
@@ -89,19 +86,17 @@ func (r *ChatReranker) Rank(ctx context.Context, user *data.User, feedback []*Fe
 		documents[i] = docBuf.String()
 	}
 	// rerank
-	resp, err := r.client.Rerank(ctx, dashscope.RerankRequest{
-		Model: r.model,
-		Input: dashscope.Input{
-			Query:     queryBuf.String(),
-			Documents: documents,
-		},
+	resp, err := r.client.Rerank(ctx, reranker.RerankRequest{
+		Model:     r.model,
+		Query:     queryBuf.String(),
+		Documents: documents,
 	})
 	if err != nil {
 		return nil, err
 	}
 	// sort items
-	result := make([]cache.Score, len(resp.Output.Results))
-	for i, rerankResult := range resp.Output.Results {
+	result := make([]cache.Score, len(resp.Results))
+	for i, rerankResult := range resp.Results {
 		result[i].Id = items[rerankResult.Index].ItemId
 		result[i].Score = rerankResult.RelevanceScore
 	}
