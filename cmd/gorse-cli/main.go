@@ -311,7 +311,7 @@ func SplitCTRDataset(ctrDataset *ctr.Dataset, train, test dataset.CFSplit) (*ctr
 
 func EvaluateLLM(cfg *config.Config, train, test dataset.CFSplit, topK int, scores *sync.Map) {
 	chat, err := logics.NewChatReranker(
-		cfg.Recommend.Ranker.DashScope,
+		cfg.Recommend.Ranker.RerankerAPI,
 		cfg.Recommend.Ranker.QueryTemplate,
 		cfg.Recommend.Ranker.DocumentTemplate,
 	)
