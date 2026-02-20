@@ -378,7 +378,7 @@ func EvaluateLLM(cfg *config.Config, train, test dataset.CFSplit, topK int, scor
 	}))
 
 	score := sum.Load() / count.Load()
-	scores.Store(cfg.Recommend.Ranker.DashScope.RerankerModel, cf.Score{NDCG: score})
+	scores.Store(cfg.Recommend.Ranker.RerankerAPI.Model, cf.Score{NDCG: score})
 }
 
 func EvaluateEmbedding(cfg *config.Config, train, test dataset.CFSplit, embeddingExpr, textExpr string, topK, jobs int, scores *sync.Map) {
