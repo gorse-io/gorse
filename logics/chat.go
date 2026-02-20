@@ -44,7 +44,7 @@ type ChatReranker struct {
 }
 
 func NewChatReranker(cfg config.RerankerAPIConfig, queryTemplate, docTemplate string) (*ChatReranker, error) {
-	// create DashScope client
+	// create reranker client
 	client := reranker.NewClient(cfg.APIKey, cfg.BaseURL)
 	// create templates
 	qTpl, err := gonja.FromString(queryTemplate)

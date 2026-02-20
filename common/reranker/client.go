@@ -22,7 +22,6 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"strings"
 
 	"github.com/emicklei/go-restful/v3"
 )
@@ -63,53 +62,11 @@ type Usage struct {
 	TotalTokens int `json:"total_tokens"`
 }
 
-type dashScopeRequest struct {
-	Model      string              `json:"model"`
-	Input      dashScopeInput      `json:"input"`
-	Parameters dashScopeParameters `json:"parameters,omitempty"`
-}
-
-type dashScopeInput struct {
-	Query     string   `json:"query"`
-	Documents []string `json:"documents"`
-}
-
-type dashScopeParameters struct {
-	TopN int `json:"top_n,omitempty"`
-}
-
-type dashScopeResponse struct {
-	Output    dashScopeOutput `json:"output"`
-	Usage     Usage           `json:"usage"`
-	RequestID string          `json:"request_id"`
-	Code      string          `json:"code,omitempty"`
-	Message   string          `json:"message,omitempty"`
-}
-
-type dashScopeOutput struct {
-	Results []RerankResult `json:"results"`
-}
-
 func (c *Client) Rerank(ctx context.Context, req RerankRequest) (*RerankResponse, error) {
 	var body []byte
 	var err error
 
-	isDashScope := strings.Contains(c.baseURL, "dashscope.aliyuncs.com") || strings.Contains(c.baseURL, "services/rerank")
-
-	if isDashScope {
-		body, err = json.Marshal(dashScopeRequest{
-			Model: req.Model,
-			Input: dashScopeInput{
-				Query:     req.Query,
-				Documents: req.Documents,
-			},
-			Parameters: dashScopeParameters{
-				TopN: req.TopN,
-			},
-		})
-	} else {
-		body, err = json.Marshal(req)
-	}
+	body, err = json.Marshal(req)
 
 	if err != nil {
 		return nil, err
@@ -138,25 +95,11 @@ func (c *Client) Rerank(ctx context.Context, req RerankRequest) (*RerankResponse
 		return nil, fmt.Errorf("rerank request failed with status: %d, body: %s", resp.StatusCode, string(respBody))
 	}
 
-	if isDashScope {
-		var dsResp dashScopeResponse
-		if err := json.Unmarshal(respBody, &dsResp); err != nil {
-			return nil, err
-		}
-		if dsResp.Code != "" {
-			return nil, fmt.Errorf("dashscope error: %s (code: %s)", dsResp.Message, dsResp.Code)
-		}
-		return &RerankResponse{
-			Usage:   dsResp.Usage,
-			Results: dsResp.Output.Results,
-		}, nil
-	} else {
-		var rerankResp RerankResponse
-		if err := json.Unmarshal(respBody, &rerankResp); err != nil {
-			return nil, err
-		}
-		return &rerankResp, nil
+	var rerankResp RerankResponse
+	if err := json.Unmarshal(respBody, &rerankResp); err != nil {
+		return nil, err
 	}
+	return &rerankResp, nil
 }
 
 type MockServer struct {
@@ -172,14 +115,10 @@ func NewMockServer() *MockServer {
 	ws.Path("/").
 		Consumes(restful.MIME_JSON).
 		Produces(restful.MIME_JSON)
-	ws.Route(ws.POST("/api/v1/services/rerank/text-rerank/text-rerank").
-		Reads(dashScopeRequest{}).
-		Writes(dashScopeResponse{}).
-		To(s.dashscope))
 	ws.Route(ws.POST("/v1/rerank").
 		Reads(RerankRequest{}).
 		Writes(RerankResponse{}).
-		To(s.jina))
+		To(s.rerank))
 	container := restful.NewContainer()
 	container.Add(ws)
 	s.httpServer = &http.Server{Handler: container}
@@ -198,11 +137,7 @@ func (s *MockServer) Start() error {
 	return s.httpServer.Serve(s.listener)
 }
 
-func (s *MockServer) DashScopeURL() string {
-	return fmt.Sprintf("http://%s/api/v1/services/rerank/text-rerank/text-rerank", s.listener.Addr().String())
-}
-
-func (s *MockServer) JinaURL() string {
+func (s *MockServer) URL() string {
 	return fmt.Sprintf("http://%s/v1/rerank", s.listener.Addr().String())
 }
 
@@ -218,37 +153,7 @@ func (s *MockServer) Close() error {
 	return s.httpServer.Close()
 }
 
-func (s *MockServer) generateResults(documents []string) []RerankResult {
-	results := make([]RerankResult, len(documents))
-	for i := range documents {
-		results[i] = RerankResult{
-			Index:          i,
-			RelevanceScore: 1.0 / float64(i+1),
-		}
-	}
-	return results
-}
-
-func (s *MockServer) dashscope(req *restful.Request, resp *restful.Response) {
-	var r dashScopeRequest
-	err := req.ReadEntity(&r)
-	if err != nil {
-		_ = resp.WriteError(http.StatusBadRequest, err)
-		return
-	}
-
-	_ = resp.WriteEntity(dashScopeResponse{
-		Output: dashScopeOutput{
-			Results: s.generateResults(r.Input.Documents),
-		},
-		Usage: Usage{
-			TotalTokens: 100,
-		},
-		RequestID: "test-request-id",
-	})
-}
-
-func (s *MockServer) jina(req *restful.Request, resp *restful.Response) {
+func (s *MockServer) rerank(req *restful.Request, resp *restful.Response) {
 	var r RerankRequest
 	err := req.ReadEntity(&r)
 	if err != nil {
@@ -256,11 +161,19 @@ func (s *MockServer) jina(req *restful.Request, resp *restful.Response) {
 		return
 	}
 
+	results := make([]RerankResult, len(r.Documents))
+	for i := range r.Documents {
+		results[i] = RerankResult{
+			Index:          i,
+			RelevanceScore: 1.0 / float64(i+1),
+		}
+	}
+
 	_ = resp.WriteEntity(RerankResponse{
 		Model: r.Model,
 		Usage: Usage{
 			TotalTokens: 100,
 		},
-		Results: s.generateResults(r.Documents),
+		Results: results,
 	})
 }

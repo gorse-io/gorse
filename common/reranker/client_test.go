@@ -40,29 +40,8 @@ func (suite *ClientTestSuite) TearDownSuite() {
 	suite.s.Close()
 }
 
-func (suite *ClientTestSuite) TestDashScope() {
-	client := NewClient(suite.s.APIKey(), suite.s.DashScopeURL())
-
-	req := RerankRequest{
-		Model: "gte-rerank",
-		Query: "What is the capital of France?",
-		Documents: []string{
-			"Paris is the capital of France.",
-			"Lyon is a city in France.",
-		},
-	}
-
-	resp, err := client.Rerank(context.Background(), req)
-	suite.NoError(err)
-	suite.Equal(2, len(resp.Results))
-	suite.Equal(0, resp.Results[0].Index)
-	suite.Equal(1.0, resp.Results[0].RelevanceScore)
-	suite.Equal(1, resp.Results[1].Index)
-	suite.Equal(0.5, resp.Results[1].RelevanceScore)
-}
-
-func (suite *ClientTestSuite) TestJina() {
-	client := NewClient(suite.s.APIKey(), suite.s.JinaURL())
+func (suite *ClientTestSuite) TestRerank() {
+	client := NewClient(suite.s.APIKey(), suite.s.URL())
 
 	req := RerankRequest{
 		Model: "jina-reranker-v2-base-multilingual",

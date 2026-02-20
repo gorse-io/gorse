@@ -754,7 +754,7 @@ func (suite *WorkerTestSuite) TestRankByLLM() {
 	suite.NoError(err)
 
 	suite.Config.Recommend.Ranker.RerankerAPI = config.RerankerAPIConfig{
-		BaseURL: mockAI.DashScopeURL(),
+		BaseURL: mockAI.URL(),
 		APIKey:  mockAI.APIKey(),
 		Model:   "v1",
 	}
