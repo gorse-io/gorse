@@ -395,9 +395,9 @@ type OIDCConfig struct {
 }
 
 type RerankerAPIConfig struct {
-	APIKey  string `mapstructure:"api_key"`
-	Model   string `mapstructure:"model"`
-	BaseURL string `mapstructure:"base_url"`
+	AuthToken string `mapstructure:"auth_token"`
+	Model     string `mapstructure:"model"`
+	URL       string `mapstructure:"url"`
 }
 
 type OpenAIConfig struct {
@@ -685,7 +685,9 @@ var bindings = []configBinding{
 	{"openai.base_url", "OPENAI_BASE_URL"},
 	{"openai.auth_token", "OPENAI_AUTH_TOKEN"},
 	{"openai.chat_completion_model", "OPENAI_CHAT_COMPLETION_MODEL"},
-	{"recommend.ranker.reranker_api.api_key", "RERANKER_API_KEY"},
+	{"recommend.ranker.reranker_api.url", "RERANKER_URL"},
+	{"recommend.ranker.reranker_api.model", "RERANKER_MODEL"},
+	{"recommend.ranker.reranker_api.auth_token", "RERANKER_AUTH_TOKEN"},
 }
 
 // LoadConfig loads configuration from toml file.

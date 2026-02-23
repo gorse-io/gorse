@@ -49,6 +49,8 @@ func TestUnmarshal(t *testing.T) {
 	text = strings.Replace(text, "client_id = \"\"", "client_id = \"client_id\"", -1)
 	text = strings.Replace(text, "client_secret = \"\"", "client_secret = \"client_secret\"", -1)
 	text = strings.Replace(text, "redirect_url = \"\"", "redirect_url = \"http://localhost:8088/callback/oauth2\"", -1)
+	text = strings.Replace(text, "auth_token = \"\"", "auth_token = \"<reranker_auth_token>\"", -1)
+	text = strings.Replace(text, "url = \"https://dashscope.aliyuncs.com/compatible-api/v1/reranks\"", "url = \"<reranker_url>\"", -1)
 	r, err := convert.TOML{}.Decode(bytes.NewBufferString(text))
 	assert.NoError(t, err)
 
@@ -138,6 +140,9 @@ func TestUnmarshal(t *testing.T) {
 			assert.Equal(t, 100, config.Recommend.Ranker.FitEpoch)
 			assert.Equal(t, 360*time.Minute, config.Recommend.Ranker.OptimizePeriod)
 			assert.Equal(t, 10, config.Recommend.Ranker.OptimizeTrials)
+			assert.Equal(t, "<reranker_auth_token>", config.Recommend.Ranker.RerankerAPI.AuthToken)
+			assert.Equal(t, "qwen3-rerank", config.Recommend.Ranker.RerankerAPI.Model)
+			assert.Equal(t, "<reranker_url>", config.Recommend.Ranker.RerankerAPI.URL)
 			// [recommend.fallback]
 			assert.Equal(t, []string{"item-to-item/neighbors", "latest"}, config.Recommend.Fallback.Recommenders)
 			// [tracing]
@@ -223,7 +228,9 @@ func TestBindEnv(t *testing.T) {
 		{"OPENAI_BASE_URL", "https://api.openai.com/v1"},
 		{"OPENAI_AUTH_TOKEN", "<auth_token>"},
 		{"OPENAI_CHAT_COMPLETION_MODEL", "gpt-4"},
-		{"RERANKER_API_KEY", "<reranker_api_key>"},
+		{"RERANKER_AUTH_TOKEN", "<reranker_auth_token>"},
+		{"RERANKER_URL", "<reranker_url>"},
+		{"RERANKER_MODEL", "<reranker_model>"},
 	}
 	for _, variable := range variables {
 		t.Setenv(variable.key, variable.value)
@@ -267,7 +274,9 @@ func TestBindEnv(t *testing.T) {
 	assert.Equal(t, "https://api.openai.com/v1", config.OpenAI.BaseURL)
 	assert.Equal(t, "<auth_token>", config.OpenAI.AuthToken)
 	assert.Equal(t, "gpt-4", config.OpenAI.ChatCompletionModel)
-	assert.Equal(t, "<reranker_api_key>", config.Recommend.Ranker.RerankerAPI.APIKey)
+	assert.Equal(t, "<reranker_auth_token>", config.Recommend.Ranker.RerankerAPI.AuthToken)
+	assert.Equal(t, "<reranker_url>", config.Recommend.Ranker.RerankerAPI.URL)
+	assert.Equal(t, "<reranker_model>", config.Recommend.Ranker.RerankerAPI.Model)
 
 	// check default values
 	assert.Equal(t, 100, config.Recommend.CacheSize)

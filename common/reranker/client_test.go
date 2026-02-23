@@ -41,7 +41,7 @@ func (suite *ClientTestSuite) TearDownSuite() {
 }
 
 func (suite *ClientTestSuite) TestRerank() {
-	client := NewClient(suite.s.APIKey(), suite.s.URL())
+	client := NewClient(suite.s.AuthToken(), suite.s.URL())
 
 	req := RerankRequest{
 		Model: "jina-reranker-v2-base-multilingual",

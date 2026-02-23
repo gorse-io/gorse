@@ -45,7 +45,7 @@ type ChatReranker struct {
 
 func NewChatReranker(cfg config.RerankerAPIConfig, queryTemplate, docTemplate string) (*ChatReranker, error) {
 	// create reranker client
-	client := reranker.NewClient(cfg.APIKey, cfg.BaseURL)
+	client := reranker.NewClient(cfg.AuthToken, cfg.URL)
 	// create templates
 	qTpl, err := gonja.FromString(queryTemplate)
 	if err != nil {

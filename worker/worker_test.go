@@ -754,9 +754,9 @@ func (suite *WorkerTestSuite) TestRankByLLM() {
 	suite.NoError(err)
 
 	suite.Config.Recommend.Ranker.RerankerAPI = config.RerankerAPIConfig{
-		BaseURL: mockAI.URL(),
-		APIKey:  mockAI.APIKey(),
-		Model:   "v1",
+		URL:       mockAI.URL(),
+		AuthToken: mockAI.AuthToken(),
+		Model:     "v1",
 	}
 	ranker, err := logics.NewChatReranker(suite.Config.Recommend.Ranker.RerankerAPI,
 		"{{user.UserId}}", "{{item.ItemId}}")

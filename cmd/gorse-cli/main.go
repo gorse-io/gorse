@@ -16,6 +16,7 @@ package main
 
 import (
 	"context"
+	"encoding/csv"
 	"fmt"
 	"maps"
 	"math"
@@ -102,8 +103,9 @@ var benchLLMCmd = &cobra.Command{
 		}))
 		lo.Must0(table.Render())
 
-		go EvaluateAFM(cfg, train, test, &scores)
-		EvaluateLLM(cfg, train, test, cfDataset.GetItems(), &scores)
+		exportUserAUC, _ := cmd.Flags().GetBool("user-auc")
+		go EvaluateAFM(cfg, train, test, exportUserAUC, &scores)
+		EvaluateLLM(cfg, train, test, cfDataset.GetItems(), exportUserAUC, &scores)
 		data := [][]string{{"Ranker", "GAUC"}}
 		scores.Range(func(key, value any) bool {
 			data = append(data, []string{
@@ -119,7 +121,7 @@ var benchLLMCmd = &cobra.Command{
 	},
 }
 
-func EvaluateAFM(cfg *config.Config, train, test *ctr.Dataset, scores *sync.Map) {
+func EvaluateAFM(cfg *config.Config, train, test *ctr.Dataset, exportUserAUC bool, scores *sync.Map) {
 	ml := ctr.NewAFM(nil)
 	ml.Fit(context.Background(), train, test,
 		ctr.NewFitConfig().
@@ -153,6 +155,22 @@ func EvaluateAFM(cfg *config.Config, train, test *ctr.Dataset, scores *sync.Map)
 	}
 	predictions := ml.BatchInternalPredict(features, embeddings, runtime.NumCPU())
 
+	var csvFile *os.File
+	var csvWriter *csv.Writer
+	if exportUserAUC {
+		var err error
+		csvFile, err = os.Create("AFM.csv")
+		if err != nil {
+			log.Logger().Error("failed to create AFM.csv", zap.Error(err))
+			exportUserAUC = false
+		} else {
+			defer csvFile.Close()
+			csvWriter = csv.NewWriter(csvFile)
+			defer csvWriter.Flush()
+			_ = csvWriter.Write([]string{"Feedback", "Candidates", "AUC"})
+		}
+	}
+
 	var sum float32
 	var count float32
 	for userIndex, posIndices := range positives {
@@ -167,8 +185,16 @@ func EvaluateAFM(cfg *config.Config, train, test *ctr.Dataset, scores *sync.Map)
 		for _, negIndex := range negIndices {
 			negPredictions = append(negPredictions, predictions[negIndex])
 		}
+		userAUC := ctr.AUC(posPredictions, negPredictions)
+		if exportUserAUC {
+			_ = csvWriter.Write([]string{
+				strconv.Itoa(feedbackCount[userIndex]),
+				strconv.Itoa(len(posIndices) + len(negIndices)),
+				fmt.Sprintf("%.4f", userAUC),
+			})
+		}
 		userCount := float32(len(posIndices) + len(negIndices))
-		sum += ctr.AUC(posPredictions, negPredictions) * userCount
+		sum += userAUC * userCount
 		count += userCount
 	}
 
@@ -179,7 +205,7 @@ func EvaluateAFM(cfg *config.Config, train, test *ctr.Dataset, scores *sync.Map)
 	scores.Store("AFM", score)
 }
 
-func EvaluateLLM(cfg *config.Config, train, test *ctr.Dataset, items []data.Item, scores *sync.Map) {
+func EvaluateLLM(cfg *config.Config, train, test *ctr.Dataset, items []data.Item, exportUserAUC bool, scores *sync.Map) {
 	chat, err := logics.NewChatReranker(
 		cfg.Recommend.Ranker.RerankerAPI,
 		cfg.Recommend.Ranker.QueryTemplate,
@@ -212,6 +238,23 @@ func EvaluateLLM(cfg *config.Config, train, test *ctr.Dataset, items []data.Item
 			positives[userIndex] = append(positives[userIndex], itemIndex)
 		} else {
 			negatives[userIndex] = append(negatives[userIndex], itemIndex)
+		}
+	}
+
+	var csvFile *os.File
+	var csvWriter *csv.Writer
+	var csvMu sync.Mutex
+	if exportUserAUC {
+		var err error
+		csvFile, err = os.Create(fmt.Sprintf("%s.csv", cfg.Recommend.Ranker.RerankerAPI.Model))
+		if err != nil {
+			log.Logger().Error("failed to create LLM.csv", zap.Error(err))
+			exportUserAUC = false
+		} else {
+			defer csvFile.Close()
+			csvWriter = csv.NewWriter(csvFile)
+			defer csvWriter.Flush()
+			_ = csvWriter.Write([]string{"Feedback", "Candidates", "AUC"})
 		}
 	}
 
@@ -253,8 +296,18 @@ func EvaluateLLM(cfg *config.Config, train, test *ctr.Dataset, items []data.Item
 				negPredictions = append(negPredictions, float32(item.Score))
 			}
 		}
+		userAUC := ctr.AUC(posPredictions, negPredictions)
+		if exportUserAUC {
+			csvMu.Lock()
+			_ = csvWriter.Write([]string{
+				strconv.Itoa(len(feedback)),
+				strconv.Itoa(len(posIndices) + len(negIndices)),
+				fmt.Sprintf("%.4f", userAUC),
+			})
+			csvMu.Unlock()
+		}
 		userCount := float32(len(posIndices) + len(negIndices))
-		sum.Add(ctr.AUC(posPredictions, negPredictions) * userCount)
+		sum.Add(userAUC * userCount)
 		count.Add(userCount)
 	}))
 
@@ -500,9 +553,10 @@ var benchEmbeddingCmd = &cobra.Command{
 func init() {
 	rootCmd.PersistentFlags().StringP("config", "c", "", "Path to configuration file")
 	rootCmd.PersistentFlags().IntP("jobs", "j", runtime.NumCPU(), "Number of jobs to run in parallel")
-	rootCmd.PersistentFlags().IntP("top", "k", 10, "Number of top items to evaluate for each user")
 	rootCmd.AddCommand(benchLLMCmd)
 	rootCmd.AddCommand(benchEmbeddingCmd)
+	benchLLMCmd.PersistentFlags().Bool("user-auc", false, "Export user-level AUC scores to CSV file")
+	benchEmbeddingCmd.PersistentFlags().IntP("top", "k", 10, "Number of top items to evaluate for each user")
 	benchEmbeddingCmd.PersistentFlags().IntP("shots", "s", math.MaxInt, "Number of shots for each user")
 	benchEmbeddingCmd.PersistentFlags().Int("embedding-dimensions", 0, "Embedding dimensions")
 	benchEmbeddingCmd.PersistentFlags().String("embedding-model", "", "Embedding model")

@@ -1187,8 +1187,8 @@ func (suite *MasterAPITestSuite) TestRerank() {
 	s.Ready()
 
 	// setup master
-	suite.Config.Recommend.Ranker.RerankerAPI.BaseURL = s.URL()
-	suite.Config.Recommend.Ranker.RerankerAPI.APIKey = s.APIKey()
+	suite.Config.Recommend.Ranker.RerankerAPI.URL = s.URL()
+	suite.Config.Recommend.Ranker.RerankerAPI.AuthToken = s.AuthToken()
 	suite.Config.Recommend.Ranker.RerankerAPI.Model = "test"
 
 	// test rerank

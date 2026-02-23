@@ -38,9 +38,9 @@ func TestChatReranker(t *testing.T) {
 	defer s.Close()
 
 	reranker, err := NewChatReranker(config.RerankerAPIConfig{
-		APIKey:  s.APIKey(),
-		BaseURL: s.URL(),
-		Model:   "gte-rerank",
+		AuthToken: s.AuthToken(),
+		URL:       s.URL(),
+		Model:     "gte-rerank",
 	},
 		"{{ user.UserId }} is a {{ user.Comment }} watched the following movies recently: {% for item in feedback %}{{ item.Comment }}, {% endfor %}",
 		"{{ item.Comment }}")

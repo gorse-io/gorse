@@ -295,14 +295,14 @@ patience = 10
 
 [recommend.ranker.reranker_api]
 
-# The API key for the reranker API.
-api_key = ""
+# Auth token for the reranker API.
+auth_token = ""
 
 # The reranker model.
 model = "qwen3-rerank"
 
-# Base URL for the reranker API, supports Jina style and DashScope.
-base_url = "https://dashscope.aliyuncs.com/api/v1/services/rerank/text-rerank/text-rerank"
+# URL for the reranker API, supports Jina style and DashScope.
+url = "https://dashscope.aliyuncs.com/compatible-api/v1/reranks"
 
 [recommend.fallback]
 

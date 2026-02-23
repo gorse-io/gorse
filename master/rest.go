@@ -2084,7 +2084,7 @@ func (m *Master) rerank(response http.ResponseWriter, request *http.Request) {
 		rerankRequest.Model = m.Config.Recommend.Ranker.RerankerAPI.Model
 	}
 	// create reranker client
-	client := reranker.NewClient(m.Config.Recommend.Ranker.RerankerAPI.APIKey, m.Config.Recommend.Ranker.RerankerAPI.BaseURL)
+	client := reranker.NewClient(m.Config.Recommend.Ranker.RerankerAPI.AuthToken, m.Config.Recommend.Ranker.RerankerAPI.URL)
 	// call reranker
 	resp, err := client.Rerank(request.Context(), rerankRequest)
 	if err != nil {

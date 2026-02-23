@@ -27,15 +27,15 @@ import (
 )
 
 type Client struct {
-	apiKey     string
-	baseURL    string
+	authToken  string
+	url        string
 	httpClient *http.Client
 }
 
 func NewClient(apiKey, endpoint string) *Client {
 	return &Client{
-		apiKey:     apiKey,
-		baseURL:    endpoint,
+		authToken:  apiKey,
+		url:        endpoint,
 		httpClient: &http.Client{},
 	}
 }
@@ -72,12 +72,12 @@ func (c *Client) Rerank(ctx context.Context, req RerankRequest) (*RerankResponse
 		return nil, err
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", c.baseURL, bytes.NewBuffer(body))
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", c.url, bytes.NewBuffer(body))
 	if err != nil {
 		return nil, err
 	}
 
-	httpReq.Header.Set("Authorization", "Bearer "+c.apiKey)
+	httpReq.Header.Set("Authorization", "Bearer "+c.authToken)
 	httpReq.Header.Set("Content-Type", "application/json")
 
 	resp, err := c.httpClient.Do(httpReq)
@@ -141,7 +141,7 @@ func (s *MockServer) URL() string {
 	return fmt.Sprintf("http://%s/v1/rerank", s.listener.Addr().String())
 }
 
-func (s *MockServer) APIKey() string {
+func (s *MockServer) AuthToken() string {
 	return s.apiKey
 }
 
