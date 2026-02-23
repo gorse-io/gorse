@@ -256,6 +256,7 @@ read_replacement_decay = 0.6
 # The type of the ranker. There are two types:
 #   none: no ranking (default).
 #   fm: factorization machines.
+#   llm: LLM-based reranker.
 type = "fm"
 
 # The time period to refresh recommendation for inactive users. The default values is 120h.
@@ -301,7 +302,7 @@ auth_token = ""
 # The reranker model.
 model = "qwen3-rerank"
 
-# URL for the reranker API, supports Jina style and DashScope.
+# URL for the reranker API, supports Jina style.
 url = "https://dashscope.aliyuncs.com/compatible-api/v1/reranks"
 
 [recommend.fallback]
