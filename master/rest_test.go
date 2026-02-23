@@ -32,7 +32,6 @@ import (
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/gorse-io/gorse/common/expression"
 	"github.com/gorse-io/gorse/common/mock"
-	"github.com/gorse-io/gorse/common/reranker"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/protocol"
 	"github.com/gorse-io/gorse/server"
@@ -1175,39 +1174,6 @@ func (suite *MasterAPITestSuite) TestChat() {
 	suite.chat(w, req)
 	suite.Equal(http.StatusOK, w.Code, w.Body.String())
 	suite.Equal(content, w.Body.String())
-}
-
-func (suite *MasterAPITestSuite) TestRerank() {
-	// setup mock server
-	s := reranker.NewMockServer()
-	go func() {
-		_ = s.Start()
-	}()
-	defer s.Close()
-	s.Ready()
-
-	// setup master
-	suite.Config.Recommend.Ranker.RerankerAPI.URL = s.URL()
-	suite.Config.Recommend.Ranker.RerankerAPI.AuthToken = s.AuthToken()
-	suite.Config.Recommend.Ranker.RerankerAPI.Model = "test"
-
-	// test rerank
-	rerankReq := reranker.RerankRequest{
-		Model:     "test",
-		Query:     "test",
-		Documents: []string{"test1", "test2"},
-	}
-	buf := strings.NewReader(marshal(suite.T(), rerankReq))
-	req := httptest.NewRequest("POST", "https://example.com/", buf)
-	req.Header.Set("Cookie", suite.cookie)
-	w := httptest.NewRecorder()
-	suite.rerank(w, req)
-	suite.Equal(http.StatusOK, w.Code, w.Body.String())
-
-	var rerankResp reranker.RerankResponse
-	err := json.Unmarshal(w.Body.Bytes(), &rerankResp)
-	suite.NoError(err)
-	suite.Equal(len(rerankReq.Documents), len(rerankResp.Results))
 }
 
 func TestMasterAPI(t *testing.T) {

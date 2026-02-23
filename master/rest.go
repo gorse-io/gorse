@@ -38,7 +38,6 @@ import (
 	"github.com/gorse-io/gorse/common/expression"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/common/monitor"
-	"github.com/gorse-io/gorse/common/reranker"
 	"github.com/gorse-io/gorse/common/util"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/logics"
@@ -279,7 +278,6 @@ func (m *Master) StartHttpServer() {
 	container.Handle("/api/dump", http.HandlerFunc(m.dump))
 	container.Handle("/api/restore", http.HandlerFunc(m.restore))
 	container.Handle("/api/chat", http.HandlerFunc(m.chat))
-	container.Handle("/api/rerank", http.HandlerFunc(m.rerank))
 	m.RestServer.StartHttpServer(container)
 }
 
@@ -2064,37 +2062,5 @@ func (m *Master) chat(response http.ResponseWriter, request *http.Request) {
 		if f, ok := response.(http.Flusher); ok {
 			f.Flush()
 		}
-	}
-}
-
-func (m *Master) rerank(response http.ResponseWriter, request *http.Request) {
-	if !m.checkAdmin(request) {
-		writeError(response, http.StatusUnauthorized, "unauthorized")
-		return
-	}
-	// read request
-	var rerankRequest reranker.RerankRequest
-	err := json.NewDecoder(request.Body).Decode(&rerankRequest)
-	if err != nil {
-		writeError(response, http.StatusBadRequest, err.Error())
-		return
-	}
-	// override model if not provided
-	if rerankRequest.Model == "" {
-		rerankRequest.Model = m.Config.Recommend.Ranker.RerankerAPI.Model
-	}
-	// create reranker client
-	client := reranker.NewClient(m.Config.Recommend.Ranker.RerankerAPI.AuthToken, m.Config.Recommend.Ranker.RerankerAPI.URL)
-	// call reranker
-	resp, err := client.Rerank(request.Context(), rerankRequest)
-	if err != nil {
-		writeError(response, http.StatusInternalServerError, err.Error())
-		return
-	}
-	// write response
-	response.Header().Set("Content-Type", "application/json")
-	if err = json.NewEncoder(response).Encode(resp); err != nil {
-		writeError(response, http.StatusInternalServerError, err.Error())
-		return
 	}
 }
