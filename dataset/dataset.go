@@ -240,6 +240,15 @@ func (d *Dataset) AddFeedback(userId, itemId string, timestamp time.Time) {
 	d.numFeedback++
 }
 
+func (d *Dataset) AddFeedbackByIndex(userIndex, itemIndex int32, timestamp time.Time) {
+	d.userDict.cnt[userIndex]++
+	d.itemDict.cnt[itemIndex]++
+	d.userFeedback[userIndex] = append(d.userFeedback[userIndex], itemIndex)
+	d.itemFeedback[itemIndex] = append(d.itemFeedback[itemIndex], userIndex)
+	d.timestamps[userIndex] = append(d.timestamps[userIndex], timestamp)
+	d.numFeedback++
+}
+
 func (d *Dataset) SampleUserNegatives(excludeSet CFSplit, numCandidates int) [][]int32 {
 	if len(d.negatives) == 0 {
 		rng := util.NewRandomGenerator(0)

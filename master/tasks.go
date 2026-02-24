@@ -19,7 +19,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/c-bata/goptuna"
@@ -427,15 +426,39 @@ func (m *Master) LoadDataFromDatabase(
 		return items[i].ItemId < items[j].ItemId
 	})
 	itemGroups := parallel.Split(items, m.Config.Master.NumJobs)
+	itemGroupIDToPos := make([]map[string]int, len(itemGroups))
+	for i := range itemGroups {
+		itemGroupIDToPos[i] = make(map[string]int, len(itemGroups[i]))
+		for pos, item := range itemGroups[i] {
+			itemGroupIDToPos[i][item.ItemId] = pos
+		}
+	}
+
+	type indexedFeedback struct {
+		userIndex    int32
+		itemIndex    int32
+		feedbackType string
+		value        float64
+		timestamp    time.Time
+	}
 
 	// STEP 3: pull positive feedback
-	var mu sync.Mutex
-	var posFeedbackCount int
+	positiveFeedback := make([][]indexedFeedback, len(itemGroups))
 	start = time.Now()
 	err = parallel.Parallel(newCtx, len(itemGroups), m.Config.Master.NumJobs, func(_, i int) error {
-		var itemFeedback []data.Feedback
-		var itemGroupIndex int
 		itemHasFeedback := make([]bool, len(itemGroups[i]))
+		collectedFeedback := make([]indexedFeedback, 0)
+		var itemFeedback []data.Feedback
+		currentItemGroupIndex := -1
+		flushItemFeedback := func() {
+			if currentItemGroupIndex < 0 || len(itemFeedback) == 0 {
+				return
+			}
+			itemHasFeedback[currentItemGroupIndex] = true
+			for _, recommender := range nonPersonalizedRecommenders {
+				recommender.Push(itemGroups[i][currentItemGroupIndex], itemFeedback)
+			}
+		}
 		feedbackChan, errChan := database.GetFeedbackStream(newCtx, batchSize,
 			data.WithBeginItemId(itemGroups[i][0].ItemId),
 			data.WithEndItemId(itemGroups[i][len(itemGroups[i])-1].ItemId),
@@ -454,45 +477,35 @@ func (m *Master) LoadDataFromDatabase(
 				if itemIndex == dataset.NotId {
 					continue
 				}
-				// insert feedback to positive set
-				positiveSet[userIndex].Add(itemIndex)
+				collectedFeedback = append(collectedFeedback, indexedFeedback{
+					userIndex:    userIndex,
+					itemIndex:    itemIndex,
+					feedbackType: f.FeedbackType,
+					value:        f.Value,
+					timestamp:    f.Timestamp,
+				})
 
-				mu.Lock()
-				posFeedbackCount++
-				// insert feedback to evaluator
-				evaluator.Add(f.FeedbackType, f.Value, userIndex, itemIndex, f.Timestamp)
-				mu.Unlock()
+				itemGroupIndex, exists := itemGroupIDToPos[i][f.ItemId]
+				if !exists {
+					continue
+				}
 
 				// append item feedback
 				if len(itemFeedback) == 0 || itemFeedback[len(itemFeedback)-1].ItemId == f.ItemId {
+					currentItemGroupIndex = itemGroupIndex
 					itemFeedback = append(itemFeedback, f)
 				} else {
 					// add item to non-personalized recommenders
-					itemHasFeedback[itemGroupIndex] = true
-					for _, recommender := range nonPersonalizedRecommenders {
-						recommender.Push(itemGroups[i][itemGroupIndex], itemFeedback)
-					}
-					itemFeedback = itemFeedback[:0]
-					itemFeedback = append(itemFeedback, f)
+					flushItemFeedback()
+					currentItemGroupIndex = itemGroupIndex
+					itemFeedback = append(itemFeedback[:0], f)
 				}
-				// find item group index
-				for itemGroupIndex = 0; itemGroupIndex < len(itemGroups[i]); itemGroupIndex++ {
-					if itemGroups[i][itemGroupIndex].ItemId == f.ItemId {
-						break
-					}
-				}
-				dataSet.AddFeedback(f.UserId, f.ItemId, f.Timestamp)
 			}
 			span.Add(len(feedback))
 		}
 
 		// add item to non-personalized recommenders
-		if len(itemFeedback) > 0 {
-			itemHasFeedback[itemGroupIndex] = true
-			for _, recommender := range nonPersonalizedRecommenders {
-				recommender.Push(itemGroups[i][itemGroupIndex], itemFeedback)
-			}
-		}
+		flushItemFeedback()
 		for index, hasFeedback := range itemHasFeedback {
 			if !hasFeedback {
 				for _, recommender := range nonPersonalizedRecommenders {
@@ -500,13 +513,23 @@ func (m *Master) LoadDataFromDatabase(
 				}
 			}
 		}
-		if err = <-errChan; err != nil {
-			return errors.Trace(err)
+		if streamErr := <-errChan; streamErr != nil {
+			return errors.Trace(streamErr)
 		}
+		positiveFeedback[i] = collectedFeedback
 		return nil
 	})
 	if err != nil {
 		return nil, nil, errors.Trace(err)
+	}
+	var posFeedbackCount int
+	for _, workerFeedback := range positiveFeedback {
+		posFeedbackCount += len(workerFeedback)
+		for _, feedback := range workerFeedback {
+			positiveSet[feedback.userIndex].Add(feedback.itemIndex)
+			evaluator.Add(feedback.feedbackType, feedback.value, feedback.userIndex, feedback.itemIndex, feedback.timestamp)
+			dataSet.AddFeedbackByIndex(feedback.userIndex, feedback.itemIndex, feedback.timestamp)
+		}
 	}
 	log.Logger().Debug("pulled positive feedback from database",
 		zap.Int("n_positive_feedback", posFeedbackCount),
@@ -521,8 +544,9 @@ func (m *Master) LoadDataFromDatabase(
 
 	// STEP 4: pull negative feedback
 	start = time.Now()
-	var negativeFeedbackCount float64
+	negativeFeedback := make([][]indexedFeedback, len(itemGroups))
 	err = parallel.Parallel(newCtx, len(itemGroups), m.Config.Master.NumJobs, func(_, i int) error {
+		collectedFeedback := make([]indexedFeedback, 0)
 		feedbackChan, errChan := database.GetFeedbackStream(newCtx, batchSize,
 			data.WithBeginItemId(itemGroups[i][0].ItemId),
 			data.WithEndItemId(itemGroups[i][len(itemGroups[i])-1].ItemId),
@@ -539,24 +563,35 @@ func (m *Master) LoadDataFromDatabase(
 				if itemIndex == dataset.NotId {
 					continue
 				}
-				negativeSet[userIndex].Add(itemIndex)
-				mu.Lock()
-				negativeFeedbackCount++
-				evaluator.Add(f.FeedbackType, f.Value, userIndex, itemIndex, f.Timestamp)
-				mu.Unlock()
+				collectedFeedback = append(collectedFeedback, indexedFeedback{
+					userIndex:    userIndex,
+					itemIndex:    itemIndex,
+					feedbackType: f.FeedbackType,
+					value:        f.Value,
+					timestamp:    f.Timestamp,
+				})
 			}
 			span.Add(len(feedback))
 		}
-		if err = <-errChan; err != nil {
-			return errors.Trace(err)
+		if streamErr := <-errChan; streamErr != nil {
+			return errors.Trace(streamErr)
 		}
+		negativeFeedback[i] = collectedFeedback
 		return nil
 	})
 	if err != nil {
 		return nil, nil, errors.Trace(err)
 	}
+	var negativeFeedbackCount int
+	for _, workerFeedback := range negativeFeedback {
+		negativeFeedbackCount += len(workerFeedback)
+		for _, feedback := range workerFeedback {
+			negativeSet[feedback.userIndex].Add(feedback.itemIndex)
+			evaluator.Add(feedback.feedbackType, feedback.value, feedback.userIndex, feedback.itemIndex, feedback.timestamp)
+		}
+	}
 	log.Logger().Debug("pulled negative feedback from database",
-		zap.Int("n_negative_feedback", int(negativeFeedbackCount)),
+		zap.Int("n_negative_feedback", negativeFeedbackCount),
 		zap.Duration("used_time", time.Since(start)))
 	LoadDatasetStepSecondsVec.WithLabelValues("load_negative_feedback").Set(time.Since(start).Seconds())
 

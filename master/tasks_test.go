@@ -667,3 +667,75 @@ func (s *MasterTestSuite) TestLoadDataFromDatabase_DataRace() {
 	totalFeedback := datasets.rankingTrainSet.CountFeedback() + datasets.rankingTestSet.CountFeedback()
 	s.Equal(numUsers*numItems, totalFeedback)
 }
+
+// TestLoadDataFromDatabase_NegativeFeedbackDataRace creates enough shared users
+// and negative feedback across chunks to exercise parallel negative feedback
+// loading with -race.
+func (s *MasterTestSuite) TestLoadDataFromDatabase_NegativeFeedbackDataRace() {
+	ctx := context.Background()
+	s.Config = &config.Config{}
+	s.Config.Recommend.CacheSize = 3
+	s.Config.Recommend.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{
+		expression.MustParseFeedbackTypeExpression("positive")}
+	s.Config.Recommend.DataSource.ReadFeedbackTypes = []expression.FeedbackTypeExpression{
+		expression.MustParseFeedbackTypeExpression("negative")}
+	numJobs := 4
+	if runtime.NumCPU() > numJobs {
+		numJobs = runtime.NumCPU()
+	}
+	s.Config.Master.NumJobs = numJobs
+
+	numItems := 100
+	var items []data.Item
+	for i := 0; i < numItems; i++ {
+		items = append(items, data.Item{
+			ItemId:     fmt.Sprintf("%07d", i),
+			Timestamp:  time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC),
+			Categories: []string{"*"},
+		})
+	}
+	err := s.DataClient.BatchInsertItems(ctx, items)
+	s.NoError(err)
+
+	numUsers := 20
+	var users []data.User
+	for i := 0; i < numUsers; i++ {
+		users = append(users, data.User{UserId: fmt.Sprintf("user_%d", i)})
+	}
+	err = s.DataClient.BatchInsertUsers(ctx, users)
+	s.NoError(err)
+
+	var feedbacks []data.Feedback
+	for u := 0; u < numUsers; u++ {
+		userID := fmt.Sprintf("user_%d", u)
+		feedbacks = append(feedbacks, data.Feedback{
+			FeedbackKey: data.FeedbackKey{
+				UserId:       userID,
+				ItemId:       fmt.Sprintf("%07d", 0),
+				FeedbackType: "positive",
+			},
+			Timestamp: time.Now(),
+		})
+		for i := 0; i < numItems; i++ {
+			feedbacks = append(feedbacks, data.Feedback{
+				FeedbackKey: data.FeedbackKey{
+					UserId:       userID,
+					ItemId:       fmt.Sprintf("%07d", i),
+					FeedbackType: "negative",
+				},
+				Timestamp: time.Now(),
+			})
+		}
+	}
+	err = s.DataClient.BatchInsertFeedback(ctx, feedbacks, false, false, true)
+	s.NoError(err)
+
+	datasets, err := s.loadDataset(ctx)
+	s.NoError(err)
+	s.Equal(numUsers, datasets.rankingTrainSet.CountUsers())
+	s.Equal(numItems, datasets.rankingTrainSet.CountItems())
+	totalPositive := datasets.rankingTrainSet.CountFeedback() + datasets.rankingTestSet.CountFeedback()
+	s.Equal(numUsers, totalPositive)
+	totalNegative := datasets.clickTrainSet.NegativeCount + datasets.clickTestSet.NegativeCount
+	s.Equal(numUsers*numItems, totalNegative)
+}
