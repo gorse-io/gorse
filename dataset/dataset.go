@@ -21,6 +21,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/chewxy/math32"
@@ -86,7 +88,9 @@ type Dataset struct {
 	negatives    [][]int32
 	userDict     *FreqDict
 	itemDict     *FreqDict
-	numFeedback  int
+	userLocks    []sync.Mutex
+	itemLocks    []sync.Mutex
+	numFeedback  int64
 	categories   map[string]int
 }
 
@@ -100,6 +104,8 @@ func NewDataset(timestamp time.Time, userCount, itemCount int) *Dataset {
 		userFeedback: make([][]int32, userCount),
 		itemFeedback: make([][]int32, itemCount),
 		timestamps:   make([][]time.Time, userCount),
+		userLocks:    make([]sync.Mutex, userCount),
+		itemLocks:    make([]sync.Mutex, itemCount),
 		userDict:     NewFreqDict(),
 		itemDict:     NewFreqDict(),
 		categories:   make(map[string]int),
@@ -111,7 +117,7 @@ func (d *Dataset) GetTimestamp() time.Time {
 }
 
 func (d *Dataset) CountFeedback() int {
-	return d.numFeedback
+	return int(atomic.LoadInt64(&d.numFeedback))
 }
 
 func (d *Dataset) GetUsers() []data.User {
@@ -211,6 +217,9 @@ func (d *Dataset) AddUser(user data.User) {
 	if len(d.timestamps) < len(d.users) {
 		d.timestamps = append(d.timestamps, nil)
 	}
+	if len(d.userLocks) < len(d.users) {
+		d.userLocks = append(d.userLocks, sync.Mutex{})
+	}
 }
 
 func (d *Dataset) AddItem(item data.Item) {
@@ -226,18 +235,67 @@ func (d *Dataset) AddItem(item data.Item) {
 	if len(d.itemFeedback) < len(d.items) {
 		d.itemFeedback = append(d.itemFeedback, nil)
 	}
+	if len(d.itemLocks) < len(d.items) {
+		d.itemLocks = append(d.itemLocks, sync.Mutex{})
+	}
 	for _, category := range item.Categories {
 		d.categories[category]++
 	}
 }
 
+func (d *Dataset) ensureUserCapacity(userIndex int32) {
+	required := int(userIndex) + 1
+	for len(d.userFeedback) < required {
+		d.userFeedback = append(d.userFeedback, nil)
+	}
+	for len(d.timestamps) < required {
+		d.timestamps = append(d.timestamps, nil)
+	}
+	for len(d.userLocks) < required {
+		d.userLocks = append(d.userLocks, sync.Mutex{})
+	}
+}
+
+func (d *Dataset) ensureItemCapacity(itemIndex int32) {
+	required := int(itemIndex) + 1
+	for len(d.itemFeedback) < required {
+		d.itemFeedback = append(d.itemFeedback, nil)
+	}
+	for len(d.itemLocks) < required {
+		d.itemLocks = append(d.itemLocks, sync.Mutex{})
+	}
+}
+
+func (d *Dataset) addFeedbackByIndex(userIndex, itemIndex int32, timestamp time.Time) {
+	if userIndex == NotId || itemIndex == NotId {
+		return
+	}
+	ui := int(userIndex)
+	ii := int(itemIndex)
+	d.userLocks[ui].Lock()
+	d.userFeedback[ui] = append(d.userFeedback[ui], itemIndex)
+	d.timestamps[ui] = append(d.timestamps[ui], timestamp)
+	d.userLocks[ui].Unlock()
+	d.itemLocks[ii].Lock()
+	d.itemFeedback[ii] = append(d.itemFeedback[ii], userIndex)
+	d.itemLocks[ii].Unlock()
+	atomic.AddInt64(&d.numFeedback, 1)
+}
+
 func (d *Dataset) AddFeedback(userId, itemId string, timestamp time.Time) {
 	userIndex := d.userDict.Add(userId)
 	itemIndex := d.itemDict.Add(itemId)
-	d.userFeedback[userIndex] = append(d.userFeedback[userIndex], itemIndex)
-	d.itemFeedback[itemIndex] = append(d.itemFeedback[itemIndex], userIndex)
-	d.timestamps[userIndex] = append(d.timestamps[userIndex], timestamp)
-	d.numFeedback++
+	d.ensureUserCapacity(userIndex)
+	d.ensureItemCapacity(itemIndex)
+	d.addFeedbackByIndex(userIndex, itemIndex, timestamp)
+}
+
+// AddFeedbackByIndex appends feedback using existing user/item indexes.
+func (d *Dataset) AddFeedbackByIndex(userIndex, itemIndex int32, timestamp time.Time) {
+	if userIndex < 0 || itemIndex < 0 {
+		return
+	}
+	d.addFeedbackByIndex(userIndex, itemIndex, timestamp)
 }
 
 func (d *Dataset) SampleUserNegatives(excludeSet CFSplit, numCandidates int) [][]int32 {
@@ -273,13 +331,13 @@ func (d *Dataset) SplitCF(numTestUsers int, seed int64) (CFSplit, CFSplit) {
 				testSet.userFeedback[userIndex] = append(testSet.userFeedback[userIndex], d.userFeedback[userIndex][k])
 				testSet.itemFeedback[d.userFeedback[userIndex][k]] = append(testSet.itemFeedback[d.userFeedback[userIndex][k]], userIndex)
 				testSet.timestamps[userIndex] = append(testSet.timestamps[userIndex], d.timestamps[userIndex][k])
-				testSet.numFeedback++
+				atomic.AddInt64(&testSet.numFeedback, 1)
 				for i, itemIndex := range d.userFeedback[userIndex] {
 					if i != k {
 						trainSet.userFeedback[userIndex] = append(trainSet.userFeedback[userIndex], itemIndex)
 						trainSet.itemFeedback[itemIndex] = append(trainSet.itemFeedback[itemIndex], userIndex)
 						trainSet.timestamps[userIndex] = append(trainSet.timestamps[userIndex], d.timestamps[userIndex][i])
-						trainSet.numFeedback++
+						atomic.AddInt64(&trainSet.numFeedback, 1)
 					}
 				}
 			}
@@ -292,13 +350,13 @@ func (d *Dataset) SplitCF(numTestUsers int, seed int64) (CFSplit, CFSplit) {
 				testSet.userFeedback[userIndex] = append(testSet.userFeedback[userIndex], d.userFeedback[userIndex][k])
 				testSet.itemFeedback[d.userFeedback[userIndex][k]] = append(testSet.itemFeedback[d.userFeedback[userIndex][k]], userIndex)
 				testSet.timestamps[userIndex] = append(testSet.timestamps[userIndex], d.timestamps[userIndex][k])
-				testSet.numFeedback++
+				atomic.AddInt64(&testSet.numFeedback, 1)
 				for i, itemIndex := range d.userFeedback[userIndex] {
 					if i != k {
 						trainSet.userFeedback[userIndex] = append(trainSet.userFeedback[userIndex], itemIndex)
 						trainSet.itemFeedback[itemIndex] = append(trainSet.itemFeedback[itemIndex], userIndex)
 						trainSet.timestamps[userIndex] = append(trainSet.timestamps[userIndex], d.timestamps[userIndex][i])
-						trainSet.numFeedback++
+						atomic.AddInt64(&trainSet.numFeedback, 1)
 					}
 				}
 			}
@@ -310,7 +368,7 @@ func (d *Dataset) SplitCF(numTestUsers int, seed int64) (CFSplit, CFSplit) {
 					trainSet.userFeedback[userIndex] = append(trainSet.userFeedback[userIndex], itemIndex)
 					trainSet.itemFeedback[itemIndex] = append(trainSet.itemFeedback[itemIndex], userIndex)
 					trainSet.timestamps[userIndex] = append(trainSet.timestamps[userIndex], d.timestamps[userIndex][idx])
-					trainSet.numFeedback++
+					atomic.AddInt64(&trainSet.numFeedback, 1)
 				}
 			}
 		}
@@ -339,13 +397,13 @@ func (d *Dataset) SplitLatest(shots int) (CFSplit, CFSplit) {
 		testSet.timestamps[userIndex] = append(testSet.timestamps[userIndex], d.timestamps[userIndex][idxs[0]])
 		testSet.itemFeedback[d.userFeedback[userIndex][idxs[0]]] = append(testSet.itemFeedback[d.userFeedback[userIndex][idxs[0]]], userIndex)
 		testSet.userFeedback[userIndex] = append(testSet.userFeedback[userIndex], d.userFeedback[userIndex][idxs[0]])
-		testSet.numFeedback++
+		atomic.AddInt64(&testSet.numFeedback, 1)
 		for i := 1; i < len(d.userFeedback[userIndex]) && i <= shots; i++ {
 			itemIndex := d.userFeedback[userIndex][idxs[i]]
 			trainSet.userFeedback[userIndex] = append(trainSet.userFeedback[userIndex], itemIndex)
 			trainSet.itemFeedback[itemIndex] = append(trainSet.itemFeedback[itemIndex], userIndex)
 			trainSet.timestamps[userIndex] = append(trainSet.timestamps[userIndex], d.timestamps[userIndex][idxs[i]])
-			trainSet.numFeedback++
+			atomic.AddInt64(&trainSet.numFeedback, 1)
 		}
 	}
 	return trainSet, testSet

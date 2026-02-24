@@ -332,8 +332,8 @@ func (m *Master) LoadDataFromDatabase(
 		}
 		span.Add(len(users))
 	}
-	if err = <-errChan; err != nil {
-		return nil, nil, errors.Trace(err)
+	if fetchErr := <-errChan; fetchErr != nil {
+		return nil, nil, errors.Trace(fetchErr)
 	}
 	log.Logger().Debug("pulled users from database",
 		zap.Int("n_users", dataSet.CountUsers()),
@@ -407,8 +407,8 @@ func (m *Master) LoadDataFromDatabase(
 		}
 		span.Add(len(batchItems))
 	}
-	if err = <-errChan; err != nil {
-		return nil, nil, errors.Trace(err)
+	if fetchErr := <-errChan; fetchErr != nil {
+		return nil, nil, errors.Trace(fetchErr)
 	}
 	log.Logger().Debug("pulled items from database",
 		zap.Int("n_items", dataSet.CountItems()),
@@ -418,6 +418,7 @@ func (m *Master) LoadDataFromDatabase(
 
 	// create positive set
 	positiveSet := make([]mapset.Set[int32], dataSet.CountUsers())
+	positiveSetLocks := make([]sync.Mutex, dataSet.CountUsers())
 	for i := range positiveSet {
 		positiveSet[i] = mapset.NewSet[int32]()
 	}
@@ -455,7 +456,9 @@ func (m *Master) LoadDataFromDatabase(
 					continue
 				}
 				// insert feedback to positive set
+				positiveSetLocks[userIndex].Lock()
 				positiveSet[userIndex].Add(itemIndex)
+				positiveSetLocks[userIndex].Unlock()
 
 				mu.Lock()
 				posFeedbackCount++
@@ -481,7 +484,7 @@ func (m *Master) LoadDataFromDatabase(
 						break
 					}
 				}
-				dataSet.AddFeedback(f.UserId, f.ItemId, f.Timestamp)
+				dataSet.AddFeedbackByIndex(userIndex, itemIndex, f.Timestamp)
 			}
 			span.Add(len(feedback))
 		}
@@ -500,8 +503,8 @@ func (m *Master) LoadDataFromDatabase(
 				}
 			}
 		}
-		if err = <-errChan; err != nil {
-			return errors.Trace(err)
+		if fetchErr := <-errChan; fetchErr != nil {
+			return errors.Trace(fetchErr)
 		}
 		return nil
 	})
@@ -515,6 +518,7 @@ func (m *Master) LoadDataFromDatabase(
 
 	// create negative set
 	negativeSet := make([]mapset.Set[int32], dataSet.CountUsers())
+	negativeSetLocks := make([]sync.Mutex, dataSet.CountUsers())
 	for i := range negativeSet {
 		negativeSet[i] = mapset.NewSet[int32]()
 	}
@@ -539,7 +543,9 @@ func (m *Master) LoadDataFromDatabase(
 				if itemIndex == dataset.NotId {
 					continue
 				}
+				negativeSetLocks[userIndex].Lock()
 				negativeSet[userIndex].Add(itemIndex)
+				negativeSetLocks[userIndex].Unlock()
 				mu.Lock()
 				negativeFeedbackCount++
 				evaluator.Add(f.FeedbackType, f.Value, userIndex, itemIndex, f.Timestamp)
@@ -547,8 +553,8 @@ func (m *Master) LoadDataFromDatabase(
 			}
 			span.Add(len(feedback))
 		}
-		if err = <-errChan; err != nil {
-			return errors.Trace(err)
+		if fetchErr := <-errChan; fetchErr != nil {
+			return errors.Trace(fetchErr)
 		}
 		return nil
 	})
