@@ -16,6 +16,7 @@ package master
 
 import (
 	"context"
+	"fmt"
 	"runtime"
 	"strconv"
 	"time"
@@ -598,4 +599,71 @@ func (s *MasterTestSuite) TestGarbageCollection() {
 	cf, err = s.CacheClient.SearchScores(ctx, cache.CollaborativeFiltering, "3", nil, 0, 100)
 	s.NoError(err)
 	s.Empty(cf)
+}
+
+// TestLoadDataFromDatabase_DataRace creates enough items and shared users to
+// exercise the parallel feedback loading path with multiple goroutines writing
+// to the same user slices in dataSet.AddFeedback. Run with -race to detect.
+func (s *MasterTestSuite) TestLoadDataFromDatabase_DataRace() {
+	ctx := context.Background()
+	s.Config = &config.Config{}
+	s.Config.Recommend.CacheSize = 3
+	s.Config.Recommend.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{
+		expression.MustParseFeedbackTypeExpression("positive")}
+	s.Config.Recommend.DataSource.ReadFeedbackTypes = []expression.FeedbackTypeExpression{
+		expression.MustParseFeedbackTypeExpression("negative")}
+	// Use enough jobs to create multiple chunks
+	numJobs := 4
+	if runtime.NumCPU() > numJobs {
+		numJobs = runtime.NumCPU()
+	}
+	s.Config.Master.NumJobs = numJobs
+
+	// Create 100 items spread across chunks
+	numItems := 100
+	var items []data.Item
+	for i := 0; i < numItems; i++ {
+		items = append(items, data.Item{
+			ItemId:     fmt.Sprintf("%07d", i),
+			Timestamp:  time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC),
+			Categories: []string{"*"},
+		})
+	}
+	err := s.DataClient.BatchInsertItems(ctx, items)
+	s.NoError(err)
+
+	// Create 20 users
+	numUsers := 20
+	var users []data.User
+	for i := 0; i < numUsers; i++ {
+		users = append(users, data.User{UserId: fmt.Sprintf("user_%d", i)})
+	}
+	err = s.DataClient.BatchInsertUsers(ctx, users)
+	s.NoError(err)
+
+	// Each user has feedback for items across ALL chunks.
+	// This forces multiple goroutines to call AddFeedback for the same user.
+	var feedbacks []data.Feedback
+	for u := 0; u < numUsers; u++ {
+		for i := 0; i < numItems; i++ {
+			feedbacks = append(feedbacks, data.Feedback{
+				FeedbackKey: data.FeedbackKey{
+					UserId:       fmt.Sprintf("user_%d", u),
+					ItemId:       fmt.Sprintf("%07d", i),
+					FeedbackType: "positive",
+				},
+				Timestamp: time.Now(),
+			})
+		}
+	}
+	err = s.DataClient.BatchInsertFeedback(ctx, feedbacks, false, false, true)
+	s.NoError(err)
+
+	// Load dataset — with -race this will detect concurrent slice appends
+	datasets, err := s.loadDataset(ctx)
+	s.NoError(err)
+	s.Equal(numUsers, datasets.rankingTrainSet.CountUsers())
+	s.Equal(numItems, datasets.rankingTrainSet.CountItems())
+	totalFeedback := datasets.rankingTrainSet.CountFeedback() + datasets.rankingTestSet.CountFeedback()
+	s.Equal(numUsers*numItems, totalFeedback)
 }
