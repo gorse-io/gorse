@@ -187,23 +187,23 @@ func (p ProxyClient) QueryVectors(ctx context.Context, collection string, q []fl
 func distanceToProtoDistance(distance Distance) (protocol.Distance, error) {
 	switch distance {
 	case Cosine:
-		return protocol.Distance_Distance_Cosine, nil
+		return protocol.Distance_Cosine, nil
 	case Euclidean:
-		return protocol.Distance_Distance_Euclidean, nil
+		return protocol.Distance_Euclidean, nil
 	case Dot:
-		return protocol.Distance_Distance_Dot, nil
+		return protocol.Distance_Dot, nil
 	default:
-		return protocol.Distance_Distance_Unknown, errors.NotSupportedf("distance method")
+		return protocol.Distance_Unknown, errors.NotSupportedf("distance method")
 	}
 }
 
 func protoDistanceToDistance(distance protocol.Distance) (Distance, error) {
 	switch distance {
-	case protocol.Distance_Distance_Cosine:
+	case protocol.Distance_Cosine:
 		return Cosine, nil
-	case protocol.Distance_Distance_Euclidean:
+	case protocol.Distance_Euclidean:
 		return Euclidean, nil
-	case protocol.Distance_Distance_Dot:
+	case protocol.Distance_Dot:
 		return Dot, nil
 	default:
 		return Cosine, errors.NotSupportedf("distance method")

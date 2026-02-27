@@ -38,25 +38,25 @@ const (
 type Distance int32
 
 const (
-	Distance_Distance_Unknown   Distance = 0
-	Distance_Distance_Cosine    Distance = 1
-	Distance_Distance_Euclidean Distance = 2
-	Distance_Distance_Dot       Distance = 3
+	Distance_Unknown   Distance = 0
+	Distance_Cosine    Distance = 1
+	Distance_Euclidean Distance = 2
+	Distance_Dot       Distance = 3
 )
 
 // Enum value maps for Distance.
 var (
 	Distance_name = map[int32]string{
-		0: "Distance_Unknown",
-		1: "Distance_Cosine",
-		2: "Distance_Euclidean",
-		3: "Distance_Dot",
+		0: "Unknown",
+		1: "Cosine",
+		2: "Euclidean",
+		3: "Dot",
 	}
 	Distance_value = map[string]int32{
-		"Distance_Unknown":   0,
-		"Distance_Cosine":    1,
-		"Distance_Euclidean": 2,
-		"Distance_Dot":       3,
+		"Unknown":   0,
+		"Cosine":    1,
+		"Euclidean": 2,
+		"Dot":       3,
 	}
 )
 
@@ -284,7 +284,7 @@ func (x *AddCollectionRequest) GetDistance() Distance {
 	if x != nil {
 		return x.Distance
 	}
-	return Distance_Distance_Unknown
+	return Distance_Unknown
 }
 
 type AddCollectionResponse struct {
@@ -643,12 +643,13 @@ const file_vector_store_proto_rawDesc = "" +
 	"categories\x12\x13\n" +
 	"\x05top_k\x18\x04 \x01(\x05R\x04topK\"B\n" +
 	"\x14QueryVectorsResponse\x12*\n" +
-	"\avectors\x18\x01 \x03(\v2\x10.protocol.VectorR\avectors*_\n" +
-	"\bDistance\x12\x14\n" +
-	"\x10Distance_Unknown\x10\x00\x12\x13\n" +
-	"\x0fDistance_Cosine\x10\x01\x12\x16\n" +
-	"\x12Distance_Euclidean\x10\x02\x12\x10\n" +
-	"\fDistance_Dot\x10\x032\xb4\x03\n" +
+	"\avectors\x18\x01 \x03(\v2\x10.protocol.VectorR\avectors*;\n" +
+	"\bDistance\x12\v\n" +
+	"\aUnknown\x10\x00\x12\n" +
+	"\n" +
+	"\x06Cosine\x10\x01\x12\r\n" +
+	"\tEuclidean\x10\x02\x12\a\n" +
+	"\x03Dot\x10\x032\xb4\x03\n" +
 	"\vVectorStore\x12X\n" +
 	"\x0fListCollections\x12 .protocol.ListCollectionsRequest\x1a!.protocol.ListCollectionsResponse\"\x00\x12R\n" +
 	"\rAddCollection\x12\x1e.protocol.AddCollectionRequest\x1a\x1f.protocol.AddCollectionResponse\"\x00\x12[\n" +

@@ -19,10 +19,10 @@ option go_package = "github.com/gorse-io/gorse/protocol";
 package protocol;
 
 enum Distance {
-  Distance_Unknown = 0;
-  Distance_Cosine = 1;
-  Distance_Euclidean = 2;
-  Distance_Dot = 3;
+  Unknown = 0;
+  Cosine = 1;
+  Euclidean = 2;
+  Dot = 3;
 }
 
 message Vector {
