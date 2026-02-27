@@ -15,7 +15,6 @@
 package logics
 
 import (
-	"context"
 	"net/http"
 	"testing"
 
@@ -46,7 +45,7 @@ func TestChatReranker(t *testing.T) {
 		"{{ item.Comment }}")
 	assert.NoError(t, err)
 
-	items, err := reranker.Rank(context.Background(), &data.User{
+	items, err := reranker.Rank(t.Context(), &data.User{
 		UserId:  "Tom",
 		Comment: "horror movie enthusiast",
 	}, []*FeedbackItem{

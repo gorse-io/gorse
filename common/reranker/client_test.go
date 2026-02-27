@@ -15,7 +15,6 @@
 package reranker
 
 import (
-	"context"
 	"net/http"
 	"testing"
 
@@ -52,7 +51,7 @@ func (suite *ClientTestSuite) TestRerank() {
 		},
 	}
 
-	resp, err := client.Rerank(context.Background(), req)
+	resp, err := client.Rerank(suite.T().Context(), req)
 	suite.NoError(err)
 	suite.Equal(2, len(resp.Results))
 	suite.Equal(0, resp.Results[0].Index)

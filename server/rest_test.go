@@ -14,7 +14,6 @@
 package server
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -323,7 +322,7 @@ func (suite *ServerTestSuite) TestItems() {
 			{Id: items[1].ItemId, Score: float64(items[1].Timestamp.Unix())},
 		})).
 		End()
-	err := suite.DataClient.BatchInsertFeedback(context.Background(), []data.Feedback{{
+	err := suite.DataClient.BatchInsertFeedback(suite.T().Context(), []data.Feedback{{
 		FeedbackKey: data.FeedbackKey{FeedbackType: "read", UserId: "0", ItemId: "6"},
 		Timestamp:   time.Now().Truncate(time.Hour),
 	}}, true, true, true)
@@ -572,7 +571,7 @@ func (suite *ServerTestSuite) TestItems() {
 }
 
 func (suite *ServerTestSuite) TestFeedback() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	t := suite.T()
 	// Insert ret
 	feedback := []data.Feedback{
@@ -724,7 +723,7 @@ func (suite *ServerTestSuite) TestFeedback() {
 }
 
 func (suite *ServerTestSuite) TestNonPersonalizedRecommend() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	suite.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "default"}}
 	type ListOperator struct {
 		Name       string
@@ -849,7 +848,7 @@ func (suite *ServerTestSuite) TestNonPersonalizedRecommend() {
 }
 
 func (suite *ServerTestSuite) TestUserToUser() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	suite.Config.Recommend.UserToUser = []config.UserToUserConfig{{Name: "default"}}
 	err := suite.CacheClient.AddScores(ctx, cache.UserToUser, cache.Key("default", "0"), []cache.Score{
 		{Id: "1", Score: 100},
@@ -949,7 +948,7 @@ func (suite *ServerTestSuite) TestDeleteFeedback() {
 }
 
 func (suite *ServerTestSuite) TestGetRecommends() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	// insert hidden items
 	err := suite.CacheClient.AddScores(ctx, cache.Recommend, "0", []cache.Score{{Id: "0", Score: 100, Categories: []string{""}}})
 	suite.NoError(err)
@@ -1087,7 +1086,7 @@ func (suite *ServerTestSuite) TestGetRecommends() {
 }
 
 func (suite *ServerTestSuite) TestGetRecommendsMultiCategories() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	// insert recommendation
 	err := suite.CacheClient.AddScores(ctx, cache.Recommend, "0", []cache.Score{
 		{Id: "1", Score: 1, Categories: []string{""}},
@@ -1116,7 +1115,7 @@ func (suite *ServerTestSuite) TestGetRecommendsMultiCategories() {
 }
 
 func (suite *ServerTestSuite) TestGetRecommendsReplacement() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	suite.Config.Recommend.Replacement.EnableReplacement = true
 	// insert recommendation
 	err := suite.CacheClient.AddScores(ctx, cache.Recommend, "0", []cache.Score{
@@ -1169,7 +1168,7 @@ func (suite *ServerTestSuite) TestGetRecommendsReplacement() {
 }
 
 func (suite *ServerTestSuite) TestGetRecommendsFallbackItemToItem() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	suite.Config.Recommend.ContextSize = 4
 	suite.Config.Recommend.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{
 		expression.MustParseFeedbackTypeExpression("a")}
@@ -1263,7 +1262,7 @@ func (suite *ServerTestSuite) TestGetRecommendsFallbackItemToItem() {
 }
 
 func (suite *ServerTestSuite) TestGetRecommendsFallbackUserToUser() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	suite.Config.Recommend.UserToUser = []config.UserToUserConfig{{Name: "default"}}
 	// insert recommendation
 	err := suite.CacheClient.AddScores(ctx, cache.Recommend, "0",
@@ -1339,7 +1338,7 @@ func (suite *ServerTestSuite) TestGetRecommendsFallbackUserToUser() {
 }
 
 func (suite *ServerTestSuite) TestRecommendFallbackLatest() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	// insert offline recommendation
 	err := suite.CacheClient.AddScores(ctx, cache.Recommend, "0", []cache.Score{
 		{Id: "1", Score: 99, Categories: []string{"*"}},
@@ -1386,7 +1385,7 @@ func (suite *ServerTestSuite) TestRecommendFallbackLatest() {
 }
 
 func (suite *ServerTestSuite) TestGetRecommendsFallbackCollaborativeFiltering() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	// insert offline recommendation
 	err := suite.CacheClient.AddScores(ctx, cache.Recommend, "0", []cache.Score{
 		{Id: "1", Score: 99, Categories: []string{"*"}},
@@ -1428,7 +1427,7 @@ func (suite *ServerTestSuite) TestGetRecommendsFallbackCollaborativeFiltering() 
 }
 
 func (suite *ServerTestSuite) TestGetRecommendsFallbackNonPersonalized() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	// insert offline recommendation
 	err := suite.CacheClient.AddScores(ctx, cache.Recommend, "0", []cache.Score{
 		{Id: "1", Score: 99, Categories: []string{"*"}},
@@ -1475,7 +1474,7 @@ func (suite *ServerTestSuite) TestGetRecommendsFallbackNonPersonalized() {
 }
 
 func (suite *ServerTestSuite) TestGetRecommendsLatest() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	err := suite.DataClient.BatchInsertItems(ctx, []data.Item{
 		{ItemId: "5", Timestamp: time.Unix(95, 0)},
 		{ItemId: "6", Timestamp: time.Unix(94, 0)},
@@ -1500,7 +1499,7 @@ func (suite *ServerTestSuite) TestGetRecommendsLatest() {
 }
 
 func (suite *ServerTestSuite) TestSessionRecommend() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	suite.Config.Recommend.ContextSize = 4
 	suite.Config.Recommend.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{
 		expression.MustParseFeedbackTypeExpression("a")}
@@ -1602,7 +1601,7 @@ func (suite *ServerTestSuite) TestSessionRecommend() {
 }
 
 func (suite *ServerTestSuite) TestVisibility() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	suite.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "default"}}
 	// insert items: 0, 1, 2, 3, 4
 	var items []Item

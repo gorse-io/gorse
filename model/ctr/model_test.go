@@ -15,7 +15,6 @@ package ctr
 
 import (
 	"bytes"
-	"context"
 	"runtime"
 	"testing"
 
@@ -44,7 +43,7 @@ func TestFactorizationMachines_Classification_Frappe(t *testing.T) {
 		model.BatchSize: 1024,
 	})
 	fitConfig := newFitConfigWithTestTracker()
-	score := m.Fit(context.Background(), train, test, fitConfig)
+	score := m.Fit(t.Context(), train, test, fitConfig)
 	assert.InDelta(t, 0.919, score.Accuracy, classificationDelta)
 }
 
@@ -62,7 +61,7 @@ func TestFactorizationMachines_Classification_MovieLens(t *testing.T) {
 		model.BatchSize:  1024,
 	})
 	fitConfig := newFitConfigWithTestTracker()
-	score := m.Fit(context.Background(), train, test, fitConfig)
+	score := m.Fit(t.Context(), train, test, fitConfig)
 	assert.InDelta(t, 0.815, score.Accuracy, classificationDelta)
 }
 
@@ -78,7 +77,7 @@ func TestFactorizationMachines_Classification_Criteo(t *testing.T) {
 		model.BatchSize: 1024,
 	})
 	fitConfig := newFitConfigWithTestTracker()
-	score := m.Fit(context.Background(), train, test, fitConfig)
+	score := m.Fit(t.Context(), train, test, fitConfig)
 	assert.InDelta(t, 0.77, score.Accuracy, 0.025)
 
 	// test prediction
@@ -157,7 +156,7 @@ func TestFactorizationMachines_Classification_Synthesis(t *testing.T) {
 	dataSet := newSynthesisDataset()
 	fitConfig := newFitConfigWithTestTracker()
 	m := NewAFM(nil)
-	score := m.Fit(context.Background(), dataSet, dataSet, fitConfig)
+	score := m.Fit(t.Context(), dataSet, dataSet, fitConfig)
 	assert.GreaterOrEqual(t, score.Accuracy, float32(0.5))
 
 	buf := bytes.NewBuffer(nil)

@@ -15,7 +15,6 @@
 package blob
 
 import (
-	"context"
 	"errors"
 	"io"
 	"os"
@@ -36,7 +35,7 @@ func TestAzureBlobEmulator(t *testing.T) {
 	client, err := NewAzureBlob(config.AzureBlobConfig{ConnectionString: connectionString}, "gorse-test", "blob")
 	assert.NoError(t, err)
 
-	ctx := context.Background()
+	ctx := t.Context()
 	_, err = client.client.CreateContainer(ctx, client.container, nil)
 	if err != nil {
 		var respErr *azcore.ResponseError

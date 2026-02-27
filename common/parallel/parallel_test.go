@@ -32,7 +32,7 @@ func TestParallel(t *testing.T) {
 		b := make([]int, len(a))
 		workerIds := make([]int, len(a))
 		// multiple threads
-		_ = Parallel(context.Background(), len(a), 4, func(workerId, jobId int) error {
+		_ = Parallel(t.Context(), len(a), 4, func(workerId, jobId int) error {
 			b[jobId] = a[jobId]
 			workerIds[jobId] = workerId
 			time.Sleep(time.Microsecond)
@@ -43,7 +43,7 @@ func TestParallel(t *testing.T) {
 		assert.GreaterOrEqual(t, 4, workersSet.Cardinality())
 		assert.Less(t, 1, workersSet.Cardinality())
 		// single thread
-		_ = Parallel(context.Background(), len(a), 1, func(workerId, jobId int) error {
+		_ = Parallel(t.Context(), len(a), 1, func(workerId, jobId int) error {
 			b[jobId] = a[jobId]
 			workerIds[jobId] = workerId
 			return nil
@@ -59,14 +59,14 @@ func TestFor(t *testing.T) {
 		// multiple threads
 		a := util.RangeInt(10000)
 		b := make([]int, len(a))
-		err := For(context.Background(), len(a), 4, func(jobId int) {
+		err := For(t.Context(), len(a), 4, func(jobId int) {
 			b[jobId] = a[jobId]
 			time.Sleep(time.Microsecond)
 		})
 		assert.NoError(t, err)
 		assert.Equal(t, a, b)
 		// single thread
-		err = For(context.Background(), len(a), 1, func(jobId int) {
+		err = For(t.Context(), len(a), 1, func(jobId int) {
 			b[jobId] = a[jobId]
 			time.Sleep(time.Microsecond)
 		})
@@ -77,7 +77,7 @@ func TestFor(t *testing.T) {
 
 func TestForCancel(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(t.Context())
 		var count atomic.Int32
 
 		err := For(ctx, 1000, 4, func(jobId int) {
@@ -98,7 +98,7 @@ func TestForEach(t *testing.T) {
 		a := util.RangeInt(10000)
 		b := make([]int, len(a))
 		// multiple threads
-		err := ForEach(context.Background(), a, 4, func(i, v int) {
+		err := ForEach(t.Context(), a, 4, func(i, v int) {
 			assert.Equal(t, i, v)
 			b[i] = v
 			time.Sleep(time.Microsecond)
@@ -106,7 +106,7 @@ func TestForEach(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Equal(t, a, b)
 		// single thread
-		err = ForEach(context.Background(), a, 1, func(i, v int) {
+		err = ForEach(t.Context(), a, 1, func(i, v int) {
 			assert.Equal(t, i, v)
 			b[i] = v
 			time.Sleep(time.Microsecond)
@@ -118,7 +118,7 @@ func TestForEach(t *testing.T) {
 
 func TestForEachCancel(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(t.Context())
 		var count atomic.Int32
 
 		err := ForEach(ctx, util.RangeInt(1000), 4, func(i, v int) {
@@ -136,7 +136,7 @@ func TestForEachCancel(t *testing.T) {
 
 func TestParallelFail(t *testing.T) {
 	// multiple threads
-	err := Parallel(context.Background(), 10000, 4, func(workerId, jobId int) error {
+	err := Parallel(t.Context(), 10000, 4, func(workerId, jobId int) error {
 		if jobId%2 == 1 {
 			return fmt.Errorf("error from %d", jobId)
 		}
@@ -144,7 +144,7 @@ func TestParallelFail(t *testing.T) {
 	})
 	assert.Error(t, err)
 	// single thread
-	err = Parallel(context.Background(), 10000, 1, func(workerId, jobId int) error {
+	err = Parallel(t.Context(), 10000, 1, func(workerId, jobId int) error {
 		if jobId%2 == 1 {
 			return fmt.Errorf("error from %d", jobId)
 		}
@@ -155,7 +155,7 @@ func TestParallelFail(t *testing.T) {
 
 func TestParallelCancel(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(t.Context())
 		var count atomic.Int32
 
 		err := Parallel(ctx, 10000, 4, func(_, jobId int) error {
@@ -185,7 +185,7 @@ func TestSplit(t *testing.T) {
 func TestDetachable(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		start := time.Now()
-		err := Detachable(context.Background(), 100, 1, 100, func(ctx *Context, jobId int) {
+		err := Detachable(t.Context(), 100, 1, 100, func(ctx *Context, jobId int) {
 			ctx.Detach()
 			time.Sleep(time.Second)
 			ctx.Attach()
@@ -196,7 +196,7 @@ func TestDetachable(t *testing.T) {
 
 	synctest.Test(t, func(t *testing.T) {
 		start := time.Now()
-		err := Detachable(context.Background(), 100, 1, 10, func(ctx *Context, jobId int) {
+		err := Detachable(t.Context(), 100, 1, 10, func(ctx *Context, jobId int) {
 			ctx.Detach()
 			time.Sleep(time.Second)
 			ctx.Attach()
@@ -208,7 +208,7 @@ func TestDetachable(t *testing.T) {
 
 func TestDetachableCancel(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(t.Context())
 		var count atomic.Int32
 
 		err := Detachable(ctx, 100, 4, 10, func(c *Context, jobId int) {

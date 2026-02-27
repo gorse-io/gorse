@@ -15,7 +15,6 @@
 package blob
 
 import (
-	"context"
 	"io"
 	"testing"
 
@@ -39,7 +38,7 @@ func TestGCS(t *testing.T) {
 	assert.NoError(t, err)
 
 	// create bucket if not exists
-	err = client.client.Bucket("gorse-test").Create(context.Background(), "test-project", nil)
+	err = client.client.Bucket("gorse-test").Create(t.Context(), "test-project", nil)
 	if err != nil {
 		assert.ErrorContains(t, err, "A Cloud Storage bucket named 'gorse-test' already exists.")
 	}

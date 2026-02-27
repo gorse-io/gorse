@@ -60,7 +60,7 @@ func (suite *baseTestSuite) TestInit() {
 }
 
 func (suite *baseTestSuite) TestMeta() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	// Set meta string
 	err := suite.Database.Set(ctx, String(Key("meta", "1"), "2"), String(Key("meta", "1000"), "10"))
 	suite.NoError(err)
@@ -106,7 +106,7 @@ func (suite *baseTestSuite) TestMeta() {
 }
 
 func (suite *baseTestSuite) TestExists() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 
 	// Test non-existent key
 	ret := suite.Database.Get(ctx, Key("test", "nonexistent"))
@@ -152,7 +152,7 @@ func (suite *baseTestSuite) TestExists() {
 }
 
 func (suite *baseTestSuite) TestScan() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	err := suite.Database.Set(ctx, String("1", "1"))
 	suite.NoError(err)
 
@@ -166,7 +166,7 @@ func (suite *baseTestSuite) TestScan() {
 }
 
 func (suite *baseTestSuite) TestPurge() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	// insert data
 	err := suite.Database.Set(ctx, String("key", "value"))
 	suite.NoError(err)
@@ -187,7 +187,7 @@ func (suite *baseTestSuite) TestPurge() {
 }
 
 func (suite *baseTestSuite) TestPushPop() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	err := suite.Push(ctx, "a", "1")
 	suite.NoError(err)
 	err = suite.Push(ctx, "a", "2")
@@ -227,7 +227,7 @@ func (suite *baseTestSuite) TestPushPop() {
 
 func (suite *baseTestSuite) TestDocument() {
 	ts := time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	err := suite.AddScores(ctx, "a", "", []Score{{
 		Id:         "0",
 		Score:      math.MaxFloat64,
@@ -358,7 +358,7 @@ func (suite *baseTestSuite) TestDocument() {
 
 func (suite *baseTestSuite) TestSubsetDocument() {
 	ts := time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	err := suite.AddScores(ctx, "a", "a", []Score{
 		{
 			Id:         "1",
@@ -483,13 +483,13 @@ func (suite *baseTestSuite) TestScanScores() {
 		},
 	}
 	for k, v := range scores {
-		err := suite.AddScores(context.Background(), k.A, k.B, v)
+		err := suite.AddScores(suite.T().Context(), k.A, k.B, v)
 		suite.NoError(err)
 	}
 
 	// scan scores
 	totalScores := 0
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	err := suite.ScanScores(ctx, func(collection, id, subset string, t time.Time) error {
 		totalScores++
 		suite.Equal(timestamp, t.UTC())
@@ -500,7 +500,7 @@ func (suite *baseTestSuite) TestScanScores() {
 
 	// scan scores with timeout
 	scanScores := 0
-	ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond)
+	ctx, cancel := context.WithTimeout(suite.T().Context(), time.Millisecond)
 	defer cancel()
 	err = suite.ScanScores(ctx, func(collection, id, subset string, timestamp time.Time) error {
 		time.Sleep(time.Millisecond)
@@ -515,7 +515,7 @@ func (suite *baseTestSuite) TestScanScores() {
 
 func (suite *baseTestSuite) TestTimeSeries() {
 	ts := time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	err := suite.AddTimeSeriesPoints(ctx, []TimeSeriesPoint{
 		{Name: "a", Value: 1, Timestamp: ts.Add(1 * time.Second)},
 		{Name: "a", Value: 2, Timestamp: ts.Add(2 * time.Second)},
@@ -543,7 +543,7 @@ func (suite *baseTestSuite) TestTimeSeries() {
 }
 
 func (suite *baseTestSuite) TestTimestampPrecision() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	timestamp := time.Date(2023, 1, 1, 0, 0, 0, 500, time.UTC)
 	// add scores
 	err := suite.Database.AddScores(ctx, "a", "s", []Score{
@@ -604,7 +604,7 @@ func benchmark(b *testing.B, database Database) {
 }
 
 func benchmarkAddDocuments(b *testing.B, database Database) {
-	ctx := context.Background()
+	ctx := b.Context()
 	var documents []Score
 	for i := 1; i <= b.N; i++ {
 		documents = append(documents, Score{
@@ -621,7 +621,7 @@ func benchmarkAddDocuments(b *testing.B, database Database) {
 
 func benchmarkSearchDocuments(b *testing.B, database Database) {
 	// insert data
-	ctx := context.Background()
+	ctx := b.Context()
 	var documents []Score
 	for i := 1; i <= benchmarkDataSize; i++ {
 		documents = append(documents, Score{
@@ -646,7 +646,7 @@ func benchmarkSearchDocuments(b *testing.B, database Database) {
 }
 
 func benchmarkUpdateDocuments(b *testing.B, database Database) {
-	ctx := context.Background()
+	ctx := b.Context()
 	b.ResetTimer()
 	for i := 1; i <= b.N; i++ {
 		// select a random number

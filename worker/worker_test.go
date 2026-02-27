@@ -96,7 +96,7 @@ func (suite *WorkerTestSuite) SetupTest() {
 }
 
 func (suite *WorkerTestSuite) TestPullUsers() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	// create user index
 	err := suite.DataClient.BatchInsertUsers(ctx, []data.User{
 		{UserId: "1"},
@@ -121,7 +121,7 @@ func (suite *WorkerTestSuite) TestPullUsers() {
 }
 
 func (suite *WorkerTestSuite) TestCheckRecommendCacheTimeout() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 
 	// empty cache
 	suite.True(suite.checkRecommendCacheOutOfDate(ctx, "0"))
@@ -148,7 +148,7 @@ func (suite *WorkerTestSuite) TestCheckRecommendCacheTimeout() {
 }
 
 func (suite *WorkerTestSuite) TestRecommendCollaborative() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	suite.Config.Recommend.Ranker.Recommenders = []string{"collaborative"}
 	// insert feedbacks
 	now := time.Now()
@@ -199,7 +199,7 @@ func (suite *WorkerTestSuite) TestRecommendCollaborative() {
 }
 
 func (suite *WorkerTestSuite) TestRecommendItemToItem() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	suite.Config.Recommend.Ranker.Recommenders = []string{"item-to-item/default"}
 	suite.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "default"}}
 	suite.Config.Recommend.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{expression.MustParseFeedbackTypeExpression("a")}
@@ -275,7 +275,7 @@ func (suite *WorkerTestSuite) TestRecommendItemToItem() {
 }
 
 func (suite *WorkerTestSuite) TestRecommendUserToUser() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	suite.Config.Recommend.Ranker.Recommenders = []string{"user-to-user/default"}
 	suite.Config.Recommend.UserToUser = []config.UserToUserConfig{{Name: "default"}}
 	suite.Config.Recommend.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{expression.MustParseFeedbackTypeExpression("a")}
@@ -335,7 +335,7 @@ func (suite *WorkerTestSuite) TestRecommendUserToUser() {
 
 func (suite *WorkerTestSuite) TestRecommendLatest() {
 	// create mock worker
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	suite.Config.Recommend.Ranker.Recommenders = []string{"latest"}
 	// insert items
 	err := suite.DataClient.BatchInsertItems(ctx, []data.Item{
@@ -378,7 +378,7 @@ func (suite *WorkerTestSuite) TestRecommendLatest() {
 
 func (suite *WorkerTestSuite) TestRecommendNonPersonalized() {
 	// create mock worker
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	suite.Config.Recommend.Ranker.Recommenders = []string{"non-personalized/popular"}
 	// insert items
 	err := suite.DataClient.BatchInsertItems(ctx, []data.Item{
@@ -427,7 +427,7 @@ func (suite *WorkerTestSuite) TestRecommendNonPersonalized() {
 }
 
 func (suite *WorkerTestSuite) TestRecommend() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	suite.Config.Recommend.Ranker.Type = "fm"
 	suite.Config.Recommend.Ranker.Recommenders = nil
 	suite.Config.Recommend.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{expression.MustParseFeedbackTypeExpression("a")}
@@ -492,7 +492,7 @@ func (suite *WorkerTestSuite) TestRecommend() {
 }
 
 func (suite *WorkerTestSuite) TestRecommendRankerNone() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	suite.Config.Recommend.Ranker.Type = "none"
 	suite.Config.Recommend.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{expression.MustParseFeedbackTypeExpression("a")}
 	suite.Config.Recommend.CacheSize = 1
@@ -588,7 +588,7 @@ func newMockMaster(t *testing.T) *mockMaster {
 	// create click model
 	train, test := newClickDataset()
 	fm := ctr.NewAFM(model.Params{model.NEpochs: 0})
-	fm.Fit(context.Background(), train, test, &ctr.FitConfig{})
+	fm.Fit(t.Context(), train, test, &ctr.FitConfig{})
 	clickModelBuffer := bytes.NewBuffer(nil)
 	err := ctr.MarshalModel(clickModelBuffer, fm)
 	assert.NoError(t, err)
@@ -596,7 +596,7 @@ func newMockMaster(t *testing.T) *mockMaster {
 	// create ranking model
 	trainSet, testSet := newRankingDataset()
 	bpr := cf.NewBPR(model.Params{model.NEpochs: 0})
-	bpr.Fit(context.Background(), trainSet, testSet, cf.NewFitConfig())
+	bpr.Fit(t.Context(), trainSet, testSet, cf.NewFitConfig())
 	rankingModelBuffer := bytes.NewBuffer(nil)
 	err = cf.MarshalModel(rankingModelBuffer, bpr)
 	assert.NoError(t, err)
@@ -711,7 +711,7 @@ func (m mockFactorizationMachine) Marshal(_ io.Writer) error {
 }
 
 func (suite *WorkerTestSuite) TestRankByClickTroughRate() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	// insert a user
 	err := suite.DataClient.BatchInsertUsers(ctx, []data.User{{UserId: "1"}})
 	suite.NoError(err)
@@ -738,7 +738,7 @@ func (suite *WorkerTestSuite) TestRankByClickTroughRate() {
 }
 
 func (suite *WorkerTestSuite) TestRankByLLM() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	mockAI := reranker.NewMockServer()
 	go func() {
 		_ = mockAI.Start()
@@ -781,7 +781,7 @@ func (suite *WorkerTestSuite) TestRankByLLM() {
 }
 
 func (suite *WorkerTestSuite) TestReplacement() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	suite.Config.Recommend.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{
 		expression.MustParseFeedbackTypeExpression("p")}
 	suite.Config.Recommend.DataSource.ReadFeedbackTypes = []expression.FeedbackTypeExpression{
@@ -836,7 +836,7 @@ func (suite *WorkerTestSuite) TestReplacement() {
 }
 
 func (suite *WorkerTestSuite) TestUserActivity() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	err := suite.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastModifyUserTime, "0"), time.Now().AddDate(0, 0, -1)))
 	suite.NoError(err)
 	err = suite.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastModifyUserTime, "1"), time.Now().AddDate(0, 0, -10)))

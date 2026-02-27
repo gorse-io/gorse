@@ -15,7 +15,6 @@
 package blob
 
 import (
-	"context"
 	"io"
 	"os"
 	"testing"
@@ -45,7 +44,7 @@ func TestS3(t *testing.T) {
 	assert.NoError(t, err)
 
 	// create bucket if not exists
-	err = client.Client.MakeBucket(context.Background(), client.bucket, minio.MakeBucketOptions{})
+	err = client.Client.MakeBucket(t.Context(), client.bucket, minio.MakeBucketOptions{})
 	assert.NoError(t, err)
 
 	// write a temp file

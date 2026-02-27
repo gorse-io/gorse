@@ -55,12 +55,12 @@ func (suite *RedisTestSuite) SetupSuite() {
 	redisClient, ok := suite.Database.(*Redis)
 	suite.True(ok)
 	if clusterClient, ok := redisClient.client.(*redis.ClusterClient); ok {
-		err = clusterClient.ForEachMaster(context.Background(), func(ctx context.Context, client *redis.Client) error {
+		err = clusterClient.ForEachMaster(suite.T().Context(), func(ctx context.Context, client *redis.Client) error {
 			return client.FlushDB(ctx).Err()
 		})
 		suite.NoError(err)
 	} else {
-		err = redisClient.client.FlushDB(context.TODO()).Err()
+		err = redisClient.client.FlushDB(suite.T().Context()).Err()
 		suite.NoError(err)
 	}
 	// create schema
@@ -70,7 +70,7 @@ func (suite *RedisTestSuite) SetupSuite() {
 
 func (suite *RedisTestSuite) TestEscapeCharacters() {
 	ts := time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	for _, c := range []string{"-", ":", ".", "/"} {
 		suite.Run(c, func() {
 			collection := fmt.Sprintf("a%s1", c)
@@ -106,7 +106,7 @@ func (suite *RedisTestSuite) TestEscapeCharacters() {
 }
 
 func (suite *RedisTestSuite) TestUpdateScoresWithPagination() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	db, ok := suite.Database.(*Redis)
 	suite.True(ok)
 	limit := db.maxSearchResults
@@ -141,7 +141,7 @@ func (suite *RedisTestSuite) TestUpdateScoresWithPagination() {
 }
 
 func (suite *RedisTestSuite) TestUpdateScoresWithPaginationAndScorePatch() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	db, ok := suite.Database.(*Redis)
 	suite.True(ok)
 	limit := db.maxSearchResults
@@ -178,7 +178,7 @@ func (suite *RedisTestSuite) TestUpdateScoresWithPaginationAndScorePatch() {
 }
 
 func (suite *RedisTestSuite) TestUpdateScoresWithPaginationAndTiedScores() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	db, ok := suite.Database.(*Redis)
 	suite.True(ok)
 	limit := db.maxSearchResults
@@ -234,7 +234,7 @@ func BenchmarkRedis(b *testing.B) {
 	database, err := Open(redisDSN, "gorse_")
 	assert.NoError(b, err)
 	// flush db
-	err = database.(*Redis).client.FlushDB(context.TODO()).Err()
+	err = database.(*Redis).client.FlushDB(b.Context()).Err()
 	assert.NoError(b, err)
 	// create schema
 	err = database.Init()

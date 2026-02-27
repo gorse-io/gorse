@@ -15,7 +15,6 @@
 package vectors
 
 import (
-	"context"
 
 	"github.com/stretchr/testify/suite"
 )
@@ -29,7 +28,7 @@ type vectorsTestSuite struct {
 
 func (suite *vectorsTestSuite) SetupTest() {
 	// purge
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	collections, err := suite.Database.ListCollections(ctx)
 	suite.NoError(err)
 	for _, collection := range collections {
@@ -39,7 +38,7 @@ func (suite *vectorsTestSuite) SetupTest() {
 }
 
 func (suite *vectorsTestSuite) TestCollections() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	// list collections
 	collections, err := suite.Database.ListCollections(ctx)
 	suite.NoError(err)
@@ -64,7 +63,7 @@ func (suite *vectorsTestSuite) TestCollections() {
 }
 
 func (suite *vectorsTestSuite) TestVectors() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	err := suite.Database.AddCollection(ctx, "test", defaultVectorSize, Cosine)
 	suite.NoError(err)
 
