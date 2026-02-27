@@ -40,6 +40,7 @@ import (
 	"github.com/gorse-io/gorse/storage/blob"
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
+	"github.com/gorse-io/gorse/storage/vectors"
 	"github.com/juju/errors"
 	"github.com/lafikl/consistent"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -69,10 +70,12 @@ type Worker struct {
 	cacheFile  string
 
 	// database connection path
-	cachePath   string
-	cachePrefix string
-	dataPath    string
-	dataPrefix  string
+	cachePath    string
+	cachePrefix  string
+	dataPath     string
+	dataPrefix   string
+	vectorPath   string
+	vectorPrefix string
 
 	blobConfig string
 	blobStore  blob.Store
@@ -109,10 +112,11 @@ func NewWorker(
 ) *Worker {
 	return &Worker{
 		Pipeline: Pipeline{
-			Config:      config.GetDefaultConfig(),
-			CacheClient: new(cache.NoDatabase),
-			DataClient:  new(data.NoDatabase),
-			Jobs:        jobs,
+			Config:       config.GetDefaultConfig(),
+			CacheClient:  new(cache.NoDatabase),
+			DataClient:   new(data.NoDatabase),
+			VectorClient: vectors.NoDatabase{},
+			Jobs:         jobs,
 		},
 		randGenerator: util.NewRand(time.Now().UTC().UnixNano()),
 		// config
@@ -189,6 +193,24 @@ func (w *Worker) Sync() {
 			}
 			w.cachePath = w.Config.Database.CacheStore
 			w.cachePrefix = w.Config.Database.CacheTablePrefix
+		}
+
+		// connect to vector store
+		if w.vectorPath != w.Config.Database.VectorStore || w.vectorPrefix != w.Config.Database.TablePrefix {
+			if strings.HasPrefix(w.Config.Database.VectorStore, storage.SQLitePrefix) {
+				log.Logger().Info("connect vector store via master")
+				w.VectorClient = vectors.NewProxyClient(w.conn)
+			} else {
+				log.Logger().Info("connect vector store",
+					zap.String("database", log.RedactDBURL(w.Config.Database.VectorStore)))
+				vectorOpts := w.Config.Database.StorageOptions(w.Config.Database.VectorStore)
+				if w.VectorClient, err = vectors.Open(w.Config.Database.VectorStore, w.Config.Database.TablePrefix, vectorOpts...); err != nil {
+					log.Logger().Error("failed to connect vector store", zap.Error(err))
+					goto sleep
+				}
+			}
+			w.vectorPath = w.Config.Database.VectorStore
+			w.vectorPrefix = w.Config.Database.TablePrefix
 		}
 
 		// connect to blob store

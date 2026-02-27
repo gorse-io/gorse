@@ -73,6 +73,7 @@ type Config struct {
 type DatabaseConfig struct {
 	DataStore        string      `mapstructure:"data_store" validate:"required,data_store"`   // database for data store
 	CacheStore       string      `mapstructure:"cache_store" validate:"required,cache_store"` // database for cache store
+	VectorStore      string      `mapstructure:"vector_store" validate:"required,vector_store"`
 	TablePrefix      string      `mapstructure:"table_prefix"`
 	DataTablePrefix  string      `mapstructure:"data_table_prefix"`
 	CacheTablePrefix string      `mapstructure:"cache_table_prefix"`
@@ -440,8 +441,9 @@ type AzureBlobConfig struct {
 func GetDefaultConfig() *Config {
 	return &Config{
 		Database: DatabaseConfig{
-			DataStore:  "sqlite://" + filepath.Join(MkDir(), "data.sqlite"),
-			CacheStore: "sqlite://" + filepath.Join(MkDir(), "cache.sqlite"),
+			DataStore:   "sqlite://" + filepath.Join(MkDir(), "data.sqlite"),
+			CacheStore:  "sqlite://" + filepath.Join(MkDir(), "cache.sqlite"),
+			VectorStore: "sqlite://" + filepath.Join(MkDir(), "vectors.sqlite"),
 			MySQL: MySQLConfig{
 				IsolationLevel:  "READ-UNCOMMITTED",
 				MaxOpenConns:    0,
@@ -584,6 +586,7 @@ func setDefault() {
 	// [database]
 	viper.SetDefault("database.data_store", defaultConfig.Database.DataStore)
 	viper.SetDefault("database.cache_store", defaultConfig.Database.CacheStore)
+	viper.SetDefault("database.vector_store", defaultConfig.Database.VectorStore)
 	// [database.mysql]
 	viper.SetDefault("database.mysql.isolation_level", defaultConfig.Database.MySQL.IsolationLevel)
 	viper.SetDefault("database.mysql.max_open_conns", defaultConfig.Database.MySQL.MaxOpenConns)
@@ -650,6 +653,7 @@ type configBinding struct {
 var bindings = []configBinding{
 	{"database.cache_store", "GORSE_CACHE_STORE"},
 	{"database.data_store", "GORSE_DATA_STORE"},
+	{"database.vector_store", "GORSE_VECTOR_STORE"},
 	{"database.table_prefix", "GORSE_TABLE_PREFIX"},
 	{"database.cache_table_prefix", "GORSE_CACHE_TABLE_PREFIX"},
 	{"database.data_table_prefix", "GORSE_DATA_TABLE_PREFIX"},
@@ -835,6 +839,23 @@ func (config *Config) Validate() error {
 	}); err != nil {
 		return errors.Trace(err)
 	}
+	if err := validate.RegisterValidation("vector_store", func(fl validator.FieldLevel) bool {
+		prefixes := []string{
+			storage.SQLitePrefix,
+			storage.QdrantPrefix,
+			storage.WeaviatePrefix,
+			storage.WeaviatesPrefix,
+			storage.MilvusPrefix,
+		}
+		for _, prefix := range prefixes {
+			if strings.HasPrefix(fl.Field().String(), prefix) {
+				return true
+			}
+		}
+		return false
+	}); err != nil {
+		return errors.Trace(err)
+	}
 	if err := validate.RegisterValidation("item_expr", func(fl validator.FieldLevel) bool {
 		if fl.Field().String() == "" {
 			// Empty expression is legal.
@@ -867,6 +888,14 @@ func (config *Config) Validate() error {
 			return ut.Add("cache_store", "unsupported cache storage backend", true) // see universal-translator for details
 		}, func(ut ut.Translator, fe validator.FieldError) string {
 			t, _ := ut.T("cache_store", fe.Field())
+			return t
+		}); err != nil {
+			return errors.Trace(err)
+		}
+		if err := validate.RegisterTranslation("vector_store", trans, func(ut ut.Translator) error {
+			return ut.Add("vector_store", "unsupported vector storage backend", true)
+		}, func(ut ut.Translator, fe validator.FieldError) string {
+			t, _ := ut.T("vector_store", fe.Field())
 			return t
 		}); err != nil {
 			return errors.Trace(err)

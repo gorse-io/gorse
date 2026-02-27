@@ -40,6 +40,7 @@ import (
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
 	"github.com/gorse-io/gorse/storage/meta"
+	"github.com/gorse-io/gorse/storage/vectors"
 	"github.com/jellydator/ttlcache/v3"
 	"github.com/juju/errors"
 	"github.com/sashabaranov/go-openai"
@@ -131,12 +132,13 @@ func NewMaster(cfg *config.Config, cacheFolder string, standalone bool, configPa
 		tracer:       monitor.NewTracer("master"),
 		openAIClient: openai.NewClientWithConfig(clientConfig),
 		RestServer: server.RestServer{
-			Config:      cfg,
-			CacheClient: cache.NoDatabase{},
-			DataClient:  data.NoDatabase{},
-			HttpHost:    cfg.Master.HttpHost,
-			HttpPort:    cfg.Master.HttpPort,
-			WebService:  new(restful.WebService),
+			Config:       cfg,
+			CacheClient:  cache.NoDatabase{},
+			DataClient:   data.NoDatabase{},
+			VectorClient: vectors.NoDatabase{},
+			HttpHost:     cfg.Master.HttpHost,
+			HttpPort:     cfg.Master.HttpPort,
+			WebService:   new(restful.WebService),
 		},
 		ticker:    time.NewTicker(duration),
 		scheduled: make(chan struct{}, 1),
@@ -184,6 +186,17 @@ func (m *Master) Serve() {
 	}
 	if err = m.CacheClient.Init(); err != nil {
 		log.Logger().Fatal("failed to init database", zap.Error(err))
+	}
+
+	// connect vector database
+	vectorOpts := m.Config.Database.StorageOptions(m.Config.Database.VectorStore)
+	m.VectorClient, err = vectors.Open(m.Config.Database.VectorStore, m.Config.Database.TablePrefix, vectorOpts...)
+	if err != nil {
+		log.Logger().Fatal("failed to connect vector database", zap.Error(err),
+			zap.String("database", log.RedactDBURL(m.Config.Database.VectorStore)))
+	}
+	if err = m.VectorClient.Init(); err != nil {
+		log.Logger().Fatal("failed to init vector database", zap.Error(err))
 	}
 
 	// load recommend config
@@ -258,6 +271,7 @@ func (m *Master) Serve() {
 		protocol.RegisterMasterServer(m.grpcServer, m)
 		protocol.RegisterCacheStoreServer(m.grpcServer, cache.NewProxyServer(m.CacheClient))
 		protocol.RegisterDataStoreServer(m.grpcServer, data.NewProxyServer(m.DataClient))
+		protocol.RegisterVectorStoreServer(m.grpcServer, vectors.NewProxyServer(m.VectorClient))
 		protocol.RegisterBlobStoreServer(m.grpcServer, m.blobServer)
 		if err = m.grpcServer.Serve(lis); err != nil {
 			log.Logger().Fatal("failed to start rpc server", zap.Error(err))

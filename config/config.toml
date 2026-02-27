@@ -25,6 +25,14 @@ cache_store = "redis://localhost:6379/0"
 #   sqlite://<path>
 data_store = "mysql://gorse:gorse_pass@tcp(localhost:3306)/gorse"
 
+# The vector database for embeddings, support SQLite, Qdrant, Weaviate and Milvus:
+#   sqlite://<path>
+#   qdrant://<host>:<port>
+#   weaviate://<host>:<port>
+#   weaviates://<host>:<port>
+#   milvus://<host>:<port>
+vector_store = "sqlite:///var/lib/gorse/vectors.sqlite"
+
 # The naming prefix for tables (collections, keys) in databases. The default value is empty.
 table_prefix = ""
 

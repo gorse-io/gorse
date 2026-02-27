@@ -31,6 +31,7 @@ import (
 	"github.com/gorse-io/gorse/model/ctr"
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
+	"github.com/gorse-io/gorse/storage/vectors"
 	"github.com/juju/errors"
 	"github.com/samber/lo"
 	"go.uber.org/atomic"
@@ -41,6 +42,7 @@ type Pipeline struct {
 	Config                   *config.Config
 	CacheClient              cache.Database
 	DataClient               data.Database
+	VectorClient             vectors.Database
 	Tracer                   *monitor.Monitor
 	Jobs                     int
 	MatrixFactorizationItems *logics.MatrixFactorizationItems

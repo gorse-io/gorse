@@ -35,6 +35,7 @@ import (
 	"github.com/gorse-io/gorse/storage"
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
+	"github.com/gorse-io/gorse/storage/vectors"
 	"github.com/samber/lo"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
@@ -51,6 +52,8 @@ type Server struct {
 	cachePrefix  string
 	dataPath     string
 	dataPrefix   string
+	vectorPath   string
+	vectorPrefix string
 	conn         *grpc.ClientConn
 	masterClient protocol.MasterClient
 	serverName   string
@@ -76,12 +79,13 @@ func NewServer(
 		tlsConfig:  tlsConfig,
 		cacheFile:  cacheFile,
 		RestServer: RestServer{
-			Config:      config.GetDefaultConfig(),
-			CacheClient: new(cache.NoDatabase),
-			DataClient:  new(data.NoDatabase),
-			HttpHost:    serverHost,
-			HttpPort:    serverPort,
-			WebService:  new(restful.WebService),
+			Config:       config.GetDefaultConfig(),
+			CacheClient:  new(cache.NoDatabase),
+			DataClient:   new(data.NoDatabase),
+			VectorClient: vectors.NoDatabase{},
+			HttpHost:     serverHost,
+			HttpPort:     serverPort,
+			WebService:   new(restful.WebService),
 		},
 	}
 	return s
@@ -204,6 +208,24 @@ func (s *Server) Sync() {
 			}
 			s.cachePath = s.Config.Database.CacheStore
 			s.cachePrefix = s.Config.Database.CacheTablePrefix
+		}
+
+		// connect to vector store
+		if s.vectorPath != s.Config.Database.VectorStore || s.vectorPrefix != s.Config.Database.TablePrefix {
+			if strings.HasPrefix(s.Config.Database.VectorStore, storage.SQLitePrefix) {
+				log.Logger().Info("connect vector store via master")
+				s.VectorClient = vectors.NewProxyClient(s.conn)
+			} else {
+				log.Logger().Info("connect vector store",
+					zap.String("database", log.RedactDBURL(s.Config.Database.VectorStore)))
+				vectorOpts := s.Config.Database.StorageOptions(s.Config.Database.VectorStore)
+				if s.VectorClient, err = vectors.Open(s.Config.Database.VectorStore, s.Config.Database.TablePrefix, vectorOpts...); err != nil {
+					log.Logger().Error("failed to connect vector store", zap.Error(err))
+					goto sleep
+				}
+			}
+			s.vectorPath = s.Config.Database.VectorStore
+			s.vectorPrefix = s.Config.Database.TablePrefix
 		}
 
 		// create trace provider

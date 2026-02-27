@@ -23,6 +23,10 @@ import (
 	"github.com/juju/errors"
 )
 
+var (
+	ErrNoDatabase = errors.NotAssignedf("database")
+)
+
 type Distance int
 
 const (

@@ -68,6 +68,7 @@ func TestUnmarshal(t *testing.T) {
 			// [database]
 			assert.Equal(t, "redis://localhost:6379/0", config.Database.CacheStore)
 			assert.Equal(t, "mysql://gorse:gorse_pass@tcp(localhost:3306)/gorse", config.Database.DataStore)
+			assert.Equal(t, "sqlite:///var/lib/gorse/vectors.sqlite", config.Database.VectorStore)
 			assert.Equal(t, "gorse_", config.Database.TablePrefix)
 			assert.Equal(t, "gorse_cache_", config.Database.CacheTablePrefix)
 			assert.Equal(t, "gorse_data_", config.Database.DataTablePrefix)
@@ -193,6 +194,7 @@ func TestBindEnv(t *testing.T) {
 	variables := []environmentVariable{
 		{"GORSE_CACHE_STORE", "redis://<cache_store>"},
 		{"GORSE_DATA_STORE", "mysql://<data_store>"},
+		{"GORSE_VECTOR_STORE", "qdrant://<vector_store>"},
 		{"GORSE_TABLE_PREFIX", "gorse_"},
 		{"GORSE_DATA_TABLE_PREFIX", "gorse_data_"},
 		{"GORSE_CACHE_TABLE_PREFIX", "gorse_cache_"},
@@ -240,6 +242,7 @@ func TestBindEnv(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "redis://<cache_store>", config.Database.CacheStore)
 	assert.Equal(t, "mysql://<data_store>", config.Database.DataStore)
+	assert.Equal(t, "qdrant://<vector_store>", config.Database.VectorStore)
 	assert.Equal(t, "gorse_", config.Database.TablePrefix)
 	assert.Equal(t, "gorse_cache_", config.Database.CacheTablePrefix)
 	assert.Equal(t, "gorse_data_", config.Database.DataTablePrefix)
