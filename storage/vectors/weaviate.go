@@ -64,6 +64,10 @@ func (db *Weaviate) Init() error {
 	return nil
 }
 
+func (db *Weaviate) Optimize() error {
+	return nil
+}
+
 func (db *Weaviate) Close() error {
 	return nil
 }

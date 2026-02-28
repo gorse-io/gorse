@@ -57,6 +57,10 @@ func (db *Milvus) Init() error {
 	return nil
 }
 
+func (db *Milvus) Optimize() error {
+	return nil
+}
+
 func (db *Milvus) Close() error {
 	return db.client.Close()
 }

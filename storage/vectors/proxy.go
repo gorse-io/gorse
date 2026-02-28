@@ -117,6 +117,10 @@ func (p ProxyClient) Init() error {
 	return nil
 }
 
+func (p ProxyClient) Optimize() error {
+	return nil
+}
+
 func (p ProxyClient) Close() error {
 	return nil
 }

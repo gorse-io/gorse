@@ -41,6 +41,7 @@ type Vector struct {
 
 type Database interface {
 	Init() error
+	Optimize() error
 	Close() error
 	ListCollections(ctx context.Context) ([]string, error)
 	AddCollection(ctx context.Context, name string, dimensions int, distance Distance) error

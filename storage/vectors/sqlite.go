@@ -48,6 +48,10 @@ func (db *SQLite) Init() error {
 	return nil
 }
 
+func (db *SQLite) Optimize() error {
+	return nil
+}
+
 func (db *SQLite) Close() error {
 	return db.db.Close()
 }

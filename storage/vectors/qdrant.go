@@ -62,6 +62,10 @@ func (db *Qdrant) Init() error {
 	return nil
 }
 
+func (db *Qdrant) Optimize() error {
+	return nil
+}
+
 func (db *Qdrant) Close() error {
 	return db.client.Close()
 }
