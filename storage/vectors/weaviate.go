@@ -111,8 +111,10 @@ func (db *Weaviate) AddCollection(ctx context.Context, name string, dimensions i
 				DataType: []string{"string[]"},
 			},
 			{
-				Name:     weaviatePayloadTimestampKey,
-				DataType: []string{"date"},
+				Name:              weaviatePayloadTimestampKey,
+				DataType:          []string{"date"},
+				IndexFilterable:   new(true),
+				IndexRangeFilters: new(true),
 			},
 		},
 		VectorIndexConfig: map[string]interface{}{

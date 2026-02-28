@@ -111,6 +111,11 @@ func (db *Milvus) AddCollection(ctx context.Context, name string, dimensions int
 	if err != nil {
 		return errors.Trace(err)
 	}
+	scalarIdx := entity.NewScalarIndex()
+	err = db.client.CreateIndex(ctx, name, milvusTimestampField, scalarIdx, false)
+	if err != nil {
+		return errors.Trace(err)
+	}
 
 	// Load collection
 	err = db.client.LoadCollection(ctx, name, false)

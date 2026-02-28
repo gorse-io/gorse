@@ -95,6 +95,15 @@ func (db *Qdrant) AddCollection(ctx context.Context, name string, dimensions int
 			Distance: qdrantDistance,
 		}),
 	})
+	if err != nil {
+		return errors.Trace(err)
+	}
+	_, err = db.client.CreateFieldIndex(ctx, &qdrant.CreateFieldIndexCollection{
+		CollectionName: name,
+		Wait:           new(true),
+		FieldName:      qdrantPayloadTimestampKey,
+		FieldType:      qdrant.FieldType_FieldTypeInteger.Enum(),
+	})
 	return errors.Trace(err)
 }
 
@@ -145,7 +154,7 @@ func (db *Qdrant) QueryVectors(ctx context.Context, collection string, q []float
 	request := &qdrant.QueryPoints{
 		CollectionName: collection,
 		Query:          qdrant.NewQueryDense(q),
-		Limit:          qdrant.PtrOf(uint64(topK)),
+		Limit:          new(uint64(topK)),
 		WithPayload:    qdrant.NewWithPayloadEnable(true),
 		WithVectors:    qdrant.NewWithVectorsEnable(true),
 	}
