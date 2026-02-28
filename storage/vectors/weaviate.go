@@ -18,6 +18,7 @@ import (
 	"context"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/go-openapi/strfmt"
 	"github.com/google/uuid"
@@ -31,6 +32,7 @@ import (
 
 const (
 	weaviatePayloadCategoriesKey = "categories"
+	weaviatePayloadTimestampKey  = "timestamp"
 )
 
 func init() {
@@ -108,6 +110,10 @@ func (db *Weaviate) AddCollection(ctx context.Context, name string, dimensions i
 				Name:     weaviatePayloadCategoriesKey,
 				DataType: []string{"string[]"},
 			},
+			{
+				Name:     weaviatePayloadTimestampKey,
+				DataType: []string{"date"},
+			},
 		},
 		VectorIndexConfig: map[string]interface{}{
 			"distance": weaviateDistance,
@@ -141,11 +147,23 @@ func (db *Weaviate) AddVectors(ctx context.Context, collection string, vectors [
 			Properties: map[string]interface{}{
 				"originalId":                 vector.Id,
 				weaviatePayloadCategoriesKey: vector.Categories,
+				weaviatePayloadTimestampKey:  vector.Timestamp,
 			},
 			Vector: models.C11yVector(vector.Vector),
 		})
 	}
 	_, err := db.client.Batch().ObjectsBatcher().WithObjects(objects...).Do(ctx)
+	return errors.Trace(err)
+}
+
+func (db *Weaviate) DeleteVectors(ctx context.Context, collection string, timestamp time.Time) error {
+	_, err := db.client.Batch().ObjectsBatchDeleter().
+		WithClassName(capitalize(collection)).
+		WithWhere(filters.Where().
+			WithPath([]string{weaviatePayloadTimestampKey}).
+			WithOperator(filters.LessThan).
+			WithValueDate(timestamp)).
+		Do(ctx)
 	return errors.Trace(err)
 }
 

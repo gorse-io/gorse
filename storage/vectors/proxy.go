@@ -17,10 +17,12 @@ package vectors
 import (
 	"context"
 	"net"
+	"time"
 
 	"github.com/gorse-io/gorse/protocol"
 	"github.com/juju/errors"
 	"google.golang.org/grpc"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 type ProxyServer struct {
@@ -74,10 +76,15 @@ func (p *ProxyServer) DeleteCollection(ctx context.Context, request *protocol.De
 func (p *ProxyServer) AddVectors(ctx context.Context, request *protocol.AddVectorsRequest) (*protocol.AddVectorsResponse, error) {
 	vectors := make([]Vector, len(request.Vectors))
 	for i, vector := range request.Vectors {
+		timestamp := time.Time{}
+		if vector.GetTimestamp() != nil {
+			timestamp = vector.GetTimestamp().AsTime()
+		}
 		vectors[i] = Vector{
 			Id:         vector.GetId(),
 			Vector:     vector.GetValues(),
 			Categories: vector.GetCategories(),
+			Timestamp:  timestamp,
 		}
 	}
 	err := p.database.AddVectors(ctx, request.GetCollection(), vectors)
@@ -85,6 +92,18 @@ func (p *ProxyServer) AddVectors(ctx context.Context, request *protocol.AddVecto
 		return nil, err
 	}
 	return &protocol.AddVectorsResponse{}, nil
+}
+
+func (p *ProxyServer) DeleteVectors(ctx context.Context, request *protocol.DeleteVectorsRequest) (*protocol.DeleteVectorsResponse, error) {
+	timestamp := time.Time{}
+	if request.GetTimestamp() != nil {
+		timestamp = request.GetTimestamp().AsTime()
+	}
+	err := p.database.DeleteVectors(ctx, request.GetCollection(), timestamp)
+	if err != nil {
+		return nil, err
+	}
+	return &protocol.DeleteVectorsResponse{}, nil
 }
 
 func (p *ProxyServer) QueryVectors(ctx context.Context, request *protocol.QueryVectorsRequest) (*protocol.QueryVectorsResponse, error) {
@@ -158,11 +177,20 @@ func (p ProxyClient) AddVectors(ctx context.Context, collection string, vectors 
 			Id:         vector.Id,
 			Values:     vector.Vector,
 			Categories: vector.Categories,
+			Timestamp:  timestamppb.New(vector.Timestamp),
 		}
 	}
 	_, err := p.VectorStoreClient.AddVectors(ctx, &protocol.AddVectorsRequest{
 		Collection: collection,
 		Vectors:    pbVectors,
+	})
+	return err
+}
+
+func (p ProxyClient) DeleteVectors(ctx context.Context, collection string, timestamp time.Time) error {
+	_, err := p.VectorStoreClient.DeleteVectors(ctx, &protocol.DeleteVectorsRequest{
+		Collection: collection,
+		Timestamp:  timestamppb.New(timestamp),
 	})
 	return err
 }

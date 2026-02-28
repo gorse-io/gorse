@@ -15,6 +15,7 @@
 package vectors
 
 import (
+	"time"
 
 	"github.com/stretchr/testify/suite"
 )
@@ -110,4 +111,41 @@ func (suite *vectorsTestSuite) TestVectors() {
 	for _, result := range results {
 		suite.NotEmpty(result.Categories)
 	}
+}
+
+func (suite *vectorsTestSuite) TestDeleteVectors() {
+	ctx := suite.T().Context()
+	err := suite.Database.AddCollection(ctx, "test", defaultVectorSize, Cosine)
+	suite.NoError(err)
+
+	vectorA := make([]float32, defaultVectorSize)
+	vectorA[0] = 1
+	vectorB := make([]float32, defaultVectorSize)
+	vectorB[0] = 0.9
+	vectorB[1] = 0.1
+
+	cutoff := time.Now().UTC().Truncate(time.Millisecond)
+	err = suite.Database.AddVectors(ctx, "test", []Vector{
+		{
+			Id:         "old",
+			Vector:     vectorA,
+			Categories: []string{"common"},
+			Timestamp:  cutoff.Add(-time.Hour),
+		},
+		{
+			Id:         "new",
+			Vector:     vectorB,
+			Categories: []string{"common"},
+			Timestamp:  cutoff,
+		},
+	})
+	suite.NoError(err)
+
+	err = suite.Database.DeleteVectors(ctx, "test", cutoff)
+	suite.NoError(err)
+
+	results, err := suite.Database.QueryVectors(ctx, "test", vectorA, []string{"common"}, 10)
+	suite.NoError(err)
+	suite.Len(results, 1)
+	suite.Equal("new", results[0].Id)
 }

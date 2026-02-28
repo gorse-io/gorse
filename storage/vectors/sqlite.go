@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/gorse-io/gorse/storage"
 	"github.com/juju/errors"
@@ -85,7 +86,7 @@ func (db *SQLite) AddCollection(ctx context.Context, name string, dimensions int
 	default:
 		return errors.NotSupportedf("distance method")
 	}
-	_, err := db.db.ExecContext(ctx, fmt.Sprintf("CREATE VIRTUAL TABLE %s USING vec0(id TEXT, categories TEXT, vector FLOAT[%d] distance_metric=%s)", name, dimensions, metric))
+	_, err := db.db.ExecContext(ctx, fmt.Sprintf("CREATE VIRTUAL TABLE %s USING vec0(id TEXT, categories TEXT, timestamp INTEGER, vector FLOAT[%d] distance_metric=%s)", name, dimensions, metric))
 	return errors.Trace(err)
 }
 
@@ -110,7 +111,7 @@ func (db *SQLite) AddVectors(ctx context.Context, collection string, vectors []V
 	if err != nil {
 		return errors.Trace(err)
 	}
-	stmt, err := tx.PrepareContext(ctx, fmt.Sprintf("INSERT INTO %s(id, categories, vector) VALUES(?, ?, ?)", collection))
+	stmt, err := tx.PrepareContext(ctx, fmt.Sprintf("INSERT INTO %s(id, categories, timestamp, vector) VALUES(?, ?, ?, ?)", collection))
 	if err != nil {
 		_ = tx.Rollback()
 		return errors.Trace(err)
@@ -128,13 +129,19 @@ func (db *SQLite) AddVectors(ctx context.Context, collection string, vectors []V
 			_ = tx.Rollback()
 			return errors.Trace(err)
 		}
-		_, err = stmt.ExecContext(ctx, v.Id, string(categories), string(vectorJson))
+		timestamp := v.Timestamp.UnixMilli()
+		_, err = stmt.ExecContext(ctx, v.Id, string(categories), timestamp, string(vectorJson))
 		if err != nil {
 			_ = tx.Rollback()
 			return errors.Trace(err)
 		}
 	}
 	return errors.Trace(tx.Commit())
+}
+
+func (db *SQLite) DeleteVectors(ctx context.Context, collection string, timestamp time.Time) error {
+	_, err := db.db.ExecContext(ctx, fmt.Sprintf("DELETE FROM %s WHERE timestamp < ?", collection), timestamp.UnixMilli())
+	return errors.Trace(err)
 }
 
 func (db *SQLite) QueryVectors(ctx context.Context, collection string, q []float32, categories []string, topK int) ([]Vector, error) {

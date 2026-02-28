@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/gorse-io/gorse/storage"
 	"github.com/juju/errors"
@@ -30,6 +31,7 @@ const (
 	milvusIdField         = "id"
 	milvusVectorField     = "vector"
 	milvusCategoriesField = "categories"
+	milvusTimestampField  = "timestamp"
 )
 
 func init() {
@@ -81,6 +83,7 @@ func (db *Milvus) AddCollection(ctx context.Context, name string, dimensions int
 	schema := entity.NewSchema().WithName(name).WithDescription("gorse collection").
 		WithField(entity.NewField().WithName(milvusIdField).WithDataType(entity.FieldTypeVarChar).WithMaxLength(65535).WithIsPrimaryKey(true)).
 		WithField(entity.NewField().WithName(milvusCategoriesField).WithDataType(entity.FieldTypeArray).WithElementType(entity.FieldTypeVarChar).WithMaxCapacity(100).WithMaxLength(65535)).
+		WithField(entity.NewField().WithName(milvusTimestampField).WithDataType(entity.FieldTypeInt64)).
 		WithField(entity.NewField().WithName(milvusVectorField).WithDataType(entity.FieldTypeFloatVector).WithDim(int64(dimensions)))
 
 	err := db.client.CreateCollection(ctx, schema, entity.DefaultShardNumber)
@@ -132,18 +135,26 @@ func (db *Milvus) AddVectors(ctx context.Context, collection string, vectors []V
 	}
 	ids := make([]string, 0, len(vectors))
 	categories := make([][]string, 0, len(vectors))
+	timestamps := make([]int64, 0, len(vectors))
 	data := make([][]float32, 0, len(vectors))
 	for _, v := range vectors {
 		ids = append(ids, v.Id)
 		categories = append(categories, v.Categories)
+		timestamps = append(timestamps, v.Timestamp.UnixMilli())
 		data = append(data, v.Vector)
 	}
 
 	idCol := entity.NewColumnVarChar(milvusIdField, ids)
 	categoriesCol := entity.NewColumnVarCharArray(milvusCategoriesField, milvusStringsToBytes(categories))
+	timestampCol := entity.NewColumnInt64(milvusTimestampField, timestamps)
 	vectorCol := entity.NewColumnFloatVector(milvusVectorField, len(data[0]), data)
 
-	_, err := db.client.Upsert(ctx, collection, "", idCol, categoriesCol, vectorCol)
+	_, err := db.client.Upsert(ctx, collection, "", idCol, categoriesCol, timestampCol, vectorCol)
+	return errors.Trace(err)
+}
+
+func (db *Milvus) DeleteVectors(ctx context.Context, collection string, timestamp time.Time) error {
+	err := db.client.Delete(ctx, collection, "", fmt.Sprintf("%s < %d", milvusTimestampField, timestamp.UnixMilli()))
 	return errors.Trace(err)
 }
 

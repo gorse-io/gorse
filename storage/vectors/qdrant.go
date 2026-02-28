@@ -18,6 +18,7 @@ import (
 	"context"
 	"net/url"
 	"strconv"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/gorse-io/gorse/storage"
@@ -28,6 +29,7 @@ import (
 const (
 	qdrantPayloadCategoriesKey = "categories"
 	qdrantPayloadIdKey         = "id"
+	qdrantPayloadTimestampKey  = "timestamp"
 )
 
 func init() {
@@ -111,6 +113,7 @@ func (db *Qdrant) AddVectors(ctx context.Context, collection string, vectors []V
 			Payload: map[string]*qdrant.Value{
 				qdrantPayloadCategoriesKey: qdrantListValue(vector.Categories),
 				qdrantPayloadIdKey:         qdrant.NewValueString(vector.Id),
+				qdrantPayloadTimestampKey:  qdrant.NewValueInt(vector.Timestamp.UnixMilli()),
 			},
 			Vectors: qdrant.NewVectorsDense(vector.Vector),
 		})
@@ -118,6 +121,19 @@ func (db *Qdrant) AddVectors(ctx context.Context, collection string, vectors []V
 	_, err := db.client.Upsert(ctx, &qdrant.UpsertPoints{
 		CollectionName: collection,
 		Points:         points,
+	})
+	return errors.Trace(err)
+}
+
+func (db *Qdrant) DeleteVectors(ctx context.Context, collection string, timestamp time.Time) error {
+	lt := float64(timestamp.UnixMilli())
+	_, err := db.client.Delete(ctx, &qdrant.DeletePoints{
+		CollectionName: collection,
+		Points: qdrant.NewPointsSelectorFilter(&qdrant.Filter{
+			Must: []*qdrant.Condition{
+				qdrant.NewRange(qdrantPayloadTimestampKey, &qdrant.Range{Lt: &lt}),
+			},
+		}),
 	})
 	return errors.Trace(err)
 }

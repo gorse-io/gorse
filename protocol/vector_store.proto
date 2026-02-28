@@ -18,6 +18,8 @@ option go_package = "github.com/gorse-io/gorse/protocol";
 
 package protocol;
 
+import "google/protobuf/timestamp.proto";
+
 enum Distance {
   Unknown = 0;
   Cosine = 1;
@@ -29,6 +31,7 @@ message Vector {
   string id = 1;
   repeated float values = 2;
   repeated string categories = 3;
+  google.protobuf.Timestamp timestamp = 4;
 }
 
 message ListCollectionsRequest {}
@@ -54,6 +57,13 @@ message AddVectorsRequest {
 
 message AddVectorsResponse {}
 
+message DeleteVectorsRequest {
+  string collection = 1;
+  google.protobuf.Timestamp timestamp = 2;
+}
+
+message DeleteVectorsResponse {}
+
 message QueryVectorsRequest {
   string collection = 1;
   repeated float query = 2;
@@ -68,5 +78,6 @@ service VectorStore {
   rpc AddCollection(AddCollectionRequest) returns (AddCollectionResponse) {}
   rpc DeleteCollection(DeleteCollectionRequest) returns (DeleteCollectionResponse) {}
   rpc AddVectors(AddVectorsRequest) returns (AddVectorsResponse) {}
+  rpc DeleteVectors(DeleteVectorsRequest) returns (DeleteVectorsResponse) {}
   rpc QueryVectors(QueryVectorsRequest) returns (QueryVectorsResponse) {}
 }
