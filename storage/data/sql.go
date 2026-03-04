@@ -1379,9 +1379,11 @@ func (d *SQLDatabase) CountUsers(ctx context.Context) (int, error) {
 			Scan(&tableStatus).Error
 		count = tableStatus.Rows
 	case Postgres:
+		var pgCount float64
 		err = d.gormDB.WithContext(ctx).
 			Raw(fmt.Sprintf("SELECT reltuples AS estimate FROM pg_class where relname = '%s'", d.UsersTable())).
-			Scan(&count).Error
+			Scan(&pgCount).Error
+		count = max(int64(pgCount), 0)
 	default:
 		err = d.gormDB.WithContext(ctx).Table(d.UsersTable()).Count(&count).Error
 	}
@@ -1403,9 +1405,11 @@ func (d *SQLDatabase) CountItems(ctx context.Context) (int, error) {
 			Scan(&tableStatus).Error
 		count = tableStatus.Rows
 	case Postgres:
+		var pgCount float64
 		err = d.gormDB.WithContext(ctx).
 			Raw(fmt.Sprintf("SELECT reltuples AS estimate FROM pg_class where relname = '%s'", d.ItemsTable())).
-			Scan(&count).Error
+			Scan(&pgCount).Error
+		count = max(int64(pgCount), 0)
 	default:
 		err = d.gormDB.WithContext(ctx).Table(d.ItemsTable()).Count(&count).Error
 	}
@@ -1431,7 +1435,7 @@ func (d *SQLDatabase) CountFeedback(ctx context.Context) (int, error) {
 		err = d.gormDB.WithContext(ctx).
 			Raw(fmt.Sprintf("SELECT reltuples AS estimate FROM pg_class where relname = '%s'", d.FeedbackTable())).
 			Scan(&pgCount).Error
-		count = int64(pgCount)
+		count = max(int64(pgCount), 0)
 	default:
 		err = d.gormDB.WithContext(ctx).Table(d.FeedbackTable()).Count(&count).Error
 	}
