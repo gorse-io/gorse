@@ -947,12 +947,12 @@ func (m *Master) trainCollaborativeFiltering(parent context.Context, trainSet, t
 	<-done
 
 	// update meta
-	m.collaborativeFilteringModelMutex.RLock()
+	m.collaborativeFilteringModelMutex.Lock()
 	m.collaborativeFilteringMeta.ID = collaborativeFilteringModelId
 	m.collaborativeFilteringMeta.Type = collaborativeFilteringType
 	m.collaborativeFilteringMeta.Params = collaborativeFilteringParams
 	m.collaborativeFilteringMeta.Score = score
-	m.collaborativeFilteringModelMutex.RUnlock()
+	m.collaborativeFilteringModelMutex.Unlock()
 	if err = m.metaStore.Put(meta.COLLABORATIVE_FILTERING_MODEL, m.collaborativeFilteringMeta.ToJSON()); err != nil {
 		log.Logger().Error("failed to write collaborative filtering model meta", zap.Error(err))
 		return err
@@ -1067,12 +1067,12 @@ func (m *Master) trainClickThroughRatePrediction(parent context.Context, trainSe
 	<-done
 
 	// update meta
-	m.clickThroughRateModelMutex.RLock()
+	m.clickThroughRateModelMutex.Lock()
 	m.clickThroughRateMeta.ID = clickThroughRateModelId
 	m.clickThroughRateMeta.Type = clickThroughRateType
 	m.clickThroughRateMeta.Params = clickThroughRateParams
 	m.clickThroughRateMeta.Score = score
-	m.clickThroughRateModelMutex.RUnlock()
+	m.clickThroughRateModelMutex.Unlock()
 	if err = m.metaStore.Put(meta.CLICK_THROUGH_RATE_MODEL, m.clickThroughRateMeta.ToJSON()); err != nil {
 		log.Logger().Error("failed to write click-through rate model meta", zap.Error(err))
 		return err
