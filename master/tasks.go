@@ -19,7 +19,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/c-bata/goptuna"
@@ -422,30 +421,46 @@ func (m *Master) LoadDataFromDatabase(
 		positiveSet[i] = mapset.NewSet[int32]()
 	}
 
-	// split item groups
+	// split item groups (used for non-personalized recommender push)
 	sort.Slice(items, func(i, j int) bool {
 		return items[i].ItemId < items[j].ItemId
 	})
 	itemGroups := parallel.Split(items, m.Config.Master.NumJobs)
 
-	// STEP 3: pull positive feedback
-	var mu sync.Mutex
+	// build lookup maps: item ID → position in sorted items slice, and position → chunk/group info
+	itemIdToPos := make(map[string]int, len(items))
+	for i, item := range items {
+		itemIdToPos[item.ItemId] = i
+	}
+	type chunkPos struct{ chunk, index int }
+	itemChunkPos := make([]chunkPos, len(items))
+	posOffset := 0
+	for ci, group := range itemGroups {
+		for gi := range group {
+			itemChunkPos[posOffset+gi] = chunkPos{chunk: ci, index: gi}
+		}
+		posOffset += len(group)
+	}
+
+	// STEP 3: pull positive feedback (single-pass fetch avoids collation
+	// mismatch from per-chunk range queries and data race in AddFeedback)
 	var posFeedbackCount int
 	start = time.Now()
-	err = parallel.Parallel(newCtx, len(itemGroups), m.Config.Master.NumJobs, func(_, i int) error {
+	itemHasFeedback := make([]bool, len(items))
+	{
 		var itemFeedback []data.Feedback
-		var itemGroupIndex int
-		itemHasFeedback := make([]bool, len(itemGroups[i]))
+		var curItemPos int
 		feedbackChan, errChan := database.GetFeedbackStream(newCtx, batchSize,
-			data.WithBeginItemId(itemGroups[i][0].ItemId),
-			data.WithEndItemId(itemGroups[i][len(itemGroups[i])-1].ItemId),
 			feedbackTimeLimit,
 			data.WithEndTime(*m.Config.Now()),
 			data.WithFeedbackTypes(posFeedbackTypes...),
 			data.WithOrderByItemId())
 		for feedback := range feedbackChan {
 			for _, f := range feedback {
-				// convert user and item id to index
+				itemPos, known := itemIdToPos[f.ItemId]
+				if !known {
+					continue
+				}
 				userIndex := dataSet.GetUserDict().Id(f.UserId)
 				if userIndex == dataset.NotId {
 					continue
@@ -454,59 +469,48 @@ func (m *Master) LoadDataFromDatabase(
 				if itemIndex == dataset.NotId {
 					continue
 				}
-				// insert feedback to positive set
 				positiveSet[userIndex].Add(itemIndex)
-
-				mu.Lock()
 				posFeedbackCount++
-				// insert feedback to evaluator
 				evaluator.Add(f.FeedbackType, f.Value, userIndex, itemIndex, f.Timestamp)
-				mu.Unlock()
 
-				// append item feedback
+				// accumulate per-item feedback for non-personalized recommenders
 				if len(itemFeedback) == 0 || itemFeedback[len(itemFeedback)-1].ItemId == f.ItemId {
 					itemFeedback = append(itemFeedback, f)
 				} else {
-					// add item to non-personalized recommenders
-					itemHasFeedback[itemGroupIndex] = true
+					// flush previous item
+					cp := itemChunkPos[curItemPos]
+					itemHasFeedback[curItemPos] = true
 					for _, recommender := range nonPersonalizedRecommenders {
-						recommender.Push(itemGroups[i][itemGroupIndex], itemFeedback)
+						recommender.Push(itemGroups[cp.chunk][cp.index], itemFeedback)
 					}
 					itemFeedback = itemFeedback[:0]
 					itemFeedback = append(itemFeedback, f)
 				}
-				// find item group index
-				for itemGroupIndex = 0; itemGroupIndex < len(itemGroups[i]); itemGroupIndex++ {
-					if itemGroups[i][itemGroupIndex].ItemId == f.ItemId {
-						break
-					}
-				}
+				curItemPos = itemPos
 				dataSet.AddFeedback(f.UserId, f.ItemId, f.Timestamp)
 			}
 			span.Add(len(feedback))
 		}
-
-		// add item to non-personalized recommenders
+		// flush last item
 		if len(itemFeedback) > 0 {
-			itemHasFeedback[itemGroupIndex] = true
+			cp := itemChunkPos[curItemPos]
+			itemHasFeedback[curItemPos] = true
 			for _, recommender := range nonPersonalizedRecommenders {
-				recommender.Push(itemGroups[i][itemGroupIndex], itemFeedback)
+				recommender.Push(itemGroups[cp.chunk][cp.index], itemFeedback)
 			}
 		}
-		for index, hasFeedback := range itemHasFeedback {
+		// push nil for items with no feedback
+		for i, hasFeedback := range itemHasFeedback {
 			if !hasFeedback {
+				cp := itemChunkPos[i]
 				for _, recommender := range nonPersonalizedRecommenders {
-					recommender.Push(itemGroups[i][index], nil)
+					recommender.Push(itemGroups[cp.chunk][cp.index], nil)
 				}
 			}
 		}
 		if err = <-errChan; err != nil {
-			return errors.Trace(err)
+			return nil, nil, errors.Trace(err)
 		}
-		return nil
-	})
-	if err != nil {
-		return nil, nil, errors.Trace(err)
 	}
 	log.Logger().Debug("pulled positive feedback from database",
 		zap.Int("n_positive_feedback", posFeedbackCount),
@@ -519,18 +523,19 @@ func (m *Master) LoadDataFromDatabase(
 		negativeSet[i] = mapset.NewSet[int32]()
 	}
 
-	// STEP 4: pull negative feedback
+	// STEP 4: pull negative feedback (single-pass, same rationale as step 3)
 	start = time.Now()
 	var negativeFeedbackCount float64
-	err = parallel.Parallel(newCtx, len(itemGroups), m.Config.Master.NumJobs, func(_, i int) error {
+	{
 		feedbackChan, errChan := database.GetFeedbackStream(newCtx, batchSize,
-			data.WithBeginItemId(itemGroups[i][0].ItemId),
-			data.WithEndItemId(itemGroups[i][len(itemGroups[i])-1].ItemId),
 			feedbackTimeLimit,
 			data.WithEndTime(*m.Config.Now()),
 			data.WithFeedbackTypes(readTypes...))
 		for feedback := range feedbackChan {
 			for _, f := range feedback {
+				if _, known := itemIdToPos[f.ItemId]; !known {
+					continue
+				}
 				userIndex := dataSet.GetUserDict().Id(f.UserId)
 				if userIndex == dataset.NotId {
 					continue
@@ -540,20 +545,14 @@ func (m *Master) LoadDataFromDatabase(
 					continue
 				}
 				negativeSet[userIndex].Add(itemIndex)
-				mu.Lock()
 				negativeFeedbackCount++
 				evaluator.Add(f.FeedbackType, f.Value, userIndex, itemIndex, f.Timestamp)
-				mu.Unlock()
 			}
 			span.Add(len(feedback))
 		}
 		if err = <-errChan; err != nil {
-			return errors.Trace(err)
+			return nil, nil, errors.Trace(err)
 		}
-		return nil
-	})
-	if err != nil {
-		return nil, nil, errors.Trace(err)
 	}
 	log.Logger().Debug("pulled negative feedback from database",
 		zap.Int("n_negative_feedback", int(negativeFeedbackCount)),
