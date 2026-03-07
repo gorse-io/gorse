@@ -266,7 +266,7 @@ func (d *SQLDatabase) Init() error {
 	case MySQL:
 		// create tables
 		type Items struct {
-			ItemId     string    `gorm:"column:item_id;type:varchar(256) not null;primaryKey"`
+			ItemId     string    `gorm:"column:item_id;type:varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin not null;primaryKey"`
 			IsHidden   bool      `gorm:"column:is_hidden;type:bool;not null"`
 			Categories []string  `gorm:"column:categories;type:json;not null"`
 			Timestamp  time.Time `gorm:"column:time_stamp;type:datetime;not null;index:time_stamp_index"`
@@ -274,14 +274,14 @@ func (d *SQLDatabase) Init() error {
 			Comment    string    `gorm:"column:comment;type:text;not null"`
 		}
 		type Users struct {
-			UserId  string   `gorm:"column:user_id;type:varchar(256);not null;primaryKey"`
+			UserId  string   `gorm:"column:user_id;type:varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin not null;primaryKey"`
 			Labels  []string `gorm:"column:labels;type:json;not null"`
 			Comment string   `gorm:"column:comment;type:text;not null"`
 		}
 		type Feedback struct {
-			FeedbackType string    `gorm:"column:feedback_type;type:varchar(256);not null;primaryKey"`
-			UserId       string    `gorm:"column:user_id;type:varchar(256);not null;primaryKey;index:user_id"`
-			ItemId       string    `gorm:"column:item_id;type:varchar(256);not null;primaryKey;index:item_id"`
+			FeedbackType string    `gorm:"column:feedback_type;type:varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin not null;primaryKey"`
+			UserId       string    `gorm:"column:user_id;type:varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin not null;primaryKey;index:user_id"`
+			ItemId       string    `gorm:"column:item_id;type:varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin not null;primaryKey;index:item_id"`
 			Value        float64   `gorm:"column:value;type:float;not null;default:0"`
 			Timestamp    time.Time `gorm:"column:time_stamp;type:datetime;not null"`
 			Updated      time.Time `gorm:"column:updated;type:datetime;not null;default:'2000-01-01 00:00:00'"`
@@ -294,7 +294,7 @@ func (d *SQLDatabase) Init() error {
 	case Postgres:
 		// create tables
 		type Items struct {
-			ItemId     string    `gorm:"column:item_id;type:varchar(256);not null;primaryKey"`
+			ItemId     string    `gorm:"column:item_id;type:varchar(256) COLLATE \"C\";not null;primaryKey"`
 			IsHidden   bool      `gorm:"column:is_hidden;type:bool;not null;default:false"`
 			Categories string    `gorm:"column:categories;type:json;not null;default:'[]'"`
 			Timestamp  time.Time `gorm:"column:time_stamp;type:timestamptz;not null;index:time_stamp_index"`
@@ -302,14 +302,14 @@ func (d *SQLDatabase) Init() error {
 			Comment    string    `gorm:"column:comment;type:text;not null;default:''"`
 		}
 		type Users struct {
-			UserId  string `gorm:"column:user_id;type:varchar(256) not null;primaryKey"`
+			UserId  string `gorm:"column:user_id;type:varchar(256) COLLATE \"C\" not null;primaryKey"`
 			Labels  string `gorm:"column:labels;type:json;not null;default:'[]'"`
 			Comment string `gorm:"column:comment;type:text;not null;default:''"`
 		}
 		type Feedback struct {
-			FeedbackType string    `gorm:"column:feedback_type;type:varchar(256);not null;primaryKey"`
-			UserId       string    `gorm:"column:user_id;type:varchar(256);not null;primaryKey;index:user_id_index"`
-			ItemId       string    `gorm:"column:item_id;type:varchar(256);not null;primaryKey;index:item_id_index"`
+			FeedbackType string    `gorm:"column:feedback_type;type:varchar(256) COLLATE \"C\";not null;primaryKey"`
+			UserId       string    `gorm:"column:user_id;type:varchar(256) COLLATE \"C\";not null;primaryKey;index:user_id_index"`
+			ItemId       string    `gorm:"column:item_id;type:varchar(256) COLLATE \"C\";not null;primaryKey;index:item_id_index"`
 			Value        float64   `gorm:"column:value;type:float8;not null;default:0"`
 			Timestamp    time.Time `gorm:"column:time_stamp;type:timestamptz;not null"`
 			Updated      time.Time `gorm:"column:updated;type:timestamptz;not null;default:'2000-01-01 00:00:00'"`

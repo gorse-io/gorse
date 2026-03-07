@@ -847,6 +847,19 @@ func (suite *baseTestSuite) TestTimezone() {
 	}
 }
 
+func (suite *baseTestSuite) TestCollation() {
+	ctx := suite.T().Context()
+	err := suite.Database.BatchInsertFeedback(ctx, []Feedback{
+		{FeedbackKey: FeedbackKey{"type", "user", "A"}},
+		{FeedbackKey: FeedbackKey{"type", "user", "a"}},
+		{FeedbackKey: FeedbackKey{"type", "user", "B"}},
+		{FeedbackKey: FeedbackKey{"type", "user", "b"}},
+	}, true, true, true)
+	suite.NoError(err)
+	feedbacks := suite.getFeedbackStream(ctx, 10, WithBeginItemId("a"), WithEndItemId("B"))
+	suite.Empty(feedbacks)
+}
+
 func (suite *baseTestSuite) TestPurge() {
 	ctx := suite.T().Context()
 	// insert data
