@@ -126,3 +126,10 @@ SELECT value FROM key_values WHERE key = ?
 	}
 	return &value, nil // key found
 }
+
+func (s *SQLite) Delete(key string) error {
+	_, err := s.db.Exec(`
+DELETE FROM key_values WHERE key = ?
+`, key)
+	return err
+}

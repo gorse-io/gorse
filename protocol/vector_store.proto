@@ -1,0 +1,83 @@
+// Copyright 2026 gorse Project Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+
+option go_package = "github.com/gorse-io/gorse/protocol";
+
+package protocol;
+
+import "google/protobuf/timestamp.proto";
+
+enum Distance {
+  Unknown = 0;
+  Cosine = 1;
+  Euclidean = 2;
+  Dot = 3;
+}
+
+message Vector {
+  string id = 1;
+  repeated float values = 2;
+  repeated string categories = 3;
+  google.protobuf.Timestamp timestamp = 4;
+}
+
+message ListCollectionsRequest {}
+
+message ListCollectionsResponse { repeated string collections = 1; }
+
+message AddCollectionRequest {
+  string name = 1;
+  int32 dimensions = 2;
+  Distance distance = 3;
+}
+
+message AddCollectionResponse {}
+
+message DeleteCollectionRequest { string name = 1; }
+
+message DeleteCollectionResponse {}
+
+message AddVectorsRequest {
+  string collection = 1;
+  repeated Vector vectors = 2;
+}
+
+message AddVectorsResponse {}
+
+message DeleteVectorsRequest {
+  string collection = 1;
+  google.protobuf.Timestamp timestamp = 2;
+}
+
+message DeleteVectorsResponse {}
+
+message QueryVectorsRequest {
+  string collection = 1;
+  repeated float query = 2;
+  repeated string categories = 3;
+  int32 top_k = 4;
+}
+
+message QueryVectorsResponse { repeated Vector vectors = 1; }
+
+service VectorStore {
+  rpc ListCollections(ListCollectionsRequest) returns (ListCollectionsResponse) {}
+  rpc AddCollection(AddCollectionRequest) returns (AddCollectionResponse) {}
+  rpc DeleteCollection(DeleteCollectionRequest) returns (DeleteCollectionResponse) {}
+  rpc AddVectors(AddVectorsRequest) returns (AddVectorsResponse) {}
+  rpc DeleteVectors(DeleteVectorsRequest) returns (DeleteVectorsResponse) {}
+  rpc QueryVectors(QueryVectorsRequest) returns (QueryVectorsResponse) {}
+}

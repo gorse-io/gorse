@@ -15,7 +15,6 @@
 package cache
 
 import (
-	"context"
 	"os"
 	"testing"
 
@@ -44,7 +43,7 @@ type MongoTestSuite struct {
 }
 
 func (suite *MongoTestSuite) SetupSuite() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	var err error
 	// create database
 	suite.Database, err = Open(mongoUri, "gorse_")
@@ -79,7 +78,7 @@ func TestMongo(t *testing.T) {
 
 func BenchmarkMongo(b *testing.B) {
 	log.CloseLogger()
-	ctx := context.Background()
+	ctx := b.Context()
 	// create database
 	database, err := Open(mongoUri, "gorse_")
 	assert.NoError(b, err)

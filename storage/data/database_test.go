@@ -30,7 +30,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-	"google.golang.org/protobuf/proto"
 )
 
 var (
@@ -175,7 +174,7 @@ func (suite *baseTestSuite) TestInit() {
 }
 
 func (suite *baseTestSuite) TestUsers() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	// Insert users
 	var insertedUsers []User
 	fake := faker.New()
@@ -225,7 +224,7 @@ func (suite *baseTestSuite) TestUsers() {
 	suite.NoError(err)
 	suite.Equal("override", user.Comment)
 	// test modify
-	err = suite.Database.ModifyUser(ctx, "1", UserPatch{Comment: proto.String("modify")})
+	err = suite.Database.ModifyUser(ctx, "1", UserPatch{Comment: new("modify")})
 	suite.NoError(err)
 	err = suite.Database.ModifyUser(ctx, "1", UserPatch{Labels: []string{"a", "b", "c"}})
 	suite.NoError(err)
@@ -246,7 +245,7 @@ func (suite *baseTestSuite) TestUsers() {
 }
 
 func (suite *baseTestSuite) TestFeedback() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	// users that already exists
 	err := suite.Database.BatchInsertUsers(ctx, []User{{"0", []string{"a"}, "comment"}})
 	suite.NoError(err)
@@ -392,6 +391,12 @@ func (suite *baseTestSuite) TestFeedback() {
 	suite.NoError(err)
 	err = suite.Database.Optimize()
 	suite.NoError(err)
+	// Get feedback by user with value filter
+	ret, err = suite.Database.GetUserFeedback(ctx, "0", lo.ToPtr(time.Now()),
+		expression.FeedbackTypeExpression{FeedbackType: positiveFeedbackType, Value: 50, ExprType: expression.Greater})
+	suite.NoError(err)
+	suite.Equal(1, len(ret))
+	suite.Equal(float64(100), ret[0].Value)
 	ret, err = suite.Database.GetUserFeedback(ctx, "0", lo.ToPtr(time.Now()), expression.MustParseFeedbackTypeExpression(positiveFeedbackType))
 	suite.NoError(err)
 	suite.Equal(1, len(ret))
@@ -473,7 +478,7 @@ func (suite *baseTestSuite) TestFeedback() {
 }
 
 func (suite *baseTestSuite) TestItems() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	// Items
 	items := []Item{
 		{
@@ -566,11 +571,11 @@ func (suite *baseTestSuite) TestItems() {
 
 	// test modify
 	timestamp := time.Date(2000, 1, 1, 1, 1, 1, 0, time.UTC)
-	err = suite.Database.ModifyItem(ctx, "2", ItemPatch{IsHidden: proto.Bool(true)})
+	err = suite.Database.ModifyItem(ctx, "2", ItemPatch{IsHidden: new(true)})
 	suite.NoError(err)
 	err = suite.Database.ModifyItem(ctx, "2", ItemPatch{Categories: []string{"a"}})
 	suite.NoError(err)
-	err = suite.Database.ModifyItem(ctx, "2", ItemPatch{Comment: proto.String("modify")})
+	err = suite.Database.ModifyItem(ctx, "2", ItemPatch{Comment: new("modify")})
 	suite.NoError(err)
 	err = suite.Database.ModifyItem(ctx, "2", ItemPatch{Labels: []string{"a", "b", "c"}})
 	suite.NoError(err)
@@ -600,7 +605,7 @@ func (suite *baseTestSuite) TestItems() {
 }
 
 func (suite *baseTestSuite) TestDeleteUser() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	// Insert ret
 	feedback := []Feedback{
 		{FeedbackKey: FeedbackKey{positiveFeedbackType, "a", "0"}, Value: 0, Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), Comment: "comment"},
@@ -625,7 +630,7 @@ func (suite *baseTestSuite) TestDeleteUser() {
 }
 
 func (suite *baseTestSuite) TestDeleteItem() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	// Insert ret
 	feedbacks := []Feedback{
 		{FeedbackKey: FeedbackKey{positiveFeedbackType, "0", "b"}, Value: 0, Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), Comment: "comment"},
@@ -650,7 +655,7 @@ func (suite *baseTestSuite) TestDeleteItem() {
 }
 
 func (suite *baseTestSuite) TestDeleteFeedback() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	feedbacks := []Feedback{
 		{FeedbackKey: FeedbackKey{"type1", "2", "3"}, Value: 0, Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), Comment: "comment"},
 		{FeedbackKey: FeedbackKey{"type2", "2", "3"}, Value: 0, Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), Comment: "comment"},
@@ -697,7 +702,7 @@ func (suite *baseTestSuite) TestDeleteFeedback() {
 }
 
 func (suite *baseTestSuite) TestTimeLimit() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	// insert items
 	items := []Item{
 		{
@@ -762,7 +767,7 @@ func (suite *baseTestSuite) TestTimeLimit() {
 }
 
 func (suite *baseTestSuite) TestTimezone() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	loc, err := time.LoadLocation("Asia/Tokyo")
 	suite.NoError(err)
 	// insert feedbacks
@@ -842,8 +847,21 @@ func (suite *baseTestSuite) TestTimezone() {
 	}
 }
 
+func (suite *baseTestSuite) TestCollation() {
+	ctx := suite.T().Context()
+	err := suite.Database.BatchInsertFeedback(ctx, []Feedback{
+		{FeedbackKey: FeedbackKey{"type", "user", "A"}},
+		{FeedbackKey: FeedbackKey{"type", "user", "a"}},
+		{FeedbackKey: FeedbackKey{"type", "user", "B"}},
+		{FeedbackKey: FeedbackKey{"type", "user", "b"}},
+	}, true, true, true)
+	suite.NoError(err)
+	feedbacks := suite.getFeedbackStream(ctx, 10, WithBeginItemId("a"), WithEndItemId("B"))
+	suite.Empty(feedbacks)
+}
+
 func (suite *baseTestSuite) TestPurge() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	// insert data
 	err := suite.Database.BatchInsertFeedback(ctx, lo.Map(lo.Range(100), func(t int, i int) Feedback {
 		return Feedback{FeedbackKey: FeedbackKey{
@@ -910,7 +928,7 @@ func TestValidateLabels(t *testing.T) {
 }
 
 func benchmarkCountItems(b *testing.B, db Database) {
-	ctx := context.Background()
+	ctx := b.Context()
 	// Insert 10,000 items
 	items := make([]Item, 100000)
 	for i := range items {

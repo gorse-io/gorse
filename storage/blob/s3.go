@@ -32,7 +32,7 @@ type S3 struct {
 	prefix string
 }
 
-func NewS3(cfg config.S3Config) (*S3, error) {
+func NewS3(cfg config.S3Config, bucket string, prefix string) (*S3, error) {
 	minioClient, err := minio.New(cfg.Endpoint, &minio.Options{
 		Creds: credentials.NewStaticV4(cfg.AccessKeyID, cfg.SecretAccessKey, ""),
 	})
@@ -41,8 +41,8 @@ func NewS3(cfg config.S3Config) (*S3, error) {
 	}
 	return &S3{
 		Client: minioClient,
-		bucket: cfg.Bucket,
-		prefix: cfg.Prefix,
+		bucket: bucket,
+		prefix: prefix,
 	}, nil
 }
 

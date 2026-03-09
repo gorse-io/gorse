@@ -14,7 +14,6 @@
 package data
 
 import (
-	"context"
 	"os"
 	"testing"
 
@@ -42,7 +41,7 @@ type MongoTestSuite struct {
 }
 
 func (suite *MongoTestSuite) SetupSuite() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	var err error
 	// create database
 	suite.Database, err = Open(mongoUri, "gorse_")
@@ -75,7 +74,7 @@ func TestMongo(t *testing.T) {
 }
 
 func BenchmarkMongo_CountItems(b *testing.B) {
-	ctx := context.Background()
+	ctx := b.Context()
 	var err error
 
 	// create database

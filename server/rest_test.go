@@ -14,7 +14,6 @@
 package server
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -31,7 +30,6 @@ import (
 	"github.com/steinfletcher/apitest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
-	"google.golang.org/protobuf/proto"
 )
 
 const apiKey = "test_api_key"
@@ -79,6 +77,9 @@ func (suite *ServerTestSuite) SetupTest() {
 	// configuration
 	suite.Config = config.GetDefaultConfig()
 	suite.Config.Server.APIKey = apiKey
+	suite.Config.Recommend.Collaborative.Type = "mf"
+	suite.Config.Recommend.Ranker.Type = "fm"
+	suite.Config.Recommend.Fallback.Recommenders = []string{"latest"}
 }
 
 func (suite *ServerTestSuite) marshal(v interface{}) string {
@@ -157,7 +158,7 @@ func (suite *ServerTestSuite) TestUsers() {
 		Handler(suite.handler).
 		Patch("/api/user/1").
 		Header("X-API-Key", apiKey).
-		JSON(data.UserPatch{Labels: []string{"a", "b", "c"}, Comment: proto.String("modified")}).
+		JSON(data.UserPatch{Labels: []string{"a", "b", "c"}, Comment: new("modified")}).
 		Expect(t).
 		Status(http.StatusOK).
 		Body(`{"RowAffected": 1}`).
@@ -321,7 +322,7 @@ func (suite *ServerTestSuite) TestItems() {
 			{Id: items[1].ItemId, Score: float64(items[1].Timestamp.Unix())},
 		})).
 		End()
-	err := suite.DataClient.BatchInsertFeedback(context.Background(), []data.Feedback{{
+	err := suite.DataClient.BatchInsertFeedback(suite.T().Context(), []data.Feedback{{
 		FeedbackKey: data.FeedbackKey{FeedbackType: "read", UserId: "0", ItemId: "6"},
 		Timestamp:   time.Now().Truncate(time.Hour),
 	}}, true, true, true)
@@ -393,10 +394,10 @@ func (suite *ServerTestSuite) TestItems() {
 		Patch("/api/item/2").
 		Header("X-API-Key", apiKey).
 		JSON(data.ItemPatch{
-			IsHidden:   proto.Bool(true),
+			IsHidden:   new(true),
 			Categories: []string{"-"},
 			Labels:     []string{"a", "b", "c"},
-			Comment:    proto.String("modified"),
+			Comment:    new("modified"),
 			Timestamp:  &timestamp,
 		}).
 		Expect(t).
@@ -423,7 +424,7 @@ func (suite *ServerTestSuite) TestItems() {
 		Patch("/api/item/2").
 		Header("X-API-Key", apiKey).
 		JSON(data.ItemPatch{
-			IsHidden: proto.Bool(false),
+			IsHidden: new(false),
 		}).
 		Expect(t).
 		Status(http.StatusOK).
@@ -570,7 +571,7 @@ func (suite *ServerTestSuite) TestItems() {
 }
 
 func (suite *ServerTestSuite) TestFeedback() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	t := suite.T()
 	// Insert ret
 	feedback := []data.Feedback{
@@ -722,7 +723,7 @@ func (suite *ServerTestSuite) TestFeedback() {
 }
 
 func (suite *ServerTestSuite) TestNonPersonalizedRecommend() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	suite.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "default"}}
 	type ListOperator struct {
 		Name       string
@@ -764,7 +765,7 @@ func (suite *ServerTestSuite) TestNonPersonalizedRecommend() {
 				Handler(suite.handler).
 				Patch("/api/item/"+strconv.Itoa(i)+"3").
 				Header("X-API-Key", apiKey).
-				JSON(data.ItemPatch{IsHidden: proto.Bool(true)}).
+				JSON(data.ItemPatch{IsHidden: new(true)}).
 				Expect(t).
 				Status(http.StatusOK).
 				End()
@@ -847,7 +848,7 @@ func (suite *ServerTestSuite) TestNonPersonalizedRecommend() {
 }
 
 func (suite *ServerTestSuite) TestUserToUser() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	suite.Config.Recommend.UserToUser = []config.UserToUserConfig{{Name: "default"}}
 	err := suite.CacheClient.AddScores(ctx, cache.UserToUser, cache.Key("default", "0"), []cache.Score{
 		{Id: "1", Score: 100},
@@ -947,7 +948,7 @@ func (suite *ServerTestSuite) TestDeleteFeedback() {
 }
 
 func (suite *ServerTestSuite) TestGetRecommends() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	// insert hidden items
 	err := suite.CacheClient.AddScores(ctx, cache.Recommend, "0", []cache.Score{{Id: "0", Score: 100, Categories: []string{""}}})
 	suite.NoError(err)
@@ -956,7 +957,7 @@ func (suite *ServerTestSuite) TestGetRecommends() {
 		Handler(suite.handler).
 		Patch("/api/item/0").
 		Header("X-API-Key", apiKey).
-		JSON(data.ItemPatch{IsHidden: proto.Bool(true)}).
+		JSON(data.ItemPatch{IsHidden: new(true)}).
 		Expect(suite.T()).
 		Status(http.StatusOK).
 		End()
@@ -1085,7 +1086,7 @@ func (suite *ServerTestSuite) TestGetRecommends() {
 }
 
 func (suite *ServerTestSuite) TestGetRecommendsMultiCategories() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	// insert recommendation
 	err := suite.CacheClient.AddScores(ctx, cache.Recommend, "0", []cache.Score{
 		{Id: "1", Score: 1, Categories: []string{""}},
@@ -1114,7 +1115,7 @@ func (suite *ServerTestSuite) TestGetRecommendsMultiCategories() {
 }
 
 func (suite *ServerTestSuite) TestGetRecommendsReplacement() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	suite.Config.Recommend.Replacement.EnableReplacement = true
 	// insert recommendation
 	err := suite.CacheClient.AddScores(ctx, cache.Recommend, "0", []cache.Score{
@@ -1134,7 +1135,7 @@ func (suite *ServerTestSuite) TestGetRecommendsReplacement() {
 		Handler(suite.handler).
 		Patch("/api/item/0").
 		Header("X-API-Key", apiKey).
-		JSON(data.ItemPatch{IsHidden: proto.Bool(true)}).
+		JSON(data.ItemPatch{IsHidden: new(true)}).
 		Expect(suite.T()).
 		Status(http.StatusOK).
 		End()
@@ -1167,7 +1168,7 @@ func (suite *ServerTestSuite) TestGetRecommendsReplacement() {
 }
 
 func (suite *ServerTestSuite) TestGetRecommendsFallbackItemToItem() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	suite.Config.Recommend.ContextSize = 4
 	suite.Config.Recommend.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{
 		expression.MustParseFeedbackTypeExpression("a")}
@@ -1261,7 +1262,7 @@ func (suite *ServerTestSuite) TestGetRecommendsFallbackItemToItem() {
 }
 
 func (suite *ServerTestSuite) TestGetRecommendsFallbackUserToUser() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	suite.Config.Recommend.UserToUser = []config.UserToUserConfig{{Name: "default"}}
 	// insert recommendation
 	err := suite.CacheClient.AddScores(ctx, cache.Recommend, "0",
@@ -1337,7 +1338,7 @@ func (suite *ServerTestSuite) TestGetRecommendsFallbackUserToUser() {
 }
 
 func (suite *ServerTestSuite) TestRecommendFallbackLatest() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	// insert offline recommendation
 	err := suite.CacheClient.AddScores(ctx, cache.Recommend, "0", []cache.Score{
 		{Id: "1", Score: 99, Categories: []string{"*"}},
@@ -1384,7 +1385,7 @@ func (suite *ServerTestSuite) TestRecommendFallbackLatest() {
 }
 
 func (suite *ServerTestSuite) TestGetRecommendsFallbackCollaborativeFiltering() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	// insert offline recommendation
 	err := suite.CacheClient.AddScores(ctx, cache.Recommend, "0", []cache.Score{
 		{Id: "1", Score: 99, Categories: []string{"*"}},
@@ -1426,7 +1427,7 @@ func (suite *ServerTestSuite) TestGetRecommendsFallbackCollaborativeFiltering() 
 }
 
 func (suite *ServerTestSuite) TestGetRecommendsFallbackNonPersonalized() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	// insert offline recommendation
 	err := suite.CacheClient.AddScores(ctx, cache.Recommend, "0", []cache.Score{
 		{Id: "1", Score: 99, Categories: []string{"*"}},
@@ -1472,8 +1473,33 @@ func (suite *ServerTestSuite) TestGetRecommendsFallbackNonPersonalized() {
 		End()
 }
 
+func (suite *ServerTestSuite) TestGetRecommendsLatest() {
+	ctx := suite.T().Context()
+	err := suite.DataClient.BatchInsertItems(ctx, []data.Item{
+		{ItemId: "5", Timestamp: time.Unix(95, 0)},
+		{ItemId: "6", Timestamp: time.Unix(94, 0)},
+		{ItemId: "7", Timestamp: time.Unix(93, 0)},
+		{ItemId: "8", Timestamp: time.Unix(92, 0)},
+	})
+	suite.NoError(err)
+	suite.Config.Recommend.Ranker.Type = "none"
+	suite.Config.Recommend.Ranker.Recommenders = []string{"latest"}
+	suite.Config.Recommend.Fallback.Recommenders = []string{}
+	apitest.New().
+		Handler(suite.handler).
+		Get("/api/recommend/0").
+		Header("X-API-Key", apiKey).
+		QueryParams(map[string]string{
+			"n": "4",
+		}).
+		Expect(suite.T()).
+		Status(http.StatusOK).
+		Body(suite.marshal([]string{"5", "6", "7", "8"})).
+		End()
+}
+
 func (suite *ServerTestSuite) TestSessionRecommend() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	suite.Config.Recommend.ContextSize = 4
 	suite.Config.Recommend.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{
 		expression.MustParseFeedbackTypeExpression("a")}
@@ -1575,7 +1601,7 @@ func (suite *ServerTestSuite) TestSessionRecommend() {
 }
 
 func (suite *ServerTestSuite) TestVisibility() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	suite.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "default"}}
 	// insert items: 0, 1, 2, 3, 4
 	var items []Item
@@ -1627,7 +1653,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		Handler(suite.handler).
 		Patch("/api/item/1").
 		Header("X-API-Key", apiKey).
-		JSON(data.ItemPatch{IsHidden: proto.Bool(true)}).
+		JSON(data.ItemPatch{IsHidden: new(true)}).
 		Expect(suite.T()).
 		Status(http.StatusOK).
 		End()
@@ -1684,7 +1710,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		Handler(suite.handler).
 		Patch("/api/item/1").
 		Header("X-API-Key", apiKey).
-		JSON(data.ItemPatch{IsHidden: proto.Bool(false)}).
+		JSON(data.ItemPatch{IsHidden: new(false)}).
 		Expect(suite.T()).
 		Status(http.StatusOK).
 		End()

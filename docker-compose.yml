@@ -99,14 +99,19 @@ services:
       # GORSE_DATA_STORE: postgres://gorse:gorse_pass@postgres/gorse?sslmode=disable
       # GORSE_DATA_STORE: mongodb://root:password@mongo:27017/gorse?authSource=admin&connect=direct
       # GORSE_DATA_STORE: clickhouse://gorse:gorse_pass@clickhouse:8123/gorse
+      GORSE_BLOB_URI: /var/lib/gorse/blob
+      # GORSE_BLOB_URI: s3://my-bucket/path
+      # GORSE_BLOB_URI: gs://my-bucket/path
+      # GORSE_BLOB_URI: az://container/path
     command: >
       -c /etc/gorse/config.toml 
       --log-path /var/log/gorse/master.log 
-      --cache-path /var/lib/gorse
+      --cache-path /var/lib/gorse/master
     volumes:
       - ./config/config.toml:/etc/gorse/config.toml
       - gorse_log:/var/log/gorse
-      - master_data:/var/lib/gorse
+      - master_data:/var/lib/gorse/master
+      - blob_data:/var/lib/gorse/blob
     depends_on:
       - mysql
       # - postgres
@@ -123,3 +128,4 @@ volumes:
   # postgres_data:
   # mongo_data:
   # clickhouse_data:
+  blob_data:

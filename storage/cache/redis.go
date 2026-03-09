@@ -44,6 +44,7 @@ func init() {
 		database := new(Redis)
 		database.client = redis.NewClient(opt)
 		database.TablePrefix = storage.TablePrefix(tablePrefix)
+		database.maxSearchResults = storage.NewOptions(opts...).MaxSearchResults
 		if err = redisotel.InstrumentTracing(database.client, redisotel.WithAttributes(semconv.DBSystemRedis)); err != nil {
 			log.Logger().Error("failed to add tracing for redis", zap.Error(err))
 			return nil, errors.Trace(err)
@@ -65,6 +66,7 @@ func init() {
 		database := new(Redis)
 		database.client = redis.NewClusterClient(opt)
 		database.TablePrefix = storage.TablePrefix(tablePrefix)
+		database.maxSearchResults = storage.NewOptions(opts...).MaxSearchResults
 		if err = redisotel.InstrumentTracing(database.client, redisotel.WithAttributes(semconv.DBSystemRedis)); err != nil {
 			log.Logger().Error("failed to add tracing for redis", zap.Error(err))
 			return nil, errors.Trace(err)
@@ -76,7 +78,8 @@ func init() {
 // Redis cache storage.
 type Redis struct {
 	storage.TablePrefix
-	client redis.UniversalClient
+	client           redis.UniversalClient
+	maxSearchResults int
 }
 
 // Close redis connection.
@@ -265,12 +268,12 @@ func (r *Redis) AddScores(ctx context.Context, collection, subset string, docume
 
 func (r *Redis) SearchScores(ctx context.Context, collection, subset string, query []string, begin, end int) ([]Score, error) {
 	var builder strings.Builder
-	builder.WriteString(fmt.Sprintf("@collection:{ %s } @is_hidden:[0 0]", escape(collection)))
+	fmt.Fprintf(&builder, "@collection:{ %s } @is_hidden:[0 0]", escape(collection))
 	if subset != "" {
-		builder.WriteString(fmt.Sprintf(" @subset:{ %s }", escape(subset)))
+		fmt.Fprintf(&builder, " @subset:{ %s }", escape(subset))
 	}
 	for _, q := range query {
-		builder.WriteString(fmt.Sprintf(" @categories:{ %s }", escape(encdodeCategory(q))))
+		fmt.Fprintf(&builder, " @categories:{ %s }", escape(encodeCategory(q)))
 	}
 	options := &redis.FTSearchOptions{
 		SortBy:      []redis.FTSearchSortBy{{FieldName: "score", Desc: true}},
@@ -322,48 +325,73 @@ func (r *Redis) UpdateScores(ctx context.Context, collections []string, subset *
 		return nil
 	}
 	var builder strings.Builder
-	builder.WriteString(fmt.Sprintf("@collection:{ %s }", escape(strings.Join(collections, " | "))))
-	builder.WriteString(fmt.Sprintf(" @id:{ %s }", escape(id)))
+	fmt.Fprintf(&builder, "@collection:{ %s }", escape(strings.Join(collections, " | ")))
+	fmt.Fprintf(&builder, " @id:{ %s }", escape(id))
 	if subset != nil {
-		builder.WriteString(fmt.Sprintf(" @subset:{ %s }", escape(*subset)))
+		fmt.Fprintf(&builder, " @subset:{ %s }", escape(*subset))
 	}
+	limit := r.maxSearchResults
+	if limit <= 0 {
+		limit = 10000
+	}
+
+	// Two-phase update:
+	// 1) collect matched document IDs with pagination,
+	// 2) mutate documents by key.
+	// This avoids pagination drift when patch.Score changes the sort order.
+	keys := make([]string, 0)
+	keySet := make(map[string]struct{})
+	offset := 0
 	for {
 		// search documents
 		result, err := r.client.FTSearchWithArgs(ctx, r.DocumentTable(), builder.String(), &redis.FTSearchOptions{
 			SortBy:      []redis.FTSearchSortBy{{FieldName: "score", Desc: true}},
-			LimitOffset: 0,
-			Limit:       10000,
+			LimitOffset: offset,
+			Limit:       limit,
 		}).Result()
 		if err != nil {
 			return errors.Trace(err)
 		}
-		// update documents
+		if len(result.Docs) == 0 {
+			break
+		}
+		newKeys := 0
 		for _, doc := range result.Docs {
-			key := doc.ID
-			values := make([]any, 0)
-			if patch.Score != nil {
-				values = append(values, "score", *patch.Score)
-			}
-			if patch.IsHidden != nil {
-				values = append(values, "is_hidden", *patch.IsHidden)
-			}
-			if patch.Categories != nil {
-				values = append(values, "categories", encodeCategories(patch.Categories))
-			}
-			if err = r.client.Watch(ctx, func(tx *redis.Tx) error {
-				if exist, err := tx.Exists(ctx, key).Result(); err != nil {
-					return err
-				} else if exist == 0 {
-					return nil
-				}
-				return tx.HSet(ctx, key, values...).Err()
-			}, key); err != nil {
-				return errors.Trace(err)
+			if _, exists := keySet[doc.ID]; !exists {
+				keySet[doc.ID] = struct{}{}
+				keys = append(keys, doc.ID)
+				newKeys++
 			}
 		}
-		// break if no more documents
-		if result.Total <= len(result.Docs) {
+		offset += len(result.Docs)
+		// Stop when:
+		// 1) the last page is shorter than the limit (common Redis behavior), or
+		// 2) no new keys are discovered (defensive for engines with non-standard total/offset semantics).
+		if len(result.Docs) < limit || newKeys == 0 {
 			break
+		}
+	}
+
+	values := make([]any, 0)
+	if patch.Score != nil {
+		values = append(values, "score", *patch.Score)
+	}
+	if patch.IsHidden != nil {
+		values = append(values, "is_hidden", *patch.IsHidden)
+	}
+	if patch.Categories != nil {
+		values = append(values, "categories", encodeCategories(patch.Categories))
+	}
+	for _, key := range keys {
+		if err := r.client.Watch(ctx, func(tx *redis.Tx) error {
+			if exist, err := tx.Exists(ctx, key).Result(); err != nil {
+				return err
+			} else if exist == 0 {
+				return nil
+			}
+			return tx.HSet(ctx, key, values...).Err()
+		}, key); err != nil {
+			return errors.Trace(err)
 		}
 	}
 	return nil
@@ -374,15 +402,15 @@ func (r *Redis) DeleteScores(ctx context.Context, collections []string, conditio
 		return errors.Trace(err)
 	}
 	var builder strings.Builder
-	builder.WriteString(fmt.Sprintf("@collection:{ %s }", escape(strings.Join(collections, " | "))))
+	fmt.Fprintf(&builder, "@collection:{ %s }", escape(strings.Join(collections, " | ")))
 	if condition.Subset != nil {
-		builder.WriteString(fmt.Sprintf(" @subset:{ %s }", escape(*condition.Subset)))
+		fmt.Fprintf(&builder, " @subset:{ %s }", escape(*condition.Subset))
 	}
 	if condition.Id != nil {
-		builder.WriteString(fmt.Sprintf(" @id:{ %s }", escape(*condition.Id)))
+		fmt.Fprintf(&builder, " @id:{ %s }", escape(*condition.Id))
 	}
 	if condition.Before != nil {
-		builder.WriteString(fmt.Sprintf(" @timestamp:[-inf (%d]", condition.Before.UnixMicro()))
+		fmt.Fprintf(&builder, " @timestamp:[-inf (%d]", condition.Before.UnixMicro())
 	}
 	for {
 		// search documents
@@ -482,7 +510,7 @@ func (r *Redis) GetTimeSeriesPoints(ctx context.Context, name string, begin, end
 	return points, nil
 }
 
-func encdodeCategory(category string) string {
+func encodeCategory(category string) string {
 	return base64.RawStdEncoding.EncodeToString([]byte("_" + category))
 }
 
@@ -500,7 +528,7 @@ func encodeCategories(categories []string) string {
 		if i > 0 {
 			builder.WriteByte(';')
 		}
-		builder.WriteString(encdodeCategory(category))
+		builder.WriteString(encodeCategory(category))
 	}
 	return builder.String()
 }

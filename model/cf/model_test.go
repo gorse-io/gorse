@@ -15,7 +15,6 @@ package cf
 
 import (
 	"bytes"
-	"context"
 	"math"
 	"runtime"
 	"testing"
@@ -45,7 +44,7 @@ func TestBPR_MovieLens(t *testing.T) {
 		model.InitStdDev: 0.001,
 	})
 	fitConfig := newFitConfig(30)
-	score := m.Fit(context.Background(), trainSet, testSet, fitConfig)
+	score := m.Fit(t.Context(), trainSet, testSet, fitConfig)
 	assert.InDelta(t, 0.36, score.NDCG, benchDelta)
 	assert.Equal(t, trainSet.GetUserDict(), m.GetUserIndex())
 	assert.Equal(t, testSet.GetItemDict(), m.GetItemIndex())
@@ -101,7 +100,7 @@ func TestCCD_MovieLens(t *testing.T) {
 		model.Alpha:    0.05,
 	})
 	fitConfig := newFitConfig(30)
-	score := m.Fit(context.Background(), trainSet, testSet, fitConfig)
+	score := m.Fit(t.Context(), trainSet, testSet, fitConfig)
 	assert.InDelta(t, 0.36, score.NDCG, benchDelta)
 
 	// test predict

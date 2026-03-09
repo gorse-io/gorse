@@ -15,7 +15,6 @@
 package master
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -68,11 +67,11 @@ func newMockMasterRPC(t *testing.T) *mockMasterRPC {
 	// create click model
 	train, test := newClickDataset()
 	fm := ctr.NewAFM(model.Params{model.NEpochs: 0})
-	fm.Fit(context.Background(), train, test, &ctr.FitConfig{})
+	fm.Fit(t.Context(), train, test, &ctr.FitConfig{})
 	// create ranking model
 	trainSet, testSet := newRankingDataset()
 	bpr := cf.NewBPR(model.Params{model.NEpochs: 0})
-	bpr.Fit(context.Background(), trainSet, testSet, cf.NewFitConfig())
+	bpr.Fit(t.Context(), trainSet, testSet, cf.NewFitConfig())
 	return &mockMasterRPC{
 		Master: Master{
 			RestServer: server.RestServer{
@@ -128,7 +127,7 @@ func TestRPC(t *testing.T) {
 	conn, err := grpc.Dial(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	assert.NoError(t, err)
 	client := protocol.NewMasterClient(conn)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	progressList := []monitor.Progress{{
 		Tracer:     "tracer",
@@ -208,14 +207,14 @@ func TestSSL(t *testing.T) {
 	conn, err := grpc.Dial(address, grpc.WithTransportCredentials(c))
 	assert.NoError(t, err)
 	client := protocol.NewMasterClient(conn)
-	_, err = client.GetMeta(context.Background(), &protocol.NodeInfo{NodeType: protocol.NodeType_Server, Uuid: "server1", Hostname: "yoga"})
+	_, err = client.GetMeta(t.Context(), &protocol.NodeInfo{NodeType: protocol.NodeType_Server, Uuid: "server1", Hostname: "yoga"})
 	assert.NoError(t, err)
 
 	// insecure
 	conn, err = grpc.Dial(address, grpc.WithInsecure())
 	assert.NoError(t, err)
 	client = protocol.NewMasterClient(conn)
-	_, err = client.GetMeta(context.Background(), &protocol.NodeInfo{NodeType: protocol.NodeType_Server, Uuid: "server1", Hostname: "yoga"})
+	_, err = client.GetMeta(t.Context(), &protocol.NodeInfo{NodeType: protocol.NodeType_Server, Uuid: "server1", Hostname: "yoga"})
 	assert.Error(t, err)
 
 	// certificate mismatch
@@ -230,6 +229,6 @@ func TestSSL(t *testing.T) {
 	conn, err = grpc.Dial(address, grpc.WithTransportCredentials(c))
 	assert.NoError(t, err)
 	client = protocol.NewMasterClient(conn)
-	_, err = client.GetMeta(context.Background(), &protocol.NodeInfo{NodeType: protocol.NodeType_Server, Uuid: "server1", Hostname: "yoga"})
+	_, err = client.GetMeta(t.Context(), &protocol.NodeInfo{NodeType: protocol.NodeType_Server, Uuid: "server1", Hostname: "yoga"})
 	assert.Error(t, err)
 }

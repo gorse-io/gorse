@@ -15,7 +15,6 @@
 package data
 
 import (
-	"context"
 	"testing"
 	"time"
 
@@ -24,7 +23,7 @@ import (
 )
 
 func TestNoDatabase(t *testing.T) {
-	ctx := context.Background()
+	ctx := t.Context()
 	var database NoDatabase
 
 	err := database.Close()

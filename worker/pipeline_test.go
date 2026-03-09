@@ -15,7 +15,6 @@
 package worker
 
 import (
-	"context"
 	"fmt"
 	"testing"
 
@@ -36,7 +35,7 @@ func (suite *PipelineTestSuite) SetupSuite() {
 	suite.NoError(err)
 
 	// insert items
-	err = suite.dataClient.BatchInsertItems(context.Background(), []data.Item{
+	err = suite.dataClient.BatchInsertItems(suite.T().Context(), []data.Item{
 		{ItemId: "1"},
 		{ItemId: "2"},
 		{ItemId: "3"},
@@ -53,14 +52,14 @@ func (suite *PipelineTestSuite) TearDownSuite() {
 
 func (suite *PipelineTestSuite) TestGetSlice() {
 	c := NewItemCache(suite.dataClient)
-	items, err := c.GetSlice(context.Background(), []string{"1", "2", "3", "4", "5", "6"})
+	items, err := c.GetSlice(suite.T().Context(), []string{"1", "2", "3", "4", "5", "6"})
 	suite.NoError(err)
 	suite.Equal(5, len(items))
 }
 
 func (suite *PipelineTestSuite) TestGetMap() {
 	c := NewItemCache(suite.dataClient)
-	items, err := c.GetMap(context.Background(), []string{"1", "2", "3", "4", "5", "6"})
+	items, err := c.GetMap(suite.T().Context(), []string{"1", "2", "3", "4", "5", "6"})
 	suite.NoError(err)
 	suite.Equal(5, len(items))
 }

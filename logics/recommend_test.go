@@ -15,7 +15,6 @@
 package logics
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -66,7 +65,7 @@ func (suite *RecommenderTestSuite) TestLatest() {
 			items[i].Categories = []string{"cat_1"}
 		}
 	}
-	err := suite.dataClient.BatchInsertItems(context.Background(), items)
+	err := suite.dataClient.BatchInsertItems(suite.T().Context(), items)
 	suite.NoError(err)
 
 	feedback := make([]data.Feedback, 10)
@@ -79,12 +78,12 @@ func (suite *RecommenderTestSuite) TestLatest() {
 			},
 		}
 	}
-	err = suite.dataClient.BatchInsertFeedback(context.Background(), feedback, true, true, false)
+	err = suite.dataClient.BatchInsertFeedback(suite.T().Context(), feedback, true, true, false)
 	suite.NoError(err)
 
 	recommender, err := NewRecommender(config.RecommendConfig{}, suite.cacheClient, suite.dataClient, true, "user_1", nil)
 	suite.NoError(err)
-	scores, digest, err := recommender.recommendLatest(context.Background())
+	scores, digest, err := recommender.recommendLatest(suite.T().Context())
 	suite.NoError(err)
 	suite.Equal("latest", digest)
 	if suite.Equal(10, len(scores)) {
@@ -96,7 +95,7 @@ func (suite *RecommenderTestSuite) TestLatest() {
 
 	recommender, err = NewRecommender(config.RecommendConfig{}, suite.cacheClient, suite.dataClient, true, "user_1", []string{"cat_1"})
 	suite.NoError(err)
-	scores, digest, err = recommender.recommendLatest(context.Background())
+	scores, digest, err = recommender.recommendLatest(suite.T().Context())
 	suite.NoError(err)
 	suite.Equal("latest", digest)
 	if suite.Equal(5, len(scores)) {
@@ -118,9 +117,9 @@ func (suite *RecommenderTestSuite) TestCollaborative() {
 			recommends[i].Categories = []string{"cat_1"}
 		}
 	}
-	err := suite.cacheClient.AddScores(context.Background(), cache.CollaborativeFiltering, "user_1", recommends)
+	err := suite.cacheClient.AddScores(suite.T().Context(), cache.CollaborativeFiltering, "user_1", recommends)
 	suite.NoError(err)
-	err = suite.cacheClient.Set(context.Background(), cache.String(cache.Key(cache.CollaborativeFilteringDigest, "user_1"), "digest"))
+	err = suite.cacheClient.Set(suite.T().Context(), cache.String(cache.Key(cache.CollaborativeFilteringDigest, "user_1"), "digest"))
 	suite.NoError(err)
 
 	feedback := make([]data.Feedback, 10)
@@ -133,12 +132,12 @@ func (suite *RecommenderTestSuite) TestCollaborative() {
 			},
 		}
 	}
-	err = suite.dataClient.BatchInsertFeedback(context.Background(), feedback, true, true, false)
+	err = suite.dataClient.BatchInsertFeedback(suite.T().Context(), feedback, true, true, false)
 	suite.NoError(err)
 
 	recommender, err := NewRecommender(config.RecommendConfig{}, suite.cacheClient, suite.dataClient, true, "user_1", nil)
 	suite.NoError(err)
-	scores, digest, err := recommender.recommendCollaborative(context.Background())
+	scores, digest, err := recommender.recommendCollaborative(suite.T().Context())
 	suite.NoError(err)
 	suite.Equal("digest", digest)
 	if suite.Equal(10, len(scores)) {
@@ -150,7 +149,7 @@ func (suite *RecommenderTestSuite) TestCollaborative() {
 
 	recommender, err = NewRecommender(config.RecommendConfig{}, suite.cacheClient, suite.dataClient, true, "user_1", []string{"cat_1"})
 	suite.NoError(err)
-	scores, digest, err = recommender.recommendCollaborative(context.Background())
+	scores, digest, err = recommender.recommendCollaborative(suite.T().Context())
 	suite.NoError(err)
 	suite.Equal("digest", digest)
 	if suite.Equal(5, len(scores)) {
@@ -174,9 +173,9 @@ func (suite *RecommenderTestSuite) TestNonPersonalized() {
 			recommends[i].Categories = []string{""}
 		}
 	}
-	err := suite.cacheClient.AddScores(context.Background(), cache.NonPersonalized, "a", recommends)
+	err := suite.cacheClient.AddScores(suite.T().Context(), cache.NonPersonalized, "a", recommends)
 	suite.NoError(err)
-	err = suite.cacheClient.Set(context.Background(), cache.String(cache.Key(cache.NonPersonalizedDigest, "a"), "digest"))
+	err = suite.cacheClient.Set(suite.T().Context(), cache.String(cache.Key(cache.NonPersonalizedDigest, "a"), "digest"))
 	suite.NoError(err)
 
 	feedback := make([]data.Feedback, 10)
@@ -189,13 +188,13 @@ func (suite *RecommenderTestSuite) TestNonPersonalized() {
 			},
 		}
 	}
-	err = suite.dataClient.BatchInsertFeedback(context.Background(), feedback, true, true, false)
+	err = suite.dataClient.BatchInsertFeedback(suite.T().Context(), feedback, true, true, false)
 	suite.NoError(err)
 
 	recommender, err := NewRecommender(config.RecommendConfig{}, suite.cacheClient, suite.dataClient, true, "user_1", nil)
 	suite.NoError(err)
 	recommendFunc := recommender.recommendNonPersonalized("a")
-	scores, digest, err := recommendFunc(context.Background())
+	scores, digest, err := recommendFunc(suite.T().Context())
 	suite.NoError(err)
 	suite.Equal("digest", digest)
 	if suite.Equal(10, len(scores)) {
@@ -208,7 +207,7 @@ func (suite *RecommenderTestSuite) TestNonPersonalized() {
 	recommender, err = NewRecommender(config.RecommendConfig{}, suite.cacheClient, suite.dataClient, true, "user_1", []string{"cat_1"})
 	suite.NoError(err)
 	recommendFunc = recommender.recommendNonPersonalized("a")
-	scores, digest, err = recommendFunc(context.Background())
+	scores, digest, err = recommendFunc(suite.T().Context())
 	suite.NoError(err)
 	suite.Equal("digest", digest)
 	if suite.Equal(5, len(scores)) {
@@ -240,7 +239,7 @@ func (suite *RecommenderTestSuite) TestExternal() {
 			},
 		}
 	}
-	err := suite.dataClient.BatchInsertFeedback(context.Background(), feedback, true, true, false)
+	err := suite.dataClient.BatchInsertFeedback(suite.T().Context(), feedback, true, true, false)
 	suite.NoError(err)
 
 	cfg := config.RecommendConfig{
@@ -252,7 +251,7 @@ func (suite *RecommenderTestSuite) TestExternal() {
 	recommender, err := NewRecommender(cfg, suite.cacheClient, suite.dataClient, true, "user_1", nil)
 	suite.NoError(err)
 	recommendFunc := recommender.recommendExternal("test")
-	scores, digest, err := recommendFunc(context.Background())
+	scores, digest, err := recommendFunc(suite.T().Context())
 	suite.NoError(err)
 	suite.Equal(cfg.External[0].Hash(), digest)
 	suite.Equal([]cache.Score{

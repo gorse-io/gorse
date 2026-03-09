@@ -69,6 +69,7 @@ type Database interface {
 	ListNodes() ([]*Node, error)
 	Put(key, value string) error
 	Get(key string) (*string, error)
+	Delete(key string) error
 }
 
 // Open a connection to a database.

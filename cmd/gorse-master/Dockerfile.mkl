@@ -3,7 +3,7 @@
 ############################
 # STEP 1 build executable binary
 ############################
-FROM golang:1.25-bookworm
+FROM golang:1.26-bookworm
 
 # Install Intel® oneAPI Toolkits
 
@@ -32,17 +32,20 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     go build -tags mkl -ldflags=" \
        -X 'github.com/gorse-io/gorse/cmd/version.Version=$(git describe --tags $(git rev-parse HEAD))' \
        -X 'github.com/gorse-io/gorse/cmd/version.GitCommit=$(git rev-parse HEAD)' \
-       -X 'github.com/gorse-io/gorse/cmd/version.BuildTime=$(date)'" .
+       -X 'github.com/gorse-io/gorse/cmd/version.BuildTime=$(date)' \
+       -X 'github.com/gorse-io/gorse/config.RootDir=/var/lib/gorse'" .
 
 ############################
 # STEP 2 build runtime image
 ############################
 FROM debian:bookworm-slim
 
+RUN apt update && apt install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+
 COPY --from=0 /src/cmd/gorse-master/gorse-master /usr/bin/gorse-master
 
 RUN /usr/bin/gorse-master --version
 
-ENV USER root
+ENV USER=root
 
 ENTRYPOINT ["/usr/bin/gorse-master", "-c", "/etc/gorse/config.toml"]

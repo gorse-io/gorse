@@ -144,7 +144,7 @@ func TestEvaluate(t *testing.T) {
 	}
 	for i := 0; i < 16; i++ {
 		test.AddItem(data.Item{ItemId: strconv.Itoa(i)})
-		test.AddFeedback(strconv.Itoa(i/4), strconv.Itoa(i))
+		test.AddFeedback(strconv.Itoa(i/4), strconv.Itoa(i), time.Time{})
 	}
 	assert.Equal(t, 16, test.CountFeedback())
 	assert.Equal(t, 4, test.CountUsers())

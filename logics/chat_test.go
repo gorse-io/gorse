@@ -15,41 +15,37 @@
 package logics
 
 import (
-	"context"
+	"net/http"
 	"testing"
 
-	"github.com/gorse-io/gorse/common/mock"
+	"github.com/gorse-io/gorse/common/reranker"
 	"github.com/gorse-io/gorse/config"
+	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
 	"github.com/stretchr/testify/assert"
 )
 
-func TestChatRanker(t *testing.T) {
-	mockAI := mock.NewOpenAIServer()
+func TestChatReranker(t *testing.T) {
+	s := reranker.NewMockServer()
 	go func() {
-		_ = mockAI.Start()
+		err := s.Start()
+		if err != nil && err != http.ErrServerClosed {
+			panic(err)
+		}
 	}()
-	mockAI.Ready()
-	defer mockAI.Close()
+	s.Ready()
+	defer s.Close()
 
-	ranker, err := NewChatRanker(config.OpenAIConfig{
-		BaseURL:             mockAI.BaseURL(),
-		AuthToken:           mockAI.AuthToken(),
-		ChatCompletionModel: "deepseek-r1",
-		EmbeddingModel:      "text-similarity-ada-001",
-	}, `{{ user.UserId }} is a {{ user.Comment }} watched the following movies recently:
-{% for item in feedback -%}
-- {{ item.Comment }}
-{% endfor -%}
-Please sort the following movies based on his or her preference:
-| ID | Title |
-{% for item in items -%}
-| {{ item.ItemId }} | {{ item.Comment }} |
-{% endfor -%}
-Return IDs as a JSON array. For example:
-`+"```json\n"+`["tt1233227", "tt0926084", "tt0890870", "tt1132626", "tt0435761"]`+"\n```")
+	reranker, err := NewChatReranker(config.RerankerAPIConfig{
+		AuthToken: s.AuthToken(),
+		URL:       s.URL(),
+		Model:     "gte-rerank",
+	},
+		"{{ user.UserId }} is a {{ user.Comment }} watched the following movies recently: {% for item in feedback %}{{ item.Comment }}, {% endfor %}",
+		"{{ item.Comment }}")
 	assert.NoError(t, err)
-	items, err := ranker.Rank(context.Background(), &data.User{
+
+	items, err := reranker.Rank(t.Context(), &data.User{
 		UserId:  "Tom",
 		Comment: "horror movie enthusiast",
 	}, []*FeedbackItem{
@@ -64,7 +60,13 @@ Return IDs as a JSON array. For example:
 		{ItemId: "tt0435761", Comment: "Saw V"},
 	})
 	assert.NoError(t, err)
-	assert.Equal(t, []string{"tt1233227", "tt0926084", "tt0890870", "tt1132626", "tt0435761"}, items)
+	assert.Equal(t, []cache.Score{
+		{Id: "tt1233227", Score: 1},
+		{Id: "tt0926084", Score: 0.5},
+		{Id: "tt0890870", Score: 0.3333333333333333},
+		{Id: "tt1132626", Score: 0.25},
+		{Id: "tt0435761", Score: 0.2},
+	}, items)
 }
 
 func TestParseArrayFromCompletion(t *testing.T) {

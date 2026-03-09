@@ -68,6 +68,7 @@ type Master struct {
 	tracer         *monitor.Monitor
 	remoteProgress sync.Map
 	cachePath      string
+	configPath     string
 	standalone     bool
 	openAIClient   *openai.Client
 
@@ -100,7 +101,7 @@ type Master struct {
 }
 
 // NewMaster creates a master node.
-func NewMaster(cfg *config.Config, cacheFolder string, standalone bool) *Master {
+func NewMaster(cfg *config.Config, cacheFolder string, standalone bool, configPath string) *Master {
 	rand.Seed(time.Now().UnixNano())
 
 	// setup trace provider
@@ -125,6 +126,7 @@ func NewMaster(cfg *config.Config, cacheFolder string, standalone bool) *Master 
 	m := &Master{
 		// create task monitor
 		cachePath:    cacheFolder,
+		configPath:   configPath,
 		standalone:   standalone,
 		tracer:       monitor.NewTracer("master"),
 		openAIClient: openai.NewClientWithConfig(clientConfig),
@@ -147,19 +149,10 @@ func NewMaster(cfg *config.Config, cacheFolder string, standalone bool) *Master 
 func (m *Master) Serve() {
 	// connect blob store
 	var err error
-	m.blobServer = blob.NewMasterStoreServer(m.cachePath)
-	if m.Config.S3.Endpoint != "" {
-		m.blobStore, err = blob.NewS3(m.Config.S3)
-		if err != nil {
-			log.Logger().Fatal("failed to create S3 blob store", zap.Error(err))
-		}
-	} else if m.Config.GCS.Bucket != "" {
-		m.blobStore, err = blob.NewGCS(m.Config.GCS)
-		if err != nil {
-			log.Logger().Fatal("failed to create GCS blob store", zap.Error(err))
-		}
-	} else {
-		m.blobStore = blob.NewPOSIX(m.cachePath)
+	m.blobServer = blob.NewMasterStoreServer(m.Config.Blob.URI)
+	m.blobStore, err = blob.NewStore(m.Config.Blob, nil)
+	if err != nil {
+		log.Logger().Fatal("failed to create blob store", zap.Error(err))
 	}
 
 	// connect meta database
