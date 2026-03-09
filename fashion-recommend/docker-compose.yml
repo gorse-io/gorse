@@ -1,0 +1,84 @@
+version: '3'
+
+services:
+  # PostgreSQL 数据库
+  postgres:
+    image: postgres:15
+    container_name: fashion-postgres
+    environment:
+      POSTGRES_DB: gorse
+      POSTGRES_USER: gorse
+      POSTGRES_PASSWORD: gorse_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gorse"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis 缓存（使用 Redis Stack 支持 RediSearch）
+  redis:
+    image: redis/redis-stack-server:latest
+    container_name: fashion-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Gorse Master 节点
+  gorse-master:
+    image: zhenghaoz/gorse-master:latest
+    container_name: fashion-gorse-master
+    ports:
+      - "8086:8086"
+      - "8088:8088"
+    volumes:
+      - ./config/config.toml:/etc/gorse/config.toml
+      - gorse_data:/var/lib/gorse
+    command: --config /etc/gorse/config.toml
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Gorse Server 节点
+  gorse-server:
+    image: zhenghaoz/gorse-server:latest
+    container_name: fashion-gorse-server
+    ports:
+      - "8087:8087"
+    command: 
+      - --master-host=gorse-master
+      - --master-port=8086
+      - --http-host=0.0.0.0
+      - --http-port=8087
+    depends_on:
+      - gorse-master
+    restart: unless-stopped
+
+  # Gorse Worker 节点
+  gorse-worker:
+    image: zhenghaoz/gorse-worker:latest
+    container_name: fashion-gorse-worker
+    command:
+      - --master-host=gorse-master
+      - --master-port=8086
+      - --jobs=4
+    depends_on:
+      - gorse-master
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+  gorse_data:
