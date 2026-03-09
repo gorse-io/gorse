@@ -538,8 +538,8 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.QueryParameter("write-back-delay", "Timestamp delay of write back feedback (format 0h0m0s)").DataType("string")).
 		Param(ws.QueryParameter("n", "Number of returned items").DataType("integer")).
 		Param(ws.QueryParameter("offset", "Offset of returned items").DataType("integer")).
-		Returns(http.StatusOK, "OK", []string{}).
-		Writes([]string{}))
+		Returns(http.StatusOK, "OK", RecommendResponse{}).
+		Writes(RecommendResponse{}))
 	ws.Route(ws.GET("/recommend/{user-id}/{category}").To(s.getRecommend).
 		Deprecate().Doc("Get recommendation for user.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{RecommendationAPITag}).
@@ -550,8 +550,8 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.QueryParameter("write-back-delay", "Timestamp delay of write back feedback (format 0h0m0s)").DataType("string")).
 		Param(ws.QueryParameter("n", "Number of returned items").DataType("integer")).
 		Param(ws.QueryParameter("offset", "Offset of returned items").DataType("integer")).
-		Returns(http.StatusOK, "OK", []string{}).
-		Writes([]string{}))
+		Returns(http.StatusOK, "OK", RecommendResponse{}).
+		Writes(RecommendResponse{}))
 	ws.Route(ws.POST("/session/recommend").To(s.sessionRecommend).
 		Doc("Get recommendation for session.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{RecommendationAPITag}).
@@ -835,13 +835,30 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 	} else {
 		scores = []cache.Score{}
 	}
-	results := lo.Map(scores, func(item cache.Score, index int) string {
+	itemIds := lo.Map(scores, func(item cache.Score, index int) string {
 		return item.Id
 	})
+	// fetch full item data
+	fetchedItems, err := s.DataClient.BatchGetItems(ctx, itemIds)
+	if err != nil {
+		InternalServerError(response, err)
+		return
+	}
+	// order items to match itemIds order
+	itemMap := make(map[string]data.Item, len(fetchedItems))
+	for _, item := range fetchedItems {
+		itemMap[item.ItemId] = item
+	}
+	var items []data.Item
+	for _, id := range itemIds {
+		if item, ok := itemMap[id]; ok {
+			items = append(items, item)
+		}
+	}
 	// write back
 	if writeBackFeedback != "" {
 		startTime := time.Now()
-		for _, itemId := range results {
+		for _, itemId := range itemIds {
 			// insert to data store
 			feedback := data.Feedback{
 				FeedbackKey: data.FeedbackKey{
@@ -858,8 +875,11 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 			}
 		}
 	}
-	// Send result
-	Ok(response, results)
+	// Send result with both item IDs (backward-compatible) and full item data
+	Ok(response, RecommendResponse{
+		ItemIds: itemIds,
+		Items:   items,
+	})
 }
 
 func (s *RestServer) sessionRecommend(request *restful.Request, response *restful.Response) {
@@ -957,6 +977,13 @@ func (s *RestServer) sessionRecommend(request *restful.Request, response *restfu
 	result = result[:lo.Min([]int{len(result), n})]
 	// Send result
 	Ok(response, result)
+}
+
+// RecommendResponse is the response for the recommend endpoint.
+// It includes both item IDs (for backward compatibility) and full item data.
+type RecommendResponse struct {
+	ItemIds []string    `json:"item_ids"`
+	Items   []data.Item `json:"items"`
 }
 
 // Success is the returned data structure for data insert operations.
