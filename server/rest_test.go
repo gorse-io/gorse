@@ -994,7 +994,7 @@ func (suite *ServerTestSuite) TestGetRecommends() {
 		}).
 		Expect(suite.T()).
 		Status(http.StatusOK).
-		Body(suite.marshalRecommend([]string{"1", "3", "5"})).
+		Body(suite.marshal([]string{"1", "3", "5"})).
 		End()
 	apitest.New().
 		Handler(suite.handler).
@@ -1006,7 +1006,7 @@ func (suite *ServerTestSuite) TestGetRecommends() {
 		}).
 		Expect(suite.T()).
 		Status(http.StatusOK).
-		Body(suite.marshalRecommend([]string{"6", "7", "8"})).
+		Body(suite.marshal([]string{"6", "7", "8"})).
 		End()
 	apitest.New().
 		Handler(suite.handler).
@@ -1018,7 +1018,7 @@ func (suite *ServerTestSuite) TestGetRecommends() {
 		}).
 		Expect(suite.T()).
 		Status(http.StatusOK).
-		Body(suite.marshalRecommend([]string{})).
+		Body(suite.marshal([]string{})).
 		End()
 	apitest.New().
 		Handler(suite.handler).
@@ -1030,7 +1030,7 @@ func (suite *ServerTestSuite) TestGetRecommends() {
 		}).
 		Expect(suite.T()).
 		Status(http.StatusOK).
-		Body(suite.marshalRecommend([]string{"1", "3", "5"})).
+		Body(suite.marshal([]string{"1", "3", "5"})).
 		End()
 	apitest.New().
 		Handler(suite.handler).
@@ -1043,7 +1043,7 @@ func (suite *ServerTestSuite) TestGetRecommends() {
 		}).
 		Expect(suite.T()).
 		Status(http.StatusOK).
-		Body(suite.marshalRecommend([]string{"6", "7", "8"})).
+		Body(suite.marshal([]string{"6", "7", "8"})).
 		End()
 	apitest.New().
 		Handler(suite.handler).
@@ -1051,6 +1051,19 @@ func (suite *ServerTestSuite) TestGetRecommends() {
 		Header("X-API-Key", apiKey).
 		QueryParams(map[string]string{
 			"n": "3",
+		}).
+		Expect(suite.T()).
+		Status(http.StatusOK).
+		Body(suite.marshal([]string{"6", "7", "8"})).
+		End()
+	// Test include-items=true returns full item data
+	apitest.New().
+		Handler(suite.handler).
+		Get("/api/recommend/0").
+		Header("X-API-Key", apiKey).
+		QueryParams(map[string]string{
+			"n":             "3",
+			"include-items": "true",
 		}).
 		Expect(suite.T()).
 		Status(http.StatusOK).
@@ -1083,7 +1096,7 @@ func (suite *ServerTestSuite) TestGetRecommendsMultiCategories() {
 		}).
 		Expect(suite.T()).
 		Status(http.StatusOK).
-		Body(suite.marshalRecommend([]string{"6"})).
+		Body(suite.marshal([]string{"6"})).
 		End()
 }
 
@@ -1136,7 +1149,7 @@ func (suite *ServerTestSuite) TestGetRecommendsReplacement() {
 		}).
 		Expect(suite.T()).
 		Status(http.StatusOK).
-		Body(suite.marshalRecommend([]string{"1", "2", "3"})).
+		Body(suite.marshal([]string{"1", "2", "3"})).
 		End()
 }
 
@@ -1218,7 +1231,7 @@ func (suite *ServerTestSuite) TestGetRecommendsFallbackItemToItem() {
 		}).
 		Expect(suite.T()).
 		Status(http.StatusOK).
-		Body(suite.marshalRecommend([]string{"9", "8", "7"})).
+		Body(suite.marshal([]string{"9", "8", "7"})).
 		End()
 	suite.Config.Recommend.Fallback.Recommenders = []string{"item-to-item/default"}
 	apitest.New().
@@ -1230,7 +1243,7 @@ func (suite *ServerTestSuite) TestGetRecommendsFallbackItemToItem() {
 		}).
 		Expect(suite.T()).
 		Status(http.StatusOK).
-		Body(suite.marshalRecommend([]string{"9", "7"})).
+		Body(suite.marshal([]string{"9", "7"})).
 		End()
 }
 
@@ -1295,7 +1308,7 @@ func (suite *ServerTestSuite) TestGetRecommendsFallbackUserToUser() {
 		}).
 		Expect(suite.T()).
 		Status(http.StatusOK).
-		Body(suite.marshalRecommend([]string{"48", "11", "12"})).
+		Body(suite.marshal([]string{"48", "11", "12"})).
 		End()
 	apitest.New().
 		Handler(suite.handler).
@@ -1306,7 +1319,7 @@ func (suite *ServerTestSuite) TestGetRecommendsFallbackUserToUser() {
 		}).
 		Expect(suite.T()).
 		Status(http.StatusOK).
-		Body(suite.marshalRecommend([]string{"48", "12"})).
+		Body(suite.marshal([]string{"48", "12"})).
 		End()
 }
 
@@ -1342,7 +1355,7 @@ func (suite *ServerTestSuite) TestRecommendFallbackLatest() {
 		}).
 		Expect(suite.T()).
 		Status(http.StatusOK).
-		Body(suite.marshalRecommend([]string{"1", "2", "3", "4", "5", "6", "7", "8"})).
+		Body(suite.marshal([]string{"1", "2", "3", "4", "5", "6", "7", "8"})).
 		End()
 	apitest.New().
 		Handler(suite.handler).
@@ -1353,7 +1366,7 @@ func (suite *ServerTestSuite) TestRecommendFallbackLatest() {
 		}).
 		Expect(suite.T()).
 		Status(http.StatusOK).
-		Body(suite.marshalRecommend([]string{"1", "2", "3", "4", "105", "106", "107", "108"})).
+		Body(suite.marshal([]string{"1", "2", "3", "4", "105", "106", "107", "108"})).
 		End()
 }
 
@@ -1384,7 +1397,7 @@ func (suite *ServerTestSuite) TestGetRecommendsFallbackCollaborativeFiltering() 
 		}).
 		Expect(suite.T()).
 		Status(http.StatusOK).
-		Body(suite.marshalRecommend([]string{"1", "2", "3", "4", "13", "14", "15", "16"})).
+		Body(suite.marshal([]string{"1", "2", "3", "4", "13", "14", "15", "16"})).
 		End()
 	apitest.New().
 		Handler(suite.handler).
@@ -1395,7 +1408,7 @@ func (suite *ServerTestSuite) TestGetRecommendsFallbackCollaborativeFiltering() 
 		}).
 		Expect(suite.T()).
 		Status(http.StatusOK).
-		Body(suite.marshalRecommend([]string{"1", "2", "3", "4", "13", "14", "15", "16"})).
+		Body(suite.marshal([]string{"1", "2", "3", "4", "13", "14", "15", "16"})).
 		End()
 }
 
@@ -1431,7 +1444,7 @@ func (suite *ServerTestSuite) TestGetRecommendsFallbackNonPersonalized() {
 		}).
 		Expect(suite.T()).
 		Status(http.StatusOK).
-		Body(suite.marshalRecommend([]string{"1", "2", "3", "4", "5", "6", "7", "8"})).
+		Body(suite.marshal([]string{"1", "2", "3", "4", "5", "6", "7", "8"})).
 		End()
 	apitest.New().
 		Handler(suite.handler).
@@ -1442,7 +1455,7 @@ func (suite *ServerTestSuite) TestGetRecommendsFallbackNonPersonalized() {
 		}).
 		Expect(suite.T()).
 		Status(http.StatusOK).
-		Body(suite.marshalRecommend([]string{"1", "2", "3", "4", "105", "106", "107", "108"})).
+		Body(suite.marshal([]string{"1", "2", "3", "4", "105", "106", "107", "108"})).
 		End()
 }
 
@@ -1641,7 +1654,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		JSON(items).
 		Expect(suite.T()).
 		Status(http.StatusOK).
-		Body(suite.marshalRecommend(cache.ConvertDocumentsToValues(documents[:2]))).
+		Body(suite.marshal(cache.ConvertDocumentsToValues(documents[:2]))).
 		End()
 
 	// insert item
@@ -1698,7 +1711,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		JSON(items).
 		Expect(suite.T()).
 		Status(http.StatusOK).
-		Body(suite.marshalRecommend(cache.ConvertDocumentsToValues(documents))).
+		Body(suite.marshal(cache.ConvertDocumentsToValues(documents))).
 		End()
 
 	// delete category
@@ -1755,7 +1768,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		JSON(items).
 		Expect(suite.T()).
 		Status(http.StatusOK).
-		Body(suite.marshalRecommend(cache.ConvertDocumentsToValues(documents[:2]))).
+		Body(suite.marshal(cache.ConvertDocumentsToValues(documents[:2]))).
 		End()
 
 	// delete category
@@ -1812,7 +1825,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		JSON(items).
 		Expect(suite.T()).
 		Status(http.StatusOK).
-		Body(suite.marshalRecommend(cache.ConvertDocumentsToValues(documents))).
+		Body(suite.marshal(cache.ConvertDocumentsToValues(documents))).
 		End()
 }
 

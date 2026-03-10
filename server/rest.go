@@ -538,6 +538,7 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.QueryParameter("write-back-delay", "Timestamp delay of write back feedback (format 0h0m0s)").DataType("string")).
 		Param(ws.QueryParameter("n", "Number of returned items").DataType("integer")).
 		Param(ws.QueryParameter("offset", "Offset of returned items").DataType("integer")).
+		Param(ws.QueryParameter("include-items", "Include full item data in response").DataType("boolean")).
 		Returns(http.StatusOK, "OK", RecommendResponse{}).
 		Writes(RecommendResponse{}))
 	ws.Route(ws.GET("/recommend/{user-id}/{category}").To(s.getRecommend).
@@ -550,6 +551,7 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.QueryParameter("write-back-delay", "Timestamp delay of write back feedback (format 0h0m0s)").DataType("string")).
 		Param(ws.QueryParameter("n", "Number of returned items").DataType("integer")).
 		Param(ws.QueryParameter("offset", "Offset of returned items").DataType("integer")).
+		Param(ws.QueryParameter("include-items", "Include full item data in response").DataType("boolean")).
 		Returns(http.StatusOK, "OK", RecommendResponse{}).
 		Writes(RecommendResponse{}))
 	ws.Route(ws.POST("/session/recommend").To(s.sessionRecommend).
@@ -838,21 +840,24 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 	itemIds := lo.Map(scores, func(item cache.Score, index int) string {
 		return item.Id
 	})
-	// fetch full item data
-	fetchedItems, err := s.DataClient.BatchGetItems(ctx, itemIds)
-	if err != nil {
-		InternalServerError(response, err)
-		return
-	}
-	// order items to match itemIds order
-	itemMap := make(map[string]data.Item, len(fetchedItems))
-	for _, item := range fetchedItems {
-		itemMap[item.ItemId] = item
-	}
+	includeItems := request.QueryParameter("include-items") == "true"
 	var items []data.Item
-	for _, id := range itemIds {
-		if item, ok := itemMap[id]; ok {
-			items = append(items, item)
+	if includeItems {
+		// fetch full item data only when requested
+		fetchedItems, err := s.DataClient.BatchGetItems(ctx, itemIds)
+		if err != nil {
+			InternalServerError(response, err)
+			return
+		}
+		// order items to match itemIds order
+		itemMap := make(map[string]data.Item, len(fetchedItems))
+		for _, item := range fetchedItems {
+			itemMap[item.ItemId] = item
+		}
+		for _, id := range itemIds {
+			if item, ok := itemMap[id]; ok {
+				items = append(items, item)
+			}
 		}
 	}
 	// write back
@@ -875,11 +880,15 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 			}
 		}
 	}
-	// Send result with both item IDs (backward-compatible) and full item data
-	Ok(response, RecommendResponse{
-		ItemIds: itemIds,
-		Items:   items,
-	})
+	// Send response: include full item data only when requested
+	if includeItems {
+		Ok(response, RecommendResponse{
+			ItemIds: itemIds,
+			Items:   items,
+		})
+	} else {
+		Ok(response, itemIds)
+	}
 }
 
 func (s *RestServer) sessionRecommend(request *restful.Request, response *restful.Response) {
