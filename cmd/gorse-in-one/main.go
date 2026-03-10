@@ -23,19 +23,17 @@ import (
 	"path/filepath"
 	"runtime"
 
+	"github.com/gorse-io/gorse/client"
 	"github.com/gorse-io/gorse/cmd/version"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/master"
-	"github.com/gorse-io/gorse/storage"
 	"github.com/gorse-io/gorse/storage/data"
 	"github.com/klauspost/cpuid/v2"
 	"github.com/schollz/progressbar/v3"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 )
-
-const dumpFile = "https://cdn.gorse.io/example/github.bin.gz"
 
 var oneCommand = &cobra.Command{
 	Use:   "gorse-in-one",
@@ -52,12 +50,10 @@ var oneCommand = &cobra.Command{
 		log.SetLogger(cmd.PersistentFlags(), debug)
 
 		// locate config file
-		var (
-			configPath string
-			cachePath  string
-		)
-		playground, _ := cmd.PersistentFlags().GetBool("playground")
-		if playground {
+		var configPath string
+		cachePath, _ := cmd.PersistentFlags().GetString("cache-path")
+		playground, _ := cmd.PersistentFlags().GetString("playground")
+		if playground != "" {
 			userHomeDir, err := os.UserHomeDir()
 			if err != nil {
 				log.Logger().Fatal("failed to get user home directory", zap.Error(err))
@@ -67,18 +63,18 @@ var oneCommand = &cobra.Command{
 				log.Logger().Fatal("failed to create config directory", zap.Error(err))
 			}
 			configPath = filepath.Join(etcDir, "config.toml")
-			if err = os.WriteFile(configPath, []byte(config.ConfigTOML), 0644); err != nil {
+			if playground == "ml-100k" {
+				err = os.WriteFile(configPath, []byte(client.ConfigTOML), 0644)
+			} else {
+				err = os.WriteFile(configPath, []byte(config.ConfigTOML), 0644)
+			}
+			if err != nil {
 				log.Logger().Fatal("failed to write playground config", zap.Error(err))
 			}
 			fmt.Println("Generated config file:", configPath)
-			cachePath = filepath.Join(userHomeDir, ".gorse", "tmp")
-			if err = os.MkdirAll(cachePath, os.ModePerm); err != nil {
-				log.Logger().Fatal("failed to create tmp directory", zap.Error(err))
-			}
 			fmt.Println("Using cache directory:", cachePath)
 		} else {
 			configPath, _ = cmd.PersistentFlags().GetString("config")
-			cachePath, _ = cmd.PersistentFlags().GetString("cache-path")
 			log.Logger().Info("load config", zap.String("config", configPath))
 		}
 
@@ -89,10 +85,10 @@ var oneCommand = &cobra.Command{
 		}
 
 		// create master
-		m := master.NewMaster(conf, cachePath, true)
+		m := master.NewMaster(conf, cachePath, true, configPath)
 
-		if playground {
-			setup(m)
+		if playground != "" {
+			setup(m, playground)
 		}
 
 		// Stop master
@@ -115,9 +111,10 @@ func init() {
 	log.AddFlags(oneCommand.PersistentFlags())
 	oneCommand.PersistentFlags().Bool("debug", false, "use debug log mode")
 	oneCommand.PersistentFlags().BoolP("version", "v", false, "gorse version")
-	oneCommand.PersistentFlags().Bool("playground", false, "playground mode (setup a recommender system for GitHub repositories)")
+	oneCommand.PersistentFlags().String("playground", "", "playground mode (setup a recommender system for GitHub repositories)")
+	oneCommand.PersistentFlags().Lookup("playground").NoOptDefVal = "default"
 	oneCommand.PersistentFlags().StringP("config", "c", "", "configuration file path")
-	oneCommand.PersistentFlags().String("cache-path", "one_cache.data", "path of cache file")
+	oneCommand.PersistentFlags().String("cache-path", config.MkDir("master"), "path of cache folder")
 }
 
 func main() {
@@ -126,26 +123,19 @@ func main() {
 	}
 }
 
-func setup(m *master.Master) {
+func setup(m *master.Master, playground string) {
 	// set database to user home directory
-	userHomeDir, err := os.UserHomeDir()
-	if err != nil {
-		log.Logger().Fatal("failed to get user home directory", zap.Error(err))
-	}
-	libDir := filepath.Join(userHomeDir, ".gorse", "lib")
-	if err = os.MkdirAll(libDir, os.ModePerm); err != nil {
-		log.Logger().Fatal("failed to create lib directory", zap.Error(err))
-	}
-	m.Config.Database.DataStore = "sqlite://" + filepath.Join(libDir, "data.db")
+	m.Config.Database.DataStore = config.GetDefaultConfig().Database.DataStore
 	fmt.Println("Using database:", m.Config.Database.DataStore)
-	m.Config.Database.CacheStore = "sqlite://" + filepath.Join(libDir, "cache.db")
+	m.Config.Database.CacheStore = config.GetDefaultConfig().Database.CacheStore
 	fmt.Println("Using cache:", m.Config.Database.CacheStore)
 	m.Config.Master.NumJobs = runtime.NumCPU()
 	fmt.Printf("Using %d CPU cores: %s\n", m.Config.Master.NumJobs, cpuid.CPU.BrandName)
 
 	// connect database
-	m.DataClient, err = data.Open(m.Config.Database.DataStore, m.Config.Database.DataTablePrefix,
-		storage.WithIsolationLevel(m.Config.Database.MySQL.IsolationLevel))
+	var err error
+	dataOpts := m.Config.Database.StorageOptions(m.Config.Database.DataStore)
+	m.DataClient, err = data.Open(m.Config.Database.DataStore, m.Config.Database.DataTablePrefix, dataOpts...)
 	if err != nil {
 		log.Logger().Fatal("failed to connect data database", zap.Error(err),
 			zap.String("database", log.RedactDBURL(m.Config.Database.DataStore)))
@@ -156,16 +146,21 @@ func setup(m *master.Master) {
 	}
 
 	// import playground data
-	req, err := http.Get(dumpFile)
+	var resp *http.Response
+	if playground == "ml-100k" {
+		resp, err = http.Get("https://cdn.gorse.io/example/ml-100k.bin.gz")
+	} else {
+		resp, err = http.Get("https://cdn.gorse.io/example/github.bin.gz")
+	}
 	if err != nil {
 		log.Logger().Fatal("failed to download playground data", zap.Error(err))
 	}
-	defer req.Body.Close()
+	defer resp.Body.Close()
 	bar := progressbar.DefaultBytes(
-		req.ContentLength,
+		resp.ContentLength,
 		"Importing data",
 	)
-	p := progressbar.NewReader(req.Body, bar)
+	p := progressbar.NewReader(resp.Body, bar)
 	d, err := gzip.NewReader(&p)
 	if err != nil {
 		log.Logger().Fatal("failed to decompress playground data", zap.Error(err))

@@ -90,7 +90,7 @@ func Parallel(ctx context.Context, nJobs, nWorkers int, worker func(workerId, jo
 			}
 		}
 	}
-	return nil
+	return ctx.Err()
 }
 
 func For(ctx context.Context, nJobs, nWorkers int, worker func(int)) error {

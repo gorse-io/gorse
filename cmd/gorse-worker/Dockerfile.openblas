@@ -3,7 +3,7 @@
 ############################
 # STEP 1 build executable binary
 ############################
-FROM --platform=$BUILDPLATFORM golang:1.25
+FROM --platform=$BUILDPLATFORM golang:1.26
 
 # Install OpenBLAS
 
@@ -17,6 +17,12 @@ elif [ "${TARGETARCH}" = "arm64" ]; then \
     dpkg --add-architecture ${TARGETARCH} && apt update && apt install -y gcc-aarch64-linux-gnu libopenblas-dev:${TARGETARCH} git; \
 elif [ "${TARGETARCH}" = "riscv64" ]; then \
     dpkg --add-architecture ${TARGETARCH} && apt update && apt install -y gcc-riscv64-linux-gnu libopenblas-dev:${TARGETARCH} git; \
+elif [ "${TARGETARCH}" = "ppc64le" ]; then \
+    dpkg --add-architecture ppc64el && apt update && apt install -y gcc-powerpc64le-linux-gnu libopenblas-dev:ppc64el git; \
+elif [ "${TARGETARCH}" = "s390x" ]; then \
+    dpkg --add-architecture ${TARGETARCH} && apt update && apt install -y gcc-s390x-linux-gnu libopenblas-dev:${TARGETARCH} git; \
+elif [ "${TARGETARCH}" = "loong64" ]; then \
+    dpkg --add-architecture ${TARGETARCH} && apt update && apt install -y gcc-loongarch64-linux-gnu libopenblas-dev:${TARGETARCH} git; \
 else \
     echo "Unsupported TARGETARCH ${TARGETARCH}"; exit 1; \
 fi
@@ -40,6 +46,12 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
         export CC=aarch64-linux-gnu-gcc; \
     elif [ "${TARGETARCH}" = "riscv64" ]; then \
         export CC=riscv64-linux-gnu-gcc; \
+    elif [ "${TARGETARCH}" = "ppc64le" ]; then \
+        export CC=powerpc64le-linux-gnu-gcc; \
+    elif [ "${TARGETARCH}" = "s390x" ]; then \
+        export CC=s390x-linux-gnu-gcc; \
+    elif [ "${TARGETARCH}" = "loong64" ]; then \
+        export CC=loongarch64-linux-gnu-gcc; \
     else \
         echo "Unsupported TARGETARCH ${TARGETARCH}"; exit 1; \
     fi && \
@@ -47,17 +59,20 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     GOOS=${TARGETOS} GOARCH=${TARGETARCH} CGO_ENABLED=1 go build -tags openblas -ldflags=" \
        -X 'github.com/gorse-io/gorse/cmd/version.Version=$(git describe --tags $(git rev-parse HEAD))' \
        -X 'github.com/gorse-io/gorse/cmd/version.GitCommit=$(git rev-parse HEAD)' \
-       -X 'github.com/gorse-io/gorse/cmd/version.BuildTime=$(date)'" .
+       -X 'github.com/gorse-io/gorse/cmd/version.BuildTime=$(date)' \
+       -X 'github.com/gorse-io/gorse/config.RootDir=/var/lib/gorse'" .
 
 ############################
 # STEP 2 build runtime image
 ############################
 FROM debian:trixie-slim
 
+RUN apt update && apt install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+
 COPY --from=0 /src/cmd/gorse-worker/gorse-worker /usr/bin/gorse-worker
 
 RUN /usr/bin/gorse-worker --version
 
-ENV USER root
+ENV USER=root
 
 ENTRYPOINT ["/usr/bin/gorse-worker"]

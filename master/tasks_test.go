@@ -15,7 +15,6 @@
 package master
 
 import (
-	"context"
 	"runtime"
 	"strconv"
 	"time"
@@ -28,7 +27,7 @@ import (
 )
 
 func (s *MasterTestSuite) TestFindItemToItem() {
-	ctx := context.Background()
+	ctx := s.T().Context()
 	// create config
 	s.Config = &config.Config{}
 	s.Config.Recommend.CacheSize = 3
@@ -82,14 +81,14 @@ func (s *MasterTestSuite) TestFindItemToItem() {
 	}
 
 	// load mock dataset
-	_, dataSet, err := s.LoadDataFromDatabase(context.Background(), s.DataClient,
+	_, dataSet, err := s.LoadDataFromDatabase(s.T().Context(), s.DataClient,
 		[]expression.FeedbackTypeExpression{expression.MustParseFeedbackTypeExpression("FeedbackType")},
 		nil, 0, 0, NewOnlineEvaluator(nil, nil), nil)
 	s.NoError(err)
 
 	// similar items (common users)
 	s.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "default", Type: "users"}}
-	s.NoError(s.updateItemToItem(context.Background(), dataSet))
+	s.NoError(s.updateItemToItem(s.T().Context(), dataSet))
 	similar, err := s.CacheClient.SearchScores(ctx, cache.ItemToItem, cache.Key("default", "9"), nil, 0, 100)
 	s.NoError(err)
 	s.Equal([]string{"7", "5", "3"}, cache.ConvertDocumentsToValues(similar))
@@ -106,7 +105,7 @@ func (s *MasterTestSuite) TestFindItemToItem() {
 	err = s.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastModifyItemTime, "8"), time.Now()))
 	s.NoError(err)
 	s.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "default", Type: "tags", Column: "item.Labels"}}
-	s.NoError(s.updateItemToItem(context.Background(), dataSet))
+	s.NoError(s.updateItemToItem(s.T().Context(), dataSet))
 	similar, err = s.CacheClient.SearchScores(ctx, cache.ItemToItem, cache.Key("default", "8"), nil, 0, 100)
 	s.NoError(err)
 	s.Equal([]string{"0", "2", "4"}, cache.ConvertDocumentsToValues(similar))
@@ -121,7 +120,7 @@ func (s *MasterTestSuite) TestFindItemToItem() {
 	err = s.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastModifyItemTime, "9"), time.Now()))
 	s.NoError(err)
 	s.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "default", Type: "auto"}}
-	s.NoError(s.updateItemToItem(context.Background(), dataSet))
+	s.NoError(s.updateItemToItem(s.T().Context(), dataSet))
 	similar, err = s.CacheClient.SearchScores(ctx, cache.ItemToItem, cache.Key("default", "8"), nil, 0, 100)
 	s.NoError(err)
 	s.Equal([]string{"0", "2", "4"}, cache.ConvertDocumentsToValues(similar))
@@ -131,7 +130,7 @@ func (s *MasterTestSuite) TestFindItemToItem() {
 }
 
 func (s *MasterTestSuite) TestUserToUser() {
-	ctx := context.Background()
+	ctx := s.T().Context()
 	// create config
 	s.Config = &config.Config{}
 	s.Config.Recommend.CacheSize = 3
@@ -169,14 +168,14 @@ func (s *MasterTestSuite) TestUserToUser() {
 	s.NoError(err)
 	err = s.DataClient.BatchInsertFeedback(ctx, feedbacks, true, true, true)
 	s.NoError(err)
-	_, dataSet, err := s.LoadDataFromDatabase(context.Background(), s.DataClient,
+	_, dataSet, err := s.LoadDataFromDatabase(s.T().Context(), s.DataClient,
 		[]expression.FeedbackTypeExpression{expression.MustParseFeedbackTypeExpression("FeedbackType")},
 		nil, 0, 0, NewOnlineEvaluator(nil, nil), nil)
 	s.NoError(err)
 
 	// similar items (common users)
 	s.Config.Recommend.UserToUser = []config.UserToUserConfig{{Name: "default", Type: "items"}}
-	s.NoError(s.updateUserToUser(context.Background(), dataSet))
+	s.NoError(s.updateUserToUser(s.T().Context(), dataSet))
 	similar, err := s.CacheClient.SearchScores(ctx, cache.UserToUser, cache.Key("default", "9"), nil, 0, 100)
 	s.NoError(err)
 	s.Equal([]string{"7", "5", "3"}, cache.ConvertDocumentsToValues(similar))
@@ -188,7 +187,7 @@ func (s *MasterTestSuite) TestUserToUser() {
 	err = s.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastModifyUserTime, "8"), time.Now()))
 	s.NoError(err)
 	s.Config.Recommend.UserToUser = []config.UserToUserConfig{{Name: "default", Type: "tags", Column: "user.Labels"}}
-	s.NoError(s.updateUserToUser(context.Background(), dataSet))
+	s.NoError(s.updateUserToUser(s.T().Context(), dataSet))
 	similar, err = s.CacheClient.SearchScores(ctx, cache.UserToUser, cache.Key("default", "8"), nil, 0, 100)
 	s.NoError(err)
 	s.Equal([]string{"0", "2", "4"}, cache.ConvertDocumentsToValues(similar))
@@ -199,7 +198,7 @@ func (s *MasterTestSuite) TestUserToUser() {
 	err = s.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastModifyUserTime, "9"), time.Now()))
 	s.NoError(err)
 	s.Config.Recommend.UserToUser = []config.UserToUserConfig{{Name: "default", Type: "auto"}}
-	s.NoError(s.updateUserToUser(context.Background(), dataSet))
+	s.NoError(s.updateUserToUser(s.T().Context(), dataSet))
 	similar, err = s.CacheClient.SearchScores(ctx, cache.UserToUser, cache.Key("default", "8"), nil, 0, 100)
 	s.NoError(err)
 	s.Equal([]string{"0", "2", "4"}, cache.ConvertDocumentsToValues(similar))
@@ -209,7 +208,7 @@ func (s *MasterTestSuite) TestUserToUser() {
 }
 
 func (s *MasterTestSuite) TestLoadDataFromDatabase() {
-	ctx := context.Background()
+	ctx := s.T().Context()
 	// create config
 	s.Config = &config.Config{}
 	s.Config.Recommend.CacheSize = 3
@@ -331,7 +330,7 @@ func (s *MasterTestSuite) TestLoadDataFromDatabase() {
 }
 
 func (s *MasterTestSuite) TestNonPersonalizedRecommend() {
-	ctx := context.Background()
+	ctx := s.T().Context()
 	// create config
 	s.Config = &config.Config{}
 	s.Config.Recommend.CacheSize = 3
@@ -410,7 +409,7 @@ func (s *MasterTestSuite) TestNonPersonalizedRecommend() {
 func (s *MasterTestSuite) TestNeedUpdateItemToItem() {
 	s.Config = config.GetDefaultConfig()
 	recommendConfig := config.ItemToItemConfig{Name: "default"}
-	ctx := context.Background()
+	ctx := s.T().Context()
 
 	// empty cache
 	s.True(s.needUpdateItemToItem(ctx, "1", recommendConfig))
@@ -441,7 +440,7 @@ func (s *MasterTestSuite) TestNeedUpdateItemToItem() {
 }
 
 func (s *MasterTestSuite) TestNeedUpdateUserToUser() {
-	ctx := context.Background()
+	ctx := s.T().Context()
 	s.Config = config.GetDefaultConfig()
 	recommendConfig := config.UserToUserConfig{Name: "default"}
 
@@ -482,7 +481,7 @@ func (s *MasterTestSuite) TestGarbageCollection() {
 	s.Config.Recommend.UserToUser = []config.UserToUserConfig{{Name: "default", Type: "items"}}
 
 	// insert items
-	ctx := context.Background()
+	ctx := s.T().Context()
 	err := s.DataClient.BatchInsertItems(ctx, []data.Item{
 		{ItemId: "1", Timestamp: time.Now(), Categories: []string{"*"}, Labels: []string{"a", "b", "c", "d"}, Comment: ""},
 		{ItemId: "2", Timestamp: time.Now(), Categories: []string{"*"}, Labels: []string{}, Comment: ""},

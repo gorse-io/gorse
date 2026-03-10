@@ -16,6 +16,7 @@ package master
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
@@ -49,6 +50,8 @@ import (
 	"github.com/gorse-io/gorse/storage/meta"
 	"github.com/invopop/jsonschema"
 	"github.com/juju/errors"
+	"github.com/nikolalohinski/gonja/v2"
+	"github.com/nikolalohinski/gonja/v2/exec"
 	"github.com/rakyll/statik/fs"
 	"github.com/samber/lo"
 	"github.com/sashabaranov/go-openai"
@@ -68,6 +71,11 @@ type UserInfo struct {
 	Email      string `json:"email"`
 	Verified   bool   `json:"email_verified"`
 	AuthType   string `json:"auth_type"`
+}
+
+type RerankerPrompt struct {
+	Query     string   `json:"query"`
+	Documents []string `json:"documents"`
 }
 
 func (m *Master) CreateWebService() {
@@ -101,6 +109,10 @@ func (m *Master) CreateWebService() {
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
 		Returns(http.StatusOK, "OK", config.Config{}).
 		Writes(config.Config{}))
+	ws.Route(ws.DELETE("/dashboard/config").To(m.deleteConfig).
+		Doc("Delete config.").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
+		Returns(http.StatusOK, "OK", struct{}{}))
 	ws.Route(ws.GET("/dashboard/config/schema").To(m.getConfigSchema).
 		Doc("Get config schema.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
@@ -221,6 +233,21 @@ func (m *Master) CreateWebService() {
 		Param(ws.QueryParameter("offset", "offset of the list").DataType("int")).
 		Returns(http.StatusOK, "OK", []ScoreUser{}).
 		Writes([]ScoreUser{}))
+	ws.Route(ws.GET("/dashboard/external").To(m.getExternal).
+		Doc("get external recommendations preview").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
+		Param(ws.QueryParameter("script", "external script").DataType("string")).
+		Param(ws.QueryParameter("user-id", "identifier of the user").DataType("string")).
+		Returns(http.StatusOK, "OK", []string{}).
+		Writes([]string{}))
+	ws.Route(ws.GET("/dashboard/ranker/prompt").To(m.getRankerPrompt).
+		Doc("Get ranker prompt.").
+		Metadata(restfulspec.KeyOpenAPITags, []string{"dashboard"}).
+		Param(ws.QueryParameter("query-template", "query template (base64)").DataType("string")).
+		Param(ws.QueryParameter("document-template", "document template (base64)").DataType("string")).
+		Param(ws.QueryParameter("user-id", "identifier of the user").DataType("string")).
+		Returns(http.StatusOK, "OK", RerankerPrompt{}).
+		Writes(RerankerPrompt{}))
 }
 
 // SinglePageAppFileSystem is the file system for single page app.
@@ -567,6 +594,26 @@ func (m *Master) getConfig(_ *restful.Request, response *restful.Response) {
 		delete(configMap, "database")
 	}
 	server.Ok(response, formatConfig(configMap))
+}
+
+func (m *Master) deleteConfig(_request *restful.Request, response *restful.Response) {
+	if err := m.metaStore.Delete(meta.RECOMMEND_CONFIG); err != nil {
+		server.InternalServerError(response, err)
+		return
+	}
+	newConfig, err := config.LoadConfig(m.configPath)
+	if err != nil {
+		server.InternalServerError(response, err)
+		return
+	}
+	m.Config.Recommend = newConfig.Recommend
+
+	m.cancel()
+	select {
+	case m.scheduled <- struct{}{}:
+	default:
+	}
+	server.Ok(response, struct{}{})
 }
 
 func (m *Master) getConfigSchema(_ *restful.Request, response *restful.Response) {
@@ -1055,6 +1102,159 @@ func (m *Master) getUserToUser(request *restful.Request, response *restful.Respo
 	name := request.PathParameter("name")
 	m.SetLastModified(request, response, cache.Key(cache.UserToUserUpdateTime, name, userId))
 	m.SearchDocuments(cache.UserToUser, cache.Key(name, userId), nil, m.GetUser, request, response)
+}
+
+func (m *Master) getExternal(request *restful.Request, response *restful.Response) {
+	scriptBase64 := request.QueryParameter("script")
+	if scriptBase64 == "" {
+		server.BadRequest(response, fmt.Errorf("script is required"))
+		return
+	}
+	userId := request.QueryParameter("user-id")
+
+	scriptBytes, err := base64.StdEncoding.DecodeString(scriptBase64)
+	if err != nil {
+		server.BadRequest(response, fmt.Errorf("invalid script encoding: %w", err))
+		return
+	}
+
+	external, err := logics.NewExternal(config.ExternalConfig{
+		Name:   "preview",
+		Script: string(scriptBytes),
+	})
+	if err != nil {
+		server.InternalServerError(response, err)
+		return
+	}
+	defer external.Close()
+
+	items, err := external.Pull(userId)
+	if err != nil {
+		server.InternalServerError(response, err)
+		return
+	}
+
+	m.SetLastModified(request, response, time.Now().String())
+	server.Ok(response, items)
+}
+
+func (m *Master) getRankerPrompt(request *restful.Request, response *restful.Response) {
+	ctx := context.Background()
+	if request != nil && request.Request != nil {
+		ctx = request.Request.Context()
+	}
+	queryTplBase64 := request.QueryParameter("query-template")
+	documentTplBase64 := request.QueryParameter("document-template")
+	if queryTplBase64 == "" || documentTplBase64 == "" {
+		server.BadRequest(response, fmt.Errorf("query-template and document-template are required"))
+		return
+	}
+	userId := request.QueryParameter("user-id")
+	if userId == "" {
+		server.BadRequest(response, fmt.Errorf("user-id is required"))
+		return
+	}
+
+	queryTplBytes, err := base64.StdEncoding.DecodeString(queryTplBase64)
+	if err != nil {
+		server.BadRequest(response, fmt.Errorf("invalid query-template encoding: %w", err))
+		return
+	}
+	queryTpl, err := gonja.FromString(string(queryTplBytes))
+	if err != nil {
+		server.BadRequest(response, err)
+		return
+	}
+
+	documentTplBytes, err := base64.StdEncoding.DecodeString(documentTplBase64)
+	if err != nil {
+		server.BadRequest(response, fmt.Errorf("invalid document-template encoding: %w", err))
+		return
+	}
+	documentTpl, err := gonja.FromString(string(documentTplBytes))
+	if err != nil {
+		server.BadRequest(response, err)
+		return
+	}
+
+	user, err := m.DataClient.GetUser(ctx, userId)
+	if err != nil {
+		if errors.Is(err, errors.NotFound) {
+			server.PageNotFound(response, err)
+		} else {
+			server.InternalServerError(response, err)
+		}
+		return
+	}
+	feedbacks, err := m.DataClient.GetUserFeedback(ctx, userId, m.Config.Now(), m.Config.Recommend.DataSource.PositiveFeedbackTypes...)
+	if err != nil {
+		server.InternalServerError(response, err)
+		return
+	}
+	data.SortFeedbacks(feedbacks)
+	if len(feedbacks) > 10 {
+		feedbacks = feedbacks[:10]
+	}
+	itemsById := map[string]data.Item{}
+	if len(feedbacks) > 0 {
+		feedbackItemIds := lo.Map(feedbacks, func(fb data.Feedback, _ int) string {
+			return fb.ItemId
+		})
+		feedbackItems, err := m.DataClient.BatchGetItems(ctx, feedbackItemIds)
+		if err != nil {
+			server.InternalServerError(response, err)
+			return
+		}
+		itemsById = make(map[string]data.Item, len(feedbackItems))
+		for _, item := range feedbackItems {
+			itemsById[item.ItemId] = item
+		}
+	}
+	feedbackItems := make([]*logics.FeedbackItem, 0, len(feedbacks))
+	for _, fb := range feedbacks {
+		if item, exist := itemsById[fb.ItemId]; exist {
+			feedbackItems = append(feedbackItems, &logics.FeedbackItem{
+				FeedbackType: fb.FeedbackType,
+				Item:         item,
+			})
+		}
+	}
+
+	latestItems, err := m.DataClient.GetLatestItems(ctx, 100, nil)
+	if err != nil {
+		server.InternalServerError(response, err)
+		return
+	}
+
+	// render query
+	var queryBuf strings.Builder
+	queryCtx := exec.NewContext(map[string]any{
+		"user":     &user,
+		"feedback": feedbackItems,
+	})
+	if err := queryTpl.Execute(&queryBuf, queryCtx); err != nil {
+		server.InternalServerError(response, err)
+		return
+	}
+
+	// render documents
+	documents := make([]string, len(latestItems))
+	for i, item := range latestItems {
+		var docBuf strings.Builder
+		docCtx := exec.NewContext(map[string]any{
+			"item": item,
+		})
+		if err := documentTpl.Execute(&docBuf, docCtx); err != nil {
+			server.InternalServerError(response, err)
+			return
+		}
+		documents[i] = docBuf.String()
+	}
+
+	server.Ok(response, RerankerPrompt{
+		Query:     queryBuf.String(),
+		Documents: documents,
+	})
 }
 
 func (m *Master) importExportUsers(response http.ResponseWriter, request *http.Request) {
@@ -1850,6 +2050,9 @@ func (m *Master) chat(response http.ResponseWriter, request *http.Request) {
 		if err != nil {
 			writeError(response, http.StatusInternalServerError, err.Error())
 			return
+		}
+		if len(resp.Choices) == 0 {
+			continue
 		}
 		if _, err = response.Write([]byte(resp.Choices[0].Delta.Content)); err != nil {
 			log.Logger().Error("failed to write response", zap.Error(err))

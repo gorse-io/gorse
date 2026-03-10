@@ -1,6 +1,4 @@
-//go:build cgo && cuda
-
-// Copyright 2025 gorse Project Authors
+// Copyright 2026 gorse Project Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,18 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package floats
+package vectors
 
-import "github.com/gorse-io/gorse/common/blas"
+import (
+	"testing"
 
-func init() {
-	feature = feature | CUDA
+	"github.com/stretchr/testify/suite"
+)
+
+type SQLiteTestSuite struct {
+	vectorsTestSuite
 }
 
-func mm(transA, transB bool, m, n, k int, a []float32, lda int, b []float32, ldb int, c []float32, ldc int) {
-	err := blas.SGEMM(blas.RowMajor, blas.NewTranspose(transA), blas.NewTranspose(transB),
-		m, n, k, 1.0, a, lda, b, ldb, 0, c, ldc)
-	if err != nil {
-		panic(err)
-	}
+func (suite *SQLiteTestSuite) SetupSuite() {
+	var err error
+	suite.Database, err = Open("sqlite://:memory:", "gorse_")
+	suite.NoError(err)
+}
+
+func TestSQLite(t *testing.T) {
+	suite.Run(t, new(SQLiteTestSuite))
 }

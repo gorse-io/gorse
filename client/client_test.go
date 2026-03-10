@@ -15,14 +15,12 @@
 package client
 
 import (
-	"context"
 	"os"
 	"testing"
 	"time"
 
 	client "github.com/gorse-io/gorse-go"
 	"github.com/stretchr/testify/suite"
-	"google.golang.org/protobuf/proto"
 )
 
 var (
@@ -48,7 +46,7 @@ func (suite *GorseClientTestSuite) SetupSuite() {
 }
 
 func (suite *GorseClientTestSuite) TestUsers() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 
 	cursor, err := suite.client.GetUsers(ctx, 3, "")
 	suite.NoError(err)
@@ -96,7 +94,7 @@ func (suite *GorseClientTestSuite) TestUsers() {
 	suite.Equal(user, resp)
 
 	patch := client.UserPatch{
-		Comment: proto.String("hongmi"),
+		Comment: new("hongmi"),
 	}
 	rowAffected, err = suite.client.UpdateUser(ctx, user.UserId, patch)
 	suite.NoError(err)
@@ -113,7 +111,7 @@ func (suite *GorseClientTestSuite) TestUsers() {
 }
 
 func (suite *GorseClientTestSuite) TestItems() {
-	ctx := context.TODO()
+	ctx := suite.T().Context()
 	items, err := suite.client.GetItems(ctx, 3, "")
 	suite.NoError(err)
 	suite.NotEmpty(items.Cursor)
@@ -150,7 +148,7 @@ func (suite *GorseClientTestSuite) TestItems() {
 	suite.Equal(item, resp)
 
 	patch := client.ItemPatch{
-		Comment: proto.String("小黄人 (2015)"),
+		Comment: new("小黄人 (2015)"),
 	}
 	rowAffected, err = suite.client.UpdateItem(ctx, item.ItemId, patch)
 	suite.NoError(err)
@@ -167,7 +165,7 @@ func (suite *GorseClientTestSuite) TestItems() {
 }
 
 func (suite *GorseClientTestSuite) TestFeedback() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	_, err := suite.client.InsertUser(ctx, client.User{UserId: "2000"})
 	suite.NoError(err)
 
@@ -213,7 +211,7 @@ func (suite *GorseClientTestSuite) TestFeedback() {
 }
 
 func (suite *GorseClientTestSuite) TestLatest() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	items, err := suite.client.GetLatestItems(ctx, "", "", 3, 0)
 	suite.NoError(err)
 	if suite.Len(items, 3) {
@@ -224,7 +222,7 @@ func (suite *GorseClientTestSuite) TestLatest() {
 }
 
 func (suite *GorseClientTestSuite) TestItemToItem() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	neighbors, err := suite.client.GetNeighbors(ctx, "1", 3)
 	suite.NoError(err)
 	if suite.Len(neighbors, 3) {
@@ -235,7 +233,7 @@ func (suite *GorseClientTestSuite) TestItemToItem() {
 }
 
 func (suite *GorseClientTestSuite) TestRecommend() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	_, err := suite.client.InsertUser(ctx, client.User{UserId: "3000"})
 	suite.NoError(err)
 	recommendations, err := suite.client.GetRecommend(ctx, "3000", "", 3, 0)

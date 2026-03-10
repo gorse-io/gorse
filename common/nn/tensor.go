@@ -242,19 +242,19 @@ func (t *Tensor) String() string {
 	builder.WriteString("[")
 	if len(t.data) <= 10 {
 		for i := 0; i < len(t.data); i++ {
-			builder.WriteString(fmt.Sprint(t.data[i]))
+			fmt.Fprint(&builder, t.data[i])
 			if i != len(t.data)-1 {
 				builder.WriteString(", ")
 			}
 		}
 	} else {
 		for i := 0; i < 5; i++ {
-			builder.WriteString(fmt.Sprint(t.data[i]))
+			fmt.Fprint(&builder, t.data[i])
 			builder.WriteString(", ")
 		}
 		builder.WriteString("..., ")
 		for i := len(t.data) - 5; i < len(t.data); i++ {
-			builder.WriteString(fmt.Sprint(t.data[i]))
+			fmt.Fprint(&builder, t.data[i])
 			if i != len(t.data)-1 {
 				builder.WriteString(", ")
 			}

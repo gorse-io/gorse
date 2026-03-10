@@ -39,6 +39,31 @@ data_table_prefix = ""
 # Transaction isolation level. The default value is "READ-UNCOMMITTED".
 isolation_level = "READ-UNCOMMITTED"
 
+# Maximum number of open connections to the database. Set to 0 to keep the driver default.
+max_open_conns = 0
+
+# Maximum number of idle connections to the database. Set to 0 to keep the driver default.
+max_idle_conns = 0
+
+# Maximum amount of time a connection may be reused. Set to "0s" to keep the driver default.
+conn_max_lifetime = "0s"
+
+[database.postgres]
+
+# Maximum number of open connections to the database. The default value is 64.
+max_open_conns = 64
+
+# Maximum number of idle connections to the database. The default value is 64.
+max_idle_conns = 64
+
+# Maximum amount of time a connection may be reused. The default value is "1m".
+conn_max_lifetime = "1m"
+
+[database.redis]
+
+# The maximum number of results to be returned by the FT.SEARCH command if LIMIT is used
+max_search_results = 10000
+
 [master]
 
 # GRPC port of the master node. The default value is 8086.
@@ -158,7 +183,6 @@ name = "neighbors"
 #   embedding: recommend by Euclidean distance of embeddings.
 #   tags: recommend by number of common tags.
 #   users: recommend by number of common users.
-#   chat: recommend by chat completion model.
 type = "embedding"
 
 # The column of the item embeddings. Leave blank if type is "users".
@@ -194,13 +218,18 @@ data["items"].map((item) => {
 
 [recommend.collaborative]
 
+# The type of collaborative filtering. Supported values:
+#   none: disable collaborative filtering.
+#   mf: matrix factorization.
+type = "mf"
+
 # The time period for model fitting. The default value is "60m".
 fit_period = "60m"
 
 # The number of epochs for model fitting. The default value is 100.
 fit_epoch = 100
 
-# The time period for hyperparameter optimization. The default value is "360m".
+# The time period for hyperparameter optimization, set to 0 to disable. The default value is "0".
 optimize_period = "360m"
 
 # The number of trials for hyperparameter optimization. The default value is 10.
@@ -225,9 +254,9 @@ read_replacement_decay = 0.6
 [recommend.ranker]
 
 # The type of the ranker. There are two types:
-#   none: no ranking.
+#   none: no ranking (default).
 #   fm: factorization machines.
-#   llm: large language model.
+#   llm: LLM-based reranker.
 type = "fm"
 
 # The time period to refresh recommendation for inactive users. The default values is 120h.
@@ -242,37 +271,39 @@ fit_period = "60m"
 # The number of epochs for model fitting. The default value is 100.
 fit_epoch = 100
 
-# The time period for hyperparameter optimization. The default value is "360m".
+# The time period for hyperparameter optimization, set to 0 to disable. The default value is "0".
 optimize_period = "360m"
 
 # The number of trials for hyperparameter optimization. The default value is 10.
 optimize_trials = 10
 
-# The prompt template for LLM ranker. The default value is empty.
-prompt = """
+# The prompt template for query.
+query_template = """
 You are a GitHub repository recommender system. Given a user is interested in the following repositories:
 {% for repo in feedback -%}
 - {{ repo.Comment }}
 {% endfor -%}
-Please sort the following repositories by the user's interests:
-```csv
-item_id,description
-{% for repo in items -%}
-{{ repo.ItemId }},{{ repo.Comment | replace(",", " ") | replace("\n", " ") }}
-{% endfor -%}
-```
-Return the sorted list of repository IDs in CSV format. For example:
-```csv
-{% for repo in items[:3] -%}
-{{ repo.ItemId }}
-{% endfor -%}
-```
+Please sort repositories by the user's interests.
 """
+
+# The prompt template for documents.
+document_template = '{{ item.Comment | replace(",", " ") | replace("\n", " ") }}'
 
 [recommend.ranker.early_stopping]
 
 # Number of epochs to wait if no improvement and then stop the training. The default value is 10.
 patience = 10
+
+[recommend.ranker.reranker_api]
+
+# Auth token for the reranker API.
+auth_token = ""
+
+# The reranker model.
+model = "qwen3-rerank"
+
+# URL for the reranker API, supports Jina style.
+url = "https://dashscope.aliyuncs.com/compatible-api/v1/reranks"
 
 [recommend.fallback]
 
@@ -284,11 +315,11 @@ recommenders = ["item-to-item/neighbors", "latest"]
 # Enable tracing for REST APIs. The default value is false.
 enable_tracing = false
 
-# The type of tracing exporters should be one of "jaeger", "zipkin", "otlp" and "otlphttp". The default value is "jaeger".
-exporter = "jaeger"
+# The type of tracing exporters should be one of "zipkin", "otlp" and "otlphttp". The default value is "otlp".
+exporter = "otlp"
 
 # The endpoint of tracing collector.
-collector_endpoint = "http://localhost:14268/api/traces"
+collector_endpoint = "http://localhost:4317"
 
 # The type of tracing sampler should be one of "always", "never" and "ratio". The default value is "always".
 sampler = "always"
@@ -311,10 +342,49 @@ client_id = ""
 client_secret = ""
 
 # URL used by the OAuth provider to redirect users after they are successfully authenticated
-# (also referred to as the callback URL). You should set this to the concatenation of the 
-# Gorse dashboard URL and "/callback/oauth2". For example, if the Gorse dashboard URL is 
+# (also referred to as the callback URL). You should set this to the concatenation of the
+# Gorse dashboard URL and "/callback/oauth2". For example, if the Gorse dashboard URL is
 # http://localhost:8088, the redirect URL should be: http://localhost:8088/callback/oauth2
 redirect_url = ""
+
+[blob]
+
+# Blob storage URI.
+#   - S3: s3://bucket/path
+#   - GCS: gs://my-bucket/my-database
+#   - Azure Blob: az://container/path
+#   - Local: /path/without/prefix
+uri = "/var/lib/gorse/blob"
+
+[blob.s3]
+
+# S3 endpoint.
+endpoint = ""
+
+# S3 access key ID.
+access_key_id = ""
+
+# S3 secret access key.
+secret_access_key = ""
+
+[blob.gcs]
+
+# GCS credentials file.
+credentials_file = ""
+
+[blob.azure]
+
+# Azure Blob endpoint. Leave empty to use https://<account_name>.blob.core.windows.net/.
+endpoint = ""
+
+# Azure storage account name.
+account_name = ""
+
+# Azure storage account key.
+account_key = ""
+
+# Azure storage connection string (takes precedence over account_name/account_key).
+connection_string = ""
 
 [openai]
 

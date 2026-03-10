@@ -94,7 +94,6 @@ type Worker struct {
 	ticker       *time.Ticker
 	syncedChan   chan struct{} // meta synced events
 	pulledChan   chan struct{} // model pulled events
-	triggerChan  chan struct{} // manually triggered events
 }
 
 // NewWorker creates a new worker node.
@@ -128,13 +127,12 @@ func NewWorker(
 		ticker:       time.NewTicker(interval),
 		syncedChan:   make(chan struct{}, 1),
 		pulledChan:   make(chan struct{}, 1),
-		triggerChan:  make(chan struct{}, 1),
 	}
 }
 
 // Sync this worker to the master.
 func (w *Worker) Sync() {
-	var nextBlobConfig string
+	var nextBlobConfig config.BlobConfig
 	log.Logger().Info("start meta sync", zap.Duration("meta_timeout", w.Config.Master.MetaTimeout))
 	for {
 		var meta *protocol.Meta
@@ -165,7 +163,8 @@ func (w *Worker) Sync() {
 			} else {
 				log.Logger().Info("connect data store",
 					zap.String("database", log.RedactDBURL(w.Config.Database.DataStore)))
-				if w.DataClient, err = data.Open(w.Config.Database.DataStore, w.Config.Database.DataTablePrefix); err != nil {
+				dataOpts := w.Config.Database.StorageOptions(w.Config.Database.DataStore)
+				if w.DataClient, err = data.Open(w.Config.Database.DataStore, w.Config.Database.DataTablePrefix, dataOpts...); err != nil {
 					log.Logger().Error("failed to connect data store", zap.Error(err))
 					goto sleep
 				}
@@ -182,7 +181,8 @@ func (w *Worker) Sync() {
 			} else {
 				log.Logger().Info("connect cache store",
 					zap.String("database", log.RedactDBURL(w.Config.Database.CacheStore)))
-				if w.CacheClient, err = cache.Open(w.Config.Database.CacheStore, w.Config.Database.CacheTablePrefix); err != nil {
+				cacheOpts := w.Config.Database.StorageOptions(w.Config.Database.CacheStore)
+				if w.CacheClient, err = cache.Open(w.Config.Database.CacheStore, w.Config.Database.CacheTablePrefix, cacheOpts...); err != nil {
 					log.Logger().Error("failed to connect cache store", zap.Error(err))
 					goto sleep
 				}
@@ -192,31 +192,14 @@ func (w *Worker) Sync() {
 		}
 
 		// connect to blob store
-		if w.Config.S3.Endpoint != "" {
-			nextBlobConfig = w.Config.S3.ToJSON()
-		} else if w.Config.GCS.Bucket != "" {
-			nextBlobConfig = w.Config.GCS.ToJSON()
-		} else {
-			nextBlobConfig = "{}"
-		}
-		if w.blobConfig != nextBlobConfig {
-			if w.Config.S3.Endpoint != "" {
-				log.Logger().Info("connect s3 endpoint", zap.String("endpoint", w.Config.S3.Endpoint))
-				if w.blobStore, err = blob.NewS3(w.Config.S3); err != nil {
-					log.Logger().Error("failed to connect s3 endpoint", zap.Error(err))
-					goto sleep
-				}
-			} else if w.Config.GCS.Bucket != "" {
-				log.Logger().Info("connect gcs bucket", zap.String("bucket", w.Config.GCS.Bucket))
-				if w.blobStore, err = blob.NewGCS(w.Config.GCS); err != nil {
-					log.Logger().Error("failed to connect gcs bucket", zap.Error(err))
-					goto sleep
-				}
-			} else {
-				log.Logger().Info("connect blob store via master")
-				w.blobStore = blob.NewMasterStoreClient(w.conn)
+		nextBlobConfig = w.Config.Blob
+		if w.blobConfig != nextBlobConfig.URI {
+			w.blobStore, err = blob.NewStore(w.Config.Blob, w.conn)
+			if err != nil {
+				log.Logger().Error("failed to connect blob store", zap.Error(err))
+				goto sleep
 			}
-			w.blobConfig = nextBlobConfig
+			w.blobConfig = nextBlobConfig.URI
 		}
 
 		// synchronize collaborative filtering model
@@ -227,7 +210,7 @@ func (w *Worker) Sync() {
 				zap.Int64("new_version", w.latestCollaborativeFilteringModelId))
 
 			select {
-			case w.triggerChan <- struct{}{}:
+			case w.syncedChan <- struct{}{}:
 			default:
 			}
 		}
@@ -240,7 +223,7 @@ func (w *Worker) Sync() {
 				zap.Int64("new_version", w.latestClickThroughRateModelId))
 
 			select {
-			case w.triggerChan <- struct{}{}:
+			case w.syncedChan <- struct{}{}:
 			default:
 			}
 		}

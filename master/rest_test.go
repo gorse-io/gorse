@@ -16,7 +16,7 @@ package master
 
 import (
 	"bytes"
-	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"mime/multipart"
@@ -43,7 +43,6 @@ import (
 	"github.com/steinfletcher/apitest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
-	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -86,6 +85,7 @@ func (suite *MasterAPITestSuite) SetupTest() {
 	// open database
 	var err error
 	suite.Config = config.GetDefaultConfig()
+	suite.Config.Recommend.Ranker.Type = "fm"
 	suite.Config.Database.DataStore = fmt.Sprintf("sqlite://%s/data.db", suite.T().TempDir())
 	suite.Config.Database.CacheStore = fmt.Sprintf("sqlite://%s/cache.db", suite.T().TempDir())
 	suite.metaStore, err = meta.Open(fmt.Sprintf("sqlite://%s/meta.db", suite.T().TempDir()), suite.Config.Master.MetaTimeout)
@@ -144,7 +144,7 @@ func (suite *MasterAPITestSuite) TearDownTest() {
 }
 
 func (suite *MasterAPITestSuite) TestExportUsers() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	// insert users
 	users := []data.User{
 		{UserId: "1", Labels: map[string]any{"gender": "male", "job": "engineer"}},
@@ -165,7 +165,7 @@ func (suite *MasterAPITestSuite) TestExportUsers() {
 }
 
 func (suite *MasterAPITestSuite) TestExportItems() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	// insert items
 	items := []data.Item{
 		{
@@ -207,7 +207,7 @@ func (suite *MasterAPITestSuite) TestExportItems() {
 }
 
 func (suite *MasterAPITestSuite) TestExportFeedback() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	// insert feedback
 	feedbacks := []data.Feedback{
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "2"}},
@@ -228,7 +228,7 @@ func (suite *MasterAPITestSuite) TestExportFeedback() {
 }
 
 func (suite *MasterAPITestSuite) TestImportUsers() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	// send request
 	buf := bytes.NewBuffer(nil)
 	writer := multipart.NewWriter(buf)
@@ -259,7 +259,7 @@ func (suite *MasterAPITestSuite) TestImportUsers() {
 }
 
 func (suite *MasterAPITestSuite) TestImportItems() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	// send request
 	buf := bytes.NewBuffer(nil)
 	writer := multipart.NewWriter(buf)
@@ -311,7 +311,7 @@ func (suite *MasterAPITestSuite) TestImportItems() {
 
 func (suite *MasterAPITestSuite) TestImportFeedback() {
 	// send request
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	buf := bytes.NewBuffer(nil)
 	writer := multipart.NewWriter(buf)
 	file, err := writer.CreateFormFile("file", "feedback.jsonl")
@@ -372,7 +372,7 @@ func (suite *MasterAPITestSuite) TestGetCluster() {
 }
 
 func (suite *MasterAPITestSuite) TestGetStats() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	// set stats
 	err := suite.CacheClient.Set(ctx, cache.Integer(cache.Key(cache.GlobalMeta, cache.NumUsers), 123))
 	suite.NoError(err)
@@ -400,7 +400,7 @@ func (suite *MasterAPITestSuite) TestGetStats() {
 }
 
 func (suite *MasterAPITestSuite) TestGetCategories() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	// insert categories
 	categoryScores := []cache.Score{
 		{Id: "a", Score: 3},
@@ -421,7 +421,7 @@ func (suite *MasterAPITestSuite) TestGetCategories() {
 }
 
 func (suite *MasterAPITestSuite) TestGetUsers() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	// add users
 	users := []User{
 		{data.User{UserId: "0"}, time.Date(2000, 1, 1, 1, 1, 1, 1, time.UTC), time.Date(2020, 1, 1, 1, 1, 1, 1, time.UTC)},
@@ -460,7 +460,7 @@ func (suite *MasterAPITestSuite) TestGetUsers() {
 }
 
 func (suite *MasterAPITestSuite) TestGetLatestItems() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	// add items
 	items := []data.Item{
 		{ItemId: "0", Timestamp: time.Date(2025, 1, 1, 1, 1, 1, 1, time.UTC)},
@@ -491,7 +491,7 @@ func (suite *MasterAPITestSuite) TestSearchDocumentsOfItems() {
 		Category   string
 		Get        string
 	}
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	operators := []ListOperator{
 		{"ItemToItem", cache.ItemToItem, cache.Key("neighbors", "0"), "", "/api/dashboard/item-to-item/neighbors/0"},
 		{"ItemToItemCategory", cache.ItemToItem, cache.Key("neighbors", "0"), "*", "/api/dashboard/item-to-item/neighbors/0"},
@@ -526,7 +526,7 @@ func (suite *MasterAPITestSuite) TestSearchDocumentsOfItems() {
 				Handler(suite.handler).
 				Patch("/api/item/"+strconv.Itoa(i)+"3").
 				Header("Cookie", suite.cookie).
-				JSON(data.ItemPatch{IsHidden: proto.Bool(true)}).
+				JSON(data.ItemPatch{IsHidden: new(true)}).
 				Expect(t).
 				Status(http.StatusOK).
 				End()
@@ -550,7 +550,7 @@ func (suite *MasterAPITestSuite) TestSearchDocumentsOfUsers() {
 		Label  string
 		Get    string
 	}
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	operators := []ListOperator{
 		{cache.UserToUser, cache.Key("neighbors", "0"), "/api/dashboard/user-to-user/neighbors/0/"},
 	}
@@ -588,7 +588,7 @@ func (suite *MasterAPITestSuite) TestSearchDocumentsOfUsers() {
 }
 
 func (suite *MasterAPITestSuite) TestFeedback() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	// insert feedback
 	feedback := []DetailedFeedback{
 		{FeedbackType: "click", UserId: "0", Item: data.Item{ItemId: "0"}},
@@ -626,7 +626,7 @@ func (suite *MasterAPITestSuite) TestGetRecommends() {
 		{Id: "7", Score: 93, Categories: []string{""}},
 		{Id: "8", Score: 92, Categories: []string{""}},
 	}
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	err := suite.CacheClient.AddScores(ctx, cache.Recommend, "0", itemIds)
 	suite.NoError(err)
 	// insert feedback
@@ -659,7 +659,7 @@ func (suite *MasterAPITestSuite) TestGetRecommends() {
 }
 
 func (suite *MasterAPITestSuite) TestGetNonPersonalizedRecommends() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	// insert offline recommendation
 	err := suite.CacheClient.AddScores(ctx, cache.Recommend, "0", []cache.Score{
 		{Id: "1", Score: 99, Categories: []string{""}},
@@ -698,8 +698,33 @@ func (suite *MasterAPITestSuite) TestGetNonPersonalizedRecommends() {
 		End()
 }
 
+func (suite *MasterAPITestSuite) TestGetExternal() {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("user_id") == "1" {
+			fmt.Fprintln(w, `["x","y"]`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer ts.Close()
+
+	script := fmt.Sprintf(`fetch("%s?user_id=" + user_id).body`, ts.URL)
+	scriptBase64 := base64.StdEncoding.EncodeToString([]byte(script))
+
+	apitest.New().
+		Handler(suite.handler).
+		Get("/api/dashboard/external").
+		Header("Cookie", suite.cookie).
+		Query("script", scriptBase64).
+		Query("user-id", "1").
+		Expect(suite.T()).
+		Status(http.StatusOK).
+		Body(marshal(suite.T(), []string{"x", "y"})).
+		End()
+}
+
 func (suite *MasterAPITestSuite) TestPurge() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	// insert data
 	err := suite.CacheClient.Set(ctx, cache.String("key", "value"))
 	suite.NoError(err)
@@ -768,6 +793,7 @@ func (suite *MasterAPITestSuite) TestConfig() {
 		expression.MustParseFeedbackTypeExpression("a")}
 	suite.Config.Recommend.DataSource.ReadFeedbackTypes = []expression.FeedbackTypeExpression{
 		expression.MustParseFeedbackTypeExpression("b")}
+	suite.Config.Recommend.Ranker.Recommenders = []string{"latest"}
 	apitest.New().
 		Handler(suite.handler).
 		Get("/api/dashboard/config").
@@ -814,6 +840,23 @@ func (suite *MasterAPITestSuite) TestConfig() {
 		Status(http.StatusBadRequest).
 		End()
 	suite.Equal("llm", suite.Config.Recommend.Ranker.Type)
+
+	configBytes, err := json.Marshal(suite.Config.Recommend)
+	suite.NoError(err)
+	err = suite.metaStore.Put(meta.RECOMMEND_CONFIG, string(configBytes))
+	suite.NoError(err)
+
+	apitest.New().
+		Handler(suite.handler).
+		Delete("/api/dashboard/config").
+		Header("Cookie", suite.cookie).
+		Expect(suite.T()).
+		Status(http.StatusOK).
+		End()
+
+	value, err := suite.metaStore.Get(meta.RECOMMEND_CONFIG)
+	suite.NoError(err)
+	suite.Nil(value)
 }
 
 func (suite *MasterAPITestSuite) TestGetConfigSchema() {
@@ -828,7 +871,7 @@ func (suite *MasterAPITestSuite) TestGetConfigSchema() {
 }
 
 func (suite *MasterAPITestSuite) TestGetTimeseries() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	err := suite.CacheClient.AddTimeSeriesPoints(ctx, []cache.TimeSeriesPoint{
 		{Name: "test_timeseries", Timestamp: time.Now().Add(-24 * time.Hour), Value: 1},
 		{Name: "test_timeseries", Timestamp: time.Now().Add(-48 * time.Hour), Value: 2},
@@ -847,8 +890,83 @@ func (suite *MasterAPITestSuite) TestGetTimeseries() {
 	suite.Len(got, 3)
 }
 
+func (suite *MasterAPITestSuite) TestGetRankerPrompt() {
+	ctx := suite.T().Context()
+	// insert user
+	user := data.User{UserId: "u1"}
+	err := suite.DataClient.BatchInsertUsers(ctx, []data.User{user})
+	suite.NoError(err)
+
+	// insert items for feedback (hidden items)
+	feedbackItems := make([]data.Item, 12)
+	feedbacks := make([]data.Feedback, 12)
+	for i := 0; i < 12; i++ {
+		itemId := fmt.Sprintf("fb-%02d", i)
+		feedbackItems[i] = data.Item{
+			ItemId:    itemId,
+			IsHidden:  true,
+			Timestamp: time.Date(2020, 1, 1, 0, 0, i, 0, time.UTC),
+		}
+		feedbacks[i] = data.Feedback{
+			FeedbackKey: data.FeedbackKey{
+				FeedbackType: "click",
+				UserId:       user.UserId,
+				ItemId:       itemId,
+			},
+			Timestamp: time.Date(2021, 1, 1, 0, 0, i, 0, time.UTC),
+		}
+	}
+	err = suite.DataClient.BatchInsertItems(ctx, feedbackItems)
+	suite.NoError(err)
+	err = suite.DataClient.BatchInsertFeedback(ctx, feedbacks, true, true, true)
+	suite.NoError(err)
+
+	// insert latest items (visible)
+	latestItems := []data.Item{
+		{ItemId: "lt-1", IsHidden: false, Timestamp: time.Date(2024, 1, 1, 0, 0, 1, 0, time.UTC)},
+		{ItemId: "lt-2", IsHidden: false, Timestamp: time.Date(2024, 1, 1, 0, 0, 2, 0, time.UTC)},
+		{ItemId: "lt-3", IsHidden: false, Timestamp: time.Date(2024, 1, 1, 0, 0, 3, 0, time.UTC)},
+	}
+	err = suite.DataClient.BatchInsertItems(ctx, latestItems)
+	suite.NoError(err)
+
+	// render template
+	queryTpl := "user={{ user.UserId }}\n" +
+		"feedback={% for f in feedback %}{{ f.Item.ItemId }}{% if not loop.last %}, {% endif %}{% endfor %}"
+	documentTpl := "item={{ item.ItemId }}"
+	queryTplBase64 := base64.StdEncoding.EncodeToString([]byte(queryTpl))
+	documentTplBase64 := base64.StdEncoding.EncodeToString([]byte(documentTpl))
+
+	// latest 10 feedback items: fb-11 to fb-02
+	feedbackList := []string{}
+	for i := 11; i >= 2; i-- {
+		feedbackList = append(feedbackList, fmt.Sprintf("fb-%02d", i))
+	}
+	expectedQuery := fmt.Sprintf(
+		"user=%s\nfeedback=%s",
+		user.UserId,
+		strings.Join(feedbackList, ", "),
+	)
+	expectedDocuments := []string{"item=lt-3", "item=lt-2", "item=lt-1"}
+
+	apitest.New().
+		Handler(suite.handler).
+		Get("/api/dashboard/ranker/prompt").
+		Header("Cookie", suite.cookie).
+		Query("query-template", queryTplBase64).
+		Query("document-template", documentTplBase64).
+		Query("user-id", user.UserId).
+		Expect(suite.T()).
+		Status(http.StatusOK).
+		Body(marshal(suite.T(), RerankerPrompt{
+			Query:     expectedQuery,
+			Documents: expectedDocuments,
+		})).
+		End()
+}
+
 func (suite *MasterAPITestSuite) TestDumpAndRestore() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	// insert users
 	users := make([]data.User, batchSize+1)
 	for i := range users {
@@ -920,7 +1038,7 @@ func (suite *MasterAPITestSuite) TestDumpAndRestore() {
 }
 
 func (suite *MasterAPITestSuite) TestExportAndImport() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	// insert users
 	users := make([]data.User, batchSize+1)
 	for i := range users {

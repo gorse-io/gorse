@@ -58,8 +58,6 @@ func (NoDatabase) Delete(_ context.Context, _ string) error {
 	return ErrNoDatabase
 }
 
-
-
 func (NoDatabase) Push(_ context.Context, _, _ string) error {
 	return ErrNoDatabase
 }

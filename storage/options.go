@@ -1,7 +1,16 @@
 package storage
 
+import (
+	"database/sql"
+	"time"
+)
+
 type Options struct {
-	IsolationLevel string
+	IsolationLevel   string
+	MaxOpenConns     int
+	MaxIdleConns     int
+	ConnMaxLifetime  time.Duration
+	MaxSearchResults int
 }
 
 type Option func(*Options)
@@ -12,9 +21,46 @@ func WithIsolationLevel(isolationLevel string) Option {
 	}
 }
 
+func WithMaxOpenConns(maxOpenConns int) Option {
+	return func(o *Options) {
+		o.MaxOpenConns = maxOpenConns
+	}
+}
+
+func WithMaxIdleConns(maxIdleConns int) Option {
+	return func(o *Options) {
+		o.MaxIdleConns = maxIdleConns
+	}
+}
+
+func WithConnMaxLifetime(connMaxLifetime time.Duration) Option {
+	return func(o *Options) {
+		o.ConnMaxLifetime = connMaxLifetime
+	}
+}
+
+func WithMaxSearchResults(limit int) Option {
+	return func(o *Options) {
+		o.MaxSearchResults = limit
+	}
+}
+
+func ApplySQLPool(db *sql.DB, opt Options) {
+	if opt.MaxOpenConns > 0 {
+		db.SetMaxOpenConns(opt.MaxOpenConns)
+	}
+	if opt.MaxIdleConns > 0 {
+		db.SetMaxIdleConns(opt.MaxIdleConns)
+	}
+	if opt.ConnMaxLifetime > 0 {
+		db.SetConnMaxLifetime(opt.ConnMaxLifetime)
+	}
+}
+
 func NewOptions(opts ...Option) Options {
 	opt := Options{
-		IsolationLevel: "READ-UNCOMMITTED",
+		IsolationLevel:   "READ-UNCOMMITTED",
+		MaxSearchResults: 10000,
 	}
 	for _, o := range opts {
 		o(&opt)

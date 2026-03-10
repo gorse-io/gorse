@@ -43,7 +43,6 @@ import (
 	"github.com/juju/errors"
 	"github.com/samber/lo"
 	"go.uber.org/zap"
-	"google.golang.org/protobuf/proto"
 )
 
 const batchSize = 10000
@@ -90,7 +89,7 @@ func (m *Master) loadDataset(parent context.Context) (datasets Datasets, err err
 		}
 		if err = m.CacheClient.DeleteScores(ctx, []string{cache.NonPersonalized},
 			cache.ScoreCondition{
-				Subset: proto.String(recommender.Name()),
+				Subset: new(recommender.Name()),
 				Before: lo.ToPtr(recommender.Timestamp()),
 			}); err != nil {
 			log.Logger().Error("failed to reclaim outdated items", zap.Error(err))
@@ -211,6 +210,7 @@ func (m *Master) runLoadDatasetTask(ctx context.Context) error {
 	if err != nil {
 		return errors.Trace(err)
 	}
+	useCollaborativeFilteringTasks := !strings.EqualFold(m.Config.Recommend.Collaborative.Type, "none")
 	useClickThroughRateTasks := strings.EqualFold(m.Config.Recommend.Ranker.Type, "fm")
 	if err = m.updateUserToUser(ctx, datasets.rankingDataset); err != nil {
 		log.Logger().Error("failed to update user-to-user recommendation", zap.Error(err))
@@ -218,8 +218,10 @@ func (m *Master) runLoadDatasetTask(ctx context.Context) error {
 	if err = m.updateItemToItem(ctx, datasets.rankingDataset); err != nil {
 		log.Logger().Error("failed to update item-to-item recommendation", zap.Error(err))
 	}
-	if err = m.trainCollaborativeFiltering(ctx, datasets.rankingTrainSet, datasets.rankingTestSet); err != nil {
-		log.Logger().Error("failed to train collaborative filtering model", zap.Error(err))
+	if useCollaborativeFilteringTasks {
+		if err = m.trainCollaborativeFiltering(ctx, datasets.rankingTrainSet, datasets.rankingTestSet); err != nil {
+			log.Logger().Error("failed to train collaborative filtering model", zap.Error(err))
+		}
 	}
 	if useClickThroughRateTasks {
 		if err = m.trainClickThroughRatePrediction(ctx, datasets.clickTrainSet, datasets.clickTestSet); err != nil {
@@ -234,10 +236,12 @@ func (m *Master) runLoadDatasetTask(ctx context.Context) error {
 	if err = m.collectGarbage(ctx, datasets.rankingDataset); err != nil {
 		log.Logger().Error("failed to collect garbage in cache", zap.Error(err))
 	}
-	if err = m.optimizeCollaborativeFiltering(ctx, datasets.rankingTrainSet, datasets.rankingTestSet); err != nil {
-		log.Logger().Error("failed to optimize collaborative filtering model", zap.Error(err))
+	if useCollaborativeFilteringTasks && m.Config.Recommend.Collaborative.OptimizePeriod > 0 {
+		if err = m.optimizeCollaborativeFiltering(ctx, datasets.rankingTrainSet, datasets.rankingTestSet); err != nil {
+			log.Logger().Error("failed to optimize collaborative filtering model", zap.Error(err))
+		}
 	}
-	if useClickThroughRateTasks {
+	if useClickThroughRateTasks && m.Config.Recommend.Ranker.OptimizePeriod > 0 {
 		if err = m.optimizeClickThroughRatePrediction(ctx, datasets.clickTrainSet, datasets.clickTestSet); err != nil {
 			log.Logger().Error("failed to optimize click-through rate prediction model", zap.Error(err))
 		}
@@ -477,7 +481,7 @@ func (m *Master) LoadDataFromDatabase(
 						break
 					}
 				}
-				dataSet.AddFeedback(f.UserId, f.ItemId)
+				dataSet.AddFeedback(f.UserId, f.ItemId, f.Timestamp)
 			}
 			span.Add(len(feedback))
 		}
@@ -943,12 +947,12 @@ func (m *Master) trainCollaborativeFiltering(parent context.Context, trainSet, t
 	<-done
 
 	// update meta
-	m.collaborativeFilteringModelMutex.RLock()
+	m.collaborativeFilteringModelMutex.Lock()
 	m.collaborativeFilteringMeta.ID = collaborativeFilteringModelId
 	m.collaborativeFilteringMeta.Type = collaborativeFilteringType
 	m.collaborativeFilteringMeta.Params = collaborativeFilteringParams
 	m.collaborativeFilteringMeta.Score = score
-	m.collaborativeFilteringModelMutex.RUnlock()
+	m.collaborativeFilteringModelMutex.Unlock()
 	if err = m.metaStore.Put(meta.COLLABORATIVE_FILTERING_MODEL, m.collaborativeFilteringMeta.ToJSON()); err != nil {
 		log.Logger().Error("failed to write collaborative filtering model meta", zap.Error(err))
 		return err
@@ -1019,7 +1023,7 @@ func (m *Master) trainClickThroughRatePrediction(parent context.Context, trainSe
 			zap.Float32("Recall", m.clickThroughRateTarget.Score.Recall),
 			zap.Any("params", clickThroughRateParams))
 	}
-	clickModel := ctr.NewFMV2(clickThroughRateParams)
+	clickModel := ctr.NewAFM(clickThroughRateParams)
 	m.clickThroughRateModelMutex.Unlock()
 
 	startFitTime := time.Now()
@@ -1063,12 +1067,12 @@ func (m *Master) trainClickThroughRatePrediction(parent context.Context, trainSe
 	<-done
 
 	// update meta
-	m.clickThroughRateModelMutex.RLock()
+	m.clickThroughRateModelMutex.Lock()
 	m.clickThroughRateMeta.ID = clickThroughRateModelId
 	m.clickThroughRateMeta.Type = clickThroughRateType
 	m.clickThroughRateMeta.Params = clickThroughRateParams
 	m.clickThroughRateMeta.Score = score
-	m.clickThroughRateModelMutex.RUnlock()
+	m.clickThroughRateModelMutex.Unlock()
 	if err = m.metaStore.Put(meta.CLICK_THROUGH_RATE_MODEL, m.clickThroughRateMeta.ToJSON()); err != nil {
 		log.Logger().Error("failed to write click-through rate model meta", zap.Error(err))
 		return err
@@ -1244,7 +1248,7 @@ func (m *Master) optimizeClickThroughRatePrediction(parent context.Context, trai
 
 	search := ctr.NewModelSearch(map[string]ctr.ModelCreator{
 		"FM": func() ctr.FactorizationMachines {
-			return ctr.NewFMV2(nil)
+			return ctr.NewAFM(nil)
 		},
 	}, trainSet, testSet,
 		ctr.NewFitConfig().
@@ -1287,21 +1291,23 @@ func (m *Master) updateRecommend(ctx context.Context) error {
 	}
 
 	// load matrix factorization model
-	r, err := m.blobStore.Open(strconv.FormatInt(m.collaborativeFilteringMeta.ID, 10))
-	if err != nil {
-		log.Logger().Error("failed to load collaborative filtering model from blob store",
-			zap.Int64("id", m.collaborativeFilteringMeta.ID), zap.Error(err))
-		return errors.Trace(err)
-	}
-	if err = pipeline.MatrixFactorizationItems.Unmarshal(r); err != nil {
-		log.Logger().Error("failed to unmarshal matrix factorization items", zap.Error(err))
-	} else if err = pipeline.MatrixFactorizationUsers.Unmarshal(r); err != nil {
-		log.Logger().Error("failed to unmarshal matrix factorization users", zap.Error(err))
+	if m.collaborativeFilteringMeta.ID > 0 {
+		r, err := m.blobStore.Open(strconv.FormatInt(m.collaborativeFilteringMeta.ID, 10))
+		if err != nil {
+			log.Logger().Error("failed to load collaborative filtering model from blob store",
+				zap.Int64("id", m.collaborativeFilteringMeta.ID), zap.Error(err))
+			return errors.Trace(err)
+		}
+		if err = pipeline.MatrixFactorizationItems.Unmarshal(r); err != nil {
+			log.Logger().Error("failed to unmarshal matrix factorization items", zap.Error(err))
+		} else if err = pipeline.MatrixFactorizationUsers.Unmarshal(r); err != nil {
+			log.Logger().Error("failed to unmarshal matrix factorization users", zap.Error(err))
+		}
 	}
 
 	// load click-through rate model when FM ranker is enabled
-	if strings.EqualFold(m.Config.Recommend.Ranker.Type, "fm") {
-		r, err = m.blobStore.Open(strconv.FormatInt(m.clickThroughRateMeta.ID, 10))
+	if strings.EqualFold(m.Config.Recommend.Ranker.Type, "fm") && m.clickThroughRateMeta.ID > 0 {
+		r, err := m.blobStore.Open(strconv.FormatInt(m.clickThroughRateMeta.ID, 10))
 		if err != nil {
 			log.Logger().Error("failed to open click-through rate model", zap.Error(err))
 			return errors.Trace(err)

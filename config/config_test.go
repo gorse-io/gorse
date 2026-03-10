@@ -49,6 +49,8 @@ func TestUnmarshal(t *testing.T) {
 	text = strings.Replace(text, "client_id = \"\"", "client_id = \"client_id\"", -1)
 	text = strings.Replace(text, "client_secret = \"\"", "client_secret = \"client_secret\"", -1)
 	text = strings.Replace(text, "redirect_url = \"\"", "redirect_url = \"http://localhost:8088/callback/oauth2\"", -1)
+	text = strings.Replace(text, "auth_token = \"\"", "auth_token = \"<reranker_auth_token>\"", -1)
+	text = strings.Replace(text, "url = \"https://dashscope.aliyuncs.com/compatible-api/v1/reranks\"", "url = \"<reranker_url>\"", -1)
 	r, err := convert.TOML{}.Decode(bytes.NewBufferString(text))
 	assert.NoError(t, err)
 
@@ -70,6 +72,13 @@ func TestUnmarshal(t *testing.T) {
 			assert.Equal(t, "gorse_cache_", config.Database.CacheTablePrefix)
 			assert.Equal(t, "gorse_data_", config.Database.DataTablePrefix)
 			assert.Equal(t, "READ-UNCOMMITTED", config.Database.MySQL.IsolationLevel)
+			assert.Equal(t, 0, config.Database.MySQL.MaxOpenConns)
+			assert.Equal(t, 0, config.Database.MySQL.MaxIdleConns)
+			assert.Equal(t, time.Duration(0), config.Database.MySQL.ConnMaxLifetime)
+			assert.Equal(t, 64, config.Database.Postgres.MaxOpenConns)
+			assert.Equal(t, 64, config.Database.Postgres.MaxIdleConns)
+			assert.Equal(t, time.Minute, config.Database.Postgres.ConnMaxLifetime)
+			assert.Equal(t, 10000, config.Database.Redis.MaxSearchResults)
 			// [master]
 			assert.Equal(t, 8086, config.Master.Port)
 			assert.Equal(t, "0.0.0.0", config.Master.Host)
@@ -114,6 +123,7 @@ func TestUnmarshal(t *testing.T) {
 			assert.Equal(t, "count(feedback, .FeedbackType == 'star')", config.Recommend.NonPersonalized[0].Score)
 			assert.Equal(t, "(now() - item.Timestamp).Hours() < 168", config.Recommend.NonPersonalized[0].Filter)
 			// [recommend.collaborative]
+			assert.Equal(t, "mf", config.Recommend.Collaborative.Type)
 			assert.Equal(t, 60*time.Minute, config.Recommend.Collaborative.FitPeriod)
 			assert.Equal(t, 100, config.Recommend.Collaborative.FitEpoch)
 			assert.Equal(t, 360*time.Minute, config.Recommend.Collaborative.OptimizePeriod)
@@ -130,12 +140,15 @@ func TestUnmarshal(t *testing.T) {
 			assert.Equal(t, 100, config.Recommend.Ranker.FitEpoch)
 			assert.Equal(t, 360*time.Minute, config.Recommend.Ranker.OptimizePeriod)
 			assert.Equal(t, 10, config.Recommend.Ranker.OptimizeTrials)
+			assert.Equal(t, "<reranker_auth_token>", config.Recommend.Ranker.RerankerAPI.AuthToken)
+			assert.Equal(t, "qwen3-rerank", config.Recommend.Ranker.RerankerAPI.Model)
+			assert.Equal(t, "<reranker_url>", config.Recommend.Ranker.RerankerAPI.URL)
 			// [recommend.fallback]
 			assert.Equal(t, []string{"item-to-item/neighbors", "latest"}, config.Recommend.Fallback.Recommenders)
 			// [tracing]
 			assert.False(t, config.Tracing.EnableTracing)
-			assert.Equal(t, "jaeger", config.Tracing.Exporter)
-			assert.Equal(t, "http://localhost:14268/api/traces", config.Tracing.CollectorEndpoint)
+			assert.Equal(t, "otlp", config.Tracing.Exporter)
+			assert.Equal(t, "http://localhost:4317", config.Tracing.CollectorEndpoint)
 			assert.Equal(t, "always", config.Tracing.Sampler)
 			assert.Equal(t, 1.0, config.Tracing.Ratio)
 			// [oauth2]
@@ -158,6 +171,9 @@ func TestUnmarshal(t *testing.T) {
 }
 
 func TestSetDefault(t *testing.T) {
+	for _, binding := range bindings {
+		t.Setenv(binding.env, "")
+	}
 	setDefault()
 	viper.SetConfigType("toml")
 	err := viper.ReadConfig(strings.NewReader(""))
@@ -200,6 +216,21 @@ func TestBindEnv(t *testing.T) {
 		{"GORSE_OIDC_CLIENT_ID", "client_id"},
 		{"GORSE_OIDC_CLIENT_SECRET", "client_secret"},
 		{"GORSE_OIDC_REDIRECT_URL", "http://localhost:8088/callback/oauth2"},
+		{"GORSE_BLOB_URI", "s3://<bucket>/path"},
+		{"S3_ENDPOINT", "https://s3.example.com"},
+		{"S3_ACCESS_KEY_ID", "<access_key_id>"},
+		{"S3_SECRET_ACCESS_KEY", "<secret_access_key>"},
+		{"GCS_CREDENTIALS_FILE", "/path/to/credentials.json"},
+		{"AZURE_STORAGE_ENDPOINT", "https://<account>.blob.core.windows.net"},
+		{"AZURE_STORAGE_ACCOUNT_NAME", "<account_name>"},
+		{"AZURE_STORAGE_ACCOUNT_KEY", "<account_key>"},
+		{"AZURE_STORAGE_CONNECTION_STRING", "DefaultEndpointsProtocol=https;AccountName=<account>;AccountKey=<key>"},
+		{"OPENAI_BASE_URL", "https://api.openai.com/v1"},
+		{"OPENAI_AUTH_TOKEN", "<auth_token>"},
+		{"OPENAI_CHAT_COMPLETION_MODEL", "gpt-4"},
+		{"RERANKER_AUTH_TOKEN", "<reranker_auth_token>"},
+		{"RERANKER_URL", "<reranker_url>"},
+		{"RERANKER_MODEL", "<reranker_model>"},
 	}
 	for _, variable := range variables {
 		t.Setenv(variable.key, variable.value)
@@ -231,6 +262,21 @@ func TestBindEnv(t *testing.T) {
 	assert.Equal(t, "client_id", config.OIDC.ClientID)
 	assert.Equal(t, "client_secret", config.OIDC.ClientSecret)
 	assert.Equal(t, "http://localhost:8088/callback/oauth2", config.OIDC.RedirectURL)
+	assert.Equal(t, "s3://<bucket>/path", config.Blob.URI)
+	assert.Equal(t, "https://s3.example.com", config.Blob.S3.Endpoint)
+	assert.Equal(t, "<access_key_id>", config.Blob.S3.AccessKeyID)
+	assert.Equal(t, "<secret_access_key>", config.Blob.S3.SecretAccessKey)
+	assert.Equal(t, "/path/to/credentials.json", config.Blob.GCS.CredentialsFile)
+	assert.Equal(t, "https://<account>.blob.core.windows.net", config.Blob.Azure.Endpoint)
+	assert.Equal(t, "<account_name>", config.Blob.Azure.AccountName)
+	assert.Equal(t, "<account_key>", config.Blob.Azure.AccountKey)
+	assert.Equal(t, "DefaultEndpointsProtocol=https;AccountName=<account>;AccountKey=<key>", config.Blob.Azure.ConnectionString)
+	assert.Equal(t, "https://api.openai.com/v1", config.OpenAI.BaseURL)
+	assert.Equal(t, "<auth_token>", config.OpenAI.AuthToken)
+	assert.Equal(t, "gpt-4", config.OpenAI.ChatCompletionModel)
+	assert.Equal(t, "<reranker_auth_token>", config.Recommend.Ranker.RerankerAPI.AuthToken)
+	assert.Equal(t, "<reranker_url>", config.Recommend.Ranker.RerankerAPI.URL)
+	assert.Equal(t, "<reranker_model>", config.Recommend.Ranker.RerankerAPI.Model)
 
 	// check default values
 	assert.Equal(t, 100, config.Recommend.CacheSize)
@@ -433,6 +479,15 @@ func (s *ValidateTestSuite) TestDuplicateItemToItem() {
 		Name: "item_to_item",
 		Type: "users",
 	}}
+	s.Error(s.Validate())
+}
+
+func (s *ValidateTestSuite) TestRecommendersExistence() {
+	s.Recommend.Ranker.Recommenders = []string{"not_exist"}
+	s.Error(s.Validate())
+
+	s.Recommend.Collaborative.Type = "none"
+	s.Recommend.Ranker.Recommenders = []string{"collaborative"}
 	s.Error(s.Validate())
 }
 

@@ -529,9 +529,10 @@ func (s *RestServer) CreateWebService() {
 		Returns(http.StatusOK, "OK", []cache.Score{}).
 		Writes([]cache.Score{}))
 	ws.Route(ws.GET("/recommend/{user-id}").To(s.getRecommend).
-		Doc("Get recommendation for user.").
+		Doc("Get recommendation for user. Set X-API-Version: 2 to return scores.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{RecommendationAPITag}).
 		Param(ws.HeaderParameter("X-API-Key", "API key").DataType("string")).
+		Param(ws.HeaderParameter("X-API-Version", "API version (set to 2 to return scores)").DataType("string")).
 		Param(ws.PathParameter("user-id", "User ID").DataType("string")).
 		Param(ws.QueryParameter("category", "Category of the returned items (support multi-categories filtering)").DataType("string")).
 		Param(ws.QueryParameter("write-back-type", "Type of write back feedback").DataType("string")).
@@ -542,9 +543,10 @@ func (s *RestServer) CreateWebService() {
 		Returns(http.StatusOK, "OK", RecommendResponse{}).
 		Writes(RecommendResponse{}))
 	ws.Route(ws.GET("/recommend/{user-id}/{category}").To(s.getRecommend).
-		Deprecate().Doc("Get recommendation for user.").
+		Deprecate().Doc("Get recommendation for user. Set X-API-Version: 2 to return scores.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{RecommendationAPITag}).
 		Param(ws.HeaderParameter("X-API-Key", "API key").DataType("string")).
+		Param(ws.HeaderParameter("X-API-Version", "API version (set to 2 to return scores)").DataType("string")).
 		Param(ws.PathParameter("user-id", "User ID").DataType("string")).
 		Param(ws.PathParameter("category", "Category of the returned items").DataType("string")).
 		Param(ws.QueryParameter("write-back-type", "Type of write back feedback").DataType("string")).
@@ -674,20 +676,61 @@ func (s *RestServer) SearchDocuments(collection, subset string, categories []str
 }
 
 func (s *RestServer) getLatest(request *restful.Request, response *restful.Response) {
-	n, err := ParseInt(request, "n", s.Config.Server.DefaultN)
-	if err != nil {
-		BadRequest(response, errors.New("invalid n parameter"))
+	var (
+		offset int
+		n      int
+		err    error
+	)
+	ctx := request.Request.Context()
+	if offset, err = ParseInt(request, "offset", 0); err != nil {
+		BadRequest(response, errors.Errorf("invalid offset parameter: %v", err))
 		return
 	}
-
+	if n, err = ParseInt(request, "n", s.Config.Server.DefaultN); err != nil {
+		BadRequest(response, errors.Errorf("invalid n parameter: %v", err))
+		return
+	}
 	categories := ReadCategories(request, nil)
-	log.ResponseLogger(response).Debug("get category latest items in category", zap.Strings("categories", categories))
+	userId := request.QueryParameter("user-id")
 
-	items, err := s.DataClient.GetLatestItems(request.Request.Context(), n, categories)
+	readItems := mapset.NewSet[string]()
+	if userId != "" {
+		feedback, err := s.DataClient.GetUserFeedback(ctx, userId, s.Config.Now())
+		if err != nil {
+			InternalServerError(response, err)
+			return
+		}
+		for _, f := range feedback {
+			readItems.Add(f.ItemId)
+		}
+	}
+
+	limit := offset + n
+	if readItems.Cardinality() > 0 {
+		limit += readItems.Cardinality()
+	}
+
+	items, err := s.DataClient.GetLatestItems(ctx, limit, categories)
 	if err != nil {
 		InternalServerError(response, err)
 		return
 	}
+
+	if readItems.Cardinality() > 0 {
+		filtered := make([]data.Item, 0, len(items))
+		for _, item := range items {
+			if !readItems.Contains(item.ItemId) {
+				filtered = append(filtered, item)
+			}
+		}
+		items = filtered
+	}
+
+	items = items[min(offset, len(items)):]
+	if n > 0 && len(items) > n {
+		items = items[:n]
+	}
+
 	Ok(response, lo.Map(items, func(item data.Item, _ int) cache.Score {
 		return cache.Score{
 			Id:    item.ItemId,
@@ -790,6 +833,10 @@ func (s *RestServer) getUserNeighbors(request *restful.Request, response *restfu
 
 // getCollaborativeFiltering gets cached recommended items from database.
 func (s *RestServer) getCollaborativeFiltering(request *restful.Request, response *restful.Response) {
+	if strings.EqualFold(s.Config.Recommend.Collaborative.Type, "none") {
+		PageNotFound(response, errors.New("collaborative filtering recommendation is disabled"))
+		return
+	}
 	// Get user id
 	userId := request.PathParameter("user-id")
 	categories := ReadCategories(request, nil)
@@ -804,6 +851,7 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 	}
 	// parse arguments
 	userId := request.PathParameter("user-id")
+	apiVersion := strings.TrimSpace(request.HeaderParameter("X-API-Version"))
 	n, err := ParseInt(request, "n", s.Config.Server.DefaultN)
 	if err != nil {
 		BadRequest(response, err)
@@ -879,6 +927,11 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 				return
 			}
 		}
+	}
+	// Send result
+	if apiVersion == "2" {
+		Ok(response, scores)
+		return
 	}
 	// Send response: include full item data only when requested
 	if includeItems {

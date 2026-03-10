@@ -18,12 +18,10 @@ import (
 	"context"
 	"encoding/json"
 	"strings"
-	"time"
 
-	"github.com/cenkalti/backoff/v5"
-	mapset "github.com/deckarep/golang-set/v2"
-	"github.com/gorse-io/gorse/common/log"
+	"github.com/gorse-io/gorse/common/reranker"
 	"github.com/gorse-io/gorse/config"
+	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
 	"github.com/nikolalohinski/gonja/v2"
 	"github.com/nikolalohinski/gonja/v2/exec"
@@ -31,7 +29,6 @@ import (
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/text"
-	"go.uber.org/zap"
 )
 
 type FeedbackItem struct {
@@ -39,82 +36,69 @@ type FeedbackItem struct {
 	data.Item
 }
 
-type ChatRanker struct {
-	template *exec.Template
-	client   *openai.Client
-	model    string
+type ChatReranker struct {
+	queryTemplate *exec.Template
+	docTemplate   *exec.Template
+	client        *reranker.Client
+	model         string
 }
 
-func NewChatRanker(cfg config.OpenAIConfig, prompt string) (*ChatRanker, error) {
-	// create OpenAI client
-	clientConfig := openai.DefaultConfig(cfg.AuthToken)
-	clientConfig.BaseURL = cfg.BaseURL
-	client := openai.NewClientWithConfig(clientConfig)
-	// create template
-	template, err := gonja.FromString(prompt)
+func NewChatReranker(cfg config.RerankerAPIConfig, queryTemplate, docTemplate string) (*ChatReranker, error) {
+	// create reranker client
+	client := reranker.NewClient(cfg.AuthToken, cfg.URL)
+	// create templates
+	qTpl, err := gonja.FromString(queryTemplate)
 	if err != nil {
 		return nil, err
 	}
-	return &ChatRanker{
-		template: template,
-		client:   client,
-		model:    cfg.ChatCompletionModel,
+	dTpl, err := gonja.FromString(docTemplate)
+	if err != nil {
+		return nil, err
+	}
+	return &ChatReranker{
+		queryTemplate: qTpl,
+		docTemplate:   dTpl,
+		client:        client,
+		model:         cfg.Model,
 	}, nil
 }
 
-func (r *ChatRanker) Rank(ctx context.Context, user *data.User, feedback []*FeedbackItem, items []*data.Item) ([]string, error) {
-	// render template
-	var buf strings.Builder
-	tplCtx := exec.NewContext(map[string]any{
+func (r *ChatReranker) Rank(ctx context.Context, user *data.User, feedback []*FeedbackItem, items []*data.Item) ([]cache.Score, error) {
+	// render query
+	var queryBuf strings.Builder
+	queryCtx := exec.NewContext(map[string]any{
 		"user":     user,
 		"feedback": feedback,
-		"items":    items,
 	})
-	if err := r.template.Execute(&buf, tplCtx); err != nil {
+	if err := r.queryTemplate.Execute(&queryBuf, queryCtx); err != nil {
 		return nil, err
 	}
-	// chat completion
-	start := time.Now()
-	resp, err := backoff.Retry(ctx, func() (openai.ChatCompletionResponse, error) {
-		resp, err := r.client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
-			Model: r.model,
-			Messages: []openai.ChatCompletionMessage{{
-				Role:    openai.ChatMessageRoleUser,
-				Content: buf.String(),
-			}},
+	// render documents
+	documents := make([]string, len(items))
+	for i, item := range items {
+		var docBuf strings.Builder
+		docCtx := exec.NewContext(map[string]any{
+			"item": item,
 		})
-		if err == nil {
-			return resp, nil
+		if err := r.docTemplate.Execute(&docBuf, docCtx); err != nil {
+			return nil, err
 		}
-		if isThrottled(err) {
-			return openai.ChatCompletionResponse{}, err
-		}
-		return openai.ChatCompletionResponse{}, backoff.Permanent(err)
-	}, backoff.WithBackOff(backoff.NewConstantBackOff(time.Minute)))
+		documents[i] = docBuf.String()
+	}
+	// rerank
+	resp, err := r.client.Rerank(ctx, reranker.RerankRequest{
+		Model:     r.model,
+		Query:     queryBuf.String(),
+		Documents: documents,
+	})
 	if err != nil {
 		return nil, err
 	}
-	duration := time.Since(start)
-	// parse response
-	parsed := parseArrayFromCompletion(resp.Choices[0].Message.Content)
-	log.OpenAILogger().Info("chat completion",
-		zap.String("prompt", buf.String()),
-		zap.String("completion", resp.Choices[0].Message.Content),
-		zap.Strings("parsed", parsed),
-		zap.Int("prompt_tokens", resp.Usage.PromptTokens),
-		zap.Int("completion_tokens", resp.Usage.CompletionTokens),
-		zap.Int("total_tokens", resp.Usage.TotalTokens),
-		zap.Duration("duration", duration))
-	// filter items
-	s := mapset.NewSet[string]()
-	for _, item := range items {
-		s.Add(item.ItemId)
-	}
-	var result []string
-	for _, itemId := range parsed {
-		if s.Contains(itemId) {
-			result = append(result, itemId)
-		}
+	// sort items
+	result := make([]cache.Score, len(resp.Results))
+	for i, rerankResult := range resp.Results {
+		result[i].Id = items[rerankResult.Index].ItemId
+		result[i].Score = rerankResult.RelevanceScore
 	}
 	return result, nil
 }

@@ -19,8 +19,8 @@ import (
 	"crypto/md5"
 	_ "embed"
 	"encoding/hex"
-	"encoding/json"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"time"
@@ -39,7 +39,6 @@ import (
 	"github.com/juju/errors"
 	"github.com/samber/lo"
 	"github.com/spf13/viper"
-	"go.opentelemetry.io/otel/exporters/jaeger"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
@@ -67,8 +66,7 @@ type Config struct {
 	Tracing   TracingConfig   `mapstructure:"tracing"`
 	OIDC      OIDCConfig      `mapstructure:"oidc"`
 	OpenAI    OpenAIConfig    `mapstructure:"openai"`
-	S3        S3Config        `mapstructure:"s3"`
-	GCS       GCSConfig       `mapstructure:"gcs"`
+	Blob      BlobConfig      `mapstructure:"blob"`
 }
 
 // DatabaseConfig is the configuration for the database.
@@ -79,10 +77,50 @@ type DatabaseConfig struct {
 	DataTablePrefix  string      `mapstructure:"data_table_prefix"`
 	CacheTablePrefix string      `mapstructure:"cache_table_prefix"`
 	MySQL            MySQLConfig `mapstructure:"mysql"`
+	Postgres         SQLConfig   `mapstructure:"postgres"`
+	Redis            RedisConfig `mapstructure:"redis"`
 }
 
 type MySQLConfig struct {
-	IsolationLevel string `mapstructure:"isolation_level" validate:"oneof=READ-UNCOMMITTED READ-COMMITTED REPEATABLE-READ SERIALIZABLE"`
+	IsolationLevel  string        `mapstructure:"isolation_level" validate:"oneof=READ-UNCOMMITTED READ-COMMITTED REPEATABLE-READ SERIALIZABLE"`
+	MaxOpenConns    int           `mapstructure:"max_open_conns" validate:"gte=0"`
+	MaxIdleConns    int           `mapstructure:"max_idle_conns" validate:"gte=0"`
+	ConnMaxLifetime time.Duration `mapstructure:"conn_max_lifetime" validate:"gte=0"`
+}
+
+type SQLConfig struct {
+	MaxOpenConns    int           `mapstructure:"max_open_conns" validate:"gte=0"`
+	MaxIdleConns    int           `mapstructure:"max_idle_conns" validate:"gte=0"`
+	ConnMaxLifetime time.Duration `mapstructure:"conn_max_lifetime" validate:"gte=0"`
+}
+
+type RedisConfig struct {
+	MaxSearchResults int `mapstructure:"max_search_results" validate:"gt=0"`
+}
+
+func (db *DatabaseConfig) StorageOptions(path string) []storage.Option {
+	if strings.HasPrefix(path, storage.MySQLPrefix) {
+		return []storage.Option{
+			storage.WithIsolationLevel(db.MySQL.IsolationLevel),
+			storage.WithMaxOpenConns(db.MySQL.MaxOpenConns),
+			storage.WithMaxIdleConns(db.MySQL.MaxIdleConns),
+			storage.WithConnMaxLifetime(db.MySQL.ConnMaxLifetime),
+		}
+	}
+	if strings.HasPrefix(path, storage.PostgresPrefix) || strings.HasPrefix(path, storage.PostgreSQLPrefix) {
+		return []storage.Option{
+			storage.WithMaxOpenConns(db.Postgres.MaxOpenConns),
+			storage.WithMaxIdleConns(db.Postgres.MaxIdleConns),
+			storage.WithConnMaxLifetime(db.Postgres.ConnMaxLifetime),
+		}
+	}
+	if strings.HasPrefix(path, storage.RedisPrefix) || strings.HasPrefix(path, storage.RedissPrefix) ||
+		strings.HasPrefix(path, storage.RedisClusterPrefix) || strings.HasPrefix(path, storage.RedissClusterPrefix) {
+		return []storage.Option{
+			storage.WithMaxSearchResults(db.Redis.MaxSearchResults),
+		}
+	}
+	return nil
 }
 
 // MasterConfig is the configuration for the master.
@@ -276,9 +314,10 @@ func (config *UserToUserConfig) Hash(cfg *RecommendConfig) string {
 }
 
 type CollaborativeConfig struct {
+	Type           string              `mapstructure:"type" validate:"oneof=none mf"`
 	FitPeriod      time.Duration       `mapstructure:"fit_period" validate:"gt=0"`
 	FitEpoch       int                 `mapstructure:"fit_epoch" validate:"gt=0"`
-	OptimizePeriod time.Duration       `mapstructure:"optimize_period" validate:"gt=0"`
+	OptimizePeriod time.Duration       `mapstructure:"optimize_period" validate:"gte=0"`
 	OptimizeTrials int                 `mapstructure:"optimize_trials" validate:"gt=0"`
 	EarlyStopping  EarlyStoppingConfig `mapstructure:"early_stopping"`
 }
@@ -322,15 +361,17 @@ type ReplacementConfig struct {
 }
 
 type RankerConfig struct {
-	Type           string              `mapstructure:"type" validate:"oneof=none fm llm"`
-	Recommenders   []string            `mapstructure:"recommenders"`
-	CacheExpire    time.Duration       `mapstructure:"cache_expire" validate:"gt=0"`
-	FitPeriod      time.Duration       `mapstructure:"fit_period" validate:"gt=0"`
-	FitEpoch       int                 `mapstructure:"fit_epoch" validate:"gt=0"`
-	OptimizePeriod time.Duration       `mapstructure:"optimize_period" validate:"gt=0"`
-	OptimizeTrials int                 `mapstructure:"optimize_trials" validate:"gt=0"`
-	Prompt         string              `mapstructure:"prompt"`
-	EarlyStopping  EarlyStoppingConfig `mapstructure:"early_stopping"`
+	Type             string              `mapstructure:"type" validate:"oneof=none fm llm"`
+	Recommenders     []string            `mapstructure:"recommenders"`
+	CacheExpire      time.Duration       `mapstructure:"cache_expire" validate:"gt=0"`
+	FitPeriod        time.Duration       `mapstructure:"fit_period" validate:"gt=0"`
+	FitEpoch         int                 `mapstructure:"fit_epoch" validate:"gt=0"`
+	OptimizePeriod   time.Duration       `mapstructure:"optimize_period" validate:"gte=0"`
+	OptimizeTrials   int                 `mapstructure:"optimize_trials" validate:"gt=0"`
+	QueryTemplate    string              `mapstructure:"query_template"`
+	DocumentTemplate string              `mapstructure:"document_template"`
+	EarlyStopping    EarlyStoppingConfig `mapstructure:"early_stopping"`
+	RerankerAPI      RerankerAPIConfig   `mapstructure:"reranker_api"`
 }
 
 type FallbackConfig struct {
@@ -339,7 +380,7 @@ type FallbackConfig struct {
 
 type TracingConfig struct {
 	EnableTracing     bool    `mapstructure:"enable_tracing"`
-	Exporter          string  `mapstructure:"exporter" validate:"oneof=jaeger zipkin otlp otlphttp"`
+	Exporter          string  `mapstructure:"exporter" validate:"oneof=zipkin otlp otlphttp"`
 	CollectorEndpoint string  `mapstructure:"collector_endpoint"`
 	Sampler           string  `mapstructure:"sampler"`
 	Ratio             float64 `mapstructure:"ratio"`
@@ -351,6 +392,12 @@ type OIDCConfig struct {
 	ClientID     string `mapstructure:"client_id"`
 	ClientSecret string `mapstructure:"client_secret"`
 	RedirectURL  string `mapstructure:"redirect_url" validate:"omitempty,endswith=/callback/oauth2"`
+}
+
+type RerankerAPIConfig struct {
+	AuthToken string `mapstructure:"auth_token"`
+	Model     string `mapstructure:"model"`
+	URL       string `mapstructure:"url"`
 }
 
 type OpenAIConfig struct {
@@ -366,33 +413,48 @@ type OpenAIConfig struct {
 	LogFile             string `mapstructure:"log_file"`
 }
 
+type BlobConfig struct {
+	URI   string          `mapstructure:"uri" validate:"required"`
+	S3    S3Config        `mapstructure:"s3"`
+	GCS   GCSConfig       `mapstructure:"gcs"`
+	Azure AzureBlobConfig `mapstructure:"azure"`
+}
+
 type S3Config struct {
 	Endpoint        string `mapstructure:"endpoint"`
 	AccessKeyID     string `mapstructure:"access_key_id"`
 	SecretAccessKey string `mapstructure:"secret_access_key"`
-	Bucket          string `mapstructure:"bucket"`
-	Prefix          string `mapstructure:"prefix"`
-}
-
-func (s *S3Config) ToJSON() string {
-	return string(lo.Must1(json.Marshal(s)))
 }
 
 type GCSConfig struct {
 	CredentialsFile string `mapstructure:"credentials_file"`
-	Bucket          string `mapstructure:"bucket"`
-	Prefix          string `mapstructure:"prefix"`
 }
 
-func (g *GCSConfig) ToJSON() string {
-	return string(lo.Must1(json.Marshal(g)))
+type AzureBlobConfig struct {
+	Endpoint         string `mapstructure:"endpoint"`
+	AccountName      string `mapstructure:"account_name"`
+	AccountKey       string `mapstructure:"account_key"`
+	ConnectionString string `mapstructure:"connection_string"`
 }
 
 func GetDefaultConfig() *Config {
 	return &Config{
 		Database: DatabaseConfig{
+			DataStore:  "sqlite://" + filepath.Join(MkDir(), "data.sqlite"),
+			CacheStore: "sqlite://" + filepath.Join(MkDir(), "cache.sqlite"),
 			MySQL: MySQLConfig{
-				IsolationLevel: "READ-UNCOMMITTED",
+				IsolationLevel:  "READ-UNCOMMITTED",
+				MaxOpenConns:    0,
+				MaxIdleConns:    0,
+				ConnMaxLifetime: 0,
+			},
+			Postgres: SQLConfig{
+				MaxOpenConns:    64,
+				MaxIdleConns:    64,
+				ConnMaxLifetime: time.Minute,
+			},
+			Redis: RedisConfig{
+				MaxSearchResults: 10000,
 			},
 		},
 		Master: MasterConfig{
@@ -417,9 +479,10 @@ func GetDefaultConfig() *Config {
 			CacheExpire: 72 * time.Hour,
 			ContextSize: 100,
 			Collaborative: CollaborativeConfig{
+				Type:           "none",
 				FitPeriod:      60 * time.Minute,
 				FitEpoch:       100,
-				OptimizePeriod: 180 * time.Minute,
+				OptimizePeriod: 0,
 				OptimizeTrials: 10,
 			},
 			Replacement: ReplacementConfig{
@@ -432,16 +495,17 @@ func GetDefaultConfig() *Config {
 				CacheExpire:    120 * time.Hour,
 				FitPeriod:      60 * time.Minute,
 				FitEpoch:       100,
-				OptimizePeriod: 360 * time.Minute,
+				OptimizePeriod: 0,
 				OptimizeTrials: 10,
-			},
-			Fallback: FallbackConfig{
-				Recommenders: []string{"latest"},
+				Recommenders:   []string{"latest"},
 			},
 		},
 		Tracing: TracingConfig{
-			Exporter: "jaeger",
+			Exporter: "otlp",
 			Sampler:  "always",
+		},
+		Blob: BlobConfig{
+			URI: MkDir("blob"),
 		},
 	}
 }
@@ -461,11 +525,6 @@ func (config *TracingConfig) NewTracerProvider() (trace.TracerProvider, error) {
 	var exporter tracesdk.SpanExporter
 	var err error
 	switch config.Exporter {
-	case "jaeger":
-		exporter, err = jaeger.New(jaeger.WithCollectorEndpoint(jaeger.WithEndpoint(config.CollectorEndpoint)))
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
 	case "zipkin":
 		exporter, err = zipkin.New(config.CollectorEndpoint)
 		if err != nil {
@@ -522,8 +581,20 @@ func (config *TracingConfig) Equal(other TracingConfig) bool {
 
 func setDefault() {
 	defaultConfig := GetDefaultConfig()
+	// [database]
+	viper.SetDefault("database.data_store", defaultConfig.Database.DataStore)
+	viper.SetDefault("database.cache_store", defaultConfig.Database.CacheStore)
 	// [database.mysql]
 	viper.SetDefault("database.mysql.isolation_level", defaultConfig.Database.MySQL.IsolationLevel)
+	viper.SetDefault("database.mysql.max_open_conns", defaultConfig.Database.MySQL.MaxOpenConns)
+	viper.SetDefault("database.mysql.max_idle_conns", defaultConfig.Database.MySQL.MaxIdleConns)
+	viper.SetDefault("database.mysql.conn_max_lifetime", defaultConfig.Database.MySQL.ConnMaxLifetime)
+	// [database.postgres]
+	viper.SetDefault("database.postgres.max_open_conns", defaultConfig.Database.Postgres.MaxOpenConns)
+	viper.SetDefault("database.postgres.max_idle_conns", defaultConfig.Database.Postgres.MaxIdleConns)
+	viper.SetDefault("database.postgres.conn_max_lifetime", defaultConfig.Database.Postgres.ConnMaxLifetime)
+	// [database.redis]
+	viper.SetDefault("database.redis.max_search_results", defaultConfig.Database.Redis.MaxSearchResults)
 	// [master]
 	viper.SetDefault("master.port", defaultConfig.Master.Port)
 	viper.SetDefault("master.host", defaultConfig.Master.Host)
@@ -545,6 +616,7 @@ func setDefault() {
 	viper.SetDefault("recommend.cache_expire", defaultConfig.Recommend.CacheExpire)
 	viper.SetDefault("recommend.context_size", defaultConfig.Recommend.ContextSize)
 	// [recommend.collaborative]
+	viper.SetDefault("recommend.collaborative.type", defaultConfig.Recommend.Collaborative.Type)
 	viper.SetDefault("recommend.collaborative.fit_period", defaultConfig.Recommend.Collaborative.FitPeriod)
 	viper.SetDefault("recommend.collaborative.fit_epoch", defaultConfig.Recommend.Collaborative.FitEpoch)
 	viper.SetDefault("recommend.collaborative.optimize_period", defaultConfig.Recommend.Collaborative.OptimizePeriod)
@@ -560,16 +632,62 @@ func setDefault() {
 	viper.SetDefault("recommend.ranker.fit_epoch", defaultConfig.Recommend.Ranker.FitEpoch)
 	viper.SetDefault("recommend.ranker.optimize_period", defaultConfig.Recommend.Ranker.OptimizePeriod)
 	viper.SetDefault("recommend.ranker.optimize_trials", defaultConfig.Recommend.Ranker.OptimizeTrials)
+	viper.SetDefault("recommend.ranker.recommenders", defaultConfig.Recommend.Ranker.Recommenders)
 	// [recommend.fallback]
 	viper.SetDefault("recommend.fallback", defaultConfig.Recommend.Fallback)
 	// [tracing]
 	viper.SetDefault("tracing.exporter", defaultConfig.Tracing.Exporter)
 	viper.SetDefault("tracing.sampler", defaultConfig.Tracing.Sampler)
+	// [blob]
+	viper.SetDefault("blob.uri", defaultConfig.Blob.URI)
 }
 
 type configBinding struct {
 	key string
 	env string
+}
+
+var bindings = []configBinding{
+	{"database.cache_store", "GORSE_CACHE_STORE"},
+	{"database.data_store", "GORSE_DATA_STORE"},
+	{"database.table_prefix", "GORSE_TABLE_PREFIX"},
+	{"database.cache_table_prefix", "GORSE_CACHE_TABLE_PREFIX"},
+	{"database.data_table_prefix", "GORSE_DATA_TABLE_PREFIX"},
+	{"master.port", "GORSE_MASTER_PORT"},
+	{"master.host", "GORSE_MASTER_HOST"},
+	{"master.ssl_mode", "GORSE_MASTER_SSL_MODE"},
+	{"master.ssl_ca", "GORSE_MASTER_SSL_CA"},
+	{"master.ssl_cert", "GORSE_MASTER_SSL_CERT"},
+	{"master.ssl_key", "GORSE_MASTER_SSL_KEY"},
+	{"master.http_port", "GORSE_MASTER_HTTP_PORT"},
+	{"master.http_host", "GORSE_MASTER_HTTP_HOST"},
+	{"master.n_jobs", "GORSE_MASTER_JOBS"},
+	{"master.dashboard_user_name", "GORSE_DASHBOARD_USER_NAME"},
+	{"master.dashboard_password", "GORSE_DASHBOARD_PASSWORD"},
+	{"master.dashboard_auth_server", "GORSE_DASHBOARD_AUTH_SERVER"},
+	{"master.dashboard_redacted", "GORSE_DASHBOARD_REDACTED"},
+	{"master.admin_api_key", "GORSE_ADMIN_API_KEY"},
+	{"server.api_key", "GORSE_SERVER_API_KEY"},
+	{"oidc.enable", "GORSE_OIDC_ENABLE"},
+	{"oidc.issuer", "GORSE_OIDC_ISSUER"},
+	{"oidc.client_id", "GORSE_OIDC_CLIENT_ID"},
+	{"oidc.client_secret", "GORSE_OIDC_CLIENT_SECRET"},
+	{"oidc.redirect_url", "GORSE_OIDC_REDIRECT_URL"},
+	{"blob.uri", "GORSE_BLOB_URI"},
+	{"blob.s3.endpoint", "S3_ENDPOINT"},
+	{"blob.s3.access_key_id", "S3_ACCESS_KEY_ID"},
+	{"blob.s3.secret_access_key", "S3_SECRET_ACCESS_KEY"},
+	{"blob.gcs.credentials_file", "GCS_CREDENTIALS_FILE"},
+	{"blob.azure.endpoint", "AZURE_STORAGE_ENDPOINT"},
+	{"blob.azure.account_name", "AZURE_STORAGE_ACCOUNT_NAME"},
+	{"blob.azure.account_key", "AZURE_STORAGE_ACCOUNT_KEY"},
+	{"blob.azure.connection_string", "AZURE_STORAGE_CONNECTION_STRING"},
+	{"openai.base_url", "OPENAI_BASE_URL"},
+	{"openai.auth_token", "OPENAI_AUTH_TOKEN"},
+	{"openai.chat_completion_model", "OPENAI_CHAT_COMPLETION_MODEL"},
+	{"recommend.ranker.reranker_api.url", "RERANKER_URL"},
+	{"recommend.ranker.reranker_api.model", "RERANKER_MODEL"},
+	{"recommend.ranker.reranker_api.auth_token", "RERANKER_AUTH_TOKEN"},
 }
 
 // LoadConfig loads configuration from toml file.
@@ -578,33 +696,6 @@ func LoadConfig(path string) (*Config, error) {
 	setDefault()
 
 	// bind environment bindings
-	bindings := []configBinding{
-		{"database.cache_store", "GORSE_CACHE_STORE"},
-		{"database.data_store", "GORSE_DATA_STORE"},
-		{"database.table_prefix", "GORSE_TABLE_PREFIX"},
-		{"database.cache_table_prefix", "GORSE_CACHE_TABLE_PREFIX"},
-		{"database.data_table_prefix", "GORSE_DATA_TABLE_PREFIX"},
-		{"master.port", "GORSE_MASTER_PORT"},
-		{"master.host", "GORSE_MASTER_HOST"},
-		{"master.ssl_mode", "GORSE_MASTER_SSL_MODE"},
-		{"master.ssl_ca", "GORSE_MASTER_SSL_CA"},
-		{"master.ssl_cert", "GORSE_MASTER_SSL_CERT"},
-		{"master.ssl_key", "GORSE_MASTER_SSL_KEY"},
-		{"master.http_port", "GORSE_MASTER_HTTP_PORT"},
-		{"master.http_host", "GORSE_MASTER_HTTP_HOST"},
-		{"master.n_jobs", "GORSE_MASTER_JOBS"},
-		{"master.dashboard_user_name", "GORSE_DASHBOARD_USER_NAME"},
-		{"master.dashboard_password", "GORSE_DASHBOARD_PASSWORD"},
-		{"master.dashboard_auth_server", "GORSE_DASHBOARD_AUTH_SERVER"},
-		{"master.dashboard_redacted", "GORSE_DASHBOARD_REDACTED"},
-		{"master.admin_api_key", "GORSE_ADMIN_API_KEY"},
-		{"server.api_key", "GORSE_SERVER_API_KEY"},
-		{"oidc.enable", "GORSE_OIDC_ENABLE"},
-		{"oidc.issuer", "GORSE_OIDC_ISSUER"},
-		{"oidc.client_id", "GORSE_OIDC_CLIENT_ID"},
-		{"oidc.client_secret", "GORSE_OIDC_CLIENT_SECRET"},
-		{"oidc.redirect_url", "GORSE_OIDC_REDIRECT_URL"},
-	}
 	for _, binding := range bindings {
 		err := viper.BindEnv(binding.key, binding.env)
 		if err != nil {
@@ -612,15 +703,24 @@ func LoadConfig(path string) (*Config, error) {
 		}
 	}
 
-	// check if file exist
-	if _, err := os.Stat(path); err != nil {
-		return nil, errors.Trace(err)
-	}
-
-	// load config file
-	viper.SetConfigFile(path)
-	if err := viper.ReadInConfig(); err != nil {
-		return nil, errors.Trace(err)
+	// load config file if provided
+	if path != "" {
+		// check if file exist
+		if _, err := os.Stat(path); err != nil {
+			if os.IsNotExist(err) {
+				log.Logger().Warn("config file not found, use default config", zap.String("path", path))
+			} else {
+				return nil, errors.Trace(err)
+			}
+		} else {
+			// load config file
+			viper.SetConfigFile(path)
+			if err := viper.ReadInConfig(); err != nil {
+				return nil, errors.Trace(err)
+			}
+		}
+	} else {
+		log.Logger().Info("no config file provided, use defaults and environment variables")
 	}
 
 	// unmarshal config file
@@ -661,6 +761,36 @@ func (config *Config) Validate() error {
 			return errors.Errorf("item-to-item recommender %v is duplicated", itemToItem.Name)
 		}
 		itemToItemNames.Add(itemToItem.Name)
+	}
+
+	// Check recommender existence and collaborative enabled
+	availableRecommenders := mapset.NewSet[string]()
+	for _, rec := range config.Recommend.NonPersonalized {
+		availableRecommenders.Add(rec.FullName())
+	}
+	for _, rec := range config.Recommend.ItemToItem {
+		availableRecommenders.Add(rec.FullName())
+	}
+	for _, rec := range config.Recommend.UserToUser {
+		availableRecommenders.Add(rec.FullName())
+	}
+	for _, rec := range config.Recommend.External {
+		availableRecommenders.Add(rec.FullName())
+	}
+	availableRecommenders.Add("latest")
+	if config.Recommend.Collaborative.Type != "none" {
+		availableRecommenders.Add(config.Recommend.Collaborative.FullName())
+	}
+	checkRecommenders := func(recommenders []string) error {
+		for _, recommender := range recommenders {
+			if recommender == config.Recommend.Collaborative.FullName() && config.Recommend.Collaborative.Type == "none" {
+				return errors.New("collaborative recommender is disabled")
+			}
+			if !availableRecommenders.Contains(recommender) {
+				return errors.Errorf("recommender %v doesn't exist", recommender)
+			}
+		}
+		return nil
 	}
 
 	validate := validator.New()
@@ -754,5 +884,30 @@ func (config *Config) Validate() error {
 			return errors.New(e.Translate(trans))
 		}
 	}
+
+	if len(config.Recommend.Ranker.Recommenders) == 0 {
+		return errors.New("ranker.recommenders must not be empty")
+	}
+	if config.Recommend.Ranker.Type == "none" && len(config.Recommend.Ranker.Recommenders) > 1 {
+		return errors.New("ranker.recommenders must contain at most one recommender when ranker.type is none")
+	}
+	if err := checkRecommenders(config.Recommend.Ranker.Recommenders); err != nil {
+		return err
+	}
+	if err := checkRecommenders(config.Recommend.Fallback.Recommenders); err != nil {
+		return err
+	}
 	return nil
+}
+
+var RootDir string
+
+// MkDir creates a directory under Gorse home directory.
+func MkDir(elem ...string) string {
+	if RootDir == "" {
+		RootDir = filepath.Join(lo.Must(os.UserHomeDir()), ".gorse", "var", "lib")
+	}
+	path := filepath.Join(RootDir, filepath.Join(elem...))
+	lo.Must0(os.MkdirAll(path, 0755))
+	return path
 }

@@ -15,7 +15,6 @@
 package mock
 
 import (
-	"context"
 	"io"
 	"strings"
 	"testing"
@@ -50,7 +49,7 @@ func (suite *OpenAITestSuite) TearDownSuite() {
 
 func (suite *OpenAITestSuite) TestChatCompletion() {
 	resp, err := suite.client.CreateChatCompletion(
-		context.Background(),
+		suite.T().Context(),
 		openai.ChatCompletionRequest{
 			Model: "qwen2.5",
 			Messages: []openai.ChatCompletionMessage{
@@ -70,7 +69,7 @@ func (suite *OpenAITestSuite) TestChatCompletionStream() {
 		" my mind ever since. Whenever you feel like criticizing anyone, he told me, just remember that all the " +
 		"people in this world haven't had the advantages that you've had."
 	stream, err := suite.client.CreateChatCompletionStream(
-		context.Background(),
+		suite.T().Context(),
 		openai.ChatCompletionRequest{
 			Model: "qwen2.5",
 			Messages: []openai.ChatCompletionMessage{
@@ -99,7 +98,7 @@ func (suite *OpenAITestSuite) TestChatCompletionStream() {
 
 func (suite *OpenAITestSuite) TestEmbeddings() {
 	resp, err := suite.client.CreateEmbeddings(
-		context.Background(),
+		suite.T().Context(),
 		openai.EmbeddingRequest{
 			Input: "Hello",
 			Model: "mxbai-embed-large",

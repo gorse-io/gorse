@@ -30,8 +30,8 @@ import (
 
 	"github.com/c-bata/goptuna"
 	"github.com/gorse-io/gorse/common/expression"
-	"github.com/gorse-io/gorse/common/mock"
 	"github.com/gorse-io/gorse/common/monitor"
+	"github.com/gorse-io/gorse/common/reranker"
 	"github.com/gorse-io/gorse/common/util"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/dataset"
@@ -47,7 +47,6 @@ import (
 	"github.com/stretchr/testify/suite"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/protobuf/proto"
 )
 
 type WorkerTestSuite struct {
@@ -85,6 +84,8 @@ func (suite *WorkerTestSuite) SetupTest() {
 	suite.NoError(err)
 	// configuration
 	suite.Config = config.GetDefaultConfig()
+	suite.Config.Recommend.Collaborative.Type = "mf"
+	suite.Config.Recommend.Fallback.Recommenders = []string{"latest"}
 	suite.Jobs = 1
 	suite.dontskipColdStartUsers = true
 	// reset random generator
@@ -95,7 +96,7 @@ func (suite *WorkerTestSuite) SetupTest() {
 }
 
 func (suite *WorkerTestSuite) TestPullUsers() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	// create user index
 	err := suite.DataClient.BatchInsertUsers(ctx, []data.User{
 		{UserId: "1"},
@@ -120,7 +121,7 @@ func (suite *WorkerTestSuite) TestPullUsers() {
 }
 
 func (suite *WorkerTestSuite) TestCheckRecommendCacheTimeout() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 
 	// empty cache
 	suite.True(suite.checkRecommendCacheOutOfDate(ctx, "0"))
@@ -141,13 +142,13 @@ func (suite *WorkerTestSuite) TestCheckRecommendCacheTimeout() {
 	err = suite.CacheClient.Set(ctx, cache.Time(cache.Key(cache.RecommendUpdateTime, "0"), time.Now().Add(time.Hour*100)))
 	suite.NoError(err)
 	suite.False(suite.checkRecommendCacheOutOfDate(ctx, "0"))
-	err = suite.CacheClient.DeleteScores(ctx, []string{cache.Recommend}, cache.ScoreCondition{Subset: proto.String("0")})
+	err = suite.CacheClient.DeleteScores(ctx, []string{cache.Recommend}, cache.ScoreCondition{Subset: new("0")})
 	suite.NoError(err)
 	suite.True(suite.checkRecommendCacheOutOfDate(ctx, "0"))
 }
 
 func (suite *WorkerTestSuite) TestRecommendCollaborative() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	suite.Config.Recommend.Ranker.Recommenders = []string{"collaborative"}
 	// insert feedbacks
 	now := time.Now()
@@ -198,7 +199,7 @@ func (suite *WorkerTestSuite) TestRecommendCollaborative() {
 }
 
 func (suite *WorkerTestSuite) TestRecommendItemToItem() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	suite.Config.Recommend.Ranker.Recommenders = []string{"item-to-item/default"}
 	suite.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "default"}}
 	suite.Config.Recommend.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{expression.MustParseFeedbackTypeExpression("a")}
@@ -274,7 +275,7 @@ func (suite *WorkerTestSuite) TestRecommendItemToItem() {
 }
 
 func (suite *WorkerTestSuite) TestRecommendUserToUser() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	suite.Config.Recommend.Ranker.Recommenders = []string{"user-to-user/default"}
 	suite.Config.Recommend.UserToUser = []config.UserToUserConfig{{Name: "default"}}
 	suite.Config.Recommend.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{expression.MustParseFeedbackTypeExpression("a")}
@@ -334,7 +335,7 @@ func (suite *WorkerTestSuite) TestRecommendUserToUser() {
 
 func (suite *WorkerTestSuite) TestRecommendLatest() {
 	// create mock worker
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	suite.Config.Recommend.Ranker.Recommenders = []string{"latest"}
 	// insert items
 	err := suite.DataClient.BatchInsertItems(ctx, []data.Item{
@@ -377,7 +378,7 @@ func (suite *WorkerTestSuite) TestRecommendLatest() {
 
 func (suite *WorkerTestSuite) TestRecommendNonPersonalized() {
 	// create mock worker
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	suite.Config.Recommend.Ranker.Recommenders = []string{"non-personalized/popular"}
 	// insert items
 	err := suite.DataClient.BatchInsertItems(ctx, []data.Item{
@@ -426,8 +427,9 @@ func (suite *WorkerTestSuite) TestRecommendNonPersonalized() {
 }
 
 func (suite *WorkerTestSuite) TestRecommend() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	suite.Config.Recommend.Ranker.Type = "fm"
+	suite.Config.Recommend.Ranker.Recommenders = nil
 	suite.Config.Recommend.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{expression.MustParseFeedbackTypeExpression("a")}
 	suite.Config.Recommend.CacheSize = 1
 	suite.Config.Recommend.NonPersonalized = []config.NonPersonalizedConfig{{Name: "popular"}}
@@ -455,6 +457,10 @@ func (suite *WorkerTestSuite) TestRecommend() {
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "0"}},
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "1", ItemId: "1"}},
 	}, true, true, true)
+	suite.NoError(err)
+
+	// insert stale recommendation
+	err = suite.CacheClient.AddScores(ctx, cache.Recommend, "0", []cache.Score{{Id: "999", Score: 999}})
 	suite.NoError(err)
 
 	// insert non-personalized recommendation
@@ -486,7 +492,7 @@ func (suite *WorkerTestSuite) TestRecommend() {
 }
 
 func (suite *WorkerTestSuite) TestRecommendRankerNone() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	suite.Config.Recommend.Ranker.Type = "none"
 	suite.Config.Recommend.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{expression.MustParseFeedbackTypeExpression("a")}
 	suite.Config.Recommend.CacheSize = 1
@@ -581,8 +587,8 @@ func newMockMaster(t *testing.T) *mockMaster {
 
 	// create click model
 	train, test := newClickDataset()
-	fm := ctr.NewFMV2(model.Params{model.NEpochs: 0})
-	fm.Fit(context.Background(), train, test, &ctr.FitConfig{})
+	fm := ctr.NewAFM(model.Params{model.NEpochs: 0})
+	fm.Fit(t.Context(), train, test, &ctr.FitConfig{})
 	clickModelBuffer := bytes.NewBuffer(nil)
 	err := ctr.MarshalModel(clickModelBuffer, fm)
 	assert.NoError(t, err)
@@ -590,7 +596,7 @@ func newMockMaster(t *testing.T) *mockMaster {
 	// create ranking model
 	trainSet, testSet := newRankingDataset()
 	bpr := cf.NewBPR(model.Params{model.NEpochs: 0})
-	bpr.Fit(context.Background(), trainSet, testSet, cf.NewFitConfig())
+	bpr.Fit(t.Context(), trainSet, testSet, cf.NewFitConfig())
 	rankingModelBuffer := bytes.NewBuffer(nil)
 	err = cf.MarshalModel(rankingModelBuffer, bpr)
 	assert.NoError(t, err)
@@ -705,7 +711,7 @@ func (m mockFactorizationMachine) Marshal(_ io.Writer) error {
 }
 
 func (suite *WorkerTestSuite) TestRankByClickTroughRate() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	// insert a user
 	err := suite.DataClient.BatchInsertUsers(ctx, []data.User{{UserId: "1"}})
 	suite.NoError(err)
@@ -732,8 +738,8 @@ func (suite *WorkerTestSuite) TestRankByClickTroughRate() {
 }
 
 func (suite *WorkerTestSuite) TestRankByLLM() {
-	ctx := context.Background()
-	mockAI := mock.NewOpenAIServer()
+	ctx := suite.T().Context()
+	mockAI := reranker.NewMockServer()
 	go func() {
 		_ = mockAI.Start()
 	}()
@@ -747,16 +753,13 @@ func (suite *WorkerTestSuite) TestRankByLLM() {
 	err = suite.DataClient.BatchInsertItems(ctx, []data.Item{{ItemId: "1"}, {ItemId: "2"}, {ItemId: "3"}, {ItemId: "4"}, {ItemId: "5"}})
 	suite.NoError(err)
 
-	suite.Config.OpenAI = config.OpenAIConfig{
-		BaseURL:             mockAI.BaseURL(),
-		AuthToken:           mockAI.AuthToken(),
-		ChatCompletionModel: "deepseek-r1",
+	suite.Config.Recommend.Ranker.RerankerAPI = config.RerankerAPIConfig{
+		URL:       mockAI.URL(),
+		AuthToken: mockAI.AuthToken(),
+		Model:     "v1",
 	}
-	ranker, err := logics.NewChatRanker(suite.Config.OpenAI, "```csv"+`
-	{% for item in items %}
-	{{item.ItemId}}
-	{% endfor %}
-	`+"```")
+	ranker, err := logics.NewChatReranker(suite.Config.Recommend.Ranker.RerankerAPI,
+		"{{user.UserId}}", "{{item.ItemId}}")
 	suite.NoError(err)
 
 	itemCache := NewItemCache(suite.DataClient)
@@ -769,7 +772,7 @@ func (suite *WorkerTestSuite) TestRankByLLM() {
 	suite.Equal([]string{"1", "2", "3"}, lo.Map(result, func(d cache.Score, _ int) string {
 		return d.Id
 	}))
-	suite.Equal([]float64{1, float64(2) / 3, float64(1) / 3}, lo.Map(result, func(d cache.Score, _ int) float64 {
+	suite.Equal([]float64{1, 0.5, float64(1) / 3}, lo.Map(result, func(d cache.Score, _ int) float64 {
 		return d.Score
 	}))
 	for _, scored := range result {
@@ -778,7 +781,7 @@ func (suite *WorkerTestSuite) TestRankByLLM() {
 }
 
 func (suite *WorkerTestSuite) TestReplacement() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	suite.Config.Recommend.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{
 		expression.MustParseFeedbackTypeExpression("p")}
 	suite.Config.Recommend.DataSource.ReadFeedbackTypes = []expression.FeedbackTypeExpression{
@@ -833,7 +836,7 @@ func (suite *WorkerTestSuite) TestReplacement() {
 }
 
 func (suite *WorkerTestSuite) TestUserActivity() {
-	ctx := context.Background()
+	ctx := suite.T().Context()
 	err := suite.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastModifyUserTime, "0"), time.Now().AddDate(0, 0, -1)))
 	suite.NoError(err)
 	err = suite.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastModifyUserTime, "1"), time.Now().AddDate(0, 0, -10)))
