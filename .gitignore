@@ -120,4 +120,3 @@ $RECYCLE.BIN/
 .vscode
 
 # End of https://www.gitignore.io/api/go,windows,jetbrains
-/.idea

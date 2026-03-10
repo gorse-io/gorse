@@ -28,15 +28,6 @@ The playground mode has been prepared for beginners. Just set up a recommender s
 docker run -p 8088:8088 zhenghaoz/gorse-in-one --playground
 ```
 
-Run locally using go & idea
-```bash
-cd gorse # root of repo
-podman-compose up -d # may need to delete previous gorse_server_1 container
-http://localhost:8088/tasks # brings up the Gorse Dashboard
-http://localhost:8087/api/health/live # server health
-http://localhost:8087/api/latest # get latest items
-```
-
 The playground mode will download data from [GitRec](https://gitrec.gorse.io/) and import it into Gorse. The dashboard is available at `http://localhost:8088`.
 
 <img width=720 src="https://github.com/gorse-io/dashboard/blob/master/assets/dashboard.png?raw=true"/>

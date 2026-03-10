@@ -737,7 +737,7 @@ func (m *Master) updateUserToUser(parent context.Context, dataset *dataset.Datas
 	if len(m.Config.Recommend.UserToUser) == 0 {
 		return nil
 	}
-	ctx, span := m.tracer.Start(parent, "Generate user-to-user recommendation Amma",
+	ctx, span := m.tracer.Start(parent, "Generate user-to-user recommendation",
 		len(dataset.GetUsers())*(len(m.Config.Recommend.UserToUser))*2)
 	defer span.End()
 
