@@ -85,7 +85,7 @@ type Item struct {
 	Categories []string  `gorm:"serializer:json" mapstructure:"categories"`
 	Timestamp  time.Time `gorm:"column:time_stamp" mapstructure:"timestamp"`
 	Labels     any       `gorm:"serializer:json" mapstructure:"labels"`
-	Comment    string    `mapsstructure:"comment"`
+	Comment    string    `mapstructure:"comment"`
 }
 
 // ItemPatch is the modification on an item.
@@ -121,9 +121,9 @@ type FeedbackKey struct {
 type Feedback struct {
 	FeedbackKey `gorm:"embedded" mapstructure:",squash"`
 	Value       float64   `gorm:"column:value" mapstructure:"value"`
-	Timestamp   time.Time `gorm:"column:time_stamp" mapsstructure:"timestamp"`
+	Timestamp   time.Time `gorm:"column:time_stamp" mapstructure:"timestamp"`
 	Updated     time.Time `gorm:"column:updated" mapstructure:"updated"`
-	Comment     string    `gorm:"column:comment" mapsstructure:"comment"`
+	Comment     string    `gorm:"column:comment" mapstructure:"comment"`
 }
 
 type UserFeedback Feedback
