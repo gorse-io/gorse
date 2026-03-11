@@ -539,7 +539,7 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.QueryParameter("write-back-delay", "Timestamp delay of write back feedback (format 0h0m0s)").DataType("string")).
 		Param(ws.QueryParameter("n", "Number of returned items").DataType("integer")).
 		Param(ws.QueryParameter("offset", "Offset of returned items").DataType("integer")).
-		Param(ws.QueryParameter("return-items", "Include full item data in response").DataType("boolean")).
+		Param(ws.QueryParameter("include-items", "Include full item data in response").DataType("boolean")).
 		Returns(http.StatusOK, "OK", RecommendResponse{}).
 		Writes(RecommendResponse{}))
 	ws.Route(ws.GET("/recommend/{user-id}/{category}").To(s.getRecommend).
@@ -553,7 +553,7 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.QueryParameter("write-back-delay", "Timestamp delay of write back feedback (format 0h0m0s)").DataType("string")).
 		Param(ws.QueryParameter("n", "Number of returned items").DataType("integer")).
 		Param(ws.QueryParameter("offset", "Offset of returned items").DataType("integer")).
-		Param(ws.QueryParameter("return-items", "Include full item data in response").DataType("boolean")).
+		Param(ws.QueryParameter("include-items", "Include full item data in response").DataType("boolean")).
 		Returns(http.StatusOK, "OK", RecommendResponse{}).
 		Writes(RecommendResponse{}))
 	ws.Route(ws.POST("/session/recommend").To(s.sessionRecommend).
@@ -888,8 +888,8 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 	itemIds := lo.Map(scores, func(item cache.Score, index int) string {
 		return item.Id
 	})
-	includeItems := request.QueryParameter("return-items") == "true"
-	var items []data.Item
+	includeItems := request.QueryParameter("include-items") == "true"
+	var itemMap map[string]data.Item
 	if includeItems {
 		// fetch full item data only when requested
 		fetchedItems, err := s.DataClient.BatchGetItems(ctx, itemIds)
@@ -897,15 +897,9 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 			InternalServerError(response, err)
 			return
 		}
-		// order items to match itemIds order
-		itemMap := make(map[string]data.Item, len(fetchedItems))
+		itemMap = make(map[string]data.Item, len(fetchedItems))
 		for _, item := range fetchedItems {
 			itemMap[item.ItemId] = item
-		}
-		for _, id := range itemIds {
-			if item, ok := itemMap[id]; ok {
-				items = append(items, item)
-			}
 		}
 	}
 	// write back
@@ -930,11 +924,29 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 	}
 	// Send result
 	if apiVersion == "2" {
-		Ok(response, scores)
+		if includeItems {
+			scoredItems := make([]ScoredItem, 0, len(scores))
+			for _, s := range scores {
+				si := ScoredItem{ItemId: s.Id, Score: s.Score}
+				if item, ok := itemMap[s.Id]; ok {
+					si.Item = &item
+				}
+				scoredItems = append(scoredItems, si)
+			}
+			Ok(response, scoredItems)
+		} else {
+			Ok(response, scores)
+		}
 		return
 	}
 	// Send response: include full item data only when requested
 	if includeItems {
+		var items []data.Item
+		for _, id := range itemIds {
+			if item, ok := itemMap[id]; ok {
+				items = append(items, item)
+			}
+		}
 		Ok(response, RecommendResponse{
 			ItemIds: itemIds,
 			Items:   items,
@@ -1039,6 +1051,13 @@ func (s *RestServer) sessionRecommend(request *restful.Request, response *restfu
 	result = result[:lo.Min([]int{len(result), n})]
 	// Send result
 	Ok(response, result)
+}
+
+// ScoredItem is a scored item with optional full item data for X-Api-Version: 2.
+type ScoredItem struct {
+	ItemId string     `json:"ItemId"`
+	Score  float64    `json:"Score"`
+	Item   *data.Item `json:"Item,omitempty"`
 }
 
 // RecommendResponse is the response for the recommend endpoint.
