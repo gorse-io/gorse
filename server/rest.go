@@ -539,7 +539,7 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.QueryParameter("write-back-delay", "Timestamp delay of write back feedback (format 0h0m0s)").DataType("string")).
 		Param(ws.QueryParameter("n", "Number of returned items").DataType("integer")).
 		Param(ws.QueryParameter("offset", "Offset of returned items").DataType("integer")).
-		Param(ws.QueryParameter("include-items", "Include full item data in response").DataType("boolean")).
+		Param(ws.QueryParameter("return-items", "Include full item data in response").DataType("boolean")).
 		Returns(http.StatusOK, "OK", RecommendResponse{}).
 		Writes(RecommendResponse{}))
 	ws.Route(ws.GET("/recommend/{user-id}/{category}").To(s.getRecommend).
@@ -553,7 +553,7 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.QueryParameter("write-back-delay", "Timestamp delay of write back feedback (format 0h0m0s)").DataType("string")).
 		Param(ws.QueryParameter("n", "Number of returned items").DataType("integer")).
 		Param(ws.QueryParameter("offset", "Offset of returned items").DataType("integer")).
-		Param(ws.QueryParameter("include-items", "Include full item data in response").DataType("boolean")).
+		Param(ws.QueryParameter("return-items", "Include full item data in response").DataType("boolean")).
 		Returns(http.StatusOK, "OK", RecommendResponse{}).
 		Writes(RecommendResponse{}))
 	ws.Route(ws.POST("/session/recommend").To(s.sessionRecommend).
@@ -888,7 +888,7 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 	itemIds := lo.Map(scores, func(item cache.Score, index int) string {
 		return item.Id
 	})
-	includeItems := request.QueryParameter("include-items") == "true"
+	includeItems := request.QueryParameter("return-items") == "true"
 	var itemMap map[string]data.Item
 	if includeItems {
 		// fetch full item data only when requested

@@ -1102,14 +1102,14 @@ func (suite *ServerTestSuite) TestGetRecommends() {
 		Status(http.StatusOK).
 		Body(suite.marshal([]string{"6", "7", "8"})).
 		End()
-	// Test include-items=true returns full item data
+	// Test return-items=true returns full item data
 	apitest.New().
 		Handler(suite.handler).
 		Get("/api/recommend/0").
 		Header("X-API-Key", apiKey).
 		QueryParams(map[string]string{
-			"n":             "3",
-			"include-items": "true",
+			"n":            "3",
+			"return-items": "true",
 		}).
 		Expect(suite.T()).
 		Status(http.StatusOK).
