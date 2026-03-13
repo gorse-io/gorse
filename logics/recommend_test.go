@@ -317,6 +317,56 @@ func (suite *RecommenderTestSuite) TestRecommendFallbackItemToItemSkipsExpiredIt
 	}, scores)
 }
 
+func (suite *RecommenderTestSuite) TestRecommendFallbackItemToItemKeepsPerSeedCacheSize() {
+	err := suite.cacheClient.AddScores(suite.T().Context(), cache.ItemToItem, cache.Key("default", "item_to_item_seed_1"), []cache.Score{
+		{Id: "item_to_item_hidden", Score: 11},
+		{Id: "item_to_item_a", Score: 10},
+		{Id: "item_to_item_b", Score: 9},
+		{Id: "item_to_item_z", Score: 5},
+	})
+	suite.NoError(err)
+	err = suite.cacheClient.AddScores(suite.T().Context(), cache.ItemToItem, cache.Key("default", "item_to_item_seed_2"), []cache.Score{
+		{Id: "item_to_item_z", Score: 8},
+		{Id: "item_to_item_c", Score: 7},
+	})
+	suite.NoError(err)
+	err = suite.cacheClient.Set(suite.T().Context(), cache.String(cache.Key(cache.ItemToItemDigest, "default", "item_to_item_seed_1"), "digest_1"))
+	suite.NoError(err)
+	err = suite.cacheClient.Set(suite.T().Context(), cache.String(cache.Key(cache.ItemToItemDigest, "default", "item_to_item_seed_2"), "digest_2"))
+	suite.NoError(err)
+	err = suite.dataClient.BatchInsertFeedback(suite.T().Context(), []data.Feedback{
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "item_to_item_limit_user", ItemId: "item_to_item_seed_1"}},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "item_to_item_limit_user", ItemId: "item_to_item_seed_2"}},
+	}, true, true, false)
+	suite.NoError(err)
+	err = suite.dataClient.BatchInsertItems(suite.T().Context(), []data.Item{
+		{ItemId: "item_to_item_hidden", IsHidden: true},
+	})
+	suite.NoError(err)
+
+	cfg := config.RecommendConfig{
+		CacheSize:   2,
+		ContextSize: 10,
+		DataSource: config.DataSourceConfig{
+			PositiveFeedbackTypes: []expression.FeedbackTypeExpression{expression.MustParseFeedbackTypeExpression("click")},
+		},
+		Ranker: config.RankerConfig{
+			Type: "fm",
+		},
+		Fallback: config.FallbackConfig{
+			Recommenders: []string{"item-to-item/default"},
+		},
+	}
+	recommender, err := NewRecommender(cfg, suite.cacheClient, suite.dataClient, true, "item_to_item_limit_user", nil)
+	suite.NoError(err)
+	scores, err := recommender.Recommend(suite.T().Context(), 2)
+	suite.NoError(err)
+	suite.Equal([]cache.Score{
+		{Id: "item_to_item_a", Score: 10},
+		{Id: "item_to_item_b", Score: 9},
+	}, scores)
+}
+
 func (suite *RecommenderTestSuite) TestRecommendFallbackLatestSkipsExpiredItems() {
 	now := time.Now()
 	err := suite.cacheClient.AddScores(suite.T().Context(), cache.Recommend, "ttl_user", []cache.Score{
@@ -354,6 +404,118 @@ func (suite *RecommenderTestSuite) TestRecommendFallbackLatestSkipsExpiredItems(
 		{Id: "ttl_rec_valid", Score: 9},
 		{Id: "ttl_rec_valid_2", Score: 8},
 		{Id: "ttl_latest_valid", Score: float64(now.Add(time.Hour).Unix())},
+	}, scores)
+}
+
+func (suite *RecommenderTestSuite) TestRecommendRankerDoesNotBackfillPastExcludedItems() {
+	err := suite.cacheClient.AddScores(suite.T().Context(), cache.Recommend, "ranker_excluded_user", []cache.Score{
+		{Id: "ranker_seen", Score: 10},
+		{Id: "ranker_valid", Score: 9},
+		{Id: "ranker_deeper", Score: 8},
+	})
+	suite.NoError(err)
+	err = suite.dataClient.BatchInsertFeedback(suite.T().Context(), []data.Feedback{
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "ranker_excluded_user", ItemId: "ranker_seen"}},
+	}, true, true, false)
+	suite.NoError(err)
+	now := time.Now()
+	err = suite.dataClient.BatchInsertItems(suite.T().Context(), []data.Item{
+		{ItemId: "ranker_valid", Timestamp: now.Add(-time.Hour)},
+		{ItemId: "ranker_deeper", Timestamp: now.Add(-2 * time.Hour)},
+		{ItemId: "ranker_fallback", Timestamp: now.Add(time.Hour)},
+	})
+	suite.NoError(err)
+
+	cfg := config.RecommendConfig{
+		CacheSize: 2,
+		Ranker: config.RankerConfig{
+			Type: "fm",
+		},
+		Fallback: config.FallbackConfig{
+			Recommenders: []string{"latest"},
+		},
+	}
+	recommender, err := NewRecommender(cfg, suite.cacheClient, suite.dataClient, true, "ranker_excluded_user", nil)
+	suite.NoError(err)
+	scores, err := recommender.Recommend(suite.T().Context(), 2)
+	suite.NoError(err)
+	suite.Equal([]cache.Score{
+		{Id: "ranker_valid", Score: 9},
+		{Id: "ranker_fallback", Score: float64(now.Add(time.Hour).Unix())},
+	}, scores)
+}
+
+func (suite *RecommenderTestSuite) TestRecommendRankerSkipsUnavailableItemsAndKeepsCacheOnlyIds() {
+	now := time.Now()
+	err := suite.cacheClient.AddScores(suite.T().Context(), cache.Recommend, "ranker_user", []cache.Score{
+		{Id: "ranker_hidden", Score: 10},
+		{Id: "ranker_expired", Score: 9},
+		{Id: "ranker_cache_only", Score: 8},
+		{Id: "ranker_valid", Score: 7},
+	})
+	suite.NoError(err)
+	err = suite.dataClient.BatchInsertItems(suite.T().Context(), []data.Item{
+		{ItemId: "ranker_hidden", IsHidden: true},
+		{ItemId: "ranker_expired", Timestamp: now.Add(-48 * time.Hour)},
+		{ItemId: "ranker_valid", Timestamp: now.Add(-time.Hour)},
+	})
+	suite.NoError(err)
+
+	cfg := config.RecommendConfig{
+		CacheSize: 2,
+		DataSource: config.DataSourceConfig{
+			ItemTTL: 1,
+		},
+		Ranker: config.RankerConfig{
+			Type: "fm",
+		},
+	}
+	recommender, err := NewRecommender(cfg, suite.cacheClient, suite.dataClient, true, "ranker_user", nil)
+	suite.NoError(err)
+	scores, err := recommender.Recommend(suite.T().Context(), 2)
+	suite.NoError(err)
+	suite.Equal([]cache.Score{
+		{Id: "ranker_cache_only", Score: 8},
+		{Id: "ranker_valid", Score: 7},
+	}, scores)
+}
+
+func (suite *RecommenderTestSuite) TestRecommendRankerDoesNotBackfillPastExcludedItemsWhenSkippingUnavailableItems() {
+	err := suite.cacheClient.AddScores(suite.T().Context(), cache.Recommend, "ranker_mixed_user", []cache.Score{
+		{Id: "ranker_mixed_seen", Score: 10},
+		{Id: "ranker_mixed_hidden", Score: 9},
+		{Id: "ranker_mixed_valid", Score: 8},
+		{Id: "ranker_mixed_deeper", Score: 7},
+	})
+	suite.NoError(err)
+	err = suite.dataClient.BatchInsertFeedback(suite.T().Context(), []data.Feedback{
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "ranker_mixed_user", ItemId: "ranker_mixed_seen"}},
+	}, true, true, false)
+	suite.NoError(err)
+	now := time.Now()
+	err = suite.dataClient.BatchInsertItems(suite.T().Context(), []data.Item{
+		{ItemId: "ranker_mixed_hidden", IsHidden: true},
+		{ItemId: "ranker_mixed_valid", Timestamp: now.Add(-time.Hour)},
+		{ItemId: "ranker_mixed_fallback", Timestamp: now.Add(time.Hour)},
+	})
+	suite.NoError(err)
+
+	cfg := config.RecommendConfig{
+		CacheSize: 2,
+		Ranker: config.RankerConfig{
+			Type: "fm",
+		},
+		Fallback: config.FallbackConfig{
+			Recommenders: []string{"latest"},
+		},
+	}
+	recommender, err := NewRecommender(cfg, suite.cacheClient, suite.dataClient, true, "ranker_mixed_user", nil)
+	suite.NoError(err)
+	scores, err := recommender.Recommend(suite.T().Context(), 2)
+	suite.NoError(err)
+	suite.Equal([]cache.Score{
+		{Id: "ranker_mixed_valid", Score: 8},
+		{Id: "ranker_mixed_fallback", Score: float64(now.Add(time.Hour).Unix())},
 	}, scores)
 }
 

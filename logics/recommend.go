@@ -167,20 +167,27 @@ func (r *Recommender) filterAvailableItems(items []data.Item) []data.Item {
 	})
 }
 
-// filterAvailableScores removes hidden or expired items when current item metadata is available.
-func (r *Recommender) filterAvailableScores(ctx context.Context, scores []cache.Score) ([]cache.Score, error) {
-	if len(scores) == 0 {
-		return scores, nil
+func (r *Recommender) batchGetItemsMap(ctx context.Context, ids []string) (map[string]data.Item, error) {
+	if len(ids) == 0 {
+		return map[string]data.Item{}, nil
 	}
-	items, err := r.dataClient.BatchGetItems(ctx, lo.Map(scores, func(score cache.Score, _ int) string {
-		return score.Id
-	}))
+	items, err := r.dataClient.BatchGetItems(ctx, ids)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
 	itemsMap := make(map[string]data.Item, len(items))
 	for _, item := range items {
 		itemsMap[item.ItemId] = item
+	}
+	return itemsMap, nil
+}
+
+func (r *Recommender) filterAvailableScores(ctx context.Context, scores []cache.Score) ([]cache.Score, error) {
+	itemsMap, err := r.batchGetItemsMap(ctx, lo.Map(scores, func(score cache.Score, _ int) string {
+		return score.Id
+	}))
+	if err != nil {
+		return nil, errors.Trace(err)
 	}
 	expireBefore := r.expireBefore()
 	return lo.Filter(scores, func(score cache.Score, _ int) bool {
@@ -195,8 +202,7 @@ func (r *Recommender) searchAvailableScores(ctx context.Context, collection, sub
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
-		scores, err = r.filterAvailableScores(ctx, scores)
-		return scores, errors.Trace(err)
+		return r.filterAvailableScores(ctx, scores)
 	}
 	results := make([]cache.Score, 0, r.config.CacheSize)
 	for begin := 0; ; begin += r.config.CacheSize {
@@ -204,8 +210,8 @@ func (r *Recommender) searchAvailableScores(ctx context.Context, collection, sub
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
-		n := len(scores)
-		if n == 0 {
+		pageSize := len(scores)
+		if pageSize == 0 {
 			return results, nil
 		}
 		scores, err = r.filterAvailableScores(ctx, scores)
@@ -216,7 +222,7 @@ func (r *Recommender) searchAvailableScores(ctx context.Context, collection, sub
 		if len(results) >= r.config.CacheSize {
 			return results[:r.config.CacheSize], nil
 		}
-		if n < r.config.CacheSize {
+		if pageSize < r.config.CacheSize {
 			return results, nil
 		}
 	}
@@ -294,7 +300,6 @@ func (r *Recommender) recommendNonPersonalized(name string) RecommenderFunc {
 		} else {
 			categories = r.categories
 		}
-		// fetch items from cache
 		items, err := r.searchAvailableScores(ctx, cache.NonPersonalized, name, categories)
 		if err != nil {
 			return nil, "", errors.Trace(err)
@@ -305,14 +310,13 @@ func (r *Recommender) recommendNonPersonalized(name string) RecommenderFunc {
 			return nil, "", errors.Trace(err)
 		}
 		// remove excluded items
-		return lo.Filter(items, func(item cache.Score, index int) bool {
+		return lo.Filter(items, func(item cache.Score, _ int) bool {
 			return !r.excludeSet.Contains(item.Id)
 		}), digest, nil
 	}
 }
 
 func (r *Recommender) recommendCollaborative(ctx context.Context) ([]cache.Score, string, error) {
-	// fetch items from cache
 	items, err := r.searchAvailableScores(ctx, cache.CollaborativeFiltering, r.userId, r.categories)
 	if err != nil {
 		return nil, "", errors.Trace(err)
@@ -323,7 +327,7 @@ func (r *Recommender) recommendCollaborative(ctx context.Context) ([]cache.Score
 		return nil, "", errors.Trace(err)
 	}
 	// remove excluded items
-	return lo.Filter(items, func(item cache.Score, index int) bool {
+	return lo.Filter(items, func(item cache.Score, _ int) bool {
 		return !r.excludeSet.Contains(item.Id)
 	}), digest, nil
 }
@@ -416,13 +420,9 @@ func (r *Recommender) recommendUserToUser(name string) RecommenderFunc {
 		ids := lo.Map(elems, func(elem heap.Elem[string, float64], _ int) string {
 			return elem.Value
 		})
-		items, err := r.dataClient.BatchGetItems(ctx, ids)
+		itemsMap, err := r.batchGetItemsMap(ctx, ids)
 		if err != nil {
 			return nil, "", errors.Trace(err)
-		}
-		itemsMap := make(map[string]data.Item)
-		for _, item := range items {
-			itemsMap[item.ItemId] = item
 		}
 		expireBefore := r.expireBefore()
 		for _, elem := range elems {
