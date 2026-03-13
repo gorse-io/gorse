@@ -14,6 +14,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -86,6 +87,25 @@ func (suite *ServerTestSuite) marshal(v interface{}) string {
 	s, err := json.Marshal(v)
 	suite.NoError(err)
 	return string(s)
+}
+
+// marshalRecommend builds the expected JSON for the recommend endpoint.
+// It fetches full item data from the test DataClient and orders them to match itemIds.
+func (suite *ServerTestSuite) marshalRecommend(itemIds []string) string {
+	ctx := context.Background()
+	fetched, err := suite.DataClient.BatchGetItems(ctx, itemIds)
+	suite.NoError(err)
+	itemMap := make(map[string]data.Item, len(fetched))
+	for _, item := range fetched {
+		itemMap[item.ItemId] = item
+	}
+	var items []data.Item
+	for _, id := range itemIds {
+		if item, ok := itemMap[id]; ok {
+			items = append(items, item)
+		}
+	}
+	return suite.marshal(RecommendResponse{ItemIds: itemIds, Items: items})
 }
 
 func (suite *ServerTestSuite) TestUsers() {
@@ -1082,6 +1102,19 @@ func (suite *ServerTestSuite) TestGetRecommends() {
 		Expect(suite.T()).
 		Status(http.StatusOK).
 		Body(suite.marshal([]string{"6", "7", "8"})).
+		End()
+	// Test return-items=true returns full item data
+	apitest.New().
+		Handler(suite.handler).
+		Get("/api/recommend/0").
+		Header("X-API-Key", apiKey).
+		QueryParams(map[string]string{
+			"n":            "3",
+			"return-items": "true",
+		}).
+		Expect(suite.T()).
+		Status(http.StatusOK).
+		Body(suite.marshalRecommend([]string{"6", "7", "8"})).
 		End()
 }
 
