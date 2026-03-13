@@ -912,7 +912,7 @@ func (m *Master) trainCollaborativeFiltering(parent context.Context, trainSet, t
 	m.collaborativeFilteringModelMutex.Lock()
 	m.collaborativeFilteringTrainSetSize = trainSet.CountFeedback()
 	m.collaborativeFilteringModelMutex.Unlock()
-	collaborativeFilteringModelId := time.Now().Unix()
+	collaborativeFilteringModelId := time.Now().UnixMilli()
 	log.Logger().Info("fit collaborative filtering model completed",
 		zap.Int64("id", collaborativeFilteringModelId))
 	CollaborativeFilteringNDCG10.Set(float64(score.NDCG))
@@ -1036,7 +1036,7 @@ func (m *Master) trainClickThroughRatePrediction(parent context.Context, trainSe
 	// update match model
 	m.clickThroughRateModelMutex.Lock()
 	m.clickThroughRateTrainSetSize = trainSet.Count()
-	clickThroughRateModelId := time.Now().Unix()
+	clickThroughRateModelId := time.Now().UnixMilli()
 	m.clickThroughRateModelMutex.Unlock()
 	log.Logger().Info("fit click model complete",
 		zap.Int64("id", clickThroughRateModelId))
