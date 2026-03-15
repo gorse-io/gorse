@@ -54,7 +54,7 @@ func (suite *ItemToItemTestSuite) TestColumnFunc() {
 			"description": []float32{0.1, 0.2, 0.3},
 		},
 	}, nil)
-	suite.Len(item2item.Items(), 1)
+	suite.Len(item2item.Items(), 2)
 
 	// Dimension does not match
 	item2item.Push(&data.Item{
@@ -63,7 +63,7 @@ func (suite *ItemToItemTestSuite) TestColumnFunc() {
 			"description": []float32{0.1, 0.2},
 		},
 	}, nil)
-	suite.Len(item2item.Items(), 1)
+	suite.Len(item2item.Items(), 2)
 
 	// Type does not match
 	item2item.Push(&data.Item{
@@ -72,14 +72,14 @@ func (suite *ItemToItemTestSuite) TestColumnFunc() {
 			"description": "hello",
 		},
 	}, nil)
-	suite.Len(item2item.Items(), 1)
+	suite.Len(item2item.Items(), 2)
 
 	// Column does not exist
 	item2item.Push(&data.Item{
 		ItemId: "2",
 		Labels: []float32{0.1, 0.2, 0.3},
 	}, nil)
-	suite.Len(item2item.Items(), 1)
+	suite.Len(item2item.Items(), 2)
 }
 
 func (suite *ItemToItemTestSuite) TestEmbedding() {
@@ -102,6 +102,50 @@ func (suite *ItemToItemTestSuite) TestEmbedding() {
 	suite.Len(scores, 10)
 	for i := 1; i <= 10; i++ {
 		suite.Equal(strconv.Itoa(i), scores[i-1].Id)
+	}
+}
+
+func (suite *ItemToItemTestSuite) TestHidden() {
+	timestamp := time.Now()
+	item2item, err := newEmbeddingItemToItem(config.ItemToItemConfig{
+		Column: "item.Labels.description",
+	}, 2, timestamp)
+	suite.NoError(err)
+
+	item2item.Push(&data.Item{
+		ItemId: "visible_1",
+		Labels: map[string]any{
+			"description": []float32{0.0, 0.0, 0.0},
+		},
+	}, nil)
+	item2item.Push(&data.Item{
+		ItemId: "visible_2",
+		Labels: map[string]any{
+			"description": []float32{0.1, 0.0, 0.0},
+		},
+	}, nil)
+	item2item.Push(&data.Item{
+		ItemId:   "hidden_1",
+		IsHidden: true,
+		Labels: map[string]any{
+			"description": []float32{0.05, 0.0, 0.0},
+		},
+	}, nil)
+
+	suite.Len(item2item.Items(), 3)
+
+	// hidden item should have similar items generated from non-hidden index
+	hiddenScores := item2item.PopAll(2)
+	suite.Len(hiddenScores, 2)
+	for _, score := range hiddenScores {
+		suite.NotEqual("hidden_1", score.Id)
+	}
+
+	// non-hidden item should never get hidden item in similarity results
+	visibleScores := item2item.PopAll(0)
+	suite.Len(visibleScores, 1)
+	for _, score := range visibleScores {
+		suite.NotEqual("hidden_1", score.Id)
 	}
 }
 
