@@ -104,6 +104,10 @@ type baseItemToItem[T any] struct {
 	index      *ann.HNSW[T]
 	items      []*data.Item
 	itemsLock  sync.Mutex
+	// Hidden items are stored separately without adding to the index,
+	// and they have neighbors but are not neiighbors of other items.
+	hiddenItems   []*data.Item
+	hiddenVectors []T
 }
 
 func (b *baseItemToItem[T]) Timestamp() time.Time {
@@ -111,16 +115,48 @@ func (b *baseItemToItem[T]) Timestamp() time.Time {
 }
 
 func (b *baseItemToItem[T]) Items() []*data.Item {
-	return b.items
+	return append(b.items, b.hiddenItems...)
+}
+
+func (b *baseItemToItem[T]) getItem(i int) *data.Item {
+	if i < len(b.items) {
+		return b.items[i]
+	}
+	return b.hiddenItems[i-len(b.items)]
+}
+
+func (b *baseItemToItem[T]) pushItem(item *data.Item, v T) {
+	if item.IsHidden {
+		b.itemsLock.Lock()
+		b.hiddenItems = append(b.hiddenItems, item)
+		b.hiddenVectors = append(b.hiddenVectors, v)
+		b.itemsLock.Unlock()
+	} else {
+		b.itemsLock.Lock()
+		b.items = append(b.items, nil)
+		b.itemsLock.Unlock()
+		j := b.index.Add(v)
+		b.itemsLock.Lock()
+		b.items[j] = item
+		b.itemsLock.Unlock()
+	}
 }
 
 func (b *baseItemToItem[T]) PopAll(i int) []cache.Score {
-	scores, err := b.index.SearchIndex(i, b.n+1, true)
-	if err != nil {
-		log.Logger().Error("failed to search index", zap.Error(err))
-		return nil
+	var results []lo.Tuple2[int, float32]
+	if i < len(b.items) {
+		// Non-hidden item: search by index
+		var err error
+		results, err = b.index.SearchIndex(i, b.n+1, true)
+		if err != nil {
+			log.Logger().Error("failed to search index", zap.Error(err))
+			return nil
+		}
+	} else {
+		// Hidden item: search by vector
+		results = b.index.SearchVector(b.hiddenVectors[i-len(b.items)], b.n, true)
 	}
-	return lo.Map(scores, func(v lo.Tuple2[int, float32], _ int) cache.Score {
+	return lo.Map(results, func(v lo.Tuple2[int, float32], _ int) cache.Score {
 		return cache.Score{
 			Id:         b.items[v.A].ItemId,
 			Categories: b.items[v.A].Categories,
@@ -153,10 +189,6 @@ func newEmbeddingItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.T
 }
 
 func (e *embeddingItemToItem) Push(item *data.Item, _ []int32) {
-	// Check if hidden
-	if item.IsHidden {
-		return
-	}
 	// Evaluate filter function
 	result, err := expr.Run(e.columnFunc, map[string]any{
 		"item": item,
@@ -178,15 +210,11 @@ func (e *embeddingItemToItem) Push(item *data.Item, _ []int32) {
 		e.dimension = len(v)
 	} else if e.dimension != len(v) {
 		log.Logger().Error("invalid column dimension", zap.Int("dimension", len(v)))
+		e.itemsLock.Unlock()
 		return
 	}
-	// Push item
-	e.items = append(e.items, nil)
 	e.itemsLock.Unlock()
-	j := e.index.Add(v)
-	e.itemsLock.Lock()
-	e.items[j] = item
-	e.itemsLock.Unlock()
+	e.pushItem(item, v)
 }
 
 type tagsItemToItem struct {
@@ -208,16 +236,12 @@ func newTagsItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time, 
 		n:          n,
 		timestamp:  timestamp,
 		columnFunc: columnFunc,
-		index:      ann.NewHNSW[[]dataset.ID](t.distance),
+		index:      ann.NewHNSW(t.distance),
 	}
 	return t, nil
 }
 
 func (t *tagsItemToItem) Push(item *data.Item, _ []int32) {
-	// Check if hidden
-	if item.IsHidden {
-		return
-	}
 	// Evaluate filter function
 	result, err := expr.Run(t.columnFunc, map[string]any{
 		"item": item,
@@ -234,14 +258,7 @@ func (t *tagsItemToItem) Push(item *data.Item, _ []int32) {
 	sort.Slice(v, func(i, j int) bool {
 		return v[i] < v[j]
 	})
-	// Push item
-	t.itemsLock.Lock()
-	t.items = append(t.items, nil)
-	t.itemsLock.Unlock()
-	j := t.index.Add(v)
-	t.itemsLock.Lock()
-	t.items[j] = item
-	t.itemsLock.Unlock()
+	t.pushItem(item, v)
 }
 
 type usersItemToItem struct {
@@ -258,28 +275,17 @@ func newUsersItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time,
 		name:      cfg.Name,
 		n:         n,
 		timestamp: timestamp,
-		index:     ann.NewHNSW[[]int32](u.distance),
+		index:     ann.NewHNSW(u.distance),
 	}
 	return u, nil
 }
 
 func (u *usersItemToItem) Push(item *data.Item, feedback []int32) {
-	// Check if hidden
-	if item.IsHidden {
-		return
-	}
 	// Sort feedback
 	sort.Slice(feedback, func(i, j int) bool {
 		return feedback[i] < feedback[j]
 	})
-	// Push item
-	u.itemsLock.Lock()
-	u.items = append(u.items, nil)
-	u.itemsLock.Unlock()
-	j := u.index.Add(feedback)
-	u.itemsLock.Lock()
-	u.items[j] = item
-	u.itemsLock.Unlock()
+	u.pushItem(item, feedback)
 }
 
 type autoItemToItem struct {
@@ -303,10 +309,6 @@ func newAutoItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time, 
 }
 
 func (a *autoItemToItem) Push(item *data.Item, feedback []int32) {
-	// Check if hidden
-	if item.IsHidden {
-		return
-	}
 	// Extract tags
 	tSet := mapset.NewSet[dataset.ID]()
 	flatten(item.Labels, tSet)
@@ -318,14 +320,7 @@ func (a *autoItemToItem) Push(item *data.Item, feedback []int32) {
 	sort.Slice(feedback, func(i, j int) bool {
 		return feedback[i] < feedback[j]
 	})
-	// Push item
-	a.itemsLock.Lock()
-	a.items = append(a.items, nil)
-	a.itemsLock.Unlock()
-	j := a.index.Add(lo.Tuple2[[]dataset.ID, []int32]{A: v, B: feedback})
-	a.itemsLock.Lock()
-	a.items[j] = item
-	a.itemsLock.Unlock()
+	a.pushItem(item, lo.Tuple2[[]dataset.ID, []int32]{A: v, B: feedback})
 }
 
 func (a *autoItemToItem) distance(u, v lo.Tuple2[[]dataset.ID, []int32]) float32 {
@@ -427,13 +422,14 @@ func newChatItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time, 
 }
 
 func (g *chatItemToItem) PopAll(i int) []cache.Score {
+	item := g.getItem(i)
 	// evaluate column expression and get embedding vector
 	result, err := expr.Run(g.columnFunc, map[string]any{
-		"item": g.items[i],
+		"item": item,
 	})
 	if err != nil {
 		log.Logger().Error("failed to evaluate column expression",
-			zap.Any("item", g.items[i]), zap.Error(err))
+			zap.Any("item", item), zap.Error(err))
 		return nil
 	}
 	embedding0, ok := result.([]float32)
@@ -444,7 +440,7 @@ func (g *chatItemToItem) PopAll(i int) []cache.Score {
 	// render template
 	var buf strings.Builder
 	ctx := exec.NewContext(map[string]any{
-		"item": g.items[i],
+		"item": item,
 	})
 	if err := g.template.Execute(&buf, ctx); err != nil {
 		log.Logger().Error("failed to execute template", zap.Error(err))
@@ -472,7 +468,7 @@ func (g *chatItemToItem) PopAll(i int) []cache.Score {
 		return openai.ChatCompletionResponse{}, backoff.Permanent(err)
 	}, backoff.WithBackOff(backoff.NewExponentialBackOff()))
 	if err != nil {
-		log.Logger().Error("failed to chat completion", zap.String("item_id", g.items[i].ItemId), zap.Error(err))
+		log.Logger().Error("failed to chat completion", zap.String("item_id", item.ItemId), zap.Error(err))
 		return nil
 	}
 	duration := time.Since(start)

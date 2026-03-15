@@ -643,11 +643,9 @@ func (m *Master) updateItemToItem(parent context.Context, dataset *dataset.Datas
 
 	// Push items to item-to-item recommenders
 	if err := parallel.ForEach(ctx, dataset.GetItems(), m.Config.Master.NumJobs, func(i int, item data.Item) {
-		if !item.IsHidden {
-			for _, recommender := range itemToItemRecommenders {
-				recommender.Push(&item, dataset.GetItemFeedback()[i])
-				span.Add(1)
-			}
+		for _, recommender := range itemToItemRecommenders {
+			recommender.Push(&item, dataset.GetItemFeedback()[i])
+			span.Add(1)
 		}
 	}); err != nil {
 		return errors.Trace(err)
