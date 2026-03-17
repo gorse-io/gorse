@@ -924,6 +924,8 @@ github.com/valyala/fasttemplate v1.2.1/go.mod h1:KHLXt3tVN2HBp8eijSv/kGJopbvo7S+
 github.com/valyala/tcplisten v0.0.0-20161114210144-ceec8f93295a/go.mod h1:v3UYOV9WzVtRmSR+PDvWpU/qWl4Wa5LApYYX4ZtKbio=
 github.com/vearutop/statigz v1.4.0 h1:RQL0KG3j/uyA/PFpHeZ/L6l2ta920/MxlOAIGEOuwmU=
 github.com/vearutop/statigz v1.4.0/go.mod h1:LYTolBLiz9oJISwiVKnOQoIwhO1LWX1A7OECawGS8XE=
+github.com/weaviate/weaviate v1.27.0 h1:ovFnKER+HRpT5PPuR1ysbKgit0NSpHbBLcsjWR1UyWI=
+github.com/weaviate/weaviate v1.27.0/go.mod h1:ppTWDzt/atYk1KhyYzxVD8XckmaCaOYnnmelD5M4LK4=
 github.com/weaviate/weaviate v1.36.5 h1:lCiuEfQ08+5wK0DkTCUBb6ayNep9QpBH6JJhmZaRfzk=
 github.com/weaviate/weaviate v1.36.5/go.mod h1:ljzrgEmGKn3CRzDdcxvhmBUUZIcghwIYd1Lmn54f3Z8=
 github.com/weaviate/weaviate-go-client/v4 v4.16.1 h1:jkDYuRCYly6zG2ngqTpv6z8azzbqiMUXcmaJHJmAV0Q=
