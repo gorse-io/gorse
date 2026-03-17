@@ -14,7 +14,6 @@
 package server
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -89,10 +88,10 @@ func (suite *ServerTestSuite) marshal(v interface{}) string {
 	return string(s)
 }
 
-// marshalRecommend builds the expected JSON for the recommend endpoint.
+// marshalScoredItems builds the expected JSON for the recommend endpoint.
 // It fetches full item data from the test DataClient and orders them to match itemIds.
-func (suite *ServerTestSuite) marshalRecommend(itemIds []string) string {
-	ctx := context.Background()
+func (suite *ServerTestSuite) marshalScoredItems(itemIds []string) string {
+	ctx := suite.T().Context()
 	fetched, err := suite.DataClient.BatchGetItems(ctx, itemIds)
 	suite.NoError(err)
 	itemMap := make(map[string]data.Item, len(fetched))
@@ -105,7 +104,7 @@ func (suite *ServerTestSuite) marshalRecommend(itemIds []string) string {
 			items = append(items, item)
 		}
 	}
-	return suite.marshal(RecommendResponse{ItemIds: itemIds, Items: items})
+	return suite.marshal(items)
 }
 
 func (suite *ServerTestSuite) TestUsers() {
@@ -1114,7 +1113,7 @@ func (suite *ServerTestSuite) TestGetRecommends() {
 		}).
 		Expect(suite.T()).
 		Status(http.StatusOK).
-		Body(suite.marshalRecommend([]string{"6", "7", "8"})).
+		Body(suite.marshalScoredItems([]string{"6", "7", "8"})).
 		End()
 }
 
