@@ -44,7 +44,7 @@ func (suite *ItemToItemTestSuite) TestColumnFunc() {
 			"description": []float32{0.1, 0.2, 0.3},
 		},
 	}, nil)
-	suite.Len(item2item.Items(), 1)
+	suite.Equal(item2item.Count(), 1)
 
 	// Hidden
 	item2item.Push(&data.Item{
@@ -54,7 +54,7 @@ func (suite *ItemToItemTestSuite) TestColumnFunc() {
 			"description": []float32{0.1, 0.2, 0.3},
 		},
 	}, nil)
-	suite.Len(item2item.Items(), 2)
+	suite.Equal(item2item.Count(), 2)
 
 	// Dimension does not match
 	item2item.Push(&data.Item{
@@ -63,7 +63,7 @@ func (suite *ItemToItemTestSuite) TestColumnFunc() {
 			"description": []float32{0.1, 0.2},
 		},
 	}, nil)
-	suite.Len(item2item.Items(), 2)
+	suite.Equal(item2item.Count(), 2)
 
 	// Type does not match
 	item2item.Push(&data.Item{
@@ -72,14 +72,14 @@ func (suite *ItemToItemTestSuite) TestColumnFunc() {
 			"description": "hello",
 		},
 	}, nil)
-	suite.Len(item2item.Items(), 2)
+	suite.Equal(item2item.Count(), 2)
 
 	// Column does not exist
 	item2item.Push(&data.Item{
 		ItemId: "2",
 		Labels: []float32{0.1, 0.2, 0.3},
 	}, nil)
-	suite.Len(item2item.Items(), 2)
+	suite.Equal(item2item.Count(), 2)
 }
 
 func (suite *ItemToItemTestSuite) TestEmbedding() {
@@ -132,7 +132,7 @@ func (suite *ItemToItemTestSuite) TestHidden() {
 		},
 	}, nil)
 
-	suite.Len(item2item.Items(), 3)
+	suite.Equal(item2item.Count(), 3)
 
 	// hidden item should have similar items generated from non-hidden index
 	hiddenScores := item2item.PopAll(2)

@@ -653,7 +653,8 @@ func (m *Master) updateItemToItem(parent context.Context, dataset *dataset.Datas
 
 	// Save item-to-item recommendations to cache
 	for i, recommender := range itemToItemRecommenders {
-		if err := parallel.ForEach(ctx, recommender.Items(), m.Config.Master.NumJobs, func(j int, item *data.Item) {
+		if err := parallel.For(ctx, recommender.Count(), m.Config.Master.NumJobs, func(j int) {
+			item := recommender.Get(i)
 			itemToItemConfig := m.Config.Recommend.ItemToItem[i]
 			if m.needUpdateItemToItem(ctx, item.ItemId, itemToItemConfig) {
 				defer span.Add(1)

@@ -62,7 +62,8 @@ type ItemToItemOptions struct {
 
 type ItemToItem interface {
 	Timestamp() time.Time
-	Items() []*data.Item
+	Count() int
+	Get(i int) *data.Item
 	Push(item *data.Item, feedback []int32)
 	PopAll(i int) []cache.Score
 }
@@ -114,11 +115,11 @@ func (b *baseItemToItem[T]) Timestamp() time.Time {
 	return b.timestamp
 }
 
-func (b *baseItemToItem[T]) Items() []*data.Item {
-	return append(b.items, b.hiddenItems...)
+func (b *baseItemToItem[T]) Count() int {
+	return len(b.items) + len(b.hiddenItems)
 }
 
-func (b *baseItemToItem[T]) getItem(i int) *data.Item {
+func (b *baseItemToItem[T]) Get(i int) *data.Item {
 	if i < len(b.items) {
 		return b.items[i]
 	}
@@ -422,7 +423,7 @@ func newChatItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time, 
 }
 
 func (g *chatItemToItem) PopAll(i int) []cache.Score {
-	item := g.getItem(i)
+	item := g.Get(i)
 	// evaluate column expression and get embedding vector
 	result, err := expr.Run(g.columnFunc, map[string]any{
 		"item": item,
