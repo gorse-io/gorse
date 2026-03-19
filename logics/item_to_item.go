@@ -106,7 +106,7 @@ type baseItemToItem[T any] struct {
 	items      []*data.Item
 	itemsLock  sync.Mutex
 	// Hidden items are stored separately without adding to the index,
-	// and they have neighbors but are not neiighbors of other items.
+	// and they have neighbors but are not neighbors of other items.
 	hiddenItems   []*data.Item
 	hiddenVectors []T
 }
