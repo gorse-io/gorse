@@ -643,11 +643,9 @@ func (m *Master) updateItemToItem(parent context.Context, dataset *dataset.Datas
 
 	// Push items to item-to-item recommenders
 	if err := parallel.ForEach(ctx, dataset.GetItems(), m.Config.Master.NumJobs, func(i int, item data.Item) {
-		if !item.IsHidden {
-			for _, recommender := range itemToItemRecommenders {
-				recommender.Push(&item, dataset.GetItemFeedback()[i])
-				span.Add(1)
-			}
+		for _, recommender := range itemToItemRecommenders {
+			recommender.Push(&item, dataset.GetItemFeedback()[i])
+			span.Add(1)
 		}
 	}); err != nil {
 		return errors.Trace(err)
@@ -655,7 +653,8 @@ func (m *Master) updateItemToItem(parent context.Context, dataset *dataset.Datas
 
 	// Save item-to-item recommendations to cache
 	for i, recommender := range itemToItemRecommenders {
-		if err := parallel.ForEach(ctx, recommender.Items(), m.Config.Master.NumJobs, func(j int, item *data.Item) {
+		if err := parallel.For(ctx, recommender.Count(), m.Config.Master.NumJobs, func(j int) {
+			item := recommender.Get(j)
 			itemToItemConfig := m.Config.Recommend.ItemToItem[i]
 			if m.needUpdateItemToItem(ctx, item.ItemId, itemToItemConfig) {
 				defer span.Add(1)
