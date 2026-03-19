@@ -73,6 +73,20 @@ func convertToMapStructure(t *testing.T, v interface{}) map[string]interface{} {
 	return m
 }
 
+func decodeTrainingTriggerResponse(t *testing.T, recorder *httptest.ResponseRecorder) TrainingTriggerResponse {
+	var resp TrainingTriggerResponse
+	err := json.Unmarshal(recorder.Body.Bytes(), &resp)
+	assert.NoError(t, err)
+	return resp
+}
+
+func decodeTrainingTriggerErrorResponse(t *testing.T, recorder *httptest.ResponseRecorder) TrainingTriggerErrorResponse {
+	var resp TrainingTriggerErrorResponse
+	err := json.Unmarshal(recorder.Body.Bytes(), &resp)
+	assert.NoError(t, err)
+	return resp
+}
+
 type MasterAPITestSuite struct {
 	suite.Suite
 	Master
@@ -109,6 +123,8 @@ func (suite *MasterAPITestSuite) SetupTest() {
 	suite.RestServer.CreateWebService()
 	suite.cancel = func() {}
 	suite.scheduled = make(chan struct{}, 1)
+	suite.trainingInProgress = false
+	suite.trainingReplacementQueued = false
 	// create handler
 	suite.handler = restful.NewContainer()
 	suite.handler.Add(suite.WebService)
@@ -141,6 +157,117 @@ func (suite *MasterAPITestSuite) TearDownTest() {
 	suite.NoError(err)
 	err = suite.openAIServer.Close()
 	suite.NoError(err)
+}
+
+func (suite *MasterAPITestSuite) TestTriggerTrainingMethodNotAllowed() {
+	req := httptest.NewRequest(http.MethodGet, "/api/training/trigger", nil)
+	w := httptest.NewRecorder()
+	suite.triggerTraining(w, req)
+	suite.Equal(http.StatusMethodNotAllowed, w.Code)
+	suite.Equal(restful.MIME_JSON, w.Header().Get("Content-Type"))
+	suite.Equal(TrainingTriggerErrorResponse{Error: "method not allowed"}, decodeTrainingTriggerErrorResponse(suite.T(), w))
+}
+
+func (suite *MasterAPITestSuite) TestTriggerTrainingUnauthorized() {
+	req := httptest.NewRequest(http.MethodPost, "/api/training/trigger", nil)
+	w := httptest.NewRecorder()
+	suite.triggerTraining(w, req)
+	suite.Equal(http.StatusUnauthorized, w.Code)
+	suite.Equal(restful.MIME_JSON, w.Header().Get("Content-Type"))
+	suite.Equal(TrainingTriggerErrorResponse{Error: "unauthorized"}, decodeTrainingTriggerErrorResponse(suite.T(), w))
+}
+
+func (suite *MasterAPITestSuite) TestTriggerTrainingAcceptsAdminAPIKey() {
+	suite.Config.Master.AdminAPIKey = "secret"
+	req := httptest.NewRequest(http.MethodPost, "/api/training/trigger", nil)
+	req.Header.Set("X-Api-Key", "secret")
+	w := httptest.NewRecorder()
+	suite.triggerTraining(w, req)
+	suite.Equal(http.StatusAccepted, w.Code)
+	resp := decodeTrainingTriggerResponse(suite.T(), w)
+	suite.Equal(TrainingTriggerResponse{
+		Status: "scheduled",
+		Force:  false,
+	}, resp)
+	suite.Equal(1, len(suite.scheduled))
+}
+
+func (suite *MasterAPITestSuite) TestTriggerTrainingInvalidForce() {
+	req := httptest.NewRequest(http.MethodPost, "/api/training/trigger?force=maybe", nil)
+	req.Header.Set("Cookie", suite.cookie)
+	w := httptest.NewRecorder()
+	suite.triggerTraining(w, req)
+	suite.Equal(http.StatusBadRequest, w.Code)
+	suite.Equal(restful.MIME_JSON, w.Header().Get("Content-Type"))
+	suite.Equal(TrainingTriggerErrorResponse{Error: "invalid force value"}, decodeTrainingTriggerErrorResponse(suite.T(), w))
+}
+
+func (suite *MasterAPITestSuite) TestTriggerTrainingWithoutForceDefaultsToFalseWhenIdle() {
+	req := httptest.NewRequest(http.MethodPost, "/api/training/trigger", nil)
+	req.Header.Set("Cookie", suite.cookie)
+	w := httptest.NewRecorder()
+	suite.triggerTraining(w, req)
+	suite.Equal(http.StatusAccepted, w.Code)
+	resp := decodeTrainingTriggerResponse(suite.T(), w)
+	suite.Equal(TrainingTriggerResponse{
+		Status: "scheduled",
+		Force:  false,
+	}, resp)
+	suite.Equal(1, len(suite.scheduled))
+}
+
+func (suite *MasterAPITestSuite) TestTriggerTrainingWithoutForceMatchesFalseWhenRunning() {
+	suite.trainingInProgress = true
+	cancelCount := 0
+	suite.cancel = func() {
+		cancelCount++
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/training/trigger", nil)
+	req.Header.Set("Cookie", suite.cookie)
+	w := httptest.NewRecorder()
+	suite.triggerTraining(w, req)
+	suite.Equal(http.StatusOK, w.Code)
+	respWithoutForce := decodeTrainingTriggerResponse(suite.T(), w)
+
+	req = httptest.NewRequest(http.MethodPost, "/api/training/trigger?force=false", nil)
+	req.Header.Set("Cookie", suite.cookie)
+	w = httptest.NewRecorder()
+	suite.triggerTraining(w, req)
+	suite.Equal(http.StatusOK, w.Code)
+	respWithForceFalse := decodeTrainingTriggerResponse(suite.T(), w)
+
+	suite.Equal(TrainingTriggerResponse{
+		Status: "already_running",
+		Force:  false,
+	}, respWithoutForce)
+	suite.Equal(respWithoutForce, respWithForceFalse)
+	suite.Equal(0, cancelCount)
+	suite.Equal(0, len(suite.scheduled))
+}
+
+func (suite *MasterAPITestSuite) TestTriggerTrainingForceCancelsRunningTraining() {
+	suite.trainingInProgress = true
+	cancelCount := 0
+	suite.cancel = func() {
+		cancelCount++
+	}
+
+	req := httptest.NewRequest(http.MethodPost, "/api/training/trigger?force=true", nil)
+	req.Header.Set("Cookie", suite.cookie)
+	w := httptest.NewRecorder()
+	suite.triggerTraining(w, req)
+	suite.Equal(http.StatusAccepted, w.Code)
+	resp := decodeTrainingTriggerResponse(suite.T(), w)
+
+	suite.Equal(TrainingTriggerResponse{
+		Status:   "scheduled",
+		Force:    true,
+		Canceled: true,
+	}, resp)
+	suite.Equal(1, cancelCount)
+	suite.True(suite.trainingReplacementQueued)
+	suite.Equal(0, len(suite.scheduled))
 }
 
 func (suite *MasterAPITestSuite) TestExportUsers() {

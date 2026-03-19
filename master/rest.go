@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -76,6 +77,16 @@ type UserInfo struct {
 type RerankerPrompt struct {
 	Query     string   `json:"query"`
 	Documents []string `json:"documents"`
+}
+
+type TrainingTriggerResponse struct {
+	Status   string `json:"status"`
+	Force    bool   `json:"force"`
+	Canceled bool   `json:"canceled"`
+}
+
+type TrainingTriggerErrorResponse struct {
+	Error string `json:"error"`
 }
 
 func (m *Master) CreateWebService() {
@@ -272,6 +283,7 @@ func (m *Master) StartHttpServer() {
 	container.Handle("/logout", http.HandlerFunc(m.logout))
 	container.Handle("/callback/oauth2", http.HandlerFunc(m.handleOAuth2Callback))
 	container.Handle("/api/purge", http.HandlerFunc(m.purge))
+	container.Handle("/api/training/trigger", http.HandlerFunc(m.triggerTraining))
 	container.Handle("/api/bulk/users", http.HandlerFunc(m.importExportUsers))
 	container.Handle("/api/bulk/items", http.HandlerFunc(m.importExportItems))
 	container.Handle("/api/bulk/feedback", http.HandlerFunc(m.importExportFeedback))
@@ -1655,6 +1667,78 @@ func writeError(response http.ResponseWriter, httpStatus int, message string) {
 	response.WriteHeader(httpStatus)
 	if _, err := response.Write([]byte(message)); err != nil {
 		log.Logger().Error("failed to write error", zap.Error(err))
+	}
+}
+
+func (m *Master) requestTraining(force bool) (TrainingTriggerResponse, int) {
+	m.trainingMutex.Lock()
+	defer m.trainingMutex.Unlock()
+
+	resp := TrainingTriggerResponse{Force: force}
+	if !m.trainingInProgress {
+		select {
+		case m.scheduled <- struct{}{}:
+		default:
+		}
+		resp.Status = "scheduled"
+		return resp, http.StatusAccepted
+	}
+
+	if !force {
+		resp.Status = "already_running"
+		return resp, http.StatusOK
+	}
+
+	m.trainingReplacementQueued = true
+	m.cancel()
+	resp.Status = "scheduled"
+	resp.Canceled = true
+	return resp, http.StatusAccepted
+}
+
+func writeTrainingTriggerError(response http.ResponseWriter, httpStatus int, message string) {
+	log.Logger().Error(strings.ToLower(http.StatusText(httpStatus)), zap.String("error", message))
+	response.Header().Set("Content-Type", restful.MIME_JSON)
+	response.WriteHeader(httpStatus)
+	if err := json.NewEncoder(response).Encode(TrainingTriggerErrorResponse{Error: message}); err != nil {
+		log.Logger().Error("failed to write training trigger error response", zap.Error(err))
+	}
+}
+
+func (m *Master) triggerTraining(response http.ResponseWriter, request *http.Request) {
+	if request.Method != http.MethodPost {
+		writeTrainingTriggerError(response, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	if !m.checkLogin(request) {
+		writeTrainingTriggerError(response, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	force := false
+	if forceValue := request.URL.Query().Get("force"); forceValue != "" {
+		var err error
+		force, err = strconv.ParseBool(forceValue)
+		if err != nil {
+			writeTrainingTriggerError(response, http.StatusBadRequest, "invalid force value")
+			return
+		}
+	}
+
+	resp, status := m.requestTraining(force)
+	action := resp.Status
+	if resp.Canceled {
+		action = "force_cancel_and_reschedule"
+	}
+	log.Logger().Info("trigger training",
+		zap.Bool("force", force),
+		zap.String("action", action),
+		zap.Bool("canceled", resp.Canceled))
+
+	response.Header().Set("Content-Type", restful.MIME_JSON)
+	response.WriteHeader(status)
+	if err := json.NewEncoder(response).Encode(resp); err != nil {
+		log.Logger().Error("failed to write training trigger response", zap.Error(err))
 	}
 }
 
