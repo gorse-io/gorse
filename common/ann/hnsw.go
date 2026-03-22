@@ -18,6 +18,7 @@ import (
 	"encoding/binary"
 	"io"
 	"math/rand"
+	"sort"
 	"sync"
 
 	"github.com/chewxy/math32"
@@ -154,7 +155,17 @@ func (h *HNSW[T]) insert(q int32) {
 		neighbors := h.selectNeighbors(h.vectors[q], w, h.maxConnection)
 		// add bidirectional connections from upperNeighbors to q at layer l_c
 		h.setNeighbourhood(q, currentLayer, neighbors)
-		for _, e := range neighbors.Elems() {
+		// Sort neighbors by index so that locks are acquired in ascending order
+		// to prevent deadlock. Since q is always the most recently allocated index
+		// (via indexMutex), q > all neighbor indices in the common case. This
+		// ensures the lock ordering: neighbor locks (ascending) < lock[q] (held),
+		// preventing circular waits when concurrent insertions become mutual
+		// neighbors.
+		elems := neighbors.Elems()
+		sort.Slice(elems, func(i, j int) bool {
+			return elems[i].Value < elems[j].Value
+		})
+		for _, e := range elems {
 			h.bottomMutex[e.Value].Lock()
 			h.getNeighbourhood(e.Value, currentLayer).Push(q, e.Weight)
 			connections := h.getNeighbourhood(e.Value, currentLayer)
