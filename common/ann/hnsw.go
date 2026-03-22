@@ -161,7 +161,7 @@ func (h *HNSW[T]) insert(q int32) {
 		// ensures the lock ordering: neighbor locks (ascending) < lock[q] (held),
 		// preventing circular waits when concurrent insertions become mutual
 		// neighbors.
-		elems := neighbors.Elems()
+		elems := lo.Clone(neighbors.Elems())
 		sort.Slice(elems, func(i, j int) bool {
 			return elems[i].Value < elems[j].Value
 		})
