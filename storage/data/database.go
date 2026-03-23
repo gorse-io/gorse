@@ -230,6 +230,9 @@ func NewScanOptions(opts ...ScanOption) ScanOptions {
 
 // GetOptions is the options for getting items.
 type GetOptions struct {
+	Categories  []string
+	SkipHidden  bool
+	ReturnId    bool
 }
 
 type Database interface {

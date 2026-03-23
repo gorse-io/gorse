@@ -526,10 +526,39 @@ func (d *SQLDatabase) BatchGetItems(ctx context.Context, itemIds []string, opts 
 	if len(itemIds) == 0 {
 		return nil, nil
 	}
-	result, err := d.gormDB.WithContext(ctx).
+	var selectFields string
+	if opts.ReturnId {
+		selectFields = "item_id"
+	} else {
+		selectFields = "item_id, is_hidden, categories, time_stamp, labels, comment"
+	}
+	query := d.gormDB.WithContext(ctx).
 		Table(d.ItemsTable()).
-		Select("item_id, is_hidden, categories, time_stamp, labels, comment").
-		Where("item_id IN ?", itemIds).Rows()
+		Select(selectFields).
+		Where("item_id IN ?", itemIds)
+	// Add category filter if specified (using JSON functions for portability)
+	if len(opts.Categories) > 0 {
+		q, err := jsonutil.Marshal(opts.Categories)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		switch d.driver {
+		case Postgres:
+			// PostgreSQL: use jsonb @> for array containment
+			query = query.Where("categories::jsonb @> ?::jsonb", string(q))
+		case MySQL, SQLite:
+			// MySQL/SQLite: use JSON_CONTAINS (checks if all categories are present)
+			query = query.Where("JSON_CONTAINS(categories,?)", string(q))
+		case ClickHouse:
+			// ClickHouse: use hasAll for array containment
+			query = query.Where("hasAll(JSONExtractArrayRaw(categories),JSONExtractArrayRaw(?))", string(q))
+		}
+	}
+	// Add hidden filter if specified
+	if opts.SkipHidden {
+		query = query.Where("is_hidden = ?", false)
+	}
+	result, err := query.Rows()
 	if err != nil {
 		return nil, errors.Trace(err)
 	}

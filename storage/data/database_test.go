@@ -604,6 +604,69 @@ func (suite *baseTestSuite) TestItems() {
 	suite.NoError(err)
 }
 
+func (suite *baseTestSuite) TestBatchGetItems() {
+	ctx := suite.T().Context()
+
+	// Insert test items
+	items := []Item{
+		{ItemId: "1", IsHidden: false, Categories: []string{"a"}, Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC)},
+		{ItemId: "2", IsHidden: false, Categories: []string{"b"}, Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC)},
+		{ItemId: "3", IsHidden: true, Categories: []string{"c"}, Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC)},
+		{ItemId: "4", IsHidden: false, Categories: []string{"a", "b"}, Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC)},
+	}
+	err := suite.Database.BatchInsertItems(ctx, items)
+	suite.NoError(err)
+
+	// Test basic batch get
+	gotItems, err := suite.Database.BatchGetItems(ctx, []string{"1", "2", "3"}, GetOptions{})
+	suite.NoError(err)
+	suite.Len(gotItems, 3)
+
+	// Test batch get with empty list
+	emptyItems, err := suite.Database.BatchGetItems(ctx, []string{}, GetOptions{})
+	suite.NoError(err)
+	suite.Empty(emptyItems)
+
+	// Test batch get with non-existent items
+	nonExistent, err := suite.Database.BatchGetItems(ctx, []string{"999", "1000"}, GetOptions{})
+	suite.NoError(err)
+	suite.Empty(nonExistent)
+
+	// Test batch get with category filter (AND logic - must contain all specified categories)
+	categoryItems, err := suite.Database.BatchGetItems(ctx, []string{"1", "2", "3", "4"}, GetOptions{Categories: []string{"a"}})
+	suite.NoError(err)
+	suite.Len(categoryItems, 2) // items 1 and 4 have category "a"
+
+	// Test batch get with multiple category filter (AND logic - must contain both "a" AND "b")
+	multiCategoryItems, err := suite.Database.BatchGetItems(ctx, []string{"1", "2", "3", "4"}, GetOptions{Categories: []string{"a", "b"}})
+	suite.NoError(err)
+	suite.Len(multiCategoryItems, 1) // only item 4 has both "a" and "b"
+
+	// Test batch get with category filter that matches nothing
+	noMatchItems, err := suite.Database.BatchGetItems(ctx, []string{"1", "2", "3"}, GetOptions{Categories: []string{"z"}})
+	suite.NoError(err)
+	suite.Empty(noMatchItems)
+
+	// Test batch get with SkipHidden filter
+	visibleItems, err := suite.Database.BatchGetItems(ctx, []string{"1", "2", "3"}, GetOptions{SkipHidden: true})
+	suite.NoError(err)
+	suite.Len(visibleItems, 2) // items 1 and 2 are not hidden, item 3 is hidden
+
+	// Test batch get with both category and SkipHidden filter
+	visibleCategoryItems, err := suite.Database.BatchGetItems(ctx, []string{"1", "2", "3", "4"}, GetOptions{Categories: []string{"a"}, SkipHidden: true})
+	suite.NoError(err)
+	suite.Len(visibleCategoryItems, 2) // items 1 and 4 have category "a", both are not hidden
+
+	// Test batch get with ReturnId filter
+	idOnlyItems, err := suite.Database.BatchGetItems(ctx, []string{"1", "2", "3"}, GetOptions{ReturnId: true})
+	suite.NoError(err)
+	suite.Len(idOnlyItems, 3)
+	for _, item := range idOnlyItems {
+		suite.NotEmpty(item.ItemId)
+		suite.Empty(item.Categories) // other fields should be empty
+	}
+}
+
 func (suite *baseTestSuite) TestDeleteUser() {
 	ctx := suite.T().Context()
 	// Insert ret
