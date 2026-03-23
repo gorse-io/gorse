@@ -895,7 +895,7 @@ func (m *Master) getRecommend(request *restful.Request, response *restful.Respon
 	// Get item details
 	items, err := m.DataClient.BatchGetItems(ctx, lo.Map(results, func(id string, _ int) string {
 		return id
-	}))
+	}), data.GetOptions{})
 	if err != nil {
 		server.InternalServerError(response, err)
 		return
@@ -990,7 +990,7 @@ func (m *Master) getUserFeedback(request *restful.Request, response *restful.Res
 	// Get item details
 	items, err := m.DataClient.BatchGetItems(ctx, lo.Map(feedback, func(f data.Feedback, _ int) string {
 		return f.ItemId
-	}))
+	}), data.GetOptions{})
 	if err != nil {
 		server.InternalServerError(response, err)
 		return
@@ -1200,7 +1200,7 @@ func (m *Master) getRankerPrompt(request *restful.Request, response *restful.Res
 		feedbackItemIds := lo.Map(feedbacks, func(fb data.Feedback, _ int) string {
 			return fb.ItemId
 		})
-		feedbackItems, err := m.DataClient.BatchGetItems(ctx, feedbackItemIds)
+		feedbackItems, err := m.DataClient.BatchGetItems(ctx, feedbackItemIds, data.GetOptions{})
 		if err != nil {
 			server.InternalServerError(response, err)
 			return

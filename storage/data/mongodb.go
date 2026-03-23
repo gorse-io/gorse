@@ -239,12 +239,26 @@ func (db *MongoDB) BatchInsertItems(ctx context.Context, items []Item) error {
 	return errors.Trace(err)
 }
 
-func (db *MongoDB) BatchGetItems(ctx context.Context, itemIds []string) ([]Item, error) {
+func (db *MongoDB) BatchGetItems(ctx context.Context, itemIds []string, opts GetOptions) ([]Item, error) {
 	if len(itemIds) == 0 {
 		return nil, nil
 	}
 	c := db.client.Database(db.dbName).Collection(db.ItemsTable())
-	r, err := c.Find(ctx, bson.M{"itemid": bson.M{"$in": itemIds}})
+	filter := bson.M{"itemid": bson.M{"$in": itemIds}}
+	// Add category filter if specified (AND logic - must contain all categories)
+	if len(opts.Categories) > 0 {
+		filter["categories"] = bson.M{"$all": opts.Categories}
+	}
+	// Add hidden filter if specified
+	if opts.SkipHidden {
+		filter["ishidden"] = false
+	}
+	// Add projection for ReturnId
+	var optsFind bson.M
+	if opts.ReturnId {
+		optsFind = bson.M{"itemid": 1}
+	}
+	r, err := c.Find(ctx, filter, options.Find().SetProjection(optsFind))
 	if err != nil {
 		return nil, errors.Trace(err)
 	}

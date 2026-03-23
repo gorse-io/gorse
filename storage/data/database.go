@@ -228,6 +228,13 @@ func NewScanOptions(opts ...ScanOption) ScanOptions {
 	return options
 }
 
+// GetOptions is the options for getting items.
+type GetOptions struct {
+	Categories  []string
+	SkipHidden  bool
+	ReturnId    bool
+}
+
 type Database interface {
 	Init() error
 	Ping() error
@@ -235,7 +242,7 @@ type Database interface {
 	Optimize() error
 	Purge() error
 	BatchInsertItems(ctx context.Context, items []Item) error
-	BatchGetItems(ctx context.Context, itemIds []string) ([]Item, error)
+	BatchGetItems(ctx context.Context, itemIds []string, opts GetOptions) ([]Item, error)
 	DeleteItem(ctx context.Context, itemId string) error
 	GetItem(ctx context.Context, itemId string) (Item, error)
 	ModifyItem(ctx context.Context, itemId string, patch ItemPatch) error

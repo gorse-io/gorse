@@ -60,11 +60,20 @@ message ScanOptions {
   bool order_by_item_id = 8;
 }
 
+message GetOptions {
+  repeated string categories = 1;
+  bool skip_hidden = 2;
+  bool return_id = 3;
+}
+
 message BatchInsertItemsRequest { repeated Item items = 1; }
 
 message BatchInsertItemsResponse {}
 
-message BatchGetItemsRequest { repeated string item_ids = 1; }
+message BatchGetItemsRequest {
+  repeated string item_ids = 1;
+  GetOptions get_options = 2;
+}
 
 message BatchGetItemsResponse { repeated Item items = 1; }
 

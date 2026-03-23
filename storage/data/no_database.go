@@ -53,7 +53,7 @@ func (NoDatabase) BatchInsertItems(_ context.Context, _ []Item) error {
 }
 
 // BatchGetItems method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) BatchGetItems(_ context.Context, _ []string) ([]Item, error) {
+func (NoDatabase) BatchGetItems(_ context.Context, _ []string, _ GetOptions) ([]Item, error) {
 	return nil, ErrNoDatabase
 }
 

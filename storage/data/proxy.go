@@ -74,7 +74,13 @@ func (p *ProxyServer) BatchInsertItems(ctx context.Context, in *protocol.BatchIn
 }
 
 func (p *ProxyServer) BatchGetItems(ctx context.Context, in *protocol.BatchGetItemsRequest) (*protocol.BatchGetItemsResponse, error) {
-	items, err := p.database.BatchGetItems(ctx, in.ItemIds)
+	var opts GetOptions
+	if in.GetOptions != nil {
+		opts.Categories = in.GetOptions.Categories
+		opts.SkipHidden = in.GetOptions.SkipHidden
+		opts.ReturnId = in.GetOptions.ReturnId
+	}
+	items, err := p.database.BatchGetItems(ctx, in.ItemIds, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -577,8 +583,16 @@ func (p ProxyClient) BatchInsertItems(ctx context.Context, items []Item) error {
 	return err
 }
 
-func (p ProxyClient) BatchGetItems(ctx context.Context, itemIds []string) ([]Item, error) {
-	resp, err := p.DataStoreClient.BatchGetItems(ctx, &protocol.BatchGetItemsRequest{ItemIds: itemIds})
+func (p ProxyClient) BatchGetItems(ctx context.Context, itemIds []string, opts GetOptions) ([]Item, error) {
+	req := &protocol.BatchGetItemsRequest{ItemIds: itemIds}
+	if len(opts.Categories) > 0 || opts.SkipHidden || opts.ReturnId {
+		req.GetOptions = &protocol.GetOptions{
+			Categories: opts.Categories,
+			SkipHidden: opts.SkipHidden,
+			ReturnId:   opts.ReturnId,
+		}
+	}
+	resp, err := p.DataStoreClient.BatchGetItems(ctx, req)
 	if err != nil {
 		return nil, err
 	}

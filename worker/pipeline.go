@@ -595,7 +595,7 @@ func (c *ItemCache) GetSlice(ctx context.Context, itemIds []string) ([]*data.Ite
 			requests = append(requests, itemId)
 		}
 	}
-	response, err := c.Client.BatchGetItems(ctx, requests)
+	response, err := c.Client.BatchGetItems(ctx, requests, data.GetOptions{})
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
