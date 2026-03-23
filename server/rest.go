@@ -1227,7 +1227,7 @@ func (s *RestServer) batchInsertItems(ctx context.Context, response *restful.Res
 	start := time.Now()
 	existedItems, err := s.DataClient.BatchGetItems(ctx, lo.Map(temp, func(t Item, i int) string {
 		return t.ItemId
-	}))
+	}), data.GetOptions{})
 	if err != nil {
 		InternalServerError(response, err)
 		return

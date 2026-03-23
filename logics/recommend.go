@@ -316,7 +316,7 @@ func (r *Recommender) recommendUserToUser(name string) RecommenderFunc {
 		ids := lo.Map(elems, func(elem heap.Elem[string, float64], _ int) string {
 			return elem.Value
 		})
-		items, err := r.dataClient.BatchGetItems(ctx, ids)
+		items, err := r.dataClient.BatchGetItems(ctx, ids, data.GetOptions{})
 		if err != nil {
 			return nil, "", errors.Trace(err)
 		}

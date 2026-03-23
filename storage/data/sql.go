@@ -522,7 +522,7 @@ func (d *SQLDatabase) BatchInsertItems(ctx context.Context, items []Item) error 
 	}
 }
 
-func (d *SQLDatabase) BatchGetItems(ctx context.Context, itemIds []string) ([]Item, error) {
+func (d *SQLDatabase) BatchGetItems(ctx context.Context, itemIds []string, opts GetOptions) ([]Item, error) {
 	if len(itemIds) == 0 {
 		return nil, nil
 	}

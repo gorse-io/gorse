@@ -541,7 +541,7 @@ func (suite *baseTestSuite) TestItems() {
 		suite.Equal(item, ret)
 	}
 	// batch get items
-	batchItem, err := suite.Database.BatchGetItems(ctx, []string{"2", "6"})
+	batchItem, err := suite.Database.BatchGetItems(ctx, []string{"2", "6"}, GetOptions{})
 	suite.NoError(err)
 	suite.Equal([]Item{items[1], items[3]}, batchItem)
 	// Test GetLatestItems
@@ -595,7 +595,7 @@ func (suite *baseTestSuite) TestItems() {
 	err = suite.Database.BatchInsertItems(ctx, nil)
 	suite.NoError(err)
 	// test get empty
-	items, err = suite.Database.BatchGetItems(ctx, nil)
+	items, err = suite.Database.BatchGetItems(ctx, nil, GetOptions{})
 	suite.NoError(err)
 	suite.Empty(items)
 

@@ -74,7 +74,7 @@ func (p *ProxyServer) BatchInsertItems(ctx context.Context, in *protocol.BatchIn
 }
 
 func (p *ProxyServer) BatchGetItems(ctx context.Context, in *protocol.BatchGetItemsRequest) (*protocol.BatchGetItemsResponse, error) {
-	items, err := p.database.BatchGetItems(ctx, in.ItemIds)
+	items, err := p.database.BatchGetItems(ctx, in.ItemIds, GetOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -577,7 +577,7 @@ func (p ProxyClient) BatchInsertItems(ctx context.Context, items []Item) error {
 	return err
 }
 
-func (p ProxyClient) BatchGetItems(ctx context.Context, itemIds []string) ([]Item, error) {
+func (p ProxyClient) BatchGetItems(ctx context.Context, itemIds []string, opts GetOptions) ([]Item, error) {
 	resp, err := p.DataStoreClient.BatchGetItems(ctx, &protocol.BatchGetItemsRequest{ItemIds: itemIds})
 	if err != nil {
 		return nil, err

@@ -239,7 +239,7 @@ func (db *MongoDB) BatchInsertItems(ctx context.Context, items []Item) error {
 	return errors.Trace(err)
 }
 
-func (db *MongoDB) BatchGetItems(ctx context.Context, itemIds []string) ([]Item, error) {
+func (db *MongoDB) BatchGetItems(ctx context.Context, itemIds []string, opts GetOptions) ([]Item, error) {
 	if len(itemIds) == 0 {
 		return nil, nil
 	}
