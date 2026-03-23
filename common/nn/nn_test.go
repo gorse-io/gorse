@@ -46,7 +46,7 @@ func TestLinearRegression(t *testing.T) {
 	predict := func(x *Tensor) *Tensor { return Add(MatMul(x, w, false, false, 0), b) }
 
 	lr := float32(0.1)
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		yPred := predict(x)
 		loss := MeanSquareError(y, yPred)
 
@@ -78,7 +78,7 @@ func TestNeuralNetwork(t *testing.T) {
 	optimizer := NewSGD(model.Parameters(), 0.2)
 
 	var l float32
-	for i := 0; i < 10000; i++ {
+	for range 10000 {
 		yPred := model.Forward(x)
 		loss := MeanSquareError(y, yPred)
 
@@ -139,7 +139,7 @@ func TestIris(t *testing.T) {
 	optimizer := NewAdam(model.Parameters(), 0.01)
 
 	var l float32
-	for i := 0; i < 1000; i++ {
+	for range 1000 {
 		yPred := model.Forward(x)
 		loss := SoftmaxCrossEntropy(yPred, y)
 
@@ -246,7 +246,7 @@ func TestMNIST(t *testing.T) {
 		batchSize = 1000
 		numEpoch  = 5
 	)
-	for i := 0; i < numEpoch; i++ {
+	for i := range numEpoch {
 		startTime := time.Now()
 		sumLoss, sumAcc := float32(0), float32(0)
 		bar := progressbar.Default(int64(train.A.shape[0]), fmt.Sprintf("Epoch %v/%v", i+1, numEpoch))
@@ -284,8 +284,8 @@ func spiral() (*Tensor, *Tensor, error) {
 	x := Zeros(dataSize, inputDim)
 	t := Zeros(dataSize)
 
-	for j := 0; j < numClass; j++ {
-		for i := 0; i < numData; i++ {
+	for j := range numClass {
+		for i := range numData {
 			rate := float32(i) / float32(numData)
 			radius := 1.0 * rate
 			theta := float32(j)*4.0 + 4.0*rate + float32(rand.NormFloat64())*0.2
@@ -314,7 +314,7 @@ func TestSaveAndLoad(t *testing.T) {
 	optimizer := NewAdam(model.Parameters(), 0.01)
 
 	var expected float32
-	for i := 0; i < 300; i++ {
+	for range 300 {
 		yPred := model.Forward(x)
 		loss := SoftmaxCrossEntropy(yPred, y)
 

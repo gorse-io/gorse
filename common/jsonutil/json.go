@@ -17,14 +17,14 @@ package jsonutil
 import "encoding/json"
 
 // Marshal returns the JSON encoding of v.
-func Marshal(v interface{}) ([]byte, error) {
+func Marshal(v any) ([]byte, error) {
 	return json.Marshal(v)
 }
 
 // Unmarshal parses the JSON-encoded data and stores the result
 // in the value pointed to by v. If data is empty, Unmarshal clears
 // contents in v.
-func Unmarshal(data []byte, v interface{}) error {
+func Unmarshal(data []byte, v any) error {
 	if len(data) == 0 {
 		data = []byte("null")
 	}
@@ -32,7 +32,7 @@ func Unmarshal(data []byte, v interface{}) error {
 }
 
 // MustMarshal returns the JSON encoding of v. Panic if error occurs.
-func MustMarshal(v interface{}) string {
+func MustMarshal(v any) string {
 	data, err := Marshal(v)
 	if err != nil {
 		panic(err)

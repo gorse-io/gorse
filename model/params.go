@@ -15,6 +15,7 @@
 package model
 
 import (
+	"maps"
 	"reflect"
 
 	"github.com/gorse-io/gorse/common/log"
@@ -56,14 +57,12 @@ const (
 //			base.NFactors: 80,
 //			base.Reg:      0.1,
 //		}
-type Params map[ParamName]interface{}
+type Params map[ParamName]any
 
 // Copy hyper-parameters.
 func (parameters Params) Copy() Params {
 	newParams := make(Params)
-	for k, v := range parameters {
-		newParams[k] = v
-	}
+	maps.Copy(newParams, parameters)
 	return newParams
 }
 
@@ -76,7 +75,7 @@ func (parameters Params) GetBool(name ParamName, _default bool) bool {
 		default:
 			log.Logger().Error("type mismatch",
 				zap.String("param_name", string(name)),
-				zap.String("actual_type", reflect.TypeOf(name).Name()))
+				zap.String("actual_type", reflect.TypeFor[ParamName]().Name()))
 		}
 	}
 	return _default
@@ -91,7 +90,7 @@ func (parameters Params) GetInt(name ParamName, _default int) int {
 		default:
 			log.Logger().Error("type mismatch",
 				zap.String("param_name", string(name)),
-				zap.String("actual_type", reflect.TypeOf(name).Name()))
+				zap.String("actual_type", reflect.TypeFor[ParamName]().Name()))
 		}
 	}
 	return _default
@@ -109,7 +108,7 @@ func (parameters Params) GetInt64(name ParamName, _default int64) int64 {
 		default:
 			log.Logger().Error("type mismatch",
 				zap.String("param_name", string(name)),
-				zap.String("actual_type", reflect.TypeOf(name).Name()))
+				zap.String("actual_type", reflect.TypeFor[ParamName]().Name()))
 		}
 	}
 	return _default
@@ -127,7 +126,7 @@ func (parameters Params) GetFloat32(name ParamName, _default float32) float32 {
 		default:
 			log.Logger().Error("type mismatch",
 				zap.String("param_name", string(name)),
-				zap.String("actual_type", reflect.TypeOf(name).Name()))
+				zap.String("actual_type", reflect.TypeFor[ParamName]().Name()))
 		}
 	}
 	return _default
@@ -149,7 +148,7 @@ func (parameters Params) GetIntSlice(name ParamName, _default []int) []int {
 		default:
 			log.Logger().Error("type mismatch",
 				zap.String("param_name", string(name)),
-				zap.String("actual_type", reflect.TypeOf(name).Name()))
+				zap.String("actual_type", reflect.TypeFor[ParamName]().Name()))
 		}
 	}
 	return _default
@@ -157,17 +156,13 @@ func (parameters Params) GetIntSlice(name ParamName, _default []int) []int {
 
 func (parameters Params) Overwrite(params Params) Params {
 	merged := make(Params)
-	for k, v := range parameters {
-		merged[k] = v
-	}
-	for k, v := range params {
-		merged[k] = v
-	}
+	maps.Copy(merged, parameters)
+	maps.Copy(merged, params)
 	return merged
 }
 
 // ParamsGrid contains candidate for grid search.
-type ParamsGrid map[ParamName][]interface{}
+type ParamsGrid map[ParamName][]any
 
 func (grid ParamsGrid) Len() int {
 	return len(grid)

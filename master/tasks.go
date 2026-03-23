@@ -90,7 +90,7 @@ func (m *Master) loadDataset(parent context.Context) (datasets Datasets, err err
 		if err = m.CacheClient.DeleteScores(ctx, []string{cache.NonPersonalized},
 			cache.ScoreCondition{
 				Subset: new(recommender.Name()),
-				Before: lo.ToPtr(recommender.Timestamp()),
+				Before: new(recommender.Timestamp()),
 			}); err != nil {
 			log.Logger().Error("failed to reclaim outdated items", zap.Error(err))
 		}
@@ -683,8 +683,8 @@ func (m *Master) updateItemToItem(parent context.Context, dataset *dataset.Datas
 				}
 				// Remove stale item-to-item recommendation
 				if err := m.CacheClient.DeleteScores(ctx, []string{cache.ItemToItem}, cache.ScoreCondition{
-					Subset: lo.ToPtr(cache.Key(itemToItemConfig.Name, item.ItemId)),
-					Before: lo.ToPtr(recommender.Timestamp()),
+					Subset: new(cache.Key(itemToItemConfig.Name, item.ItemId)),
+					Before: new(recommender.Timestamp()),
 				}); err != nil {
 					log.Logger().Error("failed to remove stale item-to-item recommendation",
 						zap.String("item_id", item.ItemId), zap.Error(err))
@@ -793,8 +793,8 @@ func (m *Master) updateUserToUser(parent context.Context, dataset *dataset.Datas
 				}
 				// Delete stale user-to-user recommendations
 				if err := m.CacheClient.DeleteScores(ctx, []string{cache.UserToUser}, cache.ScoreCondition{
-					Subset: lo.ToPtr(cache.Key(userToUserConfig.Name, user.UserId)),
-					Before: lo.ToPtr(recommender.Timestamp()),
+					Subset: new(cache.Key(userToUserConfig.Name, user.UserId)),
+					Before: new(recommender.Timestamp()),
 				}); err != nil {
 					log.Logger().Error("failed to remove stale user neighbors", zap.String("user_id", user.UserId), zap.Error(err))
 				}
@@ -1136,7 +1136,7 @@ func (m *Master) collectGarbage(parent context.Context, dataSet *dataset.Dataset
 				return cfg.Name == subset
 			}) {
 				return m.CacheClient.DeleteScores(ctx, []string{cache.NonPersonalized}, cache.ScoreCondition{
-					Subset: lo.ToPtr(subset),
+					Subset: new(subset),
 				})
 			}
 		case cache.UserToUser:
@@ -1149,8 +1149,8 @@ func (m *Master) collectGarbage(parent context.Context, dataSet *dataset.Dataset
 				return cfg.Name == splits[0]
 			}) {
 				return m.CacheClient.DeleteScores(ctx, []string{cache.UserToUser}, cache.ScoreCondition{
-					Subset: lo.ToPtr(subset),
-					Before: lo.ToPtr(dataSet.GetTimestamp()),
+					Subset: new(subset),
+					Before: new(dataSet.GetTimestamp()),
 				})
 			}
 		case cache.ItemToItem:
@@ -1163,15 +1163,15 @@ func (m *Master) collectGarbage(parent context.Context, dataSet *dataset.Dataset
 				return cfg.Name == splits[0]
 			}) {
 				return m.CacheClient.DeleteScores(ctx, []string{cache.ItemToItem}, cache.ScoreCondition{
-					Subset: lo.ToPtr(subset),
-					Before: lo.ToPtr(dataSet.GetTimestamp()),
+					Subset: new(subset),
+					Before: new(dataSet.GetTimestamp()),
 				})
 			}
 		case cache.CollaborativeFiltering:
 			if dataSet.GetUserDict().Id(subset) == dataset.NotId {
 				return m.CacheClient.DeleteScores(ctx, []string{cache.CollaborativeFiltering}, cache.ScoreCondition{
-					Subset: lo.ToPtr(subset),
-					Before: lo.ToPtr(dataSet.GetTimestamp()),
+					Subset: new(subset),
+					Before: new(dataSet.GetTimestamp()),
 				})
 			}
 		}

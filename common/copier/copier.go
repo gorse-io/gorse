@@ -21,9 +21,9 @@ import (
 	"github.com/juju/errors"
 )
 
-func Copy(dst, src interface{}) error {
+func Copy(dst, src any) error {
 	dstPtr := reflect.ValueOf(dst)
-	if dstPtr.Kind() != reflect.Ptr {
+	if dstPtr.Kind() != reflect.Pointer {
 		return errors.NotValidf("expect dst to be a pointer, but receive %v", dstPtr.Kind())
 	}
 
@@ -102,7 +102,7 @@ func copyValue(dst, src reflect.Value) error {
 			dst.Set(dstPointer.Elem())
 		} else {
 			numFiled := src.NumField()
-			for i := 0; i < numFiled; i++ {
+			for i := range numFiled {
 				fieldDST := dst.Field(i)
 				fieldSRC := src.Field(i)
 				if !fieldDST.CanSet() {
@@ -114,7 +114,7 @@ func copyValue(dst, src reflect.Value) error {
 				}
 			}
 		}
-	case reflect.Ptr:
+	case reflect.Pointer:
 		if src.IsNil() {
 			// If source is nil, set dst to nil.
 			dst.Set(reflect.Zero(dst.Type()))

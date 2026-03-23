@@ -89,7 +89,7 @@ func (suite *ItemToItemTestSuite) TestEmbedding() {
 	}, 10, timestamp)
 	suite.NoError(err)
 
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		item2item.Push(&data.Item{
 			ItemId: strconv.Itoa(i),
 			Labels: map[string]any{
@@ -160,7 +160,7 @@ func (suite *ItemToItemTestSuite) TestTags() {
 	}, 10, timestamp, idf)
 	suite.NoError(err)
 
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		labels := make(map[string]any)
 		for j := 1; j <= 100-i; j++ {
 			labels[strconv.Itoa(j)] = []dataset.ID{dataset.ID(j)}
@@ -187,7 +187,7 @@ func (suite *ItemToItemTestSuite) TestUsers() {
 	item2item, err := newUsersItemToItem(config.ItemToItemConfig{}, 10, timestamp, idf)
 	suite.NoError(err)
 
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		feedback := make([]int32, 0, 100-i)
 		for j := 1; j <= 100-i; j++ {
 			feedback = append(feedback, int32(j))
@@ -211,7 +211,7 @@ func (suite *ItemToItemTestSuite) TestAuto() {
 	item2item, err := newAutoItemToItem(config.ItemToItemConfig{}, 10, timestamp, idf, idf)
 	suite.NoError(err)
 
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		item := &data.Item{ItemId: strconv.Itoa(i)}
 		feedback := make([]int32, 0, 100-i)
 		if i%2 == 0 {
@@ -260,7 +260,7 @@ func (suite *ItemToItemTestSuite) TestChat() {
 	})
 	suite.NoError(err)
 
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		embedding := mock.Hash("Please generate similar items for item_0.")
 		floats.AddConst(embedding, float32(i+1))
 		item2item.Push(&data.Item{

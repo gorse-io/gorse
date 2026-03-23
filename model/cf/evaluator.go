@@ -35,7 +35,7 @@ type Metric func(targetSet mapset.Set[int32], rankList []int32) float32
 func Evaluate(estimator MatrixFactorization, testSet, trainSet dataset.CFSplit, topK, numCandidates, nJobs int, scorers ...Metric) []float32 {
 	partSum := make([][]float32, nJobs)
 	partCount := make([]float32, nJobs)
-	for i := 0; i < nJobs; i++ {
+	for i := range nJobs {
 		partSum[i] = make([]float32, len(scorers))
 	}
 	//rng := NewRandomGenerator(0)
@@ -61,7 +61,7 @@ func Evaluate(estimator MatrixFactorization, testSet, trainSet dataset.CFSplit, 
 		return nil
 	})
 	sum := make([]float32, len(scorers))
-	for i := 0; i < nJobs; i++ {
+	for i := range nJobs {
 		for j := range partSum[i] {
 			sum[j] += partSum[i][j]
 		}

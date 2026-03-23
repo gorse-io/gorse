@@ -32,7 +32,7 @@ const chanSize = 1024
 // Names (begin, end). The ctx argument allows callers to cancel outstanding work.
 func Parallel(ctx context.Context, nJobs, nWorkers int, worker func(workerId, jobId int) error) error {
 	if nWorkers <= 1 {
-		for i := 0; i < nJobs; i++ {
+		for i := range nJobs {
 			if err := ctx.Err(); err != nil {
 				return errors.Trace(err)
 			}
@@ -45,7 +45,7 @@ func Parallel(ctx context.Context, nJobs, nWorkers int, worker func(workerId, jo
 		// producer
 		go func() {
 			defer close(c)
-			for i := 0; i < nJobs; i++ {
+			for i := range nJobs {
 				select {
 				case <-ctx.Done():
 					return
@@ -56,7 +56,7 @@ func Parallel(ctx context.Context, nJobs, nWorkers int, worker func(workerId, jo
 		// consumer
 		var wg sync.WaitGroup
 		errs := make([]error, nJobs)
-		for j := 0; j < nWorkers; j++ {
+		for j := range nWorkers {
 			// start workers
 			workerId := j
 			wg.Go(func() {
@@ -95,7 +95,7 @@ func Parallel(ctx context.Context, nJobs, nWorkers int, worker func(workerId, jo
 
 func For(ctx context.Context, nJobs, nWorkers int, worker func(int)) error {
 	if nWorkers <= 1 {
-		for i := 0; i < nJobs; i++ {
+		for i := range nJobs {
 			if err := ctx.Err(); err != nil {
 				return errors.Trace(err)
 			}
@@ -106,7 +106,7 @@ func For(ctx context.Context, nJobs, nWorkers int, worker func(int)) error {
 		// producer
 		go func() {
 			defer close(c)
-			for i := 0; i < nJobs; i++ {
+			for i := range nJobs {
 				select {
 				case <-ctx.Done():
 					return
@@ -116,7 +116,7 @@ func For(ctx context.Context, nJobs, nWorkers int, worker func(int)) error {
 		}()
 		// consumer
 		var wg sync.WaitGroup
-		for j := 0; j < nWorkers; j++ {
+		for range nWorkers {
 			// start workers
 			wg.Go(func() {
 				for {
@@ -163,7 +163,7 @@ func ForEach[T any](ctx context.Context, a []T, nWorkers int, worker func(int, T
 		}()
 		// consumer
 		var wg sync.WaitGroup
-		for j := 0; j < nWorkers; j++ {
+		for range nWorkers {
 			// start workers
 			wg.Go(func() {
 				for {
@@ -237,7 +237,7 @@ func Detachable(ctx context.Context, nJobs, nWorkers, nMaxDetached int, worker f
 	sem := make(chan struct{}, nWorkers)
 	detachedSem := make(chan struct{}, nMaxDetached)
 	var wg sync.WaitGroup
-	for i := 0; i < nJobs; i++ {
+	for i := range nJobs {
 		select {
 		case <-ctx.Done():
 			wg.Wait()

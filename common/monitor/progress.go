@@ -62,7 +62,7 @@ func (t *Monitor) Start(ctx context.Context, name string, total int) (context.Co
 
 func (t *Monitor) List() []Progress {
 	var progress []Progress
-	t.spans.Range(func(key, value interface{}) bool {
+	t.spans.Range(func(key, value any) bool {
 		span := value.(*Span)
 		p := span.Progress()
 		p.Tracer = t.name
@@ -111,7 +111,7 @@ func (s *Span) Count() int {
 func (s *Span) Progress() Progress {
 	// find running children
 	var children []Progress
-	s.children.Range(func(key, value interface{}) bool {
+	s.children.Range(func(key, value any) bool {
 		child := value.(*Span)
 		progress := child.Progress()
 		if progress.Status == StatusRunning {

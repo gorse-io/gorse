@@ -35,7 +35,7 @@ func TestPrimitives(t *testing.T) {
 	err = Copy(&c, a)
 	assert.True(t, errors.Is(err, errors.NotValid))
 	// copy to interface
-	var d interface{}
+	var d any
 	err = Copy(&d, a)
 	assert.NoError(t, err)
 	assert.Equal(t, a, d)
@@ -58,12 +58,12 @@ func TestSlice(t *testing.T) {
 	integers[0] = 100
 	assert.Equal(t, 100, c[0][0])
 	// copy to interface
-	var d interface{}
+	var d any
 	err = Copy(&d, a)
 	assert.NoError(t, err)
 	assert.Equal(t, a, d)
 	// copy empty slice
-	var e interface{}
+	var e any
 	err = Copy(&e, make([]int, 0))
 	assert.NoError(t, err)
 	assert.NotNil(t, e)
@@ -85,7 +85,7 @@ func TestMap(t *testing.T) {
 	a[1][0] = 100
 	assert.Equal(t, int64(1), b[1][0])
 	// copy to interface
-	var d interface{}
+	var d any
 	err = Copy(&d, a)
 	assert.NoError(t, err)
 	assert.Equal(t, a, d)
@@ -132,14 +132,14 @@ func TestPtr(t *testing.T) {
 }
 
 func TestInterface(t *testing.T) {
-	var a = []interface{}{&Foo{A: 3, B: []string{"3"}}, []int{100}, 1}
-	var b []interface{}
+	var a = []any{&Foo{A: 3, B: []string{"3"}}, []int{100}, 1}
+	var b []any
 	err := Copy(&b, a)
 	assert.NoError(t, err)
 	assert.Equal(t, a, b)
 	// test reuse memory
 	var strings = []string{"30"}
-	var c = []interface{}{&Foo{A: 30, B: strings}, []int{1000}, 10}
+	var c = []any{&Foo{A: 30, B: strings}, []int{1000}, 10}
 	err = Copy(&c, a)
 	assert.NoError(t, err)
 	assert.Equal(t, a, c)
@@ -171,7 +171,7 @@ func TestPrivate(t *testing.T) {
 	assert.Equal(t, "hello", *b.text)
 }
 
-type NilInterface interface{}
+type NilInterface any
 
 type NilStruct struct {
 	Interface NilInterface

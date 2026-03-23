@@ -22,7 +22,6 @@ import (
 
 	"github.com/gorse-io/gorse/protocol"
 	"github.com/juju/errors"
-	"github.com/samber/lo"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -134,7 +133,7 @@ func (p *ProxyServer) SearchScores(ctx context.Context, request *protocol.Search
 func (p *ProxyServer) DeleteScores(ctx context.Context, request *protocol.DeleteScoresRequest) (*protocol.DeleteScoresResponse, error) {
 	var before *time.Time
 	if request.Condition.Before != nil {
-		before = lo.ToPtr(request.Condition.Before.AsTime())
+		before = new(request.Condition.Before.AsTime())
 	}
 	return &protocol.DeleteScoresResponse{}, p.database.DeleteScores(ctx, request.GetCollection(), ScoreCondition{
 		Subset: request.Condition.Subset,

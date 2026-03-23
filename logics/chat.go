@@ -156,7 +156,7 @@ func parseArrayFromCompletion(completion string) []string {
 		}
 	}
 	var result []string
-	for _, line := range strings.Split(string(source), "\n") {
+	for line := range strings.SplitSeq(string(source), "\n") {
 		line = strings.TrimSpace(line)
 		if line != "" {
 			result = append(result, line)

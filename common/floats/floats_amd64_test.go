@@ -48,7 +48,7 @@ func TestAVX512(t *testing.T) {
 
 func initializeFloat32Array(n int) []float32 {
 	x := make([]float32, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		x[i] = rand.Float32()
 	}
 	return x

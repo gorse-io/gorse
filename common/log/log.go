@@ -181,18 +181,18 @@ func NewOptunaLogger(logger *zap.Logger) goptuna.Logger {
 	return &OptunaLogger{logger: logger}
 }
 
-func (o OptunaLogger) Debug(msg string, fields ...interface{}) {
+func (o OptunaLogger) Debug(msg string, fields ...any) {
 	o.logger.Debug(msg, zap.Any("fields", fields))
 }
 
-func (o OptunaLogger) Info(msg string, fields ...interface{}) {
+func (o OptunaLogger) Info(msg string, fields ...any) {
 	o.logger.Info(msg, zap.Any("fields", fields))
 }
 
-func (o OptunaLogger) Warn(msg string, fields ...interface{}) {
+func (o OptunaLogger) Warn(msg string, fields ...any) {
 	o.logger.Warn(msg, zap.Any("fields", fields))
 }
 
-func (o OptunaLogger) Error(msg string, fields ...interface{}) {
+func (o OptunaLogger) Error(msg string, fields ...any) {
 	o.logger.Error(msg, zap.Any("fields", fields))
 }

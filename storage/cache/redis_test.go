@@ -115,7 +115,7 @@ func (suite *RedisTestSuite) TestUpdateScoresWithPagination() {
 		db.maxSearchResults = limit
 	}()
 
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		subset := fmt.Sprintf("subset-%d", i)
 		err := suite.AddScores(ctx, "collection-a", subset, []Score{{
 			Id:         "shared-item",
@@ -131,7 +131,7 @@ func (suite *RedisTestSuite) TestUpdateScoresWithPagination() {
 	})
 	suite.NoError(err)
 
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		subset := fmt.Sprintf("subset-%d", i)
 		docs, err := suite.SearchScores(ctx, "collection-a", subset, []string{"new"}, 0, -1)
 		suite.NoError(err)
@@ -187,7 +187,7 @@ func (suite *RedisTestSuite) TestUpdateScoresWithPaginationAndTiedScores() {
 		db.maxSearchResults = limit
 	}()
 
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		subset := fmt.Sprintf("tie-subset-%d", i)
 		err := suite.AddScores(ctx, "collection-c", subset, []Score{{
 			Id:         "shared-item",
@@ -203,7 +203,7 @@ func (suite *RedisTestSuite) TestUpdateScoresWithPaginationAndTiedScores() {
 	})
 	suite.NoError(err)
 
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		subset := fmt.Sprintf("tie-subset-%d", i)
 		docs, err := suite.SearchScores(ctx, "collection-c", subset, []string{"tie-new"}, 0, -1)
 		suite.NoError(err)

@@ -17,7 +17,7 @@ package logics
 import (
 	"context"
 	"errors"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -256,9 +256,7 @@ func (t *tagsItemToItem) Push(item *data.Item, _ []int32) {
 	tSet := mapset.NewSet[dataset.ID]()
 	flatten(result, tSet)
 	v := tSet.ToSlice()
-	sort.Slice(v, func(i, j int) bool {
-		return v[i] < v[j]
-	})
+	slices.Sort(v)
 	t.pushItem(item, v)
 }
 
@@ -283,9 +281,7 @@ func newUsersItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time,
 
 func (u *usersItemToItem) Push(item *data.Item, feedback []int32) {
 	// Sort feedback
-	sort.Slice(feedback, func(i, j int) bool {
-		return feedback[i] < feedback[j]
-	})
+	slices.Sort(feedback)
 	u.pushItem(item, feedback)
 }
 
@@ -314,13 +310,9 @@ func (a *autoItemToItem) Push(item *data.Item, feedback []int32) {
 	tSet := mapset.NewSet[dataset.ID]()
 	flatten(item.Labels, tSet)
 	v := tSet.ToSlice()
-	sort.Slice(v, func(i, j int) bool {
-		return v[i] < v[j]
-	})
+	slices.Sort(v)
 	// Sort feedback
-	sort.Slice(feedback, func(i, j int) bool {
-		return feedback[i] < feedback[j]
-	})
+	slices.Sort(feedback)
 	a.pushItem(item, lo.Tuple2[[]dataset.ID, []int32]{A: v, B: feedback})
 }
 
@@ -539,9 +531,9 @@ func stripThinkInCompletion(s string) string {
 	if len(s) < 7 || s[:7] != "<think>" {
 		return s
 	}
-	end := strings.Index(s, "</think>")
-	if end == -1 {
+	_, after, ok := strings.Cut(s, "</think>")
+	if !ok {
 		return s
 	}
-	return s[end+8:]
+	return after
 }

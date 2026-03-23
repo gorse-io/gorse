@@ -50,7 +50,7 @@ const (
 	mockMasterPassword = "pass"
 )
 
-func marshal(t *testing.T, v interface{}) string {
+func marshal(t *testing.T, v any) string {
 	s, err := json.Marshal(v)
 	assert.NoError(t, err)
 	return string(s)
@@ -66,8 +66,8 @@ func marshalJSONLines[T any](t *testing.T, v []T) string {
 	return buf.String()
 }
 
-func convertToMapStructure(t *testing.T, v interface{}) map[string]interface{} {
-	var m map[string]interface{}
+func convertToMapStructure(t *testing.T, v any) map[string]any {
+	var m map[string]any
 	err := mapstructure.Decode(v, &m)
 	assert.NoError(t, err)
 	return m
@@ -330,7 +330,7 @@ func (suite *MasterAPITestSuite) TestImportFeedback() {
 	// check
 	suite.Equal(http.StatusOK, w.Result().StatusCode)
 	suite.JSONEq(marshal(suite.T(), server.Success{RowAffected: 3}), w.Body.String())
-	_, feedback, err := suite.DataClient.GetFeedback(ctx, "", 100, nil, lo.ToPtr(time.Now()))
+	_, feedback, err := suite.DataClient.GetFeedback(ctx, "", 100, nil, new(time.Now()))
 	suite.NoError(err)
 	suite.Equal([]data.Feedback{
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "2"}},
@@ -758,7 +758,7 @@ func (suite *MasterAPITestSuite) TestPurge() {
 	_, items, err := suite.DataClient.GetItems(ctx, "", 100, nil)
 	suite.NoError(err)
 	suite.Equal(100, len(items))
-	_, feedbacks, err := suite.DataClient.GetFeedback(ctx, "", 100, nil, lo.ToPtr(time.Now()))
+	_, feedbacks, err := suite.DataClient.GetFeedback(ctx, "", 100, nil, new(time.Now()))
 	suite.NoError(err)
 	suite.Equal(100, len(feedbacks))
 
@@ -783,7 +783,7 @@ func (suite *MasterAPITestSuite) TestPurge() {
 	_, items, err = suite.DataClient.GetItems(ctx, "", 100, nil)
 	suite.NoError(err)
 	suite.Empty(items)
-	_, feedbacks, err = suite.DataClient.GetFeedback(ctx, "", 100, nil, lo.ToPtr(time.Now()))
+	_, feedbacks, err = suite.DataClient.GetFeedback(ctx, "", 100, nil, new(time.Now()))
 	suite.NoError(err)
 	suite.Empty(feedbacks)
 }
@@ -900,7 +900,7 @@ func (suite *MasterAPITestSuite) TestGetRankerPrompt() {
 	// insert items for feedback (hidden items)
 	feedbackItems := make([]data.Item, 12)
 	feedbacks := make([]data.Feedback, 12)
-	for i := 0; i < 12; i++ {
+	for i := range 12 {
 		itemId := fmt.Sprintf("fb-%02d", i)
 		feedbackItems[i] = data.Item{
 			ItemId:    itemId,
@@ -1029,7 +1029,7 @@ func (suite *MasterAPITestSuite) TestDumpAndRestore() {
 	if suite.Equal(len(items), len(returnItems)) {
 		suite.Equal(items, returnItems)
 	}
-	_, returnFeedback, err := suite.DataClient.GetFeedback(ctx, "", len(feedback), nil, lo.ToPtr(time.Now()))
+	_, returnFeedback, err := suite.DataClient.GetFeedback(ctx, "", len(feedback), nil, new(time.Now()))
 	suite.NoError(err)
 	if suite.Equal(len(feedback), len(returnFeedback)) {
 		suite.Equal(feedback, returnFeedback)
@@ -1155,7 +1155,7 @@ func (suite *MasterAPITestSuite) TestExportAndImport() {
 	if suite.Equal(len(items), len(returnItems)) {
 		suite.Equal(items, returnItems)
 	}
-	_, returnFeedback, err := suite.DataClient.GetFeedback(ctx, "", len(feedback), nil, lo.ToPtr(time.Now()))
+	_, returnFeedback, err := suite.DataClient.GetFeedback(ctx, "", len(feedback), nil, new(time.Now()))
 	suite.NoError(err)
 	if suite.Equal(len(feedback), len(returnFeedback)) {
 		suite.Equal(feedback, returnFeedback)

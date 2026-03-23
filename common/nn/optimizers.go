@@ -179,10 +179,7 @@ func partitionAligned(n, m, k int) []lo.Tuple2[int, int] {
 	parts := make([]lo.Tuple2[int, int], 0, m)
 	start := 0
 	for start < n {
-		end := start + partSize
-		if end > n {
-			end = n
-		}
+		end := min(start+partSize, n)
 		parts = append(parts, lo.Tuple2[int, int]{A: start, B: end})
 		start = end
 	}

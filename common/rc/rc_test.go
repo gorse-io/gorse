@@ -70,7 +70,7 @@ func TestRc_Concurrent(t *testing.T) {
 	for i := range f {
 		rc.Reset(f[i])
 		cnt := rand.IntN(10)
-		for j := 0; j < cnt; j++ {
+		for range cnt {
 			_, drop := rc.Get()
 			drops = append(drops, drop)
 		}

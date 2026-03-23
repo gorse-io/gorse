@@ -24,9 +24,9 @@ func TestTensor_Slice(t *testing.T) {
 	x := Rand(3, 4, 5)
 	y := x.Slice(1, 3)
 	assert.Equal(t, []int{2, 4, 5}, y.Shape())
-	for i := 0; i < 2; i++ {
-		for j := 0; j < 4; j++ {
-			for k := 0; k < 5; k++ {
+	for i := range 2 {
+		for j := range 4 {
+			for k := range 5 {
 				assert.Equal(t, x.Get(i+1, j, k), y.Get(i, j, k))
 			}
 		}
@@ -93,9 +93,9 @@ func (t *Tensor) matMulLegacy(other *Tensor, transpose1, transpose2 bool) *Tenso
 		}
 		m, n, p := t.shape[0], t.shape[1], other.shape[1]
 		result := make([]float32, m*p)
-		for i := 0; i < m; i++ {
-			for j := 0; j < p; j++ {
-				for k := 0; k < n; k++ {
+		for i := range m {
+			for j := range p {
+				for k := range n {
 					result[i*p+j] += t.data[i*n+k] * other.data[k*p+j]
 				}
 			}
@@ -113,9 +113,9 @@ func (t *Tensor) matMulLegacy(other *Tensor, transpose1, transpose2 bool) *Tenso
 		}
 		m, n, p := t.shape[1], t.shape[0], other.shape[1]
 		result := make([]float32, m*p)
-		for i := 0; i < m; i++ {
-			for j := 0; j < p; j++ {
-				for k := 0; k < n; k++ {
+		for i := range m {
+			for j := range p {
+				for k := range n {
 					result[i*p+j] += t.data[k*m+i] * other.data[k*p+j]
 				}
 			}
@@ -133,9 +133,9 @@ func (t *Tensor) matMulLegacy(other *Tensor, transpose1, transpose2 bool) *Tenso
 		}
 		m, n, p := t.shape[0], t.shape[1], other.shape[0]
 		result := make([]float32, m*p)
-		for i := 0; i < m; i++ {
-			for j := 0; j < p; j++ {
-				for k := 0; k < n; k++ {
+		for i := range m {
+			for j := range p {
+				for k := range n {
 					result[i*p+j] += t.data[i*n+k] * other.data[j*n+k]
 				}
 			}
@@ -153,9 +153,9 @@ func (t *Tensor) matMulLegacy(other *Tensor, transpose1, transpose2 bool) *Tenso
 		}
 		m, n, p := t.shape[1], t.shape[0], other.shape[1]
 		result := make([]float32, m*p)
-		for i := 0; i < m; i++ {
-			for j := 0; j < p; j++ {
-				for k := 0; k < n; k++ {
+		for i := range m {
+			for j := range p {
+				for k := range n {
 					result[i*p+j] += t.data[k*m+i] * other.data[j*n+k]
 				}
 			}
@@ -177,9 +177,9 @@ func (t *Tensor) batchMatMulLegacy(other *Tensor, transpose1, transpose2 bool) *
 		}
 		m, n, p := t.shape[0], t.shape[1], other.shape[2]
 		result := make([]float32, m*n*p)
-		for i := 0; i < m; i++ {
-			for j := 0; j < n; j++ {
-				for k := 0; k < p; k++ {
+		for i := range m {
+			for j := range n {
+				for k := range p {
 					for l := 0; l < t.shape[2]; l++ {
 						result[i*n*p+j*p+k] += t.data[i*n*t.shape[2]+j*t.shape[2]+l] * other.data[i*other.shape[1]*other.shape[2]+l*other.shape[2]+k]
 					}
@@ -199,9 +199,9 @@ func (t *Tensor) batchMatMulLegacy(other *Tensor, transpose1, transpose2 bool) *
 		}
 		m, n, p := t.shape[0], t.shape[2], other.shape[2]
 		result := make([]float32, m*n*p)
-		for i := 0; i < m; i++ {
-			for j := 0; j < n; j++ {
-				for k := 0; k < p; k++ {
+		for i := range m {
+			for j := range n {
+				for k := range p {
 					for l := 0; l < t.shape[1]; l++ {
 						result[i*n*p+j*p+k] += t.data[i*t.shape[1]*t.shape[2]+l*t.shape[2]+j] * other.data[i*other.shape[1]*other.shape[2]+l*other.shape[2]+k]
 					}
@@ -221,9 +221,9 @@ func (t *Tensor) batchMatMulLegacy(other *Tensor, transpose1, transpose2 bool) *
 		}
 		m, n, p := t.shape[0], t.shape[1], other.shape[1]
 		result := make([]float32, m*n*p)
-		for i := 0; i < m; i++ {
-			for j := 0; j < n; j++ {
-				for k := 0; k < p; k++ {
+		for i := range m {
+			for j := range n {
+				for k := range p {
 					for l := 0; l < t.shape[2]; l++ {
 						result[i*n*p+j*p+k] += t.data[i*n*t.shape[2]+j*t.shape[2]+l] * other.data[i*other.shape[1]*other.shape[2]+k*other.shape[2]+l]
 					}
@@ -243,9 +243,9 @@ func (t *Tensor) batchMatMulLegacy(other *Tensor, transpose1, transpose2 bool) *
 		}
 		m, n, p := t.shape[1], t.shape[2], other.shape[2]
 		result := make([]float32, m*n*p)
-		for i := 0; i < m; i++ {
-			for j := 0; j < n; j++ {
-				for k := 0; k < p; k++ {
+		for i := range m {
+			for j := range n {
+				for k := range p {
 					for l := 0; l < t.shape[0]; l++ {
 						result[i*n*p+j*p+k] += t.data[l*t.shape[1]*t.shape[2]+i*t.shape[2]+j] * other.data[l*other.shape[1]*other.shape[2]+j*other.shape[2]+k]
 					}
@@ -262,8 +262,8 @@ func (t *Tensor) batchMatMulLegacy(other *Tensor, transpose1, transpose2 bool) *
 func BenchmarkMatMulLegacy64(b *testing.B) {
 	x := Rand(64, 64)
 	y := Rand(64, 64)
-	for t1 := 0; t1 < 2; t1++ {
-		for t2 := 0; t2 < 2; t2++ {
+	for t1 := range 2 {
+		for t2 := range 2 {
 			b.Run(fmt.Sprintf("(%d,%d)", t1, t2), func(b *testing.B) {
 				for i := 0; i < b.N; i++ {
 					x.matMulLegacy(y, t1 == 1, t2 == 1)
@@ -276,8 +276,8 @@ func BenchmarkMatMulLegacy64(b *testing.B) {
 func BenchmarkMatMul64(b *testing.B) {
 	x := Rand(64, 64)
 	y := Rand(64, 64)
-	for t1 := 0; t1 < 2; t1++ {
-		for t2 := 0; t2 < 2; t2++ {
+	for t1 := range 2 {
+		for t2 := range 2 {
 			b.Run(fmt.Sprintf("(%d,%d)", t1, t2), func(b *testing.B) {
 				for i := 0; i < b.N; i++ {
 					x.matMul(y, t1 == 1, t2 == 1, 0)
@@ -290,8 +290,8 @@ func BenchmarkMatMul64(b *testing.B) {
 func BenchmarkBatchMatMulLegacy64(b *testing.B) {
 	x := Rand(64, 64, 64)
 	y := Rand(64, 64, 64)
-	for t1 := 0; t1 < 2; t1++ {
-		for t2 := 0; t2 < 2; t2++ {
+	for t1 := range 2 {
+		for t2 := range 2 {
 			b.Run(fmt.Sprintf("(%d,%d)", t1, t2), func(b *testing.B) {
 				for i := 0; i < b.N; i++ {
 					x.batchMatMulLegacy(y, t1 == 1, t2 == 1)
@@ -304,8 +304,8 @@ func BenchmarkBatchMatMulLegacy64(b *testing.B) {
 func BenchmarkBatchMatMul64(b *testing.B) {
 	x := Rand(64, 64, 64)
 	y := Rand(64, 64, 64)
-	for t1 := 0; t1 < 2; t1++ {
-		for t2 := 0; t2 < 2; t2++ {
+	for t1 := range 2 {
+		for t2 := range 2 {
 			b.Run(fmt.Sprintf("(%d,%d)", t1, t2), func(b *testing.B) {
 				for i := 0; i < b.N; i++ {
 					x.batchMatMul(y, t1 == 1, t2 == 1, 0)

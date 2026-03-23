@@ -32,13 +32,13 @@ func TestLatest(t *testing.T) {
 		Score: "item.Timestamp.Unix()",
 	}, 10, timestamp)
 	assert.NoError(t, err)
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		item := data.Item{ItemId: strconv.Itoa(i), Timestamp: timestamp.Add(time.Duration(-i) * time.Second)}
 		latest.Push(item, nil)
 	}
 	scores := latest.PopAll()
 	assert.Len(t, scores, 10)
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		assert.Equal(t, strconv.Itoa(i), scores[i].Id)
 		assert.Equal(t, float64(timestamp.Add(time.Duration(-i)*time.Second).Unix()), scores[i].Score)
 		assert.Equal(t, timestamp, scores[i].Timestamp)
@@ -52,14 +52,14 @@ func TestPopular(t *testing.T) {
 		Score: "len(feedback)",
 	}, 10, timestamp)
 	assert.NoError(t, err)
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		item := data.Item{ItemId: strconv.Itoa(i)}
 		feedback := make([]data.Feedback, i)
 		popular.Push(item, feedback)
 	}
 	scores := popular.PopAll()
 	assert.Len(t, scores, 10)
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		assert.Equal(t, strconv.Itoa(99-i), scores[i].Id)
 		assert.Equal(t, float64(99-i), scores[i].Score)
 	}
@@ -75,7 +75,7 @@ func TestPopularWindow(t *testing.T) {
 	}, 10, timestamp)
 	assert.NoError(t, err)
 	// Add items
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		item := data.Item{ItemId: strconv.Itoa(i), Timestamp: timestamp.Add(time.Second - time.Hour)}
 		feedback := make([]data.Feedback, i)
 		popular.Push(item, feedback)
@@ -91,7 +91,7 @@ func TestPopularWindow(t *testing.T) {
 	// Check result
 	scores := popular.PopAll()
 	assert.Len(t, scores, 10)
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		assert.Equal(t, strconv.Itoa(99-i), scores[i].Id)
 		assert.Equal(t, float64(99-i), scores[i].Score)
 	}
@@ -105,14 +105,14 @@ func TestFilter(t *testing.T) {
 		Filter: "!item.IsHidden",
 	}, 10, timestamp)
 	assert.NoError(t, err)
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		item := data.Item{ItemId: strconv.Itoa(i), Timestamp: timestamp.Add(time.Duration(-i) * time.Second)}
 		item.IsHidden = i < 10
 		latest.Push(item, nil)
 	}
 	scores := latest.PopAll()
 	assert.Len(t, scores, 10)
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		assert.Equal(t, strconv.Itoa(i+10), scores[i].Id)
 		assert.Equal(t, float64(timestamp.Add(time.Duration(-i-10)*time.Second).Unix()), scores[i].Score)
 		assert.Equal(t, timestamp, scores[i].Timestamp)
@@ -126,14 +126,14 @@ func TestHidden(t *testing.T) {
 		Score: "item.Timestamp.Unix()",
 	}, 10, timestamp)
 	assert.NoError(t, err)
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		item := data.Item{ItemId: strconv.Itoa(i), Timestamp: timestamp.Add(time.Duration(-i) * time.Second)}
 		item.IsHidden = i < 10
 		latest.Push(item, nil)
 	}
 	scores := latest.PopAll()
 	assert.Len(t, scores, 10)
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		assert.Equal(t, strconv.Itoa(i+10), scores[i].Id)
 		assert.Equal(t, float64(timestamp.Add(time.Duration(-i-10)*time.Second).Unix()), scores[i].Score)
 		assert.Equal(t, timestamp, scores[i].Timestamp)
@@ -151,7 +151,7 @@ func TestMostStarredWeekly(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Add items
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		item := data.Item{ItemId: strconv.Itoa(i), Timestamp: timestamp.Add(-167 * time.Hour)}
 		var feedback []data.Feedback
 		for j := 0; j < i; j++ {
@@ -195,7 +195,7 @@ func TestMostStarredWeekly(t *testing.T) {
 	// Check result
 	scores := mostStarredWeekly.PopAll()
 	assert.Len(t, scores, 10)
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		assert.Equal(t, strconv.Itoa(99-i), scores[i].Id)
 		assert.Equal(t, float64(99-i), scores[i].Score)
 	}

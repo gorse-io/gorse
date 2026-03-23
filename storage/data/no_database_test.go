@@ -18,7 +18,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -69,11 +68,11 @@ func TestNoDatabase(t *testing.T) {
 	assert.ErrorIs(t, err, ErrNoDatabase)
 	err = database.BatchInsertFeedback(ctx, nil, false, false, false)
 	assert.ErrorIs(t, err, ErrNoDatabase)
-	_, err = database.GetUserFeedback(ctx, "", lo.ToPtr(time.Now()))
+	_, err = database.GetUserFeedback(ctx, "", new(time.Now()))
 	assert.ErrorIs(t, err, ErrNoDatabase)
 	_, err = database.GetItemFeedback(ctx, "")
 	assert.ErrorIs(t, err, ErrNoDatabase)
-	_, _, err = database.GetFeedback(ctx, "", 0, nil, lo.ToPtr(time.Now()))
+	_, _, err = database.GetFeedback(ctx, "", 0, nil, new(time.Now()))
 	assert.ErrorIs(t, err, ErrNoDatabase)
 	_, err = database.GetUserItemFeedback(ctx, "", "")
 	assert.ErrorIs(t, err, ErrNoDatabase)

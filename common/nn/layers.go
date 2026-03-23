@@ -202,7 +202,7 @@ func Save(o any, w io.Writer) error {
 			}
 		default:
 			tp := reflect.TypeOf(o)
-			if tp.Kind() == reflect.Ptr {
+			if tp.Kind() == reflect.Pointer {
 				return save(reflect.ValueOf(o).Elem().Interface(), key)
 			} else if tp.Kind() == reflect.Struct {
 				for i := 0; i < tp.NumField(); i++ {
@@ -242,7 +242,7 @@ func Load(o any, r io.Reader) error {
 			typed.fromPB(pb)
 		default:
 			tp := reflect.TypeOf(o)
-			if tp.Kind() == reflect.Ptr {
+			if tp.Kind() == reflect.Pointer {
 				return place(reflect.ValueOf(o).Elem().Interface(), key, pb)
 			} else if tp.Kind() == reflect.Struct {
 				field := reflect.ValueOf(o).FieldByName(key[0])

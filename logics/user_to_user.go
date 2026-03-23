@@ -15,7 +15,7 @@
 package logics
 
 import (
-	"sort"
+	"slices"
 	"sync"
 	"time"
 
@@ -194,9 +194,7 @@ func (t *tagsUserToUser) Push(user *data.User, _ []int32) {
 	tSet := mapset.NewSet[dataset.ID]()
 	flatten(result, tSet)
 	v := tSet.ToSlice()
-	sort.Slice(v, func(i, j int) bool {
-		return v[i] < v[j]
-	})
+	slices.Sort(v)
 	// Push user
 	t.usersLock.Lock()
 	t.users = append(t.users, nil)
@@ -228,9 +226,7 @@ func newItemsUserToUser(cfg config.UserToUserConfig, n int, timestamp time.Time,
 
 func (i *itemsUserToUser) Push(user *data.User, feedback []int32) {
 	// Sort feedback
-	sort.Slice(feedback, func(i, j int) bool {
-		return feedback[i] < feedback[j]
-	})
+	slices.Sort(feedback)
 	// Push user
 	i.usersLock.Lock()
 	i.users = append(i.users, nil)
@@ -266,13 +262,9 @@ func (a *autoUserToUser) Push(user *data.User, feedback []int32) {
 	tSet := mapset.NewSet[dataset.ID]()
 	flatten(user.Labels, tSet)
 	t := tSet.ToSlice()
-	sort.Slice(t, func(i, j int) bool {
-		return t[i] < t[j]
-	})
+	slices.Sort(t)
 	// Sort feedback
-	sort.Slice(feedback, func(i, j int) bool {
-		return feedback[i] < feedback[j]
-	})
+	slices.Sort(feedback)
 	// Push user
 	a.usersLock.Lock()
 	a.users = append(a.users, nil)

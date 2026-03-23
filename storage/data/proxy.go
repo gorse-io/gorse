@@ -24,7 +24,6 @@ import (
 	"github.com/gorse-io/gorse/common/expression"
 	"github.com/gorse-io/gorse/protocol"
 	"github.com/juju/errors"
-	"github.com/samber/lo"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -136,7 +135,7 @@ func (p *ProxyServer) ModifyItem(ctx context.Context, in *protocol.ModifyItemReq
 	}
 	var timestamp *time.Time
 	if in.Patch.Timestamp != nil {
-		timestamp = lo.ToPtr(in.Patch.Timestamp.AsTime())
+		timestamp = new(in.Patch.Timestamp.AsTime())
 	}
 	err := p.database.ModifyItem(ctx, in.ItemId, ItemPatch{
 		IsHidden:   in.Patch.IsHidden,
@@ -151,7 +150,7 @@ func (p *ProxyServer) ModifyItem(ctx context.Context, in *protocol.ModifyItemReq
 func (p *ProxyServer) GetItems(ctx context.Context, in *protocol.GetItemsRequest) (*protocol.GetItemsResponse, error) {
 	var beginTime *time.Time
 	if in.BeginTime != nil {
-		beginTime = lo.ToPtr(in.BeginTime.AsTime())
+		beginTime = new(in.BeginTime.AsTime())
 	}
 	cursor, items, err := p.database.GetItems(ctx, in.Cursor, int(in.N), beginTime)
 	if err != nil {
@@ -281,7 +280,7 @@ func (p *ProxyServer) GetUsers(ctx context.Context, in *protocol.GetUsersRequest
 func (p *ProxyServer) GetUserFeedback(ctx context.Context, in *protocol.GetUserFeedbackRequest) (*protocol.GetFeedbackResponse, error) {
 	var endTime *time.Time
 	if in.EndTime != nil {
-		endTime = lo.ToPtr(in.EndTime.AsTime())
+		endTime = new(in.EndTime.AsTime())
 	}
 	types := make([]expression.FeedbackTypeExpression, len(in.FeedbackTypes))
 	for i, t := range in.FeedbackTypes {
@@ -356,10 +355,10 @@ func (p *ProxyServer) BatchInsertFeedback(ctx context.Context, in *protocol.Batc
 func (p *ProxyServer) GetFeedback(ctx context.Context, in *protocol.GetFeedbackRequest) (*protocol.GetFeedbackResponse, error) {
 	var beginTime, endTime *time.Time
 	if in.BeginTime != nil {
-		beginTime = lo.ToPtr(in.BeginTime.AsTime())
+		beginTime = new(in.BeginTime.AsTime())
 	}
 	if in.EndTime != nil {
-		endTime = lo.ToPtr(in.EndTime.AsTime())
+		endTime = new(in.EndTime.AsTime())
 	}
 	var types []string
 	for _, t := range in.FeedbackTypes {
@@ -410,7 +409,7 @@ func (p *ProxyServer) GetUserStream(in *protocol.GetUserStreamRequest, stream gr
 func (p *ProxyServer) GetItemStream(in *protocol.GetItemStreamRequest, stream grpc.ServerStreamingServer[protocol.GetItemStreamResponse]) error {
 	var timeLimit *time.Time
 	if in.TimeLimit != nil {
-		timeLimit = lo.ToPtr(in.TimeLimit.AsTime())
+		timeLimit = new(in.TimeLimit.AsTime())
 	}
 	itemsChan, errChan := p.database.GetItemStream(stream.Context(), int(in.BatchSize), timeLimit)
 	for items := range itemsChan {

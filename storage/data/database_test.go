@@ -288,11 +288,11 @@ func (suite *baseTestSuite) TestFeedback() {
 	suite.NoError(err)
 	suite.Equal(12, count)
 	// Get feedback
-	ret := suite.getFeedback(ctx, 3, nil, lo.ToPtr(time.Now()), positiveFeedbackType1, positiveFeedbackType2)
+	ret := suite.getFeedback(ctx, 3, nil, new(time.Now()), positiveFeedbackType1, positiveFeedbackType2)
 	suite.Equal(feedback, ret)
-	ret = suite.getFeedback(ctx, 2, nil, lo.ToPtr(time.Now()))
+	ret = suite.getFeedback(ctx, 2, nil, new(time.Now()))
 	suite.Equal(len(feedback)+2, len(ret))
-	ret = suite.getFeedback(ctx, 2, lo.ToPtr(timestamp.Add(time.Second)), lo.ToPtr(time.Now()))
+	ret = suite.getFeedback(ctx, 2, new(timestamp.Add(time.Second)), new(time.Now()))
 	suite.Empty(ret)
 	// Get feedback stream
 	feedbackFromStream := suite.getFeedbackStream(ctx, 3,
@@ -359,7 +359,7 @@ func (suite *baseTestSuite) TestFeedback() {
 	suite.NoError(err)
 	suite.Equal(Item{ItemId: "0", Labels: []any{"b"}, Timestamp: time.Date(1996, 4, 8, 10, 0, 0, 0, time.UTC)}, item)
 	// Get typed feedback by user
-	ret, err = suite.Database.GetUserFeedback(ctx, "2", lo.ToPtr(time.Now()),
+	ret, err = suite.Database.GetUserFeedback(ctx, "2", new(time.Now()),
 		expression.MustParseFeedbackTypeExpression(positiveFeedbackType1),
 		expression.MustParseFeedbackTypeExpression(positiveFeedbackType2))
 	suite.NoError(err)
@@ -368,7 +368,7 @@ func (suite *baseTestSuite) TestFeedback() {
 		suite.Equal("4", ret[0].ItemId)
 	}
 	// Get all feedback by user
-	ret, err = suite.Database.GetUserFeedback(ctx, "2", lo.ToPtr(time.Now()))
+	ret, err = suite.Database.GetUserFeedback(ctx, "2", new(time.Now()))
 	suite.NoError(err)
 	suite.Equal(2, len(ret))
 	// Get typed feedback by item
@@ -392,12 +392,12 @@ func (suite *baseTestSuite) TestFeedback() {
 	err = suite.Database.Optimize()
 	suite.NoError(err)
 	// Get feedback by user with value filter
-	ret, err = suite.Database.GetUserFeedback(ctx, "0", lo.ToPtr(time.Now()),
+	ret, err = suite.Database.GetUserFeedback(ctx, "0", new(time.Now()),
 		expression.FeedbackTypeExpression{FeedbackType: positiveFeedbackType, Value: 50, ExprType: expression.Greater})
 	suite.NoError(err)
 	suite.Equal(1, len(ret))
 	suite.Equal(float64(100), ret[0].Value)
-	ret, err = suite.Database.GetUserFeedback(ctx, "0", lo.ToPtr(time.Now()), expression.MustParseFeedbackTypeExpression(positiveFeedbackType))
+	ret, err = suite.Database.GetUserFeedback(ctx, "0", new(time.Now()), expression.MustParseFeedbackTypeExpression(positiveFeedbackType))
 	suite.NoError(err)
 	suite.Equal(1, len(ret))
 	suite.Equal(float64(100), ret[0].Value)
@@ -413,7 +413,7 @@ func (suite *baseTestSuite) TestFeedback() {
 	suite.NoError(err)
 	err = suite.Database.Optimize()
 	suite.NoError(err)
-	ret, err = suite.Database.GetUserFeedback(ctx, "0", lo.ToPtr(time.Now()), expression.MustParseFeedbackTypeExpression(positiveFeedbackType))
+	ret, err = suite.Database.GetUserFeedback(ctx, "0", new(time.Now()), expression.MustParseFeedbackTypeExpression(positiveFeedbackType))
 	suite.NoError(err)
 	suite.Equal(1, len(ret))
 	suite.Equal(float64(180), ret[0].Value)
@@ -621,10 +621,10 @@ func (suite *baseTestSuite) TestDeleteUser() {
 	suite.NoError(err)
 	_, err = suite.Database.GetUser(ctx, "a")
 	suite.NotNil(err, "failed to delete user")
-	ret, err := suite.Database.GetUserFeedback(ctx, "a", lo.ToPtr(time.Now()), expression.MustParseFeedbackTypeExpression(positiveFeedbackType))
+	ret, err := suite.Database.GetUserFeedback(ctx, "a", new(time.Now()), expression.MustParseFeedbackTypeExpression(positiveFeedbackType))
 	suite.NoError(err)
 	suite.Equal(0, len(ret))
-	_, ret, err = suite.Database.GetFeedback(ctx, "", 100, nil, lo.ToPtr(time.Now()), positiveFeedbackType)
+	_, ret, err = suite.Database.GetFeedback(ctx, "", 100, nil, new(time.Now()), positiveFeedbackType)
 	suite.NoError(err)
 	suite.Empty(ret)
 }
@@ -649,7 +649,7 @@ func (suite *baseTestSuite) TestDeleteItem() {
 	ret, err := suite.Database.GetItemFeedback(ctx, "b", positiveFeedbackType)
 	suite.NoError(err)
 	suite.Equal(0, len(ret))
-	_, ret, err = suite.Database.GetFeedback(ctx, "", 100, nil, lo.ToPtr(time.Now()), positiveFeedbackType)
+	_, ret, err = suite.Database.GetFeedback(ctx, "", 100, nil, new(time.Now()), positiveFeedbackType)
 	suite.NoError(err)
 	suite.Empty(ret)
 }
@@ -757,11 +757,11 @@ func (suite *baseTestSuite) TestTimeLimit() {
 	for i := range feedbacks {
 		feedbacks[i].Updated = feedbacks[i].Timestamp
 	}
-	_, retFeedback, err := suite.Database.GetFeedback(ctx, "", 100, &timeLimit, lo.ToPtr(time.Now()))
+	_, retFeedback, err := suite.Database.GetFeedback(ctx, "", 100, &timeLimit, new(time.Now()))
 	suite.NoError(err)
 	suite.Equal([]Feedback{feedbacks[4], feedbacks[3], feedbacks[2]}, retFeedback)
 	typeFilter := "type1"
-	_, retFeedback, err = suite.Database.GetFeedback(ctx, "", 100, &timeLimit, lo.ToPtr(time.Now()), typeFilter)
+	_, retFeedback, err = suite.Database.GetFeedback(ctx, "", 100, &timeLimit, new(time.Now()), typeFilter)
 	suite.NoError(err)
 	suite.Equal([]Feedback{feedbacks[4], feedbacks[3]}, retFeedback)
 }
@@ -781,14 +781,14 @@ func (suite *baseTestSuite) TestTimezone() {
 	}, true, true, true)
 	suite.NoError(err)
 	// get feedback stream
-	feedback := suite.getFeedback(ctx, 10, nil, lo.ToPtr(time.Now()))
+	feedback := suite.getFeedback(ctx, 10, nil, new(time.Now()))
 	suite.Equal(3, len(feedback))
 	// get feedback
-	_, feedback, err = suite.Database.GetFeedback(ctx, "", 10, nil, lo.ToPtr(time.Now()))
+	_, feedback, err = suite.Database.GetFeedback(ctx, "", 10, nil, new(time.Now()))
 	suite.NoError(err)
 	suite.Equal(3, len(feedback))
 	// get user feedback
-	feedback, err = suite.Database.GetUserFeedback(ctx, "1", lo.ToPtr(time.Now()))
+	feedback, err = suite.Database.GetUserFeedback(ctx, "1", new(time.Now()))
 	suite.NoError(err)
 	suite.Equal(2, len(feedback))
 	// get item feedback
@@ -877,7 +877,7 @@ func (suite *baseTestSuite) TestPurge() {
 	_, items, err := suite.Database.GetItems(ctx, "", 100, nil)
 	suite.NoError(err)
 	suite.Equal(100, len(items))
-	_, feedbacks, err := suite.Database.GetFeedback(ctx, "", 100, nil, lo.ToPtr(time.Now()))
+	_, feedbacks, err := suite.Database.GetFeedback(ctx, "", 100, nil, new(time.Now()))
 	suite.NoError(err)
 	suite.Equal(100, len(feedbacks))
 	// purge data
@@ -889,7 +889,7 @@ func (suite *baseTestSuite) TestPurge() {
 	_, items, err = suite.Database.GetItems(ctx, "", 100, nil)
 	suite.NoError(err)
 	suite.Empty(items)
-	_, feedbacks, err = suite.Database.GetFeedback(ctx, "", 100, nil, lo.ToPtr(time.Now()))
+	_, feedbacks, err = suite.Database.GetFeedback(ctx, "", 100, nil, new(time.Now()))
 	suite.NoError(err)
 	suite.Empty(feedbacks)
 	// purge empty database

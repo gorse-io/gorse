@@ -36,7 +36,7 @@ func (suite *UserToUserTestSuite) TestEmbedding() {
 	}, 10, timestamp)
 	suite.NoError(err)
 
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		user2user.Push(&data.User{
 			UserId: strconv.Itoa(i),
 			Labels: map[string]any{
@@ -63,7 +63,7 @@ func (suite *UserToUserTestSuite) TestTags() {
 	}, 10, timestamp, idf)
 	suite.NoError(err)
 
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		labels := make(map[string]any)
 		for j := 1; j <= 100-i; j++ {
 			labels[strconv.Itoa(j)] = []dataset.ID{dataset.ID(j)}
@@ -90,7 +90,7 @@ func (suite *UserToUserTestSuite) TestItems() {
 	user2user, err := newItemsUserToUser(config.UserToUserConfig{}, 10, timestamp, idf)
 	suite.NoError(err)
 
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		feedback := make([]int32, 0, 100-i)
 		for j := 1; j <= 100-i; j++ {
 			feedback = append(feedback, int32(j))
@@ -114,7 +114,7 @@ func (suite *UserToUserTestSuite) TestAuto() {
 	user2user, err := newAutoUserToUser(config.UserToUserConfig{}, 10, timestamp, idf, idf)
 	suite.NoError(err)
 
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		user := &data.User{UserId: strconv.Itoa(i)}
 		feedback := make([]int32, 0, 100-i)
 		if i%2 == 0 {
