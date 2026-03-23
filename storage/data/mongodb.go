@@ -253,6 +253,10 @@ func (db *MongoDB) BatchGetItems(ctx context.Context, itemIds []string, opts Get
 	if opts.SkipHidden {
 		filter["ishidden"] = false
 	}
+	// Add time filter if specified
+	if opts.After != nil {
+		filter["timestamp"] = bson.M{"$gt": *opts.After}
+	}
 	// Add projection for ReturnId
 	var optsFind bson.M
 	if opts.ReturnId {
@@ -365,7 +369,7 @@ func (db *MongoDB) GetItems(ctx context.Context, cursor string, n int, timeLimit
 }
 
 // GetLatestItems returns the latest items from MongoDB.
-func (db *MongoDB) GetLatestItems(ctx context.Context, n int, categories []string) ([]Item, error) {
+func (db *MongoDB) GetLatestItems(ctx context.Context, n int, categories []string, after *time.Time) ([]Item, error) {
 	c := db.client.Database(db.dbName).Collection(db.ItemsTable())
 	opt := options.Find()
 	opt.SetLimit(int64(n))
@@ -373,6 +377,9 @@ func (db *MongoDB) GetLatestItems(ctx context.Context, n int, categories []strin
 	filter := bson.M{"ishidden": bson.M{"$ne": true}}
 	if len(categories) > 0 {
 		filter["categories"] = bson.M{"$all": categories}
+	}
+	if after != nil {
+		filter["timestamp"] = bson.M{"$gt": *after}
 	}
 	r, err := c.Find(ctx, filter, opt)
 	if err != nil {

@@ -545,12 +545,17 @@ func (suite *baseTestSuite) TestItems() {
 	suite.NoError(err)
 	suite.Equal([]Item{items[1], items[3]}, batchItem)
 	// Test GetLatestItems
-	latestItems, err := suite.Database.GetLatestItems(ctx, 3, nil)
+	latestItems, err := suite.Database.GetLatestItems(ctx, 3, nil, nil)
 	suite.NoError(err)
 	suite.Equal([]Item{items[3], items[1]}, latestItems)
-	latestItemsWithCategory, err := suite.Database.GetLatestItems(ctx, 3, []string{"b"})
+	latestItemsWithCategory, err := suite.Database.GetLatestItems(ctx, 3, []string{"b"}, nil)
 	suite.NoError(err)
 	suite.Equal([]Item{items[3], items[1]}, latestItemsWithCategory)
+	// Test GetLatestItems with after time filter
+	afterTime := time.Date(1998, 1, 1, 0, 0, 0, 0, time.UTC)
+	latestItemsAfter, err := suite.Database.GetLatestItems(ctx, 3, nil, &afterTime)
+	suite.NoError(err)
+	suite.Equal([]Item{items[3]}, latestItemsAfter) // only the newest item has timestamp > afterTime
 	// Delete item
 	err = suite.Database.DeleteItem(ctx, "0")
 	suite.NoError(err)
@@ -665,6 +670,18 @@ func (suite *baseTestSuite) TestBatchGetItems() {
 		suite.NotEmpty(item.ItemId)
 		suite.Empty(item.Categories) // other fields should be empty
 	}
+
+	// Test batch get with After time filter (cutoff at item timestamp)
+	afterTime := time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC)
+	afterItems, err := suite.Database.BatchGetItems(ctx, []string{"1", "2", "3", "4"}, GetOptions{After: &afterTime})
+	suite.NoError(err)
+	suite.Len(afterItems, 0) // all items have timestamp exactly at 1996-03-15, so none are strictly after
+
+	// Test batch get with After time filter (cutoff before item timestamps)
+	cutoffBeforeItems := time.Date(1996, 3, 14, 0, 0, 0, 0, time.UTC)
+	itemsAfterCutoff, err := suite.Database.BatchGetItems(ctx, []string{"1", "2", "3", "4"}, GetOptions{After: &cutoffBeforeItems})
+	suite.NoError(err)
+	suite.Len(itemsAfterCutoff, 4) // all requested items have timestamp after 1996-03-14
 }
 
 func (suite *baseTestSuite) TestDeleteUser() {

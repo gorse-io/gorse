@@ -169,7 +169,11 @@ func (r *Recommender) parse(fullname string) (RecommenderFunc, error) {
 }
 
 func (r *Recommender) recommendLatest(ctx context.Context) ([]cache.Score, string, error) {
-	items, err := r.dataClient.GetLatestItems(ctx, r.config.CacheSize, r.categories)
+	var after *time.Time
+	if r.config.DataSource.ItemTTL > 0 {
+		after = new(time.Now().AddDate(0, 0, -int(r.config.DataSource.ItemTTL)))
+	}
+	items, err := r.dataClient.GetLatestItems(ctx, r.config.CacheSize, r.categories, after)
 	if err != nil {
 		return nil, "", errors.Trace(err)
 	}

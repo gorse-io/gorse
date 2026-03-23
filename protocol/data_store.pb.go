@@ -392,6 +392,7 @@ type GetOptions struct {
 	Categories    []string               `protobuf:"bytes,1,rep,name=categories,proto3" json:"categories,omitempty"`
 	SkipHidden    bool                   `protobuf:"varint,2,opt,name=skip_hidden,json=skipHidden,proto3" json:"skip_hidden,omitempty"`
 	ReturnId      bool                   `protobuf:"varint,3,opt,name=return_id,json=returnId,proto3" json:"return_id,omitempty"`
+	After         *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=after,proto3" json:"after,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -445,6 +446,13 @@ func (x *GetOptions) GetReturnId() bool {
 		return x.ReturnId
 	}
 	return false
+}
+
+func (x *GetOptions) GetAfter() *timestamppb.Timestamp {
+	if x != nil {
+		return x.After
+	}
+	return nil
 }
 
 type BatchInsertItemsRequest struct {
@@ -2463,6 +2471,7 @@ type GetLatestItemsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	N             int32                  `protobuf:"varint,1,opt,name=n,proto3" json:"n,omitempty"`
 	Categories    []string               `protobuf:"bytes,2,rep,name=categories,proto3" json:"categories,omitempty"`
+	After         *timestamppb.Timestamp `protobuf:"bytes,3,opt,name=after,proto3" json:"after,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2507,6 +2516,13 @@ func (x *GetLatestItemsRequest) GetN() int32 {
 func (x *GetLatestItemsRequest) GetCategories() []string {
 	if x != nil {
 		return x.Categories
+	}
+	return nil
+}
+
+func (x *GetLatestItemsRequest) GetAfter() *timestamppb.Timestamp {
+	if x != nil {
+		return x.After
 	}
 	return nil
 }
@@ -2599,7 +2615,7 @@ const file_data_store_proto_rawDesc = "" +
 	"\x0e_begin_item_idB\x0e\n" +
 	"\f_end_item_idB\r\n" +
 	"\v_begin_timeB\v\n" +
-	"\t_end_time\"j\n" +
+	"\t_end_time\"\x9c\x01\n" +
 	"\n" +
 	"GetOptions\x12\x1e\n" +
 	"\n" +
@@ -2607,7 +2623,8 @@ const file_data_store_proto_rawDesc = "" +
 	"categories\x12\x1f\n" +
 	"\vskip_hidden\x18\x02 \x01(\bR\n" +
 	"skipHidden\x12\x1b\n" +
-	"\treturn_id\x18\x03 \x01(\bR\breturnId\"?\n" +
+	"\treturn_id\x18\x03 \x01(\bR\breturnId\x120\n" +
+	"\x05after\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\x05after\"?\n" +
 	"\x17BatchInsertItemsRequest\x12$\n" +
 	"\x05items\x18\x01 \x03(\v2\x0e.protocol.ItemR\x05items\"\x1a\n" +
 	"\x18BatchInsertItemsResponse\"h\n" +
@@ -2719,12 +2736,13 @@ const file_data_store_proto_rawDesc = "" +
 	"\x05count\x18\x01 \x01(\x05R\x05count\"\x16\n" +
 	"\x14CountFeedbackRequest\"-\n" +
 	"\x15CountFeedbackResponse\x12\x14\n" +
-	"\x05count\x18\x01 \x01(\x05R\x05count\"E\n" +
+	"\x05count\x18\x01 \x01(\x05R\x05count\"w\n" +
 	"\x15GetLatestItemsRequest\x12\f\n" +
 	"\x01n\x18\x01 \x01(\x05R\x01n\x12\x1e\n" +
 	"\n" +
 	"categories\x18\x02 \x03(\tR\n" +
-	"categories\">\n" +
+	"categories\x120\n" +
+	"\x05after\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x05after\">\n" +
 	"\x16GetLatestItemsResponse\x12$\n" +
 	"\x05items\x18\x01 \x03(\v2\x0e.protocol.ItemR\x05items*V\n" +
 	"\x0eExpressionType\x12\b\n" +
@@ -2845,87 +2863,89 @@ var file_data_store_proto_depIdxs = []int32{
 	51, // 2: protocol.ScanOptions.begin_time:type_name -> google.protobuf.Timestamp
 	51, // 3: protocol.ScanOptions.end_time:type_name -> google.protobuf.Timestamp
 	1,  // 4: protocol.ScanOptions.feedback_types:type_name -> protocol.FeedbackTypeExpression
-	52, // 5: protocol.BatchInsertItemsRequest.items:type_name -> protocol.Item
-	5,  // 6: protocol.BatchGetItemsRequest.get_options:type_name -> protocol.GetOptions
-	52, // 7: protocol.BatchGetItemsResponse.items:type_name -> protocol.Item
-	52, // 8: protocol.GetItemResponse.item:type_name -> protocol.Item
-	3,  // 9: protocol.ModifyItemRequest.patch:type_name -> protocol.ItemPatch
-	51, // 10: protocol.GetItemsRequest.begin_time:type_name -> google.protobuf.Timestamp
-	52, // 11: protocol.GetItemsResponse.items:type_name -> protocol.Item
-	1,  // 12: protocol.GetItemFeedbackRequest.feedback_types:type_name -> protocol.FeedbackTypeExpression
-	53, // 13: protocol.BatchInsertUsersRequest.users:type_name -> protocol.User
-	53, // 14: protocol.GetUserResponse.user:type_name -> protocol.User
-	2,  // 15: protocol.ModifyUserRequest.patch:type_name -> protocol.UserPatch
-	53, // 16: protocol.GetUsersResponse.users:type_name -> protocol.User
-	51, // 17: protocol.GetUserFeedbackRequest.end_time:type_name -> google.protobuf.Timestamp
-	1,  // 18: protocol.GetUserFeedbackRequest.feedback_types:type_name -> protocol.FeedbackTypeExpression
-	1,  // 19: protocol.GetUserItemFeedbackRequest.feedback_types:type_name -> protocol.FeedbackTypeExpression
-	54, // 20: protocol.BatchInsertFeedbackRequest.feedback:type_name -> protocol.Feedback
-	51, // 21: protocol.GetFeedbackRequest.begin_time:type_name -> google.protobuf.Timestamp
-	51, // 22: protocol.GetFeedbackRequest.end_time:type_name -> google.protobuf.Timestamp
-	1,  // 23: protocol.GetFeedbackRequest.feedback_types:type_name -> protocol.FeedbackTypeExpression
-	54, // 24: protocol.GetFeedbackResponse.feedback:type_name -> protocol.Feedback
-	53, // 25: protocol.GetUserStreamResponse.users:type_name -> protocol.User
-	51, // 26: protocol.GetItemStreamRequest.time_limit:type_name -> google.protobuf.Timestamp
-	52, // 27: protocol.GetItemStreamResponse.items:type_name -> protocol.Item
-	4,  // 28: protocol.GetFeedbackStreamRequest.scan_options:type_name -> protocol.ScanOptions
-	54, // 29: protocol.GetFeedbackStreamResponse.feedback:type_name -> protocol.Feedback
-	52, // 30: protocol.GetLatestItemsResponse.items:type_name -> protocol.Item
-	55, // 31: protocol.DataStore.Ping:input_type -> protocol.PingRequest
-	6,  // 32: protocol.DataStore.BatchInsertItems:input_type -> protocol.BatchInsertItemsRequest
-	8,  // 33: protocol.DataStore.BatchGetItems:input_type -> protocol.BatchGetItemsRequest
-	10, // 34: protocol.DataStore.DeleteItem:input_type -> protocol.DeleteItemRequest
-	12, // 35: protocol.DataStore.GetItem:input_type -> protocol.GetItemRequest
-	14, // 36: protocol.DataStore.ModifyItem:input_type -> protocol.ModifyItemRequest
-	16, // 37: protocol.DataStore.GetItems:input_type -> protocol.GetItemsRequest
-	18, // 38: protocol.DataStore.GetItemFeedback:input_type -> protocol.GetItemFeedbackRequest
-	19, // 39: protocol.DataStore.BatchInsertUsers:input_type -> protocol.BatchInsertUsersRequest
-	21, // 40: protocol.DataStore.DeleteUser:input_type -> protocol.DeleteUserRequest
-	23, // 41: protocol.DataStore.GetUser:input_type -> protocol.GetUserRequest
-	25, // 42: protocol.DataStore.ModifyUser:input_type -> protocol.ModifyUserRequest
-	27, // 43: protocol.DataStore.GetUsers:input_type -> protocol.GetUsersRequest
-	29, // 44: protocol.DataStore.GetUserFeedback:input_type -> protocol.GetUserFeedbackRequest
-	30, // 45: protocol.DataStore.GetUserItemFeedback:input_type -> protocol.GetUserItemFeedbackRequest
-	31, // 46: protocol.DataStore.DeleteUserItemFeedback:input_type -> protocol.DeleteUserItemFeedbackRequest
-	33, // 47: protocol.DataStore.BatchInsertFeedback:input_type -> protocol.BatchInsertFeedbackRequest
-	35, // 48: protocol.DataStore.GetFeedback:input_type -> protocol.GetFeedbackRequest
-	37, // 49: protocol.DataStore.GetUserStream:input_type -> protocol.GetUserStreamRequest
-	39, // 50: protocol.DataStore.GetItemStream:input_type -> protocol.GetItemStreamRequest
-	41, // 51: protocol.DataStore.GetFeedbackStream:input_type -> protocol.GetFeedbackStreamRequest
-	43, // 52: protocol.DataStore.CountUsers:input_type -> protocol.CountUsersRequest
-	45, // 53: protocol.DataStore.CountItems:input_type -> protocol.CountItemsRequest
-	47, // 54: protocol.DataStore.CountFeedback:input_type -> protocol.CountFeedbackRequest
-	49, // 55: protocol.DataStore.GetLatestItems:input_type -> protocol.GetLatestItemsRequest
-	56, // 56: protocol.DataStore.Ping:output_type -> protocol.PingResponse
-	7,  // 57: protocol.DataStore.BatchInsertItems:output_type -> protocol.BatchInsertItemsResponse
-	9,  // 58: protocol.DataStore.BatchGetItems:output_type -> protocol.BatchGetItemsResponse
-	11, // 59: protocol.DataStore.DeleteItem:output_type -> protocol.DeleteItemResponse
-	13, // 60: protocol.DataStore.GetItem:output_type -> protocol.GetItemResponse
-	15, // 61: protocol.DataStore.ModifyItem:output_type -> protocol.ModifyItemResponse
-	17, // 62: protocol.DataStore.GetItems:output_type -> protocol.GetItemsResponse
-	36, // 63: protocol.DataStore.GetItemFeedback:output_type -> protocol.GetFeedbackResponse
-	20, // 64: protocol.DataStore.BatchInsertUsers:output_type -> protocol.BatchInsertUsersResponse
-	22, // 65: protocol.DataStore.DeleteUser:output_type -> protocol.DeleteUserResponse
-	24, // 66: protocol.DataStore.GetUser:output_type -> protocol.GetUserResponse
-	26, // 67: protocol.DataStore.ModifyUser:output_type -> protocol.ModifyUserResponse
-	28, // 68: protocol.DataStore.GetUsers:output_type -> protocol.GetUsersResponse
-	36, // 69: protocol.DataStore.GetUserFeedback:output_type -> protocol.GetFeedbackResponse
-	36, // 70: protocol.DataStore.GetUserItemFeedback:output_type -> protocol.GetFeedbackResponse
-	32, // 71: protocol.DataStore.DeleteUserItemFeedback:output_type -> protocol.DeleteUserItemFeedbackResponse
-	34, // 72: protocol.DataStore.BatchInsertFeedback:output_type -> protocol.BatchInsertFeedbackResponse
-	36, // 73: protocol.DataStore.GetFeedback:output_type -> protocol.GetFeedbackResponse
-	38, // 74: protocol.DataStore.GetUserStream:output_type -> protocol.GetUserStreamResponse
-	40, // 75: protocol.DataStore.GetItemStream:output_type -> protocol.GetItemStreamResponse
-	42, // 76: protocol.DataStore.GetFeedbackStream:output_type -> protocol.GetFeedbackStreamResponse
-	44, // 77: protocol.DataStore.CountUsers:output_type -> protocol.CountUsersResponse
-	46, // 78: protocol.DataStore.CountItems:output_type -> protocol.CountItemsResponse
-	48, // 79: protocol.DataStore.CountFeedback:output_type -> protocol.CountFeedbackResponse
-	50, // 80: protocol.DataStore.GetLatestItems:output_type -> protocol.GetLatestItemsResponse
-	56, // [56:81] is the sub-list for method output_type
-	31, // [31:56] is the sub-list for method input_type
-	31, // [31:31] is the sub-list for extension type_name
-	31, // [31:31] is the sub-list for extension extendee
-	0,  // [0:31] is the sub-list for field type_name
+	51, // 5: protocol.GetOptions.after:type_name -> google.protobuf.Timestamp
+	52, // 6: protocol.BatchInsertItemsRequest.items:type_name -> protocol.Item
+	5,  // 7: protocol.BatchGetItemsRequest.get_options:type_name -> protocol.GetOptions
+	52, // 8: protocol.BatchGetItemsResponse.items:type_name -> protocol.Item
+	52, // 9: protocol.GetItemResponse.item:type_name -> protocol.Item
+	3,  // 10: protocol.ModifyItemRequest.patch:type_name -> protocol.ItemPatch
+	51, // 11: protocol.GetItemsRequest.begin_time:type_name -> google.protobuf.Timestamp
+	52, // 12: protocol.GetItemsResponse.items:type_name -> protocol.Item
+	1,  // 13: protocol.GetItemFeedbackRequest.feedback_types:type_name -> protocol.FeedbackTypeExpression
+	53, // 14: protocol.BatchInsertUsersRequest.users:type_name -> protocol.User
+	53, // 15: protocol.GetUserResponse.user:type_name -> protocol.User
+	2,  // 16: protocol.ModifyUserRequest.patch:type_name -> protocol.UserPatch
+	53, // 17: protocol.GetUsersResponse.users:type_name -> protocol.User
+	51, // 18: protocol.GetUserFeedbackRequest.end_time:type_name -> google.protobuf.Timestamp
+	1,  // 19: protocol.GetUserFeedbackRequest.feedback_types:type_name -> protocol.FeedbackTypeExpression
+	1,  // 20: protocol.GetUserItemFeedbackRequest.feedback_types:type_name -> protocol.FeedbackTypeExpression
+	54, // 21: protocol.BatchInsertFeedbackRequest.feedback:type_name -> protocol.Feedback
+	51, // 22: protocol.GetFeedbackRequest.begin_time:type_name -> google.protobuf.Timestamp
+	51, // 23: protocol.GetFeedbackRequest.end_time:type_name -> google.protobuf.Timestamp
+	1,  // 24: protocol.GetFeedbackRequest.feedback_types:type_name -> protocol.FeedbackTypeExpression
+	54, // 25: protocol.GetFeedbackResponse.feedback:type_name -> protocol.Feedback
+	53, // 26: protocol.GetUserStreamResponse.users:type_name -> protocol.User
+	51, // 27: protocol.GetItemStreamRequest.time_limit:type_name -> google.protobuf.Timestamp
+	52, // 28: protocol.GetItemStreamResponse.items:type_name -> protocol.Item
+	4,  // 29: protocol.GetFeedbackStreamRequest.scan_options:type_name -> protocol.ScanOptions
+	54, // 30: protocol.GetFeedbackStreamResponse.feedback:type_name -> protocol.Feedback
+	51, // 31: protocol.GetLatestItemsRequest.after:type_name -> google.protobuf.Timestamp
+	52, // 32: protocol.GetLatestItemsResponse.items:type_name -> protocol.Item
+	55, // 33: protocol.DataStore.Ping:input_type -> protocol.PingRequest
+	6,  // 34: protocol.DataStore.BatchInsertItems:input_type -> protocol.BatchInsertItemsRequest
+	8,  // 35: protocol.DataStore.BatchGetItems:input_type -> protocol.BatchGetItemsRequest
+	10, // 36: protocol.DataStore.DeleteItem:input_type -> protocol.DeleteItemRequest
+	12, // 37: protocol.DataStore.GetItem:input_type -> protocol.GetItemRequest
+	14, // 38: protocol.DataStore.ModifyItem:input_type -> protocol.ModifyItemRequest
+	16, // 39: protocol.DataStore.GetItems:input_type -> protocol.GetItemsRequest
+	18, // 40: protocol.DataStore.GetItemFeedback:input_type -> protocol.GetItemFeedbackRequest
+	19, // 41: protocol.DataStore.BatchInsertUsers:input_type -> protocol.BatchInsertUsersRequest
+	21, // 42: protocol.DataStore.DeleteUser:input_type -> protocol.DeleteUserRequest
+	23, // 43: protocol.DataStore.GetUser:input_type -> protocol.GetUserRequest
+	25, // 44: protocol.DataStore.ModifyUser:input_type -> protocol.ModifyUserRequest
+	27, // 45: protocol.DataStore.GetUsers:input_type -> protocol.GetUsersRequest
+	29, // 46: protocol.DataStore.GetUserFeedback:input_type -> protocol.GetUserFeedbackRequest
+	30, // 47: protocol.DataStore.GetUserItemFeedback:input_type -> protocol.GetUserItemFeedbackRequest
+	31, // 48: protocol.DataStore.DeleteUserItemFeedback:input_type -> protocol.DeleteUserItemFeedbackRequest
+	33, // 49: protocol.DataStore.BatchInsertFeedback:input_type -> protocol.BatchInsertFeedbackRequest
+	35, // 50: protocol.DataStore.GetFeedback:input_type -> protocol.GetFeedbackRequest
+	37, // 51: protocol.DataStore.GetUserStream:input_type -> protocol.GetUserStreamRequest
+	39, // 52: protocol.DataStore.GetItemStream:input_type -> protocol.GetItemStreamRequest
+	41, // 53: protocol.DataStore.GetFeedbackStream:input_type -> protocol.GetFeedbackStreamRequest
+	43, // 54: protocol.DataStore.CountUsers:input_type -> protocol.CountUsersRequest
+	45, // 55: protocol.DataStore.CountItems:input_type -> protocol.CountItemsRequest
+	47, // 56: protocol.DataStore.CountFeedback:input_type -> protocol.CountFeedbackRequest
+	49, // 57: protocol.DataStore.GetLatestItems:input_type -> protocol.GetLatestItemsRequest
+	56, // 58: protocol.DataStore.Ping:output_type -> protocol.PingResponse
+	7,  // 59: protocol.DataStore.BatchInsertItems:output_type -> protocol.BatchInsertItemsResponse
+	9,  // 60: protocol.DataStore.BatchGetItems:output_type -> protocol.BatchGetItemsResponse
+	11, // 61: protocol.DataStore.DeleteItem:output_type -> protocol.DeleteItemResponse
+	13, // 62: protocol.DataStore.GetItem:output_type -> protocol.GetItemResponse
+	15, // 63: protocol.DataStore.ModifyItem:output_type -> protocol.ModifyItemResponse
+	17, // 64: protocol.DataStore.GetItems:output_type -> protocol.GetItemsResponse
+	36, // 65: protocol.DataStore.GetItemFeedback:output_type -> protocol.GetFeedbackResponse
+	20, // 66: protocol.DataStore.BatchInsertUsers:output_type -> protocol.BatchInsertUsersResponse
+	22, // 67: protocol.DataStore.DeleteUser:output_type -> protocol.DeleteUserResponse
+	24, // 68: protocol.DataStore.GetUser:output_type -> protocol.GetUserResponse
+	26, // 69: protocol.DataStore.ModifyUser:output_type -> protocol.ModifyUserResponse
+	28, // 70: protocol.DataStore.GetUsers:output_type -> protocol.GetUsersResponse
+	36, // 71: protocol.DataStore.GetUserFeedback:output_type -> protocol.GetFeedbackResponse
+	36, // 72: protocol.DataStore.GetUserItemFeedback:output_type -> protocol.GetFeedbackResponse
+	32, // 73: protocol.DataStore.DeleteUserItemFeedback:output_type -> protocol.DeleteUserItemFeedbackResponse
+	34, // 74: protocol.DataStore.BatchInsertFeedback:output_type -> protocol.BatchInsertFeedbackResponse
+	36, // 75: protocol.DataStore.GetFeedback:output_type -> protocol.GetFeedbackResponse
+	38, // 76: protocol.DataStore.GetUserStream:output_type -> protocol.GetUserStreamResponse
+	40, // 77: protocol.DataStore.GetItemStream:output_type -> protocol.GetItemStreamResponse
+	42, // 78: protocol.DataStore.GetFeedbackStream:output_type -> protocol.GetFeedbackStreamResponse
+	44, // 79: protocol.DataStore.CountUsers:output_type -> protocol.CountUsersResponse
+	46, // 80: protocol.DataStore.CountItems:output_type -> protocol.CountItemsResponse
+	48, // 81: protocol.DataStore.CountFeedback:output_type -> protocol.CountFeedbackResponse
+	50, // 82: protocol.DataStore.GetLatestItems:output_type -> protocol.GetLatestItemsResponse
+	58, // [58:83] is the sub-list for method output_type
+	33, // [33:58] is the sub-list for method input_type
+	33, // [33:33] is the sub-list for extension type_name
+	33, // [33:33] is the sub-list for extension extendee
+	0,  // [0:33] is the sub-list for field type_name
 }
 
 func init() { file_data_store_proto_init() }

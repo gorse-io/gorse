@@ -708,7 +708,11 @@ func (s *RestServer) getLatest(request *restful.Request, response *restful.Respo
 		limit += readItems.Cardinality()
 	}
 
-	items, err := s.DataClient.GetLatestItems(ctx, limit, categories)
+	var after *time.Time
+	if s.Config.Recommend.DataSource.ItemTTL > 0 {
+		after = new(time.Now().AddDate(0, 0, -int(s.Config.Recommend.DataSource.ItemTTL)))
+	}
+	items, err := s.DataClient.GetLatestItems(ctx, limit, categories, after)
 	if err != nil {
 		InternalServerError(response, err)
 		return
