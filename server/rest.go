@@ -1755,7 +1755,7 @@ func PageNotFound(response *restful.Response, err error) {
 }
 
 // Ok sends the content as JSON to the client.
-func Ok(response *restful.Response, content interface{}) {
+func Ok(response *restful.Response, content any) {
 	response.AddHeader("Access-Control-Allow-Origin", "*")
 	if err := response.WriteAsJson(content); err != nil {
 		log.ResponseLogger(response).Error("failed to write json", zap.Error(err))

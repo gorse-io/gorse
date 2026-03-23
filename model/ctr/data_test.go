@@ -114,7 +114,7 @@ func TestDataset_Split(t *testing.T) {
 	unifiedIndex := dataset.NewUnifiedMapIndexBuilder()
 	dataSet := NewMapIndexDataset()
 	numUsers, numItems := 5, 6
-	for i := 0; i < numUsers; i++ {
+	for i := range numUsers {
 		unifiedIndex.AddUser(fmt.Sprintf("user%v", i))
 		unifiedIndex.AddUserLabel(fmt.Sprintf("user_label%v", 2*i))
 		unifiedIndex.AddUserLabel(fmt.Sprintf("user_label%v", 2*i+1))
@@ -123,7 +123,7 @@ func TestDataset_Split(t *testing.T) {
 			{A: int32(2*i + 1), B: 1},
 		})
 	}
-	for i := 0; i < numItems; i++ {
+	for i := range numItems {
 		unifiedIndex.AddItem(fmt.Sprintf("item%v", i))
 		unifiedIndex.AddItemLabel(fmt.Sprintf("item_label%v", 3*i))
 		unifiedIndex.AddItemLabel(fmt.Sprintf("item_label%v", 3*i+1))
@@ -137,8 +137,8 @@ func TestDataset_Split(t *testing.T) {
 			{float32(i), float32(i) + 0.1, float32(i) + 0.2},
 		})
 	}
-	for i := 0; i < numUsers; i++ {
-		for j := 0; j < numItems; j++ {
+	for i := range numUsers {
+		for j := range numItems {
 			if i+j > 4 {
 				dataSet.Users = append(dataSet.Users, int32(i))
 				dataSet.Items = append(dataSet.Items, int32(j))

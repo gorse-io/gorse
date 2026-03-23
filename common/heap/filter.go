@@ -15,19 +15,18 @@
 package heap
 
 import (
+	"cmp"
 	"container/heap"
-
-	"golang.org/x/exp/constraints"
 )
 
 // TopKFilter filters out top k items with maximum weights.
-type TopKFilter[T any, W constraints.Ordered] struct {
+type TopKFilter[T any, W cmp.Ordered] struct {
 	_heap[T, W]
 	k int
 }
 
 // NewTopKFilter creates a top k filter.
-func NewTopKFilter[T any, W constraints.Ordered](k int) *TopKFilter[T, W] {
+func NewTopKFilter[T any, W cmp.Ordered](k int) *TopKFilter[T, W] {
 	return &TopKFilter[T, W]{k: k}
 }
 

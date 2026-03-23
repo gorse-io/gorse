@@ -228,9 +228,9 @@ func StringToFeedbackTypeHookFunc() mapstructure.DecodeHookFunc {
 	return func(
 		f reflect.Type,
 		t reflect.Type,
-		data interface{},
-	) (interface{}, error) {
-		if f.Kind() == reflect.String && t == reflect.TypeOf(expression.FeedbackTypeExpression{}) {
+		data any,
+	) (any, error) {
+		if f.Kind() == reflect.String && t == reflect.TypeFor[expression.FeedbackTypeExpression]() {
 			var expr expression.FeedbackTypeExpression
 			if err := expr.FromString(data.(string)); err != nil {
 				return nil, errors.Trace(err)
@@ -514,7 +514,7 @@ func GetDefaultConfig() *Config {
 var ConfigTOML string
 
 func (config *Config) Now() *time.Time {
-	return lo.ToPtr(time.Now().Add(config.Server.ClockError))
+	return new(time.Now().Add(config.Server.ClockError))
 }
 
 func (config *TracingConfig) NewTracerProvider() (trace.TracerProvider, error) {

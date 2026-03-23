@@ -25,19 +25,19 @@ func TestUnifiedMapIndex(t *testing.T) {
 	// create unified map index
 	builder := NewUnifiedMapIndexBuilder()
 	var numUsers, numItems, numUserLabels, numItemLabels, numCtxLabels int32 = 3, 4, 5, 6, 7
-	for i := int32(0); i < numUsers; i++ {
+	for i := range numUsers {
 		builder.AddUser(fmt.Sprintf("user%v", i))
 	}
-	for i := int32(0); i < numItems; i++ {
+	for i := range numItems {
 		builder.AddItem(fmt.Sprintf("item%v", i))
 	}
-	for i := int32(0); i < numUserLabels; i++ {
+	for i := range numUserLabels {
 		builder.AddUserLabel(fmt.Sprintf("user_label%v", i))
 	}
-	for i := int32(0); i < numItemLabels; i++ {
+	for i := range numItemLabels {
 		builder.AddItemLabel(fmt.Sprintf("item_label%v", i))
 	}
-	for i := int32(0); i < numCtxLabels; i++ {
+	for i := range numCtxLabels {
 		builder.AddCtxLabel(fmt.Sprintf("ctx_label%v", i))
 	}
 	index := builder.Build()
@@ -50,31 +50,31 @@ func TestUnifiedMapIndex(t *testing.T) {
 	assert.Equal(t, numCtxLabels, index.CountContextLabels())
 	// check encode
 	users := index.GetUsers()
-	for i := int32(0); i < numUsers; i++ {
+	for i := range numUsers {
 		userIndex := index.EncodeUser(fmt.Sprintf("user%v", i))
 		assert.Equal(t, i, userIndex)
 		assert.Equal(t, fmt.Sprintf("user%v", i), users[i])
 	}
 	items := index.GetItems()
-	for i := int32(0); i < numItems; i++ {
+	for i := range numItems {
 		itemIndex := index.EncodeItem(fmt.Sprintf("item%v", i))
 		assert.Equal(t, numUsers+i, itemIndex)
 		assert.Equal(t, fmt.Sprintf("item%v", i), items[i])
 	}
 	userLabels := index.GetUserLabels()
-	for i := int32(0); i < numUserLabels; i++ {
+	for i := range numUserLabels {
 		userLabelIndex := index.EncodeUserLabel(fmt.Sprintf("user_label%v", i))
 		assert.Equal(t, numUsers+numItems+i, userLabelIndex)
 		assert.Equal(t, fmt.Sprintf("user_label%v", i), userLabels[i])
 	}
 	itemLabels := index.GetItemLabels()
-	for i := int32(0); i < numItemLabels; i++ {
+	for i := range numItemLabels {
 		itemLabelIndex := index.EncodeItemLabel(fmt.Sprintf("item_label%v", i))
 		assert.Equal(t, numUsers+numItems+numUserLabels+i, itemLabelIndex)
 		assert.Equal(t, fmt.Sprintf("item_label%v", i), itemLabels[i])
 	}
 	ctxLabels := index.GetContextLabels()
-	for i := int32(0); i < numCtxLabels; i++ {
+	for i := range numCtxLabels {
 		ctxLabelIndex := index.EncodeContextLabel(fmt.Sprintf("ctx_label%v", i))
 		assert.Equal(t, numUsers+numItems+numUserLabels+numItemLabels+i, ctxLabelIndex)
 		assert.Equal(t, fmt.Sprintf("ctx_label%v", i), ctxLabels[i])

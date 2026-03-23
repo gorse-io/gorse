@@ -138,11 +138,11 @@ func TestEvaluate(t *testing.T) {
 	// create dataset
 	train, test := dataset.NewDataset(time.Now(), 0, 0), dataset.NewDataset(time.Now(), 0, 0)
 	//train.UserFeedback = make([][]int32, 4)
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		train.AddUser(data.User{UserId: strconv.Itoa(i)})
 		test.AddUser(data.User{UserId: strconv.Itoa(i / 4)})
 	}
-	for i := 0; i < 16; i++ {
+	for i := range 16 {
 		test.AddItem(data.Item{ItemId: strconv.Itoa(i)})
 		test.AddFeedback(strconv.Itoa(i/4), strconv.Itoa(i), time.Time{})
 	}

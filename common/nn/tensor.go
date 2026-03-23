@@ -248,7 +248,7 @@ func (t *Tensor) String() string {
 			}
 		}
 	} else {
-		for i := 0; i < 5; i++ {
+		for i := range 5 {
 			fmt.Fprint(&builder, t.data[i])
 			builder.WriteString(", ")
 		}
@@ -481,10 +481,7 @@ func partition(n, p int) []lo.Tuple2[int, int] {
 			partSize++
 			maxPartCount--
 		}
-		end := i + partSize
-		if end > n {
-			end = n
-		}
+		end := min(i+partSize, n)
 		parts = append(parts, lo.Tuple2[int, int]{A: i, B: end})
 		i = end
 	}
@@ -646,8 +643,8 @@ func (t *Tensor) transpose() *Tensor {
 	shape = append(shape, n, m)
 	data := make([]float32, batchSize*m*n)
 	for b := 0; b < batchSize; b++ {
-		for i := 0; i < m; i++ {
-			for j := 0; j < n; j++ {
+		for i := range m {
+			for j := range n {
 				data[b*m*n+j*m+i] = t.data[b*m*n+i*n+j]
 			}
 		}

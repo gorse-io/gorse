@@ -538,7 +538,7 @@ func decodeCategories(s string) ([]string, error) {
 		return []string{}, nil
 	}
 	var categories []string
-	for _, category := range strings.Split(s, ";") {
+	for category := range strings.SplitSeq(s, ";") {
 		category, err := decodeCategory(category)
 		if err != nil {
 			return nil, errors.Trace(err)

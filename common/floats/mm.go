@@ -18,29 +18,29 @@ package floats
 
 func mm(transA, transB bool, m, n, k int, a []float32, lda int, b []float32, ldb int, c []float32, ldc int) {
 	if !transA && !transB {
-		for i := 0; i < m; i++ {
-			for l := 0; l < k; l++ {
+		for i := range m {
+			for l := range k {
 				// C_l += A_{il} * B_i
 				MulConstAdd(b[l*ldb:(l+1)*ldb], a[i*lda+l], c[i*ldc:(i+1)*ldc])
 			}
 		}
 	} else if !transA && transB {
-		for i := 0; i < m; i++ {
-			for j := 0; j < n; j++ {
+		for i := range m {
+			for j := range n {
 				c[i*ldc+j] = Dot(a[i*lda:(i+1)*lda], b[j*ldb:(j+1)*ldb])
 			}
 		}
 	} else if transA && !transB {
-		for i := 0; i < m; i++ {
-			for l := 0; l < k; l++ {
+		for i := range m {
+			for l := range k {
 				// C_j += A_{ji} * B_i
 				MulConstAdd(b[l*ldb:(l+1)*ldb], a[l*lda+i], c[i*ldc:(i+1)*ldc])
 			}
 		}
 	} else {
-		for i := 0; i < m; i++ {
-			for j := 0; j < n; j++ {
-				for l := 0; l < k; l++ {
+		for i := range m {
+			for j := range n {
+				for l := range k {
 					c[i*ldc+j] += a[l*lda+i] * b[j*ldb+l]
 				}
 			}

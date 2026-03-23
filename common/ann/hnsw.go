@@ -298,14 +298,14 @@ func (h *HNSW[T]) Marshal(w io.Writer) error {
 	if err := binary.Write(w, binary.LittleEndian, numVectors); err != nil {
 		return err
 	}
-	for i := int64(0); i < numVectors; i++ {
+	for i := range numVectors {
 		if err := encoding.WriteGob(w, h.vectors[i]); err != nil {
 			return err
 		}
 	}
 
 	// save neighbors
-	for i := int64(0); i < numVectors; i++ {
+	for i := range numVectors {
 		if err := h.bottomNeighbors[i].Marshal(w); err != nil {
 			return err
 		}
@@ -314,7 +314,7 @@ func (h *HNSW[T]) Marshal(w io.Writer) error {
 	if err := binary.Write(w, binary.LittleEndian, int64(numLayers)); err != nil {
 		return err
 	}
-	for i := 0; i < numLayers; i++ {
+	for i := range numLayers {
 		var elements []lo.Tuple2[int32, *heap.PriorityQueue]
 		h.upperNeighbors[i].Range(func(key, value any) bool {
 			elements = append(elements, lo.Tuple2[int32, *heap.PriorityQueue]{
@@ -325,7 +325,7 @@ func (h *HNSW[T]) Marshal(w io.Writer) error {
 		if err := binary.Write(w, binary.LittleEndian, numElements); err != nil {
 			return err
 		}
-		for j := int32(0); j < numElements; j++ {
+		for j := range numElements {
 			if err := binary.Write(w, binary.LittleEndian, elements[j].A); err != nil {
 				return err
 			}

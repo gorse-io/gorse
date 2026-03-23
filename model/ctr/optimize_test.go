@@ -75,9 +75,9 @@ func (m *mockFactorizationMachineForSearch) Clear() {
 
 func (m *mockFactorizationMachineForSearch) GetParamsGrid(_ bool) model.ParamsGrid {
 	return model.ParamsGrid{
-		model.NFactors:   []interface{}{1, 2, 3, 4},
-		model.InitMean:   []interface{}{4, 3, 2, 1},
-		model.InitStdDev: []interface{}{4, 4, 4, 4},
+		model.NFactors:   []any{1, 2, 3, 4},
+		model.InitMean:   []any{4, 3, 2, 1},
+		model.InitStdDev: []any{4, 4, 4, 4},
 	}
 }
 

@@ -117,7 +117,7 @@ func (db *Weaviate) AddCollection(ctx context.Context, name string, dimensions i
 				IndexRangeFilters: new(true),
 			},
 		},
-		VectorIndexConfig: map[string]interface{}{
+		VectorIndexConfig: map[string]any{
 			"distance": weaviateDistance,
 		},
 	}
@@ -146,7 +146,7 @@ func (db *Weaviate) AddVectors(ctx context.Context, collection string, vectors [
 		objects = append(objects, &models.Object{
 			Class: capitalize(collection),
 			ID:    strfmt.UUID(uuid.NewMD5(uuid.NameSpaceURL, []byte(vector.Id)).String()),
-			Properties: map[string]interface{}{
+			Properties: map[string]any{
 				"originalId":                 vector.Id,
 				weaviatePayloadCategoriesKey: vector.Categories,
 				weaviatePayloadTimestampKey:  vector.Timestamp,
@@ -214,15 +214,15 @@ func (db *Weaviate) QueryVectors(ctx context.Context, collection string, q []flo
 		return nil, errors.New(result.Errors[0].Message)
 	}
 
-	data := result.Data["Get"].(map[string]interface{})
-	items := data[capitalize(collection)].([]interface{})
+	data := result.Data["Get"].(map[string]any)
+	items := data[capitalize(collection)].([]any)
 	results := make([]Vector, 0, len(items))
 	for _, item := range items {
-		m := item.(map[string]interface{})
+		m := item.(map[string]any)
 		id := m["originalId"].(string)
 		var cats []string
 		if m[weaviatePayloadCategoriesKey] != nil {
-			for _, c := range m[weaviatePayloadCategoriesKey].([]interface{}) {
+			for _, c := range m[weaviatePayloadCategoriesKey].([]any) {
 				cats = append(cats, c.(string))
 			}
 		}

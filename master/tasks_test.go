@@ -46,7 +46,7 @@ func (s *MasterTestSuite) TestFindItemToItem() {
 		{ItemId: "9", IsHidden: false, Categories: nil, Timestamp: time.Now(), Labels: []string{}, Comment: ""},
 	}
 	feedbacks := make([]data.Feedback, 0)
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		for j := 0; j <= i; j++ {
 			if i%2 == 1 {
 				feedbacks = append(feedbacks, data.Feedback{
@@ -149,7 +149,7 @@ func (s *MasterTestSuite) TestUserToUser() {
 		{UserId: "9", Labels: []string{}, Comment: ""},
 	}
 	feedbacks := make([]data.Feedback, 0)
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		for j := 0; j <= i; j++ {
 			if i%2 == 1 {
 				feedbacks = append(feedbacks, data.Feedback{
@@ -220,7 +220,7 @@ func (s *MasterTestSuite) TestLoadDataFromDatabase() {
 
 	// insert items
 	var items []data.Item
-	for i := 0; i < 9; i++ {
+	for i := range 9 {
 		items = append(items, data.Item{
 			ItemId:     strconv.Itoa(i),
 			Timestamp:  time.Date(2000+i, 1, 1, 1, 1, 0, 0, time.UTC),
@@ -250,7 +250,7 @@ func (s *MasterTestSuite) TestLoadDataFromDatabase() {
 
 	// insert feedback
 	feedbacks := make([]data.Feedback, 0)
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		// positive feedback
 		// item 0: user 0
 		// ...
@@ -343,7 +343,7 @@ func (s *MasterTestSuite) TestNonPersonalizedRecommend() {
 
 	// insert items
 	var items []data.Item
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		items = append(items, data.Item{
 			ItemId:    strconv.Itoa(i),
 			Timestamp: time.Date(2000+i%2, 1, 1, i, 1, 0, 0, time.UTC),
@@ -354,7 +354,7 @@ func (s *MasterTestSuite) TestNonPersonalizedRecommend() {
 
 	// insert users
 	var users []data.User
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		users = append(users, data.User{
 			UserId: strconv.Itoa(i),
 		})
@@ -364,7 +364,7 @@ func (s *MasterTestSuite) TestNonPersonalizedRecommend() {
 
 	// insert feedback
 	feedbacks := make([]data.Feedback, 0)
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		// positive feedback
 		// item 0: user 0
 		// ...

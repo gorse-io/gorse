@@ -136,13 +136,13 @@ func TestParams_Overwrite(t *testing.T) {
 
 func TestParamsGrid(t *testing.T) {
 	grid := ParamsGrid{}
-	grid["a"] = []interface{}{0, 1}
+	grid["a"] = []any{0, 1}
 	defaultGrid := ParamsGrid{}
-	defaultGrid["a"] = []interface{}{2, 3}
-	defaultGrid["b"] = []interface{}{4, 5}
+	defaultGrid["a"] = []any{2, 3}
+	defaultGrid["b"] = []any{4, 5}
 	assert.Equal(t, 1, grid.Len())
 	grid.Fill(defaultGrid)
-	assert.Equal(t, []interface{}{0, 1}, grid["a"])
-	assert.Equal(t, []interface{}{4, 5}, grid["b"])
+	assert.Equal(t, []any{0, 1}, grid["a"])
+	assert.Equal(t, []any{4, 5}, grid["b"])
 	assert.Equal(t, 4, grid.NumCombinations())
 }

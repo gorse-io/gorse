@@ -90,7 +90,7 @@ func ReadBytes(r io.Reader) ([]byte, error) {
 }
 
 // WriteGob writes object to byte stream.
-func WriteGob(w io.Writer, v interface{}) error {
+func WriteGob(w io.Writer, v any) error {
 	buffer := bytes.NewBuffer(nil)
 	encoder := gob.NewEncoder(buffer)
 	err := encoder.Encode(v)
@@ -101,7 +101,7 @@ func WriteGob(w io.Writer, v interface{}) error {
 }
 
 // ReadGob read object from byte stream.
-func ReadGob(r io.Reader, v interface{}) error {
+func ReadGob(r io.Reader, v any) error {
 	data, err := ReadBytes(r)
 	if err != nil {
 		return err

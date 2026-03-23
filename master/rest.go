@@ -516,8 +516,8 @@ func (m *Master) getCluster(_ *restful.Request, response *restful.Response) {
 	server.Ok(response, nodes)
 }
 
-func formatConfig(configMap map[string]interface{}) map[string]interface{} {
-	return lo.MapValues(configMap, func(v interface{}, _ string) interface{} {
+func formatConfig(configMap map[string]any) map[string]any {
+	return lo.MapValues(configMap, func(v any, _ string) any {
 		switch value := v.(type) {
 		case time.Duration:
 			s := value.String()
@@ -528,7 +528,7 @@ func formatConfig(configMap map[string]interface{}) map[string]interface{} {
 				s = s[:len(s)-2]
 			}
 			return s
-		case map[string]interface{}:
+		case map[string]any:
 			return formatConfig(value)
 		default:
 			return v
@@ -584,7 +584,7 @@ func (m *Master) postConfig(request *restful.Request, response *restful.Response
 }
 
 func (m *Master) getConfig(_ *restful.Request, response *restful.Response) {
-	var configMap map[string]interface{}
+	var configMap map[string]any
 	err := mapstructure.Decode(m.Config, &configMap)
 	if err != nil {
 		server.InternalServerError(response, err)
@@ -723,7 +723,7 @@ func (m *Master) getTasks(_ *restful.Request, response *restful.Response) {
 	// List local progress
 	progressList := m.tracer.List()
 	// list remote progress
-	m.remoteProgress.Range(func(key, value interface{}) bool {
+	m.remoteProgress.Range(func(key, value any) bool {
 		if workers.Contains(key.(string)) {
 			progressList = append(progressList, value.([]monitor.Progress)...)
 		}

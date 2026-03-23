@@ -56,7 +56,7 @@ func (suite *RecommenderTestSuite) TearDownSuite() {
 
 func (suite *RecommenderTestSuite) TestLatest() {
 	items := make([]data.Item, 20)
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		items[i] = data.Item{
 			ItemId:    fmt.Sprintf("item_%d", i),
 			Timestamp: time.Unix(int64(i), 0),
@@ -69,7 +69,7 @@ func (suite *RecommenderTestSuite) TestLatest() {
 	suite.NoError(err)
 
 	feedback := make([]data.Feedback, 10)
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		feedback[i] = data.Feedback{
 			FeedbackKey: data.FeedbackKey{
 				FeedbackType: "click",
@@ -87,7 +87,7 @@ func (suite *RecommenderTestSuite) TestLatest() {
 	suite.NoError(err)
 	suite.Equal("latest", digest)
 	if suite.Equal(10, len(scores)) {
-		for i := 0; i < 10; i++ {
+		for i := range 10 {
 			suite.Equal(fmt.Sprintf("item_%d", 19-i), scores[i].Id)
 			suite.Equal(float64(19-i), scores[i].Score)
 		}
@@ -99,7 +99,7 @@ func (suite *RecommenderTestSuite) TestLatest() {
 	suite.NoError(err)
 	suite.Equal("latest", digest)
 	if suite.Equal(5, len(scores)) {
-		for i := 0; i < 5; i++ {
+		for i := range 5 {
 			suite.Equal(fmt.Sprintf("item_%d", 18-2*i), scores[i].Id)
 			suite.Equal(float64(18-2*i), scores[i].Score)
 		}
@@ -108,7 +108,7 @@ func (suite *RecommenderTestSuite) TestLatest() {
 
 func (suite *RecommenderTestSuite) TestCollaborative() {
 	recommends := make([]cache.Score, 20)
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		recommends[i] = cache.Score{
 			Id:    fmt.Sprintf("item_%d", i),
 			Score: float64(i),
@@ -123,7 +123,7 @@ func (suite *RecommenderTestSuite) TestCollaborative() {
 	suite.NoError(err)
 
 	feedback := make([]data.Feedback, 10)
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		feedback[i] = data.Feedback{
 			FeedbackKey: data.FeedbackKey{
 				FeedbackType: "click",
@@ -141,7 +141,7 @@ func (suite *RecommenderTestSuite) TestCollaborative() {
 	suite.NoError(err)
 	suite.Equal("digest", digest)
 	if suite.Equal(10, len(scores)) {
-		for i := 0; i < 10; i++ {
+		for i := range 10 {
 			suite.Equal(fmt.Sprintf("item_%d", 19-i), scores[i].Id)
 			suite.Equal(float64(19-i), scores[i].Score)
 		}
@@ -153,7 +153,7 @@ func (suite *RecommenderTestSuite) TestCollaborative() {
 	suite.NoError(err)
 	suite.Equal("digest", digest)
 	if suite.Equal(5, len(scores)) {
-		for i := 0; i < 5; i++ {
+		for i := range 5 {
 			suite.Equal(fmt.Sprintf("item_%d", 18-2*i), scores[i].Id)
 			suite.Equal(float64(18-2*i), scores[i].Score)
 		}
@@ -162,7 +162,7 @@ func (suite *RecommenderTestSuite) TestCollaborative() {
 
 func (suite *RecommenderTestSuite) TestNonPersonalized() {
 	recommends := make([]cache.Score, 20)
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		recommends[i] = cache.Score{
 			Id:    fmt.Sprintf("item_%d", i),
 			Score: float64(i),
@@ -179,7 +179,7 @@ func (suite *RecommenderTestSuite) TestNonPersonalized() {
 	suite.NoError(err)
 
 	feedback := make([]data.Feedback, 10)
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		feedback[i] = data.Feedback{
 			FeedbackKey: data.FeedbackKey{
 				FeedbackType: "click",
@@ -198,7 +198,7 @@ func (suite *RecommenderTestSuite) TestNonPersonalized() {
 	suite.NoError(err)
 	suite.Equal("digest", digest)
 	if suite.Equal(10, len(scores)) {
-		for i := 0; i < 10; i++ {
+		for i := range 10 {
 			suite.Equal(fmt.Sprintf("item_%d", 19-i), scores[i].Id)
 			suite.Equal(float64(19-i), scores[i].Score)
 		}
@@ -211,7 +211,7 @@ func (suite *RecommenderTestSuite) TestNonPersonalized() {
 	suite.NoError(err)
 	suite.Equal("digest", digest)
 	if suite.Equal(5, len(scores)) {
-		for i := 0; i < 5; i++ {
+		for i := range 5 {
 			suite.Equal(fmt.Sprintf("item_%d", 18-2*i), scores[i].Id)
 			suite.Equal(float64(18-2*i), scores[i].Score)
 		}
@@ -230,7 +230,7 @@ func (suite *RecommenderTestSuite) TestExternal() {
 	defer ts.Close()
 
 	feedback := make([]data.Feedback, 10)
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		feedback[i] = data.Feedback{
 			FeedbackKey: data.FeedbackKey{
 				FeedbackType: "click",

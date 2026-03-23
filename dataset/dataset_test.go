@@ -148,24 +148,24 @@ func TestDataset_GetUserColumnValuesIDF(t *testing.T) {
 
 func TestDataset_AddFeedback(t *testing.T) {
 	dataSet := NewDataset(time.Now(), 10, 10)
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		dataSet.AddUser(data.User{
 			UserId: strconv.Itoa(i),
 		})
 	}
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		dataSet.AddItem(data.Item{
 			ItemId: strconv.Itoa(i),
 		})
 	}
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		for j := i; j < 10; j++ {
 			dataSet.AddFeedback(strconv.Itoa(i), strconv.Itoa(j), time.Unix(int64(i*10+j), 0))
 		}
 	}
 	userIDF := dataSet.GetUserIDF()
 	itemIDF := dataSet.GetItemIDF()
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		assert.Len(t, dataSet.GetUserFeedback()[i], 10-i)
 		assert.Len(t, dataSet.GetItemFeedback()[i], i+1)
 		assert.Len(t, dataSet.timestamps[i], 10-i)
@@ -178,13 +178,13 @@ func TestDataset_Split(t *testing.T) {
 	const numUsers, numItems = 3, 5
 	// create dataset
 	dataset := NewDataset(time.Now(), numUsers, numItems)
-	for i := 0; i < numUsers; i++ {
+	for i := range numUsers {
 		dataset.AddUser(data.User{UserId: fmt.Sprintf("user%v", i)})
 	}
-	for i := 0; i < numItems; i++ {
+	for i := range numItems {
 		dataset.AddItem(data.Item{ItemId: fmt.Sprintf("item%v", i)})
 	}
-	for i := 0; i < numUsers; i++ {
+	for i := range numUsers {
 		for j := i + 1; j < numItems; j++ {
 			dataset.AddFeedback(fmt.Sprintf("user%v", i), fmt.Sprintf("item%v", j), time.Time{})
 		}
@@ -212,13 +212,13 @@ func TestDataset_SplitLatest(t *testing.T) {
 	const numUsers, numItems = 3, 5
 	// create dataset
 	dataset := NewDataset(time.Now(), numUsers, numItems)
-	for i := 0; i < numUsers; i++ {
+	for i := range numUsers {
 		dataset.AddUser(data.User{UserId: fmt.Sprintf("user%v", i)})
 	}
-	for i := 0; i < numItems; i++ {
+	for i := range numItems {
 		dataset.AddItem(data.Item{ItemId: fmt.Sprintf("item%v", i)})
 	}
-	for i := 0; i < numUsers; i++ {
+	for i := range numUsers {
 		for j := i + 1; j < numItems; j++ {
 			dataset.AddFeedback(fmt.Sprintf("user%v", i), fmt.Sprintf("item%v", j), time.Unix(int64(j), 0))
 		}
@@ -232,7 +232,7 @@ func TestDataset_SplitLatest(t *testing.T) {
 	assert.Equal(t, numItems, test.CountItems())
 	assert.Equal(t, 6, train.CountFeedback())
 	assert.Equal(t, 3, test.CountFeedback())
-	for i := 0; i < numUsers; i++ {
+	for i := range numUsers {
 		assert.Len(t, train.GetUserFeedback()[i], numItems-i-2)
 		assert.Len(t, test.GetUserFeedback()[i], 1)
 		assert.Equal(t, 4, int(test.GetUserFeedback()[i][0]))

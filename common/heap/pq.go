@@ -15,6 +15,7 @@
 package heap
 
 import (
+	"cmp"
 	"container/heap"
 	"encoding/binary"
 	"io"
@@ -22,15 +23,14 @@ import (
 	"github.com/chewxy/math32"
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/gorse-io/gorse/common/encoding"
-	"golang.org/x/exp/constraints"
 )
 
-type Elem[E any, W constraints.Ordered] struct {
+type Elem[E any, W cmp.Ordered] struct {
 	Value  E
 	Weight W
 }
 
-type _heap[T any, W constraints.Ordered] struct {
+type _heap[T any, W cmp.Ordered] struct {
 	elems []Elem[T, W]
 	desc  bool
 }
@@ -51,12 +51,12 @@ func (e *_heap[T, W]) Swap(i, j int) {
 	e.elems[i], e.elems[j] = e.elems[j], e.elems[i]
 }
 
-func (e *_heap[T, W]) Push(x interface{}) {
+func (e *_heap[T, W]) Push(x any) {
 	it := x.(Elem[T, W])
 	e.elems = append(e.elems, it)
 }
 
-func (e *_heap[T, W]) Pop() interface{} {
+func (e *_heap[T, W]) Pop() any {
 	old := e.elems
 	item := e.elems[len(old)-1]
 	e.elems = old[0 : len(old)-1]

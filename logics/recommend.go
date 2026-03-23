@@ -56,7 +56,7 @@ type RecommenderFunc func(ctx context.Context) ([]cache.Score, string, error)
 
 func NewRecommender(config config.RecommendConfig, cacheClient cache.Database, dataClient data.Database, online bool, userId string, categories []string) (*Recommender, error) {
 	// Load user feedback
-	userFeedback, err := dataClient.GetUserFeedback(context.Background(), userId, lo.ToPtr(time.Now()))
+	userFeedback, err := dataClient.GetUserFeedback(context.Background(), userId, new(time.Now()))
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -151,17 +151,17 @@ func (r *Recommender) parse(fullname string) (RecommenderFunc, error) {
 		return r.recommendCollaborative, nil
 	} else if fullname == LatestRecommender {
 		return r.recommendLatest, nil
-	} else if strings.HasPrefix(fullname, NonPersonalizedRecommender) {
-		name := strings.TrimPrefix(fullname, NonPersonalizedRecommender)
+	} else if after, ok := strings.CutPrefix(fullname, NonPersonalizedRecommender); ok {
+		name := after
 		return r.recommendNonPersonalized(name), nil
-	} else if strings.HasPrefix(fullname, ItemToItemRecommender) {
-		name := strings.TrimPrefix(fullname, ItemToItemRecommender)
+	} else if after, ok := strings.CutPrefix(fullname, ItemToItemRecommender); ok {
+		name := after
 		return r.recommendItemToItem(name), nil
-	} else if strings.HasPrefix(fullname, UserToUserRecommender) {
-		name := strings.TrimPrefix(fullname, UserToUserRecommender)
+	} else if after, ok := strings.CutPrefix(fullname, UserToUserRecommender); ok {
+		name := after
 		return r.recommendUserToUser(name), nil
-	} else if strings.HasPrefix(fullname, ExternalRecommender) {
-		name := strings.TrimPrefix(fullname, ExternalRecommender)
+	} else if after, ok := strings.CutPrefix(fullname, ExternalRecommender); ok {
+		name := after
 		return r.recommendExternal(name), nil
 	} else {
 		return nil, errors.Errorf("unknown recommender: %s", fullname)
@@ -294,7 +294,7 @@ func (r *Recommender) recommendUserToUser(name string) RecommenderFunc {
 		// aggregate scores
 		for _, user := range similarUsers {
 			// load historical feedback
-			feedbacks, err := r.dataClient.GetUserFeedback(ctx, user.Id, lo.ToPtr(time.Now()), r.config.DataSource.PositiveFeedbackTypes...)
+			feedbacks, err := r.dataClient.GetUserFeedback(ctx, user.Id, new(time.Now()), r.config.DataSource.PositiveFeedbackTypes...)
 			if err != nil {
 				return nil, "", errors.Trace(err)
 			}

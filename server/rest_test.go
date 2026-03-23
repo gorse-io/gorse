@@ -82,7 +82,7 @@ func (suite *ServerTestSuite) SetupTest() {
 	suite.Config.Recommend.Fallback.Recommenders = []string{"latest"}
 }
 
-func (suite *ServerTestSuite) marshal(v interface{}) string {
+func (suite *ServerTestSuite) marshal(v any) string {
 	s, err := json.Marshal(v)
 	suite.NoError(err)
 	return string(s)
@@ -1605,7 +1605,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 	suite.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "default"}}
 	// insert items: 0, 1, 2, 3, 4
 	var items []Item
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		items = append(items, Item{
 			ItemId:     strconv.Itoa(i),
 			Categories: []string{"a"},

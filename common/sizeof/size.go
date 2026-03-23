@@ -47,7 +47,7 @@ func DeepSize(v any) int {
 func valueSize(v reflect.Value, seen map[uintptr]bool) uintptr {
 	base := v.Type().Size()
 	switch v.Kind() {
-	case reflect.Ptr:
+	case reflect.Pointer:
 		p := v.Pointer()
 		if !seen[p] && !v.IsNil() {
 			seen[p] = true
@@ -56,7 +56,7 @@ func valueSize(v reflect.Value, seen map[uintptr]bool) uintptr {
 
 	case reflect.Slice:
 		n := v.Len()
-		for i := 0; i < n; i++ {
+		for i := range n {
 			base += valueSize(v.Index(i), seen)
 		}
 
@@ -92,10 +92,10 @@ func valueSize(v reflect.Value, seen map[uintptr]bool) uintptr {
 
 	case reflect.Struct:
 		// Chase pointer and slice fields and add the size of their members.
-		for i := 0; i < v.NumField(); i++ {
-			f := v.Field(i)
+		for _, f := range v.Fields() {
+			f := f
 			switch f.Kind() {
-			case reflect.Ptr:
+			case reflect.Pointer:
 				p := f.Pointer()
 				if !seen[p] && !f.IsNil() {
 					seen[p] = true

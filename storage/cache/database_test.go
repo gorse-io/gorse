@@ -327,7 +327,7 @@ func (suite *baseTestSuite) TestDocument() {
 	suite.Len(documents, 1)
 	suite.Equal("3", documents[0].Id)
 	// delete by timestamp
-	err = suite.DeleteScores(ctx, []string{"a"}, ScoreCondition{Before: lo.ToPtr(time.Date(2022, 1, 1, 0, 0, 0, 0, time.UTC))})
+	err = suite.DeleteScores(ctx, []string{"a"}, ScoreCondition{Before: new(time.Date(2022, 1, 1, 0, 0, 0, 0, time.UTC))})
 	suite.NoError(err)
 	documents, err = suite.SearchScores(ctx, "a", "", []string{"b"}, 0, 1)
 	suite.NoError(err)
@@ -553,7 +553,7 @@ func (suite *baseTestSuite) TestTimestampPrecision() {
 	// remove by timestamp
 	err = suite.Database.DeleteScores(ctx, []string{"a"}, ScoreCondition{
 		Subset: new("s"),
-		Before: lo.ToPtr(timestamp)})
+		Before: new(timestamp)})
 	suite.NoError(err)
 	// search scores
 	documents, err := suite.Database.SearchScores(ctx, "a", "s", nil, 0, -1)

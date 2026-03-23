@@ -177,7 +177,7 @@ func (suite *WorkerTestSuite) TestRecommendCollaborative() {
 
 	// create mock model
 	suite.MatrixFactorizationItems = logics.NewMatrixFactorizationItems(time.Time{})
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		suite.MatrixFactorizationItems.Add(strconv.Itoa(i), []float32{float32(i)})
 	}
 	suite.MatrixFactorizationUsers = logics.NewMatrixFactorizationUsers()
@@ -551,7 +551,7 @@ func (suite *WorkerTestSuite) TestRecommendRankerNone() {
 	}, recommends)
 }
 
-func marshal(t *testing.T, v interface{}) string {
+func marshal(t *testing.T, v any) string {
 	s, err := json.Marshal(v)
 	assert.NoError(t, err)
 	return string(s)
