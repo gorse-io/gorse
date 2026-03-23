@@ -136,10 +136,35 @@ func (s *Span) Progress() Progress {
 		}
 	}
 	// non-leaf node
-	childTotal := children[0].Total
+	// use max child total to ensure deterministic result (sync.Map iteration order is random)
+	childTotal := 0
+	for _, child := range children {
+		if child.Total > childTotal {
+			childTotal = child.Total
+		}
+	}
+	// if all children have zero total, the parent task has nothing to do
+	// set parentCount and parentTotal to 1 to indicate 100% complete
+	if childTotal == 0 {
+		return Progress{
+			Name:       s.name,
+			Status:     s.status,
+			Error:      s.err,
+			Count:      1,
+			Total:      1,
+			StartTime:  s.start,
+			FinishTime: s.finish,
+		}
+	}
 	parentTotal := s.total * childTotal
 	parentCount := s.count * childTotal
 	for _, child := range children {
+		// avoid divide by zero
+		if child.Total == 0 {
+			// child with zero total means no work needed, consider it complete
+			parentCount += childTotal
+			continue
+		}
 		parentCount += childTotal * child.Count / child.Total
 	}
 	return Progress{
