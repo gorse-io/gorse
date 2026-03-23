@@ -1063,7 +1063,11 @@ func (m *Master) getLatest(request *restful.Request, response *restful.Response)
 		server.BadRequest(response, err)
 		return
 	}
-	items, err := m.DataClient.GetLatestItems(context.Background(), offset+n, categories)
+	var after *time.Time
+	if m.Config.Recommend.DataSource.ItemTTL > 0 {
+		after = new(time.Now().AddDate(0, 0, -int(m.Config.Recommend.DataSource.ItemTTL)))
+	}
+	items, err := m.DataClient.GetLatestItems(context.Background(), offset+n, categories, after)
 	if err != nil {
 		server.InternalServerError(response, err)
 		return
@@ -1220,7 +1224,11 @@ func (m *Master) getRankerPrompt(request *restful.Request, response *restful.Res
 		}
 	}
 
-	latestItems, err := m.DataClient.GetLatestItems(ctx, 100, nil)
+	var latestAfter *time.Time
+	if m.Config.Recommend.DataSource.ItemTTL > 0 {
+		latestAfter = new(time.Now().AddDate(0, 0, -int(m.Config.Recommend.DataSource.ItemTTL)))
+	}
+	latestItems, err := m.DataClient.GetLatestItems(ctx, 100, nil, latestAfter)
 	if err != nil {
 		server.InternalServerError(response, err)
 		return

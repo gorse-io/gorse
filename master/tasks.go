@@ -282,8 +282,7 @@ func (m *Master) LoadDataFromDatabase(
 	var feedbackTimeLimit data.ScanOption
 	var itemTimeLimit *time.Time
 	if itemTTL > 0 {
-		temp := time.Now().AddDate(0, 0, -int(itemTTL))
-		itemTimeLimit = &temp
+		itemTimeLimit = new(time.Now().AddDate(0, 0, -int(itemTTL)))
 	}
 	if positiveFeedbackTTL > 0 {
 		temp := time.Now().AddDate(0, 0, -int(positiveFeedbackTTL))

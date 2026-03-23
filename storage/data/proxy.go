@@ -79,6 +79,10 @@ func (p *ProxyServer) BatchGetItems(ctx context.Context, in *protocol.BatchGetIt
 		opts.Categories = in.GetOptions.Categories
 		opts.SkipHidden = in.GetOptions.SkipHidden
 		opts.ReturnId = in.GetOptions.ReturnId
+		if in.GetOptions.After != nil {
+			t := in.GetOptions.After.AsTime()
+			opts.After = &t
+		}
 	}
 	items, err := p.database.BatchGetItems(ctx, in.ItemIds, opts)
 	if err != nil {
@@ -510,7 +514,12 @@ func (p *ProxyServer) CountFeedback(ctx context.Context, in *protocol.CountFeedb
 }
 
 func (p *ProxyServer) GetLatestItems(ctx context.Context, in *protocol.GetLatestItemsRequest) (*protocol.GetLatestItemsResponse, error) {
-	items, err := p.database.GetLatestItems(ctx, int(in.N), in.Categories)
+	var after *time.Time
+	if in.After != nil {
+		t := in.After.AsTime()
+		after = &t
+	}
+	items, err := p.database.GetLatestItems(ctx, int(in.N), in.Categories, after)
 	if err != nil {
 		return nil, err
 	}
@@ -585,12 +594,16 @@ func (p ProxyClient) BatchInsertItems(ctx context.Context, items []Item) error {
 
 func (p ProxyClient) BatchGetItems(ctx context.Context, itemIds []string, opts GetOptions) ([]Item, error) {
 	req := &protocol.BatchGetItemsRequest{ItemIds: itemIds}
-	if len(opts.Categories) > 0 || opts.SkipHidden || opts.ReturnId {
-		req.GetOptions = &protocol.GetOptions{
+	if len(opts.Categories) > 0 || opts.SkipHidden || opts.ReturnId || opts.After != nil {
+		pbOpts := &protocol.GetOptions{
 			Categories: opts.Categories,
 			SkipHidden: opts.SkipHidden,
 			ReturnId:   opts.ReturnId,
 		}
+		if opts.After != nil {
+			pbOpts.After = timestamppb.New(*opts.After)
+		}
+		req.GetOptions = pbOpts
 	}
 	resp, err := p.DataStoreClient.BatchGetItems(ctx, req)
 	if err != nil {
@@ -642,8 +655,12 @@ func (p ProxyClient) GetItem(ctx context.Context, itemId string) (Item, error) {
 	}, nil
 }
 
-func (p ProxyClient) GetLatestItems(ctx context.Context, n int, categories []string) ([]Item, error) {
-	resp, err := p.DataStoreClient.GetLatestItems(ctx, &protocol.GetLatestItemsRequest{N: int32(n), Categories: categories})
+func (p ProxyClient) GetLatestItems(ctx context.Context, n int, categories []string, after *time.Time) ([]Item, error) {
+	req := &protocol.GetLatestItemsRequest{N: int32(n), Categories: categories}
+	if after != nil {
+		req.After = timestamppb.New(*after)
+	}
+	resp, err := p.DataStoreClient.GetLatestItems(ctx, req)
 	if err != nil {
 		return nil, err
 	}

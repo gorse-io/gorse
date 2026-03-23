@@ -233,6 +233,7 @@ type GetOptions struct {
 	Categories  []string
 	SkipHidden  bool
 	ReturnId    bool
+	After       *time.Time
 }
 
 type Database interface {
@@ -247,7 +248,7 @@ type Database interface {
 	GetItem(ctx context.Context, itemId string) (Item, error)
 	ModifyItem(ctx context.Context, itemId string, patch ItemPatch) error
 	GetItems(ctx context.Context, cursor string, n int, beginTime *time.Time) (string, []Item, error)
-	GetLatestItems(ctx context.Context, n int, categories []string) ([]Item, error)
+	GetLatestItems(ctx context.Context, n int, categories []string, after *time.Time) ([]Item, error)
 	GetItemFeedback(ctx context.Context, itemId string, feedbackTypes ...string) ([]Feedback, error)
 	BatchInsertUsers(ctx context.Context, users []User) error
 	DeleteUser(ctx context.Context, userId string) error

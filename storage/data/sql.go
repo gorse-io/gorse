@@ -558,6 +558,10 @@ func (d *SQLDatabase) BatchGetItems(ctx context.Context, itemIds []string, opts 
 	if opts.SkipHidden {
 		query = query.Where("is_hidden = ?", false)
 	}
+	// Add time filter if specified
+	if opts.After != nil {
+		query = query.Where("time_stamp > ?", *opts.After)
+	}
 	result, err := query.Rows()
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -689,7 +693,7 @@ func (d *SQLDatabase) GetItems(ctx context.Context, cursor string, n int, timeLi
 }
 
 // GetLatestItems returns the latest items from the database.
-func (d *SQLDatabase) GetLatestItems(ctx context.Context, n int, categories []string) ([]Item, error) {
+func (d *SQLDatabase) GetLatestItems(ctx context.Context, n int, categories []string, after *time.Time) ([]Item, error) {
 	var tableName string
 	if d.driver == ClickHouse {
 		tableName = d.LatestItemsTable()
@@ -713,6 +717,9 @@ func (d *SQLDatabase) GetLatestItems(ctx context.Context, n int, categories []st
 		case ClickHouse:
 			tx = tx.Where("hasAll(JSONExtractArrayRaw(categories),JSONExtractArrayRaw(?))", string(q))
 		}
+	}
+	if after != nil {
+		tx = tx.Where("time_stamp > ?", *after)
 	}
 	result, err := tx.Order("time_stamp DESC").Limit(n).Rows()
 	if err != nil {

@@ -304,14 +304,14 @@ func (s *MasterTestSuite) TestLoadDataFromDatabase() {
 	s.Equal(55, datasets.clickTrainSet.NegativeCount+datasets.clickTestSet.NegativeCount)
 
 	// check latest items
-	latest, err := s.DataClient.GetLatestItems(ctx, 3, nil)
+	latest, err := s.DataClient.GetLatestItems(ctx, 3, nil, nil)
 	s.NoError(err)
 	s.Equal([]data.Item{
 		items[8],
 		items[7],
 		items[6],
 	}, latest)
-	latest, err = s.DataClient.GetLatestItems(ctx, 3, []string{"2"})
+	latest, err = s.DataClient.GetLatestItems(ctx, 3, []string{"2"}, nil)
 	s.NoError(err)
 	s.Equal([]data.Item{
 		items[8],
