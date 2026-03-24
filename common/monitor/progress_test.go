@@ -70,6 +70,8 @@ func TestProgress(t *testing.T) {
 		progress := span.Progress()
 		assert.Equal(t, "parent", progress.Name)
 		assert.Equal(t, StatusRunning, progress.Status)
+		assert.Equal(t, 6, progress.Count)
+		assert.Equal(t, 10, progress.Total)
 	})
 
 	t.Run("child with zero total", func(t *testing.T) {
@@ -103,6 +105,8 @@ func TestProgress(t *testing.T) {
 		// This should not panic
 		progress := span.Progress()
 		assert.Equal(t, "parent", progress.Name)
+		assert.Equal(t, 650, progress.Count)
+		assert.Equal(t, 1000, progress.Total)
 	})
 
 	t.Run("all children with zero total", func(t *testing.T) {
@@ -132,10 +136,11 @@ func TestProgress(t *testing.T) {
 		span.children.Store("child1", child1)
 		span.children.Store("child2", child2)
 
-		// This should not panic and should respect the parent's own progress (5/10)
+		// This should not panic
+		// childTotal=1, so parentCount = 5 + 1 + 1 = 7, parentTotal = 10
 		progress := span.Progress()
 		assert.Equal(t, "parent", progress.Name)
-		assert.Equal(t, 5, progress.Count)
+		assert.Equal(t, 7, progress.Count)
 		assert.Equal(t, 10, progress.Total)
 	})
 }
