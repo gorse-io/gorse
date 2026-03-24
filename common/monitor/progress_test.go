@@ -132,10 +132,10 @@ func TestProgress(t *testing.T) {
 		span.children.Store("child1", child1)
 		span.children.Store("child2", child2)
 
-		// This should not panic and should return 1/1 (100% complete)
+		// This should not panic and should respect the parent's own progress (5/10)
 		progress := span.Progress()
 		assert.Equal(t, "parent", progress.Name)
-		assert.Equal(t, 1, progress.Count)
-		assert.Equal(t, 1, progress.Total)
+		assert.Equal(t, 5, progress.Count)
+		assert.Equal(t, 10, progress.Total)
 	})
 }

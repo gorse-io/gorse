@@ -143,18 +143,10 @@ func (s *Span) Progress() Progress {
 			childTotal = child.Total
 		}
 	}
-	// if all children have zero total, the parent task has nothing to do
-	// set parentCount and parentTotal to 1 to indicate 100% complete
+	// if all children have zero total, fall back to 1 so the parent progress
+	// still reflects its configured total/count instead of forcing 1/1
 	if childTotal == 0 {
-		return Progress{
-			Name:       s.name,
-			Status:     s.status,
-			Error:      s.err,
-			Count:      1,
-			Total:      1,
-			StartTime:  s.start,
-			FinishTime: s.finish,
-		}
+		childTotal = 1
 	}
 	parentTotal := s.total * childTotal
 	parentCount := s.count * childTotal
