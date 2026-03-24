@@ -19,21 +19,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/suite"
 )
-
-type ProgressTestSuite struct {
-	suite.Suite
-	tracer Monitor
-}
-
-func (suite *ProgressTestSuite) SetupTest() {
-	suite.tracer = Monitor{}
-}
-
-func TestProgressTestSuite(t *testing.T) {
-	suite.Run(t, new(ProgressTestSuite))
-}
 
 func TestEncodeDecode(t *testing.T) {
 	progressList := []Progress{
@@ -58,4 +44,103 @@ func TestEncodeDecode(t *testing.T) {
 	}
 	pb := EncodeProgress(progressList)
 	assert.Equal(t, progressList, DecodeProgress(pb))
+}
+
+func TestProgress(t *testing.T) {
+	t.Run("divide by zero", func(t *testing.T) {
+		// Test case: child with zero Total should not cause panic
+		span := &Span{
+			name:   "parent",
+			status: StatusRunning,
+			total:  10,
+			count:  5,
+			start:  time.Now(),
+		}
+		// Add a child with zero total
+		childSpan := &Span{
+			name:   "child-zero-total",
+			status: StatusRunning,
+			total:  0,
+			count:  0,
+			start:  time.Now(),
+		}
+		span.children.Store("child-zero-total", childSpan)
+
+		// This should not panic
+		progress := span.Progress()
+		assert.Equal(t, "parent", progress.Name)
+		assert.Equal(t, StatusRunning, progress.Status)
+		assert.Equal(t, 6, progress.Count)
+		assert.Equal(t, 10, progress.Total)
+	})
+
+	t.Run("child with zero total", func(t *testing.T) {
+		// Test case: multiple children, one with zero Total
+		span := &Span{
+			name:   "parent",
+			status: StatusRunning,
+			total:  10,
+			count:  5,
+			start:  time.Now(),
+		}
+		// Add a normal child
+		child1 := &Span{
+			name:   "child1",
+			status: StatusRunning,
+			total:  100,
+			count:  50,
+			start:  time.Now(),
+		}
+		// Add a child with zero total
+		child2 := &Span{
+			name:   "child2",
+			status: StatusRunning,
+			total:  0,
+			count:  0,
+			start:  time.Now(),
+		}
+		span.children.Store("child1", child1)
+		span.children.Store("child2", child2)
+
+		// This should not panic
+		progress := span.Progress()
+		assert.Equal(t, "parent", progress.Name)
+		assert.Equal(t, 650, progress.Count)
+		assert.Equal(t, 1000, progress.Total)
+	})
+
+	t.Run("all children with zero total", func(t *testing.T) {
+		// Test case: all children have zero Total
+		span := &Span{
+			name:   "parent",
+			status: StatusRunning,
+			total:  10,
+			count:  5,
+			start:  time.Now(),
+		}
+		// All children have zero total
+		child1 := &Span{
+			name:   "child1",
+			status: StatusRunning,
+			total:  0,
+			count:  0,
+			start:  time.Now(),
+		}
+		child2 := &Span{
+			name:   "child2",
+			status: StatusRunning,
+			total:  0,
+			count:  0,
+			start:  time.Now(),
+		}
+		span.children.Store("child1", child1)
+		span.children.Store("child2", child2)
+
+		// This should not panic
+		// childTotal=1, so parentCount = 5 + 1 + 1 = 7, parentTotal = 10
+		progress := span.Progress()
+		assert.Equal(t, "parent", progress.Name)
+		assert.Equal(t, 7, progress.Count)
+		assert.Equal(t, 10, progress.Total)
+	})
 }
