@@ -14,7 +14,7 @@
 
 ### 1.2 索引方案
 
-**复用现有 label 索引**（选项 A）：
+**复用现有 label 索引**：
 ```
 | user | item | user_label | item_label | context_label |
 ```
@@ -22,116 +22,163 @@
 数值特征作为一种特殊的 label，使用统一索引：
 - 例如：`user.age` → `EncodeUserLabel("age")`
 
-### 1.3 AutoScaler 存储
+### 1.3 AutoScaler 实现
 
-在 AFM 中添加：
+```go
+type AutoScaler struct {
+    UseLog    bool         // true = log1p + MinMax, false = Robust
+    MinMax    MinMaxScaler // 非负数据使用
+    Robust    RobustScaler // 含负数数据使用
+    HasRobust bool         // 是否使用 RobustScaler
+}
+```
+
+**自动选择逻辑：**
+- **有负数** → `RobustScaler`（对异常值鲁棒）
+- **全非负** → `log1p` + `MinMaxScaler`（压缩长尾分布）
+
+### 1.4 数值特征检测
+
+**自动检测规则：**
+- 遍历所有样本，收集每个特征的值
+- 如果 `value != 1`，则判定为数值特征
+- 为每个数值特征创建并拟合 `AutoScaler`
+
+## 2. 实现进度
+
+### Phase 1: Scaler 实现 ✅
+
+| 任务 | 文件 | 状态 |
+|------|------|------|
+| MinMaxScaler | model/ctr/transformer.go | ✅ 完成 |
+| RobustScaler | model/ctr/transformer.go | ✅ 完成 |
+| AutoScaler | model/ctr/transformer.go | ✅ 完成 |
+| 单元测试 | model/ctr/transformer_test.go | ✅ 完成 |
+
+### Phase 2: AFM 集成 ✅
+
+| 任务 | 文件 | 状态 |
+|------|------|------|
+| 添加 Scalers 字段 | model/ctr/fm.go | ✅ 完成 |
+| 自动检测数值特征 | model/ctr/fm.go | ✅ 完成 |
+| 训练时应用 scaler | model/ctr/fm.go | ✅ 完成 |
+| 推理时应用 scaler | model/ctr/fm.go | ✅ 完成 |
+| 模型序列化/反序列化 | model/ctr/fm.go | ✅ 完成 |
+| 单元测试 | model/ctr/model_test.go | ✅ 通过 |
+
+### Phase 3: 数据加载扩展 ⏳
+
+| 任务 | 状态 |
+|------|------|
+| 数据格式支持数值字段 | 待讨论 |
+| 数值特征显式声明配置 | 待讨论 |
+
+### Phase 4: 集成测试 ⏳
+
+| 任务 | 状态 |
+|------|------|
+| 真实数据集测试 | 待完成 |
+
+## 3. 已完成的功能
+
+### 3.1 MinMaxScaler
+
+```go
+type MinMaxScaler struct {
+    Min float32
+    Max float32
+}
+
+// X_scaled = (X - Min) / (Max - Min)
+// range == 0 时返回 1
+```
+
+### 3.2 RobustScaler
+
+```go
+type RobustScaler struct {
+    Median float32  // 中位数
+    Q1     float32  // 25th percentile
+    Q3     float32  // 75th percentile
+    IQR    float32  // Q3 - Q1
+}
+
+// X_scaled = (X - Median) / IQR
+```
+
+### 3.3 AutoScaler
+
+自动选择最佳归一化方法：
+- 有负数 → RobustScaler（对异常值鲁棒）
+- 全非负 → log1p + MinMaxScaler（压缩长尾）
+
+### 3.4 AFM 集成
+
 ```go
 type AFM struct {
-    // 现有字段...
-    
-    // 新增：数值特征的 Scaler 映射
+    // ...
     Scalers map[int32]*AutoScaler  // feature_index -> scaler
 }
 ```
 
-### 1.4 数据处理流程
+**流程：**
+1. `Init()`: 自动检测数值特征并拟合 scaler
+2. `Fit()`: 训练时用 scaler 归一化数值特征
+3. `BatchInternalPredict()`: 推理时用 scaler 归一化
+4. `Marshal/Unmarshal`: scaler 随模型保存和加载
 
-**训练阶段：**
-1. 遍历所有样本，收集每个数值特征的值
-2. 为每个数值特征创建并拟合 `AutoScaler`
-3. 用 `scaler.Transform(value)` 归一化数值特征
-4. 将归一化后的值填入 `values`
+## 4. 下一步讨论
 
-**推理阶段：**
-1. 根据特征名找到索引
-2. 如果该索引在 `Scalers` 中存在，使用对应的 scaler 归一化
-3. 如果不存在（类别特征），直接使用原始值（通常为 1）
-4. 用户自行负责字段类型匹配：
-   - 数值字段传成 label → 忽略 scaler，直接使用值
-   - label 字段传成数值 → 忽略，值会被当作类别特征处理
+### 4.1 数据加载
 
-## 2. 实现计划
+**问题：用户如何声明数值特征？**
 
-### Phase 1: Scaler 实现 ✅ (已完成)
+**选项 A：自动推断**
+- 根据特征值自动判断（当前实现）
+- 优点：无需配置
+- 缺点：可能误判
 
-| 任务 | 状态 |
-|------|------|
-| 实现 MinMaxScaler | ✅ |
-| 实现 RobustScaler | ✅ |
-| 实现 AutoScaler | ✅ |
-| 添加单元测试 | ✅ |
-
-### Phase 2: AFM 扩展
-
-| 任务 | 文件 | 优先级 |
-|------|------|--------|
-| 在 AFM 中添加 Scalers 字段 | model/ctr/fm.go | P0 |
-| 修改 AFM.Init() 收集数值特征并拟合 scaler | model/ctr/fm.go | P0 |
-| 修改 AFM.Forward() 使用 scaler 归一化数值 | model/ctr/fm.go | P0 |
-| 扩展 AFM.Marshal/Unmarshal 保存 scaler | model/ctr/fm.go | P0 |
-| 添加单元测试 | model/ctr/model_test.go | P1 |
-
-### Phase 3: 数据加载扩展
-
-| 任务 | 文件 | 优先级 |
-|------|------|--------|
-| 扩展 Dataset 支持数值特征声明 | model/ctr/data.go | P0 |
-| 修改数据加载流程收集数值特征 | model/ctr/data.go | P0 |
-
-### Phase 4: 集成测试
-
-| 任务 | 优先级 |
-|------|--------|
-| 数值特征 + 类别特征混合训练测试 | P0 |
-| 模型保存/加载测试 | P0 |
-| 推理正确性测试 | P1 |
-
-## 3. 接口设计
-
-### 3.1 数值特征声明（配置方式）
-
+**选项 B：配置声明**
 ```toml
 [recommend.collaborative.features.numerical]
 user_features = ["age", "income"]
 item_features = ["price", "rating"]
 ```
 
-### 3.2 数值特征声明（数据格式方式）
-
-用户在数据中直接传入数值：
+**选项 C：数据格式约定**
 ```json
 {
   "user_labels": {
     "age": 25,           // 数值
     "gender": "male"     // 类别
-  },
-  "item_labels": {
-    "price": 99.99,      // 数值
-    "category": "book"   // 类别
   }
 }
 ```
 
-训练时自动识别数值类型的字段并创建 scaler。
+### 4.2 测试数据集
 
-## 4. 向后兼容性
+需要在真实数据集上验证：
+- 包含数值特征的推荐数据集
+- 对比有无 scaler 的效果差异
 
-1. **默认行为**：没有 scaler 的特征按类别特征处理
-2. **模型加载**：旧版模型（无 Scalers 字段）可正常加载
-3. **API 兼容**：现有预测接口保持不变
+### 4.3 其他模型
 
-## 5. 风险评估
+当前仅 AFM 支持，是否需要扩展到：
+- FM (Factorization Machines)
+- DeepFM
+- 其他 CTR 模型
 
-| 风险 | 影响 | 缓解措施 |
-|------|------|----------|
-| 类型混淆 | 中 | 文档说明，用户自行负责 |
-| 性能影响 | 低 | Scaler 计算开销小 |
-| 向后兼容 | 低 | Scalers 为空时退化为原有行为 |
+## 5. 提交记录
 
-## 6. 已完成
-
-- ✅ MinMaxScaler 实现
-- ✅ RobustScaler 实现  
-- ✅ AutoScaler 实现（自动选择：有负数→Robust，全非负→log1p+MinMax）
-- ✅ 单元测试
-- ✅ 序列化/反序列化
+| 提交 | 说明 |
+|------|------|
+| `95eb08a` | refactor: remove AutoScale parameter and simplify scaler logic |
+| `90762b4` | refactor: remove Skip field from AutoScaler |
+| `d42f7d7` | feat: skip scaling for constant values in AutoScaler |
+| `727a645` | test: disable AutoScale for Criteo test |
+| `fd4c88c` | refactor: move AutoScale parameter to model package |
+| `f51b0ef` | feat: add AutoScale parameter to AFM |
+| `de0cf21` | feat: integrate AutoScaler into AFM |
+| `95d3132` | feat: implement AutoScaler |
+| `28b90f7` | feat: implement RobustScaler |
+| `cdaedd5` | feat: implement MinMaxScaler |
