@@ -58,7 +58,6 @@ type AFM struct {
 	initMean   float32
 	initStdDev float32
 	optimizer  string
-	autoScale  bool // whether to apply scaler to numerical features
 	// dataset stats
 	numFeatures    int
 	numDimension   int
@@ -94,7 +93,6 @@ func (fm *AFM) SetParams(params model.Params) {
 	fm.initMean = fm.Params.GetFloat32(model.InitMean, 0)
 	fm.initStdDev = fm.Params.GetFloat32(model.InitStdDev, 0.01)
 	fm.optimizer = fm.Params.GetString(model.Optimizer, model.Adam)
-	fm.autoScale = fm.Params.GetBool(model.AutoScale, true)
 }
 
 func (fm *AFM) Clear() {
@@ -155,7 +153,7 @@ func (fm *AFM) BatchInternalPredict(x []lo.Tuple2[[]int32, []float32], e [][][]f
 	defer fm.mu.RUnlock()
 	// Apply scalers to numerical features if enabled
 	var scaledX []lo.Tuple2[[]int32, []float32]
-	if fm.autoScale && len(fm.Scalers) > 0 {
+	if len(fm.Scalers) > 0 {
 		scaledX = fm.applyScalers(x)
 	} else {
 		scaledX = x
@@ -258,7 +256,7 @@ func (fm *AFM) Init(trainSet dataset.CTRSplit) {
 		fm.E[i] = nn.NewLinear(dim, fm.nFactors)
 	}
 	// Collect numerical features and fit scalers
-	if fm.autoScale {
+	{
 		fm.fitScalers(trainSet)
 	}
 	fm.BaseFactorizationMachines.Init(trainSet)
@@ -328,7 +326,7 @@ func (fm *AFM) Fit(ctx context.Context, trainSet, testSet dataset.CTRSplit, conf
 		// Apply scalers to numerical features if enabled
 		scaledValues := make([]float32, len(values))
 		copy(scaledValues, values)
-		if fm.autoScale {
+		{
 			for j, idx := range indices {
 				if scaler, ok := fm.Scalers[idx]; ok {
 					scaledValues[j] = scaler.Transform(values[j])

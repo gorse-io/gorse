@@ -47,8 +47,8 @@ func TestMinMaxScaler(t *testing.T) {
 		assert.Equal(t, float32(5), scaler.Min)
 		assert.Equal(t, float32(5), scaler.Max)
 
-		// When range is 0, should return 0.5
-		assert.Equal(t, float32(0.5), scaler.Transform(5))
+		// When range is 0, should return 1
+		assert.Equal(t, float32(1), scaler.Transform(5))
 	})
 
 	t.Run("negative values", func(t *testing.T) {

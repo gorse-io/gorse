@@ -41,7 +41,6 @@ func TestFactorizationMachines_Classification_Frappe(t *testing.T) {
 		model.Lr:        0.01,
 		model.Reg:       0.0001,
 		model.BatchSize: 1024,
-		model.AutoScale: false,
 	})
 	fitConfig := newFitConfigWithTestTracker()
 	score := m.Fit(t.Context(), train, test, fitConfig)
@@ -76,11 +75,10 @@ func TestFactorizationMachines_Classification_Criteo(t *testing.T) {
 		model.Lr:        0.01,
 		model.Reg:       0.0001,
 		model.BatchSize: 1024,
-		model.AutoScale: false,
 	})
 	fitConfig := newFitConfigWithTestTracker()
 	score := m.Fit(t.Context(), train, test, fitConfig)
-	assert.InDelta(t, 0.77, score.Accuracy, 0.03)
+	assert.InDelta(t, 0.77, score.Accuracy, 0.025)
 
 	// test prediction
 	assert.Equal(t,
@@ -106,7 +104,7 @@ func TestFactorizationMachines_Classification_Criteo(t *testing.T) {
 	tmp, err := UnmarshalModel(buf)
 	assert.NoError(t, err)
 	scoreClone := EvaluateClassification(tmp, test, fitConfig.Jobs)
-	assert.InDelta(t, 0.77, scoreClone.Accuracy, 0.03)
+	assert.InDelta(t, 0.77, scoreClone.Accuracy, 0.02)
 
 	// test clear
 	assert.False(t, m.Invalid())

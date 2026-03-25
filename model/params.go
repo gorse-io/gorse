@@ -42,7 +42,6 @@ const (
 	BatchSize    ParamName = "BatchSize"
 	HiddenLayers ParamName = "HiddenLayers"
 	Optimizer    ParamName = "Optimizer"
-	AutoScale    ParamName = "AutoScale" // whether to apply scaler to numerical features
 
 	SGD  = "sgd"
 	Adam = "adam"

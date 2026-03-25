@@ -56,7 +56,7 @@ func (s *MinMaxScaler) Fit(values []float32) {
 func (s *MinMaxScaler) Transform(value float32) float32 {
 	range_ := s.Max - s.Min
 	if range_ == 0 {
-		return 0.5
+		return 1
 	}
 	return (value - s.Min) / range_
 }
