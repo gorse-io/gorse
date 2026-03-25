@@ -20,7 +20,37 @@
 
 ## 2. 技术方案
 
-### 2.1 配置格式
+### 2.1 架构设计
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      配置层 (Config)                         │
+│  FeedbackWeight map[string]string                           │
+│  例: {"click": "1", "purchase": "5", "rating": "Value"}     │
+└─────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────┐
+│                    数据层 (Dataset)                          │
+│  - 解析 WeightExpression                                     │
+│  - 记录 FeedbackTypes, FeedbackValues                        │
+│  - 计算 SampleWeights []float32                              │
+│  - Get() 返回 (indices, values, embeddings, target, weight)  │
+└─────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────┐
+│                    模型层 (AFM)                              │
+│  - 接收 weight 参数                                          │
+│  - Fit() 使用 BCEWithLogits(target, output, weights)         │
+│  - 不感知 WeightExpression                                   │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**设计原则：**
+- 模型层只接收数值型权重，不感知表达式
+- 数据层负责解析表达式并计算权重
+- 配置层存储原始表达式字符串
+
+### 2.2 配置格式
 
 ```toml
 [recommend.collaborative.feedback_weight]
@@ -32,24 +62,9 @@ view_time = "log(Value)"  # 观看时长用对数权重
 score = "Value / 5"   # 归一化评分
 ```
 
-### 2.2 表达式设计
-
-**支持的语法：**
-
-| 类型 | 示例 | 说明 |
-|------|------|------|
-| 常量 | `1`, `2.5` | 固定权重值 |
-| 变量 | `Value` | 使用 feedback 的 value 字段 |
-| 数学函数 | `log(Value)`, `sqrt(Value)`, `abs(Value)` | 常用数学函数 |
-| 算术运算 | `Value * 2`, `Value / 10`, `Value + 1` | 四则运算 |
-| 复合表达式 | `log(Value + 1)`, `sqrt(Value) * 2` | 组合使用 |
-
-**实现方式：**
-- 使用 `github.com/expr-lang/expr` 表达式引擎
-
 ### 2.3 数据结构
 
-#### 2.3.1 WeightExpression
+#### 2.3.1 WeightExpression (数据层)
 
 ```go
 // common/expression/weight.go
@@ -89,20 +104,7 @@ type DataSourceConfig struct {
 }
 ```
 
-#### 2.3.3 AFM 扩展
-
-```go
-// model/ctr/fm.go
-
-type AFM struct {
-    // 现有字段...
-    
-    // 新增：feedback 权重表达式
-    FeedbackWeight map[string]*WeightExpression
-}
-```
-
-#### 2.3.4 Dataset 扩展
+#### 2.3.3 Dataset 扩展
 
 ```go
 // model/ctr/data.go
@@ -110,22 +112,51 @@ type AFM struct {
 type Dataset struct {
     // 现有字段...
     
-    // 新增：每个样本的 feedback type 和 value
-    FeedbackTypes []string
-    FeedbackValues []float64
+    // 新增：每个样本的权重
+    SampleWeights []float32
+}
+
+// Get 返回样本数据，新增 weight 参数
+func (dataset *Dataset) Get(i int) ([]int32, []float32, [][]float32, float32, float32) {
+    // ...
+    return indices, values, embedding, target, dataset.SampleWeights[i]
 }
 ```
 
-### 2.4 训练流程
+#### 2.3.4 AFM (模型层)
+
+```go
+// model/ctr/fm.go
+
+// AFM 不需要添加 FeedbackWeight 字段
+// 只需修改 Fit() 接收权重
+
+func (fm *AFM) Fit(ctx context.Context, trainSet, testSet dataset.CTRSplit, config *FitConfig) Score {
+    // ...
+    for i := 0; i < trainSet.Count(); i++ {
+        indices, values, embeddings, target, weight := trainSet.Get(i)
+        // 构建权重张量
+        weights = append(weights, weight)
+        // ...
+    }
+    // 使用带权重的损失函数
+    batchLoss := nn.BCEWithLogits(batchTarget, batchOutput, batchWeights)
+}
+```
+
+### 2.4 数据流
 
 ```
-1. 解析配置中的 feedback_weight 表达式
-2. 加载数据时记录每个样本的 feedback_type 和 value
-3. 训练时：
-   a. 根据 feedback_type 找到对应的权重表达式
-   b. 用 value 计算实际权重
-   c. 构建权重张量
-   d. 使用 BCEWithLogits(target, output, weights) 计算损失
+1. 配置加载: FeedbackWeight = {"click": "1", "purchase": "5"}
+                    ↓
+2. Dataset 初始化:
+   - 解析表达式: weightExpr["click"] = ParseWeightExpression("1")
+   - 加载样本: 记录每个样本的 feedback_type 和 value
+   - 计算权重: sampleWeight = weightExpr[feedbackType].Evaluate(value)
+                    ↓
+3. 训练:
+   - Get(i) 返回 weight
+   - AFM 使用 BCEWithLogits(target, output, weights)
 ```
 
 ## 3. 实现计划
@@ -151,18 +182,18 @@ type Dataset struct {
 
 | 任务 | 文件 | 状态 |
 |------|------|------|
-| Dataset 添加 FeedbackTypes/FeedbackValues | model/ctr/data.go | ⏳ |
-| 修改数据加载流程 | model/ctr/data.go | ⏳ |
+| 实现 WeightExpression 解析 | common/expression/weight.go | ⏳ |
+| Dataset 添加 SampleWeights | model/ctr/data.go | ⏳ |
+| 修改数据加载流程计算权重 | model/ctr/data.go | ⏳ |
+| 扩展 Get() 返回 weight | model/ctr/data.go | ⏳ |
 | 向后兼容处理 | model/ctr/data.go | ⏳ |
 
 ### Phase 4: 模型层扩展
 
 | 任务 | 文件 | 状态 |
 |------|------|------|
-| AFM 添加 FeedbackWeight 字段 | model/ctr/fm.go | ⏳ |
-| 修改 Fit() 支持带权重训练 | model/ctr/fm.go | ⏳ |
+| 修改 Fit() 接收权重 | model/ctr/fm.go | ⏳ |
 | 修改 fm_xla.go | model/ctr/fm_xla.go | ⏳ |
-| 模型序列化 | model/ctr/fm.go | ⏳ |
 
 ### Phase 5: 测试
 
@@ -203,7 +234,7 @@ func main() {
 
 1. **默认行为**：未配置 feedback_weight 时，所有样本权重为 1.0
 2. **未知 feedback_type**：使用默认权重 1.0
-3. **模型加载**：旧版模型无 FeedbackWeight 字段时，使用默认权重
+3. **模型加载**：旧版模型无需修改，权重在 Dataset 层处理
 
 ## 6. 示例配置
 
