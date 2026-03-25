@@ -39,6 +39,11 @@ import (
 
 const headerAFM = "AFM"
 
+// Param names for AFM
+const (
+	AutoScale model.ParamName = "AutoScale"
+)
+
 type AFM struct {
 	BaseFactorizationMachines
 	mu sync.RWMutex
@@ -57,6 +62,7 @@ type AFM struct {
 	initMean   float32
 	initStdDev float32
 	optimizer  string
+	autoScale  bool // whether to apply scaler to numerical features
 	// dataset stats
 	numFeatures    int
 	numDimension   int
@@ -92,6 +98,7 @@ func (fm *AFM) SetParams(params model.Params) {
 	fm.initMean = fm.Params.GetFloat32(model.InitMean, 0)
 	fm.initStdDev = fm.Params.GetFloat32(model.InitStdDev, 0.01)
 	fm.optimizer = fm.Params.GetString(model.Optimizer, model.Adam)
+	fm.autoScale = fm.Params.GetBool(AutoScale, true)
 }
 
 func (fm *AFM) Clear() {
@@ -150,8 +157,13 @@ func (fm *AFM) InternalPredict(_ []int32, _ []float32) float32 {
 func (fm *AFM) BatchInternalPredict(x []lo.Tuple2[[]int32, []float32], e [][][]float32, jobs int) []float32 {
 	fm.mu.RLock()
 	defer fm.mu.RUnlock()
-	// Apply scalers to numerical features
-	scaledX := fm.applyScalerss(x)
+	// Apply scalers to numerical features if enabled
+	var scaledX []lo.Tuple2[[]int32, []float32]
+	if fm.autoScale && len(fm.Scalers) > 0 {
+		scaledX = fm.applyScalers(x)
+	} else {
+		scaledX = x
+	}
 	indicesTensor, valuesTensor, embeddingTensor, _ := fm.convertToTensors(scaledX, e, nil)
 	predictions := make([]float32, 0, len(x))
 	for i := 0; i < len(x); i += fm.batchSize {
@@ -214,11 +226,8 @@ func (fm *AFM) BatchPredict(inputs []lo.Tuple4[string, string, []Label, []Label]
 	return fm.BatchInternalPredict(x, e, jobs)
 }
 
-// applyScalerss applies scalers to numerical features in the input.
-func (fm *AFM) applyScalerss(x []lo.Tuple2[[]int32, []float32]) []lo.Tuple2[[]int32, []float32] {
-	if len(fm.Scalers) == 0 {
-		return x
-	}
+// applyScalers applies scalers to numerical features in the input.
+func (fm *AFM) applyScalers(x []lo.Tuple2[[]int32, []float32]) []lo.Tuple2[[]int32, []float32] {
 	result := make([]lo.Tuple2[[]int32, []float32], len(x))
 	for i, sample := range x {
 		result[i].A = make([]int32, len(sample.A))
@@ -253,14 +262,16 @@ func (fm *AFM) Init(trainSet dataset.CTRSplit) {
 		fm.E[i] = nn.NewLinear(dim, fm.nFactors)
 	}
 	// Collect numerical features and fit scalers
-	fm.fitScalers(trainSet)
+	if fm.autoScale {
+		fm.fitScalers(trainSet)
+	}
 	fm.BaseFactorizationMachines.Init(trainSet)
 }
 
 // fitScalers collects numerical feature values and fits AutoScaler for each.
 func (fm *AFM) fitScalers(trainSet dataset.CTRSplit) {
 	fm.Scalers = make(map[int32]*AutoScaler)
-	
+
 	// Collect values for each feature index
 	featureValues := make(map[int32][]float32)
 	for i := 0; i < trainSet.Count(); i++ {
@@ -269,7 +280,7 @@ func (fm *AFM) fitScalers(trainSet dataset.CTRSplit) {
 			featureValues[idx] = append(featureValues[idx], values[j])
 		}
 	}
-	
+
 	// Identify numerical features (values not all equal to 1) and fit scalers
 	for idx, values := range featureValues {
 		isNumerical := false
@@ -285,7 +296,7 @@ func (fm *AFM) fitScalers(trainSet dataset.CTRSplit) {
 			fm.Scalers[idx] = scaler
 		}
 	}
-	
+
 	if len(fm.Scalers) > 0 {
 		log.Logger().Info("fitted scalers for numerical features",
 			zap.Int("num_numerical_features", len(fm.Scalers)))
@@ -318,12 +329,14 @@ func (fm *AFM) Fit(ctx context.Context, trainSet, testSet dataset.CTRSplit, conf
 	var y []float32
 	for i := 0; i < trainSet.Count(); i++ {
 		indices, values, embeddings, target := trainSet.Get(i)
-		// Apply scalers to numerical features
+		// Apply scalers to numerical features if enabled
 		scaledValues := make([]float32, len(values))
 		copy(scaledValues, values)
-		for j, idx := range indices {
-			if scaler, ok := fm.Scalers[idx]; ok {
-				scaledValues[j] = scaler.Transform(values[j])
+		if fm.autoScale {
+			for j, idx := range indices {
+				if scaler, ok := fm.Scalers[idx]; ok {
+					scaledValues[j] = scaler.Transform(values[j])
+				}
 			}
 		}
 		x = append(x, lo.Tuple2[[]int32, []float32]{A: indices, B: scaledValues})
