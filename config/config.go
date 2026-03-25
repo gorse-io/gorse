@@ -245,6 +245,7 @@ type DataSourceConfig struct {
 	PositiveFeedbackTypes []expression.FeedbackTypeExpression `mapstructure:"positive_feedback_types"`                // positive feedback type
 	NegativeFeedbackTypes []expression.FeedbackTypeExpression `mapstructure:"negative_feedback_types"`                // negative feedback type (highest priority)
 	ReadFeedbackTypes     []expression.FeedbackTypeExpression `mapstructure:"read_feedback_types"`                    // feedback type for read event
+	FeedbackWeight        map[string]string                `mapstructure:"feedback_weight"`                        // feedback weight expressions
 	PositiveFeedbackTTL   uint                                `mapstructure:"positive_feedback_ttl" validate:"gte=0"` // time-to-live of positive feedbacks
 	ItemTTL               uint                                `mapstructure:"item_ttl" validate:"gte=0"`              // item-to-live of items
 }
