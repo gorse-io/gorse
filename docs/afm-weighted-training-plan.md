@@ -159,13 +159,13 @@ func (fm *AFM) Fit(ctx context.Context, trainSet, testSet dataset.CTRSplit, conf
 
 ## 3. 实现计划
 
-### Phase 1: 表达式解析
+### Phase 1: 表达式解析 ✅
 
 | 任务 | 文件 | 状态 |
 |------|------|------|
-| 添加 expr 依赖 | go.mod | ⏳ |
-| 在 Dataset 中集成表达式解析 | model/ctr/data.go | ⏳ |
-| 单元测试 | model/ctr/data_test.go | ⏳ |
+| 添加 expr 依赖 | go.mod | ✅ |
+| 在 Dataset 中集成表达式解析 | model/ctr/data.go | ✅ |
+| 单元测试 | model/ctr/data_test.go | ✅ |
 
 ### Phase 2: 配置扩展 ✅
 
