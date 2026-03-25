@@ -14,6 +14,7 @@
 package ctr
 
 import (
+	"context"
 	"bytes"
 	"runtime"
 	"testing"
@@ -22,6 +23,7 @@ import (
 	"github.com/gorse-io/gorse/model"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 const classificationDelta = 0.01
@@ -234,4 +236,61 @@ func TestFactorizationMachines_Classification_Synthesis(t *testing.T) {
 		},
 		fitConfig.Jobs,
 	), 4)
+}
+
+
+func TestFactorizationMachines_WeightedTraining(t *testing.T) {
+	// Load built-in dataset
+	train, test, err := LoadDataFromBuiltIn("frappe")
+	require.NoError(t, err)
+	
+	// Simulate feedback types and values
+	train.FeedbackTypes = make([]string, train.Count())
+	train.FeedbackValues = make([]float64, train.Count())
+	for i := 0; i < train.Count(); i++ {
+		// Alternate between click and purchase for simulation
+		if i%10 == 0 {
+			train.FeedbackTypes[i] = "purchase"
+			train.FeedbackValues[i] = 1.0
+		} else {
+			train.FeedbackTypes[i] = "click"
+			train.FeedbackValues[i] = 1.0
+		}
+	}
+	
+	// Compute weights - purchase should have higher weight
+	weightConfig := map[string]string{
+		"click":    "1",
+		"purchase": "5",
+	}
+	err = train.ComputeWeights(weightConfig)
+	require.NoError(t, err)
+	
+	// Verify some weights
+	foundClick := false
+	foundPurchase := false
+	for i := 0; i < train.Count(); i++ {
+		w := train.GetWeight(i)
+		if train.FeedbackTypes[i] == "click" {
+			assert.Equal(t, float32(1.0), w)
+			foundClick = true
+		} else if train.FeedbackTypes[i] == "purchase" {
+			assert.Equal(t, float32(5.0), w)
+			foundPurchase = true
+		}
+	}
+	assert.True(t, foundClick, "should have click samples")
+	assert.True(t, foundPurchase, "should have purchase samples")
+	
+	// Test that AFM can train with weights
+	m := NewAFM(model.Params{
+		model.NFactors:  8,
+		model.NEpochs:   2,
+		model.Lr:        0.01,
+		model.BatchSize: 1024,
+	})
+	
+	score := m.Fit(context.Background(), train, test, &FitConfig{Jobs: 1, Verbose: 1})
+	assert.NotZero(t, score.AUC)
+	t.Logf("Weighted training completed: AUC=%.3f, Accuracy=%.3f", score.AUC, score.Accuracy)
 }
