@@ -62,6 +62,8 @@ type AFM struct {
 	numDimension   int
 	embeddingDim   []int
 	embeddingIndex *dataset.Index
+	// numerical feature scalers: feature_index -> AutoScaler
+	Scalers map[int32]*AutoScaler
 }
 
 func NewAFM(params model.Params) *AFM {
@@ -94,6 +96,7 @@ func (fm *AFM) SetParams(params model.Params) {
 
 func (fm *AFM) Clear() {
 	fm.Index = nil
+	fm.Scalers = nil
 }
 
 func (fm *AFM) Invalid() bool {
@@ -147,7 +150,9 @@ func (fm *AFM) InternalPredict(_ []int32, _ []float32) float32 {
 func (fm *AFM) BatchInternalPredict(x []lo.Tuple2[[]int32, []float32], e [][][]float32, jobs int) []float32 {
 	fm.mu.RLock()
 	defer fm.mu.RUnlock()
-	indicesTensor, valuesTensor, embeddingTensor, _ := fm.convertToTensors(x, e, nil)
+	// Apply scalers to numerical features
+	scaledX := fm.applyScalerss(x)
+	indicesTensor, valuesTensor, embeddingTensor, _ := fm.convertToTensors(scaledX, e, nil)
 	predictions := make([]float32, 0, len(x))
 	for i := 0; i < len(x); i += fm.batchSize {
 		j := mathutil.Min(i+fm.batchSize, len(x))
@@ -209,6 +214,26 @@ func (fm *AFM) BatchPredict(inputs []lo.Tuple4[string, string, []Label, []Label]
 	return fm.BatchInternalPredict(x, e, jobs)
 }
 
+// applyScalerss applies scalers to numerical features in the input.
+func (fm *AFM) applyScalerss(x []lo.Tuple2[[]int32, []float32]) []lo.Tuple2[[]int32, []float32] {
+	if len(fm.Scalers) == 0 {
+		return x
+	}
+	result := make([]lo.Tuple2[[]int32, []float32], len(x))
+	for i, sample := range x {
+		result[i].A = make([]int32, len(sample.A))
+		result[i].B = make([]float32, len(sample.B))
+		copy(result[i].A, sample.A)
+		copy(result[i].B, sample.B)
+		for j, idx := range sample.A {
+			if scaler, ok := fm.Scalers[idx]; ok {
+				result[i].B[j] = scaler.Transform(sample.B[j])
+			}
+		}
+	}
+	return result
+}
+
 func (fm *AFM) Init(trainSet dataset.CTRSplit) {
 	fm.numFeatures = int(trainSet.GetIndex().Len())
 	fm.numDimension = 0
@@ -227,7 +252,44 @@ func (fm *AFM) Init(trainSet dataset.CTRSplit) {
 		fm.A[i] = nn.NewAttention(dim, fm.nFactors)
 		fm.E[i] = nn.NewLinear(dim, fm.nFactors)
 	}
+	// Collect numerical features and fit scalers
+	fm.fitScalers(trainSet)
 	fm.BaseFactorizationMachines.Init(trainSet)
+}
+
+// fitScalers collects numerical feature values and fits AutoScaler for each.
+func (fm *AFM) fitScalers(trainSet dataset.CTRSplit) {
+	fm.Scalers = make(map[int32]*AutoScaler)
+	
+	// Collect values for each feature index
+	featureValues := make(map[int32][]float32)
+	for i := 0; i < trainSet.Count(); i++ {
+		indices, values, _, _ := trainSet.Get(i)
+		for j, idx := range indices {
+			featureValues[idx] = append(featureValues[idx], values[j])
+		}
+	}
+	
+	// Identify numerical features (values not all equal to 1) and fit scalers
+	for idx, values := range featureValues {
+		isNumerical := false
+		for _, v := range values {
+			if v != 1 {
+				isNumerical = true
+				break
+			}
+		}
+		if isNumerical {
+			scaler := NewAutoScaler()
+			scaler.Fit(values)
+			fm.Scalers[idx] = scaler
+		}
+	}
+	
+	if len(fm.Scalers) > 0 {
+		log.Logger().Info("fitted scalers for numerical features",
+			zap.Int("num_numerical_features", len(fm.Scalers)))
+	}
 }
 
 func (fm *AFM) Fit(ctx context.Context, trainSet, testSet dataset.CTRSplit, config *FitConfig) Score {
@@ -256,7 +318,15 @@ func (fm *AFM) Fit(ctx context.Context, trainSet, testSet dataset.CTRSplit, conf
 	var y []float32
 	for i := 0; i < trainSet.Count(); i++ {
 		indices, values, embeddings, target := trainSet.Get(i)
-		x = append(x, lo.Tuple2[[]int32, []float32]{A: indices, B: values})
+		// Apply scalers to numerical features
+		scaledValues := make([]float32, len(values))
+		copy(scaledValues, values)
+		for j, idx := range indices {
+			if scaler, ok := fm.Scalers[idx]; ok {
+				scaledValues[j] = scaler.Transform(values[j])
+			}
+		}
+		x = append(x, lo.Tuple2[[]int32, []float32]{A: indices, B: scaledValues})
 		e = append(e, embeddings)
 		y = append(y, target)
 	}
@@ -358,6 +428,18 @@ func (fm *AFM) Marshal(w io.Writer) error {
 			return errors.Trace(err)
 		}
 	}
+	// write scalers
+	if err := encoding.WriteGob(w, len(fm.Scalers)); err != nil {
+		return errors.Trace(err)
+	}
+	for idx, scaler := range fm.Scalers {
+		if err := encoding.WriteGob(w, idx); err != nil {
+			return errors.Trace(err)
+		}
+		if err := scaler.Marshal(w); err != nil {
+			return errors.Trace(err)
+		}
+	}
 	// write parameters
 	if err := nn.Save(fm.Parameters(), w); err != nil {
 		return errors.Trace(err)
@@ -392,6 +474,23 @@ func (fm *AFM) Unmarshal(r io.Reader) error {
 		if err != nil {
 			return errors.Trace(err)
 		}
+	}
+	// read scalers
+	var numScalers int
+	if err = encoding.ReadGob(r, &numScalers); err != nil {
+		return errors.Trace(err)
+	}
+	fm.Scalers = make(map[int32]*AutoScaler, numScalers)
+	for i := 0; i < numScalers; i++ {
+		var idx int32
+		if err = encoding.ReadGob(r, &idx); err != nil {
+			return errors.Trace(err)
+		}
+		scaler := NewAutoScaler()
+		if err = scaler.Unmarshal(r); err != nil {
+			return errors.Trace(err)
+		}
+		fm.Scalers[idx] = scaler
 	}
 	// read parameters
 	fm.B = nn.Zeros()

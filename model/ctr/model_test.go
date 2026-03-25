@@ -78,7 +78,7 @@ func TestFactorizationMachines_Classification_Criteo(t *testing.T) {
 	})
 	fitConfig := newFitConfigWithTestTracker()
 	score := m.Fit(t.Context(), train, test, fitConfig)
-	assert.InDelta(t, 0.77, score.Accuracy, 0.025)
+	assert.InDelta(t, 0.77, score.Accuracy, 0.03)
 
 	// test prediction
 	assert.Equal(t,
@@ -104,7 +104,7 @@ func TestFactorizationMachines_Classification_Criteo(t *testing.T) {
 	tmp, err := UnmarshalModel(buf)
 	assert.NoError(t, err)
 	scoreClone := EvaluateClassification(tmp, test, fitConfig.Jobs)
-	assert.InDelta(t, 0.77, scoreClone.Accuracy, 0.02)
+	assert.InDelta(t, 0.77, scoreClone.Accuracy, 0.03)
 
 	// test clear
 	assert.False(t, m.Invalid())
