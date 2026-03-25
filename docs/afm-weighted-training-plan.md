@@ -76,12 +76,12 @@ func (e *WeightExpression) Evaluate(value float64) float32 {
 }
 ```
 
-#### 2.3.2 配置扩展
+#### 2.3.2 配置扩展 ✅
 
 ```go
 // config/config.go
 
-type Config struct {
+type DataSourceConfig struct {
     // 现有字段...
     
     // 新增：feedback 权重配置
@@ -132,46 +132,45 @@ type Dataset struct {
 
 ### Phase 1: 表达式解析
 
-| 任务 | 文件 | 优先级 |
-|------|------|--------|
-| 添加 expr 依赖 | go.mod | P0 |
-| 实现 WeightExpression 类型 | common/expression/weight.go | P0 |
-| 支持常量和 Value 变量 | common/expression/weight.go | P0 |
-| 支持数学函数 (log, sqrt, abs) | common/expression/weight.go | P1 |
-| 单元测试 | common/expression/weight_test.go | P0 |
+| 任务 | 文件 | 状态 |
+|------|------|------|
+| 添加 expr 依赖 | go.mod | ⏳ |
+| 实现 WeightExpression 类型 | common/expression/weight.go | ⏳ |
+| 支持常量和 Value 变量 | common/expression/weight.go | ⏳ |
+| 支持数学函数 (log, sqrt, abs) | common/expression/weight.go | ⏳ |
+| 单元测试 | common/expression/weight_test.go | ⏳ |
 
-### Phase 2: 配置扩展
+### Phase 2: 配置扩展 ✅
 
-| 任务 | 文件 | 优先级 |
-|------|------|--------|
-| 添加 FeedbackWeight 配置项 | config/config.go | P0 |
-| 解析权重表达式配置 | config/config.go | P0 |
-| 配置验证 | config/config.go | P0 |
+| 任务 | 文件 | 状态 |
+|------|------|------|
+| 添加 FeedbackWeight 配置项 | config/config.go | ✅ |
+| 解析权重表达式配置 | config/config.go | ✅ (存为string) |
 
 ### Phase 3: 数据层扩展
 
-| 任务 | 文件 | 优先级 |
-|------|------|--------|
-| Dataset 添加 FeedbackTypes/FeedbackValues | model/ctr/data.go | P0 |
-| 修改数据加载流程 | model/ctr/data.go | P0 |
-| 向后兼容处理 | model/ctr/data.go | P0 |
+| 任务 | 文件 | 状态 |
+|------|------|------|
+| Dataset 添加 FeedbackTypes/FeedbackValues | model/ctr/data.go | ⏳ |
+| 修改数据加载流程 | model/ctr/data.go | ⏳ |
+| 向后兼容处理 | model/ctr/data.go | ⏳ |
 
 ### Phase 4: 模型层扩展
 
-| 任务 | 文件 | 优先级 |
-|------|------|--------|
-| AFM 添加 FeedbackWeight 字段 | model/ctr/fm.go | P0 |
-| 修改 Fit() 支持带权重训练 | model/ctr/fm.go | P0 |
-| 修改 fm_xla.go | model/ctr/fm_xla.go | P0 |
-| 模型序列化 | model/ctr/fm.go | P0 |
+| 任务 | 文件 | 状态 |
+|------|------|------|
+| AFM 添加 FeedbackWeight 字段 | model/ctr/fm.go | ⏳ |
+| 修改 Fit() 支持带权重训练 | model/ctr/fm.go | ⏳ |
+| 修改 fm_xla.go | model/ctr/fm_xla.go | ⏳ |
+| 模型序列化 | model/ctr/fm.go | ⏳ |
 
 ### Phase 5: 测试
 
-| 任务 | 优先级 |
-|------|--------|
-| 表达式解析测试 | P0 |
-| 带权重训练测试 | P0 |
-| 效果对比测试 | P1 |
+| 任务 | 状态 |
+|------|------|
+| 表达式解析测试 | ⏳ |
+| 带权重训练测试 | ⏳ |
+| 效果对比测试 | ⏳ |
 
 ## 4. expr 库使用示例
 
@@ -238,7 +237,14 @@ skip = "0.1"             # 跳过（低权重负样本）
 like = "5"
 ```
 
-## 7. 参考资料
+## 7. 提交记录
+
+| 提交 | 说明 |
+|------|------|
+| `f7a0dd1` | feat: add feedback_weight config for weighted training |
+| `a7c38f4` | docs: use expr-lang/expr for weight expression parsing |
+
+## 8. 参考资料
 
 - [expr-lang/expr](https://github.com/expr-lang/expr) - Go 表达式引擎
 - [BCEWithLogits Loss](https://pytorch.org/docs/stable/generated/torch.nn.functional.binary_cross_entropy_with_logits.html)
