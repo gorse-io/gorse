@@ -186,11 +186,13 @@ func (s *RobustScaler) Unmarshal(r io.Reader) error {
 // AutoScaler automatically selects the appropriate scaling method based on data distribution.
 // - If data contains negative values: uses RobustScaler
 // - If all values are non-negative: applies log1p then MinMaxScaler
+// - If variance is less than 1e-6 (constant values): skip scaling
 type AutoScaler struct {
 	UseLog    bool         // true if log1p preprocessing is applied
 	MinMax    MinMaxScaler // for non-negative values (after log1p if UseLog)
 	Robust    RobustScaler // for data with negative values
 	HasRobust bool         // true if RobustScaler is used
+	Skip      bool         // true if scaling should be skipped (constant values)
 }
 
 // NewAutoScaler creates an AutoScaler.
@@ -203,6 +205,13 @@ func (s *AutoScaler) Fit(values []float32) {
 	if len(values) == 0 {
 		return
 	}
+
+	// Check if variance is too small (constant values)
+	if s.isConstant(values) {
+		s.Skip = true
+		return
+	}
+	s.Skip = false
 
 	// Check for negative values
 	hasNegative := false
@@ -232,8 +241,35 @@ func (s *AutoScaler) Fit(values []float32) {
 	}
 }
 
+// isConstant checks if the variance of values is less than 1e-6.
+func (s *AutoScaler) isConstant(values []float32) bool {
+	if len(values) < 2 {
+		return true
+	}
+
+	// Compute mean
+	var sum float32
+	for _, v := range values {
+		sum += v
+	}
+	mean := sum / float32(len(values))
+
+	// Compute variance
+	var variance float32
+	for _, v := range values {
+		diff := v - mean
+		variance += diff * diff
+	}
+	variance /= float32(len(values))
+
+	return variance < 1e-6
+}
+
 // Transform scales a value using the selected method.
 func (s *AutoScaler) Transform(value float32) float32 {
+	if s.Skip {
+		return value
+	}
 	if s.HasRobust {
 		return s.Robust.Transform(value)
 	}
@@ -249,6 +285,9 @@ func (s *AutoScaler) Marshal(w io.Writer) error {
 		return errors.Trace(err)
 	}
 	if err := encoding.WriteGob(w, s.HasRobust); err != nil {
+		return errors.Trace(err)
+	}
+	if err := encoding.WriteGob(w, s.Skip); err != nil {
 		return errors.Trace(err)
 	}
 	if s.HasRobust {
@@ -269,6 +308,9 @@ func (s *AutoScaler) Unmarshal(r io.Reader) error {
 		return errors.Trace(err)
 	}
 	if err := encoding.ReadGob(r, &s.HasRobust); err != nil {
+		return errors.Trace(err)
+	}
+	if err := encoding.ReadGob(r, &s.Skip); err != nil {
 		return errors.Trace(err)
 	}
 	if s.HasRobust {
