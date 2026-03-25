@@ -268,3 +268,21 @@ like = "5"
 
 - [expr-lang/expr](https://github.com/expr-lang/expr) - Go 表达式引擎
 - [BCEWithLogits Loss](https://pytorch.org/docs/stable/generated/torch.nn.functional.binary_cross_entropy_with_logits.html)
+
+## 9. 实现状态
+
+### Phase 4: 模型层扩展 ✅
+
+**已完成：**
+- `fm.go`: 添加权重支持
+  - 收集样本权重
+  - 创建权重张量
+  - 传入 BCEWithLogits 损失函数
+
+- `dataset/dataset.go`: 扩展 CTRSplit 接口
+  - 添加 `GetWeight(i int) float32` 方法
+
+**待完成：**
+- `fm_xla.go`: GoMLX 的损失函数暂不支持样本权重
+  - 需要自定义加权损失函数或等待 GoMLX 更新
+
