@@ -119,3 +119,79 @@ func TestMinMaxScaler(t *testing.T) {
 		assert.Equal(t, scaler.Transform(500), scaler2.Transform(500))
 	})
 }
+
+func TestRobustScaler(t *testing.T) {
+	t.Run("fit and transform", func(t *testing.T) {
+		scaler := NewRobustScaler()
+		// Values: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+		values := []float32{10, 9, 8, 7, 6, 5, 4, 3, 2, 1}
+		scaler.Fit(values)
+
+		// Sorted: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+		// Median = (5 + 6) / 2 = 5.5
+		// Q1 (index 2) = 3
+		// Q3 (index 7) = 8
+		// IQR = 8 - 3 = 5
+		assert.Equal(t, float32(5.5), scaler.Median)
+		assert.Equal(t, float32(3), scaler.Q1)
+		assert.Equal(t, float32(8), scaler.Q3)
+		assert.Equal(t, float32(5), scaler.IQR)
+
+		// Transform: (X - median) / IQR
+		assert.InDelta(t, -0.9, scaler.Transform(1), 0.01)   // (1 - 5.5) / 5 = -0.9
+		assert.InDelta(t, 0.0, scaler.Transform(5.5), 0.01)  // (5.5 - 5.5) / 5 = 0
+		assert.InDelta(t, 0.9, scaler.Transform(10), 0.01)   // (10 - 5.5) / 5 = 0.9
+	})
+
+	t.Run("robust to outliers", func(t *testing.T) {
+		scaler := NewRobustScaler()
+		// Values with outliers: 1, 2, 3, 4, 5, 100, 1000
+		values := []float32{1, 2, 3, 4, 5, 100, 1000}
+		scaler.Fit(values)
+
+		// Sorted: 1, 2, 3, 4, 5, 100, 1000
+		// n = 7, median index = 3, median = 4
+		// Q1 index = 1, Q1 = 2
+		// Q3 index = 5, Q3 = 100
+		// IQR = 100 - 2 = 98
+		assert.Equal(t, float32(4), scaler.Median)
+		assert.Equal(t, float32(2), scaler.Q1)
+		assert.Equal(t, float32(100), scaler.Q3)
+		assert.Equal(t, float32(98), scaler.IQR)
+	})
+
+	t.Run("constant values", func(t *testing.T) {
+		scaler := NewRobustScaler()
+		values := []float32{5, 5, 5, 5, 5}
+		scaler.Fit(values)
+
+		assert.Equal(t, float32(5), scaler.Median)
+		assert.Equal(t, float32(5), scaler.Q1)
+		assert.Equal(t, float32(5), scaler.Q3)
+		assert.Equal(t, float32(1.0), scaler.IQR) // Avoid division by zero
+	})
+
+	t.Run("marshal and unmarshal", func(t *testing.T) {
+		scaler := NewRobustScaler()
+		values := []float32{1, 5, 10, 15, 20}
+		scaler.Fit(values)
+
+		// Marshal
+		var buf bytes.Buffer
+		err := scaler.Marshal(&buf)
+		assert.NoError(t, err)
+
+		// Unmarshal
+		scaler2 := NewRobustScaler()
+		err = scaler2.Unmarshal(&buf)
+		assert.NoError(t, err)
+
+		assert.Equal(t, scaler.Median, scaler2.Median)
+		assert.Equal(t, scaler.Q1, scaler2.Q1)
+		assert.Equal(t, scaler.Q3, scaler2.Q3)
+		assert.Equal(t, scaler.IQR, scaler2.IQR)
+
+		// Verify transform gives same result
+		assert.Equal(t, scaler.Transform(7), scaler2.Transform(7))
+	})
+}
