@@ -39,10 +39,6 @@ import (
 
 const headerAFM = "AFM"
 
-// Param names for AFM
-const (
-	AutoScale model.ParamName = "AutoScale"
-)
 
 type AFM struct {
 	BaseFactorizationMachines
@@ -98,7 +94,7 @@ func (fm *AFM) SetParams(params model.Params) {
 	fm.initMean = fm.Params.GetFloat32(model.InitMean, 0)
 	fm.initStdDev = fm.Params.GetFloat32(model.InitStdDev, 0.01)
 	fm.optimizer = fm.Params.GetString(model.Optimizer, model.Adam)
-	fm.autoScale = fm.Params.GetBool(AutoScale, true)
+	fm.autoScale = fm.Params.GetBool(model.AutoScale, true)
 }
 
 func (fm *AFM) Clear() {
