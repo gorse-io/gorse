@@ -182,3 +182,103 @@ func (s *RobustScaler) Unmarshal(r io.Reader) error {
 	}
 	return nil
 }
+
+// AutoScaler automatically selects the appropriate scaling method based on data distribution.
+// - If data contains negative values: uses RobustScaler
+// - If all values are non-negative: applies log1p then MinMaxScaler
+type AutoScaler struct {
+	UseLog    bool         // true if log1p preprocessing is applied
+	MinMax    MinMaxScaler // for non-negative values (after log1p if UseLog)
+	Robust    RobustScaler // for data with negative values
+	HasRobust bool         // true if RobustScaler is used
+}
+
+// NewAutoScaler creates an AutoScaler.
+func NewAutoScaler() *AutoScaler {
+	return &AutoScaler{}
+}
+
+// Fit analyzes the data and selects the appropriate scaling method.
+func (s *AutoScaler) Fit(values []float32) {
+	if len(values) == 0 {
+		return
+	}
+
+	// Check for negative values
+	hasNegative := false
+	for _, v := range values {
+		if v < 0 {
+			hasNegative = true
+			break
+		}
+	}
+
+	if hasNegative {
+		// Use RobustScaler for data with negative values
+		s.HasRobust = true
+		s.UseLog = false
+		s.Robust.Fit(values)
+	} else {
+		// Apply log1p then MinMaxScaler for non-negative data
+		s.HasRobust = false
+		s.UseLog = true
+
+		// Apply log1p transformation
+		logValues := make([]float32, len(values))
+		for i, v := range values {
+			logValues[i] = math32.Log1p(v)
+		}
+		s.MinMax.Fit(logValues)
+	}
+}
+
+// Transform scales a value using the selected method.
+func (s *AutoScaler) Transform(value float32) float32 {
+	if s.HasRobust {
+		return s.Robust.Transform(value)
+	}
+
+	// Apply log1p then MinMax
+	logValue := math32.Log1p(value)
+	return s.MinMax.Transform(logValue)
+}
+
+// Marshal writes the scaler to a writer.
+func (s *AutoScaler) Marshal(w io.Writer) error {
+	if err := encoding.WriteGob(w, s.UseLog); err != nil {
+		return errors.Trace(err)
+	}
+	if err := encoding.WriteGob(w, s.HasRobust); err != nil {
+		return errors.Trace(err)
+	}
+	if s.HasRobust {
+		if err := s.Robust.Marshal(w); err != nil {
+			return errors.Trace(err)
+		}
+	} else {
+		if err := s.MinMax.Marshal(w); err != nil {
+			return errors.Trace(err)
+		}
+	}
+	return nil
+}
+
+// Unmarshal reads the scaler from a reader.
+func (s *AutoScaler) Unmarshal(r io.Reader) error {
+	if err := encoding.ReadGob(r, &s.UseLog); err != nil {
+		return errors.Trace(err)
+	}
+	if err := encoding.ReadGob(r, &s.HasRobust); err != nil {
+		return errors.Trace(err)
+	}
+	if s.HasRobust {
+		if err := s.Robust.Unmarshal(r); err != nil {
+			return errors.Trace(err)
+		}
+	} else {
+		if err := s.MinMax.Unmarshal(r); err != nil {
+			return errors.Trace(err)
+		}
+	}
+	return nil
+}

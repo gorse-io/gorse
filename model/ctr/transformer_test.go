@@ -15,6 +15,7 @@
 package ctr
 
 import (
+	"github.com/chewxy/math32"
 	"bytes"
 	"testing"
 
@@ -157,5 +158,107 @@ func TestRobustScaler(t *testing.T) {
 
 		// Verify transform gives same result
 		assert.Equal(t, scaler.Transform(7), scaler2.Transform(7))
+	})
+}
+
+func TestAutoScaler(t *testing.T) {
+	t.Run("non-negative values use log1p + MinMax", func(t *testing.T) {
+		scaler := NewAutoScaler()
+		values := []float32{0, 10, 100, 1000}
+		scaler.Fit(values)
+
+		assert.True(t, scaler.UseLog)
+		assert.False(t, scaler.HasRobust)
+
+		// Verify log transformation
+		// log1p(0) = 0, log1p(1000) ≈ 6.909
+		minLog := math32.Log1p(0)
+		maxLog := math32.Log1p(1000)
+
+		assert.InDelta(t, 0.0, scaler.Transform(0), 0.001)
+		assert.InDelta(t, 1.0, scaler.Transform(1000), 0.001)
+
+		// Verify intermediate values
+		expectedVal := (math32.Log1p(100) - minLog) / (maxLog - minLog)
+		assert.InDelta(t, expectedVal, scaler.Transform(100), 0.001)
+	})
+
+	t.Run("negative values use RobustScaler", func(t *testing.T) {
+		scaler := NewAutoScaler()
+		values := []float32{-10, -5, 0, 5, 10}
+		scaler.Fit(values)
+
+		assert.False(t, scaler.UseLog)
+		assert.True(t, scaler.HasRobust)
+
+		// Should use RobustScaler
+		// median = 0, Q1 = -5, Q3 = 5, IQR = 10
+		assert.Equal(t, float32(0), scaler.Robust.Median)
+		assert.Equal(t, float32(10), scaler.Robust.IQR)
+
+		assert.InDelta(t, 0.0, scaler.Transform(0), 0.001)
+		assert.InDelta(t, 1.0, scaler.Transform(10), 0.001)
+		assert.InDelta(t, -1.0, scaler.Transform(-10), 0.001)
+	})
+
+	t.Run("mixed values with single negative", func(t *testing.T) {
+		scaler := NewAutoScaler()
+		values := []float32{-1, 10, 100, 1000}
+		scaler.Fit(values)
+
+		assert.False(t, scaler.UseLog)
+		assert.True(t, scaler.HasRobust)
+	})
+
+	t.Run("marshal and unmarshal with log", func(t *testing.T) {
+		scaler := NewAutoScaler()
+		values := []float32{0, 100, 1000}
+		scaler.Fit(values)
+
+		assert.True(t, scaler.UseLog)
+
+		// Marshal
+		var buf bytes.Buffer
+		err := scaler.Marshal(&buf)
+		assert.NoError(t, err)
+
+		// Unmarshal
+		scaler2 := NewAutoScaler()
+		err = scaler2.Unmarshal(&buf)
+		assert.NoError(t, err)
+
+		assert.Equal(t, scaler.UseLog, scaler2.UseLog)
+		assert.Equal(t, scaler.HasRobust, scaler2.HasRobust)
+		assert.Equal(t, scaler.MinMax.Min, scaler2.MinMax.Min)
+		assert.Equal(t, scaler.MinMax.Max, scaler2.MinMax.Max)
+
+		// Verify transform gives same result
+		assert.Equal(t, scaler.Transform(500), scaler2.Transform(500))
+	})
+
+	t.Run("marshal and unmarshal with robust", func(t *testing.T) {
+		scaler := NewAutoScaler()
+		values := []float32{-100, -50, 0, 50, 100}
+		scaler.Fit(values)
+
+		assert.True(t, scaler.HasRobust)
+
+		// Marshal
+		var buf bytes.Buffer
+		err := scaler.Marshal(&buf)
+		assert.NoError(t, err)
+
+		// Unmarshal
+		scaler2 := NewAutoScaler()
+		err = scaler2.Unmarshal(&buf)
+		assert.NoError(t, err)
+
+		assert.Equal(t, scaler.UseLog, scaler2.UseLog)
+		assert.Equal(t, scaler.HasRobust, scaler2.HasRobust)
+		assert.Equal(t, scaler.Robust.Median, scaler2.Robust.Median)
+		assert.Equal(t, scaler.Robust.IQR, scaler2.Robust.IQR)
+
+		// Verify transform gives same result
+		assert.Equal(t, scaler.Transform(25), scaler2.Transform(25))
 	})
 }
