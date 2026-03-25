@@ -24,6 +24,7 @@ import (
 	"time"
 
 	mapset "github.com/deckarep/golang-set/v2"
+	"github.com/expr-lang/expr/vm"
 	"github.com/gorse-io/gorse/common/bfloats"
 	"github.com/gorse-io/gorse/common/jsonutil"
 	"github.com/gorse-io/gorse/common/util"
@@ -163,6 +164,10 @@ type Dataset struct {
 	ItemEmbeddingIndex     *dataset.Index
 	PositiveCount          int
 	NegativeCount          int
+	// Weight support
+	FeedbackTypes  []string  // Feedback type for each sample
+	FeedbackValues []float64 // Feedback value for each sample
+	SampleWeights  []float32 // Computed weight for each sample
 }
 
 // CountUsers returns the number of users.
@@ -264,6 +269,52 @@ func (dataset *Dataset) Get(i int) ([]int32, []float32, [][]uint16, float32) {
 		values = append(values, contextValues...)
 	}
 	return indices, values, embedding, dataset.Target[i]
+}
+
+// GetWeight returns the weight for the i-th sample.
+// Returns 1.0 if no weight is set (default behavior).
+func (dataset *Dataset) GetWeight(i int) float32 {
+	if dataset.SampleWeights != nil && i < len(dataset.SampleWeights) {
+		return dataset.SampleWeights[i]
+	}
+	return 1.0
+}
+
+// ComputeWeights computes sample weights based on feedback_weight configuration.
+// If feedbackWeight is nil or empty, all weights are set to 1.0.
+func (dataset *Dataset) ComputeWeights(feedbackWeight map[string]string) error {
+	if len(feedbackWeight) == 0 || len(dataset.FeedbackTypes) == 0 {
+		// No weight configuration or no feedback types, use default weight 1.0
+		dataset.SampleWeights = nil
+		return nil
+	}
+
+	// Compile all weight expressions
+	programs := make(map[string]*vm.Program, len(feedbackWeight))
+	for fbType, exprStr := range feedbackWeight {
+		program, err := CompileWeightExpression(exprStr)
+		if err != nil {
+			return errors.Annotatef(err, "failed to compile weight expression for %s", fbType)
+		}
+		programs[fbType] = program
+	}
+
+	// Compute weight for each sample
+	dataset.SampleWeights = make([]float32, len(dataset.FeedbackTypes))
+	for i, fbType := range dataset.FeedbackTypes {
+		if program, ok := programs[fbType]; ok {
+			weight, err := EvaluateWeight(program, dataset.FeedbackValues[i])
+			if err != nil {
+				return errors.Annotatef(err, "failed to evaluate weight for sample %d", i)
+			}
+			dataset.SampleWeights[i] = weight
+		} else {
+			// Unknown feedback type, use default weight
+			dataset.SampleWeights[i] = 1.0
+		}
+	}
+
+	return nil
 }
 
 // LoadLibFMFile loads libFM format file.
@@ -369,6 +420,13 @@ func (dataset *Dataset) Split(ratio float32, seed int64) (*Dataset, *Dataset) {
 			}
 			testSet.Target = append(testSet.Target, dataset.Target[i])
 			testSet.Timestamps = append(testSet.Timestamps, dataset.Timestamps[i])
+			if dataset.FeedbackTypes != nil {
+				testSet.FeedbackTypes = append(testSet.FeedbackTypes, dataset.FeedbackTypes[i])
+				testSet.FeedbackValues = append(testSet.FeedbackValues, dataset.FeedbackValues[i])
+			}
+			if dataset.SampleWeights != nil {
+				testSet.SampleWeights = append(testSet.SampleWeights, dataset.SampleWeights[i])
+			}
 			if dataset.Target[i] > 0 {
 				testSet.PositiveCount++
 			} else {
@@ -383,6 +441,13 @@ func (dataset *Dataset) Split(ratio float32, seed int64) (*Dataset, *Dataset) {
 			}
 			trainSet.Target = append(trainSet.Target, dataset.Target[i])
 			trainSet.Timestamps = append(trainSet.Timestamps, dataset.Timestamps[i])
+			if dataset.FeedbackTypes != nil {
+				trainSet.FeedbackTypes = append(trainSet.FeedbackTypes, dataset.FeedbackTypes[i])
+				trainSet.FeedbackValues = append(trainSet.FeedbackValues, dataset.FeedbackValues[i])
+			}
+			if dataset.SampleWeights != nil {
+				trainSet.SampleWeights = append(trainSet.SampleWeights, dataset.SampleWeights[i])
+			}
 			if dataset.Target[i] > 0 {
 				trainSet.PositiveCount++
 			} else {
@@ -452,6 +517,13 @@ func (dataset *Dataset) appendSample(dst *Dataset, i int) {
 	}
 	dst.Target = append(dst.Target, dataset.Target[i])
 	dst.Timestamps = append(dst.Timestamps, dataset.Timestamps[i])
+	if dataset.FeedbackTypes != nil {
+		dst.FeedbackTypes = append(dst.FeedbackTypes, dataset.FeedbackTypes[i])
+		dst.FeedbackValues = append(dst.FeedbackValues, dataset.FeedbackValues[i])
+	}
+	if dataset.SampleWeights != nil {
+		dst.SampleWeights = append(dst.SampleWeights, dataset.SampleWeights[i])
+	}
 	if dataset.Target[i] > 0 {
 		dst.PositiveCount++
 	} else {
