@@ -190,7 +190,7 @@ func (fm *AFM) Fit(ctx context.Context, trainSet, testSet dataset.CTRSplit, conf
 | 修改 Fit() 接收权重 | model/ctr/fm.go | ⏳ |
 | 修改 fm_xla.go | model/ctr/fm_xla.go | ⏳ |
 
-### Phase 5: 测试
+### Phase 5: 测试 ✅
 
 | 任务 | 状态 |
 |------|------|
