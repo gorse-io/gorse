@@ -28,18 +28,26 @@ func TestCompileWeightExpression(t *testing.T) {
 		expr    string
 		wantErr bool
 	}{
+		// Constants and variables
 		{"constant", "1", false},
 		{"constant float", "2.5", false},
 		{"value variable", "Value", false},
 		{"value multiplication", "Value * 2", false},
 		{"value division", "Value / 5", false},
+		// Built-in functions (expr provides these)
 		{"log function", "log(Value)", false},
-		{"log1p function", "log1p(Value)", false},
 		{"sqrt function", "sqrt(Value)", false},
 		{"abs function", "abs(Value)", false},
 		{"pow function", "pow(Value, 2)", false},
 		{"max function", "max(Value, 1)", false},
 		{"min function", "min(Value, 10)", false},
+		// Additional functions (we provide these)
+		{"log1p function", "log1p(Value)", false},
+		{"cbrt function", "cbrt(Value)", false},
+		{"exp2 function", "exp2(Value)", false},
+		{"expm1 function", "expm1(Value)", false},
+		{"tanh function", "tanh(Value)", false},
+		// Complex expressions
 		{"complex expression", "log(Value + 1) * 2", false},
 		{"invalid expression", "Value ++", true},
 	}
@@ -62,20 +70,28 @@ func TestEvaluateWeight(t *testing.T) {
 		expr      string
 		value     float64
 		want      float32
-		tolerance float32
+		tolerance float64
 	}{
+		// Constants and variables
 		{"constant 1", "1", 100.0, 1.0, 0.001},
 		{"constant 2.5", "2.5", 100.0, 2.5, 0.001},
 		{"value", "Value", 5.0, 5.0, 0.001},
 		{"value * 2", "Value * 2", 3.0, 6.0, 0.001},
 		{"value / 5", "Value / 5", 10.0, 2.0, 0.001},
+		// Built-in functions
 		{"log(100)", "log(Value)", 100.0, float32(math.Log(100)), 0.001},
-		{"log1p(99)", "log1p(Value)", 99.0, float32(math.Log1p(99)), 0.001},
 		{"sqrt(16)", "sqrt(Value)", 16.0, 4.0, 0.001},
 		{"abs(-5)", "abs(Value)", -5.0, 5.0, 0.001},
 		{"pow(3, 2)", "pow(Value, 2)", 3.0, 9.0, 0.001},
 		{"max(5, 10)", "max(Value, 10)", 5.0, 10.0, 0.001},
 		{"min(5, 1)", "min(Value, 1)", 5.0, 1.0, 0.001},
+		// Additional functions
+		{"log1p(99)", "log1p(Value)", 99.0, float32(math.Log1p(99)), 0.001},
+		{"cbrt(27)", "cbrt(Value)", 27.0, 3.0, 0.001},
+		{"exp2(3)", "exp2(Value)", 3.0, 8.0, 0.001},
+		{"expm1(0)", "expm1(Value)", 0.0, 0.0, 0.001},
+		{"tanh(0)", "tanh(Value)", 0.0, 0.0, 0.001},
+		// Complex expressions
 		{"log(Value + 1)", "log(Value + 1)", 99.0, float32(math.Log(100)), 0.001},
 	}
 
@@ -87,7 +103,7 @@ func TestEvaluateWeight(t *testing.T) {
 			got, err := EvaluateWeight(program, tt.value)
 			require.NoError(t, err)
 
-			assert.InDelta(t, tt.want, got, float64(tt.tolerance))
+			assert.InDelta(t, tt.want, got, tt.tolerance)
 		})
 	}
 }

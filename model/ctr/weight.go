@@ -22,11 +22,11 @@ import (
 )
 
 // WeightEnv returns the environment for weight expression evaluation.
-// It includes common mathematical functions and the Value variable.
+// It includes the Value variable and common math functions.
 func WeightEnv() map[string]any {
 	return map[string]any{
 		"Value": 0.0,
-		// Mathematical functions
+		// Common math functions
 		"abs":   math.Abs,
 		"ceil":  math.Ceil,
 		"floor": math.Floor,
@@ -36,7 +36,6 @@ func WeightEnv() map[string]any {
 		"log":   math.Log,
 		"log2":  math.Log2,
 		"log10": math.Log10,
-		"ln":    math.Log,
 		"log1p": math.Log1p,
 		"exp":   math.Exp,
 		"exp2":  math.Exp2,
