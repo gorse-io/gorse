@@ -174,14 +174,14 @@ func (fm *AFM) Fit(ctx context.Context, trainSet, testSet dataset.CTRSplit, conf
 | 添加 FeedbackWeight 配置项 | config/config.go | ✅ |
 | 解析权重表达式配置 | config/config.go | ✅ (存为string) |
 
-### Phase 3: 数据层扩展
+### Phase 3: 数据层扩展 ✅
 
 | 任务 | 文件 | 状态 |
 |------|------|------|
-| Dataset 添加 SampleWeights | model/ctr/data.go | ⏳ |
-| 实现 ComputeWeights() | model/ctr/data.go | ⏳ |
-| 扩展 Get() 返回 weight | model/ctr/data.go | ⏳ |
-| 向后兼容处理 | model/ctr/data.go | ⏳ |
+| Dataset 添加 SampleWeights | model/ctr/data.go | ✅ |
+| 实现 ComputeWeights() | model/ctr/data.go | ✅ |
+| 扩展 Get() 返回 weight | model/ctr/data.go | ✅ |
+| 向后兼容处理 | model/ctr/data.go | ✅ |
 
 ### Phase 4: 模型层扩展
 
