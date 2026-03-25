@@ -323,6 +323,7 @@ func (fm *AFM) Fit(ctx context.Context, trainSet, testSet dataset.CTRSplit, conf
 	var x []lo.Tuple2[[]int32, []float32]
 	var e [][][]float32
 	var y []float32
+	var w []float32
 	for i := 0; i < trainSet.Count(); i++ {
 		indices, values, embeddings, target := trainSet.Get(i)
 		// Apply scalers to numerical features
@@ -336,8 +337,10 @@ func (fm *AFM) Fit(ctx context.Context, trainSet, testSet dataset.CTRSplit, conf
 		x = append(x, lo.Tuple2[[]int32, []float32]{A: indices, B: scaledValues})
 		e = append(e, embeddings)
 		y = append(y, target)
+		w = append(w, trainSet.GetWeight(i))
 	}
 	indices, values, embeddings, target := fm.convertToTensors(x, e, y)
+	weights := nn.NewTensor(w, len(w))
 
 	var optimizer nn.Optimizer
 	switch fm.optimizer {
@@ -368,8 +371,9 @@ func (fm *AFM) Fit(ctx context.Context, trainSet, testSet dataset.CTRSplit, conf
 				batchEmbedding[k] = embeddings[k].Slice(i, j)
 			}
 			batchTarget := target.Slice(i, j)
+			batchWeights := weights.Slice(i, j)
 			batchOutput := fm.Forward(batchIndices, batchValues, batchEmbedding, config.Jobs)
-			batchLoss := nn.BCEWithLogits(batchTarget, batchOutput, nil)
+			batchLoss := nn.BCEWithLogits(batchTarget, batchOutput, batchWeights)
 			cost += batchLoss.Data()[0]
 			optimizer.ZeroGrad()
 			batchLoss.Backward()

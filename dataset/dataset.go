@@ -72,6 +72,7 @@ type CTRSplit interface {
 	Get(i int) ([]int32, []float32, [][]float32, float32)
 	GetItemEmbeddingDim() []int
 	GetItemEmbeddingIndex() *Index
+	GetWeight(i int) float32
 }
 
 type Dataset struct {
