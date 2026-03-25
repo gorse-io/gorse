@@ -256,9 +256,7 @@ func (fm *AFM) Init(trainSet dataset.CTRSplit) {
 		fm.E[i] = nn.NewLinear(dim, fm.nFactors)
 	}
 	// Collect numerical features and fit scalers
-	{
-		fm.fitScalers(trainSet)
-	}
+	fm.fitScalers(trainSet)
 	fm.BaseFactorizationMachines.Init(trainSet)
 }
 
@@ -323,14 +321,12 @@ func (fm *AFM) Fit(ctx context.Context, trainSet, testSet dataset.CTRSplit, conf
 	var y []float32
 	for i := 0; i < trainSet.Count(); i++ {
 		indices, values, embeddings, target := trainSet.Get(i)
-		// Apply scalers to numerical features if enabled
+		// Apply scalers to numerical features
 		scaledValues := make([]float32, len(values))
 		copy(scaledValues, values)
-		{
-			for j, idx := range indices {
-				if scaler, ok := fm.Scalers[idx]; ok {
-					scaledValues[j] = scaler.Transform(values[j])
-				}
+		for j, idx := range indices {
+			if scaler, ok := fm.Scalers[idx]; ok {
+				scaledValues[j] = scaler.Transform(values[j])
 			}
 		}
 		x = append(x, lo.Tuple2[[]int32, []float32]{A: indices, B: scaledValues})
