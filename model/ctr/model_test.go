@@ -41,6 +41,7 @@ func TestFactorizationMachines_Classification_Frappe(t *testing.T) {
 		model.Lr:        0.01,
 		model.Reg:       0.0001,
 		model.BatchSize: 1024,
+		model.AutoScale: false,
 	})
 	fitConfig := newFitConfigWithTestTracker()
 	score := m.Fit(t.Context(), train, test, fitConfig)
@@ -75,6 +76,7 @@ func TestFactorizationMachines_Classification_Criteo(t *testing.T) {
 		model.Lr:        0.01,
 		model.Reg:       0.0001,
 		model.BatchSize: 1024,
+		model.AutoScale: false,
 	})
 	fitConfig := newFitConfigWithTestTracker()
 	score := m.Fit(t.Context(), train, test, fitConfig)
