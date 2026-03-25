@@ -124,6 +124,7 @@ func (items *MatrixFactorizationItems) Unmarshal(r io.Reader) error {
 }
 
 type MatrixFactorizationUsers struct {
+	mu         sync.RWMutex
 	embeddings map[string][]float32
 }
 
@@ -134,15 +135,21 @@ func NewMatrixFactorizationUsers() *MatrixFactorizationUsers {
 }
 
 func (users *MatrixFactorizationUsers) Add(userId string, v []float32) {
+	users.mu.Lock()
+	defer users.mu.Unlock()
 	users.embeddings[userId] = v
 }
 
 func (users *MatrixFactorizationUsers) Get(userId string) ([]float32, bool) {
+	users.mu.RLock()
+	defer users.mu.RUnlock()
 	v, ok := users.embeddings[userId]
 	return v, ok
 }
 
 func (users *MatrixFactorizationUsers) Marshal(w io.Writer) error {
+	users.mu.RLock()
+	defer users.mu.RUnlock()
 	numUsers := int64(len(users.embeddings))
 	if err := encoding.WriteGob(w, numUsers); err != nil {
 		return errors.WithStack(err)
@@ -159,6 +166,8 @@ func (users *MatrixFactorizationUsers) Marshal(w io.Writer) error {
 }
 
 func (users *MatrixFactorizationUsers) Unmarshal(r io.Reader) error {
+	users.mu.Lock()
+	defer users.mu.Unlock()
 	var numUsers int64
 	if err := encoding.ReadGob(r, &numUsers); err != nil {
 		return errors.WithStack(err)
