@@ -31,9 +31,10 @@
                               ↓
 ┌─────────────────────────────────────────────────────────────┐
 │                    数据层 (Dataset)                          │
-│  - 解析 WeightExpression                                     │
-│  - 记录 FeedbackTypes, FeedbackValues                        │
-│  - 计算 SampleWeights []float32                              │
+│  构造时:                                                     │
+│  - 解析表达式字符串 (expr.Compile)                            │
+│  - 遍历样本计算权重 (expr.Run)                                │
+│  - 存储 SampleWeights []float32                              │
 │  - Get() 返回 (indices, values, embeddings, target, weight)  │
 └─────────────────────────────────────────────────────────────┘
                               ↓
@@ -41,14 +42,13 @@
 │                    模型层 (AFM)                              │
 │  - 接收 weight 参数                                          │
 │  - Fit() 使用 BCEWithLogits(target, output, weights)         │
-│  - 不感知 WeightExpression                                   │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 **设计原则：**
-- 模型层只接收数值型权重，不感知表达式
-- 数据层负责解析表达式并计算权重
-- 配置层存储原始表达式字符串
+- 无需 WeightExpression 抽象，直接 inline 解析
+- 数据层在构造时一次性计算所有权重
+- 模型层只接收数值型权重
 
 ### 2.2 配置格式
 
@@ -64,34 +64,7 @@ score = "Value / 5"   # 归一化评分
 
 ### 2.3 数据结构
 
-#### 2.3.1 WeightExpression (数据层)
-
-```go
-// common/expression/weight.go
-
-import "github.com/expr-lang/expr"
-
-type WeightExpression struct {
-    expr string
-    program *vm.Program
-}
-
-func ParseWeightExpression(s string) (*WeightExpression, error) {
-    program, err := expr.Compile(s, expr.Env(map[string]float64{"Value": 0}))
-    if err != nil {
-        return nil, err
-    }
-    return &WeightExpression{expr: s, program: program}, nil
-}
-
-func (e *WeightExpression) Evaluate(value float64) float32 {
-    env := map[string]float64{"Value": value}
-    result, _ := expr.Run(e.program, env)
-    return float32(result.(float64))
-}
-```
-
-#### 2.3.2 配置扩展 ✅
+#### 2.3.1 配置扩展 ✅
 
 ```go
 // config/config.go
@@ -104,16 +77,41 @@ type DataSourceConfig struct {
 }
 ```
 
-#### 2.3.3 Dataset 扩展
+#### 2.3.2 Dataset 扩展
 
 ```go
 // model/ctr/data.go
+
+import "github.com/expr-lang/expr"
 
 type Dataset struct {
     // 现有字段...
     
     // 新增：每个样本的权重
     SampleWeights []float32
+}
+
+// 计算样本权重 (在数据集构造时调用)
+func (dataset *Dataset) ComputeWeights(feedbackWeight map[string]string, 
+                                        feedbackTypes []string, 
+                                        feedbackValues []float64) {
+    // 编译所有表达式
+    programs := make(map[string]*vm.Program)
+    for fbType, exprStr := range feedbackWeight {
+        programs[fbType], _ = expr.Compile(exprStr, expr.Env(map[string]float64{"Value": 0}))
+    }
+    
+    // 计算每个样本的权重
+    dataset.SampleWeights = make([]float32, len(feedbackTypes))
+    for i, fbType := range feedbackTypes {
+        if program, ok := programs[fbType]; ok {
+            env := map[string]float64{"Value": feedbackValues[i]}
+            result, _ := expr.Run(program, env)
+            dataset.SampleWeights[i] = float32(result.(float64))
+        } else {
+            dataset.SampleWeights[i] = 1.0  // 默认权重
+        }
+    }
 }
 
 // Get 返回样本数据，新增 weight 参数
@@ -123,19 +121,18 @@ func (dataset *Dataset) Get(i int) ([]int32, []float32, [][]float32, float32, fl
 }
 ```
 
-#### 2.3.4 AFM (模型层)
+#### 2.3.3 AFM (模型层)
 
 ```go
 // model/ctr/fm.go
 
-// AFM 不需要添加 FeedbackWeight 字段
+// AFM 不需要添加任何字段
 // 只需修改 Fit() 接收权重
 
 func (fm *AFM) Fit(ctx context.Context, trainSet, testSet dataset.CTRSplit, config *FitConfig) Score {
     // ...
     for i := 0; i < trainSet.Count(); i++ {
         indices, values, embeddings, target, weight := trainSet.Get(i)
-        // 构建权重张量
         weights = append(weights, weight)
         // ...
     }
@@ -149,10 +146,11 @@ func (fm *AFM) Fit(ctx context.Context, trainSet, testSet dataset.CTRSplit, conf
 ```
 1. 配置加载: FeedbackWeight = {"click": "1", "purchase": "5"}
                     ↓
-2. Dataset 初始化:
-   - 解析表达式: weightExpr["click"] = ParseWeightExpression("1")
-   - 加载样本: 记录每个样本的 feedback_type 和 value
-   - 计算权重: sampleWeight = weightExpr[feedbackType].Evaluate(value)
+2. Dataset 构造:
+   - 编译表达式: expr.Compile("1"), expr.Compile("5")
+   - 加载样本时记录 feedback_type 和 value
+   - 计算权重: expr.Run(program, {"Value": value})
+   - 存入 SampleWeights
                     ↓
 3. 训练:
    - Get(i) 返回 weight
@@ -166,10 +164,8 @@ func (fm *AFM) Fit(ctx context.Context, trainSet, testSet dataset.CTRSplit, conf
 | 任务 | 文件 | 状态 |
 |------|------|------|
 | 添加 expr 依赖 | go.mod | ⏳ |
-| 实现 WeightExpression 类型 | common/expression/weight.go | ⏳ |
-| 支持常量和 Value 变量 | common/expression/weight.go | ⏳ |
-| 支持数学函数 (log, sqrt, abs) | common/expression/weight.go | ⏳ |
-| 单元测试 | common/expression/weight_test.go | ⏳ |
+| 在 Dataset 中集成表达式解析 | model/ctr/data.go | ⏳ |
+| 单元测试 | model/ctr/data_test.go | ⏳ |
 
 ### Phase 2: 配置扩展 ✅
 
@@ -182,9 +178,8 @@ func (fm *AFM) Fit(ctx context.Context, trainSet, testSet dataset.CTRSplit, conf
 
 | 任务 | 文件 | 状态 |
 |------|------|------|
-| 实现 WeightExpression 解析 | common/expression/weight.go | ⏳ |
 | Dataset 添加 SampleWeights | model/ctr/data.go | ⏳ |
-| 修改数据加载流程计算权重 | model/ctr/data.go | ⏳ |
+| 实现 ComputeWeights() | model/ctr/data.go | ⏳ |
 | 扩展 Get() 返回 weight | model/ctr/data.go | ⏳ |
 | 向后兼容处理 | model/ctr/data.go | ⏳ |
 
@@ -224,17 +219,11 @@ func main() {
 }
 ```
 
-**expr 特点：**
-- 安全的表达式执行
-- 支持丰富的运算符和函数
-- 编译后可重复执行，性能好
-- 活跃维护
-
 ## 5. 向后兼容性
 
 1. **默认行为**：未配置 feedback_weight 时，所有样本权重为 1.0
 2. **未知 feedback_type**：使用默认权重 1.0
-3. **模型加载**：旧版模型无需修改，权重在 Dataset 层处理
+3. **模型加载**：旧版模型无需修改
 
 ## 6. 示例配置
 
@@ -245,14 +234,14 @@ func main() {
 click = "1"
 cart = "3"
 purchase = "10"
-rating = "Value * 2"  # 1-5星映射到 2-10
+rating = "Value * 2"
 ```
 
 ### 6.2 视频场景
 
 ```toml
 [recommend.collaborative.feedback_weight]
-view = "log(Value + 1)"  # 观看时长对数权重
+view = "log(Value + 1)"
 like = "3"
 share = "10"
 comment = "5"
@@ -263,8 +252,8 @@ comment = "5"
 ```toml
 [recommend.collaborative.feedback_weight]
 play = "1"
-complete = "3"           # 完整播放
-skip = "0.1"             # 跳过（低权重负样本）
+complete = "3"
+skip = "0.1"
 like = "5"
 ```
 
@@ -272,11 +261,10 @@ like = "5"
 
 | 提交 | 说明 |
 |------|------|
+| `342c609` | docs: refactor architecture - model layer should not be aware of WeightExpression |
 | `f7a0dd1` | feat: add feedback_weight config for weighted training |
-| `a7c38f4` | docs: use expr-lang/expr for weight expression parsing |
 
 ## 8. 参考资料
 
 - [expr-lang/expr](https://github.com/expr-lang/expr) - Go 表达式引擎
 - [BCEWithLogits Loss](https://pytorch.org/docs/stable/generated/torch.nn.functional.binary_cross_entropy_with_logits.html)
-- [Sample Weights in sklearn](https://scikit-learn.org/stable/modules/generated/sklearn.utils.class_weight.compute_sample_weight.html)
