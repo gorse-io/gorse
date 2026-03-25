@@ -45,8 +45,7 @@ score = "Value / 5"   # 归一化评分
 | 复合表达式 | `log(Value + 1)`, `sqrt(Value) * 2` | 组合使用 |
 
 **实现方式：**
-- 使用 Go 的表达式解析库（如 `github.com/Knetic/govaluate`）
-- 或实现简单的表达式解析器
+- 使用 `github.com/expr-lang/expr` 表达式引擎
 
 ### 2.3 数据结构
 
@@ -55,13 +54,26 @@ score = "Value / 5"   # 归一化评分
 ```go
 // common/expression/weight.go
 
+import "github.com/expr-lang/expr"
+
 type WeightExpression struct {
     expr string
-    // 解析后的表达式（使用 govaluate 或自定义解析器）
+    program *vm.Program
 }
 
-func ParseWeightExpression(s string) (*WeightExpression, error)
-func (e *WeightExpression) Evaluate(value float64) float32
+func ParseWeightExpression(s string) (*WeightExpression, error) {
+    program, err := expr.Compile(s, expr.Env(map[string]float64{"Value": 0}))
+    if err != nil {
+        return nil, err
+    }
+    return &WeightExpression{expr: s, program: program}, nil
+}
+
+func (e *WeightExpression) Evaluate(value float64) float32 {
+    env := map[string]float64{"Value": value}
+    result, _ := expr.Run(e.program, env)
+    return float32(result.(float64))
+}
 ```
 
 #### 2.3.2 配置扩展
@@ -122,10 +134,10 @@ type Dataset struct {
 
 | 任务 | 文件 | 优先级 |
 |------|------|--------|
+| 添加 expr 依赖 | go.mod | P0 |
 | 实现 WeightExpression 类型 | common/expression/weight.go | P0 |
 | 支持常量和 Value 变量 | common/expression/weight.go | P0 |
 | 支持数学函数 (log, sqrt, abs) | common/expression/weight.go | P1 |
-| 支持算术运算 | common/expression/weight.go | P1 |
 | 单元测试 | common/expression/weight_test.go | P0 |
 
 ### Phase 2: 配置扩展
@@ -161,36 +173,32 @@ type Dataset struct {
 | 带权重训练测试 | P0 |
 | 效果对比测试 | P1 |
 
-## 4. 表达式库选择
-
-### 选项 A: govaluate
+## 4. expr 库使用示例
 
 ```go
-import "github.com/Knetic/govaluate"
+package main
 
-expr, _ := govaluate.NewEvaluableExpression("log(Value) + 1")
-params := map[string]interface{}{"Value": 100.0}
-result, _ := expr.Evaluate(params)
-```
+import (
+    "fmt"
+    "github.com/expr-lang/expr"
+)
 
-**优点：** 功能强大，支持复杂表达式
-**缺点：** 外部依赖
-
-### 选项 B: 自定义解析器
-
-```go
-// 只支持简单表达式
-func parseWeightExpression(s string) (func(float64) float32, error) {
-    // 解析并返回求值函数
+func main() {
+    // 编译表达式
+    program, _ := expr.Compile("log(Value) + 1", expr.Env(map[string]float64{"Value": 0}))
+    
+    // 执行表达式
+    env := map[string]float64{"Value": 100.0}
+    result, _ := expr.Run(program, env)
+    fmt.Println(result) // 5.605...
 }
 ```
 
-**优点：** 无外部依赖，可控
-**缺点：** 功能有限
-
-### 推荐方案
-
-先用 **选项 A (govaluate)**，快速实现功能。后续如有需要可替换为自定义解析器。
+**expr 特点：**
+- 安全的表达式执行
+- 支持丰富的运算符和函数
+- 编译后可重复执行，性能好
+- 活跃维护
 
 ## 5. 向后兼容性
 
@@ -232,6 +240,6 @@ like = "5"
 
 ## 7. 参考资料
 
-- [govaluate](https://github.com/Knetic/govaluate) - Go 表达式解析库
+- [expr-lang/expr](https://github.com/expr-lang/expr) - Go 表达式引擎
 - [BCEWithLogits Loss](https://pytorch.org/docs/stable/generated/torch.nn.functional.binary_cross_entropy_with_logits.html)
 - [Sample Weights in sklearn](https://scikit-learn.org/stable/modules/generated/sklearn.utils.class_weight.compute_sample_weight.html)
