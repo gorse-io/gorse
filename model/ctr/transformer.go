@@ -60,35 +60,6 @@ func (s *MinMaxScaler) Transform(value float32) float32 {
 	return (value - s.Min) / range_
 }
 
-// TransformSlice scales multiple values to [0, 1] range.
-func (s *MinMaxScaler) TransformSlice(values []float32) []float32 {
-	result := make([]float32, len(values))
-	for i, v := range values {
-		result[i] = s.Transform(v)
-	}
-	return result
-}
-
-// FitTransform fits the scaler and transforms the values.
-func (s *MinMaxScaler) FitTransform(values []float32) []float32 {
-	s.Fit(values)
-	return s.TransformSlice(values)
-}
-
-// InverseTransform scales a value back to the original range.
-func (s *MinMaxScaler) InverseTransform(value float32) float32 {
-	return value*(s.Max-s.Min) + s.Min
-}
-
-// InverseTransformSlice scales multiple values back to the original range.
-func (s *MinMaxScaler) InverseTransformSlice(values []float32) []float32 {
-	result := make([]float32, len(values))
-	for i, v := range values {
-		result[i] = s.InverseTransform(v)
-	}
-	return result
-}
-
 // Marshal writes the scaler to a writer.
 func (s *MinMaxScaler) Marshal(w io.Writer) error {
 	if err := encoding.WriteGob(w, s.Min); err != nil {
