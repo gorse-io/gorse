@@ -418,9 +418,12 @@ func (m *Master) LoadDataFromDatabase(
 	LoadDatasetStepSecondsVec.WithLabelValues("load_items").Set(time.Since(start).Seconds())
 
 	// create negative feedback set (highest priority)
-	negativeFeedbackSet := make([]mapset.Set[int32], dataSet.CountUsers())
-	for i := range negativeFeedbackSet {
-		negativeFeedbackSet[i] = mapset.NewSet[int32]()
+	var negativeSet []mapset.Set[int32]
+	if len(negFeedbackTypes) > 0 {
+		negativeSet = make([]mapset.Set[int32], dataSet.CountUsers())
+		for i := range negativeSet {
+			negativeSet[i] = mapset.NewSet[int32]()
+		}
 	}
 
 	// create positive set
@@ -458,7 +461,7 @@ func (m *Master) LoadDataFromDatabase(
 					if itemIndex == dataset.NotId {
 						continue
 					}
-					negativeFeedbackSet[userIndex].Add(itemIndex)
+					negativeSet[userIndex].Add(itemIndex)
 					mu.Lock()
 					explicitNegativeFeedbackCount++
 					evaluator.Add(f.FeedbackType, f.Value, userIndex, itemIndex, f.Timestamp)
@@ -506,7 +509,7 @@ func (m *Master) LoadDataFromDatabase(
 					continue
 				}
 				// skip if already in negative feedback set (negative feedback has highest priority)
-				if negativeFeedbackSet[userIndex].Contains(itemIndex) {
+				if negativeSet != nil && negativeSet[userIndex].Contains(itemIndex) {
 					continue
 				}
 				// insert feedback to positive set
@@ -595,7 +598,7 @@ func (m *Master) LoadDataFromDatabase(
 					continue
 				}
 				// skip if already in negative feedback set or positive set
-				if negativeFeedbackSet[userIndex].Contains(itemIndex) || positiveSet[userIndex].Contains(itemIndex) {
+				if (negativeSet != nil && negativeSet[userIndex].Contains(itemIndex)) || positiveSet[userIndex].Contains(itemIndex) {
 					continue
 				}
 				readSet[userIndex].Add(itemIndex)
@@ -653,11 +656,13 @@ func (m *Master) LoadDataFromDatabase(
 	ctrDataset.ItemEmbeddings = itemEmbeddings
 	for userIndex := range positiveSet {
 		// insert explicit negative feedback (highest priority)
-		for _, itemIndex := range negativeFeedbackSet[userIndex].ToSlice() {
-			ctrDataset.Users = append(ctrDataset.Users, int32(userIndex))
-			ctrDataset.Items = append(ctrDataset.Items, itemIndex)
-			ctrDataset.Target = append(ctrDataset.Target, -1)
-			ctrDataset.NegativeCount++
+		if negativeSet != nil {
+			for _, itemIndex := range negativeSet[userIndex].ToSlice() {
+				ctrDataset.Users = append(ctrDataset.Users, int32(userIndex))
+				ctrDataset.Items = append(ctrDataset.Items, itemIndex)
+				ctrDataset.Target = append(ctrDataset.Target, -1)
+				ctrDataset.NegativeCount++
+			}
 		}
 		// insert positive feedback
 		for _, itemIndex := range positiveSet[userIndex].ToSlice() {
@@ -674,7 +679,9 @@ func (m *Master) LoadDataFromDatabase(
 			ctrDataset.NegativeCount++
 		}
 		// release sets
-		negativeFeedbackSet[userIndex] = nil
+		if negativeSet != nil {
+			negativeSet[userIndex] = nil
+		}
 		positiveSet[userIndex] = nil
 		readSet[userIndex] = nil
 	}

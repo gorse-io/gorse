@@ -21,8 +21,8 @@ import (
 
 	"github.com/gorse-io/gorse/common/expression"
 	"github.com/gorse-io/gorse/config"
-	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/logics"
+	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
 	"github.com/samber/lo"
 )
