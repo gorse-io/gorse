@@ -271,10 +271,11 @@ func TestFactorizationMachines_WeightedTraining(t *testing.T) {
 	foundPurchase := false
 	for i := 0; i < train.Count(); i++ {
 		w := train.GetWeight(i)
-		if train.FeedbackTypes[i] == "click" {
+		switch train.FeedbackTypes[i] {
+		case "click":
 			assert.Equal(t, float32(1.0), w)
 			foundClick = true
-		} else if train.FeedbackTypes[i] == "purchase" {
+		case "purchase":
 			assert.Equal(t, float32(5.0), w)
 			foundPurchase = true
 		}
