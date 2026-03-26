@@ -243,6 +243,7 @@ func StringToFeedbackTypeHookFunc() mapstructure.DecodeHookFunc {
 
 type DataSourceConfig struct {
 	PositiveFeedbackTypes []expression.FeedbackTypeExpression `mapstructure:"positive_feedback_types"`                // positive feedback type
+	NegativeFeedbackTypes []expression.FeedbackTypeExpression `mapstructure:"negative_feedback_types"`                // negative feedback type (highest priority)
 	ReadFeedbackTypes     []expression.FeedbackTypeExpression `mapstructure:"read_feedback_types"`                    // feedback type for read event
 	PositiveFeedbackTTL   uint                                `mapstructure:"positive_feedback_ttl" validate:"gte=0"` // time-to-live of positive feedbacks
 	ItemTTL               uint                                `mapstructure:"item_ttl" validate:"gte=0"`              // item-to-live of items
@@ -286,6 +287,9 @@ func (config *ItemToItemConfig) Hash(cfg *RecommendConfig) string {
 		for _, expr := range cfg.DataSource.PositiveFeedbackTypes {
 			hash.Write([]byte(expr.String()))
 		}
+		for _, expr := range cfg.DataSource.NegativeFeedbackTypes {
+			hash.Write([]byte(expr.String()))
+		}
 	}
 	return hex.EncodeToString(hash.Sum(nil)[:])
 }
@@ -309,6 +313,9 @@ func (config *UserToUserConfig) Hash(cfg *RecommendConfig) string {
 		for _, expr := range cfg.DataSource.PositiveFeedbackTypes {
 			hash.Write([]byte(expr.String()))
 		}
+		for _, expr := range cfg.DataSource.NegativeFeedbackTypes {
+			hash.Write([]byte(expr.String()))
+		}
 	}
 	return hex.EncodeToString(hash.Sum(nil)[:])
 }
@@ -329,6 +336,9 @@ func (config *CollaborativeConfig) FullName() string {
 func (config *CollaborativeConfig) Hash(cfg *RecommendConfig) string {
 	hash := md5.New()
 	for _, expr := range cfg.DataSource.PositiveFeedbackTypes {
+		hash.Write([]byte(expr.String()))
+	}
+	for _, expr := range cfg.DataSource.NegativeFeedbackTypes {
 		hash.Write([]byte(expr.String()))
 	}
 	return hex.EncodeToString(hash.Sum(nil)[:])

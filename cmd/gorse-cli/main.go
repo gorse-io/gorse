@@ -81,6 +81,7 @@ var benchLLMCmd = &cobra.Command{
 			m.Config.Recommend.DataSource.ReadFeedbackTypes)
 		dataset, cfDataset, err := m.LoadDataFromDatabase(context.Background(), m.DataClient,
 			m.Config.Recommend.DataSource.PositiveFeedbackTypes,
+			m.Config.Recommend.DataSource.NegativeFeedbackTypes,
 			m.Config.Recommend.DataSource.ReadFeedbackTypes,
 			m.Config.Recommend.DataSource.ItemTTL,
 			m.Config.Recommend.DataSource.PositiveFeedbackTTL,
@@ -494,6 +495,7 @@ var benchEmbeddingCmd = &cobra.Command{
 			m.Config.Recommend.DataSource.ReadFeedbackTypes)
 		_, dataset, err := m.LoadDataFromDatabase(context.Background(), m.DataClient,
 			m.Config.Recommend.DataSource.PositiveFeedbackTypes,
+			m.Config.Recommend.DataSource.NegativeFeedbackTypes,
 			m.Config.Recommend.DataSource.ReadFeedbackTypes,
 			m.Config.Recommend.DataSource.ItemTTL,
 			m.Config.Recommend.DataSource.PositiveFeedbackTTL,

@@ -21,6 +21,7 @@ import (
 
 	"github.com/gorse-io/gorse/common/expression"
 	"github.com/gorse-io/gorse/config"
+	"github.com/gorse-io/gorse/logics"
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
 	"github.com/samber/lo"
@@ -83,7 +84,7 @@ func (s *MasterTestSuite) TestFindItemToItem() {
 	// load mock dataset
 	_, dataSet, err := s.LoadDataFromDatabase(s.T().Context(), s.DataClient,
 		[]expression.FeedbackTypeExpression{expression.MustParseFeedbackTypeExpression("FeedbackType")},
-		nil, 0, 0, NewOnlineEvaluator(nil, nil), nil)
+		nil, nil, 0, 0, NewOnlineEvaluator(nil, nil), nil)
 	s.NoError(err)
 
 	// similar items (common users)
@@ -170,7 +171,7 @@ func (s *MasterTestSuite) TestUserToUser() {
 	s.NoError(err)
 	_, dataSet, err := s.LoadDataFromDatabase(s.T().Context(), s.DataClient,
 		[]expression.FeedbackTypeExpression{expression.MustParseFeedbackTypeExpression("FeedbackType")},
-		nil, 0, 0, NewOnlineEvaluator(nil, nil), nil)
+		nil, nil, 0, 0, NewOnlineEvaluator(nil, nil), nil)
 	s.NoError(err)
 
 	// similar items (common users)
@@ -327,6 +328,80 @@ func (s *MasterTestSuite) TestLoadDataFromDatabase() {
 		categories[i] = score.Id
 	}
 	s.Equal([]string{"0", "1", "2"}, categories)
+}
+
+func (s *MasterTestSuite) TestNegativeFeedbackPriority() {
+	ctx := s.T().Context()
+	// create config
+	s.Config = &config.Config{}
+	s.Config.Recommend.CacheSize = 3
+	s.Config.Recommend.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{
+		expression.MustParseFeedbackTypeExpression("positive")}
+	s.Config.Recommend.DataSource.NegativeFeedbackTypes = []expression.FeedbackTypeExpression{
+		expression.MustParseFeedbackTypeExpression("dislike")}
+	s.Config.Recommend.DataSource.ReadFeedbackTypes = []expression.FeedbackTypeExpression{
+		expression.MustParseFeedbackTypeExpression("read")}
+	s.Config.Master.NumJobs = runtime.NumCPU()
+
+	// insert items
+	var items []data.Item
+	for i := range 5 {
+		items = append(items, data.Item{
+			ItemId:    strconv.Itoa(i),
+			Timestamp: time.Date(2000+i, 1, 1, 1, 1, 0, 0, time.UTC),
+		})
+	}
+	err := s.DataClient.BatchInsertItems(ctx, items)
+	s.NoError(err)
+
+	// insert users
+	var users []data.User
+	for i := 0; i < 3; i++ {
+		users = append(users, data.User{
+			UserId: strconv.Itoa(i),
+		})
+	}
+	err = s.DataClient.BatchInsertUsers(ctx, users)
+	s.NoError(err)
+
+	// insert feedback
+	feedbacks := []data.Feedback{
+		// User 0: positive on item 0, 1; negative on item 2; read on item 3, 4
+		{FeedbackKey: data.FeedbackKey{UserId: "0", ItemId: "0", FeedbackType: "positive"}, Timestamp: time.Now()},
+		{FeedbackKey: data.FeedbackKey{UserId: "0", ItemId: "1", FeedbackType: "positive"}, Timestamp: time.Now()},
+		{FeedbackKey: data.FeedbackKey{UserId: "0", ItemId: "2", FeedbackType: "dislike"}, Timestamp: time.Now()},
+		{FeedbackKey: data.FeedbackKey{UserId: "0", ItemId: "3", FeedbackType: "read"}, Timestamp: time.Now()},
+		{FeedbackKey: data.FeedbackKey{UserId: "0", ItemId: "4", FeedbackType: "read"}, Timestamp: time.Now()},
+		// User 1: positive AND negative on item 0 (should be negative due to priority)
+		{FeedbackKey: data.FeedbackKey{UserId: "1", ItemId: "0", FeedbackType: "positive"}, Timestamp: time.Now()},
+		{FeedbackKey: data.FeedbackKey{UserId: "1", ItemId: "0", FeedbackType: "dislike"}, Timestamp: time.Now()},
+		{FeedbackKey: data.FeedbackKey{UserId: "1", ItemId: "1", FeedbackType: "positive"}, Timestamp: time.Now()},
+		// User 2: positive, then negative on item 2 (should be negative due to priority)
+		{FeedbackKey: data.FeedbackKey{UserId: "2", ItemId: "2", FeedbackType: "positive"}, Timestamp: time.Now().Add(-time.Hour)},
+		{FeedbackKey: data.FeedbackKey{UserId: "2", ItemId: "2", FeedbackType: "dislike"}, Timestamp: time.Now()},
+		{FeedbackKey: data.FeedbackKey{UserId: "2", ItemId: "3", FeedbackType: "positive"}, Timestamp: time.Now()},
+	}
+	err = s.DataClient.BatchInsertFeedback(ctx, feedbacks, false, false, true)
+	s.NoError(err)
+
+	// load dataset
+	datasets, err := s.loadDataset(ctx)
+	s.NoError(err)
+
+	// Verify the dataset
+	// User 0: 2 positive (0,1), 1 negative feedback (2), 2 read (3,4) = 2 pos + 3 neg = 5 samples
+	// User 1: item 0 is negative (due to dislike priority), item 1 is positive = 1 pos + 1 neg = 2 samples
+	// User 2: item 2 is negative (due to dislike priority), item 3 is positive = 1 pos + 1 neg = 2 samples
+	s.Equal(9, datasets.clickTrainSet.Count()+datasets.clickTestSet.Count())
+	s.Equal(4, datasets.clickTrainSet.PositiveCount+datasets.clickTestSet.PositiveCount)
+	s.Equal(5, datasets.clickTrainSet.NegativeCount+datasets.clickTestSet.NegativeCount)
+
+	// Verify negative feedback items are excluded from recommendations
+	recommender, err := logics.NewRecommender(s.Config.Recommend, s.CacheClient, s.DataClient, true, "1", nil)
+	s.NoError(err)
+	excludeSet := recommender.ExcludeSet()
+	// User 1 should have item 0 in exclude set (due to dislike)
+	s.True(excludeSet.Contains("0"), "item 0 should be excluded due to dislike feedback")
 }
 
 func (s *MasterTestSuite) TestNonPersonalizedRecommend() {
