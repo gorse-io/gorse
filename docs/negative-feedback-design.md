@@ -257,3 +257,48 @@ GET /api/user/{user_id}/feedback?feedback_type=dislike
 1. **优先级明确**: 负反馈 > 正反馈 > 读反馈
 2. **向后兼容**: 不配置新选项时行为不变
 3. **可扩展**: 支持多种负反馈类型，支持表达式配置
+
+---
+
+## 实现状态
+
+✅ **已完成** (2026-03-26)
+
+### 提交记录
+
+| Phase | 提交 | 描述 |
+|-------|------|------|
+| Phase 1 | `e4d3a33` | 配置扩展 - 添加 `NegativeFeedbackTypes` |
+| Phase 2 | `c1666d9` | 数据加载逻辑 - 负反馈优先级 |
+| Phase 3 | `c98920a` | 推荐过滤 - 负反馈物品始终排除 |
+| Phase 4 | - | 测试与文档 |
+
+### 使用示例
+
+```yaml
+# config.toml
+[recommend.data_source]
+positive_feedback_types = ["like", "purchase"]
+negative_feedback_types = ["dislike", "not_interested"]
+read_feedback_types = ["read"]
+```
+
+### API 使用
+
+```bash
+# 插入负反馈
+curl -X POST http://localhost:8087/api/feedback \
+  -H "Content-Type: application/json" \
+  -d '[{
+    "FeedbackType": "dislike",
+    "UserId": "user1",
+    "ItemId": "item1",
+    "Timestamp": "2026-03-26T10:00:00Z"
+  }]'
+```
+
+### 测试覆盖
+
+- `TestNegativeFeedbackPriority`: 验证负反馈优先级逻辑
+  - 用户对同一物品同时有正反馈和负反馈时，负反馈优先
+  - 负反馈物品从推荐候选中排除
