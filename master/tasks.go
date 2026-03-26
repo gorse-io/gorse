@@ -64,6 +64,7 @@ func (m *Master) loadDataset(parent context.Context) (datasets Datasets, err err
 
 	log.Logger().Info("load dataset",
 		zap.Any("positive_feedback_types", m.Config.Recommend.DataSource.PositiveFeedbackTypes),
+		zap.Any("negative_feedback_types", m.Config.Recommend.DataSource.NegativeFeedbackTypes),
 		zap.Any("read_feedback_types", m.Config.Recommend.DataSource.ReadFeedbackTypes),
 		zap.Uint("item_ttl", m.Config.Recommend.DataSource.ItemTTL),
 		zap.Uint("feedback_ttl", m.Config.Recommend.DataSource.PositiveFeedbackTTL))
@@ -72,6 +73,7 @@ func (m *Master) loadDataset(parent context.Context) (datasets Datasets, err err
 		m.Config.Recommend.DataSource.ReadFeedbackTypes)
 	datasets.clickDataset, datasets.rankingDataset, err = m.LoadDataFromDatabase(ctx, m.DataClient,
 		m.Config.Recommend.DataSource.PositiveFeedbackTypes,
+		m.Config.Recommend.DataSource.NegativeFeedbackTypes,
 		m.Config.Recommend.DataSource.ReadFeedbackTypes,
 		m.Config.Recommend.DataSource.ItemTTL,
 		m.Config.Recommend.DataSource.PositiveFeedbackTTL,
@@ -253,7 +255,7 @@ func (m *Master) runLoadDatasetTask(ctx context.Context) error {
 func (m *Master) LoadDataFromDatabase(
 	ctx context.Context,
 	database data.Database,
-	posFeedbackTypes, readTypes []expression.FeedbackTypeExpression,
+	posFeedbackTypes, negFeedbackTypes, readTypes []expression.FeedbackTypeExpression,
 	itemTTL, positiveFeedbackTTL uint,
 	evaluator *OnlineEvaluator,
 	nonPersonalizedRecommenders []*logics.NonPersonalized,
@@ -415,6 +417,12 @@ func (m *Master) LoadDataFromDatabase(
 		zap.Duration("used_time", time.Since(start)))
 	LoadDatasetStepSecondsVec.WithLabelValues("load_items").Set(time.Since(start).Seconds())
 
+	// create negative feedback set (highest priority)
+	negativeFeedbackSet := make([]mapset.Set[int32], dataSet.CountUsers())
+	for i := range negativeFeedbackSet {
+		negativeFeedbackSet[i] = mapset.NewSet[int32]()
+	}
+
 	// create positive set
 	positiveSet := make([]mapset.Set[int32], dataSet.CountUsers())
 	for i := range positiveSet {
@@ -427,8 +435,52 @@ func (m *Master) LoadDataFromDatabase(
 	})
 	itemGroups := parallel.Split(items, m.Config.Master.NumJobs)
 
-	// STEP 3: pull positive feedback
+	// STEP 3: pull explicit negative feedback (highest priority)
 	var mu sync.Mutex
+	start = time.Now()
+	var explicitNegativeFeedbackCount int
+	if len(negFeedbackTypes) > 0 {
+		err = parallel.Parallel(newCtx, len(itemGroups), m.Config.Master.NumJobs, func(_, i int) error {
+			feedbackChan, errChan := database.GetFeedbackStream(newCtx, batchSize,
+				data.WithBeginItemId(itemGroups[i][0].ItemId),
+				data.WithEndItemId(itemGroups[i][len(itemGroups[i])-1].ItemId),
+				feedbackTimeLimit,
+				data.WithEndTime(*m.Config.Now()),
+				data.WithFeedbackTypes(negFeedbackTypes...),
+				data.WithOrderByItemId())
+			for feedback := range feedbackChan {
+				for _, f := range feedback {
+					userIndex := dataSet.GetUserDict().Id(f.UserId)
+					if userIndex == dataset.NotId {
+						continue
+					}
+					itemIndex := dataSet.GetItemDict().Id(f.ItemId)
+					if itemIndex == dataset.NotId {
+						continue
+					}
+					negativeFeedbackSet[userIndex].Add(itemIndex)
+					mu.Lock()
+					explicitNegativeFeedbackCount++
+					evaluator.Add(f.FeedbackType, f.Value, userIndex, itemIndex, f.Timestamp)
+					mu.Unlock()
+				}
+				span.Add(len(feedback))
+			}
+			if err = <-errChan; err != nil {
+				return errors.Trace(err)
+			}
+			return nil
+		})
+		if err != nil {
+			return nil, nil, errors.Trace(err)
+		}
+	}
+	log.Logger().Debug("pulled explicit negative feedback from database",
+		zap.Int("n_explicit_negative_feedback", explicitNegativeFeedbackCount),
+		zap.Duration("used_time", time.Since(start)))
+	LoadDatasetStepSecondsVec.WithLabelValues("load_explicit_negative_feedback").Set(time.Since(start).Seconds())
+
+	// STEP 4: pull positive feedback
 	var posFeedbackCount int
 	start = time.Now()
 	err = parallel.Parallel(newCtx, len(itemGroups), m.Config.Master.NumJobs, func(_, i int) error {
@@ -451,6 +503,10 @@ func (m *Master) LoadDataFromDatabase(
 				}
 				itemIndex := dataSet.GetItemDict().Id(f.ItemId)
 				if itemIndex == dataset.NotId {
+					continue
+				}
+				// skip if already in negative feedback set (negative feedback has highest priority)
+				if negativeFeedbackSet[userIndex].Contains(itemIndex) {
 					continue
 				}
 				// insert feedback to positive set
@@ -512,15 +568,15 @@ func (m *Master) LoadDataFromDatabase(
 		zap.Duration("used_time", time.Since(start)))
 	LoadDatasetStepSecondsVec.WithLabelValues("load_positive_feedback").Set(time.Since(start).Seconds())
 
-	// create negative set
-	negativeSet := make([]mapset.Set[int32], dataSet.CountUsers())
-	for i := range negativeSet {
-		negativeSet[i] = mapset.NewSet[int32]()
+	// create read set (implicit negative feedback)
+	readSet := make([]mapset.Set[int32], dataSet.CountUsers())
+	for i := range readSet {
+		readSet[i] = mapset.NewSet[int32]()
 	}
 
-	// STEP 4: pull negative feedback
+	// STEP 5: pull read feedback (implicit negative feedback)
 	start = time.Now()
-	var negativeFeedbackCount float64
+	var readFeedbackCount int
 	err = parallel.Parallel(newCtx, len(itemGroups), m.Config.Master.NumJobs, func(_, i int) error {
 		feedbackChan, errChan := database.GetFeedbackStream(newCtx, batchSize,
 			data.WithBeginItemId(itemGroups[i][0].ItemId),
@@ -538,9 +594,13 @@ func (m *Master) LoadDataFromDatabase(
 				if itemIndex == dataset.NotId {
 					continue
 				}
-				negativeSet[userIndex].Add(itemIndex)
+				// skip if already in negative feedback set or positive set
+				if negativeFeedbackSet[userIndex].Contains(itemIndex) || positiveSet[userIndex].Contains(itemIndex) {
+					continue
+				}
+				readSet[userIndex].Add(itemIndex)
 				mu.Lock()
-				negativeFeedbackCount++
+				readFeedbackCount++
 				evaluator.Add(f.FeedbackType, f.Value, userIndex, itemIndex, f.Timestamp)
 				mu.Unlock()
 			}
@@ -554,12 +614,12 @@ func (m *Master) LoadDataFromDatabase(
 	if err != nil {
 		return nil, nil, errors.Trace(err)
 	}
-	log.Logger().Debug("pulled negative feedback from database",
-		zap.Int("n_negative_feedback", int(negativeFeedbackCount)),
+	log.Logger().Debug("pulled read feedback from database",
+		zap.Int("n_read_feedback", readFeedbackCount),
 		zap.Duration("used_time", time.Since(start)))
-	LoadDatasetStepSecondsVec.WithLabelValues("load_negative_feedback").Set(time.Since(start).Seconds())
+	LoadDatasetStepSecondsVec.WithLabelValues("load_read_feedback").Set(time.Since(start).Seconds())
 
-	// STEP 5: create click-through rate dataset
+	// STEP 6: create click-through rate dataset
 	start = time.Now()
 	unifiedIndex := dataset.NewUnifiedMapIndexBuilder()
 	unifiedIndex.ItemIndex = dataSet.GetItemDict().ToIndex()
@@ -592,6 +652,13 @@ func (m *Master) LoadDataFromDatabase(
 	}
 	ctrDataset.ItemEmbeddings = itemEmbeddings
 	for userIndex := range positiveSet {
+		// insert explicit negative feedback (highest priority)
+		for _, itemIndex := range negativeFeedbackSet[userIndex].ToSlice() {
+			ctrDataset.Users = append(ctrDataset.Users, int32(userIndex))
+			ctrDataset.Items = append(ctrDataset.Items, itemIndex)
+			ctrDataset.Target = append(ctrDataset.Target, -1)
+			ctrDataset.NegativeCount++
+		}
 		// insert positive feedback
 		for _, itemIndex := range positiveSet[userIndex].ToSlice() {
 			ctrDataset.Users = append(ctrDataset.Users, int32(userIndex))
@@ -599,16 +666,17 @@ func (m *Master) LoadDataFromDatabase(
 			ctrDataset.Target = append(ctrDataset.Target, 1)
 			ctrDataset.PositiveCount++
 		}
-		// insert negative feedback
-		for _, itemIndex := range negativeSet[userIndex].ToSlice() {
+		// insert read feedback (implicit negative)
+		for _, itemIndex := range readSet[userIndex].ToSlice() {
 			ctrDataset.Users = append(ctrDataset.Users, int32(userIndex))
 			ctrDataset.Items = append(ctrDataset.Items, itemIndex)
 			ctrDataset.Target = append(ctrDataset.Target, -1)
 			ctrDataset.NegativeCount++
 		}
-		// release positive set and negative set
+		// release sets
+		negativeFeedbackSet[userIndex] = nil
 		positiveSet[userIndex] = nil
-		negativeSet[userIndex] = nil
+		readSet[userIndex] = nil
 	}
 	log.Logger().Debug("created ranking dataset",
 		zap.Int("n_valid_positive", ctrDataset.PositiveCount),
