@@ -42,6 +42,7 @@ const (
 	BatchSize    ParamName = "BatchSize"
 	HiddenLayers ParamName = "HiddenLayers"
 	Optimizer    ParamName = "Optimizer"
+	AutoScale    ParamName = "AutoScale"
 
 	SGD  = "sgd"
 	Adam = "adam"

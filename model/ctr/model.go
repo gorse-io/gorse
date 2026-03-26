@@ -114,9 +114,13 @@ func (b *BaseFactorizationMachines) Init(trainSet dataset.CTRSplit) {
 func MarshalModel(w io.Writer, m FactorizationMachines) error {
 	// write header
 	var err error
-	switch m.(type) {
+	switch fm := m.(type) {
 	case *AFM:
-		err = encoding.WriteString(w, headerAFM)
+		if !fm.autoScale {
+			err = encoding.WriteString(w, headerAFM)
+		} else {
+			err = encoding.WriteString(w, headerAFM2)
+		}
 	default:
 		return fmt.Errorf("unknown model: %v", reflect.TypeOf(m))
 	}
@@ -133,8 +137,9 @@ func UnmarshalModel(r io.Reader) (FactorizationMachines, error) {
 		return nil, err
 	}
 	switch header {
-	case headerAFM:
+	case headerAFM, headerAFM2:
 		var fm AFM
+		fm.autoScale = header == headerAFM2
 		if err := fm.Unmarshal(r); err != nil {
 			return nil, errors.Trace(err)
 		}
@@ -142,4 +147,3 @@ func UnmarshalModel(r io.Reader) (FactorizationMachines, error) {
 	}
 	return nil, fmt.Errorf("unknown model: %v", header)
 }
-

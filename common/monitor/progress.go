@@ -22,7 +22,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorse-io/gorse/protocol"
-	"modernc.org/mathutil"
 )
 
 type spanKeyType string
@@ -88,7 +87,7 @@ type Span struct {
 }
 
 func (s *Span) Add(n int) {
-	s.count = mathutil.Min(s.count+n, s.total)
+	s.count = min(s.count+n, s.total)
 }
 
 func (s *Span) End() {

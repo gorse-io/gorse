@@ -1010,7 +1010,7 @@ func (s *RestServer) sessionRecommend(request *restful.Request, response *restfu
 	} else {
 		result = nil
 	}
-	result = result[:lo.Min([]int{len(result), n})]
+	result = result[:min(len(result), n)]
 	// Send result
 	Ok(response, result)
 }
