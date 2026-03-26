@@ -14,8 +14,8 @@
 package ctr
 
 import (
-	"context"
 	"bytes"
+	"context"
 	"runtime"
 	"testing"
 

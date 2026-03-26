@@ -14,9 +14,9 @@
 package ctr
 
 import (
-	"math"
 	"encoding/json"
 	"fmt"
+	"math"
 	"testing"
 
 	"github.com/gorse-io/gorse/dataset"
