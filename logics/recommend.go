@@ -63,7 +63,11 @@ func NewRecommender(config config.RecommendConfig, cacheClient cache.Database, d
 	excludeSet := mapset.NewSet[string]()
 	coldstart := true
 	for _, feedback := range userFeedback {
-		if !config.Replacement.EnableReplacement || !online {
+		// Negative feedback items should always be excluded (highest priority)
+		if expression.MatchFeedbackTypeExpressions(config.DataSource.NegativeFeedbackTypes, feedback.FeedbackType, feedback.Value) {
+			excludeSet.Add(feedback.ItemId)
+		} else if !config.Replacement.EnableReplacement || !online {
+			// Other feedback items are excluded unless replacement is enabled
 			excludeSet.Add(feedback.ItemId)
 		}
 		if expression.MatchFeedbackTypeExpressions(config.DataSource.PositiveFeedbackTypes, feedback.FeedbackType, feedback.Value) {
