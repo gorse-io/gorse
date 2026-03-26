@@ -34,7 +34,6 @@ import (
 	"github.com/juju/errors"
 	"github.com/samber/lo"
 	"go.uber.org/zap"
-	"modernc.org/mathutil"
 )
 
 const (
@@ -157,7 +156,7 @@ func (fm *AFM) BatchInternalPredict(x []lo.Tuple2[[]int32, []float32], e [][][]f
 	defer fm.mu.RUnlock()
 	// Apply scalers to numerical features if enabled
 	var scaledX []lo.Tuple2[[]int32, []float32]
-	if len(fm.Scalers) > 0 {
+	if fm.autoScale {
 		scaledX = fm.applyScalers(x)
 	} else {
 		scaledX = x
@@ -165,7 +164,7 @@ func (fm *AFM) BatchInternalPredict(x []lo.Tuple2[[]int32, []float32], e [][][]f
 	indicesTensor, valuesTensor, embeddingTensor, _ := fm.convertToTensors(scaledX, e, nil)
 	predictions := make([]float32, 0, len(x))
 	for i := 0; i < len(x); i += fm.batchSize {
-		j := mathutil.Min(i+fm.batchSize, len(x))
+		j := min(i+fm.batchSize, len(x))
 		embeddingTensorSlice := make([]*nn.Tensor, len(fm.embeddingDim))
 		for k := range fm.embeddingDim {
 			embeddingTensorSlice[k] = embeddingTensor[k].Slice(i, j)
@@ -246,7 +245,7 @@ func (fm *AFM) Init(trainSet dataset.CTRSplit) {
 	fm.numDimension = 0
 	for i := 0; i < trainSet.Count(); i++ {
 		_, x, _, _ := trainSet.Get(i)
-		fm.numDimension = mathutil.MaxVal(fm.numDimension, len(x))
+		fm.numDimension = max(fm.numDimension, len(x))
 	}
 	fm.B = nn.Zeros()
 	fm.W = nn.NewEmbedding(int(trainSet.GetIndex().Len()), 1)
@@ -362,7 +361,7 @@ func (fm *AFM) Fit(ctx context.Context, trainSet, testSet dataset.CTRSplit, conf
 				log.Logger().Info("fit AFM canceled", zap.Error(ctx.Err()))
 				return Score{}
 			}
-			j := mathutil.Min(i+fm.batchSize, trainSet.Count())
+			j := min(i+fm.batchSize, trainSet.Count())
 			batchIndices := indices.Slice(i, j)
 			batchValues := values.Slice(i, j)
 			batchEmbedding := make([]*nn.Tensor, len(fm.embeddingDim))

@@ -91,7 +91,6 @@ require (
 	gorm.io/driver/postgres v1.3.5
 	gorm.io/driver/sqlite v1.3.4
 	gorm.io/gorm v1.23.6
-	modernc.org/mathutil v1.7.1
 	modernc.org/quickjs v0.17.1
 	modernc.org/sortutil v1.2.1
 	modernc.org/sqlite v1.47.0
@@ -264,6 +263,7 @@ require (
 	k8s.io/klog/v2 v2.140.0 // indirect
 	modernc.org/libc v1.70.0 // indirect
 	modernc.org/libquickjs v0.12.3 // indirect
+	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
 )
 

@@ -45,7 +45,6 @@ import (
 	"github.com/juju/errors"
 	"github.com/samber/lo"
 	"go.uber.org/zap"
-	"modernc.org/mathutil"
 )
 
 const headerAFM = "AFM"
@@ -249,7 +248,7 @@ func (fm *AFM) BatchInternalPredict(x []lo.Tuple2[[]int32, []float32], e [][][]f
 
 	for b := 0; b < numBatches; b++ {
 		start := b * fm.batchSize
-		end := mathutil.Min(start+fm.batchSize, len(x))
+		end := min(start+fm.batchSize, len(x))
 		batchSize := end - start
 
 		indicesData := make([]int32, batchSize*fm.numDimension)
@@ -341,7 +340,7 @@ func (fm *AFM) Init(trainSet dataset.CTRSplit) {
 	fm.numDimension = 0
 	for i := 0; i < trainSet.Count(); i++ {
 		_, x, _, _ := trainSet.Get(i)
-		fm.numDimension = mathutil.MaxVal(fm.numDimension, len(x))
+		fm.numDimension = max(fm.numDimension, len(x))
 	}
 	fm.embeddingDim = trainSet.GetItemEmbeddingDim()
 	fm.embeddingIndex = trainSet.GetItemEmbeddingIndex()
@@ -416,7 +415,7 @@ func (d *ctrDataset) Yield() (spec any, inputs []*tensors.Tensor, labels []*tens
 		return nil, nil, nil, io.EOF
 	}
 
-	batchSize := mathutil.Min(d.batchSize, d.trainSet.Count()-d.currentOffset)
+	batchSize := min(d.batchSize, d.trainSet.Count()-d.currentOffset)
 	indicesData := make([]int32, batchSize*d.numDimension)
 	valuesData := make([]float32, batchSize*d.numDimension)
 	additionalData := make([][]float32, len(d.embeddingDim))

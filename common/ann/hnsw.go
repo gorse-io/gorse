@@ -27,7 +27,6 @@ import (
 	"github.com/gorse-io/gorse/common/heap"
 	"github.com/pkg/errors"
 	"github.com/samber/lo"
-	"modernc.org/mathutil"
 )
 
 // HNSW is a vector index based on Hierarchical Navigable Small Worlds.
@@ -150,7 +149,7 @@ func (h *HNSW[T]) insert(q int32) {
 	}
 
 	h.bottomMutex[q].Lock()
-	for currentLayer := mathutil.Min(topLayer, l); currentLayer >= 0; currentLayer-- {
+	for currentLayer := min(topLayer, l); currentLayer >= 0; currentLayer-- {
 		w = h.searchLayer(h.vectors[q], enterPoints, h.efConstruction, currentLayer)
 		neighbors := h.selectNeighbors(h.vectors[q], w, h.maxConnection)
 		// add bidirectional connections from upperNeighbors to q at layer l_c
@@ -271,9 +270,9 @@ func (h *HNSW[T]) distance(q T, points []int32) *heap.PriorityQueue {
 // efSearchValue returns the efSearch value to use, given the current number of elements desired.
 func (h *HNSW[T]) efSearchValue(n int) int {
 	if h.ef > 0 {
-		return mathutil.Max(h.ef, n)
+		return max(h.ef, n)
 	}
-	return mathutil.Max(h.efConstruction, n)
+	return max(h.efConstruction, n)
 }
 
 func (h *HNSW[T]) Marshal(w io.Writer) error {
