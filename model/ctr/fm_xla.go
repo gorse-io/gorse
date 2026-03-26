@@ -47,7 +47,10 @@ import (
 	"go.uber.org/zap"
 )
 
-const headerAFM = "AFM"
+const (
+	headerAFM  = "AFM"
+	headerAFM2 = "AFM2"
+)
 
 type AFM struct {
 	BaseFactorizationMachines
@@ -63,6 +66,7 @@ type AFM struct {
 	initMean   float32
 	initStdDev float32
 	optimizer  string
+	autoScale  bool
 	// dataset stats
 	numFeatures    int
 	numDimension   int
@@ -101,6 +105,7 @@ func (fm *AFM) SetParams(params model.Params) {
 	fm.initMean = fm.Params.GetFloat32(model.InitMean, 0)
 	fm.initStdDev = fm.Params.GetFloat32(model.InitStdDev, 0.01)
 	fm.optimizer = fm.Params.GetString(model.Optimizer, model.Adam)
+	fm.autoScale = fm.Params.GetBool(model.AutoScale, true)
 }
 
 func (fm *AFM) Clear() {
@@ -206,14 +211,10 @@ func (fm *AFM) forwardGraph(ctx *mlx_context.Context, indices, values *graph.Nod
 
 // applyScalers applies scalers to numerical features in the input.
 func (fm *AFM) applyScalers(x []lo.Tuple2[[]int32, []float32]) []lo.Tuple2[[]int32, []float32] {
-	if len(fm.Scalers) == 0 {
-		return x
-	}
 	result := make([]lo.Tuple2[[]int32, []float32], len(x))
 	for i, sample := range x {
-		result[i].A = make([]int32, len(sample.A))
+		result[i].A = sample.A
 		result[i].B = make([]float32, len(sample.B))
-		copy(result[i].A, sample.A)
 		copy(result[i].B, sample.B)
 		for j, idx := range sample.A {
 			if scaler, ok := fm.Scalers[idx]; ok {
@@ -228,8 +229,13 @@ func (fm *AFM) BatchInternalPredict(x []lo.Tuple2[[]int32, []float32], e [][][]f
 	fm.mu.RLock()
 	defer fm.mu.RUnlock()
 
-	// Apply scalers to numerical features
-	scaledX := fm.applyScalers(x)
+	// Apply scalers to numerical features if enabled
+	var scaledX []lo.Tuple2[[]int32, []float32]
+	if fm.autoScale {
+		scaledX = fm.applyScalers(x)
+	} else {
+		scaledX = x
+	}
 
 	if fm.predictExecutor == nil {
 		var err error
@@ -358,8 +364,10 @@ func (fm *AFM) Init(trainSet dataset.CTRSplit) {
 			panic(err)
 		}
 	}
-	// Collect numerical features and fit scalers
-	fm.fitScalers(trainSet)
+	// Collect numerical features and fit scalers if enabled
+	if fm.autoScale {
+		fm.fitScalers(trainSet)
+	}
 	fm.BaseFactorizationMachines.Init(trainSet)
 }
 
@@ -567,15 +575,17 @@ func (fm *AFM) Marshal(w io.Writer) error {
 		}
 	}
 	// write scalers
-	if err := encoding.WriteGob(w, len(fm.Scalers)); err != nil {
-		return errors.Trace(err)
-	}
-	for idx, scaler := range fm.Scalers {
-		if err := encoding.WriteGob(w, idx); err != nil {
+	if fm.autoScale {
+		if err := encoding.WriteGob(w, len(fm.Scalers)); err != nil {
 			return errors.Trace(err)
 		}
-		if err := scaler.Marshal(w); err != nil {
-			return errors.Trace(err)
+		for idx, scaler := range fm.Scalers {
+			if err := encoding.WriteGob(w, idx); err != nil {
+				return errors.Trace(err)
+			}
+			if err := scaler.Marshal(w); err != nil {
+				return errors.Trace(err)
+			}
 		}
 	}
 	// write parameters (GoMLX variables)
@@ -631,21 +641,23 @@ func (fm *AFM) Unmarshal(r io.Reader) error {
 		}
 	}
 	// read scalers
-	var numScalers int
-	if err = encoding.ReadGob(r, &numScalers); err != nil {
-		return errors.Trace(err)
-	}
-	fm.Scalers = make(map[int32]*AutoScaler, numScalers)
-	for i := 0; i < numScalers; i++ {
-		var idx int32
-		if err = encoding.ReadGob(r, &idx); err != nil {
+	if fm.autoScale {
+		var numScalers int
+		if err = encoding.ReadGob(r, &numScalers); err != nil {
 			return errors.Trace(err)
 		}
-		scaler := NewAutoScaler()
-		if err = scaler.Unmarshal(r); err != nil {
-			return errors.Trace(err)
+		fm.Scalers = make(map[int32]*AutoScaler, numScalers)
+		for i := 0; i < numScalers; i++ {
+			var idx int32
+			if err = encoding.ReadGob(r, &idx); err != nil {
+				return errors.Trace(err)
+			}
+			scaler := NewAutoScaler()
+			if err = scaler.Unmarshal(r); err != nil {
+				return errors.Trace(err)
+			}
+			fm.Scalers[idx] = scaler
 		}
-		fm.Scalers[idx] = scaler
 	}
 	// read parameters
 	var variables map[string]savedVariable

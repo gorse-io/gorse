@@ -227,9 +227,8 @@ func (fm *AFM) BatchPredict(inputs []lo.Tuple4[string, string, []Label, []Label]
 func (fm *AFM) applyScalers(x []lo.Tuple2[[]int32, []float32]) []lo.Tuple2[[]int32, []float32] {
 	result := make([]lo.Tuple2[[]int32, []float32], len(x))
 	for i, sample := range x {
-		result[i].A = make([]int32, len(sample.A))
+		result[i].A = sample.A
 		result[i].B = make([]float32, len(sample.B))
-		copy(result[i].A, sample.A)
 		copy(result[i].B, sample.B)
 		for j, idx := range sample.A {
 			if scaler, ok := fm.Scalers[idx]; ok {
@@ -413,16 +412,6 @@ func (fm *AFM) Fit(ctx context.Context, trainSet, testSet dataset.CTRSplit, conf
 }
 
 func (fm *AFM) Marshal(w io.Writer) error {
-	// write header
-	if fm.autoScale {
-		if err := encoding.WriteString(w, headerAFM2); err != nil {
-			return errors.Trace(err)
-		}
-	} else {
-		if err := encoding.WriteString(w, headerAFM); err != nil {
-			return errors.Trace(err)
-		}
-	}
 	// write params
 	if err := encoding.WriteGob(w, fm.Params); err != nil {
 		return errors.Trace(err)
@@ -468,16 +457,8 @@ func (fm *AFM) Marshal(w io.Writer) error {
 }
 
 func (fm *AFM) Unmarshal(r io.Reader) error {
-	// read header
-	header, err := encoding.ReadString(r)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	if header != headerAFM && header != headerAFM2 {
-		return errors.Errorf("invalid header: %s", header)
-	}
 	// read params
-	err = encoding.ReadGob(r, &fm.Params)
+	err := encoding.ReadGob(r, &fm.Params)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -504,7 +485,7 @@ func (fm *AFM) Unmarshal(r io.Reader) error {
 		}
 	}
 	// read scalers
-	if header == headerAFM2 {
+	if fm.autoScale {
 		var numScalers int
 		if err = encoding.ReadGob(r, &numScalers); err != nil {
 			return errors.Trace(err)

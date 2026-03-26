@@ -54,6 +54,9 @@ func (s *MinMaxScaler) Fit(values []float32) {
 
 // Transform scales a value to [0, 1] range.
 func (s *MinMaxScaler) Transform(value float32) float32 {
+	if s.Min > s.Max {
+		return value
+	}
 	range_ := s.Max - s.Min
 	if range_ == 0 {
 		return 1
@@ -146,6 +149,9 @@ func (s *RobustScaler) Fit(values []float32) {
 
 // Transform scales a value using median and IQR.
 func (s *RobustScaler) Transform(value float32) float32 {
+	if s.IQR == 0 {
+		return value
+	}
 	return (value - s.Median) / s.IQR
 }
 
@@ -194,7 +200,9 @@ type AutoScaler struct {
 
 // NewAutoScaler creates an AutoScaler.
 func NewAutoScaler() *AutoScaler {
-	return &AutoScaler{}
+	return &AutoScaler{
+		MinMax: *NewMinMaxScaler(),
+	}
 }
 
 // Fit analyzes the data and selects the appropriate scaling method.

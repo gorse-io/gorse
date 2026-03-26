@@ -83,6 +83,18 @@ func TestMinMaxScaler(t *testing.T) {
 		assert.Equal(t, scaler.Min, scaler2.Min)
 		assert.Equal(t, scaler.Max, scaler2.Max)
 	})
+
+	t.Run("empty values", func(t *testing.T) {
+		scaler := NewMinMaxScaler()
+		values := []float32{}
+		scaler.Fit(values)
+
+		assert.Equal(t, float32(math32.Inf(1)), scaler.Min)
+		assert.Equal(t, float32(math32.Inf(-1)), scaler.Max)
+
+		assert.Equal(t, float32(5), scaler.Transform(5))
+		assert.Equal(t, float32(-5), scaler.Transform(-5))
+	})
 }
 
 func TestRobustScaler(t *testing.T) {
@@ -164,17 +176,17 @@ func TestRobustScaler(t *testing.T) {
 func TestAutoScaler(t *testing.T) {
 	t.Run("non-negative values use log1p + MinMax", func(t *testing.T) {
 		scaler := NewAutoScaler()
-		values := []float32{0, 10, 100, 1000}
+		values := []float32{1, 10, 100, 1000}
 		scaler.Fit(values)
 
 		assert.True(t, scaler.UseLog)
 
 		// Verify log transformation
-		// log1p(0) = 0, log1p(1000) ≈ 6.909
-		minLog := math32.Log1p(0)
+		// log1p(1) ≈ 0.693, log1p(1000) ≈ 6.909
+		minLog := math32.Log1p(1)
 		maxLog := math32.Log1p(1000)
 
-		assert.Equal(t, float32(0.0), scaler.Transform(0))
+		assert.Equal(t, float32(0.0), scaler.Transform(1))
 		assert.Equal(t, float32(1.0), scaler.Transform(1000))
 
 		// Verify intermediate values
