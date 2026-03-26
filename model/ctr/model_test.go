@@ -45,6 +45,14 @@ func TestFactorizationMachines_Classification_Frappe(t *testing.T) {
 	fitConfig := newFitConfigWithTestTracker()
 	score := m.Fit(t.Context(), train, test, fitConfig)
 	assert.InDelta(t, 0.919, score.Accuracy, classificationDelta)
+
+	buf := bytes.NewBuffer(nil)
+	err = MarshalModel(buf, m)
+	assert.NoError(t, err)
+	tmp, err := UnmarshalModel(buf)
+	assert.NoError(t, err)
+	scoreClone := EvaluateClassification(tmp, test, fitConfig.Jobs)
+	assert.InDelta(t, 0.919, scoreClone.Accuracy, classificationDelta)
 }
 
 func TestFactorizationMachines_Classification_MovieLens(t *testing.T) {
@@ -75,6 +83,7 @@ func TestFactorizationMachines_Classification_Criteo(t *testing.T) {
 		model.Lr:        0.01,
 		model.Reg:       0.0001,
 		model.BatchSize: 1024,
+		model.AutoScale: false,
 	})
 	fitConfig := newFitConfigWithTestTracker()
 	score := m.Fit(t.Context(), train, test, fitConfig)

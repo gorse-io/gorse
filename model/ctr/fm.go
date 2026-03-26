@@ -37,8 +37,10 @@ import (
 	"modernc.org/mathutil"
 )
 
-const headerAFM = "AFM"
-
+const (
+	headerAFM  = "AFM"
+	headerAFM2 = "AFM2"
+)
 
 type AFM struct {
 	BaseFactorizationMachines
@@ -58,6 +60,7 @@ type AFM struct {
 	initMean   float32
 	initStdDev float32
 	optimizer  string
+	autoScale  bool
 	// dataset stats
 	numFeatures    int
 	numDimension   int
@@ -93,6 +96,7 @@ func (fm *AFM) SetParams(params model.Params) {
 	fm.initMean = fm.Params.GetFloat32(model.InitMean, 0)
 	fm.initStdDev = fm.Params.GetFloat32(model.InitStdDev, 0.01)
 	fm.optimizer = fm.Params.GetString(model.Optimizer, model.Adam)
+	fm.autoScale = fm.Params.GetBool(model.AutoScale, true)
 }
 
 func (fm *AFM) Clear() {
@@ -255,8 +259,10 @@ func (fm *AFM) Init(trainSet dataset.CTRSplit) {
 		fm.A[i] = nn.NewAttention(dim, fm.nFactors)
 		fm.E[i] = nn.NewLinear(dim, fm.nFactors)
 	}
-	// Collect numerical features and fit scalers
-	fm.fitScalers(trainSet)
+	// Collect numerical features and fit scalers if enabled
+	if fm.autoScale {
+		fm.fitScalers(trainSet)
+	}
 	fm.BaseFactorizationMachines.Init(trainSet)
 }
 
@@ -408,6 +414,16 @@ func (fm *AFM) Fit(ctx context.Context, trainSet, testSet dataset.CTRSplit, conf
 }
 
 func (fm *AFM) Marshal(w io.Writer) error {
+	// write header
+	if fm.autoScale {
+		if err := encoding.WriteString(w, headerAFM2); err != nil {
+			return errors.Trace(err)
+		}
+	} else {
+		if err := encoding.WriteString(w, headerAFM); err != nil {
+			return errors.Trace(err)
+		}
+	}
 	// write params
 	if err := encoding.WriteGob(w, fm.Params); err != nil {
 		return errors.Trace(err)
@@ -432,15 +448,17 @@ func (fm *AFM) Marshal(w io.Writer) error {
 		}
 	}
 	// write scalers
-	if err := encoding.WriteGob(w, len(fm.Scalers)); err != nil {
-		return errors.Trace(err)
-	}
-	for idx, scaler := range fm.Scalers {
-		if err := encoding.WriteGob(w, idx); err != nil {
+	if fm.autoScale {
+		if err := encoding.WriteGob(w, len(fm.Scalers)); err != nil {
 			return errors.Trace(err)
 		}
-		if err := scaler.Marshal(w); err != nil {
-			return errors.Trace(err)
+		for idx, scaler := range fm.Scalers {
+			if err := encoding.WriteGob(w, idx); err != nil {
+				return errors.Trace(err)
+			}
+			if err := scaler.Marshal(w); err != nil {
+				return errors.Trace(err)
+			}
 		}
 	}
 	// write parameters
@@ -451,8 +469,16 @@ func (fm *AFM) Marshal(w io.Writer) error {
 }
 
 func (fm *AFM) Unmarshal(r io.Reader) error {
+	// read header
+	header, err := encoding.ReadString(r)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	if header != headerAFM && header != headerAFM2 {
+		return errors.Errorf("invalid header: %s", header)
+	}
 	// read params
-	err := encoding.ReadGob(r, &fm.Params)
+	err = encoding.ReadGob(r, &fm.Params)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -479,21 +505,23 @@ func (fm *AFM) Unmarshal(r io.Reader) error {
 		}
 	}
 	// read scalers
-	var numScalers int
-	if err = encoding.ReadGob(r, &numScalers); err != nil {
-		return errors.Trace(err)
-	}
-	fm.Scalers = make(map[int32]*AutoScaler, numScalers)
-	for i := 0; i < numScalers; i++ {
-		var idx int32
-		if err = encoding.ReadGob(r, &idx); err != nil {
+	if header == headerAFM2 {
+		var numScalers int
+		if err = encoding.ReadGob(r, &numScalers); err != nil {
 			return errors.Trace(err)
 		}
-		scaler := NewAutoScaler()
-		if err = scaler.Unmarshal(r); err != nil {
-			return errors.Trace(err)
+		fm.Scalers = make(map[int32]*AutoScaler, numScalers)
+		for i := 0; i < numScalers; i++ {
+			var idx int32
+			if err = encoding.ReadGob(r, &idx); err != nil {
+				return errors.Trace(err)
+			}
+			scaler := NewAutoScaler()
+			if err = scaler.Unmarshal(r); err != nil {
+				return errors.Trace(err)
+			}
+			fm.Scalers[idx] = scaler
 		}
-		fm.Scalers[idx] = scaler
 	}
 	// read parameters
 	fm.B = nn.Zeros()

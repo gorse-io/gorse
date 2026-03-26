@@ -187,10 +187,9 @@ func (s *RobustScaler) Unmarshal(r io.Reader) error {
 // - If data contains negative values: uses RobustScaler
 // - If all values are non-negative: applies log1p then MinMaxScaler
 type AutoScaler struct {
-	UseLog    bool         // true if log1p preprocessing is applied
-	MinMax    MinMaxScaler // for non-negative values (after log1p if UseLog)
-	Robust    RobustScaler // for data with negative values
-	HasRobust bool         // true if RobustScaler is used
+	UseLog bool         // true if log1p preprocessing is applied, false if RobustScaler is used
+	MinMax MinMaxScaler // for non-negative values (after log1p if UseLog)
+	Robust RobustScaler // for data with negative values
 }
 
 // NewAutoScaler creates an AutoScaler.
@@ -214,13 +213,17 @@ func (s *AutoScaler) Fit(values []float32) {
 	}
 
 	if hasNegative {
-		// Use RobustScaler for data with negative values
-		s.HasRobust = true
+		// Use RobustScaler then MinMaxScaler for data with negative values
 		s.UseLog = false
 		s.Robust.Fit(values)
+
+		robustValues := make([]float32, len(values))
+		for i, v := range values {
+			robustValues[i] = s.Robust.Transform(v)
+		}
+		s.MinMax.Fit(robustValues)
 	} else {
 		// Apply log1p then MinMaxScaler for non-negative data
-		s.HasRobust = false
 		s.UseLog = true
 
 		// Apply log1p transformation
@@ -234,12 +237,13 @@ func (s *AutoScaler) Fit(values []float32) {
 
 // Transform scales a value using the selected method.
 func (s *AutoScaler) Transform(value float32) float32 {
-	if s.HasRobust {
-		return s.Robust.Transform(value)
+	if !s.UseLog {
+		robustValue := s.Robust.Transform(value)
+		return s.MinMax.Transform(robustValue)
 	}
 
 	// Apply log1p then MinMax
-	logValue := math32.Log1p(value)
+	logValue := math32.Log1p(max(0, value))
 	return s.MinMax.Transform(logValue)
 }
 
@@ -248,15 +252,11 @@ func (s *AutoScaler) Marshal(w io.Writer) error {
 	if err := encoding.WriteGob(w, s.UseLog); err != nil {
 		return errors.Trace(err)
 	}
-	if err := encoding.WriteGob(w, s.HasRobust); err != nil {
+	if err := s.MinMax.Marshal(w); err != nil {
 		return errors.Trace(err)
 	}
-	if s.HasRobust {
+	if !s.UseLog {
 		if err := s.Robust.Marshal(w); err != nil {
-			return errors.Trace(err)
-		}
-	} else {
-		if err := s.MinMax.Marshal(w); err != nil {
 			return errors.Trace(err)
 		}
 	}
@@ -268,15 +268,11 @@ func (s *AutoScaler) Unmarshal(r io.Reader) error {
 	if err := encoding.ReadGob(r, &s.UseLog); err != nil {
 		return errors.Trace(err)
 	}
-	if err := encoding.ReadGob(r, &s.HasRobust); err != nil {
+	if err := s.MinMax.Unmarshal(r); err != nil {
 		return errors.Trace(err)
 	}
-	if s.HasRobust {
+	if !s.UseLog {
 		if err := s.Robust.Unmarshal(r); err != nil {
-			return errors.Trace(err)
-		}
-	} else {
-		if err := s.MinMax.Unmarshal(r); err != nil {
 			return errors.Trace(err)
 		}
 	}
