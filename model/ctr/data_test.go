@@ -278,7 +278,7 @@ func TestDataset_GetWeight(t *testing.T) {
 
 	t.Run("with weights", func(t *testing.T) {
 		dataset := &Dataset{
-			SampleWeights: []float32{1.0, 2.0, 3.0},
+			Weights: []float32{1.0, 2.0, 3.0},
 		}
 		assert.Equal(t, float32(1.0), dataset.GetWeight(0))
 		assert.Equal(t, float32(2.0), dataset.GetWeight(1))
@@ -287,7 +287,7 @@ func TestDataset_GetWeight(t *testing.T) {
 
 	t.Run("out of range returns 1.0", func(t *testing.T) {
 		dataset := &Dataset{
-			SampleWeights: []float32{1.0},
+			Weights: []float32{1.0},
 		}
 		assert.Equal(t, float32(1.0), dataset.GetWeight(100))
 	})
