@@ -164,9 +164,7 @@ type Dataset struct {
 	PositiveCount          int
 	NegativeCount          int
 	// Weight support
-	FeedbackTypes  []string  // Feedback type for each sample
-	FeedbackValues []float64 // Feedback value for each sample
-	SampleWeights  []float32 // Computed weight for each sample
+	SampleWeights []float32 // Computed weight for each sample (set by tasks)
 }
 
 // CountUsers returns the number of users.
@@ -382,10 +380,6 @@ func (dataset *Dataset) Split(ratio float32, seed int64) (*Dataset, *Dataset) {
 			}
 			testSet.Target = append(testSet.Target, dataset.Target[i])
 			testSet.Timestamps = append(testSet.Timestamps, dataset.Timestamps[i])
-			if dataset.FeedbackTypes != nil {
-				testSet.FeedbackTypes = append(testSet.FeedbackTypes, dataset.FeedbackTypes[i])
-				testSet.FeedbackValues = append(testSet.FeedbackValues, dataset.FeedbackValues[i])
-			}
 			if dataset.SampleWeights != nil {
 				testSet.SampleWeights = append(testSet.SampleWeights, dataset.SampleWeights[i])
 			}
@@ -403,10 +397,6 @@ func (dataset *Dataset) Split(ratio float32, seed int64) (*Dataset, *Dataset) {
 			}
 			trainSet.Target = append(trainSet.Target, dataset.Target[i])
 			trainSet.Timestamps = append(trainSet.Timestamps, dataset.Timestamps[i])
-			if dataset.FeedbackTypes != nil {
-				trainSet.FeedbackTypes = append(trainSet.FeedbackTypes, dataset.FeedbackTypes[i])
-				trainSet.FeedbackValues = append(trainSet.FeedbackValues, dataset.FeedbackValues[i])
-			}
 			if dataset.SampleWeights != nil {
 				trainSet.SampleWeights = append(trainSet.SampleWeights, dataset.SampleWeights[i])
 			}
@@ -479,10 +469,6 @@ func (dataset *Dataset) appendSample(dst *Dataset, i int) {
 	}
 	dst.Target = append(dst.Target, dataset.Target[i])
 	dst.Timestamps = append(dst.Timestamps, dataset.Timestamps[i])
-	if dataset.FeedbackTypes != nil {
-		dst.FeedbackTypes = append(dst.FeedbackTypes, dataset.FeedbackTypes[i])
-		dst.FeedbackValues = append(dst.FeedbackValues, dataset.FeedbackValues[i])
-	}
 	if dataset.SampleWeights != nil {
 		dst.SampleWeights = append(dst.SampleWeights, dataset.SampleWeights[i])
 	}
