@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package weight
+package logics
 
 import (
 	"math"
@@ -21,9 +21,9 @@ import (
 	"github.com/expr-lang/expr/vm"
 )
 
-// Env returns the environment for weight expression evaluation.
+// WeightEnv returns the environment for weight expression evaluation.
 // It includes the Value variable and common math functions.
-func Env() map[string]any {
+func WeightEnv() map[string]any {
 	return map[string]any{
 		"Value": 0.0,
 		// Common math functions
@@ -55,14 +55,14 @@ func Env() map[string]any {
 	}
 }
 
-// Compile compiles a weight expression string.
-func Compile(exprStr string) (*vm.Program, error) {
-	return expr.Compile(exprStr, expr.Env(Env()))
+// CompileWeightExpression compiles a weight expression string.
+func CompileWeightExpression(exprStr string) (*vm.Program, error) {
+	return expr.Compile(exprStr, expr.Env(WeightEnv()))
 }
 
-// Evaluate evaluates a compiled weight expression with the given value.
-func Evaluate(program *vm.Program, value float64) (float32, error) {
-	env := Env()
+// EvaluateWeight evaluates a compiled weight expression with the given value.
+func EvaluateWeight(program *vm.Program, value float64) (float32, error) {
+	env := WeightEnv()
 	env["Value"] = value
 	result, err := expr.Run(program, env)
 	if err != nil {
@@ -101,4 +101,41 @@ func ToFloat32(v any) (float32, error) {
 	default:
 		return 1.0, nil
 	}
+}
+
+// ComputeSampleWeights computes sample weights based on feedback_weight configuration.
+// This function is used by both CTR training and item-to-item recommendation.
+// If feedbackWeight is nil or empty, nil is returned (default weight 1.0 should be used).
+func ComputeSampleWeights(feedbackWeight map[string]string, feedbackTypes []string, feedbackValues []float64) ([]float32, error) {
+	if len(feedbackWeight) == 0 || len(feedbackTypes) == 0 {
+		// No weight configuration or no feedback types, return nil for default weight 1.0
+		return nil, nil
+	}
+
+	// Compile all weight expressions
+	programs := make(map[string]*vm.Program, len(feedbackWeight))
+	for fbType, exprStr := range feedbackWeight {
+		program, err := CompileWeightExpression(exprStr)
+		if err != nil {
+			return nil, err
+		}
+		programs[fbType] = program
+	}
+
+	// Compute weight for each sample
+	weights := make([]float32, len(feedbackTypes))
+	for i, fbType := range feedbackTypes {
+		if program, ok := programs[fbType]; ok {
+			w, err := EvaluateWeight(program, feedbackValues[i])
+			if err != nil {
+				return nil, err
+			}
+			weights[i] = w
+		} else {
+			// Unknown feedback type, use default weight
+			weights[i] = 1.0
+		}
+	}
+
+	return weights, nil
 }

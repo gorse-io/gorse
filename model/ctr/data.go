@@ -22,7 +22,6 @@ import (
 	"strings"
 
 	mapset "github.com/deckarep/golang-set/v2"
-	"github.com/expr-lang/expr/vm"
 	"github.com/gorse-io/gorse/common/jsonutil"
 	"github.com/gorse-io/gorse/common/util"
 	"github.com/gorse-io/gorse/dataset"
@@ -266,43 +265,6 @@ func (dataset *Dataset) GetWeight(i int) float32 {
 		return dataset.SampleWeights[i]
 	}
 	return 1.0
-}
-
-// ComputeWeights computes sample weights based on feedback_weight configuration.
-// If feedbackWeight is nil or empty, all weights are set to 1.0.
-func (dataset *Dataset) ComputeWeights(feedbackWeight map[string]string) error {
-	if len(feedbackWeight) == 0 || len(dataset.FeedbackTypes) == 0 {
-		// No weight configuration or no feedback types, use default weight 1.0
-		dataset.SampleWeights = nil
-		return nil
-	}
-
-	// Compile all weight expressions
-	programs := make(map[string]*vm.Program, len(feedbackWeight))
-	for fbType, exprStr := range feedbackWeight {
-		program, err := CompileWeightExpression(exprStr)
-		if err != nil {
-			return errors.Annotatef(err, "failed to compile weight expression for %s", fbType)
-		}
-		programs[fbType] = program
-	}
-
-	// Compute weight for each sample
-	dataset.SampleWeights = make([]float32, len(dataset.FeedbackTypes))
-	for i, fbType := range dataset.FeedbackTypes {
-		if program, ok := programs[fbType]; ok {
-			weight, err := EvaluateWeight(program, dataset.FeedbackValues[i])
-			if err != nil {
-				return errors.Annotatef(err, "failed to evaluate weight for sample %d", i)
-			}
-			dataset.SampleWeights[i] = weight
-		} else {
-			// Unknown feedback type, use default weight
-			dataset.SampleWeights[i] = 1.0
-		}
-	}
-
-	return nil
 }
 
 // LoadLibFMFile loads libFM format file.
