@@ -15,90 +15,24 @@
 package ctr
 
 import (
-	"math"
-
-	"github.com/expr-lang/expr"
 	"github.com/expr-lang/expr/vm"
+	"github.com/gorse-io/gorse/common/weight"
 )
 
 // WeightEnv returns the environment for weight expression evaluation.
-// It includes the Value variable and common math functions.
+// Deprecated: Use weight.Env() instead.
 func WeightEnv() map[string]any {
-	return map[string]any{
-		"Value": 0.0,
-		// Common math functions
-		"abs":   math.Abs,
-		"ceil":  math.Ceil,
-		"floor": math.Floor,
-		"round": math.Round,
-		"sqrt":  math.Sqrt,
-		"cbrt":  math.Cbrt,
-		"log":   math.Log,
-		"log2":  math.Log2,
-		"log10": math.Log10,
-		"log1p": math.Log1p,
-		"exp":   math.Exp,
-		"exp2":  math.Exp2,
-		"expm1": math.Expm1,
-		"pow":   math.Pow,
-		"sin":   math.Sin,
-		"cos":   math.Cos,
-		"tan":   math.Tan,
-		"asin":  math.Asin,
-		"acos":  math.Acos,
-		"atan":  math.Atan,
-		"sinh":  math.Sinh,
-		"cosh":  math.Cosh,
-		"tanh":  math.Tanh,
-		"max":   math.Max,
-		"min":   math.Min,
-	}
+	return weight.Env()
 }
 
 // CompileWeightExpression compiles a weight expression string.
+// Deprecated: Use weight.Compile() instead.
 func CompileWeightExpression(exprStr string) (*vm.Program, error) {
-	return expr.Compile(exprStr, expr.Env(WeightEnv()))
+	return weight.Compile(exprStr)
 }
 
 // EvaluateWeight evaluates a compiled weight expression with the given value.
+// Deprecated: Use weight.Evaluate() instead.
 func EvaluateWeight(program *vm.Program, value float64) (float32, error) {
-	env := WeightEnv()
-	env["Value"] = value
-	result, err := expr.Run(program, env)
-	if err != nil {
-		return 1.0, err
-	}
-	return toFloat32(result)
-}
-
-// toFloat32 converts various numeric types to float32.
-func toFloat32(v any) (float32, error) {
-	switch val := v.(type) {
-	case float32:
-		return val, nil
-	case float64:
-		return float32(val), nil
-	case int:
-		return float32(val), nil
-	case int8:
-		return float32(val), nil
-	case int16:
-		return float32(val), nil
-	case int32:
-		return float32(val), nil
-	case int64:
-		return float32(val), nil
-	case uint:
-		return float32(val), nil
-	case uint8:
-		return float32(val), nil
-	case uint16:
-		return float32(val), nil
-	case uint32:
-		return float32(val), nil
-	case uint64:
-		return float32(val), nil
-	default:
-		return 1.0, nil
-	}
+	return weight.Evaluate(program, value)
 }

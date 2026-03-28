@@ -24,8 +24,8 @@ import (
 	"github.com/gorse-io/gorse/common/expression"
 	"github.com/gorse-io/gorse/common/heap"
 	"github.com/gorse-io/gorse/common/util"
+	"github.com/gorse-io/gorse/common/weight"
 	"github.com/gorse-io/gorse/config"
-	"github.com/gorse-io/gorse/model/ctr"
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
 	"github.com/juju/errors"
@@ -254,7 +254,7 @@ func (r *Recommender) recommendItemToItem(name string) RecommenderFunc {
 		// compile feedback weight expressions
 		weightPrograms := make(map[string]*vm.Program, len(r.config.DataSource.FeedbackWeight))
 		for fbType, exprStr := range r.config.DataSource.FeedbackWeight {
-			program, err := ctr.CompileWeightExpression(exprStr)
+			program, err := weight.Compile(exprStr)
 			if err != nil {
 				// log error but continue with default weight
 				continue
@@ -269,9 +269,9 @@ func (r *Recommender) recommendItemToItem(name string) RecommenderFunc {
 			// compute feedback weight
 			fbWeight := 1.0 // default weight
 			if program, ok := weightPrograms[feedback.FeedbackType]; ok {
-				weight, err := ctr.EvaluateWeight(program, feedback.Value)
+				w, err := weight.Evaluate(program, feedback.Value)
 				if err == nil {
-					fbWeight = float64(weight)
+					fbWeight = float64(w)
 				}
 			}
 			
