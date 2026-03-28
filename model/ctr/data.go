@@ -152,7 +152,7 @@ type Dataset struct {
 	PositiveCount          int
 	NegativeCount          int
 	// Weight support
-	SampleWeights  []float32  // Computed weight for each sample (set by tasks)
+	Weights  []float32  // Computed weight for each sample (set by tasks)
 }
 
 // CountUsers returns the number of users.
@@ -259,8 +259,8 @@ func (dataset *Dataset) Get(i int) ([]int32, []float32, [][]float32, float32) {
 // GetWeight returns the weight for the i-th sample.
 // Returns 1.0 if no weight is set (default behavior).
 func (dataset *Dataset) GetWeight(i int) float32 {
-	if dataset.SampleWeights != nil && i < len(dataset.SampleWeights) {
-		return dataset.SampleWeights[i]
+	if dataset.Weights != nil && i < len(dataset.Weights) {
+		return dataset.Weights[i]
 	}
 	return 1.0
 }
@@ -368,8 +368,8 @@ func (dataset *Dataset) Split(ratio float32, seed int64) (*Dataset, *Dataset) {
 			}
 			testSet.Target = append(testSet.Target, dataset.Target[i])
 
-			if dataset.SampleWeights != nil {
-				testSet.SampleWeights = append(testSet.SampleWeights, dataset.SampleWeights[i])
+			if dataset.Weights != nil {
+				testSet.Weights = append(testSet.Weights, dataset.Weights[i])
 			}
 			if dataset.Target[i] > 0 {
 				testSet.PositiveCount++
@@ -385,8 +385,8 @@ func (dataset *Dataset) Split(ratio float32, seed int64) (*Dataset, *Dataset) {
 			}
 			trainSet.Target = append(trainSet.Target, dataset.Target[i])
 
-			if dataset.SampleWeights != nil {
-				trainSet.SampleWeights = append(trainSet.SampleWeights, dataset.SampleWeights[i])
+			if dataset.Weights != nil {
+				trainSet.Weights = append(trainSet.Weights, dataset.Weights[i])
 			}
 			if dataset.Target[i] > 0 {
 				trainSet.PositiveCount++
