@@ -20,10 +20,12 @@ import (
 	"time"
 
 	mapset "github.com/deckarep/golang-set/v2"
+	"github.com/expr-lang/expr/vm"
 	"github.com/gorse-io/gorse/common/expression"
 	"github.com/gorse-io/gorse/common/heap"
 	"github.com/gorse-io/gorse/common/util"
 	"github.com/gorse-io/gorse/config"
+	"github.com/gorse-io/gorse/model/ctr"
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
 	"github.com/juju/errors"
@@ -249,11 +251,30 @@ func (r *Recommender) recommendItemToItem(name string) RecommenderFunc {
 				}
 			}
 		}
-		// collect scores
+		// compile feedback weight expressions
+		weightPrograms := make(map[string]*vm.Program, len(r.config.DataSource.FeedbackWeight))
+		for fbType, exprStr := range r.config.DataSource.FeedbackWeight {
+			program, err := ctr.CompileWeightExpression(exprStr)
+			if err != nil {
+				// log error but continue with default weight
+				continue
+			}
+			weightPrograms[fbType] = program
+		}
+		// collect scores with weighted aggregation
 		scores := make(map[string]float64)
 		categories := make(map[string][]string)
 		digests := mapset.NewSet[string]()
 		for _, feedback := range userFeedback {
+			// compute feedback weight
+			fbWeight := 1.0 // default weight
+			if program, ok := weightPrograms[feedback.FeedbackType]; ok {
+				weight, err := ctr.EvaluateWeight(program, feedback.Value)
+				if err == nil {
+					fbWeight = float64(weight)
+				}
+			}
+			
 			similarItems, err := r.cacheClient.SearchScores(ctx, cache.ItemToItem, cache.Key(name, feedback.ItemId), r.categories, 0, r.config.CacheSize)
 			if err != nil {
 				return nil, "", errors.Trace(err)
@@ -264,7 +285,8 @@ func (r *Recommender) recommendItemToItem(name string) RecommenderFunc {
 			}
 			for _, item := range similarItems {
 				if !r.excludeSet.Contains(item.Id) {
-					scores[item.Id] += item.Score
+					// weighted score aggregation
+					scores[item.Id] += item.Score * fbWeight
 					categories[item.Id] = item.Categories
 					digests.Add(digest)
 				}
