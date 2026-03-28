@@ -152,9 +152,7 @@ type Dataset struct {
 	PositiveCount          int
 	NegativeCount          int
 	// Weight support
-	FeedbackTypes  []string   // Feedback type for each sample
-	FeedbackValues []float64  // Feedback value for each sample
-	SampleWeights  []float32  // Computed weight for each sample
+	SampleWeights  []float32  // Computed weight for each sample (set by tasks)
 }
 
 // CountUsers returns the number of users.
@@ -369,10 +367,7 @@ func (dataset *Dataset) Split(ratio float32, seed int64) (*Dataset, *Dataset) {
 				testSet.ContextLabels = append(testSet.ContextLabels, dataset.ContextLabels[i])
 			}
 			testSet.Target = append(testSet.Target, dataset.Target[i])
-			if dataset.FeedbackTypes != nil {
-				testSet.FeedbackTypes = append(testSet.FeedbackTypes, dataset.FeedbackTypes[i])
-				testSet.FeedbackValues = append(testSet.FeedbackValues, dataset.FeedbackValues[i])
-			}
+
 			if dataset.SampleWeights != nil {
 				testSet.SampleWeights = append(testSet.SampleWeights, dataset.SampleWeights[i])
 			}
@@ -389,10 +384,7 @@ func (dataset *Dataset) Split(ratio float32, seed int64) (*Dataset, *Dataset) {
 				trainSet.ContextLabels = append(trainSet.ContextLabels, dataset.ContextLabels[i])
 			}
 			trainSet.Target = append(trainSet.Target, dataset.Target[i])
-			if dataset.FeedbackTypes != nil {
-				trainSet.FeedbackTypes = append(trainSet.FeedbackTypes, dataset.FeedbackTypes[i])
-				trainSet.FeedbackValues = append(trainSet.FeedbackValues, dataset.FeedbackValues[i])
-			}
+
 			if dataset.SampleWeights != nil {
 				trainSet.SampleWeights = append(trainSet.SampleWeights, dataset.SampleWeights[i])
 			}
