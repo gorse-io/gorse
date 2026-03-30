@@ -204,13 +204,21 @@ func (db *SQLDatabase) Init() error {
 		if err != nil {
 			return errors.Trace(err)
 		}
-		// create index
-		err = db.gormDB.Exec(fmt.Sprintf("ALTER TABLE %s ADD INDEX idx_collection_subset_categories (collection, subset, (CAST(categories AS CHAR(255) ARRAY)))", db.DocumentTable())).Error
-		if err != nil {
-			if mysqlErr, ok := err.(*mysql.MySQLError); ok && mysqlErr.Number == 1061 {
-				// ignore duplicate index error
-			} else {
-				return errors.Trace(err)
+		// detect MariaDB
+		var isMariaDB bool
+		var version string
+		if err = db.gormDB.Raw("SELECT VERSION()").Scan(&version).Error; err == nil {
+			isMariaDB = strings.Contains(version, "MariaDB")
+		}
+		// create index (skip categories index for MariaDB since it doesn't support CAST AS ARRAY)
+		if !isMariaDB {
+			err = db.gormDB.Exec(fmt.Sprintf("ALTER TABLE %s ADD INDEX idx_collection_subset_categories (collection, subset, (CAST(categories AS CHAR(255) ARRAY)))", db.DocumentTable())).Error
+			if err != nil {
+				if mysqlErr, ok := err.(*mysql.MySQLError); ok && mysqlErr.Number == 1061 {
+					// ignore duplicate index error
+				} else {
+					return errors.Trace(err)
+				}
 			}
 		}
 		err = db.gormDB.Exec(fmt.Sprintf("ALTER TABLE %s ADD INDEX idx_collection_id (collection, id)", db.DocumentTable())).Error
