@@ -71,11 +71,13 @@ type Config struct {
 
 // DatabaseConfig is the configuration for the database.
 type DatabaseConfig struct {
+	VectorStore        string      `mapstructure:"vector_store"`
 	DataStore        string      `mapstructure:"data_store" validate:"required,data_store"`   // database for data store
 	CacheStore       string      `mapstructure:"cache_store" validate:"required,cache_store"` // database for cache store
 	TablePrefix      string      `mapstructure:"table_prefix"`
 	DataTablePrefix  string      `mapstructure:"data_table_prefix"`
 	CacheTablePrefix string      `mapstructure:"cache_table_prefix"`
+	VectorTablePrefix string      `mapstructure:"vector_table_prefix"`
 	MySQL            MySQLConfig `mapstructure:"mysql"`
 	Postgres         SQLConfig   `mapstructure:"postgres"`
 	Redis            RedisConfig `mapstructure:"redis"`

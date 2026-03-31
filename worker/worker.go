@@ -40,6 +40,7 @@ import (
 	"github.com/gorse-io/gorse/storage/blob"
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
+	"github.com/gorse-io/gorse/storage/vectors"
 	"github.com/juju/errors"
 	"github.com/lafikl/consistent"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -76,6 +77,7 @@ type Worker struct {
 
 	blobConfig string
 	blobStore  blob.Store
+	vectorStore vectors.Database
 
 	// master connection
 	conn         *grpc.ClientConn
@@ -200,6 +202,16 @@ func (w *Worker) Sync() {
 				goto sleep
 			}
 			w.blobConfig = nextBlobConfig.URI
+		}
+
+		// connect to vector store
+		if w.Config.Database.VectorStore != "" {
+			if w.vectorStore, err = vectors.Open(w.Config.Database.VectorStore, w.Config.Database.VectorTablePrefix); err != nil {
+				log.Logger().Error("failed to connect vector store", zap.Error(err))
+				goto sleep
+			}
+		} else {
+			w.vectorStore = vectors.NoDatabase{}
 		}
 
 		// synchronize collaborative filtering model

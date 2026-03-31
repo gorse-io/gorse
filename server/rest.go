@@ -36,6 +36,7 @@ import (
 	"github.com/gorse-io/gorse/logics"
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
+	"github.com/gorse-io/gorse/storage/vectors"
 	"github.com/juju/errors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/samber/lo"
@@ -60,6 +61,7 @@ type RestServer struct {
 	Config      *config.Config
 	CacheClient cache.Database
 	DataClient  data.Database
+	VectorClient vectors.Database
 
 	HttpHost string
 	HttpPort int
