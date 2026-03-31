@@ -35,6 +35,7 @@ import (
 	"github.com/gorse-io/gorse/storage"
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
+	"github.com/gorse-io/gorse/storage/vectors"
 	"github.com/samber/lo"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
@@ -58,6 +59,7 @@ type Server struct {
 	masterPort   int
 	tlsConfig    *util.TLSConfig
 	testMode     bool
+	vectorStore  vectors.Database
 	cacheFile    string
 }
 
@@ -79,6 +81,7 @@ func NewServer(
 			Config:      config.GetDefaultConfig(),
 			CacheClient: new(cache.NoDatabase),
 			DataClient:  new(data.NoDatabase),
+			VectorClient: vectors.NoDatabase{},
 			HttpHost:    serverHost,
 			HttpPort:    serverPort,
 			WebService:  new(restful.WebService),
@@ -204,6 +207,18 @@ func (s *Server) Sync() {
 			}
 			s.cachePath = s.Config.Database.CacheStore
 			s.cachePrefix = s.Config.Database.CacheTablePrefix
+		}
+
+		// connect to vector store
+		if s.Config.Database.VectorStore != "" {
+			if s.vectorStore, err = vectors.Open(s.Config.Database.VectorStore, s.Config.Database.VectorTablePrefix); err != nil {
+				log.Logger().Error("failed to connect vector store", zap.Error(err))
+				goto sleep
+			}
+			s.VectorClient = s.vectorStore
+		} else {
+			s.vectorStore = vectors.NoDatabase{}
+			s.VectorClient = s.vectorStore
 		}
 
 		// create trace provider
