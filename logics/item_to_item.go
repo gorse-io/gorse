@@ -17,6 +17,7 @@ package logics
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"sync"
@@ -199,10 +200,11 @@ func (e *embeddingItemToItem) Push(item *data.Item, _ []int32) {
 			zap.Any("item", item), zap.Error(err))
 		return
 	}
-	// Check column type
-	v, ok := result.([]float32)
-	if !ok {
-		log.Logger().Error("invalid column type", zap.Any("column", result))
+	// Convert column to []float32
+	v, err := toFloat32Slice(result)
+	if err != nil {
+		log.Logger().Error("failed to convert column to float32 slice",
+			zap.Any("column", result), zap.Error(err))
 		return
 	}
 	// Check dimension
@@ -216,6 +218,60 @@ func (e *embeddingItemToItem) Push(item *data.Item, _ []int32) {
 	}
 	e.itemsLock.Unlock()
 	e.pushItem(item, v)
+}
+
+// toFloat32Slice converts an any to []float32, handling mixed numeric types
+// that may occur when reading from MongoDB (e.g., 0 stored as int instead of float32)
+func toFloat32Slice(v any) ([]float32, error) {
+	switch val := v.(type) {
+	case []float32:
+		return val, nil
+	case []float64:
+		result := make([]float32, len(val))
+		for i, e := range val {
+			result[i] = float32(e)
+		}
+		return result, nil
+	case []int:
+		result := make([]float32, len(val))
+		for i, e := range val {
+			result[i] = float32(e)
+		}
+		return result, nil
+	case []int32:
+		result := make([]float32, len(val))
+		for i, e := range val {
+			result[i] = float32(e)
+		}
+		return result, nil
+	case []int64:
+		result := make([]float32, len(val))
+		for i, e := range val {
+			result[i] = float32(e)
+		}
+		return result, nil
+	case []any:
+		result := make([]float32, len(val))
+		for i, elem := range val {
+			switch e := elem.(type) {
+			case float32:
+				result[i] = e
+			case float64:
+				result[i] = float32(e)
+			case int:
+				result[i] = float32(e)
+			case int32:
+				result[i] = float32(e)
+			case int64:
+				result[i] = float32(e)
+			default:
+				return nil, fmt.Errorf("invalid element type %T in slice", e)
+			}
+		}
+		return result, nil
+	default:
+		return nil, fmt.Errorf("invalid column type %T", v)
+	}
 }
 
 type tagsItemToItem struct {
@@ -425,9 +481,10 @@ func (g *chatItemToItem) PopAll(i int) []cache.Score {
 			zap.Any("item", item), zap.Error(err))
 		return nil
 	}
-	embedding0, ok := result.([]float32)
-	if !ok {
-		log.Logger().Error("invalid column type", zap.Any("column", result))
+	embedding0, err := toFloat32Slice(result)
+	if err != nil {
+		log.Logger().Error("failed to convert column to float32 slice",
+			zap.Any("column", result), zap.Error(err))
 		return nil
 	}
 	// render template

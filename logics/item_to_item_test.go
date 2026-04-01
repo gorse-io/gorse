@@ -24,6 +24,7 @@ import (
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/dataset"
 	"github.com/gorse-io/gorse/storage/data"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -281,4 +282,83 @@ func (suite *ItemToItemTestSuite) TestChat() {
 
 func TestItemToItem(t *testing.T) {
 	suite.Run(t, new(ItemToItemTestSuite))
+}
+
+func TestToFloat32Slice(t *testing.T) {
+	floatSlice := []float32{0.1, 0.2, 0.3}
+	testCases := []struct {
+		name        string
+		input       any
+		expected    []float32
+		errContains string
+	}{
+		{
+			name:     "float32 slice",
+			input:    floatSlice,
+			expected: []float32{0.1, 0.2, 0.3},
+		},
+		{
+			name:     "float64 slice",
+			input:    []float64{0.1, 0.2, 0.3},
+			expected: []float32{0.1, 0.2, 0.3},
+		},
+		{
+			name:     "int slice",
+			input:    []int{-1, 0, 2},
+			expected: []float32{-1, 0, 2},
+		},
+		{
+			name:     "int32 slice",
+			input:    []int32{-1, 0, 2},
+			expected: []float32{-1, 0, 2},
+		},
+		{
+			name:     "int64 slice",
+			input:    []int64{-1, 0, 2},
+			expected: []float32{-1, 0, 2},
+		},
+		{
+			name:     "mixed any slice",
+			input:    []any{float32(0.1), float64(0.2), int(0), int32(1), int64(2)},
+			expected: []float32{0.1, 0.2, 0.0, 1.0, 2.0},
+		},
+		{
+			name:     "empty any slice",
+			input:    []any{},
+			expected: []float32{},
+		},
+		{
+			name:        "invalid element in any slice",
+			input:       []any{float32(0.1), "string"},
+			errContains: "invalid element type",
+		},
+		{
+			name:        "nil element in any slice",
+			input:       []any{float32(0.1), nil},
+			errContains: "invalid element type",
+		},
+		{
+			name:        "invalid input type",
+			input:       "string",
+			errContains: "invalid column type",
+		},
+		{
+			name:        "nil input",
+			input:       nil,
+			errContains: "invalid column type",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, err := toFloat32Slice(tc.input)
+			if tc.errContains != "" {
+				assert.Error(t, err)
+				assert.ErrorContains(t, err, tc.errContains)
+				return
+			}
+			assert.NoError(t, err)
+			assert.Equal(t, tc.expected, result)
+		})
+	}
 }
