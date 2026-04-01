@@ -279,6 +279,29 @@ func (suite *ItemToItemTestSuite) TestChat() {
 	}
 }
 
+func (suite *ItemToItemTestSuite) TestToFloat32Slice() {
+	// Test []float32 input
+	floatSlice := []float32{0.1, 0.2, 0.3}
+	result, err := toFloat32Slice(floatSlice)
+	suite.NoError(err)
+	suite.Equal(floatSlice, result)
+
+	// Test []any with mixed numeric types (covers the MongoDB issue #1221)
+	mixedSlice := []any{float32(0.1), float64(0.2), int(0), int32(1), int64(2)}
+	result, err = toFloat32Slice(mixedSlice)
+	suite.NoError(err)
+	suite.Equal([]float32{0.1, 0.2, 0.0, 1.0, 2.0}, result)
+
+	// Test []any with invalid element type
+	invalidSlice := []any{float32(0.1), "string"}
+	_, err = toFloat32Slice(invalidSlice)
+	suite.Error(err)
+
+	// Test invalid input type
+	_, err = toFloat32Slice("string")
+	suite.Error(err)
+}
+
 func TestItemToItem(t *testing.T) {
 	suite.Run(t, new(ItemToItemTestSuite))
 }

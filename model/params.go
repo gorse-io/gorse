@@ -49,7 +49,7 @@ const (
 )
 
 // Params stores hyper-parameters for an model. It is a map between strings
-// (names) and interface{}s (values). For example, hyper-parameters for SVD
+// (names) and anys (values). For example, hyper-parameters for SVD
 // is given by:
 //
 //	 base.Params{
