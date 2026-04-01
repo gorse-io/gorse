@@ -226,6 +226,30 @@ func toFloat32Slice(v any) ([]float32, error) {
 	switch val := v.(type) {
 	case []float32:
 		return val, nil
+	case []float64:
+		result := make([]float32, len(val))
+		for i, e := range val {
+			result[i] = float32(e)
+		}
+		return result, nil
+	case []int:
+		result := make([]float32, len(val))
+		for i, e := range val {
+			result[i] = float32(e)
+		}
+		return result, nil
+	case []int32:
+		result := make([]float32, len(val))
+		for i, e := range val {
+			result[i] = float32(e)
+		}
+		return result, nil
+	case []int64:
+		result := make([]float32, len(val))
+		for i, e := range val {
+			result[i] = float32(e)
+		}
+		return result, nil
 	case []any:
 		result := make([]float32, len(val))
 		for i, elem := range val {
