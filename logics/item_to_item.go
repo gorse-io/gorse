@@ -481,9 +481,10 @@ func (g *chatItemToItem) PopAll(i int) []cache.Score {
 			zap.Any("item", item), zap.Error(err))
 		return nil
 	}
-	embedding0, ok := result.([]float32)
-	if !ok {
-		log.Logger().Error("invalid column type", zap.Any("column", result))
+	embedding0, err := toFloat32Slice(result)
+	if err != nil {
+		log.Logger().Error("failed to convert column to float32 slice",
+			zap.Any("column", result), zap.Error(err))
 		return nil
 	}
 	// render template
