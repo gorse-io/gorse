@@ -205,8 +205,6 @@ func (m *Master) Serve() {
 		if err = m.VectorClient.Init(); err != nil {
 			log.Logger().Fatal("failed to init vector store", zap.Error(err))
 		}
-	} else {
-		m.VectorClient = vectors.NoDatabase{}
 	}
 
 	// load recommend config

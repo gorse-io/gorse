@@ -671,10 +671,12 @@ type configBinding struct {
 var bindings = []configBinding{
 	{"database.cache_store", "GORSE_CACHE_STORE"},
 	{"database.data_store", "GORSE_DATA_STORE"},
+	{"database.vector_store", "GORSE_VECTOR_STORE"},
 	{"database.table_prefix", "GORSE_TABLE_PREFIX"},
 	{"database.cache_table_prefix", "GORSE_CACHE_TABLE_PREFIX"},
 	{"database.cache_client_name", "GORSE_CACHE_CLIENT_NAME"},
 	{"database.data_table_prefix", "GORSE_DATA_TABLE_PREFIX"},
+	{"database.vector_table_prefix", "GORSE_VECTOR_TABLE_PREFIX"},
 	{"master.port", "GORSE_MASTER_PORT"},
 	{"master.host", "GORSE_MASTER_HOST"},
 	{"master.ssl_mode", "GORSE_MASTER_SSL_MODE"},

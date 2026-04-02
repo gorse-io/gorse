@@ -52,6 +52,8 @@ type Server struct {
 	cachePrefix  string
 	dataPath     string
 	dataPrefix   string
+	vectorPath   string
+	vectorPrefix string
 	conn         *grpc.ClientConn
 	masterClient protocol.MasterClient
 	serverName   string
@@ -59,7 +61,6 @@ type Server struct {
 	masterPort   int
 	tlsConfig    *util.TLSConfig
 	testMode     bool
-	vectorStore  vectors.Database
 	cacheFile    string
 }
 
@@ -78,13 +79,13 @@ func NewServer(
 		tlsConfig:  tlsConfig,
 		cacheFile:  cacheFile,
 		RestServer: RestServer{
-			Config:      config.GetDefaultConfig(),
-			CacheClient: new(cache.NoDatabase),
-			DataClient:  new(data.NoDatabase),
+			Config:       config.GetDefaultConfig(),
+			CacheClient:  new(cache.NoDatabase),
+			DataClient:   new(data.NoDatabase),
 			VectorClient: vectors.NoDatabase{},
-			HttpHost:    serverHost,
-			HttpPort:    serverPort,
-			WebService:  new(restful.WebService),
+			HttpHost:     serverHost,
+			HttpPort:     serverPort,
+			WebService:   new(restful.WebService),
 		},
 	}
 	return s
@@ -210,15 +211,18 @@ func (s *Server) Sync() {
 		}
 
 		// connect to vector store
-		if s.Config.Database.VectorStore != "" {
-			if s.vectorStore, err = vectors.Open(s.Config.Database.VectorStore, s.Config.Database.VectorTablePrefix); err != nil {
-				log.Logger().Error("failed to connect vector store", zap.Error(err))
-				goto sleep
+		if s.vectorPath != s.Config.Database.VectorStore || s.vectorPrefix != s.Config.Database.VectorTablePrefix {
+			if strings.HasPrefix(s.Config.Database.VectorStore, storage.SQLitePrefix) {
+				log.Logger().Info("connect vector store via master")
+				s.VectorClient = vectors.NewProxyClient(s.conn)
+			} else {
+				if s.VectorClient, err = vectors.Open(s.Config.Database.VectorStore, s.Config.Database.VectorTablePrefix); err != nil {
+					log.Logger().Error("failed to connect vector store", zap.Error(err))
+					goto sleep
+				}
 			}
-			s.VectorClient = s.vectorStore
-		} else {
-			s.vectorStore = vectors.NoDatabase{}
-			s.VectorClient = s.vectorStore
+			s.vectorPath = s.Config.Database.VectorStore
+			s.vectorPrefix = s.Config.Database.VectorTablePrefix
 		}
 
 		// create trace provider
