@@ -80,9 +80,6 @@ type Master struct {
 	blobStore  blob.Store
 	blobServer *blob.MasterStoreServer
 
-	// vector store
-	VectorClient vectors.Database
-
 	// collaborative filtering
 	collaborativeFilteringModelMutex   sync.RWMutex
 	collaborativeFilteringTrainSetSize int
