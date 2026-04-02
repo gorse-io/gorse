@@ -72,25 +72,3 @@ func Open(path, tablePrefix string, opts ...storage.Option) (Database, error) {
 	}
 	return nil, errors.Errorf("Unknown database: %s", path)
 }
-
-// NoDatabase is a no-op database that does nothing.
-// Used when no vector store is configured.
-type NoDatabase struct{}
-
-func (n NoDatabase) Init() error                                                { return nil }
-func (n NoDatabase) Optimize() error                                            { return nil }
-func (n NoDatabase) Close() error                                               { return nil }
-func (n NoDatabase) ListCollections(ctx context.Context) ([]string, error)      { return nil, nil }
-func (n NoDatabase) AddCollection(ctx context.Context, name string, dimensions int, distance Distance) error {
-	return nil
-}
-func (n NoDatabase) DeleteCollection(ctx context.Context, name string) error    { return nil }
-func (n NoDatabase) AddVectors(ctx context.Context, collection string, vectors []Vector) error {
-	return nil
-}
-func (n NoDatabase) DeleteVectors(ctx context.Context, collection string, timestamp time.Time) error {
-	return nil
-}
-func (n NoDatabase) QueryVectors(ctx context.Context, collection string, q []float32, categories []string, topK int) ([]Vector, error) {
-	return nil, nil
-}

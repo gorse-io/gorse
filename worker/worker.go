@@ -70,13 +70,15 @@ type Worker struct {
 	cacheFile  string
 
 	// database connection path
-	cachePath   string
-	cachePrefix string
-	dataPath    string
-	dataPrefix  string
+	cachePath    string
+	cachePrefix  string
+	dataPath     string
+	dataPrefix   string
+	vectorPath   string
+	vectorPrefix string
 
-	blobConfig string
-	blobStore  blob.Store
+	blobConfig  string
+	blobStore   blob.Store
 	vectorStore vectors.Database
 
 	// master connection
@@ -116,6 +118,7 @@ func NewWorker(
 			DataClient:  new(data.NoDatabase),
 			Jobs:        jobs,
 		},
+		vectorStore:   vectors.NoDatabase{},
 		randGenerator: util.NewRand(time.Now().UTC().UnixNano()),
 		// config
 		cacheFile:  cacheFile,
@@ -205,13 +208,18 @@ func (w *Worker) Sync() {
 		}
 
 		// connect to vector store
-		if w.Config.Database.VectorStore != "" {
-			if w.vectorStore, err = vectors.Open(w.Config.Database.VectorStore, w.Config.Database.VectorTablePrefix); err != nil {
-				log.Logger().Error("failed to connect vector store", zap.Error(err))
-				goto sleep
+		if w.vectorPath != w.Config.Database.VectorStore || w.vectorPrefix != w.Config.Database.VectorTablePrefix {
+			if strings.HasPrefix(w.Config.Database.VectorStore, storage.SQLitePrefix) {
+				log.Logger().Info("connect vector store via master")
+				w.vectorStore = vectors.NewProxyClient(w.conn)
+			} else {
+				if w.vectorStore, err = vectors.Open(w.Config.Database.VectorStore, w.Config.Database.VectorTablePrefix); err != nil {
+					log.Logger().Error("failed to connect vector store", zap.Error(err))
+					goto sleep
+				}
 			}
-		} else {
-			w.vectorStore = vectors.NoDatabase{}
+			w.vectorPath = w.Config.Database.VectorStore
+			w.vectorPrefix = w.Config.Database.VectorTablePrefix
 		}
 
 		// synchronize collaborative filtering model

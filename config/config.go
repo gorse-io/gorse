@@ -71,16 +71,16 @@ type Config struct {
 
 // DatabaseConfig is the configuration for the database.
 type DatabaseConfig struct {
-	VectorStore        string      `mapstructure:"vector_store"`
-	DataStore        string      `mapstructure:"data_store" validate:"required,data_store"`   // database for data store
-	CacheStore       string      `mapstructure:"cache_store" validate:"required,cache_store"` // database for cache store
-	TablePrefix      string      `mapstructure:"table_prefix"`
-	DataTablePrefix  string      `mapstructure:"data_table_prefix"`
-	CacheTablePrefix string      `mapstructure:"cache_table_prefix"`
+	VectorStore       string      `mapstructure:"vector_store"`
+	DataStore         string      `mapstructure:"data_store" validate:"required,data_store"`   // database for data store
+	CacheStore        string      `mapstructure:"cache_store" validate:"required,cache_store"` // database for cache store
+	TablePrefix       string      `mapstructure:"table_prefix"`
+	DataTablePrefix   string      `mapstructure:"data_table_prefix"`
+	CacheTablePrefix  string      `mapstructure:"cache_table_prefix"`
 	VectorTablePrefix string      `mapstructure:"vector_table_prefix"`
-	MySQL            MySQLConfig `mapstructure:"mysql"`
-	Postgres         SQLConfig   `mapstructure:"postgres"`
-	Redis            RedisConfig `mapstructure:"redis"`
+	MySQL             MySQLConfig `mapstructure:"mysql"`
+	Postgres          SQLConfig   `mapstructure:"postgres"`
+	Redis             RedisConfig `mapstructure:"redis"`
 }
 
 type MySQLConfig struct {
@@ -662,9 +662,11 @@ type configBinding struct {
 var bindings = []configBinding{
 	{"database.cache_store", "GORSE_CACHE_STORE"},
 	{"database.data_store", "GORSE_DATA_STORE"},
+	{"database.vector_store", "GORSE_VECTOR_STORE"},
 	{"database.table_prefix", "GORSE_TABLE_PREFIX"},
 	{"database.cache_table_prefix", "GORSE_CACHE_TABLE_PREFIX"},
 	{"database.data_table_prefix", "GORSE_DATA_TABLE_PREFIX"},
+	{"database.vector_table_prefix", "GORSE_VECTOR_TABLE_PREFIX"},
 	{"master.port", "GORSE_MASTER_PORT"},
 	{"master.host", "GORSE_MASTER_HOST"},
 	{"master.ssl_mode", "GORSE_MASTER_SSL_MODE"},

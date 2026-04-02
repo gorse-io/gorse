@@ -58,9 +58,9 @@ const (
 
 // RestServer implements a REST-ful API server.
 type RestServer struct {
-	Config      *config.Config
-	CacheClient cache.Database
-	DataClient  data.Database
+	Config       *config.Config
+	CacheClient  cache.Database
+	DataClient   data.Database
 	VectorClient vectors.Database
 
 	HttpHost string

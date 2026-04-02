@@ -39,8 +39,8 @@ import (
 	"github.com/gorse-io/gorse/storage/blob"
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
-	"github.com/gorse-io/gorse/storage/vectors"
 	"github.com/gorse-io/gorse/storage/meta"
+	"github.com/gorse-io/gorse/storage/vectors"
 	"github.com/jellydator/ttlcache/v3"
 	"github.com/juju/errors"
 	"github.com/sashabaranov/go-openai"
@@ -200,8 +200,6 @@ func (m *Master) Serve() {
 		if err = m.VectorClient.Init(); err != nil {
 			log.Logger().Fatal("failed to init vector store", zap.Error(err))
 		}
-	} else {
-		m.VectorClient = vectors.NoDatabase{}
 	}
 
 	// load recommend config
