@@ -404,6 +404,7 @@ func (m MongoDB) GetTimeSeriesPoints(ctx context.Context, name string, begin, en
 			"name":      1,
 			"value":     1,
 		}},
+		{"$sort": bson.M{"timestamp": -1}},
 	})
 	if err != nil {
 		return nil, errors.Trace(err)
