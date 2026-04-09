@@ -494,3 +494,27 @@ func (s *ValidateTestSuite) TestRecommendersExistence() {
 func TestValidate(t *testing.T) {
 	suite.Run(t, new(ValidateTestSuite))
 }
+
+func (s *ValidateTestSuite) TestRedisClusterCacheStore() {
+	// Test that redis+cluster:// prefix is accepted for cache_store
+	s.Database.CacheStore = "redis+cluster://:password@192.168.1.11:6379?addr=192.168.0.5:6379&addr=192.168.0.7:6379"
+	s.NoError(s.Validate())
+}
+
+func (s *ValidateTestSuite) TestRedissClusterCacheStore() {
+	// Test that rediss+cluster:// prefix is accepted for cache_store
+	s.Database.CacheStore = "rediss+cluster://:password@192.168.1.11:6379?addr=192.168.0.5:6379"
+	s.NoError(s.Validate())
+}
+
+func (s *ValidateTestSuite) TestRedisClusterDataStore() {
+	// Test that redis+cluster:// prefix is accepted for data_store
+	s.Database.DataStore = "redis+cluster://:password@192.168.1.11:6379?addr=192.168.0.5:6379&addr=192.168.0.7:6379"
+	s.NoError(s.Validate())
+}
+
+func (s *ValidateTestSuite) TestRedissClusterDataStore() {
+	// Test that rediss+cluster:// prefix is accepted for data_store
+	s.Database.DataStore = "rediss+cluster://:password@192.168.1.11:6379?addr=192.168.0.5:6379"
+	s.NoError(s.Validate())
+}
