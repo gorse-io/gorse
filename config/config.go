@@ -829,6 +829,8 @@ func (config *Config) Validate() error {
 		prefixes := []string{
 			storage.RedisPrefix,
 			storage.RedissPrefix,
+			storage.RedisClusterPrefix,
+			storage.RedissClusterPrefix,
 			storage.MongoPrefix,
 			storage.MongoSrvPrefix,
 			storage.MySQLPrefix,
