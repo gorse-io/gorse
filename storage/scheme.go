@@ -87,6 +87,8 @@ const (
 	WeaviatePrefix      = "weaviate://"
 	WeaviatesPrefix     = "weaviates://"
 	MilvusPrefix        = "milvus://"
+	ElasticPrefix       = "elastic://"
+	ElasticsPrefix      = "elastics://"
 )
 
 func AppendURLParams(rawURL string, params []lo.Tuple2[string, string]) (string, error) {

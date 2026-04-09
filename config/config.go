@@ -815,6 +815,8 @@ func (config *Config) Validate() error {
 			storage.CHHTTPPrefix,
 			storage.CHHTTPSPrefix,
 			storage.SQLitePrefix,
+			storage.ElasticPrefix,
+			storage.ElasticsPrefix,
 		}
 		for _, prefix := range prefixes {
 			if strings.HasPrefix(fl.Field().String(), prefix) {
@@ -835,6 +837,8 @@ func (config *Config) Validate() error {
 			storage.PostgresPrefix,
 			storage.PostgreSQLPrefix,
 			storage.SQLitePrefix,
+			storage.ElasticPrefix,
+			storage.ElasticsPrefix,
 		}
 		for _, prefix := range prefixes {
 			if strings.HasPrefix(fl.Field().String(), prefix) {
