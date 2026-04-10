@@ -31,6 +31,7 @@ import (
 	"github.com/juju/errors"
 	"github.com/samber/lo"
 	"modernc.org/strutil"
+	"sync"
 )
 
 type ID int32
@@ -88,6 +89,7 @@ type Dataset struct {
 	itemDict     *FreqDict
 	numFeedback  int
 	categories   map[string]int
+	mu           sync.Mutex // protects concurrent AddFeedback operations
 }
 
 func NewDataset(timestamp time.Time, userCount, itemCount int) *Dataset {
@@ -232,6 +234,9 @@ func (d *Dataset) AddItem(item data.Item) {
 }
 
 func (d *Dataset) AddFeedback(userId, itemId string, timestamp time.Time) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	
 	userIndex := d.userDict.Add(userId)
 	itemIndex := d.itemDict.Add(itemId)
 	// Ensure users array is large enough for new users
