@@ -242,11 +242,11 @@ func (r *Recommender) recommendItemToItem(name string) RecommenderFunc {
 		data.SortFeedbacks(r.userFeedback)
 		userFeedback := make([]data.Feedback, 0, r.config.CacheSize)
 		for _, feedback := range r.userFeedback {
-			if r.online && r.config.ContextSize <= len(userFeedback) {
-				break
-			}
 			if expression.MatchFeedbackTypeExpressions(r.config.DataSource.PositiveFeedbackTypes, feedback.FeedbackType, feedback.Value) {
 				userFeedback = append(userFeedback, feedback)
+				if r.online && r.config.ContextSize <= len(userFeedback) {
+					break
+				}
 			}
 		}
 		// collect scores
