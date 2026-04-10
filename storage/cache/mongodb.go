@@ -387,7 +387,6 @@ func (m MongoDB) GetTimeSeriesPoints(ctx context.Context, name string, begin, en
 			"name":      name,
 			"timestamp": bson.M{"$gte": begin, "$lte": end},
 		}},
-		{"$sort": bson.M{"timestamp": -1}},
 		{"$group": bson.M{
 			"_id": bson.M{
 				"$multiply": bson.A{
@@ -395,8 +394,8 @@ func (m MongoDB) GetTimeSeriesPoints(ctx context.Context, name string, begin, en
 					duration.Milliseconds(),
 				},
 			},
-			"name":  bson.M{"$first": "$name"},
-			"value": bson.M{"$first": "$value"},
+			"name":  bson.M{"$top": bson.M{"sortBy": bson.M{"timestamp": -1}, "output": "$name"}},
+			"value": bson.M{"$top": bson.M{"sortBy": bson.M{"timestamp": -1}, "output": "$value"}},
 		}},
 		{"$project": bson.M{
 			"_id":       0,
@@ -404,6 +403,7 @@ func (m MongoDB) GetTimeSeriesPoints(ctx context.Context, name string, begin, en
 			"name":      1,
 			"value":     1,
 		}},
+		{"$sort": bson.M{"timestamp": 1}},
 	})
 	if err != nil {
 		return nil, errors.Trace(err)

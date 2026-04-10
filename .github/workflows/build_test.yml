@@ -41,14 +41,14 @@ jobs:
           --health-retries 5
 
       mongo:
-        image: mongo:4.0
+        image: mongo:6
         ports:
           - 27017
         env:
           MONGO_INITDB_ROOT_USERNAME: root
           MONGO_INITDB_ROOT_PASSWORD: password
         options: >-
-          --health-cmd mongo
+          --health-cmd mongosh
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
