@@ -21,6 +21,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/chewxy/math32"
@@ -31,7 +32,6 @@ import (
 	"github.com/juju/errors"
 	"github.com/samber/lo"
 	"modernc.org/strutil"
-	"sync"
 )
 
 type ID int32
@@ -79,6 +79,7 @@ type Dataset struct {
 	timestamp    time.Time
 	users        []data.User
 	items        []data.Item
+	userLocks    []*sync.Mutex
 	userLabels   *Labels
 	itemLabels   *Labels
 	userFeedback [][]int32
@@ -89,7 +90,6 @@ type Dataset struct {
 	itemDict     *FreqDict
 	numFeedback  int
 	categories   map[string]int
-	mu           sync.Mutex // protects concurrent AddFeedback operations
 }
 
 func NewDataset(timestamp time.Time, userCount, itemCount int) *Dataset {
@@ -97,6 +97,7 @@ func NewDataset(timestamp time.Time, userCount, itemCount int) *Dataset {
 		timestamp:    timestamp,
 		users:        make([]data.User, 0, userCount),
 		items:        make([]data.Item, 0, itemCount),
+		userLocks:    make([]*sync.Mutex, 0, userCount),
 		userLabels:   NewLabels(),
 		itemLabels:   NewLabels(),
 		userFeedback: make([][]int32, userCount),
@@ -206,6 +207,7 @@ func (d *Dataset) AddUser(user data.User) {
 		Labels:  d.userLabels.processLabels(user.Labels, ""),
 		Comment: user.Comment,
 	})
+	d.userLocks = append(d.userLocks, &sync.Mutex{})
 	d.userDict.AddNoCount(user.UserId)
 	if len(d.userFeedback) < len(d.users) {
 		d.userFeedback = append(d.userFeedback, nil)
@@ -234,32 +236,12 @@ func (d *Dataset) AddItem(item data.Item) {
 }
 
 func (d *Dataset) AddFeedback(userId, itemId string, timestamp time.Time) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	
 	userIndex := d.userDict.Add(userId)
 	itemIndex := d.itemDict.Add(itemId)
-	// Ensure users array is large enough for new users
-	for int(userIndex) >= len(d.users) {
-		d.users = append(d.users, data.User{UserId: userId})
-	}
-	// Ensure items array is large enough for new items
-	for int(itemIndex) >= len(d.items) {
-		d.items = append(d.items, data.Item{ItemId: itemId})
-	}
-	// Ensure userFeedback and timestamps arrays are large enough
-	for int(userIndex) >= len(d.userFeedback) {
-		d.userFeedback = append(d.userFeedback, nil)
-	}
-	for int(userIndex) >= len(d.timestamps) {
-		d.timestamps = append(d.timestamps, nil)
-	}
-	// Ensure itemFeedback array is large enough
-	for int(itemIndex) >= len(d.itemFeedback) {
-		d.itemFeedback = append(d.itemFeedback, nil)
-	}
-	d.userFeedback[userIndex] = append(d.userFeedback[userIndex], itemIndex)
 	d.itemFeedback[itemIndex] = append(d.itemFeedback[itemIndex], userIndex)
+	d.userLocks[userIndex].Lock()
+	defer d.userLocks[userIndex].Unlock()
+	d.userFeedback[userIndex] = append(d.userFeedback[userIndex], itemIndex)
 	d.timestamps[userIndex] = append(d.timestamps[userIndex], timestamp)
 	d.numFeedback++
 }

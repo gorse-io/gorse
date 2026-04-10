@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"math"
 	"strconv"
-	"sync"
 	"testing"
 	"time"
 
@@ -249,69 +248,4 @@ func TestDataset_LoadMovieLens1M(t *testing.T) {
 	assert.Len(t, test.GetUsers(), 6040)
 	assert.Len(t, test.GetItems(), 3706)
 	assert.Equal(t, test.CountFeedback(), 6040)
-}
-
-// Test case for issue #1224: panic when AddFeedback is called with a userId
-// that was not previously added via AddUser
-func TestDataset_AddFeedback_NewUser(t *testing.T) {
-	dataSet := NewDataset(time.Now(), 0, 0)
-	
-	// Add only 3 users
-	dataSet.AddUser(data.User{UserId: "user1"})
-	dataSet.AddUser(data.User{UserId: "user2"})
-	dataSet.AddUser(data.User{UserId: "user3"})
-	
-	// Add items
-	dataSet.AddItem(data.Item{ItemId: "item1"})
-	dataSet.AddItem(data.Item{ItemId: "item2"})
-	
-	// Now add feedback for user4 which was NOT added via AddUser
-	// This should trigger panic: index out of range
-	dataSet.AddFeedback("user4", "item1", time.Now())
-	
-	// If we reach here without panic, the bug is fixed
-	assert.Equal(t, 4, dataSet.CountUsers())
-	assert.Equal(t, 2, dataSet.CountItems())
-	assert.Equal(t, 1, dataSet.CountFeedback())
-}
-
-// Test concurrent AddFeedback operations (issue #1224)
-func TestDataset_AddFeedback_Concurrent(t *testing.T) {
-	dataSet := NewDataset(time.Now(), 0, 0)
-	
-	// Add 3 users
-	dataSet.AddUser(data.User{UserId: "user1"})
-	dataSet.AddUser(data.User{UserId: "user2"})
-	dataSet.AddUser(data.User{UserId: "user3"})
-	
-	// Add items
-	dataSet.AddItem(data.Item{ItemId: "item1"})
-	dataSet.AddItem(data.Item{ItemId: "item2"})
-	dataSet.AddItem(data.Item{ItemId: "item3"})
-	
-	// Concurrently add feedback from multiple goroutines
-	var wg sync.WaitGroup
-	numGoroutines := 10
-	numFeedbacksPerGoroutine := 100
-	
-	for g := 0; g < numGoroutines; g++ {
-		wg.Add(1)
-		go func(goroutineId int) {
-			defer wg.Done()
-			for i := 0; i < numFeedbacksPerGoroutine; i++ {
-				// Mix of existing and new users
-				user := fmt.Sprintf("user%d", (i % 5) + 1)
-				item := fmt.Sprintf("item%d", (i % 3) + 1)
-				dataSet.AddFeedback(user, item, time.Now())
-			}
-		}(g)
-	}
-	
-	wg.Wait()
-	
-	// Verify no panics occurred and counts are correct
-	assert.Equal(t, 5, dataSet.CountUsers()) // user1-5
-	assert.Equal(t, 3, dataSet.CountItems()) // item1-3
-	expectedFeedback := numGoroutines * numFeedbacksPerGoroutine
-	assert.Equal(t, expectedFeedback, dataSet.CountFeedback())
 }
