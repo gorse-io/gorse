@@ -24,7 +24,7 @@ services:
       POSTGRES_PASSWORD: gorse_pass
 
   mongo:
-    image: mongo:5.2
+    image: mongo:5
     ports:
       - 27017:27017
     environment:
