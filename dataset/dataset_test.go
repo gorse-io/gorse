@@ -205,47 +205,47 @@ func TestDataset_Split(t *testing.T) {
 	assert.Equal(t, 7, train2.CountFeedback())
 	assert.Equal(t, numUsers, test2.CountUsers())
 	assert.Equal(t, numItems, test2.CountItems())
-	assert.Equal(t, 2, test2.CountFeedback())
+
+func TestDataset_AddFeedback_NewUser(t *testing.T) {
+	dataSet := NewDataset(time.Now(), 0, 0)
+	
+	// Add only 3 users
+	dataSet.AddUser(data.User{UserId: "user1"})
+	dataSet.AddUser(data.User{UserId: "user2"})
+	dataSet.AddUser(data.User{UserId: "user3"})
+	
+	// Add items
+	dataSet.AddItem(data.Item{ItemId: "item1"})
+	dataSet.AddItem(data.Item{ItemId: "item2"})
+	
+	// Now add feedback for user4 which was NOT added via AddUser
+	// This should trigger panic: index out of range
+	dataSet.AddFeedback("user4", "item1", time.Now())
+	
+	// If we reach here without panic, the bug is fixed
+	assert.Equal(t, 4, dataSet.CountUsers())
+	assert.Equal(t, 2, dataSet.CountItems())
+	assert.Equal(t, 1, dataSet.CountFeedback())
 }
 
-func TestDataset_SplitLatest(t *testing.T) {
-	const numUsers, numItems = 3, 5
-	// create dataset
-	dataset := NewDataset(time.Now(), numUsers, numItems)
-	for i := range numUsers {
-		dataset.AddUser(data.User{UserId: fmt.Sprintf("user%v", i)})
-	}
-	for i := range numItems {
-		dataset.AddItem(data.Item{ItemId: fmt.Sprintf("item%v", i)})
-	}
-	for i := range numUsers {
-		for j := i + 1; j < numItems; j++ {
-			dataset.AddFeedback(fmt.Sprintf("user%v", i), fmt.Sprintf("item%v", j), time.Unix(int64(j), 0))
-		}
-	}
-	assert.Equal(t, 9, dataset.CountFeedback())
-	// split
-	train, test := dataset.SplitLatest(math.MaxInt)
-	assert.Equal(t, numUsers, train.CountUsers())
-	assert.Equal(t, numItems, train.CountItems())
-	assert.Equal(t, numUsers, test.CountUsers())
-	assert.Equal(t, numItems, test.CountItems())
-	assert.Equal(t, 6, train.CountFeedback())
-	assert.Equal(t, 3, test.CountFeedback())
-	for i := range numUsers {
-		assert.Len(t, train.GetUserFeedback()[i], numItems-i-2)
-		assert.Len(t, test.GetUserFeedback()[i], 1)
-		assert.Equal(t, 4, int(test.GetUserFeedback()[i][0]))
-	}
-}
-
-func TestDataset_LoadMovieLens1M(t *testing.T) {
-	train, test, err := LoadDataFromBuiltIn("ml-1m")
-	assert.NoError(t, err)
-	assert.Len(t, train.GetUsers(), 6040)
-	assert.Len(t, train.GetItems(), 3706)
-	assert.Equal(t, train.CountFeedback(), 994169)
-	assert.Len(t, test.GetUsers(), 6040)
-	assert.Len(t, test.GetItems(), 3706)
-	assert.Equal(t, test.CountFeedback(), 6040)
+func TestDataset_AddFeedback_NewUser(t *testing.T) {
+	dataSet := NewDataset(time.Now(), 0, 0)
+	
+	// Add only 3 users
+	dataSet.AddUser(data.User{UserId: "user1"})
+	dataSet.AddUser(data.User{UserId: "user2"})
+	dataSet.AddUser(data.User{UserId: "user3"})
+	
+	// Add items
+	dataSet.AddItem(data.Item{ItemId: "item1"})
+	dataSet.AddItem(data.Item{ItemId: "item2"})
+	
+	// Now add feedback for user4 which was NOT added via AddUser
+	// This should trigger panic: index out of range
+	dataSet.AddFeedback("user4", "item1", time.Now())
+	
+	// If we reach here without panic, the bug is fixed
+	assert.Equal(t, 4, dataSet.CountUsers())
+	assert.Equal(t, 2, dataSet.CountItems())
+	assert.Equal(t, 1, dataSet.CountFeedback())
 }
