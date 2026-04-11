@@ -14,14 +14,17 @@
 
 package dataset
 
+import "sync"
+
 type FreqDict struct {
 	si  map[string]int32
 	is  []string
 	cnt []int32
+	mu  []sync.Mutex
 }
 
 func NewFreqDict() (d *FreqDict) {
-	d = &FreqDict{map[string]int32{}, []string{}, []int32{}}
+	d = &FreqDict{map[string]int32{}, []string{}, []int32{}, []sync.Mutex{}}
 	return
 }
 
@@ -39,6 +42,7 @@ func (d *FreqDict) Add(s string) (y int32) {
 	d.si[s] = y
 	d.is = append(d.is, s)
 	d.cnt = append(d.cnt, 1)
+	d.mu = append(d.mu, sync.Mutex{})
 	return
 }
 
@@ -51,6 +55,7 @@ func (d *FreqDict) AddNoCount(s string) (y int32) {
 	d.si[s] = y
 	d.is = append(d.is, s)
 	d.cnt = append(d.cnt, 0)
+	d.mu = append(d.mu, sync.Mutex{})
 	return
 }
 
@@ -73,6 +78,14 @@ func (d *FreqDict) Freq(id int32) int32 {
 		return 0
 	}
 	return d.cnt[id]
+}
+
+func (d *FreqDict) Lock(index int32) {
+	d.mu[index].Lock()
+}
+
+func (d *FreqDict) Unlock(index int32) {
+	d.mu[index].Unlock()
 }
 
 func (d *FreqDict) ToIndex() *Index {

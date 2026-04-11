@@ -15,7 +15,9 @@
 package dataset
 
 import (
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -34,4 +36,38 @@ func TestFreqDict(t *testing.T) {
 	assert.Equal(t, int32(3), dict.Freq(2))
 	assert.Equal(t, int32(0), dict.Id("a"))
 	assert.Equal(t, int32(-1), dict.Id("e"))
+}
+
+func TestFreqDictLock(t *testing.T) {
+	dict := NewFreqDict()
+	index := dict.AddNoCount("a")
+	dict.Lock(index)
+
+	locked := make(chan struct{})
+	released := make(chan struct{})
+	var acquired atomic.Bool
+	go func() {
+		close(locked)
+		dict.Lock(index)
+		acquired.Store(true)
+		dict.Unlock(index)
+		close(released)
+	}()
+
+	<-locked
+	select {
+	case <-released:
+		t.Fatal("lock should block concurrent access")
+	case <-time.After(10 * time.Millisecond):
+	}
+	assert.False(t, acquired.Load())
+
+	dict.Unlock(index)
+
+	select {
+	case <-released:
+	case <-time.After(time.Second):
+		t.Fatal("lock should be released")
+	}
+	assert.True(t, acquired.Load())
 }

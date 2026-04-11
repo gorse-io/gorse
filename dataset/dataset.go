@@ -21,7 +21,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/chewxy/math32"
@@ -79,7 +78,6 @@ type Dataset struct {
 	timestamp    time.Time
 	users        []data.User
 	items        []data.Item
-	userLocks    []*sync.Mutex
 	userLabels   *Labels
 	itemLabels   *Labels
 	userFeedback [][]int32
@@ -97,7 +95,6 @@ func NewDataset(timestamp time.Time, userCount, itemCount int) *Dataset {
 		timestamp:    timestamp,
 		users:        make([]data.User, 0, userCount),
 		items:        make([]data.Item, 0, itemCount),
-		userLocks:    make([]*sync.Mutex, 0, userCount),
 		userLabels:   NewLabels(),
 		itemLabels:   NewLabels(),
 		userFeedback: make([][]int32, userCount),
@@ -207,7 +204,6 @@ func (d *Dataset) AddUser(user data.User) {
 		Labels:  d.userLabels.processLabels(user.Labels, ""),
 		Comment: user.Comment,
 	})
-	d.userLocks = append(d.userLocks, &sync.Mutex{})
 	d.userDict.AddNoCount(user.UserId)
 	if len(d.userFeedback) < len(d.users) {
 		d.userFeedback = append(d.userFeedback, nil)
@@ -239,8 +235,8 @@ func (d *Dataset) AddFeedback(userId, itemId string, timestamp time.Time) {
 	userIndex := d.userDict.Add(userId)
 	itemIndex := d.itemDict.Add(itemId)
 	d.itemFeedback[itemIndex] = append(d.itemFeedback[itemIndex], userIndex)
-	d.userLocks[userIndex].Lock()
-	defer d.userLocks[userIndex].Unlock()
+	d.userDict.Lock(userIndex)
+	defer d.userDict.Unlock(userIndex)
 	d.userFeedback[userIndex] = append(d.userFeedback[userIndex], itemIndex)
 	d.timestamps[userIndex] = append(d.timestamps[userIndex], timestamp)
 	d.numFeedback++
