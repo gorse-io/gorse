@@ -15,6 +15,7 @@
 package master
 
 import (
+	"fmt"
 	"runtime"
 	"strconv"
 	"time"
@@ -672,4 +673,50 @@ func (s *MasterTestSuite) TestGarbageCollection() {
 	cf, err = s.CacheClient.SearchScores(ctx, cache.CollaborativeFiltering, "3", nil, 0, 100)
 	s.NoError(err)
 	s.Empty(cf)
+}
+
+func (s *MasterTestSuite) TestLoadDataFromDatabaseInParallel() {
+	ctx := s.T().Context()
+	s.Config = config.GetDefaultConfig()
+	s.Config.Master.NumJobs = 16
+	s.Config.Recommend.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{
+		expression.MustParseFeedbackTypeExpression("positive"),
+	}
+	s.Config.Recommend.DataSource.NegativeFeedbackTypes = nil
+	s.Config.Recommend.DataSource.ReadFeedbackTypes = nil
+
+	const numItems = 12000
+	items := make([]data.Item, 0, numItems)
+	feedbacks := make([]data.Feedback, 0, numItems)
+	for i := range numItems {
+		itemID := fmt.Sprintf("item-%05d", i)
+		items = append(items, data.Item{
+			ItemId:    itemID,
+			Timestamp: time.Unix(int64(i), 0),
+		})
+		feedbacks = append(feedbacks, data.Feedback{
+			FeedbackKey: data.FeedbackKey{
+				FeedbackType: "positive",
+				UserId:       "hot-user",
+				ItemId:       itemID,
+			},
+			Timestamp: time.Unix(int64(i), 0),
+		})
+	}
+
+	err := s.DataClient.BatchInsertUsers(ctx, []data.User{{UserId: "hot-user"}})
+	s.NoError(err)
+	err = s.DataClient.BatchInsertItems(ctx, items)
+	s.NoError(err)
+	err = s.DataClient.BatchInsertFeedback(ctx, feedbacks, false, false, true)
+	s.NoError(err)
+
+	datasets, err := s.loadDataset(ctx)
+	s.NoError(err)
+	s.Equal(1, datasets.rankingTrainSet.CountUsers())
+	s.Equal(1, datasets.rankingTestSet.CountUsers())
+	s.Equal(numItems, datasets.rankingTrainSet.CountFeedback()+datasets.rankingTestSet.CountFeedback())
+	s.Equal(numItems, datasets.clickTrainSet.Count()+datasets.clickTestSet.Count())
+	s.Equal(numItems, datasets.clickTrainSet.PositiveCount+datasets.clickTestSet.PositiveCount)
+	s.Equal(0, datasets.clickTrainSet.NegativeCount+datasets.clickTestSet.NegativeCount)
 }
