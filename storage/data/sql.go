@@ -508,9 +508,7 @@ func (d *SQLDatabase) BatchInsertItems(ctx context.Context, items []Item) error 
 			if !memo.Contains(item.ItemId) {
 				memo.Add(item.ItemId)
 				row := NewSQLItem(item)
-				if d.driver == SQLite {
-					row.Timestamp = row.Timestamp.In(time.UTC)
-				}
+				row.Timestamp = d.normalizeTimestampForWrite(row.Timestamp)
 				rows = append(rows, row)
 			}
 		}
@@ -646,12 +644,7 @@ func (d *SQLDatabase) ModifyItem(ctx context.Context, itemId string, patch ItemP
 		attributes["labels"] = string(text)
 	}
 	if patch.Timestamp != nil {
-		switch d.driver {
-		case ClickHouse, SQLite:
-			attributes["time_stamp"] = patch.Timestamp.In(time.UTC)
-		default:
-			attributes["time_stamp"] = patch.Timestamp
-		}
+		attributes["time_stamp"] = d.normalizeTimestampForWrite(*patch.Timestamp)
 	}
 	err := d.gormDB.WithContext(ctx).Model(&SQLItem{ItemId: itemId}).Updates(attributes).Error
 	return errors.Trace(err)
@@ -1158,13 +1151,8 @@ func (d *SQLDatabase) BatchInsertFeedback(ctx context.Context, feedback []Feedba
 			if users.Contains(f.UserId) && items.Contains(f.ItemId) {
 				if _, exist := memo[lo.Tuple3[string, string, string]{f.FeedbackType, f.UserId, f.ItemId}]; !exist {
 					memo[lo.Tuple3[string, string, string]{f.FeedbackType, f.UserId, f.ItemId}] = struct{}{}
-					if d.driver == SQLite {
-						f.Timestamp = f.Timestamp.In(time.UTC)
-					}
+					f.Timestamp = d.normalizeTimestampForWrite(f.Timestamp)
 					f.Updated = f.Timestamp
-					if d.driver == SQLite {
-						f.Updated = f.Updated.In(time.UTC)
-					}
 					rows = append(rows, f)
 				}
 			}
@@ -1397,6 +1385,17 @@ func (d *SQLDatabase) convertTimeZone(timestamp *time.Time) time.Time {
 		return timestamp.In(time.UTC)
 	default:
 		return *timestamp
+	}
+}
+
+func (d *SQLDatabase) normalizeTimestampForWrite(timestamp time.Time) time.Time {
+	switch d.driver {
+	case MySQL:
+		return timestamp.Truncate(time.Second)
+	case ClickHouse, SQLite:
+		return timestamp.In(time.UTC)
+	default:
+		return timestamp
 	}
 }
 

@@ -844,6 +844,19 @@ func (suite *baseTestSuite) TestTimeLimit() {
 	_, retFeedback, err = suite.Database.GetFeedback(ctx, "", 100, &timeLimit, new(time.Now()), typeFilter)
 	suite.NoError(err)
 	suite.Equal([]Feedback{feedbacks[4], feedbacks[3]}, retFeedback)
+
+	// get user feedback with time limit
+	for i := 0; i < 100; i++ {
+		err := suite.Database.BatchInsertFeedback(ctx, []Feedback{{
+			FeedbackKey: FeedbackKey{"type", "user_2", "item_" + strconv.Itoa(i)},
+			Timestamp:   time.Now(),
+			Updated:     time.Now(),
+		}}, true, true, true)
+		suite.Require().NoError(err)
+		feedback, err := suite.Database.GetUserFeedback(ctx, "user_2", new(time.Now()), expression.MustParseFeedbackTypeExpression("type"))
+		suite.Require().NoError(err)
+		suite.Require().Equal(i+1, len(feedback))
+	}
 }
 
 func (suite *baseTestSuite) TestTimezone() {
