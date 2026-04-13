@@ -15,7 +15,6 @@ package ctr
 
 import (
 	"bytes"
-	"context"
 	"runtime"
 	"testing"
 
@@ -23,7 +22,6 @@ import (
 	"github.com/gorse-io/gorse/model"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 const classificationDelta = 0.01
@@ -237,5 +235,3 @@ func TestFactorizationMachines_Classification_Synthesis(t *testing.T) {
 		fitConfig.Jobs,
 	), 4)
 }
-
-
