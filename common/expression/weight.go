@@ -19,6 +19,8 @@ import (
 
 	"github.com/expr-lang/expr"
 	"github.com/expr-lang/expr/vm"
+	"github.com/gorse-io/gorse/common/log"
+	"go.uber.org/zap"
 )
 
 // FeedbackWeightExpression wraps compiled weight expressions by feedback type.
@@ -72,46 +74,50 @@ func NewFeedbackWeightExpression(feedbackWeight map[string]string) (*FeedbackWei
 
 // Evaluate evaluates the weight for the given feedback type and value.
 // If there is no expression for the feedback type, the default weight 1.0 is returned.
-func (weightExpr *FeedbackWeightExpression) Evaluate(feedbackType string, value float64) (float32, error) {
+func (weightExpr *FeedbackWeightExpression) Evaluate(feedbackType string, value float64) float32 {
 	program, ok := weightExpr.programs[feedbackType]
 	if !ok {
-		return 1.0, nil
+		return 1.0
 	}
 	result, err := expr.Run(program, env(value))
 	if err != nil {
-		return 1.0, err
+		log.Logger().Error("failed to evaluate weight expression",
+			zap.String("feedback_type", feedbackType),
+			zap.Float64("value", value),
+			zap.Error(err))
+		return 1.0
 	}
 	return ToFloat32(result)
 }
 
 // ToFloat32 converts various numeric types to float32.
-func ToFloat32(v any) (float32, error) {
+func ToFloat32(v any) float32 {
 	switch val := v.(type) {
 	case float32:
-		return val, nil
+		return val
 	case float64:
-		return float32(val), nil
+		return float32(val)
 	case int:
-		return float32(val), nil
+		return float32(val)
 	case int8:
-		return float32(val), nil
+		return float32(val)
 	case int16:
-		return float32(val), nil
+		return float32(val)
 	case int32:
-		return float32(val), nil
+		return float32(val)
 	case int64:
-		return float32(val), nil
+		return float32(val)
 	case uint:
-		return float32(val), nil
+		return float32(val)
 	case uint8:
-		return float32(val), nil
+		return float32(val)
 	case uint16:
-		return float32(val), nil
+		return float32(val)
 	case uint32:
-		return float32(val), nil
+		return float32(val)
 	case uint64:
-		return float32(val), nil
+		return float32(val)
 	default:
-		return 1.0, nil
+		return 1.0
 	}
 }
