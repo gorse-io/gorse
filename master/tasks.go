@@ -16,6 +16,7 @@ package master
 
 import (
 	"context"
+	stderrors "errors"
 	"sort"
 	"strconv"
 	"strings"
@@ -46,6 +47,10 @@ import (
 )
 
 const batchSize = 10000
+
+func isContextCanceled(err error) bool {
+	return stderrors.Is(err, context.Canceled)
+}
 
 func (m *Master) loadDataset(parent context.Context) (datasets Datasets, err error) {
 	ctx, span := m.tracer.Start(parent, "Load Dataset", 1)
@@ -215,36 +220,81 @@ func (m *Master) runLoadDatasetTask(ctx context.Context) error {
 	useCollaborativeFilteringTasks := !strings.EqualFold(m.Config.Recommend.Collaborative.Type, "none")
 	useClickThroughRateTasks := strings.EqualFold(m.Config.Recommend.Ranker.Type, "fm")
 	if err = m.updateUserToUser(ctx, datasets.rankingDataset); err != nil {
+		if isContextCanceled(err) {
+			return err
+		}
 		log.Logger().Error("failed to update user-to-user recommendation", zap.Error(err))
 	}
+	if err = ctx.Err(); err != nil {
+		return err
+	}
 	if err = m.updateItemToItem(ctx, datasets.rankingDataset); err != nil {
+		if isContextCanceled(err) {
+			return err
+		}
 		log.Logger().Error("failed to update item-to-item recommendation", zap.Error(err))
+	}
+	if err = ctx.Err(); err != nil {
+		return err
 	}
 	if useCollaborativeFilteringTasks {
 		if err = m.trainCollaborativeFiltering(ctx, datasets.rankingTrainSet, datasets.rankingTestSet); err != nil {
+			if isContextCanceled(err) {
+				return err
+			}
 			log.Logger().Error("failed to train collaborative filtering model", zap.Error(err))
 		}
 	}
+	if err = ctx.Err(); err != nil {
+		return err
+	}
 	if useClickThroughRateTasks {
 		if err = m.trainClickThroughRatePrediction(ctx, datasets.clickTrainSet, datasets.clickTestSet); err != nil {
+			if isContextCanceled(err) {
+				return err
+			}
 			log.Logger().Error("failed to train click-through rate prediction model", zap.Error(err))
 		}
 	}
+	if err = ctx.Err(); err != nil {
+		return err
+	}
 	if m.standalone {
 		if err = m.updateRecommend(ctx); err != nil {
+			if isContextCanceled(err) {
+				return err
+			}
 			log.Logger().Error("failed to update recommendation", zap.Error(err))
 		}
 	}
+	if err = ctx.Err(); err != nil {
+		return err
+	}
 	if err = m.collectGarbage(ctx, datasets.rankingDataset); err != nil {
+		if isContextCanceled(err) {
+			return err
+		}
 		log.Logger().Error("failed to collect garbage in cache", zap.Error(err))
+	}
+	if err = ctx.Err(); err != nil {
+		return err
 	}
 	if useCollaborativeFilteringTasks && m.Config.Recommend.Collaborative.OptimizePeriod > 0 {
 		if err = m.optimizeCollaborativeFiltering(ctx, datasets.rankingTrainSet, datasets.rankingTestSet); err != nil {
+			if isContextCanceled(err) {
+				return err
+			}
 			log.Logger().Error("failed to optimize collaborative filtering model", zap.Error(err))
 		}
 	}
+	if err = ctx.Err(); err != nil {
+		return err
+	}
 	if useClickThroughRateTasks && m.Config.Recommend.Ranker.OptimizePeriod > 0 {
 		if err = m.optimizeClickThroughRatePrediction(ctx, datasets.clickTrainSet, datasets.clickTestSet); err != nil {
+			if isContextCanceled(err) {
+				return err
+			}
 			log.Logger().Error("failed to optimize click-through rate prediction model", zap.Error(err))
 		}
 	}
@@ -742,6 +792,9 @@ func (m *Master) updateItemToItem(parent context.Context, dataset *dataset.Datas
 					zap.Int("n_recommendations", len(score)))
 				// Save item-to-item recommendation to cache
 				if err := m.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key(itemToItemConfig.Name, item.ItemId), score); err != nil {
+					if isContextCanceled(err) {
+						return
+					}
 					log.Logger().Error("failed to save item-to-item recommendation to cache",
 						zap.String("item_id", item.ItemId), zap.Error(err))
 					return
@@ -751,6 +804,9 @@ func (m *Master) updateItemToItem(parent context.Context, dataset *dataset.Datas
 					cache.String(cache.Key(cache.ItemToItemDigest, itemToItemConfig.Name, item.ItemId), itemToItemConfig.Hash(&m.Config.Recommend)),
 					cache.Time(cache.Key(cache.ItemToItemUpdateTime, itemToItemConfig.Name, item.ItemId), time.Now()),
 				); err != nil {
+					if isContextCanceled(err) {
+						return
+					}
 					log.Logger().Error("failed to save item-to-item digest to cache",
 						zap.String("item_id", item.ItemId), zap.Error(err))
 					return
@@ -760,6 +816,9 @@ func (m *Master) updateItemToItem(parent context.Context, dataset *dataset.Datas
 					Subset: new(cache.Key(itemToItemConfig.Name, item.ItemId)),
 					Before: new(recommender.Timestamp()),
 				}); err != nil {
+					if isContextCanceled(err) {
+						return
+					}
 					log.Logger().Error("failed to remove stale item-to-item recommendation",
 						zap.String("item_id", item.ItemId), zap.Error(err))
 					return
@@ -776,10 +835,16 @@ func (m *Master) updateItemToItem(parent context.Context, dataset *dataset.Datas
 
 // needUpdateItemToItem checks if item-to-item recommendation needs to be updated.
 func (m *Master) needUpdateItemToItem(ctx context.Context, itemId string, itemToItemConfig config.ItemToItemConfig) bool {
+	if ctx.Err() != nil {
+		return false
+	}
 	// check cache
 	items, err := m.CacheClient.SearchScores(ctx, cache.ItemToItem,
 		cache.Key(itemToItemConfig.Name, itemId), nil, 0, -1)
 	if err != nil {
+		if isContextCanceled(err) {
+			return false
+		}
 		log.Logger().Error("failed to fetch item-to-item recommendation",
 			zap.String("item_id", itemId), zap.Error(err))
 		return true
@@ -790,6 +855,9 @@ func (m *Master) needUpdateItemToItem(ctx context.Context, itemId string, itemTo
 	// check digest
 	digest, err := m.CacheClient.Get(ctx, cache.Key(cache.ItemToItemDigest, itemToItemConfig.Name, itemId)).String()
 	if err != nil {
+		if isContextCanceled(err) {
+			return false
+		}
 		if !errors.Is(err, errors.NotFound) {
 			log.Logger().Error("failed to read item-to-item digest", zap.Error(err))
 		}
@@ -802,6 +870,9 @@ func (m *Master) needUpdateItemToItem(ctx context.Context, itemId string, itemTo
 	// check update time
 	updateTime, err := m.CacheClient.Get(ctx, cache.Key(cache.ItemToItemUpdateTime, itemToItemConfig.Name, itemId)).Time()
 	if err != nil {
+		if isContextCanceled(err) {
+			return false
+		}
 		if !errors.Is(err, errors.NotFound) {
 			log.Logger().Error("failed to read last update item neighbors time", zap.Error(err))
 		}
@@ -854,6 +925,9 @@ func (m *Master) updateUserToUser(parent context.Context, dataset *dataset.Datas
 					zap.Int("n_recommendations", len(score)))
 				// Save user-to-user recommendations to cache
 				if err := m.CacheClient.AddScores(ctx, cache.UserToUser, cache.Key(userToUserConfig.Name, user.UserId), score); err != nil {
+					if isContextCanceled(err) {
+						return
+					}
 					log.Logger().Error("failed to save user neighbors to cache", zap.String("user_id", user.UserId), zap.Error(err))
 					return
 				}
@@ -862,6 +936,9 @@ func (m *Master) updateUserToUser(parent context.Context, dataset *dataset.Datas
 					cache.String(cache.Key(cache.UserToUserDigest, cache.Key(userToUserConfig.Name, user.UserId)), userToUserConfig.Hash(&m.Config.Recommend)),
 					cache.Time(cache.Key(cache.UserToUserUpdateTime, cache.Key(userToUserConfig.Name, user.UserId)), time.Now()),
 				); err != nil {
+					if isContextCanceled(err) {
+						return
+					}
 					log.Logger().Error("failed to save user neighbors digest to cache", zap.String("user_id", user.UserId), zap.Error(err))
 					return
 				}
@@ -870,6 +947,9 @@ func (m *Master) updateUserToUser(parent context.Context, dataset *dataset.Datas
 					Subset: new(cache.Key(userToUserConfig.Name, user.UserId)),
 					Before: new(recommender.Timestamp()),
 				}); err != nil {
+					if isContextCanceled(err) {
+						return
+					}
 					log.Logger().Error("failed to remove stale user neighbors", zap.String("user_id", user.UserId), zap.Error(err))
 				}
 			}
@@ -883,8 +963,14 @@ func (m *Master) updateUserToUser(parent context.Context, dataset *dataset.Datas
 
 // needUpdateUserToUser checks if user-to-user recommendation needs to be updated.
 func (m *Master) needUpdateUserToUser(ctx context.Context, userId string, userToUserConfig config.UserToUserConfig) bool {
+	if ctx.Err() != nil {
+		return false
+	}
 	// check cache
 	if items, err := m.CacheClient.SearchScores(ctx, cache.UserToUser, cache.Key(userToUserConfig.Name, userId), nil, 0, -1); err != nil {
+		if isContextCanceled(err) {
+			return false
+		}
 		log.Logger().Error("failed to load user neighbors", zap.String("user_id", userId), zap.Error(err))
 		return true
 	} else if len(items) == 0 {
@@ -894,6 +980,9 @@ func (m *Master) needUpdateUserToUser(ctx context.Context, userId string, userTo
 	// read digest
 	cacheDigest, err := m.CacheClient.Get(ctx, cache.Key(cache.UserToUserDigest, cache.Key(userToUserConfig.Name, userId))).String()
 	if err != nil {
+		if isContextCanceled(err) {
+			return false
+		}
 		if !errors.Is(err, errors.NotFound) {
 			log.Logger().Error("failed to read user neighbors digest", zap.Error(err))
 		}
@@ -906,6 +995,9 @@ func (m *Master) needUpdateUserToUser(ctx context.Context, userId string, userTo
 	// check update time
 	updateTime, err := m.CacheClient.Get(ctx, cache.Key(cache.UserToUserUpdateTime, cache.Key(userToUserConfig.Name, userId))).Time()
 	if err != nil {
+		if isContextCanceled(err) {
+			return false
+		}
 		if !errors.Is(err, errors.NotFound) {
 			log.Logger().Error("failed to read last update user neighbors time", zap.Error(err))
 		}
