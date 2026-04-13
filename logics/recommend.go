@@ -20,7 +20,6 @@ import (
 	"time"
 
 	mapset "github.com/deckarep/golang-set/v2"
-	"github.com/expr-lang/expr/vm"
 	"github.com/gorse-io/gorse/common/expression"
 	"github.com/gorse-io/gorse/common/heap"
 	"github.com/gorse-io/gorse/common/util"
@@ -251,14 +250,9 @@ func (r *Recommender) recommendItemToItem(name string) RecommenderFunc {
 			}
 		}
 		// compile feedback weight expressions
-		weightPrograms := make(map[string]*vm.Program, len(r.config.DataSource.FeedbackWeight))
-		for fbType, exprStr := range r.config.DataSource.FeedbackWeight {
-			program, err := CompileWeightExpression(exprStr)
-			if err != nil {
-				// log error but continue with default weight
-				continue
-			}
-			weightPrograms[fbType] = program
+		weightExpr, err := expression.NewFeedbackWeightExpression(r.config.DataSource.FeedbackWeight)
+		if err != nil {
+			weightExpr = nil
 		}
 		// collect scores with weighted aggregation
 		scores := make(map[string]float64)
@@ -267,13 +261,13 @@ func (r *Recommender) recommendItemToItem(name string) RecommenderFunc {
 		for _, feedback := range userFeedback {
 			// compute feedback weight
 			fbWeight := 1.0 // default weight
-			if program, ok := weightPrograms[feedback.FeedbackType]; ok {
-				w, err := EvaluateWeight(program, feedback.Value)
+			if weightExpr != nil {
+				w, err := weightExpr.Evaluate(feedback.FeedbackType, feedback.Value)
 				if err == nil {
 					fbWeight = float64(w)
 				}
 			}
-			
+
 			similarItems, err := r.cacheClient.SearchScores(ctx, cache.ItemToItem, cache.Key(name, feedback.ItemId), r.categories, 0, r.config.CacheSize)
 			if err != nil {
 				return nil, "", errors.Trace(err)
