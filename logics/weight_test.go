@@ -55,7 +55,7 @@ func TestEvaluateWeight(t *testing.T) {
 		expr      string
 		value     float64
 		want      float32
-		tolerance float32
+		tolerance float64
 	}{
 		{"constant", "5", 1.0, 5.0, 0},
 		{"value", "Value", 3.5, 3.5, 0},
