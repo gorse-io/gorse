@@ -51,26 +51,22 @@ func TestFeedbackWeightExpression_Evaluate(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("constant expression", func(t *testing.T) {
-		got, err := weightExpr.Evaluate("click", 123)
-		require.NoError(t, err)
+		got := weightExpr.Evaluate("click", 123)
 		assert.Equal(t, float32(1), got)
 	})
 
 	t.Run("value expression", func(t *testing.T) {
-		got, err := weightExpr.Evaluate("rating", 3.5)
-		require.NoError(t, err)
+		got := weightExpr.Evaluate("rating", 3.5)
 		assert.Equal(t, float32(7), got)
 	})
 
 	t.Run("math expression", func(t *testing.T) {
-		got, err := weightExpr.Evaluate("view_time", 99)
-		require.NoError(t, err)
+		got := weightExpr.Evaluate("view_time", 99)
 		assert.InDelta(t, float32(math.Log1p(99)), got, 0.001)
 	})
 
 	t.Run("missing feedback type returns default", func(t *testing.T) {
-		got, err := weightExpr.Evaluate("purchase", 5)
-		require.NoError(t, err)
+		got := weightExpr.Evaluate("purchase", 5)
 		assert.Equal(t, float32(1), got)
 	})
 }
@@ -98,8 +94,7 @@ func TestToFloat32(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := ToFloat32(tt.input)
-			require.NoError(t, err)
+			got := ToFloat32(tt.input)
 			assert.Equal(t, tt.want, got)
 		})
 	}
