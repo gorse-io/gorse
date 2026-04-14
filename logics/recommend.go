@@ -324,7 +324,14 @@ func (r *Recommender) recommendUserToUser(name string) RecommenderFunc {
 		ids := lo.Map(elems, func(elem heap.Elem[string, float64], _ int) string {
 			return elem.Value
 		})
-		items, err := r.dataClient.BatchGetItems(ctx, ids, data.GetOptions{})
+		var after *time.Time
+		if r.config.DataSource.ItemTTL > 0 {
+			after = new(time.Now().AddDate(0, 0, -int(r.config.DataSource.ItemTTL)))
+		}
+		items, err := r.dataClient.BatchGetItems(ctx, ids, data.GetOptions{
+			SkipHidden: true,
+			After:      after,
+		})
 		if err != nil {
 			return nil, "", errors.Trace(err)
 		}
