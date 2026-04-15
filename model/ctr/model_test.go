@@ -149,8 +149,8 @@ func newSynthesisDataset() *Dataset {
 	dataSet.ItemEmbeddingIndex.Add("e2")
 	dataSet.ItemEmbeddingDimension = []int{3, 4}
 	dataSet.ItemEmbeddings = [][][]uint16{
-		{encodeEmbeddingBF16([]float32{0.8, 0.8, 0.8}), encodeEmbeddingBF16([]float32{0.1, 0.1, 0.1, 0.1})},
-		{encodeEmbeddingBF16([]float32{-0.8, -0.8, -0.8}), encodeEmbeddingBF16([]float32{-0.1, -0.1, -0.1, -0.1})},
+		{EncodeEmbeddingBF16([]float32{0.8, 0.8, 0.8}), EncodeEmbeddingBF16([]float32{0.1, 0.1, 0.1, 0.1})},
+		{EncodeEmbeddingBF16([]float32{-0.8, -0.8, -0.8}), EncodeEmbeddingBF16([]float32{-0.1, -0.1, -0.1, -0.1})},
 	}
 
 	dataSet.Users = []int32{0, 0, 1, 1}

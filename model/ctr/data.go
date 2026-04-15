@@ -216,7 +216,7 @@ func bfloat16ToFloat32(value uint16) float32 {
 	return math.Float32frombits(uint32(value) << 16)
 }
 
-func encodeEmbeddingBF16(embedding []float32) []uint16 {
+func EncodeEmbeddingBF16(embedding []float32) []uint16 {
 	if embedding == nil {
 		return nil
 	}
@@ -238,13 +238,13 @@ func decodeEmbeddingBF16(embedding []uint16) []float32 {
 	return decoded
 }
 
-func encodeEmbeddingsBF16(embeddings [][]float32) [][]uint16 {
+func EncodeEmbeddingsBF16(embeddings [][]float32) [][]uint16 {
 	if embeddings == nil {
 		return nil
 	}
 	encoded := make([][]uint16, len(embeddings))
 	for i, embedding := range embeddings {
-		encoded[i] = encodeEmbeddingBF16(embedding)
+		encoded[i] = EncodeEmbeddingBF16(embedding)
 	}
 	return encoded
 }

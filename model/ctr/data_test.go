@@ -134,7 +134,7 @@ func TestDataset_Split(t *testing.T) {
 			{A: int32(3*i + 2), B: 1},
 		})
 		dataSet.ItemEmbeddings = append(dataSet.ItemEmbeddings, [][]uint16{
-			encodeEmbeddingBF16([]float32{float32(i), float32(i) + 0.1, float32(i) + 0.2}),
+			EncodeEmbeddingBF16([]float32{float32(i), float32(i) + 0.1, float32(i) + 0.2}),
 		})
 	}
 	for i := range numUsers {
