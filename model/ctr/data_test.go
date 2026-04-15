@@ -133,8 +133,8 @@ func TestDataset_Split(t *testing.T) {
 			{A: int32(3*i + 1), B: 1},
 			{A: int32(3*i + 2), B: 1},
 		})
-		dataSet.ItemEmbeddings = append(dataSet.ItemEmbeddings, [][]float32{
-			{float32(i), float32(i) + 0.1, float32(i) + 0.2},
+		dataSet.ItemEmbeddings = append(dataSet.ItemEmbeddings, [][]uint16{
+			encodeEmbeddingBF16([]float32{float32(i), float32(i) + 0.1, float32(i) + 0.2}),
 		})
 	}
 	for i := range numUsers {
@@ -173,7 +173,7 @@ func TestDataset_Split(t *testing.T) {
 		dataSet.Index.CountUsers() + dataSet.Index.CountItems() + dataSet.Index.CountUserLabels() + 8,
 		0,
 	}, features)
-	assert.Equal(t, [][]float32{{2, 2.1, 2.2}}, embeddings)
+	assert.InDeltaSlice(t, []float32{2, 2.1, 2.2}, embeddings[0], 0.01)
 	assert.Equal(t, []float32{1, 1, 1, 1, 1, 1, 1, 0.5}, values)
 	assert.Equal(t, float32(-1), target)
 

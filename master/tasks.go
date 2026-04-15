@@ -653,7 +653,10 @@ func (m *Master) LoadDataFromDatabase(
 			}
 		}
 	}
-	ctrDataset.ItemEmbeddings = itemEmbeddings
+	ctrDataset.ItemEmbeddings = make([][][]uint16, len(itemEmbeddings))
+	for i, embeddings := range itemEmbeddings {
+		ctrDataset.ItemEmbeddings[i] = encodeEmbeddingsBF16(embeddings)
+	}
 	for userIndex := range positiveSet {
 		// insert explicit negative feedback (highest priority)
 		if negativeSet != nil {
