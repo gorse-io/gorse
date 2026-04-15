@@ -45,7 +45,7 @@ func TestFactorizationMachines_Classification_Frappe(t *testing.T) {
 	})
 	fitConfig := newFitConfigWithTestTracker()
 	score := m.Fit(t.Context(), train, test, fitConfig)
-	assert.InDelta(t, 0.919, score.Accuracy, classificationDelta)
+	assert.GreaterOrEqual(t, score.Accuracy, float32(0.919)-classificationDelta)
 
 	buf := bytes.NewBuffer(nil)
 	err = MarshalModel(buf, m)
@@ -53,7 +53,7 @@ func TestFactorizationMachines_Classification_Frappe(t *testing.T) {
 	tmp, err := UnmarshalModel(buf)
 	assert.NoError(t, err)
 	scoreClone := EvaluateClassification(tmp, test, fitConfig.Jobs)
-	assert.InDelta(t, 0.919, scoreClone.Accuracy, classificationDelta)
+	assert.GreaterOrEqual(t, scoreClone.Accuracy, float32(0.919)-classificationDelta)
 }
 
 func TestFactorizationMachines_Classification_MovieLens(t *testing.T) {

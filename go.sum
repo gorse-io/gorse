@@ -379,10 +379,10 @@ github.com/golang/protobuf v1.5.4 h1:i7eJL8qZTpSEXOPTxNKhASYpMn+8e5Q6AdndVa1dWek
 github.com/golang/protobuf v1.5.4/go.mod h1:lnTiLA8Wa4RWRcIUkrtSVa5nRhsEGBg48fD6rSs7xps=
 github.com/golang/snappy v1.0.0 h1:Oy607GVXHs7RtbggtPBnr2RmDArIsAefDwvrdWvRhGs=
 github.com/golang/snappy v1.0.0/go.mod h1:/XxbfmMg8lxefKM7IXC3fBNl/7bRcc72aCRzEWrmP2Q=
-github.com/gomlx/go-xla v0.2.0 h1:vPRgGjKUaN4Pq58ZswWtiKNGUkqcbUj95YmvELZNvTA=
-github.com/gomlx/go-xla v0.2.0/go.mod h1:T2CsL/E90te3k4qpuzlXv2uQU2FmLMLfUsRlAGqKSuI=
-github.com/gomlx/gomlx v0.27.1 h1:WhWop7VzKWOgl7C0yDfvJ0kXiaNAWjw5XvWME5cP6Zg=
-github.com/gomlx/gomlx v0.27.1/go.mod h1:9fOMnTb7YMs/6zYVR6diliq25x9oSjMUPMlHAbcJWd4=
+github.com/gomlx/go-xla v0.2.2 h1:2YMzXAcmK8BvqFjRnUHHtE2QwKDEts2tRglcFcKhZj8=
+github.com/gomlx/go-xla v0.2.2/go.mod h1:T2CsL/E90te3k4qpuzlXv2uQU2FmLMLfUsRlAGqKSuI=
+github.com/gomlx/gomlx v0.27.2 h1:CWBwmFOi5wSZ2lvLB+D1/dwYtJqcO2xRJMK/cBFjD6A=
+github.com/gomlx/gomlx v0.27.2/go.mod h1:kk+NQXJ8pFrREbC+oJ/s+sMF+q4zjd3t8+/4Ro/6DHM=
 github.com/gomodule/redigo v1.7.1-0.20190724094224-574c33c3df38/go.mod h1:B4C85qUVwatsJoIUNIfCRsp7qO0iAmpGFZ4EELWSbC4=
 github.com/gonum/blas v0.0.0-20181208220705-f22b278b28ac/go.mod h1:P32wAyui1PQ58Oce/KYkOqQv8cVw1zAapXOl+dRFGbc=
 github.com/google/btree v0.0.0-20180813153112-4030bb1f1f0c/go.mod h1:lNA+9X1NB3Zf8V7Ke586lFgjr2dZNuvo3lPJSGZ5JPQ=
