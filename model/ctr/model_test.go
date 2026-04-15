@@ -94,7 +94,7 @@ func TestFactorizationMachines_Classification_Criteo(t *testing.T) {
 	assert.Equal(t,
 		m.BatchInternalPredict(
 			[]lo.Tuple2[[]int32, []float32]{{A: []int32{1, 2, 3, 4, 5, 6}, B: []float32{1, 1, 0.3, 0.4, 0.5, 0.6}}},
-			make([][][]float32, 2), fitConfig.Jobs),
+			make([][][]uint16, 2), fitConfig.Jobs),
 		m.BatchPredict([]lo.Tuple4[string, string, []Label, []Label]{{
 			A: "1",
 			B: "2",
@@ -185,7 +185,7 @@ func TestFactorizationMachines_Classification_Synthesis(t *testing.T) {
 				{A: indicesPos, B: valuesPos},
 				{A: indicesNeg, B: valuesNeg},
 			},
-			[][][]float32{embeddingsPos, embeddingsNeg},
+			[][][]uint16{embeddingsPos, embeddingsNeg},
 			fitConfig.Jobs,
 		),
 		m.BatchPredict(
@@ -204,8 +204,8 @@ func TestFactorizationMachines_Classification_Synthesis(t *testing.T) {
 				},
 			},
 			[][]Embedding{
-				{{Name: "e1", Value: embeddingsPos[0]}, {Name: "e2", Value: embeddingsPos[1]}},
-				{{Name: "e1", Value: embeddingsNeg[0]}, {Name: "e2", Value: embeddingsNeg[1]}},
+				{{Name: "e1", Value: floats.FromBF16(embeddingsPos[0])}, {Name: "e2", Value: floats.FromBF16(embeddingsPos[1])}},
+				{{Name: "e1", Value: floats.FromBF16(embeddingsNeg[0])}, {Name: "e2", Value: floats.FromBF16(embeddingsNeg[1])}},
 			},
 			fitConfig.Jobs,
 		))

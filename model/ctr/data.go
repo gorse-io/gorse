@@ -22,7 +22,6 @@ import (
 	"strings"
 
 	mapset "github.com/deckarep/golang-set/v2"
-	"github.com/gorse-io/gorse/common/floats"
 	"github.com/gorse-io/gorse/common/jsonutil"
 	"github.com/gorse-io/gorse/common/util"
 	"github.com/gorse-io/gorse/dataset"
@@ -207,11 +206,11 @@ func (dataset *Dataset) GetTarget(i int) float32 {
 }
 
 // Get returns the i-th sample.
-func (dataset *Dataset) Get(i int) ([]int32, []float32, [][]float32, float32) {
+func (dataset *Dataset) Get(i int) ([]int32, []float32, [][]uint16, float32) {
 	var (
 		indices   []int32
 		values    []float32
-		embedding [][]float32
+		embedding [][]uint16
 		position  int32
 	)
 	// append user id
@@ -226,11 +225,7 @@ func (dataset *Dataset) Get(i int) ([]int32, []float32, [][]float32, float32) {
 		values = append(values, 1)
 		position += int32(dataset.CountItems())
 		if len(dataset.ItemEmbeddings) > 0 {
-			storedEmbeddings := dataset.ItemEmbeddings[dataset.Items[i]]
-			embedding = make([][]float32, len(storedEmbeddings))
-			for j, stored := range storedEmbeddings {
-				embedding[j] = floats.FromBF16(stored)
-			}
+			embedding = dataset.ItemEmbeddings[dataset.Items[i]]
 		}
 	}
 	// append user indices

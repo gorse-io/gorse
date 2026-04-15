@@ -99,7 +99,7 @@ type FactorizationMachines interface {
 
 type BatchInference interface {
 	BatchPredict(inputs []lo.Tuple4[string, string, []Label, []Label], e [][]Embedding, jobs int) []float32
-	BatchInternalPredict(x []lo.Tuple2[[]int32, []float32], e [][][]float32, jobs int) []float32
+	BatchInternalPredict(x []lo.Tuple2[[]int32, []float32], e [][][]uint16, jobs int) []float32
 }
 
 type BaseFactorizationMachines struct {

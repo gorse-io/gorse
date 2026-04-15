@@ -174,7 +174,7 @@ func TestDataset_Split(t *testing.T) {
 		dataSet.Index.CountUsers() + dataSet.Index.CountItems() + dataSet.Index.CountUserLabels() + 8,
 		0,
 	}, features)
-	assert.InDeltaSlice(t, []float32{2, 2.1, 2.2}, embeddings[0], 0.01)
+	assert.InDeltaSlice(t, []float32{2, 2.1, 2.2}, floats.FromBF16(embeddings[0]), 0.01)
 	assert.Equal(t, []float32{1, 1, 1, 1, 1, 1, 1, 0.5}, values)
 	assert.Equal(t, float32(-1), target)
 

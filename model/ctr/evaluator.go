@@ -46,7 +46,7 @@ func EvaluateRegression(estimator FactorizationMachines, testSet *Dataset) Score
 func EvaluateClassification(estimator FactorizationMachines, testSet dataset.CTRSplit, jobs int) Score {
 	// For all UserFeedback
 	var posFeatures, negFeatures []lo.Tuple2[[]int32, []float32]
-	var posEmbeddings, negEmbeddings [][][]float32
+	var posEmbeddings, negEmbeddings [][][]uint16
 	for i := 0; i < testSet.Count(); i++ {
 		indices, values, embeddings, target := testSet.Get(i)
 		if target > 0 {
