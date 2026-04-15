@@ -15,6 +15,7 @@
 package floats
 
 import (
+	"math"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -37,6 +38,21 @@ func TestZero(t *testing.T) {
 	a := []float32{3, 2, 5, 6, 0, 0}
 	Zero(a)
 	assert.Equal(t, []float32{0, 0, 0, 0, 0, 0}, a)
+}
+
+func TestToBF16(t *testing.T) {
+	assert.Nil(t, ToBF16(nil))
+	assert.Equal(t, []uint16{0x0000, 0x3f80, 0xc020, 0x3f8d}, ToBF16([]float32{0, 1, -2.5, 1.1}))
+}
+
+func TestFromBF16(t *testing.T) {
+	assert.Nil(t, FromBF16(nil))
+	decoded := FromBF16([]uint16{0x0000, 0x3f80, 0xc020, 0x3f8d})
+	assert.Len(t, decoded, 4)
+	assert.Equal(t, uint32(0x00000000), math.Float32bits(decoded[0]))
+	assert.Equal(t, uint32(0x3f800000), math.Float32bits(decoded[1]))
+	assert.Equal(t, uint32(0xc0200000), math.Float32bits(decoded[2]))
+	assert.Equal(t, uint32(0x3f8d0000), math.Float32bits(decoded[3]))
 }
 
 func TestAdd(t *testing.T) {

@@ -17,12 +17,12 @@ package ctr
 import (
 	"bufio"
 	"encoding/json"
-	"math"
 	"os"
 	"strconv"
 	"strings"
 
 	mapset "github.com/deckarep/golang-set/v2"
+	"github.com/gorse-io/gorse/common/floats"
 	"github.com/gorse-io/gorse/common/jsonutil"
 	"github.com/gorse-io/gorse/common/util"
 	"github.com/gorse-io/gorse/dataset"
@@ -206,49 +206,6 @@ func (dataset *Dataset) GetTarget(i int) float32 {
 	return dataset.Target[i]
 }
 
-func float32ToBFloat16(value float32) uint16 {
-	bits := math.Float32bits(value)
-	roundingBias := uint32(0x7FFF + ((bits >> 16) & 1))
-	return uint16((bits + roundingBias) >> 16)
-}
-
-func bfloat16ToFloat32(value uint16) float32 {
-	return math.Float32frombits(uint32(value) << 16)
-}
-
-func EncodeEmbeddingBF16(embedding []float32) []uint16 {
-	if embedding == nil {
-		return nil
-	}
-	encoded := make([]uint16, len(embedding))
-	for i, value := range embedding {
-		encoded[i] = float32ToBFloat16(value)
-	}
-	return encoded
-}
-
-func decodeEmbeddingBF16(embedding []uint16) []float32 {
-	if embedding == nil {
-		return nil
-	}
-	decoded := make([]float32, len(embedding))
-	for i, value := range embedding {
-		decoded[i] = bfloat16ToFloat32(value)
-	}
-	return decoded
-}
-
-func EncodeEmbeddingsBF16(embeddings [][]float32) [][]uint16 {
-	if embeddings == nil {
-		return nil
-	}
-	encoded := make([][]uint16, len(embeddings))
-	for i, embedding := range embeddings {
-		encoded[i] = EncodeEmbeddingBF16(embedding)
-	}
-	return encoded
-}
-
 // Get returns the i-th sample.
 func (dataset *Dataset) Get(i int) ([]int32, []float32, [][]float32, float32) {
 	var (
@@ -272,7 +229,7 @@ func (dataset *Dataset) Get(i int) ([]int32, []float32, [][]float32, float32) {
 			storedEmbeddings := dataset.ItemEmbeddings[dataset.Items[i]]
 			embedding = make([][]float32, len(storedEmbeddings))
 			for j, stored := range storedEmbeddings {
-				embedding[j] = decodeEmbeddingBF16(stored)
+				embedding[j] = floats.FromBF16(stored)
 			}
 		}
 	}
