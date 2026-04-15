@@ -26,6 +26,7 @@ import (
 	"github.com/c-bata/goptuna"
 	"github.com/chewxy/math32"
 	"github.com/gorse-io/gorse/common/encoding"
+	"github.com/gorse-io/gorse/common/floats"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/common/nn"
@@ -151,7 +152,7 @@ func (fm *AFM) InternalPredict(_ []int32, _ []float32) float32 {
 	panic("InternalPredict is unsupported for deep learning models")
 }
 
-func (fm *AFM) BatchInternalPredict(x []lo.Tuple2[[]int32, []float32], e [][][]float32, jobs int) []float32 {
+func (fm *AFM) BatchInternalPredict(x []lo.Tuple2[[]int32, []float32], e [][][]uint16, jobs int) []float32 {
 	fm.mu.RLock()
 	defer fm.mu.RUnlock()
 	// Apply scalers to numerical features if enabled
@@ -203,9 +204,9 @@ func (fm *AFM) BatchPredict(inputs []lo.Tuple4[string, string, []Label, []Label]
 			}
 		}
 	}
-	e := make([][][]float32, len(inputs))
+	e := make([][][]uint16, len(inputs))
 	for i := range inputs {
-		e[i] = make([][]float32, len(fm.embeddingDim))
+		e[i] = make([][]uint16, len(fm.embeddingDim))
 		for _, embedding := range embeddings[i] {
 			itemIndex := fm.embeddingIndex.ToNumber(embedding.Name)
 			if itemIndex == dataset.NotId {
@@ -217,7 +218,7 @@ func (fm *AFM) BatchPredict(inputs []lo.Tuple4[string, string, []Label, []Label]
 				// dimension mismatch
 				continue
 			}
-			e[i][index] = embedding.Value
+			e[i][index] = floats.ToBF16(embedding.Value)
 		}
 	}
 	return fm.BatchInternalPredict(x, e, jobs)
@@ -321,7 +322,7 @@ func (fm *AFM) Fit(ctx context.Context, trainSet, testSet dataset.CTRSplit, conf
 	log.Logger().Info(fmt.Sprintf("fit AFM %v/%v", 0, fm.nEpochs), fields...)
 
 	var x []lo.Tuple2[[]int32, []float32]
-	var e [][][]float32
+	var e [][][]uint16
 	var y []float32
 	for i := 0; i < trainSet.Count(); i++ {
 		indices, values, embeddings, target := trainSet.Get(i)
@@ -519,7 +520,7 @@ func (fm *AFM) Unmarshal(r io.Reader) error {
 	return nil
 }
 
-func (fm *AFM) convertToTensors(x []lo.Tuple2[[]int32, []float32], e [][][]float32, y []float32) (
+func (fm *AFM) convertToTensors(x []lo.Tuple2[[]int32, []float32], e [][][]uint16, y []float32) (
 	indicesTensor, valuesTensor *nn.Tensor,
 	embeddingTensor []*nn.Tensor,
 	targetTensor *nn.Tensor,
@@ -545,7 +546,7 @@ func (fm *AFM) convertToTensors(x []lo.Tuple2[[]int32, []float32], e [][][]float
 		}
 		for j := range fm.embeddingDim {
 			if len(e[i]) > j && len(e[i][j]) == fm.embeddingDim[j] {
-				alignedEmbeddings[j] = append(alignedEmbeddings[j], e[i][j]...)
+				alignedEmbeddings[j] = append(alignedEmbeddings[j], floats.FromBF16(e[i][j])...)
 			} else {
 				alignedEmbeddings[j] = append(alignedEmbeddings[j], make([]float32, fm.embeddingDim[j])...)
 			}

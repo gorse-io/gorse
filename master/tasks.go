@@ -26,6 +26,7 @@ import (
 	"github.com/c-bata/goptuna/tpe"
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/gorse-io/gorse/common/expression"
+	"github.com/gorse-io/gorse/common/floats"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/common/parallel"
@@ -653,7 +654,16 @@ func (m *Master) LoadDataFromDatabase(
 			}
 		}
 	}
-	ctrDataset.ItemEmbeddings = itemEmbeddings
+	ctrDataset.ItemEmbeddings = make([][][]uint16, len(itemEmbeddings))
+	for i, embeddings := range itemEmbeddings {
+		if embeddings == nil {
+			continue
+		}
+		ctrDataset.ItemEmbeddings[i] = make([][]uint16, len(embeddings))
+		for j, embedding := range embeddings {
+			ctrDataset.ItemEmbeddings[i][j] = floats.ToBF16(embedding)
+		}
+	}
 	for userIndex := range positiveSet {
 		// insert explicit negative feedback (highest priority)
 		if negativeSet != nil {

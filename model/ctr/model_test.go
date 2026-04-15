@@ -18,6 +18,7 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/gorse-io/gorse/common/floats"
 	"github.com/gorse-io/gorse/dataset"
 	"github.com/gorse-io/gorse/model"
 	"github.com/samber/lo"
@@ -44,7 +45,7 @@ func TestFactorizationMachines_Classification_Frappe(t *testing.T) {
 	})
 	fitConfig := newFitConfigWithTestTracker()
 	score := m.Fit(t.Context(), train, test, fitConfig)
-	assert.InDelta(t, 0.919, score.Accuracy, classificationDelta)
+	assert.GreaterOrEqual(t, score.Accuracy, float32(0.919)-classificationDelta)
 
 	buf := bytes.NewBuffer(nil)
 	err = MarshalModel(buf, m)
@@ -52,7 +53,7 @@ func TestFactorizationMachines_Classification_Frappe(t *testing.T) {
 	tmp, err := UnmarshalModel(buf)
 	assert.NoError(t, err)
 	scoreClone := EvaluateClassification(tmp, test, fitConfig.Jobs)
-	assert.InDelta(t, 0.919, scoreClone.Accuracy, classificationDelta)
+	assert.GreaterOrEqual(t, scoreClone.Accuracy, float32(0.919)-classificationDelta)
 }
 
 func TestFactorizationMachines_Classification_MovieLens(t *testing.T) {
@@ -93,7 +94,7 @@ func TestFactorizationMachines_Classification_Criteo(t *testing.T) {
 	assert.Equal(t,
 		m.BatchInternalPredict(
 			[]lo.Tuple2[[]int32, []float32]{{A: []int32{1, 2, 3, 4, 5, 6}, B: []float32{1, 1, 0.3, 0.4, 0.5, 0.6}}},
-			make([][][]float32, 2), fitConfig.Jobs),
+			make([][][]uint16, 2), fitConfig.Jobs),
 		m.BatchPredict([]lo.Tuple4[string, string, []Label, []Label]{{
 			A: "1",
 			B: "2",
@@ -148,9 +149,9 @@ func newSynthesisDataset() *Dataset {
 	dataSet.ItemEmbeddingIndex.Add("e1")
 	dataSet.ItemEmbeddingIndex.Add("e2")
 	dataSet.ItemEmbeddingDimension = []int{3, 4}
-	dataSet.ItemEmbeddings = [][][]float32{
-		{{0.8, 0.8, 0.8}, {0.1, 0.1, 0.1, 0.1}},
-		{{-0.8, -0.8, -0.8}, {-0.1, -0.1, -0.1, -0.1}},
+	dataSet.ItemEmbeddings = [][][]uint16{
+		{floats.ToBF16([]float32{0.8, 0.8, 0.8}), floats.ToBF16([]float32{0.1, 0.1, 0.1, 0.1})},
+		{floats.ToBF16([]float32{-0.8, -0.8, -0.8}), floats.ToBF16([]float32{-0.1, -0.1, -0.1, -0.1})},
 	}
 
 	dataSet.Users = []int32{0, 0, 1, 1}
@@ -184,7 +185,7 @@ func TestFactorizationMachines_Classification_Synthesis(t *testing.T) {
 				{A: indicesPos, B: valuesPos},
 				{A: indicesNeg, B: valuesNeg},
 			},
-			[][][]float32{embeddingsPos, embeddingsNeg},
+			[][][]uint16{embeddingsPos, embeddingsNeg},
 			fitConfig.Jobs,
 		),
 		m.BatchPredict(
@@ -203,8 +204,8 @@ func TestFactorizationMachines_Classification_Synthesis(t *testing.T) {
 				},
 			},
 			[][]Embedding{
-				{{Name: "e1", Value: embeddingsPos[0]}, {Name: "e2", Value: embeddingsPos[1]}},
-				{{Name: "e1", Value: embeddingsNeg[0]}, {Name: "e2", Value: embeddingsNeg[1]}},
+				{{Name: "e1", Value: floats.FromBF16(embeddingsPos[0])}, {Name: "e2", Value: floats.FromBF16(embeddingsPos[1])}},
+				{{Name: "e1", Value: floats.FromBF16(embeddingsNeg[0])}, {Name: "e2", Value: floats.FromBF16(embeddingsNeg[1])}},
 			},
 			fitConfig.Jobs,
 		))

@@ -38,6 +38,7 @@ import (
 	"github.com/gomlx/gomlx/pkg/ml/train/losses"
 	"github.com/gomlx/gomlx/pkg/ml/train/optimizers"
 	"github.com/gorse-io/gorse/common/encoding"
+	"github.com/gorse-io/gorse/common/floats"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/dataset"
@@ -141,7 +142,7 @@ func (fm *AFM) attentionForward(ctx *mlx_context.Context, x *graph.Node, dimensi
 	// w: [batchSize, k]
 	// h: [k, dimensions]
 	// score: [batchSize, dimensions]
-	score := graph.Dot(w, h)
+	score := graph.DotGeneral(w, []int{1}, nil, h, []int{0}, nil)
 	score = graph.Softmax(score, 1)
 
 	// score * x
@@ -225,7 +226,7 @@ func (fm *AFM) applyScalers(x []lo.Tuple2[[]int32, []float32]) []lo.Tuple2[[]int
 	return result
 }
 
-func (fm *AFM) BatchInternalPredict(x []lo.Tuple2[[]int32, []float32], e [][][]float32, jobs int) []float32 {
+func (fm *AFM) BatchInternalPredict(x []lo.Tuple2[[]int32, []float32], e [][][]uint16, jobs int) []float32 {
 	fm.mu.RLock()
 	defer fm.mu.RUnlock()
 
@@ -272,7 +273,7 @@ func (fm *AFM) BatchInternalPredict(x []lo.Tuple2[[]int32, []float32], e [][][]f
 			}
 			for j := range fm.embeddingDim {
 				if len(e[start+i]) > j && len(e[start+i][j]) == fm.embeddingDim[j] {
-					copy(additionalData[j][i*fm.embeddingDim[j]:], e[start+i][j])
+					copy(additionalData[j][i*fm.embeddingDim[j]:], floats.FromBF16(e[start+i][j]))
 				}
 			}
 		}
@@ -321,9 +322,9 @@ func (fm *AFM) BatchPredict(inputs []lo.Tuple4[string, string, []Label, []Label]
 			}
 		}
 	}
-	e := make([][][]float32, len(inputs))
+	e := make([][][]uint16, len(inputs))
 	for i := range inputs {
-		e[i] = make([][]float32, len(fm.embeddingDim))
+		e[i] = make([][]uint16, len(fm.embeddingDim))
 		for _, embedding := range embeddings[i] {
 			itemIndex := fm.embeddingIndex.ToNumber(embedding.Name)
 			if itemIndex == dataset.NotId {
@@ -335,7 +336,7 @@ func (fm *AFM) BatchPredict(inputs []lo.Tuple4[string, string, []Label, []Label]
 				// dimension mismatch
 				continue
 			}
-			e[i][index] = embedding.Value
+			e[i][index] = floats.ToBF16(embedding.Value)
 		}
 	}
 	return fm.BatchInternalPredict(x, e, jobs)
@@ -448,7 +449,7 @@ func (d *ctrDataset) Yield() (spec any, inputs []*tensors.Tensor, labels []*tens
 		}
 		for j := range d.embeddingDim {
 			if len(embeddings) > j && len(embeddings[j]) == d.embeddingDim[j] {
-				copy(additionalData[j][i*d.embeddingDim[j]:], embeddings[j])
+				copy(additionalData[j][i*d.embeddingDim[j]:], floats.FromBF16(embeddings[j]))
 			}
 		}
 		// Convert target from {-1, 1} to {0, 1} for GoMLX BinaryCrossentropy

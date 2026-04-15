@@ -140,7 +140,7 @@ func EvaluateAFM(cfg *config.Config, train, test *ctr.Dataset, exportUserAUC boo
 	}
 
 	var features []lo.Tuple2[[]int32, []float32]
-	var embeddings [][][]float32
+	var embeddings [][][]uint16
 	positives := make(map[int32][]int)
 	negatives := make(map[int32][]int)
 	for i := 0; i < test.Count(); i++ {

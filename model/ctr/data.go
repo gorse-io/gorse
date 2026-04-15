@@ -146,7 +146,7 @@ type Dataset struct {
 	Users                  []int32
 	Items                  []int32
 	Target                 []float32
-	ItemEmbeddings         [][][]float32 // Index by row id, embedding id, embedding dimension
+	ItemEmbeddings         [][][]uint16 // Index by row id, embedding id, embedding dimension; stored as BF16 bits
 	ItemEmbeddingDimension []int
 	ItemEmbeddingIndex     *dataset.Index
 	PositiveCount          int
@@ -206,11 +206,11 @@ func (dataset *Dataset) GetTarget(i int) float32 {
 }
 
 // Get returns the i-th sample.
-func (dataset *Dataset) Get(i int) ([]int32, []float32, [][]float32, float32) {
+func (dataset *Dataset) Get(i int) ([]int32, []float32, [][]uint16, float32) {
 	var (
 		indices   []int32
 		values    []float32
-		embedding [][]float32
+		embedding [][]uint16
 		position  int32
 	)
 	// append user id
