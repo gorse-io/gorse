@@ -21,6 +21,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gorse-io/gorse/common/expression"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
@@ -258,6 +259,53 @@ func (suite *RecommenderTestSuite) TestExternal() {
 		{Id: "item_100", Score: 0},
 		{Id: "item_200", Score: 0},
 		{Id: "item_300", Score: 0},
+	}, scores)
+}
+
+func (suite *RecommenderTestSuite) TestUserToUser() {
+	items := []data.Item{
+		{ItemId: "item_20", Timestamp: time.Now()},
+		{ItemId: "item_21", Timestamp: time.Now()},
+		{ItemId: "item_22", Timestamp: time.Now(), IsHidden: true},
+		{ItemId: "item_23", Timestamp: time.Now().AddDate(0, 0, -10)},
+	}
+	err := suite.dataClient.BatchInsertItems(suite.T().Context(), items)
+	suite.NoError(err)
+
+	feedback := make([]data.Feedback, len(items))
+	for i, item := range items {
+		feedback[i] = data.Feedback{
+			FeedbackKey: data.FeedbackKey{
+				FeedbackType: "click",
+				UserId:       "user_2",
+				ItemId:       item.ItemId,
+			},
+		}
+	}
+	err = suite.dataClient.BatchInsertFeedback(suite.T().Context(), feedback, true, true, false)
+	suite.NoError(err)
+
+	err = suite.cacheClient.AddScores(suite.T().Context(), cache.UserToUser, cache.Key("test", "user_1"), []cache.Score{
+		{Id: "user_2", Score: 1},
+	})
+	suite.NoError(err)
+	err = suite.cacheClient.Set(suite.T().Context(), cache.String(cache.Key(cache.UserToUserDigest, "test", "user_1"), "digest"))
+	suite.NoError(err)
+
+	recommender, err := NewRecommender(config.RecommendConfig{
+		CacheSize: 10,
+		DataSource: config.DataSourceConfig{
+			PositiveFeedbackTypes: []expression.FeedbackTypeExpression{{FeedbackType: "click"}},
+			ItemTTL:               1,
+		},
+	}, suite.cacheClient, suite.dataClient, true, "user_1", nil)
+	suite.NoError(err)
+	scores, digest, err := recommender.recommendUserToUser("test")(suite.T().Context())
+	suite.NoError(err)
+	suite.Equal("digest", digest)
+	suite.ElementsMatch([]cache.Score{
+		{Id: "item_20", Score: 1},
+		{Id: "item_21", Score: 1},
 	}, scores)
 }
 
