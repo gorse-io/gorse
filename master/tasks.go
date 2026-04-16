@@ -404,7 +404,7 @@ func (m *Master) LoadDataFromDatabase(
 				for len(itemEmbeddingDimension) <= int(itemEmbeddingIndex) {
 					itemEmbeddingDimension = append(itemEmbeddingDimension, make(map[int]int))
 				}
-				itemEmbeddingDimension[itemEmbeddingIndex][len(floats.FromBF16(itemEmbeddings[itemIndex][itemEmbeddingIndex]))]++
+				itemEmbeddingDimension[itemEmbeddingIndex][len(itemEmbeddings[itemIndex][itemEmbeddingIndex])]++
 			}
 		}
 		span.Add(len(batchItems))
@@ -649,7 +649,7 @@ func (m *Master) LoadDataFromDatabase(
 	}
 	for i, embeddings := range itemEmbeddings {
 		for j, embedding := range embeddings {
-			if len(floats.FromBF16(embedding)) != ctrDataset.ItemEmbeddingDimension[j] {
+			if len(embedding) != ctrDataset.ItemEmbeddingDimension[j] {
 				itemEmbeddings[i][j] = nil
 			}
 		}
