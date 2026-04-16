@@ -351,7 +351,7 @@ func (m *Master) LoadDataFromDatabase(
 	itemLabels := make([][]lo.Tuple2[int32, float32], 0, estimatedNumItems)
 	itemEmbeddingIndexer := dataset.NewMapIndex()
 	itemEmbeddingDimension := make([]map[int]int, 0)
-	itemEmbeddings := make([][][]float32, 0, estimatedNumItems)
+	itemEmbeddings := make([][][]uint16, 0, estimatedNumItems)
 	start = time.Now()
 	itemChan, errChan := database.GetItemStream(newCtx, batchSize, itemTimeLimit)
 	for batchItems := range itemChan {
@@ -393,18 +393,18 @@ func (m *Master) LoadDataFromDatabase(
 			}
 			// load embeddings
 			embeddings := ctr.ConvertEmbeddings(item.Labels)
-			itemEmbeddings[itemIndex] = make([][]float32, 0, len(embeddings))
+			itemEmbeddings[itemIndex] = make([][]uint16, 0, len(embeddings))
 			for _, embedding := range embeddings {
 				itemEmbeddingIndexer.Add(embedding.Name)
 				itemEmbeddingIndex := itemEmbeddingIndexer.ToNumber(embedding.Name)
 				for len(itemEmbeddings[itemIndex]) <= int(itemEmbeddingIndex) {
 					itemEmbeddings[itemIndex] = append(itemEmbeddings[itemIndex], nil)
 				}
-				itemEmbeddings[itemIndex][itemEmbeddingIndex] = embedding.Value
+				itemEmbeddings[itemIndex][itemEmbeddingIndex] = floats.ToBF16(embedding.Value)
 				for len(itemEmbeddingDimension) <= int(itemEmbeddingIndex) {
 					itemEmbeddingDimension = append(itemEmbeddingDimension, make(map[int]int))
 				}
-				itemEmbeddingDimension[itemEmbeddingIndex][len(itemEmbeddings[itemIndex][itemEmbeddingIndex])]++
+				itemEmbeddingDimension[itemEmbeddingIndex][len(floats.FromBF16(itemEmbeddings[itemIndex][itemEmbeddingIndex]))]++
 			}
 		}
 		span.Add(len(batchItems))
@@ -649,21 +649,12 @@ func (m *Master) LoadDataFromDatabase(
 	}
 	for i, embeddings := range itemEmbeddings {
 		for j, embedding := range embeddings {
-			if len(embedding) != ctrDataset.ItemEmbeddingDimension[j] {
+			if len(floats.FromBF16(embedding)) != ctrDataset.ItemEmbeddingDimension[j] {
 				itemEmbeddings[i][j] = nil
 			}
 		}
 	}
-	ctrDataset.ItemEmbeddings = make([][][]uint16, len(itemEmbeddings))
-	for i, embeddings := range itemEmbeddings {
-		if embeddings == nil {
-			continue
-		}
-		ctrDataset.ItemEmbeddings[i] = make([][]uint16, len(embeddings))
-		for j, embedding := range embeddings {
-			ctrDataset.ItemEmbeddings[i][j] = floats.ToBF16(embedding)
-		}
-	}
+	ctrDataset.ItemEmbeddings = itemEmbeddings
 	for userIndex := range positiveSet {
 		// insert explicit negative feedback (highest priority)
 		if negativeSet != nil {
