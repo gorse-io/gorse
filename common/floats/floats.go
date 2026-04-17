@@ -232,8 +232,7 @@ func ToBF16(values []float32) []uint16 {
 	encoded := make([]uint16, len(values))
 	for i, value := range values {
 		bits := math.Float32bits(value)
-		roundingBias := uint32(0x7FFF + ((bits >> 16) & 1))
-		encoded[i] = uint16((bits + roundingBias) >> 16)
+		encoded[i] = uint16(bits >> 16)
 	}
 	return encoded
 }
