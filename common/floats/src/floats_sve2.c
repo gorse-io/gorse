@@ -15,14 +15,14 @@
 #include <arm_sve.h>
 #include <stdint.h>
 
-void svmul_const_add_to(float *a, float *b, float *c, long n)
+void svmul_const_add_to(float *a, float *b, float *c, float *dst, long n)
 {
     for (long i = 0; i < n; i += svcntw())
     {
         svbool_t pg = svwhilelt_b32(i, n);
         svfloat32_t a_seg = svld1(pg, a + i);
         svfloat32_t c_seg = svld1(pg, c + i);
-        svst1(pg, c + i, svmla_x(pg, c_seg, a_seg, *b));
+        svst1(pg, dst + i, svmla_x(pg, c_seg, a_seg, *b));
     }
 }
 
