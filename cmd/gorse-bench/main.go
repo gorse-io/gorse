@@ -51,7 +51,7 @@ import (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "gorse-cli",
+	Use:   "gorse-bench",
 	Short: "Gorse command line tool",
 	Run: func(cmd *cobra.Command, args []string) {
 		_ = cmd.Help()
@@ -59,7 +59,7 @@ var rootCmd = &cobra.Command{
 }
 
 var benchLLMCmd = &cobra.Command{
-	Use:   "bench-llm",
+	Use:   "llm",
 	Short: "Benchmark LLM models for ranking",
 	Run: func(cmd *cobra.Command, args []string) {
 		// Load configuration
@@ -467,7 +467,7 @@ func EvaluateEmbedding(cfg *config.Config, train, test dataset.CFSplit, embeddin
 }
 
 var benchEmbeddingCmd = &cobra.Command{
-	Use:   "bench-embedding",
+	Use:   "embedding",
 	Short: "Benchmark embedding models for item-to-item",
 	Run: func(cmd *cobra.Command, args []string) {
 		// Load configuration
