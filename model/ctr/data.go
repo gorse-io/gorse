@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	mapset "github.com/deckarep/golang-set/v2"
+	"github.com/gorse-io/gorse/common/bfloats"
 	"github.com/gorse-io/gorse/common/jsonutil"
 	"github.com/gorse-io/gorse/common/util"
 	"github.com/gorse-io/gorse/dataset"
@@ -83,7 +84,7 @@ func convertLabels(result []Label, prefix string, o any) []Label {
 
 type Embedding struct {
 	Name  string
-	Value []float32
+	Value []uint16
 }
 
 func ConvertEmbeddings(o any) []Embedding {
@@ -107,20 +108,28 @@ func convertEmbeddings(result []Embedding, prefix string, o any) []Embedding {
 				value = append(value, float32(v))
 			case float32:
 				value = append(value, v)
+			case int:
+				value = append(value, float32(v))
+			case json.Number:
 			default:
 				return result
 			}
 		}
 		result = append(result, Embedding{
 			Name:  prefix,
-			Value: value,
+			Value: bfloats.FromFloat32(value),
 		})
 	case []float64:
 		result = append(result, Embedding{
 			Name:  prefix,
-			Value: lo.Map(embeddings, func(f float64, _ int) float32 { return float32(f) }),
+			Value: bfloats.FromFloat32(lo.Map(embeddings, func(f float64, _ int) float32 { return float32(f) })),
 		})
 	case []float32:
+		result = append(result, Embedding{
+			Name:  prefix,
+			Value: bfloats.FromFloat32(embeddings),
+		})
+	case []uint16:
 		result = append(result, Embedding{
 			Name:  prefix,
 			Value: embeddings,
