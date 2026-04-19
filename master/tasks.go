@@ -26,7 +26,6 @@ import (
 	"github.com/c-bata/goptuna/tpe"
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/gorse-io/gorse/common/expression"
-	"github.com/gorse-io/gorse/common/floats"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/common/parallel"
@@ -400,7 +399,7 @@ func (m *Master) LoadDataFromDatabase(
 				for len(itemEmbeddings[itemIndex]) <= int(itemEmbeddingIndex) {
 					itemEmbeddings[itemIndex] = append(itemEmbeddings[itemIndex], nil)
 				}
-				itemEmbeddings[itemIndex][itemEmbeddingIndex] = floats.ToBF16(embedding.Value)
+				itemEmbeddings[itemIndex][itemEmbeddingIndex] = embedding.Value
 				for len(itemEmbeddingDimension) <= int(itemEmbeddingIndex) {
 					itemEmbeddingDimension = append(itemEmbeddingDimension, make(map[int]int))
 				}

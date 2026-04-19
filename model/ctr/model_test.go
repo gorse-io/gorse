@@ -204,8 +204,8 @@ func TestFactorizationMachines_Classification_Synthesis(t *testing.T) {
 				},
 			},
 			[][]Embedding{
-				{{Name: "e1", Value: floats.FromBF16(embeddingsPos[0])}, {Name: "e2", Value: floats.FromBF16(embeddingsPos[1])}},
-				{{Name: "e1", Value: floats.FromBF16(embeddingsNeg[0])}, {Name: "e2", Value: floats.FromBF16(embeddingsNeg[1])}},
+				{{Name: "e1", Value: embeddingsPos[0]}, {Name: "e2", Value: embeddingsPos[1]}},
+				{{Name: "e1", Value: embeddingsNeg[0]}, {Name: "e2", Value: embeddingsNeg[1]}},
 			},
 			fitConfig.Jobs,
 		))
@@ -230,8 +230,8 @@ func TestFactorizationMachines_Classification_Synthesis(t *testing.T) {
 		[][]Embedding{
 			{},
 			{},
-			{{Name: "unknown_embedding", Value: make([]float32, 3)}},
-			{{Name: "unknown_embedding", Value: make([]float32, 3)}},
+			{{Name: "unknown_embedding", Value: make([]uint16, 3)}},
+			{{Name: "unknown_embedding", Value: make([]uint16, 3)}},
 		},
 		fitConfig.Jobs,
 	), 4)

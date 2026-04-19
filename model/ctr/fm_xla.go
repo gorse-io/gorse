@@ -336,7 +336,7 @@ func (fm *AFM) BatchPredict(inputs []lo.Tuple4[string, string, []Label, []Label]
 				// dimension mismatch
 				continue
 			}
-			e[i][index] = floats.ToBF16(embedding.Value)
+			e[i][index] = embedding.Value
 		}
 	}
 	return fm.BatchInternalPredict(x, e, jobs)
