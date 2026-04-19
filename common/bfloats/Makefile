@@ -21,6 +21,14 @@ avx:
 	$(GOAT) -o $$out --target $(GOAT_TARGET_AVX) -O 3 -m avx2 src/bfloats_avx.c; \
 	cp $$out/bfloats_avx.go $$out/bfloats_avx.s .
 
+avx512:
+	@set -e; \
+	tmp=$$(mktemp -d); \
+	out=$$tmp/bfloats; \
+	mkdir -p $$out; \
+	$(GOAT) -o $$out --target $(GOAT_TARGET_AVX) -O 3 -m avx -m avx512f -m avx512bw src/bfloats_avx512.c; \
+	cp $$out/bfloats_avx512.go $$out/bfloats_avx512.s .
+
 neon:
 	@set -e; \
 	tmp=$$(mktemp -d); \
@@ -30,9 +38,14 @@ neon:
 	cp $$out/bfloats_neon.go $$out/bfloats_neon.s .
 
 rvv:
-	@echo "RVV BF16 path is implemented in Go; no generated wrapper is required"
+	@set -e; \
+	tmp=$$(mktemp -d); \
+	out=$$tmp/bfloats; \
+	mkdir -p $$out; \
+	$(GOAT) -o $$out --target $(GOAT_TARGET_RVV) -O 3 -e=-march=rv64gv -e=-mabi=lp64d src/bfloats_rvv.c; \
+	cp $$out/bfloats_rvv.go $$out/bfloats_rvv.s .
 
-regen: avx neon rvv
+regen: avx avx512 neon rvv
 
 test:
 	$(GO) test $(PKG)
@@ -50,4 +63,4 @@ test-rvv:
 	$(RISCV64_QEMU) $(RISCV64_QEMU_FLAGS) ./$(TEST_RVV_BINARY) -test.run '^TestEuclideanVMatchesScalar$$'
 
 clean:
-	$(RM) bfloats_avx.go bfloats_avx.s bfloats_neon.go bfloats_neon.s
+	$(RM) bfloats_avx.go bfloats_avx.s bfloats_avx512.go bfloats_avx512.s bfloats_neon.go bfloats_neon.s bfloats_rvv.go bfloats_rvv.s

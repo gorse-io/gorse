@@ -22,6 +22,8 @@ import (
 	"golang.org/x/sys/cpu"
 )
 
+//go:generate sh -c "set -e; tmp=$$(mktemp -d); out=$$tmp/bfloats; mkdir -p $$out; goat -o $$out -t riscv64 -O 3 -e=-march=rv64gv -e=-mabi=lp64d src/bfloats_rvv.c; cp $$out/bfloats_rvv.go $$out/bfloats_rvv.s ."
+
 type Feature uint64
 
 const (
