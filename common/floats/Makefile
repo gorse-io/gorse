@@ -20,18 +20,10 @@ TEST_AVX512_BINARY ?= .test-avx512.amd64.test
 TEST_NEON_BINARY ?= .test-neon.arm64.test
 TEST_RVV_BINARY ?= .test-rvv.riscv64.test
 
-.PHONY: avx avx-512 neon rvv deps test-avx test-avx512 test-neon test-rvv
+.PHONY: avx avx512 neon rvv deps test-avx test-avx512 test-neon test-rvv
 
 avx:
-	@set -e; \
-	tmpdir="$$(mktemp -d)"; \
-	outdir="$$tmpdir/floats"; \
-	trap '$(RM) -r "$$tmpdir"' EXIT; \
-	mkdir -p "$$outdir"; \
-	perl -0pe 's/#include <immintrin.h>/#define _IMMINTRIN_H_INCLUDED\n#define __IMMINTRIN_H\n#include <xmmintrin.h>\n#include <emmintrin.h>\n#include <avxintrin.h>/' src/floats_avx.c > "$$tmpdir/floats_avx.c"; \
-	$(GOAT) "$$tmpdir/floats_avx.c" -o "$$outdir" --target $(GOAT_TARGET_AVX) -O3 -mavx; \
-	perl -0pi -e 's@^// source: .*floats_avx\.c$$@// source: src/floats_avx.c@m' "$$outdir/floats_avx.go" "$$outdir/floats_avx.s"; \
-	cp "$$outdir/floats_avx.go" "$$outdir/floats_avx.s" .
+	$(GOAT) src/floats_avx.c -o . --target $(GOAT_TARGET_AVX) -O3 -mavx -mfma
 
 avx512:
 	$(GOAT) src/floats_avx512.c -o . --target $(GOAT_TARGET_AVX) -O3 -mavx -mfma -mavx512f
