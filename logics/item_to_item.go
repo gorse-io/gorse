@@ -17,7 +17,6 @@ package logics
 import (
 	"context"
 	"errors"
-	"fmt"
 	"slices"
 	"strings"
 	"sync"
@@ -201,10 +200,10 @@ func (e *embeddingItemToItem) Push(item *data.Item, _ []int32) {
 		return
 	}
 	// Convert column to BF16 vector
-	v, err := toBFloat16Slice(result)
-	if err != nil {
+	v, ok := bfloats.FromAny(result)
+	if !ok {
 		log.Logger().Error("failed to convert column to BF16 slice",
-			zap.Any("column", result), zap.Error(err))
+			zap.Any("column", result))
 		return
 	}
 	// Check dimension
@@ -218,62 +217,6 @@ func (e *embeddingItemToItem) Push(item *data.Item, _ []int32) {
 	}
 	e.itemsLock.Unlock()
 	e.pushItem(item, v)
-}
-
-// toBFloat16Slice converts an any to BF16 slice, handling mixed numeric types
-// that may occur when reading from MongoDB (e.g., 0 stored as int instead of float32)
-func toBFloat16Slice(v any) ([]uint16, error) {
-	switch val := v.(type) {
-	case []uint16:
-		return val, nil
-	case []float32:
-		return bfloats.FromFloat32(val), nil
-	case []float64:
-		result := make([]float32, len(val))
-		for i, e := range val {
-			result[i] = float32(e)
-		}
-		return bfloats.FromFloat32(result), nil
-	case []int:
-		result := make([]float32, len(val))
-		for i, e := range val {
-			result[i] = float32(e)
-		}
-		return bfloats.FromFloat32(result), nil
-	case []int32:
-		result := make([]float32, len(val))
-		for i, e := range val {
-			result[i] = float32(e)
-		}
-		return bfloats.FromFloat32(result), nil
-	case []int64:
-		result := make([]float32, len(val))
-		for i, e := range val {
-			result[i] = float32(e)
-		}
-		return bfloats.FromFloat32(result), nil
-	case []any:
-		result := make([]float32, len(val))
-		for i, elem := range val {
-			switch e := elem.(type) {
-			case float32:
-				result[i] = e
-			case float64:
-				result[i] = float32(e)
-			case int:
-				result[i] = float32(e)
-			case int32:
-				result[i] = float32(e)
-			case int64:
-				result[i] = float32(e)
-			default:
-				return nil, fmt.Errorf("invalid element type %T in slice", e)
-			}
-		}
-		return bfloats.FromFloat32(result), nil
-	default:
-		return nil, fmt.Errorf("invalid column type %T", v)
-	}
 }
 
 type tagsItemToItem struct {
@@ -483,10 +426,10 @@ func (g *chatItemToItem) PopAll(i int) []cache.Score {
 			zap.Any("item", item), zap.Error(err))
 		return nil
 	}
-	embedding0, err := toBFloat16Slice(result)
-	if err != nil {
+	embedding0, ok := bfloats.FromAny(result)
+	if !ok {
 		log.Logger().Error("failed to convert column to BF16 slice",
-			zap.Any("column", result), zap.Error(err))
+			zap.Any("column", result))
 		return nil
 	}
 	// render template

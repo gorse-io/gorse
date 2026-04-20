@@ -54,7 +54,17 @@ func TestDataset_AddItem(t *testing.T) {
 		},
 		Comment: "comment",
 	})
-	assert.Len(t, dataSet.GetItems(), 2)
+	dataSet.AddItem(data.Item{
+		ItemId:     "3",
+		IsHidden:   false,
+		Categories: []string{"a"},
+		Timestamp:  time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
+		Labels: map[string]any{
+			"embedded": []any{1.1, 0, int32(2)},
+		},
+		Comment: "comment",
+	})
+	assert.Len(t, dataSet.GetItems(), 3)
 	assert.Equal(t, data.Item{
 		ItemId:     "1",
 		IsHidden:   false,
@@ -80,6 +90,16 @@ func TestDataset_AddItem(t *testing.T) {
 		},
 		Comment: "comment",
 	}, dataSet.GetItems()[1])
+	assert.Equal(t, data.Item{
+		ItemId:     "3",
+		IsHidden:   false,
+		Categories: []string{"a"},
+		Timestamp:  time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
+		Labels: map[string]any{
+			"embedded": bfloats.FromFloat32([]float32{1.1, 0, 2}),
+		},
+		Comment: "comment",
+	}, dataSet.GetItems()[2])
 }
 
 func TestDataset_GetItemColumnValuesIDF(t *testing.T) {

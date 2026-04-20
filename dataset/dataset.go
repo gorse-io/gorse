@@ -375,26 +375,14 @@ func (l *Labels) processLabels(labels any, parent string) any {
 		}
 		return o
 	case []any:
-		if isSliceOf[float64](typed) {
-			return bfloats.FromFloat32(lo.Map(typed, func(e any, _ int) float32 {
-				return float32(e.(float64))
-			}))
-		} else if isSliceOf[float32](typed) {
-			return bfloats.FromFloat32(lo.Map(typed, func(e any, _ int) float32 {
-				return e.(float32)
-			}))
+		if values, ok := bfloats.FromAny(typed); ok {
+			return values
 		} else if isSliceOf[string](typed) {
 			return lo.Map(typed, func(e any, _ int) ID {
 				return ID(l.values.Add(parent + ":" + e.(string)))
 			})
 		}
 		return typed
-	case []float64:
-		return bfloats.FromFloat32(lo.Map(typed, func(e float64, _ int) float32 {
-			return float32(e)
-		}))
-	case []float32:
-		return bfloats.FromFloat32(typed)
 	case string:
 		return ID(l.values.Add(parent + ":" + typed))
 	default:
