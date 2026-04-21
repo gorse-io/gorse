@@ -725,7 +725,7 @@ func (suite *WorkerTestSuite) TestRankByClickTroughRate() {
 	})
 	suite.NoError(err)
 	// rank items
-	itemCache := NewItemCache(suite.DataClient)
+	itemCache := NewItemCache(suite.DataClient, 10000)
 	result, err := suite.rankByClickTroughRate(ctx, new(mockFactorizationMachine), &data.User{UserId: "1"},
 		[]cache.Score{{Id: "1"}, {Id: "2"}, {Id: "3"}, {Id: "4"}, {Id: "5"}}, itemCache, time.Now())
 	suite.NoError(err)
@@ -762,7 +762,7 @@ func (suite *WorkerTestSuite) TestRankByLLM() {
 		"{{user.UserId}}", "{{item.ItemId}}")
 	suite.NoError(err)
 
-	itemCache := NewItemCache(suite.DataClient)
+	itemCache := NewItemCache(suite.DataClient, 10000)
 	recommendTime := time.Now()
 	result, err := suite.rankByLLM(ctx, nil, ranker, &data.User{UserId: "u1"}, []data.Feedback{
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "like", UserId: "u1", ItemId: "4"}},
