@@ -18,9 +18,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-
 	"github.com/gorse-io/gorse/storage/data"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -99,7 +98,7 @@ func TestCompressLabelsEmbeddings(t *testing.T) {
 
 	// Test map with embedding
 	mapInput := map[string]any{
-		"title": "test item",
+		"title":     "test item",
 		"embedding": []any{1.0, 2.0, 3.0},
 	}
 	mapOutput := compressLabelsEmbeddings(mapInput)

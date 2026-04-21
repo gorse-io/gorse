@@ -20,9 +20,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/gorse-io/gorse/common/bfloats"
-
 	mapset "github.com/deckarep/golang-set/v2"
+	"github.com/gorse-io/gorse/common/bfloats"
 	"github.com/gorse-io/gorse/common/expression"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/common/monitor"
