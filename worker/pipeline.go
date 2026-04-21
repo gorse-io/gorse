@@ -17,7 +17,6 @@ package worker
 import (
 	"context"
 	"strings"
-	"sync"
 	"time"
 
 	mapset "github.com/deckarep/golang-set/v2"
@@ -35,6 +34,8 @@ import (
 	"github.com/samber/lo"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
+
+	"github.com/maypok86/otter/v2"
 )
 
 type Pipeline struct {
@@ -51,7 +52,13 @@ type Pipeline struct {
 
 func (p *Pipeline) Recommend(ctx context.Context, users []data.User, progress func(completed, throughput int)) {
 	startRecommendTime := time.Now()
-	itemCache := NewItemCache(p.DataClient)
+	// Get total item count to determine cache size
+	itemCount, err := p.DataClient.CountItems(ctx)
+	if err != nil {
+		log.Logger().Error("failed to count items for cache size", zap.Error(err))
+		itemCount = 1024 * 10 // fallback to default
+	}
+	itemCache := NewItemCache(p.DataClient, itemCount)
 	log.Logger().Info("ranking recommendation",
 		zap.Int("n_working_users", len(users)),
 		zap.Int("n_jobs", p.Jobs),
@@ -574,24 +581,33 @@ func (p *Pipeline) applyReplacementDecay(
 	return updated
 }
 
-// ItemCache is alias of map[string]data.Item.
+// ItemCache is a cache for items using W-TinyLFU eviction policy.
 type ItemCache struct {
 	Client data.Database
-	Data   sync.Map
+	Data   *otter.Cache[string, *data.Item]
 }
 
-// NewItemCache creates a new ItemCache.
-func NewItemCache(client data.Database) *ItemCache {
+// NewItemCache creates a new ItemCache with W-TinyLFU eviction.
+// The cache size is calculated as max(1024, itemCount * 10%).
+func NewItemCache(client data.Database, itemCount int) *ItemCache {
+	// Calculate cache size: 10% of total items, but at least 1024
+	size := itemCount / 10
+	if size < 1024 {
+		size = 1024
+	}
+	cache := otter.Must(&otter.Options[string, *data.Item]{
+		MaximumSize: size,
+	})
 	return &ItemCache{
 		Client: client,
-		Data:   sync.Map{},
+		Data:   cache,
 	}
 }
 
 func (c *ItemCache) GetSlice(ctx context.Context, itemIds []string) ([]*data.Item, error) {
 	requests := make([]string, 0, len(itemIds))
 	for _, itemId := range itemIds {
-		if _, exist := c.Data.Load(itemId); !exist {
+		if _, ok := c.Data.GetIfPresent(itemId); !ok {
 			requests = append(requests, itemId)
 		}
 	}
@@ -600,12 +616,11 @@ func (c *ItemCache) GetSlice(ctx context.Context, itemIds []string) ([]*data.Ite
 		return nil, errors.Trace(err)
 	}
 	for _, item := range response {
-		c.Data.Store(item.ItemId, &item)
+		c.Data.Set(item.ItemId, &item)
 	}
 	items := make([]*data.Item, 0, len(itemIds))
 	for _, itemId := range itemIds {
-		if val, exist := c.Data.Load(itemId); exist {
-			item := val.(*data.Item)
+		if item, ok := c.Data.GetIfPresent(itemId); ok {
 			if !item.IsHidden {
 				items = append(items, item)
 			}
