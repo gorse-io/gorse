@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/gorse-io/gorse/common/bfloats"
 	"github.com/gorse-io/gorse/common/floats"
 	"github.com/gorse-io/gorse/dataset"
 	"github.com/samber/lo"
@@ -73,19 +74,19 @@ func TestConvertEmbeddings(t *testing.T) {
 	embeddings = ConvertEmbeddings([]float32{1, 2, 3})
 	if assert.Len(t, embeddings, 1) {
 		assert.Equal(t, "", embeddings[0].Name)
-		assert.Equal(t, []float32{1, 2, 3}, embeddings[0].Value)
+		assert.Equal(t, bfloats.FromFloat32([]float32{1, 2, 3}), embeddings[0].Value)
 	}
 
 	embeddings = ConvertEmbeddings([]float64{1, 2, 3})
 	if assert.Len(t, embeddings, 1) {
 		assert.Equal(t, "", embeddings[0].Name)
-		assert.Equal(t, []float32{1, 2, 3}, embeddings[0].Value)
+		assert.Equal(t, bfloats.FromFloat32([]float32{1, 2, 3}), embeddings[0].Value)
 	}
 
 	embeddings = ConvertEmbeddings([]any{float64(1), float32(2), float64(3)})
 	if assert.Len(t, embeddings, 1) {
 		assert.Equal(t, "", embeddings[0].Name)
-		assert.Equal(t, []float32{1, 2, 3}, embeddings[0].Value)
+		assert.Equal(t, bfloats.FromFloat32([]float32{1, 2, 3}), embeddings[0].Value)
 	}
 
 	embeddings = ConvertEmbeddings(map[string]any{
@@ -97,8 +98,8 @@ func TestConvertEmbeddings(t *testing.T) {
 	})
 	if assert.Len(t, embeddings, 2) {
 		assert.ElementsMatch(t, []Embedding{
-			{Name: "embedding1", Value: []float32{1, 2, 3}},
-			{Name: "a.embedding2", Value: []float32{4, 5, 6}},
+			{Name: "embedding1", Value: bfloats.FromFloat32([]float32{1, 2, 3})},
+			{Name: "a.embedding2", Value: bfloats.FromFloat32([]float32{4, 5, 6})},
 		}, embeddings)
 	}
 }

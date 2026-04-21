@@ -26,3 +26,90 @@ func TestEuclidean(t *testing.T) {
 	assert.Equal(t, float32(19.621416), Euclidean(a, b))
 	assert.Panics(t, func() { Euclidean([]uint16{1}, nil) })
 }
+
+func TestFromAny(t *testing.T) {
+	floatSlice := []float32{0.1, 0.2, 0.3}
+	testCases := []struct {
+		name     string
+		input    any
+		expected []uint16
+		ok       bool
+	}{
+		{
+			name:     "float32 slice",
+			input:    floatSlice,
+			expected: FromFloat32([]float32{0.1, 0.2, 0.3}),
+			ok:       true,
+		},
+		{
+			name:     "bf16 slice",
+			input:    FromFloat32(floatSlice),
+			expected: FromFloat32([]float32{0.1, 0.2, 0.3}),
+			ok:       true,
+		},
+		{
+			name:     "float64 slice",
+			input:    []float64{0.1, 0.2, 0.3},
+			expected: FromFloat32([]float32{0.1, 0.2, 0.3}),
+			ok:       true,
+		},
+		{
+			name:     "int slice",
+			input:    []int{-1, 0, 2},
+			expected: FromFloat32([]float32{-1, 0, 2}),
+			ok:       true,
+		},
+		{
+			name:     "int32 slice",
+			input:    []int32{-1, 0, 2},
+			expected: FromFloat32([]float32{-1, 0, 2}),
+			ok:       true,
+		},
+		{
+			name:     "int64 slice",
+			input:    []int64{-1, 0, 2},
+			expected: FromFloat32([]float32{-1, 0, 2}),
+			ok:       true,
+		},
+		{
+			name:     "mixed any slice",
+			input:    []any{float32(0.1), float64(0.2), int(0), int32(1), int64(2)},
+			expected: FromFloat32([]float32{0.1, 0.2, 0.0, 1.0, 2.0}),
+			ok:       true,
+		},
+		{
+			name:     "empty any slice",
+			input:    []any{},
+			expected: []uint16{},
+			ok:       true,
+		},
+		{
+			name:  "invalid element in any slice",
+			input: []any{float32(0.1), "string"},
+			ok:    false,
+		},
+		{
+			name:  "nil element in any slice",
+			input: []any{float32(0.1), nil},
+			ok:    false,
+		},
+		{
+			name:  "invalid input type",
+			input: "string",
+			ok:    false,
+		},
+		{
+			name:  "nil input",
+			input: nil,
+			ok:    false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			result, ok := FromAny(tc.input)
+			assert.Equal(t, tc.ok, ok)
+			assert.Equal(t, tc.expected, result)
+		})
+	}
+}

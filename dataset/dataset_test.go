@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/chewxy/math32"
+	"github.com/gorse-io/gorse/common/bfloats"
 	"github.com/gorse-io/gorse/storage/data"
 	"github.com/stretchr/testify/assert"
 )
@@ -53,7 +54,17 @@ func TestDataset_AddItem(t *testing.T) {
 		},
 		Comment: "comment",
 	})
-	assert.Len(t, dataSet.GetItems(), 2)
+	dataSet.AddItem(data.Item{
+		ItemId:     "3",
+		IsHidden:   false,
+		Categories: []string{"a"},
+		Timestamp:  time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
+		Labels: map[string]any{
+			"embedded": []any{1.1, 0, int32(2)},
+		},
+		Comment: "comment",
+	})
+	assert.Len(t, dataSet.GetItems(), 3)
 	assert.Equal(t, data.Item{
 		ItemId:     "1",
 		IsHidden:   false,
@@ -61,7 +72,7 @@ func TestDataset_AddItem(t *testing.T) {
 		Timestamp:  time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
 		Labels: map[string]any{
 			"a":        1,
-			"embedded": []float32{1.1, 2.2, 3.3},
+			"embedded": bfloats.FromFloat32([]float32{1.1, 2.2, 3.3}),
 			"tags":     []ID{0, 1, 2},
 		},
 		Comment: "comment",
@@ -73,12 +84,22 @@ func TestDataset_AddItem(t *testing.T) {
 		Timestamp:  time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
 		Labels: map[string]any{
 			"a":        1,
-			"embedded": []float32{1.1, 2.2, 3.3},
+			"embedded": bfloats.FromFloat32([]float32{1.1, 2.2, 3.3}),
 			"tags":     []ID{1, 2, 0},
 			"topics":   []ID{3, 4, 5},
 		},
 		Comment: "comment",
 	}, dataSet.GetItems()[1])
+	assert.Equal(t, data.Item{
+		ItemId:     "3",
+		IsHidden:   false,
+		Categories: []string{"a"},
+		Timestamp:  time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
+		Labels: map[string]any{
+			"embedded": bfloats.FromFloat32([]float32{1.1, 0, 2}),
+		},
+		Comment: "comment",
+	}, dataSet.GetItems()[2])
 }
 
 func TestDataset_GetItemColumnValuesIDF(t *testing.T) {

@@ -16,6 +16,7 @@ package bfloats
 
 import (
 	"math"
+	"reflect"
 
 	"github.com/chewxy/math32"
 )
@@ -53,4 +54,59 @@ func Euclidean(a, b []uint16) float32 {
 		return 0
 	}
 	return feature.euclidean(a, b)
+}
+
+func FromAny(v any) ([]uint16, bool) {
+	switch typed := v.(type) {
+	case []uint16:
+		return typed, true
+	case []float32:
+		return FromFloat32(typed), true
+	case nil:
+		return nil, false
+	}
+	rv := reflect.ValueOf(v)
+	if rv.Kind() != reflect.Slice {
+		return nil, false
+	}
+	values := make([]float32, rv.Len())
+	for i := range rv.Len() {
+		converted, ok := toFloat32(rv.Index(i).Interface())
+		if !ok {
+			return nil, false
+		}
+		values[i] = converted
+	}
+	return FromFloat32(values), true
+}
+
+func toFloat32(v any) (float32, bool) {
+	switch typed := v.(type) {
+	case float32:
+		return typed, true
+	case float64:
+		return float32(typed), true
+	case int:
+		return float32(typed), true
+	case int8:
+		return float32(typed), true
+	case int16:
+		return float32(typed), true
+	case int32:
+		return float32(typed), true
+	case int64:
+		return float32(typed), true
+	case uint:
+		return float32(typed), true
+	case uint8:
+		return float32(typed), true
+	case uint16:
+		return float32(typed), true
+	case uint32:
+		return float32(typed), true
+	case uint64:
+		return float32(typed), true
+	default:
+		return 0, false
+	}
 }
