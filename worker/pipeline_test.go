@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	"github.com/gorse-io/gorse/storage/data"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -66,4 +67,56 @@ func (suite *PipelineTestSuite) TestGetMap() {
 
 func TestPipeline(t *testing.T) {
 	suite.Run(t, new(PipelineTestSuite))
+}
+
+func TestCompressLabelsEmbeddings(t *testing.T) {
+	// Test nil input
+	assert.Nil(t, compressLabelsEmbeddings(nil))
+
+	// Test embedding vector as []any
+	input := []any{1.0, 2.0, 3.0}
+	output := compressLabelsEmbeddings(input)
+	assert.IsType(t, []uint16{}, output)
+	assert.Len(t, output.([]uint16), 3)
+
+	// Test embedding vector as []float32
+	input32 := []float32{1.0, 2.0, 3.0}
+	output32 := compressLabelsEmbeddings(input32)
+	assert.IsType(t, []uint16{}, output32)
+	assert.Len(t, output32.([]uint16), 3)
+
+	// Test embedding vector as []float64
+	input64 := []float64{1.0, 2.0, 3.0}
+	output64 := compressLabelsEmbeddings(input64)
+	assert.IsType(t, []uint16{}, output64)
+	assert.Len(t, output64.([]uint16), 3)
+
+	// Test already compressed []uint16
+	inputU16 := []uint16{0x3f80, 0x4000, 0x4040}
+	outputU16 := compressLabelsEmbeddings(inputU16)
+	assert.Equal(t, inputU16, outputU16)
+
+	// Test map with embedding
+	mapInput := map[string]any{
+		"title":     "test item",
+		"embedding": []any{1.0, 2.0, 3.0},
+	}
+	mapOutput := compressLabelsEmbeddings(mapInput)
+	assert.IsType(t, []uint16{}, mapOutput.(map[string]any)["embedding"])
+	assert.Equal(t, "test item", mapOutput.(map[string]any)["title"])
+
+	// Test nested map
+	nestedInput := map[string]any{
+		"features": map[string]any{
+			"embedding": []float32{1.0, 2.0},
+		},
+	}
+	nestedOutput := compressLabelsEmbeddings(nestedInput)
+	assert.IsType(t, []uint16{}, nestedOutput.(map[string]any)["features"].(map[string]any)["embedding"])
+
+	// Test non-embedding []any (strings)
+	strSlice := []any{"tag1", "tag2"}
+	strOutput := compressLabelsEmbeddings(strSlice)
+	assert.IsType(t, []any{}, strOutput)
+	assert.Equal(t, strSlice, strOutput)
 }

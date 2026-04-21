@@ -21,6 +21,7 @@ import (
 	"time"
 
 	mapset "github.com/deckarep/golang-set/v2"
+	"github.com/gorse-io/gorse/common/bfloats"
 	"github.com/gorse-io/gorse/common/expression"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/common/monitor"
@@ -36,6 +37,41 @@ import (
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 )
+
+// compressLabelsEmbeddings recursively processes Labels and compresses embedding vectors to BF16.
+// This saves memory when storing items in ItemCache.
+func compressLabelsEmbeddings(labels any) any {
+	if labels == nil {
+		return nil
+	}
+	switch typed := labels.(type) {
+	case map[string]any:
+		result := make(map[string]any, len(typed))
+		for k, v := range typed {
+			result[k] = compressLabelsEmbeddings(v)
+		}
+		return result
+	case []any:
+		// Try to compress as embedding vector
+		if values, ok := bfloats.FromAny(typed); ok {
+			return values
+		}
+		// Otherwise recursively process each element
+		result := make([]any, len(typed))
+		for i, v := range typed {
+			result[i] = compressLabelsEmbeddings(v)
+		}
+		return result
+	case []float32:
+		return bfloats.FromFloat32(typed)
+	case []float64:
+		return bfloats.FromFloat32(lo.Map(typed, func(f float64, _ int) float32 { return float32(f) }))
+	case []uint16:
+		return typed // Already BF16
+	default:
+		return labels
+	}
+}
 
 type Pipeline struct {
 	Config                   *config.Config
@@ -600,6 +636,7 @@ func (c *ItemCache) GetSlice(ctx context.Context, itemIds []string) ([]*data.Ite
 		return nil, errors.Trace(err)
 	}
 	for _, item := range response {
+		item.Labels = compressLabelsEmbeddings(item.Labels)
 		c.Data.Store(item.ItemId, &item)
 	}
 	items := make([]*data.Item, 0, len(itemIds))
