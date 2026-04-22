@@ -94,6 +94,7 @@ func TestCompressLabelsEmbeddings(t *testing.T) {
 	assert.Contains(t, compressedMap, "score")
 	assert.Equal(t, "books", compressedMap["category"])
 	assert.Equal(t, 1.0, compressedMap["score"])
+
 	// Test embedding vector as []any
 	input := []any{1.0, 2.0, 3.0}
 	output := compressLabelsEmbeddings(pool, input)
