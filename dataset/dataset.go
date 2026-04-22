@@ -199,6 +199,14 @@ func (d *Dataset) GetItemColumnValuesIDF() []float32 {
 	return idf
 }
 
+func (d *Dataset) GetUserColumnValuesIndex() *Index {
+	return d.userLabels.values.ToIndex()
+}
+
+func (d *Dataset) GetItemColumnValuesIndex() *Index {
+	return d.itemLabels.values.ToIndex()
+}
+
 func (d *Dataset) AddUser(user data.User) {
 	d.users = append(d.users, data.User{
 		UserId:  user.UserId,
@@ -355,13 +363,13 @@ func (d *Dataset) SplitLatest(shots int) (CFSplit, CFSplit) {
 }
 
 type Labels struct {
-	fields *strutil.Pool
+	fields *strutil.GoPool
 	values *FreqDict
 }
 
 func NewLabels() *Labels {
 	return &Labels{
-		fields: strutil.NewPool(),
+		fields: strutil.NewGoPool(),
 		values: NewFreqDict(),
 	}
 }
@@ -378,16 +386,25 @@ func (l *Labels) processLabels(labels any, parent string) any {
 		if values, ok := bfloats.FromAny(typed); ok {
 			return values
 		} else if isSliceOf[string](typed) {
-			return lo.Map(typed, func(e any, _ int) ID {
-				return ID(l.values.Add(parent + ":" + e.(string)))
+			return lo.Map(typed, func(e any, _ int) string {
+				return l.addLabelValue(parent, e.(string))
 			})
 		}
 		return typed
+	case []string:
+		return lo.Map(typed, func(value string, _ int) string {
+			return l.addLabelValue(parent, value)
+		})
 	case string:
-		return ID(l.values.Add(parent + ":" + typed))
+		return l.addLabelValue(parent, typed)
 	default:
 		return labels
 	}
+}
+
+func (l *Labels) addLabelValue(parent, value string) string {
+	l.values.Add(parent + ":" + value)
+	return l.fields.Align(value)
 }
 
 func isSliceOf[T any](v []any) bool {

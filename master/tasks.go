@@ -707,6 +707,7 @@ func (m *Master) updateItemToItem(parent context.Context, dataset *dataset.Datas
 	for _, cfg := range m.Config.Recommend.ItemToItem {
 		recommender, err := logics.NewItemToItem(cfg, m.Config.Recommend.CacheSize, dataset.GetTimestamp(), &logics.ItemToItemOptions{
 			TagsIDF:      dataset.GetItemColumnValuesIDF(),
+			TagsIndex:    dataset.GetItemColumnValuesIndex(),
 			UsersIDF:     dataset.GetUserIDF(),
 			OpenAIConfig: m.Config.OpenAI,
 		})
@@ -822,8 +823,9 @@ func (m *Master) updateUserToUser(parent context.Context, dataset *dataset.Datas
 	userToUserRecommenders := make([]logics.UserToUser, 0, len(m.Config.Recommend.UserToUser))
 	for _, cfg := range m.Config.Recommend.UserToUser {
 		recommender, err := logics.NewUserToUser(cfg, m.Config.Recommend.CacheSize, dataset.GetTimestamp(), &logics.UserToUserOptions{
-			TagsIDF:  dataset.GetUserColumnValuesIDF(),
-			ItemsIDF: dataset.GetItemIDF(),
+			TagsIDF:   dataset.GetUserColumnValuesIDF(),
+			TagsIndex: dataset.GetUserColumnValuesIndex(),
+			ItemsIDF:  dataset.GetItemIDF(),
 		})
 		if err != nil {
 			return errors.Trace(err)

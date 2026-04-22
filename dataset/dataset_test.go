@@ -73,7 +73,7 @@ func TestDataset_AddItem(t *testing.T) {
 		Labels: map[string]any{
 			"a":        1,
 			"embedded": bfloats.FromFloat32([]float32{1.1, 2.2, 3.3}),
-			"tags":     []ID{0, 1, 2},
+			"tags":     []string{"a", "b", "c"},
 		},
 		Comment: "comment",
 	}, dataSet.GetItems()[0])
@@ -85,8 +85,8 @@ func TestDataset_AddItem(t *testing.T) {
 		Labels: map[string]any{
 			"a":        1,
 			"embedded": bfloats.FromFloat32([]float32{1.1, 2.2, 3.3}),
-			"tags":     []ID{1, 2, 0},
-			"topics":   []ID{3, 4, 5},
+			"tags":     []string{"b", "c", "a"},
+			"topics":   []string{"a", "b", "c"},
 		},
 		Comment: "comment",
 	}, dataSet.GetItems()[1])
@@ -140,7 +140,7 @@ func TestDataset_AddUser(t *testing.T) {
 	assert.Len(t, dataSet.users, 1)
 	assert.Equal(t, data.User{
 		UserId:  "1",
-		Labels:  map[string]any{"a": 1, "b": ID(0)},
+		Labels:  map[string]any{"a": 1, "b": "a"},
 		Comment: "comment",
 	}, dataSet.users[0])
 }

@@ -155,15 +155,19 @@ func (suite *ItemToItemTestSuite) TestTags() {
 	for i := range idf {
 		idf[i] = 1
 	}
+	tagsIndex := dataset.NewMapIndex()
 	item2item, err := newTagsItemToItem(config.ItemToItemConfig{
 		Column: "item.Labels",
-	}, 10, timestamp, idf)
+	}, 10, timestamp, idf, tagsIndex)
 	suite.NoError(err)
+	for i := 1; i <= 100; i++ {
+		tagsIndex.Add("." + strconv.Itoa(i) + ":" + strconv.Itoa(i))
+	}
 
 	for i := range 100 {
 		labels := make(map[string]any)
 		for j := 1; j <= 100-i; j++ {
-			labels[strconv.Itoa(j)] = []dataset.ID{dataset.ID(j)}
+			labels[strconv.Itoa(j)] = []string{strconv.Itoa(j)}
 		}
 		item2item.Push(&data.Item{
 			ItemId: strconv.Itoa(i),
@@ -208,8 +212,12 @@ func (suite *ItemToItemTestSuite) TestAuto() {
 	for i := range idf {
 		idf[i] = 1
 	}
-	item2item, err := newAutoItemToItem(config.ItemToItemConfig{}, 10, timestamp, idf, idf)
+	tagsIndex := dataset.NewMapIndex()
+	item2item, err := newAutoItemToItem(config.ItemToItemConfig{}, 10, timestamp, idf, tagsIndex, idf)
 	suite.NoError(err)
+	for i := 1; i <= 100; i++ {
+		tagsIndex.Add("." + strconv.Itoa(i) + ":" + strconv.Itoa(i))
+	}
 
 	for i := range 100 {
 		item := &data.Item{ItemId: strconv.Itoa(i)}
@@ -217,7 +225,7 @@ func (suite *ItemToItemTestSuite) TestAuto() {
 		if i%2 == 0 {
 			labels := make(map[string]any)
 			for j := 1; j <= 100-i; j++ {
-				labels[strconv.Itoa(j)] = []dataset.ID{dataset.ID(j)}
+				labels[strconv.Itoa(j)] = []string{strconv.Itoa(j)}
 			}
 			item.Labels = labels
 		} else {

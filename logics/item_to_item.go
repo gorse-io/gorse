@@ -56,6 +56,7 @@ func init() {
 
 type ItemToItemOptions struct {
 	TagsIDF      []float32
+	TagsIndex    *dataset.Index
 	UsersIDF     []float32
 	OpenAIConfig config.OpenAIConfig
 }
@@ -73,20 +74,20 @@ func NewItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time, opts
 	case "embedding":
 		return newEmbeddingItemToItem(cfg, n, timestamp)
 	case "tags":
-		if opts == nil || opts.TagsIDF == nil {
-			return nil, errors.New("tags IDF is required for tags item-to-item")
+		if opts == nil || opts.TagsIDF == nil || opts.TagsIndex == nil {
+			return nil, errors.New("tags IDF and index are required for tags item-to-item")
 		}
-		return newTagsItemToItem(cfg, n, timestamp, opts.TagsIDF)
+		return newTagsItemToItem(cfg, n, timestamp, opts.TagsIDF, opts.TagsIndex)
 	case "users":
 		if opts == nil || opts.UsersIDF == nil {
 			return nil, errors.New("users IDF is required for users item-to-item")
 		}
 		return newUsersItemToItem(cfg, n, timestamp, opts.UsersIDF)
 	case "auto":
-		if opts == nil || opts.TagsIDF == nil || opts.UsersIDF == nil {
-			return nil, errors.New("tags and users IDF are required for auto item-to-item")
+		if opts == nil || opts.TagsIDF == nil || opts.TagsIndex == nil || opts.UsersIDF == nil {
+			return nil, errors.New("tags IDF, tags index, and users IDF are required for auto item-to-item")
 		}
-		return newAutoItemToItem(cfg, n, timestamp, opts.TagsIDF, opts.UsersIDF)
+		return newAutoItemToItem(cfg, n, timestamp, opts.TagsIDF, opts.TagsIndex, opts.UsersIDF)
 	case "chat":
 		if opts == nil || opts.OpenAIConfig.BaseURL == "" || opts.OpenAIConfig.AuthToken == "" {
 			return nil, errors.New("OpenAI config is required for chat item-to-item")
@@ -222,9 +223,10 @@ func (e *embeddingItemToItem) Push(item *data.Item, _ []int32) {
 type tagsItemToItem struct {
 	baseItemToItem[[]dataset.ID]
 	IDF[dataset.ID]
+	tagsIndex *dataset.Index
 }
 
-func newTagsItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time, idf []float32) (ItemToItem, error) {
+func newTagsItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time, idf []float32, tagsIndex *dataset.Index) (ItemToItem, error) {
 	// Compile column expression
 	columnFunc, err := expr.Compile(cfg.Column, expr.Env(map[string]any{
 		"item": data.Item{},
@@ -232,7 +234,7 @@ func newTagsItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time, 
 	if err != nil {
 		return nil, err
 	}
-	t := &tagsItemToItem{IDF: idf}
+	t := &tagsItemToItem{IDF: idf, tagsIndex: tagsIndex}
 	t.baseItemToItem = baseItemToItem[[]dataset.ID]{
 		name:       cfg.Name,
 		n:          n,
@@ -244,9 +246,12 @@ func newTagsItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time, 
 }
 
 func (t *tagsItemToItem) Push(item *data.Item, _ []int32) {
+	itemForExpr := *item
+	itemForExpr.Labels = convertLabelsToID(item.Labels, t.tagsIndex, "")
+
 	// Evaluate filter function
 	result, err := expr.Run(t.columnFunc, map[string]any{
-		"item": item,
+		"item": itemForExpr,
 	})
 	if err != nil {
 		log.Logger().Error("failed to evaluate column expression",
@@ -288,14 +293,16 @@ func (u *usersItemToItem) Push(item *data.Item, feedback []int32) {
 
 type autoItemToItem struct {
 	baseItemToItem[lo.Tuple2[[]dataset.ID, []int32]]
-	tIDF IDF[dataset.ID]
-	uIDF IDF[int32]
+	tIDF      IDF[dataset.ID]
+	tagsIndex *dataset.Index
+	uIDF      IDF[int32]
 }
 
-func newAutoItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time, tIDF, uIDF []float32) (ItemToItem, error) {
+func newAutoItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time, tIDF []float32, tagsIndex *dataset.Index, uIDF []float32) (ItemToItem, error) {
 	a := &autoItemToItem{
-		tIDF: tIDF,
-		uIDF: uIDF,
+		tIDF:      tIDF,
+		tagsIndex: tagsIndex,
+		uIDF:      uIDF,
 	}
 	a.baseItemToItem = baseItemToItem[lo.Tuple2[[]dataset.ID, []int32]]{
 		name:      cfg.Name,
@@ -309,7 +316,7 @@ func newAutoItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time, 
 func (a *autoItemToItem) Push(item *data.Item, feedback []int32) {
 	// Extract tags
 	tSet := mapset.NewSet[dataset.ID]()
-	flatten(item.Labels, tSet)
+	flatten(convertLabelsToID(item.Labels, a.tagsIndex, ""), tSet)
 	v := tSet.ToSlice()
 	slices.Sort(v)
 	// Sort feedback
@@ -363,6 +370,62 @@ func (idf IDF[T]) weightedSum(a []T) float32 {
 		sum += idf[i]
 	}
 	return sum
+}
+
+func convertLabelsToID(labels any, tagsIndex *dataset.Index, parent string) any {
+	if labels == nil || tagsIndex == nil {
+		return labels
+	}
+	switch typed := labels.(type) {
+	case map[string]any:
+		result := make(map[string]any, len(typed))
+		for key, value := range typed {
+			result[key] = convertLabelsToID(value, tagsIndex, parent+"."+key)
+		}
+		return result
+	case []string:
+		result := make([]dataset.ID, 0, len(typed))
+		for _, value := range typed {
+			if id := tagsIndex.ToNumber(parent + ":" + value); id != dataset.NotId {
+				result = append(result, dataset.ID(id))
+			}
+		}
+		return result
+	case []any:
+		if values, ok := bfloats.FromAny(typed); ok {
+			return values
+		}
+		if isStringSlice(typed) {
+			result := make([]dataset.ID, 0, len(typed))
+			for _, value := range typed {
+				if id := tagsIndex.ToNumber(parent + ":" + value.(string)); id != dataset.NotId {
+					result = append(result, dataset.ID(id))
+				}
+			}
+			return result
+		}
+		result := make([]any, len(typed))
+		for i, value := range typed {
+			result[i] = convertLabelsToID(value, tagsIndex, parent)
+		}
+		return result
+	case string:
+		if id := tagsIndex.ToNumber(parent + ":" + typed); id != dataset.NotId {
+			return dataset.ID(id)
+		}
+		return typed
+	default:
+		return labels
+	}
+}
+
+func isStringSlice(values []any) bool {
+	for _, value := range values {
+		if _, ok := value.(string); !ok {
+			return false
+		}
+	}
+	return true
 }
 
 func flatten(o any, tSet mapset.Set[dataset.ID]) {

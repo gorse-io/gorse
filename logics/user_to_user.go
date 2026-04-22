@@ -35,8 +35,9 @@ import (
 )
 
 type UserToUserOptions struct {
-	TagsIDF  []float32
-	ItemsIDF []float32
+	TagsIDF   []float32
+	TagsIndex *dataset.Index
+	ItemsIDF  []float32
 }
 
 type UserToUser interface {
@@ -51,20 +52,20 @@ func NewUserToUser(cfg config.UserToUserConfig, n int, timestamp time.Time, opts
 	case "embedding":
 		return newEmbeddingUserToUser(cfg, n, timestamp)
 	case "tags":
-		if opts == nil || opts.TagsIDF == nil {
-			return nil, errors.New("tags IDF is required for tags user-to-user")
+		if opts == nil || opts.TagsIDF == nil || opts.TagsIndex == nil {
+			return nil, errors.New("tags IDF and index are required for tags user-to-user")
 		}
-		return newTagsUserToUser(cfg, n, timestamp, opts.TagsIDF)
+		return newTagsUserToUser(cfg, n, timestamp, opts.TagsIDF, opts.TagsIndex)
 	case "items":
 		if opts == nil || opts.ItemsIDF == nil {
 			return nil, errors.New("items IDF is required for items user-to-user")
 		}
 		return newItemsUserToUser(cfg, n, timestamp, opts.ItemsIDF)
 	case "auto":
-		if opts == nil || opts.TagsIDF == nil || opts.ItemsIDF == nil {
-			return nil, errors.New("tags IDF and items IDF are required for auto user-to-user")
+		if opts == nil || opts.TagsIDF == nil || opts.TagsIndex == nil || opts.ItemsIDF == nil {
+			return nil, errors.New("tags IDF, tags index, and items IDF are required for auto user-to-user")
 		}
-		return newAutoUserToUser(cfg, n, timestamp, opts.TagsIDF, opts.ItemsIDF)
+		return newAutoUserToUser(cfg, n, timestamp, opts.TagsIDF, opts.TagsIndex, opts.ItemsIDF)
 	}
 	return nil, errors.New("unknown user-to-user method")
 }
@@ -160,9 +161,10 @@ func (e *embeddingUserToUser) Push(user *data.User, _ []int32) {
 type tagsUserToUser struct {
 	baseUserToUser[[]dataset.ID]
 	IDF[dataset.ID]
+	tagsIndex *dataset.Index
 }
 
-func newTagsUserToUser(cfg config.UserToUserConfig, n int, timestamp time.Time, idf []float32) (UserToUser, error) {
+func newTagsUserToUser(cfg config.UserToUserConfig, n int, timestamp time.Time, idf []float32, tagsIndex *dataset.Index) (UserToUser, error) {
 	// Compile column expression
 	columnFunc, err := expr.Compile(cfg.Column, expr.Env(map[string]any{
 		"user": data.User{},
@@ -170,7 +172,7 @@ func newTagsUserToUser(cfg config.UserToUserConfig, n int, timestamp time.Time, 
 	if err != nil {
 		return nil, err
 	}
-	t := &tagsUserToUser{IDF: idf}
+	t := &tagsUserToUser{IDF: idf, tagsIndex: tagsIndex}
 	t.baseUserToUser = baseUserToUser[[]dataset.ID]{
 		name:       cfg.Name,
 		n:          n,
@@ -182,9 +184,12 @@ func newTagsUserToUser(cfg config.UserToUserConfig, n int, timestamp time.Time, 
 }
 
 func (t *tagsUserToUser) Push(user *data.User, _ []int32) {
+	userForExpr := *user
+	userForExpr.Labels = convertLabelsToID(user.Labels, t.tagsIndex, "")
+
 	// Evaluate filter function
 	result, err := expr.Run(t.columnFunc, map[string]any{
-		"user": user,
+		"user": userForExpr,
 	})
 	if err != nil {
 		log.Logger().Error("failed to evaluate column expression", zap.Error(err))
@@ -239,14 +244,16 @@ func (i *itemsUserToUser) Push(user *data.User, feedback []int32) {
 
 type autoUserToUser struct {
 	baseUserToUser[lo.Tuple2[[]dataset.ID, []int32]]
-	tIDF IDF[dataset.ID]
-	iIDF IDF[int32]
+	tIDF      IDF[dataset.ID]
+	tagsIndex *dataset.Index
+	iIDF      IDF[int32]
 }
 
-func newAutoUserToUser(cfg config.UserToUserConfig, n int, timestamp time.Time, tIDF, iIDF []float32) (UserToUser, error) {
+func newAutoUserToUser(cfg config.UserToUserConfig, n int, timestamp time.Time, tIDF []float32, tagsIndex *dataset.Index, iIDF []float32) (UserToUser, error) {
 	a := &autoUserToUser{
-		tIDF: tIDF,
-		iIDF: iIDF,
+		tIDF:      tIDF,
+		tagsIndex: tagsIndex,
+		iIDF:      iIDF,
 	}
 	a.baseUserToUser = baseUserToUser[lo.Tuple2[[]dataset.ID, []int32]]{
 		name:      cfg.Name,
@@ -260,7 +267,7 @@ func newAutoUserToUser(cfg config.UserToUserConfig, n int, timestamp time.Time, 
 func (a *autoUserToUser) Push(user *data.User, feedback []int32) {
 	// Extract tags
 	tSet := mapset.NewSet[dataset.ID]()
-	flatten(user.Labels, tSet)
+	flatten(convertLabelsToID(user.Labels, a.tagsIndex, ""), tSet)
 	t := tSet.ToSlice()
 	slices.Sort(t)
 	// Sort feedback
