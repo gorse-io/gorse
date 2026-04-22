@@ -76,6 +76,24 @@ func TestCompressLabelsEmbeddings(t *testing.T) {
 	// Test nil input
 	assert.Nil(t, compressLabelsEmbeddings(pool, nil))
 
+	// Test direct string input
+	inputString := "tag"
+	outputString := compressLabelsEmbeddings(pool, inputString)
+	assert.IsType(t, "", outputString)
+	assert.Equal(t, inputString, outputString)
+
+	// Test map input preserves keys and values after compression/alignment
+	inputMap := map[string]any{
+		"category": "books",
+		"score":    1.0,
+	}
+	outputMap := compressLabelsEmbeddings(pool, inputMap)
+	assert.IsType(t, map[string]any{}, outputMap)
+	compressedMap := outputMap.(map[string]any)
+	assert.Contains(t, compressedMap, "category")
+	assert.Contains(t, compressedMap, "score")
+	assert.Equal(t, "books", compressedMap["category"])
+	assert.Equal(t, 1.0, compressedMap["score"])
 	// Test embedding vector as []any
 	input := []any{1.0, 2.0, 3.0}
 	output := compressLabelsEmbeddings(pool, input)
