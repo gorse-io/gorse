@@ -343,7 +343,7 @@ func (m *Master) LoadDataFromDatabase(
 	LoadDatasetStepSecondsVec.WithLabelValues("load_users").Set(time.Since(start).Seconds())
 
 	// STEP 2: pull items
-	var items []data.Item
+	var itemIds []string
 	itemLabelCount := make(map[string]int)
 	itemLabelFirst := make(map[string]int32)
 	itemLabelIndex := dataset.NewMapIndex()
@@ -354,8 +354,8 @@ func (m *Master) LoadDataFromDatabase(
 	start = time.Now()
 	itemChan, errChan := database.GetItemStream(newCtx, batchSize, itemTimeLimit)
 	for batchItems := range itemChan {
-		items = append(items, batchItems...)
 		for _, item := range batchItems {
+			itemIds = append(itemIds, item.ItemId)
 			dataSet.AddItem(item)
 			itemIndex := dataSet.GetItemDict().Id(item.ItemId)
 			if len(itemLabels) == int(itemIndex) {
@@ -433,20 +433,18 @@ func (m *Master) LoadDataFromDatabase(
 	}
 
 	// split item groups
-	sort.Slice(items, func(i, j int) bool {
-		return items[i].ItemId < items[j].ItemId
-	})
-	itemGroups := parallel.Split(items, m.Config.Master.NumJobs)
+	sort.Strings(itemIds)
+	itemIdGroups := parallel.Split(itemIds, m.Config.Master.NumJobs)
 
 	// STEP 3: pull explicit negative feedback (highest priority)
 	var mu sync.Mutex
 	start = time.Now()
 	var explicitNegativeFeedbackCount int
 	if len(negFeedbackTypes) > 0 {
-		err = parallel.Parallel(newCtx, len(itemGroups), m.Config.Master.NumJobs, func(_, i int) error {
+		err = parallel.Parallel(newCtx, len(itemIdGroups), m.Config.Master.NumJobs, func(_, i int) error {
 			feedbackChan, errChan := database.GetFeedbackStream(newCtx, batchSize,
-				data.WithBeginItemId(itemGroups[i][0].ItemId),
-				data.WithEndItemId(itemGroups[i][len(itemGroups[i])-1].ItemId),
+				data.WithBeginItemId(itemIdGroups[i][0]),
+				data.WithEndItemId(itemIdGroups[i][len(itemIdGroups[i])-1]),
 				feedbackTimeLimit,
 				data.WithEndTime(*m.Config.Now()),
 				data.WithFeedbackTypes(negFeedbackTypes...),
@@ -486,13 +484,13 @@ func (m *Master) LoadDataFromDatabase(
 	// STEP 4: pull positive feedback
 	var posFeedbackCount int
 	start = time.Now()
-	err = parallel.Parallel(newCtx, len(itemGroups), m.Config.Master.NumJobs, func(_, i int) error {
+	err = parallel.Parallel(newCtx, len(itemIdGroups), m.Config.Master.NumJobs, func(_, i int) error {
 		var itemFeedback []data.Feedback
 		var itemGroupIndex int
-		itemHasFeedback := make([]bool, len(itemGroups[i]))
+		itemHasFeedback := make([]bool, len(itemIdGroups[i]))
 		feedbackChan, errChan := database.GetFeedbackStream(newCtx, batchSize,
-			data.WithBeginItemId(itemGroups[i][0].ItemId),
-			data.WithEndItemId(itemGroups[i][len(itemGroups[i])-1].ItemId),
+			data.WithBeginItemId(itemIdGroups[i][0]),
+			data.WithEndItemId(itemIdGroups[i][len(itemIdGroups[i])-1]),
 			feedbackTimeLimit,
 			data.WithEndTime(*m.Config.Now()),
 			data.WithFeedbackTypes(posFeedbackTypes...),
@@ -527,15 +525,16 @@ func (m *Master) LoadDataFromDatabase(
 				} else {
 					// add item to non-personalized recommenders
 					itemHasFeedback[itemGroupIndex] = true
+					itemIdx := dataSet.GetItemDict().Id(itemIdGroups[i][itemGroupIndex])
 					for _, recommender := range nonPersonalizedRecommenders {
-						recommender.Push(itemGroups[i][itemGroupIndex], itemFeedback)
+						recommender.Push(dataSet.GetItems()[itemIdx], itemFeedback)
 					}
 					itemFeedback = itemFeedback[:0]
 					itemFeedback = append(itemFeedback, f)
 				}
 				// find item group index
-				for itemGroupIndex = 0; itemGroupIndex < len(itemGroups[i]); itemGroupIndex++ {
-					if itemGroups[i][itemGroupIndex].ItemId == f.ItemId {
+				for itemGroupIndex = 0; itemGroupIndex < len(itemIdGroups[i]); itemGroupIndex++ {
+					if itemIdGroups[i][itemGroupIndex] == f.ItemId {
 						break
 					}
 				}
@@ -547,14 +546,16 @@ func (m *Master) LoadDataFromDatabase(
 		// add item to non-personalized recommenders
 		if len(itemFeedback) > 0 {
 			itemHasFeedback[itemGroupIndex] = true
+			itemIdx := dataSet.GetItemDict().Id(itemIdGroups[i][itemGroupIndex])
 			for _, recommender := range nonPersonalizedRecommenders {
-				recommender.Push(itemGroups[i][itemGroupIndex], itemFeedback)
+				recommender.Push(dataSet.GetItems()[itemIdx], itemFeedback)
 			}
 		}
 		for index, hasFeedback := range itemHasFeedback {
 			if !hasFeedback {
+				itemIdx := dataSet.GetItemDict().Id(itemIdGroups[i][index])
 				for _, recommender := range nonPersonalizedRecommenders {
-					recommender.Push(itemGroups[i][index], nil)
+					recommender.Push(dataSet.GetItems()[itemIdx], nil)
 				}
 			}
 		}
@@ -580,10 +581,10 @@ func (m *Master) LoadDataFromDatabase(
 	// STEP 5: pull read feedback (implicit negative feedback)
 	start = time.Now()
 	var readFeedbackCount int
-	err = parallel.Parallel(newCtx, len(itemGroups), m.Config.Master.NumJobs, func(_, i int) error {
+	err = parallel.Parallel(newCtx, len(itemIdGroups), m.Config.Master.NumJobs, func(_, i int) error {
 		feedbackChan, errChan := database.GetFeedbackStream(newCtx, batchSize,
-			data.WithBeginItemId(itemGroups[i][0].ItemId),
-			data.WithEndItemId(itemGroups[i][len(itemGroups[i])-1].ItemId),
+			data.WithBeginItemId(itemIdGroups[i][0]),
+			data.WithEndItemId(itemIdGroups[i][len(itemIdGroups[i])-1]),
 			feedbackTimeLimit,
 			data.WithEndTime(*m.Config.Now()),
 			data.WithFeedbackTypes(readTypes...))
