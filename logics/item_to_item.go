@@ -17,7 +17,6 @@ package logics
 import (
 	"context"
 	"errors"
-	"fmt"
 	"slices"
 	"strings"
 	"sync"
@@ -29,7 +28,7 @@ import (
 	"github.com/expr-lang/expr"
 	"github.com/expr-lang/expr/vm"
 	"github.com/gorse-io/gorse/common/ann"
-	"github.com/gorse-io/gorse/common/floats"
+	"github.com/gorse-io/gorse/common/bfloats"
 	"github.com/gorse-io/gorse/common/heap"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/common/parallel"
@@ -169,7 +168,7 @@ func (b *baseItemToItem[T]) PopAll(i int) []cache.Score {
 }
 
 type embeddingItemToItem struct {
-	baseItemToItem[[]float32]
+	baseItemToItem[[]uint16]
 	dimension int
 }
 
@@ -181,12 +180,12 @@ func newEmbeddingItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.T
 	if err != nil {
 		return nil, err
 	}
-	return &embeddingItemToItem{baseItemToItem: baseItemToItem[[]float32]{
+	return &embeddingItemToItem{baseItemToItem: baseItemToItem[[]uint16]{
 		name:       cfg.Name,
 		n:          n,
 		timestamp:  timestamp,
 		columnFunc: columnFunc,
-		index:      ann.NewHNSW(floats.Euclidean),
+		index:      ann.NewHNSW(bfloats.Euclidean),
 	}}, nil
 }
 
@@ -200,11 +199,11 @@ func (e *embeddingItemToItem) Push(item *data.Item, _ []int32) {
 			zap.Any("item", item), zap.Error(err))
 		return
 	}
-	// Convert column to []float32
-	v, err := toFloat32Slice(result)
-	if err != nil {
-		log.Logger().Error("failed to convert column to float32 slice",
-			zap.Any("column", result), zap.Error(err))
+	// Convert column to BF16 vector
+	v, ok := bfloats.FromAny(result)
+	if !ok {
+		log.Logger().Error("failed to convert column to BF16 slice",
+			zap.Any("column", result))
 		return
 	}
 	// Check dimension
@@ -218,60 +217,6 @@ func (e *embeddingItemToItem) Push(item *data.Item, _ []int32) {
 	}
 	e.itemsLock.Unlock()
 	e.pushItem(item, v)
-}
-
-// toFloat32Slice converts an any to []float32, handling mixed numeric types
-// that may occur when reading from MongoDB (e.g., 0 stored as int instead of float32)
-func toFloat32Slice(v any) ([]float32, error) {
-	switch val := v.(type) {
-	case []float32:
-		return val, nil
-	case []float64:
-		result := make([]float32, len(val))
-		for i, e := range val {
-			result[i] = float32(e)
-		}
-		return result, nil
-	case []int:
-		result := make([]float32, len(val))
-		for i, e := range val {
-			result[i] = float32(e)
-		}
-		return result, nil
-	case []int32:
-		result := make([]float32, len(val))
-		for i, e := range val {
-			result[i] = float32(e)
-		}
-		return result, nil
-	case []int64:
-		result := make([]float32, len(val))
-		for i, e := range val {
-			result[i] = float32(e)
-		}
-		return result, nil
-	case []any:
-		result := make([]float32, len(val))
-		for i, elem := range val {
-			switch e := elem.(type) {
-			case float32:
-				result[i] = e
-			case float64:
-				result[i] = float32(e)
-			case int:
-				result[i] = float32(e)
-			case int32:
-				result[i] = float32(e)
-			case int64:
-				result[i] = float32(e)
-			default:
-				return nil, fmt.Errorf("invalid element type %T in slice", e)
-			}
-		}
-		return result, nil
-	default:
-		return nil, fmt.Errorf("invalid column type %T", v)
-	}
 }
 
 type tagsItemToItem struct {
@@ -481,10 +426,10 @@ func (g *chatItemToItem) PopAll(i int) []cache.Score {
 			zap.Any("item", item), zap.Error(err))
 		return nil
 	}
-	embedding0, err := toFloat32Slice(result)
-	if err != nil {
-		log.Logger().Error("failed to convert column to float32 slice",
-			zap.Any("column", result), zap.Error(err))
+	embedding0, ok := bfloats.FromAny(result)
+	if !ok {
+		log.Logger().Error("failed to convert column to BF16 slice",
+			zap.Any("column", result))
 		return nil
 	}
 	// render template
@@ -560,8 +505,9 @@ func (g *chatItemToItem) PopAll(i int) []cache.Score {
 	// search index
 	pq := heap.NewPriorityQueue(true)
 	for _, embedding := range embeddings {
-		score0 := floats.Euclidean(embedding, embedding0)
-		scores := g.index.SearchVector(embedding, g.n+1, true)
+		embeddingBF16 := bfloats.FromFloat32(embedding)
+		score0 := bfloats.Euclidean(embeddingBF16, embedding0)
+		scores := g.index.SearchVector(embeddingBF16, g.n+1, true)
 		for _, score := range scores {
 			if score.A != i {
 				pq.Push(int32(score.A), score.B*score0)
