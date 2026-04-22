@@ -343,7 +343,7 @@ func (m *Master) LoadDataFromDatabase(
 	LoadDatasetStepSecondsVec.WithLabelValues("load_users").Set(time.Since(start).Seconds())
 
 	// STEP 2: pull items
-	var items []data.Item
+	items := make([]data.Item, 0, estimatedNumItems)
 	itemLabelCount := make(map[string]int)
 	itemLabelFirst := make(map[string]int32)
 	itemLabelIndex := dataset.NewMapIndex()
@@ -530,6 +530,7 @@ func (m *Master) LoadDataFromDatabase(
 					for _, recommender := range nonPersonalizedRecommenders {
 						recommender.Push(itemGroups[i][itemGroupIndex], itemFeedback)
 					}
+					itemGroups[i][itemGroupIndex] = data.Item{ItemId: itemGroups[i][itemGroupIndex].ItemId} // release memory
 					itemFeedback = itemFeedback[:0]
 					itemFeedback = append(itemFeedback, f)
 				}
@@ -550,12 +551,14 @@ func (m *Master) LoadDataFromDatabase(
 			for _, recommender := range nonPersonalizedRecommenders {
 				recommender.Push(itemGroups[i][itemGroupIndex], itemFeedback)
 			}
+			itemGroups[i][itemGroupIndex] = data.Item{ItemId: itemGroups[i][itemGroupIndex].ItemId} // release memory
 		}
 		for index, hasFeedback := range itemHasFeedback {
 			if !hasFeedback {
 				for _, recommender := range nonPersonalizedRecommenders {
 					recommender.Push(itemGroups[i][index], nil)
 				}
+				itemGroups[i][index] = data.Item{ItemId: itemGroups[i][index].ItemId} // release memory
 			}
 		}
 		if err = <-errChan; err != nil {
