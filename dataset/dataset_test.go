@@ -22,7 +22,6 @@ import (
 	"time"
 
 	"github.com/chewxy/math32"
-	"github.com/gorse-io/gorse/common/bfloats"
 	"github.com/gorse-io/gorse/storage/data"
 	"github.com/stretchr/testify/assert"
 )
@@ -54,17 +53,7 @@ func TestDataset_AddItem(t *testing.T) {
 		},
 		Comment: "comment",
 	})
-	dataSet.AddItem(data.Item{
-		ItemId:     "3",
-		IsHidden:   false,
-		Categories: []string{"a"},
-		Timestamp:  time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
-		Labels: map[string]any{
-			"embedded": []any{1.1, 0, int32(2)},
-		},
-		Comment: "comment",
-	})
-	assert.Len(t, dataSet.GetItems(), 3)
+	assert.Len(t, dataSet.GetItems(), 2)
 	assert.Equal(t, data.Item{
 		ItemId:     "1",
 		IsHidden:   false,
@@ -72,8 +61,8 @@ func TestDataset_AddItem(t *testing.T) {
 		Timestamp:  time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
 		Labels: map[string]any{
 			"a":        1,
-			"embedded": bfloats.FromFloat32([]float32{1.1, 2.2, 3.3}),
-			"tags":     []string{"a", "b", "c"},
+			"embedded": []float32{1.1, 2.2, 3.3},
+			"tags":     []ID{0, 1, 2},
 		},
 		Comment: "comment",
 	}, dataSet.GetItems()[0])
@@ -84,22 +73,12 @@ func TestDataset_AddItem(t *testing.T) {
 		Timestamp:  time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
 		Labels: map[string]any{
 			"a":        1,
-			"embedded": bfloats.FromFloat32([]float32{1.1, 2.2, 3.3}),
-			"tags":     []string{"b", "c", "a"},
-			"topics":   []string{"a", "b", "c"},
+			"embedded": []float32{1.1, 2.2, 3.3},
+			"tags":     []ID{1, 2, 0},
+			"topics":   []ID{3, 4, 5},
 		},
 		Comment: "comment",
 	}, dataSet.GetItems()[1])
-	assert.Equal(t, data.Item{
-		ItemId:     "3",
-		IsHidden:   false,
-		Categories: []string{"a"},
-		Timestamp:  time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
-		Labels: map[string]any{
-			"embedded": bfloats.FromFloat32([]float32{1.1, 0, 2}),
-		},
-		Comment: "comment",
-	}, dataSet.GetItems()[2])
 }
 
 func TestDataset_GetItemColumnValuesIDF(t *testing.T) {
@@ -140,7 +119,7 @@ func TestDataset_AddUser(t *testing.T) {
 	assert.Len(t, dataSet.users, 1)
 	assert.Equal(t, data.User{
 		UserId:  "1",
-		Labels:  map[string]any{"a": 1, "b": "a"},
+		Labels:  map[string]any{"a": 1, "b": ID(0)},
 		Comment: "comment",
 	}, dataSet.users[0])
 }

@@ -58,19 +58,15 @@ func (suite *UserToUserTestSuite) TestTags() {
 	for i := range idf {
 		idf[i] = 1
 	}
-	tagsIndex := dataset.NewMapIndex()
 	user2user, err := newTagsUserToUser(config.UserToUserConfig{
 		Column: "user.Labels",
-	}, 10, timestamp, idf, tagsIndex)
+	}, 10, timestamp, idf)
 	suite.NoError(err)
-	for i := 1; i <= 100; i++ {
-		tagsIndex.Add("." + strconv.Itoa(i) + ":" + strconv.Itoa(i))
-	}
 
 	for i := range 100 {
 		labels := make(map[string]any)
 		for j := 1; j <= 100-i; j++ {
-			labels[strconv.Itoa(j)] = []string{strconv.Itoa(j)}
+			labels[strconv.Itoa(j)] = []dataset.ID{dataset.ID(j)}
 		}
 		user2user.Push(&data.User{
 			UserId: strconv.Itoa(i),
@@ -115,12 +111,8 @@ func (suite *UserToUserTestSuite) TestAuto() {
 	for i := range idf {
 		idf[i] = 1
 	}
-	tagsIndex := dataset.NewMapIndex()
-	user2user, err := newAutoUserToUser(config.UserToUserConfig{}, 10, timestamp, idf, tagsIndex, idf)
+	user2user, err := newAutoUserToUser(config.UserToUserConfig{}, 10, timestamp, idf, idf)
 	suite.NoError(err)
-	for i := 1; i <= 100; i++ {
-		tagsIndex.Add("." + strconv.Itoa(i) + ":" + strconv.Itoa(i))
-	}
 
 	for i := range 100 {
 		user := &data.User{UserId: strconv.Itoa(i)}
@@ -128,7 +120,7 @@ func (suite *UserToUserTestSuite) TestAuto() {
 		if i%2 == 0 {
 			labels := make(map[string]any)
 			for j := 1; j <= 100-i; j++ {
-				labels[strconv.Itoa(j)] = []string{strconv.Itoa(j)}
+				labels[strconv.Itoa(j)] = []dataset.ID{dataset.ID(j)}
 			}
 			user.Labels = labels
 		} else {

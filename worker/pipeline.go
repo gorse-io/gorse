@@ -640,9 +640,9 @@ func (c *ItemCache) GetSlice(ctx context.Context, itemIds []string) ([]*data.Ite
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	for _, item := range response {
-		item.Labels = compressLabelsEmbeddings(c.Pool, item.Labels)
-		c.Data.Store(item.ItemId, &item)
+	for i := range response {
+		response[i].Labels = compressLabelsEmbeddings(c.Pool, response[i].Labels)
+		c.Data.Store(response[i].ItemId, &response[i])
 	}
 	items := make([]*data.Item, 0, len(itemIds))
 	for _, itemId := range itemIds {

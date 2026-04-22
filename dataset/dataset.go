@@ -25,7 +25,6 @@ import (
 
 	"github.com/chewxy/math32"
 	mapset "github.com/deckarep/golang-set/v2"
-	"github.com/gorse-io/gorse/common/bfloats"
 	"github.com/gorse-io/gorse/common/util"
 	"github.com/gorse-io/gorse/model"
 	"github.com/gorse-io/gorse/storage/data"
@@ -199,14 +198,6 @@ func (d *Dataset) GetItemColumnValuesIDF() []float32 {
 	return idf
 }
 
-func (d *Dataset) GetUserColumnValuesIndex() *Index {
-	return d.userLabels.values.ToIndex()
-}
-
-func (d *Dataset) GetItemColumnValuesIndex() *Index {
-	return d.itemLabels.values.ToIndex()
-}
-
 func (d *Dataset) AddUser(user data.User) {
 	d.users = append(d.users, data.User{
 		UserId:  user.UserId,
@@ -363,13 +354,13 @@ func (d *Dataset) SplitLatest(shots int) (CFSplit, CFSplit) {
 }
 
 type Labels struct {
-	fields *strutil.GoPool
+	fields *strutil.Pool
 	values *FreqDict
 }
 
 func NewLabels() *Labels {
 	return &Labels{
-		fields: strutil.NewGoPool(),
+		fields: strutil.NewPool(),
 		values: NewFreqDict(),
 	}
 }
@@ -383,28 +374,21 @@ func (l *Labels) processLabels(labels any, parent string) any {
 		}
 		return o
 	case []any:
-		if values, ok := bfloats.FromAny(typed); ok {
-			return values
+		if isSliceOf[float64](typed) {
+			return lo.Map(typed, func(e any, _ int) float32 {
+				return float32(e.(float64))
+			})
 		} else if isSliceOf[string](typed) {
-			return lo.Map(typed, func(e any, _ int) string {
-				return l.addLabelValue(parent, e.(string))
+			return lo.Map(typed, func(e any, _ int) ID {
+				return ID(l.values.Add(parent + ":" + e.(string)))
 			})
 		}
 		return typed
-	case []string:
-		return lo.Map(typed, func(value string, _ int) string {
-			return l.addLabelValue(parent, value)
-		})
 	case string:
-		return l.addLabelValue(parent, typed)
+		return ID(l.values.Add(parent + ":" + typed))
 	default:
 		return labels
 	}
-}
-
-func (l *Labels) addLabelValue(parent, value string) string {
-	l.values.Add(parent + ":" + value)
-	return l.fields.Align(value)
 }
 
 func isSliceOf[T any](v []any) bool {

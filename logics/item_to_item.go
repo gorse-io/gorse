@@ -17,6 +17,7 @@ package logics
 import (
 	"context"
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"sync"
@@ -28,7 +29,7 @@ import (
 	"github.com/expr-lang/expr"
 	"github.com/expr-lang/expr/vm"
 	"github.com/gorse-io/gorse/common/ann"
-	"github.com/gorse-io/gorse/common/bfloats"
+	"github.com/gorse-io/gorse/common/floats"
 	"github.com/gorse-io/gorse/common/heap"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/common/parallel"
@@ -56,7 +57,6 @@ func init() {
 
 type ItemToItemOptions struct {
 	TagsIDF      []float32
-	TagsIndex    *dataset.Index
 	UsersIDF     []float32
 	OpenAIConfig config.OpenAIConfig
 }
@@ -74,20 +74,20 @@ func NewItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time, opts
 	case "embedding":
 		return newEmbeddingItemToItem(cfg, n, timestamp)
 	case "tags":
-		if opts == nil || opts.TagsIDF == nil || opts.TagsIndex == nil {
-			return nil, errors.New("tags IDF and index are required for tags item-to-item")
+		if opts == nil || opts.TagsIDF == nil {
+			return nil, errors.New("tags IDF is required for tags item-to-item")
 		}
-		return newTagsItemToItem(cfg, n, timestamp, opts.TagsIDF, opts.TagsIndex)
+		return newTagsItemToItem(cfg, n, timestamp, opts.TagsIDF)
 	case "users":
 		if opts == nil || opts.UsersIDF == nil {
 			return nil, errors.New("users IDF is required for users item-to-item")
 		}
 		return newUsersItemToItem(cfg, n, timestamp, opts.UsersIDF)
 	case "auto":
-		if opts == nil || opts.TagsIDF == nil || opts.TagsIndex == nil || opts.UsersIDF == nil {
-			return nil, errors.New("tags IDF, tags index, and users IDF are required for auto item-to-item")
+		if opts == nil || opts.TagsIDF == nil || opts.UsersIDF == nil {
+			return nil, errors.New("tags and users IDF are required for auto item-to-item")
 		}
-		return newAutoItemToItem(cfg, n, timestamp, opts.TagsIDF, opts.TagsIndex, opts.UsersIDF)
+		return newAutoItemToItem(cfg, n, timestamp, opts.TagsIDF, opts.UsersIDF)
 	case "chat":
 		if opts == nil || opts.OpenAIConfig.BaseURL == "" || opts.OpenAIConfig.AuthToken == "" {
 			return nil, errors.New("OpenAI config is required for chat item-to-item")
@@ -169,7 +169,7 @@ func (b *baseItemToItem[T]) PopAll(i int) []cache.Score {
 }
 
 type embeddingItemToItem struct {
-	baseItemToItem[[]uint16]
+	baseItemToItem[[]float32]
 	dimension int
 }
 
@@ -181,12 +181,12 @@ func newEmbeddingItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.T
 	if err != nil {
 		return nil, err
 	}
-	return &embeddingItemToItem{baseItemToItem: baseItemToItem[[]uint16]{
+	return &embeddingItemToItem{baseItemToItem: baseItemToItem[[]float32]{
 		name:       cfg.Name,
 		n:          n,
 		timestamp:  timestamp,
 		columnFunc: columnFunc,
-		index:      ann.NewHNSW(bfloats.Euclidean),
+		index:      ann.NewHNSW(floats.Euclidean),
 	}}, nil
 }
 
@@ -200,11 +200,11 @@ func (e *embeddingItemToItem) Push(item *data.Item, _ []int32) {
 			zap.Any("item", item), zap.Error(err))
 		return
 	}
-	// Convert column to BF16 vector
-	v, ok := bfloats.FromAny(result)
-	if !ok {
-		log.Logger().Error("failed to convert column to BF16 slice",
-			zap.Any("column", result))
+	// Convert column to []float32
+	v, err := toFloat32Slice(result)
+	if err != nil {
+		log.Logger().Error("failed to convert column to float32 slice",
+			zap.Any("column", result), zap.Error(err))
 		return
 	}
 	// Check dimension
@@ -220,13 +220,66 @@ func (e *embeddingItemToItem) Push(item *data.Item, _ []int32) {
 	e.pushItem(item, v)
 }
 
+// toFloat32Slice converts an any to []float32, handling mixed numeric types
+// that may occur when reading from MongoDB (e.g., 0 stored as int instead of float32)
+func toFloat32Slice(v any) ([]float32, error) {
+	switch val := v.(type) {
+	case []float32:
+		return val, nil
+	case []float64:
+		result := make([]float32, len(val))
+		for i, e := range val {
+			result[i] = float32(e)
+		}
+		return result, nil
+	case []int:
+		result := make([]float32, len(val))
+		for i, e := range val {
+			result[i] = float32(e)
+		}
+		return result, nil
+	case []int32:
+		result := make([]float32, len(val))
+		for i, e := range val {
+			result[i] = float32(e)
+		}
+		return result, nil
+	case []int64:
+		result := make([]float32, len(val))
+		for i, e := range val {
+			result[i] = float32(e)
+		}
+		return result, nil
+	case []any:
+		result := make([]float32, len(val))
+		for i, elem := range val {
+			switch e := elem.(type) {
+			case float32:
+				result[i] = e
+			case float64:
+				result[i] = float32(e)
+			case int:
+				result[i] = float32(e)
+			case int32:
+				result[i] = float32(e)
+			case int64:
+				result[i] = float32(e)
+			default:
+				return nil, fmt.Errorf("invalid element type %T in slice", e)
+			}
+		}
+		return result, nil
+	default:
+		return nil, fmt.Errorf("invalid column type %T", v)
+	}
+}
+
 type tagsItemToItem struct {
 	baseItemToItem[[]dataset.ID]
 	IDF[dataset.ID]
-	tagsIndex *dataset.Index
 }
 
-func newTagsItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time, idf []float32, tagsIndex *dataset.Index) (ItemToItem, error) {
+func newTagsItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time, idf []float32) (ItemToItem, error) {
 	// Compile column expression
 	columnFunc, err := expr.Compile(cfg.Column, expr.Env(map[string]any{
 		"item": data.Item{},
@@ -234,7 +287,7 @@ func newTagsItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time, 
 	if err != nil {
 		return nil, err
 	}
-	t := &tagsItemToItem{IDF: idf, tagsIndex: tagsIndex}
+	t := &tagsItemToItem{IDF: idf}
 	t.baseItemToItem = baseItemToItem[[]dataset.ID]{
 		name:       cfg.Name,
 		n:          n,
@@ -246,12 +299,9 @@ func newTagsItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time, 
 }
 
 func (t *tagsItemToItem) Push(item *data.Item, _ []int32) {
-	itemForExpr := *item
-	itemForExpr.Labels = convertLabelsToID(item.Labels, t.tagsIndex, "")
-
 	// Evaluate filter function
 	result, err := expr.Run(t.columnFunc, map[string]any{
-		"item": itemForExpr,
+		"item": item,
 	})
 	if err != nil {
 		log.Logger().Error("failed to evaluate column expression",
@@ -293,16 +343,14 @@ func (u *usersItemToItem) Push(item *data.Item, feedback []int32) {
 
 type autoItemToItem struct {
 	baseItemToItem[lo.Tuple2[[]dataset.ID, []int32]]
-	tIDF      IDF[dataset.ID]
-	tagsIndex *dataset.Index
-	uIDF      IDF[int32]
+	tIDF IDF[dataset.ID]
+	uIDF IDF[int32]
 }
 
-func newAutoItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time, tIDF []float32, tagsIndex *dataset.Index, uIDF []float32) (ItemToItem, error) {
+func newAutoItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time, tIDF, uIDF []float32) (ItemToItem, error) {
 	a := &autoItemToItem{
-		tIDF:      tIDF,
-		tagsIndex: tagsIndex,
-		uIDF:      uIDF,
+		tIDF: tIDF,
+		uIDF: uIDF,
 	}
 	a.baseItemToItem = baseItemToItem[lo.Tuple2[[]dataset.ID, []int32]]{
 		name:      cfg.Name,
@@ -316,7 +364,7 @@ func newAutoItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time, 
 func (a *autoItemToItem) Push(item *data.Item, feedback []int32) {
 	// Extract tags
 	tSet := mapset.NewSet[dataset.ID]()
-	flatten(convertLabelsToID(item.Labels, a.tagsIndex, ""), tSet)
+	flatten(item.Labels, tSet)
 	v := tSet.ToSlice()
 	slices.Sort(v)
 	// Sort feedback
@@ -370,62 +418,6 @@ func (idf IDF[T]) weightedSum(a []T) float32 {
 		sum += idf[i]
 	}
 	return sum
-}
-
-func convertLabelsToID(labels any, tagsIndex *dataset.Index, parent string) any {
-	if labels == nil || tagsIndex == nil {
-		return labels
-	}
-	switch typed := labels.(type) {
-	case map[string]any:
-		result := make(map[string]any, len(typed))
-		for key, value := range typed {
-			result[key] = convertLabelsToID(value, tagsIndex, parent+"."+key)
-		}
-		return result
-	case []string:
-		result := make([]dataset.ID, 0, len(typed))
-		for _, value := range typed {
-			if id := tagsIndex.ToNumber(parent + ":" + value); id != dataset.NotId {
-				result = append(result, dataset.ID(id))
-			}
-		}
-		return result
-	case []any:
-		if values, ok := bfloats.FromAny(typed); ok {
-			return values
-		}
-		if isStringSlice(typed) {
-			result := make([]dataset.ID, 0, len(typed))
-			for _, value := range typed {
-				if id := tagsIndex.ToNumber(parent + ":" + value.(string)); id != dataset.NotId {
-					result = append(result, dataset.ID(id))
-				}
-			}
-			return result
-		}
-		result := make([]any, len(typed))
-		for i, value := range typed {
-			result[i] = convertLabelsToID(value, tagsIndex, parent)
-		}
-		return result
-	case string:
-		if id := tagsIndex.ToNumber(parent + ":" + typed); id != dataset.NotId {
-			return dataset.ID(id)
-		}
-		return typed
-	default:
-		return labels
-	}
-}
-
-func isStringSlice(values []any) bool {
-	for _, value := range values {
-		if _, ok := value.(string); !ok {
-			return false
-		}
-	}
-	return true
 }
 
 func flatten(o any, tSet mapset.Set[dataset.ID]) {
@@ -489,10 +481,10 @@ func (g *chatItemToItem) PopAll(i int) []cache.Score {
 			zap.Any("item", item), zap.Error(err))
 		return nil
 	}
-	embedding0, ok := bfloats.FromAny(result)
-	if !ok {
-		log.Logger().Error("failed to convert column to BF16 slice",
-			zap.Any("column", result))
+	embedding0, err := toFloat32Slice(result)
+	if err != nil {
+		log.Logger().Error("failed to convert column to float32 slice",
+			zap.Any("column", result), zap.Error(err))
 		return nil
 	}
 	// render template
@@ -568,9 +560,8 @@ func (g *chatItemToItem) PopAll(i int) []cache.Score {
 	// search index
 	pq := heap.NewPriorityQueue(true)
 	for _, embedding := range embeddings {
-		embeddingBF16 := bfloats.FromFloat32(embedding)
-		score0 := bfloats.Euclidean(embeddingBF16, embedding0)
-		scores := g.index.SearchVector(embeddingBF16, g.n+1, true)
+		score0 := floats.Euclidean(embedding, embedding0)
+		scores := g.index.SearchVector(embedding, g.n+1, true)
 		for _, score := range scores {
 			if score.A != i {
 				pq.Push(int32(score.A), score.B*score0)
