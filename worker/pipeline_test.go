@@ -21,6 +21,7 @@ import (
 	"github.com/gorse-io/gorse/storage/data"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
+	"modernc.org/strutil"
 )
 
 type PipelineTestSuite struct {
@@ -70,30 +71,51 @@ func TestPipeline(t *testing.T) {
 }
 
 func TestCompressLabelsEmbeddings(t *testing.T) {
+	pool := strutil.NewGoPool()
+
 	// Test nil input
-	assert.Nil(t, compressLabelsEmbeddings(nil))
+	assert.Nil(t, compressLabelsEmbeddings(pool, nil))
+
+	// Test direct string input
+	inputString := "tag"
+	outputString := compressLabelsEmbeddings(pool, inputString)
+	assert.IsType(t, "", outputString)
+	assert.Equal(t, inputString, outputString)
+
+	// Test map input preserves keys and values after compression/alignment
+	inputMap := map[string]any{
+		"category": "books",
+		"score":    1.0,
+	}
+	outputMap := compressLabelsEmbeddings(pool, inputMap)
+	assert.IsType(t, map[string]any{}, outputMap)
+	compressedMap := outputMap.(map[string]any)
+	assert.Contains(t, compressedMap, "category")
+	assert.Contains(t, compressedMap, "score")
+	assert.Equal(t, "books", compressedMap["category"])
+	assert.Equal(t, 1.0, compressedMap["score"])
 
 	// Test embedding vector as []any
 	input := []any{1.0, 2.0, 3.0}
-	output := compressLabelsEmbeddings(input)
+	output := compressLabelsEmbeddings(pool, input)
 	assert.IsType(t, []uint16{}, output)
 	assert.Len(t, output.([]uint16), 3)
 
 	// Test embedding vector as []float32
 	input32 := []float32{1.0, 2.0, 3.0}
-	output32 := compressLabelsEmbeddings(input32)
+	output32 := compressLabelsEmbeddings(pool, input32)
 	assert.IsType(t, []uint16{}, output32)
 	assert.Len(t, output32.([]uint16), 3)
 
 	// Test embedding vector as []float64
 	input64 := []float64{1.0, 2.0, 3.0}
-	output64 := compressLabelsEmbeddings(input64)
+	output64 := compressLabelsEmbeddings(pool, input64)
 	assert.IsType(t, []uint16{}, output64)
 	assert.Len(t, output64.([]uint16), 3)
 
 	// Test already compressed []uint16
 	inputU16 := []uint16{0x3f80, 0x4000, 0x4040}
-	outputU16 := compressLabelsEmbeddings(inputU16)
+	outputU16 := compressLabelsEmbeddings(pool, inputU16)
 	assert.Equal(t, inputU16, outputU16)
 
 	// Test map with embedding
@@ -101,7 +123,7 @@ func TestCompressLabelsEmbeddings(t *testing.T) {
 		"title":     "test item",
 		"embedding": []any{1.0, 2.0, 3.0},
 	}
-	mapOutput := compressLabelsEmbeddings(mapInput)
+	mapOutput := compressLabelsEmbeddings(pool, mapInput)
 	assert.IsType(t, []uint16{}, mapOutput.(map[string]any)["embedding"])
 	assert.Equal(t, "test item", mapOutput.(map[string]any)["title"])
 
@@ -111,12 +133,12 @@ func TestCompressLabelsEmbeddings(t *testing.T) {
 			"embedding": []float32{1.0, 2.0},
 		},
 	}
-	nestedOutput := compressLabelsEmbeddings(nestedInput)
+	nestedOutput := compressLabelsEmbeddings(pool, nestedInput)
 	assert.IsType(t, []uint16{}, nestedOutput.(map[string]any)["features"].(map[string]any)["embedding"])
 
 	// Test non-embedding []any (strings)
 	strSlice := []any{"tag1", "tag2"}
-	strOutput := compressLabelsEmbeddings(strSlice)
+	strOutput := compressLabelsEmbeddings(pool, strSlice)
 	assert.IsType(t, []any{}, strOutput)
 	assert.Equal(t, strSlice, strOutput)
 }

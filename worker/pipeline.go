@@ -36,11 +36,12 @@ import (
 	"github.com/samber/lo"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
+	"modernc.org/strutil"
 )
 
 // compressLabelsEmbeddings recursively processes Labels and compresses embedding vectors to BF16.
 // This saves memory when storing items in ItemCache.
-func compressLabelsEmbeddings(labels any) any {
+func compressLabelsEmbeddings(pool *strutil.GoPool, labels any) any {
 	if labels == nil {
 		return nil
 	}
@@ -48,7 +49,7 @@ func compressLabelsEmbeddings(labels any) any {
 	case map[string]any:
 		result := make(map[string]any, len(typed))
 		for k, v := range typed {
-			result[k] = compressLabelsEmbeddings(v)
+			result[pool.Align(k)] = compressLabelsEmbeddings(pool, v)
 		}
 		return result
 	case []any:
@@ -59,7 +60,7 @@ func compressLabelsEmbeddings(labels any) any {
 		// Otherwise recursively process each element
 		result := make([]any, len(typed))
 		for i, v := range typed {
-			result[i] = compressLabelsEmbeddings(v)
+			result[i] = compressLabelsEmbeddings(pool, v)
 		}
 		return result
 	case []float32:
@@ -68,6 +69,8 @@ func compressLabelsEmbeddings(labels any) any {
 		return bfloats.FromFloat32(lo.Map(typed, func(f float64, _ int) float32 { return float32(f) }))
 	case []uint16:
 		return typed // Already BF16
+	case string:
+		return pool.Align(typed)
 	default:
 		return labels
 	}
@@ -614,6 +617,7 @@ func (p *Pipeline) applyReplacementDecay(
 type ItemCache struct {
 	Client data.Database
 	Data   sync.Map
+	Pool   *strutil.GoPool
 }
 
 // NewItemCache creates a new ItemCache.
@@ -621,6 +625,7 @@ func NewItemCache(client data.Database) *ItemCache {
 	return &ItemCache{
 		Client: client,
 		Data:   sync.Map{},
+		Pool:   strutil.NewGoPool(),
 	}
 }
 
@@ -635,9 +640,9 @@ func (c *ItemCache) GetSlice(ctx context.Context, itemIds []string) ([]*data.Ite
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	for _, item := range response {
-		item.Labels = compressLabelsEmbeddings(item.Labels)
-		c.Data.Store(item.ItemId, &item)
+	for i := range response {
+		response[i].Labels = compressLabelsEmbeddings(c.Pool, response[i].Labels)
+		c.Data.Store(response[i].ItemId, &response[i])
 	}
 	items := make([]*data.Item, 0, len(itemIds))
 	for _, itemId := range itemIds {
