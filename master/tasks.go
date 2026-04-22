@@ -343,7 +343,7 @@ func (m *Master) LoadDataFromDatabase(
 	LoadDatasetStepSecondsVec.WithLabelValues("load_users").Set(time.Since(start).Seconds())
 
 	// STEP 2: pull items
-	var itemIds []string
+	itemIds := make([]string, 0, estimatedNumItems)
 	itemLabelCount := make(map[string]int)
 	itemLabelFirst := make(map[string]int32)
 	itemLabelIndex := dataset.NewMapIndex()
