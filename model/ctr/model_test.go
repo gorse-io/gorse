@@ -18,7 +18,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/gorse-io/gorse/common/floats"
+	"github.com/gorse-io/gorse/common/bfloats"
 	"github.com/gorse-io/gorse/dataset"
 	"github.com/gorse-io/gorse/model"
 	"github.com/samber/lo"
@@ -150,8 +150,8 @@ func newSynthesisDataset() *Dataset {
 	dataSet.ItemEmbeddingIndex.Add("e2")
 	dataSet.ItemEmbeddingDimension = []int{3, 4}
 	dataSet.ItemEmbeddings = [][][]uint16{
-		{floats.ToBF16([]float32{0.8, 0.8, 0.8}), floats.ToBF16([]float32{0.1, 0.1, 0.1, 0.1})},
-		{floats.ToBF16([]float32{-0.8, -0.8, -0.8}), floats.ToBF16([]float32{-0.1, -0.1, -0.1, -0.1})},
+		{bfloats.FromFloat32([]float32{0.8, 0.8, 0.8}), bfloats.FromFloat32([]float32{0.1, 0.1, 0.1, 0.1})},
+		{bfloats.FromFloat32([]float32{-0.8, -0.8, -0.8}), bfloats.FromFloat32([]float32{-0.1, -0.1, -0.1, -0.1})},
 	}
 
 	dataSet.Users = []int32{0, 0, 1, 1}

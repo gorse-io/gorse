@@ -273,7 +273,7 @@ func (fm *AFM) BatchInternalPredict(x []lo.Tuple2[[]int32, []float32], e [][][]u
 			}
 			for j := range fm.embeddingDim {
 				if len(e[start+i]) > j && len(e[start+i][j]) == fm.embeddingDim[j] {
-					copy(additionalData[j][i*fm.embeddingDim[j]:], floats.FromBF16(e[start+i][j]))
+					copy(additionalData[j][i*fm.embeddingDim[j]:], bfloats.ToFloat32(e[start+i][j]))
 				}
 			}
 		}
@@ -449,7 +449,7 @@ func (d *ctrDataset) Yield() (spec any, inputs []*tensors.Tensor, labels []*tens
 		}
 		for j := range d.embeddingDim {
 			if len(embeddings) > j && len(embeddings[j]) == d.embeddingDim[j] {
-				copy(additionalData[j][i*d.embeddingDim[j]:], floats.FromBF16(embeddings[j]))
+				copy(additionalData[j][i*d.embeddingDim[j]:], bfloats.ToFloat32(embeddings[j]))
 			}
 		}
 		// Convert target from {-1, 1} to {0, 1} for GoMLX BinaryCrossentropy

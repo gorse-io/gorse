@@ -19,7 +19,6 @@ import (
 	"testing"
 
 	"github.com/gorse-io/gorse/common/bfloats"
-	"github.com/gorse-io/gorse/common/floats"
 	"github.com/gorse-io/gorse/dataset"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
@@ -136,7 +135,7 @@ func TestDataset_Split(t *testing.T) {
 			{A: int32(3*i + 2), B: 1},
 		})
 		dataSet.ItemEmbeddings = append(dataSet.ItemEmbeddings, [][]uint16{
-			floats.ToBF16([]float32{float32(i), float32(i) + 0.1, float32(i) + 0.2}),
+			bfloats.FromFloat32([]float32{float32(i), float32(i) + 0.1, float32(i) + 0.2}),
 		})
 	}
 	for i := range numUsers {
@@ -175,7 +174,7 @@ func TestDataset_Split(t *testing.T) {
 		dataSet.Index.CountUsers() + dataSet.Index.CountItems() + dataSet.Index.CountUserLabels() + 8,
 		0,
 	}, features)
-	assert.InDeltaSlice(t, []float32{2, 2.09375, 2.1875}, floats.FromBF16(embeddings[0]), 0.001)
+	assert.InDeltaSlice(t, []float32{2, 2.09375, 2.1875}, bfloats.ToFloat32(embeddings[0]), 0.001)
 	assert.Equal(t, []float32{1, 1, 1, 1, 1, 1, 1, 0.5}, values)
 	assert.Equal(t, float32(-1), target)
 
