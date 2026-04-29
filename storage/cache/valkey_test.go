@@ -38,7 +38,7 @@ func init() {
 		}
 		return defaultValue
 	}
-	valkeyDSN = env("VALKEY_URI", "valkey://127.0.0.1:6379/")
+	valkeyDSN = env("VALKEY_URI", "valkey://127.0.0.1:6380/")
 }
 
 type ValkeyTestSuite struct {

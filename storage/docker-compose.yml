@@ -5,6 +5,14 @@ services:
     ports:
       - 6379:6379
 
+  # Valkey with valkey-search 1.2.0+ (full-text search support).
+  # Bundle 'unstable' is the only published tag with search >= 1.2.
+  # Switch to a stable tag (e.g. 9.1) once it is released.
+  valkey:
+    image: valkey/valkey-bundle:unstable
+    ports:
+      - 6380:6379
+
   mysql:
     image: mysql:8.0
     ports:
