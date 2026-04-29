@@ -42,16 +42,17 @@ func init() {
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
-		cfg := &glideconfig.ClientConfiguration{
-			Addresses: []glideconfig.NodeAddress{addr},
-		}
+		cfg := glideconfig.NewClientConfiguration().
+			WithAddress(&addr)
 		if password != "" {
-			cfg.Credentials = &glideconfig.ServerCredentials{Password: password}
+			cfg.WithCredentials(glideconfig.NewServerCredentialsWithDefaultUsername(password))
 		}
 		if db > 0 {
-			cfg.DatabaseId = db
+			cfg.WithDatabaseId(db)
 		}
-		cfg.UseTLS = useTLS
+		if useTLS {
+			cfg.WithUseTLS(true)
+		}
 		client, err := glide.NewClient(cfg)
 		if err != nil {
 			return nil, errors.Trace(err)
@@ -69,20 +70,23 @@ func init() {
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
-		cfg := &glideconfig.ClusterClientConfiguration{
-			Addresses: addresses,
+		cfg := glideconfig.NewClusterClientConfiguration()
+		for i := range addresses {
+			cfg.WithAddress(&addresses[i])
 		}
 		if password != "" {
-			cfg.Credentials = &glideconfig.ServerCredentials{Password: password}
+			cfg.WithCredentials(glideconfig.NewServerCredentialsWithDefaultUsername(password))
 		}
-		cfg.UseTLS = useTLS
+		if useTLS {
+			cfg.WithUseTLS(true)
+		}
 		client, err := glide.NewClusterClient(cfg)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
 		database := &Valkey{
-			clusterClient: client,
-			isCluster:     true,
+			clusterClient:    client,
+			isCluster:        true,
 			maxSearchResults: storage.NewOptions(opts...).MaxSearchResults,
 		}
 		database.TablePrefix = storage.TablePrefix(tablePrefix)
@@ -324,20 +328,18 @@ func (v *Valkey) Purge() error {
 
 // Set stores values in Valkey.
 func (v *Valkey) Set(ctx context.Context, values ...Value) error {
-	if v.isCluster {
-		for _, val := range values {
-			if _, err := v.clusterClient.Set(ctx, v.Key(val.name), val.value); err != nil {
-				return errors.Trace(err)
-			}
-		}
-		return nil
-	}
-	batch := pipeline.NewStandaloneBatch(false)
 	for _, val := range values {
-		batch.Set(v.Key(val.name), val.value)
+		var err error
+		if v.isCluster {
+			_, err = v.clusterClient.Set(ctx, v.Key(val.name), val.value)
+		} else {
+			_, err = v.standaloneClient.Set(ctx, v.Key(val.name), val.value)
+		}
+		if err != nil {
+			return errors.Trace(err)
+		}
 	}
-	_, err := v.standaloneClient.Exec(ctx, *batch, true)
-	return errors.Trace(err)
+	return nil
 }
 
 // Get returns a value from Valkey.
@@ -463,20 +465,38 @@ func (v *Valkey) SearchScores(ctx context.Context, collection, subset string, qu
 	for _, q := range query {
 		fmt.Fprintf(&builder, " @categories:{ %s }", escape(encodeCategory(q)))
 	}
-	limit := 10000
+	// Fetch enough results to cover the requested range.
+	// We request from offset 0 because the Glide map format loses ordering,
+	// and we sort + slice in Go.
+	fetchLimit := 10000
 	if end != -1 {
-		limit = end - begin
+		fetchLimit = end
 	}
 	args := []string{
 		"FT.SEARCH", v.DocumentTable(), builder.String(),
 		"SORTBY", "score", "DESC",
-		"LIMIT", strconv.Itoa(begin), strconv.Itoa(limit),
+		"LIMIT", "0", strconv.Itoa(fetchLimit),
 	}
 	result, err := v.customCommand(ctx, args)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	return parseFTSearchResult(result)
+	documents, err := parseFTSearchResult(result)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	// Apply begin/end slicing since Glide map format loses server-side ordering.
+	if begin > 0 || end != -1 {
+		if begin >= len(documents) {
+			return []Score{}, nil
+		}
+		endIdx := len(documents)
+		if end != -1 && end < endIdx {
+			endIdx = end
+		}
+		documents = documents[begin:endIdx]
+	}
+	return documents, nil
 }
 
 // UpdateScores updates score documents matching the query.
@@ -511,6 +531,20 @@ func (v *Valkey) UpdateScores(ctx context.Context, collections []string, subset 
 		result, err := v.customCommand(ctx, args)
 		if err != nil {
 			return errors.Trace(err)
+		}
+		// On the first page, check the total and fetch all at once if needed.
+		// This avoids pagination issues with tied scores where the server
+		// may return duplicates across pages.
+		if offset == 0 {
+			total := parseFTSearchTotal(result)
+			if total > limit {
+				// Re-fetch with the full count to avoid pagination drift.
+				args[len(args)-1] = strconv.Itoa(total)
+				result, err = v.customCommand(ctx, args)
+				if err != nil {
+					return errors.Trace(err)
+				}
+			}
 		}
 		docKeys := parseFTSearchKeys(result)
 		if len(docKeys) == 0 {
@@ -790,9 +824,9 @@ func (v *Valkey) GetTimeSeriesPoints(ctx context.Context, name string, begin, en
 		durationMs = 1
 	}
 	type bucket struct {
-		bucketMs    int64
-		lastTsMs    int64
-		lastValue   float64
+		bucketMs  int64
+		lastTsMs  int64
+		lastValue float64
 	}
 	buckets := make(map[int64]*bucket)
 	for _, tv := range tsValues {
@@ -844,6 +878,7 @@ func parseStringSlice(result any) []string {
 }
 
 // parseFTSearchTotal extracts the total count from an FT.SEARCH result.
+// Valkey Glide returns: [int64_total, map[string]interface{}{docKey: map[string]interface{}{fields...}, ...}]
 func parseFTSearchTotal(result any) int {
 	if result == nil {
 		return 0
@@ -863,7 +898,7 @@ func parseFTSearchTotal(result any) int {
 }
 
 // parseFTSearchKeys extracts document keys from an FT.SEARCH result.
-// FT.SEARCH returns: [total, key1, [field, value, ...], key2, [field, value, ...], ...]
+// Valkey Glide returns: [int64_total, map[string]interface{}{docKey: fieldsMap, ...}]
 func parseFTSearchKeys(result any) []string {
 	if result == nil {
 		return nil
@@ -872,8 +907,16 @@ func parseFTSearchKeys(result any) []string {
 	if !ok || len(arr) < 2 {
 		return nil
 	}
+	// Glide format: arr[1] is a map[string]interface{} where keys are doc keys.
+	if docMap, ok := arr[1].(map[string]any); ok {
+		keys := make([]string, 0, len(docMap))
+		for key := range docMap {
+			keys = append(keys, key)
+		}
+		return keys
+	}
+	// Fallback: flat array format [total, key1, [fields...], key2, [fields...], ...]
 	var keys []string
-	// Skip index 0 (total), then every other element starting at 1 is a key.
 	for i := 1; i < len(arr); i += 2 {
 		if key, ok := arr[i].(string); ok {
 			keys = append(keys, key)
@@ -883,7 +926,7 @@ func parseFTSearchKeys(result any) []string {
 }
 
 // parseFTSearchResult parses an FT.SEARCH result into Score documents.
-// FT.SEARCH returns: [total, key1, [field, value, ...], key2, [field, value, ...], ...]
+// Valkey Glide returns: [int64_total, map[string]interface{}{docKey: map[string]interface{}{fields...}, ...}]
 func parseFTSearchResult(result any) ([]Score, error) {
 	if result == nil {
 		return nil, nil
@@ -892,6 +935,14 @@ func parseFTSearchResult(result any) ([]Score, error) {
 	if !ok || len(arr) < 2 {
 		return nil, nil
 	}
+
+	// Glide format: arr[1] is a map[string]interface{} where keys are doc keys
+	// and values are maps of field name → field value.
+	if docMap, ok := arr[1].(map[string]any); ok {
+		return parseFTSearchResultFromMap(docMap)
+	}
+
+	// Fallback: flat array format [total, key1, [fields...], key2, [fields...], ...]
 	documents := make([]Score, 0)
 	for i := 1; i < len(arr); i += 2 {
 		if i+1 >= len(arr) {
@@ -901,31 +952,63 @@ func parseFTSearchResult(result any) ([]Score, error) {
 		if fields == nil {
 			continue
 		}
-		var doc Score
-		doc.Id = fields["id"]
-		score, err := strconv.ParseFloat(fields["score"], 64)
+		doc, err := scoreFromFieldMap(fields)
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, err
 		}
-		doc.Score = score
-		isHidden, err := strconv.ParseInt(fields["is_hidden"], 10, 64)
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
-		doc.IsHidden = isHidden != 0
-		categories, err := decodeCategories(fields["categories"])
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
-		doc.Categories = categories
-		timestamp, err := strconv.ParseInt(fields["timestamp"], 10, 64)
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
-		doc.Timestamp = time.UnixMicro(timestamp).In(time.UTC)
 		documents = append(documents, doc)
 	}
 	return documents, nil
+}
+
+// parseFTSearchResultFromMap parses the Glide map format into Score documents.
+// The map has doc keys as keys and field maps as values.
+// We need to sort by score DESC to match the SORTBY in the query.
+func parseFTSearchResultFromMap(docMap map[string]any) ([]Score, error) {
+	documents := make([]Score, 0, len(docMap))
+	for _, docValue := range docMap {
+		fields := parseFieldMap(docValue)
+		if fields == nil {
+			continue
+		}
+		doc, err := scoreFromFieldMap(fields)
+		if err != nil {
+			return nil, err
+		}
+		documents = append(documents, doc)
+	}
+	// Sort by score descending to match the FT.SEARCH SORTBY score DESC.
+	sort.Slice(documents, func(i, j int) bool {
+		return documents[i].Score > documents[j].Score
+	})
+	return documents, nil
+}
+
+// scoreFromFieldMap converts a field map into a Score struct.
+func scoreFromFieldMap(fields map[string]string) (Score, error) {
+	var doc Score
+	doc.Id = fields["id"]
+	score, err := strconv.ParseFloat(fields["score"], 64)
+	if err != nil {
+		return doc, errors.Trace(err)
+	}
+	doc.Score = score
+	isHidden, err := strconv.ParseInt(fields["is_hidden"], 10, 64)
+	if err != nil {
+		return doc, errors.Trace(err)
+	}
+	doc.IsHidden = isHidden != 0
+	categories, err := decodeCategories(fields["categories"])
+	if err != nil {
+		return doc, errors.Trace(err)
+	}
+	doc.Categories = categories
+	timestamp, err := strconv.ParseInt(fields["timestamp"], 10, 64)
+	if err != nil {
+		return doc, errors.Trace(err)
+	}
+	doc.Timestamp = time.UnixMicro(timestamp).In(time.UTC)
+	return doc, nil
 }
 
 // parseFieldMap converts a field array from FT.SEARCH into a map.
@@ -948,9 +1031,7 @@ func parseFieldMap(v any) map[string]string {
 	case map[string]any:
 		m := make(map[string]string)
 		for k, val := range fields {
-			if s, ok := val.(string); ok {
-				m[k] = s
-			}
+			m[k] = fmt.Sprint(val)
 		}
 		return m
 	case map[string]string:
