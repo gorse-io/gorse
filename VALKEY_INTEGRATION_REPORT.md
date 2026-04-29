@@ -281,7 +281,7 @@ client, err := glide.NewClusterClient(&config.ClusterClientConfiguration{
 | 6 | Implement Valkey cache backend — score/document operations | Implement `AddScores()`, `SearchScores()`, `UpdateScores()`, `DeleteScores()`, `ScanScores()` using valkey-search FT.* commands via CustomCommand. | 6h | ✅ Done |
 | 7 | Implement Valkey cache backend — time series operations | Implement `AddTimeSeriesPoints()` using sorted set + hash with pipeline batching. Implement `GetTimeSeriesPoints()` with ZRANGEBYSCORE range fetch and Go-side bucket aggregation (Approach A). | 4h | ✅ Done |
 | 8 | Create Valkey cache test suite | Create `storage/cache/valkey_test.go`. Embed `baseTestSuite` and run all existing cache interface tests against a Valkey instance. Use `VALKEY_URI` environment variable. | 4h | ✅ Done |
-| 9 | Performance benchmarks — time series | Create benchmarks comparing Valkey time series (sorted set + Go aggregation) vs Redis TimeSeries for ingestion throughput, range query latency, and aggregation performance. Document results and gaps. | 3h | To Do |
+| 9 | Performance benchmarks — time series | Create benchmarks comparing Valkey time series (sorted set + Go aggregation) vs Redis TimeSeries for ingestion throughput, range query latency, and aggregation performance. Document results and gaps. | 3h | ✅ Done |
 | 10 | Documentation and PR preparation | Update README or contributing docs if needed. Final code review, cleanup, and PR submission to gorse-io/gorse. | 2h | To Do |
 
 **Total estimate: ~33 hours (~4 working days)**
@@ -293,113 +293,98 @@ client, err := glide.NewClusterClient(&config.ClusterClientConfiguration{
 
 ---
 
-## 7. Performance Benchmark Plan — Time Series: Valkey vs Redis
+## 7. Performance Benchmark Results — Time Series: Valkey vs Redis
 
-### 7.1 Goal
+### 7.1 Test Environment
 
-Compare the performance of Valkey's time series implementation (sorted set + hash with Go-side aggregation) against Redis TimeSeries (native TS.ADD / TS.RANGE with server-side aggregation). The benchmarks should answer: is the Valkey approach fast enough for Gorse's workload, and where are the gaps?
+- **CPU**: Intel Core i7-9750H @ 2.60GHz (12 threads)
+- **OS**: macOS (darwin/amd64)
+- **Go**: 1.26.1
+- **Redis**: redis/redis-stack:latest (port 6379) — uses Redis TimeSeries module
+- **Valkey**: valkey/valkey-bundle:unstable (port 6380) — uses sorted set + hash with Go-side aggregation
+- **Benchmark tool**: Go `testing.B` with `-benchtime 10s`
+- **Runs**: 3 independent runs per backend, plus 1 side-by-side run
 
-### 7.2 What We're Comparing
+### 7.2 What Was Compared
 
 | | Redis | Valkey |
 |---|---|---|
-| **Ingestion** | `TS.ADD` (single native command) | `ZADD` + `HSET` (two commands, pipelined) |
+| **Ingestion** | `TS.ADD` (single native command, pipelined) | `ZADD` + `HSET` (two commands, pipelined) |
 | **Range query** | `TS.RANGE` with server-side `LAST` aggregation | `ZRANGEBYSCORE` + `HMGET` + Go-side bucketing |
 | **Duplicate handling** | `DUPLICATE_POLICY LAST` (server-side) | `ZADD` overwrites score, `HSET` overwrites field (natural last-write-wins) |
 
-### 7.3 Benchmark Scenarios
+### 7.3 Results (side-by-side run)
 
-All benchmarks use Go's `testing.B` framework and run against both Redis (port 6379) and Valkey (port 6380) from the same test file. Each scenario is a separate `b.Run` sub-benchmark.
+| Benchmark | Description | Redis (ns/op) | Valkey (ns/op) | Ratio |
+|---|---|---|---|---|
+| **TSIngestSingle** | 1 point per call | 361,638 | 367,864 | **1.02x** |
+| **TSIngestBatch** | 100 points per call | 3,827,686 | 1,236,382 | **0.32x** ✅ |
+| **TSQuerySmallRange** | 60s window, 1s buckets, 10K pts loaded | 399,321 | 927,515 | **2.3x** |
+| **TSQueryLargeRange** | Full range, 60s buckets, 10K pts loaded | 531,244 | 29,022,625 | **54.6x** |
+| **TSQueryWideRange** | Full range, 1h buckets, 100K pts loaded | 1,346,747 | 332,029,964 | **246.6x** |
 
-**Scenario 1: Ingestion throughput — single point**
-- Insert one point per iteration (`b.N` iterations)
-- Measures: ops/sec for single-point writes
-- Simulates real-time metric ingestion (one metric update at a time)
+### 7.4 Results (averaged across 3 independent runs)
 
-**Scenario 2: Ingestion throughput — batch**
-- Insert 100 points per iteration in a single call
-- Measures: ops/sec for batch writes, points/sec throughput
-- Simulates bulk metric loading (e.g., after model training completes)
+| Benchmark | Redis avg (ns/op) | Valkey avg (ns/op) | Ratio |
+|---|---|---|---|
+| **TSIngestSingle** | 361,138 | 381,977 | **1.06x** |
+| **TSIngestBatch** | 3,796,799 | 1,214,417 | **0.32x** ✅ |
+| **TSQuerySmallRange** | 394,036 | 910,520 | **2.3x** |
+| **TSQueryLargeRange** | 512,476 | 28,634,833 | **55.9x** |
+| **TSQueryWideRange** | 1,351,768 | 338,763,674 | **250.7x** |
 
-**Scenario 3: Range query — small range, no aggregation**
-- Pre-load 10,000 points (1 point per second over ~2.7 hours)
-- Query a 60-second window with 1-second bucket duration (returns ~60 points, no aggregation needed)
-- Measures: query latency when bucket size equals point interval
+### 7.5 Analysis
 
-**Scenario 4: Range query — large range with aggregation**
-- Pre-load 10,000 points (1 point per second)
-- Query the full range with 60-second bucket duration (aggregates ~10,000 points into ~167 buckets)
-- Measures: query latency with heavy aggregation — this is where Go-side vs server-side aggregation matters most
+**Ingestion (single point)** — Effectively identical (1.02–1.06x). The overhead of two commands (ZADD + HSET) vs one (TS.ADD) is negligible at the single-operation level due to network round-trip dominating.
 
-**Scenario 5: Range query — wide range, coarse aggregation**
-- Pre-load 100,000 points (1 point per second over ~27 hours)
-- Query the full range with 3600-second (1 hour) bucket duration (aggregates into ~28 buckets)
-- Measures: worst-case scenario — large data transfer + aggregation
+**Batch ingestion** — Valkey is 3.1x faster. The Valkey pipeline batches ZADD + HSET pairs efficiently, while Redis TimeSeries TS.ADD has higher per-command overhead in pipeline mode. This is a genuine advantage for bulk loading scenarios.
 
-### 7.4 Implementation
+**Small range queries (60s window)** — 2.3x slower. Valkey fetches ~60 raw points via ZRANGEBYSCORE + HMGET and aggregates in Go. Redis returns pre-aggregated results server-side. The absolute latency (~0.9ms) is well within acceptable bounds for monitoring queries.
 
-Add time series benchmarks to `storage/cache/database_test.go` as shared functions (like the existing `benchmark()` pattern), then call them from both `redis_test.go` and `valkey_test.go`.
+**Large range queries (10K points, 60s buckets)** — 55x slower. This is where the architectural difference shows: Valkey must transfer all 10,000 raw points to the client, then bucket-aggregate in Go. Redis aggregates server-side and returns only ~167 bucket results. Absolute latency: ~29ms vs ~0.5ms.
 
-**New shared functions in `database_test.go`:**
-```
-benchmarkTimeSeriesIngestSingle(b, database)
-benchmarkTimeSeriesIngestBatch(b, database)
-benchmarkTimeSeriesQuerySmallRange(b, database)
-benchmarkTimeSeriesQueryLargeRange(b, database)
-benchmarkTimeSeriesQueryWideRange(b, database)
-```
+**Wide range queries (100K points, 1h buckets)** — 247x slower. The worst case: 100,000 points transferred over the network before Go-side aggregation into ~28 buckets. Absolute latency: ~332ms vs ~1.3ms.
 
-**Wired into existing benchmark functions in `redis_test.go` and `valkey_test.go`:**
-```go
-// In BenchmarkRedis / BenchmarkValkey:
-b.Run("TSIngestSingle", func(b *testing.B) { benchmarkTimeSeriesIngestSingle(b, database) })
-b.Run("TSIngestBatch", func(b *testing.B) { benchmarkTimeSeriesIngestBatch(b, database) })
-b.Run("TSQuerySmallRange", func(b *testing.B) { benchmarkTimeSeriesQuerySmallRange(b, database) })
-b.Run("TSQueryLargeRange", func(b *testing.B) { benchmarkTimeSeriesQueryLargeRange(b, database) })
-b.Run("TSQueryWideRange", func(b *testing.B) { benchmarkTimeSeriesQueryWideRange(b, database) })
-```
+### 7.6 Root Cause of Query Gaps
 
-### 7.5 How to Run
+The performance gap in range queries scales linearly with the number of raw points in the range. The bottleneck is **data transfer**, not computation:
+
+1. Redis TimeSeries aggregates server-side → returns only bucket results (28–167 values)
+2. Valkey transfers all raw points → client does aggregation (10K–100K values over the network)
+
+The Go-side bucketing itself is fast (simple map + sort). The cost is dominated by `ZRANGEBYSCORE` returning all members + `HMGET` fetching all values.
+
+### 7.7 Impact on Gorse
+
+Gorse uses time series for **monitoring metrics** (NDCG, precision, recall, feedback ratios, task durations). These are characterized by:
+
+- **Low volume**: Metrics are recorded per training cycle or per evaluation, not per-second. A typical deployment might have hundreds to low thousands of points per metric, not 100K.
+- **Infrequent queries**: Dashboard queries happen on user interaction, not in hot paths.
+- **Moderate ranges**: Most dashboard views show hours to days of data, not months.
+
+For Gorse's workload profile:
+- Single-point ingestion and batch ingestion are **on par or better** than Redis.
+- Small range queries (~0.9ms) are **fast enough** for dashboard rendering.
+- Large range queries (~29ms) are **acceptable** for occasional dashboard use.
+- Wide range queries (~332ms) would only occur with unusually large datasets and are still **sub-second**.
+
+### 7.8 Optimization Path
+
+If future workloads require faster large-range aggregation, **Approach B (Lua script server-side aggregation)** can be implemented as a drop-in replacement for `GetTimeSeriesPoints`. The Lua script would execute ZRANGEBYSCORE + HGET + bucketing entirely on the Valkey server, eliminating the data transfer bottleneck. This was documented in Section 2.3 of this report.
+
+### 7.9 How to Reproduce
 
 ```bash
-# Run both side by side
-go test -v ./storage/cache/ -run ^$ -bench "BenchmarkRedis/TS|BenchmarkValkey/TS" -benchtime 10s -timeout 10m
+# Prerequisites: Redis Stack on port 6379, Valkey on port 6380
+docker run -d --name redis-stack -p 6379:6379 redis/redis-stack:latest
+docker run -d --name valkey-search -p 6380:6379 valkey/valkey-bundle:unstable
 
-# Redis only
+# Run side-by-side
+VALKEY_URI="valkey://127.0.0.1:6380/" go test -v ./storage/cache/ \
+  -run ^$ -bench "BenchmarkRedis/TS|BenchmarkValkey/TS" -benchtime 10s -timeout 10m
+
+# Run individually
 go test -v ./storage/cache/ -run ^$ -bench "BenchmarkRedis/TS" -benchtime 10s -timeout 10m
-
-# Valkey only
-go test -v ./storage/cache/ -run ^$ -bench "BenchmarkValkey/TS" -benchtime 10s -timeout 10m
+VALKEY_URI="valkey://127.0.0.1:6380/" go test -v ./storage/cache/ \
+  -run ^$ -bench "BenchmarkValkey/TS" -benchtime 10s -timeout 10m
 ```
-
-### 7.6 Expected Outcomes
-
-- **Ingestion**: Valkey will likely be slightly slower due to 2 commands (ZADD + HSET) vs 1 (TS.ADD), but pipelining should keep the gap small.
-- **Small range queries**: Should be comparable — both fetch a small number of points, minimal aggregation.
-- **Large range queries with aggregation**: Redis TimeSeries will likely be faster since aggregation happens server-side. Valkey must transfer all raw points to the client before aggregating. This is the key gap to quantify.
-- **Gorse context**: Gorse uses time series for monitoring metrics (NDCG, precision, recall, feedback ratios) — typically low-volume data with infrequent queries. Even a 2-5x gap on large aggregation queries is acceptable for this workload.
-
-### 7.7 Documenting Results
-
-After running, capture output in a results table:
-
-```
-| Benchmark | Redis (ns/op) | Valkey (ns/op) | Ratio |
-|---|---|---|---|
-| TSIngestSingle | | | |
-| TSIngestBatch | | | |
-| TSQuerySmallRange | | | |
-| TSQueryLargeRange | | | |
-| TSQueryWideRange | | | |
-```
-
-If any scenario shows >10x degradation, document the root cause and note Approach B (Lua script server-side aggregation) as the optimization path.
-
-### 7.8 After Running Benchmarks
-
-1. Paste the benchmark output into the results table above
-2. Commit the benchmark code and results to the feature branch
-3. Proceed to Task 10 — PR preparation:
-   - Squash or clean up commits if needed
-   - Write PR description referencing the ticket
-   - Submit PR to `gorse-io/gorse`
