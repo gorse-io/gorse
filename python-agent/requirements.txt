@@ -1,0 +1,13 @@
+langgraph>=0.2
+langgraph-checkpoint-postgres  # AsyncPostgresSaver for cross-session state
+psycopg[binary]                # psycopg3 with bundled libpq (avoids arch mismatch on Apple Silicon)
+langchain-google-genai
+langchain-core>=0.2
+langchain-tavily
+fastapi>=0.110
+uvicorn[standard]
+asyncpg
+httpx
+pydantic>=2.0
+pydantic-settings
+tavily-python
