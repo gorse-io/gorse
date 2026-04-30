@@ -16,11 +16,13 @@ package vectors
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"net/url"
 	"strings"
 	"time"
 
+	"github.com/gorse-io/gorse/common/bfloats"
 	"github.com/gorse-io/gorse/storage"
 	"github.com/juju/errors"
 	"github.com/milvus-io/milvus-sdk-go/v2/client"
@@ -84,7 +86,7 @@ func (db *Milvus) AddCollection(ctx context.Context, name string, dimensions int
 		WithField(entity.NewField().WithName(milvusIdField).WithDataType(entity.FieldTypeVarChar).WithMaxLength(65535).WithIsPrimaryKey(true)).
 		WithField(entity.NewField().WithName(milvusCategoriesField).WithDataType(entity.FieldTypeArray).WithElementType(entity.FieldTypeVarChar).WithMaxCapacity(100).WithMaxLength(65535)).
 		WithField(entity.NewField().WithName(milvusTimestampField).WithDataType(entity.FieldTypeInt64)).
-		WithField(entity.NewField().WithName(milvusVectorField).WithDataType(entity.FieldTypeFloatVector).WithDim(int64(dimensions)))
+		WithField(entity.NewField().WithName(milvusVectorField).WithDataType(entity.FieldTypeBFloat16Vector).WithDim(int64(dimensions)))
 
 	err := db.client.CreateCollection(ctx, schema, entity.DefaultShardNumber)
 	if err != nil {
@@ -141,18 +143,21 @@ func (db *Milvus) AddVectors(ctx context.Context, collection string, vectors []V
 	ids := make([]string, 0, len(vectors))
 	categories := make([][]string, 0, len(vectors))
 	timestamps := make([]int64, 0, len(vectors))
-	data := make([][]float32, 0, len(vectors))
+	data := make([][]byte, 0, len(vectors))
+	dim := len(vectors[0].Vector)
 	for _, v := range vectors {
 		ids = append(ids, v.Id)
 		categories = append(categories, v.Categories)
 		timestamps = append(timestamps, v.Timestamp.UnixMilli())
-		data = append(data, v.Vector)
+		// Convert float32 to BF16 ([]uint16 -> []byte)
+		bf16 := bfloats.FromFloat32(v.Vector)
+		data = append(data, uint16SliceToBytes(bf16))
 	}
 
 	idCol := entity.NewColumnVarChar(milvusIdField, ids)
 	categoriesCol := entity.NewColumnVarCharArray(milvusCategoriesField, milvusStringsToBytes(categories))
 	timestampCol := entity.NewColumnInt64(milvusTimestampField, timestamps)
-	vectorCol := entity.NewColumnFloatVector(milvusVectorField, len(data[0]), data)
+	vectorCol := entity.NewColumnBFloat16Vector(milvusVectorField, dim, data)
 
 	_, err := db.client.Upsert(ctx, collection, "", idCol, categoriesCol, timestampCol, vectorCol)
 	return errors.Trace(err)
@@ -177,8 +182,12 @@ func (db *Milvus) QueryVectors(ctx context.Context, collection string, q []float
 		expr = strings.Join(conditions, " or ")
 	}
 
+	// Convert query vector to BF16
+	bf16 := bfloats.FromFloat32(q)
+	queryVector := entity.BFloat16Vector(uint16SliceToBytes(bf16))
+
 	searchParam, _ := entity.NewIndexHNSWSearchParam(64)
-	results, err := db.client.Search(ctx, collection, []string{}, expr, []string{milvusIdField, milvusCategoriesField}, []entity.Vector{entity.FloatVector(q)}, milvusVectorField, entity.COSINE, topK, searchParam, client.WithSearchQueryConsistencyLevel(entity.ClStrong))
+	results, err := db.client.Search(ctx, collection, []string{}, expr, []string{milvusIdField, milvusCategoriesField}, []entity.Vector{queryVector}, milvusVectorField, entity.COSINE, topK, searchParam, client.WithSearchQueryConsistencyLevel(entity.ClStrong))
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -222,6 +231,24 @@ func (db *Milvus) QueryVectors(ctx context.Context, collection string, q []float
 		}
 	}
 	return vectors, nil
+}
+
+// uint16SliceToBytes converts []uint16 to []byte (BF16 format)
+func uint16SliceToBytes(s []uint16) []byte {
+	buf := make([]byte, len(s)*2)
+	for i, v := range s {
+		binary.LittleEndian.PutUint16(buf[i*2:(i+1)*2], v)
+	}
+	return buf
+}
+
+// bytesToUint16Slice converts []byte to []uint16 (BF16 format)
+func bytesToUint16Slice(b []byte) []uint16 {
+	s := make([]uint16, len(b)/2)
+	for i := range s {
+		s[i] = binary.LittleEndian.Uint16(b[i*2:(i+1)*2])
+	}
+	return s
 }
 
 func milvusStringsToBytes(ss [][]string) [][][]byte {
