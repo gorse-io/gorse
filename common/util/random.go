@@ -28,7 +28,7 @@ type RandomGenerator struct {
 
 // NewRandomGenerator creates a RandomGenerator.
 func NewRandomGenerator(seed int64) RandomGenerator {
-	return RandomGenerator{rand.New(rand.NewSource(int64(seed)))}
+	return RandomGenerator{rand.New(rand.NewSource(seed))}
 }
 
 // UniformVector makes a vec filled with uniform random floats,
