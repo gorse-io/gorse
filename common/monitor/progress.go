@@ -150,10 +150,15 @@ func (s *Span) Progress() Progress {
 	parentTotal := s.total * childTotal
 	parentCount := s.count * childTotal
 	for _, child := range children {
-		// avoid divide by zero
+		// children only contains Running children (Complete / Failed /
+		// Suspended children are filtered out above and accounted for via
+		// the parent's own count). A Running child with Total == 0 has
+		// no measurable progress yet, so it contributes nothing - the
+		// previous "treat zero-total as complete" branch could push
+		// parentCount above parentTotal once the parent had already
+		// consumed its own count, producing >100% in the dashboard
+		// (#1241).
 		if child.Total == 0 {
-			// child with zero total means no work needed, consider it complete
-			parentCount += childTotal
 			continue
 		}
 		parentCount += childTotal * child.Count / child.Total
