@@ -41,8 +41,8 @@ func (rng RandomGenerator) UniformVector(size int, low, high float32) []float32 
 	return ret
 }
 
-// NewNormalVector makes a vec filled with normal random floats.
-func (rng RandomGenerator) NewNormalVector(size int, mean, stdDev float32) []float32 {
+// NormalVector makes a vec filled with normal random floats.
+func (rng RandomGenerator) NormalVector(size int, mean, stdDev float32) []float32 {
 	ret := make([]float32, size)
 	for i := range ret {
 		ret[i] = float32(rng.NormFloat64())*stdDev + mean
@@ -54,15 +54,7 @@ func (rng RandomGenerator) NewNormalVector(size int, mean, stdDev float32) []flo
 func (rng RandomGenerator) NormalMatrix(row, col int, mean, stdDev float32) [][]float32 {
 	ret := make([][]float32, row)
 	for i := range ret {
-		ret[i] = rng.NewNormalVector(col, mean, stdDev)
-	}
-	return ret
-}
-
-func (rng RandomGenerator) NormalVector(size int, mean, stdDev float32) []float32 {
-	ret := make([]float32, size)
-	for i := range ret {
-		ret[i] = float32(rng.NormFloat64())*stdDev + mean
+		ret[i] = rng.NormalVector(col, mean, stdDev)
 	}
 	return ret
 }
