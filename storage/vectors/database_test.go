@@ -45,7 +45,7 @@ func (suite *vectorsTestSuite) TestCollections() {
 	suite.NoError(err)
 	suite.Empty(collections)
 	// create collection
-	err = suite.Database.AddCollection(ctx, "test", defaultVectorSize, Cosine)
+	err = suite.Database.AddCollection(ctx, "test", defaultVectorSize, Cosine, DefaultVectorConfig())
 	suite.NoError(err)
 	// list collections
 	collections, err = suite.Database.ListCollections(ctx)
@@ -65,7 +65,7 @@ func (suite *vectorsTestSuite) TestCollections() {
 
 func (suite *vectorsTestSuite) TestVectors() {
 	ctx := suite.T().Context()
-	err := suite.Database.AddCollection(ctx, "test", defaultVectorSize, Cosine)
+	err := suite.Database.AddCollection(ctx, "test", defaultVectorSize, Cosine, DefaultVectorConfig())
 	suite.NoError(err)
 
 	vectorA := make([]float32, defaultVectorSize)
@@ -115,7 +115,7 @@ func (suite *vectorsTestSuite) TestVectors() {
 
 func (suite *vectorsTestSuite) TestDeleteVectors() {
 	ctx := suite.T().Context()
-	err := suite.Database.AddCollection(ctx, "test", defaultVectorSize, Cosine)
+	err := suite.Database.AddCollection(ctx, "test", defaultVectorSize, Cosine, DefaultVectorConfig())
 	suite.NoError(err)
 
 	vectorA := make([]float32, defaultVectorSize)

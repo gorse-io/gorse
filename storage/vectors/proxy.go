@@ -58,7 +58,9 @@ func (p *ProxyServer) AddCollection(ctx context.Context, request *protocol.AddCo
 	if err != nil {
 		return nil, err
 	}
-	err = p.database.AddCollection(ctx, request.GetName(), int(request.GetDimensions()), distance)
+	// Use default config for now (protobuf needs to be regenerated for VectorConfig support)
+	config := DefaultVectorConfig()
+	err = p.database.AddCollection(ctx, request.GetName(), int(request.GetDimensions()), distance, config)
 	if err != nil {
 		return nil, err
 	}
@@ -152,11 +154,13 @@ func (p ProxyClient) ListCollections(ctx context.Context) ([]string, error) {
 	return resp.Collections, nil
 }
 
-func (p ProxyClient) AddCollection(ctx context.Context, name string, dimensions int, distance Distance) error {
+func (p ProxyClient) AddCollection(ctx context.Context, name string, dimensions int, distance Distance, config VectorConfig) error {
 	pbDistance, err := distanceToProtoDistance(distance)
 	if err != nil {
 		return err
 	}
+	// Note: VectorConfig is not yet supported in protobuf (needs regeneration)
+	// The config is ignored for now, using default config on server side
 	_, err = p.VectorStoreClient.AddCollection(ctx, &protocol.AddCollectionRequest{
 		Name:       name,
 		Dimensions: int32(dimensions),

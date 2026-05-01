@@ -86,7 +86,7 @@ func (db *Weaviate) ListCollections(ctx context.Context) ([]string, error) {
 	return names, nil
 }
 
-func (db *Weaviate) AddCollection(ctx context.Context, name string, dimensions int, distance Distance) error {
+func (db *Weaviate) AddCollection(ctx context.Context, name string, dimensions int, distance Distance, config VectorConfig) error {
 	var weaviateDistance string
 	switch distance {
 	case Cosine:
@@ -98,6 +98,30 @@ func (db *Weaviate) AddCollection(ctx context.Context, name string, dimensions i
 	default:
 		return errors.NotSupportedf("distance method")
 	}
+
+	// Weaviate 不支持 SQ，只支持 PQ
+	if config.Quantization == QuantizationSQ {
+		return errors.NotSupportedf("SQ quantization for Weaviate")
+	}
+
+	// 构建 VectorIndexConfig
+	vectorIndexConfig := map[string]any{
+		"distance": weaviateDistance,
+		"ef":       config.HNSWEfSearch,
+		"maxConnections": config.HNSWM,
+		"efConstruction": config.HNSWEfConstruct,
+	}
+
+	// PQ 量化配置
+	if config.Quantization == QuantizationPQ {
+		vectorIndexConfig["pq"] = map[string]any{
+			"enabled":       true,
+			"segments":      config.PQSubvectors,
+			"centroids":     1 << config.PQBits, // 2^bits
+			"trainingLimit": 100000,
+		}
+	}
+
 	class := &models.Class{
 		Class:      capitalize(name),
 		Vectorizer: "none",
@@ -117,9 +141,7 @@ func (db *Weaviate) AddCollection(ctx context.Context, name string, dimensions i
 				IndexRangeFilters: new(true),
 			},
 		},
-		VectorIndexConfig: map[string]any{
-			"distance": weaviateDistance,
-		},
+		VectorIndexConfig: vectorIndexConfig,
 	}
 	err := db.client.Schema().ClassCreator().WithClass(class).Do(ctx)
 	return errors.Trace(err)
