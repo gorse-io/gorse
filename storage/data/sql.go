@@ -31,7 +31,7 @@ import (
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/storage"
 	"github.com/juju/errors"
-	_ "github.com/lib/pq"
+	_ "github.com/jackc/pgx/v5/stdlib"
 	_ "github.com/mailru/go-clickhouse/v2"
 	"github.com/samber/lo"
 	semconv "go.opentelemetry.io/otel/semconv/v1.12.0"
@@ -86,7 +86,7 @@ func init() {
 		database.TablePrefix = storage.TablePrefix(tablePrefix)
 		option := storage.NewOptions(opts...)
 		var err error
-		if database.client, err = otelsql.Open("postgres", path,
+		if database.client, err = otelsql.Open("pgx", path,
 			otelsql.WithAttributes(semconv.DBSystemPostgreSQL),
 			otelsql.WithSpanOptions(otelsql.SpanOptions{DisableErrSkip: true}),
 		); err != nil {

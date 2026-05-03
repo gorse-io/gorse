@@ -51,7 +51,7 @@ type PostgresTestSuite struct {
 func (suite *PostgresTestSuite) SetupSuite() {
 	var err error
 	// create database
-	databaseComm, err := sql.Open("postgres", postgresDSN+"?sslmode=disable")
+	databaseComm, err := sql.Open("pgx", postgresDSN+"?sslmode=disable")
 	suite.NoError(err)
 	const dbName = "gorse_cache_test"
 	_, err = databaseComm.Exec("DROP DATABASE IF EXISTS " + dbName)
@@ -145,7 +145,7 @@ func assertQuery(t *testing.T, connection *sql.DB, sql string, expected string) 
 func BenchmarkPostgres(b *testing.B) {
 	log.CloseLogger()
 	// create database
-	databaseComm, err := sql.Open("postgres", postgresDSN+"?sslmode=disable")
+	databaseComm, err := sql.Open("pgx", postgresDSN+"?sslmode=disable")
 	assert.NoError(b, err)
 	const dbName = "gorse_cache_benchmark"
 	_, err = databaseComm.Exec("DROP DATABASE IF EXISTS " + dbName)

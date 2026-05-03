@@ -30,7 +30,8 @@ import (
 	"github.com/go-sql-driver/mysql"
 	"github.com/gorse-io/gorse/storage"
 	"github.com/juju/errors"
-	"github.com/lib/pq"
+	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/lib/pq" // for pq.StringArray type only
 	"github.com/samber/lo"
 	semconv "go.opentelemetry.io/otel/semconv/v1.8.0"
 	gormmysql "gorm.io/driver/mysql"
@@ -47,7 +48,7 @@ func init() {
 		database.TablePrefix = storage.TablePrefix(tablePrefix)
 		option := storage.NewOptions(opts...)
 		var err error
-		if database.client, err = otelsql.Open("postgres", path,
+		if database.client, err = otelsql.Open("pgx", path,
 			otelsql.WithAttributes(semconv.DBSystemPostgreSQL),
 			otelsql.WithSpanOptions(otelsql.SpanOptions{DisableErrSkip: true}),
 		); err != nil {
