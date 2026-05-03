@@ -19,9 +19,9 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"net/url"
 	"io"
 	"math"
+	"net/url"
 	"strings"
 	"time"
 
@@ -30,8 +30,8 @@ import (
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/go-sql-driver/mysql"
 	"github.com/gorse-io/gorse/storage"
-	"github.com/juju/errors"
 	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/juju/errors"
 	"github.com/lib/pq" // for pq.StringArray type only
 	"github.com/samber/lo"
 	semconv "go.opentelemetry.io/otel/semconv/v1.8.0"
