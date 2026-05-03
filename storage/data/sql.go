@@ -30,8 +30,8 @@ import (
 	"github.com/gorse-io/gorse/common/jsonutil"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/storage"
-	"github.com/juju/errors"
 	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/juju/errors"
 	_ "github.com/mailru/go-clickhouse/v2"
 	"github.com/samber/lo"
 	semconv "go.opentelemetry.io/otel/semconv/v1.12.0"
@@ -65,17 +65,6 @@ func init() {
 		}
 		// connect to database
 		database := new(SQLDatabase)
-		// Append timezone=UTC to PostgreSQL URI for pgx driver
-		if u, err := url.Parse(path); err == nil {
-			q := u.Query()
-			q.Set("timezone", "UTC")
-			u.RawQuery = q.Encode()
-			path = u.String()
-		} else if strings.Contains(path, "?") {
-			path = path + "&timezone=UTC"
-		} else {
-			path = path + "?timezone=UTC"
-		}
 		database.driver = MySQL
 		database.TablePrefix = storage.TablePrefix(tablePrefix)
 		if database.client, err = otelsql.Open("mysql", name,
@@ -134,17 +123,6 @@ func init() {
 		}
 		uri := parsed.String()
 		database := new(SQLDatabase)
-		// Append timezone=UTC to PostgreSQL URI for pgx driver
-		if u, err := url.Parse(path); err == nil {
-			q := u.Query()
-			q.Set("timezone", "UTC")
-			u.RawQuery = q.Encode()
-			path = u.String()
-		} else if strings.Contains(path, "?") {
-			path = path + "&timezone=UTC"
-		} else {
-			path = path + "?timezone=UTC"
-		}
 		database.driver = ClickHouse
 		database.TablePrefix = storage.TablePrefix(tablePrefix)
 		if database.client, err = otelsql.Open("chhttp", uri,
@@ -171,17 +149,6 @@ func init() {
 		}
 		// connect to database
 		database := new(SQLDatabase)
-		// Append timezone=UTC to PostgreSQL URI for pgx driver
-		if u, err := url.Parse(path); err == nil {
-			q := u.Query()
-			q.Set("timezone", "UTC")
-			u.RawQuery = q.Encode()
-			path = u.String()
-		} else if strings.Contains(path, "?") {
-			path = path + "&timezone=UTC"
-		} else {
-			path = path + "?timezone=UTC"
-		}
 		database.driver = SQLite
 		database.TablePrefix = storage.TablePrefix(tablePrefix)
 		if database.client, err = otelsql.Open("sqlite", dataSourceName,

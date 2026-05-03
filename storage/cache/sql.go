@@ -90,17 +90,6 @@ func init() {
 		}
 		// connect to database
 		database := new(SQLDatabase)
-		// Append timezone=UTC to PostgreSQL URI for pgx driver
-		if u, err := url.Parse(path); err == nil {
-			q := u.Query()
-			q.Set("timezone", "UTC")
-			u.RawQuery = q.Encode()
-			path = u.String()
-		} else if strings.Contains(path, "?") {
-			path = path + "&timezone=UTC"
-		} else {
-			path = path + "?timezone=UTC"
-		}
 		database.driver = MySQL
 		database.TablePrefix = storage.TablePrefix(tablePrefix)
 		if database.client, err = otelsql.Open("mysql", name,
@@ -128,17 +117,6 @@ func init() {
 		}
 		// connect to database
 		database := new(SQLDatabase)
-		// Append timezone=UTC to PostgreSQL URI for pgx driver
-		if u, err := url.Parse(path); err == nil {
-			q := u.Query()
-			q.Set("timezone", "UTC")
-			u.RawQuery = q.Encode()
-			path = u.String()
-		} else if strings.Contains(path, "?") {
-			path = path + "&timezone=UTC"
-		} else {
-			path = path + "?timezone=UTC"
-		}
 		database.driver = SQLite
 		database.TablePrefix = storage.TablePrefix(tablePrefix)
 		if database.client, err = otelsql.Open("sqlite", dataSourceName,
