@@ -30,7 +30,8 @@ import (
 	"github.com/gorse-io/gorse/common/jsonutil"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/storage"
-	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/juju/errors"
 	_ "github.com/mailru/go-clickhouse/v2"
 	"github.com/samber/lo"
@@ -80,29 +81,20 @@ func init() {
 		}
 		return database, nil
 	})
-	Register([]string{storage.PostgresPrefix, storage.PostgreSQLPrefix}, func(path, tablePrefix string, opts ...storage.Option) (Database, error) {
+Register([]string{storage.PostgresPrefix, storage.PostgreSQLPrefix}, func(path, tablePrefix string, opts ...storage.Option) (Database, error) {
 		database := new(SQLDatabase)
-		// Append timezone=UTC to PostgreSQL URI for pgx driver
-		if u, err := url.Parse(path); err == nil {
-			q := u.Query()
-			q.Set("time_zone", "UTC")
-			u.RawQuery = q.Encode()
-			path = u.String()
-		} else if strings.Contains(path, "?") {
-			path = path + "&time_zone=UTC"
-		} else {
-			path = path + "?time_zone=UTC"
-		}
 		database.driver = Postgres
 		database.TablePrefix = storage.TablePrefix(tablePrefix)
 		option := storage.NewOptions(opts...)
 		var err error
-		if database.client, err = otelsql.Open("pgx", path,
-			otelsql.WithAttributes(semconv.DBSystemPostgreSQL),
-			otelsql.WithSpanOptions(otelsql.SpanOptions{DisableErrSkip: true}),
-		); err != nil {
+		// Parse PostgreSQL DSN and set timezone to UTC in pgx RuntimeParams
+		pgxConfig, err := pgx.ParseConfig(path)
+		if err != nil {
 			return nil, errors.Trace(err)
 		}
+		pgxConfig.RuntimeParams["timezone"] = "UTC"
+		// Create sql.DB from pgx config
+		database.client = stdlib.OpenDB(*pgxConfig)
 		storage.ApplySQLPool(database.client, option)
 		database.gormDB, err = gorm.Open(postgres.New(postgres.Config{Conn: database.client}), storage.NewGORMConfig(tablePrefix))
 		if err != nil {
