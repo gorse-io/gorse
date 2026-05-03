@@ -85,13 +85,13 @@ func init() {
 		// Append timezone=UTC to PostgreSQL URI for pgx driver
 		if u, err := url.Parse(path); err == nil {
 			q := u.Query()
-			q.Set("timezone", "UTC")
+			q.Set("time_zone", "UTC")
 			u.RawQuery = q.Encode()
 			path = u.String()
 		} else if strings.Contains(path, "?") {
-			path = path + "&timezone=UTC"
+			path = path + "&time_zone=UTC"
 		} else {
-			path = path + "?timezone=UTC"
+			path = path + "?time_zone=UTC"
 		}
 		database.driver = Postgres
 		database.TablePrefix = storage.TablePrefix(tablePrefix)
