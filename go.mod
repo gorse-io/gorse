@@ -9,7 +9,7 @@ require (
 	github.com/XSAM/otelsql v0.41.0
 	github.com/araddon/dateparse v0.0.0-20210429162001-6b43995a97de
 	github.com/bits-and-blooms/bitset v1.24.4
-	github.com/c-bata/goptuna v0.8.1
+	github.com/c-bata/goptuna v0.9.0
 	github.com/cenkalti/backoff/v5 v5.0.3
 	github.com/chewxy/math32 v1.11.1
 	github.com/coreos/go-oidc/v3 v3.17.0
