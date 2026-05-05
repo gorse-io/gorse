@@ -38,14 +38,18 @@ import (
 
 func init() {
 	Register([]string{storage.ValkeyPrefix, storage.ValkeysPrefix}, func(path, tablePrefix string, opts ...storage.Option) (Database, error) {
-		addr, password, db, useTLS, err := parseValkeyURL(path)
+		addr, username, password, db, useTLS, err := parseValkeyURL(path)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
 		cfg := glideconfig.NewClientConfiguration().
 			WithAddress(&addr)
 		if password != "" {
-			cfg.WithCredentials(glideconfig.NewServerCredentialsWithDefaultUsername(password))
+			if username != "" {
+				cfg.WithCredentials(glideconfig.NewServerCredentials(username, password))
+			} else {
+				cfg.WithCredentials(glideconfig.NewServerCredentialsWithDefaultUsername(password))
+			}
 		}
 		if db > 0 {
 			cfg.WithDatabaseId(db)
@@ -66,7 +70,7 @@ func init() {
 		return database, nil
 	})
 	Register([]string{storage.ValkeyClusterPrefix, storage.ValkeysClusterPrefix}, func(path, tablePrefix string, opts ...storage.Option) (Database, error) {
-		addresses, password, useTLS, err := parseValkeyClusterURL(path)
+		addresses, username, password, useTLS, err := parseValkeyClusterURL(path)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
@@ -75,7 +79,11 @@ func init() {
 			cfg.WithAddress(&addresses[i])
 		}
 		if password != "" {
-			cfg.WithCredentials(glideconfig.NewServerCredentialsWithDefaultUsername(password))
+			if username != "" {
+				cfg.WithCredentials(glideconfig.NewServerCredentials(username, password))
+			} else {
+				cfg.WithCredentials(glideconfig.NewServerCredentialsWithDefaultUsername(password))
+			}
 		}
 		if useTLS {
 			cfg.WithUseTLS(true)
@@ -95,10 +103,10 @@ func init() {
 }
 
 // parseValkeyURL parses a valkey:// or valkeys:// URL into connection parameters.
-func parseValkeyURL(rawURL string) (addr glideconfig.NodeAddress, password string, db int, useTLS bool, err error) {
+func parseValkeyURL(rawURL string) (addr glideconfig.NodeAddress, username, password string, db int, useTLS bool, err error) {
 	parsed, err := url.Parse(rawURL)
 	if err != nil {
-		return addr, "", 0, false, errors.Trace(err)
+		return addr, "", "", 0, false, errors.Trace(err)
 	}
 	host := parsed.Hostname()
 	if host == "" {
@@ -108,11 +116,12 @@ func parseValkeyURL(rawURL string) (addr glideconfig.NodeAddress, password strin
 	if parsed.Port() != "" {
 		port, err = strconv.Atoi(parsed.Port())
 		if err != nil {
-			return addr, "", 0, false, errors.Trace(err)
+			return addr, "", "", 0, false, errors.Trace(err)
 		}
 	}
 	addr = glideconfig.NodeAddress{Host: host, Port: port}
 	if parsed.User != nil {
+		username = parsed.User.Username()
 		password, _ = parsed.User.Password()
 	}
 	if parsed.Path != "" && parsed.Path != "/" {
@@ -120,16 +129,16 @@ func parseValkeyURL(rawURL string) (addr glideconfig.NodeAddress, password strin
 		if dbStr != "" {
 			db, err = strconv.Atoi(dbStr)
 			if err != nil {
-				return addr, "", 0, false, errors.Errorf("invalid database number: %s", dbStr)
+				return addr, "", "", 0, false, errors.Errorf("invalid database number: %s", dbStr)
 			}
 		}
 	}
 	useTLS = parsed.Scheme == "valkeys"
-	return addr, password, db, useTLS, nil
+	return addr, username, password, db, useTLS, nil
 }
 
 // parseValkeyClusterURL parses a valkey+cluster:// or valkeys+cluster:// URL.
-func parseValkeyClusterURL(rawURL string) (addresses []glideconfig.NodeAddress, password string, useTLS bool, err error) {
+func parseValkeyClusterURL(rawURL string) (addresses []glideconfig.NodeAddress, username, password string, useTLS bool, err error) {
 	// Replace the cluster prefix with a standard scheme for URL parsing.
 	var newURL string
 	if strings.HasPrefix(rawURL, storage.ValkeyClusterPrefix) {
@@ -141,7 +150,7 @@ func parseValkeyClusterURL(rawURL string) (addresses []glideconfig.NodeAddress, 
 	}
 	parsed, err := url.Parse(newURL)
 	if err != nil {
-		return nil, "", false, errors.Trace(err)
+		return nil, "", "", false, errors.Trace(err)
 	}
 	host := parsed.Hostname()
 	if host == "" {
@@ -151,11 +160,12 @@ func parseValkeyClusterURL(rawURL string) (addresses []glideconfig.NodeAddress, 
 	if parsed.Port() != "" {
 		port, err = strconv.Atoi(parsed.Port())
 		if err != nil {
-			return nil, "", false, errors.Trace(err)
+			return nil, "", "", false, errors.Trace(err)
 		}
 	}
 	addresses = append(addresses, glideconfig.NodeAddress{Host: host, Port: port})
 	if parsed.User != nil {
+		username = parsed.User.Username()
 		password, _ = parsed.User.Password()
 	}
 	// Parse additional addresses from query params (addr=host:port).
@@ -166,12 +176,12 @@ func parseValkeyClusterURL(rawURL string) (addresses []glideconfig.NodeAddress, 
 		if len(parts) == 2 {
 			p, err = strconv.Atoi(parts[1])
 			if err != nil {
-				return nil, "", false, errors.Errorf("invalid port in addr param: %s", addrStr)
+				return nil, "", "", false, errors.Errorf("invalid port in addr param: %s", addrStr)
 			}
 		}
 		addresses = append(addresses, glideconfig.NodeAddress{Host: h, Port: p})
 	}
-	return addresses, password, useTLS, nil
+	return addresses, username, password, useTLS, nil
 }
 
 // Valkey cache storage using valkey-glide client.
@@ -328,18 +338,20 @@ func (v *Valkey) Purge() error {
 
 // Set stores values in Valkey.
 func (v *Valkey) Set(ctx context.Context, values ...Value) error {
-	for _, val := range values {
-		var err error
-		if v.isCluster {
-			_, err = v.clusterClient.Set(ctx, v.Key(val.name), val.value)
-		} else {
-			_, err = v.standaloneClient.Set(ctx, v.Key(val.name), val.value)
+	if v.isCluster {
+		for _, val := range values {
+			if _, err := v.clusterClient.Set(ctx, v.Key(val.name), val.value); err != nil {
+				return errors.Trace(err)
+			}
 		}
-		if err != nil {
-			return errors.Trace(err)
-		}
+		return nil
 	}
-	return nil
+	batch := pipeline.NewStandaloneBatch(false)
+	for _, val := range values {
+		batch.Set(v.Key(val.name), val.value)
+	}
+	_, err := v.standaloneClient.Exec(ctx, *batch, true)
+	return errors.Trace(err)
 }
 
 // Get returns a value from Valkey.
@@ -587,24 +599,16 @@ func (v *Valkey) UpdateScores(ctx context.Context, collections []string, subset 
 				return errors.Trace(err)
 			}
 		} else {
-			// Use Watch for optimistic locking on standalone.
-			if _, err := v.standaloneClient.Watch(ctx, []string{key}); err != nil {
-				return errors.Trace(err)
-			}
 			exists, err := v.standaloneClient.Exists(ctx, []string{key})
 			if err != nil {
-				v.standaloneClient.Unwatch(ctx) //nolint:errcheck
 				return errors.Trace(err)
 			}
 			if exists == 0 {
-				v.standaloneClient.Unwatch(ctx) //nolint:errcheck
 				continue
 			}
 			if _, err = v.standaloneClient.HSet(ctx, key, values); err != nil {
-				v.standaloneClient.Unwatch(ctx) //nolint:errcheck
 				return errors.Trace(err)
 			}
-			v.standaloneClient.Unwatch(ctx) //nolint:errcheck
 		}
 	}
 	return nil
@@ -642,10 +646,8 @@ func (v *Valkey) DeleteScores(ctx context.Context, collections []string, conditi
 			break
 		}
 		if v.isCluster {
-			for _, key := range docKeys {
-				if _, err = v.clusterClient.Del(ctx, []string{key}); err != nil {
-					return errors.Trace(err)
-				}
+			if _, err = v.clusterClient.Del(ctx, docKeys); err != nil {
+				return errors.Trace(err)
 			}
 		} else {
 			batch := pipeline.NewStandaloneBatch(false)
@@ -667,7 +669,7 @@ func (v *Valkey) DeleteScores(ctx context.Context, collections []string, conditi
 func (v *Valkey) ScanScores(ctx context.Context, callback func(collection string, id string, subset string, timestamp time.Time) error) error {
 	if v.isCluster {
 		cursor := models.NewClusterScanCursor()
-		scanOpts := glideoptions.NewClusterScanOptions().SetMatch(v.DocumentTable() + "*")
+		scanOpts := glideoptions.NewClusterScanOptions().SetMatch(v.DocumentTable() + ":*")
 		for !cursor.IsFinished() {
 			result, err := v.clusterClient.ScanWithOptions(ctx, cursor, *scanOpts)
 			if err != nil {
@@ -691,7 +693,7 @@ func (v *Valkey) ScanScores(ctx context.Context, callback func(collection string
 		return nil
 	}
 	cursor := models.NewCursor()
-	scanOpts := glideoptions.NewScanOptions().SetMatch(v.DocumentTable() + "*")
+	scanOpts := glideoptions.NewScanOptions().SetMatch(v.DocumentTable() + ":*")
 	for {
 		result, err := v.standaloneClient.ScanWithOptions(ctx, cursor, *scanOpts)
 		if err != nil {
@@ -722,17 +724,33 @@ func (v *Valkey) ScanScores(ctx context.Context, callback func(collection string
 // Hash key: {prefix}ts_data:{name} — field = timestamp_ms as string, value = float64 as string
 func (v *Valkey) AddTimeSeriesPoints(ctx context.Context, points []TimeSeriesPoint) error {
 	if v.isCluster {
+		// Group points by name to batch ZADD and HSET per series.
+		type seriesData struct {
+			zaddMembers map[string]float64
+			hsetFields  map[string]string
+		}
+		grouped := make(map[string]*seriesData)
 		for _, point := range points {
 			tsMs := point.Timestamp.UnixMilli()
 			tsMsStr := strconv.FormatInt(tsMs, 10)
-			indexKey := v.PointsTable() + ":ts_index:" + point.Name
-			dataKey := v.PointsTable() + ":ts_data:" + point.Name
-			if _, err := v.clusterClient.ZAdd(ctx, indexKey, map[string]float64{tsMsStr: float64(tsMs)}); err != nil {
+			sd, ok := grouped[point.Name]
+			if !ok {
+				sd = &seriesData{
+					zaddMembers: make(map[string]float64),
+					hsetFields:  make(map[string]string),
+				}
+				grouped[point.Name] = sd
+			}
+			sd.zaddMembers[tsMsStr] = float64(tsMs)
+			sd.hsetFields[tsMsStr] = strconv.FormatFloat(point.Value, 'g', -1, 64)
+		}
+		for name, sd := range grouped {
+			indexKey := v.PointsTable() + ":ts_index:" + name
+			dataKey := v.PointsTable() + ":ts_data:" + name
+			if _, err := v.clusterClient.ZAdd(ctx, indexKey, sd.zaddMembers); err != nil {
 				return errors.Trace(err)
 			}
-			if _, err := v.clusterClient.HSet(ctx, dataKey, map[string]string{
-				tsMsStr: strconv.FormatFloat(point.Value, 'g', -1, 64),
-			}); err != nil {
+			if _, err := v.clusterClient.HSet(ctx, dataKey, sd.hsetFields); err != nil {
 				return errors.Trace(err)
 			}
 		}
