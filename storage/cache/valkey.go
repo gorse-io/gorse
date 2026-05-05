@@ -43,7 +43,8 @@ func init() {
 			return nil, errors.Trace(err)
 		}
 		cfg := glideconfig.NewClientConfiguration().
-			WithAddress(&addr)
+			WithAddress(&addr).
+			WithRequestTimeout(60 * time.Second)
 		if password != "" {
 			if username != "" {
 				cfg.WithCredentials(glideconfig.NewServerCredentials(username, password))
@@ -78,6 +79,7 @@ func init() {
 		for i := range addresses {
 			cfg.WithAddress(&addresses[i])
 		}
+		cfg.WithRequestTimeout(60 * time.Second)
 		if password != "" {
 			if username != "" {
 				cfg.WithCredentials(glideconfig.NewServerCredentials(username, password))
@@ -382,6 +384,9 @@ func (v *Valkey) Purge() error {
 
 // Set stores values in Valkey.
 func (v *Valkey) Set(ctx context.Context, values ...Value) error {
+	if len(values) == 0 {
+		return nil
+	}
 	if v.isCluster {
 		for _, val := range values {
 			if _, err := v.clusterClient.Set(ctx, v.Key(val.name), val.value); err != nil {
@@ -390,12 +395,12 @@ func (v *Valkey) Set(ctx context.Context, values ...Value) error {
 		}
 		return nil
 	}
-	batch := pipeline.NewStandaloneBatch(false)
 	for _, val := range values {
-		batch.Set(v.Key(val.name), val.value)
+		if _, err := v.standaloneClient.Set(ctx, v.Key(val.name), val.value); err != nil {
+			return errors.Trace(err)
+		}
 	}
-	_, err := v.standaloneClient.Exec(ctx, *batch, true)
-	return errors.Trace(err)
+	return nil
 }
 
 // Get returns a value from Valkey.
@@ -488,9 +493,8 @@ func (v *Valkey) AddScores(ctx context.Context, collection, subset string, docum
 		}
 		return nil
 	}
-	batch := pipeline.NewStandaloneBatch(false)
 	for _, document := range documents {
-		batch.HSet(v.documentKey(collection, subset, document.Id), map[string]string{
+		if _, err := v.standaloneClient.HSet(ctx, v.documentKey(collection, subset, document.Id), map[string]string{
 			"collection": collection,
 			"subset":     subset,
 			"id":         document.Id,
@@ -498,10 +502,11 @@ func (v *Valkey) AddScores(ctx context.Context, collection, subset string, docum
 			"is_hidden":  formatBool(document.IsHidden),
 			"categories": encodeCategories(document.Categories),
 			"timestamp":  strconv.FormatInt(document.Timestamp.UnixMicro(), 10),
-		})
+		}); err != nil {
+			return errors.Trace(err)
+		}
 	}
-	_, err := v.standaloneClient.Exec(ctx, *batch, true)
-	return errors.Trace(err)
+	return nil
 }
 
 func formatBool(b bool) string {
@@ -676,11 +681,7 @@ func (v *Valkey) DeleteScores(ctx context.Context, collections []string, conditi
 				return errors.Trace(err)
 			}
 		} else {
-			batch := pipeline.NewStandaloneBatch(false)
-			for _, key := range docKeys {
-				batch.Del([]string{key})
-			}
-			if _, err = v.standaloneClient.Exec(ctx, *batch, true); err != nil {
+			if _, err = v.standaloneClient.Del(ctx, docKeys); err != nil {
 				return errors.Trace(err)
 			}
 		}
