@@ -203,6 +203,52 @@ func (v *Valkey) Close() error {
 	return nil
 }
 
+// --- Thin wrapper methods to eliminate cluster/standalone branching duplication ---
+
+// vDel deletes keys, handling cluster mode by deleting one at a time to avoid CROSSSLOT errors.
+func (v *Valkey) vDel(ctx context.Context, keys []string) error {
+	if v.isCluster {
+		for _, key := range keys {
+			if _, err := v.clusterClient.Del(ctx, []string{key}); err != nil {
+				return errors.Trace(err)
+			}
+		}
+		return nil
+	}
+	if _, err := v.standaloneClient.Del(ctx, keys); err != nil {
+		return errors.Trace(err)
+	}
+	return nil
+}
+
+// vHSet sets hash fields on a key.
+func (v *Valkey) vHSet(ctx context.Context, key string, fields map[string]string) error {
+	if v.isCluster {
+		_, err := v.clusterClient.HSet(ctx, key, fields)
+		return err
+	}
+	_, err := v.standaloneClient.HSet(ctx, key, fields)
+	return err
+}
+
+// vZAdd adds members to a sorted set.
+func (v *Valkey) vZAdd(ctx context.Context, key string, members map[string]float64) error {
+	if v.isCluster {
+		_, err := v.clusterClient.ZAdd(ctx, key, members)
+		return err
+	}
+	_, err := v.standaloneClient.ZAdd(ctx, key, members)
+	return err
+}
+
+// vHGetAll returns all fields and values of a hash.
+func (v *Valkey) vHGetAll(ctx context.Context, key string) (map[string]string, error) {
+	if v.isCluster {
+		return v.clusterClient.HGetAll(ctx, key)
+	}
+	return v.standaloneClient.HGetAll(ctx, key)
+}
+
 // Ping the valkey server.
 func (v *Valkey) Ping() error {
 	ctx := context.Background()
@@ -308,10 +354,8 @@ func (v *Valkey) Purge() error {
 			if err != nil {
 				return errors.Trace(err)
 			}
-			if len(result.Keys) > 0 {
-				if _, err = v.clusterClient.Del(ctx, result.Keys); err != nil {
-					return errors.Trace(err)
-				}
+			if err = v.vDel(ctx, result.Keys); err != nil {
+				return errors.Trace(err)
 			}
 			cursor = result.Cursor
 		}
@@ -430,7 +474,7 @@ func (v *Valkey) documentKey(collection, subset, value string) string {
 func (v *Valkey) AddScores(ctx context.Context, collection, subset string, documents []Score) error {
 	if v.isCluster {
 		for _, document := range documents {
-			if _, err := v.clusterClient.HSet(ctx, v.documentKey(collection, subset, document.Id), map[string]string{
+			if err := v.vHSet(ctx, v.documentKey(collection, subset, document.Id), map[string]string{
 				"collection": collection,
 				"subset":     subset,
 				"id":         document.Id,
@@ -470,12 +514,12 @@ func formatBool(b bool) string {
 // SearchScores searches for score documents using FT.SEARCH.
 func (v *Valkey) SearchScores(ctx context.Context, collection, subset string, query []string, begin, end int) ([]Score, error) {
 	var builder strings.Builder
-	fmt.Fprintf(&builder, "@collection:{ %s } @is_hidden:[0 0]", escape(collection))
+	fmt.Fprintf(&builder, "@collection:{ %s } @is_hidden:[0 0]", escapeTag(collection))
 	if subset != "" {
-		fmt.Fprintf(&builder, " @subset:{ %s }", escape(subset))
+		fmt.Fprintf(&builder, " @subset:{ %s }", escapeTag(subset))
 	}
 	for _, q := range query {
-		fmt.Fprintf(&builder, " @categories:{ %s }", escape(encodeCategory(q)))
+		fmt.Fprintf(&builder, " @categories:{ %s }", escapeTag(encodeCategory(q)))
 	}
 	// Fetch enough results to cover the requested range.
 	// We request from offset 0 because the Glide map format loses ordering,
@@ -520,10 +564,10 @@ func (v *Valkey) UpdateScores(ctx context.Context, collections []string, subset 
 		return nil
 	}
 	var builder strings.Builder
-	fmt.Fprintf(&builder, "@collection:{ %s }", escape(strings.Join(collections, " | ")))
-	fmt.Fprintf(&builder, " @id:{ %s }", escape(id))
+	fmt.Fprintf(&builder, "@collection:{ %s }", escapeTag(strings.Join(collections, " | ")))
+	fmt.Fprintf(&builder, " @id:{ %s }", escapeTag(id))
 	if subset != nil {
-		fmt.Fprintf(&builder, " @subset:{ %s }", escape(*subset))
+		fmt.Fprintf(&builder, " @subset:{ %s }", escapeTag(*subset))
 	}
 	limit := v.maxSearchResults
 	if limit <= 0 {
@@ -587,28 +631,8 @@ func (v *Valkey) UpdateScores(ctx context.Context, collections []string, subset 
 		values["categories"] = encodeCategories(patch.Categories)
 	}
 	for _, key := range keys {
-		if v.isCluster {
-			exists, err := v.clusterClient.Exists(ctx, []string{key})
-			if err != nil {
-				return errors.Trace(err)
-			}
-			if exists == 0 {
-				continue
-			}
-			if _, err = v.clusterClient.HSet(ctx, key, values); err != nil {
-				return errors.Trace(err)
-			}
-		} else {
-			exists, err := v.standaloneClient.Exists(ctx, []string{key})
-			if err != nil {
-				return errors.Trace(err)
-			}
-			if exists == 0 {
-				continue
-			}
-			if _, err = v.standaloneClient.HSet(ctx, key, values); err != nil {
-				return errors.Trace(err)
-			}
+		if err := v.vHSet(ctx, key, values); err != nil {
+			return errors.Trace(err)
 		}
 	}
 	return nil
@@ -620,17 +644,18 @@ func (v *Valkey) DeleteScores(ctx context.Context, collections []string, conditi
 		return errors.Trace(err)
 	}
 	var builder strings.Builder
-	fmt.Fprintf(&builder, "@collection:{ %s }", escape(strings.Join(collections, " | ")))
+	fmt.Fprintf(&builder, "@collection:{ %s }", escapeTag(strings.Join(collections, " | ")))
 	if condition.Subset != nil {
-		fmt.Fprintf(&builder, " @subset:{ %s }", escape(*condition.Subset))
+		fmt.Fprintf(&builder, " @subset:{ %s }", escapeTag(*condition.Subset))
 	}
 	if condition.Id != nil {
-		fmt.Fprintf(&builder, " @id:{ %s }", escape(*condition.Id))
+		fmt.Fprintf(&builder, " @id:{ %s }", escapeTag(*condition.Id))
 	}
 	if condition.Before != nil {
 		fmt.Fprintf(&builder, " @timestamp:[-inf (%d]", condition.Before.UnixMicro())
 	}
-	for {
+	const maxDeleteIterations = 100
+	for iteration := 0; iteration < maxDeleteIterations; iteration++ {
 		args := []string{
 			"FT.SEARCH", v.DocumentTable(), builder.String(),
 			"SORTBY", "score", "DESC",
@@ -646,7 +671,8 @@ func (v *Valkey) DeleteScores(ctx context.Context, collections []string, conditi
 			break
 		}
 		if v.isCluster {
-			if _, err = v.clusterClient.Del(ctx, docKeys); err != nil {
+			// Delete keys one at a time to avoid CROSSSLOT errors in cluster mode.
+			if err = v.vDel(ctx, docKeys); err != nil {
 				return errors.Trace(err)
 			}
 		} else {
@@ -676,7 +702,7 @@ func (v *Valkey) ScanScores(ctx context.Context, callback func(collection string
 				return errors.Trace(err)
 			}
 			for _, key := range result.Keys {
-				row, err := v.clusterClient.HGetAll(ctx, key)
+				row, err := v.vHGetAll(ctx, key)
 				if err != nil {
 					return errors.Trace(err)
 				}
@@ -700,7 +726,7 @@ func (v *Valkey) ScanScores(ctx context.Context, callback func(collection string
 			return errors.Trace(err)
 		}
 		for _, key := range result.Data {
-			row, err := v.standaloneClient.HGetAll(ctx, key)
+			row, err := v.vHGetAll(ctx, key)
 			if err != nil {
 				return errors.Trace(err)
 			}
@@ -719,53 +745,56 @@ func (v *Valkey) ScanScores(ctx context.Context, callback func(collection string
 	}
 }
 
+// timeSeriesGroup holds grouped ZADD members and HSET fields for a single time series.
+type timeSeriesGroup struct {
+	zaddMembers map[string]float64
+	hsetFields  map[string]string
+}
+
+// groupTimeSeriesPoints groups time series points by name for batched writes.
+func groupTimeSeriesPoints(points []TimeSeriesPoint) map[string]*timeSeriesGroup {
+	grouped := make(map[string]*timeSeriesGroup)
+	for _, point := range points {
+		tsMs := point.Timestamp.UnixMilli()
+		tsMsStr := strconv.FormatInt(tsMs, 10)
+		sd, ok := grouped[point.Name]
+		if !ok {
+			sd = &timeSeriesGroup{
+				zaddMembers: make(map[string]float64),
+				hsetFields:  make(map[string]string),
+			}
+			grouped[point.Name] = sd
+		}
+		sd.zaddMembers[tsMsStr] = float64(tsMs)
+		sd.hsetFields[tsMsStr] = strconv.FormatFloat(point.Value, 'g', -1, 64)
+	}
+	return grouped
+}
+
 // AddTimeSeriesPoints adds time series points using sorted set + hash (Approach A).
 // Sorted set key: {prefix}ts_index:{name} — score = timestamp_ms, member = timestamp_ms as string
 // Hash key: {prefix}ts_data:{name} — field = timestamp_ms as string, value = float64 as string
 func (v *Valkey) AddTimeSeriesPoints(ctx context.Context, points []TimeSeriesPoint) error {
+	grouped := groupTimeSeriesPoints(points)
 	if v.isCluster {
-		// Group points by name to batch ZADD and HSET per series.
-		type seriesData struct {
-			zaddMembers map[string]float64
-			hsetFields  map[string]string
-		}
-		grouped := make(map[string]*seriesData)
-		for _, point := range points {
-			tsMs := point.Timestamp.UnixMilli()
-			tsMsStr := strconv.FormatInt(tsMs, 10)
-			sd, ok := grouped[point.Name]
-			if !ok {
-				sd = &seriesData{
-					zaddMembers: make(map[string]float64),
-					hsetFields:  make(map[string]string),
-				}
-				grouped[point.Name] = sd
-			}
-			sd.zaddMembers[tsMsStr] = float64(tsMs)
-			sd.hsetFields[tsMsStr] = strconv.FormatFloat(point.Value, 'g', -1, 64)
-		}
 		for name, sd := range grouped {
 			indexKey := v.PointsTable() + ":ts_index:" + name
 			dataKey := v.PointsTable() + ":ts_data:" + name
-			if _, err := v.clusterClient.ZAdd(ctx, indexKey, sd.zaddMembers); err != nil {
+			if err := v.vZAdd(ctx, indexKey, sd.zaddMembers); err != nil {
 				return errors.Trace(err)
 			}
-			if _, err := v.clusterClient.HSet(ctx, dataKey, sd.hsetFields); err != nil {
+			if err := v.vHSet(ctx, dataKey, sd.hsetFields); err != nil {
 				return errors.Trace(err)
 			}
 		}
 		return nil
 	}
 	batch := pipeline.NewStandaloneBatch(false)
-	for _, point := range points {
-		tsMs := point.Timestamp.UnixMilli()
-		tsMsStr := strconv.FormatInt(tsMs, 10)
-		indexKey := v.PointsTable() + ":ts_index:" + point.Name
-		dataKey := v.PointsTable() + ":ts_data:" + point.Name
-		batch.ZAdd(indexKey, map[string]float64{tsMsStr: float64(tsMs)})
-		batch.HSet(dataKey, map[string]string{
-			tsMsStr: strconv.FormatFloat(point.Value, 'g', -1, 64),
-		})
+	for name, sd := range grouped {
+		indexKey := v.PointsTable() + ":ts_index:" + name
+		dataKey := v.PointsTable() + ":ts_data:" + name
+		batch.ZAdd(indexKey, sd.zaddMembers)
+		batch.HSet(dataKey, sd.hsetFields)
 	}
 	_, err := v.standaloneClient.Exec(ctx, *batch, true)
 	return errors.Trace(err)
@@ -1057,4 +1086,31 @@ func parseFieldMap(v any) map[string]string {
 	default:
 		return nil
 	}
+}
+
+// valkeyTagEscaper escapes all TAG special characters for Valkey Search queries.
+// This prevents query injection via user-controlled values in TAG fields.
+// Valkey Search TAG syntax has special chars: | * { } ( ) ~ @ \ " ' - : . / +
+var valkeyTagEscaper = strings.NewReplacer(
+	`\`, `\\`,
+	`{`, `\{`,
+	`}`, `\}`,
+	`|`, `\|`,
+	`*`, `\*`,
+	`(`, `\(`,
+	`)`, `\)`,
+	`~`, `\~`,
+	`@`, `\@`,
+	`"`, `\"`,
+	`'`, `\'`,
+	`-`, `\-`,
+	`:`, `\:`,
+	`.`, `\.`,
+	`/`, `\/`,
+	`+`, `\+`,
+)
+
+// escapeTag escapes a value for use in Valkey Search TAG queries.
+func escapeTag(s string) string {
+	return valkeyTagEscaper.Replace(s)
 }
