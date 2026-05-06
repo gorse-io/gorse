@@ -52,10 +52,8 @@ func (suite *ValkeyTestSuite) SetupSuite() {
 	// flush db
 	valkeyClient, ok := suite.Database.(*Valkey)
 	suite.True(ok)
-	if !valkeyClient.isCluster {
-		_, err = valkeyClient.standaloneClient.CustomCommand(suite.T().Context(), []string{"FLUSHDB"})
-		suite.NoError(err)
-	}
+	err = valkeyClient.client.Do(context.Background(), valkeyClient.client.B().Flushdb().Build()).Error()
+	suite.NoError(err)
 	// create schema
 	err = suite.Database.Init()
 	suite.NoError(err)
@@ -211,44 +209,42 @@ func TestValkey(t *testing.T) {
 
 func TestParseValkeyURL(t *testing.T) {
 	// Basic URL
-	addr, username, password, db, useTLS, err := parseValkeyURL("valkey://127.0.0.1:6380/")
+	host, port, username, password, db, useTLS, err := parseValkeyURL("valkey://127.0.0.1:6380/")
 	assert.NoError(t, err)
-	assert.Equal(t, "127.0.0.1", addr.Host)
-	assert.Equal(t, 6380, addr.Port)
+	assert.Equal(t, "127.0.0.1", host)
+	assert.Equal(t, 6380, port)
 	assert.Equal(t, "", username)
 	assert.Equal(t, "", password)
 	assert.Equal(t, 0, db)
 	assert.False(t, useTLS)
 
 	// URL with password only
-	addr, username, password, db, useTLS, err = parseValkeyURL("valkey://:secret@localhost:6379/2")
+	host, _, password, _, db, useTLS, err = parseValkeyURL("valkey://:secret@localhost:6379/2")
 	assert.NoError(t, err)
-	assert.Equal(t, "localhost", addr.Host)
-	assert.Equal(t, 6379, addr.Port)
-	assert.Equal(t, "", username)
+	assert.Equal(t, "localhost", host)
 	assert.Equal(t, "secret", password)
 	assert.Equal(t, 2, db)
 	assert.False(t, useTLS)
 
 	// URL with username and password
-	addr, username, password, db, useTLS, err = parseValkeyURL("valkey://myuser:mypass@host.example.com:6380/3")
+	host, port, username, password, db, useTLS, err = parseValkeyURL("valkey://myuser:mypass@host.example.com:6380/3")
 	assert.NoError(t, err)
-	assert.Equal(t, "host.example.com", addr.Host)
-	assert.Equal(t, 6380, addr.Port)
+	assert.Equal(t, "host.example.com", host)
+	assert.Equal(t, 6380, port)
 	assert.Equal(t, "myuser", username)
 	assert.Equal(t, "mypass", password)
 	assert.Equal(t, 3, db)
 	assert.False(t, useTLS)
 
 	// TLS URL
-	addr, _, _, _, useTLS, err = parseValkeyURL("valkeys://localhost:6379/0")
+	_, _, _, _, _, useTLS, err = parseValkeyURL("valkeys://localhost:6379/0")
 	assert.NoError(t, err)
 	assert.True(t, useTLS)
 
 	// Default port
-	addr, _, _, _, _, err = parseValkeyURL("valkey://localhost/")
+	_, port, _, _, _, _, err = parseValkeyURL("valkey://localhost/")
 	assert.NoError(t, err)
-	assert.Equal(t, 6379, addr.Port)
+	assert.Equal(t, 6379, port)
 }
 
 func TestParseValkeyClusterURL(t *testing.T) {
@@ -256,10 +252,9 @@ func TestParseValkeyClusterURL(t *testing.T) {
 	addresses, username, password, useTLS, err := parseValkeyClusterURL("valkey+cluster://:password@192.168.1.11:6379?addr=192.168.0.5:6379&addr=192.168.0.7:6379")
 	assert.NoError(t, err)
 	assert.Len(t, addresses, 3)
-	assert.Equal(t, "192.168.1.11", addresses[0].Host)
-	assert.Equal(t, 6379, addresses[0].Port)
-	assert.Equal(t, "192.168.0.5", addresses[1].Host)
-	assert.Equal(t, "192.168.0.7", addresses[2].Host)
+	assert.Equal(t, "192.168.1.11:6379", addresses[0])
+	assert.Equal(t, "192.168.0.5:6379", addresses[1])
+	assert.Equal(t, "192.168.0.7:6379", addresses[2])
 	assert.Equal(t, "", username)
 	assert.Equal(t, "password", password)
 	assert.False(t, useTLS)
@@ -268,9 +263,8 @@ func TestParseValkeyClusterURL(t *testing.T) {
 	addresses, username, password, useTLS, err = parseValkeyClusterURL("valkeys+cluster://admin:secret@node1:6380?addr=node2:6380")
 	assert.NoError(t, err)
 	assert.Len(t, addresses, 2)
-	assert.Equal(t, "node1", addresses[0].Host)
-	assert.Equal(t, 6380, addresses[0].Port)
-	assert.Equal(t, "node2", addresses[1].Host)
+	assert.Equal(t, "node1:6380", addresses[0])
+	assert.Equal(t, "node2:6380", addresses[1])
 	assert.Equal(t, "admin", username)
 	assert.Equal(t, "secret", password)
 	assert.True(t, useTLS)
@@ -282,10 +276,8 @@ func BenchmarkValkey(b *testing.B) {
 	assert.NoError(b, err)
 	// flush db
 	valkeyClient := database.(*Valkey)
-	if !valkeyClient.isCluster {
-		_, err = valkeyClient.standaloneClient.CustomCommand(context.Background(), []string{"FLUSHDB"})
-		assert.NoError(b, err)
-	}
+	err = valkeyClient.client.Do(context.Background(), valkeyClient.client.B().Flushdb().Build()).Error()
+	assert.NoError(b, err)
 	// create schema
 	err = database.Init()
 	assert.NoError(b, err)

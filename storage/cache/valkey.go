@@ -16,6 +16,7 @@ package cache
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"io"
 	"net/url"
@@ -28,42 +29,33 @@ import (
 	"github.com/gorse-io/gorse/storage"
 	"github.com/juju/errors"
 	"github.com/samber/lo"
-	glide "github.com/valkey-io/valkey-glide/go/v2"
-	glideconfig "github.com/valkey-io/valkey-glide/go/v2/config"
-	"github.com/valkey-io/valkey-glide/go/v2/models"
-	glideoptions "github.com/valkey-io/valkey-glide/go/v2/options"
-	"github.com/valkey-io/valkey-glide/go/v2/pipeline"
+	"github.com/valkey-io/valkey-go"
 	"go.uber.org/zap"
 )
 
 func init() {
 	Register([]string{storage.ValkeyPrefix, storage.ValkeysPrefix}, func(path, tablePrefix string, opts ...storage.Option) (Database, error) {
-		addr, username, password, db, useTLS, err := parseValkeyURL(path)
+		host, port, username, password, db, useTLS, err := parseValkeyURL(path)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
-		cfg := glideconfig.NewClientConfiguration().
-			WithAddress(&addr).
-			WithRequestTimeout(60 * time.Second)
-		if password != "" {
-			if username != "" {
-				cfg.WithCredentials(glideconfig.NewServerCredentials(username, password))
-			} else {
-				cfg.WithCredentials(glideconfig.NewServerCredentialsWithDefaultUsername(password))
-			}
+		option := valkey.ClientOption{
+			InitAddress: []string{fmt.Sprintf("%s:%d", host, port)},
+			SelectDB:    db,
 		}
-		if db > 0 {
-			cfg.WithDatabaseId(db)
+		if username != "" || password != "" {
+			option.Username = username
+			option.Password = password
 		}
 		if useTLS {
-			cfg.WithUseTLS(true)
+			option.TLSConfig = &tls.Config{}
 		}
-		client, err := glide.NewClient(cfg)
+		client, err := valkey.NewClient(option)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
 		database := &Valkey{
-			standaloneClient: client,
+			client:           client,
 			isCluster:        false,
 			maxSearchResults: storage.NewOptions(opts...).MaxSearchResults,
 		}
@@ -75,27 +67,22 @@ func init() {
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
-		cfg := glideconfig.NewClusterClientConfiguration()
-		for i := range addresses {
-			cfg.WithAddress(&addresses[i])
+		option := valkey.ClientOption{
+			InitAddress: addresses,
 		}
-		cfg.WithRequestTimeout(60 * time.Second)
-		if password != "" {
-			if username != "" {
-				cfg.WithCredentials(glideconfig.NewServerCredentials(username, password))
-			} else {
-				cfg.WithCredentials(glideconfig.NewServerCredentialsWithDefaultUsername(password))
-			}
+		if username != "" || password != "" {
+			option.Username = username
+			option.Password = password
 		}
 		if useTLS {
-			cfg.WithUseTLS(true)
+			option.TLSConfig = &tls.Config{}
 		}
-		client, err := glide.NewClusterClient(cfg)
+		client, err := valkey.NewClient(option)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
 		database := &Valkey{
-			clusterClient:    client,
+			client:           client,
 			isCluster:        true,
 			maxSearchResults: storage.NewOptions(opts...).MaxSearchResults,
 		}
@@ -105,23 +92,22 @@ func init() {
 }
 
 // parseValkeyURL parses a valkey:// or valkeys:// URL into connection parameters.
-func parseValkeyURL(rawURL string) (addr glideconfig.NodeAddress, username, password string, db int, useTLS bool, err error) {
+func parseValkeyURL(rawURL string) (host string, port int, username, password string, db int, useTLS bool, err error) {
 	parsed, err := url.Parse(rawURL)
 	if err != nil {
-		return addr, "", "", 0, false, errors.Trace(err)
+		return "", 0, "", "", 0, false, errors.Trace(err)
 	}
-	host := parsed.Hostname()
+	host = parsed.Hostname()
 	if host == "" {
 		host = "localhost"
 	}
-	port := 6379
+	port = 6379
 	if parsed.Port() != "" {
 		port, err = strconv.Atoi(parsed.Port())
 		if err != nil {
-			return addr, "", "", 0, false, errors.Trace(err)
+			return "", 0, "", "", 0, false, errors.Trace(err)
 		}
 	}
-	addr = glideconfig.NodeAddress{Host: host, Port: port}
 	if parsed.User != nil {
 		username = parsed.User.Username()
 		password, _ = parsed.User.Password()
@@ -131,16 +117,16 @@ func parseValkeyURL(rawURL string) (addr glideconfig.NodeAddress, username, pass
 		if dbStr != "" {
 			db, err = strconv.Atoi(dbStr)
 			if err != nil {
-				return addr, "", "", 0, false, errors.Errorf("invalid database number: %s", dbStr)
+				return "", 0, "", "", 0, false, errors.Errorf("invalid database number: %s", dbStr)
 			}
 		}
 	}
 	useTLS = parsed.Scheme == "valkeys"
-	return addr, username, password, db, useTLS, nil
+	return host, port, username, password, db, useTLS, nil
 }
 
 // parseValkeyClusterURL parses a valkey+cluster:// or valkeys+cluster:// URL.
-func parseValkeyClusterURL(rawURL string) (addresses []glideconfig.NodeAddress, username, password string, useTLS bool, err error) {
+func parseValkeyClusterURL(rawURL string) (addresses []string, username, password string, useTLS bool, err error) {
 	// Replace the cluster prefix with a standard scheme for URL parsing.
 	var newURL string
 	if strings.HasPrefix(rawURL, storage.ValkeyClusterPrefix) {
@@ -165,220 +151,126 @@ func parseValkeyClusterURL(rawURL string) (addresses []glideconfig.NodeAddress, 
 			return nil, "", "", false, errors.Trace(err)
 		}
 	}
-	addresses = append(addresses, glideconfig.NodeAddress{Host: host, Port: port})
+	addresses = append(addresses, fmt.Sprintf("%s:%d", host, port))
 	if parsed.User != nil {
 		username = parsed.User.Username()
 		password, _ = parsed.User.Password()
 	}
 	// Parse additional addresses from query params (addr=host:port).
 	for _, addrStr := range parsed.Query()["addr"] {
-		parts := strings.SplitN(addrStr, ":", 2)
-		h := parts[0]
-		p := 6379
-		if len(parts) == 2 {
-			p, err = strconv.Atoi(parts[1])
-			if err != nil {
-				return nil, "", "", false, errors.Errorf("invalid port in addr param: %s", addrStr)
-			}
+		if !strings.Contains(addrStr, ":") {
+			addrStr = addrStr + ":6379"
 		}
-		addresses = append(addresses, glideconfig.NodeAddress{Host: h, Port: p})
+		addresses = append(addresses, addrStr)
 	}
 	return addresses, username, password, useTLS, nil
 }
 
-// Valkey cache storage using valkey-glide client.
+// Valkey cache storage using valkey-go client.
 type Valkey struct {
 	storage.TablePrefix
-	standaloneClient *glide.Client
-	clusterClient    *glide.ClusterClient
+	client           valkey.Client
 	isCluster        bool
 	maxSearchResults int
 }
 
 // Close the valkey connection.
 func (v *Valkey) Close() error {
-	if v.isCluster {
-		v.clusterClient.Close()
-	} else {
-		v.standaloneClient.Close()
-	}
+	v.client.Close()
 	return nil
-}
-
-// --- Thin wrapper methods to eliminate cluster/standalone branching duplication ---
-
-// vDel deletes keys, handling cluster mode by deleting one at a time to avoid CROSSSLOT errors.
-func (v *Valkey) vDel(ctx context.Context, keys []string) error {
-	if v.isCluster {
-		for _, key := range keys {
-			if _, err := v.clusterClient.Del(ctx, []string{key}); err != nil {
-				return errors.Trace(err)
-			}
-		}
-		return nil
-	}
-	if _, err := v.standaloneClient.Del(ctx, keys); err != nil {
-		return errors.Trace(err)
-	}
-	return nil
-}
-
-// vHSet sets hash fields on a key.
-func (v *Valkey) vHSet(ctx context.Context, key string, fields map[string]string) error {
-	if v.isCluster {
-		_, err := v.clusterClient.HSet(ctx, key, fields)
-		return err
-	}
-	_, err := v.standaloneClient.HSet(ctx, key, fields)
-	return err
-}
-
-// vZAdd adds members to a sorted set.
-func (v *Valkey) vZAdd(ctx context.Context, key string, members map[string]float64) error {
-	if v.isCluster {
-		_, err := v.clusterClient.ZAdd(ctx, key, members)
-		return err
-	}
-	_, err := v.standaloneClient.ZAdd(ctx, key, members)
-	return err
-}
-
-// vHGetAll returns all fields and values of a hash.
-func (v *Valkey) vHGetAll(ctx context.Context, key string) (map[string]string, error) {
-	if v.isCluster {
-		return v.clusterClient.HGetAll(ctx, key)
-	}
-	return v.standaloneClient.HGetAll(ctx, key)
 }
 
 // Ping the valkey server.
 func (v *Valkey) Ping() error {
 	ctx := context.Background()
-	if v.isCluster {
-		_, err := v.clusterClient.Ping(ctx)
-		return err
-	}
-	_, err := v.standaloneClient.Ping(ctx)
-	return err
+	return v.client.Do(ctx, v.client.B().Ping().Build()).Error()
 }
 
 // Init creates the valkey-search index for document storage.
 func (v *Valkey) Init() error {
 	ctx := context.Background()
 	// List existing indices via FT._LIST.
-	result, err := v.customCommand(ctx, []string{"FT._LIST"})
+	result, err := v.client.Do(ctx, v.client.B().Arbitrary("FT._LIST").Build()).ToArray()
 	if err != nil {
 		return errors.Trace(err)
 	}
-	indices := parseStringSlice(result)
+	indices := make([]string, 0, len(result))
+	for _, r := range result {
+		if s, err := r.ToString(); err == nil {
+			indices = append(indices, s)
+		}
+	}
 	if lo.Contains(indices, v.DocumentTable()) {
 		return nil
 	}
 	// Create the index.
-	_, err = v.customCommand(ctx, []string{
-		"FT.CREATE", v.DocumentTable(),
-		"ON", "HASH",
-		"PREFIX", "1", v.DocumentTable() + ":",
-		"SCHEMA",
-		"collection", "TAG",
-		"subset", "TAG",
-		"id", "TAG",
-		"score", "NUMERIC",
-		"is_hidden", "NUMERIC",
-		"categories", "TAG", "SEPARATOR", ";",
-		"timestamp", "NUMERIC",
-	})
+	err = v.client.Do(ctx, v.client.B().Arbitrary("FT.CREATE").
+		Keys(v.DocumentTable()).
+		Args(
+			"ON", "HASH",
+			"PREFIX", "1", v.DocumentTable()+":",
+			"SCHEMA",
+			"collection", "TAG",
+			"subset", "TAG",
+			"id", "TAG",
+			"score", "NUMERIC",
+			"is_hidden", "NUMERIC",
+			"categories", "TAG", "SEPARATOR", ";",
+			"timestamp", "NUMERIC",
+		).Build()).Error()
 	if err != nil {
 		return errors.Trace(err)
 	}
 	return nil
 }
 
-// customCommand executes a custom command, handling both standalone and cluster modes.
-func (v *Valkey) customCommand(ctx context.Context, args []string) (any, error) {
-	if v.isCluster {
-		result, err := v.clusterClient.CustomCommand(ctx, args)
-		if err != nil {
-			return nil, err
-		}
-		return result.SingleValue(), nil
-	}
-	return v.standaloneClient.CustomCommand(ctx, args)
-}
-
 // Scan iterates over all keys with the table prefix.
 func (v *Valkey) Scan(work func(string) error) error {
 	ctx := context.Background()
-	if v.isCluster {
-		cursor := models.NewClusterScanCursor()
-		scanOpts := glideoptions.NewClusterScanOptions().SetMatch(string(v.TablePrefix) + "*")
-		for !cursor.IsFinished() {
-			result, err := v.clusterClient.ScanWithOptions(ctx, cursor, *scanOpts)
-			if err != nil {
-				return errors.Trace(err)
-			}
-			for _, key := range result.Keys {
-				if err = work(key[len(v.TablePrefix):]); err != nil {
-					return errors.Trace(err)
-				}
-			}
-			cursor = result.Cursor
-		}
-		return nil
-	}
-	cursor := models.NewCursor()
-	scanOpts := glideoptions.NewScanOptions().SetMatch(string(v.TablePrefix) + "*")
+	var cursor uint64
 	for {
-		result, err := v.standaloneClient.ScanWithOptions(ctx, cursor, *scanOpts)
+		entry, err := v.client.Do(ctx, v.client.B().Scan().Cursor(cursor).Match(string(v.TablePrefix)+"*").Count(100).Build()).AsScanEntry()
 		if err != nil {
 			return errors.Trace(err)
 		}
-		for _, key := range result.Data {
+		for _, key := range entry.Elements {
 			if err = work(key[len(v.TablePrefix):]); err != nil {
 				return errors.Trace(err)
 			}
 		}
-		if result.Cursor.IsFinished() {
+		cursor = entry.Cursor
+		if cursor == 0 {
 			return nil
 		}
-		cursor = result.Cursor
 	}
 }
 
 // Purge deletes all keys with the table prefix.
 func (v *Valkey) Purge() error {
 	ctx := context.Background()
-	if v.isCluster {
-		cursor := models.NewClusterScanCursor()
-		scanOpts := glideoptions.NewClusterScanOptions().SetMatch(string(v.TablePrefix) + "*")
-		for !cursor.IsFinished() {
-			result, err := v.clusterClient.ScanWithOptions(ctx, cursor, *scanOpts)
-			if err != nil {
-				return errors.Trace(err)
-			}
-			if err = v.vDel(ctx, result.Keys); err != nil {
-				return errors.Trace(err)
-			}
-			cursor = result.Cursor
-		}
-		return nil
-	}
-	cursor := models.NewCursor()
-	scanOpts := glideoptions.NewScanOptions().SetMatch(string(v.TablePrefix) + "*")
+	var cursor uint64
 	for {
-		result, err := v.standaloneClient.ScanWithOptions(ctx, cursor, *scanOpts)
+		entry, err := v.client.Do(ctx, v.client.B().Scan().Cursor(cursor).Match(string(v.TablePrefix)+"*").Count(100).Build()).AsScanEntry()
 		if err != nil {
 			return errors.Trace(err)
 		}
-		if len(result.Data) > 0 {
-			if _, err = v.standaloneClient.Del(ctx, result.Data); err != nil {
-				return errors.Trace(err)
+		if len(entry.Elements) > 0 {
+			if v.isCluster {
+				for _, key := range entry.Elements {
+					if err = v.client.Do(ctx, v.client.B().Del().Key(key).Build()).Error(); err != nil {
+						return errors.Trace(err)
+					}
+				}
+			} else {
+				if err = v.client.Do(ctx, v.client.B().Del().Key(entry.Elements...).Build()).Error(); err != nil {
+					return errors.Trace(err)
+				}
 			}
 		}
-		if result.Cursor.IsFinished() {
+		cursor = entry.Cursor
+		if cursor == 0 {
 			return nil
 		}
-		cursor = result.Cursor
 	}
 }
 
@@ -387,16 +279,8 @@ func (v *Valkey) Set(ctx context.Context, values ...Value) error {
 	if len(values) == 0 {
 		return nil
 	}
-	if v.isCluster {
-		for _, val := range values {
-			if _, err := v.clusterClient.Set(ctx, v.Key(val.name), val.value); err != nil {
-				return errors.Trace(err)
-			}
-		}
-		return nil
-	}
 	for _, val := range values {
-		if _, err := v.standaloneClient.Set(ctx, v.Key(val.name), val.value); err != nil {
+		if err := v.client.Do(ctx, v.client.B().Set().Key(v.Key(val.name)).Value(val.value).Build()).Error(); err != nil {
 			return errors.Trace(err)
 		}
 	}
@@ -405,70 +289,41 @@ func (v *Valkey) Set(ctx context.Context, values ...Value) error {
 
 // Get returns a value from Valkey.
 func (v *Valkey) Get(ctx context.Context, key string) *ReturnValue {
-	var result models.Result[string]
-	var err error
-	if v.isCluster {
-		result, err = v.clusterClient.Get(ctx, v.Key(key))
-	} else {
-		result, err = v.standaloneClient.Get(ctx, v.Key(key))
-	}
+	result, err := v.client.Do(ctx, v.client.B().Get().Key(v.Key(key)).Build()).ToString()
 	if err != nil {
+		if valkey.IsValkeyNil(err) {
+			return &ReturnValue{value: "", exists: false}
+		}
 		return &ReturnValue{err: err, exists: false}
 	}
-	if result.IsNil() {
-		return &ReturnValue{value: "", exists: false}
-	}
-	return &ReturnValue{value: result.Value(), exists: true}
+	return &ReturnValue{value: result, exists: true}
 }
 
 // Delete removes a key from Valkey.
 func (v *Valkey) Delete(ctx context.Context, key string) error {
-	if v.isCluster {
-		_, err := v.clusterClient.Del(ctx, []string{v.Key(key)})
-		return err
-	}
-	_, err := v.standaloneClient.Del(ctx, []string{v.Key(key)})
-	return err
+	return v.client.Do(ctx, v.client.B().Del().Key(v.Key(key)).Build()).Error()
 }
 
 // Push adds a message to a sorted set queue with timestamp as score.
 func (v *Valkey) Push(ctx context.Context, name, message string) error {
-	members := map[string]float64{message: float64(time.Now().UnixNano())}
-	if v.isCluster {
-		_, err := v.clusterClient.ZAdd(ctx, v.Key(name), members)
-		return err
-	}
-	_, err := v.standaloneClient.ZAdd(ctx, v.Key(name), members)
-	return err
+	return v.client.Do(ctx, v.client.B().Zadd().Key(v.Key(name)).ScoreMember().ScoreMember(float64(time.Now().UnixNano()), message).Build()).Error()
 }
 
 // Pop removes and returns the message with the lowest score from the queue.
 func (v *Valkey) Pop(ctx context.Context, name string) (string, error) {
-	var result map[string]float64
-	var err error
-	if v.isCluster {
-		result, err = v.clusterClient.ZPopMin(ctx, v.Key(name))
-	} else {
-		result, err = v.standaloneClient.ZPopMin(ctx, v.Key(name))
-	}
+	result, err := v.client.Do(ctx, v.client.B().Zpopmin().Key(v.Key(name)).Count(1).Build()).AsZScores()
 	if err != nil {
 		return "", errors.Trace(err)
 	}
 	if len(result) == 0 {
 		return "", io.EOF
 	}
-	for member := range result {
-		return member, nil
-	}
-	return "", io.EOF
+	return result[0].Member, nil
 }
 
 // Remain returns the number of messages in the queue.
 func (v *Valkey) Remain(ctx context.Context, name string) (int64, error) {
-	if v.isCluster {
-		return v.clusterClient.ZCard(ctx, v.Key(name))
-	}
-	return v.standaloneClient.ZCard(ctx, v.Key(name))
+	return v.client.Do(ctx, v.client.B().Zcard().Key(v.Key(name)).Build()).AsInt64()
 }
 
 func (v *Valkey) documentKey(collection, subset, value string) string {
@@ -477,32 +332,18 @@ func (v *Valkey) documentKey(collection, subset, value string) string {
 
 // AddScores adds score documents to Valkey using hash storage.
 func (v *Valkey) AddScores(ctx context.Context, collection, subset string, documents []Score) error {
-	if v.isCluster {
-		for _, document := range documents {
-			if err := v.vHSet(ctx, v.documentKey(collection, subset, document.Id), map[string]string{
-				"collection": collection,
-				"subset":     subset,
-				"id":         document.Id,
-				"score":      strconv.FormatFloat(document.Score, 'g', -1, 64),
-				"is_hidden":  formatBool(document.IsHidden),
-				"categories": encodeCategories(document.Categories),
-				"timestamp":  strconv.FormatInt(document.Timestamp.UnixMicro(), 10),
-			}); err != nil {
-				return errors.Trace(err)
-			}
-		}
-		return nil
-	}
 	for _, document := range documents {
-		if _, err := v.standaloneClient.HSet(ctx, v.documentKey(collection, subset, document.Id), map[string]string{
-			"collection": collection,
-			"subset":     subset,
-			"id":         document.Id,
-			"score":      strconv.FormatFloat(document.Score, 'g', -1, 64),
-			"is_hidden":  formatBool(document.IsHidden),
-			"categories": encodeCategories(document.Categories),
-			"timestamp":  strconv.FormatInt(document.Timestamp.UnixMicro(), 10),
-		}); err != nil {
+		key := v.documentKey(collection, subset, document.Id)
+		cmd := v.client.B().Hset().Key(key).FieldValue().
+			FieldValue("collection", collection).
+			FieldValue("subset", subset).
+			FieldValue("id", document.Id).
+			FieldValue("score", strconv.FormatFloat(document.Score, 'g', -1, 64)).
+			FieldValue("is_hidden", formatBool(document.IsHidden)).
+			FieldValue("categories", encodeCategories(document.Categories)).
+			FieldValue("timestamp", strconv.FormatInt(document.Timestamp.UnixMicro(), 10)).
+			Build()
+		if err := v.client.Do(ctx, cmd).Error(); err != nil {
 			return errors.Trace(err)
 		}
 	}
@@ -526,19 +367,15 @@ func (v *Valkey) SearchScores(ctx context.Context, collection, subset string, qu
 	for _, q := range query {
 		fmt.Fprintf(&builder, " @categories:{ %s }", escapeTag(encodeCategory(q)))
 	}
-	// Fetch enough results to cover the requested range.
-	// We request from offset 0 because the Glide map format loses ordering,
-	// and we sort + slice in Go.
 	fetchLimit := 10000
 	if end != -1 {
 		fetchLimit = end
 	}
-	args := []string{
-		"FT.SEARCH", v.DocumentTable(), builder.String(),
-		"SORTBY", "score", "DESC",
-		"LIMIT", "0", strconv.Itoa(fetchLimit),
-	}
-	result, err := v.customCommand(ctx, args)
+	cmd := v.client.B().Arbitrary("FT.SEARCH").
+		Keys(v.DocumentTable()).
+		Args(builder.String(), "SORTBY", "score", "DESC", "LIMIT", "0", strconv.Itoa(fetchLimit)).
+		Build()
+	result, err := v.client.Do(ctx, cmd).ToArray()
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -546,7 +383,6 @@ func (v *Valkey) SearchScores(ctx context.Context, collection, subset string, qu
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	// Apply begin/end slicing since Glide map format loses server-side ordering.
 	if begin > 0 || end != -1 {
 		if begin >= len(documents) {
 			return []Score{}, nil
@@ -584,24 +420,22 @@ func (v *Valkey) UpdateScores(ctx context.Context, collections []string, subset 
 	keySet := make(map[string]struct{})
 	offset := 0
 	for {
-		args := []string{
-			"FT.SEARCH", v.DocumentTable(), builder.String(),
-			"SORTBY", "score", "DESC",
-			"LIMIT", strconv.Itoa(offset), strconv.Itoa(limit),
-		}
-		result, err := v.customCommand(ctx, args)
+		cmd := v.client.B().Arbitrary("FT.SEARCH").
+			Keys(v.DocumentTable()).
+			Args(builder.String(), "SORTBY", "score", "DESC", "LIMIT", strconv.Itoa(offset), strconv.Itoa(limit)).
+			Build()
+		result, err := v.client.Do(ctx, cmd).ToArray()
 		if err != nil {
 			return errors.Trace(err)
 		}
-		// On the first page, check the total and fetch all at once if needed.
-		// This avoids pagination issues with tied scores where the server
-		// may return duplicates across pages.
 		if offset == 0 {
 			total := parseFTSearchTotal(result)
 			if total > limit {
-				// Re-fetch with the full count to avoid pagination drift.
-				args[len(args)-1] = strconv.Itoa(total)
-				result, err = v.customCommand(ctx, args)
+				cmd = v.client.B().Arbitrary("FT.SEARCH").
+					Keys(v.DocumentTable()).
+					Args(builder.String(), "SORTBY", "score", "DESC", "LIMIT", "0", strconv.Itoa(total)).
+					Build()
+				result, err = v.client.Do(ctx, cmd).ToArray()
 				if err != nil {
 					return errors.Trace(err)
 				}
@@ -625,18 +459,18 @@ func (v *Valkey) UpdateScores(ctx context.Context, collections []string, subset 
 		}
 	}
 
-	values := make(map[string]string)
-	if patch.Score != nil {
-		values["score"] = strconv.FormatFloat(*patch.Score, 'g', -1, 64)
-	}
-	if patch.IsHidden != nil {
-		values["is_hidden"] = formatBool(*patch.IsHidden)
-	}
-	if patch.Categories != nil {
-		values["categories"] = encodeCategories(patch.Categories)
-	}
 	for _, key := range keys {
-		if err := v.vHSet(ctx, key, values); err != nil {
+		cmd := v.client.B().Hset().Key(key).FieldValue()
+		if patch.Score != nil {
+			cmd = cmd.FieldValue("score", strconv.FormatFloat(*patch.Score, 'g', -1, 64))
+		}
+		if patch.IsHidden != nil {
+			cmd = cmd.FieldValue("is_hidden", formatBool(*patch.IsHidden))
+		}
+		if patch.Categories != nil {
+			cmd = cmd.FieldValue("categories", encodeCategories(patch.Categories))
+		}
+		if err := v.client.Do(ctx, cmd.Build()).Error(); err != nil {
 			return errors.Trace(err)
 		}
 	}
@@ -661,12 +495,11 @@ func (v *Valkey) DeleteScores(ctx context.Context, collections []string, conditi
 	}
 	const maxDeleteIterations = 100
 	for iteration := 0; iteration < maxDeleteIterations; iteration++ {
-		args := []string{
-			"FT.SEARCH", v.DocumentTable(), builder.String(),
-			"SORTBY", "score", "DESC",
-			"LIMIT", "0", "10000",
-		}
-		result, err := v.customCommand(ctx, args)
+		cmd := v.client.B().Arbitrary("FT.SEARCH").
+			Keys(v.DocumentTable()).
+			Args(builder.String(), "SORTBY", "score", "DESC", "LIMIT", "0", "10000").
+			Build()
+		result, err := v.client.Do(ctx, cmd).ToArray()
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -676,12 +509,13 @@ func (v *Valkey) DeleteScores(ctx context.Context, collections []string, conditi
 			break
 		}
 		if v.isCluster {
-			// Delete keys one at a time to avoid CROSSSLOT errors in cluster mode.
-			if err = v.vDel(ctx, docKeys); err != nil {
-				return errors.Trace(err)
+			for _, key := range docKeys {
+				if err = v.client.Do(ctx, v.client.B().Del().Key(key).Build()).Error(); err != nil {
+					return errors.Trace(err)
+				}
 			}
 		} else {
-			if _, err = v.standaloneClient.Del(ctx, docKeys); err != nil {
+			if err = v.client.Do(ctx, v.client.B().Del().Key(docKeys...).Build()).Error(); err != nil {
 				return errors.Trace(err)
 			}
 		}
@@ -694,40 +528,14 @@ func (v *Valkey) DeleteScores(ctx context.Context, collections []string, conditi
 
 // ScanScores iterates over all score documents.
 func (v *Valkey) ScanScores(ctx context.Context, callback func(collection string, id string, subset string, timestamp time.Time) error) error {
-	if v.isCluster {
-		cursor := models.NewClusterScanCursor()
-		scanOpts := glideoptions.NewClusterScanOptions().SetMatch(v.DocumentTable() + ":*")
-		for !cursor.IsFinished() {
-			result, err := v.clusterClient.ScanWithOptions(ctx, cursor, *scanOpts)
-			if err != nil {
-				return errors.Trace(err)
-			}
-			for _, key := range result.Keys {
-				row, err := v.vHGetAll(ctx, key)
-				if err != nil {
-					return errors.Trace(err)
-				}
-				usec, err := strconv.ParseInt(row["timestamp"], 10, 64)
-				if err != nil {
-					return errors.Trace(err)
-				}
-				if err = callback(row["collection"], row["id"], row["subset"], time.UnixMicro(usec).In(time.UTC)); err != nil {
-					return errors.Trace(err)
-				}
-			}
-			cursor = result.Cursor
-		}
-		return nil
-	}
-	cursor := models.NewCursor()
-	scanOpts := glideoptions.NewScanOptions().SetMatch(v.DocumentTable() + ":*")
+	var cursor uint64
 	for {
-		result, err := v.standaloneClient.ScanWithOptions(ctx, cursor, *scanOpts)
+		entry, err := v.client.Do(ctx, v.client.B().Scan().Cursor(cursor).Match(v.DocumentTable()+":*").Count(100).Build()).AsScanEntry()
 		if err != nil {
 			return errors.Trace(err)
 		}
-		for _, key := range result.Data {
-			row, err := v.vHGetAll(ctx, key)
+		for _, key := range entry.Elements {
+			row, err := v.client.Do(ctx, v.client.B().Hgetall().Key(key).Build()).AsStrMap()
 			if err != nil {
 				return errors.Trace(err)
 			}
@@ -739,11 +547,39 @@ func (v *Valkey) ScanScores(ctx context.Context, callback func(collection string
 				return errors.Trace(err)
 			}
 		}
-		if result.Cursor.IsFinished() {
+		cursor = entry.Cursor
+		if cursor == 0 {
 			return nil
 		}
-		cursor = result.Cursor
 	}
+}
+
+// AddTimeSeriesPoints adds time series points using sorted set + hash.
+func (v *Valkey) AddTimeSeriesPoints(ctx context.Context, points []TimeSeriesPoint) error {
+	grouped := groupTimeSeriesPoints(points)
+	cmds := make(valkey.Commands, 0, len(grouped)*2)
+	for name, sd := range grouped {
+		indexKey := v.PointsTable() + ":ts_index:" + name
+		dataKey := v.PointsTable() + ":ts_data:" + name
+		// ZADD
+		zaddCmd := v.client.B().Zadd().Key(indexKey).ScoreMember()
+		for member, score := range sd.zaddMembers {
+			zaddCmd = zaddCmd.ScoreMember(score, member)
+		}
+		cmds = append(cmds, zaddCmd.Build())
+		// HSET
+		hsetCmd := v.client.B().Hset().Key(dataKey).FieldValue()
+		for field, value := range sd.hsetFields {
+			hsetCmd = hsetCmd.FieldValue(field, value)
+		}
+		cmds = append(cmds, hsetCmd.Build())
+	}
+	for _, resp := range v.client.DoMulti(ctx, cmds...) {
+		if err := resp.Error(); err != nil {
+			return errors.Trace(err)
+		}
+	}
+	return nil
 }
 
 // timeSeriesGroup holds grouped ZADD members and HSET fields for a single time series.
@@ -772,35 +608,6 @@ func groupTimeSeriesPoints(points []TimeSeriesPoint) map[string]*timeSeriesGroup
 	return grouped
 }
 
-// AddTimeSeriesPoints adds time series points using sorted set + hash (Approach A).
-// Sorted set key: {prefix}ts_index:{name} — score = timestamp_ms, member = timestamp_ms as string
-// Hash key: {prefix}ts_data:{name} — field = timestamp_ms as string, value = float64 as string
-func (v *Valkey) AddTimeSeriesPoints(ctx context.Context, points []TimeSeriesPoint) error {
-	grouped := groupTimeSeriesPoints(points)
-	if v.isCluster {
-		for name, sd := range grouped {
-			indexKey := v.PointsTable() + ":ts_index:" + name
-			dataKey := v.PointsTable() + ":ts_data:" + name
-			if err := v.vZAdd(ctx, indexKey, sd.zaddMembers); err != nil {
-				return errors.Trace(err)
-			}
-			if err := v.vHSet(ctx, dataKey, sd.hsetFields); err != nil {
-				return errors.Trace(err)
-			}
-		}
-		return nil
-	}
-	batch := pipeline.NewStandaloneBatch(false)
-	for name, sd := range grouped {
-		indexKey := v.PointsTable() + ":ts_index:" + name
-		dataKey := v.PointsTable() + ":ts_data:" + name
-		batch.ZAdd(indexKey, sd.zaddMembers)
-		batch.HSet(dataKey, sd.hsetFields)
-	}
-	_, err := v.standaloneClient.Exec(ctx, *batch, true)
-	return errors.Trace(err)
-}
-
 // GetTimeSeriesPoints retrieves time series points with Go-side bucket aggregation.
 func (v *Valkey) GetTimeSeriesPoints(ctx context.Context, name string, begin, end time.Time, duration time.Duration) ([]TimeSeriesPoint, error) {
 	indexKey := v.PointsTable() + ":ts_index:" + name
@@ -808,18 +615,11 @@ func (v *Valkey) GetTimeSeriesPoints(ctx context.Context, name string, begin, en
 	beginMs := begin.UnixMilli()
 	endMs := end.UnixMilli()
 
-	// Fetch all timestamps in range from sorted set using ZRANGEBYSCORE via ZRangeWithScores.
-	rangeQuery := glideoptions.NewRangeByScoreQuery(
-		glideoptions.NewInclusiveScoreBoundary(float64(beginMs)),
-		glideoptions.NewInclusiveScoreBoundary(float64(endMs)),
-	)
-	var members []models.MemberAndScore
-	var err error
-	if v.isCluster {
-		members, err = v.clusterClient.ZRangeWithScores(ctx, indexKey, rangeQuery)
-	} else {
-		members, err = v.standaloneClient.ZRangeWithScores(ctx, indexKey, rangeQuery)
-	}
+	// Fetch all timestamps in range from sorted set.
+	members, err := v.client.Do(ctx, v.client.B().Zrangebyscore().Key(indexKey).
+		Min(strconv.FormatInt(beginMs, 10)).
+		Max(strconv.FormatInt(endMs, 10)).
+		Withscores().Build()).AsZScores()
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -832,12 +632,7 @@ func (v *Valkey) GetTimeSeriesPoints(ctx context.Context, name string, begin, en
 	for i, m := range members {
 		fields[i] = m.Member
 	}
-	var hmgetResults []models.Result[string]
-	if v.isCluster {
-		hmgetResults, err = v.clusterClient.HMGet(ctx, dataKey, fields)
-	} else {
-		hmgetResults, err = v.standaloneClient.HMGet(ctx, dataKey, fields)
-	}
+	hmgetResults, err := v.client.Do(ctx, v.client.B().Hmget().Key(dataKey).Field(fields...).Build()).ToArray()
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -849,24 +644,24 @@ func (v *Valkey) GetTimeSeriesPoints(ctx context.Context, name string, begin, en
 	}
 	tsValues := make([]tsValue, 0, len(members))
 	for i, m := range members {
-		if hmgetResults[i].IsNil() {
-			continue
+		valStr, err := hmgetResults[i].ToString()
+		if err != nil {
+			continue // nil result
 		}
 		tsMs, err := strconv.ParseInt(m.Member, 10, 64)
 		if err != nil {
 			log.Logger().Warn("failed to parse timestamp", zap.String("member", m.Member), zap.Error(err))
 			continue
 		}
-		val, err := strconv.ParseFloat(hmgetResults[i].Value(), 64)
+		val, err := strconv.ParseFloat(valStr, 64)
 		if err != nil {
-			log.Logger().Warn("failed to parse value", zap.String("value", hmgetResults[i].Value()), zap.Error(err))
+			log.Logger().Warn("failed to parse value", zap.String("value", valStr), zap.Error(err))
 			continue
 		}
 		tsValues = append(tsValues, tsValue{timestampMs: tsMs, value: val})
 	}
 
-	// Go-side bucket aggregation: group by floor(timestamp_ms / duration_ms) * duration_ms,
-	// take the last value per bucket (highest timestamp).
+	// Go-side bucket aggregation.
 	durationMs := duration.Milliseconds()
 	if durationMs <= 0 {
 		durationMs = 1
@@ -885,7 +680,6 @@ func (v *Valkey) GetTimeSeriesPoints(ctx context.Context, name string, begin, en
 		}
 	}
 
-	// Sort buckets by timestamp ascending.
 	sortedBuckets := make([]*bucket, 0, len(buckets))
 	for _, b := range buckets {
 		sortedBuckets = append(sortedBuckets, b)
@@ -894,7 +688,6 @@ func (v *Valkey) GetTimeSeriesPoints(ctx context.Context, name string, begin, en
 		return sortedBuckets[i].bucketMs < sortedBuckets[j].bucketMs
 	})
 
-	// Convert to TimeSeriesPoint.
 	points := make([]TimeSeriesPoint, 0, len(sortedBuckets))
 	for _, b := range sortedBuckets {
 		points = append(points, TimeSeriesPoint{
@@ -906,67 +699,30 @@ func (v *Valkey) GetTimeSeriesPoints(ctx context.Context, name string, begin, en
 	return points, nil
 }
 
-// parseStringSlice converts a CustomCommand result to a string slice.
-func parseStringSlice(result any) []string {
-	if result == nil {
-		return nil
+// --- FT.SEARCH result parsing helpers ---
+
+// parseFTSearchTotal extracts the total count from an FT.SEARCH result array.
+// valkey-go returns: [total_int64, key1, [field1, val1, ...], key2, [field2, val2, ...], ...]
+func parseFTSearchTotal(result []valkey.ValkeyMessage) int {
+	if len(result) == 0 {
+		return 0
 	}
-	switch v := result.(type) {
-	case []any:
-		strs := make([]string, 0, len(v))
-		for _, item := range v {
-			if s, ok := item.(string); ok {
-				strs = append(strs, s)
-			}
-		}
-		return strs
-	default:
-		return nil
+	total, err := result[0].AsInt64()
+	if err != nil {
+		return 0
 	}
+	return int(total)
 }
 
-// parseFTSearchTotal extracts the total count from an FT.SEARCH result.
-// Valkey Glide returns: [int64_total, map[string]interface{}{docKey: map[string]interface{}{fields...}, ...}]
-func parseFTSearchTotal(result any) int {
-	if result == nil {
-		return 0
-	}
-	arr, ok := result.([]any)
-	if !ok || len(arr) == 0 {
-		return 0
-	}
-	switch v := arr[0].(type) {
-	case int64:
-		return int(v)
-	case float64:
-		return int(v)
-	default:
-		return 0
-	}
-}
-
-// parseFTSearchKeys extracts document keys from an FT.SEARCH result.
-// Valkey Glide returns: [int64_total, map[string]interface{}{docKey: fieldsMap, ...}]
-func parseFTSearchKeys(result any) []string {
-	if result == nil {
+// parseFTSearchKeys extracts document keys from an FT.SEARCH result array.
+func parseFTSearchKeys(result []valkey.ValkeyMessage) []string {
+	if len(result) < 2 {
 		return nil
 	}
-	arr, ok := result.([]any)
-	if !ok || len(arr) < 2 {
-		return nil
-	}
-	// Glide format: arr[1] is a map[string]interface{} where keys are doc keys.
-	if docMap, ok := arr[1].(map[string]any); ok {
-		keys := make([]string, 0, len(docMap))
-		for key := range docMap {
-			keys = append(keys, key)
-		}
-		return keys
-	}
-	// Fallback: flat array format [total, key1, [fields...], key2, [fields...], ...]
 	var keys []string
-	for i := 1; i < len(arr); i += 2 {
-		if key, ok := arr[i].(string); ok {
+	for i := 1; i < len(result); i += 2 {
+		key, err := result[i].ToString()
+		if err == nil {
 			keys = append(keys, key)
 		}
 	}
@@ -974,49 +730,17 @@ func parseFTSearchKeys(result any) []string {
 }
 
 // parseFTSearchResult parses an FT.SEARCH result into Score documents.
-// Valkey Glide returns: [int64_total, map[string]interface{}{docKey: map[string]interface{}{fields...}, ...}]
-func parseFTSearchResult(result any) ([]Score, error) {
-	if result == nil {
+func parseFTSearchResult(result []valkey.ValkeyMessage) ([]Score, error) {
+	if len(result) < 2 {
 		return nil, nil
 	}
-	arr, ok := result.([]any)
-	if !ok || len(arr) < 2 {
-		return nil, nil
-	}
-
-	// Glide format: arr[1] is a map[string]interface{} where keys are doc keys
-	// and values are maps of field name → field value.
-	if docMap, ok := arr[1].(map[string]any); ok {
-		return parseFTSearchResultFromMap(docMap)
-	}
-
-	// Fallback: flat array format [total, key1, [fields...], key2, [fields...], ...]
 	documents := make([]Score, 0)
-	for i := 1; i < len(arr); i += 2 {
-		if i+1 >= len(arr) {
+	for i := 1; i < len(result); i += 2 {
+		if i+1 >= len(result) {
 			break
 		}
-		fields := parseFieldMap(arr[i+1])
-		if fields == nil {
-			continue
-		}
-		doc, err := scoreFromFieldMap(fields)
+		fields, err := parseFieldArray(result[i+1])
 		if err != nil {
-			return nil, err
-		}
-		documents = append(documents, doc)
-	}
-	return documents, nil
-}
-
-// parseFTSearchResultFromMap parses the Glide map format into Score documents.
-// The map has doc keys as keys and field maps as values.
-// We need to sort by score DESC to match the SORTBY in the query.
-func parseFTSearchResultFromMap(docMap map[string]any) ([]Score, error) {
-	documents := make([]Score, 0, len(docMap))
-	for _, docValue := range docMap {
-		fields := parseFieldMap(docValue)
-		if fields == nil {
 			continue
 		}
 		doc, err := scoreFromFieldMap(fields)
@@ -1030,6 +754,23 @@ func parseFTSearchResultFromMap(docMap map[string]any) ([]Score, error) {
 		return documents[i].Score > documents[j].Score
 	})
 	return documents, nil
+}
+
+// parseFieldArray converts a ValkeyMessage field array [field1, val1, field2, val2, ...] into a map.
+func parseFieldArray(msg valkey.ValkeyMessage) (map[string]string, error) {
+	arr, err := msg.ToArray()
+	if err != nil {
+		return nil, err
+	}
+	m := make(map[string]string)
+	for j := 0; j+1 < len(arr); j += 2 {
+		key, err1 := arr[j].ToString()
+		val, err2 := arr[j+1].ToString()
+		if err1 == nil && err2 == nil {
+			m[key] = val
+		}
+	}
+	return m, nil
 }
 
 // scoreFromFieldMap converts a field map into a Score struct.
@@ -1059,39 +800,7 @@ func scoreFromFieldMap(fields map[string]string) (Score, error) {
 	return doc, nil
 }
 
-// parseFieldMap converts a field array from FT.SEARCH into a map.
-// The field array is [field1, value1, field2, value2, ...] or a map.
-func parseFieldMap(v any) map[string]string {
-	if v == nil {
-		return nil
-	}
-	switch fields := v.(type) {
-	case []any:
-		m := make(map[string]string)
-		for j := 0; j+1 < len(fields); j += 2 {
-			key, ok1 := fields[j].(string)
-			val, ok2 := fields[j+1].(string)
-			if ok1 && ok2 {
-				m[key] = val
-			}
-		}
-		return m
-	case map[string]any:
-		m := make(map[string]string)
-		for k, val := range fields {
-			m[k] = fmt.Sprint(val)
-		}
-		return m
-	case map[string]string:
-		return fields
-	default:
-		return nil
-	}
-}
-
 // valkeyTagEscaper escapes all TAG special characters for Valkey Search queries.
-// This prevents query injection via user-controlled values in TAG fields.
-// Valkey Search TAG syntax has special chars: | * { } ( ) ~ @ \ " ' - : . / +
 var valkeyTagEscaper = strings.NewReplacer(
 	`\`, `\\`,
 	`{`, `\{`,
