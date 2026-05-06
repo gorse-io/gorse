@@ -53,8 +53,6 @@ func init() {
 	} else {
 		openaiLogger = zap.NewNop()
 	}
-	// setup access logger (default to no-op)
-	accessLogger = zap.NewNop()
 	// Windows file sink support: https://github.com/uber-go/zap/issues/621
 	if runtime.GOOS == "windows" {
 		if err := zap.RegisterSink("windows", func(u *url.URL) (zap.Sink, error) {
@@ -77,7 +75,10 @@ func ResponseLogger(resp *restful.Response) *zap.Logger {
 
 // AccessLogger returns the access logger for HTTP request logging
 func AccessLogger() *zap.Logger {
-	return accessLogger
+	if accessLogger != nil {
+		return accessLogger
+	}
+	return logger
 }
 
 func CloseLogger() {
