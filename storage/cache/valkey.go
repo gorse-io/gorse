@@ -405,7 +405,11 @@ func (v *Valkey) UpdateScores(ctx context.Context, collections []string, subset 
 		return nil
 	}
 	var builder strings.Builder
-	fmt.Fprintf(&builder, "@collection:{ %s }", escapeTag(strings.Join(collections, " | ")))
+	escapedCollections := make([]string, len(collections))
+	for i, c := range collections {
+		escapedCollections[i] = escapeTag(c)
+	}
+	fmt.Fprintf(&builder, "@collection:{ %s }", strings.Join(escapedCollections, " | "))
 	fmt.Fprintf(&builder, " @id:{ %s }", escapeTag(id))
 	if subset != nil {
 		fmt.Fprintf(&builder, " @subset:{ %s }", escapeTag(*subset))
@@ -483,7 +487,11 @@ func (v *Valkey) DeleteScores(ctx context.Context, collections []string, conditi
 		return errors.Trace(err)
 	}
 	var builder strings.Builder
-	fmt.Fprintf(&builder, "@collection:{ %s }", escapeTag(strings.Join(collections, " | ")))
+	escapedCollections := make([]string, len(collections))
+	for i, c := range collections {
+		escapedCollections[i] = escapeTag(c)
+	}
+	fmt.Fprintf(&builder, "@collection:{ %s }", strings.Join(escapedCollections, " | "))
 	if condition.Subset != nil {
 		fmt.Fprintf(&builder, " @subset:{ %s }", escapeTag(*condition.Subset))
 	}
