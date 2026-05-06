@@ -279,8 +279,12 @@ func (v *Valkey) Set(ctx context.Context, values ...Value) error {
 	if len(values) == 0 {
 		return nil
 	}
+	cmds := make(valkey.Commands, 0, len(values))
 	for _, val := range values {
-		if err := v.client.Do(ctx, v.client.B().Set().Key(v.Key(val.name)).Value(val.value).Build()).Error(); err != nil {
+		cmds = append(cmds, v.client.B().Set().Key(v.Key(val.name)).Value(val.value).Build())
+	}
+	for _, resp := range v.client.DoMulti(ctx, cmds...) {
+		if err := resp.Error(); err != nil {
 			return errors.Trace(err)
 		}
 	}
@@ -332,9 +336,13 @@ func (v *Valkey) documentKey(collection, subset, value string) string {
 
 // AddScores adds score documents to Valkey using hash storage.
 func (v *Valkey) AddScores(ctx context.Context, collection, subset string, documents []Score) error {
+	if len(documents) == 0 {
+		return nil
+	}
+	cmds := make(valkey.Commands, 0, len(documents))
 	for _, document := range documents {
 		key := v.documentKey(collection, subset, document.Id)
-		cmd := v.client.B().Hset().Key(key).FieldValue().
+		cmds = append(cmds, v.client.B().Hset().Key(key).FieldValue().
 			FieldValue("collection", collection).
 			FieldValue("subset", subset).
 			FieldValue("id", document.Id).
@@ -342,8 +350,10 @@ func (v *Valkey) AddScores(ctx context.Context, collection, subset string, docum
 			FieldValue("is_hidden", formatBool(document.IsHidden)).
 			FieldValue("categories", encodeCategories(document.Categories)).
 			FieldValue("timestamp", strconv.FormatInt(document.Timestamp.UnixMicro(), 10)).
-			Build()
-		if err := v.client.Do(ctx, cmd).Error(); err != nil {
+			Build())
+	}
+	for _, resp := range v.client.DoMulti(ctx, cmds...) {
+		if err := resp.Error(); err != nil {
 			return errors.Trace(err)
 		}
 	}
@@ -367,13 +377,15 @@ func (v *Valkey) SearchScores(ctx context.Context, collection, subset string, qu
 	for _, q := range query {
 		fmt.Fprintf(&builder, " @categories:{ %s }", escapeTag(encodeCategory(q)))
 	}
-	fetchLimit := 10000
+	// Use server-side LIMIT offset/count to fetch only the needed slice.
+	fetchOffset := begin
+	fetchCount := 10000
 	if end != -1 {
-		fetchLimit = end
+		fetchCount = end - begin
 	}
 	cmd := v.client.B().Arbitrary("FT.SEARCH").
 		Keys(v.DocumentTable()).
-		Args(builder.String(), "SORTBY", "score", "DESC", "LIMIT", "0", strconv.Itoa(fetchLimit)).
+		Args(builder.String(), "SORTBY", "score", "DESC", "LIMIT", strconv.Itoa(fetchOffset), strconv.Itoa(fetchCount)).
 		Build()
 	result, err := v.client.Do(ctx, cmd).ToArray()
 	if err != nil {
@@ -382,16 +394,6 @@ func (v *Valkey) SearchScores(ctx context.Context, collection, subset string, qu
 	documents, err := parseFTSearchResult(result)
 	if err != nil {
 		return nil, errors.Trace(err)
-	}
-	if begin > 0 || end != -1 {
-		if begin >= len(documents) {
-			return []Score{}, nil
-		}
-		endIdx := len(documents)
-		if end != -1 && end < endIdx {
-			endIdx = end
-		}
-		documents = documents[begin:endIdx]
 	}
 	return documents, nil
 }
@@ -419,7 +421,9 @@ func (v *Valkey) UpdateScores(ctx context.Context, collections []string, subset 
 		limit = 10000
 	}
 
-	// Two-phase update: collect keys first, then mutate.
+	// Two-phase update: collect all matching keys first, then mutate.
+	// On the first fetch, if total results exceed the page limit, re-fetch all
+	// in a single request to avoid pagination drift when scores change.
 	keys := make([]string, 0)
 	keySet := make(map[string]struct{})
 	offset := 0
@@ -435,6 +439,7 @@ func (v *Valkey) UpdateScores(ctx context.Context, collections []string, subset 
 		if offset == 0 {
 			total := parseFTSearchTotal(result)
 			if total > limit {
+				// Fetch all results in one shot to avoid pagination issues.
 				cmd = v.client.B().Arbitrary("FT.SEARCH").
 					Keys(v.DocumentTable()).
 					Args(builder.String(), "SORTBY", "score", "DESC", "LIMIT", "0", strconv.Itoa(total)).
