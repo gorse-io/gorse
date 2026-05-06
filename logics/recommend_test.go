@@ -82,7 +82,7 @@ func (suite *RecommenderTestSuite) TestLatest() {
 	err = suite.dataClient.BatchInsertFeedback(suite.T().Context(), feedback, true, true, false)
 	suite.NoError(err)
 
-	recommender, err := NewRecommender(config.RecommendConfig{}, suite.cacheClient, suite.dataClient, true, "user_1", nil)
+	recommender, err := NewRecommender(config.RecommendConfig{CacheSize: 10}, suite.cacheClient, suite.dataClient, true, "user_1", nil)
 	suite.NoError(err)
 	scores, digest, err := recommender.recommendLatest(suite.T().Context())
 	suite.NoError(err)
@@ -94,7 +94,7 @@ func (suite *RecommenderTestSuite) TestLatest() {
 		}
 	}
 
-	recommender, err = NewRecommender(config.RecommendConfig{}, suite.cacheClient, suite.dataClient, true, "user_1", []string{"cat_1"})
+	recommender, err = NewRecommender(config.RecommendConfig{CacheSize: 10}, suite.cacheClient, suite.dataClient, true, "user_1", []string{"cat_1"})
 	suite.NoError(err)
 	scores, digest, err = recommender.recommendLatest(suite.T().Context())
 	suite.NoError(err)
@@ -136,7 +136,7 @@ func (suite *RecommenderTestSuite) TestCollaborative() {
 	err = suite.dataClient.BatchInsertFeedback(suite.T().Context(), feedback, true, true, false)
 	suite.NoError(err)
 
-	recommender, err := NewRecommender(config.RecommendConfig{}, suite.cacheClient, suite.dataClient, true, "user_1", nil)
+	recommender, err := NewRecommender(config.RecommendConfig{CacheSize: 10}, suite.cacheClient, suite.dataClient, true, "user_1", nil)
 	suite.NoError(err)
 	scores, digest, err := recommender.recommendCollaborative(suite.T().Context())
 	suite.NoError(err)
@@ -148,7 +148,7 @@ func (suite *RecommenderTestSuite) TestCollaborative() {
 		}
 	}
 
-	recommender, err = NewRecommender(config.RecommendConfig{}, suite.cacheClient, suite.dataClient, true, "user_1", []string{"cat_1"})
+	recommender, err = NewRecommender(config.RecommendConfig{CacheSize: 10}, suite.cacheClient, suite.dataClient, true, "user_1", []string{"cat_1"})
 	suite.NoError(err)
 	scores, digest, err = recommender.recommendCollaborative(suite.T().Context())
 	suite.NoError(err)
@@ -192,7 +192,7 @@ func (suite *RecommenderTestSuite) TestNonPersonalized() {
 	err = suite.dataClient.BatchInsertFeedback(suite.T().Context(), feedback, true, true, false)
 	suite.NoError(err)
 
-	recommender, err := NewRecommender(config.RecommendConfig{}, suite.cacheClient, suite.dataClient, true, "user_1", nil)
+	recommender, err := NewRecommender(config.RecommendConfig{CacheSize: 10}, suite.cacheClient, suite.dataClient, true, "user_1", nil)
 	suite.NoError(err)
 	recommendFunc := recommender.recommendNonPersonalized("a")
 	scores, digest, err := recommendFunc(suite.T().Context())
@@ -205,7 +205,7 @@ func (suite *RecommenderTestSuite) TestNonPersonalized() {
 		}
 	}
 
-	recommender, err = NewRecommender(config.RecommendConfig{}, suite.cacheClient, suite.dataClient, true, "user_1", []string{"cat_1"})
+	recommender, err = NewRecommender(config.RecommendConfig{CacheSize: 10}, suite.cacheClient, suite.dataClient, true, "user_1", []string{"cat_1"})
 	suite.NoError(err)
 	recommendFunc = recommender.recommendNonPersonalized("a")
 	scores, digest, err = recommendFunc(suite.T().Context())
@@ -244,6 +244,7 @@ func (suite *RecommenderTestSuite) TestExternal() {
 	suite.NoError(err)
 
 	cfg := config.RecommendConfig{
+		CacheSize: 10,
 		External: []config.ExternalConfig{{
 			Script: fmt.Sprintf(`fetch("%s?user_id=user_1").body`, ts.URL),
 			Name:   "test",
