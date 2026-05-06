@@ -34,6 +34,7 @@ import (
 var (
 	logger       *zap.Logger
 	openaiLogger *zap.Logger
+	accessLogger *zap.Logger
 )
 
 func init() {
@@ -52,6 +53,8 @@ func init() {
 	} else {
 		openaiLogger = zap.NewNop()
 	}
+	// setup access logger (default to no-op)
+	accessLogger = zap.NewNop()
 	// Windows file sink support: https://github.com/uber-go/zap/issues/621
 	if runtime.GOOS == "windows" {
 		if err := zap.RegisterSink("windows", func(u *url.URL) (zap.Sink, error) {
@@ -72,6 +75,11 @@ func ResponseLogger(resp *restful.Response) *zap.Logger {
 	return logger.With(zap.String("request_id", resp.Header().Get("X-Request-ID")))
 }
 
+// AccessLogger returns the access logger for HTTP request logging
+func AccessLogger() *zap.Logger {
+	return accessLogger
+}
+
 func CloseLogger() {
 	cfg := zap.NewProductionConfig()
 	cfg.Level = zap.NewAtomicLevelAt(zap.FatalLevel)
@@ -84,6 +92,7 @@ func CloseLogger() {
 
 func AddFlags(flagSet *pflag.FlagSet) {
 	flagSet.String("log-path", "", "path of log file")
+	flagSet.String("access-log-path", "", "path of access log file for RESTful API")
 	flagSet.Int("log-max-size", 100, "maximum size in megabytes of the log file")
 	flagSet.Int("log-max-age", 0, "maximum number of days to retain old log files")
 	flagSet.Int("log-max-backups", 0, "maximum number of old log files to retain")
@@ -120,6 +129,25 @@ func SetLogger(flagSet *pflag.FlagSet, debug bool) {
 	// create zap logger
 	core := zapcore.NewCore(encoder, zap.CombineWriteSyncers(writers...), level)
 	logger = zap.New(core)
+
+	// setup access logger if access-log-path is set
+	if flagSet.Changed("access-log-path") {
+		accessLogPath, _ := flagSet.GetString("access-log-path")
+		maxSize, _ := flagSet.GetInt("log-max-size")
+		maxAge, _ := flagSet.GetInt("log-max-age")
+		maxBackups, _ := flagSet.GetInt("log-max-backups")
+		accessLogger = zap.New(
+			zapcore.NewCore(
+				zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig()),
+				zapcore.AddSync(&lumberjack.Logger{
+					Filename:   accessLogPath,
+					MaxSize:    maxSize,
+					MaxBackups: maxBackups,
+					MaxAge:     maxAge,
+					Compress:   false,
+				}),
+				zap.InfoLevel))
+	}
 }
 
 const mysqlPrefix = "mysql://"

@@ -133,9 +133,11 @@ func (s *RestServer) LogFilter(req *restful.Request, resp *restful.Response, cha
 	responseTime := time.Since(start)
 	if !s.DisableLog && req.Request.URL.Path != "/api/dashboard/cluster" &&
 		req.Request.URL.Path != "/api/dashboard/tasks" {
-		log.ResponseLogger(resp).Info(fmt.Sprintf("%s %s", req.Request.Method, req.Request.URL),
+		log.AccessLogger().Info(fmt.Sprintf("%s %s", req.Request.Method, req.Request.URL.Path),
+			zap.String("request_id", requestId),
 			zap.Int("status_code", resp.StatusCode()),
-			zap.Duration("response_time", responseTime))
+			zap.Duration("response_time", responseTime),
+			zap.String("client_ip", req.Request.RemoteAddr))
 	}
 }
 
