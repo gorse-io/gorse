@@ -88,7 +88,7 @@ type PostgresTestSuite struct {
 func (suite *PostgresTestSuite) SetupSuite() {
 	var err error
 	// create database
-	databaseComm, err := sql.Open("pgx", postgresDSN+"?sslmode=disable")
+	databaseComm, err := sql.Open("postgres", postgresDSN+"?sslmode=disable")
 	suite.NoError(err)
 	const dbName = "gorse_data_test"
 	_, err = databaseComm.Exec("DROP DATABASE IF EXISTS " + dbName)

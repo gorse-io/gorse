@@ -30,9 +30,8 @@ import (
 	"github.com/gorse-io/gorse/common/jsonutil"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/storage"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/juju/errors"
+	_ "github.com/lib/pq"
 	_ "github.com/mailru/go-clickhouse/v2"
 	"github.com/samber/lo"
 	semconv "go.opentelemetry.io/otel/semconv/v1.12.0"
@@ -81,22 +80,23 @@ func init() {
 		}
 		return database, nil
 	})
-Register([]string{storage.PostgresPrefix, storage.PostgreSQLPrefix}, func(path, tablePrefix string, opts ...storage.Option) (Database, error) {
+	Register([]string{storage.PostgresPrefix, storage.PostgreSQLPrefix}, func(path, tablePrefix string, opts ...storage.Option) (Database, error) {
 		database := new(SQLDatabase)
 		database.driver = Postgres
 		database.TablePrefix = storage.TablePrefix(tablePrefix)
 		option := storage.NewOptions(opts...)
 		var err error
-		// Parse PostgreSQL DSN and set timezone to UTC in pgx RuntimeParams
-		pgxConfig, err := pgx.ParseConfig(path)
-		if err != nil {
+		if database.client, err = otelsql.Open("postgres", path,
+			otelsql.WithAttributes(semconv.DBSystemPostgreSQL),
+			otelsql.WithSpanOptions(otelsql.SpanOptions{DisableErrSkip: true}),
+		); err != nil {
 			return nil, errors.Trace(err)
 		}
-		pgxConfig.RuntimeParams["timezone"] = "UTC"
-		// Create sql.DB from pgx config
-		database.client = stdlib.OpenDB(*pgxConfig)
 		storage.ApplySQLPool(database.client, option)
-		database.gormDB, err = gorm.Open(postgres.New(postgres.Config{Conn: database.client}), storage.NewGORMConfig(tablePrefix))
+		database.gormDB, err = gorm.Open(postgres.New(postgres.Config{
+			DriverName: "postgres",
+			Conn:       database.client,
+		}), storage.NewGORMConfig(tablePrefix))
 		if err != nil {
 			return nil, errors.Trace(err)
 		}

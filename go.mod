@@ -31,14 +31,13 @@ require (
 	github.com/gorse-io/dashboard v0.0.0-20260223101641-33715448ded8
 	github.com/gorse-io/gorse-go v0.5.0-alpha.3
 	github.com/invopop/jsonschema v0.13.0
-	github.com/jackc/pgx/v5 v5.6.0
 	github.com/jaswdr/faker v1.19.1
 	github.com/jellydator/ttlcache/v3 v3.4.0
 	github.com/juju/errors v1.0.0
 	github.com/juju/ratelimit v1.0.2
 	github.com/klauspost/cpuid/v2 v2.3.0
 	github.com/lafikl/consistent v0.0.0-20220512074542-bdd3606bfc3e
-	github.com/lib/pq v1.11.2
+	github.com/lib/pq v1.12.3
 	github.com/madflojo/testcerts v1.5.0
 	github.com/mailru/go-clickhouse/v2 v2.5.1
 	github.com/matttproud/golang_protobuf_extensions v1.0.4
@@ -178,6 +177,7 @@ require (
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
+	github.com/jackc/pgx/v5 v5.6.0 // indirect
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
