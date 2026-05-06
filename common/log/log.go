@@ -132,8 +132,7 @@ func SetLogger(flagSet *pflag.FlagSet, debug bool) {
 	logger = zap.New(core)
 
 	// setup access logger if access-log-path is set
-	if flagSet.Changed("access-log-path") {
-		accessLogPath, _ := flagSet.GetString("access-log-path")
+	if accessLogPath, _ := flagSet.GetString("access-log-path"); accessLogPath != "" {
 		maxSize, _ := flagSet.GetInt("log-max-size")
 		maxAge, _ := flagSet.GetInt("log-max-age")
 		maxBackups, _ := flagSet.GetInt("log-max-backups")

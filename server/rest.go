@@ -137,7 +137,7 @@ func (s *RestServer) LogFilter(req *restful.Request, resp *restful.Response, cha
 			zap.String("request_id", requestId),
 			zap.Int("status_code", resp.StatusCode()),
 			zap.Duration("response_time", responseTime),
-			zap.String("client_ip", req.Request.RemoteAddr))
+			zap.String("remote_addr", req.Request.RemoteAddr))
 	}
 }
 
