@@ -82,6 +82,7 @@ func (m *Master) CreateWebService() {
 	ws := m.WebService
 	ws.Consumes(restful.MIME_JSON).Produces(restful.MIME_JSON)
 	ws.Path("/api/")
+	ws.Filter(m.CacheControlFilter)
 	ws.Filter(m.LoginFilter)
 
 	ws.Route(ws.GET("/dashboard/userinfo").To(m.handleUserInfo).
@@ -348,18 +349,9 @@ func noCache(h http.Handler) http.Handler {
 }
 
 func (m *Master) dashboard(response http.ResponseWriter, request *http.Request) {
+	// Serve static files without login check (frontend handles auth)
 	_, err := staticFileSystem.Open(request.RequestURI)
 	if request.RequestURI == "/" || os.IsNotExist(err) {
-		if !m.checkLogin(request) {
-			if m.Config.OIDC.Enable {
-				// Redirect to OIDC login
-				http.Redirect(response, request, m.oauth2Config.AuthCodeURL(""), http.StatusFound)
-			} else {
-				http.Redirect(response, request, "/login", http.StatusFound)
-				log.Logger().Info(fmt.Sprintf("%s %s", request.Method, request.URL), zap.Int("status_code", http.StatusFound))
-			}
-			return
-		}
 		noCache(staticFileServer).ServeHTTP(response, request)
 		return
 	}
@@ -2071,4 +2063,13 @@ func (m *Master) chat(response http.ResponseWriter, request *http.Request) {
 			f.Flush()
 		}
 	}
+}
+
+
+// CacheControlFilter adds Cache-Control headers to prevent CDN caching for API endpoints
+func (m *Master) CacheControlFilter(req *restful.Request, resp *restful.Response, chain *restful.FilterChain) {
+	resp.Header().Set("Cache-Control", "private, no-store, no-cache, must-revalidate")
+	resp.Header().Set("Pragma", "no-cache")
+	resp.Header().Set("Expires", "0")
+	chain.ProcessFilter(req, resp)
 }
