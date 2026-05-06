@@ -113,7 +113,7 @@ func (r *Redis) Init() error {
 			&redis.FieldSchema{FieldName: "categories", FieldType: redis.SearchFieldTypeTag, Separator: ";"},
 			&redis.FieldSchema{FieldName: "timestamp", FieldType: redis.SearchFieldTypeNumeric},
 		).Result()
-		if err != nil {
+		if err != nil && !strings.Contains(err.Error(), "Index already exists") {
 			return errors.Trace(err)
 		}
 	}
