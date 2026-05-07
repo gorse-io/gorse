@@ -542,6 +542,180 @@ func (suite *baseTestSuite) TestTimeSeries() {
 	}, points)
 }
 
+func (suite *baseTestSuite) TestTimeSeriesDuplicateTimestamp() {
+	// Duplicate timestamps should use last-write-wins semantics.
+	ts := time.Date(2023, 6, 15, 0, 0, 0, 0, time.UTC)
+	ctx := suite.T().Context()
+
+	// Write initial value
+	err := suite.AddTimeSeriesPoints(ctx, []TimeSeriesPoint{
+		{Name: "dup", Value: 100, Timestamp: ts},
+	})
+	suite.NoError(err)
+
+	// Overwrite with a new value at the same timestamp
+	err = suite.AddTimeSeriesPoints(ctx, []TimeSeriesPoint{
+		{Name: "dup", Value: 200, Timestamp: ts},
+	})
+	suite.NoError(err)
+
+	points, err := suite.GetTimeSeriesPoints(ctx, "dup", ts, ts, time.Second)
+	suite.NoError(err)
+	suite.Require().Len(points, 1)
+	suite.Equal(float64(200), points[0].Value)
+}
+
+func (suite *baseTestSuite) TestTimeSeriesEmptyRange() {
+	ts := time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)
+	ctx := suite.T().Context()
+
+	// Add points
+	err := suite.AddTimeSeriesPoints(ctx, []TimeSeriesPoint{
+		{Name: "empty_range", Value: 1, Timestamp: ts},
+	})
+	suite.NoError(err)
+
+	// Query a range that contains no points
+	points, err := suite.GetTimeSeriesPoints(ctx, "empty_range",
+		ts.Add(10*time.Second), ts.Add(20*time.Second), time.Second)
+	suite.NoError(err)
+	suite.Empty(points)
+
+	// Query a non-existent series
+	points, err = suite.GetTimeSeriesPoints(ctx, "nonexistent",
+		ts, ts.Add(time.Hour), time.Second)
+	suite.NoError(err)
+	suite.Empty(points)
+}
+
+func (suite *baseTestSuite) TestTimeSeriesMultipleSeries() {
+	// Multiple series should be isolated from each other.
+	ts := time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)
+	ctx := suite.T().Context()
+
+	err := suite.AddTimeSeriesPoints(ctx, []TimeSeriesPoint{
+		{Name: "series_x", Value: 10, Timestamp: ts.Add(1 * time.Second)},
+		{Name: "series_x", Value: 20, Timestamp: ts.Add(2 * time.Second)},
+		{Name: "series_y", Value: 30, Timestamp: ts.Add(1 * time.Second)},
+		{Name: "series_y", Value: 40, Timestamp: ts.Add(2 * time.Second)},
+	})
+	suite.NoError(err)
+
+	pointsX, err := suite.GetTimeSeriesPoints(ctx, "series_x", ts, ts.Add(3*time.Second), time.Second)
+	suite.NoError(err)
+	suite.Equal([]TimeSeriesPoint{
+		{Name: "series_x", Value: 10, Timestamp: ts.Add(1 * time.Second)},
+		{Name: "series_x", Value: 20, Timestamp: ts.Add(2 * time.Second)},
+	}, pointsX)
+
+	pointsY, err := suite.GetTimeSeriesPoints(ctx, "series_y", ts, ts.Add(3*time.Second), time.Second)
+	suite.NoError(err)
+	suite.Equal([]TimeSeriesPoint{
+		{Name: "series_y", Value: 30, Timestamp: ts.Add(1 * time.Second)},
+		{Name: "series_y", Value: 40, Timestamp: ts.Add(2 * time.Second)},
+	}, pointsY)
+}
+
+func (suite *baseTestSuite) TestTimeSeriesBucketAggregation() {
+	// Test that bucket aggregation picks the last value per bucket.
+	ts := time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)
+	ctx := suite.T().Context()
+
+	// Add 10 points, 1 per second
+	points := make([]TimeSeriesPoint, 10)
+	for i := range 10 {
+		points[i] = TimeSeriesPoint{
+			Name:      "agg",
+			Value:     float64(i + 1),
+			Timestamp: ts.Add(time.Duration(i) * time.Second),
+		}
+	}
+	err := suite.AddTimeSeriesPoints(ctx, points)
+	suite.NoError(err)
+
+	// Query with 5-second buckets: [0-4] and [5-9]
+	result, err := suite.GetTimeSeriesPoints(ctx, "agg", ts, ts.Add(9*time.Second), 5*time.Second)
+	suite.NoError(err)
+	suite.Require().Len(result, 2)
+	// First bucket [0s,5s): last value is at 4s = value 5
+	suite.Equal(float64(5), result[0].Value)
+	suite.Equal(ts, result[0].Timestamp)
+	// Second bucket [5s,10s): last value is at 9s = value 10
+	suite.Equal(float64(10), result[1].Value)
+	suite.Equal(ts.Add(5*time.Second), result[1].Timestamp)
+}
+
+func (suite *baseTestSuite) TestTimeSeriesSinglePoint() {
+	ts := time.Date(2023, 3, 1, 12, 0, 0, 0, time.UTC)
+	ctx := suite.T().Context()
+
+	err := suite.AddTimeSeriesPoints(ctx, []TimeSeriesPoint{
+		{Name: "single", Value: 42.5, Timestamp: ts},
+	})
+	suite.NoError(err)
+
+	points, err := suite.GetTimeSeriesPoints(ctx, "single", ts, ts, time.Second)
+	suite.NoError(err)
+	suite.Require().Len(points, 1)
+	suite.Equal(float64(42.5), points[0].Value)
+	suite.Equal("single", points[0].Name)
+}
+
+func (suite *baseTestSuite) TestTimeSeriesBatchAdd() {
+	// Batch add with many points for same series should work correctly.
+	ts := time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)
+	ctx := suite.T().Context()
+
+	batch := make([]TimeSeriesPoint, 100)
+	for i := range 100 {
+		batch[i] = TimeSeriesPoint{
+			Name:      "batch_ts",
+			Value:     float64(i),
+			Timestamp: ts.Add(time.Duration(i) * time.Second),
+		}
+	}
+	err := suite.AddTimeSeriesPoints(ctx, batch)
+	suite.NoError(err)
+
+	// Query full range with 10-second buckets
+	points, err := suite.GetTimeSeriesPoints(ctx, "batch_ts", ts, ts.Add(99*time.Second), 10*time.Second)
+	suite.NoError(err)
+	suite.Len(points, 10)
+	// Last bucket should have the highest value in its range
+	suite.Equal(float64(99), points[9].Value)
+}
+
+func (suite *baseTestSuite) TestTimeSeriesEmptyBatch() {
+	ctx := suite.T().Context()
+	// Adding nil points should not error
+	err := suite.AddTimeSeriesPoints(ctx, nil)
+	suite.NoError(err)
+	// Adding empty slice should not error
+	err = suite.AddTimeSeriesPoints(ctx, []TimeSeriesPoint{})
+	suite.NoError(err)
+}
+
+func (suite *baseTestSuite) TestAddScoresEmpty() {
+	ctx := suite.T().Context()
+	// Adding empty slice should be a no-op
+	err := suite.AddScores(ctx, "empty_collection", "empty_subset", []Score{})
+	suite.NoError(err)
+	err = suite.AddScores(ctx, "empty_collection", "empty_subset", nil)
+	suite.NoError(err)
+}
+
+func (suite *baseTestSuite) TestUpdateScoresNoOp() {
+	ctx := suite.T().Context()
+	// Empty collections should be a no-op
+	err := suite.UpdateScores(ctx, nil, nil, "some-id", ScorePatch{Score: new(float64(1))})
+	suite.NoError(err)
+	err = suite.UpdateScores(ctx, []string{}, nil, "some-id", ScorePatch{Score: new(float64(1))})
+	suite.NoError(err)
+	// No-op patch (all nil) should be a no-op
+	err = suite.UpdateScores(ctx, []string{"a"}, nil, "some-id", ScorePatch{})
+	suite.NoError(err)
+}
+
 func (suite *baseTestSuite) TestTimestampPrecision() {
 	ctx := suite.T().Context()
 	timestamp := time.Date(2023, 1, 1, 0, 0, 0, 500, time.UTC)

@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/gorse-io/gorse/common/log"
+	"github.com/gorse-io/gorse/storage"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
@@ -216,6 +217,73 @@ func TestRedis(t *testing.T) {
 	suite.Run(t, new(RedisTestSuite))
 }
 
+// ValkeyViaRedisTestSuite tests the unified Redis struct when connected via a valkey:// DSN.
+// This exercises the same code path that Valkey users will hit, including
+// the sortedSetTimeSeries fallback if TimeSeries module is unavailable.
+type ValkeyViaRedisTestSuite struct {
+	baseTestSuite
+}
+
+func (suite *ValkeyViaRedisTestSuite) SetupSuite() {
+	// Use VALKEY_URI env var, defaulting to valkey://127.0.0.1:6380/
+	dsn := os.Getenv("VALKEY_URI")
+	if dsn == "" {
+		dsn = "valkey://127.0.0.1:6380/"
+	}
+	var err error
+	suite.Database, err = Open(dsn, "gorse_valkey_")
+	suite.Require().NoError(err)
+	// flush db
+	redisDB, ok := suite.Database.(*RedisValkey)
+	suite.Require().True(ok, "valkey:// DSN should produce a *RedisValkey instance")
+	err = redisDB.client.FlushDB(suite.T().Context()).Err()
+	suite.Require().NoError(err)
+	// create schema
+	err = suite.Database.Init()
+	suite.Require().NoError(err)
+}
+
+func (suite *ValkeyViaRedisTestSuite) TestEscapeCharacters() {
+	ts := time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)
+	ctx := suite.T().Context()
+	for _, c := range []string{"-", ":", ".", "/"} {
+		suite.Run(c, func() {
+			collection := fmt.Sprintf("a%s1", c)
+			subset := fmt.Sprintf("b%s2", c)
+			id := fmt.Sprintf("c%s3", c)
+			err := suite.AddScores(ctx, collection, subset, []Score{{
+				Id:         id,
+				Score:      math.MaxFloat64,
+				Categories: []string{"a", "b"},
+				Timestamp:  ts,
+			}})
+			suite.NoError(err)
+			documents, err := suite.SearchScores(ctx, collection, subset, []string{"b"}, 0, -1)
+			suite.NoError(err)
+			suite.Equal([]Score{{Id: id, Score: math.MaxFloat64, Categories: []string{"a", "b"}, Timestamp: ts}}, documents)
+
+			err = suite.UpdateScores(ctx, []string{collection}, nil, id, ScorePatch{Score: new(float64(1))})
+			suite.NoError(err)
+			documents, err = suite.SearchScores(ctx, collection, subset, []string{"b"}, 0, -1)
+			suite.NoError(err)
+			suite.Equal([]Score{{Id: id, Score: 1, Categories: []string{"a", "b"}, Timestamp: ts}}, documents)
+
+			err = suite.DeleteScores(ctx, []string{collection}, ScoreCondition{
+				Subset: new(subset),
+				Id:     new(id),
+			})
+			suite.NoError(err)
+			documents, err = suite.SearchScores(ctx, collection, subset, []string{"b"}, 0, -1)
+			suite.NoError(err)
+			suite.Empty(documents)
+		})
+	}
+}
+
+func TestValkeyViaRedis(t *testing.T) {
+	suite.Run(t, new(ValkeyViaRedisTestSuite))
+}
+
 func TestEncodeDecodeCategories(t *testing.T) {
 	encoded := encodeCategories([]string{"z", "h"})
 	decoded, err := decodeCategories(encoded)
@@ -226,6 +294,35 @@ func TestEncodeDecodeCategories(t *testing.T) {
 	decoded, err = decodeCategories(encoded)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{}, decoded)
+}
+
+// RedisSortedSetTSTestSuite runs the full test suite using the RedisValkey type
+// (sorted-set time series) against a real Redis server. This validates the
+// fallback implementation works correctly using Redis's ZADD/HSET commands.
+type RedisSortedSetTSTestSuite struct {
+	baseTestSuite
+}
+
+func (suite *RedisSortedSetTSTestSuite) SetupSuite() {
+	// Open as a regular Redis connection, then wrap in RedisValkey.
+	opt, err := redis.ParseURL(redisDSN)
+	suite.Require().NoError(err)
+	opt.Protocol = 2
+	database := &RedisValkey{}
+	database.TablePrefix = storage.TablePrefix("gorse_ss_ts_")
+	database.client = redis.NewClient(opt)
+	database.maxSearchResults = 0
+	suite.Database = database
+	// flush db
+	err = database.client.FlushDB(suite.T().Context()).Err()
+	suite.Require().NoError(err)
+	// create schema
+	err = suite.Database.Init()
+	suite.Require().NoError(err)
+}
+
+func TestRedisSortedSetTS(t *testing.T) {
+	suite.Run(t, new(RedisSortedSetTSTestSuite))
 }
 
 func BenchmarkRedis(b *testing.B) {
