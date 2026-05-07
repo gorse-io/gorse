@@ -48,15 +48,15 @@ type ValkeyTestSuite struct {
 func (suite *ValkeyTestSuite) SetupSuite() {
 	var err error
 	suite.Database, err = Open(valkeyDSN, "gorse_")
-	suite.NoError(err)
+	suite.Require().NoError(err)
 	// flush db
 	valkeyClient, ok := suite.Database.(*Valkey)
-	suite.True(ok)
+	suite.Require().True(ok)
 	err = valkeyClient.client.Do(context.Background(), valkeyClient.client.B().Flushdb().Build()).Error()
-	suite.NoError(err)
+	suite.Require().NoError(err)
 	// create schema
 	err = suite.Database.Init()
-	suite.NoError(err)
+	suite.Require().NoError(err)
 }
 
 func (suite *ValkeyTestSuite) TestEscapeCharacters() {
@@ -219,7 +219,7 @@ func TestParseValkeyURL(t *testing.T) {
 	assert.False(t, useTLS)
 
 	// URL with password only
-	host, _, password, _, db, useTLS, err = parseValkeyURL("valkey://:secret@localhost:6379/2")
+	host, _, _, password, db, useTLS, err = parseValkeyURL("valkey://:secret@localhost:6379/2")
 	assert.NoError(t, err)
 	assert.Equal(t, "localhost", host)
 	assert.Equal(t, "secret", password)
