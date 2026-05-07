@@ -16,6 +16,7 @@ package cache
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"strconv"
 	"strings"
@@ -51,6 +52,7 @@ func init() {
 		database.TablePrefix = storage.TablePrefix(tablePrefix)
 		database.client = redis.NewClient(opt)
 		database.maxSearchResults = storage.NewOptions(opts...).MaxSearchResults
+		// TODO: switch to semconv.DBSystemValkey once available in go.opentelemetry.io/otel/semconv
 		if err = redisotel.InstrumentTracing(database.client, redisotel.WithAttributes(semconv.DBSystemRedis)); err != nil {
 			log.Logger().Error("failed to add tracing for valkey", zap.Error(err))
 			return nil, errors.Trace(err)
@@ -73,6 +75,7 @@ func init() {
 		database.TablePrefix = storage.TablePrefix(tablePrefix)
 		database.client = redis.NewClusterClient(opt)
 		database.maxSearchResults = storage.NewOptions(opts...).MaxSearchResults
+		// TODO: switch to semconv.DBSystemValkey once available in go.opentelemetry.io/otel/semconv
 		if err = redisotel.InstrumentTracing(database.client, redisotel.WithAttributes(semconv.DBSystemRedis)); err != nil {
 			log.Logger().Error("failed to add tracing for valkey", zap.Error(err))
 			return nil, errors.Trace(err)
@@ -86,6 +89,16 @@ func init() {
 // from Redis since Valkey is wire-compatible for those commands.
 type RedisValkey struct {
 	Redis
+}
+
+// Init initializes the Valkey cache store. It delegates to Redis.Init() which
+// requires FT.* (search) commands. If the valkey-search module is not loaded,
+// this provides a clear error message.
+func (v *RedisValkey) Init() error {
+	if err := v.Redis.Init(); err != nil {
+		return fmt.Errorf("valkey cache store requires the valkey-search module (FT.* commands): %w", err)
+	}
+	return nil
 }
 
 // AddTimeSeriesPoints stores time series points using sorted sets + hashes.
@@ -121,7 +134,10 @@ func (v *RedisValkey) GetTimeSeriesPoints(ctx context.Context, name string, begi
 	beginMs := begin.UnixMilli()
 	endMs := end.UnixMilli()
 
-	// Fetch all timestamps in range from sorted set.
+	// NOTE: This fetches all timestamps in the requested range into memory for
+	// client-side aggregation. For very large ranges with high-density data this
+	// could be expensive. Current usage (metrics with bounded density) is fine.
+	// If this becomes a bottleneck, add Count/Offset pagination here.
 	members, err := v.client.ZRangeByScore(ctx, indexKey, &redis.ZRangeBy{
 		Min: strconv.FormatInt(beginMs, 10),
 		Max: strconv.FormatInt(endMs, 10),
@@ -130,7 +146,7 @@ func (v *RedisValkey) GetTimeSeriesPoints(ctx context.Context, name string, begi
 		return nil, errors.Trace(err)
 	}
 	if len(members) == 0 {
-		return nil, nil
+		return []TimeSeriesPoint{}, nil
 	}
 
 	// Fetch corresponding values from hash.

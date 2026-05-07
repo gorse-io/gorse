@@ -69,9 +69,9 @@ jobs:
           - 6379
 
       valkey:
-        image: valkey/valkey-bundle:unstable
+        image: valkey/valkey-bundle:9.1-rc2
         ports:
-          - 6380
+          - 6379
 
       rustfs:
         image: rustfs/rustfs:alpha
@@ -139,7 +139,7 @@ jobs:
         # Redis
         REDIS_URI: redis://localhost:${{ job.services.redis.ports[6379] }}/
         # Valkey
-        VALKEY_URI: valkey://localhost:${{ job.services.valkey.ports[6380] }}/
+        VALKEY_URI: valkey://localhost:${{ job.services.valkey.ports[6379] }}/
         # S3
         S3_ENDPOINT: localhost:${{ job.services.rustfs.ports[9000] }}
         S3_ACCESS_KEY_ID: rustfsadmin
