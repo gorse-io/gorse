@@ -18,7 +18,6 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"os"
 	"strings"
 
 	"github.com/gorse-io/gorse/config"
@@ -40,32 +39,7 @@ func NewExternal(cfg config.ExternalConfig) (*External, error) {
 		return nil, errors.WithStack(err)
 	}
 
-	// Add environment variables
-	env, err := vm.NewObjectValue()
-	if err != nil {
-		return nil, errors.WithStack(err)
-	}
-	for _, e := range os.Environ() {
-		parts := strings.SplitN(e, "=", 2)
-		if len(parts) != 2 {
-			continue
-		}
-		key, err := vm.NewAtom(parts[0])
-		if err != nil {
-			return nil, errors.WithStack(err)
-		}
-		value := parts[1]
-		if err := env.SetProperty(key, value); err != nil {
-			return nil, errors.WithStack(err)
-		}
-	}
-	envKey, err := vm.NewAtom("env")
-	if err != nil {
-		return nil, errors.WithStack(err)
-	}
-	if err := vm.GlobalObject().SetProperty(envKey, env); err != nil {
-		return nil, errors.WithStack(err)
-	}
+
 
 	// Register fetch function
 	external := &External{
