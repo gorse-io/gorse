@@ -19,23 +19,22 @@ import (
 	"sync"
 )
 
-// BufferRecorder is an in-memory buffer recorder that stores events
-// in a buffer. This is a placeholder implementation for future batched
-// event processing.
-type BufferRecorder struct {
+// BufferHandler is an in-memory buffer handler that stores events
+// in a buffer. This is useful for testing and debugging.
+type BufferHandler struct {
 	buffer []APIEvent
 	mu     sync.Mutex
 }
 
-// NewBufferRecorder creates a new buffer recorder.
-func NewBufferRecorder() *BufferRecorder {
-	return &BufferRecorder{
+// NewBufferRecorder creates a new buffer handler.
+func NewBufferRecorder() *BufferHandler {
+	return &BufferHandler{
 		buffer: make([]APIEvent, 0),
 	}
 }
 
-// Record adds an event to the buffer.
-func (b *BufferRecorder) Record(ctx context.Context, event APIEvent) error {
+// Handle adds an event to the buffer.
+func (b *BufferHandler) Handle(ctx context.Context, event APIEvent) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.buffer = append(b.buffer, event)
@@ -43,7 +42,7 @@ func (b *BufferRecorder) Record(ctx context.Context, event APIEvent) error {
 }
 
 // Close clears the buffer.
-func (b *BufferRecorder) Close() error {
+func (b *BufferHandler) Close() error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.buffer = nil
@@ -52,7 +51,7 @@ func (b *BufferRecorder) Close() error {
 
 // GetEvents returns all buffered events.
 // This method is for testing and debugging purposes.
-func (b *BufferRecorder) GetEvents() []APIEvent {
+func (b *BufferHandler) GetEvents() []APIEvent {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	result := make([]APIEvent, len(b.buffer))
@@ -61,7 +60,7 @@ func (b *BufferRecorder) GetEvents() []APIEvent {
 }
 
 // Clear clears the buffer.
-func (b *BufferRecorder) Clear() {
+func (b *BufferHandler) Clear() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.buffer = make([]APIEvent, 0)
