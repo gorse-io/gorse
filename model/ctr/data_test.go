@@ -191,3 +191,26 @@ func TestDataset_Split(t *testing.T) {
 	assert.Equal(t, 3, test.PositiveCount)
 	assert.Equal(t, 3, test.NegativeCount)
 }
+
+func TestDataset_GetWeight(t *testing.T) {
+	t.Run("no weights returns 1.0", func(t *testing.T) {
+		dataset := &Dataset{}
+		assert.Equal(t, float32(1.0), dataset.GetWeight(0))
+	})
+
+	t.Run("with weights", func(t *testing.T) {
+		dataset := &Dataset{
+			Weights: []float32{1.0, 2.0, 3.0},
+		}
+		assert.Equal(t, float32(1.0), dataset.GetWeight(0))
+		assert.Equal(t, float32(2.0), dataset.GetWeight(1))
+		assert.Equal(t, float32(3.0), dataset.GetWeight(2))
+	})
+
+	t.Run("out of range returns 1.0", func(t *testing.T) {
+		dataset := &Dataset{
+			Weights: []float32{1.0},
+		}
+		assert.Equal(t, float32(1.0), dataset.GetWeight(100))
+	})
+}
