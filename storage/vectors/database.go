@@ -31,6 +31,39 @@ const (
 	Dot
 )
 
+// QuantizationType 量化类型
+type QuantizationType string
+
+const (
+	QuantizationNone QuantizationType = "none" // 无量化 (float32)
+	QuantizationSQ   QuantizationType = "sq"   // 标量量化
+	QuantizationPQ   QuantizationType = "pq"   // 乘积量化
+)
+
+// VectorConfig 向量配置（量化 + HNSW 索引参数）
+type VectorConfig struct {
+	// 量化配置
+	Quantization    QuantizationType // none | sq | pq
+	SQBits          int              // SQ 量化位数 (4 | 8)
+	PQSubvectors    int              // PQ 子向量数量
+	PQBits          int              // PQ 每个子向量位数
+
+	// HNSW 索引参数
+	HNSWM           int              // HNSW M 参数
+	HNSWEfConstruct int              // HNSW 构建时 ef
+	HNSWEfSearch    int              // HNSW 搜索时 ef
+}
+
+// DefaultVectorConfig 返回默认向量配置
+func DefaultVectorConfig() VectorConfig {
+	return VectorConfig{
+		Quantization:    QuantizationNone,
+		HNSWM:           16,
+		HNSWEfConstruct: 200,
+		HNSWEfSearch:    64,
+	}
+}
+
 type Vector struct {
 	Id         string
 	Vector     []float32
@@ -44,7 +77,7 @@ type Database interface {
 	Optimize() error
 	Close() error
 	ListCollections(ctx context.Context) ([]string, error)
-	AddCollection(ctx context.Context, name string, dimensions int, distance Distance) error
+	AddCollection(ctx context.Context, name string, dimensions int, distance Distance, config VectorConfig) error
 	DeleteCollection(ctx context.Context, name string) error
 	AddVectors(ctx context.Context, collection string, vectors []Vector) error
 	DeleteVectors(ctx context.Context, collection string, timestamp time.Time) error

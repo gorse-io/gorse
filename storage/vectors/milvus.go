@@ -79,7 +79,13 @@ func (db *Milvus) ListCollections(ctx context.Context) ([]string, error) {
 	return names, nil
 }
 
-func (db *Milvus) AddCollection(ctx context.Context, name string, dimensions int, distance Distance) error {
+func (db *Milvus) AddCollection(ctx context.Context, name string, dimensions int, distance Distance, config VectorConfig) error {
+	// Milvus SQ support requires Int8Vector which may not be available in older SDK versions
+	// For now, we only support PQ as index-level quantization
+	if config.Quantization == QuantizationSQ {
+		return errors.NotSupportedf("SQ quantization for Milvus, use PQ instead")
+	}
+
 	schema := entity.NewSchema().WithName(name).WithDescription("gorse collection").
 		WithField(entity.NewField().WithName(milvusIdField).WithDataType(entity.FieldTypeVarChar).WithMaxLength(65535).WithIsPrimaryKey(true)).
 		WithField(entity.NewField().WithName(milvusCategoriesField).WithDataType(entity.FieldTypeArray).WithElementType(entity.FieldTypeVarChar).WithMaxCapacity(100).WithMaxLength(65535)).
@@ -103,7 +109,9 @@ func (db *Milvus) AddCollection(ctx context.Context, name string, dimensions int
 	default:
 		return errors.NotSupportedf("distance method")
 	}
-	idx, err := entity.NewIndexHNSW(metricType, 8, 200)
+
+	// Create HNSW index with configurable parameters
+	idx, err := entity.NewIndexHNSW(metricType, config.HNSWM, config.HNSWEfConstruct)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -111,6 +119,7 @@ func (db *Milvus) AddCollection(ctx context.Context, name string, dimensions int
 	if err != nil {
 		return errors.Trace(err)
 	}
+
 	scalarIdx := entity.NewScalarIndex()
 	err = db.client.CreateIndex(ctx, name, milvusTimestampField, scalarIdx, false)
 	if err != nil {

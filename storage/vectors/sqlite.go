@@ -74,7 +74,12 @@ func (db *SQLite) ListCollections(ctx context.Context) ([]string, error) {
 	return names, nil
 }
 
-func (db *SQLite) AddCollection(ctx context.Context, name string, dimensions int, distance Distance) error {
+func (db *SQLite) AddCollection(ctx context.Context, name string, dimensions int, distance Distance, config VectorConfig) error {
+	// SQLite 不支持量化
+	if config.Quantization != QuantizationNone {
+		return errors.NotSupportedf("quantization type %s for SQLite", config.Quantization)
+	}
+
 	var metric string
 	switch distance {
 	case Cosine:

@@ -76,7 +76,7 @@ func (db *Qdrant) ListCollections(ctx context.Context) ([]string, error) {
 	return db.client.ListCollections(ctx)
 }
 
-func (db *Qdrant) AddCollection(ctx context.Context, name string, dimensions int, distance Distance) error {
+func (db *Qdrant) AddCollection(ctx context.Context, name string, dimensions int, distance Distance, config VectorConfig) error {
 	var qdrantDistance qdrant.Distance
 	switch distance {
 	case Cosine:
@@ -88,19 +88,32 @@ func (db *Qdrant) AddCollection(ctx context.Context, name string, dimensions int
 	default:
 		return errors.NotSupportedf("distance method")
 	}
+
+	// Note: Quantization support requires different API structure in qdrant-go-client v1.17.1
+	// SQ/PQ quantization configuration should be added via QuantizationConfig field in VectorParams
+	// For now, we only support HNSW parameters without quantization
+	if config.Quantization != QuantizationNone {
+		return errors.NotSupportedf("quantization type %s for Qdrant via this API, configure quantization directly in Qdrant server", config.Quantization)
+	}
+
 	err := db.client.CreateCollection(ctx, &qdrant.CreateCollection{
 		CollectionName: name,
 		VectorsConfig: qdrant.NewVectorsConfig(&qdrant.VectorParams{
 			Size:     uint64(dimensions),
 			Distance: qdrantDistance,
 		}),
+		HnswConfig: &qdrant.HnswConfigDiff{
+			M:           ptrUint64(uint64(config.HNSWM)),
+			EfConstruct: ptrUint64(uint64(config.HNSWEfConstruct)),
+		},
 	})
 	if err != nil {
 		return errors.Trace(err)
 	}
+
 	_, err = db.client.CreateFieldIndex(ctx, &qdrant.CreateFieldIndexCollection{
 		CollectionName: name,
-		Wait:           new(true),
+		Wait:           ptrBool(true),
 		FieldName:      qdrantPayloadTimestampKey,
 		FieldType:      qdrant.FieldType_FieldTypeInteger.Enum(),
 	})
@@ -154,7 +167,7 @@ func (db *Qdrant) QueryVectors(ctx context.Context, collection string, q []float
 	request := &qdrant.QueryPoints{
 		CollectionName: collection,
 		Query:          qdrant.NewQueryDense(q),
-		Limit:          new(uint64(topK)),
+		Limit:          ptrUint64(uint64(topK)),
 		WithPayload:    qdrant.NewWithPayloadEnable(true),
 		WithVectors:    qdrant.NewWithVectorsEnable(true),
 	}
@@ -230,4 +243,13 @@ func qdrantVectorOutput(output *qdrant.VectorsOutput) []float32 {
 		return nil
 	}
 	return vector.GetDenseVector().GetData()
+}
+
+// Helper functions for pointer types
+func ptrBool(v bool) *bool {
+	return &v
+}
+
+func ptrUint64(v uint64) *uint64 {
+	return &v
 }
