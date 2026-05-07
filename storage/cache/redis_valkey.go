@@ -16,7 +16,7 @@ package cache
 
 import (
 	"context"
-	"sort"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -175,7 +175,7 @@ func (v *RedisValkey) GetTimeSeriesPoints(ctx context.Context, name string, begi
 	for k := range buckets {
 		sortedKeys = append(sortedKeys, k)
 	}
-	sort.Slice(sortedKeys, func(i, j int) bool { return sortedKeys[i] < sortedKeys[j] })
+	slices.Sort(sortedKeys)
 
 	points := make([]TimeSeriesPoint, 0, len(sortedKeys))
 	for _, bk := range sortedKeys {

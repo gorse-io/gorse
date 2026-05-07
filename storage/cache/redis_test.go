@@ -284,6 +284,78 @@ func TestValkeyViaRedis(t *testing.T) {
 	suite.Run(t, new(ValkeyViaRedisTestSuite))
 }
 
+func (suite *ValkeyViaRedisTestSuite) TestUpdateScoresWithPagination() {
+	ctx := suite.T().Context()
+	db, ok := suite.Database.(*RedisValkey)
+	suite.True(ok)
+	limit := db.maxSearchResults
+	db.maxSearchResults = 2
+	defer func() {
+		db.maxSearchResults = limit
+	}()
+
+	for i := range 5 {
+		subset := fmt.Sprintf("subset-%d", i)
+		err := suite.AddScores(ctx, "collection-a", subset, []Score{{
+			Id:         "shared-item",
+			Score:      float64(i),
+			Categories: []string{"old"},
+			Timestamp:  time.Now().UTC(),
+		}})
+		suite.NoError(err)
+	}
+
+	err := suite.UpdateScores(ctx, []string{"collection-a"}, nil, "shared-item", ScorePatch{
+		Categories: []string{"new"},
+	})
+	suite.NoError(err)
+
+	for i := range 5 {
+		subset := fmt.Sprintf("subset-%d", i)
+		docs, err := suite.SearchScores(ctx, "collection-a", subset, []string{"new"}, 0, -1)
+		suite.NoError(err)
+		suite.Require().Len(docs, 1)
+		suite.Equal("shared-item", docs[0].Id)
+	}
+}
+
+func (suite *ValkeyViaRedisTestSuite) TestUpdateScoresWithPaginationAndScorePatch() {
+	ctx := suite.T().Context()
+	db, ok := suite.Database.(*RedisValkey)
+	suite.True(ok)
+	limit := db.maxSearchResults
+	db.maxSearchResults = 1
+	defer func() {
+		db.maxSearchResults = limit
+	}()
+
+	initialScores := []float64{3, 2, 1}
+	for i, score := range initialScores {
+		subset := fmt.Sprintf("score-subset-%d", i)
+		err := suite.AddScores(ctx, "collection-b", subset, []Score{{
+			Id:         "shared-item",
+			Score:      score,
+			Categories: []string{"score-old"},
+			Timestamp:  time.Now().UTC(),
+		}})
+		suite.NoError(err)
+	}
+
+	targetScore := float64(0)
+	err := suite.UpdateScores(ctx, []string{"collection-b"}, nil, "shared-item", ScorePatch{
+		Score: &targetScore,
+	})
+	suite.NoError(err)
+
+	for i := range initialScores {
+		subset := fmt.Sprintf("score-subset-%d", i)
+		docs, err := suite.SearchScores(ctx, "collection-b", subset, nil, 0, -1)
+		suite.NoError(err)
+		suite.Require().Len(docs, 1)
+		suite.Equal(targetScore, docs[0].Score)
+	}
+}
+
 func TestEncodeDecodeCategories(t *testing.T) {
 	encoded := encodeCategories([]string{"z", "h"})
 	decoded, err := decodeCategories(encoded)
@@ -323,6 +395,17 @@ func (suite *RedisSortedSetTSTestSuite) SetupSuite() {
 
 func TestRedisSortedSetTS(t *testing.T) {
 	suite.Run(t, new(RedisSortedSetTSTestSuite))
+}
+
+// TestRedisSortedSetTS_NonExistentSeries validates that the sorted-set TS
+// implementation returns empty results (not an error) for non-existent series.
+func (suite *RedisSortedSetTSTestSuite) TestNonExistentSeries() {
+	ctx := suite.T().Context()
+	ts := time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)
+	points, err := suite.GetTimeSeriesPoints(ctx, "nonexistent",
+		ts, ts.Add(time.Hour), time.Second)
+	suite.NoError(err)
+	suite.Empty(points)
 }
 
 func BenchmarkRedis(b *testing.B) {

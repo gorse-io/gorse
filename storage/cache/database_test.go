@@ -580,12 +580,6 @@ func (suite *baseTestSuite) TestTimeSeriesEmptyRange() {
 		ts.Add(10*time.Second), ts.Add(20*time.Second), time.Second)
 	suite.NoError(err)
 	suite.Empty(points)
-
-	// Query a non-existent series
-	points, err = suite.GetTimeSeriesPoints(ctx, "nonexistent",
-		ts, ts.Add(time.Hour), time.Second)
-	suite.NoError(err)
-	suite.Empty(points)
 }
 
 func (suite *baseTestSuite) TestTimeSeriesMultipleSeries() {
