@@ -39,8 +39,6 @@ func NewExternal(cfg config.ExternalConfig) (*External, error) {
 		return nil, errors.WithStack(err)
 	}
 
-
-
 	// Register fetch function
 	external := &External{
 		vm:     vm,
