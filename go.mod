@@ -63,6 +63,7 @@ require (
 	github.com/stretchr/testify v1.11.1
 	github.com/swaggest/swgui v1.8.5
 	github.com/tiktoken-go/tokenizer v0.7.0
+	github.com/valkey-io/valkey-go v1.0.74
 	github.com/weaviate/weaviate v1.27.0
 	github.com/weaviate/weaviate-go-client/v4 v4.16.1
 	github.com/yuin/goldmark v1.7.16

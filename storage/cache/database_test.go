@@ -601,6 +601,21 @@ func benchmark(b *testing.B, database Database) {
 	b.Run("UpdateScores", func(b *testing.B) {
 		benchmarkUpdateDocuments(b, database)
 	})
+	b.Run("TSIngestSingle", func(b *testing.B) {
+		benchmarkTimeSeriesIngestSingle(b, database)
+	})
+	b.Run("TSIngestBatch", func(b *testing.B) {
+		benchmarkTimeSeriesIngestBatch(b, database)
+	})
+	b.Run("TSQuerySmallRange", func(b *testing.B) {
+		benchmarkTimeSeriesQuerySmallRange(b, database)
+	})
+	b.Run("TSQueryLargeRange", func(b *testing.B) {
+		benchmarkTimeSeriesQueryLargeRange(b, database)
+	})
+	b.Run("TSQueryWideRange", func(b *testing.B) {
+		benchmarkTimeSeriesQueryWideRange(b, database)
+	})
 }
 
 func benchmarkAddDocuments(b *testing.B, database Database) {
@@ -656,5 +671,139 @@ func benchmarkUpdateDocuments(b *testing.B, database Database) {
 			Score: new(float64(n)),
 		})
 		assert.NoError(b, err)
+	}
+}
+
+// benchmarkTimeSeriesIngestSingle measures single-point ingestion throughput.
+func benchmarkTimeSeriesIngestSingle(b *testing.B, database Database) {
+	ctx := b.Context()
+	base := time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		err := database.AddTimeSeriesPoints(ctx, []TimeSeriesPoint{
+			{Name: "bench_single", Value: float64(i), Timestamp: base.Add(time.Duration(i) * time.Second)},
+		})
+		assert.NoError(b, err)
+	}
+}
+
+// benchmarkTimeSeriesIngestBatch measures batch ingestion throughput (100 points per call).
+func benchmarkTimeSeriesIngestBatch(b *testing.B, database Database) {
+	ctx := b.Context()
+	base := time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)
+	const batchSize = 100
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		points := make([]TimeSeriesPoint, batchSize)
+		for j := range batchSize {
+			points[j] = TimeSeriesPoint{
+				Name:      "bench_batch",
+				Value:     float64(i*batchSize + j),
+				Timestamp: base.Add(time.Duration(i*batchSize+j) * time.Second),
+			}
+		}
+		err := database.AddTimeSeriesPoints(ctx, points)
+		assert.NoError(b, err)
+	}
+}
+
+// benchmarkTimeSeriesQuerySmallRange measures query latency for a small time range (60s window, 1s buckets).
+// Pre-loads 10,000 points at 1-second intervals.
+func benchmarkTimeSeriesQuerySmallRange(b *testing.B, database Database) {
+	ctx := b.Context()
+	base := time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)
+	const totalPoints = 10000
+	// pre-load data in batches of 500
+	for offset := 0; offset < totalPoints; offset += 500 {
+		end := offset + 500
+		if end > totalPoints {
+			end = totalPoints
+		}
+		points := make([]TimeSeriesPoint, 0, end-offset)
+		for i := offset; i < end; i++ {
+			points = append(points, TimeSeriesPoint{
+				Name:      "bench_query_small",
+				Value:     float64(i),
+				Timestamp: base.Add(time.Duration(i) * time.Second),
+			})
+		}
+		err := database.AddTimeSeriesPoints(ctx, points)
+		assert.NoError(b, err)
+	}
+	// query a 60-second window in the middle, 1-second buckets (~60 points returned)
+	queryBegin := base.Add(5000 * time.Second)
+	queryEnd := base.Add(5060 * time.Second)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		points, err := database.GetTimeSeriesPoints(ctx, "bench_query_small", queryBegin, queryEnd, time.Second)
+		assert.NoError(b, err)
+		assert.NotEmpty(b, points)
+	}
+}
+
+// benchmarkTimeSeriesQueryLargeRange measures query latency with heavy aggregation.
+// Pre-loads 10,000 points at 1-second intervals, queries full range with 60-second buckets (~167 buckets).
+func benchmarkTimeSeriesQueryLargeRange(b *testing.B, database Database) {
+	ctx := b.Context()
+	base := time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)
+	const totalPoints = 10000
+	// pre-load data in batches of 500
+	for offset := 0; offset < totalPoints; offset += 500 {
+		end := offset + 500
+		if end > totalPoints {
+			end = totalPoints
+		}
+		points := make([]TimeSeriesPoint, 0, end-offset)
+		for i := offset; i < end; i++ {
+			points = append(points, TimeSeriesPoint{
+				Name:      "bench_query_large",
+				Value:     float64(i),
+				Timestamp: base.Add(time.Duration(i) * time.Second),
+			})
+		}
+		err := database.AddTimeSeriesPoints(ctx, points)
+		assert.NoError(b, err)
+	}
+	// query full range with 60-second buckets
+	queryBegin := base
+	queryEnd := base.Add(time.Duration(totalPoints) * time.Second)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		points, err := database.GetTimeSeriesPoints(ctx, "bench_query_large", queryBegin, queryEnd, 60*time.Second)
+		assert.NoError(b, err)
+		assert.NotEmpty(b, points)
+	}
+}
+
+// benchmarkTimeSeriesQueryWideRange measures worst-case query: 100K points aggregated into ~28 hourly buckets.
+func benchmarkTimeSeriesQueryWideRange(b *testing.B, database Database) {
+	ctx := b.Context()
+	base := time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)
+	const totalPoints = 100000
+	// pre-load data in batches of 1000
+	for offset := 0; offset < totalPoints; offset += 1000 {
+		end := offset + 1000
+		if end > totalPoints {
+			end = totalPoints
+		}
+		points := make([]TimeSeriesPoint, 0, end-offset)
+		for i := offset; i < end; i++ {
+			points = append(points, TimeSeriesPoint{
+				Name:      "bench_query_wide",
+				Value:     float64(i),
+				Timestamp: base.Add(time.Duration(i) * time.Second),
+			})
+		}
+		err := database.AddTimeSeriesPoints(ctx, points)
+		assert.NoError(b, err)
+	}
+	// query full range with 1-hour buckets
+	queryBegin := base
+	queryEnd := base.Add(time.Duration(totalPoints) * time.Second)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		points, err := database.GetTimeSeriesPoints(ctx, "bench_query_wide", queryBegin, queryEnd, time.Hour)
+		assert.NoError(b, err)
+		assert.NotEmpty(b, points)
 	}
 }
