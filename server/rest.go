@@ -141,7 +141,7 @@ func (s *RestServer) LogFilter(req *restful.Request, resp *restful.Response, cha
 			zap.Int("status_code", resp.StatusCode()),
 			zap.Duration("response_time", responseTime),
 			zap.String("remote_addr", req.Request.RemoteAddr))
-		event.EventRecorder().RecordAPI(req.Request.Context(), event.APIEvent{
+		go event.EventRecorder().RecordAPI(req.Request.Context(), event.APIEvent{
 			RequestID:    requestId,
 			Method:       req.Request.Method,
 			Path:         req.Request.URL.Path,

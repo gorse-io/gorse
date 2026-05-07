@@ -83,7 +83,7 @@ func (m *Master) loadDataset(parent context.Context) (datasets Datasets, err err
 	if err != nil {
 		return Datasets{}, errors.Trace(err)
 	}
-	event.EventRecorder().RecordStorage(ctx, event.StorageEvent{
+	go event.EventRecorder().RecordStorage(ctx, event.StorageEvent{
 		UserCount:     datasets.rankingDataset.CountUsers(),
 		ItemCount:     datasets.rankingDataset.CountItems(),
 		FeedbackCount: len(datasets.clickDataset.Target),
