@@ -29,9 +29,9 @@ import (
 	restfulspec "github.com/emicklei/go-restful-openapi/v2"
 	"github.com/emicklei/go-restful/v3"
 	"github.com/google/uuid"
+	"github.com/gorse-io/gorse/common/event"
 	"github.com/gorse-io/gorse/common/expression"
 	"github.com/gorse-io/gorse/common/heap"
-	"github.com/gorse-io/gorse/common/event"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/logics"
@@ -133,24 +133,6 @@ func (s *RestServer) LogFilter(req *restful.Request, resp *restful.Response, cha
 	chain.ProcessFilter(req, resp)
 	responseTime := time.Since(start)
 
-	// Record API event for billing
-	var routePath string
-	if req.SelectedRoute() != nil {
-		routePath = req.SelectedRoutePath()
-	}
-	apiKey := req.HeaderParameter("X-API-Key")
-	event.Handle(context.Background(), event.APIEvent{
-		RequestID:    requestId,
-		APIKey:       apiKey,
-		Method:       req.Request.Method,
-		Path:         req.Request.URL.Path,
-		RoutePath:    routePath,
-		StatusCode:   resp.StatusCode(),
-		ResponseTime: responseTime.Milliseconds(),
-		Timestamp:    start,
-		RemoteAddr:   req.Request.RemoteAddr,
-	})
-
 	// Log access
 	if !s.DisableLog && req.Request.URL.Path != "/api/dashboard/cluster" &&
 		req.Request.URL.Path != "/api/dashboard/tasks" {
@@ -159,6 +141,15 @@ func (s *RestServer) LogFilter(req *restful.Request, resp *restful.Response, cha
 			zap.Int("status_code", resp.StatusCode()),
 			zap.Duration("response_time", responseTime),
 			zap.String("remote_addr", req.Request.RemoteAddr))
+		event.EventRecorder().RecordAPI(req.Request.Context(), event.APIEvent{
+			RequestID:    requestId,
+			Method:       req.Request.Method,
+			Path:         req.Request.URL.Path,
+			StatusCode:   resp.StatusCode(),
+			ResponseTime: responseTime.Milliseconds(),
+			Timestamp:    start,
+			RemoteAddr:   req.Request.RemoteAddr,
+		})
 	}
 }
 
