@@ -25,6 +25,7 @@ import (
 	"github.com/c-bata/goptuna"
 	"github.com/c-bata/goptuna/tpe"
 	mapset "github.com/deckarep/golang-set/v2"
+	"github.com/gorse-io/gorse/common/event"
 	"github.com/gorse-io/gorse/common/expression"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/common/monitor"
@@ -82,6 +83,12 @@ func (m *Master) loadDataset(parent context.Context) (datasets Datasets, err err
 	if err != nil {
 		return Datasets{}, errors.Trace(err)
 	}
+	go event.EventRecorder().RecordStorage(ctx, event.StorageEvent{
+		UserCount:     datasets.rankingDataset.CountUsers(),
+		ItemCount:     datasets.rankingDataset.CountItems(),
+		FeedbackCount: len(datasets.clickDataset.Target),
+		Timestamp:     datasets.rankingDataset.GetTimestamp(),
+	})
 
 	// save non-personalized recommenders to cache
 	for i, recommender := range nonPersonalizedRecommenders {
