@@ -570,6 +570,172 @@ func (suite *ServerTestSuite) TestItems() {
 		End()
 }
 
+func (suite *ServerTestSuite) TestDataLimits() {
+	t := suite.T()
+
+	suite.Config.DataLimits.MaxUsersCount = 1
+	apitest.New().
+		Handler(suite.handler).
+		Post("/api/user").
+		Header("X-API-Key", apiKey).
+		JSON(data.User{UserId: "limited-user-1"}).
+		Expect(t).
+		Status(http.StatusOK).
+		End()
+	apitest.New().
+		Handler(suite.handler).
+		Post("/api/user").
+		Header("X-API-Key", apiKey).
+		JSON(data.User{UserId: "limited-user-2"}).
+		Expect(t).
+		Status(http.StatusBadRequest).
+		End()
+	apitest.New().
+		Handler(suite.handler).
+		Post("/api/users").
+		Header("X-API-Key", apiKey).
+		JSON([]data.User{{UserId: "limited-user-1", Comment: "updated"}}).
+		Expect(t).
+		Status(http.StatusOK).
+		End()
+	suite.Config.DataLimits.MaxUsersCount = 0
+
+	suite.Config.DataLimits.MaxItemsCount = 1
+	apitest.New().
+		Handler(suite.handler).
+		Post("/api/item").
+		Header("X-API-Key", apiKey).
+		JSON(Item{ItemId: "limited-item-1"}).
+		Expect(t).
+		Status(http.StatusOK).
+		End()
+	apitest.New().
+		Handler(suite.handler).
+		Post("/api/item").
+		Header("X-API-Key", apiKey).
+		JSON(Item{ItemId: "limited-item-2"}).
+		Expect(t).
+		Status(http.StatusBadRequest).
+		End()
+	apitest.New().
+		Handler(suite.handler).
+		Post("/api/items").
+		Header("X-API-Key", apiKey).
+		JSON([]Item{{ItemId: "limited-item-1", Comment: "updated"}}).
+		Expect(t).
+		Status(http.StatusOK).
+		End()
+	suite.Config.DataLimits.MaxItemsCount = 0
+
+	suite.Config.DataLimits.MaxUserCommentSize = 3
+	apittestUser := data.User{UserId: "oversized-user-comment", Comment: "toolong"}
+	apitest.New().
+		Handler(suite.handler).
+		Post("/api/user").
+		Header("X-API-Key", apiKey).
+		JSON(apittestUser).
+		Expect(t).
+		Status(http.StatusBadRequest).
+		End()
+
+	comment := "toolong"
+	apitest.New().
+		Handler(suite.handler).
+		Patch("/api/user/oversized-user-comment").
+		Header("X-API-Key", apiKey).
+		JSON(data.UserPatch{Comment: &comment}).
+		Expect(t).
+		Status(http.StatusBadRequest).
+		End()
+
+	suite.Config.DataLimits.MaxUserCommentSize = 0
+	suite.Config.DataLimits.MaxUserLabelsSize = 5
+	apitest.New().
+		Handler(suite.handler).
+		Post("/api/users").
+		Header("X-API-Key", apiKey).
+		JSON([]data.User{{UserId: "oversized-user-labels", Labels: []string{"abcdef"}}}).
+		Expect(t).
+		Status(http.StatusBadRequest).
+		End()
+
+	suite.Config.DataLimits.MaxUserLabelsSize = 0
+	suite.Config.DataLimits.MaxItemCommentSize = 3
+	apitest.New().
+		Handler(suite.handler).
+		Post("/api/item").
+		Header("X-API-Key", apiKey).
+		JSON(Item{ItemId: "oversized-item-comment", Comment: "toolong"}).
+		Expect(t).
+		Status(http.StatusBadRequest).
+		End()
+
+	itemComment := "toolong"
+	apitest.New().
+		Handler(suite.handler).
+		Patch("/api/item/oversized-item-comment").
+		Header("X-API-Key", apiKey).
+		JSON(data.ItemPatch{Comment: &itemComment}).
+		Expect(t).
+		Status(http.StatusBadRequest).
+		End()
+
+	suite.Config.DataLimits.MaxItemCommentSize = 0
+	suite.Config.DataLimits.MaxItemLabelsSize = 5
+	apitest.New().
+		Handler(suite.handler).
+		Post("/api/items").
+		Header("X-API-Key", apiKey).
+		JSON([]Item{{ItemId: "oversized-item-labels", Labels: []string{"abcdef"}}}).
+		Expect(t).
+		Status(http.StatusBadRequest).
+		End()
+
+	suite.Config.DataLimits.MaxItemLabelsSize = 0
+	suite.Config.DataLimits.MaxItemCategoriesCount = 1
+	apitest.New().
+		Handler(suite.handler).
+		Post("/api/item").
+		Header("X-API-Key", apiKey).
+		JSON(Item{ItemId: "too-many-categories", Categories: []string{"a", "b"}}).
+		Expect(t).
+		Status(http.StatusBadRequest).
+		End()
+
+	suite.Config.DataLimits.MaxItemCategoriesCount = 0
+	suite.Config.DataLimits.MaxItemCategoriesSize = 5
+	apitest.New().
+		Handler(suite.handler).
+		Post("/api/item").
+		Header("X-API-Key", apiKey).
+		JSON(Item{ItemId: "oversized-categories", Categories: []string{"abcdef"}}).
+		Expect(t).
+		Status(http.StatusBadRequest).
+		End()
+
+	suite.Config.DataLimits.MaxItemCategoriesSize = 0
+	suite.Config.DataLimits.MaxFeedbackLabelsSize = 5
+	apitest.New().
+		Handler(suite.handler).
+		Post("/api/feedback").
+		Header("X-API-Key", apiKey).
+		JSON([]Feedback{{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "u", ItemId: "i"}, Labels: []string{"abcdef"}}}).
+		Expect(t).
+		Status(http.StatusBadRequest).
+		End()
+
+	suite.Config.DataLimits.MaxFeedbackLabelsSize = 0
+	suite.Config.DataLimits.MaxFeedbackCommentSize = 3
+	apitest.New().
+		Handler(suite.handler).
+		Post("/api/feedback").
+		Header("X-API-Key", apiKey).
+		JSON([]Feedback{{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "u", ItemId: "i"}, Comment: "toolong"}}).
+		Expect(t).
+		Status(http.StatusBadRequest).
+		End()
+}
+
 func (suite *ServerTestSuite) TestSearchItems() {
 	t := suite.T()
 

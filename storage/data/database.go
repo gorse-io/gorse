@@ -299,3 +299,109 @@ func Open(path, tablePrefix string, opts ...storage.Option) (Database, error) {
 	}
 	return nil, errors.Errorf("Unknown database: %s", path)
 }
+
+func validateJSONSize(name string, value any, limit int) error {
+	if limit <= 0 || value == nil {
+		return nil
+	}
+	buf := jsonutil.MustMarshal(value)
+	if len(buf) > limit {
+		return errors.Errorf("%s size exceeds limit (%d > %d bytes)", name, len(buf), limit)
+	}
+	return nil
+}
+
+// ValidateItemSize validates item data size against limits.
+// Returns error if any field exceeds the configured limit.
+func ValidateItemSize(item Item, limits DataLimits) error {
+	if err := validateJSONSize("item labels", item.Labels, limits.MaxItemLabelsSize); err != nil {
+		return err
+	}
+	if limits.MaxItemCommentSize > 0 && len(item.Comment) > limits.MaxItemCommentSize {
+		return errors.Errorf("item comment size exceeds limit (%d > %d bytes)",
+			len(item.Comment), limits.MaxItemCommentSize)
+	}
+	if limits.MaxItemCategoriesCount > 0 && len(item.Categories) > limits.MaxItemCategoriesCount {
+		return errors.Errorf("item categories count exceeds limit (%d > %d)",
+			len(item.Categories), limits.MaxItemCategoriesCount)
+	}
+	if len(item.Categories) > 0 {
+		if err := validateJSONSize("item categories", item.Categories, limits.MaxItemCategoriesSize); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// ValidateItemPatchSize validates item patch data size against limits.
+// Returns error if any field exceeds the configured limit.
+func ValidateItemPatchSize(patch ItemPatch, limits DataLimits) error {
+	if err := validateJSONSize("item labels", patch.Labels, limits.MaxItemLabelsSize); err != nil {
+		return err
+	}
+	if limits.MaxItemCommentSize > 0 && patch.Comment != nil && len(*patch.Comment) > limits.MaxItemCommentSize {
+		return errors.Errorf("item comment size exceeds limit (%d > %d bytes)",
+			len(*patch.Comment), limits.MaxItemCommentSize)
+	}
+	if limits.MaxItemCategoriesCount > 0 && patch.Categories != nil && len(patch.Categories) > limits.MaxItemCategoriesCount {
+		return errors.Errorf("item categories count exceeds limit (%d > %d)",
+			len(patch.Categories), limits.MaxItemCategoriesCount)
+	}
+	if patch.Categories != nil {
+		if err := validateJSONSize("item categories", patch.Categories, limits.MaxItemCategoriesSize); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// ValidateUserSize validates user data size against limits.
+// Returns error if any field exceeds the configured limit.
+func ValidateUserSize(user User, limits DataLimits) error {
+	if err := validateJSONSize("user labels", user.Labels, limits.MaxUserLabelsSize); err != nil {
+		return err
+	}
+	if limits.MaxUserCommentSize > 0 && len(user.Comment) > limits.MaxUserCommentSize {
+		return errors.Errorf("user comment size exceeds limit (%d > %d bytes)",
+			len(user.Comment), limits.MaxUserCommentSize)
+	}
+	return nil
+}
+
+// ValidateUserPatchSize validates user patch data size against limits.
+// Returns error if any field exceeds the configured limit.
+func ValidateUserPatchSize(patch UserPatch, limits DataLimits) error {
+	if err := validateJSONSize("user labels", patch.Labels, limits.MaxUserLabelsSize); err != nil {
+		return err
+	}
+	if limits.MaxUserCommentSize > 0 && patch.Comment != nil && len(*patch.Comment) > limits.MaxUserCommentSize {
+		return errors.Errorf("user comment size exceeds limit (%d > %d bytes)",
+			len(*patch.Comment), limits.MaxUserCommentSize)
+	}
+	return nil
+}
+
+// ValidateFeedbackSize validates feedback data size against limits.
+// Returns error if any field exceeds the configured limit.
+func ValidateFeedbackSize(feedback Feedback, limits DataLimits) error {
+	if err := validateJSONSize("feedback labels", feedback.Labels, limits.MaxFeedbackLabelsSize); err != nil {
+		return err
+	}
+	if limits.MaxFeedbackCommentSize > 0 && len(feedback.Comment) > limits.MaxFeedbackCommentSize {
+		return errors.Errorf("feedback comment size exceeds limit (%d > %d bytes)",
+			len(feedback.Comment), limits.MaxFeedbackCommentSize)
+	}
+	return nil
+}
+
+// DataLimits holds the data size limits configuration.
+type DataLimits struct {
+	MaxItemLabelsSize      int
+	MaxItemCommentSize     int
+	MaxItemCategoriesCount int
+	MaxItemCategoriesSize  int
+	MaxUserLabelsSize      int
+	MaxUserCommentSize     int
+	MaxFeedbackLabelsSize  int
+	MaxFeedbackCommentSize int
+}

@@ -67,7 +67,7 @@ func TestUnmarshal(t *testing.T) {
 			assert.NoError(t, err)
 			// [database]
 			assert.Equal(t, "redis://localhost:6379/0", config.Database.CacheStore)
-			assert.Equal(t, "mysql://gorse:gorse_pass@tcp(localhost:3306)/gorse", config.Database.DataStore)
+			assert.Equal(t, "mysql://gorse:***@tcp(localhost:3306)/gorse", config.Database.DataStore)
 			assert.Equal(t, "sqlite://vector.db", config.Database.VectorStore)
 			assert.Equal(t, "gorse_", config.Database.TablePrefix)
 			assert.Equal(t, "gorse_cache_", config.Database.CacheTablePrefix)
@@ -254,6 +254,16 @@ func TestBindEnv(t *testing.T) {
 		{"RERANKER_AUTH_TOKEN", "<reranker_auth_token>"},
 		{"RERANKER_URL", "<reranker_url>"},
 		{"RERANKER_MODEL", "<reranker_model>"},
+		{"GORSE_DATA_LIMITS_MAX_USERS_COUNT", "9"},
+		{"GORSE_DATA_LIMITS_MAX_ITEMS_COUNT", "10"},
+		{"GORSE_DATA_LIMITS_MAX_ITEM_LABELS_SIZE", "11"},
+		{"GORSE_DATA_LIMITS_MAX_ITEM_COMMENT_SIZE", "12"},
+		{"GORSE_DATA_LIMITS_MAX_ITEM_CATEGORIES_COUNT", "13"},
+		{"GORSE_DATA_LIMITS_MAX_ITEM_CATEGORIES_SIZE", "14"},
+		{"GORSE_DATA_LIMITS_MAX_USER_LABELS_SIZE", "15"},
+		{"GORSE_DATA_LIMITS_MAX_USER_COMMENT_SIZE", "16"},
+		{"GORSE_DATA_LIMITS_MAX_FEEDBACK_LABELS_SIZE", "17"},
+		{"GORSE_DATA_LIMITS_MAX_FEEDBACK_COMMENT_SIZE", "18"},
 	}
 	for _, variable := range variables {
 		t.Setenv(variable.key, variable.value)
@@ -305,6 +315,16 @@ func TestBindEnv(t *testing.T) {
 	assert.Equal(t, "<reranker_auth_token>", config.Recommend.Ranker.RerankerAPI.AuthToken)
 	assert.Equal(t, "<reranker_url>", config.Recommend.Ranker.RerankerAPI.URL)
 	assert.Equal(t, "<reranker_model>", config.Recommend.Ranker.RerankerAPI.Model)
+	assert.Equal(t, 9, config.DataLimits.MaxUsersCount)
+	assert.Equal(t, 10, config.DataLimits.MaxItemsCount)
+	assert.Equal(t, 11, config.DataLimits.MaxItemLabelsSize)
+	assert.Equal(t, 12, config.DataLimits.MaxItemCommentSize)
+	assert.Equal(t, 13, config.DataLimits.MaxItemCategoriesCount)
+	assert.Equal(t, 14, config.DataLimits.MaxItemCategoriesSize)
+	assert.Equal(t, 15, config.DataLimits.MaxUserLabelsSize)
+	assert.Equal(t, 16, config.DataLimits.MaxUserCommentSize)
+	assert.Equal(t, 17, config.DataLimits.MaxFeedbackLabelsSize)
+	assert.Equal(t, 18, config.DataLimits.MaxFeedbackCommentSize)
 
 	// check default values
 	assert.Equal(t, 100, config.Recommend.CacheSize)
@@ -485,7 +505,7 @@ type ValidateTestSuite struct {
 func (s *ValidateTestSuite) SetupTest() {
 	s.Config = GetDefaultConfig()
 	s.Database.CacheStore = "redis://localhost:6379/0"
-	s.Database.DataStore = "mysql://gorse:gorse_pass@tcp(localhost:3306)/gorse"
+	s.Database.DataStore = "mysql://gorse:***@tcp(localhost:3306)/gorse"
 }
 
 func (s *ValidateTestSuite) TestDuplicateNonPersonalized() {
@@ -529,6 +549,12 @@ func (s *ValidateTestSuite) TestSearchColumns() {
 
 func TestValidate(t *testing.T) {
 	suite.Run(t, new(ValidateTestSuite))
+}
+
+func (s *ValidateTestSuite) TestDataLimits() {
+	s.NoError(s.Validate())
+	s.DataLimits.MaxItemLabelsSize = -1
+	s.Error(s.Validate())
 }
 
 func (s *ValidateTestSuite) TestCacheStore() {
