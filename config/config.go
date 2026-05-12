@@ -264,7 +264,7 @@ func (config *NonPersonalizedConfig) Hash() string {
 	hash.Write([]byte(config.Name))
 	hash.Write([]byte(config.Score))
 	hash.Write([]byte(config.Filter))
-	return hex.EncodeToString(hash.Sum(nil)[:])
+	return hex.EncodeToString(hash.Sum(nil))
 }
 
 type ItemToItemConfig struct {
@@ -291,7 +291,7 @@ func (config *ItemToItemConfig) Hash(cfg *RecommendConfig) string {
 			hash.Write([]byte(expr.String()))
 		}
 	}
-	return hex.EncodeToString(hash.Sum(nil)[:])
+	return hex.EncodeToString(hash.Sum(nil))
 }
 
 type UserToUserConfig struct {
@@ -317,7 +317,7 @@ func (config *UserToUserConfig) Hash(cfg *RecommendConfig) string {
 			hash.Write([]byte(expr.String()))
 		}
 	}
-	return hex.EncodeToString(hash.Sum(nil)[:])
+	return hex.EncodeToString(hash.Sum(nil))
 }
 
 type CollaborativeConfig struct {
@@ -341,7 +341,7 @@ func (config *CollaborativeConfig) Hash(cfg *RecommendConfig) string {
 	for _, expr := range cfg.DataSource.NegativeFeedbackTypes {
 		hash.Write([]byte(expr.String()))
 	}
-	return hex.EncodeToString(hash.Sum(nil)[:])
+	return hex.EncodeToString(hash.Sum(nil))
 }
 
 type EarlyStoppingConfig struct {
@@ -361,7 +361,7 @@ func (config *ExternalConfig) Hash() string {
 	hash := md5.New()
 	hash.Write([]byte(config.Name))
 	hash.Write([]byte(config.Script))
-	return hex.EncodeToString(hash.Sum(nil)[:])
+	return hex.EncodeToString(hash.Sum(nil))
 }
 
 type ReplacementConfig struct {
