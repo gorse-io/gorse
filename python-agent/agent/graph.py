@@ -18,6 +18,7 @@ Key design decisions vs. Go:
 
 from __future__ import annotations
 
+import json
 from typing import Annotated
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
@@ -77,6 +78,28 @@ class AgentState(TypedDict):
     trace: list[dict]  # list[TraceStep dicts] accumulated across router calls
     iterations: int
     tokens_used: int   # cumulative tokens this turn (Fix 2A — cannot derive from messages)
+
+
+# ---------------------------------------------------------------------------
+# Quality gate helper
+# ---------------------------------------------------------------------------
+
+def _has_signal(content: str) -> bool:
+    """Return True if a tool result contains actionable data (not empty/error)."""
+    content = (content or "").strip()
+    if not content or content in ("[]", "{}", "null"):
+        return False
+    if any(marker in content for marker in ["商品搜索失败", "未找到商品"]):
+        return False
+    try:
+        parsed = json.loads(content)
+        if isinstance(parsed, list):
+            return len(parsed) > 0
+        if isinstance(parsed, dict):
+            return parsed.get("status") != "no_data"
+        return parsed is not None
+    except (json.JSONDecodeError, ValueError):
+        return len(content) > 30  # non-JSON (e.g. Tavily results) need some body
 
 
 # ---------------------------------------------------------------------------
@@ -185,10 +208,21 @@ class AgentGraph:
         async def finalizer_node(state: AgentState) -> dict:
             messages = state["messages"]
 
-            # --- collect user question and tool observations ---
+            # Scope to the current turn only — same reasoning as quality_gate_route:
+            # ToolMessages from prior turns must not bleed into this turn's answer.
+            last_human_idx = max(
+                (i for i, m in enumerate(messages) if isinstance(m, HumanMessage)),
+                default=-1,
+            )
+
+            # --- collect user question and current-turn tool observations ---
             user_question = ""
             tool_observations: list[str] = []
-            for msg in messages:
+            # True when get_recommendations ran this turn but returned no products.
+            # Used below to add an explicit "don't invent product names" guard so
+            # Gemma doesn't confabulate items when only preference data is present.
+            rec_called_empty = False
+            for i, msg in enumerate(messages):
                 if isinstance(msg, HumanMessage) and not isinstance(msg, ToolMessage):
                     # Keep the last HumanMessage as the user's question.
                     content = msg.content
@@ -198,18 +232,26 @@ class AgentGraph:
                             for b in content
                         ).strip()
                     user_question = content
-                elif isinstance(msg, ToolMessage):
+                elif isinstance(msg, ToolMessage) and i > last_human_idx:
                     name = getattr(msg, "name", "tool")
                     tool_observations.append(f"【{name}】\n{msg.content}")
+                    if name == "get_recommendations" and not _has_signal(msg.content):
+                        rec_called_empty = True
 
             # --- build Gemma-compatible prompt ---
             if tool_observations:
                 gathered = "\n\n".join(tool_observations)
+                no_products_note = (
+                    "\n重要：商品搜索结果为空，请不要编造或推测任何具体商品名称。"
+                    "请根据用户偏好提供风格建议，并说明暂时没有找到匹配商品。"
+                    if rec_called_empty else ""
+                )
                 prompt = (
                     f"用户问题：{user_question}\n\n"
                     f"以下是为了回答该问题已收集到的信息：\n\n{gathered}\n\n"
                     f"请根据以上信息，以友好、专业的语气用中文给出完整的回答。"
                     f"如果信息中包含具体商品，请直接引用商品名称（name字段）进行介绍，不要使用模糊表述如「一些商品」或「相关商品」。"
+                    + no_products_note
                 )
             else:
                 # No tools were called — answer from general knowledge.
@@ -232,38 +274,85 @@ class AgentGraph:
             new_tokens = state.get("tokens_used", 0) + usage.get("total_tokens", 0)
             return {"messages": [resp], "tokens_used": new_tokens}
 
+        # ---- quality_gate_node ----
+        # No-op waypoint: exists so LangGraph can attach a conditional edge here.
+        # The actual routing logic lives in quality_gate_route below.
+        async def quality_gate_node(state: AgentState) -> dict:
+            return {}
+
+        # ---- fallback_node ----
+        # Deterministic honest response when all tool results are empty or errors.
+        # No LLM call — prevents the finalizer from confabulating on empty data.
+        async def fallback_node(state: AgentState) -> dict:
+            msg = AIMessage(
+                content=(
+                    "抱歉，我暂时没有找到与您问题相关的商品或信息。"
+                    "这可能是因为商品库中目前没有匹配的结果，或搜索工具未能获取到数据。"
+                    "您可以尝试换个描述方式，或告诉我更多具体需求，我会重新为您查找。"
+                )
+            )
+            return {"messages": [msg]}
+
         # ---- routing logic ----
         def should_continue(state: AgentState) -> str:
             last = state["messages"][-1]
             # Branch A — iteration cap: router hit the max loop count.
             if state.get("iterations", 0) >= max_iter:
-                return "finalizer"
+                return "quality_gate"
             # Branch B — token budget: cumulative cost exceeds the per-turn cap.
             # Fires before the tool-call check so an over-budget response doesn't
             # trigger another expensive tool + router cycle.
             if state.get("tokens_used", 0) >= token_budget:
-                return "finalizer"
+                return "quality_gate"
             # Branch C — continue ReAct loop: router decided to call a tool.
             if getattr(last, "tool_calls", None):
                 return "tools"
             # Branch D — clean stop: router produced a plain-text response,
-            # meaning it judged no more tools are needed. Go straight to finalizer
-            # to write the polished answer without any nudge.
-            return "finalizer"
+            # meaning it judged no more tools are needed.
+            return "quality_gate"
+
+        def quality_gate_route(state: AgentState) -> str:
+            msgs = state["messages"]
+            # Scope to the current turn only: ToolMessages that appear after the
+            # last HumanMessage. Without this, prior-turn ToolMessages (kept in
+            # state by the add_messages reducer + checkpointer) would poison the
+            # signal check — a previous successful turn would mask a current
+            # turn where all tools returned empty results.
+            last_human_idx = max(
+                (i for i, m in enumerate(msgs) if isinstance(m, HumanMessage)),
+                default=-1,
+            )
+            tool_msgs = [
+                m for i, m in enumerate(msgs)
+                if isinstance(m, ToolMessage) and i > last_human_idx
+            ]
+            if not tool_msgs:
+                return "finalizer"  # no tools called; router answered from general knowledge
+            if any(_has_signal(m.content) for m in tool_msgs):
+                return "finalizer"
+            return "fallback"
 
         # ---- wire graph ----
         graph = StateGraph(AgentState)
         graph.add_node("router", router_node)
         graph.add_node("tools", ToolNode(self._tools))
+        graph.add_node("quality_gate", quality_gate_node)
         graph.add_node("finalizer", finalizer_node)
+        graph.add_node("fallback", fallback_node)
         graph.set_entry_point("router")
         graph.add_conditional_edges(
             "router",
             should_continue,
-            {"tools": "tools", "finalizer": "finalizer"},
+            {"tools": "tools", "quality_gate": "quality_gate"},
         )
         graph.add_edge("tools", "router")
+        graph.add_conditional_edges(
+            "quality_gate",
+            quality_gate_route,
+            {"finalizer": "finalizer", "fallback": "fallback"},
+        )
         graph.add_edge("finalizer", END)
+        graph.add_edge("fallback", END)
         return graph.compile(checkpointer=self._checkpointer)
 
 
