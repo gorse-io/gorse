@@ -176,7 +176,7 @@ func EvaluateAFM(cfg *config.Config, train, test *ctr.Dataset, exportUserAUC boo
 	var count float32
 	for userIndex, posIndices := range positives {
 		negIndices := negatives[userIndex]
-		if len(negIndices) == 0 || feedbackCount[userIndex] == 0 || feedbackCount[userIndex] > cfg.Recommend.ContextSize {
+		if len(posIndices) == 0 || len(negIndices) == 0 || feedbackCount[userIndex] == 0 || feedbackCount[userIndex] > cfg.Recommend.ContextSize {
 			continue
 		}
 		var posPredictions, negPredictions []float32
@@ -264,7 +264,7 @@ func EvaluateReranker(cfg *config.Config, train, test *ctr.Dataset, items []data
 	lo.Must0(parallel.ForEach(context.Background(), slices.Collect(maps.Keys(positives)), runtime.NumCPU(), func(_ int, userIndex int32) {
 		posIndices := positives[userIndex]
 		negIndices := negatives[userIndex]
-		if len(negIndices) == 0 {
+		if len(posIndices) == 0 || len(negIndices) == 0 {
 			return
 		}
 		candidates := make([]*data.Item, 0, len(posIndices)+len(negIndices))

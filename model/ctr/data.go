@@ -368,9 +368,7 @@ func (dataset *Dataset) Split(ratio float32, seed int64) (*Dataset, *Dataset) {
 				testSet.ContextLabels = append(testSet.ContextLabels, dataset.ContextLabels[i])
 			}
 			testSet.Target = append(testSet.Target, dataset.Target[i])
-			if len(dataset.Timestamps) > 0 {
-				testSet.Timestamps = append(testSet.Timestamps, dataset.Timestamps[i])
-			}
+			testSet.Timestamps = append(testSet.Timestamps, dataset.Timestamps[i])
 			if dataset.Target[i] > 0 {
 				testSet.PositiveCount++
 			} else {
@@ -384,9 +382,7 @@ func (dataset *Dataset) Split(ratio float32, seed int64) (*Dataset, *Dataset) {
 				trainSet.ContextLabels = append(trainSet.ContextLabels, dataset.ContextLabels[i])
 			}
 			trainSet.Target = append(trainSet.Target, dataset.Target[i])
-			if len(dataset.Timestamps) > 0 {
-				trainSet.Timestamps = append(trainSet.Timestamps, dataset.Timestamps[i])
-			}
+			trainSet.Timestamps = append(trainSet.Timestamps, dataset.Timestamps[i])
 			if dataset.Target[i] > 0 {
 				trainSet.PositiveCount++
 			} else {
@@ -398,14 +394,9 @@ func (dataset *Dataset) Split(ratio float32, seed int64) (*Dataset, *Dataset) {
 }
 
 // SplitByUserTime splits the dataset within each user by timestamp. Earlier samples are used for
-// training and the latest samples are used for testing. Users whose test samples don't contain
-// both positive and negative samples are removed from both train and test. At least one sample is
-// kept in train for every user with two or more samples. If timestamps are unavailable, it falls
-// back to random split.
+// training and the latest samples are used for testing. At least one sample is kept in train for
+// every user with two or more samples.
 func (dataset *Dataset) SplitByUserTime(ratio float32) (*Dataset, *Dataset) {
-	if len(dataset.Timestamps) != dataset.Count() {
-		return dataset.Split(ratio, 0)
-	}
 	trainSet := &Dataset{
 		Index:                  dataset.Index,
 		UserLabels:             dataset.UserLabels,
@@ -442,17 +433,6 @@ func (dataset *Dataset) SplitByUserTime(ratio float32) (*Dataset, *Dataset) {
 			numTest = len(samples) - 1
 		}
 		splitIndex := len(samples) - numTest
-		var hasPositiveTestSample, hasNegativeTestSample bool
-		for _, sampleIndex := range samples[splitIndex:] {
-			if dataset.Target[sampleIndex] > 0 {
-				hasPositiveTestSample = true
-			} else {
-				hasNegativeTestSample = true
-			}
-		}
-		if !hasPositiveTestSample || !hasNegativeTestSample {
-			continue
-		}
 		for i, sampleIndex := range samples {
 			if i >= splitIndex {
 				dataset.appendSample(testSet, sampleIndex)
@@ -471,9 +451,7 @@ func (dataset *Dataset) appendSample(dst *Dataset, i int) {
 		dst.ContextLabels = append(dst.ContextLabels, dataset.ContextLabels[i])
 	}
 	dst.Target = append(dst.Target, dataset.Target[i])
-	if len(dataset.Timestamps) > 0 {
-		dst.Timestamps = append(dst.Timestamps, dataset.Timestamps[i])
-	}
+	dst.Timestamps = append(dst.Timestamps, dataset.Timestamps[i])
 	if dataset.Target[i] > 0 {
 		dst.PositiveCount++
 	} else {
