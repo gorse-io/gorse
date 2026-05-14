@@ -426,8 +426,10 @@ func (m *Master) LoadDataFromDatabase(
 
 	// create negative feedback set (highest priority)
 	var negativeSet []mapset.Set[int32]
+	var negativeTimestamps []map[int32]time.Time
 	if len(negFeedbackTypes) > 0 {
 		negativeSet = make([]mapset.Set[int32], dataSet.CountUsers())
+		negativeTimestamps = make([]map[int32]time.Time, dataSet.CountUsers())
 		for i := range negativeSet {
 			negativeSet[i] = mapset.NewSet[int32]()
 		}
@@ -435,6 +437,7 @@ func (m *Master) LoadDataFromDatabase(
 
 	// create positive set
 	positiveSet := make([]mapset.Set[int32], dataSet.CountUsers())
+	positiveTimestamps := make([]map[int32]time.Time, dataSet.CountUsers())
 	for i := range positiveSet {
 		positiveSet[i] = mapset.NewSet[int32]()
 	}
@@ -468,8 +471,14 @@ func (m *Master) LoadDataFromDatabase(
 					if itemIndex == dataset.NotId {
 						continue
 					}
-					negativeSet[userIndex].Add(itemIndex)
 					mu.Lock()
+					negativeSet[userIndex].Add(itemIndex)
+					if negativeTimestamps[userIndex] == nil {
+						negativeTimestamps[userIndex] = make(map[int32]time.Time)
+					}
+					if timestamp, ok := negativeTimestamps[userIndex][itemIndex]; !ok || f.Timestamp.After(timestamp) {
+						negativeTimestamps[userIndex][itemIndex] = f.Timestamp
+					}
 					explicitNegativeFeedbackCount++
 					evaluator.Add(f.FeedbackType, f.Value, userIndex, itemIndex, f.Timestamp)
 					mu.Unlock()
@@ -520,9 +529,14 @@ func (m *Master) LoadDataFromDatabase(
 					continue
 				}
 				// insert feedback to positive set
-				positiveSet[userIndex].Add(itemIndex)
-
 				mu.Lock()
+				positiveSet[userIndex].Add(itemIndex)
+				if positiveTimestamps[userIndex] == nil {
+					positiveTimestamps[userIndex] = make(map[int32]time.Time)
+				}
+				if timestamp, ok := positiveTimestamps[userIndex][itemIndex]; !ok || f.Timestamp.After(timestamp) {
+					positiveTimestamps[userIndex][itemIndex] = f.Timestamp
+				}
 				posFeedbackCount++
 				// insert feedback to evaluator
 				evaluator.Add(f.FeedbackType, f.Value, userIndex, itemIndex, f.Timestamp)
@@ -583,6 +597,7 @@ func (m *Master) LoadDataFromDatabase(
 
 	// create read set (implicit negative feedback)
 	readSet := make([]mapset.Set[int32], dataSet.CountUsers())
+	readTimestamps := make([]map[int32]time.Time, dataSet.CountUsers())
 	for i := range readSet {
 		readSet[i] = mapset.NewSet[int32]()
 	}
@@ -611,8 +626,14 @@ func (m *Master) LoadDataFromDatabase(
 				if (negativeSet != nil && negativeSet[userIndex].Contains(itemIndex)) || positiveSet[userIndex].Contains(itemIndex) {
 					continue
 				}
-				readSet[userIndex].Add(itemIndex)
 				mu.Lock()
+				readSet[userIndex].Add(itemIndex)
+				if readTimestamps[userIndex] == nil {
+					readTimestamps[userIndex] = make(map[int32]time.Time)
+				}
+				if timestamp, ok := readTimestamps[userIndex][itemIndex]; !ok || f.Timestamp.After(timestamp) {
+					readTimestamps[userIndex][itemIndex] = f.Timestamp
+				}
 				readFeedbackCount++
 				evaluator.Add(f.FeedbackType, f.Value, userIndex, itemIndex, f.Timestamp)
 				mu.Unlock()
@@ -671,6 +692,7 @@ func (m *Master) LoadDataFromDatabase(
 				ctrDataset.Users = append(ctrDataset.Users, int32(userIndex))
 				ctrDataset.Items = append(ctrDataset.Items, itemIndex)
 				ctrDataset.Target = append(ctrDataset.Target, -1)
+				ctrDataset.Timestamps = append(ctrDataset.Timestamps, negativeTimestamps[userIndex][itemIndex])
 				ctrDataset.NegativeCount++
 			}
 		}
@@ -679,6 +701,7 @@ func (m *Master) LoadDataFromDatabase(
 			ctrDataset.Users = append(ctrDataset.Users, int32(userIndex))
 			ctrDataset.Items = append(ctrDataset.Items, itemIndex)
 			ctrDataset.Target = append(ctrDataset.Target, 1)
+			ctrDataset.Timestamps = append(ctrDataset.Timestamps, positiveTimestamps[userIndex][itemIndex])
 			ctrDataset.PositiveCount++
 		}
 		// insert read feedback (implicit negative)
@@ -686,6 +709,7 @@ func (m *Master) LoadDataFromDatabase(
 			ctrDataset.Users = append(ctrDataset.Users, int32(userIndex))
 			ctrDataset.Items = append(ctrDataset.Items, itemIndex)
 			ctrDataset.Target = append(ctrDataset.Target, -1)
+			ctrDataset.Timestamps = append(ctrDataset.Timestamps, readTimestamps[userIndex][itemIndex])
 			ctrDataset.NegativeCount++
 		}
 		// release sets

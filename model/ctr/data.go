@@ -18,8 +18,10 @@ import (
 	"bufio"
 	"encoding/json"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/gorse-io/gorse/common/bfloats"
@@ -155,6 +157,7 @@ type Dataset struct {
 	Users                  []int32
 	Items                  []int32
 	Target                 []float32
+	Timestamps             []time.Time
 	ItemEmbeddings         [][][]uint16 // Index by row id, embedding id, embedding dimension; stored as BF16 bits
 	ItemEmbeddingDimension []int
 	ItemEmbeddingIndex     *dataset.Index
@@ -365,6 +368,9 @@ func (dataset *Dataset) Split(ratio float32, seed int64) (*Dataset, *Dataset) {
 				testSet.ContextLabels = append(testSet.ContextLabels, dataset.ContextLabels[i])
 			}
 			testSet.Target = append(testSet.Target, dataset.Target[i])
+			if len(dataset.Timestamps) > 0 {
+				testSet.Timestamps = append(testSet.Timestamps, dataset.Timestamps[i])
+			}
 			if dataset.Target[i] > 0 {
 				testSet.PositiveCount++
 			} else {
@@ -378,6 +384,9 @@ func (dataset *Dataset) Split(ratio float32, seed int64) (*Dataset, *Dataset) {
 				trainSet.ContextLabels = append(trainSet.ContextLabels, dataset.ContextLabels[i])
 			}
 			trainSet.Target = append(trainSet.Target, dataset.Target[i])
+			if len(dataset.Timestamps) > 0 {
+				trainSet.Timestamps = append(trainSet.Timestamps, dataset.Timestamps[i])
+			}
 			if dataset.Target[i] > 0 {
 				trainSet.PositiveCount++
 			} else {
@@ -386,6 +395,90 @@ func (dataset *Dataset) Split(ratio float32, seed int64) (*Dataset, *Dataset) {
 		}
 	}
 	return trainSet, testSet
+}
+
+// SplitByUserTime splits the dataset within each user by timestamp. Earlier samples are used for
+// training and the latest samples are used for testing. Users whose test samples don't contain
+// both positive and negative samples are removed from both train and test. At least one sample is
+// kept in train for every user with two or more samples. If timestamps are unavailable, it falls
+// back to random split.
+func (dataset *Dataset) SplitByUserTime(ratio float32) (*Dataset, *Dataset) {
+	if len(dataset.Timestamps) != dataset.Count() {
+		return dataset.Split(ratio, 0)
+	}
+	trainSet := &Dataset{
+		Index:                  dataset.Index,
+		UserLabels:             dataset.UserLabels,
+		ItemLabels:             dataset.ItemLabels,
+		ItemEmbeddings:         dataset.ItemEmbeddings,
+		ItemEmbeddingIndex:     dataset.ItemEmbeddingIndex,
+		ItemEmbeddingDimension: dataset.ItemEmbeddingDimension,
+	}
+	testSet := &Dataset{
+		Index:                  dataset.Index,
+		UserLabels:             dataset.UserLabels,
+		ItemLabels:             dataset.ItemLabels,
+		ItemEmbeddings:         dataset.ItemEmbeddings,
+		ItemEmbeddingIndex:     dataset.ItemEmbeddingIndex,
+		ItemEmbeddingDimension: dataset.ItemEmbeddingDimension,
+	}
+
+	userSamples := make([][]int, dataset.CountUsers())
+	for i, userIndex := range dataset.Users {
+		userSamples[int(userIndex)] = append(userSamples[int(userIndex)], i)
+	}
+	for _, samples := range userSamples {
+		if len(samples) == 0 {
+			continue
+		}
+		sort.Slice(samples, func(i, j int) bool {
+			return dataset.Timestamps[samples[i]].Before(dataset.Timestamps[samples[j]])
+		})
+		numTest := int(float32(len(samples)) * ratio)
+		if numTest == 0 && len(samples) > 1 {
+			numTest = 1
+		}
+		if numTest >= len(samples) {
+			numTest = len(samples) - 1
+		}
+		splitIndex := len(samples) - numTest
+		var hasPositiveTestSample, hasNegativeTestSample bool
+		for _, sampleIndex := range samples[splitIndex:] {
+			if dataset.Target[sampleIndex] > 0 {
+				hasPositiveTestSample = true
+			} else {
+				hasNegativeTestSample = true
+			}
+		}
+		if !hasPositiveTestSample || !hasNegativeTestSample {
+			continue
+		}
+		for i, sampleIndex := range samples {
+			if i >= splitIndex {
+				dataset.appendSample(testSet, sampleIndex)
+			} else {
+				dataset.appendSample(trainSet, sampleIndex)
+			}
+		}
+	}
+	return trainSet, testSet
+}
+
+func (dataset *Dataset) appendSample(dst *Dataset, i int) {
+	dst.Users = append(dst.Users, dataset.Users[i])
+	dst.Items = append(dst.Items, dataset.Items[i])
+	if dataset.ContextLabels != nil {
+		dst.ContextLabels = append(dst.ContextLabels, dataset.ContextLabels[i])
+	}
+	dst.Target = append(dst.Target, dataset.Target[i])
+	if len(dataset.Timestamps) > 0 {
+		dst.Timestamps = append(dst.Timestamps, dataset.Timestamps[i])
+	}
+	if dataset.Target[i] > 0 {
+		dst.PositiveCount++
+	} else {
+		dst.NegativeCount++
+	}
 }
 
 func (dataset *Dataset) GetItemEmbeddingDim() []int {
