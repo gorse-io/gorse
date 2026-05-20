@@ -15,8 +15,6 @@
 package floats
 
 import (
-	"math"
-
 	"github.com/chewxy/math32"
 )
 
@@ -221,7 +219,7 @@ func SqrtTo(a, b []float32) {
 
 func Sqrt(a []float32) {
 	for i := range a {
-		a[i] = float32(math.Sqrt(float64(a[i])))
+		a[i] = math32.Sqrt(a[i])
 	}
 }
 

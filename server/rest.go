@@ -29,6 +29,7 @@ import (
 	restfulspec "github.com/emicklei/go-restful-openapi/v2"
 	"github.com/emicklei/go-restful/v3"
 	"github.com/google/uuid"
+	"github.com/gorse-io/gorse/common/event"
 	"github.com/gorse-io/gorse/common/expression"
 	"github.com/gorse-io/gorse/common/heap"
 	"github.com/gorse-io/gorse/common/log"
@@ -131,11 +132,24 @@ func (s *RestServer) LogFilter(req *restful.Request, resp *restful.Response, cha
 	start := time.Now()
 	chain.ProcessFilter(req, resp)
 	responseTime := time.Since(start)
+
+	// Log access
 	if !s.DisableLog && req.Request.URL.Path != "/api/dashboard/cluster" &&
 		req.Request.URL.Path != "/api/dashboard/tasks" {
-		log.ResponseLogger(resp).Info(fmt.Sprintf("%s %s", req.Request.Method, req.Request.URL),
+		log.AccessLogger().Info(fmt.Sprintf("%s %s", req.Request.Method, req.Request.URL.Path),
+			zap.String("request_id", requestId),
 			zap.Int("status_code", resp.StatusCode()),
-			zap.Duration("response_time", responseTime))
+			zap.Duration("response_time", responseTime),
+			zap.String("remote_addr", req.Request.RemoteAddr))
+		go event.EventRecorder().RecordAPI(req.Request.Context(), event.APIEvent{
+			RequestID:    requestId,
+			Method:       req.Request.Method,
+			Path:         req.Request.URL.Path,
+			StatusCode:   resp.StatusCode(),
+			ResponseTime: responseTime.Milliseconds(),
+			Timestamp:    start,
+			RemoteAddr:   req.Request.RemoteAddr,
+		})
 	}
 }
 
