@@ -20,12 +20,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"syscall"
-	"time"
 
 	"github.com/go-resty/resty/v2"
 	"github.com/gorse-io/gorse/cmd/version"
@@ -44,7 +45,7 @@ var rootCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		// Show version
 		if showVersion, _ := cmd.PersistentFlags().GetBool("version"); showVersion {
-			fmt.Println(version.BuildInfo())
+			cmd.Println(version.BuildInfo())
 			return
 		}
 		_ = cmd.Help()
@@ -55,6 +56,12 @@ const (
 	keyringService     = "gorse-cli"
 	keyringEndpointKey = "admin-endpoint"
 	keyringAPIKeyKey   = "admin-api-key"
+)
+
+var (
+	keyringGet    = keyring.Get
+	keyringSet    = keyring.Set
+	keyringDelete = keyring.Delete
 )
 
 // newAdminClient creates a new resty client for admin API
@@ -76,10 +83,10 @@ func getEndpointAndKey(cmd *cobra.Command) (endpoint, apiKey string) {
 		apiKey = os.Getenv("GORSE_ADMIN_API_KEY")
 	}
 	if endpoint == "" {
-		endpoint, _ = keyring.Get(keyringService, keyringEndpointKey)
+		endpoint, _ = keyringGet(keyringService, keyringEndpointKey)
 	}
 	if apiKey == "" {
-		apiKey, _ = keyring.Get(keyringService, keyringAPIKeyKey)
+		apiKey, _ = keyringGet(keyringService, keyringAPIKeyKey)
 	}
 	return
 }
@@ -134,13 +141,13 @@ var loginCmd = &cobra.Command{
 			log.Logger().Fatal("GORSE_ADMIN_API_KEY or --api-key is required")
 		}
 
-		if err := keyring.Set(keyringService, keyringEndpointKey, endpoint); err != nil {
+		if err := keyringSet(keyringService, keyringEndpointKey, endpoint); err != nil {
 			log.Logger().Fatal("failed to save endpoint to keyring", zap.Error(err))
 		}
-		if err := keyring.Set(keyringService, keyringAPIKeyKey, apiKey); err != nil {
+		if err := keyringSet(keyringService, keyringAPIKeyKey, apiKey); err != nil {
 			log.Logger().Fatal("failed to save API key to keyring", zap.Error(err))
 		}
-		fmt.Println("Login succeeded. Credentials saved to system keyring.")
+		printStatusTable(cmd, "login", "Credentials saved to system keyring.")
 	},
 }
 
@@ -148,13 +155,13 @@ var logoutCmd = &cobra.Command{
 	Use:   "logout",
 	Short: "Remove saved Gorse admin API credentials from the system keyring",
 	Run: func(cmd *cobra.Command, args []string) {
-		if err := keyring.Delete(keyringService, keyringEndpointKey); err != nil && !errors.Is(err, keyring.ErrNotFound) {
+		if err := keyringDelete(keyringService, keyringEndpointKey); err != nil && !errors.Is(err, keyring.ErrNotFound) {
 			log.Logger().Fatal("failed to delete endpoint from keyring", zap.Error(err))
 		}
-		if err := keyring.Delete(keyringService, keyringAPIKeyKey); err != nil && !errors.Is(err, keyring.ErrNotFound) {
+		if err := keyringDelete(keyringService, keyringAPIKeyKey); err != nil && !errors.Is(err, keyring.ErrNotFound) {
 			log.Logger().Fatal("failed to delete API key from keyring", zap.Error(err))
 		}
-		fmt.Println("Logout succeeded. Credentials removed from system keyring.")
+		printStatusTable(cmd, "logout", "Credentials removed from system keyring.")
 	},
 }
 
@@ -184,7 +191,173 @@ func getAdminAPI(cmd *cobra.Command, path string, query url.Values) {
 			zap.Int("status", resp.StatusCode()),
 			zap.String("body", resp.String()))
 	}
-	fmt.Println(resp.String())
+	printJSONTable(cmd, resp.Body())
+}
+
+func printStatusTable(cmd *cobra.Command, action, message string) {
+	printTable(cmd.OutOrStdout(), []string{"Action", "Message"}, [][]string{{action, message}})
+}
+
+func printJSONTable(cmd *cobra.Command, body []byte) {
+	decoder := json.NewDecoder(strings.NewReader(string(body)))
+	decoder.UseNumber()
+	var value any
+	if err := decoder.Decode(&value); err != nil {
+		printTable(cmd.OutOrStdout(), []string{"Response"}, [][]string{{strings.TrimSpace(string(body))}})
+		return
+	}
+	printValueTables(cmd, value)
+}
+
+func printValueTables(cmd *cobra.Command, value any) {
+	switch typed := value.(type) {
+	case []any:
+		printArrayTable(cmd, typed)
+	case map[string]any:
+		arrayKeys := make([]string, 0)
+		metadata := make(map[string]any)
+		for key, child := range typed {
+			if _, ok := child.([]any); ok {
+				arrayKeys = append(arrayKeys, key)
+			} else {
+				metadata[key] = child
+			}
+		}
+		sort.Strings(arrayKeys)
+		if len(arrayKeys) > 0 {
+			if len(metadata) > 0 {
+				printObjectTable(cmd, metadata)
+				fmt.Fprintln(cmd.OutOrStdout())
+			}
+			for i, key := range arrayKeys {
+				if i > 0 {
+					fmt.Fprintln(cmd.OutOrStdout())
+				}
+				printArrayTable(cmd, typed[key].([]any))
+			}
+			return
+		}
+		printObjectTable(cmd, typed)
+	default:
+		printTable(cmd.OutOrStdout(), []string{"Value"}, [][]string{{formatTableValue(typed)}})
+	}
+}
+
+func printObjectTable(cmd *cobra.Command, object map[string]any) {
+	flattened := make(map[string]string)
+	flattenJSON("", object, flattened)
+	keys := make([]string, 0, len(flattened))
+	for key := range flattened {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	rows := make([][]string, 0, len(keys))
+	for _, key := range keys {
+		rows = append(rows, []string{key, flattened[key]})
+	}
+	if len(rows) == 0 {
+		rows = append(rows, []string{"", ""})
+	}
+	printTable(cmd.OutOrStdout(), []string{"Key", "Value"}, rows)
+}
+
+func printArrayTable(cmd *cobra.Command, array []any) {
+	if len(array) == 0 {
+		printTable(cmd.OutOrStdout(), []string{"Result"}, [][]string{{"No data"}})
+		return
+	}
+	allObjects := true
+	columnsSet := make(map[string]struct{})
+	flattenedRows := make([]map[string]string, 0, len(array))
+	for _, element := range array {
+		object, ok := element.(map[string]any)
+		if !ok {
+			allObjects = false
+			break
+		}
+		flattened := make(map[string]string)
+		flattenJSON("", object, flattened)
+		flattenedRows = append(flattenedRows, flattened)
+		for column := range flattened {
+			columnsSet[column] = struct{}{}
+		}
+	}
+	if !allObjects {
+		rows := make([][]string, len(array))
+		for i, element := range array {
+			rows[i] = []string{strconv.Itoa(i), formatTableValue(element)}
+		}
+		printTable(cmd.OutOrStdout(), []string{"Index", "Value"}, rows)
+		return
+	}
+	columns := make([]string, 0, len(columnsSet))
+	for column := range columnsSet {
+		columns = append(columns, column)
+	}
+	sort.Strings(columns)
+	rows := make([][]string, len(flattenedRows))
+	for i, flattened := range flattenedRows {
+		row := make([]string, len(columns))
+		for j, column := range columns {
+			row[j] = flattened[column]
+		}
+		rows[i] = row
+	}
+	printTable(cmd.OutOrStdout(), columns, rows)
+}
+
+func flattenJSON(prefix string, value any, output map[string]string) {
+	switch typed := value.(type) {
+	case map[string]any:
+		if len(typed) == 0 {
+			output[prefix] = "{}"
+			return
+		}
+		keys := make([]string, 0, len(typed))
+		for key := range typed {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		for _, key := range keys {
+			next := key
+			if prefix != "" {
+				next = prefix + "." + key
+			}
+			flattenJSON(next, typed[key], output)
+		}
+	default:
+		output[prefix] = formatTableValue(typed)
+	}
+}
+
+func formatTableValue(value any) string {
+	switch typed := value.(type) {
+	case nil:
+		return ""
+	case string:
+		return typed
+	case json.Number:
+		return typed.String()
+	case bool:
+		return strconv.FormatBool(typed)
+	case float64:
+		return strconv.FormatFloat(typed, 'f', -1, 64)
+	case []any, map[string]any:
+		encoded, err := json.Marshal(typed)
+		if err != nil {
+			return fmt.Sprint(typed)
+		}
+		return string(encoded)
+	default:
+		return fmt.Sprint(typed)
+	}
+}
+
+func printTable(output io.Writer, headers []string, rows [][]string) {
+	table := tablewriter.NewWriter(output)
+	table.Header(headers)
+	lo.Must0(table.Bulk(rows))
+	lo.Must0(table.Render())
 }
 
 func addAuthFlags(commands ...*cobra.Command) {
@@ -240,15 +413,6 @@ func readFlagOrFile(cmd *cobra.Command, valueFlag, fileFlag string) string {
 	return string(content)
 }
 
-// ClusterNode represents a node in the cluster
-type ClusterNode struct {
-	UUID       string    `json:"uuid"`
-	Hostname   string    `json:"hostname"`
-	Type       string    `json:"type"`
-	Version    string    `json:"version"`
-	UpdateTime time.Time `json:"update_time"`
-}
-
 // getCmd is the parent command for get operations
 var getCmd = &cobra.Command{
 	Use:   "get",
@@ -260,41 +424,7 @@ var getClusterCmd = &cobra.Command{
 	Use:   "cluster",
 	Short: "Get cluster nodes from Gorse admin API",
 	Run: func(cmd *cobra.Command, args []string) {
-		endpoint, apiKey := requireEndpointAndKey(cmd)
-
-		client := newAdminClient(endpoint, apiKey)
-		resp, err := client.R().Get("/dashboard/cluster")
-		if err != nil {
-			log.Logger().Fatal("failed to send request", zap.Error(err))
-		}
-
-		if resp.IsError() {
-			log.Logger().Fatal("API request failed",
-				zap.Int("status", resp.StatusCode()),
-				zap.String("body", resp.String()))
-		}
-
-		// Parse and format output
-		var nodes []ClusterNode
-		if err := json.Unmarshal(resp.Body(), &nodes); err != nil {
-			log.Logger().Fatal("failed to parse response", zap.Error(err))
-		}
-
-		// Format as table
-		table := tablewriter.NewWriter(os.Stdout)
-		table.Header([]string{"Type", "UUID", "Hostname", "Version", "Update Time"})
-		data := make([][]string, len(nodes))
-		for i, node := range nodes {
-			data[i] = []string{
-				node.Type,
-				node.UUID,
-				node.Hostname,
-				node.Version,
-				node.UpdateTime.Format("2006-01-02 15:04:05"),
-			}
-		}
-		lo.Must0(table.Bulk(data))
-		lo.Must0(table.Render())
+		getAdminAPI(cmd, "/dashboard/cluster", nil)
 	},
 }
 
@@ -303,21 +433,7 @@ var getTasksCmd = &cobra.Command{
 	Use:   "tasks",
 	Short: "Get task progress from Gorse admin API",
 	Run: func(cmd *cobra.Command, args []string) {
-		endpoint, apiKey := requireEndpointAndKey(cmd)
-
-		client := newAdminClient(endpoint, apiKey)
-		resp, err := client.R().Get("/dashboard/tasks")
-		if err != nil {
-			log.Logger().Fatal("failed to send request", zap.Error(err))
-		}
-
-		if resp.IsError() {
-			log.Logger().Fatal("API request failed",
-				zap.Int("status", resp.StatusCode()),
-				zap.String("body", resp.String()))
-		}
-
-		fmt.Println(resp.String())
+		getAdminAPI(cmd, "/dashboard/tasks", nil)
 	},
 }
 
@@ -326,21 +442,7 @@ var getConfigCmd = &cobra.Command{
 	Use:   "config",
 	Short: "Get configuration from Gorse admin API",
 	Run: func(cmd *cobra.Command, args []string) {
-		endpoint, apiKey := requireEndpointAndKey(cmd)
-
-		client := newAdminClient(endpoint, apiKey)
-		resp, err := client.R().Get("/dashboard/config")
-		if err != nil {
-			log.Logger().Fatal("failed to send request", zap.Error(err))
-		}
-
-		if resp.IsError() {
-			log.Logger().Fatal("API request failed",
-				zap.Int("status", resp.StatusCode()),
-				zap.String("body", resp.String()))
-		}
-
-		fmt.Println(resp.String())
+		getAdminAPI(cmd, "/dashboard/config", nil)
 	},
 }
 
@@ -392,7 +494,7 @@ var setConfigCmd = &cobra.Command{
 				zap.String("body", resp.String()))
 		}
 
-		fmt.Println(resp.String())
+		printJSONTable(cmd, resp.Body())
 	},
 }
 
@@ -636,7 +738,7 @@ func init() {
 	loginCmd.Flags().String("api-key", "", "Gorse admin API key (default: GORSE_ADMIN_API_KEY; prefer prompt to avoid shell history)")
 	addAuthFlags(getUserInfoCmd, getClusterCmd, getCategoriesCmd, getTasksCmd, getConfigCmd, getConfigSchemaCmd,
 		getStatsCmd, getTimeseriesCmd, getUserCmd, getUsersCmd, getUserFeedbackCmd, getLatestCmd,
-		getNonPersonalizedCmd, getRecommendCmd, getItemToItemCmd, getUserToUserCmd, getExternalCmd, getRankerPromptCmd)
+		getNonPersonalizedCmd, getRecommendCmd, getItemToItemCmd, getUserToUserCmd, getExternalCmd, getRankerPromptCmd, setConfigCmd)
 
 	getTimeseriesCmd.Flags().String("begin", "", "Begin time, defaults to 7 days ago")
 	getTimeseriesCmd.Flags().String("end", "", "End time, defaults to now")
