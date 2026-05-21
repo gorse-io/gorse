@@ -19,70 +19,11 @@ import (
 	"fmt"
 	"slices"
 	"strconv"
-	"strings"
 	"time"
 
-	"github.com/gorse-io/gorse/common/log"
-	"github.com/gorse-io/gorse/storage"
 	"github.com/juju/errors"
-	"github.com/redis/go-redis/extra/redisotel/v9"
 	"github.com/redis/go-redis/v9"
-	semconv "go.opentelemetry.io/otel/semconv/v1.8.0"
-	"go.uber.org/zap"
 )
-
-func init() {
-	// Valkey is wire-compatible with Redis. We reuse the go-redis client but
-	// wrap it in RedisValkey which provides a sorted-set-based time series
-	// implementation (Valkey lacks the Redis TimeSeries module).
-	Register([]string{storage.ValkeyPrefix, storage.ValkeysPrefix}, func(path, tablePrefix string, opts ...storage.Option) (Database, error) {
-		// Rewrite valkey:// or valkeys:// to redis:// or rediss:// for go-redis URL parsing.
-		var newURL string
-		if strings.HasPrefix(path, storage.ValkeysPrefix) {
-			newURL = strings.Replace(path, storage.ValkeysPrefix, storage.RedissPrefix, 1)
-		} else {
-			newURL = strings.Replace(path, storage.ValkeyPrefix, storage.RedisPrefix, 1)
-		}
-		opt, err := redis.ParseURL(newURL)
-		if err != nil {
-			return nil, err
-		}
-		opt.Protocol = 2
-		database := &RedisValkey{}
-		database.TablePrefix = storage.TablePrefix(tablePrefix)
-		database.client = redis.NewClient(opt)
-		database.maxSearchResults = storage.NewOptions(opts...).MaxSearchResults
-		// TODO: switch to semconv.DBSystemValkey once available in go.opentelemetry.io/otel/semconv
-		if err = redisotel.InstrumentTracing(database.client, redisotel.WithAttributes(semconv.DBSystemRedis)); err != nil {
-			log.Logger().Error("failed to add tracing for valkey", zap.Error(err))
-			return nil, errors.Trace(err)
-		}
-		return database, nil
-	})
-	Register([]string{storage.ValkeyClusterPrefix, storage.ValkeysClusterPrefix}, func(path, tablePrefix string, opts ...storage.Option) (Database, error) {
-		var newURL string
-		if strings.HasPrefix(path, storage.ValkeyClusterPrefix) {
-			newURL = strings.Replace(path, storage.ValkeyClusterPrefix, storage.RedisPrefix, 1)
-		} else if strings.HasPrefix(path, storage.ValkeysClusterPrefix) {
-			newURL = strings.Replace(path, storage.ValkeysClusterPrefix, storage.RedissPrefix, 1)
-		}
-		opt, err := redis.ParseClusterURL(newURL)
-		if err != nil {
-			return nil, err
-		}
-		opt.Protocol = 2
-		database := &RedisValkey{}
-		database.TablePrefix = storage.TablePrefix(tablePrefix)
-		database.client = redis.NewClusterClient(opt)
-		database.maxSearchResults = storage.NewOptions(opts...).MaxSearchResults
-		// TODO: switch to semconv.DBSystemValkey once available in go.opentelemetry.io/otel/semconv
-		if err = redisotel.InstrumentTracing(database.client, redisotel.WithAttributes(semconv.DBSystemRedis)); err != nil {
-			log.Logger().Error("failed to add tracing for valkey", zap.Error(err))
-			return nil, errors.Trace(err)
-		}
-		return database, nil
-	})
-}
 
 // RedisValkey embeds Redis and overrides only the time series methods.
 // All other operations (KV, queue, scores/search, scan, purge) are inherited

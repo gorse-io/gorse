@@ -52,21 +52,40 @@ func (suite *RedisTestSuite) SetupSuite() {
 	var err error
 	suite.Database, err = Open(redisDSN, "gorse_")
 	suite.NoError(err)
-	// flush db
-	redisClient, ok := suite.Database.(*Redis)
-	suite.True(ok)
-	if clusterClient, ok := redisClient.client.(*redis.ClusterClient); ok {
-		err = clusterClient.ForEachMaster(suite.T().Context(), func(ctx context.Context, client *redis.Client) error {
-			return client.FlushDB(ctx).Err()
+	// flush db -- handle both *Redis and *RedisValkey (auto-detected)
+	var client redis.UniversalClient
+	switch db := suite.Database.(type) {
+	case *RedisValkey:
+		client = db.client
+	case *Redis:
+		client = db.client
+	default:
+		suite.Fail("unexpected database type")
+	}
+	if clusterClient, ok := client.(*redis.ClusterClient); ok {
+		err = clusterClient.ForEachMaster(suite.T().Context(), func(ctx context.Context, c *redis.Client) error {
+			return c.FlushDB(ctx).Err()
 		})
 		suite.NoError(err)
 	} else {
-		err = redisClient.client.FlushDB(suite.T().Context()).Err()
+		err = client.FlushDB(suite.T().Context()).Err()
 		suite.NoError(err)
 	}
 	// create schema
 	err = suite.Database.Init()
 	suite.NoError(err)
+}
+
+func (suite *RedisTestSuite) redisDB() *Redis {
+	switch db := suite.Database.(type) {
+	case *RedisValkey:
+		return &db.Redis
+	case *Redis:
+		return db
+	default:
+		suite.Fail("unexpected database type")
+		return nil
+	}
 }
 
 func (suite *RedisTestSuite) TestEscapeCharacters() {
@@ -108,8 +127,7 @@ func (suite *RedisTestSuite) TestEscapeCharacters() {
 
 func (suite *RedisTestSuite) TestUpdateScoresWithPagination() {
 	ctx := suite.T().Context()
-	db, ok := suite.Database.(*Redis)
-	suite.True(ok)
+	db := suite.redisDB()
 	limit := db.maxSearchResults
 	db.maxSearchResults = 2
 	defer func() {
@@ -143,8 +161,7 @@ func (suite *RedisTestSuite) TestUpdateScoresWithPagination() {
 
 func (suite *RedisTestSuite) TestUpdateScoresWithPaginationAndScorePatch() {
 	ctx := suite.T().Context()
-	db, ok := suite.Database.(*Redis)
-	suite.True(ok)
+	db := suite.redisDB()
 	limit := db.maxSearchResults
 	db.maxSearchResults = 1
 	defer func() {
@@ -180,8 +197,7 @@ func (suite *RedisTestSuite) TestUpdateScoresWithPaginationAndScorePatch() {
 
 func (suite *RedisTestSuite) TestUpdateScoresWithPaginationAndTiedScores() {
 	ctx := suite.T().Context()
-	db, ok := suite.Database.(*Redis)
-	suite.True(ok)
+	db := suite.redisDB()
 	limit := db.maxSearchResults
 	db.maxSearchResults = 2
 	defer func() {
@@ -217,28 +233,25 @@ func TestRedis(t *testing.T) {
 	suite.Run(t, new(RedisTestSuite))
 }
 
-// ValkeyViaRedisTestSuite tests the unified Redis struct when connected via a valkey:// DSN.
-// This exercises the same code path that Valkey users will hit, including
-// the sortedSetTimeSeries fallback if TimeSeries module is unavailable.
+// ValkeyViaRedisTestSuite tests auto-detection of Valkey when connected via a redis:// DSN.
+// The redis:// URL points at a Valkey server; isValkey() should detect it via
+// INFO server and return a *RedisValkey with sorted-set time series.
 type ValkeyViaRedisTestSuite struct {
 	baseTestSuite
 }
 
 func (suite *ValkeyViaRedisTestSuite) SetupSuite() {
-	// Use VALKEY_URI env var, defaulting to valkey://127.0.0.1:6380/
 	dsn := os.Getenv("VALKEY_URI")
 	if dsn == "" {
-		dsn = "valkey://127.0.0.1:6380/"
+		dsn = "redis://127.0.0.1:6380/"
 	}
 	var err error
 	suite.Database, err = Open(dsn, "gorse_valkey_")
 	suite.Require().NoError(err)
-	// flush db
 	redisDB, ok := suite.Database.(*RedisValkey)
-	suite.Require().True(ok, "valkey:// DSN should produce a *RedisValkey instance")
+	suite.Require().True(ok, "redis:// DSN pointing at Valkey should produce a *RedisValkey instance")
 	err = redisDB.client.FlushDB(suite.T().Context()).Err()
 	suite.Require().NoError(err)
-	// create schema
 	err = suite.Database.Init()
 	suite.Require().NoError(err)
 }
@@ -414,7 +427,12 @@ func BenchmarkRedis(b *testing.B) {
 	database, err := Open(redisDSN, "gorse_")
 	assert.NoError(b, err)
 	// flush db
-	err = database.(*Redis).client.FlushDB(b.Context()).Err()
+	switch db := database.(type) {
+	case *RedisValkey:
+		err = db.client.FlushDB(b.Context()).Err()
+	case *Redis:
+		err = db.client.FlushDB(b.Context()).Err()
+	}
 	assert.NoError(b, err)
 	// create schema
 	err = database.Init()
