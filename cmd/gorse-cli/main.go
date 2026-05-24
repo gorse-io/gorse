@@ -194,23 +194,6 @@ func getAdminAPI(cmd *cobra.Command, path string, query url.Values) {
 	printJSONTable(cmd, resp.Body())
 }
 
-func postAdminAPIFile(cmd *cobra.Command, path, fieldName, fileName string, reader io.Reader) {
-	endpoint, apiKey := requireEndpointAndKey(cmd)
-	client := newAdminClient(endpoint, apiKey)
-	resp, err := client.R().
-		SetFileReader(fieldName, fileName, reader).
-		Post(path)
-	if err != nil {
-		log.Logger().Fatal("failed to send request", zap.Error(err))
-	}
-	if resp.IsError() {
-		log.Logger().Fatal("API request failed",
-			zap.Int("status", resp.StatusCode()),
-			zap.String("body", resp.String()))
-	}
-	printJSONTable(cmd, resp.Body())
-}
-
 func postAdminAPIBody(cmd *cobra.Command, path, contentType string, reader io.Reader) {
 	endpoint, apiKey := requireEndpointAndKey(cmd)
 	client := newAdminClient(endpoint, apiKey)
@@ -227,23 +210,6 @@ func postAdminAPIBody(cmd *cobra.Command, path, contentType string, reader io.Re
 			zap.String("body", resp.String()))
 	}
 	printJSONTable(cmd, resp.Body())
-}
-
-func postAdminAPIForm(cmd *cobra.Command, path string, formData map[string]string) []byte {
-	endpoint, apiKey := requireEndpointAndKey(cmd)
-	client := newAdminClient(endpoint, apiKey)
-	resp, err := client.R().
-		SetFormData(formData).
-		Post(path)
-	if err != nil {
-		log.Logger().Fatal("failed to send request", zap.Error(err))
-	}
-	if resp.IsError() {
-		log.Logger().Fatal("API request failed",
-			zap.Int("status", resp.StatusCode()),
-			zap.String("body", resp.String()))
-	}
-	return resp.Body()
 }
 
 func deleteAdminAPI(cmd *cobra.Command, path string) []byte {
@@ -540,88 +506,14 @@ var setCmd = &cobra.Command{
 	Short: "Set resources in Gorse admin API",
 }
 
-var deleteCmd = &cobra.Command{
-	Use:   "delete",
-	Short: "Delete resources from Gorse admin API",
-}
-
-var importCmd = &cobra.Command{
-	Use:   "import <users|items|feedback> <file>",
-	Short: "Import JSONL data into Gorse",
-	Example: `  # Import users from a JSONL file
-  gorse-cli import users users.jsonl
-
-  # Import feedback from stdin
-  cat feedback.jsonl | gorse-cli import feedback -`,
-	Args: cobra.ExactArgs(2),
-	Run: func(cmd *cobra.Command, args []string) {
-		path, fileName := bulkResourcePath(args[0])
-		if path == "" {
-			log.Logger().Fatal("unsupported resource, expected users, items, or feedback", zap.String("resource", args[0]))
-		}
-		if args[1] == "-" {
-			postAdminAPIFile(cmd, path, "file", fileName, cmd.InOrStdin())
-			return
-		}
-		file, err := os.Open(args[1])
-		if err != nil {
-			log.Logger().Fatal("failed to open import file", zap.String("file", args[1]), zap.Error(err))
-		}
-		defer file.Close()
-		postAdminAPIFile(cmd, path, "file", args[1], file)
-	},
-}
-
-var exportCmd = &cobra.Command{
-	Use:   "export <users|items|feedback> [file]",
-	Short: "Export Gorse data as JSONL",
-	Example: `  # Export users to stdout
-  gorse-cli export users
-
-  # Export items to a JSONL file
-  gorse-cli export items items.jsonl`,
-	Args: cobra.RangeArgs(1, 2),
-	Run: func(cmd *cobra.Command, args []string) {
-		path, _ := bulkResourcePath(args[0])
-		if path == "" {
-			log.Logger().Fatal("unsupported resource, expected users, items, or feedback", zap.String("resource", args[0]))
-		}
-		outputPath, _ := cmd.Flags().GetString("output")
-		if len(args) == 2 {
-			outputPath = args[1]
-		}
-		if outputPath == "" || outputPath == "-" {
-			downloadAdminAPI(cmd, path, cmd.OutOrStdout())
-			return
-		}
-		file, err := os.Create(outputPath)
-		if err != nil {
-			log.Logger().Fatal("failed to create export file", zap.String("file", outputPath), zap.Error(err))
-		}
-		defer file.Close()
-		downloadAdminAPI(cmd, path, file)
-		printStatusTable(cmd, "export", "Data exported to "+outputPath)
-	},
-}
-
 var dumpCmd = &cobra.Command{
-	Use:   "dump [file]",
+	Use:   "dump <file>",
 	Short: "Dump all Gorse data as a binary backup",
-	Example: `  # Dump data to stdout
-  gorse-cli dump
-
-  # Dump data to a backup file
+	Example: `  # Dump data to a backup file
   gorse-cli dump backup.bin`,
-	Args: cobra.MaximumNArgs(1),
+	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		outputPath, _ := cmd.Flags().GetString("output")
-		if len(args) == 1 {
-			outputPath = args[0]
-		}
-		if outputPath == "" || outputPath == "-" {
-			downloadAdminAPI(cmd, "/dump", cmd.OutOrStdout())
-			return
-		}
+		outputPath := args[0]
 		file, err := os.Create(outputPath)
 		if err != nil {
 			log.Logger().Fatal("failed to create dump file", zap.String("file", outputPath), zap.Error(err))
@@ -636,14 +528,12 @@ var restoreCmd = &cobra.Command{
 	Use:   "restore <file>",
 	Short: "Restore Gorse data from a binary backup",
 	Example: `  # Restore data from a backup file
-  gorse-cli restore backup.bin
-
-  # Restore data from stdin
-  cat backup.bin | gorse-cli restore -`,
+  gorse-cli restore backup.bin`,
 	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		if args[0] == "-" {
-			postAdminAPIBody(cmd, "/restore", "application/octet-stream", cmd.InOrStdin())
+		confirmed := confirmRestore(cmd, args[0])
+		if !confirmed {
+			printStatusTable(cmd, "restore", "Restore canceled")
 			return
 		}
 		file, err := os.Open(args[0])
@@ -655,38 +545,13 @@ var restoreCmd = &cobra.Command{
 	},
 }
 
-var purgeCmd = &cobra.Command{
-	Use:   "purge",
-	Short: "Purge users, items, feedback, and cache",
-	Example: `  # Purge all data after explicit confirmation
-  gorse-cli purge --confirm`,
-	Run: func(cmd *cobra.Command, args []string) {
-		confirmed, _ := cmd.Flags().GetBool("confirm")
-		if !confirmed {
-			log.Logger().Fatal("refusing to purge without --confirm")
-		}
-		body := postAdminAPIForm(cmd, "/purge", map[string]string{
-			"check_list": "delete_users,delete_items,delete_feedback,delete_cache",
-		})
-		if len(strings.TrimSpace(string(body))) > 0 {
-			printJSONTable(cmd, body)
-			return
-		}
-		printStatusTable(cmd, "purge", "Users, items, feedback, and cache purged.")
-	},
-}
-
-func bulkResourcePath(resource string) (path, fileName string) {
-	switch resource {
-	case "users":
-		return "/bulk/users", "users.jsonl"
-	case "items":
-		return "/bulk/items", "items.jsonl"
-	case "feedback":
-		return "/bulk/feedback", "feedback.jsonl"
-	default:
-		return "", ""
+func confirmRestore(cmd *cobra.Command, file string) bool {
+	fmt.Fprintf(cmd.OutOrStdout(), "Restore data from %s? Existing users, items, feedback, and cache will be overwritten. Confirm [y/N]: ", file)
+	input, err := bufio.NewReader(cmd.InOrStdin()).ReadString('\n')
+	if err != nil && !errors.Is(err, io.EOF) {
+		log.Logger().Fatal("failed to read confirmation", zap.Error(err))
 	}
+	return strings.EqualFold(strings.TrimSpace(input), "y")
 }
 
 // setConfigCmd sets configuration via the admin API
@@ -701,9 +566,24 @@ var setConfigCmd = &cobra.Command{
 	Args: cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		endpoint, apiKey := requireEndpointAndKey(cmd)
+		client := newAdminClient(endpoint, apiKey)
 
-		// Build config patch from arguments
-		configPatch := make(map[string]interface{})
+		resp, err := client.R().Get("/dashboard/config")
+		if err != nil {
+			log.Logger().Fatal("failed to send request", zap.Error(err))
+		}
+		if resp.IsError() {
+			log.Logger().Fatal("API request failed",
+				zap.Int("status", resp.StatusCode()),
+				zap.String("body", resp.String()))
+		}
+
+		var configPatch map[string]interface{}
+		if err = json.Unmarshal(resp.Body(), &configPatch); err != nil {
+			log.Logger().Fatal("failed to parse config", zap.Error(err))
+		}
+
+		// Apply config patch from arguments.
 		for _, arg := range args {
 			parts := strings.SplitN(arg, "=", 2)
 			if len(parts) != 2 {
@@ -713,11 +593,12 @@ var setConfigCmd = &cobra.Command{
 			value := parts[1]
 
 			// Parse the value
-			configPatch[key] = parseConfigValue(value)
+			if err = setConfigValue(configPatch, key, parseConfigValue(value)); err != nil {
+				log.Logger().Fatal("failed to set config value", zap.String("key", key), zap.Error(err))
+			}
 		}
 
-		client := newAdminClient(endpoint, apiKey)
-		resp, err := client.R().
+		resp, err = client.R().
 			SetHeader("Content-Type", "application/json").
 			SetBody(configPatch).
 			Post("/dashboard/config")
@@ -740,39 +621,12 @@ var resetConfigCmd = &cobra.Command{
 	Short: "Reset recommendation configuration to the file defaults",
 	Run: func(cmd *cobra.Command, args []string) {
 		body := deleteAdminAPI(cmd, "/dashboard/config")
-		if len(strings.TrimSpace(string(body))) > 0 {
+		bodyText := strings.TrimSpace(string(body))
+		if bodyText != "" && bodyText != "{}" {
 			printJSONTable(cmd, body)
 			return
 		}
 		printStatusTable(cmd, "reset config", "Configuration reset to defaults.")
-	},
-}
-
-var deleteUserCmd = &cobra.Command{
-	Use:   "user <user-id>",
-	Short: "Delete a user and their feedback",
-	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
-		body := deleteAdminAPI(cmd, "/user/"+url.PathEscape(args[0]))
-		if len(strings.TrimSpace(string(body))) > 0 {
-			printJSONTable(cmd, body)
-			return
-		}
-		printStatusTable(cmd, "delete user", "User deleted.")
-	},
-}
-
-var deleteItemCmd = &cobra.Command{
-	Use:   "item <item-id>",
-	Short: "Delete an item and its feedback",
-	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
-		body := deleteAdminAPI(cmd, "/item/"+url.PathEscape(args[0]))
-		if len(strings.TrimSpace(string(body))) > 0 {
-			printJSONTable(cmd, body)
-			return
-		}
-		printStatusTable(cmd, "delete item", "Item deleted.")
 	},
 }
 
@@ -980,6 +834,35 @@ var getRankerPromptCmd = &cobra.Command{
 	},
 }
 
+func setConfigValue(config map[string]interface{}, key string, value interface{}) error {
+	parts := strings.Split(key, ".")
+	if len(parts) == 0 {
+		return fmt.Errorf("empty config key")
+	}
+	for _, part := range parts {
+		if part == "" {
+			return fmt.Errorf("invalid config key %q", key)
+		}
+	}
+	current := config
+	for _, part := range parts[:len(parts)-1] {
+		next, ok := current[part]
+		if !ok {
+			child := make(map[string]interface{})
+			current[part] = child
+			current = child
+			continue
+		}
+		child, ok := next.(map[string]interface{})
+		if !ok {
+			return fmt.Errorf("config key %q is not an object", part)
+		}
+		current = child
+	}
+	current[parts[len(parts)-1]] = value
+	return nil
+}
+
 // parseConfigValue parses a string value into appropriate type
 func parseConfigValue(value string) interface{} {
 	// Try parsing as bool
@@ -1032,20 +915,14 @@ func init() {
 
 	rootCmd.AddCommand(setCmd)
 	setCmd.AddCommand(setConfigCmd)
-	rootCmd.AddCommand(deleteCmd)
-	deleteCmd.AddCommand(deleteUserCmd)
-	deleteCmd.AddCommand(deleteItemCmd)
 	resetCmd := &cobra.Command{
 		Use:   "reset",
 		Short: "Reset resources in Gorse admin API",
 	}
 	rootCmd.AddCommand(resetCmd)
 	resetCmd.AddCommand(resetConfigCmd)
-	rootCmd.AddCommand(importCmd)
-	rootCmd.AddCommand(exportCmd)
 	rootCmd.AddCommand(dumpCmd)
 	rootCmd.AddCommand(restoreCmd)
-	rootCmd.AddCommand(purgeCmd)
 
 	// Add flags for endpoint and api-key
 	loginCmd.Flags().String("endpoint", "", "Gorse admin API endpoint (default: GORSE_ADMIN_ENDPOINT)")
@@ -1053,7 +930,7 @@ func init() {
 	addAuthFlags(getUserInfoCmd, getClusterCmd, getCategoriesCmd, getTasksCmd, getConfigCmd, getConfigSchemaCmd,
 		getStatsCmd, getTimeseriesCmd, getUserCmd, getUsersCmd, getItemCmd, getItemsCmd, getUserFeedbackCmd, getLatestCmd,
 		getNonPersonalizedCmd, getRecommendCmd, getItemToItemCmd, getUserToUserCmd, getExternalCmd, getRankerPromptCmd,
-		setConfigCmd, resetConfigCmd, deleteUserCmd, deleteItemCmd, importCmd, exportCmd, dumpCmd, restoreCmd, purgeCmd)
+		setConfigCmd, resetConfigCmd, dumpCmd, restoreCmd)
 
 	getTimeseriesCmd.Flags().String("begin", "", "Begin time, defaults to 7 days ago")
 	getTimeseriesCmd.Flags().String("end", "", "End time, defaults to now")
@@ -1081,9 +958,6 @@ func init() {
 	getRankerPromptCmd.Flags().String("document-template", "", "Ranker document template")
 	getRankerPromptCmd.Flags().String("document-template-file", "", "Path to ranker document template")
 	getRankerPromptCmd.Flags().String("user-id", "", "User ID")
-	exportCmd.Flags().StringP("output", "o", "", "Path to write JSONL data, defaults to stdout")
-	dumpCmd.Flags().StringP("output", "o", "", "Path to write binary dump data, defaults to stdout")
-	purgeCmd.Flags().Bool("confirm", false, "Confirm purging users, items, feedback, and cache")
 
 }
 
