@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -60,11 +61,10 @@ func TestLoginCmd(t *testing.T) {
 	)
 	defer restoreKeyring()
 
-	out, err := executeCommand(rootCmd, "login", "--endpoint", "http://localhost:8088/api", "--api-key", "secret")
+	out, err := executeCommand(rootCmd, "login", "--endpoint", "http://localhost:8088", "--api-key", "secret")
 	require.NoError(t, err)
-	require.Contains(t, out, "login")
 	require.Contains(t, out, "Credentials saved")
-	require.Equal(t, "http://localhost:8088/api", sets[keyringEndpointKey])
+	require.Equal(t, "http://localhost:8088", sets[keyringEndpointKey])
 	require.Equal(t, "secret", sets[keyringAPIKeyKey])
 }
 
@@ -82,7 +82,6 @@ func TestLogoutCmd(t *testing.T) {
 
 	out, err := executeCommand(rootCmd, "logout")
 	require.NoError(t, err)
-	require.Contains(t, out, "logout")
 	require.Contains(t, out, "Credentials removed")
 	require.True(t, deleted[keyringEndpointKey])
 	require.True(t, deleted[keyringAPIKeyKey])
@@ -96,7 +95,52 @@ type CLITestSuite struct {
 
 func (s *CLITestSuite) SetupTest() {
 	s.m, s.endpoint = newTestMaster(s.T())
-	seedTestMaster(s.T(), s.m)
+
+	ctx := s.T().Context()
+	_, err := s.m.GetMeta(ctx, &protocol.NodeInfo{
+		NodeType:      protocol.NodeType_Server,
+		Uuid:          "server-node",
+		Hostname:      "localhost",
+		BinaryVersion: "v1",
+	})
+	s.Require().NoError(err)
+	s.Require().NoError(s.m.DataClient.BatchInsertUsers(ctx, []data.User{
+		{UserId: "alice", Labels: map[string]any{"role": "tester"}},
+		{UserId: "bob"},
+		{UserId: "neighbor-1"},
+	}))
+	s.Require().NoError(s.m.DataClient.BatchInsertItems(ctx, []data.Item{
+		{ItemId: "item-1", Categories: []string{"news"}, Timestamp: time.Date(2026, 1, 1, 1, 0, 0, 0, time.UTC), Comment: "raw item"},
+		{ItemId: "item-2", Categories: []string{"books"}, Timestamp: time.Date(2026, 1, 1, 2, 0, 0, 0, time.UTC), Comment: "listed item"},
+		{ItemId: "latest-1", Categories: []string{"news", "tech"}, Timestamp: time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)},
+		{ItemId: "popular-1", Categories: []string{"news"}, Timestamp: time.Date(2026, 1, 3, 0, 0, 0, 0, time.UTC)},
+		{ItemId: "recommend-1", Categories: []string{"news"}, Timestamp: time.Date(2026, 1, 4, 0, 0, 0, 0, time.UTC)},
+		{ItemId: "similar-1", Categories: []string{"news"}, Timestamp: time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC)},
+	}))
+	s.Require().NoError(s.m.DataClient.BatchInsertFeedback(ctx, []data.Feedback{{
+		FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "alice", ItemId: "item-1"},
+		Timestamp:   time.Date(2026, 1, 1, 3, 0, 0, 0, time.UTC),
+	}}, true, true, true))
+	s.Require().NoError(s.m.CacheClient.AddScores(ctx, cache.ItemCategories, "", []cache.Score{
+		{Id: "books", Score: 2},
+		{Id: "news", Score: 1},
+	}))
+	s.Require().NoError(s.m.CacheClient.AddScores(ctx, cache.NonPersonalized, "popular", []cache.Score{
+		{Id: "popular-1", Score: 2, Categories: []string{"news"}},
+		{Id: "recommend-1", Score: 1, Categories: []string{"news"}},
+	}))
+	s.Require().NoError(s.m.CacheClient.Set(ctx, cache.String(cache.Key(cache.NonPersonalizedDigest, "popular"), "digest")))
+	s.Require().NoError(s.m.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key("neighbors", "item-1"), []cache.Score{
+		{Id: "similar-1", Score: 1, Categories: []string{"news"}},
+	}))
+	s.Require().NoError(s.m.CacheClient.AddScores(ctx, cache.UserToUser, cache.Key("neighbors", "alice"), []cache.Score{
+		{Id: "neighbor-1", Score: 1},
+	}))
+	s.Require().NoError(s.m.CacheClient.AddTimeSeriesPoints(ctx, []cache.TimeSeriesPoint{{
+		Name:      "requests",
+		Timestamp: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+		Value:     1,
+	}}))
 }
 
 func TestCLI(t *testing.T) {
@@ -122,7 +166,7 @@ func (s *CLITestSuite) TestGetSubcommands() {
 		{name: "item", args: []string{"get", "item", "item-1"}, wantInOutput: "item-1"},
 		{name: "items", args: []string{"get", "items", "--n", "10"}, wantInOutput: "item-2"},
 		{name: "user-feedback", args: []string{"get", "user-feedback", "alice", "click", "--n", "5"}, wantInOutput: "item-1"},
-		{name: "latest", args: []string{"get", "latest", "--n", "3", "--category", "news", "--category", "tech"}, wantInOutput: "latest-1"},
+		{name: "latest", args: []string{"get", "latest", "--n", "3", "--category", "tech"}, wantInOutput: "latest-1"},
 		{name: "non-personalized", args: []string{"get", "non-personalized", "popular", "--n", "3", "--user-id", "alice", "--category", "news"}, wantInOutput: "popular-1"},
 		{name: "recommend", args: []string{"get", "recommend", "alice", "non-personalized", "popular", "--n", "3", "--category", "news"}, wantInOutput: "recommend-1"},
 		{name: "item-to-item", args: []string{"get", "item-to-item", "neighbors", "item-1", "--n", "3", "--category", "news"}, wantInOutput: "similar-1"},
@@ -163,7 +207,6 @@ func (s *CLITestSuite) TestDumpRestore() {
 	outputPath := s.T().TempDir() + "/backup.bin"
 	dumpOut, err := executeCommand(rootCmd, "dump", outputPath, "--endpoint", s.endpoint, "--api-key", testAPIKey)
 	s.Require().NoError(err)
-	s.Require().Contains(dumpOut, "dump")
 	s.Require().Contains(dumpOut, "Data dumped to "+outputPath)
 	content, err := os.ReadFile(outputPath)
 	s.Require().NoError(err)
@@ -181,13 +224,9 @@ func (s *CLITestSuite) TestDumpRestore() {
 	restoreOut, err := executeCommandWithInput(rootCmd, "y\n", "restore", outputPath, "--endpoint", s.endpoint, "--api-key", testAPIKey)
 	s.Require().NoError(err)
 	s.Require().Contains(restoreOut, "Confirm [y/N]")
-	s.Require().Contains(restoreOut, "Duration")
-	s.Require().Contains(restoreOut, "Feedback")
-	s.Require().Contains(restoreOut, "Items")
-	s.Require().Contains(restoreOut, "Users")
-	s.Require().Regexp(`Feedback\s*│\s*1`, restoreOut)
-	s.Require().Regexp(`Items\s*│\s*6`, restoreOut)
-	s.Require().Regexp(`Users\s*│\s*3`, restoreOut)
+	s.Require().Contains(restoreOut, "Restored 3 users, 6 items, 1 feedback in ")
+	s.Require().NotContains(restoreOut, "│")
+	s.Require().Equal(1, strings.Count(restoreOut, "\n"))
 
 	_, err = s.m.DataClient.GetUser(s.T().Context(), "alice")
 	s.Require().NoError(err)
@@ -232,7 +271,7 @@ func newTestMaster(t *testing.T) (*master.Master, string) {
 	m := master.NewMaster(cfg, tempDir, true, "")
 	go m.Serve()
 
-	endpoint := fmt.Sprintf("http://%s:%d/api", cfg.Master.HttpHost, cfg.Master.HttpPort)
+	endpoint := fmt.Sprintf("http://%s:%d", cfg.Master.HttpHost, cfg.Master.HttpPort)
 	waitForMaster(t, endpoint)
 	t.Cleanup(func() {
 		m.Shutdown()
@@ -260,7 +299,7 @@ func waitForMaster(t *testing.T, endpoint string) {
 	client := http.Client{Timeout: time.Second}
 	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
-		resp, err := client.Get(endpoint + "/health/live")
+		resp, err := client.Get(endpoint + "/api/health/live")
 		if err == nil {
 			_ = resp.Body.Close()
 			if resp.StatusCode == http.StatusOK {
@@ -270,53 +309,4 @@ func waitForMaster(t *testing.T, endpoint string) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	require.Failf(t, "master didn't become ready", "endpoint: %s", endpoint)
-}
-
-func seedTestMaster(t *testing.T, m *master.Master) {
-	t.Helper()
-	ctx := t.Context()
-	_, err := m.GetMeta(ctx, &protocol.NodeInfo{
-		NodeType:      protocol.NodeType_Server,
-		Uuid:          "server-node",
-		Hostname:      "localhost",
-		BinaryVersion: "v1",
-	})
-	require.NoError(t, err)
-	require.NoError(t, m.DataClient.BatchInsertUsers(ctx, []data.User{
-		{UserId: "alice", Labels: map[string]any{"role": "tester"}},
-		{UserId: "bob"},
-		{UserId: "neighbor-1"},
-	}))
-	require.NoError(t, m.DataClient.BatchInsertItems(ctx, []data.Item{
-		{ItemId: "item-1", Categories: []string{"news"}, Timestamp: time.Date(2026, 1, 1, 1, 0, 0, 0, time.UTC), Comment: "raw item"},
-		{ItemId: "item-2", Categories: []string{"books"}, Timestamp: time.Date(2026, 1, 1, 2, 0, 0, 0, time.UTC), Comment: "listed item"},
-		{ItemId: "latest-1", Categories: []string{"news", "tech"}, Timestamp: time.Date(2026, 1, 2, 0, 0, 0, 0, time.UTC)},
-		{ItemId: "popular-1", Categories: []string{"news"}, Timestamp: time.Date(2026, 1, 3, 0, 0, 0, 0, time.UTC)},
-		{ItemId: "recommend-1", Categories: []string{"news"}, Timestamp: time.Date(2026, 1, 4, 0, 0, 0, 0, time.UTC)},
-		{ItemId: "similar-1", Categories: []string{"news"}, Timestamp: time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC)},
-	}))
-	require.NoError(t, m.DataClient.BatchInsertFeedback(ctx, []data.Feedback{{
-		FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "alice", ItemId: "item-1"},
-		Timestamp:   time.Date(2026, 1, 1, 3, 0, 0, 0, time.UTC),
-	}}, true, true, true))
-	require.NoError(t, m.CacheClient.AddScores(ctx, cache.ItemCategories, "", []cache.Score{
-		{Id: "books", Score: 2},
-		{Id: "news", Score: 1},
-	}))
-	require.NoError(t, m.CacheClient.AddScores(ctx, cache.NonPersonalized, "popular", []cache.Score{
-		{Id: "popular-1", Score: 2, Categories: []string{"news"}},
-		{Id: "recommend-1", Score: 1, Categories: []string{"news"}},
-	}))
-	require.NoError(t, m.CacheClient.Set(ctx, cache.String(cache.Key(cache.NonPersonalizedDigest, "popular"), "digest")))
-	require.NoError(t, m.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key("neighbors", "item-1"), []cache.Score{
-		{Id: "similar-1", Score: 1, Categories: []string{"news"}},
-	}))
-	require.NoError(t, m.CacheClient.AddScores(ctx, cache.UserToUser, cache.Key("neighbors", "alice"), []cache.Score{
-		{Id: "neighbor-1", Score: 1},
-	}))
-	require.NoError(t, m.CacheClient.AddTimeSeriesPoints(ctx, []cache.TimeSeriesPoint{{
-		Name:      "requests",
-		Timestamp: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
-		Value:     1,
-	}}))
 }

@@ -29,8 +29,10 @@ import (
 	"syscall"
 
 	"github.com/go-resty/resty/v2"
+	gorse "github.com/gorse-io/gorse-go"
 	"github.com/gorse-io/gorse/cmd/version"
 	"github.com/gorse-io/gorse/common/log"
+	"github.com/gorse-io/gorse/master"
 	"github.com/olekukonko/tablewriter"
 	"github.com/samber/lo"
 	"github.com/spf13/cobra"
@@ -67,12 +69,12 @@ var (
 // newAdminClient creates a new resty client for admin API
 func newAdminClient(endpoint, apiKey string) *resty.Client {
 	client := resty.New()
-	client.SetBaseURL(endpoint)
+	client.SetBaseURL(strings.TrimRight(endpoint, "/") + "/api")
 	client.SetHeader("X-Api-Key", apiKey)
 	return client
 }
 
-// getEndpointAndKey returns the endpoint and API key from flags, environment variables, or keyring.
+// getEndpointAndKey returns the base URL and API key from flags, environment variables, or keyring.
 func getEndpointAndKey(cmd *cobra.Command) (endpoint, apiKey string) {
 	endpoint, _ = cmd.Flags().GetString("endpoint")
 	apiKey, _ = cmd.Flags().GetString("api-key")
@@ -119,7 +121,7 @@ var loginCmd = &cobra.Command{
 		apiKey := getFlagOrEnv(cmd, "api-key", "GORSE_ADMIN_API_KEY")
 
 		if endpoint == "" {
-			fmt.Fprint(os.Stderr, "Gorse admin API endpoint: ")
+			fmt.Fprint(os.Stderr, "Gorse base URL: ")
 			input, err := bufio.NewReader(os.Stdin).ReadString('\n')
 			if err != nil {
 				log.Logger().Fatal("failed to read endpoint", zap.Error(err))
@@ -147,7 +149,7 @@ var loginCmd = &cobra.Command{
 		if err := keyringSet(keyringService, keyringAPIKeyKey, apiKey); err != nil {
 			log.Logger().Fatal("failed to save API key to keyring", zap.Error(err))
 		}
-		printStatusTable(cmd, "login", "Credentials saved to system keyring.")
+		fmt.Fprintln(cmd.OutOrStdout(), "Credentials saved to system keyring.")
 	},
 }
 
@@ -161,19 +163,24 @@ var logoutCmd = &cobra.Command{
 		if err := keyringDelete(keyringService, keyringAPIKeyKey); err != nil && !errors.Is(err, keyring.ErrNotFound) {
 			log.Logger().Fatal("failed to delete API key from keyring", zap.Error(err))
 		}
-		printStatusTable(cmd, "logout", "Credentials removed from system keyring.")
+		fmt.Fprintln(cmd.OutOrStdout(), "Credentials removed from system keyring.")
 	},
 }
 
 func requireEndpointAndKey(cmd *cobra.Command) (string, string) {
 	endpoint, apiKey := getEndpointAndKey(cmd)
 	if endpoint == "" {
-		log.Logger().Fatal("GORSE_ADMIN_ENDPOINT, --endpoint, or saved login endpoint is required")
+		log.Logger().Fatal("GORSE base URL from GORSE_ADMIN_ENDPOINT, --endpoint, or saved login endpoint is required")
 	}
 	if apiKey == "" {
 		log.Logger().Fatal("GORSE_ADMIN_API_KEY, --api-key, or saved login API key is required")
 	}
 	return endpoint, apiKey
+}
+
+func newGorseClient(cmd *cobra.Command) *gorse.GorseClient {
+	endpoint, apiKey := requireEndpointAndKey(cmd)
+	return gorse.NewGorseClient(strings.TrimRight(endpoint, "/"), apiKey)
 }
 
 func getAdminAPI(cmd *cobra.Command, path string, query url.Values) {
@@ -194,12 +201,22 @@ func getAdminAPI(cmd *cobra.Command, path string, query url.Values) {
 	printJSONTable(cmd, resp.Body())
 }
 
+func printResultTable(cmd *cobra.Command, result any) {
+	body, err := json.Marshal(result)
+	if err != nil {
+		log.Logger().Fatal("failed to encode API response", zap.Error(err))
+	}
+	printJSONTable(cmd, body)
+}
+
 func postAdminAPIBody(cmd *cobra.Command, path, contentType string, reader io.Reader) {
 	endpoint, apiKey := requireEndpointAndKey(cmd)
 	client := newAdminClient(endpoint, apiKey)
+	stats := new(master.DumpStats)
 	resp, err := client.R().
 		SetHeader("Content-Type", contentType).
 		SetBody(reader).
+		SetResult(stats).
 		Post(path)
 	if err != nil {
 		log.Logger().Fatal("failed to send request", zap.Error(err))
@@ -209,7 +226,8 @@ func postAdminAPIBody(cmd *cobra.Command, path, contentType string, reader io.Re
 			zap.Int("status", resp.StatusCode()),
 			zap.String("body", resp.String()))
 	}
-	printJSONTable(cmd, resp.Body())
+	fmt.Fprintf(cmd.OutOrStdout(), "Restored %d users, %d items, %d feedback in %s.\n",
+		stats.Users, stats.Items, stats.Feedback, stats.Duration)
 }
 
 func deleteAdminAPI(cmd *cobra.Command, path string) []byte {
@@ -246,10 +264,6 @@ func downloadAdminAPI(cmd *cobra.Command, path string, output io.Writer) {
 	if _, err = io.Copy(output, resp.RawBody()); err != nil {
 		log.Logger().Fatal("failed to write response", zap.Error(err))
 	}
-}
-
-func printStatusTable(cmd *cobra.Command, action, message string) {
-	printTable(cmd.OutOrStdout(), []string{"Action", "Message"}, [][]string{{action, message}})
 }
 
 func printJSONTable(cmd *cobra.Command, body []byte) {
@@ -416,7 +430,7 @@ func printTable(output io.Writer, headers []string, rows [][]string) {
 
 func addAuthFlags(commands ...*cobra.Command) {
 	for _, cmd := range commands {
-		cmd.Flags().String("endpoint", "", "Gorse admin API endpoint (default: GORSE_ADMIN_ENDPOINT, then keyring)")
+		cmd.Flags().String("endpoint", "", "Gorse base URL (default: GORSE_ADMIN_ENDPOINT, then keyring)")
 		cmd.Flags().String("api-key", "", "Gorse admin API key (default: GORSE_ADMIN_API_KEY, then keyring)")
 	}
 }
@@ -449,6 +463,24 @@ func addQueryStringArray(cmd *cobra.Command, query url.Values, flagName, queryNa
 	for _, value := range values {
 		query.Add(queryName, value)
 	}
+}
+
+func getIntFlag(cmd *cobra.Command, flagName string) int {
+	value, _ := cmd.Flags().GetInt(flagName)
+	return value
+}
+
+func getNFlag(cmd *cobra.Command) int {
+	n := getIntFlag(cmd, "n")
+	if n == 0 {
+		return 10
+	}
+	return n
+}
+
+func getStringArrayFlag(cmd *cobra.Command, flagName string) []string {
+	values, _ := cmd.Flags().GetStringArray(flagName)
+	return values
 }
 
 func readFlagOrFile(cmd *cobra.Command, valueFlag, fileFlag string) string {
@@ -520,7 +552,7 @@ var dumpCmd = &cobra.Command{
 		}
 		defer file.Close()
 		downloadAdminAPI(cmd, "/dump", file)
-		printStatusTable(cmd, "dump", "Data dumped to "+outputPath)
+		fmt.Fprintln(cmd.OutOrStdout(), "Data dumped to "+outputPath)
 	},
 }
 
@@ -533,7 +565,7 @@ var restoreCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		confirmed := confirmRestore(cmd, args[0])
 		if !confirmed {
-			printStatusTable(cmd, "restore", "Restore canceled")
+			fmt.Fprintln(cmd.OutOrStdout(), "Restore canceled")
 			return
 		}
 		file, err := os.Open(args[0])
@@ -626,7 +658,7 @@ var resetConfigCmd = &cobra.Command{
 			printJSONTable(cmd, body)
 			return
 		}
-		printStatusTable(cmd, "reset config", "Configuration reset to defaults.")
+		fmt.Fprintln(cmd.OutOrStdout(), "Configuration reset to defaults.")
 	},
 }
 
@@ -680,7 +712,11 @@ var getUserCmd = &cobra.Command{
 	Short: "Get user details",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		getAdminAPI(cmd, "/dashboard/user/"+url.PathEscape(args[0]), nil)
+		user, err := newGorseClient(cmd).GetUser(cmd.Context(), args[0])
+		if err != nil {
+			log.Logger().Fatal("API request failed", zap.Error(err))
+		}
+		printResultTable(cmd, user)
 	},
 }
 
@@ -689,7 +725,11 @@ var getItemCmd = &cobra.Command{
 	Short: "Get item details",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		getAdminAPI(cmd, "/item/"+url.PathEscape(args[0]), nil)
+		item, err := newGorseClient(cmd).GetItem(cmd.Context(), args[0])
+		if err != nil {
+			log.Logger().Fatal("API request failed", zap.Error(err))
+		}
+		printResultTable(cmd, item)
 	},
 }
 
@@ -697,10 +737,12 @@ var getUsersCmd = &cobra.Command{
 	Use:   "users",
 	Short: "Get users",
 	Run: func(cmd *cobra.Command, args []string) {
-		query := url.Values{}
-		addQueryInt(cmd, query, "n")
-		addQueryString(cmd, query, "cursor", "cursor")
-		getAdminAPI(cmd, "/dashboard/users", query)
+		cursor, _ := cmd.Flags().GetString("cursor")
+		users, err := newGorseClient(cmd).GetUsers(cmd.Context(), getNFlag(cmd), cursor)
+		if err != nil {
+			log.Logger().Fatal("API request failed", zap.Error(err))
+		}
+		printResultTable(cmd, users)
 	},
 }
 
@@ -708,10 +750,12 @@ var getItemsCmd = &cobra.Command{
 	Use:   "items",
 	Short: "Get items",
 	Run: func(cmd *cobra.Command, args []string) {
-		query := url.Values{}
-		addQueryInt(cmd, query, "n")
-		addQueryString(cmd, query, "cursor", "cursor")
-		getAdminAPI(cmd, "/items", query)
+		cursor, _ := cmd.Flags().GetString("cursor")
+		items, err := newGorseClient(cmd).GetItems(cmd.Context(), getNFlag(cmd), cursor)
+		if err != nil {
+			log.Logger().Fatal("API request failed", zap.Error(err))
+		}
+		printResultTable(cmd, items)
 	},
 }
 
@@ -720,14 +764,28 @@ var getUserFeedbackCmd = &cobra.Command{
 	Short: "Get user feedback",
 	Args:  cobra.RangeArgs(1, 2),
 	Run: func(cmd *cobra.Command, args []string) {
-		query := url.Values{}
-		addQueryInt(cmd, query, "n")
-		addQueryInt(cmd, query, "offset")
-		path := "/dashboard/user/" + url.PathEscape(args[0]) + "/feedback/"
+		var feedbackType string
 		if len(args) > 1 {
-			path += url.PathEscape(args[1])
+			feedbackType = args[1]
 		}
-		getAdminAPI(cmd, path, query)
+		feedback, err := newGorseClient(cmd).ListFeedbacks(cmd.Context(), feedbackType, args[0])
+		if err != nil {
+			log.Logger().Fatal("API request failed", zap.Error(err))
+		}
+		sort.Slice(feedback, func(i, j int) bool {
+			return feedback[i].Timestamp.After(feedback[j].Timestamp)
+		})
+		offset := getIntFlag(cmd, "offset")
+		if offset < len(feedback) {
+			feedback = feedback[offset:]
+		} else {
+			feedback = nil
+		}
+		n := getIntFlag(cmd, "n")
+		if n > 0 && n < len(feedback) {
+			feedback = feedback[:n]
+		}
+		printResultTable(cmd, feedback)
 	},
 }
 
@@ -735,6 +793,19 @@ var getLatestCmd = &cobra.Command{
 	Use:   "latest",
 	Short: "Get latest items",
 	Run: func(cmd *cobra.Command, args []string) {
+		categories := getStringArrayFlag(cmd, "category")
+		if len(categories) <= 1 {
+			var category string
+			if len(categories) == 1 {
+				category = categories[0]
+			}
+			latest, err := newGorseClient(cmd).GetLatestItems(cmd.Context(), "", category, getNFlag(cmd), getIntFlag(cmd, "offset"))
+			if err != nil {
+				log.Logger().Fatal("API request failed", zap.Error(err))
+			}
+			printResultTable(cmd, latest)
+			return
+		}
 		query := url.Values{}
 		addQueryInt(cmd, query, "n")
 		addQueryInt(cmd, query, "offset")
@@ -762,6 +833,19 @@ var getRecommendCmd = &cobra.Command{
 	Short: "Get recommendations for a user",
 	Args:  cobra.RangeArgs(1, 3),
 	Run: func(cmd *cobra.Command, args []string) {
+		categories := getStringArrayFlag(cmd, "category")
+		if len(args) == 1 && len(categories) <= 1 {
+			var category string
+			if len(categories) == 1 {
+				category = categories[0]
+			}
+			recommend, err := newGorseClient(cmd).GetRecommend(cmd.Context(), args[0], category, getNFlag(cmd), 0)
+			if err != nil {
+				log.Logger().Fatal("API request failed", zap.Error(err))
+			}
+			printResultTable(cmd, recommend)
+			return
+		}
 		query := url.Values{}
 		addQueryInt(cmd, query, "n")
 		addQueryStringArray(cmd, query, "category", "category")
@@ -925,7 +1009,7 @@ func init() {
 	rootCmd.AddCommand(restoreCmd)
 
 	// Add flags for endpoint and api-key
-	loginCmd.Flags().String("endpoint", "", "Gorse admin API endpoint (default: GORSE_ADMIN_ENDPOINT)")
+	loginCmd.Flags().String("endpoint", "", "Gorse base URL (default: GORSE_ADMIN_ENDPOINT)")
 	loginCmd.Flags().String("api-key", "", "Gorse admin API key (default: GORSE_ADMIN_API_KEY; prefer prompt to avoid shell history)")
 	addAuthFlags(getUserInfoCmd, getClusterCmd, getCategoriesCmd, getTasksCmd, getConfigCmd, getConfigSchemaCmd,
 		getStatsCmd, getTimeseriesCmd, getUserCmd, getUsersCmd, getItemCmd, getItemsCmd, getUserFeedbackCmd, getLatestCmd,
