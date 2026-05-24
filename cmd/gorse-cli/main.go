@@ -27,13 +27,15 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"text/tabwriter"
+	"time"
+	"unicode"
 
 	"github.com/go-resty/resty/v2"
 	gorse "github.com/gorse-io/gorse-go"
 	"github.com/gorse-io/gorse/cmd/version"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/master"
-	"github.com/olekukonko/tablewriter"
 	"github.com/samber/lo"
 	"github.com/spf13/cobra"
 	"github.com/zalando/go-keyring"
@@ -55,9 +57,11 @@ var rootCmd = &cobra.Command{
 }
 
 const (
-	keyringService     = "gorse-cli"
-	keyringEndpointKey = "admin-endpoint"
-	keyringAPIKeyKey   = "admin-api-key"
+	keyringService           = "gorse-cli"
+	keyringCurrentContextKey = "current-context"
+	keyringContextsKey       = "contexts"
+	maxInlineArrayValues     = 8
+	maxTableLabelArrayValues = 3
 )
 
 var (
@@ -74,21 +78,230 @@ func newAdminClient(endpoint, apiKey string) *resty.Client {
 	return client
 }
 
-// getEndpointAndKey returns the base URL and API key from flags, environment variables, or keyring.
+type cliContext struct {
+	Name     string
+	Endpoint string
+	APIKey   string
+}
+
+func contextEndpointKey(name string) string {
+	return "context:" + name + ":admin-endpoint"
+}
+
+func contextAPIKeyKey(name string) string {
+	return "context:" + name + ":admin-api-key"
+}
+
+func validateContextName(name string) error {
+	if name == "" {
+		return fmt.Errorf("context name is required")
+	}
+	for i := range len(name) {
+		ch := name[i]
+		if (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') ||
+			ch == '-' || ch == '_' || ch == '.' {
+			continue
+		}
+		return fmt.Errorf("context name %q contains invalid character %q", name, ch)
+	}
+	return nil
+}
+
+func getContextNames() ([]string, error) {
+	raw, err := keyringGet(keyringService, keyringContextsKey)
+	if errors.Is(err, keyring.ErrNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var names []string
+	if err = json.Unmarshal([]byte(raw), &names); err != nil {
+		return nil, err
+	}
+	names = lo.Uniq(names)
+	sort.Strings(names)
+	return names, nil
+}
+
+func saveContextNames(names []string) error {
+	names = lo.Uniq(names)
+	sort.Strings(names)
+	raw, err := json.Marshal(names)
+	if err != nil {
+		return err
+	}
+	return keyringSet(keyringService, keyringContextsKey, string(raw))
+}
+
+func addContextName(name string) error {
+	names, err := getContextNames()
+	if err != nil {
+		return err
+	}
+	if !lo.Contains(names, name) {
+		names = append(names, name)
+	}
+	return saveContextNames(names)
+}
+
+func removeContextName(name string) ([]string, error) {
+	names, err := getContextNames()
+	if err != nil {
+		return nil, err
+	}
+	names = lo.Filter(names, func(candidate string, _ int) bool {
+		return candidate != name
+	})
+	if err = saveContextNames(names); err != nil {
+		return nil, err
+	}
+	return names, nil
+}
+
+func getCurrentContextName() (string, error) {
+	name, err := keyringGet(keyringService, keyringCurrentContextKey)
+	if errors.Is(err, keyring.ErrNotFound) {
+		return "", nil
+	}
+	return name, err
+}
+
+func setCurrentContextName(name string) error {
+	return keyringSet(keyringService, keyringCurrentContextKey, name)
+}
+
+func clearCurrentContextName() error {
+	if err := keyringDelete(keyringService, keyringCurrentContextKey); err != nil && !errors.Is(err, keyring.ErrNotFound) {
+		return err
+	}
+	return nil
+}
+
+func loadContext(name string) (cliContext, error) {
+	if err := validateContextName(name); err != nil {
+		return cliContext{}, err
+	}
+	endpoint, endpointErr := keyringGet(keyringService, contextEndpointKey(name))
+	apiKey, apiKeyErr := keyringGet(keyringService, contextAPIKeyKey(name))
+	if errors.Is(endpointErr, keyring.ErrNotFound) || errors.Is(apiKeyErr, keyring.ErrNotFound) {
+		return cliContext{}, fmt.Errorf("context %q not found", name)
+	}
+	if endpointErr != nil {
+		return cliContext{}, endpointErr
+	}
+	if apiKeyErr != nil {
+		return cliContext{}, apiKeyErr
+	}
+	return cliContext{Name: name, Endpoint: endpoint, APIKey: apiKey}, nil
+}
+
+func saveContext(name, endpoint, apiKey string) error {
+	if err := validateContextName(name); err != nil {
+		return err
+	}
+	if endpoint == "" {
+		return fmt.Errorf("GORSE_ADMIN_ENDPOINT or --endpoint is required")
+	}
+	if apiKey == "" {
+		return fmt.Errorf("GORSE_ADMIN_API_KEY or --api-key is required")
+	}
+	if err := keyringSet(keyringService, contextEndpointKey(name), endpoint); err != nil {
+		return err
+	}
+	if err := keyringSet(keyringService, contextAPIKeyKey(name), apiKey); err != nil {
+		return err
+	}
+	if err := addContextName(name); err != nil {
+		return err
+	}
+	return setCurrentContextName(name)
+}
+
+func deleteContext(name string) error {
+	if _, err := loadContext(name); err != nil {
+		return err
+	}
+	if err := keyringDelete(keyringService, contextEndpointKey(name)); err != nil && !errors.Is(err, keyring.ErrNotFound) {
+		return err
+	}
+	if err := keyringDelete(keyringService, contextAPIKeyKey(name)); err != nil && !errors.Is(err, keyring.ErrNotFound) {
+		return err
+	}
+	names, err := removeContextName(name)
+	if err != nil {
+		return err
+	}
+	current, err := getCurrentContextName()
+	if err != nil {
+		return err
+	}
+	if current != name {
+		return nil
+	}
+	if len(names) == 0 {
+		return clearCurrentContextName()
+	}
+	return setCurrentContextName(names[0])
+}
+
+// getEndpointAndKey returns the base URL and API key from flags, context, or environment variables.
 func getEndpointAndKey(cmd *cobra.Command) (endpoint, apiKey string) {
 	endpoint, _ = cmd.Flags().GetString("endpoint")
 	apiKey, _ = cmd.Flags().GetString("api-key")
+
+	if endpoint == "" || apiKey == "" {
+		contextName, _ := cmd.Flags().GetString("context")
+		if contextName != "" {
+			ctx, err := loadContext(contextName)
+			if err != nil {
+				fatalUserError(cmd,
+					fmt.Sprintf("context %q was not found.", contextName),
+					"List available contexts:",
+					"  gorse-cli context list",
+					"Create it:",
+					"  gorse-cli context add "+contextName+" --endpoint http://localhost:8088",
+				)
+			}
+			if endpoint == "" {
+				endpoint = ctx.Endpoint
+			}
+			if apiKey == "" {
+				apiKey = ctx.APIKey
+			}
+		}
+	}
+
 	if endpoint == "" {
 		endpoint = os.Getenv("GORSE_ADMIN_ENDPOINT")
 	}
 	if apiKey == "" {
 		apiKey = os.Getenv("GORSE_ADMIN_API_KEY")
 	}
-	if endpoint == "" {
-		endpoint, _ = keyringGet(keyringService, keyringEndpointKey)
-	}
-	if apiKey == "" {
-		apiKey, _ = keyringGet(keyringService, keyringAPIKeyKey)
+
+	if endpoint == "" || apiKey == "" {
+		contextName, err := getCurrentContextName()
+		if err != nil {
+			fatalUserError(cmd, "failed to read the current context from the system keyring: "+err.Error())
+		}
+		if contextName != "" {
+			ctx, err := loadContext(contextName)
+			if err != nil {
+				fatalUserError(cmd,
+					fmt.Sprintf("current context %q is invalid or incomplete.", contextName),
+					"Choose another context:",
+					"  gorse-cli context use <name>",
+					"Or recreate it:",
+					"  gorse-cli context add "+contextName+" --endpoint http://localhost:8088",
+				)
+			}
+			if endpoint == "" {
+				endpoint = ctx.Endpoint
+			}
+			if apiKey == "" {
+				apiKey = ctx.APIKey
+			}
+		}
 	}
 	return
 }
@@ -113,67 +326,184 @@ func readSecret(prompt string) (string, error) {
 	return strings.TrimSpace(secret), err
 }
 
-var loginCmd = &cobra.Command{
-	Use:   "login",
-	Short: "Save Gorse admin API credentials to the system keyring",
+func fatalUserError(cmd *cobra.Command, message string, suggestions ...string) {
+	output := cmd.ErrOrStderr()
+	fmt.Fprintf(output, "Error: %s\n", message)
+	if len(suggestions) > 0 {
+		fmt.Fprintln(output)
+		for _, suggestion := range suggestions {
+			fmt.Fprintln(output, suggestion)
+		}
+	}
+	os.Exit(1)
+}
+
+func fatalMissingCredentials(cmd *cobra.Command, missingEndpoint, missingAPIKey bool) {
+	switch {
+	case missingEndpoint && missingAPIKey:
+		fatalUserError(cmd,
+			"no Gorse context is selected and no endpoint/API key was provided.",
+			"Create a context:",
+			"  gorse-cli context add dev --endpoint http://localhost:8088",
+			"Or use environment variables:",
+			"  GORSE_ADMIN_ENDPOINT=http://localhost:8088 GORSE_ADMIN_API_KEY=<api-key> "+cmd.CommandPath(),
+			"Or pass credentials for this command:",
+			"  "+cmd.CommandPath()+" --endpoint http://localhost:8088 --api-key <api-key>",
+		)
+	case missingEndpoint:
+		fatalUserError(cmd,
+			"missing Gorse base URL.",
+			"Use a saved context:",
+			"  gorse-cli context use <name>",
+			"Or set an environment variable:",
+			"  GORSE_ADMIN_ENDPOINT=http://localhost:8088 "+cmd.CommandPath(),
+			"Or pass an endpoint:",
+			"  "+cmd.CommandPath()+" --endpoint http://localhost:8088",
+		)
+	case missingAPIKey:
+		fatalUserError(cmd,
+			"missing Gorse admin API key.",
+			"Save it in a context:",
+			"  gorse-cli context add <name> --endpoint http://localhost:8088",
+			"Or set an environment variable:",
+			"  GORSE_ADMIN_API_KEY=<api-key> "+cmd.CommandPath(),
+			"Or pass it for this command:",
+			"  "+cmd.CommandPath()+" --api-key <api-key>",
+		)
+	}
+}
+
+var contextCmd = &cobra.Command{
+	Use:   "context",
+	Short: "Manage Gorse CLI contexts",
+}
+
+var contextAddCmd = &cobra.Command{
+	Use:   "add <name>",
+	Short: "Add or update a Gorse CLI context",
+	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
+		name := args[0]
 		endpoint := getFlagOrEnv(cmd, "endpoint", "GORSE_ADMIN_ENDPOINT")
 		apiKey := getFlagOrEnv(cmd, "api-key", "GORSE_ADMIN_API_KEY")
-
-		if endpoint == "" {
-			fmt.Fprint(os.Stderr, "Gorse base URL: ")
-			input, err := bufio.NewReader(os.Stdin).ReadString('\n')
-			if err != nil {
-				log.Logger().Fatal("failed to read endpoint", zap.Error(err))
-			}
-			endpoint = strings.TrimSpace(input)
-		}
-		if endpoint == "" {
-			log.Logger().Fatal("GORSE_ADMIN_ENDPOINT or --endpoint is required")
-		}
 
 		if apiKey == "" {
 			var err error
 			apiKey, err = readSecret("Gorse admin API key: ")
 			if err != nil {
-				log.Logger().Fatal("failed to read API key", zap.Error(err))
+				fatalUserError(cmd, "failed to read API key: "+err.Error())
 			}
 		}
-		if apiKey == "" {
-			log.Logger().Fatal("GORSE_ADMIN_API_KEY or --api-key is required")
+		if err := saveContext(name, endpoint, apiKey); err != nil {
+			fatalUserError(cmd,
+				"failed to save context "+strconv.Quote(name)+": "+err.Error(),
+				"Example:",
+				"  gorse-cli context add "+name+" --endpoint http://localhost:8088",
+			)
 		}
-
-		if err := keyringSet(keyringService, keyringEndpointKey, endpoint); err != nil {
-			log.Logger().Fatal("failed to save endpoint to keyring", zap.Error(err))
-		}
-		if err := keyringSet(keyringService, keyringAPIKeyKey, apiKey); err != nil {
-			log.Logger().Fatal("failed to save API key to keyring", zap.Error(err))
-		}
-		fmt.Fprintln(cmd.OutOrStdout(), "Credentials saved to system keyring.")
+		fmt.Fprintf(cmd.OutOrStdout(), "Context %q saved and selected.\n", name)
 	},
 }
 
-var logoutCmd = &cobra.Command{
-	Use:   "logout",
-	Short: "Remove saved Gorse admin API credentials from the system keyring",
+var contextListCmd = &cobra.Command{
+	Use:   "list",
+	Short: "List Gorse CLI contexts",
 	Run: func(cmd *cobra.Command, args []string) {
-		if err := keyringDelete(keyringService, keyringEndpointKey); err != nil && !errors.Is(err, keyring.ErrNotFound) {
-			log.Logger().Fatal("failed to delete endpoint from keyring", zap.Error(err))
+		names, err := getContextNames()
+		if err != nil {
+			fatalUserError(cmd, "failed to read contexts from the system keyring: "+err.Error())
 		}
-		if err := keyringDelete(keyringService, keyringAPIKeyKey); err != nil && !errors.Is(err, keyring.ErrNotFound) {
-			log.Logger().Fatal("failed to delete API key from keyring", zap.Error(err))
+		if len(names) == 0 {
+			fmt.Fprintln(cmd.OutOrStdout(), "No contexts configured.")
+			return
 		}
-		fmt.Fprintln(cmd.OutOrStdout(), "Credentials removed from system keyring.")
+		current, err := getCurrentContextName()
+		if err != nil {
+			fatalUserError(cmd, "failed to read the current context from the system keyring: "+err.Error())
+		}
+		rows := make([][]string, 0, len(names))
+		for _, name := range names {
+			ctx, err := loadContext(name)
+			if err != nil {
+				fatalUserError(cmd, "context "+strconv.Quote(name)+" is invalid or incomplete: "+err.Error())
+			}
+			currentMarker := ""
+			if name == current {
+				currentMarker = "*"
+			}
+			rows = append(rows, []string{currentMarker, name, ctx.Endpoint})
+		}
+		printTable(cmd.OutOrStdout(), []string{"Current", "Name", "Endpoint"}, rows)
+	},
+}
+
+var contextUseCmd = &cobra.Command{
+	Use:   "use <name>",
+	Short: "Switch the current Gorse CLI context",
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		name := args[0]
+		if _, err := loadContext(name); err != nil {
+			fatalUserError(cmd,
+				"context "+strconv.Quote(name)+" was not found.",
+				"List available contexts:",
+				"  gorse-cli context list",
+			)
+		}
+		if err := setCurrentContextName(name); err != nil {
+			fatalUserError(cmd, "failed to save the current context in the system keyring: "+err.Error())
+		}
+		fmt.Fprintf(cmd.OutOrStdout(), "Switched to context %q.\n", name)
+	},
+}
+
+var contextDeleteCmd = &cobra.Command{
+	Use:   "delete <name>",
+	Short: "Delete a Gorse CLI context",
+	Args:  cobra.ExactArgs(1),
+	Run: func(cmd *cobra.Command, args []string) {
+		name := args[0]
+		if err := deleteContext(name); err != nil {
+			fatalUserError(cmd,
+				"context "+strconv.Quote(name)+" was not found.",
+				"List available contexts:",
+				"  gorse-cli context list",
+			)
+		}
+		fmt.Fprintf(cmd.OutOrStdout(), "Context %q deleted.\n", name)
+	},
+}
+
+var contextCurrentCmd = &cobra.Command{
+	Use:   "current",
+	Short: "Show the current Gorse CLI context",
+	Run: func(cmd *cobra.Command, args []string) {
+		name, err := getCurrentContextName()
+		if err != nil {
+			fatalUserError(cmd, "failed to read the current context from the system keyring: "+err.Error())
+		}
+		if name == "" {
+			fmt.Fprintln(cmd.OutOrStdout(), "No current context.")
+			return
+		}
+		ctx, err := loadContext(name)
+		if err != nil {
+			fatalUserError(cmd,
+				"current context "+strconv.Quote(name)+" is invalid or incomplete.",
+				"Choose another context:",
+				"  gorse-cli context use <name>",
+				"Or recreate it:",
+				"  gorse-cli context add "+name+" --endpoint http://localhost:8088",
+			)
+		}
+		printTable(cmd.OutOrStdout(), []string{"Name", "Endpoint"}, [][]string{{ctx.Name, ctx.Endpoint}})
 	},
 }
 
 func requireEndpointAndKey(cmd *cobra.Command) (string, string) {
 	endpoint, apiKey := getEndpointAndKey(cmd)
-	if endpoint == "" {
-		log.Logger().Fatal("GORSE base URL from GORSE_ADMIN_ENDPOINT, --endpoint, or saved login endpoint is required")
-	}
-	if apiKey == "" {
-		log.Logger().Fatal("GORSE_ADMIN_API_KEY, --api-key, or saved login API key is required")
+	if endpoint == "" || apiKey == "" {
+		fatalMissingCredentials(cmd, endpoint == "", apiKey == "")
 	}
 	return endpoint, apiKey
 }
@@ -184,6 +514,11 @@ func newGorseClient(cmd *cobra.Command) *gorse.GorseClient {
 }
 
 func getAdminAPI(cmd *cobra.Command, path string, query url.Values) {
+	body := getAdminAPIBody(cmd, path, query)
+	printJSONTable(cmd, body)
+}
+
+func getAdminAPIBody(cmd *cobra.Command, path string, query url.Values) []byte {
 	endpoint, apiKey := requireEndpointAndKey(cmd)
 	if len(query) > 0 {
 		path += "?" + query.Encode()
@@ -198,7 +533,7 @@ func getAdminAPI(cmd *cobra.Command, path string, query url.Values) {
 			zap.Int("status", resp.StatusCode()),
 			zap.String("body", resp.String()))
 	}
-	printJSONTable(cmd, resp.Body())
+	return resp.Body()
 }
 
 func printResultTable(cmd *cobra.Command, result any) {
@@ -282,9 +617,20 @@ func printValueTables(cmd *cobra.Command, value any) {
 	case []any:
 		printArrayTable(cmd, typed)
 	case map[string]any:
+		if _, ok := typed["UserId"]; ok {
+			printObjectTable(cmd, typed)
+			return
+		}
+		if _, ok := typed["ItemId"]; ok {
+			printObjectTable(cmd, typed)
+			return
+		}
 		arrayKeys := make([]string, 0)
 		metadata := make(map[string]any)
 		for key, child := range typed {
+			if isPaginationCursorKey(key) {
+				continue
+			}
 			if _, ok := child.([]any); ok {
 				arrayKeys = append(arrayKeys, key)
 			} else {
@@ -311,22 +657,139 @@ func printValueTables(cmd *cobra.Command, value any) {
 	}
 }
 
+func isPaginationCursorKey(key string) bool {
+	return strings.EqualFold(key, "cursor")
+}
+
 func printObjectTable(cmd *cobra.Command, object map[string]any) {
-	flattened := make(map[string]string)
-	flattenJSON("", object, flattened)
-	keys := make([]string, 0, len(flattened))
-	for key := range flattened {
+	output := cmd.OutOrStdout()
+	if len(object) == 0 {
+		fmt.Fprintln(output, "{}")
+		return
+	}
+
+	keys := orderedObjectKeys(object, "UserId", "ItemId", "Comment", "Categories", "IsHidden", "Timestamp")
+	for _, key := range keys {
+		printObjectField(output, key, object[key])
+	}
+}
+
+func orderedObjectKeys(object map[string]any, priority ...string) []string {
+	keys := make([]string, 0, len(object))
+	for key := range object {
 		keys = append(keys, key)
 	}
-	sort.Strings(keys)
-	rows := make([][]string, 0, len(keys))
+	return orderedKeys(keys, priority...)
+}
+
+func orderedKeys(keys []string, priority ...string) []string {
+	keySet := make(map[string]struct{}, len(keys))
 	for _, key := range keys {
-		rows = append(rows, []string{key, flattened[key]})
+		keySet[key] = struct{}{}
 	}
-	if len(rows) == 0 {
-		rows = append(rows, []string{"", ""})
+	ordered := make([]string, 0, len(keys))
+	seen := make(map[string]struct{}, len(keys))
+	for _, key := range priority {
+		if _, ok := keySet[key]; ok {
+			ordered = append(ordered, key)
+			seen[key] = struct{}{}
+		}
 	}
-	printTable(cmd.OutOrStdout(), []string{"Key", "Value"}, rows)
+	remaining := make([]string, 0, len(keys)-len(ordered))
+	for _, key := range keys {
+		if _, ok := seen[key]; !ok {
+			remaining = append(remaining, key)
+		}
+	}
+	sort.Strings(remaining)
+	return append(ordered, remaining...)
+}
+
+func printObjectField(output io.Writer, key string, value any) {
+	if summary, ok := formatArraySummary(value); ok {
+		fmt.Fprintf(output, "%s: %s\n", key, summary)
+		return
+	}
+	switch value.(type) {
+	case map[string]any:
+		fmt.Fprintf(output, "%s:\n%s\n", key, formatPrettyJSON(value))
+	case []any:
+		fmt.Fprintf(output, "%s: %s\n", key, formatTableValue(value))
+	default:
+		fmt.Fprintf(output, "%s: %s\n", key, formatTableValue(value))
+	}
+}
+
+func formatPrettyJSON(value any) string {
+	encoded, err := json.MarshalIndent(summarizeLongArrays(value), "", "  ")
+	if err != nil {
+		return formatTableValue(value)
+	}
+	return string(encoded)
+}
+
+func summarizeLongArrays(value any) any {
+	return summarizeLongArraysWithLimit(value, maxInlineArrayValues)
+}
+
+func summarizeLongArraysWithLimit(value any, maxValues int) any {
+	if summary, ok := formatArraySummaryWithLimit(value, maxValues); ok {
+		return summary
+	}
+	switch typed := value.(type) {
+	case []any:
+		values := make([]any, len(typed))
+		for i, element := range typed {
+			values[i] = summarizeLongArraysWithLimit(element, maxValues)
+		}
+		return values
+	case map[string]any:
+		values := make(map[string]any, len(typed))
+		for key, element := range typed {
+			values[key] = summarizeLongArraysWithLimit(element, maxValues)
+		}
+		return values
+	default:
+		return value
+	}
+}
+
+func formatArraySummary(value any) (string, bool) {
+	return formatArraySummaryWithLimit(value, maxInlineArrayValues)
+}
+
+func formatArraySummaryWithLimit(value any, maxValues int) (string, bool) {
+	array, ok := value.([]any)
+	if maxValues < 1 {
+		maxValues = 1
+	}
+	if !ok || len(array) <= maxValues || !isScalarArray(array) {
+		return "", false
+	}
+	values := make([]string, 0, maxValues)
+	for _, element := range array[:maxValues] {
+		values = append(values, formatSummaryValue(element))
+	}
+	return fmt.Sprintf("[%s, ...] (%d values)", strings.Join(values, ", "), len(array)), true
+}
+
+func isScalarArray(array []any) bool {
+	for _, element := range array {
+		switch element.(type) {
+		case nil, string, json.Number, bool, float64:
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+func formatSummaryValue(value any) string {
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		return formatTableValue(value)
+	}
+	return string(encoded)
 }
 
 func printArrayTable(cmd *cobra.Command, array []any) {
@@ -336,17 +799,16 @@ func printArrayTable(cmd *cobra.Command, array []any) {
 	}
 	allObjects := true
 	columnsSet := make(map[string]struct{})
-	flattenedRows := make([]map[string]string, 0, len(array))
+	objectRows := make([]map[string]any, 0, len(array))
 	for _, element := range array {
 		object, ok := element.(map[string]any)
 		if !ok {
 			allObjects = false
 			break
 		}
-		flattened := make(map[string]string)
-		flattenJSON("", object, flattened)
-		flattenedRows = append(flattenedRows, flattened)
-		for column := range flattened {
+		object = formatProgressObject(object)
+		objectRows = append(objectRows, object)
+		for column := range object {
 			columnsSet[column] = struct{}{}
 		}
 	}
@@ -362,39 +824,100 @@ func printArrayTable(cmd *cobra.Command, array []any) {
 	for column := range columnsSet {
 		columns = append(columns, column)
 	}
-	sort.Strings(columns)
-	rows := make([][]string, len(flattenedRows))
-	for i, flattened := range flattenedRows {
+	columns = orderedArrayColumns(columns)
+	rows := make([][]string, len(objectRows))
+	for i, object := range objectRows {
 		row := make([]string, len(columns))
 		for j, column := range columns {
-			row[j] = flattened[column]
+			row[j] = formatTableCellValue(column, object[column])
 		}
 		rows[i] = row
 	}
 	printTable(cmd.OutOrStdout(), columns, rows)
 }
 
-func flattenJSON(prefix string, value any, output map[string]string) {
+func orderedArrayColumns(columns []string) []string {
+	if lo.Contains(columns, "FeedbackType") {
+		return orderedKeys(columns, "FeedbackType", "UserId", "ItemId", "Value", "Timestamp", "Comment", "Updated")
+	}
+	if lo.Contains(columns, "Progress") {
+		return orderedKeys(columns, "Tracer", "Name", "Status", "Progress", "Error", "StartTime", "FinishTime")
+	}
+	return orderedKeys(columns, "UserId", "ItemId", "Comment", "Categories", "IsHidden", "Timestamp")
+}
+
+func formatProgressObject(object map[string]any) map[string]any {
+	count, hasCount := numberValue(object["Count"])
+	total, hasTotal := numberValue(object["Total"])
+	if !hasCount || !hasTotal {
+		return object
+	}
+	updated := make(map[string]any, len(object))
+	for key, value := range object {
+		if key == "Count" || key == "Total" {
+			continue
+		}
+		updated[key] = value
+	}
+	updated["Progress"] = formatProgressBar(count, total)
+	return updated
+}
+
+func numberValue(value any) (float64, bool) {
 	switch typed := value.(type) {
-	case map[string]any:
-		if len(typed) == 0 {
-			output[prefix] = "{}"
-			return
-		}
-		keys := make([]string, 0, len(typed))
-		for key := range typed {
-			keys = append(keys, key)
-		}
-		sort.Strings(keys)
-		for _, key := range keys {
-			next := key
-			if prefix != "" {
-				next = prefix + "." + key
-			}
-			flattenJSON(next, typed[key], output)
-		}
+	case json.Number:
+		number, err := typed.Float64()
+		return number, err == nil
+	case float64:
+		return typed, true
+	case int:
+		return float64(typed), true
+	case int64:
+		return float64(typed), true
 	default:
-		output[prefix] = formatTableValue(typed)
+		return 0, false
+	}
+}
+
+func formatProgressBar(count, total float64) string {
+	const width = 20
+	if count < 0 {
+		count = 0
+	}
+	if total < 0 {
+		total = 0
+	}
+	if total > 0 && count > total {
+		count = total
+	}
+	ratio := 0.0
+	if total > 0 {
+		ratio = count / total
+	}
+	filled := int(ratio*width + 0.5)
+	if filled > width {
+		filled = width
+	}
+	percent := int(ratio*100 + 0.5)
+	return fmt.Sprintf("[%s%s] %d%%",
+		strings.Repeat("#", filled),
+		strings.Repeat("-", width-filled),
+		percent)
+}
+
+func formatTableCellValue(column string, value any) string {
+	if column != "Labels" {
+		return formatTableValue(value)
+	}
+	switch value.(type) {
+	case []any, map[string]any:
+		encoded, err := json.Marshal(summarizeLongArraysWithLimit(value, maxTableLabelArrayValues))
+		if err != nil {
+			return formatTableValue(value)
+		}
+		return string(encoded)
+	default:
+		return formatTableValue(value)
 	}
 }
 
@@ -403,6 +926,9 @@ func formatTableValue(value any) string {
 	case nil:
 		return ""
 	case string:
+		if formatted, ok := formatTimeValue(typed); ok {
+			return formatted
+		}
 		return typed
 	case json.Number:
 		return typed.String()
@@ -410,8 +936,17 @@ func formatTableValue(value any) string {
 		return strconv.FormatBool(typed)
 	case float64:
 		return strconv.FormatFloat(typed, 'f', -1, 64)
-	case []any, map[string]any:
-		encoded, err := json.Marshal(typed)
+	case []any:
+		if summary, ok := formatArraySummary(typed); ok {
+			return summary
+		}
+		encoded, err := json.Marshal(summarizeLongArrays(typed))
+		if err != nil {
+			return fmt.Sprint(typed)
+		}
+		return string(encoded)
+	case map[string]any:
+		encoded, err := json.Marshal(summarizeLongArrays(typed))
 		if err != nil {
 			return fmt.Sprint(typed)
 		}
@@ -421,22 +956,75 @@ func formatTableValue(value any) string {
 	}
 }
 
+func formatTimeValue(value string) (string, bool) {
+	timestamp, err := time.Parse(time.RFC3339Nano, value)
+	if err != nil {
+		return "", false
+	}
+	return timestamp.Format(time.RFC3339), true
+}
+
 func printTable(output io.Writer, headers []string, rows [][]string) {
-	table := tablewriter.NewWriter(output)
-	table.Header(headers)
-	lo.Must0(table.Bulk(rows))
-	lo.Must0(table.Render())
+	table := tabwriter.NewWriter(output, 0, 8, 2, ' ', 0)
+	for i, header := range headers {
+		if i > 0 {
+			_, _ = fmt.Fprint(table, "\t")
+		}
+		_, _ = fmt.Fprint(table, formatTableHeader(header))
+	}
+	_, _ = fmt.Fprintln(table)
+	for _, row := range rows {
+		for i, cell := range row {
+			if i > 0 {
+				_, _ = fmt.Fprint(table, "\t")
+			}
+			_, _ = fmt.Fprint(table, cell)
+		}
+		_, _ = fmt.Fprintln(table)
+	}
+	lo.Must0(table.Flush())
+}
+
+func formatTableHeader(header string) string {
+	runes := []rune(header)
+	var builder strings.Builder
+	for i, ch := range runes {
+		if ch == '.' || ch == '_' || ch == '-' || unicode.IsSpace(ch) {
+			if builder.Len() > 0 {
+				builder.WriteByte(' ')
+			}
+			continue
+		}
+		if i > 0 && shouldSplitTableHeader(runes, i) {
+			builder.WriteByte(' ')
+		}
+		builder.WriteRune(unicode.ToUpper(ch))
+	}
+	return strings.Join(strings.Fields(builder.String()), "-")
+}
+
+func shouldSplitTableHeader(runes []rune, i int) bool {
+	current := runes[i]
+	previous := runes[i-1]
+	if !unicode.IsUpper(current) {
+		return false
+	}
+	if unicode.IsLower(previous) || unicode.IsDigit(previous) {
+		return true
+	}
+	return unicode.IsUpper(previous) && i+1 < len(runes) && unicode.IsLower(runes[i+1])
 }
 
 func addAuthFlags(commands ...*cobra.Command) {
 	for _, cmd := range commands {
-		cmd.Flags().String("endpoint", "", "Gorse base URL (default: GORSE_ADMIN_ENDPOINT, then keyring)")
-		cmd.Flags().String("api-key", "", "Gorse admin API key (default: GORSE_ADMIN_API_KEY, then keyring)")
+		cmd.Flags().String("endpoint", "", "Gorse base URL (default: selected context or GORSE_ADMIN_ENDPOINT)")
+		cmd.Flags().String("api-key", "", "Gorse admin API key (default: selected context or GORSE_ADMIN_API_KEY)")
+		cmd.Flags().String("context", "", "Gorse CLI context name")
 	}
 }
 
 func addPaginationFlags(cmd *cobra.Command) {
-	cmd.Flags().Int("n", 0, "Number of returned records")
+	cmd.Flags().IntP("n", "n", 0, "Number of returned records")
 	cmd.Flags().Int("offset", 0, "Offset of returned records")
 }
 
@@ -478,6 +1066,11 @@ func getNFlag(cmd *cobra.Command) int {
 	return n
 }
 
+func getStringFlag(cmd *cobra.Command, flagName string) string {
+	value, _ := cmd.Flags().GetString(flagName)
+	return value
+}
+
 func getStringArrayFlag(cmd *cobra.Command, flagName string) []string {
 	values, _ := cmd.Flags().GetStringArray(flagName)
 	return values
@@ -503,6 +1096,28 @@ func readFlagOrFile(cmd *cobra.Command, valueFlag, fileFlag string) string {
 var getCmd = &cobra.Command{
 	Use:   "get",
 	Short: "Get resources from Gorse admin API",
+	Args:  cobra.NoArgs,
+	Run: func(cmd *cobra.Command, args []string) {
+		_ = cmd.Help()
+	},
+}
+
+var recommendCmd = &cobra.Command{
+	Use:   "recommend",
+	Short: "Get recommendations from Gorse",
+	Args:  cobra.NoArgs,
+	Run: func(cmd *cobra.Command, args []string) {
+		_ = cmd.Help()
+	},
+}
+
+var pipelineCmd = &cobra.Command{
+	Use:   "pipeline",
+	Short: "Manage recommendation pipeline configuration",
+	Args:  cobra.NoArgs,
+	Run: func(cmd *cobra.Command, args []string) {
+		_ = cmd.Help()
+	},
 }
 
 // getClusterCmd gets cluster nodes from the admin API
@@ -514,28 +1129,20 @@ var getClusterCmd = &cobra.Command{
 	},
 }
 
-// getTasksCmd gets tasks from the admin API
-var getTasksCmd = &cobra.Command{
-	Use:   "tasks",
+var statusCmd = &cobra.Command{
+	Use:   "status",
 	Short: "Get task progress from Gorse admin API",
 	Run: func(cmd *cobra.Command, args []string) {
 		getAdminAPI(cmd, "/dashboard/tasks", nil)
 	},
 }
 
-// getConfigCmd gets configuration from the admin API
-var getConfigCmd = &cobra.Command{
-	Use:   "config",
-	Short: "Get configuration from Gorse admin API",
+var pipelineGetCmd = &cobra.Command{
+	Use:   "get",
+	Short: "Get recommendation pipeline configuration",
 	Run: func(cmd *cobra.Command, args []string) {
 		getAdminAPI(cmd, "/dashboard/config", nil)
 	},
-}
-
-// setCmd is the parent command for set operations
-var setCmd = &cobra.Command{
-	Use:   "set",
-	Short: "Set resources in Gorse admin API",
 }
 
 var dumpCmd = &cobra.Command{
@@ -586,15 +1193,14 @@ func confirmRestore(cmd *cobra.Command, file string) bool {
 	return strings.EqualFold(strings.TrimSpace(input), "y")
 }
 
-// setConfigCmd sets configuration via the admin API
-var setConfigCmd = &cobra.Command{
-	Use:   "config [key=value]...",
-	Short: "Set configuration values in Gorse admin API",
+var pipelineSetCmd = &cobra.Command{
+	Use:   "set [key=value]...",
+	Short: "Set recommendation pipeline configuration values",
 	Example: `  # Set single config value
-  gorse-cli set config recommend.cache_size=1000
+  gorse-cli pipeline set recommend.cache_size=1000
 
   # Set multiple config values
-  gorse-cli set config recommend.cache_size=1000 recommend.item_ttl=72h`,
+  gorse-cli pipeline set recommend.cache_size=1000 recommend.item_ttl=72h`,
 	Args: cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		endpoint, apiKey := requireEndpointAndKey(cmd)
@@ -648,9 +1254,9 @@ var setConfigCmd = &cobra.Command{
 	},
 }
 
-var resetConfigCmd = &cobra.Command{
-	Use:   "config",
-	Short: "Reset recommendation configuration to the file defaults",
+var pipelineResetCmd = &cobra.Command{
+	Use:   "reset",
+	Short: "Reset recommendation pipeline configuration to the file defaults",
 	Run: func(cmd *cobra.Command, args []string) {
 		body := deleteAdminAPI(cmd, "/dashboard/config")
 		bodyText := strings.TrimSpace(string(body))
@@ -658,15 +1264,7 @@ var resetConfigCmd = &cobra.Command{
 			printJSONTable(cmd, body)
 			return
 		}
-		fmt.Fprintln(cmd.OutOrStdout(), "Configuration reset to defaults.")
-	},
-}
-
-var getUserInfoCmd = &cobra.Command{
-	Use:   "userinfo",
-	Short: "Get current dashboard login user information",
-	Run: func(cmd *cobra.Command, args []string) {
-		getAdminAPI(cmd, "/dashboard/userinfo", nil)
+		fmt.Fprintln(cmd.OutOrStdout(), "Pipeline reset to defaults.")
 	},
 }
 
@@ -675,14 +1273,6 @@ var getCategoriesCmd = &cobra.Command{
 	Short: "Get item categories",
 	Run: func(cmd *cobra.Command, args []string) {
 		getAdminAPI(cmd, "/dashboard/categories", nil)
-	},
-}
-
-var getConfigSchemaCmd = &cobra.Command{
-	Use:   "config-schema",
-	Short: "Get configuration JSON schema",
-	Run: func(cmd *cobra.Command, args []string) {
-		getAdminAPI(cmd, "/dashboard/config/schema", nil)
 	},
 }
 
@@ -737,8 +1327,7 @@ var getUsersCmd = &cobra.Command{
 	Use:   "users",
 	Short: "Get users",
 	Run: func(cmd *cobra.Command, args []string) {
-		cursor, _ := cmd.Flags().GetString("cursor")
-		users, err := newGorseClient(cmd).GetUsers(cmd.Context(), getNFlag(cmd), cursor)
+		users, err := newGorseClient(cmd).GetUsers(cmd.Context(), getNFlag(cmd), "")
 		if err != nil {
 			log.Logger().Fatal("API request failed", zap.Error(err))
 		}
@@ -750,8 +1339,7 @@ var getItemsCmd = &cobra.Command{
 	Use:   "items",
 	Short: "Get items",
 	Run: func(cmd *cobra.Command, args []string) {
-		cursor, _ := cmd.Flags().GetString("cursor")
-		items, err := newGorseClient(cmd).GetItems(cmd.Context(), getNFlag(cmd), cursor)
+		items, err := newGorseClient(cmd).GetItems(cmd.Context(), getNFlag(cmd), "")
 		if err != nil {
 			log.Logger().Fatal("API request failed", zap.Error(err))
 		}
@@ -759,34 +1347,90 @@ var getItemsCmd = &cobra.Command{
 	},
 }
 
-var getUserFeedbackCmd = &cobra.Command{
-	Use:   "user-feedback <user-id> [feedback-type]",
-	Short: "Get user feedback",
-	Args:  cobra.RangeArgs(1, 2),
+var getFeedbackCmd = &cobra.Command{
+	Use:   "feedback",
+	Short: "Get feedback",
+	Args:  cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
-		var feedbackType string
-		if len(args) > 1 {
-			feedbackType = args[1]
-		}
-		feedback, err := newGorseClient(cmd).ListFeedbacks(cmd.Context(), feedbackType, args[0])
-		if err != nil {
-			log.Logger().Fatal("API request failed", zap.Error(err))
-		}
-		sort.Slice(feedback, func(i, j int) bool {
-			return feedback[i].Timestamp.After(feedback[j].Timestamp)
-		})
-		offset := getIntFlag(cmd, "offset")
-		if offset < len(feedback) {
-			feedback = feedback[offset:]
-		} else {
-			feedback = nil
-		}
-		n := getIntFlag(cmd, "n")
-		if n > 0 && n < len(feedback) {
-			feedback = feedback[:n]
-		}
-		printResultTable(cmd, feedback)
+		printFeedback(cmd, getStringFlag(cmd, "type"), getStringFlag(cmd, "user"), getStringFlag(cmd, "item"), getNFlag(cmd))
 	},
+}
+
+func printFeedback(cmd *cobra.Command, feedbackType, userID, itemID string, n int) {
+	path, query := feedbackRequest(feedbackType, userID, itemID, n)
+	body := getAdminAPIBody(cmd, path, query)
+	decoder := json.NewDecoder(strings.NewReader(string(body)))
+	decoder.UseNumber()
+	var value any
+	if err := decoder.Decode(&value); err != nil {
+		printTable(cmd.OutOrStdout(), []string{"Response"}, [][]string{{strings.TrimSpace(string(body))}})
+		return
+	}
+	feedback, ok := feedbackRecords(value)
+	if !ok {
+		printValueTables(cmd, value)
+		return
+	}
+	sortFeedbackRecords(feedback)
+	if n > 0 && n < len(feedback) {
+		feedback = feedback[:n]
+	}
+	printValueTables(cmd, feedback)
+}
+
+func feedbackRequest(feedbackType, userID, itemID string, n int) (string, url.Values) {
+	query := url.Values{}
+	if userID == "" && itemID == "" && n > 0 {
+		query.Set("n", strconv.Itoa(n))
+	}
+	switch {
+	case userID != "" && itemID != "" && feedbackType != "":
+		return "/feedback/" + url.PathEscape(feedbackType) + "/" + url.PathEscape(userID) + "/" + url.PathEscape(itemID), query
+	case userID != "" && itemID != "":
+		return "/feedback/" + url.PathEscape(userID) + "/" + url.PathEscape(itemID), query
+	case userID != "" && feedbackType != "":
+		return "/user/" + url.PathEscape(userID) + "/feedback/" + url.PathEscape(feedbackType), query
+	case userID != "":
+		return "/user/" + url.PathEscape(userID) + "/feedback", query
+	case itemID != "" && feedbackType != "":
+		return "/item/" + url.PathEscape(itemID) + "/feedback/" + url.PathEscape(feedbackType), query
+	case itemID != "":
+		return "/item/" + url.PathEscape(itemID) + "/feedback/", query
+	case feedbackType != "":
+		return "/feedback/" + url.PathEscape(feedbackType), query
+	default:
+		return "/feedback", query
+	}
+}
+
+func feedbackRecords(value any) ([]any, bool) {
+	switch typed := value.(type) {
+	case []any:
+		return typed, true
+	case map[string]any:
+		if feedback, ok := typed["Feedback"].([]any); ok {
+			return feedback, true
+		}
+		if _, ok := typed["FeedbackType"]; ok {
+			return []any{typed}, true
+		}
+	}
+	return nil, false
+}
+
+func sortFeedbackRecords(feedback []any) {
+	sort.SliceStable(feedback, func(i, j int) bool {
+		return feedbackTimestamp(feedback[i]) > feedbackTimestamp(feedback[j])
+	})
+}
+
+func feedbackTimestamp(value any) string {
+	object, ok := value.(map[string]any)
+	if !ok {
+		return ""
+	}
+	timestamp, _ := object["Timestamp"].(string)
+	return timestamp
 }
 
 var getLatestCmd = &cobra.Command{
@@ -828,8 +1472,8 @@ var getNonPersonalizedCmd = &cobra.Command{
 	},
 }
 
-var getRecommendCmd = &cobra.Command{
-	Use:   "recommend <user-id> [recommender] [name]",
+var recommendUserCmd = &cobra.Command{
+	Use:   "user <user-id> [recommender] [name]",
 	Short: "Get recommendations for a user",
 	Args:  cobra.RangeArgs(1, 3),
 	Run: func(cmd *cobra.Command, args []string) {
@@ -973,64 +1617,62 @@ func parseConfigValue(value string) interface{} {
 
 func init() {
 	rootCmd.PersistentFlags().BoolP("version", "v", false, "gorse-cli version")
-	rootCmd.AddCommand(loginCmd)
-	rootCmd.AddCommand(logoutCmd)
+	rootCmd.AddCommand(contextCmd)
+	contextCmd.AddCommand(contextAddCmd)
+	contextCmd.AddCommand(contextListCmd)
+	contextCmd.AddCommand(contextUseCmd)
+	contextCmd.AddCommand(contextDeleteCmd)
+	contextCmd.AddCommand(contextCurrentCmd)
 	rootCmd.AddCommand(getCmd)
-	getCmd.AddCommand(getUserInfoCmd)
 	getCmd.AddCommand(getClusterCmd)
 	getCmd.AddCommand(getCategoriesCmd)
-	getCmd.AddCommand(getTasksCmd)
-	getCmd.AddCommand(getConfigCmd)
-	getCmd.AddCommand(getConfigSchemaCmd)
 	getCmd.AddCommand(getStatsCmd)
 	getCmd.AddCommand(getTimeseriesCmd)
 	getCmd.AddCommand(getUserCmd)
 	getCmd.AddCommand(getUsersCmd)
 	getCmd.AddCommand(getItemCmd)
 	getCmd.AddCommand(getItemsCmd)
-	getCmd.AddCommand(getUserFeedbackCmd)
-	getCmd.AddCommand(getLatestCmd)
-	getCmd.AddCommand(getNonPersonalizedCmd)
-	getCmd.AddCommand(getRecommendCmd)
-	getCmd.AddCommand(getItemToItemCmd)
-	getCmd.AddCommand(getUserToUserCmd)
-	getCmd.AddCommand(getExternalCmd)
-	getCmd.AddCommand(getRankerPromptCmd)
+	getCmd.AddCommand(getFeedbackCmd)
+	rootCmd.AddCommand(recommendCmd)
+	recommendCmd.AddCommand(recommendUserCmd)
+	recommendCmd.AddCommand(getLatestCmd)
+	recommendCmd.AddCommand(getNonPersonalizedCmd)
+	recommendCmd.AddCommand(getItemToItemCmd)
+	recommendCmd.AddCommand(getUserToUserCmd)
+	recommendCmd.AddCommand(getExternalCmd)
+	recommendCmd.AddCommand(getRankerPromptCmd)
 
-	rootCmd.AddCommand(setCmd)
-	setCmd.AddCommand(setConfigCmd)
-	resetCmd := &cobra.Command{
-		Use:   "reset",
-		Short: "Reset resources in Gorse admin API",
-	}
-	rootCmd.AddCommand(resetCmd)
-	resetCmd.AddCommand(resetConfigCmd)
+	rootCmd.AddCommand(pipelineCmd)
+	pipelineCmd.AddCommand(pipelineGetCmd)
+	pipelineCmd.AddCommand(pipelineSetCmd)
+	pipelineCmd.AddCommand(pipelineResetCmd)
+	rootCmd.AddCommand(statusCmd)
 	rootCmd.AddCommand(dumpCmd)
 	rootCmd.AddCommand(restoreCmd)
 
-	// Add flags for endpoint and api-key
-	loginCmd.Flags().String("endpoint", "", "Gorse base URL (default: GORSE_ADMIN_ENDPOINT)")
-	loginCmd.Flags().String("api-key", "", "Gorse admin API key (default: GORSE_ADMIN_API_KEY; prefer prompt to avoid shell history)")
-	addAuthFlags(getUserInfoCmd, getClusterCmd, getCategoriesCmd, getTasksCmd, getConfigCmd, getConfigSchemaCmd,
-		getStatsCmd, getTimeseriesCmd, getUserCmd, getUsersCmd, getItemCmd, getItemsCmd, getUserFeedbackCmd, getLatestCmd,
-		getNonPersonalizedCmd, getRecommendCmd, getItemToItemCmd, getUserToUserCmd, getExternalCmd, getRankerPromptCmd,
-		setConfigCmd, resetConfigCmd, dumpCmd, restoreCmd)
+	contextAddCmd.Flags().String("endpoint", "", "Gorse base URL (default: GORSE_ADMIN_ENDPOINT)")
+	contextAddCmd.Flags().String("api-key", "", "Gorse admin API key (default: GORSE_ADMIN_API_KEY; prefer prompt to avoid shell history)")
+	addAuthFlags(getClusterCmd, getCategoriesCmd, statusCmd,
+		getStatsCmd, getTimeseriesCmd, getUserCmd, getUsersCmd, getItemCmd, getItemsCmd, getFeedbackCmd, getLatestCmd,
+		getNonPersonalizedCmd, recommendUserCmd, getItemToItemCmd, getUserToUserCmd, getExternalCmd, getRankerPromptCmd,
+		pipelineGetCmd, pipelineSetCmd, pipelineResetCmd, dumpCmd, restoreCmd)
 
 	getTimeseriesCmd.Flags().String("begin", "", "Begin time, defaults to 7 days ago")
 	getTimeseriesCmd.Flags().String("end", "", "End time, defaults to now")
 	getTimeseriesCmd.Flags().String("duration", "", "Aggregation duration, defaults to 24h")
-	getUsersCmd.Flags().Int("n", 0, "Number of returned users")
-	getUsersCmd.Flags().String("cursor", "", "Cursor for next page")
-	getItemsCmd.Flags().Int("n", 0, "Number of returned items")
-	getItemsCmd.Flags().String("cursor", "", "Cursor for next page")
-	addPaginationFlags(getUserFeedbackCmd)
+	getUsersCmd.Flags().IntP("n", "n", 0, "Number of returned users")
+	getItemsCmd.Flags().IntP("n", "n", 0, "Number of returned items")
+	getFeedbackCmd.Flags().IntP("n", "n", 0, "Number of returned feedback")
+	getFeedbackCmd.Flags().String("type", "", "Filter by feedback type")
+	getFeedbackCmd.Flags().String("user", "", "Filter by user ID")
+	getFeedbackCmd.Flags().String("item", "", "Filter by item ID")
 	addPaginationFlags(getLatestCmd)
 	addCategoryFlags(getLatestCmd)
 	addPaginationFlags(getNonPersonalizedCmd)
 	addCategoryFlags(getNonPersonalizedCmd)
 	getNonPersonalizedCmd.Flags().String("user-id", "", "Remove read items of a user")
-	getRecommendCmd.Flags().Int("n", 0, "Number of returned items")
-	addCategoryFlags(getRecommendCmd)
+	recommendUserCmd.Flags().IntP("n", "n", 0, "Number of returned items")
+	addCategoryFlags(recommendUserCmd)
 	addPaginationFlags(getItemToItemCmd)
 	addCategoryFlags(getItemToItemCmd)
 	addPaginationFlags(getUserToUserCmd)
@@ -1047,6 +1689,7 @@ func init() {
 
 func main() {
 	if err := rootCmd.Execute(); err != nil {
-		log.Logger().Fatal("failed to execute command", zap.Error(err))
+		fmt.Fprintln(os.Stderr, "Error:", err)
+		os.Exit(1)
 	}
 }
