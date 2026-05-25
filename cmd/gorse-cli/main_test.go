@@ -8,9 +8,11 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
+	"unsafe"
 
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/master"
@@ -456,6 +458,7 @@ func newTestMaster(t *testing.T) (*master.Master, string) {
 	waitForMaster(t, endpoint)
 	t.Cleanup(func() {
 		m.Shutdown()
+		closeTestMasterStores(t, m)
 		for range 10 {
 			if err := os.RemoveAll(tempDir); err == nil {
 				return
@@ -465,6 +468,21 @@ func newTestMaster(t *testing.T) (*master.Master, string) {
 		require.NoError(t, os.RemoveAll(tempDir))
 	})
 	return m, endpoint
+}
+
+func closeTestMasterStores(t *testing.T, m *master.Master) {
+	t.Helper()
+	require.NoError(t, m.DataClient.Close())
+	require.NoError(t, m.CacheClient.Close())
+
+	metaStoreValue := reflect.ValueOf(m).Elem().FieldByName("metaStore")
+	if metaStoreValue.IsNil() {
+		return
+	}
+	metaStore := reflect.NewAt(metaStoreValue.Type(), unsafe.Pointer(metaStoreValue.UnsafeAddr())).Elem().Interface()
+	closer, ok := metaStore.(interface{ Close() error })
+	require.True(t, ok)
+	require.NoError(t, closer.Close())
 }
 
 func freePort(t *testing.T) int {

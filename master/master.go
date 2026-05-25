@@ -294,18 +294,6 @@ func (m *Master) Shutdown() {
 	}
 	// stop grpc server
 	m.grpcServer.GracefulStop()
-	// close databases
-	if err = m.DataClient.Close(); err != nil {
-		log.Logger().Error("failed to close data store", zap.Error(err))
-	}
-	if err = m.CacheClient.Close(); err != nil {
-		log.Logger().Error("failed to close cache store", zap.Error(err))
-	}
-	if m.metaStore != nil {
-		if err = m.metaStore.Close(); err != nil {
-			log.Logger().Error("failed to close meta store", zap.Error(err))
-		}
-	}
 }
 
 func (m *Master) RunTasksLoop() {
