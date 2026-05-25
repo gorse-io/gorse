@@ -16,7 +16,6 @@ package main
 
 import (
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/url"
@@ -27,7 +26,6 @@ import (
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/master"
 	"github.com/gorse-io/gorse/server"
-	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
 	"github.com/gorse-io/gorse/storage/meta"
 )
@@ -58,11 +56,33 @@ func (c *AdminClient) GetConfig() (map[string]any, error) {
 }
 
 func (c *AdminClient) UpdateConfig(configPatch map[string]any) (config.Config, error) {
-	return postJSON[config.Config](c, "/dashboard/config", configPatch)
+	var result config.Config
+	resp, err := c.client.R().
+		SetHeader("Content-Type", "application/json").
+		SetBody(configPatch).
+		SetResult(&result).
+		Post("/dashboard/config")
+	if err != nil {
+		return result, fmt.Errorf("failed to send request: %w", err)
+	}
+	if resp.IsError() {
+		return result, newAdminAPIError(resp)
+	}
+	return result, nil
 }
 
 func (c *AdminClient) ResetConfig() (map[string]any, error) {
-	return deleteJSON[map[string]any](c, "/dashboard/config")
+	var result map[string]any
+	resp, err := c.client.R().
+		SetResult(&result).
+		Delete("/dashboard/config")
+	if err != nil {
+		return result, fmt.Errorf("failed to send request: %w", err)
+	}
+	if resp.IsError() {
+		return result, newAdminAPIError(resp)
+	}
+	return result, nil
 }
 
 func (c *AdminClient) GetCategories() ([]string, error) {
@@ -71,14 +91,6 @@ func (c *AdminClient) GetCategories() ([]string, error) {
 
 func (c *AdminClient) GetStats() (master.Status, error) {
 	return getJSON[master.Status](c, "/dashboard/stats", nil)
-}
-
-func (c *AdminClient) GetTimeseries(name, begin, end, duration string) ([]cache.TimeSeriesPoint, error) {
-	params := url.Values{}
-	addStringParam(params, "begin", begin)
-	addStringParam(params, "end", end)
-	addStringParam(params, "duration", duration)
-	return getJSON[[]cache.TimeSeriesPoint](c, "/dashboard/timeseries/"+url.PathEscape(name), params)
 }
 
 func (c *AdminClient) GetFeedback(n int) (server.FeedbackIterator, error) {
@@ -117,18 +129,16 @@ func (c *AdminClient) GetTypedItemFeedback(itemID, feedbackType string) ([]data.
 	return getJSON[[]data.Feedback](c, "/item/"+url.PathEscape(itemID)+"/feedback/"+url.PathEscape(feedbackType), nil)
 }
 
-func (c *AdminClient) GetLatest(n, offset int, categories []string) ([]master.ScoredItem, error) {
+func (c *AdminClient) GetLatest(n int, categories []string) ([]master.ScoredItem, error) {
 	params := url.Values{}
 	addIntParam(params, "n", n)
-	addIntParam(params, "offset", offset)
 	addStringArrayParam(params, "category", categories)
 	return getJSON[[]master.ScoredItem](c, "/dashboard/latest", params)
 }
 
-func (c *AdminClient) GetNonPersonalized(name string, n, offset int, userID string, categories []string) ([]master.ScoredItem, error) {
+func (c *AdminClient) GetNonPersonalized(name string, n int, userID string, categories []string) ([]master.ScoredItem, error) {
 	params := url.Values{}
 	addIntParam(params, "n", n)
-	addIntParam(params, "offset", offset)
 	addStringParam(params, "user-id", userID)
 	addStringArrayParam(params, "category", categories)
 	return getJSON[[]master.ScoredItem](c, "/dashboard/non-personalized/"+url.PathEscape(name), params)
@@ -148,18 +158,16 @@ func (c *AdminClient) GetRecommend(userID, recommender, name string, n int, cate
 	return getJSON[[]master.ScoredItem](c, path, params)
 }
 
-func (c *AdminClient) GetItemToItem(name, itemID string, n, offset int, categories []string) ([]master.ScoredItem, error) {
+func (c *AdminClient) GetItemToItem(name, itemID string, n int, categories []string) ([]master.ScoredItem, error) {
 	params := url.Values{}
 	addIntParam(params, "n", n)
-	addIntParam(params, "offset", offset)
 	addStringArrayParam(params, "category", categories)
 	return getJSON[[]master.ScoredItem](c, "/dashboard/item-to-item/"+url.PathEscape(name)+"/"+url.PathEscape(itemID), params)
 }
 
-func (c *AdminClient) GetUserToUser(name, userID string, n, offset int) ([]master.ScoreUser, error) {
+func (c *AdminClient) GetUserToUser(name, userID string, n int) ([]master.ScoreUser, error) {
 	params := url.Values{}
 	addIntParam(params, "n", n)
-	addIntParam(params, "offset", offset)
 	return getJSON[[]master.ScoreUser](c, "/dashboard/user-to-user/"+url.PathEscape(name)+"/"+url.PathEscape(userID), params)
 }
 
@@ -179,59 +187,12 @@ func (c *AdminClient) GetRankerPrompt(queryTemplate, documentTemplate, userID st
 }
 
 func (c *AdminClient) Restore(reader io.Reader) (*master.DumpStats, error) {
-	return postOctetStream[master.DumpStats](c, "/restore", reader)
-}
-
-func (c *AdminClient) Dump(output io.Writer) error {
-	return c.download("/dump", output)
-}
-
-func getJSON[T any](c *AdminClient, path string, params url.Values) (T, error) {
-	var result T
-	body, err := c.get(path, params)
-	if err != nil {
-		return result, err
-	}
-	if err = decodeJSON(body, &result); err != nil {
-		return result, err
-	}
-	return result, nil
-}
-
-func postJSON[T any](c *AdminClient, path string, body any) (T, error) {
-	var result T
-	respBody, err := c.postJSON(path, body)
-	if err != nil {
-		return result, err
-	}
-	if err = decodeJSON(respBody, &result); err != nil {
-		return result, err
-	}
-	return result, nil
-}
-
-func deleteJSON[T any](c *AdminClient, path string) (T, error) {
-	var result T
-	body, err := c.delete(path)
-	if err != nil {
-		return result, err
-	}
-	if len(strings.TrimSpace(string(body))) == 0 {
-		return result, nil
-	}
-	if err = decodeJSON(body, &result); err != nil {
-		return result, err
-	}
-	return result, nil
-}
-
-func postOctetStream[T any](c *AdminClient, path string, reader io.Reader) (*T, error) {
-	result := new(T)
+	result := new(master.DumpStats)
 	resp, err := c.client.R().
 		SetHeader("Content-Type", "application/octet-stream").
 		SetBody(reader).
 		SetResult(result).
-		Post(path)
+		Post("/restore")
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
@@ -241,10 +202,39 @@ func postOctetStream[T any](c *AdminClient, path string, reader io.Reader) (*T, 
 	return result, nil
 }
 
-func decodeJSON(body []byte, value any) error {
-	decoder := json.NewDecoder(strings.NewReader(string(body)))
-	decoder.UseNumber()
-	return decoder.Decode(value)
+func (c *AdminClient) Dump(output io.Writer) error {
+	resp, err := c.client.R().
+		SetDoNotParseResponse(true).
+		Get("/dump")
+	if err != nil {
+		return fmt.Errorf("failed to send request: %w", err)
+	}
+	defer resp.RawBody().Close()
+	if resp.IsError() {
+		body, _ := io.ReadAll(resp.RawBody())
+		return fmt.Errorf("API request failed: status=%d body=%s", resp.StatusCode(), string(body))
+	}
+	if _, err = io.Copy(output, resp.RawBody()); err != nil {
+		return fmt.Errorf("failed to write response: %w", err)
+	}
+	return nil
+}
+
+func getJSON[T any](c *AdminClient, path string, params url.Values) (T, error) {
+	var result T
+	if len(params) > 0 {
+		path += "?" + params.Encode()
+	}
+	resp, err := c.client.R().
+		SetResult(&result).
+		Get(path)
+	if err != nil {
+		return result, fmt.Errorf("failed to send request: %w", err)
+	}
+	if resp.IsError() {
+		return result, newAdminAPIError(resp)
+	}
+	return result, nil
 }
 
 func addIntParam(params url.Values, name string, value int) {
@@ -263,63 +253,6 @@ func addStringArrayParam(params url.Values, name string, values []string) {
 	for _, value := range values {
 		params.Add(name, value)
 	}
-}
-
-func (c *AdminClient) get(path string, params url.Values) ([]byte, error) {
-	if len(params) > 0 {
-		path += "?" + params.Encode()
-	}
-	resp, err := c.client.R().Get(path)
-	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %w", err)
-	}
-	if resp.IsError() {
-		return nil, newAdminAPIError(resp)
-	}
-	return resp.Body(), nil
-}
-
-func (c *AdminClient) postJSON(path string, body any) ([]byte, error) {
-	resp, err := c.client.R().
-		SetHeader("Content-Type", "application/json").
-		SetBody(body).
-		Post(path)
-	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %w", err)
-	}
-	if resp.IsError() {
-		return nil, newAdminAPIError(resp)
-	}
-	return resp.Body(), nil
-}
-
-func (c *AdminClient) delete(path string) ([]byte, error) {
-	resp, err := c.client.R().Delete(path)
-	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %w", err)
-	}
-	if resp.IsError() {
-		return nil, newAdminAPIError(resp)
-	}
-	return resp.Body(), nil
-}
-
-func (c *AdminClient) download(path string, output io.Writer) error {
-	resp, err := c.client.R().
-		SetDoNotParseResponse(true).
-		Get(path)
-	if err != nil {
-		return fmt.Errorf("failed to send request: %w", err)
-	}
-	defer resp.RawBody().Close()
-	if resp.IsError() {
-		body, _ := io.ReadAll(resp.RawBody())
-		return fmt.Errorf("API request failed: status=%d body=%s", resp.StatusCode(), string(body))
-	}
-	if _, err = io.Copy(output, resp.RawBody()); err != nil {
-		return fmt.Errorf("failed to write response: %w", err)
-	}
-	return nil
 }
 
 func newAdminAPIError(resp *resty.Response) error {

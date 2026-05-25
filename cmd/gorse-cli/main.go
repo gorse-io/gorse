@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -72,72 +73,58 @@ func newAdminClient(cmd *cobra.Command) *AdminClient {
 	return NewAdminClient(endpoint, apiKey)
 }
 
-func printResultTable(cmd *cobra.Command, result any) {
-	body, err := json.Marshal(result)
-	if err != nil {
-		log.Logger().Fatal("failed to encode API response", zap.Error(err))
-	}
-	printJSONTable(cmd, body)
-}
-
-func printJSONTable(cmd *cobra.Command, body []byte) {
-	decoder := json.NewDecoder(strings.NewReader(string(body)))
-	decoder.UseNumber()
-	var value any
-	if err := decoder.Decode(&value); err != nil {
-		printTable(cmd.OutOrStdout(), []string{"Response"}, [][]string{{strings.TrimSpace(string(body))}})
+func printValueTables(cmd *cobra.Command, value any) {
+	if isSliceValue(value) {
+		printArrayTable(cmd, value)
 		return
 	}
-	printValueTables(cmd, value)
-}
-
-func printValueTables(cmd *cobra.Command, value any) {
-	switch typed := value.(type) {
-	case []any:
-		printArrayTable(cmd, typed)
-	case map[string]any:
-		if _, ok := typed["UserId"]; ok {
-			printObjectTable(cmd, typed)
-			return
-		}
-		if _, ok := typed["ItemId"]; ok {
-			printObjectTable(cmd, typed)
-			return
-		}
-		arrayKeys := make([]string, 0)
-		metadata := make(map[string]any)
-		for key, child := range typed {
-			if isPaginationCursorKey(key) {
-				continue
-			}
-			if _, ok := child.([]any); ok {
-				arrayKeys = append(arrayKeys, key)
-			} else {
-				metadata[key] = child
-			}
-		}
-		sort.Strings(arrayKeys)
-		if len(arrayKeys) > 0 {
-			if len(metadata) > 0 {
-				printObjectTable(cmd, metadata)
-				fmt.Fprintln(cmd.OutOrStdout())
-			}
-			for i, key := range arrayKeys {
-				if i > 0 {
-					fmt.Fprintln(cmd.OutOrStdout())
-				}
-				printArrayTable(cmd, typed[key].([]any))
-			}
-			return
-		}
-		printObjectTable(cmd, typed)
-	default:
-		printTable(cmd.OutOrStdout(), []string{"Value"}, [][]string{{formatTableValue(typed)}})
+	if object, ok := objectFields(value); ok {
+		printObjectTables(cmd, object)
+		return
 	}
+	printTable(cmd.OutOrStdout(), []string{"Value"}, [][]string{{formatTableValue(value)}})
 }
 
 func isPaginationCursorKey(key string) bool {
 	return strings.EqualFold(key, "cursor")
+}
+
+func printObjectTables(cmd *cobra.Command, object map[string]any) {
+	if _, ok := object["UserId"]; ok {
+		printObjectTable(cmd, object)
+		return
+	}
+	if _, ok := object["ItemId"]; ok {
+		printObjectTable(cmd, object)
+		return
+	}
+	arrayKeys := make([]string, 0)
+	metadata := make(map[string]any)
+	for key, child := range object {
+		if isPaginationCursorKey(key) {
+			continue
+		}
+		if isSliceValue(child) {
+			arrayKeys = append(arrayKeys, key)
+		} else {
+			metadata[key] = child
+		}
+	}
+	sort.Strings(arrayKeys)
+	if len(arrayKeys) > 0 {
+		if len(metadata) > 0 {
+			printObjectTable(cmd, metadata)
+			fmt.Fprintln(cmd.OutOrStdout())
+		}
+		for i, key := range arrayKeys {
+			if i > 0 {
+				fmt.Fprintln(cmd.OutOrStdout())
+			}
+			printArrayTable(cmd, object[key])
+		}
+		return
+	}
+	printObjectTable(cmd, object)
 }
 
 func printObjectTable(cmd *cobra.Command, object map[string]any) {
@@ -189,14 +176,15 @@ func printObjectField(output io.Writer, key string, value any) {
 		fmt.Fprintf(output, "%s: %s\n", key, summary)
 		return
 	}
-	switch value.(type) {
-	case map[string]any:
+	if isObjectValue(value) {
 		fmt.Fprintf(output, "%s:\n%s\n", key, formatPrettyJSON(value))
-	case []any:
-		fmt.Fprintf(output, "%s: %s\n", key, formatTableValue(value))
-	default:
-		fmt.Fprintf(output, "%s: %s\n", key, formatTableValue(value))
+		return
 	}
+	if isSliceValue(value) {
+		fmt.Fprintf(output, "%s: %s\n", key, formatTableValue(value))
+		return
+	}
+	fmt.Fprintf(output, "%s: %s\n", key, formatTableValue(value))
 }
 
 func formatPrettyJSON(value any) string {
@@ -215,22 +203,21 @@ func summarizeLongArraysWithLimit(value any, maxValues int) any {
 	if summary, ok := formatArraySummaryWithLimit(value, maxValues); ok {
 		return summary
 	}
-	switch typed := value.(type) {
-	case []any:
-		values := make([]any, len(typed))
-		for i, element := range typed {
+	if array, ok := sliceValues(value); ok {
+		values := make([]any, len(array))
+		for i, element := range array {
 			values[i] = summarizeLongArraysWithLimit(element, maxValues)
 		}
 		return values
-	case map[string]any:
-		values := make(map[string]any, len(typed))
-		for key, element := range typed {
+	}
+	if object, ok := objectFields(value); ok {
+		values := make(map[string]any, len(object))
+		for key, element := range object {
 			values[key] = summarizeLongArraysWithLimit(element, maxValues)
 		}
 		return values
-	default:
-		return value
 	}
+	return value
 }
 
 func formatArraySummary(value any) (string, bool) {
@@ -238,7 +225,7 @@ func formatArraySummary(value any) (string, bool) {
 }
 
 func formatArraySummaryWithLimit(value any, maxValues int) (string, bool) {
-	array, ok := value.([]any)
+	array, ok := sliceValues(value)
 	if maxValues < 1 {
 		maxValues = 1
 	}
@@ -254,8 +241,8 @@ func formatArraySummaryWithLimit(value any, maxValues int) (string, bool) {
 
 func isScalarArray(array []any) bool {
 	for _, element := range array {
-		switch element.(type) {
-		case nil, string, json.Number, bool, float64:
+		switch indirectInterface(element).(type) {
+		case nil, string, json.Number, bool, float64, float32, int, int64, int32, uint, uint64, uint32, time.Time:
 		default:
 			return false
 		}
@@ -271,7 +258,12 @@ func formatSummaryValue(value any) string {
 	return string(encoded)
 }
 
-func printArrayTable(cmd *cobra.Command, array []any) {
+func printArrayTable(cmd *cobra.Command, value any) {
+	array, ok := sliceValues(value)
+	if !ok {
+		printTable(cmd.OutOrStdout(), []string{"Value"}, [][]string{{formatTableValue(value)}})
+		return
+	}
 	if len(array) == 0 {
 		printTable(cmd.OutOrStdout(), []string{"Result"}, [][]string{{"No data"}})
 		return
@@ -280,7 +272,7 @@ func printArrayTable(cmd *cobra.Command, array []any) {
 	columnsSet := make(map[string]struct{})
 	objectRows := make([]map[string]any, 0, len(array))
 	for _, element := range array {
-		object, ok := element.(map[string]any)
+		object, ok := objectFields(element)
 		if !ok {
 			allObjects = false
 			break
@@ -388,19 +380,18 @@ func formatTableCellValue(column string, value any) string {
 	if column != "Labels" {
 		return formatTableValue(value)
 	}
-	switch value.(type) {
-	case []any, map[string]any:
+	if isSliceValue(value) || isObjectValue(value) {
 		encoded, err := json.Marshal(summarizeLongArraysWithLimit(value, maxTableLabelArrayValues))
 		if err != nil {
 			return formatTableValue(value)
 		}
 		return string(encoded)
-	default:
-		return formatTableValue(value)
 	}
+	return formatTableValue(value)
 }
 
 func formatTableValue(value any) string {
+	value = indirectInterface(value)
 	switch typed := value.(type) {
 	case nil:
 		return ""
@@ -415,24 +406,41 @@ func formatTableValue(value any) string {
 		return strconv.FormatBool(typed)
 	case float64:
 		return strconv.FormatFloat(typed, 'f', -1, 64)
-	case []any:
-		if summary, ok := formatArraySummary(typed); ok {
+	case float32:
+		return strconv.FormatFloat(float64(typed), 'f', -1, 32)
+	case int:
+		return strconv.Itoa(typed)
+	case int64:
+		return strconv.FormatInt(typed, 10)
+	case int32:
+		return strconv.FormatInt(int64(typed), 10)
+	case uint:
+		return strconv.FormatUint(uint64(typed), 10)
+	case uint64:
+		return strconv.FormatUint(typed, 10)
+	case uint32:
+		return strconv.FormatUint(uint64(typed), 10)
+	case time.Time:
+		return typed.Format(time.RFC3339)
+	}
+	if isSliceValue(value) {
+		if summary, ok := formatArraySummary(value); ok {
 			return summary
 		}
-		encoded, err := json.Marshal(summarizeLongArrays(typed))
+		encoded, err := json.Marshal(summarizeLongArrays(value))
 		if err != nil {
-			return fmt.Sprint(typed)
+			return fmt.Sprint(value)
 		}
 		return string(encoded)
-	case map[string]any:
-		encoded, err := json.Marshal(summarizeLongArrays(typed))
-		if err != nil {
-			return fmt.Sprint(typed)
-		}
-		return string(encoded)
-	default:
-		return fmt.Sprint(typed)
 	}
+	if isObjectValue(value) {
+		encoded, err := json.Marshal(summarizeLongArrays(value))
+		if err != nil {
+			return fmt.Sprint(value)
+		}
+		return string(encoded)
+	}
+	return fmt.Sprint(value)
 }
 
 func formatTimeValue(value string) (string, bool) {
@@ -441,6 +449,106 @@ func formatTimeValue(value string) (string, bool) {
 		return "", false
 	}
 	return timestamp.Format(time.RFC3339), true
+}
+
+func isSliceValue(value any) bool {
+	v := indirectValue(reflect.ValueOf(value))
+	return v.IsValid() && (v.Kind() == reflect.Slice || v.Kind() == reflect.Array)
+}
+
+func isObjectValue(value any) bool {
+	_, ok := objectFields(value)
+	return ok
+}
+
+func sliceValues(value any) ([]any, bool) {
+	v := indirectValue(reflect.ValueOf(value))
+	if !v.IsValid() || (v.Kind() != reflect.Slice && v.Kind() != reflect.Array) {
+		return nil, false
+	}
+	values := make([]any, v.Len())
+	for i := 0; i < v.Len(); i++ {
+		values[i] = valueFromReflect(v.Index(i))
+	}
+	return values, true
+}
+
+func objectFields(value any) (map[string]any, bool) {
+	return objectFieldsFromValue(reflect.ValueOf(value))
+}
+
+func objectFieldsFromValue(v reflect.Value) (map[string]any, bool) {
+	v = indirectValue(v)
+	if !v.IsValid() {
+		return nil, false
+	}
+	if v.CanInterface() {
+		if _, ok := v.Interface().(time.Time); ok {
+			return nil, false
+		}
+	}
+	if v.Type() == reflect.TypeOf(time.Time{}) {
+		return nil, false
+	}
+	switch v.Kind() {
+	case reflect.Map:
+		if v.Type().Key().Kind() != reflect.String {
+			return nil, false
+		}
+		object := make(map[string]any, v.Len())
+		iter := v.MapRange()
+		for iter.Next() {
+			object[iter.Key().String()] = valueFromReflect(iter.Value())
+		}
+		return object, true
+	case reflect.Struct:
+		object := make(map[string]any, v.NumField())
+		t := v.Type()
+		for i := 0; i < v.NumField(); i++ {
+			field := t.Field(i)
+			if field.PkgPath != "" && !field.Anonymous {
+				continue
+			}
+			fieldValue := v.Field(i)
+			if field.Anonymous {
+				if embedded, ok := objectFieldsFromValue(fieldValue); ok {
+					for key, value := range embedded {
+						object[key] = value
+					}
+					continue
+				}
+			}
+			object[field.Name] = valueFromReflect(fieldValue)
+		}
+		return object, true
+	default:
+		return nil, false
+	}
+}
+
+func valueFromReflect(v reflect.Value) any {
+	v = indirectValue(v)
+	if !v.IsValid() {
+		return nil
+	}
+	if v.CanInterface() {
+		return v.Interface()
+	}
+	return fmt.Sprint(v)
+}
+
+func indirectInterface(value any) any {
+	return valueFromReflect(reflect.ValueOf(value))
+}
+
+func indirectValue(v reflect.Value) reflect.Value {
+	for v.IsValid() && (v.Kind() == reflect.Interface || v.Kind() == reflect.Pointer) {
+		if v.IsNil() {
+			return reflect.Value{}
+		}
+		v = v.Elem()
+	}
+	return v
 }
 
 func printTable(output io.Writer, headers []string, rows [][]string) {
@@ -502,44 +610,20 @@ func addAuthFlags(commands ...*cobra.Command) {
 	}
 }
 
-func addPaginationFlags(cmd *cobra.Command) {
+func addNFlag(cmd *cobra.Command) {
 	cmd.Flags().IntP("n", "n", 0, "Number of returned records")
-	cmd.Flags().Int("offset", 0, "Offset of returned records")
 }
 
 func addCategoryFlags(cmd *cobra.Command) {
 	cmd.Flags().StringArray("category", nil, "Filter by category, repeatable")
 }
 
-func getIntFlag(cmd *cobra.Command, flagName string) int {
-	value, _ := cmd.Flags().GetInt(flagName)
-	return value
-}
-
-func getNFlag(cmd *cobra.Command) int {
-	n := getIntFlag(cmd, "n")
-	if n == 0 {
-		return 10
-	}
-	return n
-}
-
-func getStringFlag(cmd *cobra.Command, flagName string) string {
-	value, _ := cmd.Flags().GetString(flagName)
-	return value
-}
-
-func getStringArrayFlag(cmd *cobra.Command, flagName string) []string {
-	values, _ := cmd.Flags().GetStringArray(flagName)
-	return values
-}
-
 func readFlagOrFile(cmd *cobra.Command, valueFlag, fileFlag string) string {
-	value, _ := cmd.Flags().GetString(valueFlag)
+	value := lo.Must(cmd.Flags().GetString(valueFlag))
 	if value != "" {
 		return value
 	}
-	file, _ := cmd.Flags().GetString(fileFlag)
+	file := lo.Must(cmd.Flags().GetString(fileFlag))
 	if file == "" {
 		return ""
 	}
@@ -587,19 +671,19 @@ var getClusterCmd = &cobra.Command{
 		if err != nil {
 			log.Logger().Fatal("admin API request failed", zap.Error(err))
 		}
-		printResultTable(cmd, cluster)
+		printValueTables(cmd, cluster)
 	},
 }
 
-var statusCmd = &cobra.Command{
-	Use:   "status",
+var psCmd = &cobra.Command{
+	Use:   "ps",
 	Short: "Get task progress from Gorse admin API",
 	Run: func(cmd *cobra.Command, args []string) {
 		tasks, err := newAdminClient(cmd).GetTasks()
 		if err != nil {
 			log.Logger().Fatal("admin API request failed", zap.Error(err))
 		}
-		printResultTable(cmd, tasks)
+		printValueTables(cmd, tasks)
 	},
 }
 
@@ -611,7 +695,7 @@ var pipelineGetCmd = &cobra.Command{
 		if err != nil {
 			log.Logger().Fatal("admin API request failed", zap.Error(err))
 		}
-		printResultTable(cmd, config)
+		printValueTables(cmd, config)
 	},
 }
 
@@ -706,7 +790,7 @@ var pipelineSetCmd = &cobra.Command{
 			log.Logger().Fatal("admin API request failed", zap.Error(err))
 		}
 
-		printResultTable(cmd, updatedConfig)
+		printValueTables(cmd, updatedConfig)
 	},
 }
 
@@ -719,7 +803,7 @@ var pipelineResetCmd = &cobra.Command{
 			log.Logger().Fatal("admin API request failed", zap.Error(err))
 		}
 		if len(result) > 0 {
-			printResultTable(cmd, result)
+			printValueTables(cmd, result)
 			return
 		}
 		fmt.Fprintln(cmd.OutOrStdout(), "Pipeline reset to defaults.")
@@ -734,7 +818,7 @@ var getCategoriesCmd = &cobra.Command{
 		if err != nil {
 			log.Logger().Fatal("admin API request failed", zap.Error(err))
 		}
-		printResultTable(cmd, categories)
+		printValueTables(cmd, categories)
 	},
 }
 
@@ -746,25 +830,7 @@ var getStatsCmd = &cobra.Command{
 		if err != nil {
 			log.Logger().Fatal("admin API request failed", zap.Error(err))
 		}
-		printResultTable(cmd, stats)
-	},
-}
-
-var getTimeseriesCmd = &cobra.Command{
-	Use:   "timeseries <name>",
-	Short: "Get time series data",
-	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
-		timeseries, err := newAdminClient(cmd).GetTimeseries(
-			args[0],
-			getStringFlag(cmd, "begin"),
-			getStringFlag(cmd, "end"),
-			getStringFlag(cmd, "duration"),
-		)
-		if err != nil {
-			log.Logger().Fatal("admin API request failed", zap.Error(err))
-		}
-		printResultTable(cmd, timeseries)
+		printValueTables(cmd, stats)
 	},
 }
 
@@ -777,7 +843,7 @@ var getUserCmd = &cobra.Command{
 		if err != nil {
 			log.Logger().Fatal("API request failed", zap.Error(err))
 		}
-		printResultTable(cmd, user)
+		printValueTables(cmd, user)
 	},
 }
 
@@ -790,7 +856,7 @@ var getItemCmd = &cobra.Command{
 		if err != nil {
 			log.Logger().Fatal("API request failed", zap.Error(err))
 		}
-		printResultTable(cmd, item)
+		printValueTables(cmd, item)
 	},
 }
 
@@ -798,11 +864,15 @@ var getUsersCmd = &cobra.Command{
 	Use:   "users",
 	Short: "Get users",
 	Run: func(cmd *cobra.Command, args []string) {
-		users, err := newGorseClient(cmd).GetUsers(cmd.Context(), getNFlag(cmd), "")
+		n := lo.Must(cmd.Flags().GetInt("n"))
+		if n == 0 {
+			n = 10
+		}
+		users, err := newGorseClient(cmd).GetUsers(cmd.Context(), n, "")
 		if err != nil {
 			log.Logger().Fatal("API request failed", zap.Error(err))
 		}
-		printResultTable(cmd, users)
+		printValueTables(cmd, users)
 	},
 }
 
@@ -810,11 +880,15 @@ var getItemsCmd = &cobra.Command{
 	Use:   "items",
 	Short: "Get items",
 	Run: func(cmd *cobra.Command, args []string) {
-		items, err := newGorseClient(cmd).GetItems(cmd.Context(), getNFlag(cmd), "")
+		n := lo.Must(cmd.Flags().GetInt("n"))
+		if n == 0 {
+			n = 10
+		}
+		items, err := newGorseClient(cmd).GetItems(cmd.Context(), n, "")
 		if err != nil {
 			log.Logger().Fatal("API request failed", zap.Error(err))
 		}
-		printResultTable(cmd, items)
+		printValueTables(cmd, items)
 	},
 }
 
@@ -823,7 +897,15 @@ var getFeedbackCmd = &cobra.Command{
 	Short: "Get feedback",
 	Args:  cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
-		printFeedback(cmd, getStringFlag(cmd, "type"), getStringFlag(cmd, "user"), getStringFlag(cmd, "item"), getNFlag(cmd))
+		n := lo.Must(cmd.Flags().GetInt("n"))
+		if n == 0 {
+			n = 10
+		}
+		printFeedback(cmd,
+			lo.Must(cmd.Flags().GetString("type")),
+			lo.Must(cmd.Flags().GetString("user")),
+			lo.Must(cmd.Flags().GetString("item")),
+			n)
 	},
 }
 
@@ -868,33 +950,19 @@ func adminFeedback(cmd *cobra.Command, feedbackType, userID, itemID string, n in
 	if err != nil {
 		log.Logger().Fatal("admin API request failed", zap.Error(err))
 	}
-	return tableValue(cmd, result)
-}
-
-func tableValue(cmd *cobra.Command, result any) any {
-	body, err := json.Marshal(result)
-	if err != nil {
-		log.Logger().Fatal("failed to encode API response", zap.Error(err))
-	}
-	decoder := json.NewDecoder(strings.NewReader(string(body)))
-	decoder.UseNumber()
-	var value any
-	if err := decoder.Decode(&value); err != nil {
-		log.Logger().Fatal("failed to parse API response", zap.Error(err))
-	}
-	return value
+	return result
 }
 
 func feedbackRecords(value any) ([]any, bool) {
-	switch typed := value.(type) {
-	case []any:
-		return typed, true
-	case map[string]any:
-		if feedback, ok := typed["Feedback"].([]any); ok {
-			return feedback, true
+	if records, ok := sliceValues(value); ok {
+		return records, true
+	}
+	if object, ok := objectFields(value); ok {
+		if feedback, ok := object["Feedback"]; ok {
+			return sliceValues(feedback)
 		}
-		if _, ok := typed["FeedbackType"]; ok {
-			return []any{typed}, true
+		if _, ok := object["FeedbackType"]; ok {
+			return []any{value}, true
 		}
 	}
 	return nil, false
@@ -907,36 +975,39 @@ func sortFeedbackRecords(feedback []any) {
 }
 
 func feedbackTimestamp(value any) string {
-	object, ok := value.(map[string]any)
+	object, ok := objectFields(value)
 	if !ok {
 		return ""
 	}
-	timestamp, _ := object["Timestamp"].(string)
-	return timestamp
+	return formatTableValue(object["Timestamp"])
 }
 
 var getLatestCmd = &cobra.Command{
 	Use:   "latest",
 	Short: "Get latest items",
 	Run: func(cmd *cobra.Command, args []string) {
-		categories := getStringArrayFlag(cmd, "category")
+		categories := lo.Must(cmd.Flags().GetStringArray("category"))
+		n := lo.Must(cmd.Flags().GetInt("n"))
+		if n == 0 {
+			n = 10
+		}
 		if len(categories) <= 1 {
 			var category string
 			if len(categories) == 1 {
 				category = categories[0]
 			}
-			latest, err := newGorseClient(cmd).GetLatestItems(cmd.Context(), "", category, getNFlag(cmd), getIntFlag(cmd, "offset"))
+			latest, err := newGorseClient(cmd).GetLatestItems(cmd.Context(), "", category, n, 0)
 			if err != nil {
 				log.Logger().Fatal("API request failed", zap.Error(err))
 			}
-			printResultTable(cmd, latest)
+			printValueTables(cmd, latest)
 			return
 		}
-		latest, err := newAdminClient(cmd).GetLatest(getIntFlag(cmd, "n"), getIntFlag(cmd, "offset"), categories)
+		latest, err := newAdminClient(cmd).GetLatest(lo.Must(cmd.Flags().GetInt("n")), categories)
 		if err != nil {
 			log.Logger().Fatal("admin API request failed", zap.Error(err))
 		}
-		printResultTable(cmd, latest)
+		printValueTables(cmd, latest)
 	},
 }
 
@@ -947,15 +1018,14 @@ var getNonPersonalizedCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		recommendations, err := newAdminClient(cmd).GetNonPersonalized(
 			args[0],
-			getIntFlag(cmd, "n"),
-			getIntFlag(cmd, "offset"),
-			getStringFlag(cmd, "user-id"),
-			getStringArrayFlag(cmd, "category"),
+			lo.Must(cmd.Flags().GetInt("n")),
+			lo.Must(cmd.Flags().GetString("user-id")),
+			lo.Must(cmd.Flags().GetStringArray("category")),
 		)
 		if err != nil {
 			log.Logger().Fatal("admin API request failed", zap.Error(err))
 		}
-		printResultTable(cmd, recommendations)
+		printValueTables(cmd, recommendations)
 	},
 }
 
@@ -964,17 +1034,21 @@ var recommendUserCmd = &cobra.Command{
 	Short: "Get recommendations for a user",
 	Args:  cobra.RangeArgs(1, 3),
 	Run: func(cmd *cobra.Command, args []string) {
-		categories := getStringArrayFlag(cmd, "category")
+		categories := lo.Must(cmd.Flags().GetStringArray("category"))
 		if len(args) == 1 && len(categories) <= 1 {
 			var category string
 			if len(categories) == 1 {
 				category = categories[0]
 			}
-			recommend, err := newGorseClient(cmd).GetRecommend(cmd.Context(), args[0], category, getNFlag(cmd), 0)
+			n := lo.Must(cmd.Flags().GetInt("n"))
+			if n == 0 {
+				n = 10
+			}
+			recommend, err := newGorseClient(cmd).GetRecommend(cmd.Context(), args[0], category, n, 0)
 			if err != nil {
 				log.Logger().Fatal("API request failed", zap.Error(err))
 			}
-			printResultTable(cmd, recommend)
+			printValueTables(cmd, recommend)
 			return
 		}
 		var recommender, name string
@@ -984,11 +1058,11 @@ var recommendUserCmd = &cobra.Command{
 		if len(args) > 2 {
 			name = args[2]
 		}
-		recommendations, err := newAdminClient(cmd).GetRecommend(args[0], recommender, name, getIntFlag(cmd, "n"), categories)
+		recommendations, err := newAdminClient(cmd).GetRecommend(args[0], recommender, name, lo.Must(cmd.Flags().GetInt("n")), categories)
 		if err != nil {
 			log.Logger().Fatal("admin API request failed", zap.Error(err))
 		}
-		printResultTable(cmd, recommendations)
+		printValueTables(cmd, recommendations)
 	},
 }
 
@@ -1000,14 +1074,13 @@ var getItemToItemCmd = &cobra.Command{
 		recommendations, err := newAdminClient(cmd).GetItemToItem(
 			args[0],
 			args[1],
-			getIntFlag(cmd, "n"),
-			getIntFlag(cmd, "offset"),
-			getStringArrayFlag(cmd, "category"),
+			lo.Must(cmd.Flags().GetInt("n")),
+			lo.Must(cmd.Flags().GetStringArray("category")),
 		)
 		if err != nil {
 			log.Logger().Fatal("admin API request failed", zap.Error(err))
 		}
-		printResultTable(cmd, recommendations)
+		printValueTables(cmd, recommendations)
 	},
 }
 
@@ -1016,11 +1089,11 @@ var getUserToUserCmd = &cobra.Command{
 	Short: "Get user-to-user recommendations",
 	Args:  cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
-		recommendations, err := newAdminClient(cmd).GetUserToUser(args[0], args[1], getIntFlag(cmd, "n"), getIntFlag(cmd, "offset"))
+		recommendations, err := newAdminClient(cmd).GetUserToUser(args[0], args[1], lo.Must(cmd.Flags().GetInt("n")))
 		if err != nil {
 			log.Logger().Fatal("admin API request failed", zap.Error(err))
 		}
-		printResultTable(cmd, recommendations)
+		printValueTables(cmd, recommendations)
 	},
 }
 
@@ -1032,11 +1105,11 @@ var getExternalCmd = &cobra.Command{
 		if script == "" {
 			log.Logger().Fatal("--script or --script-file is required")
 		}
-		items, err := newAdminClient(cmd).GetExternal(script, getStringFlag(cmd, "user-id"))
+		items, err := newAdminClient(cmd).GetExternal(script, lo.Must(cmd.Flags().GetString("user-id")))
 		if err != nil {
 			log.Logger().Fatal("admin API request failed", zap.Error(err))
 		}
-		printResultTable(cmd, items)
+		printValueTables(cmd, items)
 	},
 }
 
@@ -1046,7 +1119,7 @@ var getRankerPromptCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		queryTemplate := readFlagOrFile(cmd, "query-template", "query-template-file")
 		documentTemplate := readFlagOrFile(cmd, "document-template", "document-template-file")
-		userID, _ := cmd.Flags().GetString("user-id")
+		userID := lo.Must(cmd.Flags().GetString("user-id"))
 		if queryTemplate == "" || documentTemplate == "" || userID == "" {
 			log.Logger().Fatal("--query-template/--query-template-file, --document-template/--document-template-file, and --user-id are required")
 		}
@@ -1054,7 +1127,7 @@ var getRankerPromptCmd = &cobra.Command{
 		if err != nil {
 			log.Logger().Fatal("admin API request failed", zap.Error(err))
 		}
-		printResultTable(cmd, prompt)
+		printValueTables(cmd, prompt)
 	},
 }
 
@@ -1123,7 +1196,6 @@ func init() {
 	getCmd.AddCommand(getClusterCmd)
 	getCmd.AddCommand(getCategoriesCmd)
 	getCmd.AddCommand(getStatsCmd)
-	getCmd.AddCommand(getTimeseriesCmd)
 	getCmd.AddCommand(getUserCmd)
 	getCmd.AddCommand(getUsersCmd)
 	getCmd.AddCommand(getItemCmd)
@@ -1142,36 +1214,33 @@ func init() {
 	pipelineCmd.AddCommand(pipelineGetCmd)
 	pipelineCmd.AddCommand(pipelineSetCmd)
 	pipelineCmd.AddCommand(pipelineResetCmd)
-	rootCmd.AddCommand(statusCmd)
+	rootCmd.AddCommand(psCmd)
 	rootCmd.AddCommand(dumpCmd)
 	rootCmd.AddCommand(restoreCmd)
 
 	contextAddCmd.Flags().String("endpoint", "", "Gorse base URL (default: GORSE_ADMIN_ENDPOINT)")
 	contextAddCmd.Flags().String("api-key", "", "Gorse admin API key (default: GORSE_ADMIN_API_KEY; prefer prompt to avoid shell history)")
-	addAuthFlags(getClusterCmd, getCategoriesCmd, statusCmd,
-		getStatsCmd, getTimeseriesCmd, getUserCmd, getUsersCmd, getItemCmd, getItemsCmd, getFeedbackCmd, getLatestCmd,
+	addAuthFlags(getClusterCmd, getCategoriesCmd, psCmd,
+		getStatsCmd, getUserCmd, getUsersCmd, getItemCmd, getItemsCmd, getFeedbackCmd, getLatestCmd,
 		getNonPersonalizedCmd, recommendUserCmd, getItemToItemCmd, getUserToUserCmd, getExternalCmd, getRankerPromptCmd,
 		pipelineGetCmd, pipelineSetCmd, pipelineResetCmd, dumpCmd, restoreCmd)
 
-	getTimeseriesCmd.Flags().String("begin", "", "Begin time, defaults to 7 days ago")
-	getTimeseriesCmd.Flags().String("end", "", "End time, defaults to now")
-	getTimeseriesCmd.Flags().String("duration", "", "Aggregation duration, defaults to 24h")
 	getUsersCmd.Flags().IntP("n", "n", 0, "Number of returned users")
 	getItemsCmd.Flags().IntP("n", "n", 0, "Number of returned items")
 	getFeedbackCmd.Flags().IntP("n", "n", 0, "Number of returned feedback")
 	getFeedbackCmd.Flags().String("type", "", "Filter by feedback type")
 	getFeedbackCmd.Flags().String("user", "", "Filter by user ID")
 	getFeedbackCmd.Flags().String("item", "", "Filter by item ID")
-	addPaginationFlags(getLatestCmd)
+	addNFlag(getLatestCmd)
 	addCategoryFlags(getLatestCmd)
-	addPaginationFlags(getNonPersonalizedCmd)
+	addNFlag(getNonPersonalizedCmd)
 	addCategoryFlags(getNonPersonalizedCmd)
 	getNonPersonalizedCmd.Flags().String("user-id", "", "Remove read items of a user")
 	recommendUserCmd.Flags().IntP("n", "n", 0, "Number of returned items")
 	addCategoryFlags(recommendUserCmd)
-	addPaginationFlags(getItemToItemCmd)
+	addNFlag(getItemToItemCmd)
 	addCategoryFlags(getItemToItemCmd)
-	addPaginationFlags(getUserToUserCmd)
+	addNFlag(getUserToUserCmd)
 	getExternalCmd.Flags().String("script", "", "External recommender script")
 	getExternalCmd.Flags().String("script-file", "", "Path to external recommender script")
 	getExternalCmd.Flags().String("user-id", "", "User ID")

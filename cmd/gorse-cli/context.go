@@ -212,11 +212,11 @@ func deleteContext(name string) error {
 
 // getEndpointAndKey returns the base URL and API key from flags, context, or environment variables.
 func getEndpointAndKey(cmd *cobra.Command) (endpoint, apiKey string) {
-	endpoint, _ = cmd.Flags().GetString("endpoint")
-	apiKey, _ = cmd.Flags().GetString("api-key")
+	endpoint = lo.Must(cmd.Flags().GetString("endpoint"))
+	apiKey = lo.Must(cmd.Flags().GetString("api-key"))
 
 	if endpoint == "" || apiKey == "" {
-		contextName, _ := cmd.Flags().GetString("context")
+		contextName := lo.Must(cmd.Flags().GetString("context"))
 		if contextName != "" {
 			ctx, err := loadContext(contextName)
 			if err != nil {
@@ -272,7 +272,7 @@ func getEndpointAndKey(cmd *cobra.Command) (endpoint, apiKey string) {
 }
 
 func getFlagOrEnv(cmd *cobra.Command, flagName, envName string) string {
-	value, _ := cmd.Flags().GetString(flagName)
+	value := lo.Must(cmd.Flags().GetString(flagName))
 	if value != "" {
 		return value
 	}

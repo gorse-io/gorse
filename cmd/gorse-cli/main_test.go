@@ -248,10 +248,9 @@ func (s *CLITestSuite) TestGetSubcommands() {
 	}{
 		{name: "cluster", args: []string{"get", "cluster"}, wantInOutput: "server-node", wantTable: true},
 		{name: "categories", args: []string{"get", "categories"}, wantInOutput: "books", wantTable: true},
-		{name: "status", args: []string{"status"}, wantTable: true},
+		{name: "ps", args: []string{"ps"}, wantTable: true},
 		{name: "pipeline-get", args: []string{"pipeline", "get"}, wantInOutput: "cache_size"},
 		{name: "stats", args: []string{"get", "stats"}, wantInOutput: "BinaryVersion"},
-		{name: "timeseries", args: []string{"get", "timeseries", "requests", "--begin", "2026-01-01", "--end", "2026-01-02", "--duration", "1h"}, wantInOutput: "2026-01-01", wantTable: true},
 		{name: "user", args: []string{"get", "user", "alice"}, wantInOutput: "alice"},
 		{name: "users", args: []string{"get", "users", "-n", "10"}, wantInOutput: "bob", wantTable: true},
 		{name: "item", args: []string{"get", "item", "item-1"}, wantInOutput: "item-1"},
@@ -343,11 +342,7 @@ func (s *CLITestSuite) TestGetFeedback() {
 		s.Require().NotContains(out, "└")
 	}
 
-	out, err := executeRawCommand(rootCmd, "get", "feedback", "--offset", "1")
-	s.Require().Error(err)
-	s.Require().Contains(out, "unknown flag: --offset")
-
-	out, err = executeRawCommand(rootCmd, "get", "feedback", "click")
+	out, err := executeRawCommand(rootCmd, "get", "feedback", "click")
 	s.Require().Error(err)
 	s.Require().Contains(out, `unknown command "click"`)
 }
