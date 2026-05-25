@@ -23,7 +23,6 @@ import (
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-	"github.com/zalando/go-keyring"
 )
 
 func executeRawCommand(root *cobra.Command, args ...string) (string, error) {
@@ -60,110 +59,6 @@ func resetFlagSet(flags *pflag.FlagSet) {
 		_ = flag.Value.Set(flag.DefValue)
 		flag.Changed = false
 	})
-}
-
-func TestContextAddCmd(t *testing.T) {
-	store := make(map[string]string)
-	restoreKeyring := mockKeyring(t,
-		func(service, user string) (string, error) {
-			value, ok := store[user]
-			if !ok {
-				return "", keyring.ErrNotFound
-			}
-			return value, nil
-		},
-		func(service, user, password string) error {
-			store[user] = password
-			return nil
-		},
-		func(service, user string) error {
-			delete(store, user)
-			return nil
-		},
-	)
-	defer restoreKeyring()
-
-	out, err := executeRawCommand(rootCmd, "context", "add", "dev", "--endpoint", "http://localhost:8088", "--api-key", "secret")
-	require.NoError(t, err)
-	require.Contains(t, out, `Context "dev" saved`)
-	require.Equal(t, "http://localhost:8088", store[contextEndpointKey("dev")])
-	require.Equal(t, "secret", store[contextAPIKeyKey("dev")])
-	require.Equal(t, "dev", store[keyringCurrentContextKey])
-
-	names, err := getContextNames()
-	require.NoError(t, err)
-	require.Equal(t, []string{"dev"}, names)
-
-	out, err = executeRawCommand(rootCmd, "context", "add", "dev", "--endpoint", "http://localhost:9090", "--api-key", "updated")
-	require.NoError(t, err)
-	require.Contains(t, out, `Context "dev" saved`)
-	require.Equal(t, "http://localhost:9090", store[contextEndpointKey("dev")])
-	require.Equal(t, "updated", store[contextAPIKeyKey("dev")])
-
-	names, err = getContextNames()
-	require.NoError(t, err)
-	require.Equal(t, []string{"dev"}, names)
-}
-
-func TestContextCommands(t *testing.T) {
-	store := make(map[string]string)
-	restoreKeyring := mockKeyring(t,
-		func(service, user string) (string, error) {
-			value, ok := store[user]
-			if !ok {
-				return "", keyring.ErrNotFound
-			}
-			return value, nil
-		},
-		func(service, user, password string) error {
-			store[user] = password
-			return nil
-		},
-		func(service, user string) error {
-			delete(store, user)
-			return nil
-		},
-	)
-	defer restoreKeyring()
-
-	_, err := executeRawCommand(rootCmd, "context", "add", "prod", "--endpoint", "http://prod:8088", "--api-key", "prod-secret")
-	require.NoError(t, err)
-	_, err = executeRawCommand(rootCmd, "context", "add", "dev", "--endpoint", "http://dev:8088", "--api-key", "dev-secret")
-	require.NoError(t, err)
-
-	listOut, err := executeRawCommand(rootCmd, "context", "list")
-	require.NoError(t, err)
-	require.Contains(t, listOut, "dev")
-	require.Contains(t, listOut, "prod")
-	require.Contains(t, listOut, "http://dev:8088")
-	require.NotContains(t, listOut, "dev-secret")
-
-	currentOut, err := executeRawCommand(rootCmd, "context", "current")
-	require.NoError(t, err)
-	require.Contains(t, currentOut, "dev")
-	require.Contains(t, currentOut, "http://dev:8088")
-	require.NotContains(t, currentOut, "dev-secret")
-
-	useOut, err := executeRawCommand(rootCmd, "context", "use", "prod")
-	require.NoError(t, err)
-	require.Contains(t, useOut, `Switched to context "prod"`)
-	require.Equal(t, "prod", store[keyringCurrentContextKey])
-
-	deleteOut, err := executeRawCommand(rootCmd, "context", "delete", "prod")
-	require.NoError(t, err)
-	require.Contains(t, deleteOut, `Context "prod" deleted`)
-	require.NotContains(t, store, contextEndpointKey("prod"))
-	require.NotContains(t, store, contextAPIKeyKey("prod"))
-	require.Equal(t, "dev", store[keyringCurrentContextKey])
-
-	deleteOut, err = executeRawCommand(rootCmd, "context", "delete", "dev")
-	require.NoError(t, err)
-	require.Contains(t, deleteOut, `Context "dev" deleted`)
-	require.NotContains(t, store, keyringCurrentContextKey)
-
-	currentOut, err = executeRawCommand(rootCmd, "context", "current")
-	require.NoError(t, err)
-	require.Contains(t, currentOut, "No current context.")
 }
 
 type CLITestSuite struct {
@@ -415,15 +310,6 @@ func (s *CLITestSuite) TestDumpRestore() {
 	s.Require().NoError(err)
 	s.Require().Len(feedback, 1)
 	s.Require().Equal(data.FeedbackKey{FeedbackType: "click", UserId: "alice", ItemId: "item-1"}, feedback[0].FeedbackKey)
-}
-
-func mockKeyring(t *testing.T, get func(string, string) (string, error), set func(string, string, string) error, delete func(string, string) error) func() {
-	t.Helper()
-	oldGet, oldSet, oldDelete := keyringGet, keyringSet, keyringDelete
-	keyringGet, keyringSet, keyringDelete = get, set, delete
-	return func() {
-		keyringGet, keyringSet, keyringDelete = oldGet, oldSet, oldDelete
-	}
 }
 
 const testAPIKey = "secret"

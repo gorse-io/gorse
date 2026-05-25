@@ -37,12 +37,6 @@ const (
 	keyringContextsKey       = "contexts"
 )
 
-var (
-	keyringGet    = keyring.Get
-	keyringSet    = keyring.Set
-	keyringDelete = keyring.Delete
-)
-
 type cliContext struct {
 	Name     string
 	Endpoint string
@@ -73,7 +67,7 @@ func validateContextName(name string) error {
 }
 
 func getContextNames() ([]string, error) {
-	raw, err := keyringGet(keyringService, keyringContextsKey)
+	raw, err := keyring.Get(keyringService, keyringContextsKey)
 	if errors.Is(err, keyring.ErrNotFound) {
 		return nil, nil
 	}
@@ -96,7 +90,7 @@ func saveContextNames(names []string) error {
 	if err != nil {
 		return err
 	}
-	return keyringSet(keyringService, keyringContextsKey, string(raw))
+	return keyring.Set(keyringService, keyringContextsKey, string(raw))
 }
 
 func addContextName(name string) error {
@@ -125,7 +119,7 @@ func removeContextName(name string) ([]string, error) {
 }
 
 func getCurrentContextName() (string, error) {
-	name, err := keyringGet(keyringService, keyringCurrentContextKey)
+	name, err := keyring.Get(keyringService, keyringCurrentContextKey)
 	if errors.Is(err, keyring.ErrNotFound) {
 		return "", nil
 	}
@@ -133,11 +127,11 @@ func getCurrentContextName() (string, error) {
 }
 
 func setCurrentContextName(name string) error {
-	return keyringSet(keyringService, keyringCurrentContextKey, name)
+	return keyring.Set(keyringService, keyringCurrentContextKey, name)
 }
 
 func clearCurrentContextName() error {
-	if err := keyringDelete(keyringService, keyringCurrentContextKey); err != nil && !errors.Is(err, keyring.ErrNotFound) {
+	if err := keyring.Delete(keyringService, keyringCurrentContextKey); err != nil && !errors.Is(err, keyring.ErrNotFound) {
 		return err
 	}
 	return nil
@@ -147,8 +141,8 @@ func loadContext(name string) (cliContext, error) {
 	if err := validateContextName(name); err != nil {
 		return cliContext{}, err
 	}
-	endpoint, endpointErr := keyringGet(keyringService, contextEndpointKey(name))
-	apiKey, apiKeyErr := keyringGet(keyringService, contextAPIKeyKey(name))
+	endpoint, endpointErr := keyring.Get(keyringService, contextEndpointKey(name))
+	apiKey, apiKeyErr := keyring.Get(keyringService, contextAPIKeyKey(name))
 	if errors.Is(endpointErr, keyring.ErrNotFound) || errors.Is(apiKeyErr, keyring.ErrNotFound) {
 		return cliContext{}, fmt.Errorf("context %q not found", name)
 	}
@@ -171,10 +165,10 @@ func saveContext(name, endpoint, apiKey string) error {
 	if apiKey == "" {
 		return fmt.Errorf("GORSE_ADMIN_API_KEY or --api-key is required")
 	}
-	if err := keyringSet(keyringService, contextEndpointKey(name), endpoint); err != nil {
+	if err := keyring.Set(keyringService, contextEndpointKey(name), endpoint); err != nil {
 		return err
 	}
-	if err := keyringSet(keyringService, contextAPIKeyKey(name), apiKey); err != nil {
+	if err := keyring.Set(keyringService, contextAPIKeyKey(name), apiKey); err != nil {
 		return err
 	}
 	if err := addContextName(name); err != nil {
@@ -187,10 +181,10 @@ func deleteContext(name string) error {
 	if _, err := loadContext(name); err != nil {
 		return err
 	}
-	if err := keyringDelete(keyringService, contextEndpointKey(name)); err != nil && !errors.Is(err, keyring.ErrNotFound) {
+	if err := keyring.Delete(keyringService, contextEndpointKey(name)); err != nil && !errors.Is(err, keyring.ErrNotFound) {
 		return err
 	}
-	if err := keyringDelete(keyringService, contextAPIKeyKey(name)); err != nil && !errors.Is(err, keyring.ErrNotFound) {
+	if err := keyring.Delete(keyringService, contextAPIKeyKey(name)); err != nil && !errors.Is(err, keyring.ErrNotFound) {
 		return err
 	}
 	names, err := removeContextName(name)
@@ -220,7 +214,7 @@ func getEndpointAndKey(cmd *cobra.Command) (endpoint, apiKey string) {
 		if contextName != "" {
 			ctx, err := loadContext(contextName)
 			if err != nil {
-				fatalUserError(cmd,
+				fatal(cmd,
 					fmt.Sprintf("context %q was not found.", contextName),
 					"List available contexts:",
 					"  gorse-cli context list",
@@ -247,12 +241,12 @@ func getEndpointAndKey(cmd *cobra.Command) (endpoint, apiKey string) {
 	if endpoint == "" || apiKey == "" {
 		contextName, err := getCurrentContextName()
 		if err != nil {
-			fatalUserError(cmd, "failed to read the current context from the system keyring: "+err.Error())
+			fatal(cmd, "failed to read the current context from the system keyring: "+err.Error())
 		}
 		if contextName != "" {
 			ctx, err := loadContext(contextName)
 			if err != nil {
-				fatalUserError(cmd,
+				fatal(cmd,
 					fmt.Sprintf("current context %q is invalid or incomplete.", contextName),
 					"Choose another context:",
 					"  gorse-cli context use <name>",
@@ -291,7 +285,7 @@ func readSecret(prompt string) (string, error) {
 	return strings.TrimSpace(secret), err
 }
 
-func fatalUserError(cmd *cobra.Command, message string, suggestions ...string) {
+func fatal(cmd *cobra.Command, message string, suggestions ...string) {
 	output := cmd.ErrOrStderr()
 	fmt.Fprintf(output, "Error: %s\n", message)
 	if len(suggestions) > 0 {
@@ -301,41 +295,6 @@ func fatalUserError(cmd *cobra.Command, message string, suggestions ...string) {
 		}
 	}
 	os.Exit(1)
-}
-
-func fatalMissingCredentials(cmd *cobra.Command, missingEndpoint, missingAPIKey bool) {
-	switch {
-	case missingEndpoint && missingAPIKey:
-		fatalUserError(cmd,
-			"no Gorse context is selected and no endpoint/API key was provided.",
-			"Create a context:",
-			"  gorse-cli context add dev --endpoint http://localhost:8088",
-			"Or use environment variables:",
-			"  GORSE_ADMIN_ENDPOINT=http://localhost:8088 GORSE_ADMIN_API_KEY=<api-key> "+cmd.CommandPath(),
-			"Or pass credentials for this command:",
-			"  "+cmd.CommandPath()+" --endpoint http://localhost:8088 --api-key <api-key>",
-		)
-	case missingEndpoint:
-		fatalUserError(cmd,
-			"missing Gorse base URL.",
-			"Use a saved context:",
-			"  gorse-cli context use <name>",
-			"Or set an environment variable:",
-			"  GORSE_ADMIN_ENDPOINT=http://localhost:8088 "+cmd.CommandPath(),
-			"Or pass an endpoint:",
-			"  "+cmd.CommandPath()+" --endpoint http://localhost:8088",
-		)
-	case missingAPIKey:
-		fatalUserError(cmd,
-			"missing Gorse admin API key.",
-			"Save it in a context:",
-			"  gorse-cli context add <name> --endpoint http://localhost:8088",
-			"Or set an environment variable:",
-			"  GORSE_ADMIN_API_KEY=<api-key> "+cmd.CommandPath(),
-			"Or pass it for this command:",
-			"  "+cmd.CommandPath()+" --api-key <api-key>",
-		)
-	}
 }
 
 var contextCmd = &cobra.Command{
@@ -356,11 +315,11 @@ var contextAddCmd = &cobra.Command{
 			var err error
 			apiKey, err = readSecret("Gorse admin API key: ")
 			if err != nil {
-				fatalUserError(cmd, "failed to read API key: "+err.Error())
+				fatal(cmd, "failed to read API key: "+err.Error())
 			}
 		}
 		if err := saveContext(name, endpoint, apiKey); err != nil {
-			fatalUserError(cmd,
+			fatal(cmd,
 				"failed to save context "+strconv.Quote(name)+": "+err.Error(),
 				"Example:",
 				"  gorse-cli context add "+name+" --endpoint http://localhost:8088",
@@ -376,7 +335,7 @@ var contextListCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		names, err := getContextNames()
 		if err != nil {
-			fatalUserError(cmd, "failed to read contexts from the system keyring: "+err.Error())
+			fatal(cmd, "failed to read contexts from the system keyring: "+err.Error())
 		}
 		if len(names) == 0 {
 			fmt.Fprintln(cmd.OutOrStdout(), "No contexts configured.")
@@ -384,13 +343,13 @@ var contextListCmd = &cobra.Command{
 		}
 		current, err := getCurrentContextName()
 		if err != nil {
-			fatalUserError(cmd, "failed to read the current context from the system keyring: "+err.Error())
+			fatal(cmd, "failed to read the current context from the system keyring: "+err.Error())
 		}
 		rows := make([][]string, 0, len(names))
 		for _, name := range names {
 			ctx, err := loadContext(name)
 			if err != nil {
-				fatalUserError(cmd, "context "+strconv.Quote(name)+" is invalid or incomplete: "+err.Error())
+				fatal(cmd, "context "+strconv.Quote(name)+" is invalid or incomplete: "+err.Error())
 			}
 			currentMarker := ""
 			if name == current {
@@ -409,14 +368,14 @@ var contextUseCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		name := args[0]
 		if _, err := loadContext(name); err != nil {
-			fatalUserError(cmd,
+			fatal(cmd,
 				"context "+strconv.Quote(name)+" was not found.",
 				"List available contexts:",
 				"  gorse-cli context list",
 			)
 		}
 		if err := setCurrentContextName(name); err != nil {
-			fatalUserError(cmd, "failed to save the current context in the system keyring: "+err.Error())
+			fatal(cmd, "failed to save the current context in the system keyring: "+err.Error())
 		}
 		fmt.Fprintf(cmd.OutOrStdout(), "Switched to context %q.\n", name)
 	},
@@ -429,7 +388,7 @@ var contextDeleteCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		name := args[0]
 		if err := deleteContext(name); err != nil {
-			fatalUserError(cmd,
+			fatal(cmd,
 				"context "+strconv.Quote(name)+" was not found.",
 				"List available contexts:",
 				"  gorse-cli context list",
@@ -445,7 +404,7 @@ var contextCurrentCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		name, err := getCurrentContextName()
 		if err != nil {
-			fatalUserError(cmd, "failed to read the current context from the system keyring: "+err.Error())
+			fatal(cmd, "failed to read the current context from the system keyring: "+err.Error())
 		}
 		if name == "" {
 			fmt.Fprintln(cmd.OutOrStdout(), "No current context.")
@@ -453,7 +412,7 @@ var contextCurrentCmd = &cobra.Command{
 		}
 		ctx, err := loadContext(name)
 		if err != nil {
-			fatalUserError(cmd,
+			fatal(cmd,
 				"current context "+strconv.Quote(name)+" is invalid or incomplete.",
 				"Choose another context:",
 				"  gorse-cli context use <name>",
@@ -461,6 +420,6 @@ var contextCurrentCmd = &cobra.Command{
 				"  gorse-cli context add "+name+" --endpoint http://localhost:8088",
 			)
 		}
-		printTable(cmd.OutOrStdout(), []string{"Name", "Endpoint"}, [][]string{{ctx.Name, ctx.Endpoint}})
+		fmt.Fprintf(cmd.OutOrStdout(), "Name:\t\t%s\nEndpoint:\t%s\n", ctx.Name, ctx.Endpoint)
 	},
 }

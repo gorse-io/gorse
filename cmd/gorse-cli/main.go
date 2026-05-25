@@ -58,7 +58,38 @@ const (
 func requireEndpointAndKey(cmd *cobra.Command) (string, string) {
 	endpoint, apiKey := getEndpointAndKey(cmd)
 	if endpoint == "" || apiKey == "" {
-		fatalMissingCredentials(cmd, endpoint == "", apiKey == "")
+		switch {
+		case endpoint == "" && apiKey == "":
+			fatal(cmd,
+				"no Gorse context is selected and no endpoint/API key was provided.",
+				"Create a context:",
+				"  gorse-cli context add dev --endpoint http://localhost:8088",
+				"Or use environment variables:",
+				"  GORSE_ADMIN_ENDPOINT=http://localhost:8088 GORSE_ADMIN_API_KEY=<api-key> "+cmd.CommandPath(),
+				"Or pass credentials for this command:",
+				"  "+cmd.CommandPath()+" --endpoint http://localhost:8088 --api-key <api-key>",
+			)
+		case endpoint == "":
+			fatal(cmd,
+				"missing Gorse base URL.",
+				"Use a saved context:",
+				"  gorse-cli context use <name>",
+				"Or set an environment variable:",
+				"  GORSE_ADMIN_ENDPOINT=http://localhost:8088 "+cmd.CommandPath(),
+				"Or pass an endpoint:",
+				"  "+cmd.CommandPath()+" --endpoint http://localhost:8088",
+			)
+		case apiKey == "":
+			fatal(cmd,
+				"missing Gorse admin API key.",
+				"Save it in a context:",
+				"  gorse-cli context add <name> --endpoint http://localhost:8088",
+				"Or set an environment variable:",
+				"  GORSE_ADMIN_API_KEY=<api-key> "+cmd.CommandPath(),
+				"Or pass it for this command:",
+				"  "+cmd.CommandPath()+" --api-key <api-key>",
+			)
+		}
 	}
 	return endpoint, apiKey
 }
