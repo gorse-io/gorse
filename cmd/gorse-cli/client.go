@@ -15,6 +15,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -72,24 +73,24 @@ func (c *AdminClient) GetStats() (master.Status, error) {
 	return getJSON[master.Status](c, "/dashboard/stats", nil)
 }
 
-func (c *AdminClient) GetTimeseries(name string, query url.Values) ([]cache.TimeSeriesPoint, error) {
-	return getJSON[[]cache.TimeSeriesPoint](c, "/dashboard/timeseries/"+url.PathEscape(name), query)
+func (c *AdminClient) GetTimeseries(name, begin, end, duration string) ([]cache.TimeSeriesPoint, error) {
+	params := url.Values{}
+	addStringParam(params, "begin", begin)
+	addStringParam(params, "end", end)
+	addStringParam(params, "duration", duration)
+	return getJSON[[]cache.TimeSeriesPoint](c, "/dashboard/timeseries/"+url.PathEscape(name), params)
 }
 
 func (c *AdminClient) GetFeedback(n int) (server.FeedbackIterator, error) {
-	query := url.Values{}
-	if n > 0 {
-		query.Set("n", fmt.Sprint(n))
-	}
-	return getJSON[server.FeedbackIterator](c, "/feedback", query)
+	params := url.Values{}
+	addIntParam(params, "n", n)
+	return getJSON[server.FeedbackIterator](c, "/feedback", params)
 }
 
 func (c *AdminClient) GetTypedFeedback(feedbackType string, n int) (server.FeedbackIterator, error) {
-	query := url.Values{}
-	if n > 0 {
-		query.Set("n", fmt.Sprint(n))
-	}
-	return getJSON[server.FeedbackIterator](c, "/feedback/"+url.PathEscape(feedbackType), query)
+	params := url.Values{}
+	addIntParam(params, "n", n)
+	return getJSON[server.FeedbackIterator](c, "/feedback/"+url.PathEscape(feedbackType), params)
 }
 
 func (c *AdminClient) GetUserItemFeedback(userID, itemID string) ([]data.Feedback, error) {
@@ -116,15 +117,24 @@ func (c *AdminClient) GetTypedItemFeedback(itemID, feedbackType string) ([]data.
 	return getJSON[[]data.Feedback](c, "/item/"+url.PathEscape(itemID)+"/feedback/"+url.PathEscape(feedbackType), nil)
 }
 
-func (c *AdminClient) GetLatest(query url.Values) ([]master.ScoredItem, error) {
-	return getJSON[[]master.ScoredItem](c, "/dashboard/latest", query)
+func (c *AdminClient) GetLatest(n, offset int, categories []string) ([]master.ScoredItem, error) {
+	params := url.Values{}
+	addIntParam(params, "n", n)
+	addIntParam(params, "offset", offset)
+	addStringArrayParam(params, "category", categories)
+	return getJSON[[]master.ScoredItem](c, "/dashboard/latest", params)
 }
 
-func (c *AdminClient) GetNonPersonalized(name string, query url.Values) ([]master.ScoredItem, error) {
-	return getJSON[[]master.ScoredItem](c, "/dashboard/non-personalized/"+url.PathEscape(name), query)
+func (c *AdminClient) GetNonPersonalized(name string, n, offset int, userID string, categories []string) ([]master.ScoredItem, error) {
+	params := url.Values{}
+	addIntParam(params, "n", n)
+	addIntParam(params, "offset", offset)
+	addStringParam(params, "user-id", userID)
+	addStringArrayParam(params, "category", categories)
+	return getJSON[[]master.ScoredItem](c, "/dashboard/non-personalized/"+url.PathEscape(name), params)
 }
 
-func (c *AdminClient) GetRecommend(userID, recommender, name string, query url.Values) ([]master.ScoredItem, error) {
+func (c *AdminClient) GetRecommend(userID, recommender, name string, n int, categories []string) ([]master.ScoredItem, error) {
 	path := "/dashboard/recommend/" + url.PathEscape(userID)
 	if recommender != "" {
 		path += "/" + url.PathEscape(recommender)
@@ -132,23 +142,40 @@ func (c *AdminClient) GetRecommend(userID, recommender, name string, query url.V
 	if name != "" {
 		path += "/" + url.PathEscape(name)
 	}
-	return getJSON[[]master.ScoredItem](c, path, query)
+	params := url.Values{}
+	addIntParam(params, "n", n)
+	addStringArrayParam(params, "category", categories)
+	return getJSON[[]master.ScoredItem](c, path, params)
 }
 
-func (c *AdminClient) GetItemToItem(name, itemID string, query url.Values) ([]master.ScoredItem, error) {
-	return getJSON[[]master.ScoredItem](c, "/dashboard/item-to-item/"+url.PathEscape(name)+"/"+url.PathEscape(itemID), query)
+func (c *AdminClient) GetItemToItem(name, itemID string, n, offset int, categories []string) ([]master.ScoredItem, error) {
+	params := url.Values{}
+	addIntParam(params, "n", n)
+	addIntParam(params, "offset", offset)
+	addStringArrayParam(params, "category", categories)
+	return getJSON[[]master.ScoredItem](c, "/dashboard/item-to-item/"+url.PathEscape(name)+"/"+url.PathEscape(itemID), params)
 }
 
-func (c *AdminClient) GetUserToUser(name, userID string, query url.Values) ([]master.ScoreUser, error) {
-	return getJSON[[]master.ScoreUser](c, "/dashboard/user-to-user/"+url.PathEscape(name)+"/"+url.PathEscape(userID), query)
+func (c *AdminClient) GetUserToUser(name, userID string, n, offset int) ([]master.ScoreUser, error) {
+	params := url.Values{}
+	addIntParam(params, "n", n)
+	addIntParam(params, "offset", offset)
+	return getJSON[[]master.ScoreUser](c, "/dashboard/user-to-user/"+url.PathEscape(name)+"/"+url.PathEscape(userID), params)
 }
 
-func (c *AdminClient) GetExternal(query url.Values) ([]string, error) {
-	return getJSON[[]string](c, "/dashboard/external", query)
+func (c *AdminClient) GetExternal(script, userID string) ([]string, error) {
+	params := url.Values{}
+	addStringParam(params, "script", base64.StdEncoding.EncodeToString([]byte(script)))
+	addStringParam(params, "user-id", userID)
+	return getJSON[[]string](c, "/dashboard/external", params)
 }
 
-func (c *AdminClient) GetRankerPrompt(query url.Values) (master.RerankerPrompt, error) {
-	return getJSON[master.RerankerPrompt](c, "/dashboard/ranker/prompt", query)
+func (c *AdminClient) GetRankerPrompt(queryTemplate, documentTemplate, userID string) (master.RerankerPrompt, error) {
+	params := url.Values{}
+	addStringParam(params, "query-template", base64.StdEncoding.EncodeToString([]byte(queryTemplate)))
+	addStringParam(params, "document-template", base64.StdEncoding.EncodeToString([]byte(documentTemplate)))
+	addStringParam(params, "user-id", userID)
+	return getJSON[master.RerankerPrompt](c, "/dashboard/ranker/prompt", params)
 }
 
 func (c *AdminClient) Restore(reader io.Reader) (*master.DumpStats, error) {
@@ -159,9 +186,9 @@ func (c *AdminClient) Dump(output io.Writer) error {
 	return c.download("/dump", output)
 }
 
-func getJSON[T any](c *AdminClient, path string, query url.Values) (T, error) {
+func getJSON[T any](c *AdminClient, path string, params url.Values) (T, error) {
 	var result T
-	body, err := c.get(path, query)
+	body, err := c.get(path, params)
 	if err != nil {
 		return result, err
 	}
@@ -220,9 +247,27 @@ func decodeJSON(body []byte, value any) error {
 	return decoder.Decode(value)
 }
 
-func (c *AdminClient) get(path string, query url.Values) ([]byte, error) {
-	if len(query) > 0 {
-		path += "?" + query.Encode()
+func addIntParam(params url.Values, name string, value int) {
+	if value != 0 {
+		params.Set(name, fmt.Sprint(value))
+	}
+}
+
+func addStringParam(params url.Values, name, value string) {
+	if value != "" {
+		params.Set(name, value)
+	}
+}
+
+func addStringArrayParam(params url.Values, name string, values []string) {
+	for _, value := range values {
+		params.Add(name, value)
+	}
+}
+
+func (c *AdminClient) get(path string, params url.Values) ([]byte, error) {
+	if len(params) > 0 {
+		path += "?" + params.Encode()
 	}
 	resp, err := c.client.R().Get(path)
 	if err != nil {

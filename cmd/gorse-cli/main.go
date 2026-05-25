@@ -16,12 +16,10 @@ package main
 
 import (
 	"bufio"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"net/url"
 	"os"
 	"sort"
 	"strconv"
@@ -513,27 +511,6 @@ func addCategoryFlags(cmd *cobra.Command) {
 	cmd.Flags().StringArray("category", nil, "Filter by category, repeatable")
 }
 
-func addQueryInt(cmd *cobra.Command, query url.Values, name string) {
-	value, _ := cmd.Flags().GetInt(name)
-	if value != 0 {
-		query.Set(name, strconv.Itoa(value))
-	}
-}
-
-func addQueryString(cmd *cobra.Command, query url.Values, flagName, queryName string) {
-	value, _ := cmd.Flags().GetString(flagName)
-	if value != "" {
-		query.Set(queryName, value)
-	}
-}
-
-func addQueryStringArray(cmd *cobra.Command, query url.Values, flagName, queryName string) {
-	values, _ := cmd.Flags().GetStringArray(flagName)
-	for _, value := range values {
-		query.Add(queryName, value)
-	}
-}
-
 func getIntFlag(cmd *cobra.Command, flagName string) int {
 	value, _ := cmd.Flags().GetInt(flagName)
 	return value
@@ -778,11 +755,12 @@ var getTimeseriesCmd = &cobra.Command{
 	Short: "Get time series data",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		query := url.Values{}
-		addQueryString(cmd, query, "begin", "begin")
-		addQueryString(cmd, query, "end", "end")
-		addQueryString(cmd, query, "duration", "duration")
-		timeseries, err := newAdminClient(cmd).GetTimeseries(args[0], query)
+		timeseries, err := newAdminClient(cmd).GetTimeseries(
+			args[0],
+			getStringFlag(cmd, "begin"),
+			getStringFlag(cmd, "end"),
+			getStringFlag(cmd, "duration"),
+		)
 		if err != nil {
 			log.Logger().Fatal("admin API request failed", zap.Error(err))
 		}
@@ -954,11 +932,7 @@ var getLatestCmd = &cobra.Command{
 			printResultTable(cmd, latest)
 			return
 		}
-		query := url.Values{}
-		addQueryInt(cmd, query, "n")
-		addQueryInt(cmd, query, "offset")
-		addQueryStringArray(cmd, query, "category", "category")
-		latest, err := newAdminClient(cmd).GetLatest(query)
+		latest, err := newAdminClient(cmd).GetLatest(getIntFlag(cmd, "n"), getIntFlag(cmd, "offset"), categories)
 		if err != nil {
 			log.Logger().Fatal("admin API request failed", zap.Error(err))
 		}
@@ -971,12 +945,13 @@ var getNonPersonalizedCmd = &cobra.Command{
 	Short: "Get non-personalized recommendations",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		query := url.Values{}
-		addQueryInt(cmd, query, "n")
-		addQueryInt(cmd, query, "offset")
-		addQueryString(cmd, query, "user-id", "user-id")
-		addQueryStringArray(cmd, query, "category", "category")
-		recommendations, err := newAdminClient(cmd).GetNonPersonalized(args[0], query)
+		recommendations, err := newAdminClient(cmd).GetNonPersonalized(
+			args[0],
+			getIntFlag(cmd, "n"),
+			getIntFlag(cmd, "offset"),
+			getStringFlag(cmd, "user-id"),
+			getStringArrayFlag(cmd, "category"),
+		)
 		if err != nil {
 			log.Logger().Fatal("admin API request failed", zap.Error(err))
 		}
@@ -1002,9 +977,6 @@ var recommendUserCmd = &cobra.Command{
 			printResultTable(cmd, recommend)
 			return
 		}
-		query := url.Values{}
-		addQueryInt(cmd, query, "n")
-		addQueryStringArray(cmd, query, "category", "category")
 		var recommender, name string
 		if len(args) > 1 {
 			recommender = args[1]
@@ -1012,7 +984,7 @@ var recommendUserCmd = &cobra.Command{
 		if len(args) > 2 {
 			name = args[2]
 		}
-		recommendations, err := newAdminClient(cmd).GetRecommend(args[0], recommender, name, query)
+		recommendations, err := newAdminClient(cmd).GetRecommend(args[0], recommender, name, getIntFlag(cmd, "n"), categories)
 		if err != nil {
 			log.Logger().Fatal("admin API request failed", zap.Error(err))
 		}
@@ -1025,11 +997,13 @@ var getItemToItemCmd = &cobra.Command{
 	Short: "Get item-to-item recommendations",
 	Args:  cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
-		query := url.Values{}
-		addQueryInt(cmd, query, "n")
-		addQueryInt(cmd, query, "offset")
-		addQueryStringArray(cmd, query, "category", "category")
-		recommendations, err := newAdminClient(cmd).GetItemToItem(args[0], args[1], query)
+		recommendations, err := newAdminClient(cmd).GetItemToItem(
+			args[0],
+			args[1],
+			getIntFlag(cmd, "n"),
+			getIntFlag(cmd, "offset"),
+			getStringArrayFlag(cmd, "category"),
+		)
 		if err != nil {
 			log.Logger().Fatal("admin API request failed", zap.Error(err))
 		}
@@ -1042,10 +1016,7 @@ var getUserToUserCmd = &cobra.Command{
 	Short: "Get user-to-user recommendations",
 	Args:  cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
-		query := url.Values{}
-		addQueryInt(cmd, query, "n")
-		addQueryInt(cmd, query, "offset")
-		recommendations, err := newAdminClient(cmd).GetUserToUser(args[0], args[1], query)
+		recommendations, err := newAdminClient(cmd).GetUserToUser(args[0], args[1], getIntFlag(cmd, "n"), getIntFlag(cmd, "offset"))
 		if err != nil {
 			log.Logger().Fatal("admin API request failed", zap.Error(err))
 		}
@@ -1061,10 +1032,7 @@ var getExternalCmd = &cobra.Command{
 		if script == "" {
 			log.Logger().Fatal("--script or --script-file is required")
 		}
-		query := url.Values{}
-		query.Set("script", base64.StdEncoding.EncodeToString([]byte(script)))
-		addQueryString(cmd, query, "user-id", "user-id")
-		items, err := newAdminClient(cmd).GetExternal(query)
+		items, err := newAdminClient(cmd).GetExternal(script, getStringFlag(cmd, "user-id"))
 		if err != nil {
 			log.Logger().Fatal("admin API request failed", zap.Error(err))
 		}
@@ -1082,11 +1050,7 @@ var getRankerPromptCmd = &cobra.Command{
 		if queryTemplate == "" || documentTemplate == "" || userID == "" {
 			log.Logger().Fatal("--query-template/--query-template-file, --document-template/--document-template-file, and --user-id are required")
 		}
-		query := url.Values{}
-		query.Set("query-template", base64.StdEncoding.EncodeToString([]byte(queryTemplate)))
-		query.Set("document-template", base64.StdEncoding.EncodeToString([]byte(documentTemplate)))
-		query.Set("user-id", userID)
-		prompt, err := newAdminClient(cmd).GetRankerPrompt(query)
+		prompt, err := newAdminClient(cmd).GetRankerPrompt(queryTemplate, documentTemplate, userID)
 		if err != nil {
 			log.Logger().Fatal("admin API request failed", zap.Error(err))
 		}
