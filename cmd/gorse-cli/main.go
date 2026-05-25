@@ -74,48 +74,12 @@ func newAdminClient(cmd *cobra.Command) *AdminClient {
 	return NewAdminClient(endpoint, apiKey)
 }
 
-func getAdminAPI(cmd *cobra.Command, path string, query url.Values) {
-	body := getAdminAPIBody(cmd, path, query)
-	printJSONTable(cmd, body)
-}
-
-func getAdminAPIBody(cmd *cobra.Command, path string, query url.Values) []byte {
-	body, err := newAdminClient(cmd).Get(path, query)
-	if err != nil {
-		log.Logger().Fatal("admin API request failed", zap.Error(err))
-	}
-	return body
-}
-
 func printResultTable(cmd *cobra.Command, result any) {
 	body, err := json.Marshal(result)
 	if err != nil {
 		log.Logger().Fatal("failed to encode API response", zap.Error(err))
 	}
 	printJSONTable(cmd, body)
-}
-
-func postAdminAPIBody(cmd *cobra.Command, path, contentType string, reader io.Reader) {
-	stats, err := newAdminClient(cmd).Restore(path, contentType, reader)
-	if err != nil {
-		log.Logger().Fatal("admin API request failed", zap.Error(err))
-	}
-	fmt.Fprintf(cmd.OutOrStdout(), "Restored %d users, %d items, %d feedback in %s.\n",
-		stats.Users, stats.Items, stats.Feedback, stats.Duration)
-}
-
-func deleteAdminAPI(cmd *cobra.Command, path string) []byte {
-	body, err := newAdminClient(cmd).Delete(path)
-	if err != nil {
-		log.Logger().Fatal("admin API request failed", zap.Error(err))
-	}
-	return body
-}
-
-func downloadAdminAPI(cmd *cobra.Command, path string, output io.Writer) {
-	if err := newAdminClient(cmd).Download(path, output); err != nil {
-		log.Logger().Fatal("admin API request failed", zap.Error(err))
-	}
 }
 
 func printJSONTable(cmd *cobra.Command, body []byte) {
@@ -642,7 +606,11 @@ var getClusterCmd = &cobra.Command{
 	Use:   "cluster",
 	Short: "Get cluster nodes from Gorse admin API",
 	Run: func(cmd *cobra.Command, args []string) {
-		getAdminAPI(cmd, "/dashboard/cluster", nil)
+		cluster, err := newAdminClient(cmd).GetCluster()
+		if err != nil {
+			log.Logger().Fatal("admin API request failed", zap.Error(err))
+		}
+		printResultTable(cmd, cluster)
 	},
 }
 
@@ -650,7 +618,11 @@ var statusCmd = &cobra.Command{
 	Use:   "status",
 	Short: "Get task progress from Gorse admin API",
 	Run: func(cmd *cobra.Command, args []string) {
-		getAdminAPI(cmd, "/dashboard/tasks", nil)
+		tasks, err := newAdminClient(cmd).GetTasks()
+		if err != nil {
+			log.Logger().Fatal("admin API request failed", zap.Error(err))
+		}
+		printResultTable(cmd, tasks)
 	},
 }
 
@@ -658,7 +630,11 @@ var pipelineGetCmd = &cobra.Command{
 	Use:   "get",
 	Short: "Get recommendation pipeline configuration",
 	Run: func(cmd *cobra.Command, args []string) {
-		getAdminAPI(cmd, "/dashboard/config", nil)
+		config, err := newAdminClient(cmd).GetConfig()
+		if err != nil {
+			log.Logger().Fatal("admin API request failed", zap.Error(err))
+		}
+		printResultTable(cmd, config)
 	},
 }
 
@@ -675,7 +651,9 @@ var dumpCmd = &cobra.Command{
 			log.Logger().Fatal("failed to create dump file", zap.String("file", outputPath), zap.Error(err))
 		}
 		defer file.Close()
-		downloadAdminAPI(cmd, "/dump", file)
+		if err = newAdminClient(cmd).Dump(file); err != nil {
+			log.Logger().Fatal("admin API request failed", zap.Error(err))
+		}
 		fmt.Fprintln(cmd.OutOrStdout(), "Data dumped to "+outputPath)
 	},
 }
@@ -697,7 +675,12 @@ var restoreCmd = &cobra.Command{
 			log.Logger().Fatal("failed to open restore file", zap.String("file", args[0]), zap.Error(err))
 		}
 		defer file.Close()
-		postAdminAPIBody(cmd, "/restore", "application/octet-stream", file)
+		stats, err := newAdminClient(cmd).Restore(file)
+		if err != nil {
+			log.Logger().Fatal("admin API request failed", zap.Error(err))
+		}
+		fmt.Fprintf(cmd.OutOrStdout(), "Restored %d users, %d items, %d feedback in %s.\n",
+			stats.Users, stats.Items, stats.Feedback, stats.Duration)
 	},
 }
 
@@ -721,14 +704,9 @@ var pipelineSetCmd = &cobra.Command{
 	Args: cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		client := newAdminClient(cmd)
-		body, err := client.Get("/dashboard/config", nil)
+		configPatch, err := client.GetConfig()
 		if err != nil {
 			log.Logger().Fatal("admin API request failed", zap.Error(err))
-		}
-
-		var configPatch map[string]interface{}
-		if err = json.Unmarshal(body, &configPatch); err != nil {
-			log.Logger().Fatal("failed to parse config", zap.Error(err))
 		}
 
 		// Apply config patch from arguments.
@@ -746,12 +724,12 @@ var pipelineSetCmd = &cobra.Command{
 			}
 		}
 
-		body, err = client.PostJSON("/dashboard/config", configPatch)
+		updatedConfig, err := client.UpdateConfig(configPatch)
 		if err != nil {
 			log.Logger().Fatal("admin API request failed", zap.Error(err))
 		}
 
-		printJSONTable(cmd, body)
+		printResultTable(cmd, updatedConfig)
 	},
 }
 
@@ -759,10 +737,12 @@ var pipelineResetCmd = &cobra.Command{
 	Use:   "reset",
 	Short: "Reset recommendation pipeline configuration to the file defaults",
 	Run: func(cmd *cobra.Command, args []string) {
-		body := deleteAdminAPI(cmd, "/dashboard/config")
-		bodyText := strings.TrimSpace(string(body))
-		if bodyText != "" && bodyText != "{}" {
-			printJSONTable(cmd, body)
+		result, err := newAdminClient(cmd).ResetConfig()
+		if err != nil {
+			log.Logger().Fatal("admin API request failed", zap.Error(err))
+		}
+		if len(result) > 0 {
+			printResultTable(cmd, result)
 			return
 		}
 		fmt.Fprintln(cmd.OutOrStdout(), "Pipeline reset to defaults.")
@@ -773,7 +753,11 @@ var getCategoriesCmd = &cobra.Command{
 	Use:   "categories",
 	Short: "Get item categories",
 	Run: func(cmd *cobra.Command, args []string) {
-		getAdminAPI(cmd, "/dashboard/categories", nil)
+		categories, err := newAdminClient(cmd).GetCategories()
+		if err != nil {
+			log.Logger().Fatal("admin API request failed", zap.Error(err))
+		}
+		printResultTable(cmd, categories)
 	},
 }
 
@@ -781,7 +765,11 @@ var getStatsCmd = &cobra.Command{
 	Use:   "stats",
 	Short: "Get global statistics",
 	Run: func(cmd *cobra.Command, args []string) {
-		getAdminAPI(cmd, "/dashboard/stats", nil)
+		stats, err := newAdminClient(cmd).GetStats()
+		if err != nil {
+			log.Logger().Fatal("admin API request failed", zap.Error(err))
+		}
+		printResultTable(cmd, stats)
 	},
 }
 
@@ -794,7 +782,11 @@ var getTimeseriesCmd = &cobra.Command{
 		addQueryString(cmd, query, "begin", "begin")
 		addQueryString(cmd, query, "end", "end")
 		addQueryString(cmd, query, "duration", "duration")
-		getAdminAPI(cmd, "/dashboard/timeseries/"+url.PathEscape(args[0]), query)
+		timeseries, err := newAdminClient(cmd).GetTimeseries(args[0], query)
+		if err != nil {
+			log.Logger().Fatal("admin API request failed", zap.Error(err))
+		}
+		printResultTable(cmd, timeseries)
 	},
 }
 
@@ -858,15 +850,7 @@ var getFeedbackCmd = &cobra.Command{
 }
 
 func printFeedback(cmd *cobra.Command, feedbackType, userID, itemID string, n int) {
-	path, query := feedbackRequest(feedbackType, userID, itemID, n)
-	body := getAdminAPIBody(cmd, path, query)
-	decoder := json.NewDecoder(strings.NewReader(string(body)))
-	decoder.UseNumber()
-	var value any
-	if err := decoder.Decode(&value); err != nil {
-		printTable(cmd.OutOrStdout(), []string{"Response"}, [][]string{{strings.TrimSpace(string(body))}})
-		return
-	}
+	value := adminFeedback(cmd, feedbackType, userID, itemID, n)
 	feedback, ok := feedbackRecords(value)
 	if !ok {
 		printValueTables(cmd, value)
@@ -879,29 +863,48 @@ func printFeedback(cmd *cobra.Command, feedbackType, userID, itemID string, n in
 	printValueTables(cmd, feedback)
 }
 
-func feedbackRequest(feedbackType, userID, itemID string, n int) (string, url.Values) {
-	query := url.Values{}
-	if userID == "" && itemID == "" && n > 0 {
-		query.Set("n", strconv.Itoa(n))
-	}
+func adminFeedback(cmd *cobra.Command, feedbackType, userID, itemID string, n int) any {
+	client := newAdminClient(cmd)
+	var (
+		result any
+		err    error
+	)
 	switch {
 	case userID != "" && itemID != "" && feedbackType != "":
-		return "/feedback/" + url.PathEscape(feedbackType) + "/" + url.PathEscape(userID) + "/" + url.PathEscape(itemID), query
+		result, err = client.GetTypedUserItemFeedback(feedbackType, userID, itemID)
 	case userID != "" && itemID != "":
-		return "/feedback/" + url.PathEscape(userID) + "/" + url.PathEscape(itemID), query
+		result, err = client.GetUserItemFeedback(userID, itemID)
 	case userID != "" && feedbackType != "":
-		return "/user/" + url.PathEscape(userID) + "/feedback/" + url.PathEscape(feedbackType), query
+		result, err = client.GetTypedUserFeedback(userID, feedbackType)
 	case userID != "":
-		return "/user/" + url.PathEscape(userID) + "/feedback", query
+		result, err = client.GetUserFeedback(userID)
 	case itemID != "" && feedbackType != "":
-		return "/item/" + url.PathEscape(itemID) + "/feedback/" + url.PathEscape(feedbackType), query
+		result, err = client.GetTypedItemFeedback(itemID, feedbackType)
 	case itemID != "":
-		return "/item/" + url.PathEscape(itemID) + "/feedback/", query
+		result, err = client.GetItemFeedback(itemID)
 	case feedbackType != "":
-		return "/feedback/" + url.PathEscape(feedbackType), query
+		result, err = client.GetTypedFeedback(feedbackType, n)
 	default:
-		return "/feedback", query
+		result, err = client.GetFeedback(n)
 	}
+	if err != nil {
+		log.Logger().Fatal("admin API request failed", zap.Error(err))
+	}
+	return tableValue(cmd, result)
+}
+
+func tableValue(cmd *cobra.Command, result any) any {
+	body, err := json.Marshal(result)
+	if err != nil {
+		log.Logger().Fatal("failed to encode API response", zap.Error(err))
+	}
+	decoder := json.NewDecoder(strings.NewReader(string(body)))
+	decoder.UseNumber()
+	var value any
+	if err := decoder.Decode(&value); err != nil {
+		log.Logger().Fatal("failed to parse API response", zap.Error(err))
+	}
+	return value
 }
 
 func feedbackRecords(value any) ([]any, bool) {
@@ -955,7 +958,11 @@ var getLatestCmd = &cobra.Command{
 		addQueryInt(cmd, query, "n")
 		addQueryInt(cmd, query, "offset")
 		addQueryStringArray(cmd, query, "category", "category")
-		getAdminAPI(cmd, "/dashboard/latest", query)
+		latest, err := newAdminClient(cmd).GetLatest(query)
+		if err != nil {
+			log.Logger().Fatal("admin API request failed", zap.Error(err))
+		}
+		printResultTable(cmd, latest)
 	},
 }
 
@@ -969,7 +976,11 @@ var getNonPersonalizedCmd = &cobra.Command{
 		addQueryInt(cmd, query, "offset")
 		addQueryString(cmd, query, "user-id", "user-id")
 		addQueryStringArray(cmd, query, "category", "category")
-		getAdminAPI(cmd, "/dashboard/non-personalized/"+url.PathEscape(args[0]), query)
+		recommendations, err := newAdminClient(cmd).GetNonPersonalized(args[0], query)
+		if err != nil {
+			log.Logger().Fatal("admin API request failed", zap.Error(err))
+		}
+		printResultTable(cmd, recommendations)
 	},
 }
 
@@ -994,14 +1005,18 @@ var recommendUserCmd = &cobra.Command{
 		query := url.Values{}
 		addQueryInt(cmd, query, "n")
 		addQueryStringArray(cmd, query, "category", "category")
-		path := "/dashboard/recommend/" + url.PathEscape(args[0])
+		var recommender, name string
 		if len(args) > 1 {
-			path += "/" + url.PathEscape(args[1])
+			recommender = args[1]
 		}
 		if len(args) > 2 {
-			path += "/" + url.PathEscape(args[2])
+			name = args[2]
 		}
-		getAdminAPI(cmd, path, query)
+		recommendations, err := newAdminClient(cmd).GetRecommend(args[0], recommender, name, query)
+		if err != nil {
+			log.Logger().Fatal("admin API request failed", zap.Error(err))
+		}
+		printResultTable(cmd, recommendations)
 	},
 }
 
@@ -1014,7 +1029,11 @@ var getItemToItemCmd = &cobra.Command{
 		addQueryInt(cmd, query, "n")
 		addQueryInt(cmd, query, "offset")
 		addQueryStringArray(cmd, query, "category", "category")
-		getAdminAPI(cmd, "/dashboard/item-to-item/"+url.PathEscape(args[0])+"/"+url.PathEscape(args[1]), query)
+		recommendations, err := newAdminClient(cmd).GetItemToItem(args[0], args[1], query)
+		if err != nil {
+			log.Logger().Fatal("admin API request failed", zap.Error(err))
+		}
+		printResultTable(cmd, recommendations)
 	},
 }
 
@@ -1026,7 +1045,11 @@ var getUserToUserCmd = &cobra.Command{
 		query := url.Values{}
 		addQueryInt(cmd, query, "n")
 		addQueryInt(cmd, query, "offset")
-		getAdminAPI(cmd, "/dashboard/user-to-user/"+url.PathEscape(args[0])+"/"+url.PathEscape(args[1]), query)
+		recommendations, err := newAdminClient(cmd).GetUserToUser(args[0], args[1], query)
+		if err != nil {
+			log.Logger().Fatal("admin API request failed", zap.Error(err))
+		}
+		printResultTable(cmd, recommendations)
 	},
 }
 
@@ -1041,7 +1064,11 @@ var getExternalCmd = &cobra.Command{
 		query := url.Values{}
 		query.Set("script", base64.StdEncoding.EncodeToString([]byte(script)))
 		addQueryString(cmd, query, "user-id", "user-id")
-		getAdminAPI(cmd, "/dashboard/external", query)
+		items, err := newAdminClient(cmd).GetExternal(query)
+		if err != nil {
+			log.Logger().Fatal("admin API request failed", zap.Error(err))
+		}
+		printResultTable(cmd, items)
 	},
 }
 
@@ -1059,7 +1086,11 @@ var getRankerPromptCmd = &cobra.Command{
 		query.Set("query-template", base64.StdEncoding.EncodeToString([]byte(queryTemplate)))
 		query.Set("document-template", base64.StdEncoding.EncodeToString([]byte(documentTemplate)))
 		query.Set("user-id", userID)
-		getAdminAPI(cmd, "/dashboard/ranker/prompt", query)
+		prompt, err := newAdminClient(cmd).GetRankerPrompt(query)
+		if err != nil {
+			log.Logger().Fatal("admin API request failed", zap.Error(err))
+		}
+		printResultTable(cmd, prompt)
 	},
 }
 

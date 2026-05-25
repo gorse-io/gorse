@@ -15,13 +15,20 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/url"
 	"strings"
 
 	"github.com/go-resty/resty/v2"
+	"github.com/gorse-io/gorse/common/monitor"
+	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/master"
+	"github.com/gorse-io/gorse/server"
+	"github.com/gorse-io/gorse/storage/cache"
+	"github.com/gorse-io/gorse/storage/data"
+	"github.com/gorse-io/gorse/storage/meta"
 )
 
 // AdminClient is a client for the Gorse admin API.
@@ -37,7 +44,183 @@ func NewAdminClient(endpoint, apiKey string) *AdminClient {
 	return &AdminClient{client: client}
 }
 
-func (c *AdminClient) Get(path string, query url.Values) ([]byte, error) {
+func (c *AdminClient) GetCluster() ([]*meta.Node, error) {
+	return getJSON[[]*meta.Node](c, "/dashboard/cluster", nil)
+}
+
+func (c *AdminClient) GetTasks() ([]monitor.Progress, error) {
+	return getJSON[[]monitor.Progress](c, "/dashboard/tasks", nil)
+}
+
+func (c *AdminClient) GetConfig() (map[string]any, error) {
+	return getJSON[map[string]any](c, "/dashboard/config", nil)
+}
+
+func (c *AdminClient) UpdateConfig(configPatch map[string]any) (config.Config, error) {
+	return postJSON[config.Config](c, "/dashboard/config", configPatch)
+}
+
+func (c *AdminClient) ResetConfig() (map[string]any, error) {
+	return deleteJSON[map[string]any](c, "/dashboard/config")
+}
+
+func (c *AdminClient) GetCategories() ([]string, error) {
+	return getJSON[[]string](c, "/dashboard/categories", nil)
+}
+
+func (c *AdminClient) GetStats() (master.Status, error) {
+	return getJSON[master.Status](c, "/dashboard/stats", nil)
+}
+
+func (c *AdminClient) GetTimeseries(name string, query url.Values) ([]cache.TimeSeriesPoint, error) {
+	return getJSON[[]cache.TimeSeriesPoint](c, "/dashboard/timeseries/"+url.PathEscape(name), query)
+}
+
+func (c *AdminClient) GetFeedback(n int) (server.FeedbackIterator, error) {
+	query := url.Values{}
+	if n > 0 {
+		query.Set("n", fmt.Sprint(n))
+	}
+	return getJSON[server.FeedbackIterator](c, "/feedback", query)
+}
+
+func (c *AdminClient) GetTypedFeedback(feedbackType string, n int) (server.FeedbackIterator, error) {
+	query := url.Values{}
+	if n > 0 {
+		query.Set("n", fmt.Sprint(n))
+	}
+	return getJSON[server.FeedbackIterator](c, "/feedback/"+url.PathEscape(feedbackType), query)
+}
+
+func (c *AdminClient) GetUserItemFeedback(userID, itemID string) ([]data.Feedback, error) {
+	return getJSON[[]data.Feedback](c, "/feedback/"+url.PathEscape(userID)+"/"+url.PathEscape(itemID), nil)
+}
+
+func (c *AdminClient) GetTypedUserItemFeedback(feedbackType, userID, itemID string) (data.Feedback, error) {
+	return getJSON[data.Feedback](c, "/feedback/"+url.PathEscape(feedbackType)+"/"+url.PathEscape(userID)+"/"+url.PathEscape(itemID), nil)
+}
+
+func (c *AdminClient) GetUserFeedback(userID string) ([]data.Feedback, error) {
+	return getJSON[[]data.Feedback](c, "/user/"+url.PathEscape(userID)+"/feedback", nil)
+}
+
+func (c *AdminClient) GetTypedUserFeedback(userID, feedbackType string) ([]data.Feedback, error) {
+	return getJSON[[]data.Feedback](c, "/user/"+url.PathEscape(userID)+"/feedback/"+url.PathEscape(feedbackType), nil)
+}
+
+func (c *AdminClient) GetItemFeedback(itemID string) ([]data.Feedback, error) {
+	return getJSON[[]data.Feedback](c, "/item/"+url.PathEscape(itemID)+"/feedback/", nil)
+}
+
+func (c *AdminClient) GetTypedItemFeedback(itemID, feedbackType string) ([]data.Feedback, error) {
+	return getJSON[[]data.Feedback](c, "/item/"+url.PathEscape(itemID)+"/feedback/"+url.PathEscape(feedbackType), nil)
+}
+
+func (c *AdminClient) GetLatest(query url.Values) ([]master.ScoredItem, error) {
+	return getJSON[[]master.ScoredItem](c, "/dashboard/latest", query)
+}
+
+func (c *AdminClient) GetNonPersonalized(name string, query url.Values) ([]master.ScoredItem, error) {
+	return getJSON[[]master.ScoredItem](c, "/dashboard/non-personalized/"+url.PathEscape(name), query)
+}
+
+func (c *AdminClient) GetRecommend(userID, recommender, name string, query url.Values) ([]master.ScoredItem, error) {
+	path := "/dashboard/recommend/" + url.PathEscape(userID)
+	if recommender != "" {
+		path += "/" + url.PathEscape(recommender)
+	}
+	if name != "" {
+		path += "/" + url.PathEscape(name)
+	}
+	return getJSON[[]master.ScoredItem](c, path, query)
+}
+
+func (c *AdminClient) GetItemToItem(name, itemID string, query url.Values) ([]master.ScoredItem, error) {
+	return getJSON[[]master.ScoredItem](c, "/dashboard/item-to-item/"+url.PathEscape(name)+"/"+url.PathEscape(itemID), query)
+}
+
+func (c *AdminClient) GetUserToUser(name, userID string, query url.Values) ([]master.ScoreUser, error) {
+	return getJSON[[]master.ScoreUser](c, "/dashboard/user-to-user/"+url.PathEscape(name)+"/"+url.PathEscape(userID), query)
+}
+
+func (c *AdminClient) GetExternal(query url.Values) ([]string, error) {
+	return getJSON[[]string](c, "/dashboard/external", query)
+}
+
+func (c *AdminClient) GetRankerPrompt(query url.Values) (master.RerankerPrompt, error) {
+	return getJSON[master.RerankerPrompt](c, "/dashboard/ranker/prompt", query)
+}
+
+func (c *AdminClient) Restore(reader io.Reader) (*master.DumpStats, error) {
+	return postOctetStream[master.DumpStats](c, "/restore", reader)
+}
+
+func (c *AdminClient) Dump(output io.Writer) error {
+	return c.download("/dump", output)
+}
+
+func getJSON[T any](c *AdminClient, path string, query url.Values) (T, error) {
+	var result T
+	body, err := c.get(path, query)
+	if err != nil {
+		return result, err
+	}
+	if err = decodeJSON(body, &result); err != nil {
+		return result, err
+	}
+	return result, nil
+}
+
+func postJSON[T any](c *AdminClient, path string, body any) (T, error) {
+	var result T
+	respBody, err := c.postJSON(path, body)
+	if err != nil {
+		return result, err
+	}
+	if err = decodeJSON(respBody, &result); err != nil {
+		return result, err
+	}
+	return result, nil
+}
+
+func deleteJSON[T any](c *AdminClient, path string) (T, error) {
+	var result T
+	body, err := c.delete(path)
+	if err != nil {
+		return result, err
+	}
+	if len(strings.TrimSpace(string(body))) == 0 {
+		return result, nil
+	}
+	if err = decodeJSON(body, &result); err != nil {
+		return result, err
+	}
+	return result, nil
+}
+
+func postOctetStream[T any](c *AdminClient, path string, reader io.Reader) (*T, error) {
+	result := new(T)
+	resp, err := c.client.R().
+		SetHeader("Content-Type", "application/octet-stream").
+		SetBody(reader).
+		SetResult(result).
+		Post(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send request: %w", err)
+	}
+	if resp.IsError() {
+		return nil, newAdminAPIError(resp)
+	}
+	return result, nil
+}
+
+func decodeJSON(body []byte, value any) error {
+	decoder := json.NewDecoder(strings.NewReader(string(body)))
+	decoder.UseNumber()
+	return decoder.Decode(value)
+}
+
+func (c *AdminClient) get(path string, query url.Values) ([]byte, error) {
 	if len(query) > 0 {
 		path += "?" + query.Encode()
 	}
@@ -51,7 +234,7 @@ func (c *AdminClient) Get(path string, query url.Values) ([]byte, error) {
 	return resp.Body(), nil
 }
 
-func (c *AdminClient) PostJSON(path string, body any) ([]byte, error) {
+func (c *AdminClient) postJSON(path string, body any) ([]byte, error) {
 	resp, err := c.client.R().
 		SetHeader("Content-Type", "application/json").
 		SetBody(body).
@@ -65,23 +248,7 @@ func (c *AdminClient) PostJSON(path string, body any) ([]byte, error) {
 	return resp.Body(), nil
 }
 
-func (c *AdminClient) Restore(path, contentType string, reader io.Reader) (*master.DumpStats, error) {
-	stats := new(master.DumpStats)
-	resp, err := c.client.R().
-		SetHeader("Content-Type", contentType).
-		SetBody(reader).
-		SetResult(stats).
-		Post(path)
-	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %w", err)
-	}
-	if resp.IsError() {
-		return nil, newAdminAPIError(resp)
-	}
-	return stats, nil
-}
-
-func (c *AdminClient) Delete(path string) ([]byte, error) {
+func (c *AdminClient) delete(path string) ([]byte, error) {
 	resp, err := c.client.R().Delete(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
@@ -92,7 +259,7 @@ func (c *AdminClient) Delete(path string) ([]byte, error) {
 	return resp.Body(), nil
 }
 
-func (c *AdminClient) Download(path string, output io.Writer) error {
+func (c *AdminClient) download(path string, output io.Writer) error {
 	resp, err := c.client.R().
 		SetDoNotParseResponse(true).
 		Get(path)
