@@ -55,6 +55,10 @@ func (c *AdminClient) GetConfig() (map[string]any, error) {
 	return getJSON[map[string]any](c, "/dashboard/config", nil)
 }
 
+func (c *AdminClient) GetConfigSchema() (map[string]any, error) {
+	return getJSON[map[string]any](c, "/dashboard/config/schema", nil)
+}
+
 func (c *AdminClient) UpdateConfig(configPatch map[string]any) (config.Config, error) {
 	var result config.Config
 	resp, err := c.client.R().
@@ -176,14 +180,6 @@ func (c *AdminClient) GetExternal(script, userID string) ([]string, error) {
 	addStringParam(params, "script", base64.StdEncoding.EncodeToString([]byte(script)))
 	addStringParam(params, "user-id", userID)
 	return getJSON[[]string](c, "/dashboard/external", params)
-}
-
-func (c *AdminClient) GetRankerPrompt(queryTemplate, documentTemplate, userID string) (master.RerankerPrompt, error) {
-	params := url.Values{}
-	addStringParam(params, "query-template", base64.StdEncoding.EncodeToString([]byte(queryTemplate)))
-	addStringParam(params, "document-template", base64.StdEncoding.EncodeToString([]byte(documentTemplate)))
-	addStringParam(params, "user-id", userID)
-	return getJSON[master.RerankerPrompt](c, "/dashboard/ranker/prompt", params)
 }
 
 func (c *AdminClient) Restore(reader io.Reader) (*master.DumpStats, error) {

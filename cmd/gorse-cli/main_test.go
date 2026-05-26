@@ -130,6 +130,18 @@ func (s *CLITestSuite) executeCommandWithInput(input string, args ...string) (st
 	return executeRawCommandWithInput(rootCmd, input, argsWithAuth...)
 }
 
+func TestCLIHelpOmitsAdminAPIQualifier(t *testing.T) {
+	out, err := executeRawCommand(rootCmd, "--help")
+	require.NoError(t, err)
+	require.NotContains(t, out, "from Gorse admin API")
+}
+
+func TestRecommendHelpOmitsRankerPrompt(t *testing.T) {
+	out, err := executeRawCommand(rootCmd, "recommend", "--help")
+	require.NoError(t, err)
+	require.NotContains(t, out, "ranker-prompt")
+}
+
 func TestCLI(t *testing.T) {
 	suite.Run(t, new(CLITestSuite))
 }
@@ -141,11 +153,11 @@ func (s *CLITestSuite) TestGetSubcommands() {
 		wantInOutput string
 		wantTable    bool
 	}{
-		{name: "cluster", args: []string{"get", "cluster"}, wantInOutput: "server-node", wantTable: true},
+		{name: "cluster-info", args: []string{"cluster-info"}, wantInOutput: "server-node", wantTable: true},
 		{name: "categories", args: []string{"get", "categories"}, wantInOutput: "books", wantTable: true},
 		{name: "ps", args: []string{"ps"}, wantTable: true},
 		{name: "pipeline-get", args: []string{"pipeline", "get"}, wantInOutput: "cache_size"},
-		{name: "stats", args: []string{"get", "stats"}, wantInOutput: "BinaryVersion"},
+		{name: "stats", args: []string{"stats"}, wantInOutput: "BinaryVersion"},
 		{name: "user", args: []string{"get", "user", "alice"}, wantInOutput: "alice"},
 		{name: "users", args: []string{"get", "users", "-n", "10"}, wantInOutput: "bob", wantTable: true},
 		{name: "item", args: []string{"get", "item", "item-1"}, wantInOutput: "item-1"},
@@ -153,11 +165,10 @@ func (s *CLITestSuite) TestGetSubcommands() {
 		{name: "feedback", args: []string{"get", "feedback", "--type", "click", "--user", "alice", "-n", "5"}, wantInOutput: "item-1", wantTable: true},
 		{name: "latest", args: []string{"recommend", "latest", "-n", "3", "--category", "tech"}, wantInOutput: "latest-1", wantTable: true},
 		{name: "non-personalized", args: []string{"recommend", "non-personalized", "popular", "-n", "3", "--user-id", "alice", "--category", "news"}, wantInOutput: "popular-1", wantTable: true},
-		{name: "recommend-user", args: []string{"recommend", "user", "alice", "non-personalized", "popular", "-n", "3", "--category", "news"}, wantInOutput: "recommend-1", wantTable: true},
+		{name: "recommend-item-to-user", args: []string{"recommend", "item-to-user", "alice", "non-personalized", "popular", "-n", "3", "--category", "news"}, wantInOutput: "recommend-1", wantTable: true},
 		{name: "item-to-item", args: []string{"recommend", "item-to-item", "neighbors", "item-1", "-n", "3", "--category", "news"}, wantInOutput: "similar-1", wantTable: true},
 		{name: "user-to-user", args: []string{"recommend", "user-to-user", "neighbors", "alice", "-n", "3"}, wantInOutput: "neighbor-1", wantTable: true},
 		{name: "external", args: []string{"recommend", "external", "--script", `["external-1"]`, "--user-id", "alice"}, wantInOutput: "external-1", wantTable: true},
-		{name: "ranker-prompt", args: []string{"recommend", "ranker-prompt", "--query-template", "query", "--document-template", "documents", "--user-id", "alice"}, wantInOutput: "documents"},
 	}
 
 	for _, tt := range tests {
@@ -262,18 +273,41 @@ func (s *CLITestSuite) TestGetItems() {
 	s.Require().NotContains(out, "└")
 }
 
-func (s *CLITestSuite) TestPipelineSetCmd() {
-	out, err := s.execute("pipeline", "set", "recommend.cache_size=100", "recommend.ranker.type=llm")
+func (s *CLITestSuite) TestPipelineSchemaCmd() {
+	out, err := s.execute("pipeline", "schema")
+	s.Require().NoError(err)
+
+	var schema map[string]any
+	s.Require().NoError(json.Unmarshal([]byte(out), &schema))
+	s.Require().Contains(schema, "$schema")
+	s.Require().Contains(schema, "$defs")
+	s.Require().Contains(out, "RecommendConfig")
+}
+
+func (s *CLITestSuite) TestPipelinePatchCmd() {
+	patch := `[{"op":"replace","path":"/recommend/cache_size","value":100},{"op":"replace","path":"/recommend/ranker/type","value":"llm"}]`
+	out, err := s.execute("pipeline", "patch", patch)
 	s.Require().NoError(err)
 	s.Require().Contains(out, "CacheSize")
 	s.Require().Contains(out, "100")
 	s.Require().Contains(out, "llm")
+
+	setOut, err := executeRawCommand(rootCmd, "pipeline", "set", "recommend.cache_size=100")
+	s.Require().Error(err)
+	s.Require().Contains(setOut, `unknown command "set"`)
 }
 
 func (s *CLITestSuite) TestPipelineResetCmd() {
-	out, err := s.execute("pipeline", "reset")
+	cancelOut, err := s.executeCommandWithInput("N\n", "pipeline", "reset")
 	s.Require().NoError(err)
-	s.Require().Contains(out, "Pipeline reset")
+	s.Require().Contains(cancelOut, "Confirm [y/N]")
+	s.Require().Contains(cancelOut, "Pipeline reset canceled")
+	s.Require().NotContains(cancelOut, "Pipeline reset to defaults")
+
+	resetOut, err := s.executeCommandWithInput("y\n", "pipeline", "reset")
+	s.Require().NoError(err)
+	s.Require().Contains(resetOut, "Confirm [y/N]")
+	s.Require().Contains(resetOut, "Pipeline reset")
 }
 
 func (s *CLITestSuite) TestDumpRestore() {

@@ -21,14 +21,10 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"reflect"
 	"sort"
-	"strconv"
 	"strings"
-	"text/tabwriter"
-	"time"
-	"unicode"
 
+	jsonpatch "github.com/evanphx/json-patch/v5"
 	gorse "github.com/gorse-io/gorse-go"
 	"github.com/gorse-io/gorse/cmd/version"
 	"github.com/gorse-io/gorse/common/log"
@@ -49,11 +45,6 @@ var rootCmd = &cobra.Command{
 		_ = cmd.Help()
 	},
 }
-
-const (
-	maxInlineArrayValues     = 8
-	maxTableLabelArrayValues = 3
-)
 
 func requireEndpointAndKey(cmd *cobra.Command) (string, string) {
 	endpoint, apiKey := getEndpointAndKey(cmd)
@@ -104,535 +95,6 @@ func newAdminClient(cmd *cobra.Command) *AdminClient {
 	return NewAdminClient(endpoint, apiKey)
 }
 
-func printValueTables(cmd *cobra.Command, value any) {
-	if isSliceValue(value) {
-		printArrayTable(cmd, value)
-		return
-	}
-	if object, ok := objectFields(value); ok {
-		printObjectTables(cmd, object)
-		return
-	}
-	printTable(cmd.OutOrStdout(), []string{"Value"}, [][]string{{formatTableValue(value)}})
-}
-
-func isPaginationCursorKey(key string) bool {
-	return strings.EqualFold(key, "cursor")
-}
-
-func printObjectTables(cmd *cobra.Command, object map[string]any) {
-	if _, ok := object["UserId"]; ok {
-		printObjectTable(cmd, object)
-		return
-	}
-	if _, ok := object["ItemId"]; ok {
-		printObjectTable(cmd, object)
-		return
-	}
-	arrayKeys := make([]string, 0)
-	metadata := make(map[string]any)
-	for key, child := range object {
-		if isPaginationCursorKey(key) {
-			continue
-		}
-		if isSliceValue(child) {
-			arrayKeys = append(arrayKeys, key)
-		} else {
-			metadata[key] = child
-		}
-	}
-	sort.Strings(arrayKeys)
-	if len(arrayKeys) > 0 {
-		if len(metadata) > 0 {
-			printObjectTable(cmd, metadata)
-			fmt.Fprintln(cmd.OutOrStdout())
-		}
-		for i, key := range arrayKeys {
-			if i > 0 {
-				fmt.Fprintln(cmd.OutOrStdout())
-			}
-			printArrayTable(cmd, object[key])
-		}
-		return
-	}
-	printObjectTable(cmd, object)
-}
-
-func printObjectTable(cmd *cobra.Command, object map[string]any) {
-	output := cmd.OutOrStdout()
-	if len(object) == 0 {
-		fmt.Fprintln(output, "{}")
-		return
-	}
-
-	keys := orderedObjectKeys(object, "UserId", "ItemId", "Comment", "Categories", "IsHidden", "Timestamp")
-	for _, key := range keys {
-		printObjectField(output, key, object[key])
-	}
-}
-
-func orderedObjectKeys(object map[string]any, priority ...string) []string {
-	keys := make([]string, 0, len(object))
-	for key := range object {
-		keys = append(keys, key)
-	}
-	return orderedKeys(keys, priority...)
-}
-
-func orderedKeys(keys []string, priority ...string) []string {
-	keySet := make(map[string]struct{}, len(keys))
-	for _, key := range keys {
-		keySet[key] = struct{}{}
-	}
-	ordered := make([]string, 0, len(keys))
-	seen := make(map[string]struct{}, len(keys))
-	for _, key := range priority {
-		if _, ok := keySet[key]; ok {
-			ordered = append(ordered, key)
-			seen[key] = struct{}{}
-		}
-	}
-	remaining := make([]string, 0, len(keys)-len(ordered))
-	for _, key := range keys {
-		if _, ok := seen[key]; !ok {
-			remaining = append(remaining, key)
-		}
-	}
-	sort.Strings(remaining)
-	return append(ordered, remaining...)
-}
-
-func printObjectField(output io.Writer, key string, value any) {
-	if summary, ok := formatArraySummary(value); ok {
-		fmt.Fprintf(output, "%s: %s\n", key, summary)
-		return
-	}
-	if isObjectValue(value) {
-		fmt.Fprintf(output, "%s:\n%s\n", key, formatPrettyJSON(value))
-		return
-	}
-	if isSliceValue(value) {
-		fmt.Fprintf(output, "%s: %s\n", key, formatTableValue(value))
-		return
-	}
-	fmt.Fprintf(output, "%s: %s\n", key, formatTableValue(value))
-}
-
-func formatPrettyJSON(value any) string {
-	encoded, err := json.MarshalIndent(summarizeLongArrays(value), "", "  ")
-	if err != nil {
-		return formatTableValue(value)
-	}
-	return string(encoded)
-}
-
-func summarizeLongArrays(value any) any {
-	return summarizeLongArraysWithLimit(value, maxInlineArrayValues)
-}
-
-func summarizeLongArraysWithLimit(value any, maxValues int) any {
-	if summary, ok := formatArraySummaryWithLimit(value, maxValues); ok {
-		return summary
-	}
-	if array, ok := sliceValues(value); ok {
-		values := make([]any, len(array))
-		for i, element := range array {
-			values[i] = summarizeLongArraysWithLimit(element, maxValues)
-		}
-		return values
-	}
-	if object, ok := objectFields(value); ok {
-		values := make(map[string]any, len(object))
-		for key, element := range object {
-			values[key] = summarizeLongArraysWithLimit(element, maxValues)
-		}
-		return values
-	}
-	return value
-}
-
-func formatArraySummary(value any) (string, bool) {
-	return formatArraySummaryWithLimit(value, maxInlineArrayValues)
-}
-
-func formatArraySummaryWithLimit(value any, maxValues int) (string, bool) {
-	array, ok := sliceValues(value)
-	if maxValues < 1 {
-		maxValues = 1
-	}
-	if !ok || len(array) <= maxValues || !isScalarArray(array) {
-		return "", false
-	}
-	values := make([]string, 0, maxValues)
-	for _, element := range array[:maxValues] {
-		values = append(values, formatSummaryValue(element))
-	}
-	return fmt.Sprintf("[%s, ...] (%d values)", strings.Join(values, ", "), len(array)), true
-}
-
-func isScalarArray(array []any) bool {
-	for _, element := range array {
-		switch indirectInterface(element).(type) {
-		case nil, string, json.Number, bool, float64, float32, int, int64, int32, uint, uint64, uint32, time.Time:
-		default:
-			return false
-		}
-	}
-	return true
-}
-
-func formatSummaryValue(value any) string {
-	encoded, err := json.Marshal(value)
-	if err != nil {
-		return formatTableValue(value)
-	}
-	return string(encoded)
-}
-
-func printArrayTable(cmd *cobra.Command, value any) {
-	array, ok := sliceValues(value)
-	if !ok {
-		printTable(cmd.OutOrStdout(), []string{"Value"}, [][]string{{formatTableValue(value)}})
-		return
-	}
-	if len(array) == 0 {
-		printTable(cmd.OutOrStdout(), []string{"Result"}, [][]string{{"No data"}})
-		return
-	}
-	allObjects := true
-	columnsSet := make(map[string]struct{})
-	objectRows := make([]map[string]any, 0, len(array))
-	for _, element := range array {
-		object, ok := objectFields(element)
-		if !ok {
-			allObjects = false
-			break
-		}
-		object = formatProgressObject(object)
-		objectRows = append(objectRows, object)
-		for column := range object {
-			columnsSet[column] = struct{}{}
-		}
-	}
-	if !allObjects {
-		rows := make([][]string, len(array))
-		for i, element := range array {
-			rows[i] = []string{strconv.Itoa(i), formatTableValue(element)}
-		}
-		printTable(cmd.OutOrStdout(), []string{"Index", "Value"}, rows)
-		return
-	}
-	columns := make([]string, 0, len(columnsSet))
-	for column := range columnsSet {
-		columns = append(columns, column)
-	}
-	columns = orderedArrayColumns(columns)
-	rows := make([][]string, len(objectRows))
-	for i, object := range objectRows {
-		row := make([]string, len(columns))
-		for j, column := range columns {
-			row[j] = formatTableCellValue(column, object[column])
-		}
-		rows[i] = row
-	}
-	printTable(cmd.OutOrStdout(), columns, rows)
-}
-
-func orderedArrayColumns(columns []string) []string {
-	if lo.Contains(columns, "FeedbackType") {
-		return orderedKeys(columns, "FeedbackType", "UserId", "ItemId", "Value", "Timestamp", "Comment", "Updated")
-	}
-	if lo.Contains(columns, "Progress") {
-		return orderedKeys(columns, "Tracer", "Name", "Status", "Progress", "Error", "StartTime", "FinishTime")
-	}
-	return orderedKeys(columns, "UserId", "ItemId", "Comment", "Categories", "IsHidden", "Timestamp")
-}
-
-func formatProgressObject(object map[string]any) map[string]any {
-	count, hasCount := numberValue(object["Count"])
-	total, hasTotal := numberValue(object["Total"])
-	if !hasCount || !hasTotal {
-		return object
-	}
-	updated := make(map[string]any, len(object))
-	for key, value := range object {
-		if key == "Count" || key == "Total" {
-			continue
-		}
-		updated[key] = value
-	}
-	updated["Progress"] = formatProgressBar(count, total)
-	return updated
-}
-
-func numberValue(value any) (float64, bool) {
-	switch typed := value.(type) {
-	case json.Number:
-		number, err := typed.Float64()
-		return number, err == nil
-	case float64:
-		return typed, true
-	case int:
-		return float64(typed), true
-	case int64:
-		return float64(typed), true
-	default:
-		return 0, false
-	}
-}
-
-func formatProgressBar(count, total float64) string {
-	const width = 20
-	if count < 0 {
-		count = 0
-	}
-	if total < 0 {
-		total = 0
-	}
-	if total > 0 && count > total {
-		count = total
-	}
-	ratio := 0.0
-	if total > 0 {
-		ratio = count / total
-	}
-	filled := int(ratio*width + 0.5)
-	if filled > width {
-		filled = width
-	}
-	percent := int(ratio*100 + 0.5)
-	return fmt.Sprintf("[%s%s] %d%%",
-		strings.Repeat("#", filled),
-		strings.Repeat("-", width-filled),
-		percent)
-}
-
-func formatTableCellValue(column string, value any) string {
-	if column != "Labels" {
-		return formatTableValue(value)
-	}
-	if isSliceValue(value) || isObjectValue(value) {
-		encoded, err := json.Marshal(summarizeLongArraysWithLimit(value, maxTableLabelArrayValues))
-		if err != nil {
-			return formatTableValue(value)
-		}
-		return string(encoded)
-	}
-	return formatTableValue(value)
-}
-
-func formatTableValue(value any) string {
-	value = indirectInterface(value)
-	switch typed := value.(type) {
-	case nil:
-		return ""
-	case string:
-		if formatted, ok := formatTimeValue(typed); ok {
-			return formatted
-		}
-		return typed
-	case json.Number:
-		return typed.String()
-	case bool:
-		return strconv.FormatBool(typed)
-	case float64:
-		return strconv.FormatFloat(typed, 'f', -1, 64)
-	case float32:
-		return strconv.FormatFloat(float64(typed), 'f', -1, 32)
-	case int:
-		return strconv.Itoa(typed)
-	case int64:
-		return strconv.FormatInt(typed, 10)
-	case int32:
-		return strconv.FormatInt(int64(typed), 10)
-	case uint:
-		return strconv.FormatUint(uint64(typed), 10)
-	case uint64:
-		return strconv.FormatUint(typed, 10)
-	case uint32:
-		return strconv.FormatUint(uint64(typed), 10)
-	case time.Time:
-		return typed.Format(time.RFC3339)
-	}
-	if isSliceValue(value) {
-		if summary, ok := formatArraySummary(value); ok {
-			return summary
-		}
-		encoded, err := json.Marshal(summarizeLongArrays(value))
-		if err != nil {
-			return fmt.Sprint(value)
-		}
-		return string(encoded)
-	}
-	if isObjectValue(value) {
-		encoded, err := json.Marshal(summarizeLongArrays(value))
-		if err != nil {
-			return fmt.Sprint(value)
-		}
-		return string(encoded)
-	}
-	return fmt.Sprint(value)
-}
-
-func formatTimeValue(value string) (string, bool) {
-	timestamp, err := time.Parse(time.RFC3339Nano, value)
-	if err != nil {
-		return "", false
-	}
-	return timestamp.Format(time.RFC3339), true
-}
-
-func isSliceValue(value any) bool {
-	v := indirectValue(reflect.ValueOf(value))
-	return v.IsValid() && (v.Kind() == reflect.Slice || v.Kind() == reflect.Array)
-}
-
-func isObjectValue(value any) bool {
-	_, ok := objectFields(value)
-	return ok
-}
-
-func sliceValues(value any) ([]any, bool) {
-	v := indirectValue(reflect.ValueOf(value))
-	if !v.IsValid() || (v.Kind() != reflect.Slice && v.Kind() != reflect.Array) {
-		return nil, false
-	}
-	values := make([]any, v.Len())
-	for i := 0; i < v.Len(); i++ {
-		values[i] = valueFromReflect(v.Index(i))
-	}
-	return values, true
-}
-
-func objectFields(value any) (map[string]any, bool) {
-	return objectFieldsFromValue(reflect.ValueOf(value))
-}
-
-func objectFieldsFromValue(v reflect.Value) (map[string]any, bool) {
-	v = indirectValue(v)
-	if !v.IsValid() {
-		return nil, false
-	}
-	if v.CanInterface() {
-		if _, ok := v.Interface().(time.Time); ok {
-			return nil, false
-		}
-	}
-	if v.Type() == reflect.TypeOf(time.Time{}) {
-		return nil, false
-	}
-	switch v.Kind() {
-	case reflect.Map:
-		if v.Type().Key().Kind() != reflect.String {
-			return nil, false
-		}
-		object := make(map[string]any, v.Len())
-		iter := v.MapRange()
-		for iter.Next() {
-			object[iter.Key().String()] = valueFromReflect(iter.Value())
-		}
-		return object, true
-	case reflect.Struct:
-		object := make(map[string]any, v.NumField())
-		t := v.Type()
-		for i := 0; i < v.NumField(); i++ {
-			field := t.Field(i)
-			if field.PkgPath != "" && !field.Anonymous {
-				continue
-			}
-			fieldValue := v.Field(i)
-			if field.Anonymous {
-				if embedded, ok := objectFieldsFromValue(fieldValue); ok {
-					for key, value := range embedded {
-						object[key] = value
-					}
-					continue
-				}
-			}
-			object[field.Name] = valueFromReflect(fieldValue)
-		}
-		return object, true
-	default:
-		return nil, false
-	}
-}
-
-func valueFromReflect(v reflect.Value) any {
-	v = indirectValue(v)
-	if !v.IsValid() {
-		return nil
-	}
-	if v.CanInterface() {
-		return v.Interface()
-	}
-	return fmt.Sprint(v)
-}
-
-func indirectInterface(value any) any {
-	return valueFromReflect(reflect.ValueOf(value))
-}
-
-func indirectValue(v reflect.Value) reflect.Value {
-	for v.IsValid() && (v.Kind() == reflect.Interface || v.Kind() == reflect.Pointer) {
-		if v.IsNil() {
-			return reflect.Value{}
-		}
-		v = v.Elem()
-	}
-	return v
-}
-
-func printTable(output io.Writer, headers []string, rows [][]string) {
-	table := tabwriter.NewWriter(output, 0, 8, 2, ' ', 0)
-	for i, header := range headers {
-		if i > 0 {
-			_, _ = fmt.Fprint(table, "\t")
-		}
-		_, _ = fmt.Fprint(table, formatTableHeader(header))
-	}
-	_, _ = fmt.Fprintln(table)
-	for _, row := range rows {
-		for i, cell := range row {
-			if i > 0 {
-				_, _ = fmt.Fprint(table, "\t")
-			}
-			_, _ = fmt.Fprint(table, cell)
-		}
-		_, _ = fmt.Fprintln(table)
-	}
-	lo.Must0(table.Flush())
-}
-
-func formatTableHeader(header string) string {
-	runes := []rune(header)
-	var builder strings.Builder
-	for i, ch := range runes {
-		if ch == '.' || ch == '_' || ch == '-' || unicode.IsSpace(ch) {
-			if builder.Len() > 0 {
-				builder.WriteByte(' ')
-			}
-			continue
-		}
-		if i > 0 && shouldSplitTableHeader(runes, i) {
-			builder.WriteByte(' ')
-		}
-		builder.WriteRune(unicode.ToUpper(ch))
-	}
-	return strings.Join(strings.Fields(builder.String()), "-")
-}
-
-func shouldSplitTableHeader(runes []rune, i int) bool {
-	current := runes[i]
-	previous := runes[i-1]
-	if !unicode.IsUpper(current) {
-		return false
-	}
-	if unicode.IsLower(previous) || unicode.IsDigit(previous) {
-		return true
-	}
-	return unicode.IsUpper(previous) && i+1 < len(runes) && unicode.IsLower(runes[i+1])
-}
-
 func addAuthFlags(commands ...*cobra.Command) {
 	for _, cmd := range commands {
 		cmd.Flags().String("endpoint", "", "Gorse base URL (default: selected context or GORSE_ADMIN_ENDPOINT)")
@@ -668,7 +130,7 @@ func readFlagOrFile(cmd *cobra.Command, valueFlag, fileFlag string) string {
 // getCmd is the parent command for get operations
 var getCmd = &cobra.Command{
 	Use:   "get",
-	Short: "Get resources from Gorse admin API",
+	Short: "Get Gorse resources",
 	Args:  cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
 		_ = cmd.Help()
@@ -693,10 +155,10 @@ var pipelineCmd = &cobra.Command{
 	},
 }
 
-// getClusterCmd gets cluster nodes from the admin API
+// getClusterCmd gets cluster nodes
 var getClusterCmd = &cobra.Command{
-	Use:   "cluster",
-	Short: "Get cluster nodes from Gorse admin API",
+	Use:   "cluster-info",
+	Short: "Get cluster nodes",
 	Run: func(cmd *cobra.Command, args []string) {
 		cluster, err := newAdminClient(cmd).GetCluster()
 		if err != nil {
@@ -708,7 +170,7 @@ var getClusterCmd = &cobra.Command{
 
 var psCmd = &cobra.Command{
 	Use:   "ps",
-	Short: "Get task progress from Gorse admin API",
+	Short: "Get task progress",
 	Run: func(cmd *cobra.Command, args []string) {
 		tasks, err := newAdminClient(cmd).GetTasks()
 		if err != nil {
@@ -727,6 +189,22 @@ var pipelineGetCmd = &cobra.Command{
 			log.Logger().Fatal("admin API request failed", zap.Error(err))
 		}
 		printValueTables(cmd, config)
+	},
+}
+
+var pipelineSchemaCmd = &cobra.Command{
+	Use:   "schema",
+	Short: "Get recommendation pipeline configuration schema",
+	Run: func(cmd *cobra.Command, args []string) {
+		schema, err := newAdminClient(cmd).GetConfigSchema()
+		if err != nil {
+			log.Logger().Fatal("admin API request failed", zap.Error(err))
+		}
+		encoder := json.NewEncoder(cmd.OutOrStdout())
+		encoder.SetIndent("", "  ")
+		if err = encoder.Encode(schema); err != nil {
+			log.Logger().Fatal("failed to encode schema", zap.Error(err))
+		}
 	},
 }
 
@@ -785,35 +263,25 @@ func confirmRestore(cmd *cobra.Command, file string) bool {
 	return strings.EqualFold(strings.TrimSpace(input), "y")
 }
 
-var pipelineSetCmd = &cobra.Command{
-	Use:   "set [key=value]...",
-	Short: "Set recommendation pipeline configuration values",
-	Example: `  # Set single config value
-  gorse-cli pipeline set recommend.cache_size=1000
+var pipelinePatchCmd = &cobra.Command{
+	Use:   "patch <json-patch>",
+	Short: "Patch recommendation pipeline configuration values",
+	Example: `  # Replace a single config value
+  gorse-cli pipeline patch '[{"op":"replace","path":"/recommend/cache_size","value":1000}]'
 
-  # Set multiple config values
-  gorse-cli pipeline set recommend.cache_size=1000 recommend.item_ttl=72h`,
-	Args: cobra.MinimumNArgs(1),
+  # Replace multiple config values
+  gorse-cli pipeline patch '[{"op":"replace","path":"/recommend/cache_size","value":1000},{"op":"replace","path":"/recommend/item_ttl","value":"72h"}]'`,
+	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		client := newAdminClient(cmd)
-		configPatch, err := client.GetConfig()
+		currentConfig, err := client.GetConfig()
 		if err != nil {
 			log.Logger().Fatal("admin API request failed", zap.Error(err))
 		}
 
-		// Apply config patch from arguments.
-		for _, arg := range args {
-			parts := strings.SplitN(arg, "=", 2)
-			if len(parts) != 2 {
-				log.Logger().Fatal("invalid config format, expected key=value", zap.String("arg", arg))
-			}
-			key := parts[0]
-			value := parts[1]
-
-			// Parse the value
-			if err = setConfigValue(configPatch, key, parseConfigValue(value)); err != nil {
-				log.Logger().Fatal("failed to set config value", zap.String("key", key), zap.Error(err))
-			}
+		configPatch, err := applyJSONPatch(currentConfig, args[0])
+		if err != nil {
+			log.Logger().Fatal("failed to apply JSON patch", zap.Error(err))
 		}
 
 		updatedConfig, err := client.UpdateConfig(configPatch)
@@ -825,10 +293,34 @@ var pipelineSetCmd = &cobra.Command{
 	},
 }
 
+func applyJSONPatch(config map[string]any, patchDocument string) (map[string]any, error) {
+	configBytes, err := json.Marshal(config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode config: %w", err)
+	}
+	patch, err := jsonpatch.DecodePatch([]byte(patchDocument))
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode JSON patch: %w", err)
+	}
+	patchedConfigBytes, err := patch.Apply(configBytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to apply JSON patch: %w", err)
+	}
+	var patchedConfig map[string]any
+	if err = json.Unmarshal(patchedConfigBytes, &patchedConfig); err != nil {
+		return nil, fmt.Errorf("failed to decode patched config: %w", err)
+	}
+	return patchedConfig, nil
+}
+
 var pipelineResetCmd = &cobra.Command{
 	Use:   "reset",
 	Short: "Reset recommendation pipeline configuration to the file defaults",
 	Run: func(cmd *cobra.Command, args []string) {
+		if !confirmPipelineReset(cmd) {
+			fmt.Fprintln(cmd.OutOrStdout(), "Pipeline reset canceled")
+			return
+		}
 		result, err := newAdminClient(cmd).ResetConfig()
 		if err != nil {
 			log.Logger().Fatal("admin API request failed", zap.Error(err))
@@ -839,6 +331,15 @@ var pipelineResetCmd = &cobra.Command{
 		}
 		fmt.Fprintln(cmd.OutOrStdout(), "Pipeline reset to defaults.")
 	},
+}
+
+func confirmPipelineReset(cmd *cobra.Command) bool {
+	fmt.Fprint(cmd.OutOrStdout(), "Reset recommendation pipeline configuration to file defaults? Current pipeline settings will be overwritten. Confirm [y/N]: ")
+	input, err := bufio.NewReader(cmd.InOrStdin()).ReadString('\n')
+	if err != nil && !errors.Is(err, io.EOF) {
+		log.Logger().Fatal("failed to read confirmation", zap.Error(err))
+	}
+	return strings.EqualFold(strings.TrimSpace(input), "y")
 }
 
 var getCategoriesCmd = &cobra.Command{
@@ -1061,7 +562,7 @@ var getNonPersonalizedCmd = &cobra.Command{
 }
 
 var recommendUserCmd = &cobra.Command{
-	Use:   "user <user-id> [recommender] [name]",
+	Use:   "item-to-user <user-id> [recommender] [name]",
 	Short: "Get recommendations for a user",
 	Args:  cobra.RangeArgs(1, 3),
 	Run: func(cmd *cobra.Command, args []string) {
@@ -1144,77 +645,6 @@ var getExternalCmd = &cobra.Command{
 	},
 }
 
-var getRankerPromptCmd = &cobra.Command{
-	Use:   "ranker-prompt",
-	Short: "Render ranker prompt preview",
-	Run: func(cmd *cobra.Command, args []string) {
-		queryTemplate := readFlagOrFile(cmd, "query-template", "query-template-file")
-		documentTemplate := readFlagOrFile(cmd, "document-template", "document-template-file")
-		userID := lo.Must(cmd.Flags().GetString("user-id"))
-		if queryTemplate == "" || documentTemplate == "" || userID == "" {
-			log.Logger().Fatal("--query-template/--query-template-file, --document-template/--document-template-file, and --user-id are required")
-		}
-		prompt, err := newAdminClient(cmd).GetRankerPrompt(queryTemplate, documentTemplate, userID)
-		if err != nil {
-			log.Logger().Fatal("admin API request failed", zap.Error(err))
-		}
-		printValueTables(cmd, prompt)
-	},
-}
-
-func setConfigValue(config map[string]interface{}, key string, value interface{}) error {
-	parts := strings.Split(key, ".")
-	if len(parts) == 0 {
-		return fmt.Errorf("empty config key")
-	}
-	for _, part := range parts {
-		if part == "" {
-			return fmt.Errorf("invalid config key %q", key)
-		}
-	}
-	current := config
-	for _, part := range parts[:len(parts)-1] {
-		next, ok := current[part]
-		if !ok {
-			child := make(map[string]interface{})
-			current[part] = child
-			current = child
-			continue
-		}
-		child, ok := next.(map[string]interface{})
-		if !ok {
-			return fmt.Errorf("config key %q is not an object", part)
-		}
-		current = child
-	}
-	current[parts[len(parts)-1]] = value
-	return nil
-}
-
-// parseConfigValue parses a string value into appropriate type
-func parseConfigValue(value string) interface{} {
-	// Try parsing as bool
-	if value == "true" {
-		return true
-	}
-	if value == "false" {
-		return false
-	}
-
-	// Try parsing as int
-	if intVal, err := strconv.Atoi(value); err == nil {
-		return intVal
-	}
-
-	// Try parsing as float
-	if floatVal, err := strconv.ParseFloat(value, 64); err == nil {
-		return floatVal
-	}
-
-	// Return as string
-	return value
-}
-
 func init() {
 	rootCmd.PersistentFlags().BoolP("version", "v", false, "gorse-cli version")
 	rootCmd.AddCommand(contextCmd)
@@ -1224,9 +654,9 @@ func init() {
 	contextCmd.AddCommand(contextDeleteCmd)
 	contextCmd.AddCommand(contextCurrentCmd)
 	rootCmd.AddCommand(getCmd)
-	getCmd.AddCommand(getClusterCmd)
+	rootCmd.AddCommand(getClusterCmd)
+	rootCmd.AddCommand(getStatsCmd)
 	getCmd.AddCommand(getCategoriesCmd)
-	getCmd.AddCommand(getStatsCmd)
 	getCmd.AddCommand(getUserCmd)
 	getCmd.AddCommand(getUsersCmd)
 	getCmd.AddCommand(getItemCmd)
@@ -1239,11 +669,11 @@ func init() {
 	recommendCmd.AddCommand(getItemToItemCmd)
 	recommendCmd.AddCommand(getUserToUserCmd)
 	recommendCmd.AddCommand(getExternalCmd)
-	recommendCmd.AddCommand(getRankerPromptCmd)
 
 	rootCmd.AddCommand(pipelineCmd)
 	pipelineCmd.AddCommand(pipelineGetCmd)
-	pipelineCmd.AddCommand(pipelineSetCmd)
+	pipelineCmd.AddCommand(pipelineSchemaCmd)
+	pipelineCmd.AddCommand(pipelinePatchCmd)
 	pipelineCmd.AddCommand(pipelineResetCmd)
 	rootCmd.AddCommand(psCmd)
 	rootCmd.AddCommand(dumpCmd)
@@ -1253,8 +683,8 @@ func init() {
 	contextAddCmd.Flags().String("api-key", "", "Gorse admin API key (default: GORSE_ADMIN_API_KEY; prefer prompt to avoid shell history)")
 	addAuthFlags(getClusterCmd, getCategoriesCmd, psCmd,
 		getStatsCmd, getUserCmd, getUsersCmd, getItemCmd, getItemsCmd, getFeedbackCmd, getLatestCmd,
-		getNonPersonalizedCmd, recommendUserCmd, getItemToItemCmd, getUserToUserCmd, getExternalCmd, getRankerPromptCmd,
-		pipelineGetCmd, pipelineSetCmd, pipelineResetCmd, dumpCmd, restoreCmd)
+		getNonPersonalizedCmd, recommendUserCmd, getItemToItemCmd, getUserToUserCmd, getExternalCmd,
+		pipelineGetCmd, pipelineSchemaCmd, pipelinePatchCmd, pipelineResetCmd, dumpCmd, restoreCmd)
 
 	getUsersCmd.Flags().IntP("n", "n", 0, "Number of returned users")
 	getItemsCmd.Flags().IntP("n", "n", 0, "Number of returned items")
@@ -1275,11 +705,6 @@ func init() {
 	getExternalCmd.Flags().String("script", "", "External recommender script")
 	getExternalCmd.Flags().String("script-file", "", "Path to external recommender script")
 	getExternalCmd.Flags().String("user-id", "", "User ID")
-	getRankerPromptCmd.Flags().String("query-template", "", "Ranker query template")
-	getRankerPromptCmd.Flags().String("query-template-file", "", "Path to ranker query template")
-	getRankerPromptCmd.Flags().String("document-template", "", "Ranker document template")
-	getRankerPromptCmd.Flags().String("document-template-file", "", "Path to ranker document template")
-	getRankerPromptCmd.Flags().String("user-id", "", "User ID")
 
 }
 
