@@ -23,6 +23,7 @@ import (
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
+	"gopkg.in/yaml.v3"
 )
 
 func executeRawCommand(root *cobra.Command, args ...string) (string, error) {
@@ -156,7 +157,6 @@ func (s *CLITestSuite) TestGetSubcommands() {
 		{name: "cluster-info", args: []string{"cluster-info"}, wantInOutput: "server-node", wantTable: true},
 		{name: "categories", args: []string{"get", "categories"}, wantInOutput: "books", wantTable: true},
 		{name: "ps", args: []string{"ps"}, wantTable: true},
-		{name: "pipeline-get", args: []string{"pipeline", "get"}, wantInOutput: "cache_size"},
 		{name: "stats", args: []string{"stats"}, wantInOutput: "BinaryVersion"},
 		{name: "user", args: []string{"get", "user", "alice"}, wantInOutput: "alice"},
 		{name: "users", args: []string{"get", "users", "-n", "10"}, wantInOutput: "bob", wantTable: true},
@@ -168,7 +168,6 @@ func (s *CLITestSuite) TestGetSubcommands() {
 		{name: "recommend-item-to-user", args: []string{"recommend", "item-to-user", "alice", "non-personalized", "popular", "-n", "3", "--category", "news"}, wantInOutput: "recommend-1", wantTable: true},
 		{name: "item-to-item", args: []string{"recommend", "item-to-item", "neighbors", "item-1", "-n", "3", "--category", "news"}, wantInOutput: "similar-1", wantTable: true},
 		{name: "user-to-user", args: []string{"recommend", "user-to-user", "neighbors", "alice", "-n", "3"}, wantInOutput: "neighbor-1", wantTable: true},
-		{name: "external", args: []string{"recommend", "external", "--script", `["external-1"]`, "--user-id", "alice"}, wantInOutput: "external-1", wantTable: true},
 	}
 
 	for _, tt := range tests {
@@ -273,14 +272,28 @@ func (s *CLITestSuite) TestGetItems() {
 	s.Require().NotContains(out, "└")
 }
 
+func (s *CLITestSuite) TestPipelineGetCmd() {
+	out, err := s.execute("pipeline", "get")
+	s.Require().NoError(err)
+
+	var config map[string]any
+	s.Require().NoError(yaml.Unmarshal([]byte(out), &config))
+	s.Require().Contains(config, "cache_size")
+	s.Require().NotContains(config, "recommend")
+	s.Require().Contains(out, "cache_size:")
+	s.Require().NotContains(out, "recommend:")
+}
+
 func (s *CLITestSuite) TestPipelineSchemaCmd() {
 	out, err := s.execute("pipeline", "schema")
 	s.Require().NoError(err)
 
 	var schema map[string]any
-	s.Require().NoError(json.Unmarshal([]byte(out), &schema))
+	s.Require().NoError(yaml.Unmarshal([]byte(out), &schema))
 	s.Require().Contains(schema, "$schema")
 	s.Require().Contains(schema, "$defs")
+	s.Require().Contains(out, "$schema:")
+	s.Require().Contains(out, "$defs:")
 	s.Require().Contains(out, "RecommendConfig")
 }
 

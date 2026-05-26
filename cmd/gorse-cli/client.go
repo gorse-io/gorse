@@ -15,13 +15,14 @@
 package main
 
 import (
-	"encoding/base64"
 	"fmt"
 	"io"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/go-resty/resty/v2"
+	"github.com/go-viper/mapstructure/v2"
 	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/master"
@@ -51,8 +52,8 @@ func (c *AdminClient) GetTasks() ([]monitor.Progress, error) {
 	return getJSON[[]monitor.Progress](c, "/dashboard/tasks", nil)
 }
 
-func (c *AdminClient) GetConfig() (map[string]any, error) {
-	return getJSON[map[string]any](c, "/dashboard/config", nil)
+func (c *AdminClient) GetConfig() (config.Config, error) {
+	return getJSON[config.Config](c, "/dashboard/config", nil)
 }
 
 func (c *AdminClient) GetConfigSchema() (map[string]any, error) {
@@ -87,6 +88,64 @@ func (c *AdminClient) ResetConfig() (map[string]any, error) {
 		return result, newAdminAPIError(resp)
 	}
 	return result, nil
+}
+
+func decodeConfig(configMap map[string]any) (config.Config, error) {
+	var result config.Config
+	decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
+		DecodeHook: mapstructure.ComposeDecodeHookFunc(
+			mapstructure.StringToTimeDurationHookFunc(),
+			config.StringToFeedbackTypeHookFunc(),
+		),
+		Result: &result,
+	})
+	if err != nil {
+		return result, fmt.Errorf("failed to create config decoder: %w", err)
+	}
+	if err = decoder.Decode(configMap); err != nil {
+		return result, fmt.Errorf("failed to decode config: %w", err)
+	}
+	return result, nil
+}
+
+func configToMap(configValue config.Config) (map[string]any, error) {
+	var configMap map[string]any
+	if err := mapstructure.Decode(configValue, &configMap); err != nil {
+		return nil, fmt.Errorf("failed to encode config: %w", err)
+	}
+	return formatConfigMap(configMap), nil
+}
+
+func formatConfigMap(configMap map[string]any) map[string]any {
+	formatted := make(map[string]any, len(configMap))
+	for key, value := range configMap {
+		formatted[key] = formatConfigValue(value)
+	}
+	return formatted
+}
+
+func formatConfigValue(value any) any {
+	switch v := value.(type) {
+	case time.Duration:
+		s := v.String()
+		if strings.HasSuffix(s, "m0s") {
+			s = s[:len(s)-2]
+		}
+		if strings.HasSuffix(s, "h0m") {
+			s = s[:len(s)-2]
+		}
+		return s
+	case map[string]any:
+		return formatConfigMap(v)
+	case []any:
+		formatted := make([]any, len(v))
+		for i, item := range v {
+			formatted[i] = formatConfigValue(item)
+		}
+		return formatted
+	default:
+		return v
+	}
 }
 
 func (c *AdminClient) GetCategories() ([]string, error) {
@@ -173,13 +232,6 @@ func (c *AdminClient) GetUserToUser(name, userID string, n int) ([]master.ScoreU
 	params := url.Values{}
 	addIntParam(params, "n", n)
 	return getJSON[[]master.ScoreUser](c, "/dashboard/user-to-user/"+url.PathEscape(name)+"/"+url.PathEscape(userID), params)
-}
-
-func (c *AdminClient) GetExternal(script, userID string) ([]string, error) {
-	params := url.Values{}
-	addStringParam(params, "script", base64.StdEncoding.EncodeToString([]byte(script)))
-	addStringParam(params, "user-id", userID)
-	return getJSON[[]string](c, "/dashboard/external", params)
 }
 
 func (c *AdminClient) Restore(reader io.Reader) (*master.DumpStats, error) {

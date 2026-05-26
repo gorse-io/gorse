@@ -31,6 +31,7 @@ import (
 	"github.com/samber/lo"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
+	"gopkg.in/yaml.v3"
 )
 
 var rootCmd = &cobra.Command{
@@ -103,34 +104,10 @@ func addAuthFlags(commands ...*cobra.Command) {
 	}
 }
 
-func addNFlag(cmd *cobra.Command) {
-	cmd.Flags().IntP("n", "n", 0, "Number of returned records")
-}
-
-func addCategoryFlags(cmd *cobra.Command) {
-	cmd.Flags().StringArray("category", nil, "Filter by category, repeatable")
-}
-
-func readFlagOrFile(cmd *cobra.Command, valueFlag, fileFlag string) string {
-	value := lo.Must(cmd.Flags().GetString(valueFlag))
-	if value != "" {
-		return value
-	}
-	file := lo.Must(cmd.Flags().GetString(fileFlag))
-	if file == "" {
-		return ""
-	}
-	content, err := os.ReadFile(file)
-	if err != nil {
-		log.Logger().Fatal("failed to read file", zap.String("file", file), zap.Error(err))
-	}
-	return string(content)
-}
-
 // getCmd is the parent command for get operations
 var getCmd = &cobra.Command{
 	Use:   "get",
-	Short: "Get Gorse resources",
+	Short: "Get items, users and feedback",
 	Args:  cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
 		_ = cmd.Help()
@@ -139,7 +116,7 @@ var getCmd = &cobra.Command{
 
 var recommendCmd = &cobra.Command{
 	Use:   "recommend",
-	Short: "Get recommendations from Gorse",
+	Short: "Get recommendations",
 	Args:  cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
 		_ = cmd.Help()
@@ -148,7 +125,7 @@ var recommendCmd = &cobra.Command{
 
 var pipelineCmd = &cobra.Command{
 	Use:   "pipeline",
-	Short: "Manage recommendation pipeline configuration",
+	Short: "Config recommendation pipeline",
 	Args:  cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
 		_ = cmd.Help()
@@ -158,7 +135,7 @@ var pipelineCmd = &cobra.Command{
 // getClusterCmd gets cluster nodes
 var getClusterCmd = &cobra.Command{
 	Use:   "cluster-info",
-	Short: "Get cluster nodes",
+	Short: "List cluster nodes",
 	Run: func(cmd *cobra.Command, args []string) {
 		cluster, err := newAdminClient(cmd).GetCluster()
 		if err != nil {
@@ -170,7 +147,7 @@ var getClusterCmd = &cobra.Command{
 
 var psCmd = &cobra.Command{
 	Use:   "ps",
-	Short: "Get task progress",
+	Short: "List task progress",
 	Run: func(cmd *cobra.Command, args []string) {
 		tasks, err := newAdminClient(cmd).GetTasks()
 		if err != nil {
@@ -184,11 +161,23 @@ var pipelineGetCmd = &cobra.Command{
 	Use:   "get",
 	Short: "Get recommendation pipeline configuration",
 	Run: func(cmd *cobra.Command, args []string) {
-		config, err := newAdminClient(cmd).GetConfig()
+		configValue, err := newAdminClient(cmd).GetConfig()
 		if err != nil {
 			log.Logger().Fatal("admin API request failed", zap.Error(err))
 		}
-		printValueTables(cmd, config)
+		configMap, err := configToMap(configValue)
+		if err != nil {
+			log.Logger().Fatal("failed to encode config", zap.Error(err))
+		}
+		recommend, ok := configMap["recommend"]
+		if !ok {
+			log.Logger().Fatal("recommend config not found")
+		}
+		encoder := yaml.NewEncoder(cmd.OutOrStdout())
+		defer encoder.Close()
+		if err = encoder.Encode(recommend); err != nil {
+			log.Logger().Fatal("failed to encode config", zap.Error(err))
+		}
 	},
 }
 
@@ -200,8 +189,8 @@ var pipelineSchemaCmd = &cobra.Command{
 		if err != nil {
 			log.Logger().Fatal("admin API request failed", zap.Error(err))
 		}
-		encoder := json.NewEncoder(cmd.OutOrStdout())
-		encoder.SetIndent("", "  ")
+		encoder := yaml.NewEncoder(cmd.OutOrStdout())
+		defer encoder.Close()
 		if err = encoder.Encode(schema); err != nil {
 			log.Logger().Fatal("failed to encode schema", zap.Error(err))
 		}
@@ -279,7 +268,11 @@ var pipelinePatchCmd = &cobra.Command{
 			log.Logger().Fatal("admin API request failed", zap.Error(err))
 		}
 
-		configPatch, err := applyJSONPatch(currentConfig, args[0])
+		currentConfigMap, err := configToMap(currentConfig)
+		if err != nil {
+			log.Logger().Fatal("failed to encode config", zap.Error(err))
+		}
+		configPatch, err := applyJSONPatch(currentConfigMap, args[0])
 		if err != nil {
 			log.Logger().Fatal("failed to apply JSON patch", zap.Error(err))
 		}
@@ -629,22 +622,6 @@ var getUserToUserCmd = &cobra.Command{
 	},
 }
 
-var getExternalCmd = &cobra.Command{
-	Use:   "external",
-	Short: "Preview external recommendations",
-	Run: func(cmd *cobra.Command, args []string) {
-		script := readFlagOrFile(cmd, "script", "script-file")
-		if script == "" {
-			log.Logger().Fatal("--script or --script-file is required")
-		}
-		items, err := newAdminClient(cmd).GetExternal(script, lo.Must(cmd.Flags().GetString("user-id")))
-		if err != nil {
-			log.Logger().Fatal("admin API request failed", zap.Error(err))
-		}
-		printValueTables(cmd, items)
-	},
-}
-
 func init() {
 	rootCmd.PersistentFlags().BoolP("version", "v", false, "gorse-cli version")
 	rootCmd.AddCommand(contextCmd)
@@ -668,7 +645,6 @@ func init() {
 	recommendCmd.AddCommand(getNonPersonalizedCmd)
 	recommendCmd.AddCommand(getItemToItemCmd)
 	recommendCmd.AddCommand(getUserToUserCmd)
-	recommendCmd.AddCommand(getExternalCmd)
 
 	rootCmd.AddCommand(pipelineCmd)
 	pipelineCmd.AddCommand(pipelineGetCmd)
@@ -683,7 +659,7 @@ func init() {
 	contextAddCmd.Flags().String("api-key", "", "Gorse admin API key (default: GORSE_ADMIN_API_KEY; prefer prompt to avoid shell history)")
 	addAuthFlags(getClusterCmd, getCategoriesCmd, psCmd,
 		getStatsCmd, getUserCmd, getUsersCmd, getItemCmd, getItemsCmd, getFeedbackCmd, getLatestCmd,
-		getNonPersonalizedCmd, recommendUserCmd, getItemToItemCmd, getUserToUserCmd, getExternalCmd,
+		getNonPersonalizedCmd, recommendUserCmd, getItemToItemCmd, getUserToUserCmd,
 		pipelineGetCmd, pipelineSchemaCmd, pipelinePatchCmd, pipelineResetCmd, dumpCmd, restoreCmd)
 
 	getUsersCmd.Flags().IntP("n", "n", 0, "Number of returned users")
@@ -692,19 +668,16 @@ func init() {
 	getFeedbackCmd.Flags().String("type", "", "Filter by feedback type")
 	getFeedbackCmd.Flags().String("user", "", "Filter by user ID")
 	getFeedbackCmd.Flags().String("item", "", "Filter by item ID")
-	addNFlag(getLatestCmd)
-	addCategoryFlags(getLatestCmd)
-	addNFlag(getNonPersonalizedCmd)
-	addCategoryFlags(getNonPersonalizedCmd)
+	getLatestCmd.Flags().IntP("n", "n", 0, "Number of returned records")
+	getLatestCmd.Flags().StringArray("category", nil, "Filter by category, repeatable")
+	getNonPersonalizedCmd.Flags().IntP("n", "n", 0, "Number of returned records")
+	getNonPersonalizedCmd.Flags().StringArray("category", nil, "Filter by category, repeatable")
 	getNonPersonalizedCmd.Flags().String("user-id", "", "Remove read items of a user")
 	recommendUserCmd.Flags().IntP("n", "n", 0, "Number of returned items")
-	addCategoryFlags(recommendUserCmd)
-	addNFlag(getItemToItemCmd)
-	addCategoryFlags(getItemToItemCmd)
-	addNFlag(getUserToUserCmd)
-	getExternalCmd.Flags().String("script", "", "External recommender script")
-	getExternalCmd.Flags().String("script-file", "", "Path to external recommender script")
-	getExternalCmd.Flags().String("user-id", "", "User ID")
+	recommendUserCmd.Flags().StringArray("category", nil, "Filter by category, repeatable")
+	getItemToItemCmd.Flags().IntP("n", "n", 0, "Number of returned records")
+	getItemToItemCmd.Flags().StringArray("category", nil, "Filter by category, repeatable")
+	getUserToUserCmd.Flags().IntP("n", "n", 0, "Number of returned records")
 
 }
 
