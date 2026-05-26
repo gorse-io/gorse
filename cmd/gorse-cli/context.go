@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -37,37 +38,35 @@ const (
 	keyringContextsKey       = "contexts"
 )
 
+var (
+	contextNamePattern = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
+	contexts           = NewContexts(keyringService)
+)
+
 type cliContext struct {
 	Name     string
 	Endpoint string
 	APIKey   string
 }
 
-func contextEndpointKey(name string) string {
+type Contexts struct {
+	keyringService string
+}
+
+func NewContexts(keyringService string) Contexts {
+	return Contexts{keyringService: keyringService}
+}
+
+func (c Contexts) contextEndpointKey(name string) string {
 	return "context:" + name + ":admin-endpoint"
 }
 
-func contextAPIKeyKey(name string) string {
+func (c Contexts) contextAPIKeyKey(name string) string {
 	return "context:" + name + ":admin-api-key"
 }
 
-func validateContextName(name string) error {
-	if name == "" {
-		return fmt.Errorf("context name is required")
-	}
-	for i := range len(name) {
-		ch := name[i]
-		if (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') ||
-			ch == '-' || ch == '_' || ch == '.' {
-			continue
-		}
-		return fmt.Errorf("context name %q contains invalid character %q", name, ch)
-	}
-	return nil
-}
-
-func getContextNames() ([]string, error) {
-	raw, err := keyring.Get(keyringService, keyringContextsKey)
+func (c Contexts) Names() ([]string, error) {
+	raw, err := keyring.Get(c.keyringService, keyringContextsKey)
 	if errors.Is(err, keyring.ErrNotFound) {
 		return nil, nil
 	}
@@ -83,66 +82,66 @@ func getContextNames() ([]string, error) {
 	return names, nil
 }
 
-func saveContextNames(names []string) error {
+func (c Contexts) saveNames(names []string) error {
 	names = lo.Uniq(names)
 	sort.Strings(names)
 	raw, err := json.Marshal(names)
 	if err != nil {
 		return err
 	}
-	return keyring.Set(keyringService, keyringContextsKey, string(raw))
+	return keyring.Set(c.keyringService, keyringContextsKey, string(raw))
 }
 
-func addContextName(name string) error {
-	names, err := getContextNames()
+func (c Contexts) addName(name string) error {
+	names, err := c.Names()
 	if err != nil {
 		return err
 	}
 	if !lo.Contains(names, name) {
 		names = append(names, name)
 	}
-	return saveContextNames(names)
+	return c.saveNames(names)
 }
 
-func removeContextName(name string) ([]string, error) {
-	names, err := getContextNames()
+func (c Contexts) removeName(name string) ([]string, error) {
+	names, err := c.Names()
 	if err != nil {
 		return nil, err
 	}
 	names = lo.Filter(names, func(candidate string, _ int) bool {
 		return candidate != name
 	})
-	if err = saveContextNames(names); err != nil {
+	if err = c.saveNames(names); err != nil {
 		return nil, err
 	}
 	return names, nil
 }
 
-func getCurrentContextName() (string, error) {
-	name, err := keyring.Get(keyringService, keyringCurrentContextKey)
+func (c Contexts) CurrentName() (string, error) {
+	name, err := keyring.Get(c.keyringService, keyringCurrentContextKey)
 	if errors.Is(err, keyring.ErrNotFound) {
 		return "", nil
 	}
 	return name, err
 }
 
-func setCurrentContextName(name string) error {
-	return keyring.Set(keyringService, keyringCurrentContextKey, name)
+func (c Contexts) SetCurrentName(name string) error {
+	return keyring.Set(c.keyringService, keyringCurrentContextKey, name)
 }
 
-func clearCurrentContextName() error {
-	if err := keyring.Delete(keyringService, keyringCurrentContextKey); err != nil && !errors.Is(err, keyring.ErrNotFound) {
+func (c Contexts) ClearCurrentName() error {
+	if err := keyring.Delete(c.keyringService, keyringCurrentContextKey); err != nil && !errors.Is(err, keyring.ErrNotFound) {
 		return err
 	}
 	return nil
 }
 
-func loadContext(name string) (cliContext, error) {
-	if err := validateContextName(name); err != nil {
-		return cliContext{}, err
+func (c Contexts) Load(name string) (cliContext, error) {
+	if !contextNamePattern.MatchString(name) {
+		return cliContext{}, fmt.Errorf("context name %q must match %q", name, contextNamePattern.String())
 	}
-	endpoint, endpointErr := keyring.Get(keyringService, contextEndpointKey(name))
-	apiKey, apiKeyErr := keyring.Get(keyringService, contextAPIKeyKey(name))
+	endpoint, endpointErr := keyring.Get(c.keyringService, c.contextEndpointKey(name))
+	apiKey, apiKeyErr := keyring.Get(c.keyringService, c.contextAPIKeyKey(name))
 	if errors.Is(endpointErr, keyring.ErrNotFound) || errors.Is(apiKeyErr, keyring.ErrNotFound) {
 		return cliContext{}, fmt.Errorf("context %q not found", name)
 	}
@@ -155,9 +154,9 @@ func loadContext(name string) (cliContext, error) {
 	return cliContext{Name: name, Endpoint: endpoint, APIKey: apiKey}, nil
 }
 
-func saveContext(name, endpoint, apiKey string) error {
-	if err := validateContextName(name); err != nil {
-		return err
+func (c Contexts) Save(name, endpoint, apiKey string) error {
+	if !contextNamePattern.MatchString(name) {
+		return fmt.Errorf("context name %q must match %q", name, contextNamePattern.String())
 	}
 	if endpoint == "" {
 		return fmt.Errorf("GORSE_ADMIN_ENDPOINT or --endpoint is required")
@@ -165,33 +164,33 @@ func saveContext(name, endpoint, apiKey string) error {
 	if apiKey == "" {
 		return fmt.Errorf("GORSE_ADMIN_API_KEY or --api-key is required")
 	}
-	if err := keyring.Set(keyringService, contextEndpointKey(name), endpoint); err != nil {
+	if err := keyring.Set(c.keyringService, c.contextEndpointKey(name), endpoint); err != nil {
 		return err
 	}
-	if err := keyring.Set(keyringService, contextAPIKeyKey(name), apiKey); err != nil {
+	if err := keyring.Set(c.keyringService, c.contextAPIKeyKey(name), apiKey); err != nil {
 		return err
 	}
-	if err := addContextName(name); err != nil {
+	if err := c.addName(name); err != nil {
 		return err
 	}
-	return setCurrentContextName(name)
+	return c.SetCurrentName(name)
 }
 
-func deleteContext(name string) error {
-	if _, err := loadContext(name); err != nil {
+func (c Contexts) Delete(name string) error {
+	if _, err := c.Load(name); err != nil {
 		return err
 	}
-	if err := keyring.Delete(keyringService, contextEndpointKey(name)); err != nil && !errors.Is(err, keyring.ErrNotFound) {
+	if err := keyring.Delete(c.keyringService, c.contextEndpointKey(name)); err != nil && !errors.Is(err, keyring.ErrNotFound) {
 		return err
 	}
-	if err := keyring.Delete(keyringService, contextAPIKeyKey(name)); err != nil && !errors.Is(err, keyring.ErrNotFound) {
+	if err := keyring.Delete(c.keyringService, c.contextAPIKeyKey(name)); err != nil && !errors.Is(err, keyring.ErrNotFound) {
 		return err
 	}
-	names, err := removeContextName(name)
+	names, err := c.removeName(name)
 	if err != nil {
 		return err
 	}
-	current, err := getCurrentContextName()
+	current, err := c.CurrentName()
 	if err != nil {
 		return err
 	}
@@ -199,20 +198,20 @@ func deleteContext(name string) error {
 		return nil
 	}
 	if len(names) == 0 {
-		return clearCurrentContextName()
+		return c.ClearCurrentName()
 	}
-	return setCurrentContextName(names[0])
+	return c.SetCurrentName(names[0])
 }
 
 // getEndpointAndKey returns the base URL and API key from flags, context, or environment variables.
 func getEndpointAndKey(cmd *cobra.Command) (endpoint, apiKey string) {
-	endpoint = lo.Must(cmd.Flags().GetString("endpoint"))
-	apiKey = lo.Must(cmd.Flags().GetString("api-key"))
+	endpoint = getFlagOrEnv(cmd, "endpoint", "GORSE_ADMIN_ENDPOINT")
+	apiKey = getFlagOrEnv(cmd, "api-key", "GORSE_ADMIN_API_KEY")
 
 	if endpoint == "" || apiKey == "" {
 		contextName := lo.Must(cmd.Flags().GetString("context"))
 		if contextName != "" {
-			ctx, err := loadContext(contextName)
+			ctx, err := contexts.Load(contextName)
 			if err != nil {
 				fatal(cmd,
 					fmt.Sprintf("context %q was not found.", contextName),
@@ -231,20 +230,13 @@ func getEndpointAndKey(cmd *cobra.Command) (endpoint, apiKey string) {
 		}
 	}
 
-	if endpoint == "" {
-		endpoint = os.Getenv("GORSE_ADMIN_ENDPOINT")
-	}
-	if apiKey == "" {
-		apiKey = os.Getenv("GORSE_ADMIN_API_KEY")
-	}
-
 	if endpoint == "" || apiKey == "" {
-		contextName, err := getCurrentContextName()
+		contextName, err := contexts.CurrentName()
 		if err != nil {
 			fatal(cmd, "failed to read the current context from the system keyring: "+err.Error())
 		}
 		if contextName != "" {
-			ctx, err := loadContext(contextName)
+			ctx, err := contexts.Load(contextName)
 			if err != nil {
 				fatal(cmd,
 					fmt.Sprintf("current context %q is invalid or incomplete.", contextName),
@@ -318,7 +310,7 @@ var contextAddCmd = &cobra.Command{
 				fatal(cmd, "failed to read API key: "+err.Error())
 			}
 		}
-		if err := saveContext(name, endpoint, apiKey); err != nil {
+		if err := contexts.Save(name, endpoint, apiKey); err != nil {
 			fatal(cmd,
 				"failed to save context "+strconv.Quote(name)+": "+err.Error(),
 				"Example:",
@@ -333,7 +325,7 @@ var contextListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List Gorse CLI contexts",
 	Run: func(cmd *cobra.Command, args []string) {
-		names, err := getContextNames()
+		names, err := contexts.Names()
 		if err != nil {
 			fatal(cmd, "failed to read contexts from the system keyring: "+err.Error())
 		}
@@ -341,13 +333,13 @@ var contextListCmd = &cobra.Command{
 			fmt.Fprintln(cmd.OutOrStdout(), "No contexts configured.")
 			return
 		}
-		current, err := getCurrentContextName()
+		current, err := contexts.CurrentName()
 		if err != nil {
 			fatal(cmd, "failed to read the current context from the system keyring: "+err.Error())
 		}
 		rows := make([][]string, 0, len(names))
 		for _, name := range names {
-			ctx, err := loadContext(name)
+			ctx, err := contexts.Load(name)
 			if err != nil {
 				fatal(cmd, "context "+strconv.Quote(name)+" is invalid or incomplete: "+err.Error())
 			}
@@ -367,14 +359,14 @@ var contextUseCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		name := args[0]
-		if _, err := loadContext(name); err != nil {
+		if _, err := contexts.Load(name); err != nil {
 			fatal(cmd,
 				"context "+strconv.Quote(name)+" was not found.",
 				"List available contexts:",
 				"  gorse-cli context list",
 			)
 		}
-		if err := setCurrentContextName(name); err != nil {
+		if err := contexts.SetCurrentName(name); err != nil {
 			fatal(cmd, "failed to save the current context in the system keyring: "+err.Error())
 		}
 		fmt.Fprintf(cmd.OutOrStdout(), "Switched to context %q.\n", name)
@@ -387,7 +379,7 @@ var contextDeleteCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		name := args[0]
-		if err := deleteContext(name); err != nil {
+		if err := contexts.Delete(name); err != nil {
 			fatal(cmd,
 				"context "+strconv.Quote(name)+" was not found.",
 				"List available contexts:",
@@ -402,7 +394,7 @@ var contextCurrentCmd = &cobra.Command{
 	Use:   "current",
 	Short: "Show the current Gorse CLI context",
 	Run: func(cmd *cobra.Command, args []string) {
-		name, err := getCurrentContextName()
+		name, err := contexts.CurrentName()
 		if err != nil {
 			fatal(cmd, "failed to read the current context from the system keyring: "+err.Error())
 		}
@@ -410,7 +402,7 @@ var contextCurrentCmd = &cobra.Command{
 			fmt.Fprintln(cmd.OutOrStdout(), "No current context.")
 			return
 		}
-		ctx, err := loadContext(name)
+		ctx, err := contexts.Load(name)
 		if err != nil {
 			fatal(cmd,
 				"current context "+strconv.Quote(name)+" is invalid or incomplete.",
