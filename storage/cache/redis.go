@@ -41,10 +41,14 @@ func init() {
 			return nil, err
 		}
 		opt.Protocol = 2
+		option := storage.NewOptions(opts...)
+		if option.RedisClientName != "" {
+			opt.ClientName = option.RedisClientName
+		}
 		database := new(Redis)
 		database.client = redis.NewClient(opt)
 		database.TablePrefix = storage.TablePrefix(tablePrefix)
-		database.maxSearchResults = storage.NewOptions(opts...).MaxSearchResults
+		database.maxSearchResults = option.MaxSearchResults
 		if err = redisotel.InstrumentTracing(database.client, redisotel.WithAttributes(semconv.DBSystemRedis)); err != nil {
 			log.Logger().Error("failed to add tracing for redis", zap.Error(err))
 			return nil, errors.Trace(err)
@@ -63,10 +67,14 @@ func init() {
 			return nil, err
 		}
 		opt.Protocol = 2
+		option := storage.NewOptions(opts...)
+		if option.RedisClientName != "" {
+			opt.ClientName = option.RedisClientName
+		}
 		database := new(Redis)
 		database.client = redis.NewClusterClient(opt)
 		database.TablePrefix = storage.TablePrefix(tablePrefix)
-		database.maxSearchResults = storage.NewOptions(opts...).MaxSearchResults
+		database.maxSearchResults = option.MaxSearchResults
 		if err = redisotel.InstrumentTracing(database.client, redisotel.WithAttributes(semconv.DBSystemRedis)); err != nil {
 			log.Logger().Error("failed to add tracing for redis", zap.Error(err))
 			return nil, errors.Trace(err)

@@ -76,6 +76,7 @@ type DatabaseConfig struct {
 	TablePrefix      string      `mapstructure:"table_prefix"`
 	DataTablePrefix  string      `mapstructure:"data_table_prefix"`
 	CacheTablePrefix string      `mapstructure:"cache_table_prefix"`
+	CacheClientName  string      `mapstructure:"cache_client_name"`
 	MySQL            MySQLConfig `mapstructure:"mysql"`
 	Postgres         SQLConfig   `mapstructure:"postgres"`
 	Redis            RedisConfig `mapstructure:"redis"`
@@ -118,6 +119,7 @@ func (db *DatabaseConfig) StorageOptions(path string) []storage.Option {
 		strings.HasPrefix(path, storage.RedisClusterPrefix) || strings.HasPrefix(path, storage.RedissClusterPrefix) {
 		return []storage.Option{
 			storage.WithMaxSearchResults(db.Redis.MaxSearchResults),
+			storage.WithRedisClientName(db.CacheClientName),
 		}
 	}
 	return nil
@@ -450,8 +452,9 @@ type AzureBlobConfig struct {
 func GetDefaultConfig() *Config {
 	return &Config{
 		Database: DatabaseConfig{
-			DataStore:  "sqlite://" + filepath.Join(MkDir(), "data.sqlite"),
-			CacheStore: "sqlite://" + filepath.Join(MkDir(), "cache.sqlite"),
+			DataStore:       "sqlite://" + filepath.Join(MkDir(), "data.sqlite"),
+			CacheStore:      "sqlite://" + filepath.Join(MkDir(), "cache.sqlite"),
+			CacheClientName: "gorse_cache_client",
 			MySQL: MySQLConfig{
 				IsolationLevel:  "READ-UNCOMMITTED",
 				MaxOpenConns:    0,
@@ -594,6 +597,7 @@ func setDefault() {
 	// [database]
 	viper.SetDefault("database.data_store", defaultConfig.Database.DataStore)
 	viper.SetDefault("database.cache_store", defaultConfig.Database.CacheStore)
+	viper.SetDefault("database.cache_client_name", defaultConfig.Database.CacheClientName)
 	// [database.mysql]
 	viper.SetDefault("database.mysql.isolation_level", defaultConfig.Database.MySQL.IsolationLevel)
 	viper.SetDefault("database.mysql.max_open_conns", defaultConfig.Database.MySQL.MaxOpenConns)
@@ -662,6 +666,7 @@ var bindings = []configBinding{
 	{"database.data_store", "GORSE_DATA_STORE"},
 	{"database.table_prefix", "GORSE_TABLE_PREFIX"},
 	{"database.cache_table_prefix", "GORSE_CACHE_TABLE_PREFIX"},
+	{"database.cache_client_name", "GORSE_CACHE_CLIENT_NAME"},
 	{"database.data_table_prefix", "GORSE_DATA_TABLE_PREFIX"},
 	{"master.port", "GORSE_MASTER_PORT"},
 	{"master.host", "GORSE_MASTER_HOST"},
