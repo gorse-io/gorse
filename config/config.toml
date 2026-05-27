@@ -31,6 +31,9 @@ table_prefix = ""
 # The naming prefix for tables (collections, keys) in cache storage databases. The default value is `table_prefix`.
 cache_table_prefix = ""
 
+# Name shown by Redis/Valkey CLIENT LIST for cache connections.
+cache_client_name = "gorse_cache_client"
+
 # The naming prefix for tables (collections, keys) in data storage databases. The default value is `table_prefix`.
 data_table_prefix = ""
 
