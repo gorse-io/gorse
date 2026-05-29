@@ -69,7 +69,7 @@ jobs:
           - 6379
 
       valkey:
-        image: valkey/valkey-bundle:9.1-rc2
+        image: valkey/valkey-bundle:latest
         ports:
           - 6379
 

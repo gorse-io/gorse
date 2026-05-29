@@ -6,10 +6,8 @@ services:
       - 6379:6379
 
   # Valkey with valkey-search 1.2.0+ (full-text search support).
-  # Using 9.1-rc2 which includes search module 1.2.0.
-  # Switch to stable 9.1 once released.
   valkey:
-    image: valkey/valkey-bundle:9.1-rc2
+    image: valkey/valkey-bundle:latest
     ports:
       - 6380:6379
 
