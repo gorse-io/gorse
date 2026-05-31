@@ -14,8 +14,11 @@
 package master
 
 import (
+	"context"
 	"fmt"
+	"net/http"
 	"testing"
+	"time"
 
 	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/config"
@@ -52,4 +55,64 @@ func (s *MasterTestSuite) TearDownTest() {
 
 func TestMaster(t *testing.T) {
 	suite.Run(t, new(MasterTestSuite))
+}
+
+func (s *MasterTestSuite) TestRequestTrainingForceQueuesSingleReplacementRun() {
+	s.scheduled = make(chan struct{}, 1)
+
+	s.startTrainingRun()
+
+	resp, status := s.requestTraining(true)
+	s.Equal(http.StatusAccepted, status)
+	s.Equal("scheduled", resp.Status)
+	s.True(resp.Force)
+	s.True(resp.Canceled)
+
+	resp, status = s.requestTraining(true)
+	s.Equal(http.StatusAccepted, status)
+	s.Equal("scheduled", resp.Status)
+	s.True(resp.Force)
+	s.True(resp.Canceled)
+
+	if s.finishTrainingRun() {
+		select {
+		case s.scheduled <- struct{}{}:
+		default:
+		}
+	}
+
+	s.False(s.trainingInProgress)
+	s.False(s.trainingReplacementQueued)
+	s.Equal(1, len(s.scheduled))
+}
+
+func (s *MasterTestSuite) TestRequestTrainingForceCancelsActiveRunContext() {
+	s.scheduled = make(chan struct{}, 1)
+
+	ctx := s.startTrainingRun()
+
+	resp, status := s.requestTraining(true)
+	s.Equal(http.StatusAccepted, status)
+	s.Equal("scheduled", resp.Status)
+	s.True(resp.Canceled)
+
+	select {
+	case <-ctx.Done():
+	case <-time.After(time.Second):
+		s.Fail("expected active training context to be canceled")
+	}
+}
+
+func (s *MasterTestSuite) TestNeedUpdateItemToItemReturnsFalseOnCanceledContext() {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	s.False(s.needUpdateItemToItem(ctx, "item-1", config.ItemToItemConfig{Name: "neighbors"}))
+}
+
+func (s *MasterTestSuite) TestNeedUpdateUserToUserReturnsFalseOnCanceledContext() {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	s.False(s.needUpdateUserToUser(ctx, "user-1", config.UserToUserConfig{Name: "neighbors"}))
 }

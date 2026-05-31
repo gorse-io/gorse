@@ -98,6 +98,10 @@ type Master struct {
 	ticker    *time.Ticker
 	scheduled chan struct{}
 	cancel    context.CancelFunc
+
+	trainingMutex             sync.Mutex
+	trainingInProgress        bool
+	trainingReplacementQueued bool
 }
 
 // NewMaster creates a master node.
@@ -309,12 +313,41 @@ func (m *Master) RunTasksLoop() {
 		}
 
 		// download dataset
-		var ctx context.Context
-		ctx, m.cancel = context.WithCancel(context.Background())
+		ctx := m.startTrainingRun()
 		err := m.runLoadDatasetTask(ctx)
+		if m.finishTrainingRun() {
+			select {
+			case m.scheduled <- struct{}{}:
+			default:
+			}
+		}
 		if err != nil {
+			if isContextCanceled(err) {
+				continue
+			}
 			log.Logger().Error("failed to load ranking dataset", zap.Error(err))
 			continue
 		}
 	}
+}
+
+func (m *Master) startTrainingRun() context.Context {
+	ctx, cancel := context.WithCancel(context.Background())
+	m.trainingMutex.Lock()
+	m.cancel = cancel
+	m.trainingInProgress = true
+	m.trainingMutex.Unlock()
+	return ctx
+}
+
+func (m *Master) finishTrainingRun() bool {
+	m.trainingMutex.Lock()
+	defer m.trainingMutex.Unlock()
+	m.trainingInProgress = false
+	m.cancel = func() {}
+	if m.trainingReplacementQueued {
+		m.trainingReplacementQueued = false
+		return true
+	}
+	return false
 }
