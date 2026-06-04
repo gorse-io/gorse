@@ -145,7 +145,19 @@ var psCmd = &cobra.Command{
 		if err != nil {
 			log.Logger().Fatal("admin API request failed", zap.Error(err))
 		}
-		printArrayTable(cmd, tasks)
+		rows := make([][]string, len(tasks))
+		for i, task := range tasks {
+			rows[i] = []string{
+				formatTableValue(task.Tracer),
+				formatTableValue(task.Name),
+				formatTableValue(task.Status),
+				formatTableValue(formatProgressBar(task.Count, task.Total)),
+				formatTableValue(task.Error),
+				formatTableValue(task.StartTime),
+				formatTableValue(task.FinishTime),
+			}
+		}
+		printTable(cmd.OutOrStdout(), []string{"Tracer", "Name", "Status", "Progress", "Error", "StartTime", "FinishTime"}, rows)
 	},
 }
 

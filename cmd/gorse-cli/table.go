@@ -237,7 +237,6 @@ func printArrayTable(cmd *cobra.Command, value any) {
 			allObjects = false
 			break
 		}
-		object = formatProgressObject(object)
 		objectRows = append(objectRows, object)
 		for column := range object {
 			columnsSet[column] = struct{}{}
@@ -288,7 +287,7 @@ func arrayElementObjectColumns(value any) ([]string, bool) {
 	if len(columns) == 0 {
 		return nil, false
 	}
-	return formatProgressColumns(columns), true
+	return columns, true
 }
 
 func objectColumnsFromType(t reflect.Type) []string {
@@ -316,22 +315,6 @@ func objectColumnsFromType(t reflect.Type) []string {
 	return columns
 }
 
-func formatProgressColumns(columns []string) []string {
-	hasCount := lo.Contains(columns, "Count")
-	hasTotal := lo.Contains(columns, "Total")
-	if !hasCount || !hasTotal {
-		return columns
-	}
-	updated := make([]string, 0, len(columns)-1)
-	for _, column := range columns {
-		if column == "Count" || column == "Total" {
-			continue
-		}
-		updated = append(updated, column)
-	}
-	return append(updated, "Progress")
-}
-
 func orderedArrayColumns(columns []string) []string {
 	if lo.Contains(columns, "FeedbackType") {
 		return orderedKeys(columns, "FeedbackType", "UserId", "ItemId", "Value", "Timestamp", "Comment", "Updated")
@@ -342,40 +325,7 @@ func orderedArrayColumns(columns []string) []string {
 	return orderedKeys(columns, "UserId", "ItemId", "Comment", "Categories", "IsHidden", "Timestamp")
 }
 
-func formatProgressObject(object map[string]any) map[string]any {
-	count, hasCount := numberValue(object["Count"])
-	total, hasTotal := numberValue(object["Total"])
-	if !hasCount || !hasTotal {
-		return object
-	}
-	updated := make(map[string]any, len(object))
-	for key, value := range object {
-		if key == "Count" || key == "Total" {
-			continue
-		}
-		updated[key] = value
-	}
-	updated["Progress"] = formatProgressBar(count, total)
-	return updated
-}
-
-func numberValue(value any) (float64, bool) {
-	switch typed := value.(type) {
-	case json.Number:
-		number, err := typed.Float64()
-		return number, err == nil
-	case float64:
-		return typed, true
-	case int:
-		return float64(typed), true
-	case int64:
-		return float64(typed), true
-	default:
-		return 0, false
-	}
-}
-
-func formatProgressBar(count, total float64) string {
+func formatProgressBar(count, total int) string {
 	const width = 20
 	if count < 0 {
 		count = 0
@@ -388,7 +338,7 @@ func formatProgressBar(count, total float64) string {
 	}
 	ratio := 0.0
 	if total > 0 {
-		ratio = count / total
+		ratio = float64(count) / float64(total)
 	}
 	filled := int(ratio*width + 0.5)
 	if filled > width {
