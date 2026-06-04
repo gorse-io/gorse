@@ -617,7 +617,10 @@ func (m *Master) deleteConfig(_request *restful.Request, response *restful.Respo
 }
 
 func (m *Master) getConfigSchema(_ *restful.Request, response *restful.Response) {
-	server.Ok(response, jsonschema.Reflect(m.Config))
+	reflector := jsonschema.Reflector{
+		FieldNameTag: "mapstructure",
+	}
+	server.Ok(response, reflector.Reflect(m.Config))
 }
 
 type Status struct {

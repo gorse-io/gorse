@@ -90,24 +90,6 @@ func (c *AdminClient) ResetConfig() (map[string]any, error) {
 	return result, nil
 }
 
-func decodeConfig(configMap map[string]any) (config.Config, error) {
-	var result config.Config
-	decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
-		DecodeHook: mapstructure.ComposeDecodeHookFunc(
-			mapstructure.StringToTimeDurationHookFunc(),
-			config.StringToFeedbackTypeHookFunc(),
-		),
-		Result: &result,
-	})
-	if err != nil {
-		return result, fmt.Errorf("failed to create config decoder: %w", err)
-	}
-	if err = decoder.Decode(configMap); err != nil {
-		return result, fmt.Errorf("failed to decode config: %w", err)
-	}
-	return result, nil
-}
-
 func configToMap(configValue config.Config) (map[string]any, error) {
 	var configMap map[string]any
 	if err := mapstructure.Decode(configValue, &configMap); err != nil {

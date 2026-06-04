@@ -21,13 +21,13 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"sort"
 	"strings"
 
 	jsonpatch "github.com/evanphx/json-patch/v5"
 	gorse "github.com/gorse-io/gorse-go"
 	"github.com/gorse-io/gorse/cmd/version"
 	"github.com/gorse-io/gorse/common/log"
+	"github.com/gorse-io/gorse/storage/data"
 	"github.com/samber/lo"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
@@ -96,14 +96,6 @@ func newAdminClient(cmd *cobra.Command) *AdminClient {
 	return NewAdminClient(endpoint, apiKey)
 }
 
-func addAuthFlags(commands ...*cobra.Command) {
-	for _, cmd := range commands {
-		cmd.Flags().String("endpoint", "", "Gorse base URL (default: selected context or GORSE_ADMIN_ENDPOINT)")
-		cmd.Flags().String("api-key", "", "Gorse admin API key (default: selected context or GORSE_ADMIN_API_KEY)")
-		cmd.Flags().String("context", "", "Gorse CLI context name")
-	}
-}
-
 // getCmd is the parent command for get operations
 var getCmd = &cobra.Command{
 	Use:   "get",
@@ -141,7 +133,7 @@ var getClusterCmd = &cobra.Command{
 		if err != nil {
 			log.Logger().Fatal("admin API request failed", zap.Error(err))
 		}
-		printValueTables(cmd, cluster)
+		printArrayTable(cmd, cluster)
 	},
 }
 
@@ -153,7 +145,7 @@ var psCmd = &cobra.Command{
 		if err != nil {
 			log.Logger().Fatal("admin API request failed", zap.Error(err))
 		}
-		printValueTables(cmd, tasks)
+		printArrayTable(cmd, tasks)
 	},
 }
 
@@ -221,11 +213,15 @@ var restoreCmd = &cobra.Command{
 	Use:   "restore <file>",
 	Short: "Restore Gorse data from a binary backup",
 	Example: `  # Restore data from a backup file
-  gorse-cli restore backup.bin`,
+ gorse-cli restore backup.bin`,
 	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		confirmed := confirmRestore(cmd, args[0])
-		if !confirmed {
+		fmt.Fprintf(cmd.OutOrStdout(), "Restore data from %s? Existing users, items, feedback, and cache will be overwritten. Confirm [y/N]: ", args[0])
+		input, err := bufio.NewReader(cmd.InOrStdin()).ReadString('\n')
+		if err != nil && !errors.Is(err, io.EOF) {
+			log.Logger().Fatal("failed to read confirmation", zap.Error(err))
+		}
+		if !strings.EqualFold(strings.TrimSpace(input), "y") {
 			fmt.Fprintln(cmd.OutOrStdout(), "Restore canceled")
 			return
 		}
@@ -241,15 +237,6 @@ var restoreCmd = &cobra.Command{
 		fmt.Fprintf(cmd.OutOrStdout(), "Restored %d users, %d items, %d feedback in %s.\n",
 			stats.Users, stats.Items, stats.Feedback, stats.Duration)
 	},
-}
-
-func confirmRestore(cmd *cobra.Command, file string) bool {
-	fmt.Fprintf(cmd.OutOrStdout(), "Restore data from %s? Existing users, items, feedback, and cache will be overwritten. Confirm [y/N]: ", file)
-	input, err := bufio.NewReader(cmd.InOrStdin()).ReadString('\n')
-	if err != nil && !errors.Is(err, io.EOF) {
-		log.Logger().Fatal("failed to read confirmation", zap.Error(err))
-	}
-	return strings.EqualFold(strings.TrimSpace(input), "y")
 }
 
 var pipelinePatchCmd = &cobra.Command{
@@ -272,9 +259,22 @@ var pipelinePatchCmd = &cobra.Command{
 		if err != nil {
 			log.Logger().Fatal("failed to encode config", zap.Error(err))
 		}
-		configPatch, err := applyJSONPatch(currentConfigMap, args[0])
+
+		configBytes, err := json.Marshal(currentConfigMap)
 		if err != nil {
-			log.Logger().Fatal("failed to apply JSON patch", zap.Error(err))
+			log.Logger().Fatal("failed to apply JSON patch", zap.Error(fmt.Errorf("failed to encode config: %w", err)))
+		}
+		patch, err := jsonpatch.DecodePatch([]byte(args[0]))
+		if err != nil {
+			log.Logger().Fatal("failed to apply JSON patch", zap.Error(fmt.Errorf("failed to decode JSON patch: %w", err)))
+		}
+		patchedConfigBytes, err := patch.Apply(configBytes)
+		if err != nil {
+			log.Logger().Fatal("failed to apply JSON patch", zap.Error(fmt.Errorf("failed to apply JSON patch: %w", err)))
+		}
+		var configPatch map[string]any
+		if err = json.Unmarshal(patchedConfigBytes, &configPatch); err != nil {
+			log.Logger().Fatal("failed to apply JSON patch", zap.Error(fmt.Errorf("failed to decode patched config: %w", err)))
 		}
 
 		updatedConfig, err := client.UpdateConfig(configPatch)
@@ -282,35 +282,20 @@ var pipelinePatchCmd = &cobra.Command{
 			log.Logger().Fatal("admin API request failed", zap.Error(err))
 		}
 
-		printValueTables(cmd, updatedConfig)
+		printNonArrayValueTables(cmd, updatedConfig)
 	},
-}
-
-func applyJSONPatch(config map[string]any, patchDocument string) (map[string]any, error) {
-	configBytes, err := json.Marshal(config)
-	if err != nil {
-		return nil, fmt.Errorf("failed to encode config: %w", err)
-	}
-	patch, err := jsonpatch.DecodePatch([]byte(patchDocument))
-	if err != nil {
-		return nil, fmt.Errorf("failed to decode JSON patch: %w", err)
-	}
-	patchedConfigBytes, err := patch.Apply(configBytes)
-	if err != nil {
-		return nil, fmt.Errorf("failed to apply JSON patch: %w", err)
-	}
-	var patchedConfig map[string]any
-	if err = json.Unmarshal(patchedConfigBytes, &patchedConfig); err != nil {
-		return nil, fmt.Errorf("failed to decode patched config: %w", err)
-	}
-	return patchedConfig, nil
 }
 
 var pipelineResetCmd = &cobra.Command{
 	Use:   "reset",
 	Short: "Reset recommendation pipeline configuration to the file defaults",
 	Run: func(cmd *cobra.Command, args []string) {
-		if !confirmPipelineReset(cmd) {
+		fmt.Fprint(cmd.OutOrStdout(), "Reset recommendation pipeline configuration to file defaults? Current pipeline settings will be overwritten. Confirm [y/N]: ")
+		input, err := bufio.NewReader(cmd.InOrStdin()).ReadString('\n')
+		if err != nil && !errors.Is(err, io.EOF) {
+			log.Logger().Fatal("failed to read confirmation", zap.Error(err))
+		}
+		if !strings.EqualFold(strings.TrimSpace(input), "y") {
 			fmt.Fprintln(cmd.OutOrStdout(), "Pipeline reset canceled")
 			return
 		}
@@ -319,20 +304,11 @@ var pipelineResetCmd = &cobra.Command{
 			log.Logger().Fatal("admin API request failed", zap.Error(err))
 		}
 		if len(result) > 0 {
-			printValueTables(cmd, result)
+			printNonArrayValueTables(cmd, result)
 			return
 		}
 		fmt.Fprintln(cmd.OutOrStdout(), "Pipeline reset to defaults.")
 	},
-}
-
-func confirmPipelineReset(cmd *cobra.Command) bool {
-	fmt.Fprint(cmd.OutOrStdout(), "Reset recommendation pipeline configuration to file defaults? Current pipeline settings will be overwritten. Confirm [y/N]: ")
-	input, err := bufio.NewReader(cmd.InOrStdin()).ReadString('\n')
-	if err != nil && !errors.Is(err, io.EOF) {
-		log.Logger().Fatal("failed to read confirmation", zap.Error(err))
-	}
-	return strings.EqualFold(strings.TrimSpace(input), "y")
 }
 
 var getCategoriesCmd = &cobra.Command{
@@ -343,7 +319,7 @@ var getCategoriesCmd = &cobra.Command{
 		if err != nil {
 			log.Logger().Fatal("admin API request failed", zap.Error(err))
 		}
-		printValueTables(cmd, categories)
+		printArrayTable(cmd, categories)
 	},
 }
 
@@ -355,7 +331,7 @@ var getStatsCmd = &cobra.Command{
 		if err != nil {
 			log.Logger().Fatal("admin API request failed", zap.Error(err))
 		}
-		printValueTables(cmd, stats)
+		printNonArrayValueTables(cmd, stats)
 	},
 }
 
@@ -368,7 +344,7 @@ var getUserCmd = &cobra.Command{
 		if err != nil {
 			log.Logger().Fatal("API request failed", zap.Error(err))
 		}
-		printValueTables(cmd, user)
+		printNonArrayValueTables(cmd, user)
 	},
 }
 
@@ -381,7 +357,7 @@ var getItemCmd = &cobra.Command{
 		if err != nil {
 			log.Logger().Fatal("API request failed", zap.Error(err))
 		}
-		printValueTables(cmd, item)
+		printNonArrayValueTables(cmd, item)
 	},
 }
 
@@ -397,7 +373,7 @@ var getUsersCmd = &cobra.Command{
 		if err != nil {
 			log.Logger().Fatal("API request failed", zap.Error(err))
 		}
-		printValueTables(cmd, users)
+		printArrayTable(cmd, users.Users)
 	},
 }
 
@@ -413,7 +389,7 @@ var getItemsCmd = &cobra.Command{
 		if err != nil {
 			log.Logger().Fatal("API request failed", zap.Error(err))
 		}
-		printValueTables(cmd, items)
+		printArrayTable(cmd, items.Items)
 	},
 }
 
@@ -426,85 +402,47 @@ var getFeedbackCmd = &cobra.Command{
 		if n == 0 {
 			n = 10
 		}
-		printFeedback(cmd,
-			lo.Must(cmd.Flags().GetString("type")),
-			lo.Must(cmd.Flags().GetString("user")),
-			lo.Must(cmd.Flags().GetString("item")),
-			n)
+		feedbackType := lo.Must(cmd.Flags().GetString("type"))
+		userID := lo.Must(cmd.Flags().GetString("user"))
+		itemID := lo.Must(cmd.Flags().GetString("item"))
+		client := newAdminClient(cmd)
+		var (
+			feedback []data.Feedback
+			err      error
+		)
+		switch {
+		case userID != "" && itemID != "" && feedbackType != "":
+			record, requestErr := client.GetTypedUserItemFeedback(feedbackType, userID, itemID)
+			err = requestErr
+			feedback = []data.Feedback{record}
+		case userID != "" && itemID != "":
+			feedback, err = client.GetUserItemFeedback(userID, itemID)
+		case userID != "" && feedbackType != "":
+			feedback, err = client.GetTypedUserFeedback(userID, feedbackType)
+		case userID != "":
+			feedback, err = client.GetUserFeedback(userID)
+		case itemID != "" && feedbackType != "":
+			feedback, err = client.GetTypedItemFeedback(itemID, feedbackType)
+		case itemID != "":
+			feedback, err = client.GetItemFeedback(itemID)
+		case feedbackType != "":
+			iterator, requestErr := client.GetTypedFeedback(feedbackType, n)
+			err = requestErr
+			feedback = iterator.Feedback
+		default:
+			iterator, requestErr := client.GetFeedback(n)
+			err = requestErr
+			feedback = iterator.Feedback
+		}
+		if err != nil {
+			log.Logger().Fatal("admin API request failed", zap.Error(err))
+		}
+		data.SortFeedbacks(feedback)
+		if n > 0 && n < len(feedback) {
+			feedback = feedback[:n]
+		}
+		printArrayTable(cmd, feedback)
 	},
-}
-
-func printFeedback(cmd *cobra.Command, feedbackType, userID, itemID string, n int) {
-	value := adminFeedback(cmd, feedbackType, userID, itemID, n)
-	feedback, ok := feedbackRecords(value)
-	if !ok {
-		printValueTables(cmd, value)
-		return
-	}
-	sortFeedbackRecords(feedback)
-	if n > 0 && n < len(feedback) {
-		feedback = feedback[:n]
-	}
-	printValueTables(cmd, feedback)
-}
-
-func adminFeedback(cmd *cobra.Command, feedbackType, userID, itemID string, n int) any {
-	client := newAdminClient(cmd)
-	var (
-		result any
-		err    error
-	)
-	switch {
-	case userID != "" && itemID != "" && feedbackType != "":
-		result, err = client.GetTypedUserItemFeedback(feedbackType, userID, itemID)
-	case userID != "" && itemID != "":
-		result, err = client.GetUserItemFeedback(userID, itemID)
-	case userID != "" && feedbackType != "":
-		result, err = client.GetTypedUserFeedback(userID, feedbackType)
-	case userID != "":
-		result, err = client.GetUserFeedback(userID)
-	case itemID != "" && feedbackType != "":
-		result, err = client.GetTypedItemFeedback(itemID, feedbackType)
-	case itemID != "":
-		result, err = client.GetItemFeedback(itemID)
-	case feedbackType != "":
-		result, err = client.GetTypedFeedback(feedbackType, n)
-	default:
-		result, err = client.GetFeedback(n)
-	}
-	if err != nil {
-		log.Logger().Fatal("admin API request failed", zap.Error(err))
-	}
-	return result
-}
-
-func feedbackRecords(value any) ([]any, bool) {
-	if records, ok := sliceValues(value); ok {
-		return records, true
-	}
-	if object, ok := objectFields(value); ok {
-		if feedback, ok := object["Feedback"]; ok {
-			return sliceValues(feedback)
-		}
-		if _, ok := object["FeedbackType"]; ok {
-			return []any{value}, true
-		}
-	}
-	return nil, false
-}
-
-func sortFeedbackRecords(feedback []any) {
-	sort.SliceStable(feedback, func(i, j int) bool {
-		return feedbackTimestamp(feedback[i]) > feedbackTimestamp(feedback[j])
-	})
-}
-
-func feedbackTimestamp(value any) string {
-	object, ok := objectFields(value)
-	if !ok {
-		return ""
-	}
-	return formatTableValue(object["Timestamp"])
 }
 
 var getLatestCmd = &cobra.Command{
@@ -525,14 +463,14 @@ var getLatestCmd = &cobra.Command{
 			if err != nil {
 				log.Logger().Fatal("API request failed", zap.Error(err))
 			}
-			printValueTables(cmd, latest)
+			printArrayTable(cmd, latest)
 			return
 		}
 		latest, err := newAdminClient(cmd).GetLatest(lo.Must(cmd.Flags().GetInt("n")), categories)
 		if err != nil {
 			log.Logger().Fatal("admin API request failed", zap.Error(err))
 		}
-		printValueTables(cmd, latest)
+		printArrayTable(cmd, latest)
 	},
 }
 
@@ -550,7 +488,7 @@ var getNonPersonalizedCmd = &cobra.Command{
 		if err != nil {
 			log.Logger().Fatal("admin API request failed", zap.Error(err))
 		}
-		printValueTables(cmd, recommendations)
+		printArrayTable(cmd, recommendations)
 	},
 }
 
@@ -573,7 +511,7 @@ var recommendUserCmd = &cobra.Command{
 			if err != nil {
 				log.Logger().Fatal("API request failed", zap.Error(err))
 			}
-			printValueTables(cmd, recommend)
+			printArrayTable(cmd, recommend)
 			return
 		}
 		var recommender, name string
@@ -587,7 +525,7 @@ var recommendUserCmd = &cobra.Command{
 		if err != nil {
 			log.Logger().Fatal("admin API request failed", zap.Error(err))
 		}
-		printValueTables(cmd, recommendations)
+		printArrayTable(cmd, recommendations)
 	},
 }
 
@@ -605,7 +543,7 @@ var getItemToItemCmd = &cobra.Command{
 		if err != nil {
 			log.Logger().Fatal("admin API request failed", zap.Error(err))
 		}
-		printValueTables(cmd, recommendations)
+		printArrayTable(cmd, recommendations)
 	},
 }
 
@@ -618,7 +556,7 @@ var getUserToUserCmd = &cobra.Command{
 		if err != nil {
 			log.Logger().Fatal("admin API request failed", zap.Error(err))
 		}
-		printValueTables(cmd, recommendations)
+		printArrayTable(cmd, recommendations)
 	},
 }
 
@@ -657,10 +595,16 @@ func init() {
 
 	contextAddCmd.Flags().String("endpoint", "", "Gorse base URL (default: GORSE_ADMIN_ENDPOINT)")
 	contextAddCmd.Flags().String("api-key", "", "Gorse admin API key (default: GORSE_ADMIN_API_KEY; prefer prompt to avoid shell history)")
-	addAuthFlags(getClusterCmd, getCategoriesCmd, psCmd,
+	for _, cmd := range []*cobra.Command{
+		getClusterCmd, getCategoriesCmd, psCmd,
 		getStatsCmd, getUserCmd, getUsersCmd, getItemCmd, getItemsCmd, getFeedbackCmd, getLatestCmd,
 		getNonPersonalizedCmd, recommendUserCmd, getItemToItemCmd, getUserToUserCmd,
-		pipelineGetCmd, pipelineSchemaCmd, pipelinePatchCmd, pipelineResetCmd, dumpCmd, restoreCmd)
+		pipelineGetCmd, pipelineSchemaCmd, pipelinePatchCmd, pipelineResetCmd, dumpCmd, restoreCmd,
+	} {
+		cmd.Flags().String("endpoint", "", "Gorse base URL (default: selected context or GORSE_ADMIN_ENDPOINT)")
+		cmd.Flags().String("api-key", "", "Gorse admin API key (default: selected context or GORSE_ADMIN_API_KEY)")
+		cmd.Flags().String("context", "", "Gorse CLI context name")
+	}
 
 	getUsersCmd.Flags().IntP("n", "n", 0, "Number of returned users")
 	getItemsCmd.Flags().IntP("n", "n", 0, "Number of returned items")

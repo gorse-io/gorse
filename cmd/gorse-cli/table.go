@@ -35,20 +35,12 @@ const (
 	maxTableLabelArrayValues = 3
 )
 
-func printValueTables(cmd *cobra.Command, value any) {
-	if isSliceValue(value) {
-		printArrayTable(cmd, value)
-		return
-	}
+func printNonArrayValueTables(cmd *cobra.Command, value any) {
 	if object, ok := objectFields(value); ok {
 		printObjectTables(cmd, object)
 		return
 	}
 	printTable(cmd.OutOrStdout(), []string{"Value"}, [][]string{{formatTableValue(value)}})
-}
-
-func isPaginationCursorKey(key string) bool {
-	return strings.EqualFold(key, "cursor")
 }
 
 func printObjectTables(cmd *cobra.Command, object map[string]any) {
@@ -63,10 +55,7 @@ func printObjectTables(cmd *cobra.Command, object map[string]any) {
 	arrayKeys := make([]string, 0)
 	metadata := make(map[string]any)
 	for key, child := range object {
-		if isPaginationCursorKey(key) {
-			continue
-		}
-		if isSliceValue(child) {
+		if _, ok := sliceValues(child); ok {
 			arrayKeys = append(arrayKeys, key)
 		} else {
 			metadata[key] = child
@@ -142,7 +131,7 @@ func printObjectField(output io.Writer, key string, value any) {
 		fmt.Fprintf(output, "%s:\n%s\n", key, formatPrettyJSON(value))
 		return
 	}
-	if isSliceValue(value) {
+	if _, ok := sliceValues(value); ok {
 		fmt.Fprintf(output, "%s: %s\n", key, formatTableValue(value))
 		return
 	}
@@ -227,7 +216,7 @@ func printArrayTable(cmd *cobra.Command, value any) {
 		return
 	}
 	if len(array) == 0 {
-		printTable(cmd.OutOrStdout(), []string{"Result"}, [][]string{{"No data"}})
+		printTable(cmd.OutOrStdout(), emptyArrayColumns(value), nil)
 		return
 	}
 	allObjects := true
@@ -267,6 +256,71 @@ func printArrayTable(cmd *cobra.Command, value any) {
 		rows[i] = row
 	}
 	printTable(cmd.OutOrStdout(), columns, rows)
+}
+
+func emptyArrayColumns(value any) []string {
+	columns, ok := arrayElementObjectColumns(value)
+	if !ok {
+		return []string{"Index", "Value"}
+	}
+	return orderedArrayColumns(columns)
+}
+
+func arrayElementObjectColumns(value any) ([]string, bool) {
+	v := indirectValue(reflect.ValueOf(value))
+	if !v.IsValid() || (v.Kind() != reflect.Slice && v.Kind() != reflect.Array) {
+		return nil, false
+	}
+	elementType := indirectType(v.Type().Elem())
+	if elementType == nil || elementType.Kind() != reflect.Struct || elementType == reflect.TypeOf(time.Time{}) {
+		return nil, false
+	}
+	columns := objectColumnsFromType(elementType)
+	if len(columns) == 0 {
+		return nil, false
+	}
+	return formatProgressColumns(columns), true
+}
+
+func objectColumnsFromType(t reflect.Type) []string {
+	columnsSet := make(map[string]struct{})
+	for i := 0; i < t.NumField(); i++ {
+		field := t.Field(i)
+		if field.PkgPath != "" && !field.Anonymous {
+			continue
+		}
+		if field.Anonymous {
+			fieldType := indirectType(field.Type)
+			if fieldType != nil && fieldType.Kind() == reflect.Struct && fieldType != reflect.TypeOf(time.Time{}) {
+				for _, column := range objectColumnsFromType(fieldType) {
+					columnsSet[column] = struct{}{}
+				}
+				continue
+			}
+		}
+		columnsSet[field.Name] = struct{}{}
+	}
+	columns := make([]string, 0, len(columnsSet))
+	for column := range columnsSet {
+		columns = append(columns, column)
+	}
+	return columns
+}
+
+func formatProgressColumns(columns []string) []string {
+	hasCount := lo.Contains(columns, "Count")
+	hasTotal := lo.Contains(columns, "Total")
+	if !hasCount || !hasTotal {
+		return columns
+	}
+	updated := make([]string, 0, len(columns)-1)
+	for _, column := range columns {
+		if column == "Count" || column == "Total" {
+			continue
+		}
+		updated = append(updated, column)
+	}
+	return append(updated, "Progress")
 }
 
 func orderedArrayColumns(columns []string) []string {
@@ -342,7 +396,7 @@ func formatTableCellValue(column string, value any) string {
 	if column != "Labels" {
 		return formatTableValue(value)
 	}
-	if isSliceValue(value) || isObjectValue(value) {
+	if _, ok := sliceValues(value); ok || isObjectValue(value) {
 		encoded, err := json.Marshal(summarizeLongArraysWithLimit(value, maxTableLabelArrayValues))
 		if err != nil {
 			return formatTableValue(value)
@@ -385,7 +439,7 @@ func formatTableValue(value any) string {
 	case time.Time:
 		return typed.Format(time.RFC3339)
 	}
-	if isSliceValue(value) {
+	if _, ok := sliceValues(value); ok {
 		if summary, ok := formatArraySummary(value); ok {
 			return summary
 		}
@@ -411,11 +465,6 @@ func formatTimeValue(value string) (string, bool) {
 		return "", false
 	}
 	return timestamp.Format(time.RFC3339), true
-}
-
-func isSliceValue(value any) bool {
-	v := indirectValue(reflect.ValueOf(value))
-	return v.IsValid() && (v.Kind() == reflect.Slice || v.Kind() == reflect.Array)
 }
 
 func isObjectValue(value any) bool {
@@ -511,6 +560,13 @@ func indirectValue(v reflect.Value) reflect.Value {
 		v = v.Elem()
 	}
 	return v
+}
+
+func indirectType(t reflect.Type) reflect.Type {
+	for t != nil && t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+	return t
 }
 
 func printTable(output io.Writer, headers []string, rows [][]string) {
