@@ -35,12 +35,12 @@ const (
 	maxTableLabelArrayValues = 3
 )
 
-func printNonArrayValueTables(cmd *cobra.Command, value any) {
+func printStruct(cmd *cobra.Command, value any) {
 	if object, ok := objectFields(value); ok {
 		printObjectTables(cmd, object)
 		return
 	}
-	printTable(cmd.OutOrStdout(), []string{"Value"}, [][]string{{formatTableValue(value)}})
+	printJSONValue(cmd.OutOrStdout(), value)
 }
 
 func printObjectTables(cmd *cobra.Command, object map[string]any) {
@@ -146,6 +146,15 @@ func formatPrettyJSON(value any) string {
 	return string(encoded)
 }
 
+func printJSONValue(output io.Writer, value any) {
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		fmt.Fprintln(output, formatTableValue(value))
+		return
+	}
+	fmt.Fprintln(output, string(encoded))
+}
+
 func summarizeLongArrays(value any) any {
 	return summarizeLongArraysWithLimit(value, maxInlineArrayValues)
 }
@@ -212,7 +221,7 @@ func formatSummaryValue(value any) string {
 func printArrayTable(cmd *cobra.Command, value any) {
 	array, ok := sliceValues(value)
 	if !ok {
-		printTable(cmd.OutOrStdout(), []string{"Value"}, [][]string{{formatTableValue(value)}})
+		printJSONValue(cmd.OutOrStdout(), value)
 		return
 	}
 	if len(array) == 0 {

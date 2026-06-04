@@ -282,7 +282,7 @@ var pipelinePatchCmd = &cobra.Command{
 			log.Logger().Fatal("admin API request failed", zap.Error(err))
 		}
 
-		printNonArrayValueTables(cmd, updatedConfig)
+		printStruct(cmd, updatedConfig)
 	},
 }
 
@@ -304,7 +304,7 @@ var pipelineResetCmd = &cobra.Command{
 			log.Logger().Fatal("admin API request failed", zap.Error(err))
 		}
 		if len(result) > 0 {
-			printNonArrayValueTables(cmd, result)
+			printStruct(cmd, result)
 			return
 		}
 		fmt.Fprintln(cmd.OutOrStdout(), "Pipeline reset to defaults.")
@@ -331,7 +331,7 @@ var getStatsCmd = &cobra.Command{
 		if err != nil {
 			log.Logger().Fatal("admin API request failed", zap.Error(err))
 		}
-		printNonArrayValueTables(cmd, stats)
+		printStruct(cmd, stats)
 	},
 }
 
@@ -344,7 +344,7 @@ var getUserCmd = &cobra.Command{
 		if err != nil {
 			log.Logger().Fatal("API request failed", zap.Error(err))
 		}
-		printNonArrayValueTables(cmd, user)
+		printStruct(cmd, user)
 	},
 }
 
@@ -357,7 +357,7 @@ var getItemCmd = &cobra.Command{
 		if err != nil {
 			log.Logger().Fatal("API request failed", zap.Error(err))
 		}
-		printNonArrayValueTables(cmd, item)
+		printStruct(cmd, item)
 	},
 }
 
