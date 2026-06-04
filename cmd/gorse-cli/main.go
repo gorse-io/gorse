@@ -243,24 +243,23 @@ var pipelinePatchCmd = &cobra.Command{
 	Use:   "patch <json-patch>",
 	Short: "Patch recommendation pipeline configuration values",
 	Example: `  # Replace a single config value
-  gorse-cli pipeline patch '[{"op":"replace","path":"/recommend/cache_size","value":1000}]'
+  gorse-cli pipeline patch '[{"op":"replace","path":"/cache_size","value":1000}]'
 
   # Replace multiple config values
-  gorse-cli pipeline patch '[{"op":"replace","path":"/recommend/cache_size","value":1000},{"op":"replace","path":"/recommend/item_ttl","value":"72h"}]'`,
+  gorse-cli pipeline patch '[{"op":"replace","path":"/cache_size","value":1000},{"op":"replace","path":"/data_source/item_ttl","value":72}]'`,
 	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		client := newAdminClient(cmd)
-		currentConfig, err := client.GetConfig()
+		currentConfigMap, err := client.GetConfigMap()
 		if err != nil {
 			log.Logger().Fatal("admin API request failed", zap.Error(err))
 		}
-
-		currentConfigMap, err := configToMap(currentConfig)
-		if err != nil {
-			log.Logger().Fatal("failed to encode config", zap.Error(err))
+		recommendConfig, ok := currentConfigMap["recommend"]
+		if !ok {
+			log.Logger().Fatal("recommend config not found")
 		}
 
-		configBytes, err := json.Marshal(currentConfigMap)
+		configBytes, err := json.Marshal(recommendConfig)
 		if err != nil {
 			log.Logger().Fatal("failed to apply JSON patch", zap.Error(fmt.Errorf("failed to encode config: %w", err)))
 		}
@@ -276,8 +275,9 @@ var pipelinePatchCmd = &cobra.Command{
 		if err = json.Unmarshal(patchedConfigBytes, &configPatch); err != nil {
 			log.Logger().Fatal("failed to apply JSON patch", zap.Error(fmt.Errorf("failed to decode patched config: %w", err)))
 		}
+		currentConfigMap["recommend"] = configPatch
 
-		updatedConfig, err := client.UpdateConfig(configPatch)
+		updatedConfig, err := client.UpdateConfig(currentConfigMap)
 		if err != nil {
 			log.Logger().Fatal("admin API request failed", zap.Error(err))
 		}

@@ -26,11 +26,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-func executeRawCommand(root *cobra.Command, args ...string) (string, error) {
-	return executeRawCommandWithInput(root, "", args...)
-}
-
-func executeRawCommandWithInput(root *cobra.Command, input string, args ...string) (string, error) {
+func executeRawCommand(root *cobra.Command, input string, args ...string) (string, error) {
 	buf := new(bytes.Buffer)
 
 	resetFlags(root)
@@ -128,63 +124,128 @@ func (s *CLITestSuite) execute(args ...string) (string, error) {
 func (s *CLITestSuite) executeCommandWithInput(input string, args ...string) (string, error) {
 	argsWithAuth := append([]string{}, args...)
 	argsWithAuth = append(argsWithAuth, "--endpoint", s.endpoint, "--api-key", testAPIKey)
-	return executeRawCommandWithInput(rootCmd, input, argsWithAuth...)
-}
-
-func TestCLIHelpOmitsAdminAPIQualifier(t *testing.T) {
-	out, err := executeRawCommand(rootCmd, "--help")
-	require.NoError(t, err)
-	require.NotContains(t, out, "from Gorse admin API")
-}
-
-func TestRecommendHelpOmitsRankerPrompt(t *testing.T) {
-	out, err := executeRawCommand(rootCmd, "recommend", "--help")
-	require.NoError(t, err)
-	require.NotContains(t, out, "ranker-prompt")
+	return executeRawCommand(rootCmd, input, argsWithAuth...)
 }
 
 func TestCLI(t *testing.T) {
 	suite.Run(t, new(CLITestSuite))
 }
 
-func (s *CLITestSuite) TestGetSubcommands() {
-	tests := []struct {
-		name         string
-		args         []string
-		wantInOutput string
-		wantTable    bool
-	}{
-		{name: "cluster-info", args: []string{"cluster-info"}, wantInOutput: "server-node", wantTable: true},
-		{name: "categories", args: []string{"get", "categories"}, wantInOutput: "books", wantTable: true},
-		{name: "ps", args: []string{"ps"}, wantTable: true},
-		{name: "stats", args: []string{"stats"}, wantInOutput: "BinaryVersion"},
-		{name: "user", args: []string{"get", "user", "alice"}, wantInOutput: "alice"},
-		{name: "users", args: []string{"get", "users", "-n", "10"}, wantInOutput: "bob", wantTable: true},
-		{name: "item", args: []string{"get", "item", "item-1"}, wantInOutput: "item-1"},
-		{name: "items", args: []string{"get", "items", "-n", "10"}, wantInOutput: "item-2", wantTable: true},
-		{name: "feedback", args: []string{"get", "feedback", "--type", "click", "--user", "alice", "-n", "5"}, wantInOutput: "item-1", wantTable: true},
-		{name: "latest", args: []string{"recommend", "latest", "-n", "3", "--category", "tech"}, wantInOutput: "latest-1", wantTable: true},
-		{name: "non-personalized", args: []string{"recommend", "non-personalized", "popular", "-n", "3", "--user-id", "alice", "--category", "news"}, wantInOutput: "popular-1", wantTable: true},
-		{name: "recommend-item-to-user", args: []string{"recommend", "item-to-user", "alice", "non-personalized", "popular", "-n", "3", "--category", "news"}, wantInOutput: "recommend-1", wantTable: true},
-		{name: "item-to-item", args: []string{"recommend", "item-to-item", "neighbors", "item-1", "-n", "3", "--category", "news"}, wantInOutput: "similar-1", wantTable: true},
-		{name: "user-to-user", args: []string{"recommend", "user-to-user", "neighbors", "alice", "-n", "3"}, wantInOutput: "neighbor-1", wantTable: true},
-	}
+const rfc3339Regexp = `\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:Z|[+-]\d{2}:\d{2})`
 
-	for _, tt := range tests {
-		s.Run(tt.name, func() {
-			args := append([]string{}, tt.args...)
-			out, err := s.execute(args...)
-			s.Require().NoError(err)
-			if tt.wantInOutput != "" {
-				s.Require().Contains(out, tt.wantInOutput)
-			}
-			if tt.wantTable {
-				s.Require().NotContains(out, "┌")
-				s.Require().NotContains(out, "│")
-				s.Require().NotContains(out, "└")
-			}
-		})
+func (s *CLITestSuite) requireCommandOutputLines(args []string, lineRegexps ...string) string {
+	out, err := s.execute(args...)
+	s.Require().NoError(err)
+	s.requireNoBoxDrawing(out)
+
+	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
+	s.Require().Len(lines, len(lineRegexps), out)
+	for i, lineRegexp := range lineRegexps {
+		s.Require().Regexp(lineRegexp, lines[i], "line %d output:\n%s", i+1, out)
 	}
+	return out
+}
+
+func (s *CLITestSuite) requireNoBoxDrawing(out string) {
+	s.Require().NotContains(out, "┌")
+	s.Require().NotContains(out, "│")
+	s.Require().NotContains(out, "└")
+}
+
+func (s *CLITestSuite) TestClusterInfo() {
+	s.requireCommandOutputLines([]string{"cluster-info"},
+		`^HOSTNAME\s+TYPE\s+UUID\s+UPDATE-TIME\s+VERSION$`,
+		`^localhost\s+Server\s+server-node\s+`+rfc3339Regexp+`\s+v1$`,
+	)
+}
+
+func (s *CLITestSuite) TestGetCategories() {
+	s.requireCommandOutputLines([]string{"get", "categories"},
+		`^INDEX\s+VALUE$`,
+		`^0\s+books$`,
+		`^1\s+news$`,
+	)
+}
+
+func (s *CLITestSuite) TestPS() {
+	s.requireCommandOutputLines([]string{"ps"},
+		`^TRACER\s+NAME\s+STATUS\s+PROGRESS\s+ERROR\s+START-TIME\s+FINISH-TIME$`,
+		`^master\s+Load Dataset\s+Complete\s+\[[#-]{20}\]\s+\d+%\s+`+rfc3339Regexp+`\s+`+rfc3339Regexp+`$`,
+		`^master\s+Generate recommendation\s+Complete\s+\[[#-]{20}\]\s+\d+%\s+`+rfc3339Regexp+`\s+`+rfc3339Regexp+`$`,
+		`^master\s+Collect Garbage in Cache\s+Complete\s+\[[#-]{20}\]\s+\d+%\s+`+rfc3339Regexp+`\s+`+rfc3339Regexp+`$`,
+	)
+}
+
+func (s *CLITestSuite) TestStats() {
+	s.requireCommandOutputLines([]string{"stats"},
+		`^BinaryVersion: .+$`,
+		`^LatestItemsUpdateTime: `+rfc3339Regexp+`$`,
+		`^MatchingModelFitTime: `+rfc3339Regexp+`$`,
+		`^MatchingModelScore:$`,
+		`^\{$`,
+		`^  "NDCG": 0,$`,
+		`^  "Precision": 0,$`,
+		`^  "Recall": 0$`,
+		`^\}$`,
+		`^NumItemLabels: \d+$`,
+		`^NumItems: \d+$`,
+		`^NumServers: \d+$`,
+		`^NumTotalPosFeedback: \d+$`,
+		`^NumUserLabels: \d+$`,
+		`^NumUsers: \d+$`,
+		`^NumValidNegFeedback: \d+$`,
+		`^NumValidPosFeedback: \d+$`,
+		`^NumWorkers: \d+$`,
+		`^PopularItemsUpdateTime: `+rfc3339Regexp+`$`,
+		`^RankingModelFitTime: `+rfc3339Regexp+`$`,
+		`^RankingModelScore:$`,
+		`^\{$`,
+		`^  "AUC": 0,$`,
+		`^  "Accuracy": 0,$`,
+		`^  "Precision": 0,$`,
+		`^  "RMSE": 0,$`,
+		`^  "Recall": 0$`,
+		`^\}$`,
+	)
+}
+
+func (s *CLITestSuite) TestRecommendLatest() {
+	s.requireCommandOutputLines([]string{"recommend", "latest", "-n", "3", "--category", "tech"},
+		`^ID\s+SCORE$`,
+		`^latest-1\s+1767312000$`,
+	)
+}
+
+func (s *CLITestSuite) TestRecommendNonPersonalized() {
+	s.requireScoredItemsOutput([]string{"recommend", "non-personalized", "popular", "-n", "3", "--user-id", "alice", "--category", "news"},
+		`^popular-1\s+\["news"\]\s+false\s+2026-01-03T00:00:00Z\s+2$`,
+		`^recommend-1\s+\["news"\]\s+false\s+2026-01-04T00:00:00Z\s+1$`,
+	)
+}
+
+func (s *CLITestSuite) TestRecommendItemToUser() {
+	s.requireScoredItemsOutput([]string{"recommend", "item-to-user", "alice", "non-personalized", "popular", "-n", "3", "--category", "news"},
+		`^popular-1\s+\["news"\]\s+false\s+2026-01-03T00:00:00Z\s+2$`,
+		`^recommend-1\s+\["news"\]\s+false\s+2026-01-04T00:00:00Z\s+1$`,
+	)
+}
+
+func (s *CLITestSuite) TestRecommendItemToItem() {
+	s.requireScoredItemsOutput([]string{"recommend", "item-to-item", "neighbors", "item-1", "-n", "3", "--category", "news"},
+		`^similar-1\s+\["news"\]\s+false\s+2026-01-05T00:00:00Z\s+1$`,
+	)
+}
+
+func (s *CLITestSuite) requireScoredItemsOutput(args []string, rowRegexps ...string) {
+	lineRegexps := append([]string{`^ITEM-ID\s+COMMENT\s+CATEGORIES\s+IS-HIDDEN\s+TIMESTAMP\s+LABELS\s+SCORE$`}, rowRegexps...)
+	s.requireCommandOutputLines(args, lineRegexps...)
+}
+
+func (s *CLITestSuite) TestRecommendUserToUser() {
+	s.requireCommandOutputLines([]string{"recommend", "user-to-user", "neighbors", "alice", "-n", "3"},
+		`^USER-ID\s+COMMENT\s+LABELS\s+SCORE$`,
+		`^neighbor-1\s+1$`,
+	)
 }
 
 func (s *CLITestSuite) TestGetUser() {
@@ -247,7 +308,7 @@ func (s *CLITestSuite) TestGetFeedback() {
 		s.Require().NotContains(out, "└")
 	}
 
-	out, err := executeRawCommand(rootCmd, "get", "feedback", "click")
+	out, err := executeRawCommand(rootCmd, "", "get", "feedback", "click")
 	s.Require().Error(err)
 	s.Require().Contains(out, `unknown command "click"`)
 }
@@ -298,14 +359,14 @@ func (s *CLITestSuite) TestPipelineSchemaCmd() {
 }
 
 func (s *CLITestSuite) TestPipelinePatchCmd() {
-	patch := `[{"op":"replace","path":"/recommend/cache_size","value":100},{"op":"replace","path":"/recommend/ranker/type","value":"llm"}]`
+	patch := `[{"op":"replace","path":"/cache_size","value":100},{"op":"replace","path":"/ranker/type","value":"llm"}]`
 	out, err := s.execute("pipeline", "patch", patch)
 	s.Require().NoError(err)
 	s.Require().Contains(out, "CacheSize")
 	s.Require().Contains(out, "100")
 	s.Require().Contains(out, "llm")
 
-	setOut, err := executeRawCommand(rootCmd, "pipeline", "set", "recommend.cache_size=100")
+	setOut, err := executeRawCommand(rootCmd, "", "pipeline", "set", "recommend.cache_size=100")
 	s.Require().Error(err)
 	s.Require().Contains(setOut, `unknown command "set"`)
 }

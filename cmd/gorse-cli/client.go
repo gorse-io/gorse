@@ -56,6 +56,10 @@ func (c *AdminClient) GetConfig() (config.Config, error) {
 	return getJSON[config.Config](c, "/dashboard/config", nil)
 }
 
+func (c *AdminClient) GetConfigMap() (map[string]any, error) {
+	return getJSON[map[string]any](c, "/dashboard/config", nil)
+}
+
 func (c *AdminClient) GetConfigSchema() (map[string]any, error) {
 	return getJSON[map[string]any](c, "/dashboard/config/schema", nil)
 }
