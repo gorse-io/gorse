@@ -454,19 +454,7 @@ var getLatestCmd = &cobra.Command{
 		if n == 0 {
 			n = 10
 		}
-		if len(categories) <= 1 {
-			var category string
-			if len(categories) == 1 {
-				category = categories[0]
-			}
-			latest, err := newGorseClient(cmd).GetLatestItems(cmd.Context(), "", category, n, 0)
-			if err != nil {
-				log.Logger().Fatal("API request failed", zap.Error(err))
-			}
-			printArrayTable(cmd, latest)
-			return
-		}
-		latest, err := newAdminClient(cmd).GetLatest(lo.Must(cmd.Flags().GetInt("n")), categories)
+		latest, err := newAdminClient(cmd).GetLatest(n, categories)
 		if err != nil {
 			log.Logger().Fatal("admin API request failed", zap.Error(err))
 		}
@@ -498,21 +486,9 @@ var recommendUserCmd = &cobra.Command{
 	Args:  cobra.RangeArgs(1, 3),
 	Run: func(cmd *cobra.Command, args []string) {
 		categories := lo.Must(cmd.Flags().GetStringArray("category"))
-		if len(args) == 1 && len(categories) <= 1 {
-			var category string
-			if len(categories) == 1 {
-				category = categories[0]
-			}
-			n := lo.Must(cmd.Flags().GetInt("n"))
-			if n == 0 {
-				n = 10
-			}
-			recommend, err := newGorseClient(cmd).GetRecommend(cmd.Context(), args[0], category, n, 0)
-			if err != nil {
-				log.Logger().Fatal("API request failed", zap.Error(err))
-			}
-			printArrayTable(cmd, recommend)
-			return
+		n := lo.Must(cmd.Flags().GetInt("n"))
+		if n == 0 {
+			n = 10
 		}
 		var recommender, name string
 		if len(args) > 1 {
@@ -521,7 +497,7 @@ var recommendUserCmd = &cobra.Command{
 		if len(args) > 2 {
 			name = args[2]
 		}
-		recommendations, err := newAdminClient(cmd).GetRecommend(args[0], recommender, name, lo.Must(cmd.Flags().GetInt("n")), categories)
+		recommendations, err := newAdminClient(cmd).GetRecommend(args[0], recommender, name, n, categories)
 		if err != nil {
 			log.Logger().Fatal("admin API request failed", zap.Error(err))
 		}

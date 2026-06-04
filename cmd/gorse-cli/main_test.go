@@ -210,9 +210,8 @@ func (s *CLITestSuite) TestStats() {
 }
 
 func (s *CLITestSuite) TestRecommendLatest() {
-	s.requireCommandOutputLines([]string{"recommend", "latest", "-n", "3", "--category", "tech"},
-		`^ID\s+SCORE$`,
-		`^latest-1\s+1767312000$`,
+	s.requireScoredItemsOutput([]string{"recommend", "latest", "-n", "3", "--category", "tech"},
+		`^latest-1\s+\["news","tech"\]\s+false\s+2026-01-02T00:00:00Z\s+1767312000$`,
 	)
 }
 

@@ -50,11 +50,29 @@ jobs:
           zip -j gorse_windows_arm64.zip windows/arm64/gorse-*
           zip -j gorse_darwin_arm64.zip darwin/arm64/gorse-*
 
+      - name: Prepare standalone CLI binaries
+        run: |
+          cp linux/amd64/gorse-cli gorse-cli_linux_amd64
+          cp linux/arm64/gorse-cli gorse-cli_linux_arm64
+          cp linux/riscv64/gorse-cli gorse-cli_linux_riscv64
+          cp windows/amd64/gorse-cli.exe gorse-cli_windows_amd64.exe
+          cp windows/arm64/gorse-cli.exe gorse-cli_windows_arm64.exe
+          cp darwin/arm64/gorse-cli gorse-cli_darwin_arm64
+
       - name: Upload release
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: gorse_*_*.zip
+          tag: ${{ github.ref }}
+          overwrite: true
+          file_glob: true
+
+      - name: Upload standalone CLI binaries
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: gorse-cli_*
           tag: ${{ github.ref }}
           overwrite: true
           file_glob: true
