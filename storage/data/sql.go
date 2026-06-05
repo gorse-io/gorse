@@ -29,6 +29,7 @@ import (
 	"github.com/gorse-io/gorse/common/expression"
 	"github.com/gorse-io/gorse/common/jsonutil"
 	"github.com/gorse-io/gorse/common/log"
+	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/storage"
 	"github.com/juju/errors"
 	_ "github.com/lib/pq"
@@ -462,6 +463,11 @@ func (d *SQLDatabase) Ping() error {
 	return d.client.Ping()
 }
 
+// Reconcile reconciles tables and indices in SQL databases.
+func (d *SQLDatabase) Reconcile(_ config.SearchConfig) error {
+	return nil
+}
+
 // Close MySQL connection.
 func (d *SQLDatabase) Close() error {
 	return d.client.Close()
@@ -618,6 +624,11 @@ func (d *SQLDatabase) GetItem(ctx context.Context, itemId string) (Item, error) 
 		return item, nil
 	}
 	return Item{}, errors.Annotate(ErrItemNotExist, itemId)
+}
+
+// SearchItems searches items from the database.
+func (d *SQLDatabase) SearchItems(_ context.Context, _ string, _ int) ([]Item, error) {
+	return []Item{}, nil
 }
 
 // ModifyItem modify an item in MySQL.

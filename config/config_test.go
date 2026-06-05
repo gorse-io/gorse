@@ -494,6 +494,14 @@ func (s *ValidateTestSuite) TestRecommendersExistence() {
 	s.Error(s.Validate())
 }
 
+func (s *ValidateTestSuite) TestSearchColumns() {
+	s.Recommend.Search.Columns = []string{"item.Labels.description"}
+	s.NoError(s.Validate())
+
+	s.Recommend.Search.Columns = []string{"item.Labels."}
+	s.Error(s.Validate())
+}
+
 func TestValidate(t *testing.T) {
 	suite.Run(t, new(ValidateTestSuite))
 }

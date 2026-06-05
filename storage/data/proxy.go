@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/gorse-io/gorse/common/expression"
+	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/protocol"
 	"github.com/juju/errors"
 	"google.golang.org/grpc"
@@ -555,6 +556,10 @@ func (p ProxyClient) Init() error {
 	return errors.MethodNotAllowedf("method Init is not allowed in ProxyClient")
 }
 
+func (p ProxyClient) Reconcile(_ config.SearchConfig) error {
+	return errors.MethodNotAllowedf("method Reconcile is not allowed in ProxyClient")
+}
+
 func (p ProxyClient) Ping() error {
 	_, err := p.DataStoreClient.Ping(context.Background(), &protocol.PingRequest{})
 	return err
@@ -653,6 +658,10 @@ func (p ProxyClient) GetItem(ctx context.Context, itemId string) (Item, error) {
 		Labels:     labels,
 		Comment:    resp.Item.Comment,
 	}, nil
+}
+
+func (p ProxyClient) SearchItems(_ context.Context, _ string, _ int) ([]Item, error) {
+	return []Item{}, nil
 }
 
 func (p ProxyClient) GetLatestItems(ctx context.Context, n int, categories []string, after *time.Time) ([]Item, error) {

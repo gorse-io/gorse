@@ -22,6 +22,7 @@ import (
 
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/gorse-io/gorse/common/expression"
+	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/storage"
 	"github.com/juju/errors"
 	"go.mongodb.org/mongo-driver/bson"
@@ -205,6 +206,11 @@ func (db *MongoDB) Ping() error {
 	return db.client.Ping(context.Background(), nil)
 }
 
+// Reconcile reconciles collections and indices in MongoDB.
+func (db *MongoDB) Reconcile(_ config.SearchConfig) error {
+	return nil
+}
+
 // Close connection to MongoDB.
 func (db *MongoDB) Close() error {
 	return db.client.Disconnect(context.Background())
@@ -329,6 +335,11 @@ func (db *MongoDB) GetItem(ctx context.Context, itemId string) (item Item, err e
 	err = r.Decode(&item)
 	item.Labels = unpack(item.Labels)
 	return
+}
+
+// SearchItems searches items from MongoDB.
+func (db *MongoDB) SearchItems(_ context.Context, _ string, _ int) ([]Item, error) {
+	return []Item{}, nil
 }
 
 // GetItems returns items from MongoDB.

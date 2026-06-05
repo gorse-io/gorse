@@ -162,6 +162,7 @@ type RecommendConfig struct {
 	ContextSize     int                     `mapstructure:"context_size" validate:"gt=0"`
 	ActiveUserTTL   int                     `mapstructure:"active_user_ttl" validate:"gte=0"`
 	DataSource      DataSourceConfig        `mapstructure:"data_source"`
+	Search          SearchConfig            `mapstructure:"search"`
 	NonPersonalized []NonPersonalizedConfig `mapstructure:"non-personalized" validate:"dive"`
 	ItemToItem      []ItemToItemConfig      `mapstructure:"item-to-item" validate:"dive"`
 	UserToUser      []UserToUserConfig      `mapstructure:"user-to-user" validate:"dive"`
@@ -249,6 +250,10 @@ type DataSourceConfig struct {
 	ReadFeedbackTypes     []expression.FeedbackTypeExpression `mapstructure:"read_feedback_types"`                    // feedback type for read event
 	PositiveFeedbackTTL   uint                                `mapstructure:"positive_feedback_ttl" validate:"gte=0"` // time-to-live of positive feedbacks
 	ItemTTL               uint                                `mapstructure:"item_ttl" validate:"gte=0"`              // item-to-live of items
+}
+
+type SearchConfig struct {
+	Columns []string `mapstructure:"columns" validate:"dive,item_expr"`
 }
 
 type NonPersonalizedConfig struct {
