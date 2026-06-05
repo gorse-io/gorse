@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"io"
 	"net"
+	"strings"
 	"time"
 
 	"github.com/gorse-io/gorse/common/expression"
@@ -544,6 +545,7 @@ func (p *ProxyServer) GetLatestItems(ctx context.Context, in *protocol.GetLatest
 
 type ProxyClient struct {
 	protocol.DataStoreClient
+	searchConfig config.SearchConfig
 }
 
 func NewProxyClient(conn *grpc.ClientConn) *ProxyClient {
@@ -556,8 +558,9 @@ func (p ProxyClient) Init() error {
 	return errors.MethodNotAllowedf("method Init is not allowed in ProxyClient")
 }
 
-func (p ProxyClient) Reconcile(_ config.SearchConfig) error {
-	return errors.MethodNotAllowedf("method Reconcile is not allowed in ProxyClient")
+func (p *ProxyClient) Reconcile(searchConfig config.SearchConfig) error {
+	p.searchConfig = searchConfig
+	return nil
 }
 
 func (p ProxyClient) Ping() error {
@@ -660,8 +663,83 @@ func (p ProxyClient) GetItem(ctx context.Context, itemId string) (Item, error) {
 	}, nil
 }
 
-func (p ProxyClient) SearchItems(_ context.Context, _ string, _ int) ([]Item, error) {
-	return []Item{}, nil
+func (p *ProxyClient) SearchItems(ctx context.Context, query string, n int) ([]Item, error) {
+	if n <= 0 {
+		return []Item{}, nil
+	}
+	columns := p.searchConfig.Columns
+	if len(columns) == 0 {
+		columns = []string{"item.ItemId", "item.Categories", "item.Labels", "item.Comment"}
+	}
+	itemsChan, errChan := p.GetItemStream(ctx, 1024, nil)
+	query = strings.ToLower(query)
+	items := make([]Item, 0, n)
+	for batch := range itemsChan {
+		for _, item := range batch {
+			if proxyItemMatchesSearch(item, columns, query) {
+				items = append(items, item)
+				if len(items) >= n {
+					for range itemsChan {
+					}
+					return items, <-errChan
+				}
+			}
+		}
+	}
+	return items, <-errChan
+}
+
+func proxyItemMatchesSearch(item Item, columns []string, query string) bool {
+	for _, column := range columns {
+		if strings.Contains(strings.ToLower(proxyItemSearchValue(item, column)), query) {
+			return true
+		}
+	}
+	return false
+}
+
+func proxyItemSearchValue(item Item, column string) string {
+	switch column {
+	case "item.ItemId":
+		return item.ItemId
+	case "item.Categories":
+		return strings.Join(item.Categories, " ")
+	case "item.Comment":
+		return item.Comment
+	case "item.Labels":
+		buf, _ := json.Marshal(item.Labels)
+		return string(buf)
+	default:
+		const labelsPrefix = "item.Labels."
+		if len(column) > len(labelsPrefix) && strings.HasPrefix(column, labelsPrefix) {
+			value, ok := proxyLookupLabel(item.Labels, strings.Split(column[len(labelsPrefix):], "."))
+			if !ok {
+				return ""
+			}
+			switch v := value.(type) {
+			case string:
+				return v
+			default:
+				buf, _ := json.Marshal(v)
+				return string(buf)
+			}
+		}
+	}
+	return ""
+}
+
+func proxyLookupLabel(value any, path []string) (any, bool) {
+	for _, element := range path {
+		m, ok := value.(map[string]any)
+		if !ok {
+			return nil, false
+		}
+		value, ok = m[element]
+		if !ok {
+			return nil, false
+		}
+	}
+	return value, true
 }
 
 func (p ProxyClient) GetLatestItems(ctx context.Context, n int, categories []string, after *time.Time) ([]Item, error) {

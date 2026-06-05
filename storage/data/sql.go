@@ -245,10 +245,16 @@ func FeedbackTypeExpressionToSQL(db *gorm.DB, e expression.FeedbackTypeExpressio
 // SQLDatabase use MySQL as data storage.
 type SQLDatabase struct {
 	storage.TablePrefix
-	gormDB *gorm.DB
-	client *sql.DB
-	driver SQLDriver
+	gormDB               *gorm.DB
+	client               *sql.DB
+	driver               SQLDriver
+	postgresSearchVector string
 }
+
+const (
+	searchIndexName           = "gorse_search_index"
+	mysqlSearchDocumentColumn = "gorse_search_document"
+)
 
 // Optimize is used by ClickHouse only.
 func (d *SQLDatabase) Optimize() error {
@@ -464,8 +470,234 @@ func (d *SQLDatabase) Ping() error {
 }
 
 // Reconcile reconciles tables and indices in SQL databases.
-func (d *SQLDatabase) Reconcile(_ config.SearchConfig) error {
+func (d *SQLDatabase) Reconcile(searchConfig config.SearchConfig) error {
+	if len(searchConfig.Columns) == 0 {
+		return nil
+	}
+	switch d.driver {
+	case Postgres:
+		searchVector := buildPostgresSearchVector(searchConfig.Columns)
+		if searchVector == "" {
+			return nil
+		}
+		if err := d.gormDB.Exec(fmt.Sprintf("DROP INDEX IF EXISTS %s", searchIndexName)).Error; err != nil {
+			return errors.Trace(err)
+		}
+		if err := d.gormDB.Exec(fmt.Sprintf("CREATE INDEX %s ON %s USING GIN ((%s))", searchIndexName, d.ItemsTable(), searchVector)).Error; err != nil {
+			return errors.Trace(err)
+		}
+		d.postgresSearchVector = searchVector
+	case MySQL:
+		searchDocument := buildMySQLSearchDocument(searchConfig.Columns)
+		if searchDocument == "" {
+			return nil
+		}
+		if err := d.dropMySQLIndexIfExists(d.ItemsTable(), searchIndexName); err != nil {
+			return errors.Trace(err)
+		}
+		if err := d.dropMySQLColumnIfExists(d.ItemsTable(), mysqlSearchDocumentColumn); err != nil {
+			return errors.Trace(err)
+		}
+		if err := d.gormDB.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s TEXT GENERATED ALWAYS AS (%s) STORED", d.ItemsTable(), mysqlSearchDocumentColumn, searchDocument)).Error; err != nil {
+			return errors.Trace(err)
+		}
+		if err := d.gormDB.Exec(fmt.Sprintf("CREATE FULLTEXT INDEX %s ON %s(%s)", searchIndexName, d.ItemsTable(), mysqlSearchDocumentColumn)).Error; err != nil {
+			return errors.Trace(err)
+		}
+	case SQLite:
+		searchDocument := buildSQLiteSearchDocument(searchConfig.Columns, "")
+		newSearchDocument := buildSQLiteSearchDocument(searchConfig.Columns, "new")
+		oldSearchDocument := buildSQLiteSearchDocument(searchConfig.Columns, "old")
+		if searchDocument == "" {
+			return nil
+		}
+		for _, triggerName := range []string{sqliteSearchInsertTriggerName(), sqliteSearchUpdateTriggerName(), sqliteSearchDeleteTriggerName()} {
+			if err := d.gormDB.Exec(fmt.Sprintf("DROP TRIGGER IF EXISTS %s", triggerName)).Error; err != nil {
+				return errors.Trace(err)
+			}
+		}
+		if err := d.gormDB.Exec(fmt.Sprintf("DROP TABLE IF EXISTS %s", searchIndexName)).Error; err != nil {
+			return errors.Trace(err)
+		}
+		if err := d.gormDB.Exec(fmt.Sprintf("CREATE VIRTUAL TABLE %s USING fts5(item_id UNINDEXED, search_document)", searchIndexName)).Error; err != nil {
+			return errors.Trace(err)
+		}
+		if err := d.gormDB.Exec(fmt.Sprintf("INSERT INTO %s(item_id, search_document) SELECT item_id, %s FROM %s", searchIndexName, searchDocument, d.ItemsTable())).Error; err != nil {
+			return errors.Trace(err)
+		}
+		if err := d.gormDB.Exec(fmt.Sprintf("CREATE TRIGGER %s AFTER INSERT ON %s BEGIN INSERT INTO %s(item_id, search_document) VALUES (new.item_id, %s); END", sqliteSearchInsertTriggerName(), d.ItemsTable(), searchIndexName, newSearchDocument)).Error; err != nil {
+			return errors.Trace(err)
+		}
+		if err := d.gormDB.Exec(fmt.Sprintf("CREATE TRIGGER %s AFTER UPDATE ON %s BEGIN DELETE FROM %s WHERE item_id = old.item_id; INSERT INTO %s(item_id, search_document) VALUES (new.item_id, %s); END", sqliteSearchUpdateTriggerName(), d.ItemsTable(), searchIndexName, searchIndexName, newSearchDocument)).Error; err != nil {
+			return errors.Trace(err)
+		}
+		if err := d.gormDB.Exec(fmt.Sprintf("CREATE TRIGGER %s AFTER DELETE ON %s BEGIN DELETE FROM %s WHERE item_id = old.item_id AND search_document = %s; END", sqliteSearchDeleteTriggerName(), d.ItemsTable(), searchIndexName, oldSearchDocument)).Error; err != nil {
+			return errors.Trace(err)
+		}
+	}
 	return nil
+}
+
+func buildPostgresSearchVector(columns []string) string {
+	searchColumns := make([]string, 0, len(columns))
+	for _, column := range columns {
+		searchColumn, ok := postgresSearchColumn(column)
+		if !ok {
+			continue
+		}
+		searchColumns = append(searchColumns, fmt.Sprintf("to_tsvector('simple', coalesce(%s, ''))", searchColumn))
+	}
+	return strings.Join(searchColumns, " || ")
+}
+
+func postgresSearchColumn(column string) (string, bool) {
+	switch column {
+	case "item.ItemId":
+		return "item_id", true
+	case "item.Categories":
+		return "categories::text", true
+	case "item.Comment":
+		return "comment", true
+	case "item.Labels":
+		return "labels::text", true
+	default:
+		const labelsPrefix = "item.Labels."
+		if len(column) > len(labelsPrefix) && strings.HasPrefix(column, labelsPrefix) {
+			path := strings.Split(column[len(labelsPrefix):], ".")
+			if lo.EveryBy(path, isPostgresJSONPathElement) {
+				return fmt.Sprintf("labels::jsonb #>> '{%s}'", strings.Join(path, ",")), true
+			}
+		}
+	}
+	return "", false
+}
+
+func isPostgresJSONPathElement(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '_' {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+func buildMySQLSearchDocument(columns []string) string {
+	searchColumns := make([]string, 0, len(columns))
+	for _, column := range columns {
+		searchColumn, ok := mysqlSearchColumn(column)
+		if !ok {
+			continue
+		}
+		searchColumns = append(searchColumns, searchColumn)
+	}
+	if len(searchColumns) == 0 {
+		return ""
+	}
+	return fmt.Sprintf("CONCAT_WS(' ', %s)", strings.Join(searchColumns, ", "))
+}
+
+func mysqlSearchColumn(column string) (string, bool) {
+	switch column {
+	case "item.ItemId":
+		return "item_id", true
+	case "item.Categories":
+		return "JSON_UNQUOTE(JSON_EXTRACT(categories, '$'))", true
+	case "item.Comment":
+		return "comment", true
+	case "item.Labels":
+		return "JSON_UNQUOTE(JSON_EXTRACT(labels, '$'))", true
+	default:
+		const labelsPrefix = "item.Labels."
+		if len(column) > len(labelsPrefix) && strings.HasPrefix(column, labelsPrefix) {
+			path := strings.Split(column[len(labelsPrefix):], ".")
+			if lo.EveryBy(path, isPostgresJSONPathElement) {
+				return fmt.Sprintf("JSON_UNQUOTE(JSON_EXTRACT(labels, '%s'))", mysqlJSONPath(path)), true
+			}
+		}
+	}
+	return "", false
+}
+
+func mysqlJSONPath(path []string) string {
+	return `$."` + strings.Join(path, `"."`) + `"`
+}
+
+func buildSQLiteSearchDocument(columns []string, qualifier string) string {
+	searchColumns := make([]string, 0, len(columns))
+	for _, column := range columns {
+		searchColumn, ok := sqliteSearchColumn(column, qualifier)
+		if !ok {
+			continue
+		}
+		searchColumns = append(searchColumns, fmt.Sprintf("coalesce(%s, '')", searchColumn))
+	}
+	return strings.Join(searchColumns, " || ' ' || ")
+}
+
+func sqliteSearchColumn(column, qualifier string) (string, bool) {
+	columnName := func(name string) string {
+		if qualifier == "" {
+			return name
+		}
+		return qualifier + "." + name
+	}
+	switch column {
+	case "item.ItemId":
+		return columnName("item_id"), true
+	case "item.Categories":
+		return fmt.Sprintf("json_extract(%s, '$')", columnName("categories")), true
+	case "item.Comment":
+		return columnName("comment"), true
+	case "item.Labels":
+		return fmt.Sprintf("json_extract(%s, '$')", columnName("labels")), true
+	default:
+		const labelsPrefix = "item.Labels."
+		if len(column) > len(labelsPrefix) && strings.HasPrefix(column, labelsPrefix) {
+			path := strings.Split(column[len(labelsPrefix):], ".")
+			if lo.EveryBy(path, isPostgresJSONPathElement) {
+				return fmt.Sprintf("json_extract(%s, '%s')", columnName("labels"), mysqlJSONPath(path)), true
+			}
+		}
+	}
+	return "", false
+}
+
+func sqliteSearchInsertTriggerName() string {
+	return searchIndexName + "_insert"
+}
+
+func sqliteSearchUpdateTriggerName() string {
+	return searchIndexName + "_update"
+}
+
+func sqliteSearchDeleteTriggerName() string {
+	return searchIndexName + "_delete"
+}
+
+func (d *SQLDatabase) dropMySQLIndexIfExists(tableName, indexName string) error {
+	var count int64
+	if err := d.gormDB.Raw("SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ?", tableName, indexName).Scan(&count).Error; err != nil {
+		return errors.Trace(err)
+	}
+	if count == 0 {
+		return nil
+	}
+	return errors.Trace(d.gormDB.Exec(fmt.Sprintf("DROP INDEX %s ON %s", indexName, tableName)).Error)
+}
+
+func (d *SQLDatabase) dropMySQLColumnIfExists(tableName, columnName string) error {
+	var count int64
+	if err := d.gormDB.Raw("SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?", tableName, columnName).Scan(&count).Error; err != nil {
+		return errors.Trace(err)
+	}
+	if count == 0 {
+		return nil
+	}
+	return errors.Trace(d.gormDB.Exec(fmt.Sprintf("ALTER TABLE %s DROP COLUMN %s", tableName, columnName)).Error)
 }
 
 // Close MySQL connection.
@@ -627,8 +859,70 @@ func (d *SQLDatabase) GetItem(ctx context.Context, itemId string) (Item, error) 
 }
 
 // SearchItems searches items from the database.
-func (d *SQLDatabase) SearchItems(_ context.Context, _ string, _ int) ([]Item, error) {
-	return []Item{}, nil
+func (d *SQLDatabase) SearchItems(ctx context.Context, query string, n int) ([]Item, error) {
+	if n <= 0 {
+		return []Item{}, nil
+	}
+	switch d.driver {
+	case Postgres:
+		searchVector := d.postgresSearchVector
+		if searchVector == "" {
+			searchVector = buildPostgresSearchVector([]string{"item.ItemId", "item.Categories", "item.Labels", "item.Comment"})
+		}
+		result, err := d.gormDB.WithContext(ctx).
+			Table(d.ItemsTable()).
+			Select("item_id, is_hidden, categories, time_stamp, labels, comment").
+			Where(fmt.Sprintf("%s @@ plainto_tsquery('simple', ?)", searchVector), query).
+			Order(clause.Expr{SQL: fmt.Sprintf("ts_rank(%s, plainto_tsquery('simple', ?)) DESC", searchVector), Vars: []any{query}}).
+			Limit(n).
+			Rows()
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		defer result.Close()
+		return d.scanItems(result)
+	case MySQL:
+		result, err := d.gormDB.WithContext(ctx).
+			Table(d.ItemsTable()).
+			Select("item_id, is_hidden, categories, time_stamp, labels, comment").
+			Where(fmt.Sprintf("MATCH(%s) AGAINST (? IN NATURAL LANGUAGE MODE)", mysqlSearchDocumentColumn), query).
+			Order(clause.Expr{SQL: fmt.Sprintf("MATCH(%s) AGAINST (? IN NATURAL LANGUAGE MODE) DESC", mysqlSearchDocumentColumn), Vars: []any{query}}).
+			Limit(n).
+			Rows()
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		defer result.Close()
+		return d.scanItems(result)
+	case SQLite:
+		result, err := d.gormDB.WithContext(ctx).
+			Table(fmt.Sprintf("%s AS items", d.ItemsTable())).
+			Select("items.item_id, items.is_hidden, items.categories, items.time_stamp, items.labels, items.comment").
+			Joins(fmt.Sprintf("JOIN %s ON items.item_id = %s.item_id", searchIndexName, searchIndexName)).
+			Where(fmt.Sprintf("%s MATCH ?", searchIndexName), query).
+			Order(fmt.Sprintf("bm25(%s)", searchIndexName)).
+			Limit(n).
+			Rows()
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		defer result.Close()
+		return d.scanItems(result)
+	default:
+		return []Item{}, nil
+	}
+}
+
+func (d *SQLDatabase) scanItems(result *sql.Rows) ([]Item, error) {
+	items := make([]Item, 0)
+	for result.Next() {
+		var item Item
+		if err := d.gormDB.ScanRows(result, &item); err != nil {
+			return nil, errors.Trace(err)
+		}
+		items = append(items, item)
+	}
+	return items, errors.Trace(result.Err())
 }
 
 // ModifyItem modify an item in MySQL.
