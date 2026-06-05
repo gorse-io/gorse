@@ -224,6 +224,14 @@ data["items"].map((item) => {
 })
 """
 
+[[recommend.agent]]
+
+# The name of the agent recommender.
+name = "assistant"
+
+# The prompt for the agent recommender.
+prompt = "Recommend items for the user."
+
 [recommend.collaborative]
 
 # The type of collaborative filtering. Supported values:
