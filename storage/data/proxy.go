@@ -19,7 +19,6 @@ import (
 	"encoding/json"
 	"io"
 	"net"
-	"strings"
 	"time"
 
 	"github.com/gorse-io/gorse/common/expression"
@@ -52,6 +51,11 @@ func (p *ProxyServer) Stop() {
 
 func (p *ProxyServer) Ping(_ context.Context, _ *protocol.PingRequest) (*protocol.PingResponse, error) {
 	return &protocol.PingResponse{}, p.database.Ping()
+}
+
+func (p *ProxyServer) Reconcile(_ context.Context, in *protocol.ReconcileRequest) (*protocol.ReconcileResponse, error) {
+	err := p.database.Reconcile(config.SearchConfig{Columns: in.SearchColumns})
+	return &protocol.ReconcileResponse{}, err
 }
 
 func (p *ProxyServer) BatchInsertItems(ctx context.Context, in *protocol.BatchInsertItemsRequest) (*protocol.BatchInsertItemsResponse, error) {
@@ -135,6 +139,29 @@ func (p *ProxyServer) GetItem(ctx context.Context, in *protocol.GetItemRequest) 
 			Comment:    item.Comment,
 		},
 	}, nil
+}
+
+func (p *ProxyServer) SearchItems(ctx context.Context, in *protocol.SearchItemsRequest) (*protocol.SearchItemsResponse, error) {
+	items, err := p.database.SearchItems(ctx, in.Query, int(in.N))
+	if err != nil {
+		return nil, err
+	}
+	pbItems := make([]*protocol.Item, len(items))
+	for i, item := range items {
+		labels, err := json.Marshal(item.Labels)
+		if err != nil {
+			return nil, err
+		}
+		pbItems[i] = &protocol.Item{
+			ItemId:     item.ItemId,
+			IsHidden:   item.IsHidden,
+			Categories: item.Categories,
+			Timestamp:  timestamppb.New(item.Timestamp),
+			Labels:     labels,
+			Comment:    item.Comment,
+		}
+	}
+	return &protocol.SearchItemsResponse{Items: pbItems}, nil
 }
 
 func (p *ProxyServer) ModifyItem(ctx context.Context, in *protocol.ModifyItemRequest) (*protocol.ModifyItemResponse, error) {
@@ -545,7 +572,6 @@ func (p *ProxyServer) GetLatestItems(ctx context.Context, in *protocol.GetLatest
 
 type ProxyClient struct {
 	protocol.DataStoreClient
-	searchConfig config.SearchConfig
 }
 
 func NewProxyClient(conn *grpc.ClientConn) *ProxyClient {
@@ -559,8 +585,8 @@ func (p ProxyClient) Init() error {
 }
 
 func (p *ProxyClient) Reconcile(searchConfig config.SearchConfig) error {
-	p.searchConfig = searchConfig
-	return nil
+	_, err := p.DataStoreClient.Reconcile(context.Background(), &protocol.ReconcileRequest{SearchColumns: searchConfig.Columns})
+	return err
 }
 
 func (p ProxyClient) Ping() error {
@@ -663,83 +689,27 @@ func (p ProxyClient) GetItem(ctx context.Context, itemId string) (Item, error) {
 	}, nil
 }
 
-func (p *ProxyClient) SearchItems(ctx context.Context, query string, n int) ([]Item, error) {
-	if n <= 0 {
-		return []Item{}, nil
+func (p ProxyClient) SearchItems(ctx context.Context, query string, n int) ([]Item, error) {
+	resp, err := p.DataStoreClient.SearchItems(ctx, &protocol.SearchItemsRequest{Query: query, N: int32(n)})
+	if err != nil {
+		return nil, err
 	}
-	columns := p.searchConfig.Columns
-	if len(columns) == 0 {
-		columns = []string{"item.ItemId", "item.Categories", "item.Labels", "item.Comment"}
-	}
-	itemsChan, errChan := p.GetItemStream(ctx, 1024, nil)
-	query = strings.ToLower(query)
-	items := make([]Item, 0, n)
-	for batch := range itemsChan {
-		for _, item := range batch {
-			if proxyItemMatchesSearch(item, columns, query) {
-				items = append(items, item)
-				if len(items) >= n {
-					for range itemsChan {
-					}
-					return items, <-errChan
-				}
-			}
+	items := make([]Item, len(resp.Items))
+	for i, item := range resp.Items {
+		var labels any
+		if err = json.Unmarshal(item.Labels, &labels); err != nil {
+			return nil, err
+		}
+		items[i] = Item{
+			ItemId:     item.ItemId,
+			IsHidden:   item.IsHidden,
+			Categories: item.Categories,
+			Timestamp:  item.Timestamp.AsTime(),
+			Labels:     labels,
+			Comment:    item.Comment,
 		}
 	}
-	return items, <-errChan
-}
-
-func proxyItemMatchesSearch(item Item, columns []string, query string) bool {
-	for _, column := range columns {
-		if strings.Contains(strings.ToLower(proxyItemSearchValue(item, column)), query) {
-			return true
-		}
-	}
-	return false
-}
-
-func proxyItemSearchValue(item Item, column string) string {
-	switch column {
-	case "item.ItemId":
-		return item.ItemId
-	case "item.Categories":
-		return strings.Join(item.Categories, " ")
-	case "item.Comment":
-		return item.Comment
-	case "item.Labels":
-		buf, _ := json.Marshal(item.Labels)
-		return string(buf)
-	default:
-		const labelsPrefix = "item.Labels."
-		if len(column) > len(labelsPrefix) && strings.HasPrefix(column, labelsPrefix) {
-			value, ok := proxyLookupLabel(item.Labels, strings.Split(column[len(labelsPrefix):], "."))
-			if !ok {
-				return ""
-			}
-			switch v := value.(type) {
-			case string:
-				return v
-			default:
-				buf, _ := json.Marshal(v)
-				return string(buf)
-			}
-		}
-	}
-	return ""
-}
-
-func proxyLookupLabel(value any, path []string) (any, bool) {
-	for _, element := range path {
-		m, ok := value.(map[string]any)
-		if !ok {
-			return nil, false
-		}
-		value, ok = m[element]
-		if !ok {
-			return nil, false
-		}
-	}
-	return value, true
+	return items, nil
 }
 
 func (p ProxyClient) GetLatestItems(ctx context.Context, n int, categories []string, after *time.Time) ([]Item, error) {
