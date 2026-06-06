@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/gorse-io/gorse/common/expression"
+	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/protocol"
 	"github.com/juju/errors"
 	"google.golang.org/grpc"
@@ -50,6 +51,11 @@ func (p *ProxyServer) Stop() {
 
 func (p *ProxyServer) Ping(_ context.Context, _ *protocol.PingRequest) (*protocol.PingResponse, error) {
 	return &protocol.PingResponse{}, p.database.Ping()
+}
+
+func (p *ProxyServer) Reconcile(_ context.Context, in *protocol.ReconcileRequest) (*protocol.ReconcileResponse, error) {
+	err := p.database.Reconcile(config.SearchConfig{Columns: in.SearchColumns})
+	return &protocol.ReconcileResponse{}, err
 }
 
 func (p *ProxyServer) BatchInsertItems(ctx context.Context, in *protocol.BatchInsertItemsRequest) (*protocol.BatchInsertItemsResponse, error) {
@@ -133,6 +139,29 @@ func (p *ProxyServer) GetItem(ctx context.Context, in *protocol.GetItemRequest) 
 			Comment:    item.Comment,
 		},
 	}, nil
+}
+
+func (p *ProxyServer) SearchItems(ctx context.Context, in *protocol.SearchItemsRequest) (*protocol.SearchItemsResponse, error) {
+	items, err := p.database.SearchItems(ctx, in.Query, int(in.N))
+	if err != nil {
+		return nil, err
+	}
+	pbItems := make([]*protocol.Item, len(items))
+	for i, item := range items {
+		labels, err := json.Marshal(item.Labels)
+		if err != nil {
+			return nil, err
+		}
+		pbItems[i] = &protocol.Item{
+			ItemId:     item.ItemId,
+			IsHidden:   item.IsHidden,
+			Categories: item.Categories,
+			Timestamp:  timestamppb.New(item.Timestamp),
+			Labels:     labels,
+			Comment:    item.Comment,
+		}
+	}
+	return &protocol.SearchItemsResponse{Items: pbItems}, nil
 }
 
 func (p *ProxyServer) ModifyItem(ctx context.Context, in *protocol.ModifyItemRequest) (*protocol.ModifyItemResponse, error) {
@@ -555,6 +584,11 @@ func (p ProxyClient) Init() error {
 	return errors.MethodNotAllowedf("method Init is not allowed in ProxyClient")
 }
 
+func (p *ProxyClient) Reconcile(searchConfig config.SearchConfig) error {
+	_, err := p.DataStoreClient.Reconcile(context.Background(), &protocol.ReconcileRequest{SearchColumns: searchConfig.Columns})
+	return err
+}
+
 func (p ProxyClient) Ping() error {
 	_, err := p.DataStoreClient.Ping(context.Background(), &protocol.PingRequest{})
 	return err
@@ -653,6 +687,29 @@ func (p ProxyClient) GetItem(ctx context.Context, itemId string) (Item, error) {
 		Labels:     labels,
 		Comment:    resp.Item.Comment,
 	}, nil
+}
+
+func (p ProxyClient) SearchItems(ctx context.Context, query string, n int) ([]Item, error) {
+	resp, err := p.DataStoreClient.SearchItems(ctx, &protocol.SearchItemsRequest{Query: query, N: int32(n)})
+	if err != nil {
+		return nil, err
+	}
+	items := make([]Item, len(resp.Items))
+	for i, item := range resp.Items {
+		var labels any
+		if err = json.Unmarshal(item.Labels, &labels); err != nil {
+			return nil, err
+		}
+		items[i] = Item{
+			ItemId:     item.ItemId,
+			IsHidden:   item.IsHidden,
+			Categories: item.Categories,
+			Timestamp:  item.Timestamp.AsTime(),
+			Labels:     labels,
+			Comment:    item.Comment,
+		}
+	}
+	return items, nil
 }
 
 func (p ProxyClient) GetLatestItems(ctx context.Context, n int, categories []string, after *time.Time) ([]Item, error) {

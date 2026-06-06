@@ -9,11 +9,13 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
 	"unsafe"
 
+	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/master"
 	"github.com/gorse-io/gorse/protocol"
@@ -146,6 +148,47 @@ func (s *CLITestSuite) requireCommandOutputLines(args []string, lineRegexps ...s
 	return out
 }
 
+func (s *CLITestSuite) requireCommandOutputEventuallyContainsLines(args []string, timeout time.Duration, lineRegexps ...string) string {
+	deadline := time.Now().Add(timeout)
+	var out string
+	var err error
+	for {
+		out, err = s.execute(args...)
+		if err == nil && !strings.Contains(out, "┌") && !strings.Contains(out, "│") && !strings.Contains(out, "└") {
+			if missing := missingLineRegexps(out, lineRegexps); len(missing) == 0 {
+				return out
+			}
+		}
+		if time.Now().After(deadline) {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	s.Require().NoError(err)
+	s.requireNoBoxDrawing(out)
+	s.Require().Empty(missingLineRegexps(out, lineRegexps), out)
+	return out
+}
+
+func missingLineRegexps(out string, lineRegexps []string) []string {
+	lines := strings.Split(strings.TrimRight(out, "\n"), "\n")
+	missing := make([]string, 0)
+	for _, lineRegexp := range lineRegexps {
+		matched := false
+		for _, line := range lines {
+			if regexp.MustCompile(lineRegexp).MatchString(line) {
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			missing = append(missing, lineRegexp)
+		}
+	}
+	return missing
+}
+
 func (s *CLITestSuite) requireNoBoxDrawing(out string) {
 	s.Require().NotContains(out, "┌")
 	s.Require().NotContains(out, "│")
@@ -168,7 +211,7 @@ func (s *CLITestSuite) TestGetCategories() {
 }
 
 func (s *CLITestSuite) TestPS() {
-	s.requireCommandOutputLines([]string{"ps"},
+	s.requireCommandOutputEventuallyContainsLines([]string{"ps"}, 10*time.Second,
 		`^TRACER\s+NAME\s+STATUS\s+PROGRESS\s+ERROR\s+START-TIME\s+FINISH-TIME$`,
 		`^master\s+Load Dataset\s+Complete\s+\[[#-]{20}\]\s+\d+%\s+`+rfc3339Regexp+`\s+`+rfc3339Regexp+`$`,
 		`^master\s+Generate recommendation\s+Complete\s+\[[#-]{20}\]\s+\d+%\s+`+rfc3339Regexp+`\s+`+rfc3339Regexp+`$`,
@@ -444,6 +487,7 @@ func newTestMaster(t *testing.T) (*master.Master, string) {
 
 	endpoint := fmt.Sprintf("http://%s:%d", cfg.Master.HttpHost, cfg.Master.HttpPort)
 	waitForMaster(t, endpoint)
+	waitForInitialTask(t, endpoint)
 	t.Cleanup(func() {
 		m.Shutdown()
 		closeTestMasterStores(t, m)
@@ -496,4 +540,27 @@ func waitForMaster(t *testing.T, endpoint string) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	require.Failf(t, "master didn't become ready", "endpoint: %s", endpoint)
+}
+
+func waitForInitialTask(t *testing.T, endpoint string) {
+	t.Helper()
+	client := NewAdminClient(endpoint, testAPIKey)
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		tasks, err := client.GetTasks()
+		if err == nil {
+			for _, task := range tasks {
+				if task.Name == "Load Dataset" {
+					switch task.Status {
+					case monitor.StatusComplete:
+						return
+					case monitor.StatusFailed:
+						require.Failf(t, "initial load dataset task failed", task.Error)
+					}
+				}
+			}
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	require.Fail(t, "initial load dataset task didn't complete")
 }
