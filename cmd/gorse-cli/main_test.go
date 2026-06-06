@@ -15,6 +15,7 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/master"
 	"github.com/gorse-io/gorse/protocol"
@@ -486,6 +487,7 @@ func newTestMaster(t *testing.T) (*master.Master, string) {
 
 	endpoint := fmt.Sprintf("http://%s:%d", cfg.Master.HttpHost, cfg.Master.HttpPort)
 	waitForMaster(t, endpoint)
+	waitForInitialTask(t, endpoint)
 	t.Cleanup(func() {
 		m.Shutdown()
 		closeTestMasterStores(t, m)
@@ -538,4 +540,27 @@ func waitForMaster(t *testing.T, endpoint string) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	require.Failf(t, "master didn't become ready", "endpoint: %s", endpoint)
+}
+
+func waitForInitialTask(t *testing.T, endpoint string) {
+	t.Helper()
+	client := NewAdminClient(endpoint, testAPIKey)
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		tasks, err := client.GetTasks()
+		if err == nil {
+			for _, task := range tasks {
+				if task.Name == "Load Dataset" {
+					switch task.Status {
+					case monitor.StatusComplete:
+						return
+					case monitor.StatusFailed:
+						require.Failf(t, "initial load dataset task failed", task.Error)
+					}
+				}
+			}
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	require.Fail(t, "initial load dataset task didn't complete")
 }
