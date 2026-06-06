@@ -886,7 +886,7 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 		return
 	}
 	// online recommendation
-	recommender, err := logics.NewRecommender(s.Config.Recommend, s.CacheClient, s.DataClient, true, userId, categories)
+	recommender, err := logics.NewRecommender(s.Config.Recommend, s.CacheClient, s.DataClient, true, userId, categories, s.Config.OpenAI)
 	if err != nil {
 		InternalServerError(response, err)
 		return
