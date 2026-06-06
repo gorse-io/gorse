@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"sort"
 	"time"
 
 	mapset "github.com/deckarep/golang-set/v2"
@@ -222,6 +223,7 @@ func (db *MongoDB) Reconcile(searchConfig config.SearchConfig) error {
 	if len(keys) == 0 {
 		return nil
 	}
+	sort.Slice(keys, func(i, j int) bool { return keys[i].Key < keys[j].Key })
 	ctx := context.Background()
 	indexes := db.client.Database(db.dbName).Collection(db.ItemsTable()).Indexes()
 	const searchIndexName = "gorse_search_index"
@@ -236,6 +238,9 @@ func (db *MongoDB) Reconcile(searchConfig config.SearchConfig) error {
 			return errors.Trace(err)
 		}
 		if index["name"] == searchIndexName {
+			if mongoSearchIndexKeysMatch(index["key"], keys) {
+				return nil
+			}
 			if _, err = indexes.DropOne(ctx, searchIndexName); err != nil {
 				return errors.Trace(err)
 			}
@@ -250,6 +255,31 @@ func (db *MongoDB) Reconcile(searchConfig config.SearchConfig) error {
 		Options: options.Index().SetName(searchIndexName),
 	})
 	return errors.Trace(err)
+}
+
+func mongoSearchIndexKeysMatch(existing any, expected bson.D) bool {
+	existingMap := make(map[string]any)
+	switch keys := existing.(type) {
+	case bson.M:
+		for k, v := range keys {
+			existingMap[k] = v
+		}
+	case bson.D:
+		for _, key := range keys {
+			existingMap[key.Key] = key.Value
+		}
+	default:
+		return false
+	}
+	if len(existingMap) != len(expected) {
+		return false
+	}
+	for _, key := range expected {
+		if existingMap[key.Key] != key.Value {
+			return false
+		}
+	}
+	return true
 }
 
 func mongoSearchColumnToField(column string) (string, bool) {
