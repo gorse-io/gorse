@@ -245,15 +245,18 @@ func FeedbackTypeExpressionToSQL(db *gorm.DB, e expression.FeedbackTypeExpressio
 // SQLDatabase use MySQL as data storage.
 type SQLDatabase struct {
 	storage.TablePrefix
-	gormDB               *gorm.DB
-	client               *sql.DB
-	driver               SQLDriver
-	postgresSearchVector string
+	gormDB       *gorm.DB
+	client       *sql.DB
+	driver       SQLDriver
+	searchVector string
 }
 
 const (
-	searchIndexName           = "gorse_search_index"
-	mysqlSearchDocumentColumn = "gorse_search_document"
+	searchIndexName               = "gorse_search_index"
+	mysqlSearchDocumentColumn     = "gorse_search_document"
+	sqliteSearchInsertTriggerName = searchIndexName + "_insert"
+	sqliteSearchUpdateTriggerName = searchIndexName + "_update"
+	sqliteSearchDeleteTriggerName = searchIndexName + "_delete"
 )
 
 // Optimize is used by ClickHouse only.
@@ -486,7 +489,7 @@ func (d *SQLDatabase) Reconcile(searchConfig config.SearchConfig) error {
 		if err := d.gormDB.Exec(fmt.Sprintf("CREATE INDEX %s ON %s USING GIN ((%s))", searchIndexName, d.ItemsTable(), searchVector)).Error; err != nil {
 			return errors.Trace(err)
 		}
-		d.postgresSearchVector = searchVector
+		d.searchVector = searchVector
 	case MySQL:
 		searchDocument := buildMySQLSearchDocument(searchConfig.Columns)
 		if searchDocument == "" {
@@ -511,7 +514,7 @@ func (d *SQLDatabase) Reconcile(searchConfig config.SearchConfig) error {
 		if searchDocument == "" {
 			return nil
 		}
-		for _, triggerName := range []string{sqliteSearchInsertTriggerName(), sqliteSearchUpdateTriggerName(), sqliteSearchDeleteTriggerName()} {
+		for _, triggerName := range []string{sqliteSearchInsertTriggerName, sqliteSearchUpdateTriggerName, sqliteSearchDeleteTriggerName} {
 			if err := d.gormDB.Exec(fmt.Sprintf("DROP TRIGGER IF EXISTS %s", triggerName)).Error; err != nil {
 				return errors.Trace(err)
 			}
@@ -525,13 +528,13 @@ func (d *SQLDatabase) Reconcile(searchConfig config.SearchConfig) error {
 		if err := d.gormDB.Exec(fmt.Sprintf("INSERT INTO %s(item_id, search_document) SELECT item_id, %s FROM %s", searchIndexName, searchDocument, d.ItemsTable())).Error; err != nil {
 			return errors.Trace(err)
 		}
-		if err := d.gormDB.Exec(fmt.Sprintf("CREATE TRIGGER %s AFTER INSERT ON %s BEGIN INSERT INTO %s(item_id, search_document) VALUES (new.item_id, %s); END", sqliteSearchInsertTriggerName(), d.ItemsTable(), searchIndexName, newSearchDocument)).Error; err != nil {
+		if err := d.gormDB.Exec(fmt.Sprintf("CREATE TRIGGER %s AFTER INSERT ON %s BEGIN INSERT INTO %s(item_id, search_document) VALUES (new.item_id, %s); END", sqliteSearchInsertTriggerName, d.ItemsTable(), searchIndexName, newSearchDocument)).Error; err != nil {
 			return errors.Trace(err)
 		}
-		if err := d.gormDB.Exec(fmt.Sprintf("CREATE TRIGGER %s AFTER UPDATE ON %s BEGIN DELETE FROM %s WHERE item_id = old.item_id; INSERT INTO %s(item_id, search_document) VALUES (new.item_id, %s); END", sqliteSearchUpdateTriggerName(), d.ItemsTable(), searchIndexName, searchIndexName, newSearchDocument)).Error; err != nil {
+		if err := d.gormDB.Exec(fmt.Sprintf("CREATE TRIGGER %s AFTER UPDATE ON %s BEGIN DELETE FROM %s WHERE item_id = old.item_id; INSERT INTO %s(item_id, search_document) VALUES (new.item_id, %s); END", sqliteSearchUpdateTriggerName, d.ItemsTable(), searchIndexName, searchIndexName, newSearchDocument)).Error; err != nil {
 			return errors.Trace(err)
 		}
-		if err := d.gormDB.Exec(fmt.Sprintf("CREATE TRIGGER %s AFTER DELETE ON %s BEGIN DELETE FROM %s WHERE item_id = old.item_id AND search_document = %s; END", sqliteSearchDeleteTriggerName(), d.ItemsTable(), searchIndexName, oldSearchDocument)).Error; err != nil {
+		if err := d.gormDB.Exec(fmt.Sprintf("CREATE TRIGGER %s AFTER DELETE ON %s BEGIN DELETE FROM %s WHERE item_id = old.item_id AND search_document = %s; END", sqliteSearchDeleteTriggerName, d.ItemsTable(), searchIndexName, oldSearchDocument)).Error; err != nil {
 			return errors.Trace(err)
 		}
 	}
@@ -664,18 +667,6 @@ func sqliteSearchColumn(column, qualifier string) (string, bool) {
 		}
 	}
 	return "", false
-}
-
-func sqliteSearchInsertTriggerName() string {
-	return searchIndexName + "_insert"
-}
-
-func sqliteSearchUpdateTriggerName() string {
-	return searchIndexName + "_update"
-}
-
-func sqliteSearchDeleteTriggerName() string {
-	return searchIndexName + "_delete"
 }
 
 func (d *SQLDatabase) dropMySQLIndexIfExists(tableName, indexName string) error {
@@ -863,57 +854,40 @@ func (d *SQLDatabase) SearchItems(ctx context.Context, query string, n int) ([]I
 	if n <= 0 {
 		return []Item{}, nil
 	}
+	var tx *gorm.DB
 	switch d.driver {
 	case Postgres:
-		searchVector := d.postgresSearchVector
-		if searchVector == "" {
-			searchVector = buildPostgresSearchVector([]string{"item.ItemId", "item.Categories", "item.Labels", "item.Comment"})
-		}
-		result, err := d.gormDB.WithContext(ctx).
+		tx = d.gormDB.WithContext(ctx).
 			Table(d.ItemsTable()).
 			Select("item_id, is_hidden, categories, time_stamp, labels, comment").
-			Where(fmt.Sprintf("%s @@ plainto_tsquery('simple', ?)", searchVector), query).
-			Order(clause.Expr{SQL: fmt.Sprintf("ts_rank(%s, plainto_tsquery('simple', ?)) DESC", searchVector), Vars: []any{query}}).
-			Limit(n).
-			Rows()
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
-		defer result.Close()
-		return d.scanItems(result)
+			Where(fmt.Sprintf("%s @@ plainto_tsquery('simple', ?)", d.searchVector), query).
+			Order(clause.Expr{SQL: fmt.Sprintf("ts_rank(%s, plainto_tsquery('simple', ?)) DESC", d.searchVector), Vars: []any{query}}).
+			Limit(n)
 	case MySQL:
-		result, err := d.gormDB.WithContext(ctx).
+		tx = d.gormDB.WithContext(ctx).
 			Table(d.ItemsTable()).
 			Select("item_id, is_hidden, categories, time_stamp, labels, comment").
 			Where(fmt.Sprintf("MATCH(%s) AGAINST (? IN NATURAL LANGUAGE MODE)", mysqlSearchDocumentColumn), query).
 			Order(clause.Expr{SQL: fmt.Sprintf("MATCH(%s) AGAINST (? IN NATURAL LANGUAGE MODE) DESC", mysqlSearchDocumentColumn), Vars: []any{query}}).
-			Limit(n).
-			Rows()
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
-		defer result.Close()
-		return d.scanItems(result)
+			Limit(n)
 	case SQLite:
-		result, err := d.gormDB.WithContext(ctx).
+		tx = d.gormDB.WithContext(ctx).
 			Table(fmt.Sprintf("%s AS items", d.ItemsTable())).
 			Select("items.item_id, items.is_hidden, items.categories, items.time_stamp, items.labels, items.comment").
 			Joins(fmt.Sprintf("JOIN %s ON items.item_id = %s.item_id", searchIndexName, searchIndexName)).
 			Where(fmt.Sprintf("%s MATCH ?", searchIndexName), query).
 			Order(fmt.Sprintf("bm25(%s)", searchIndexName)).
-			Limit(n).
-			Rows()
-		if err != nil {
-			return nil, errors.Trace(err)
-		}
-		defer result.Close()
-		return d.scanItems(result)
+			Limit(n)
 	default:
 		return []Item{}, nil
 	}
-}
 
-func (d *SQLDatabase) scanItems(result *sql.Rows) ([]Item, error) {
+	result, err := tx.Rows()
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	defer result.Close()
+
 	items := make([]Item, 0)
 	for result.Next() {
 		var item Item
