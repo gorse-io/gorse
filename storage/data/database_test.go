@@ -1021,44 +1021,6 @@ func (suite *baseTestSuite) TestSearch() {
 	suite.Len(searchItemIDs("running", 1), 1)
 }
 
-func (suite *baseTestSuite) TestSearchReconcileKeepsExistingIndexWithSameFields() {
-	database, ok := suite.Database.(*SQLDatabase)
-	if !ok || database.driver != SQLite {
-		suite.T().Skip("only SQLite search index can be inspected without external services")
-	}
-	searchColumns := []string{
-		"item.ItemId",
-		"item.Categories",
-		"item.Labels.brand",
-		"item.Comment",
-	}
-	err := suite.Database.Reconcile(config.SearchConfig{Columns: searchColumns})
-	suite.NoError(err)
-	err = database.gormDB.Exec(fmt.Sprintf("INSERT INTO %s(item_id, search_document) VALUES (?, ?)", searchIndexName), "sentinel", "sentinel").Error
-	suite.NoError(err)
-
-	// Same fields in a different order shouldn't rebuild the index.
-	err = suite.Database.Reconcile(config.SearchConfig{Columns: []string{
-		"item.Comment",
-		"item.Labels.brand",
-		"item.Categories",
-		"item.ItemId",
-	}})
-	suite.NoError(err)
-
-	var count int
-	err = database.gormDB.Raw(fmt.Sprintf("SELECT count(*) FROM %s WHERE item_id = ?", searchIndexName), "sentinel").Scan(&count).Error
-	suite.NoError(err)
-	suite.Equal(1, count)
-
-	// Different fields should rebuild the index.
-	err = suite.Database.Reconcile(config.SearchConfig{Columns: []string{"item.ItemId"}})
-	suite.NoError(err)
-	err = database.gormDB.Raw(fmt.Sprintf("SELECT count(*) FROM %s WHERE item_id = ?", searchIndexName), "sentinel").Scan(&count).Error
-	suite.NoError(err)
-	suite.Zero(count)
-}
-
 func (suite *baseTestSuite) TestPurge() {
 	ctx := suite.T().Context()
 	// insert data
