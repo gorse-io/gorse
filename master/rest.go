@@ -368,8 +368,8 @@ func (m *Master) login(response http.ResponseWriter, request *http.Request) {
 		pass := request.FormValue("password")
 		if m.Config.Master.DashboardUserName != "" || m.Config.Master.DashboardPassword != "" {
 			if name != m.Config.Master.DashboardUserName || pass != m.Config.Master.DashboardPassword {
-				http.Redirect(response, request, "login?msg=incorrect", http.StatusFound)
 				log.Logger().Info("POST /login", zap.Int("status_code", http.StatusUnauthorized))
+				server.Error(restful.NewResponse(response), http.StatusUnauthorized, errors.New("incorrect user name or password"))
 				return
 			}
 			value := map[string]string{
@@ -386,14 +386,13 @@ func (m *Master) login(response http.ResponseWriter, request *http.Request) {
 					Path:  "/",
 				}
 				http.SetCookie(response, cookie)
-				http.Redirect(response, request, "/", http.StatusFound)
-				log.Logger().Info("POST /login", zap.Int("status_code", http.StatusFound))
+				log.Logger().Info("POST /login", zap.Int("status_code", http.StatusOK))
+				server.Ok(restful.NewResponse(response), UserInfo{Name: name})
 				return
 			}
-		} else {
-			http.Redirect(response, request, "/", http.StatusFound)
-			log.Logger().Info("POST /login", zap.Int("status_code", http.StatusFound))
 		}
+		log.Logger().Info("POST /login", zap.Int("status_code", http.StatusOK))
+		server.Ok(restful.NewResponse(response), nil)
 	default:
 		server.BadRequest(restful.NewResponse(response), errors.New("unsupported method"))
 	}
@@ -407,8 +406,8 @@ func (m *Master) logout(response http.ResponseWriter, request *http.Request) {
 		MaxAge: -1,
 	}
 	http.SetCookie(response, cookie)
-	http.Redirect(response, request, "/login", http.StatusFound)
-	log.Logger().Info(fmt.Sprintf("%s %s", request.Method, request.RequestURI), zap.Int("status_code", http.StatusFound))
+	server.Ok(restful.NewResponse(response), nil)
+	log.Logger().Info(fmt.Sprintf("%s %s", request.Method, request.RequestURI), zap.Int("status_code", http.StatusOK))
 }
 
 func (m *Master) LoginFilter(req *restful.Request, resp *restful.Response, chain *restful.FilterChain) {
@@ -2005,7 +2004,7 @@ func (m *Master) handleOAuth2Callback(w http.ResponseWriter, r *http.Request) {
 			Path:    "/",
 			Expires: idToken.Expiry,
 		})
-		http.Redirect(w, r, "/", http.StatusFound)
+		server.Ok(restful.NewResponse(w), claims)
 		log.Logger().Info("login success via OIDC",
 			zap.String("name", claims.Name),
 			zap.String("email", claims.Email))
@@ -2064,7 +2063,6 @@ func (m *Master) chat(response http.ResponseWriter, request *http.Request) {
 		}
 	}
 }
-
 
 // CacheControlFilter adds Cache-Control headers to prevent CDN caching for API endpoints
 func (m *Master) CacheControlFilter(req *restful.Request, resp *restful.Response, chain *restful.FilterChain) {

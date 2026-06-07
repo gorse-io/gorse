@@ -128,7 +128,7 @@ func (suite *MasterAPITestSuite) SetupTest() {
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	resp := httptest.NewRecorder()
 	suite.login(resp, req)
-	suite.Equal(http.StatusFound, resp.Code)
+	suite.Equal(http.StatusOK, resp.Code)
 	suite.cookie = resp.Header().Get("Set-Cookie")
 }
 
@@ -141,6 +141,41 @@ func (suite *MasterAPITestSuite) TearDownTest() {
 	suite.NoError(err)
 	err = suite.openAIServer.Close()
 	suite.NoError(err)
+}
+
+func (suite *MasterAPITestSuite) TestLoginDoesNotRedirect() {
+	req := httptest.NewRequest(http.MethodPost, "/login",
+		strings.NewReader(fmt.Sprintf("user_name=%s&password=%s", mockMasterUsername, mockMasterPassword)))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	resp := httptest.NewRecorder()
+
+	suite.login(resp, req)
+
+	suite.Equal(http.StatusOK, resp.Code)
+	suite.Empty(resp.Header().Get("Location"))
+	suite.NotEmpty(resp.Header().Get("Set-Cookie"))
+}
+
+func (suite *MasterAPITestSuite) TestLoginFailureDoesNotRedirect() {
+	req := httptest.NewRequest(http.MethodPost, "/login",
+		strings.NewReader(fmt.Sprintf("user_name=%s&password=wrong", mockMasterUsername)))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	resp := httptest.NewRecorder()
+
+	suite.login(resp, req)
+
+	suite.Equal(http.StatusUnauthorized, resp.Code)
+	suite.Empty(resp.Header().Get("Location"))
+}
+
+func (suite *MasterAPITestSuite) TestLogoutDoesNotRedirect() {
+	req := httptest.NewRequest(http.MethodPost, "/logout", nil)
+	resp := httptest.NewRecorder()
+
+	suite.logout(resp, req)
+
+	suite.Equal(http.StatusOK, resp.Code)
+	suite.Empty(resp.Header().Get("Location"))
 }
 
 func (suite *MasterAPITestSuite) TestExportUsers() {
