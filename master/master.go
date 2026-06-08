@@ -22,6 +22,7 @@ import (
 	"math/rand"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
@@ -98,6 +99,9 @@ type Master struct {
 	ticker    *time.Ticker
 	scheduled chan struct{}
 	cancel    context.CancelFunc
+
+	// data store maintenance
+	reconcileRunning atomic.Bool
 }
 
 // NewMaster creates a master node.
