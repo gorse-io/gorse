@@ -286,6 +286,7 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.HeaderParameter("X-API-Key", "API key").DataType("string")).
 		Param(ws.QueryParameter("n", "Number of returned items").DataType("integer")).
 		Param(ws.QueryParameter("cursor", "Cursor for the next page").DataType("string")).
+		Param(ws.QueryParameter("q", "Search query. Requires [recommend.search].columns to be configured.").DataType("string")).
 		Returns(http.StatusOK, "OK", ItemIterator{}).
 		Writes(ItemIterator{}))
 	// Get item
@@ -1408,12 +1409,26 @@ func (s *RestServer) getItems(request *restful.Request, response *restful.Respon
 	if request != nil && request.Request != nil {
 		ctx = request.Request.Context()
 	}
-	cursor := request.QueryParameter("cursor")
 	n, err := ParseInt(request, "n", s.Config.Server.DefaultN)
 	if err != nil {
 		BadRequest(response, err)
 		return
 	}
+	query := request.QueryParameter("q")
+	if query != "" {
+		if len(s.Config.Recommend.Search.Columns) == 0 {
+			BadRequest(response, errors.New("item search is not supported because [recommend.search].columns is empty"))
+			return
+		}
+		items, err := s.DataClient.SearchItems(ctx, query, n)
+		if err != nil {
+			InternalServerError(response, err)
+			return
+		}
+		Ok(response, ItemIterator{Items: items})
+		return
+	}
+	cursor := request.QueryParameter("cursor")
 	cursor, items, err := s.DataClient.GetItems(ctx, cursor, n, nil)
 	if err != nil {
 		InternalServerError(response, err)

@@ -770,6 +770,18 @@ func sqliteSearchColumn(column, qualifier string) (string, bool) {
 	return "", false
 }
 
+func sqlitePlainTextSearchQuery(query string) string {
+	terms := strings.Fields(query)
+	if len(terms) == 0 {
+		return `""`
+	}
+	quotedTerms := make([]string, len(terms))
+	for i, term := range terms {
+		quotedTerms[i] = `"` + strings.ReplaceAll(term, `"`, `""`) + `"`
+	}
+	return strings.Join(quotedTerms, " ")
+}
+
 func (d *SQLDatabase) dropMySQLIndexIfExists(tableName, indexName string) error {
 	var count int64
 	if err := d.gormDB.Raw("SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ?", tableName, indexName).Scan(&count).Error; err != nil {
@@ -972,6 +984,7 @@ func (d *SQLDatabase) SearchItems(ctx context.Context, query string, n int) ([]I
 			Order(clause.Expr{SQL: fmt.Sprintf("MATCH(%s) AGAINST (? IN NATURAL LANGUAGE MODE) DESC", mysqlSearchDocumentColumn), Vars: []any{query}}).
 			Limit(n)
 	case SQLite:
+		query = sqlitePlainTextSearchQuery(query)
 		tx = d.gormDB.WithContext(ctx).
 			Table(fmt.Sprintf("%s AS items", d.ItemsTable())).
 			Select("items.item_id, items.is_hidden, items.categories, items.time_stamp, items.labels, items.comment").

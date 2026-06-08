@@ -1000,6 +1000,14 @@ func (suite *baseTestSuite) TestSearch() {
 			},
 			Comment: "Ergonomic chair with lumbar support",
 		},
+		{
+			ItemId:     "gorse-io:gorse",
+			Categories: []string{"repository"},
+			Labels: map[string]any{
+				"brand": "gorse",
+			},
+			Comment: "Open source recommender system",
+		},
 	}
 	err = suite.Database.BatchInsertItems(ctx, items)
 	suite.NoError(err)
@@ -1014,6 +1022,7 @@ func (suite *baseTestSuite) TestSearch() {
 		})
 	}
 
+	suite.ElementsMatch([]string{"gorse-io:gorse"}, searchItemIDs("gorse-io:gorse", 10))
 	suite.ElementsMatch([]string{"running-shoes", "trail-watch"}, searchItemIDs("running", 10))
 	suite.ElementsMatch([]string{"coffee-grinder"}, searchItemIDs("coffee", 10))
 	suite.ElementsMatch([]string{"trail-watch"}, searchItemIDs("electronics", 10))
