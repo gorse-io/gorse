@@ -54,11 +54,11 @@ func (m *Master) loadDataset(parent context.Context) (datasets Datasets, err err
 
 	searchConfig := config.SearchConfig{Columns: append([]string(nil), m.Config.Recommend.Search.Columns...)}
 	go func() {
-		if !m.reconcileRunning.CompareAndSwap(false, true) {
+		if !m.reconciling.CompareAndSwap(false, true) {
 			log.Logger().Info("skip reconciling data store since previous reconciliation is still running")
 			return
 		}
-		defer m.reconcileRunning.Store(false)
+		defer m.reconciling.Store(false)
 		if err := m.DataClient.Reconcile(searchConfig); err != nil {
 			log.Logger().Error("failed to reconcile data store", zap.Error(err))
 		}

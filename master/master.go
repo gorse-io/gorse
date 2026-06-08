@@ -96,12 +96,10 @@ type Master struct {
 	tokenCache   *ttlcache.Cache[string, UserInfo]
 
 	// events
-	ticker    *time.Ticker
-	scheduled chan struct{}
-	cancel    context.CancelFunc
-
-	// data store maintenance
-	reconcileRunning atomic.Bool
+	ticker      *time.Ticker
+	scheduled   chan struct{}
+	cancel      context.CancelFunc
+	reconciling atomic.Bool
 }
 
 // NewMaster creates a master node.
