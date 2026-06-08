@@ -52,6 +52,13 @@ func (m *Master) loadDataset(parent context.Context) (datasets Datasets, err err
 	ctx, span := m.tracer.Start(parent, "Load Dataset", 1)
 	defer span.End()
 
+	searchConfig := config.SearchConfig{Columns: append([]string(nil), m.Config.Recommend.Search.Columns...)}
+	go func() {
+		if err := m.DataClient.Reconcile(searchConfig); err != nil {
+			log.Logger().Error("failed to reconcile data store", zap.Error(err))
+		}
+	}()
+
 	// Build non-personalized recommenders
 	initialStartTime := time.Now()
 	nonPersonalizedRecommenders := make([]*logics.NonPersonalized, 0, len(m.Config.Recommend.NonPersonalized))
