@@ -18,10 +18,12 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"sort"
 	"time"
 
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/gorse-io/gorse/common/expression"
+	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/storage"
 	"github.com/juju/errors"
 	"go.mongodb.org/mongo-driver/bson"
@@ -205,6 +207,100 @@ func (db *MongoDB) Ping() error {
 	return db.client.Ping(context.Background(), nil)
 }
 
+// Reconcile reconciles collections and indices in MongoDB.
+func (db *MongoDB) Reconcile(searchConfig config.SearchConfig) error {
+	if len(searchConfig.Columns) == 0 {
+		return nil
+	}
+	keys := bson.D{}
+	for _, column := range searchConfig.Columns {
+		field, ok := mongoSearchColumnToField(column)
+		if !ok {
+			continue
+		}
+		keys = append(keys, bson.E{Key: field, Value: "text"})
+	}
+	if len(keys) == 0 {
+		return nil
+	}
+	sort.Slice(keys, func(i, j int) bool { return keys[i].Key < keys[j].Key })
+	ctx := context.Background()
+	indexes := db.client.Database(db.dbName).Collection(db.ItemsTable()).Indexes()
+	const searchIndexName = "gorse_search_index"
+	cursor, err := indexes.List(ctx)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	defer cursor.Close(ctx)
+	for cursor.Next(ctx) {
+		var index bson.M
+		if err = cursor.Decode(&index); err != nil {
+			return errors.Trace(err)
+		}
+		if index["name"] == searchIndexName {
+			if mongoSearchIndexKeysMatch(index["key"], keys) {
+				return nil
+			}
+			if _, err = indexes.DropOne(ctx, searchIndexName); err != nil {
+				return errors.Trace(err)
+			}
+			break
+		}
+	}
+	if err = cursor.Err(); err != nil {
+		return errors.Trace(err)
+	}
+	_, err = indexes.CreateOne(ctx, mongo.IndexModel{
+		Keys:    keys,
+		Options: options.Index().SetName(searchIndexName),
+	})
+	return errors.Trace(err)
+}
+
+func mongoSearchIndexKeysMatch(existing any, expected bson.D) bool {
+	existingMap := make(map[string]any)
+	switch keys := existing.(type) {
+	case bson.M:
+		for k, v := range keys {
+			existingMap[k] = v
+		}
+	case bson.D:
+		for _, key := range keys {
+			existingMap[key.Key] = key.Value
+		}
+	default:
+		return false
+	}
+	if len(existingMap) != len(expected) {
+		return false
+	}
+	for _, key := range expected {
+		if existingMap[key.Key] != key.Value {
+			return false
+		}
+	}
+	return true
+}
+
+func mongoSearchColumnToField(column string) (string, bool) {
+	switch column {
+	case "item.ItemId":
+		return "itemid", true
+	case "item.Categories":
+		return "categories", true
+	case "item.Comment":
+		return "comment", true
+	case "item.Labels":
+		return "labels", true
+	default:
+		const labelsPrefix = "item.Labels."
+		if len(column) > len(labelsPrefix) && column[:len(labelsPrefix)] == labelsPrefix {
+			return "labels." + column[len(labelsPrefix):], true
+		}
+	}
+	return "", false
+}
+
 // Close connection to MongoDB.
 func (db *MongoDB) Close() error {
 	return db.client.Disconnect(context.Background())
@@ -329,6 +425,32 @@ func (db *MongoDB) GetItem(ctx context.Context, itemId string) (item Item, err e
 	err = r.Decode(&item)
 	item.Labels = unpack(item.Labels)
 	return
+}
+
+// SearchItems searches items from MongoDB.
+func (db *MongoDB) SearchItems(ctx context.Context, query string, n int) ([]Item, error) {
+	if n <= 0 {
+		return []Item{}, nil
+	}
+	c := db.client.Database(db.dbName).Collection(db.ItemsTable())
+	r, err := c.Find(ctx,
+		bson.M{"$text": bson.M{"$search": query}},
+		options.Find().SetLimit(int64(n)).SetProjection(bson.M{"score": bson.M{"$meta": "textScore"}}).SetSort(bson.M{"score": bson.M{"$meta": "textScore"}}),
+	)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	items := make([]Item, 0)
+	defer r.Close(ctx)
+	for r.Next(ctx) {
+		var item Item
+		if err = r.Decode(&item); err != nil {
+			return nil, errors.Trace(err)
+		}
+		item.Labels = unpack(item.Labels)
+		items = append(items, item)
+	}
+	return items, errors.Trace(r.Err())
 }
 
 // GetItems returns items from MongoDB.

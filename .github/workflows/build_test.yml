@@ -116,7 +116,7 @@ jobs:
 
     - name: Setup Milvus
       run: |
-        curl -sfL https://raw.githubusercontent.com/milvus-io/milvus/master/scripts/standalone_embed.sh -o standalone_embed.sh
+        curl -sfL https://raw.githubusercontent.com/milvus-io/milvus/6da09b8b02b1/scripts/standalone_embed.sh -o standalone_embed.sh
         bash standalone_embed.sh start
       working-directory: ${{ runner.temp }}
 

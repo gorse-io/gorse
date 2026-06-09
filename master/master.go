@@ -22,6 +22,7 @@ import (
 	"math/rand"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
@@ -95,9 +96,10 @@ type Master struct {
 	tokenCache   *ttlcache.Cache[string, UserInfo]
 
 	// events
-	ticker    *time.Ticker
-	scheduled chan struct{}
-	cancel    context.CancelFunc
+	ticker      *time.Ticker
+	scheduled   chan struct{}
+	cancel      context.CancelFunc
+	reconciling atomic.Bool
 }
 
 // NewMaster creates a master node.

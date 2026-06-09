@@ -608,7 +608,10 @@ func (m *Master) deleteConfig(_request *restful.Request, response *restful.Respo
 }
 
 func (m *Master) getConfigSchema(_ *restful.Request, response *restful.Response) {
-	server.Ok(response, jsonschema.Reflect(m.Config))
+	reflector := jsonschema.Reflector{
+		FieldNameTag: "mapstructure",
+	}
+	server.Ok(response, reflector.Reflect(m.Config))
 }
 
 type Status struct {
@@ -1661,7 +1664,7 @@ func (m *Master) checkAdmin(request *http.Request) bool {
 	if m.Config.Master.AdminAPIKey == "" {
 		return true
 	}
-	if request.FormValue("X-API-Key") == m.Config.Master.AdminAPIKey {
+	if request.Header.Get("X-API-Key") == m.Config.Master.AdminAPIKey {
 		return true
 	}
 	return false

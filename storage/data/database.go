@@ -24,6 +24,7 @@ import (
 
 	"github.com/gorse-io/gorse/common/expression"
 	"github.com/gorse-io/gorse/common/jsonutil"
+	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/storage"
 	"github.com/juju/errors"
 )
@@ -230,14 +231,15 @@ func NewScanOptions(opts ...ScanOption) ScanOptions {
 
 // GetOptions is the options for getting items.
 type GetOptions struct {
-	Categories  []string
-	SkipHidden  bool
-	ReturnId    bool
-	After       *time.Time
+	Categories []string
+	SkipHidden bool
+	ReturnId   bool
+	After      *time.Time
 }
 
 type Database interface {
 	Init() error
+	Reconcile(config.SearchConfig) error
 	Ping() error
 	Close() error
 	Optimize() error
@@ -246,6 +248,7 @@ type Database interface {
 	BatchGetItems(ctx context.Context, itemIds []string, opts GetOptions) ([]Item, error)
 	DeleteItem(ctx context.Context, itemId string) error
 	GetItem(ctx context.Context, itemId string) (Item, error)
+	SearchItems(ctx context.Context, query string, n int) ([]Item, error)
 	ModifyItem(ctx context.Context, itemId string, patch ItemPatch) error
 	GetItems(ctx context.Context, cursor string, n int, beginTime *time.Time) (string, []Item, error)
 	GetLatestItems(ctx context.Context, n int, categories []string, after *time.Time) ([]Item, error)

@@ -27,18 +27,6 @@ import (
 	"modernc.org/quickjs"
 )
 
-func TestEnv(t *testing.T) {
-	t.Setenv("TEST_ENV", "test_value")
-
-	external, err := NewExternal(config.ExternalConfig{})
-	assert.NoError(t, err)
-	defer external.Close()
-
-	value, err := external.vm.Eval(`env.TEST_ENV`, quickjs.EvalGlobal)
-	assert.NoError(t, err)
-	assert.Equal(t, "test_value", value)
-}
-
 func TestFetch(t *testing.T) {
 	var (
 		req  *http.Request

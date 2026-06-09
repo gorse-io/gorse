@@ -34,6 +34,7 @@ import (
 var (
 	logger       *zap.Logger
 	openaiLogger *zap.Logger
+	accessLogger *zap.Logger
 )
 
 func init() {
@@ -72,6 +73,14 @@ func ResponseLogger(resp *restful.Response) *zap.Logger {
 	return logger.With(zap.String("request_id", resp.Header().Get("X-Request-ID")))
 }
 
+// AccessLogger returns the access logger for HTTP request logging
+func AccessLogger() *zap.Logger {
+	if accessLogger != nil {
+		return accessLogger
+	}
+	return logger
+}
+
 func CloseLogger() {
 	cfg := zap.NewProductionConfig()
 	cfg.Level = zap.NewAtomicLevelAt(zap.FatalLevel)
@@ -84,6 +93,7 @@ func CloseLogger() {
 
 func AddFlags(flagSet *pflag.FlagSet) {
 	flagSet.String("log-path", "", "path of log file")
+	flagSet.String("access-log-path", "", "path of access log file for RESTful API")
 	flagSet.Int("log-max-size", 100, "maximum size in megabytes of the log file")
 	flagSet.Int("log-max-age", 0, "maximum number of days to retain old log files")
 	flagSet.Int("log-max-backups", 0, "maximum number of old log files to retain")
@@ -120,6 +130,24 @@ func SetLogger(flagSet *pflag.FlagSet, debug bool) {
 	// create zap logger
 	core := zapcore.NewCore(encoder, zap.CombineWriteSyncers(writers...), level)
 	logger = zap.New(core)
+
+	// setup access logger if access-log-path is set
+	if accessLogPath, _ := flagSet.GetString("access-log-path"); accessLogPath != "" {
+		maxSize, _ := flagSet.GetInt("log-max-size")
+		maxAge, _ := flagSet.GetInt("log-max-age")
+		maxBackups, _ := flagSet.GetInt("log-max-backups")
+		accessLogger = zap.New(
+			zapcore.NewCore(
+				zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig()),
+				zapcore.AddSync(&lumberjack.Logger{
+					Filename:   accessLogPath,
+					MaxSize:    maxSize,
+					MaxBackups: maxBackups,
+					MaxAge:     maxAge,
+					Compress:   false,
+				}),
+				zap.InfoLevel))
+	}
 }
 
 const mysqlPrefix = "mysql://"

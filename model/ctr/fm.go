@@ -26,7 +26,7 @@ import (
 	"github.com/c-bata/goptuna"
 	"github.com/chewxy/math32"
 	"github.com/gorse-io/gorse/common/encoding"
-	"github.com/gorse-io/gorse/common/floats"
+	"github.com/gorse-io/gorse/common/bfloats"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/common/nn"
@@ -546,7 +546,7 @@ func (fm *AFM) convertToTensors(x []lo.Tuple2[[]int32, []float32], e [][][]uint1
 		}
 		for j := range fm.embeddingDim {
 			if len(e[i]) > j && len(e[i][j]) == fm.embeddingDim[j] {
-				alignedEmbeddings[j] = append(alignedEmbeddings[j], floats.FromBF16(e[i][j])...)
+				alignedEmbeddings[j] = append(alignedEmbeddings[j], bfloats.ToFloat32(e[i][j])...)
 			} else {
 				alignedEmbeddings[j] = append(alignedEmbeddings[j], make([]float32, fm.embeddingDim[j])...)
 			}

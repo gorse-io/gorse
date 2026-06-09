@@ -76,6 +76,7 @@ type DatabaseConfig struct {
 	TablePrefix      string      `mapstructure:"table_prefix"`
 	DataTablePrefix  string      `mapstructure:"data_table_prefix"`
 	CacheTablePrefix string      `mapstructure:"cache_table_prefix"`
+	CacheClientName  string      `mapstructure:"cache_client_name"`
 	MySQL            MySQLConfig `mapstructure:"mysql"`
 	Postgres         SQLConfig   `mapstructure:"postgres"`
 	Redis            RedisConfig `mapstructure:"redis"`
@@ -118,6 +119,7 @@ func (db *DatabaseConfig) StorageOptions(path string) []storage.Option {
 		strings.HasPrefix(path, storage.RedisClusterPrefix) || strings.HasPrefix(path, storage.RedissClusterPrefix) {
 		return []storage.Option{
 			storage.WithMaxSearchResults(db.Redis.MaxSearchResults),
+			storage.WithRedisClientName(db.CacheClientName),
 		}
 	}
 	return nil
@@ -160,6 +162,7 @@ type RecommendConfig struct {
 	ContextSize     int                     `mapstructure:"context_size" validate:"gt=0"`
 	ActiveUserTTL   int                     `mapstructure:"active_user_ttl" validate:"gte=0"`
 	DataSource      DataSourceConfig        `mapstructure:"data_source"`
+	Search          SearchConfig            `mapstructure:"search"`
 	NonPersonalized []NonPersonalizedConfig `mapstructure:"non-personalized" validate:"dive"`
 	ItemToItem      []ItemToItemConfig      `mapstructure:"item-to-item" validate:"dive"`
 	UserToUser      []UserToUserConfig      `mapstructure:"user-to-user" validate:"dive"`
@@ -249,6 +252,10 @@ type DataSourceConfig struct {
 	ItemTTL               uint                                `mapstructure:"item_ttl" validate:"gte=0"`              // item-to-live of items
 }
 
+type SearchConfig struct {
+	Columns []string `mapstructure:"columns" validate:"dive,item_expr"`
+}
+
 type NonPersonalizedConfig struct {
 	Name   string `mapstructure:"name" json:"name"`
 	Score  string `mapstructure:"score" json:"score" validate:"required,item_expr"`
@@ -264,7 +271,7 @@ func (config *NonPersonalizedConfig) Hash() string {
 	hash.Write([]byte(config.Name))
 	hash.Write([]byte(config.Score))
 	hash.Write([]byte(config.Filter))
-	return hex.EncodeToString(hash.Sum(nil)[:])
+	return hex.EncodeToString(hash.Sum(nil))
 }
 
 type ItemToItemConfig struct {
@@ -291,7 +298,7 @@ func (config *ItemToItemConfig) Hash(cfg *RecommendConfig) string {
 			hash.Write([]byte(expr.String()))
 		}
 	}
-	return hex.EncodeToString(hash.Sum(nil)[:])
+	return hex.EncodeToString(hash.Sum(nil))
 }
 
 type UserToUserConfig struct {
@@ -317,7 +324,7 @@ func (config *UserToUserConfig) Hash(cfg *RecommendConfig) string {
 			hash.Write([]byte(expr.String()))
 		}
 	}
-	return hex.EncodeToString(hash.Sum(nil)[:])
+	return hex.EncodeToString(hash.Sum(nil))
 }
 
 type CollaborativeConfig struct {
@@ -341,7 +348,7 @@ func (config *CollaborativeConfig) Hash(cfg *RecommendConfig) string {
 	for _, expr := range cfg.DataSource.NegativeFeedbackTypes {
 		hash.Write([]byte(expr.String()))
 	}
-	return hex.EncodeToString(hash.Sum(nil)[:])
+	return hex.EncodeToString(hash.Sum(nil))
 }
 
 type EarlyStoppingConfig struct {
@@ -361,7 +368,7 @@ func (config *ExternalConfig) Hash() string {
 	hash := md5.New()
 	hash.Write([]byte(config.Name))
 	hash.Write([]byte(config.Script))
-	return hex.EncodeToString(hash.Sum(nil)[:])
+	return hex.EncodeToString(hash.Sum(nil))
 }
 
 type ReplacementConfig struct {
@@ -450,8 +457,9 @@ type AzureBlobConfig struct {
 func GetDefaultConfig() *Config {
 	return &Config{
 		Database: DatabaseConfig{
-			DataStore:  "sqlite://" + filepath.Join(MkDir(), "data.sqlite"),
-			CacheStore: "sqlite://" + filepath.Join(MkDir(), "cache.sqlite"),
+			DataStore:       "sqlite://" + filepath.Join(MkDir(), "data.sqlite"),
+			CacheStore:      "sqlite://" + filepath.Join(MkDir(), "cache.sqlite"),
+			CacheClientName: "gorse_cache_client",
 			MySQL: MySQLConfig{
 				IsolationLevel:  "READ-UNCOMMITTED",
 				MaxOpenConns:    0,
@@ -594,6 +602,7 @@ func setDefault() {
 	// [database]
 	viper.SetDefault("database.data_store", defaultConfig.Database.DataStore)
 	viper.SetDefault("database.cache_store", defaultConfig.Database.CacheStore)
+	viper.SetDefault("database.cache_client_name", defaultConfig.Database.CacheClientName)
 	// [database.mysql]
 	viper.SetDefault("database.mysql.isolation_level", defaultConfig.Database.MySQL.IsolationLevel)
 	viper.SetDefault("database.mysql.max_open_conns", defaultConfig.Database.MySQL.MaxOpenConns)
@@ -662,6 +671,7 @@ var bindings = []configBinding{
 	{"database.data_store", "GORSE_DATA_STORE"},
 	{"database.table_prefix", "GORSE_TABLE_PREFIX"},
 	{"database.cache_table_prefix", "GORSE_CACHE_TABLE_PREFIX"},
+	{"database.cache_client_name", "GORSE_CACHE_CLIENT_NAME"},
 	{"database.data_table_prefix", "GORSE_DATA_TABLE_PREFIX"},
 	{"master.port", "GORSE_MASTER_PORT"},
 	{"master.host", "GORSE_MASTER_HOST"},

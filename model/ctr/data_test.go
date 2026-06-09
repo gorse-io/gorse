@@ -17,9 +17,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/gorse-io/gorse/common/bfloats"
-	"github.com/gorse-io/gorse/common/floats"
 	"github.com/gorse-io/gorse/dataset"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
@@ -136,7 +136,7 @@ func TestDataset_Split(t *testing.T) {
 			{A: int32(3*i + 2), B: 1},
 		})
 		dataSet.ItemEmbeddings = append(dataSet.ItemEmbeddings, [][]uint16{
-			floats.ToBF16([]float32{float32(i), float32(i) + 0.1, float32(i) + 0.2}),
+			bfloats.FromFloat32([]float32{float32(i), float32(i) + 0.1, float32(i) + 0.2}),
 		})
 	}
 	for i := range numUsers {
@@ -146,12 +146,14 @@ func TestDataset_Split(t *testing.T) {
 				dataSet.Items = append(dataSet.Items, int32(j))
 				dataSet.ContextLabels = append(dataSet.ContextLabels, []lo.Tuple2[int32, float32]{{A: int32(i * j), B: 0.5}})
 				dataSet.Target = append(dataSet.Target, 1)
+				dataSet.Timestamps = append(dataSet.Timestamps, time.Unix(int64(i*numItems+j), 0))
 				dataSet.PositiveCount++
 			} else {
 				dataSet.Users = append(dataSet.Users, int32(i))
 				dataSet.Items = append(dataSet.Items, int32(j))
 				dataSet.ContextLabels = append(dataSet.ContextLabels, []lo.Tuple2[int32, float32]{{A: int32(i * j), B: 0.5}})
 				dataSet.Target = append(dataSet.Target, -1)
+				dataSet.Timestamps = append(dataSet.Timestamps, time.Unix(int64(i*numItems+j), 0))
 				dataSet.NegativeCount++
 			}
 		}
@@ -175,7 +177,7 @@ func TestDataset_Split(t *testing.T) {
 		dataSet.Index.CountUsers() + dataSet.Index.CountItems() + dataSet.Index.CountUserLabels() + 8,
 		0,
 	}, features)
-	assert.InDeltaSlice(t, []float32{2, 2.09375, 2.1875}, floats.FromBF16(embeddings[0]), 0.001)
+	assert.InDeltaSlice(t, []float32{2, 2.09375, 2.1875}, bfloats.ToFloat32(embeddings[0]), 0.001)
 	assert.Equal(t, []float32{1, 1, 1, 1, 1, 1, 1, 0.5}, values)
 	assert.Equal(t, float32(-1), target)
 
@@ -191,4 +193,79 @@ func TestDataset_Split(t *testing.T) {
 	assert.Equal(t, 6, test.Count())
 	assert.Equal(t, 3, test.PositiveCount)
 	assert.Equal(t, 3, test.NegativeCount)
+}
+
+func TestDataset_SplitByUserTime(t *testing.T) {
+	unifiedIndex := dataset.NewUnifiedMapIndexBuilder()
+	for i := range 3 {
+		unifiedIndex.AddUser(fmt.Sprintf("user%v", i))
+	}
+	for i := range 6 {
+		unifiedIndex.AddItem(fmt.Sprintf("item%v", i))
+	}
+
+	dataSet := &Dataset{
+		Index: unifiedIndex.Build(),
+		Users: []int32{
+			0, 0, 0,
+			1, 1,
+			2,
+		},
+		Items: []int32{
+			0, 1, 2,
+			3, 4,
+			5,
+		},
+		Target: []float32{
+			1, -1, 1,
+			-1, 1,
+			-1,
+		},
+		Timestamps: []time.Time{
+			time.Unix(30, 0), time.Unix(10, 0), time.Unix(20, 0),
+			time.Unix(40, 0), time.Unix(50, 0),
+			time.Unix(60, 0),
+		},
+		PositiveCount: 3,
+		NegativeCount: 3,
+	}
+
+	train, test := dataSet.SplitByUserTime(0.5)
+
+	type sample struct {
+		User      int32
+		Item      int32
+		Target    float32
+		Timestamp int64
+	}
+	collect := func(dataSet *Dataset) []sample {
+		samples := make([]sample, 0, dataSet.Count())
+		for i := range dataSet.Count() {
+			samples = append(samples, sample{
+				User:      dataSet.Users[i],
+				Item:      dataSet.Items[i],
+				Target:    dataSet.Target[i],
+				Timestamp: dataSet.Timestamps[i].Unix(),
+			})
+		}
+		return samples
+	}
+
+	assert.Equal(t, 4, train.Count())
+	assert.Equal(t, 1, train.PositiveCount)
+	assert.Equal(t, 3, train.NegativeCount)
+	assert.ElementsMatch(t, []sample{
+		{User: 0, Item: 1, Target: -1, Timestamp: 10},
+		{User: 0, Item: 2, Target: 1, Timestamp: 20},
+		{User: 1, Item: 3, Target: -1, Timestamp: 40},
+		{User: 2, Item: 5, Target: -1, Timestamp: 60},
+	}, collect(train))
+
+	assert.Equal(t, 2, test.Count())
+	assert.Equal(t, 2, test.PositiveCount)
+	assert.Equal(t, 0, test.NegativeCount)
+	assert.ElementsMatch(t, []sample{
+		{User: 0, Item: 0, Target: 1, Timestamp: 30},
+		{User: 1, Item: 4, Target: 1, Timestamp: 50},
+	}, collect(test))
 }

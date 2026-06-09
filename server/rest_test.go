@@ -570,6 +570,63 @@ func (suite *ServerTestSuite) TestItems() {
 		End()
 }
 
+func (suite *ServerTestSuite) TestSearchItems() {
+	t := suite.T()
+
+	apitest.New().
+		Handler(suite.handler).
+		Get("/api/items").
+		Header("X-API-Key", apiKey).
+		QueryParams(map[string]string{
+			"q": "running",
+			"n": "10",
+		}).
+		Expect(t).
+		Status(http.StatusBadRequest).
+		Body("item search is not supported because [recommend.search].columns is empty").
+		End()
+
+	suite.Config.Recommend.Search.Columns = []string{"item.ItemId", "item.Categories", "item.Labels.brand", "item.Comment"}
+	err := suite.DataClient.Reconcile(suite.Config.Recommend.Search)
+	suite.NoError(err)
+
+	items := []data.Item{
+		{
+			ItemId:     "running-shoes",
+			Categories: []string{"sports", "shoes"},
+			Labels: map[string]any{
+				"brand": "acme",
+			},
+			Comment: "Lightweight running shoes for marathon training",
+		},
+		{
+			ItemId:     "coffee-grinder",
+			Categories: []string{"kitchen"},
+			Labels: map[string]any{
+				"brand": "acme",
+			},
+			Comment: "Burr grinder for espresso and pour over coffee",
+		},
+	}
+	err = suite.DataClient.BatchInsertItems(t.Context(), items)
+	suite.NoError(err)
+	err = suite.DataClient.Optimize()
+	suite.NoError(err)
+
+	apitest.New().
+		Handler(suite.handler).
+		Get("/api/items").
+		Header("X-API-Key", apiKey).
+		QueryParams(map[string]string{
+			"q": "espresso",
+			"n": "10",
+		}).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(suite.marshal(ItemIterator{Items: []data.Item{items[1]}})).
+		End()
+}
+
 func (suite *ServerTestSuite) TestFeedback() {
 	ctx := suite.T().Context()
 	t := suite.T()

@@ -895,14 +895,29 @@ func (suite *MasterAPITestSuite) TestConfig() {
 }
 
 func (suite *MasterAPITestSuite) TestGetConfigSchema() {
+	reflector := jsonschema.Reflector{
+		FieldNameTag: "mapstructure",
+	}
+	schema := reflector.Reflect(suite.Config)
+
 	apitest.New().
 		Handler(suite.handler).
 		Get("/api/dashboard/config/schema").
 		Header("Cookie", suite.cookie).
 		Expect(suite.T()).
 		Status(http.StatusOK).
-		Body(marshal(suite.T(), jsonschema.Reflect(suite.Config))).
+		Body(marshal(suite.T(), schema)).
 		End()
+
+	recommendProperties := schema.Definitions["RecommendConfig"].Properties
+	_, ok := recommendProperties.Get("cache_size")
+	suite.True(ok)
+	_, ok = recommendProperties.Get("non-personalized")
+	suite.True(ok)
+	_, ok = recommendProperties.Get("cacheSize")
+	suite.False(ok)
+	_, ok = recommendProperties.Get("nonPersonalized")
+	suite.False(ok)
 }
 
 func (suite *MasterAPITestSuite) TestGetTimeseries() {

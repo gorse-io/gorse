@@ -29,6 +29,7 @@ import (
 	restfulspec "github.com/emicklei/go-restful-openapi/v2"
 	"github.com/emicklei/go-restful/v3"
 	"github.com/google/uuid"
+	"github.com/gorse-io/gorse/common/event"
 	"github.com/gorse-io/gorse/common/expression"
 	"github.com/gorse-io/gorse/common/heap"
 	"github.com/gorse-io/gorse/common/log"
@@ -131,11 +132,24 @@ func (s *RestServer) LogFilter(req *restful.Request, resp *restful.Response, cha
 	start := time.Now()
 	chain.ProcessFilter(req, resp)
 	responseTime := time.Since(start)
+
+	// Log access
 	if !s.DisableLog && req.Request.URL.Path != "/api/dashboard/cluster" &&
 		req.Request.URL.Path != "/api/dashboard/tasks" {
-		log.ResponseLogger(resp).Info(fmt.Sprintf("%s %s", req.Request.Method, req.Request.URL),
+		log.AccessLogger().Info(fmt.Sprintf("%s %s", req.Request.Method, req.Request.URL.Path),
+			zap.String("request_id", requestId),
 			zap.Int("status_code", resp.StatusCode()),
-			zap.Duration("response_time", responseTime))
+			zap.Duration("response_time", responseTime),
+			zap.String("remote_addr", req.Request.RemoteAddr))
+		go event.EventRecorder().RecordAPI(req.Request.Context(), event.APIEvent{
+			RequestID:    requestId,
+			Method:       req.Request.Method,
+			Path:         req.Request.URL.Path,
+			StatusCode:   resp.StatusCode(),
+			ResponseTime: responseTime.Milliseconds(),
+			Timestamp:    start,
+			RemoteAddr:   req.Request.RemoteAddr,
+		})
 	}
 }
 
@@ -272,6 +286,7 @@ func (s *RestServer) CreateWebService() {
 		Param(ws.HeaderParameter("X-API-Key", "API key").DataType("string")).
 		Param(ws.QueryParameter("n", "Number of returned items").DataType("integer")).
 		Param(ws.QueryParameter("cursor", "Cursor for the next page").DataType("string")).
+		Param(ws.QueryParameter("q", "Search query. Requires [recommend.search].columns to be configured.").DataType("string")).
 		Returns(http.StatusOK, "OK", ItemIterator{}).
 		Writes(ItemIterator{}))
 	// Get item
@@ -1394,12 +1409,26 @@ func (s *RestServer) getItems(request *restful.Request, response *restful.Respon
 	if request != nil && request.Request != nil {
 		ctx = request.Request.Context()
 	}
-	cursor := request.QueryParameter("cursor")
 	n, err := ParseInt(request, "n", s.Config.Server.DefaultN)
 	if err != nil {
 		BadRequest(response, err)
 		return
 	}
+	query := request.QueryParameter("q")
+	if query != "" {
+		if len(s.Config.Recommend.Search.Columns) == 0 {
+			BadRequest(response, errors.New("item search is not supported because [recommend.search].columns is empty"))
+			return
+		}
+		items, err := s.DataClient.SearchItems(ctx, query, n)
+		if err != nil {
+			InternalServerError(response, err)
+			return
+		}
+		Ok(response, ItemIterator{Items: items})
+		return
+	}
+	cursor := request.QueryParameter("cursor")
 	cursor, items, err := s.DataClient.GetItems(ctx, cursor, n, nil)
 	if err != nil {
 		InternalServerError(response, err)

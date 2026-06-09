@@ -15,8 +15,6 @@
 package floats
 
 import (
-	"math"
-
 	"github.com/chewxy/math32"
 )
 
@@ -221,31 +219,8 @@ func SqrtTo(a, b []float32) {
 
 func Sqrt(a []float32) {
 	for i := range a {
-		a[i] = float32(math.Sqrt(float64(a[i])))
+		a[i] = math32.Sqrt(a[i])
 	}
-}
-
-func ToBF16(values []float32) []uint16 {
-	if values == nil {
-		return nil
-	}
-	encoded := make([]uint16, len(values))
-	for i, value := range values {
-		bits := math.Float32bits(value)
-		encoded[i] = uint16(bits >> 16)
-	}
-	return encoded
-}
-
-func FromBF16(values []uint16) []float32 {
-	if values == nil {
-		return nil
-	}
-	decoded := make([]float32, len(values))
-	for i, value := range values {
-		decoded[i] = math.Float32frombits(uint32(value) << 16)
-	}
-	return decoded
 }
 
 // Dot two vectors.
