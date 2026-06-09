@@ -229,8 +229,13 @@ data["items"].map((item) => {
 # The name of the agent recommender.
 name = "assistant"
 
-# The prompt for the agent recommender.
-prompt = "Recommend items for the user."
+# The prompt template for the agent recommender.
+prompt_template = """
+Recommend items for user {{ user_id }} based on the following feedback:
+{% for item in feedback -%}
+- {{ item.FeedbackType }} item {{ item.ItemId }}
+{% endfor -%}
+"""
 
 [recommend.collaborative]
 

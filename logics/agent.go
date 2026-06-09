@@ -17,6 +17,7 @@ package logics
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/cenkalti/backoff/v5"
@@ -26,6 +27,8 @@ import (
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
 	"github.com/juju/errors"
+	"github.com/nikolalohinski/gonja/v2"
+	"github.com/nikolalohinski/gonja/v2/exec"
 	"github.com/samber/lo"
 	"github.com/sashabaranov/go-openai"
 	"github.com/sashabaranov/go-openai/jsonschema"
@@ -47,16 +50,7 @@ type Agent struct {
 	excludeSet   mapset.Set[string]
 	cacheSize    int
 	client       *openai.Client
-}
-
-type agentSearchArguments struct {
-	Query string `json:"query"`
-	N     int    `json:"n"`
-}
-
-type agentContext struct {
-	UserId   string          `json:"user_id"`
-	Feedback []data.Feedback `json:"feedback"`
+	promptTpl    *exec.Template
 }
 
 type agentSearchResult struct {
@@ -66,8 +60,17 @@ type agentSearchResult struct {
 	Comment    string   `json:"comment,omitempty"`
 }
 
+type agentSearchArguments struct {
+	Query string `json:"query"`
+	N     int    `json:"n"`
+}
+
 func NewAgent(cfg config.AgentConfig, openAIConfig config.OpenAIConfig, dataClient data.Database, userId string,
-	userFeedback []data.Feedback, categories []string, excludeSet mapset.Set[string], cacheSize int) *Agent {
+	userFeedback []data.Feedback, categories []string, excludeSet mapset.Set[string], cacheSize int) (*Agent, error) {
+	promptTpl, err := gonja.FromString(cfg.PromptTemplate)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
 	clientConfig := openai.DefaultConfig(openAIConfig.AuthToken)
 	clientConfig.BaseURL = openAIConfig.BaseURL
 	return &Agent{
@@ -80,7 +83,8 @@ func NewAgent(cfg config.AgentConfig, openAIConfig config.OpenAIConfig, dataClie
 		excludeSet:   excludeSet,
 		cacheSize:    cacheSize,
 		client:       openai.NewClientWithConfig(clientConfig),
-	}
+		promptTpl:    promptTpl,
+	}, nil
 }
 
 func (a *Agent) Recommend(ctx context.Context) ([]cache.Score, error) {
@@ -93,7 +97,7 @@ func (a *Agent) Recommend(ctx context.Context) ([]cache.Score, error) {
 	if a.cacheSize > 0 && len(feedback) > a.cacheSize {
 		feedback = feedback[:a.cacheSize]
 	}
-	contextBytes, err := json.Marshal(agentContext{UserId: a.userId, Feedback: feedback})
+	prompt, err := a.renderPrompt(feedback)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -101,13 +105,12 @@ func (a *Agent) Recommend(ctx context.Context) ([]cache.Score, error) {
 	messages := []openai.ChatCompletionMessage{
 		{
 			Role: openai.ChatMessageRoleSystem,
-			Content: a.config.Prompt + "\n\n" +
-				"You are an item recommendation agent. Use the search_items tool to find candidate items from the catalog based on the user's feedback history. " +
+			Content: "You are an item recommendation agent. Use the search_items tool to find candidate items from the catalog based on the user's feedback history. " +
 				"When you have enough candidates, return recommended item IDs only, ordered from most to least relevant. Prefer a JSON array of item IDs.",
 		},
 		{
 			Role:    openai.ChatMessageRoleUser,
-			Content: string(contextBytes),
+			Content: prompt,
 		},
 	}
 
@@ -162,6 +165,18 @@ func (a *Agent) Recommend(ctx context.Context) ([]cache.Score, error) {
 	}
 
 	return a.parseRecommendations(ctx, finalContent, candidateItems)
+}
+
+func (a *Agent) renderPrompt(feedback []data.Feedback) (string, error) {
+	var buf strings.Builder
+	promptCtx := exec.NewContext(map[string]any{
+		"user_id":  a.userId,
+		"feedback": feedback,
+	})
+	if err := a.promptTpl.Execute(&buf, promptCtx); err != nil {
+		return "", errors.Trace(err)
+	}
+	return strings.TrimSpace(buf.String()), nil
 }
 
 func (a *Agent) createChatCompletion(ctx context.Context, messages []openai.ChatCompletionMessage) (openai.ChatCompletionResponse, error) {

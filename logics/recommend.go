@@ -407,8 +407,11 @@ func (r *Recommender) recommendAgent(name string) RecommenderFunc {
 				break
 			}
 		}
-		agent := NewAgent(agentConfig, r.openAIConfig, r.dataClient, r.userId, r.userFeedback,
+		agent, err := NewAgent(agentConfig, r.openAIConfig, r.dataClient, r.userId, r.userFeedback,
 			r.categories, r.excludeSet, r.config.CacheSize)
+		if err != nil {
+			return nil, "", errors.Trace(err)
+		}
 		scores, err := agent.Recommend(ctx)
 		if err != nil {
 			return nil, "", errors.Trace(err)

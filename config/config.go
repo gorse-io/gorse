@@ -381,8 +381,8 @@ func (config *ExternalConfig) Hash() string {
 }
 
 type AgentConfig struct {
-	Name   string `mapstructure:"name" json:"name"`
-	Prompt string `mapstructure:"prompt" json:"prompt"`
+	Name           string `mapstructure:"name" json:"name"`
+	PromptTemplate string `mapstructure:"prompt_template" json:"prompt_template"`
 }
 
 func (config *AgentConfig) FullName() string {
@@ -392,7 +392,7 @@ func (config *AgentConfig) FullName() string {
 func (config *AgentConfig) Hash() string {
 	hash := md5.New()
 	hash.Write([]byte(config.Name))
-	hash.Write([]byte(config.Prompt))
+	hash.Write([]byte(config.PromptTemplate))
 	return hex.EncodeToString(hash.Sum(nil))
 }
 
