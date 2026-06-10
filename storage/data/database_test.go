@@ -1017,7 +1017,7 @@ func (suite *baseTestSuite) TestSearch() {
 	searchItemIDs := func(query string, n int) []string {
 		result, err := suite.Database.SearchItems(ctx, query, n)
 		suite.NoError(err)
-		return lo.Map(result, func(item Item, _ int) string {
+		return lo.Map(result, func(item ScoredItem, _ int) string {
 			return item.ItemId
 		})
 	}
@@ -1028,6 +1028,11 @@ func (suite *baseTestSuite) TestSearch() {
 	suite.ElementsMatch([]string{"trail-watch"}, searchItemIDs("electronics", 10))
 	suite.ElementsMatch([]string{"running-shoes", "coffee-grinder"}, searchItemIDs("acme", 10))
 	suite.Len(searchItemIDs("running", 1), 1)
+	result, err := suite.Database.SearchItems(ctx, "coffee", 10)
+	suite.NoError(err)
+	for _, item := range result {
+		suite.NotZero(item.Score)
+	}
 }
 
 func (suite *baseTestSuite) TestPurge() {

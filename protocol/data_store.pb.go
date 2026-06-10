@@ -931,16 +931,68 @@ func (x *SearchItemsRequest) GetN() int32 {
 	return 0
 }
 
+type ScoredItem struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Item          *Item                  `protobuf:"bytes,1,opt,name=item,proto3" json:"item,omitempty"`
+	Score         float64                `protobuf:"fixed64,2,opt,name=score,proto3" json:"score,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ScoredItem) Reset() {
+	*x = ScoredItem{}
+	mi := &file_data_store_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ScoredItem) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ScoredItem) ProtoMessage() {}
+
+func (x *ScoredItem) ProtoReflect() protoreflect.Message {
+	mi := &file_data_store_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ScoredItem.ProtoReflect.Descriptor instead.
+func (*ScoredItem) Descriptor() ([]byte, []int) {
+	return file_data_store_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *ScoredItem) GetItem() *Item {
+	if x != nil {
+		return x.Item
+	}
+	return nil
+}
+
+func (x *ScoredItem) GetScore() float64 {
+	if x != nil {
+		return x.Score
+	}
+	return 0
+}
+
 type SearchItemsResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Items         []*Item                `protobuf:"bytes,1,rep,name=items,proto3" json:"items,omitempty"`
+	Items         []*ScoredItem          `protobuf:"bytes,1,rep,name=items,proto3" json:"items,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *SearchItemsResponse) Reset() {
 	*x = SearchItemsResponse{}
-	mi := &file_data_store_proto_msgTypes[16]
+	mi := &file_data_store_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -952,7 +1004,7 @@ func (x *SearchItemsResponse) String() string {
 func (*SearchItemsResponse) ProtoMessage() {}
 
 func (x *SearchItemsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_data_store_proto_msgTypes[16]
+	mi := &file_data_store_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -965,10 +1017,10 @@ func (x *SearchItemsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SearchItemsResponse.ProtoReflect.Descriptor instead.
 func (*SearchItemsResponse) Descriptor() ([]byte, []int) {
-	return file_data_store_proto_rawDescGZIP(), []int{16}
+	return file_data_store_proto_rawDescGZIP(), []int{17}
 }
 
-func (x *SearchItemsResponse) GetItems() []*Item {
+func (x *SearchItemsResponse) GetItems() []*ScoredItem {
 	if x != nil {
 		return x.Items
 	}
@@ -985,7 +1037,7 @@ type ModifyItemRequest struct {
 
 func (x *ModifyItemRequest) Reset() {
 	*x = ModifyItemRequest{}
-	mi := &file_data_store_proto_msgTypes[17]
+	mi := &file_data_store_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -997,7 +1049,7 @@ func (x *ModifyItemRequest) String() string {
 func (*ModifyItemRequest) ProtoMessage() {}
 
 func (x *ModifyItemRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_data_store_proto_msgTypes[17]
+	mi := &file_data_store_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1010,7 +1062,7 @@ func (x *ModifyItemRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ModifyItemRequest.ProtoReflect.Descriptor instead.
 func (*ModifyItemRequest) Descriptor() ([]byte, []int) {
-	return file_data_store_proto_rawDescGZIP(), []int{17}
+	return file_data_store_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *ModifyItemRequest) GetItemId() string {
@@ -1035,7 +1087,7 @@ type ModifyItemResponse struct {
 
 func (x *ModifyItemResponse) Reset() {
 	*x = ModifyItemResponse{}
-	mi := &file_data_store_proto_msgTypes[18]
+	mi := &file_data_store_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1047,7 +1099,7 @@ func (x *ModifyItemResponse) String() string {
 func (*ModifyItemResponse) ProtoMessage() {}
 
 func (x *ModifyItemResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_data_store_proto_msgTypes[18]
+	mi := &file_data_store_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1060,7 +1112,7 @@ func (x *ModifyItemResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ModifyItemResponse.ProtoReflect.Descriptor instead.
 func (*ModifyItemResponse) Descriptor() ([]byte, []int) {
-	return file_data_store_proto_rawDescGZIP(), []int{18}
+	return file_data_store_proto_rawDescGZIP(), []int{19}
 }
 
 type GetItemsRequest struct {
@@ -1074,7 +1126,7 @@ type GetItemsRequest struct {
 
 func (x *GetItemsRequest) Reset() {
 	*x = GetItemsRequest{}
-	mi := &file_data_store_proto_msgTypes[19]
+	mi := &file_data_store_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1086,7 +1138,7 @@ func (x *GetItemsRequest) String() string {
 func (*GetItemsRequest) ProtoMessage() {}
 
 func (x *GetItemsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_data_store_proto_msgTypes[19]
+	mi := &file_data_store_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1099,7 +1151,7 @@ func (x *GetItemsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetItemsRequest.ProtoReflect.Descriptor instead.
 func (*GetItemsRequest) Descriptor() ([]byte, []int) {
-	return file_data_store_proto_rawDescGZIP(), []int{19}
+	return file_data_store_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *GetItemsRequest) GetCursor() string {
@@ -1133,7 +1185,7 @@ type GetItemsResponse struct {
 
 func (x *GetItemsResponse) Reset() {
 	*x = GetItemsResponse{}
-	mi := &file_data_store_proto_msgTypes[20]
+	mi := &file_data_store_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1145,7 +1197,7 @@ func (x *GetItemsResponse) String() string {
 func (*GetItemsResponse) ProtoMessage() {}
 
 func (x *GetItemsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_data_store_proto_msgTypes[20]
+	mi := &file_data_store_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1158,7 +1210,7 @@ func (x *GetItemsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetItemsResponse.ProtoReflect.Descriptor instead.
 func (*GetItemsResponse) Descriptor() ([]byte, []int) {
-	return file_data_store_proto_rawDescGZIP(), []int{20}
+	return file_data_store_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *GetItemsResponse) GetCursor() string {
@@ -1185,7 +1237,7 @@ type GetItemFeedbackRequest struct {
 
 func (x *GetItemFeedbackRequest) Reset() {
 	*x = GetItemFeedbackRequest{}
-	mi := &file_data_store_proto_msgTypes[21]
+	mi := &file_data_store_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1197,7 +1249,7 @@ func (x *GetItemFeedbackRequest) String() string {
 func (*GetItemFeedbackRequest) ProtoMessage() {}
 
 func (x *GetItemFeedbackRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_data_store_proto_msgTypes[21]
+	mi := &file_data_store_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1210,7 +1262,7 @@ func (x *GetItemFeedbackRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetItemFeedbackRequest.ProtoReflect.Descriptor instead.
 func (*GetItemFeedbackRequest) Descriptor() ([]byte, []int) {
-	return file_data_store_proto_rawDescGZIP(), []int{21}
+	return file_data_store_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *GetItemFeedbackRequest) GetItemId() string {
@@ -1236,7 +1288,7 @@ type BatchInsertUsersRequest struct {
 
 func (x *BatchInsertUsersRequest) Reset() {
 	*x = BatchInsertUsersRequest{}
-	mi := &file_data_store_proto_msgTypes[22]
+	mi := &file_data_store_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1248,7 +1300,7 @@ func (x *BatchInsertUsersRequest) String() string {
 func (*BatchInsertUsersRequest) ProtoMessage() {}
 
 func (x *BatchInsertUsersRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_data_store_proto_msgTypes[22]
+	mi := &file_data_store_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1261,7 +1313,7 @@ func (x *BatchInsertUsersRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BatchInsertUsersRequest.ProtoReflect.Descriptor instead.
 func (*BatchInsertUsersRequest) Descriptor() ([]byte, []int) {
-	return file_data_store_proto_rawDescGZIP(), []int{22}
+	return file_data_store_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *BatchInsertUsersRequest) GetUsers() []*User {
@@ -1279,7 +1331,7 @@ type BatchInsertUsersResponse struct {
 
 func (x *BatchInsertUsersResponse) Reset() {
 	*x = BatchInsertUsersResponse{}
-	mi := &file_data_store_proto_msgTypes[23]
+	mi := &file_data_store_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1291,7 +1343,7 @@ func (x *BatchInsertUsersResponse) String() string {
 func (*BatchInsertUsersResponse) ProtoMessage() {}
 
 func (x *BatchInsertUsersResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_data_store_proto_msgTypes[23]
+	mi := &file_data_store_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1304,7 +1356,7 @@ func (x *BatchInsertUsersResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BatchInsertUsersResponse.ProtoReflect.Descriptor instead.
 func (*BatchInsertUsersResponse) Descriptor() ([]byte, []int) {
-	return file_data_store_proto_rawDescGZIP(), []int{23}
+	return file_data_store_proto_rawDescGZIP(), []int{24}
 }
 
 type DeleteUserRequest struct {
@@ -1316,7 +1368,7 @@ type DeleteUserRequest struct {
 
 func (x *DeleteUserRequest) Reset() {
 	*x = DeleteUserRequest{}
-	mi := &file_data_store_proto_msgTypes[24]
+	mi := &file_data_store_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1328,7 +1380,7 @@ func (x *DeleteUserRequest) String() string {
 func (*DeleteUserRequest) ProtoMessage() {}
 
 func (x *DeleteUserRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_data_store_proto_msgTypes[24]
+	mi := &file_data_store_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1341,7 +1393,7 @@ func (x *DeleteUserRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteUserRequest.ProtoReflect.Descriptor instead.
 func (*DeleteUserRequest) Descriptor() ([]byte, []int) {
-	return file_data_store_proto_rawDescGZIP(), []int{24}
+	return file_data_store_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *DeleteUserRequest) GetUserId() string {
@@ -1359,7 +1411,7 @@ type DeleteUserResponse struct {
 
 func (x *DeleteUserResponse) Reset() {
 	*x = DeleteUserResponse{}
-	mi := &file_data_store_proto_msgTypes[25]
+	mi := &file_data_store_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1371,7 +1423,7 @@ func (x *DeleteUserResponse) String() string {
 func (*DeleteUserResponse) ProtoMessage() {}
 
 func (x *DeleteUserResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_data_store_proto_msgTypes[25]
+	mi := &file_data_store_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1384,7 +1436,7 @@ func (x *DeleteUserResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteUserResponse.ProtoReflect.Descriptor instead.
 func (*DeleteUserResponse) Descriptor() ([]byte, []int) {
-	return file_data_store_proto_rawDescGZIP(), []int{25}
+	return file_data_store_proto_rawDescGZIP(), []int{26}
 }
 
 type GetUserRequest struct {
@@ -1396,7 +1448,7 @@ type GetUserRequest struct {
 
 func (x *GetUserRequest) Reset() {
 	*x = GetUserRequest{}
-	mi := &file_data_store_proto_msgTypes[26]
+	mi := &file_data_store_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1408,7 +1460,7 @@ func (x *GetUserRequest) String() string {
 func (*GetUserRequest) ProtoMessage() {}
 
 func (x *GetUserRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_data_store_proto_msgTypes[26]
+	mi := &file_data_store_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1421,7 +1473,7 @@ func (x *GetUserRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetUserRequest.ProtoReflect.Descriptor instead.
 func (*GetUserRequest) Descriptor() ([]byte, []int) {
-	return file_data_store_proto_rawDescGZIP(), []int{26}
+	return file_data_store_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *GetUserRequest) GetUserId() string {
@@ -1440,7 +1492,7 @@ type GetUserResponse struct {
 
 func (x *GetUserResponse) Reset() {
 	*x = GetUserResponse{}
-	mi := &file_data_store_proto_msgTypes[27]
+	mi := &file_data_store_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1452,7 +1504,7 @@ func (x *GetUserResponse) String() string {
 func (*GetUserResponse) ProtoMessage() {}
 
 func (x *GetUserResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_data_store_proto_msgTypes[27]
+	mi := &file_data_store_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1465,7 +1517,7 @@ func (x *GetUserResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetUserResponse.ProtoReflect.Descriptor instead.
 func (*GetUserResponse) Descriptor() ([]byte, []int) {
-	return file_data_store_proto_rawDescGZIP(), []int{27}
+	return file_data_store_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *GetUserResponse) GetUser() *User {
@@ -1485,7 +1537,7 @@ type ModifyUserRequest struct {
 
 func (x *ModifyUserRequest) Reset() {
 	*x = ModifyUserRequest{}
-	mi := &file_data_store_proto_msgTypes[28]
+	mi := &file_data_store_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1497,7 +1549,7 @@ func (x *ModifyUserRequest) String() string {
 func (*ModifyUserRequest) ProtoMessage() {}
 
 func (x *ModifyUserRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_data_store_proto_msgTypes[28]
+	mi := &file_data_store_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1510,7 +1562,7 @@ func (x *ModifyUserRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ModifyUserRequest.ProtoReflect.Descriptor instead.
 func (*ModifyUserRequest) Descriptor() ([]byte, []int) {
-	return file_data_store_proto_rawDescGZIP(), []int{28}
+	return file_data_store_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *ModifyUserRequest) GetUserId() string {
@@ -1535,7 +1587,7 @@ type ModifyUserResponse struct {
 
 func (x *ModifyUserResponse) Reset() {
 	*x = ModifyUserResponse{}
-	mi := &file_data_store_proto_msgTypes[29]
+	mi := &file_data_store_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1547,7 +1599,7 @@ func (x *ModifyUserResponse) String() string {
 func (*ModifyUserResponse) ProtoMessage() {}
 
 func (x *ModifyUserResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_data_store_proto_msgTypes[29]
+	mi := &file_data_store_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1560,7 +1612,7 @@ func (x *ModifyUserResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ModifyUserResponse.ProtoReflect.Descriptor instead.
 func (*ModifyUserResponse) Descriptor() ([]byte, []int) {
-	return file_data_store_proto_rawDescGZIP(), []int{29}
+	return file_data_store_proto_rawDescGZIP(), []int{30}
 }
 
 type GetUsersRequest struct {
@@ -1573,7 +1625,7 @@ type GetUsersRequest struct {
 
 func (x *GetUsersRequest) Reset() {
 	*x = GetUsersRequest{}
-	mi := &file_data_store_proto_msgTypes[30]
+	mi := &file_data_store_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1585,7 +1637,7 @@ func (x *GetUsersRequest) String() string {
 func (*GetUsersRequest) ProtoMessage() {}
 
 func (x *GetUsersRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_data_store_proto_msgTypes[30]
+	mi := &file_data_store_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1598,7 +1650,7 @@ func (x *GetUsersRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetUsersRequest.ProtoReflect.Descriptor instead.
 func (*GetUsersRequest) Descriptor() ([]byte, []int) {
-	return file_data_store_proto_rawDescGZIP(), []int{30}
+	return file_data_store_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *GetUsersRequest) GetCursor() string {
@@ -1625,7 +1677,7 @@ type GetUsersResponse struct {
 
 func (x *GetUsersResponse) Reset() {
 	*x = GetUsersResponse{}
-	mi := &file_data_store_proto_msgTypes[31]
+	mi := &file_data_store_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1637,7 +1689,7 @@ func (x *GetUsersResponse) String() string {
 func (*GetUsersResponse) ProtoMessage() {}
 
 func (x *GetUsersResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_data_store_proto_msgTypes[31]
+	mi := &file_data_store_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1650,7 +1702,7 @@ func (x *GetUsersResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetUsersResponse.ProtoReflect.Descriptor instead.
 func (*GetUsersResponse) Descriptor() ([]byte, []int) {
-	return file_data_store_proto_rawDescGZIP(), []int{31}
+	return file_data_store_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *GetUsersResponse) GetCursor() string {
@@ -1678,7 +1730,7 @@ type GetUserFeedbackRequest struct {
 
 func (x *GetUserFeedbackRequest) Reset() {
 	*x = GetUserFeedbackRequest{}
-	mi := &file_data_store_proto_msgTypes[32]
+	mi := &file_data_store_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1690,7 +1742,7 @@ func (x *GetUserFeedbackRequest) String() string {
 func (*GetUserFeedbackRequest) ProtoMessage() {}
 
 func (x *GetUserFeedbackRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_data_store_proto_msgTypes[32]
+	mi := &file_data_store_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1703,7 +1755,7 @@ func (x *GetUserFeedbackRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetUserFeedbackRequest.ProtoReflect.Descriptor instead.
 func (*GetUserFeedbackRequest) Descriptor() ([]byte, []int) {
-	return file_data_store_proto_rawDescGZIP(), []int{32}
+	return file_data_store_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *GetUserFeedbackRequest) GetUserId() string {
@@ -1738,7 +1790,7 @@ type GetUserItemFeedbackRequest struct {
 
 func (x *GetUserItemFeedbackRequest) Reset() {
 	*x = GetUserItemFeedbackRequest{}
-	mi := &file_data_store_proto_msgTypes[33]
+	mi := &file_data_store_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1750,7 +1802,7 @@ func (x *GetUserItemFeedbackRequest) String() string {
 func (*GetUserItemFeedbackRequest) ProtoMessage() {}
 
 func (x *GetUserItemFeedbackRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_data_store_proto_msgTypes[33]
+	mi := &file_data_store_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1763,7 +1815,7 @@ func (x *GetUserItemFeedbackRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetUserItemFeedbackRequest.ProtoReflect.Descriptor instead.
 func (*GetUserItemFeedbackRequest) Descriptor() ([]byte, []int) {
-	return file_data_store_proto_rawDescGZIP(), []int{33}
+	return file_data_store_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *GetUserItemFeedbackRequest) GetUserId() string {
@@ -1798,7 +1850,7 @@ type DeleteUserItemFeedbackRequest struct {
 
 func (x *DeleteUserItemFeedbackRequest) Reset() {
 	*x = DeleteUserItemFeedbackRequest{}
-	mi := &file_data_store_proto_msgTypes[34]
+	mi := &file_data_store_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1810,7 +1862,7 @@ func (x *DeleteUserItemFeedbackRequest) String() string {
 func (*DeleteUserItemFeedbackRequest) ProtoMessage() {}
 
 func (x *DeleteUserItemFeedbackRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_data_store_proto_msgTypes[34]
+	mi := &file_data_store_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1823,7 +1875,7 @@ func (x *DeleteUserItemFeedbackRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteUserItemFeedbackRequest.ProtoReflect.Descriptor instead.
 func (*DeleteUserItemFeedbackRequest) Descriptor() ([]byte, []int) {
-	return file_data_store_proto_rawDescGZIP(), []int{34}
+	return file_data_store_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *DeleteUserItemFeedbackRequest) GetUserId() string {
@@ -1856,7 +1908,7 @@ type DeleteUserItemFeedbackResponse struct {
 
 func (x *DeleteUserItemFeedbackResponse) Reset() {
 	*x = DeleteUserItemFeedbackResponse{}
-	mi := &file_data_store_proto_msgTypes[35]
+	mi := &file_data_store_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1868,7 +1920,7 @@ func (x *DeleteUserItemFeedbackResponse) String() string {
 func (*DeleteUserItemFeedbackResponse) ProtoMessage() {}
 
 func (x *DeleteUserItemFeedbackResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_data_store_proto_msgTypes[35]
+	mi := &file_data_store_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1881,7 +1933,7 @@ func (x *DeleteUserItemFeedbackResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteUserItemFeedbackResponse.ProtoReflect.Descriptor instead.
 func (*DeleteUserItemFeedbackResponse) Descriptor() ([]byte, []int) {
-	return file_data_store_proto_rawDescGZIP(), []int{35}
+	return file_data_store_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *DeleteUserItemFeedbackResponse) GetCount() int32 {
@@ -1903,7 +1955,7 @@ type BatchInsertFeedbackRequest struct {
 
 func (x *BatchInsertFeedbackRequest) Reset() {
 	*x = BatchInsertFeedbackRequest{}
-	mi := &file_data_store_proto_msgTypes[36]
+	mi := &file_data_store_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1915,7 +1967,7 @@ func (x *BatchInsertFeedbackRequest) String() string {
 func (*BatchInsertFeedbackRequest) ProtoMessage() {}
 
 func (x *BatchInsertFeedbackRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_data_store_proto_msgTypes[36]
+	mi := &file_data_store_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1928,7 +1980,7 @@ func (x *BatchInsertFeedbackRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BatchInsertFeedbackRequest.ProtoReflect.Descriptor instead.
 func (*BatchInsertFeedbackRequest) Descriptor() ([]byte, []int) {
-	return file_data_store_proto_rawDescGZIP(), []int{36}
+	return file_data_store_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *BatchInsertFeedbackRequest) GetFeedback() []*Feedback {
@@ -1967,7 +2019,7 @@ type BatchInsertFeedbackResponse struct {
 
 func (x *BatchInsertFeedbackResponse) Reset() {
 	*x = BatchInsertFeedbackResponse{}
-	mi := &file_data_store_proto_msgTypes[37]
+	mi := &file_data_store_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1979,7 +2031,7 @@ func (x *BatchInsertFeedbackResponse) String() string {
 func (*BatchInsertFeedbackResponse) ProtoMessage() {}
 
 func (x *BatchInsertFeedbackResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_data_store_proto_msgTypes[37]
+	mi := &file_data_store_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1992,7 +2044,7 @@ func (x *BatchInsertFeedbackResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BatchInsertFeedbackResponse.ProtoReflect.Descriptor instead.
 func (*BatchInsertFeedbackResponse) Descriptor() ([]byte, []int) {
-	return file_data_store_proto_rawDescGZIP(), []int{37}
+	return file_data_store_proto_rawDescGZIP(), []int{38}
 }
 
 type GetFeedbackRequest struct {
@@ -2008,7 +2060,7 @@ type GetFeedbackRequest struct {
 
 func (x *GetFeedbackRequest) Reset() {
 	*x = GetFeedbackRequest{}
-	mi := &file_data_store_proto_msgTypes[38]
+	mi := &file_data_store_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2020,7 +2072,7 @@ func (x *GetFeedbackRequest) String() string {
 func (*GetFeedbackRequest) ProtoMessage() {}
 
 func (x *GetFeedbackRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_data_store_proto_msgTypes[38]
+	mi := &file_data_store_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2033,7 +2085,7 @@ func (x *GetFeedbackRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetFeedbackRequest.ProtoReflect.Descriptor instead.
 func (*GetFeedbackRequest) Descriptor() ([]byte, []int) {
-	return file_data_store_proto_rawDescGZIP(), []int{38}
+	return file_data_store_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *GetFeedbackRequest) GetCursor() string {
@@ -2081,7 +2133,7 @@ type GetFeedbackResponse struct {
 
 func (x *GetFeedbackResponse) Reset() {
 	*x = GetFeedbackResponse{}
-	mi := &file_data_store_proto_msgTypes[39]
+	mi := &file_data_store_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2093,7 +2145,7 @@ func (x *GetFeedbackResponse) String() string {
 func (*GetFeedbackResponse) ProtoMessage() {}
 
 func (x *GetFeedbackResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_data_store_proto_msgTypes[39]
+	mi := &file_data_store_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2106,7 +2158,7 @@ func (x *GetFeedbackResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetFeedbackResponse.ProtoReflect.Descriptor instead.
 func (*GetFeedbackResponse) Descriptor() ([]byte, []int) {
-	return file_data_store_proto_rawDescGZIP(), []int{39}
+	return file_data_store_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *GetFeedbackResponse) GetCursor() string {
@@ -2132,7 +2184,7 @@ type GetUserStreamRequest struct {
 
 func (x *GetUserStreamRequest) Reset() {
 	*x = GetUserStreamRequest{}
-	mi := &file_data_store_proto_msgTypes[40]
+	mi := &file_data_store_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2144,7 +2196,7 @@ func (x *GetUserStreamRequest) String() string {
 func (*GetUserStreamRequest) ProtoMessage() {}
 
 func (x *GetUserStreamRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_data_store_proto_msgTypes[40]
+	mi := &file_data_store_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2157,7 +2209,7 @@ func (x *GetUserStreamRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetUserStreamRequest.ProtoReflect.Descriptor instead.
 func (*GetUserStreamRequest) Descriptor() ([]byte, []int) {
-	return file_data_store_proto_rawDescGZIP(), []int{40}
+	return file_data_store_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *GetUserStreamRequest) GetBatchSize() int32 {
@@ -2176,7 +2228,7 @@ type GetUserStreamResponse struct {
 
 func (x *GetUserStreamResponse) Reset() {
 	*x = GetUserStreamResponse{}
-	mi := &file_data_store_proto_msgTypes[41]
+	mi := &file_data_store_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2188,7 +2240,7 @@ func (x *GetUserStreamResponse) String() string {
 func (*GetUserStreamResponse) ProtoMessage() {}
 
 func (x *GetUserStreamResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_data_store_proto_msgTypes[41]
+	mi := &file_data_store_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2201,7 +2253,7 @@ func (x *GetUserStreamResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetUserStreamResponse.ProtoReflect.Descriptor instead.
 func (*GetUserStreamResponse) Descriptor() ([]byte, []int) {
-	return file_data_store_proto_rawDescGZIP(), []int{41}
+	return file_data_store_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *GetUserStreamResponse) GetUsers() []*User {
@@ -2221,7 +2273,7 @@ type GetItemStreamRequest struct {
 
 func (x *GetItemStreamRequest) Reset() {
 	*x = GetItemStreamRequest{}
-	mi := &file_data_store_proto_msgTypes[42]
+	mi := &file_data_store_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2233,7 +2285,7 @@ func (x *GetItemStreamRequest) String() string {
 func (*GetItemStreamRequest) ProtoMessage() {}
 
 func (x *GetItemStreamRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_data_store_proto_msgTypes[42]
+	mi := &file_data_store_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2246,7 +2298,7 @@ func (x *GetItemStreamRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetItemStreamRequest.ProtoReflect.Descriptor instead.
 func (*GetItemStreamRequest) Descriptor() ([]byte, []int) {
-	return file_data_store_proto_rawDescGZIP(), []int{42}
+	return file_data_store_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *GetItemStreamRequest) GetBatchSize() int32 {
@@ -2272,7 +2324,7 @@ type GetItemStreamResponse struct {
 
 func (x *GetItemStreamResponse) Reset() {
 	*x = GetItemStreamResponse{}
-	mi := &file_data_store_proto_msgTypes[43]
+	mi := &file_data_store_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2284,7 +2336,7 @@ func (x *GetItemStreamResponse) String() string {
 func (*GetItemStreamResponse) ProtoMessage() {}
 
 func (x *GetItemStreamResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_data_store_proto_msgTypes[43]
+	mi := &file_data_store_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2297,7 +2349,7 @@ func (x *GetItemStreamResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetItemStreamResponse.ProtoReflect.Descriptor instead.
 func (*GetItemStreamResponse) Descriptor() ([]byte, []int) {
-	return file_data_store_proto_rawDescGZIP(), []int{43}
+	return file_data_store_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *GetItemStreamResponse) GetItems() []*Item {
@@ -2317,7 +2369,7 @@ type GetFeedbackStreamRequest struct {
 
 func (x *GetFeedbackStreamRequest) Reset() {
 	*x = GetFeedbackStreamRequest{}
-	mi := &file_data_store_proto_msgTypes[44]
+	mi := &file_data_store_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2329,7 +2381,7 @@ func (x *GetFeedbackStreamRequest) String() string {
 func (*GetFeedbackStreamRequest) ProtoMessage() {}
 
 func (x *GetFeedbackStreamRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_data_store_proto_msgTypes[44]
+	mi := &file_data_store_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2342,7 +2394,7 @@ func (x *GetFeedbackStreamRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetFeedbackStreamRequest.ProtoReflect.Descriptor instead.
 func (*GetFeedbackStreamRequest) Descriptor() ([]byte, []int) {
-	return file_data_store_proto_rawDescGZIP(), []int{44}
+	return file_data_store_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *GetFeedbackStreamRequest) GetBatchSize() int32 {
@@ -2368,7 +2420,7 @@ type GetFeedbackStreamResponse struct {
 
 func (x *GetFeedbackStreamResponse) Reset() {
 	*x = GetFeedbackStreamResponse{}
-	mi := &file_data_store_proto_msgTypes[45]
+	mi := &file_data_store_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2380,7 +2432,7 @@ func (x *GetFeedbackStreamResponse) String() string {
 func (*GetFeedbackStreamResponse) ProtoMessage() {}
 
 func (x *GetFeedbackStreamResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_data_store_proto_msgTypes[45]
+	mi := &file_data_store_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2393,7 +2445,7 @@ func (x *GetFeedbackStreamResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetFeedbackStreamResponse.ProtoReflect.Descriptor instead.
 func (*GetFeedbackStreamResponse) Descriptor() ([]byte, []int) {
-	return file_data_store_proto_rawDescGZIP(), []int{45}
+	return file_data_store_proto_rawDescGZIP(), []int{46}
 }
 
 func (x *GetFeedbackStreamResponse) GetFeedback() []*Feedback {
@@ -2411,7 +2463,7 @@ type CountUsersRequest struct {
 
 func (x *CountUsersRequest) Reset() {
 	*x = CountUsersRequest{}
-	mi := &file_data_store_proto_msgTypes[46]
+	mi := &file_data_store_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2423,7 +2475,7 @@ func (x *CountUsersRequest) String() string {
 func (*CountUsersRequest) ProtoMessage() {}
 
 func (x *CountUsersRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_data_store_proto_msgTypes[46]
+	mi := &file_data_store_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2436,7 +2488,7 @@ func (x *CountUsersRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CountUsersRequest.ProtoReflect.Descriptor instead.
 func (*CountUsersRequest) Descriptor() ([]byte, []int) {
-	return file_data_store_proto_rawDescGZIP(), []int{46}
+	return file_data_store_proto_rawDescGZIP(), []int{47}
 }
 
 type CountUsersResponse struct {
@@ -2448,7 +2500,7 @@ type CountUsersResponse struct {
 
 func (x *CountUsersResponse) Reset() {
 	*x = CountUsersResponse{}
-	mi := &file_data_store_proto_msgTypes[47]
+	mi := &file_data_store_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2460,7 +2512,7 @@ func (x *CountUsersResponse) String() string {
 func (*CountUsersResponse) ProtoMessage() {}
 
 func (x *CountUsersResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_data_store_proto_msgTypes[47]
+	mi := &file_data_store_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2473,7 +2525,7 @@ func (x *CountUsersResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CountUsersResponse.ProtoReflect.Descriptor instead.
 func (*CountUsersResponse) Descriptor() ([]byte, []int) {
-	return file_data_store_proto_rawDescGZIP(), []int{47}
+	return file_data_store_proto_rawDescGZIP(), []int{48}
 }
 
 func (x *CountUsersResponse) GetCount() int32 {
@@ -2491,7 +2543,7 @@ type CountItemsRequest struct {
 
 func (x *CountItemsRequest) Reset() {
 	*x = CountItemsRequest{}
-	mi := &file_data_store_proto_msgTypes[48]
+	mi := &file_data_store_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2503,7 +2555,7 @@ func (x *CountItemsRequest) String() string {
 func (*CountItemsRequest) ProtoMessage() {}
 
 func (x *CountItemsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_data_store_proto_msgTypes[48]
+	mi := &file_data_store_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2516,7 +2568,7 @@ func (x *CountItemsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CountItemsRequest.ProtoReflect.Descriptor instead.
 func (*CountItemsRequest) Descriptor() ([]byte, []int) {
-	return file_data_store_proto_rawDescGZIP(), []int{48}
+	return file_data_store_proto_rawDescGZIP(), []int{49}
 }
 
 type CountItemsResponse struct {
@@ -2528,7 +2580,7 @@ type CountItemsResponse struct {
 
 func (x *CountItemsResponse) Reset() {
 	*x = CountItemsResponse{}
-	mi := &file_data_store_proto_msgTypes[49]
+	mi := &file_data_store_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2540,7 +2592,7 @@ func (x *CountItemsResponse) String() string {
 func (*CountItemsResponse) ProtoMessage() {}
 
 func (x *CountItemsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_data_store_proto_msgTypes[49]
+	mi := &file_data_store_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2553,7 +2605,7 @@ func (x *CountItemsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CountItemsResponse.ProtoReflect.Descriptor instead.
 func (*CountItemsResponse) Descriptor() ([]byte, []int) {
-	return file_data_store_proto_rawDescGZIP(), []int{49}
+	return file_data_store_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *CountItemsResponse) GetCount() int32 {
@@ -2571,7 +2623,7 @@ type CountFeedbackRequest struct {
 
 func (x *CountFeedbackRequest) Reset() {
 	*x = CountFeedbackRequest{}
-	mi := &file_data_store_proto_msgTypes[50]
+	mi := &file_data_store_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2583,7 +2635,7 @@ func (x *CountFeedbackRequest) String() string {
 func (*CountFeedbackRequest) ProtoMessage() {}
 
 func (x *CountFeedbackRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_data_store_proto_msgTypes[50]
+	mi := &file_data_store_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2596,7 +2648,7 @@ func (x *CountFeedbackRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CountFeedbackRequest.ProtoReflect.Descriptor instead.
 func (*CountFeedbackRequest) Descriptor() ([]byte, []int) {
-	return file_data_store_proto_rawDescGZIP(), []int{50}
+	return file_data_store_proto_rawDescGZIP(), []int{51}
 }
 
 type CountFeedbackResponse struct {
@@ -2608,7 +2660,7 @@ type CountFeedbackResponse struct {
 
 func (x *CountFeedbackResponse) Reset() {
 	*x = CountFeedbackResponse{}
-	mi := &file_data_store_proto_msgTypes[51]
+	mi := &file_data_store_proto_msgTypes[52]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2620,7 +2672,7 @@ func (x *CountFeedbackResponse) String() string {
 func (*CountFeedbackResponse) ProtoMessage() {}
 
 func (x *CountFeedbackResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_data_store_proto_msgTypes[51]
+	mi := &file_data_store_proto_msgTypes[52]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2633,7 +2685,7 @@ func (x *CountFeedbackResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CountFeedbackResponse.ProtoReflect.Descriptor instead.
 func (*CountFeedbackResponse) Descriptor() ([]byte, []int) {
-	return file_data_store_proto_rawDescGZIP(), []int{51}
+	return file_data_store_proto_rawDescGZIP(), []int{52}
 }
 
 func (x *CountFeedbackResponse) GetCount() int32 {
@@ -2654,7 +2706,7 @@ type GetLatestItemsRequest struct {
 
 func (x *GetLatestItemsRequest) Reset() {
 	*x = GetLatestItemsRequest{}
-	mi := &file_data_store_proto_msgTypes[52]
+	mi := &file_data_store_proto_msgTypes[53]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2666,7 +2718,7 @@ func (x *GetLatestItemsRequest) String() string {
 func (*GetLatestItemsRequest) ProtoMessage() {}
 
 func (x *GetLatestItemsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_data_store_proto_msgTypes[52]
+	mi := &file_data_store_proto_msgTypes[53]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2679,7 +2731,7 @@ func (x *GetLatestItemsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetLatestItemsRequest.ProtoReflect.Descriptor instead.
 func (*GetLatestItemsRequest) Descriptor() ([]byte, []int) {
-	return file_data_store_proto_rawDescGZIP(), []int{52}
+	return file_data_store_proto_rawDescGZIP(), []int{53}
 }
 
 func (x *GetLatestItemsRequest) GetN() int32 {
@@ -2712,7 +2764,7 @@ type GetLatestItemsResponse struct {
 
 func (x *GetLatestItemsResponse) Reset() {
 	*x = GetLatestItemsResponse{}
-	mi := &file_data_store_proto_msgTypes[53]
+	mi := &file_data_store_proto_msgTypes[54]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2724,7 +2776,7 @@ func (x *GetLatestItemsResponse) String() string {
 func (*GetLatestItemsResponse) ProtoMessage() {}
 
 func (x *GetLatestItemsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_data_store_proto_msgTypes[53]
+	mi := &file_data_store_proto_msgTypes[54]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2737,7 +2789,7 @@ func (x *GetLatestItemsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetLatestItemsResponse.ProtoReflect.Descriptor instead.
 func (*GetLatestItemsResponse) Descriptor() ([]byte, []int) {
-	return file_data_store_proto_rawDescGZIP(), []int{53}
+	return file_data_store_proto_rawDescGZIP(), []int{54}
 }
 
 func (x *GetLatestItemsResponse) GetItems() []*Item {
@@ -2823,9 +2875,13 @@ const file_data_store_proto_rawDesc = "" +
 	"\x05_item\"8\n" +
 	"\x12SearchItemsRequest\x12\x14\n" +
 	"\x05query\x18\x01 \x01(\tR\x05query\x12\f\n" +
-	"\x01n\x18\x02 \x01(\x05R\x01n\";\n" +
-	"\x13SearchItemsResponse\x12$\n" +
-	"\x05items\x18\x01 \x03(\v2\x0e.protocol.ItemR\x05items\"W\n" +
+	"\x01n\x18\x02 \x01(\x05R\x01n\"F\n" +
+	"\n" +
+	"ScoredItem\x12\"\n" +
+	"\x04item\x18\x01 \x01(\v2\x0e.protocol.ItemR\x04item\x12\x14\n" +
+	"\x05score\x18\x02 \x01(\x01R\x05score\"A\n" +
+	"\x13SearchItemsResponse\x12*\n" +
+	"\x05items\x18\x01 \x03(\v2\x14.protocol.ScoredItemR\x05items\"W\n" +
 	"\x11ModifyItemRequest\x12\x17\n" +
 	"\aitem_id\x18\x01 \x01(\tR\x06itemId\x12)\n" +
 	"\x05patch\x18\x02 \x01(\v2\x13.protocol.ItemPatchR\x05patch\"\x14\n" +
@@ -2983,7 +3039,7 @@ func file_data_store_proto_rawDescGZIP() []byte {
 }
 
 var file_data_store_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_data_store_proto_msgTypes = make([]protoimpl.MessageInfo, 54)
+var file_data_store_proto_msgTypes = make([]protoimpl.MessageInfo, 55)
 var file_data_store_proto_goTypes = []any{
 	(ExpressionType)(0),                    // 0: protocol.ExpressionType
 	(*FeedbackTypeExpression)(nil),         // 1: protocol.FeedbackTypeExpression
@@ -3002,145 +3058,147 @@ var file_data_store_proto_goTypes = []any{
 	(*GetItemRequest)(nil),                 // 14: protocol.GetItemRequest
 	(*GetItemResponse)(nil),                // 15: protocol.GetItemResponse
 	(*SearchItemsRequest)(nil),             // 16: protocol.SearchItemsRequest
-	(*SearchItemsResponse)(nil),            // 17: protocol.SearchItemsResponse
-	(*ModifyItemRequest)(nil),              // 18: protocol.ModifyItemRequest
-	(*ModifyItemResponse)(nil),             // 19: protocol.ModifyItemResponse
-	(*GetItemsRequest)(nil),                // 20: protocol.GetItemsRequest
-	(*GetItemsResponse)(nil),               // 21: protocol.GetItemsResponse
-	(*GetItemFeedbackRequest)(nil),         // 22: protocol.GetItemFeedbackRequest
-	(*BatchInsertUsersRequest)(nil),        // 23: protocol.BatchInsertUsersRequest
-	(*BatchInsertUsersResponse)(nil),       // 24: protocol.BatchInsertUsersResponse
-	(*DeleteUserRequest)(nil),              // 25: protocol.DeleteUserRequest
-	(*DeleteUserResponse)(nil),             // 26: protocol.DeleteUserResponse
-	(*GetUserRequest)(nil),                 // 27: protocol.GetUserRequest
-	(*GetUserResponse)(nil),                // 28: protocol.GetUserResponse
-	(*ModifyUserRequest)(nil),              // 29: protocol.ModifyUserRequest
-	(*ModifyUserResponse)(nil),             // 30: protocol.ModifyUserResponse
-	(*GetUsersRequest)(nil),                // 31: protocol.GetUsersRequest
-	(*GetUsersResponse)(nil),               // 32: protocol.GetUsersResponse
-	(*GetUserFeedbackRequest)(nil),         // 33: protocol.GetUserFeedbackRequest
-	(*GetUserItemFeedbackRequest)(nil),     // 34: protocol.GetUserItemFeedbackRequest
-	(*DeleteUserItemFeedbackRequest)(nil),  // 35: protocol.DeleteUserItemFeedbackRequest
-	(*DeleteUserItemFeedbackResponse)(nil), // 36: protocol.DeleteUserItemFeedbackResponse
-	(*BatchInsertFeedbackRequest)(nil),     // 37: protocol.BatchInsertFeedbackRequest
-	(*BatchInsertFeedbackResponse)(nil),    // 38: protocol.BatchInsertFeedbackResponse
-	(*GetFeedbackRequest)(nil),             // 39: protocol.GetFeedbackRequest
-	(*GetFeedbackResponse)(nil),            // 40: protocol.GetFeedbackResponse
-	(*GetUserStreamRequest)(nil),           // 41: protocol.GetUserStreamRequest
-	(*GetUserStreamResponse)(nil),          // 42: protocol.GetUserStreamResponse
-	(*GetItemStreamRequest)(nil),           // 43: protocol.GetItemStreamRequest
-	(*GetItemStreamResponse)(nil),          // 44: protocol.GetItemStreamResponse
-	(*GetFeedbackStreamRequest)(nil),       // 45: protocol.GetFeedbackStreamRequest
-	(*GetFeedbackStreamResponse)(nil),      // 46: protocol.GetFeedbackStreamResponse
-	(*CountUsersRequest)(nil),              // 47: protocol.CountUsersRequest
-	(*CountUsersResponse)(nil),             // 48: protocol.CountUsersResponse
-	(*CountItemsRequest)(nil),              // 49: protocol.CountItemsRequest
-	(*CountItemsResponse)(nil),             // 50: protocol.CountItemsResponse
-	(*CountFeedbackRequest)(nil),           // 51: protocol.CountFeedbackRequest
-	(*CountFeedbackResponse)(nil),          // 52: protocol.CountFeedbackResponse
-	(*GetLatestItemsRequest)(nil),          // 53: protocol.GetLatestItemsRequest
-	(*GetLatestItemsResponse)(nil),         // 54: protocol.GetLatestItemsResponse
-	(*timestamppb.Timestamp)(nil),          // 55: google.protobuf.Timestamp
-	(*Item)(nil),                           // 56: protocol.Item
-	(*User)(nil),                           // 57: protocol.User
-	(*Feedback)(nil),                       // 58: protocol.Feedback
-	(*PingRequest)(nil),                    // 59: protocol.PingRequest
-	(*PingResponse)(nil),                   // 60: protocol.PingResponse
+	(*ScoredItem)(nil),                     // 17: protocol.ScoredItem
+	(*SearchItemsResponse)(nil),            // 18: protocol.SearchItemsResponse
+	(*ModifyItemRequest)(nil),              // 19: protocol.ModifyItemRequest
+	(*ModifyItemResponse)(nil),             // 20: protocol.ModifyItemResponse
+	(*GetItemsRequest)(nil),                // 21: protocol.GetItemsRequest
+	(*GetItemsResponse)(nil),               // 22: protocol.GetItemsResponse
+	(*GetItemFeedbackRequest)(nil),         // 23: protocol.GetItemFeedbackRequest
+	(*BatchInsertUsersRequest)(nil),        // 24: protocol.BatchInsertUsersRequest
+	(*BatchInsertUsersResponse)(nil),       // 25: protocol.BatchInsertUsersResponse
+	(*DeleteUserRequest)(nil),              // 26: protocol.DeleteUserRequest
+	(*DeleteUserResponse)(nil),             // 27: protocol.DeleteUserResponse
+	(*GetUserRequest)(nil),                 // 28: protocol.GetUserRequest
+	(*GetUserResponse)(nil),                // 29: protocol.GetUserResponse
+	(*ModifyUserRequest)(nil),              // 30: protocol.ModifyUserRequest
+	(*ModifyUserResponse)(nil),             // 31: protocol.ModifyUserResponse
+	(*GetUsersRequest)(nil),                // 32: protocol.GetUsersRequest
+	(*GetUsersResponse)(nil),               // 33: protocol.GetUsersResponse
+	(*GetUserFeedbackRequest)(nil),         // 34: protocol.GetUserFeedbackRequest
+	(*GetUserItemFeedbackRequest)(nil),     // 35: protocol.GetUserItemFeedbackRequest
+	(*DeleteUserItemFeedbackRequest)(nil),  // 36: protocol.DeleteUserItemFeedbackRequest
+	(*DeleteUserItemFeedbackResponse)(nil), // 37: protocol.DeleteUserItemFeedbackResponse
+	(*BatchInsertFeedbackRequest)(nil),     // 38: protocol.BatchInsertFeedbackRequest
+	(*BatchInsertFeedbackResponse)(nil),    // 39: protocol.BatchInsertFeedbackResponse
+	(*GetFeedbackRequest)(nil),             // 40: protocol.GetFeedbackRequest
+	(*GetFeedbackResponse)(nil),            // 41: protocol.GetFeedbackResponse
+	(*GetUserStreamRequest)(nil),           // 42: protocol.GetUserStreamRequest
+	(*GetUserStreamResponse)(nil),          // 43: protocol.GetUserStreamResponse
+	(*GetItemStreamRequest)(nil),           // 44: protocol.GetItemStreamRequest
+	(*GetItemStreamResponse)(nil),          // 45: protocol.GetItemStreamResponse
+	(*GetFeedbackStreamRequest)(nil),       // 46: protocol.GetFeedbackStreamRequest
+	(*GetFeedbackStreamResponse)(nil),      // 47: protocol.GetFeedbackStreamResponse
+	(*CountUsersRequest)(nil),              // 48: protocol.CountUsersRequest
+	(*CountUsersResponse)(nil),             // 49: protocol.CountUsersResponse
+	(*CountItemsRequest)(nil),              // 50: protocol.CountItemsRequest
+	(*CountItemsResponse)(nil),             // 51: protocol.CountItemsResponse
+	(*CountFeedbackRequest)(nil),           // 52: protocol.CountFeedbackRequest
+	(*CountFeedbackResponse)(nil),          // 53: protocol.CountFeedbackResponse
+	(*GetLatestItemsRequest)(nil),          // 54: protocol.GetLatestItemsRequest
+	(*GetLatestItemsResponse)(nil),         // 55: protocol.GetLatestItemsResponse
+	(*timestamppb.Timestamp)(nil),          // 56: google.protobuf.Timestamp
+	(*Item)(nil),                           // 57: protocol.Item
+	(*User)(nil),                           // 58: protocol.User
+	(*Feedback)(nil),                       // 59: protocol.Feedback
+	(*PingRequest)(nil),                    // 60: protocol.PingRequest
+	(*PingResponse)(nil),                   // 61: protocol.PingResponse
 }
 var file_data_store_proto_depIdxs = []int32{
 	0,  // 0: protocol.FeedbackTypeExpression.expression_type:type_name -> protocol.ExpressionType
-	55, // 1: protocol.ItemPatch.timestamp:type_name -> google.protobuf.Timestamp
-	55, // 2: protocol.ScanOptions.begin_time:type_name -> google.protobuf.Timestamp
-	55, // 3: protocol.ScanOptions.end_time:type_name -> google.protobuf.Timestamp
+	56, // 1: protocol.ItemPatch.timestamp:type_name -> google.protobuf.Timestamp
+	56, // 2: protocol.ScanOptions.begin_time:type_name -> google.protobuf.Timestamp
+	56, // 3: protocol.ScanOptions.end_time:type_name -> google.protobuf.Timestamp
 	1,  // 4: protocol.ScanOptions.feedback_types:type_name -> protocol.FeedbackTypeExpression
-	55, // 5: protocol.GetOptions.after:type_name -> google.protobuf.Timestamp
-	56, // 6: protocol.BatchInsertItemsRequest.items:type_name -> protocol.Item
+	56, // 5: protocol.GetOptions.after:type_name -> google.protobuf.Timestamp
+	57, // 6: protocol.BatchInsertItemsRequest.items:type_name -> protocol.Item
 	5,  // 7: protocol.BatchGetItemsRequest.get_options:type_name -> protocol.GetOptions
-	56, // 8: protocol.BatchGetItemsResponse.items:type_name -> protocol.Item
-	56, // 9: protocol.GetItemResponse.item:type_name -> protocol.Item
-	56, // 10: protocol.SearchItemsResponse.items:type_name -> protocol.Item
-	3,  // 11: protocol.ModifyItemRequest.patch:type_name -> protocol.ItemPatch
-	55, // 12: protocol.GetItemsRequest.begin_time:type_name -> google.protobuf.Timestamp
-	56, // 13: protocol.GetItemsResponse.items:type_name -> protocol.Item
-	1,  // 14: protocol.GetItemFeedbackRequest.feedback_types:type_name -> protocol.FeedbackTypeExpression
-	57, // 15: protocol.BatchInsertUsersRequest.users:type_name -> protocol.User
-	57, // 16: protocol.GetUserResponse.user:type_name -> protocol.User
-	2,  // 17: protocol.ModifyUserRequest.patch:type_name -> protocol.UserPatch
-	57, // 18: protocol.GetUsersResponse.users:type_name -> protocol.User
-	55, // 19: protocol.GetUserFeedbackRequest.end_time:type_name -> google.protobuf.Timestamp
-	1,  // 20: protocol.GetUserFeedbackRequest.feedback_types:type_name -> protocol.FeedbackTypeExpression
-	1,  // 21: protocol.GetUserItemFeedbackRequest.feedback_types:type_name -> protocol.FeedbackTypeExpression
-	58, // 22: protocol.BatchInsertFeedbackRequest.feedback:type_name -> protocol.Feedback
-	55, // 23: protocol.GetFeedbackRequest.begin_time:type_name -> google.protobuf.Timestamp
-	55, // 24: protocol.GetFeedbackRequest.end_time:type_name -> google.protobuf.Timestamp
-	1,  // 25: protocol.GetFeedbackRequest.feedback_types:type_name -> protocol.FeedbackTypeExpression
-	58, // 26: protocol.GetFeedbackResponse.feedback:type_name -> protocol.Feedback
-	57, // 27: protocol.GetUserStreamResponse.users:type_name -> protocol.User
-	55, // 28: protocol.GetItemStreamRequest.time_limit:type_name -> google.protobuf.Timestamp
-	56, // 29: protocol.GetItemStreamResponse.items:type_name -> protocol.Item
-	4,  // 30: protocol.GetFeedbackStreamRequest.scan_options:type_name -> protocol.ScanOptions
-	58, // 31: protocol.GetFeedbackStreamResponse.feedback:type_name -> protocol.Feedback
-	55, // 32: protocol.GetLatestItemsRequest.after:type_name -> google.protobuf.Timestamp
-	56, // 33: protocol.GetLatestItemsResponse.items:type_name -> protocol.Item
-	59, // 34: protocol.DataStore.Ping:input_type -> protocol.PingRequest
-	6,  // 35: protocol.DataStore.Reconcile:input_type -> protocol.ReconcileRequest
-	8,  // 36: protocol.DataStore.BatchInsertItems:input_type -> protocol.BatchInsertItemsRequest
-	10, // 37: protocol.DataStore.BatchGetItems:input_type -> protocol.BatchGetItemsRequest
-	12, // 38: protocol.DataStore.DeleteItem:input_type -> protocol.DeleteItemRequest
-	14, // 39: protocol.DataStore.GetItem:input_type -> protocol.GetItemRequest
-	16, // 40: protocol.DataStore.SearchItems:input_type -> protocol.SearchItemsRequest
-	18, // 41: protocol.DataStore.ModifyItem:input_type -> protocol.ModifyItemRequest
-	20, // 42: protocol.DataStore.GetItems:input_type -> protocol.GetItemsRequest
-	22, // 43: protocol.DataStore.GetItemFeedback:input_type -> protocol.GetItemFeedbackRequest
-	23, // 44: protocol.DataStore.BatchInsertUsers:input_type -> protocol.BatchInsertUsersRequest
-	25, // 45: protocol.DataStore.DeleteUser:input_type -> protocol.DeleteUserRequest
-	27, // 46: protocol.DataStore.GetUser:input_type -> protocol.GetUserRequest
-	29, // 47: protocol.DataStore.ModifyUser:input_type -> protocol.ModifyUserRequest
-	31, // 48: protocol.DataStore.GetUsers:input_type -> protocol.GetUsersRequest
-	33, // 49: protocol.DataStore.GetUserFeedback:input_type -> protocol.GetUserFeedbackRequest
-	34, // 50: protocol.DataStore.GetUserItemFeedback:input_type -> protocol.GetUserItemFeedbackRequest
-	35, // 51: protocol.DataStore.DeleteUserItemFeedback:input_type -> protocol.DeleteUserItemFeedbackRequest
-	37, // 52: protocol.DataStore.BatchInsertFeedback:input_type -> protocol.BatchInsertFeedbackRequest
-	39, // 53: protocol.DataStore.GetFeedback:input_type -> protocol.GetFeedbackRequest
-	41, // 54: protocol.DataStore.GetUserStream:input_type -> protocol.GetUserStreamRequest
-	43, // 55: protocol.DataStore.GetItemStream:input_type -> protocol.GetItemStreamRequest
-	45, // 56: protocol.DataStore.GetFeedbackStream:input_type -> protocol.GetFeedbackStreamRequest
-	47, // 57: protocol.DataStore.CountUsers:input_type -> protocol.CountUsersRequest
-	49, // 58: protocol.DataStore.CountItems:input_type -> protocol.CountItemsRequest
-	51, // 59: protocol.DataStore.CountFeedback:input_type -> protocol.CountFeedbackRequest
-	53, // 60: protocol.DataStore.GetLatestItems:input_type -> protocol.GetLatestItemsRequest
-	60, // 61: protocol.DataStore.Ping:output_type -> protocol.PingResponse
-	7,  // 62: protocol.DataStore.Reconcile:output_type -> protocol.ReconcileResponse
-	9,  // 63: protocol.DataStore.BatchInsertItems:output_type -> protocol.BatchInsertItemsResponse
-	11, // 64: protocol.DataStore.BatchGetItems:output_type -> protocol.BatchGetItemsResponse
-	13, // 65: protocol.DataStore.DeleteItem:output_type -> protocol.DeleteItemResponse
-	15, // 66: protocol.DataStore.GetItem:output_type -> protocol.GetItemResponse
-	17, // 67: protocol.DataStore.SearchItems:output_type -> protocol.SearchItemsResponse
-	19, // 68: protocol.DataStore.ModifyItem:output_type -> protocol.ModifyItemResponse
-	21, // 69: protocol.DataStore.GetItems:output_type -> protocol.GetItemsResponse
-	40, // 70: protocol.DataStore.GetItemFeedback:output_type -> protocol.GetFeedbackResponse
-	24, // 71: protocol.DataStore.BatchInsertUsers:output_type -> protocol.BatchInsertUsersResponse
-	26, // 72: protocol.DataStore.DeleteUser:output_type -> protocol.DeleteUserResponse
-	28, // 73: protocol.DataStore.GetUser:output_type -> protocol.GetUserResponse
-	30, // 74: protocol.DataStore.ModifyUser:output_type -> protocol.ModifyUserResponse
-	32, // 75: protocol.DataStore.GetUsers:output_type -> protocol.GetUsersResponse
-	40, // 76: protocol.DataStore.GetUserFeedback:output_type -> protocol.GetFeedbackResponse
-	40, // 77: protocol.DataStore.GetUserItemFeedback:output_type -> protocol.GetFeedbackResponse
-	36, // 78: protocol.DataStore.DeleteUserItemFeedback:output_type -> protocol.DeleteUserItemFeedbackResponse
-	38, // 79: protocol.DataStore.BatchInsertFeedback:output_type -> protocol.BatchInsertFeedbackResponse
-	40, // 80: protocol.DataStore.GetFeedback:output_type -> protocol.GetFeedbackResponse
-	42, // 81: protocol.DataStore.GetUserStream:output_type -> protocol.GetUserStreamResponse
-	44, // 82: protocol.DataStore.GetItemStream:output_type -> protocol.GetItemStreamResponse
-	46, // 83: protocol.DataStore.GetFeedbackStream:output_type -> protocol.GetFeedbackStreamResponse
-	48, // 84: protocol.DataStore.CountUsers:output_type -> protocol.CountUsersResponse
-	50, // 85: protocol.DataStore.CountItems:output_type -> protocol.CountItemsResponse
-	52, // 86: protocol.DataStore.CountFeedback:output_type -> protocol.CountFeedbackResponse
-	54, // 87: protocol.DataStore.GetLatestItems:output_type -> protocol.GetLatestItemsResponse
-	61, // [61:88] is the sub-list for method output_type
-	34, // [34:61] is the sub-list for method input_type
-	34, // [34:34] is the sub-list for extension type_name
-	34, // [34:34] is the sub-list for extension extendee
-	0,  // [0:34] is the sub-list for field type_name
+	57, // 8: protocol.BatchGetItemsResponse.items:type_name -> protocol.Item
+	57, // 9: protocol.GetItemResponse.item:type_name -> protocol.Item
+	57, // 10: protocol.ScoredItem.item:type_name -> protocol.Item
+	17, // 11: protocol.SearchItemsResponse.items:type_name -> protocol.ScoredItem
+	3,  // 12: protocol.ModifyItemRequest.patch:type_name -> protocol.ItemPatch
+	56, // 13: protocol.GetItemsRequest.begin_time:type_name -> google.protobuf.Timestamp
+	57, // 14: protocol.GetItemsResponse.items:type_name -> protocol.Item
+	1,  // 15: protocol.GetItemFeedbackRequest.feedback_types:type_name -> protocol.FeedbackTypeExpression
+	58, // 16: protocol.BatchInsertUsersRequest.users:type_name -> protocol.User
+	58, // 17: protocol.GetUserResponse.user:type_name -> protocol.User
+	2,  // 18: protocol.ModifyUserRequest.patch:type_name -> protocol.UserPatch
+	58, // 19: protocol.GetUsersResponse.users:type_name -> protocol.User
+	56, // 20: protocol.GetUserFeedbackRequest.end_time:type_name -> google.protobuf.Timestamp
+	1,  // 21: protocol.GetUserFeedbackRequest.feedback_types:type_name -> protocol.FeedbackTypeExpression
+	1,  // 22: protocol.GetUserItemFeedbackRequest.feedback_types:type_name -> protocol.FeedbackTypeExpression
+	59, // 23: protocol.BatchInsertFeedbackRequest.feedback:type_name -> protocol.Feedback
+	56, // 24: protocol.GetFeedbackRequest.begin_time:type_name -> google.protobuf.Timestamp
+	56, // 25: protocol.GetFeedbackRequest.end_time:type_name -> google.protobuf.Timestamp
+	1,  // 26: protocol.GetFeedbackRequest.feedback_types:type_name -> protocol.FeedbackTypeExpression
+	59, // 27: protocol.GetFeedbackResponse.feedback:type_name -> protocol.Feedback
+	58, // 28: protocol.GetUserStreamResponse.users:type_name -> protocol.User
+	56, // 29: protocol.GetItemStreamRequest.time_limit:type_name -> google.protobuf.Timestamp
+	57, // 30: protocol.GetItemStreamResponse.items:type_name -> protocol.Item
+	4,  // 31: protocol.GetFeedbackStreamRequest.scan_options:type_name -> protocol.ScanOptions
+	59, // 32: protocol.GetFeedbackStreamResponse.feedback:type_name -> protocol.Feedback
+	56, // 33: protocol.GetLatestItemsRequest.after:type_name -> google.protobuf.Timestamp
+	57, // 34: protocol.GetLatestItemsResponse.items:type_name -> protocol.Item
+	60, // 35: protocol.DataStore.Ping:input_type -> protocol.PingRequest
+	6,  // 36: protocol.DataStore.Reconcile:input_type -> protocol.ReconcileRequest
+	8,  // 37: protocol.DataStore.BatchInsertItems:input_type -> protocol.BatchInsertItemsRequest
+	10, // 38: protocol.DataStore.BatchGetItems:input_type -> protocol.BatchGetItemsRequest
+	12, // 39: protocol.DataStore.DeleteItem:input_type -> protocol.DeleteItemRequest
+	14, // 40: protocol.DataStore.GetItem:input_type -> protocol.GetItemRequest
+	16, // 41: protocol.DataStore.SearchItems:input_type -> protocol.SearchItemsRequest
+	19, // 42: protocol.DataStore.ModifyItem:input_type -> protocol.ModifyItemRequest
+	21, // 43: protocol.DataStore.GetItems:input_type -> protocol.GetItemsRequest
+	23, // 44: protocol.DataStore.GetItemFeedback:input_type -> protocol.GetItemFeedbackRequest
+	24, // 45: protocol.DataStore.BatchInsertUsers:input_type -> protocol.BatchInsertUsersRequest
+	26, // 46: protocol.DataStore.DeleteUser:input_type -> protocol.DeleteUserRequest
+	28, // 47: protocol.DataStore.GetUser:input_type -> protocol.GetUserRequest
+	30, // 48: protocol.DataStore.ModifyUser:input_type -> protocol.ModifyUserRequest
+	32, // 49: protocol.DataStore.GetUsers:input_type -> protocol.GetUsersRequest
+	34, // 50: protocol.DataStore.GetUserFeedback:input_type -> protocol.GetUserFeedbackRequest
+	35, // 51: protocol.DataStore.GetUserItemFeedback:input_type -> protocol.GetUserItemFeedbackRequest
+	36, // 52: protocol.DataStore.DeleteUserItemFeedback:input_type -> protocol.DeleteUserItemFeedbackRequest
+	38, // 53: protocol.DataStore.BatchInsertFeedback:input_type -> protocol.BatchInsertFeedbackRequest
+	40, // 54: protocol.DataStore.GetFeedback:input_type -> protocol.GetFeedbackRequest
+	42, // 55: protocol.DataStore.GetUserStream:input_type -> protocol.GetUserStreamRequest
+	44, // 56: protocol.DataStore.GetItemStream:input_type -> protocol.GetItemStreamRequest
+	46, // 57: protocol.DataStore.GetFeedbackStream:input_type -> protocol.GetFeedbackStreamRequest
+	48, // 58: protocol.DataStore.CountUsers:input_type -> protocol.CountUsersRequest
+	50, // 59: protocol.DataStore.CountItems:input_type -> protocol.CountItemsRequest
+	52, // 60: protocol.DataStore.CountFeedback:input_type -> protocol.CountFeedbackRequest
+	54, // 61: protocol.DataStore.GetLatestItems:input_type -> protocol.GetLatestItemsRequest
+	61, // 62: protocol.DataStore.Ping:output_type -> protocol.PingResponse
+	7,  // 63: protocol.DataStore.Reconcile:output_type -> protocol.ReconcileResponse
+	9,  // 64: protocol.DataStore.BatchInsertItems:output_type -> protocol.BatchInsertItemsResponse
+	11, // 65: protocol.DataStore.BatchGetItems:output_type -> protocol.BatchGetItemsResponse
+	13, // 66: protocol.DataStore.DeleteItem:output_type -> protocol.DeleteItemResponse
+	15, // 67: protocol.DataStore.GetItem:output_type -> protocol.GetItemResponse
+	18, // 68: protocol.DataStore.SearchItems:output_type -> protocol.SearchItemsResponse
+	20, // 69: protocol.DataStore.ModifyItem:output_type -> protocol.ModifyItemResponse
+	22, // 70: protocol.DataStore.GetItems:output_type -> protocol.GetItemsResponse
+	41, // 71: protocol.DataStore.GetItemFeedback:output_type -> protocol.GetFeedbackResponse
+	25, // 72: protocol.DataStore.BatchInsertUsers:output_type -> protocol.BatchInsertUsersResponse
+	27, // 73: protocol.DataStore.DeleteUser:output_type -> protocol.DeleteUserResponse
+	29, // 74: protocol.DataStore.GetUser:output_type -> protocol.GetUserResponse
+	31, // 75: protocol.DataStore.ModifyUser:output_type -> protocol.ModifyUserResponse
+	33, // 76: protocol.DataStore.GetUsers:output_type -> protocol.GetUsersResponse
+	41, // 77: protocol.DataStore.GetUserFeedback:output_type -> protocol.GetFeedbackResponse
+	41, // 78: protocol.DataStore.GetUserItemFeedback:output_type -> protocol.GetFeedbackResponse
+	37, // 79: protocol.DataStore.DeleteUserItemFeedback:output_type -> protocol.DeleteUserItemFeedbackResponse
+	39, // 80: protocol.DataStore.BatchInsertFeedback:output_type -> protocol.BatchInsertFeedbackResponse
+	41, // 81: protocol.DataStore.GetFeedback:output_type -> protocol.GetFeedbackResponse
+	43, // 82: protocol.DataStore.GetUserStream:output_type -> protocol.GetUserStreamResponse
+	45, // 83: protocol.DataStore.GetItemStream:output_type -> protocol.GetItemStreamResponse
+	47, // 84: protocol.DataStore.GetFeedbackStream:output_type -> protocol.GetFeedbackStreamResponse
+	49, // 85: protocol.DataStore.CountUsers:output_type -> protocol.CountUsersResponse
+	51, // 86: protocol.DataStore.CountItems:output_type -> protocol.CountItemsResponse
+	53, // 87: protocol.DataStore.CountFeedback:output_type -> protocol.CountFeedbackResponse
+	55, // 88: protocol.DataStore.GetLatestItems:output_type -> protocol.GetLatestItemsResponse
+	62, // [62:89] is the sub-list for method output_type
+	35, // [35:62] is the sub-list for method input_type
+	35, // [35:35] is the sub-list for extension type_name
+	35, // [35:35] is the sub-list for extension extendee
+	0,  // [0:35] is the sub-list for field type_name
 }
 
 func init() { file_data_store_proto_init() }
@@ -3153,14 +3211,14 @@ func file_data_store_proto_init() {
 	file_data_store_proto_msgTypes[2].OneofWrappers = []any{}
 	file_data_store_proto_msgTypes[3].OneofWrappers = []any{}
 	file_data_store_proto_msgTypes[14].OneofWrappers = []any{}
-	file_data_store_proto_msgTypes[27].OneofWrappers = []any{}
+	file_data_store_proto_msgTypes[28].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_data_store_proto_rawDesc), len(file_data_store_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   54,
+			NumMessages:   55,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

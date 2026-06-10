@@ -428,9 +428,9 @@ func (db *MongoDB) GetItem(ctx context.Context, itemId string) (item Item, err e
 }
 
 // SearchItems searches items from MongoDB.
-func (db *MongoDB) SearchItems(ctx context.Context, query string, n int) ([]Item, error) {
+func (db *MongoDB) SearchItems(ctx context.Context, query string, n int) ([]ScoredItem, error) {
 	if n <= 0 {
-		return []Item{}, nil
+		return []ScoredItem{}, nil
 	}
 	c := db.client.Database(db.dbName).Collection(db.ItemsTable())
 	r, err := c.Find(ctx,
@@ -440,10 +440,10 @@ func (db *MongoDB) SearchItems(ctx context.Context, query string, n int) ([]Item
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	items := make([]Item, 0)
+	items := make([]ScoredItem, 0)
 	defer r.Close(ctx)
 	for r.Next(ctx) {
-		var item Item
+		var item ScoredItem
 		if err = r.Decode(&item); err != nil {
 			return nil, errors.Trace(err)
 		}
