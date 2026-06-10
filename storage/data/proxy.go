@@ -698,22 +698,21 @@ func (p ProxyClient) SearchItems(ctx context.Context, query string, n int) ([]Sc
 		return nil, err
 	}
 	items := make([]ScoredItem, len(resp.Items))
-	for i, scoredItem := range resp.Items {
-		item := scoredItem.Item
+	for i, item := range resp.Items {
 		var labels any
-		if err = json.Unmarshal(item.Labels, &labels); err != nil {
+		if err = json.Unmarshal(item.Item.Labels, &labels); err != nil {
 			return nil, err
 		}
 		items[i] = ScoredItem{
 			Item: Item{
-				ItemId:     item.ItemId,
-				IsHidden:   item.IsHidden,
-				Categories: item.Categories,
-				Timestamp:  item.Timestamp.AsTime(),
+				ItemId:     item.Item.ItemId,
+				IsHidden:   item.Item.IsHidden,
+				Categories: item.Item.Categories,
+				Timestamp:  item.Item.Timestamp.AsTime(),
 				Labels:     labels,
-				Comment:    item.Comment,
+				Comment:    item.Item.Comment,
 			},
-			Score: scoredItem.Score,
+			Score: item.Score,
 		}
 	}
 	return items, nil
