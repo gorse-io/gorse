@@ -75,8 +75,12 @@ func TestNewMasterBlobServer(t *testing.T) {
 		if server != nil {
 			t.Fatal("expected no local blob server for cloud URI")
 		}
-		if _, err := os.Stat(filepath.Join(dir, "s3:")); !os.IsNotExist(err) {
-			t.Fatalf("expected no s3: directory, got %v", err)
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(entries) != 0 {
+			t.Fatalf("expected no local directories, got %v", entries)
 		}
 	})
 }
