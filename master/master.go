@@ -152,7 +152,9 @@ func NewMaster(cfg *config.Config, cacheFolder string, standalone bool, configPa
 func (m *Master) Serve() {
 	// connect blob store
 	var err error
-	m.blobServer = newMasterBlobServer(m.Config.Blob.URI)
+	if !strings.Contains(m.Config.Blob.URI, "://") {
+		m.blobServer = blob.NewMasterStoreServer(m.Config.Blob.URI)
+	}
 	m.blobStore, err = blob.NewStore(m.Config.Blob, nil)
 	if err != nil {
 		log.Logger().Fatal("failed to create blob store", zap.Error(err))
@@ -289,13 +291,6 @@ func (m *Master) Serve() {
 
 	// start http server
 	m.StartHttpServer()
-}
-
-func newMasterBlobServer(uri string) *blob.MasterStoreServer {
-	if strings.Contains(uri, "://") {
-		return nil
-	}
-	return blob.NewMasterStoreServer(uri)
 }
 
 func (m *Master) Shutdown() {
