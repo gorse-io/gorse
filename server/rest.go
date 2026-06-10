@@ -1420,11 +1420,14 @@ func (s *RestServer) getItems(request *restful.Request, response *restful.Respon
 			BadRequest(response, errors.New("item search is not supported because [recommend.search].columns is empty"))
 			return
 		}
-		items, err := s.DataClient.SearchItems(ctx, query, n)
+		scoredItems, err := s.DataClient.SearchItems(ctx, query, n)
 		if err != nil {
 			InternalServerError(response, err)
 			return
 		}
+		items := lo.Map(scoredItems, func(item data.ScoredItem, _ int) data.Item {
+			return item.Item
+		})
 		Ok(response, ItemIterator{Items: items})
 		return
 	}

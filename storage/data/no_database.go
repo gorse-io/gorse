@@ -74,7 +74,7 @@ func (NoDatabase) GetItem(_ context.Context, _ string) (Item, error) {
 }
 
 // SearchItems method of NoDatabase returns ErrNoDatabase.
-func (NoDatabase) SearchItems(_ context.Context, _ string, _ int) ([]Item, error) {
+func (NoDatabase) SearchItems(_ context.Context, _ string, _ int) ([]ScoredItem, error) {
 	return nil, ErrNoDatabase
 }
 

@@ -963,23 +963,23 @@ func (d *SQLDatabase) GetItem(ctx context.Context, itemId string) (Item, error) 
 }
 
 // SearchItems searches items from the database.
-func (d *SQLDatabase) SearchItems(ctx context.Context, query string, n int) ([]Item, error) {
+func (d *SQLDatabase) SearchItems(ctx context.Context, query string, n int) ([]ScoredItem, error) {
 	if n <= 0 {
-		return []Item{}, nil
+		return []ScoredItem{}, nil
 	}
 	var tx *gorm.DB
 	switch d.driver {
 	case Postgres:
 		tx = d.gormDB.WithContext(ctx).
 			Table(d.ItemsTable()).
-			Select("item_id, is_hidden, categories, time_stamp, labels, comment").
+			Select(fmt.Sprintf("item_id, is_hidden, categories, time_stamp, labels, comment, ts_rank(%s, plainto_tsquery('simple', ?)) AS score", d.searchVector), query).
 			Where(fmt.Sprintf("%s @@ plainto_tsquery('simple', ?)", d.searchVector), query).
 			Order(clause.Expr{SQL: fmt.Sprintf("ts_rank(%s, plainto_tsquery('simple', ?)) DESC", d.searchVector), Vars: []any{query}}).
 			Limit(n)
 	case MySQL:
 		tx = d.gormDB.WithContext(ctx).
 			Table(d.ItemsTable()).
-			Select("item_id, is_hidden, categories, time_stamp, labels, comment").
+			Select(fmt.Sprintf("item_id, is_hidden, categories, time_stamp, labels, comment, MATCH(%s) AGAINST (? IN NATURAL LANGUAGE MODE) AS score", mysqlSearchDocumentColumn), query).
 			Where(fmt.Sprintf("MATCH(%s) AGAINST (? IN NATURAL LANGUAGE MODE)", mysqlSearchDocumentColumn), query).
 			Order(clause.Expr{SQL: fmt.Sprintf("MATCH(%s) AGAINST (? IN NATURAL LANGUAGE MODE) DESC", mysqlSearchDocumentColumn), Vars: []any{query}}).
 			Limit(n)
@@ -987,13 +987,13 @@ func (d *SQLDatabase) SearchItems(ctx context.Context, query string, n int) ([]I
 		query = sqlitePlainTextSearchQuery(query)
 		tx = d.gormDB.WithContext(ctx).
 			Table(fmt.Sprintf("%s AS items", d.ItemsTable())).
-			Select("items.item_id, items.is_hidden, items.categories, items.time_stamp, items.labels, items.comment").
+			Select(fmt.Sprintf("items.item_id, items.is_hidden, items.categories, items.time_stamp, items.labels, items.comment, -bm25(%s) AS score", searchIndexName)).
 			Joins(fmt.Sprintf("JOIN %s ON items.item_id = %s.item_id", searchIndexName, searchIndexName)).
 			Where(fmt.Sprintf("%s MATCH ?", searchIndexName), query).
 			Order(fmt.Sprintf("bm25(%s)", searchIndexName)).
 			Limit(n)
 	default:
-		return []Item{}, nil
+		return []ScoredItem{}, nil
 	}
 
 	result, err := tx.Rows()
@@ -1002,9 +1002,9 @@ func (d *SQLDatabase) SearchItems(ctx context.Context, query string, n int) ([]I
 	}
 	defer result.Close()
 
-	items := make([]Item, 0)
+	items := make([]ScoredItem, 0)
 	for result.Next() {
-		var item Item
+		var item ScoredItem
 		if err := d.gormDB.ScanRows(result, &item); err != nil {
 			return nil, errors.Trace(err)
 		}
