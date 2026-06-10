@@ -15,6 +15,8 @@ package master
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/gorse-io/gorse/common/monitor"
@@ -52,4 +54,29 @@ func (s *MasterTestSuite) TearDownTest() {
 
 func TestMaster(t *testing.T) {
 	suite.Run(t, new(MasterTestSuite))
+}
+
+func TestNewMasterBlobServer(t *testing.T) {
+	t.Run("local URI", func(t *testing.T) {
+		dir := filepath.Join(t.TempDir(), "blob")
+		server := newMasterBlobServer(dir)
+		if server == nil {
+			t.Fatal("expected local blob server")
+		}
+		if _, err := os.Stat(dir); err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	t.Run("cloud URI", func(t *testing.T) {
+		dir := t.TempDir()
+		t.Chdir(dir)
+		server := newMasterBlobServer("s3://bucket/path")
+		if server != nil {
+			t.Fatal("expected no local blob server for cloud URI")
+		}
+		if _, err := os.Stat(filepath.Join(dir, "s3:")); !os.IsNotExist(err) {
+			t.Fatalf("expected no s3: directory, got %v", err)
+		}
+	})
 }
