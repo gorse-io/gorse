@@ -21,6 +21,7 @@ import (
 	"math"
 	"math/rand"
 	"net"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -151,7 +152,9 @@ func NewMaster(cfg *config.Config, cacheFolder string, standalone bool, configPa
 func (m *Master) Serve() {
 	// connect blob store
 	var err error
-	m.blobServer = blob.NewMasterStoreServer(m.Config.Blob.URI)
+	if !strings.Contains(m.Config.Blob.URI, "://") {
+		m.blobServer = blob.NewMasterStoreServer(m.Config.Blob.URI)
+	}
 	m.blobStore, err = blob.NewStore(m.Config.Blob, nil)
 	if err != nil {
 		log.Logger().Fatal("failed to create blob store", zap.Error(err))
@@ -260,7 +263,9 @@ func (m *Master) Serve() {
 		protocol.RegisterMasterServer(m.grpcServer, m)
 		protocol.RegisterCacheStoreServer(m.grpcServer, cache.NewProxyServer(m.CacheClient))
 		protocol.RegisterDataStoreServer(m.grpcServer, data.NewProxyServer(m.DataClient))
-		protocol.RegisterBlobStoreServer(m.grpcServer, m.blobServer)
+		if m.blobServer != nil {
+			protocol.RegisterBlobStoreServer(m.grpcServer, m.blobServer)
+		}
 		if err = m.grpcServer.Serve(lis); err != nil {
 			log.Logger().Fatal("failed to start rpc server", zap.Error(err))
 		}
