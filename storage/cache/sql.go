@@ -532,7 +532,7 @@ func (db *SQLDatabase) AddTimeSeriesPoints(ctx context.Context, points []TimeSer
 }
 
 func (db *SQLDatabase) GetTimeSeriesPoints(ctx context.Context, name string, begin, end time.Time, duration time.Duration) ([]TimeSeriesPoint, error) {
-	var points []TimeSeriesPoint
+	points := []TimeSeriesPoint{}
 	switch db.driver {
 	case Postgres:
 		if err := db.gormDB.WithContext(ctx).
