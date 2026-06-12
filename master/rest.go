@@ -1833,7 +1833,7 @@ func (m *Master) dump(response http.ResponseWriter, request *http.Request) {
 	server.Ok(restful.NewResponse(response), stats)
 }
 
-func (m *Master) Restore(r io.ReadCloser) (stats DumpStats, err error) {
+func (m *Master) Restore(r io.ReadCloser, delta *time.Duration) (stats DumpStats, err error) {
 	flag := EOF
 	if err = binary.Read(r, binary.LittleEndian, &flag); err != nil {
 		return
@@ -1917,6 +1917,10 @@ func (m *Master) Restore(r io.ReadCloser) (stats DumpStats, err error) {
 				if flag <= 0 {
 					break
 				}
+				timestamp := feedback.Timestamp.AsTime()
+				if delta != nil {
+					timestamp = timestamp.Add(*delta)
+				}
 				feedbacks = append(feedbacks, data.Feedback{
 					FeedbackKey: data.FeedbackKey{
 						FeedbackType: feedback.FeedbackType,
@@ -1924,7 +1928,7 @@ func (m *Master) Restore(r io.ReadCloser) (stats DumpStats, err error) {
 						ItemId:       feedback.ItemId,
 					},
 					Value:     feedback.Value,
-					Timestamp: feedback.Timestamp.AsTime(),
+					Timestamp: timestamp,
 					Comment:   feedback.Comment,
 				})
 				stats.Feedback++
@@ -1958,7 +1962,7 @@ func (m *Master) restore(response http.ResponseWriter, request *http.Request) {
 		return
 	}
 	start := time.Now()
-	stats, err := m.Restore(request.Body)
+	stats, err := m.Restore(request.Body, nil)
 	if err != nil {
 		writeError(response, http.StatusInternalServerError, err.Error())
 		return

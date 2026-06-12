@@ -251,14 +251,22 @@ func (evaluator *OnlineEvaluator) Add(feedbackType string, value float64, userIn
 		}
 		evaluator.ReadFeedback[windowIndex][userIndex].Add(itemIndex)
 	}
-	if expression.MatchFeedbackTypeExpressions(evaluator.PositiveTypes, feedbackType, value) {
-		if evaluator.PositiveFeedback[feedbackType] == nil {
-			evaluator.PositiveFeedback[feedbackType] = make(map[int32]mapset.Set[int32])
+	var isPositive bool
+	for _, positiveType := range evaluator.PositiveTypes {
+		if !positiveType.Match(feedbackType, value) {
+			continue
 		}
-		if evaluator.PositiveFeedback[feedbackType][userIndex] == nil {
-			evaluator.PositiveFeedback[feedbackType][userIndex] = mapset.NewSet[int32]()
+		isPositive = true
+		name := positiveType.String()
+		if evaluator.PositiveFeedback[name] == nil {
+			evaluator.PositiveFeedback[name] = make(map[int32]mapset.Set[int32])
 		}
-		evaluator.PositiveFeedback[feedbackType][userIndex].Add(itemIndex)
+		if evaluator.PositiveFeedback[name][userIndex] == nil {
+			evaluator.PositiveFeedback[name][userIndex] = mapset.NewSet[int32]()
+		}
+		evaluator.PositiveFeedback[name][userIndex].Add(itemIndex)
+	}
+	if isPositive {
 		if evaluator.PositiveFeedback[""][userIndex] == nil {
 			evaluator.PositiveFeedback[""][userIndex] = mapset.NewSet[int32]()
 		}
