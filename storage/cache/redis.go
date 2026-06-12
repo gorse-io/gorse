@@ -505,6 +505,9 @@ func (r *Redis) GetTimeSeriesPoints(ctx context.Context, name string, begin, end
 	result, err := r.client.TSRangeWithArgs(ctx, r.PointsTable()+":"+name, int(begin.UnixMilli()), int(end.UnixMilli()),
 		&redis.TSRangeOptions{Aggregator: redis.Last, BucketDuration: int(duration / time.Millisecond)}).Result()
 	if err != nil {
+		if strings.Contains(err.Error(), "TSDB: the key does not exist") {
+			return []TimeSeriesPoint{}, nil
+		}
 		return nil, errors.Trace(err)
 	}
 	points := make([]TimeSeriesPoint, 0, len(result))
