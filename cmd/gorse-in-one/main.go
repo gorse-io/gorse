@@ -22,6 +22,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"time"
 
 	"github.com/gorse-io/gorse/client"
 	"github.com/gorse-io/gorse/cmd/version"
@@ -165,7 +166,11 @@ func setup(m *master.Master, playground string) {
 	if err != nil {
 		log.Logger().Fatal("failed to decompress playground data", zap.Error(err))
 	}
-	_, err = m.Restore(d)
+	var delta *time.Duration
+	if playground == "ml-100k" {
+		delta = new(time.Now().UTC().Sub(time.Date(1998, 4, 22, 23, 10, 38, 0, time.UTC)))
+	}
+	_, err = m.Restore(d, delta)
 	if err != nil {
 		log.Logger().Fatal("failed to import playground data", zap.Error(err))
 	}
