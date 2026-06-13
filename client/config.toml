@@ -86,7 +86,7 @@ active_user_ttl = 0
 [recommend.search]
 
 # Item fields to index for search. Values use expr syntax.
-columns = []
+columns = ["item.Comment"]
 
 [recommend.data_source]
 
