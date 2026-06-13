@@ -95,7 +95,12 @@ message SearchItemsRequest {
   int32 n = 2;
 }
 
-message SearchItemsResponse { repeated Item items = 1; }
+message ScoredItem {
+  Item item = 1;
+  double score = 2;
+}
+
+message SearchItemsResponse { repeated ScoredItem items = 1; }
 
 message ModifyItemRequest {
   string item_id = 1;

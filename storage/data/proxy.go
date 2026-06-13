@@ -146,19 +146,22 @@ func (p *ProxyServer) SearchItems(ctx context.Context, in *protocol.SearchItemsR
 	if err != nil {
 		return nil, err
 	}
-	pbItems := make([]*protocol.Item, len(items))
+	pbItems := make([]*protocol.ScoredItem, len(items))
 	for i, item := range items {
 		labels, err := json.Marshal(item.Labels)
 		if err != nil {
 			return nil, err
 		}
-		pbItems[i] = &protocol.Item{
-			ItemId:     item.ItemId,
-			IsHidden:   item.IsHidden,
-			Categories: item.Categories,
-			Timestamp:  timestamppb.New(item.Timestamp),
-			Labels:     labels,
-			Comment:    item.Comment,
+		pbItems[i] = &protocol.ScoredItem{
+			Item: &protocol.Item{
+				ItemId:     item.ItemId,
+				IsHidden:   item.IsHidden,
+				Categories: item.Categories,
+				Timestamp:  timestamppb.New(item.Timestamp),
+				Labels:     labels,
+				Comment:    item.Comment,
+			},
+			Score: item.Score,
 		}
 	}
 	return &protocol.SearchItemsResponse{Items: pbItems}, nil
@@ -689,24 +692,27 @@ func (p ProxyClient) GetItem(ctx context.Context, itemId string) (Item, error) {
 	}, nil
 }
 
-func (p ProxyClient) SearchItems(ctx context.Context, query string, n int) ([]Item, error) {
+func (p ProxyClient) SearchItems(ctx context.Context, query string, n int) ([]ScoredItem, error) {
 	resp, err := p.DataStoreClient.SearchItems(ctx, &protocol.SearchItemsRequest{Query: query, N: int32(n)})
 	if err != nil {
 		return nil, err
 	}
-	items := make([]Item, len(resp.Items))
+	items := make([]ScoredItem, len(resp.Items))
 	for i, item := range resp.Items {
 		var labels any
-		if err = json.Unmarshal(item.Labels, &labels); err != nil {
+		if err = json.Unmarshal(item.Item.Labels, &labels); err != nil {
 			return nil, err
 		}
-		items[i] = Item{
-			ItemId:     item.ItemId,
-			IsHidden:   item.IsHidden,
-			Categories: item.Categories,
-			Timestamp:  item.Timestamp.AsTime(),
-			Labels:     labels,
-			Comment:    item.Comment,
+		items[i] = ScoredItem{
+			Item: Item{
+				ItemId:     item.Item.ItemId,
+				IsHidden:   item.Item.IsHidden,
+				Categories: item.Item.Categories,
+				Timestamp:  item.Item.Timestamp.AsTime(),
+				Labels:     labels,
+				Comment:    item.Item.Comment,
+			},
+			Score: item.Score,
 		}
 	}
 	return items, nil
