@@ -237,12 +237,13 @@ func (a *Agent) callSearchItems(ctx context.Context, arguments string) ([]data.I
 	if args.N <= 0 || args.N > a.cacheSize {
 		args.N = a.cacheSize
 	}
-	items, err := a.dataClient.SearchItems(ctx, args.Query, args.N+a.excludeSet.Cardinality())
+	scoredItems, err := a.dataClient.SearchItems(ctx, args.Query, args.N+a.excludeSet.Cardinality())
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	items = lo.Filter(items, func(item data.Item, _ int) bool {
-		return !a.excludeSet.Contains(item.ItemId) && a.matchCategories(item.Categories)
+	items := lo.FilterMap(scoredItems, func(scoredItem data.ScoredItem, _ int) (data.Item, bool) {
+		item := scoredItem.Item
+		return item, !a.excludeSet.Contains(item.ItemId) && a.matchCategories(item.Categories)
 	})
 	if args.N > 0 && len(items) > args.N {
 		items = items[:args.N]
