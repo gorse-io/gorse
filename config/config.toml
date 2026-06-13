@@ -229,6 +229,9 @@ data["items"].map((item) => {
 # The name of the agent recommender.
 name = "assistant"
 
+# The maximum number of agent loop iterations. The default value is 4.
+max_iterations = 4
+
 # The prompt template for the agent recommender.
 prompt_template = """
 Recommend items for user {{ user_id }} based on the following feedback:

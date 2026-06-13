@@ -35,8 +35,8 @@ import (
 )
 
 const (
-	agentSearchToolName = "search_items"
-	agentMaxToolCalls   = 4
+	agentSearchToolName       = "search_items"
+	defaultAgentMaxIterations = 4
 )
 
 type Agent struct {
@@ -116,7 +116,7 @@ func (a *Agent) Recommend(ctx context.Context) ([]cache.Score, error) {
 
 	candidateItems := make(map[string]data.Item)
 	var finalContent string
-	for i := 0; i < agentMaxToolCalls; i++ {
+	for i := 0; i < a.maxIterations(); i++ {
 		resp, err := a.createChatCompletion(ctx, messages)
 		if err != nil {
 			return nil, errors.Trace(err)
@@ -165,6 +165,13 @@ func (a *Agent) Recommend(ctx context.Context) ([]cache.Score, error) {
 	}
 
 	return a.parseRecommendations(ctx, finalContent, candidateItems)
+}
+
+func (a *Agent) maxIterations() int {
+	if a.config.MaxIterations <= 0 {
+		return defaultAgentMaxIterations
+	}
+	return a.config.MaxIterations
 }
 
 func (a *Agent) renderPrompt(feedback []data.Feedback) (string, error) {

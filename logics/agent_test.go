@@ -49,3 +49,11 @@ func TestNewAgentInvalidPromptTemplate(t *testing.T) {
 	}, config.OpenAIConfig{}, nil, "bob", nil, nil, mapset.NewSet[string](), 10)
 	assert.Error(t, err)
 }
+
+func TestAgentMaxIterations(t *testing.T) {
+	agent := Agent{}
+	assert.Equal(t, defaultAgentMaxIterations, agent.maxIterations())
+
+	agent.config.MaxIterations = 2
+	assert.Equal(t, 2, agent.maxIterations())
+}

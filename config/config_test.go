@@ -126,6 +126,7 @@ func TestUnmarshal(t *testing.T) {
 			// [recommend.agent]
 			assert.Len(t, config.Recommend.Agent, 1)
 			assert.Equal(t, "assistant", config.Recommend.Agent[0].Name)
+			assert.Equal(t, 4, config.Recommend.Agent[0].MaxIterations)
 			assert.Contains(t, config.Recommend.Agent[0].PromptTemplate, "{{ user_id }}")
 			// [recommend.collaborative]
 			assert.Equal(t, "mf", config.Recommend.Collaborative.Type)
@@ -425,6 +426,10 @@ func TestAgentConfig(t *testing.T) {
 
 	a = AgentConfig{PromptTemplate: "a"}
 	b = AgentConfig{PromptTemplate: "b"}
+	assert.NotEqual(t, a.Hash(), b.Hash())
+
+	a = AgentConfig{MaxIterations: 1}
+	b = AgentConfig{MaxIterations: 2}
 	assert.NotEqual(t, a.Hash(), b.Hash())
 }
 
