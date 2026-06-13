@@ -93,6 +93,8 @@ func (s *CLITestSuite) SetupTest() {
 		{ItemId: "recommend-1", Categories: []string{"news"}, Timestamp: time.Date(2026, 1, 4, 0, 0, 0, 0, time.UTC)},
 		{ItemId: "similar-1", Categories: []string{"news"}, Timestamp: time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC)},
 	}))
+	s.Require().NoError(s.m.DataClient.Reconcile(config.SearchConfig{Columns: []string{"item.Comment"}}))
+	s.Require().NoError(s.m.DataClient.Optimize())
 	s.Require().NoError(s.m.DataClient.BatchInsertFeedback(ctx, []data.Feedback{{
 		FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "alice", ItemId: "item-1"},
 		Timestamp:   time.Date(2026, 1, 1, 3, 0, 0, 0, time.UTC),
@@ -375,6 +377,20 @@ func (s *CLITestSuite) TestGetItems() {
 	s.Require().NotContains(out, "└")
 }
 
+func (s *CLITestSuite) TestSearchItems() {
+	out, err := s.execute("get", "items", "raw", "item", "-n", "10")
+	s.Require().NoError(err)
+
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	s.Require().Len(lines, 2)
+	s.Require().Regexp(`^ITEM-ID\s+COMMENT\s+CATEGORIES\s+IS-HIDDEN\s+TIMESTAMP\s+LABELS$`, lines[0])
+	s.Require().Regexp(`^item-1\s+raw item\s+\["news"\]\s+false\s+2026-01-01T01:00:00Z\s+\{"embedding":"\[0\.1, 0\.2, 0\.3, \.\.\.\] \(10 values\)"\}$`, lines[1])
+	s.Require().NotContains(out, "listed item")
+	s.Require().NotContains(out, "┌")
+	s.Require().NotContains(out, "│")
+	s.Require().NotContains(out, "└")
+}
+
 func (s *CLITestSuite) TestPipelineGetCmd() {
 	out, err := s.execute("pipeline", "get")
 	s.Require().NoError(err)
@@ -480,6 +496,7 @@ func newTestMaster(t *testing.T) (*master.Master, string) {
 	cfg.Master.AdminAPIKey = testAPIKey
 	cfg.Master.DashboardUserName = "admin"
 	cfg.Master.DashboardPassword = "pass"
+	cfg.Recommend.Search.Columns = []string{"item.Comment"}
 	cfg.OpenAI.AuthToken = "test"
 
 	m := master.NewMaster(cfg, tempDir, true, "")

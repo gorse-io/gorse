@@ -240,9 +240,9 @@ func (suite *GorseClientTestSuite) TestRecommend() {
 	suite.NoError(err)
 	suite.Len(recommendations, 3)
 	if suite.Len(recommendations, 3) {
-		suite.Equal("315", recommendations[0])
-		suite.Equal("1432", recommendations[1])
-		suite.Equal("918", recommendations[2])
+		suite.Equal("315", recommendations[0].Id)
+		suite.Equal("1432", recommendations[1].Id)
+		suite.Equal("918", recommendations[2].Id)
 	}
 }
 
