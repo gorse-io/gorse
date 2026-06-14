@@ -15,6 +15,7 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/gorse-io/gorse/common/mock"
 	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/master"
@@ -135,6 +136,13 @@ func TestCLI(t *testing.T) {
 	suite.Run(t, new(CLITestSuite))
 }
 
+func TestChatHelpHasNoTUI(t *testing.T) {
+	out, err := executeRawCommand(rootCmd, "", "chat", "--help")
+	require.NoError(t, err)
+	require.NotContains(t, out, "TUI")
+	require.NotContains(t, out, "--tui")
+}
+
 const rfc3339Regexp = `\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:Z|[+-]\d{2}:\d{2})`
 
 func (s *CLITestSuite) requireCommandOutputLines(args []string, lineRegexps ...string) string {
@@ -219,6 +227,22 @@ func (s *CLITestSuite) TestPS() {
 		`^master\s+Generate recommendation\s+Complete\s+\[[#-]{20}\]\s+\d+%\s+`+rfc3339Regexp+`\s+`+rfc3339Regexp+`$`,
 		`^master\s+Collect Garbage in Cache\s+Complete\s+\[[#-]{20}\]\s+\d+%\s+`+rfc3339Regexp+`\s+`+rfc3339Regexp+`$`,
 	)
+}
+
+func (s *CLITestSuite) TestChat() {
+	out, err := s.execute("chat", "hello", "from", "cli")
+	s.Require().NoError(err)
+	s.Require().Equal("hello from cli\n", out)
+
+	out, err = s.executeCommandWithInput("hello from stdin\n", "chat")
+	s.Require().NoError(err)
+	s.Require().Equal("hello from stdin\n", out)
+
+	out, err = s.execute("chat", "search", "items", "for", "listed")
+	s.Require().NoError(err)
+	s.Require().Contains(out, "SearchItems returned:")
+	s.Require().Contains(out, `"ItemId":"item-2"`)
+	s.Require().Contains(out, "listed item")
 }
 
 func (s *CLITestSuite) TestStats() {
@@ -497,7 +521,15 @@ func newTestMaster(t *testing.T) (*master.Master, string) {
 	cfg.Master.DashboardUserName = "admin"
 	cfg.Master.DashboardPassword = "pass"
 	cfg.Recommend.Search.Columns = []string{"item.Comment"}
-	cfg.OpenAI.AuthToken = "test"
+	openAIServer := mock.NewOpenAIServer()
+	go func() { _ = openAIServer.Start() }()
+	openAIServer.Ready()
+	t.Cleanup(func() {
+		require.NoError(t, openAIServer.Close())
+	})
+	cfg.OpenAI.BaseURL = openAIServer.BaseURL()
+	cfg.OpenAI.AuthToken = openAIServer.AuthToken()
+	cfg.OpenAI.ChatCompletionModel = "gpt-test"
 
 	m := master.NewMaster(cfg, tempDir, true, "")
 	go m.Serve()

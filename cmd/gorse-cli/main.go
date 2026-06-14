@@ -560,6 +560,7 @@ func init() {
 	contextCmd.AddCommand(contextUseCmd)
 	contextCmd.AddCommand(contextDeleteCmd)
 	contextCmd.AddCommand(contextCurrentCmd)
+	rootCmd.AddCommand(chatCmd)
 	rootCmd.AddCommand(getCmd)
 	rootCmd.AddCommand(getClusterCmd)
 	rootCmd.AddCommand(getStatsCmd)
@@ -591,7 +592,7 @@ func init() {
 		getClusterCmd, getCategoriesCmd, psCmd,
 		getStatsCmd, getUserCmd, getUsersCmd, getItemCmd, getItemsCmd, getFeedbackCmd, getLatestCmd,
 		getNonPersonalizedCmd, recommendUserCmd, getItemToItemCmd, getUserToUserCmd,
-		pipelineGetCmd, pipelineSchemaCmd, pipelinePatchCmd, pipelineResetCmd, dumpCmd, restoreCmd,
+		pipelineGetCmd, pipelineSchemaCmd, pipelinePatchCmd, pipelineResetCmd, dumpCmd, restoreCmd, chatCmd,
 	} {
 		cmd.Flags().String("endpoint", "", "Gorse base URL (default: selected context or GORSE_ADMIN_ENDPOINT)")
 		cmd.Flags().String("api-key", "", "Gorse admin API key (default: selected context or GORSE_ADMIN_API_KEY)")
