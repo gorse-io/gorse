@@ -255,6 +255,7 @@ type Feedback struct {
 	Timestamp     *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
 	Comment       string                 `protobuf:"bytes,7,opt,name=comment,proto3" json:"comment,omitempty"`
 	Updated       *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=updated,proto3" json:"updated,omitempty"`
+	Labels        []byte                 `protobuf:"bytes,9,opt,name=labels,proto3" json:"labels,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -341,6 +342,13 @@ func (x *Feedback) GetComment() string {
 func (x *Feedback) GetUpdated() *timestamppb.Timestamp {
 	if x != nil {
 		return x.Updated
+	}
+	return nil
+}
+
+func (x *Feedback) GetLabels() []byte {
+	if x != nil {
+		return x.Labels
 	}
 	return nil
 }
@@ -1156,7 +1164,7 @@ const file_protocol_proto_rawDesc = "" +
 	"categories\x128\n" +
 	"\ttimestamp\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\ttimestamp\x12\x16\n" +
 	"\x06labels\x18\x06 \x01(\fR\x06labels\x12\x18\n" +
-	"\acomment\x18\a \x01(\tR\acomment\"\x9f\x02\n" +
+	"\acomment\x18\a \x01(\tR\acomment\"\xb7\x02\n" +
 	"\bFeedback\x12\x1c\n" +
 	"\tnamespace\x18\x01 \x01(\tR\tnamespace\x12#\n" +
 	"\rfeedback_type\x18\x02 \x01(\tR\ffeedbackType\x12\x17\n" +
@@ -1165,7 +1173,8 @@ const file_protocol_proto_rawDesc = "" +
 	"\x05value\x18\x05 \x01(\x01R\x05value\x128\n" +
 	"\ttimestamp\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\ttimestamp\x12\x18\n" +
 	"\acomment\x18\a \x01(\tR\acomment\x124\n" +
-	"\aupdated\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\aupdated\"\xe9\x01\n" +
+	"\aupdated\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\aupdated\x12\x16\n" +
+	"\x06labels\x18\t \x01(\fR\x06labels\"\xe9\x01\n" +
 	"\x04Meta\x12\x16\n" +
 	"\x06config\x18\x01 \x01(\tR\x06config\x12G\n" +
 	" collaborative_filtering_model_id\x18\x03 \x01(\x03R\x1dcollaborativeFilteringModelId\x12<\n" +

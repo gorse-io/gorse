@@ -44,6 +44,10 @@ func ValidateLabels(o any) error {
 		return nil
 	}
 	switch labels := o.(type) {
+	case []string:
+		return nil
+	case []float64:
+		return nil
 	case []any: // must be []string or []float64
 		if len(labels) == 0 {
 			return nil
@@ -55,9 +59,11 @@ func ValidateLabels(o any) error {
 					return errors.Errorf("unsupported labels: %v", jsonutil.MustMarshal(labels))
 				}
 			}
-		case json.Number:
+		case json.Number, float64:
 			for _, val := range labels {
-				if _, ok := val.(json.Number); !ok {
+				switch val.(type) {
+				case json.Number, float64:
+				default:
 					return errors.Errorf("unsupported labels: %v", jsonutil.MustMarshal(labels))
 				}
 			}
@@ -130,6 +136,7 @@ type Feedback struct {
 	Value       float64   `gorm:"column:value" mapstructure:"value"`
 	Timestamp   time.Time `gorm:"column:time_stamp" mapstructure:"timestamp"`
 	Updated     time.Time `gorm:"column:updated" mapstructure:"updated"`
+	Labels      any       `gorm:"serializer:json" mapstructure:"labels"`
 	Comment     string    `gorm:"column:comment" mapstructure:"comment"`
 }
 

@@ -256,7 +256,7 @@ func (suite *baseTestSuite) TestFeedback() {
 	// insert feedbacks
 	timestamp := time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC)
 	feedback := []Feedback{
-		{FeedbackKey: FeedbackKey{positiveFeedbackType1, "0", "8"}, Value: 1, Timestamp: timestamp, Comment: "comment"},
+		{FeedbackKey: FeedbackKey{positiveFeedbackType1, "0", "8"}, Value: 1, Timestamp: timestamp, Labels: []string{"positive"}, Comment: "comment"},
 		{FeedbackKey: FeedbackKey{positiveFeedbackType1, "1", "6"}, Value: 1, Timestamp: timestamp, Comment: "comment"},
 		{FeedbackKey: FeedbackKey{positiveFeedbackType2, "2", "4"}, Value: 1, Timestamp: timestamp, Comment: "comment"},
 		{FeedbackKey: FeedbackKey{positiveFeedbackType2, "3", "2"}, Value: 1, Timestamp: timestamp, Comment: "comment"},
@@ -268,6 +268,7 @@ func (suite *baseTestSuite) TestFeedback() {
 	for i := range feedback {
 		feedback[i].Updated = feedback[i].Timestamp
 	}
+	feedback[0].Labels = []any{"positive"}
 	// other type
 	err = suite.Database.BatchInsertFeedback(ctx, []Feedback{{FeedbackKey: FeedbackKey{negativeFeedbackType, "0", "2"}}}, true, true, true)
 	suite.NoError(err)
@@ -387,6 +388,7 @@ func (suite *baseTestSuite) TestFeedback() {
 		FeedbackKey: FeedbackKey{positiveFeedbackType, "0", "8"},
 		Value:       100,
 		Timestamp:   time.Date(1996, 4, 8, 0, 0, 0, 0, time.UTC),
+		Labels:      []string{"override"},
 		Comment:     "override",
 	}}, true, true, true)
 	suite.NoError(err)
@@ -403,12 +405,14 @@ func (suite *baseTestSuite) TestFeedback() {
 	suite.Equal(1, len(ret))
 	suite.Equal(float64(100), ret[0].Value)
 	suite.Equal(time.Date(1996, 4, 8, 0, 0, 0, 0, time.UTC), ret[0].Timestamp)
+	suite.Equal([]any{"override"}, ret[0].Labels)
 	suite.Equal("override", ret[0].Comment)
 	// test not overwrite
 	err = suite.Database.BatchInsertFeedback(ctx, []Feedback{{
 		FeedbackKey: FeedbackKey{positiveFeedbackType, "0", "8"},
 		Value:       80,
 		Timestamp:   time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
+		Labels:      []string{"not_override"},
 		Comment:     "not_override",
 	}}, true, true, false)
 	suite.NoError(err)
@@ -419,6 +423,7 @@ func (suite *baseTestSuite) TestFeedback() {
 	suite.Equal(1, len(ret))
 	suite.Equal(float64(180), ret[0].Value)
 	suite.Equal(time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), ret[0].Timestamp)
+	suite.Equal([]any{"not_override"}, ret[0].Labels)
 	suite.Equal("not_override", ret[0].Comment)
 
 	// insert no feedback
