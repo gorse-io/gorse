@@ -390,14 +390,24 @@ var getUsersCmd = &cobra.Command{
 }
 
 var getItemsCmd = &cobra.Command{
-	Use:   "items",
-	Short: "Get items",
+	Use:   "items [query...]",
+	Short: "Get or search items",
+	Args:  cobra.ArbitraryArgs,
 	Run: func(cmd *cobra.Command, args []string) {
 		n := lo.Must(cmd.Flags().GetInt("n"))
 		if n == 0 {
 			n = 10
 		}
-		items, err := newGorseClient(cmd).GetItems(cmd.Context(), n, "")
+		client := newGorseClient(cmd)
+		var (
+			items gorse.ItemIterator
+			err   error
+		)
+		if len(args) > 0 {
+			items, err = client.SearchItems(cmd.Context(), strings.Join(args, " "), n)
+		} else {
+			items, err = client.GetItems(cmd.Context(), n, "")
+		}
 		if err != nil {
 			log.Logger().Fatal("API request failed", zap.Error(err))
 		}
