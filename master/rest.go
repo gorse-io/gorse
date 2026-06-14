@@ -2073,7 +2073,7 @@ func (m *Master) chatCompletions(response http.ResponseWriter, request *http.Req
 	}
 
 	response.Header().Set("Content-Type", "text/event-stream")
-	response.Header().Set("Cache-Control", "no-cache")
+	response.Header().Set("Cache-Control", "no-cache, no-transform")
 	response.Header().Set("Connection", "keep-alive")
 	response.Header().Set("X-Accel-Buffering", "no")
 
