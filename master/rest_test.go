@@ -1177,17 +1177,62 @@ func (suite *MasterAPITestSuite) TestExportAndImport() {
 	}
 }
 
-func (suite *MasterAPITestSuite) TestChat() {
+func (suite *MasterAPITestSuite) TestChatCompletions() {
 	content := "In my younger and more vulnerable years my father gave me some advice that I've been turning over in" +
 		" my mind ever since. \"Whenever you feel like criticizing any one,\" he told me, \" just remember that all " +
 		"the people in this world haven't had the advantages that you've had.\""
-	buf := strings.NewReader(content)
-	req := httptest.NewRequest("POST", "https://example.com/", buf)
+	buf := bytes.NewBuffer(nil)
+	suite.NoError(json.NewEncoder(buf).Encode(openai.ChatCompletionRequest{
+		Model: "gpt-test",
+		Messages: []openai.ChatCompletionMessage{
+			{Role: openai.ChatMessageRoleUser, Content: content},
+		},
+	}))
+	req := httptest.NewRequest(http.MethodPost, "https://example.com/api/chat/completions", buf)
 	req.Header.Set("Cookie", suite.cookie)
 	w := httptest.NewRecorder()
-	suite.chat(w, req)
+	suite.chatCompletions(w, req)
 	suite.Equal(http.StatusOK, w.Code, w.Body.String())
-	suite.Equal(content, w.Body.String())
+
+	var chatResponse openai.ChatCompletionResponse
+	suite.NoError(json.NewDecoder(w.Body).Decode(&chatResponse))
+	if suite.Len(chatResponse.Choices, 1) {
+		suite.Equal(content, chatResponse.Choices[0].Message.Content)
+	}
+}
+
+func (suite *MasterAPITestSuite) TestChatCompletionsStream() {
+	content := "streaming chat completion proxy"
+	buf := bytes.NewBuffer(nil)
+	suite.NoError(json.NewEncoder(buf).Encode(openai.ChatCompletionRequest{
+		Model:  "gpt-test",
+		Stream: true,
+		Messages: []openai.ChatCompletionMessage{
+			{Role: openai.ChatMessageRoleUser, Content: content},
+		},
+	}))
+	req := httptest.NewRequest(http.MethodPost, "https://example.com/api/chat/completions", buf)
+	req.Header.Set("Cookie", suite.cookie)
+	w := httptest.NewRecorder()
+	suite.chatCompletions(w, req)
+	suite.Equal(http.StatusOK, w.Code, w.Body.String())
+	suite.Equal("text/event-stream", w.Header().Get("Content-Type"))
+	suite.Contains(w.Body.String(), "data: ")
+	suite.Contains(w.Body.String(), "data: [DONE]")
+
+	var got strings.Builder
+	for _, event := range strings.Split(w.Body.String(), "\n\n") {
+		event = strings.TrimSpace(event)
+		if event == "" || event == "data: [DONE]" {
+			continue
+		}
+		var streamResponse openai.ChatCompletionStreamResponse
+		suite.NoError(json.Unmarshal([]byte(strings.TrimPrefix(event, "data: ")), &streamResponse))
+		if len(streamResponse.Choices) > 0 {
+			got.WriteString(streamResponse.Choices[0].Delta.Content)
+		}
+	}
+	suite.Equal(content, got.String())
 }
 
 func TestMasterAPI(t *testing.T) {

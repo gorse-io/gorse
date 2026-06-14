@@ -277,7 +277,7 @@ func (m *Master) StartHttpServer() {
 	container.Handle("/api/bulk/feedback", http.HandlerFunc(m.importExportFeedback))
 	container.Handle("/api/dump", http.HandlerFunc(m.dump))
 	container.Handle("/api/restore", http.HandlerFunc(m.restore))
-	container.Handle("/api/chat", http.HandlerFunc(m.chat))
+	container.Handle("/api/chat/completions", http.HandlerFunc(m.chatCompletions))
 	m.RestServer.StartHttpServer(container)
 }
 
@@ -2027,49 +2027,81 @@ func (m *Master) handleOAuth2Callback(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (m *Master) chat(response http.ResponseWriter, request *http.Request) {
+func (m *Master) chatCompletions(response http.ResponseWriter, request *http.Request) {
+	if request.Method != http.MethodPost {
+		writeError(response, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
 	if !m.checkAdmin(request) {
 		writeError(response, http.StatusUnauthorized, "unauthorized")
 		return
 	}
-	content, err := io.ReadAll(request.Body)
-	if err != nil {
-		writeError(response, http.StatusInternalServerError, err.Error())
+
+	var chatRequest openai.ChatCompletionRequest
+	if err := json.NewDecoder(request.Body).Decode(&chatRequest); err != nil {
+		writeError(response, http.StatusBadRequest, err.Error())
 		return
 	}
+	if chatRequest.Model == "" {
+		chatRequest.Model = m.Config.OpenAI.ChatCompletionModel
+	}
+	if chatRequest.Model == "" {
+		writeError(response, http.StatusBadRequest, "missing chat completion model")
+		return
+	}
+
+	if !chatRequest.Stream {
+		chatResponse, err := m.openAIClient.CreateChatCompletion(request.Context(), chatRequest)
+		if err != nil {
+			writeError(response, http.StatusInternalServerError, err.Error())
+			return
+		}
+		response.Header().Set("Content-Type", restful.MIME_JSON)
+		if err := json.NewEncoder(response).Encode(chatResponse); err != nil {
+			log.Logger().Error("failed to write response", zap.Error(err))
+		}
+		return
+	}
+
 	stream, err := m.openAIClient.CreateChatCompletionStream(
 		request.Context(),
-		openai.ChatCompletionRequest{
-			Model: m.Config.OpenAI.ChatCompletionModel,
-			Messages: []openai.ChatCompletionMessage{
-				{
-					Role:    openai.ChatMessageRoleUser,
-					Content: string(content),
-				},
-			},
-			Stream: true,
-		},
+		chatRequest,
 	)
 	if err != nil {
 		writeError(response, http.StatusInternalServerError, err.Error())
 		return
 	}
+
+	response.Header().Set("Content-Type", "text/event-stream")
+	response.Header().Set("Cache-Control", "no-cache, no-transform")
+	response.Header().Set("Connection", "keep-alive")
+	response.Header().Set("X-Accel-Buffering", "no")
+
 	// read response
 	defer stream.Close()
 	for {
 		var resp openai.ChatCompletionStreamResponse
 		resp, err = stream.Recv()
 		if errors.Is(err, io.EOF) {
+			_, _ = response.Write([]byte("data: [DONE]\n\n"))
+			if f, ok := response.(http.Flusher); ok {
+				f.Flush()
+			}
 			return
 		}
 		if err != nil {
 			writeError(response, http.StatusInternalServerError, err.Error())
 			return
 		}
-		if len(resp.Choices) == 0 {
-			continue
+		if _, err = response.Write([]byte("data: ")); err != nil {
+			log.Logger().Error("failed to write response", zap.Error(err))
+			return
 		}
-		if _, err = response.Write([]byte(resp.Choices[0].Delta.Content)); err != nil {
+		if err = json.NewEncoder(response).Encode(resp); err != nil {
+			log.Logger().Error("failed to write response", zap.Error(err))
+			return
+		}
+		if _, err = response.Write([]byte("\n")); err != nil {
 			log.Logger().Error("failed to write response", zap.Error(err))
 			return
 		}

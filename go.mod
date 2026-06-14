@@ -30,7 +30,7 @@ require (
 	github.com/gomlx/gomlx v0.27.2
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/securecookie v1.1.2
-	github.com/gorse-io/dashboard v0.0.0-20260612180846-e25aefea3ceb
+	github.com/gorse-io/dashboard v0.0.0-20260614030520-940c6f9c303b
 	github.com/gorse-io/gorse-go v0.5.0-alpha.3.0.20260613082921-062d740c10a2
 	github.com/invopop/jsonschema v0.13.0
 	github.com/jaswdr/faker v1.19.1
