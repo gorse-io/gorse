@@ -593,6 +593,7 @@ func (db *MongoDB) GetItemFeedback(ctx context.Context, itemId string, feedbackT
 		if err = r.Decode(&feedback); err != nil {
 			return nil, err
 		}
+		feedback.Labels = unpack(feedback.Labels)
 		feedbacks = append(feedbacks, feedback)
 	}
 	return feedbacks, nil
@@ -759,6 +760,7 @@ func (db *MongoDB) GetUserFeedback(ctx context.Context, userId string, endTime *
 		if err = r.Decode(&feedback); err != nil {
 			return nil, err
 		}
+		feedback.Labels = unpack(feedback.Labels)
 		feedbacks = append(feedbacks, feedback)
 	}
 	return feedbacks, nil
@@ -859,6 +861,7 @@ func (db *MongoDB) BatchInsertFeedback(ctx context.Context, feedback []Feedback,
 						"updated": f.Updated,
 					},
 					"$set": bson.M{
+						"labels":  f.Labels,
 						"comment": f.Comment,
 					},
 				})
@@ -922,6 +925,7 @@ func (db *MongoDB) GetFeedback(ctx context.Context, cursor string, n int, beginT
 		if err = r.Decode(&feedback); err != nil {
 			return "", nil, err
 		}
+		feedback.Labels = unpack(feedback.Labels)
 		feedbacks = append(feedbacks, feedback)
 	}
 	if len(feedbacks) == n {
@@ -1005,6 +1009,7 @@ func (db *MongoDB) GetFeedbackStream(ctx context.Context, batchSize int, scanOpt
 				errChan <- errors.Trace(err)
 				return
 			}
+			feedback.Labels = unpack(feedback.Labels)
 			feedbacks = append(feedbacks, feedback)
 			if len(feedbacks) == batchSize {
 				feedbackChan <- feedbacks
@@ -1046,6 +1051,7 @@ func (db *MongoDB) GetUserItemFeedback(ctx context.Context, userId, itemId strin
 		if err = r.Decode(&feedback); err != nil {
 			return nil, err
 		}
+		feedback.Labels = unpack(feedback.Labels)
 		feedbacks = append(feedbacks, feedback)
 	}
 	return feedbacks, nil

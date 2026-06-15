@@ -53,6 +53,52 @@ func (p *ProxyServer) Ping(_ context.Context, _ *protocol.PingRequest) (*protoco
 	return &protocol.PingResponse{}, p.database.Ping()
 }
 
+func feedbackToPB(feedback []Feedback) ([]*protocol.Feedback, error) {
+	pbFeedback := make([]*protocol.Feedback, len(feedback))
+	for i, f := range feedback {
+		labels, err := json.Marshal(f.Labels)
+		if err != nil {
+			return nil, err
+		}
+		pbFeedback[i] = &protocol.Feedback{
+			FeedbackType: f.FeedbackType,
+			UserId:       f.UserId,
+			ItemId:       f.ItemId,
+			Value:        f.Value,
+			Timestamp:    timestamppb.New(f.Timestamp),
+			Updated:      timestamppb.New(f.Updated),
+			Labels:       labels,
+			Comment:      f.Comment,
+		}
+	}
+	return pbFeedback, nil
+}
+
+func feedbackFromPB(pbFeedback []*protocol.Feedback) ([]Feedback, error) {
+	feedback := make([]Feedback, len(pbFeedback))
+	for i, f := range pbFeedback {
+		var labels any
+		if len(f.Labels) > 0 {
+			if err := json.Unmarshal(f.Labels, &labels); err != nil {
+				return nil, err
+			}
+		}
+		feedback[i] = Feedback{
+			FeedbackKey: FeedbackKey{
+				FeedbackType: f.FeedbackType,
+				UserId:       f.UserId,
+				ItemId:       f.ItemId,
+			},
+			Value:     f.Value,
+			Timestamp: f.Timestamp.AsTime(),
+			Updated:   f.Updated.AsTime(),
+			Labels:    labels,
+			Comment:   f.Comment,
+		}
+	}
+	return feedback, nil
+}
+
 func (p *ProxyServer) Reconcile(_ context.Context, in *protocol.ReconcileRequest) (*protocol.ReconcileResponse, error) {
 	err := p.database.Reconcile(config.SearchConfig{Columns: in.SearchColumns})
 	return &protocol.ReconcileResponse{}, err
@@ -225,17 +271,9 @@ func (p *ProxyServer) GetItemFeedback(ctx context.Context, in *protocol.GetItemF
 	if err != nil {
 		return nil, err
 	}
-	pbFeedback := make([]*protocol.Feedback, len(feedback))
-	for i, f := range feedback {
-		pbFeedback[i] = &protocol.Feedback{
-			FeedbackType: f.FeedbackType,
-			UserId:       f.UserId,
-			ItemId:       f.ItemId,
-			Value:        f.Value,
-			Timestamp:    timestamppb.New(f.Timestamp),
-			Updated:      timestamppb.New(f.Updated),
-			Comment:      f.Comment,
-		}
+	pbFeedback, err := feedbackToPB(feedback)
+	if err != nil {
+		return nil, err
 	}
 	return &protocol.GetFeedbackResponse{Feedback: pbFeedback}, nil
 }
@@ -332,17 +370,9 @@ func (p *ProxyServer) GetUserFeedback(ctx context.Context, in *protocol.GetUserF
 	if err != nil {
 		return nil, err
 	}
-	pbFeedback := make([]*protocol.Feedback, len(feedback))
-	for i, f := range feedback {
-		pbFeedback[i] = &protocol.Feedback{
-			FeedbackType: f.FeedbackType,
-			UserId:       f.UserId,
-			ItemId:       f.ItemId,
-			Value:        f.Value,
-			Timestamp:    timestamppb.New(f.Timestamp),
-			Updated:      timestamppb.New(f.Updated),
-			Comment:      f.Comment,
-		}
+	pbFeedback, err := feedbackToPB(feedback)
+	if err != nil {
+		return nil, err
 	}
 	return &protocol.GetFeedbackResponse{Feedback: pbFeedback}, nil
 }
@@ -356,17 +386,9 @@ func (p *ProxyServer) GetUserItemFeedback(ctx context.Context, in *protocol.GetU
 	if err != nil {
 		return nil, err
 	}
-	pbFeedback := make([]*protocol.Feedback, len(feedback))
-	for i, f := range feedback {
-		pbFeedback[i] = &protocol.Feedback{
-			FeedbackType: f.FeedbackType,
-			UserId:       f.UserId,
-			ItemId:       f.ItemId,
-			Value:        f.Value,
-			Timestamp:    timestamppb.New(f.Timestamp),
-			Updated:      timestamppb.New(f.Updated),
-			Comment:      f.Comment,
-		}
+	pbFeedback, err := feedbackToPB(feedback)
+	if err != nil {
+		return nil, err
 	}
 	return &protocol.GetFeedbackResponse{Feedback: pbFeedback}, nil
 }
@@ -377,20 +399,11 @@ func (p *ProxyServer) DeleteUserItemFeedback(ctx context.Context, in *protocol.D
 }
 
 func (p *ProxyServer) BatchInsertFeedback(ctx context.Context, in *protocol.BatchInsertFeedbackRequest) (*protocol.BatchInsertFeedbackResponse, error) {
-	feedback := make([]Feedback, len(in.Feedback))
-	for i, f := range in.Feedback {
-		feedback[i] = Feedback{
-			FeedbackKey: FeedbackKey{
-				FeedbackType: f.FeedbackType,
-				UserId:       f.UserId,
-				ItemId:       f.ItemId,
-			},
-			Value:     f.Value,
-			Timestamp: f.Timestamp.AsTime(),
-			Comment:   f.Comment,
-		}
+	feedback, err := feedbackFromPB(in.Feedback)
+	if err != nil {
+		return nil, err
 	}
-	err := p.database.BatchInsertFeedback(ctx, feedback, in.InsertUser, in.InsertItem, in.Overwrite)
+	err = p.database.BatchInsertFeedback(ctx, feedback, in.InsertUser, in.InsertItem, in.Overwrite)
 	return &protocol.BatchInsertFeedbackResponse{}, err
 }
 
@@ -410,17 +423,9 @@ func (p *ProxyServer) GetFeedback(ctx context.Context, in *protocol.GetFeedbackR
 	if err != nil {
 		return nil, err
 	}
-	pbFeedback := make([]*protocol.Feedback, len(feedback))
-	for i, f := range feedback {
-		pbFeedback[i] = &protocol.Feedback{
-			FeedbackType: f.FeedbackType,
-			UserId:       f.UserId,
-			ItemId:       f.ItemId,
-			Value:        f.Value,
-			Timestamp:    timestamppb.New(f.Timestamp),
-			Updated:      timestamppb.New(f.Updated),
-			Comment:      f.Comment,
-		}
+	pbFeedback, err := feedbackToPB(feedback)
+	if err != nil {
+		return nil, err
 	}
 	return &protocol.GetFeedbackResponse{Cursor: cursor, Feedback: pbFeedback}, nil
 }
@@ -510,19 +515,11 @@ func (p *ProxyServer) GetFeedbackStream(in *protocol.GetFeedbackStreamRequest, s
 	}
 	feedbackChan, errChan := p.database.GetFeedbackStream(stream.Context(), int(in.BatchSize), opts...)
 	for feedback := range feedbackChan {
-		pbFeedback := make([]*protocol.Feedback, len(feedback))
-		for i, f := range feedback {
-			pbFeedback[i] = &protocol.Feedback{
-				FeedbackType: f.FeedbackType,
-				UserId:       f.UserId,
-				ItemId:       f.ItemId,
-				Value:        f.Value,
-				Timestamp:    timestamppb.New(f.Timestamp),
-				Updated:      timestamppb.New(f.Updated),
-				Comment:      f.Comment,
-			}
+		pbFeedback, err := feedbackToPB(feedback)
+		if err != nil {
+			return err
 		}
-		err := stream.Send(&protocol.GetFeedbackStreamResponse{Feedback: pbFeedback})
+		err = stream.Send(&protocol.GetFeedbackStreamResponse{Feedback: pbFeedback})
 		if err != nil {
 			return err
 		}
@@ -811,19 +808,9 @@ func (p ProxyClient) GetItemFeedback(ctx context.Context, itemId string, feedbac
 	if err != nil {
 		return nil, err
 	}
-	feedback := make([]Feedback, len(resp.Feedback))
-	for i, f := range resp.Feedback {
-		feedback[i] = Feedback{
-			FeedbackKey: FeedbackKey{
-				FeedbackType: f.FeedbackType,
-				UserId:       f.UserId,
-				ItemId:       f.ItemId,
-			},
-			Value:     f.Value,
-			Timestamp: f.Timestamp.AsTime(),
-			Updated:   f.Updated.AsTime(),
-			Comment:   f.Comment,
-		}
+	feedback, err := feedbackFromPB(resp.Feedback)
+	if err != nil {
+		return nil, err
 	}
 	return feedback, nil
 }
@@ -925,19 +912,9 @@ func (p ProxyClient) GetUserFeedback(ctx context.Context, userId string, endTime
 	if err != nil {
 		return nil, err
 	}
-	feedback := make([]Feedback, len(resp.Feedback))
-	for i, f := range resp.Feedback {
-		feedback[i] = Feedback{
-			FeedbackKey: FeedbackKey{
-				FeedbackType: f.FeedbackType,
-				UserId:       f.UserId,
-				ItemId:       f.ItemId,
-			},
-			Value:     f.Value,
-			Timestamp: f.Timestamp.AsTime(),
-			Updated:   f.Updated.AsTime(),
-			Comment:   f.Comment,
-		}
+	feedback, err := feedbackFromPB(resp.Feedback)
+	if err != nil {
+		return nil, err
 	}
 	return feedback, nil
 }
@@ -955,19 +932,9 @@ func (p ProxyClient) GetUserItemFeedback(ctx context.Context, userId, itemId str
 	if err != nil {
 		return nil, err
 	}
-	feedback := make([]Feedback, len(resp.Feedback))
-	for i, f := range resp.Feedback {
-		feedback[i] = Feedback{
-			FeedbackKey: FeedbackKey{
-				FeedbackType: f.FeedbackType,
-				UserId:       f.UserId,
-				ItemId:       f.ItemId,
-			},
-			Value:     f.Value,
-			Timestamp: f.Timestamp.AsTime(),
-			Updated:   f.Updated.AsTime(),
-			Comment:   f.Comment,
-		}
+	feedback, err := feedbackFromPB(resp.Feedback)
+	if err != nil {
+		return nil, err
 	}
 	return feedback, nil
 }
@@ -985,18 +952,11 @@ func (p ProxyClient) DeleteUserItemFeedback(ctx context.Context, userId, itemId 
 }
 
 func (p ProxyClient) BatchInsertFeedback(ctx context.Context, feedback []Feedback, insertUser, insertItem, overwrite bool) error {
-	reqFeedback := make([]*protocol.Feedback, len(feedback))
-	for i, f := range feedback {
-		reqFeedback[i] = &protocol.Feedback{
-			FeedbackType: f.FeedbackType,
-			UserId:       f.UserId,
-			ItemId:       f.ItemId,
-			Value:        f.Value,
-			Timestamp:    timestamppb.New(f.Timestamp),
-			Comment:      f.Comment,
-		}
+	reqFeedback, err := feedbackToPB(feedback)
+	if err != nil {
+		return err
 	}
-	_, err := p.DataStoreClient.BatchInsertFeedback(ctx, &protocol.BatchInsertFeedbackRequest{
+	_, err = p.DataStoreClient.BatchInsertFeedback(ctx, &protocol.BatchInsertFeedbackRequest{
 		Feedback:   reqFeedback,
 		InsertUser: insertUser,
 		InsertItem: insertItem,
@@ -1027,19 +987,9 @@ func (p ProxyClient) GetFeedback(ctx context.Context, cursor string, n int, begi
 	if err != nil {
 		return "", nil, err
 	}
-	feedback := make([]Feedback, len(resp.Feedback))
-	for i, f := range resp.Feedback {
-		feedback[i] = Feedback{
-			FeedbackKey: FeedbackKey{
-				FeedbackType: f.FeedbackType,
-				UserId:       f.UserId,
-				ItemId:       f.ItemId,
-			},
-			Value:     f.Value,
-			Timestamp: f.Timestamp.AsTime(),
-			Updated:   f.Updated.AsTime(),
-			Comment:   f.Comment,
-		}
+	feedback, err := feedbackFromPB(resp.Feedback)
+	if err != nil {
+		return "", nil, err
 	}
 	return resp.Cursor, feedback, nil
 }
@@ -1173,19 +1123,10 @@ func (p ProxyClient) GetFeedbackStream(ctx context.Context, batchSize int, optio
 				errChan <- err
 				return
 			}
-			feedback := make([]Feedback, len(resp.Feedback))
-			for i, f := range resp.Feedback {
-				feedback[i] = Feedback{
-					FeedbackKey: FeedbackKey{
-						FeedbackType: f.FeedbackType,
-						UserId:       f.UserId,
-						ItemId:       f.ItemId,
-					},
-					Value:     f.Value,
-					Timestamp: f.Timestamp.AsTime(),
-					Updated:   f.Updated.AsTime(),
-					Comment:   f.Comment,
-				}
+			feedback, err := feedbackFromPB(resp.Feedback)
+			if err != nil {
+				errChan <- err
+				return
 			}
 			feedbackChan <- feedback
 		}

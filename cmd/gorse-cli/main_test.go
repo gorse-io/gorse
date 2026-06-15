@@ -344,8 +344,8 @@ func (s *CLITestSuite) TestGetFeedback() {
 
 		lines := strings.Split(strings.TrimSpace(out), "\n")
 		s.Require().Len(lines, 2)
-		s.Require().Regexp(`^FEEDBACK-TYPE\s+USER-ID\s+ITEM-ID\s+VALUE\s+TIMESTAMP\s+COMMENT\s+UPDATED$`, lines[0])
-		s.Require().Regexp(`^click\s+alice\s+item-1\s+0\s+2026-01-01T03:00:00Z\s+\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$`, lines[1])
+		s.Require().Regexp(`^FEEDBACK-TYPE\s+USER-ID\s+ITEM-ID\s+VALUE\s+TIMESTAMP\s+COMMENT\s+UPDATED\s+LABELS$`, lines[0])
+		s.Require().Regexp(`^click\s+alice\s+item-1\s+0\s+2026-01-01T03:00:00Z\s+\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z\s*$`, lines[1])
 		s.Require().NotContains(out, "Cursor")
 		s.Require().NotContains(out, "┌")
 		s.Require().NotContains(out, "│")

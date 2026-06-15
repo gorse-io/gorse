@@ -1801,12 +1801,18 @@ func (m *Master) dump(response http.ResponseWriter, request *http.Request) {
 	feedbackStream, errChan := m.DataClient.GetFeedbackStream(context.Background(), batchSize, data.WithEndTime(*m.Config.Now()))
 	for feedbacks := range feedbackStream {
 		for _, feedback := range feedbacks {
+			labels, err := json.Marshal(feedback.Labels)
+			if err != nil {
+				writeError(response, http.StatusInternalServerError, err.Error())
+				return
+			}
 			if err := writeDump(response, &protocol.Feedback{
 				FeedbackType: feedback.FeedbackType,
 				UserId:       feedback.UserId,
 				ItemId:       feedback.ItemId,
 				Value:        feedback.Value,
 				Timestamp:    timestamppb.New(feedback.Timestamp),
+				Labels:       labels,
 				Comment:      feedback.Comment,
 			}); err != nil {
 				writeError(response, http.StatusInternalServerError, err.Error())
@@ -1921,6 +1927,12 @@ func (m *Master) Restore(r io.ReadCloser, delta *time.Duration) (stats DumpStats
 				if delta != nil {
 					timestamp = timestamp.Add(*delta)
 				}
+				var labels any
+				if len(feedback.Labels) > 0 {
+					if err = json.Unmarshal(feedback.Labels, &labels); err != nil {
+						return
+					}
+				}
 				feedbacks = append(feedbacks, data.Feedback{
 					FeedbackKey: data.FeedbackKey{
 						FeedbackType: feedback.FeedbackType,
@@ -1929,6 +1941,7 @@ func (m *Master) Restore(r io.ReadCloser, delta *time.Duration) (stats DumpStats
 					},
 					Value:     feedback.Value,
 					Timestamp: timestamp,
+					Labels:    labels,
 					Comment:   feedback.Comment,
 				})
 				stats.Feedback++
