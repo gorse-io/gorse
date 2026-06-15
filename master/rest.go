@@ -1669,16 +1669,6 @@ func writeError(response http.ResponseWriter, httpStatus int, message string) {
 	}
 }
 
-func (m *Master) checkAdmin(request *http.Request) bool {
-	if m.Config.Master.AdminAPIKey == "" {
-		return true
-	}
-	if request.Header.Get("X-API-Key") == m.Config.Master.AdminAPIKey {
-		return true
-	}
-	return false
-}
-
 const (
 	EOF            = int64(0)
 	UserStream     = int64(-1)
@@ -1723,7 +1713,7 @@ func readDump[T proto.Message](r io.Reader, data T) (int64, error) {
 }
 
 func (m *Master) dump(response http.ResponseWriter, request *http.Request) {
-	if !m.checkAdmin(request) {
+	if !m.checkLogin(request) {
 		writeError(response, http.StatusUnauthorized, "unauthorized")
 		return
 	}
@@ -1966,7 +1956,7 @@ func (m *Master) Restore(r io.ReadCloser, delta *time.Duration) (stats DumpStats
 }
 
 func (m *Master) restore(response http.ResponseWriter, request *http.Request) {
-	if !m.checkAdmin(request) {
+	if !m.checkLogin(request) {
 		writeError(response, http.StatusUnauthorized, "unauthorized")
 		return
 	}
@@ -2045,7 +2035,7 @@ func (m *Master) chatCompletions(response http.ResponseWriter, request *http.Req
 		writeError(response, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	if !m.checkAdmin(request) {
+	if !m.checkLogin(request) {
 		writeError(response, http.StatusUnauthorized, "unauthorized")
 		return
 	}
