@@ -44,10 +44,6 @@ func ValidateLabels(o any) error {
 		return nil
 	}
 	switch labels := o.(type) {
-	case []string:
-		return nil
-	case []float64:
-		return nil
 	case []any: // must be []string or []float64
 		if len(labels) == 0 {
 			return nil
@@ -59,11 +55,9 @@ func ValidateLabels(o any) error {
 					return errors.Errorf("unsupported labels: %v", jsonutil.MustMarshal(labels))
 				}
 			}
-		case json.Number, float64:
+		case json.Number:
 			for _, val := range labels {
-				switch val.(type) {
-				case json.Number, float64:
-				default:
+				if _, ok := val.(json.Number); !ok {
 					return errors.Errorf("unsupported labels: %v", jsonutil.MustMarshal(labels))
 				}
 			}

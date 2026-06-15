@@ -776,9 +776,6 @@ func (db *MongoDB) BatchInsertFeedback(ctx context.Context, feedback []Feedback,
 	users := mapset.NewSet[string]()
 	items := mapset.NewSet[string]()
 	for _, v := range feedback {
-		if err := ValidateLabels(v.Labels); err != nil {
-			return errors.Trace(err)
-		}
 		users.Add(v.UserId)
 		items.Add(v.ItemId)
 	}
