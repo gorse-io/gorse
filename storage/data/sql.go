@@ -1182,7 +1182,7 @@ func (d *SQLDatabase) GetItemFeedback(ctx context.Context, itemId string, feedba
 			Group("user_id, item_id, feedback_type")
 	} else {
 		tx = tx.Table(d.FeedbackTable()).
-			Select("user_id, item_id, feedback_type, value, time_stamp, updated, comment")
+			Select("user_id, item_id, feedback_type, value, time_stamp, updated, labels, comment")
 	}
 	switch d.driver {
 	case SQLite:
