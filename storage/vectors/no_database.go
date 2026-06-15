@@ -23,24 +23,24 @@ import (
 // Used when no vector store is configured.
 type NoDatabase struct{}
 
-func (NoDatabase) Init() error { return nil }
+func (NoDatabase) Init() error { return ErrNoDatabase }
 func (NoDatabase) Optimize() error {
-	return nil
+	return ErrNoDatabase
 }
-func (NoDatabase) Close() error { return nil }
+func (NoDatabase) Close() error { return ErrNoDatabase }
 func (NoDatabase) ListCollections(_ context.Context) ([]string, error) {
-	return nil, nil
+	return nil, ErrNoDatabase
 }
 func (NoDatabase) AddCollection(_ context.Context, _ string, _ int, _ Distance) error {
-	return nil
+	return ErrNoDatabase
 }
-func (NoDatabase) DeleteCollection(_ context.Context, _ string) error { return nil }
+func (NoDatabase) DeleteCollection(_ context.Context, _ string) error { return ErrNoDatabase }
 func (NoDatabase) AddVectors(_ context.Context, _ string, _ []Vector) error {
-	return nil
+	return ErrNoDatabase
 }
 func (NoDatabase) DeleteVectors(_ context.Context, _ string, _ time.Time) error {
-	return nil
+	return ErrNoDatabase
 }
 func (NoDatabase) QueryVectors(_ context.Context, _ string, _ []float32, _ []string, _ int) ([]Vector, error) {
-	return nil, nil
+	return nil, ErrNoDatabase
 }

@@ -21,34 +21,43 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+var _ Database = NoDatabase{}
+
 func TestNoDatabase(t *testing.T) {
 	ctx := t.Context()
 	var database NoDatabase
 
-	err := database.Init()
-	assert.NoError(t, err)
-	err = database.Optimize()
-	assert.NoError(t, err)
-	err = database.Close()
-	assert.NoError(t, err)
-
-	collections, err := database.ListCollections(ctx)
-	assert.NoError(t, err)
-	assert.Nil(t, collections)
-
-	err = database.AddCollection(ctx, "test", 4, Cosine)
-	assert.NoError(t, err)
-	err = database.DeleteCollection(ctx, "test")
-	assert.NoError(t, err)
-
-	err = database.AddVectors(ctx, "test", []Vector{
-		{Id: "a", Vector: []float32{1, 0, 0, 0}},
+	t.Run("lifecycle", func(t *testing.T) {
+		assert.ErrorIs(t, database.Init(), ErrNoDatabase)
+		assert.ErrorIs(t, database.Optimize(), ErrNoDatabase)
+		assert.ErrorIs(t, database.Close(), ErrNoDatabase)
 	})
-	assert.NoError(t, err)
-	err = database.DeleteVectors(ctx, "test", time.Now())
-	assert.NoError(t, err)
 
-	results, err := database.QueryVectors(ctx, "test", []float32{1, 0, 0, 0}, []string{"cat-a"}, 10)
-	assert.NoError(t, err)
-	assert.Nil(t, results)
+	t.Run("collections", func(t *testing.T) {
+		collections, err := database.ListCollections(ctx)
+		assert.ErrorIs(t, err, ErrNoDatabase)
+		assert.Nil(t, collections)
+
+		assert.ErrorIs(t, database.AddCollection(ctx, "test", 4, Cosine), ErrNoDatabase)
+		assert.ErrorIs(t, database.AddCollection(ctx, "test", 4, Dot), ErrNoDatabase)
+		assert.ErrorIs(t, database.DeleteCollection(ctx, "test"), ErrNoDatabase)
+		assert.ErrorIs(t, database.DeleteCollection(ctx, "missing"), ErrNoDatabase)
+	})
+
+	t.Run("vectors", func(t *testing.T) {
+		assert.ErrorIs(t, database.AddVectors(ctx, "test", []Vector{
+			{Id: "a", Vector: []float32{1, 0, 0, 0}, Categories: []string{"cat-a"}},
+		}), ErrNoDatabase)
+		assert.ErrorIs(t, database.AddVectors(ctx, "test", nil), ErrNoDatabase)
+		assert.ErrorIs(t, database.DeleteVectors(ctx, "test", time.Now()), ErrNoDatabase)
+		assert.ErrorIs(t, database.DeleteVectors(ctx, "missing", time.Time{}), ErrNoDatabase)
+
+		results, err := database.QueryVectors(ctx, "test", []float32{1, 0, 0, 0}, []string{"cat-a"}, 10)
+		assert.ErrorIs(t, err, ErrNoDatabase)
+		assert.Nil(t, results)
+
+		results, err = database.QueryVectors(ctx, "missing", nil, nil, 0)
+		assert.ErrorIs(t, err, ErrNoDatabase)
+		assert.Nil(t, results)
+	})
 }
