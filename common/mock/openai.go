@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"net"
 	"net/http"
-	"strings"
 
 	"github.com/emicklei/go-restful/v3"
 	"github.com/samber/lo"
@@ -90,36 +89,24 @@ func (s *OpenAIServer) chatCompletion(req *restful.Request, resp *restful.Respon
 		_ = resp.WriteError(http.StatusBadRequest, err)
 		return
 	}
-	message := lastChatMessage(r.Messages)
-	if !r.Stream && hasChatTool(r.Tools, "SearchItems") && message.Role == openai.ChatMessageRoleUser {
-		if query, ok := searchItemsQuery(message.Content); ok {
-			_ = resp.WriteEntity(searchItemsToolCallResponse(query))
-			return
-		}
-	}
-	if r.Stream && hasChatTool(r.Tools, "SearchItems") && message.Role == openai.ChatMessageRoleUser {
-		if query, ok := searchItemsQuery(message.Content); ok {
-			writeChatCompletionStreamResponse(resp, searchItemsToolCallStreamResponse(query))
-			return
-		}
-	}
-
-	content := message.Content
-	if message.Role == openai.ChatMessageRoleTool {
-		content = "SearchItems returned: " + message.Content
-	}
+	content := r.Messages[0].Content
 	if r.Model == "deepseek-r1" {
 		content = "<think>To be or not to be, that is the question.</think>" + content
 	}
 	if r.Stream {
 		for i := 0; i < len(content); i += 8 {
-			writeChatCompletionStreamResponse(resp, openai.ChatCompletionStreamResponse{
+			buf := bytes.NewBuffer(nil)
+			buf.WriteString("data: ")
+			encoder := json.NewEncoder(buf)
+			_ = encoder.Encode(openai.ChatCompletionStreamResponse{
 				Choices: []openai.ChatCompletionStreamChoice{{
 					Delta: openai.ChatCompletionStreamChoiceDelta{
 						Content: content[i:min(i+8, len(content))],
 					},
 				}},
 			})
+			buf.WriteString("\n")
+			_, _ = resp.Write(buf.Bytes())
 		}
 	} else {
 		_ = resp.WriteEntity(openai.ChatCompletionResponse{
@@ -130,87 +117,6 @@ func (s *OpenAIServer) chatCompletion(req *restful.Request, resp *restful.Respon
 			}},
 		})
 	}
-}
-
-func searchItemsToolCallResponse(query string) openai.ChatCompletionResponse {
-	return openai.ChatCompletionResponse{
-		Choices: []openai.ChatCompletionChoice{{
-			Message: openai.ChatCompletionMessage{
-				Role:      openai.ChatMessageRoleAssistant,
-				ToolCalls: []openai.ToolCall{newSearchItemsToolCall(nil, query)},
-			},
-			FinishReason: openai.FinishReasonToolCalls,
-		}},
-	}
-}
-
-func searchItemsToolCallStreamResponse(query string) openai.ChatCompletionStreamResponse {
-	index := 0
-	return openai.ChatCompletionStreamResponse{
-		Choices: []openai.ChatCompletionStreamChoice{{
-			Delta: openai.ChatCompletionStreamChoiceDelta{
-				ToolCalls: []openai.ToolCall{newSearchItemsToolCall(&index, query)},
-			},
-			FinishReason: openai.FinishReasonToolCalls,
-		}},
-	}
-}
-
-func newSearchItemsToolCall(index *int, query string) openai.ToolCall {
-	arguments, _ := json.Marshal(map[string]any{
-		"query": query,
-		"n":     10,
-	})
-	return openai.ToolCall{
-		Index: index,
-		ID:    "call_search_items",
-		Type:  openai.ToolTypeFunction,
-		Function: openai.FunctionCall{
-			Name:      "SearchItems",
-			Arguments: string(arguments),
-		},
-	}
-}
-
-func writeChatCompletionStreamResponse(resp *restful.Response, response openai.ChatCompletionStreamResponse) {
-	buf := bytes.NewBuffer(nil)
-	buf.WriteString("data: ")
-	encoder := json.NewEncoder(buf)
-	_ = encoder.Encode(response)
-	buf.WriteString("\n")
-	_, _ = resp.Write(buf.Bytes())
-}
-
-func lastChatMessage(messages []openai.ChatCompletionMessage) openai.ChatCompletionMessage {
-	if len(messages) == 0 {
-		return openai.ChatCompletionMessage{}
-	}
-	return messages[len(messages)-1]
-}
-
-func hasChatTool(tools []openai.Tool, name string) bool {
-	for _, tool := range tools {
-		if tool.Function != nil && tool.Function.Name == name {
-			return true
-		}
-	}
-	return false
-}
-
-func searchItemsQuery(content string) (string, bool) {
-	lowerContent := strings.ToLower(content)
-	for _, prefix := range []string{
-		"search items for ",
-		"search items ",
-		"find items for ",
-		"find items ",
-	} {
-		if index := strings.Index(lowerContent, prefix); index >= 0 {
-			query := strings.TrimSpace(content[index+len(prefix):])
-			return strings.Trim(query, ` "'`), query != ""
-		}
-	}
-	return "", false
 }
 
 func (s *OpenAIServer) embeddings(req *restful.Request, resp *restful.Response) {

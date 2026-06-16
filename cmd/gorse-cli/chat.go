@@ -25,10 +25,8 @@ import (
 	"strings"
 
 	gorse "github.com/gorse-io/gorse-go"
-	"github.com/gorse-io/gorse/common/log"
 	"github.com/sashabaranov/go-openai"
 	"github.com/spf13/cobra"
-	"go.uber.org/zap"
 	"golang.org/x/term"
 )
 
@@ -56,7 +54,14 @@ var chatCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		message := strings.TrimSpace(strings.Join(args, " "))
 		if message == "" {
-			message = readChatMessageFromStdin(cmd)
+			if file, ok := cmd.InOrStdin().(*os.File); ok && term.IsTerminal(int(file.Fd())) {
+				message = ""
+			}
+			content, err := io.ReadAll(cmd.InOrStdin())
+			if err != nil {
+				fatal(cmd, err.Error())
+			}
+			message = strings.TrimSpace(string(content))
 		}
 		if message == "" {
 			fatal(cmd,
@@ -67,27 +72,18 @@ var chatCmd = &cobra.Command{
 				"  echo \"How should I tune recommendations?\" | gorse-cli chat",
 			)
 		}
-		runChatOnce(cmd, newChatClient(cmd), newGorseClient(cmd), message)
+		if err := runChatReAct(cmd, newChatClient(cmd), newGorseClient(cmd), message, cmd.OutOrStdout()); err != nil {
+			fatal(cmd, err.Error())
+		}
 	},
 }
 
-func readChatMessageFromStdin(cmd *cobra.Command) string {
-	if file, ok := cmd.InOrStdin().(*os.File); ok && term.IsTerminal(int(file.Fd())) {
-		return ""
-	}
-	content, err := io.ReadAll(cmd.InOrStdin())
-	if err != nil {
-		log.Logger().Fatal("failed to read chat message", zap.Error(err))
-	}
-	return strings.TrimSpace(string(content))
-}
-
-type adminAPIKeyTransport struct {
+type adminTransport struct {
 	apiKey string
 	base   http.RoundTripper
 }
 
-func (t adminAPIKeyTransport) RoundTrip(request *http.Request) (*http.Response, error) {
+func (t adminTransport) RoundTrip(request *http.Request) (*http.Response, error) {
 	if t.apiKey != "" {
 		request = request.Clone(request.Context())
 		request.Header.Set("X-Api-Key", t.apiKey)
@@ -104,20 +100,12 @@ func newChatClient(cmd *cobra.Command) *openai.Client {
 	clientConfig := openai.DefaultConfig("")
 	clientConfig.BaseURL = strings.TrimRight(endpoint, "/") + "/api"
 	clientConfig.HTTPClient = &http.Client{
-		Transport: adminAPIKeyTransport{apiKey: apiKey},
+		Transport: adminTransport{apiKey: apiKey},
 	}
 	return openai.NewClientWithConfig(clientConfig)
 }
 
-func runChatOnce(cmd *cobra.Command, client *openai.Client, gorseClient *gorse.GorseClient, message string) {
-	content, err := runChatReAct(cmd, client, gorseClient, message)
-	if err != nil {
-		log.Logger().Fatal("chat completion failed", zap.Error(err))
-	}
-	fmt.Fprintln(cmd.OutOrStdout(), content)
-}
-
-func runChatReAct(cmd *cobra.Command, client *openai.Client, gorseClient *gorse.GorseClient, message string) (string, error) {
+func runChatReAct(cmd *cobra.Command, client *openai.Client, gorseClient *gorse.GorseClient, message string, output io.Writer) error {
 	messages := []openai.ChatCompletionMessage{
 		{Role: openai.ChatMessageRoleSystem, Content: chatReActSystemPrompt},
 		{Role: openai.ChatMessageRoleUser, Content: message},
@@ -132,22 +120,23 @@ func runChatReAct(cmd *cobra.Command, client *openai.Client, gorseClient *gorse.
 			ParallelToolCalls: false,
 		})
 		if err != nil {
-			return "", fmt.Errorf("failed to create chat completion stream: %w", err)
+			return fmt.Errorf("failed to create chat completion stream: %w", err)
 		}
-		streamedCompletion, err := readChatCompletionStream(stream)
+		streamedCompletion, err := readChatCompletionStream(stream, output)
 		closeErr := stream.Close()
 		if err != nil {
-			return "", fmt.Errorf("failed to read chat completion stream: %w", err)
+			return fmt.Errorf("failed to read chat completion stream: %w", err)
 		}
 		if closeErr != nil {
-			return "", fmt.Errorf("failed to close chat completion stream: %w", closeErr)
+			return fmt.Errorf("failed to close chat completion stream: %w", closeErr)
 		}
 
 		if len(streamedCompletion.ToolCalls) == 0 {
 			if strings.TrimSpace(streamedCompletion.Content) == "" {
-				return "", errors.New("chat completion returned an empty message")
+				return errors.New("chat completion returned an empty message")
 			}
-			return streamedCompletion.Content, nil
+			_, err = fmt.Fprintln(output)
+			return err
 		}
 
 		messages = append(messages, openai.ChatCompletionMessage{
@@ -160,7 +149,7 @@ func runChatReAct(cmd *cobra.Command, client *openai.Client, gorseClient *gorse.
 		}
 	}
 
-	return "", fmt.Errorf("tool call limit exceeded after %d iterations", chatMaxToolIterations)
+	return fmt.Errorf("tool call limit exceeded after %d iterations", chatMaxToolIterations)
 }
 
 type streamedChatCompletion struct {
@@ -168,7 +157,7 @@ type streamedChatCompletion struct {
 	ToolCalls []openai.ToolCall
 }
 
-func readChatCompletionStream(stream *openai.ChatCompletionStream) (streamedChatCompletion, error) {
+func readChatCompletionStream(stream *openai.ChatCompletionStream, output io.Writer) (streamedChatCompletion, error) {
 	var result streamedChatCompletion
 	var content strings.Builder
 	for {
@@ -181,11 +170,28 @@ func readChatCompletionStream(stream *openai.ChatCompletionStream) (streamedChat
 			return result, err
 		}
 		for _, choice := range response.Choices {
-			content.WriteString(choice.Delta.Content)
+			if choice.Delta.Content != "" {
+				content.WriteString(choice.Delta.Content)
+				if output != nil {
+					if _, err := io.WriteString(output, choice.Delta.Content); err != nil {
+						return result, err
+					}
+					flushChatOutput(output)
+				}
+			}
 			for _, toolCall := range choice.Delta.ToolCalls {
 				result.appendToolCall(toolCall)
 			}
 		}
+	}
+}
+
+func flushChatOutput(output io.Writer) {
+	switch flusher := output.(type) {
+	case interface{ Flush() error }:
+		_ = flusher.Flush()
+	case interface{ Flush() }:
+		flusher.Flush()
 	}
 }
 
