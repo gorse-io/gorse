@@ -20,23 +20,12 @@ builds:
         -X 'github.com/gorse-io/gorse/cmd/version.Version={{ .Version }}'
         -X 'github.com/gorse-io/gorse/cmd/version.GitCommit={{ .Commit }}'
         -X 'github.com/gorse-io/gorse/cmd/version.BuildTime={{ .Date }}'
-  - id: gorse-bench-darwin
-    main: ./cmd/gorse-bench
-    binary: gorse-bench
-    targets: &darwin_targets
-      - darwin_arm64
-    ldflags: *ldflags
   - id: gorse-cli
     main: ./cmd/gorse-cli
     binary: gorse-cli
     env:
       - CGO_ENABLED=0
     targets: *linux_windows_targets
-    ldflags: *ldflags
-  - id: gorse-cli-darwin
-    main: ./cmd/gorse-cli
-    binary: gorse-cli
-    targets: *darwin_targets
     ldflags: *ldflags
   - id: gorse-in-one
     main: ./cmd/gorse-in-one
@@ -45,22 +34,12 @@ builds:
       - CGO_ENABLED=0
     targets: *linux_windows_targets
     ldflags: *ldflags
-  - id: gorse-in-one-darwin
-    main: ./cmd/gorse-in-one
-    binary: gorse-in-one
-    targets: *darwin_targets
-    ldflags: *ldflags
   - id: gorse-master
     main: ./cmd/gorse-master
     binary: gorse-master
     env:
       - CGO_ENABLED=0
     targets: *linux_windows_targets
-    ldflags: *ldflags
-  - id: gorse-master-darwin
-    main: ./cmd/gorse-master
-    binary: gorse-master
-    targets: *darwin_targets
     ldflags: *ldflags
   - id: gorse-server
     main: ./cmd/gorse-server
@@ -69,11 +48,6 @@ builds:
       - CGO_ENABLED=0
     targets: *linux_windows_targets
     ldflags: *ldflags
-  - id: gorse-server-darwin
-    main: ./cmd/gorse-server
-    binary: gorse-server
-    targets: *darwin_targets
-    ldflags: *ldflags
   - id: gorse-worker
     main: ./cmd/gorse-worker
     binary: gorse-worker
@@ -81,27 +55,16 @@ builds:
       - CGO_ENABLED=0
     targets: *linux_windows_targets
     ldflags: *ldflags
-  - id: gorse-worker-darwin
-    main: ./cmd/gorse-worker
-    binary: gorse-worker
-    targets: *darwin_targets
-    ldflags: *ldflags
 
 archives:
   - id: gorse
     ids: &all_builds
       - gorse-bench
-      - gorse-bench-darwin
       - gorse-cli
-      - gorse-cli-darwin
       - gorse-in-one
-      - gorse-in-one-darwin
       - gorse-master
-      - gorse-master-darwin
       - gorse-server
-      - gorse-server-darwin
       - gorse-worker
-      - gorse-worker-darwin
     formats:
       - zip
     name_template: "gorse_{{ .Os }}_{{ .Arch }}"
@@ -110,7 +73,6 @@ archives:
   - id: gorse-cli
     ids:
       - gorse-cli
-      - gorse-cli-darwin
     formats:
       - binary
     name_template: "gorse-cli_{{ .Os }}_{{ .Arch }}"
