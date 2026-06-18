@@ -302,6 +302,16 @@ jobs:
         env:
           LOONG64_QEMU: qemu-loongarch64-static
 
+      - name: Test RISC-V bfloats
+        run: make -C common/bfloats test-rvv
+        env:
+          RISCV64_QEMU: qemu-riscv64-static
+
+      - name: Test LoongArch LASX bfloats
+        run: make -C common/bfloats test-lasx
+        env:
+          LOONG64_QEMU: qemu-loongarch64-static
+
       - name: Test MariaDB
         run: go test ./storage/data ./storage/cache -run TestMySQL
         env:

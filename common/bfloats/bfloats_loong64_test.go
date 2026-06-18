@@ -1,4 +1,4 @@
-//go:build noasm || (!amd64 && !arm64 && !riscv64 && !loong64)
+//go:build !noasm && loong64
 
 // Copyright 2026 gorse Project Authors
 //
@@ -16,10 +16,18 @@
 
 package bfloats
 
-type Feature uint64
+import (
+	"testing"
 
-var feature Feature
+	"github.com/stretchr/testify/require"
+)
 
-func (Feature) euclidean(a, b []uint16) float32 {
-	return euclidean(a, b)
+func TestEuclideanLASXMatchesScalar(t *testing.T) {
+	if feature&LASX != LASX {
+		t.Skip("LASX not available")
+	}
+
+	a := FromFloat32([]float32{0, 1, -2.5, 3.25, 4, 5.5, 6, 7.75, 8, 9, 10})
+	b := FromFloat32([]float32{1, 2, -1.5, 1.25, 8, 3.5, 12, 0.75, 16, 18, 20})
+	require.InDelta(t, euclidean(a, b), feature.euclidean(a, b), 1e-6)
 }

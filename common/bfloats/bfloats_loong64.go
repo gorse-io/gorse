@@ -1,4 +1,4 @@
-//go:build noasm || (!amd64 && !arm64 && !riscv64 && !loong64)
+//go:build !noasm && loong64
 
 // Copyright 2026 gorse Project Authors
 //
@@ -16,10 +16,31 @@
 
 package bfloats
 
+import (
+	"unsafe"
+
+	"golang.org/x/sys/cpu"
+)
+
+//go:generate sh -c "set -e; tmp=$$(mktemp -d); out=$$tmp/bfloats; mkdir -p $$out; OBJDUMP=loongarch64-linux-gnu-objdump go tool goat -o $$out -t loong64 -O 3 -m lasx src/bfloats_lasx.c; cp $$out/bfloats_lasx.go $$out/bfloats_lasx.s ."
+
 type Feature uint64
+
+const (
+	LASX Feature = 1 << iota
+)
 
 var feature Feature
 
-func (Feature) euclidean(a, b []uint16) float32 {
+func init() {
+	if cpu.Loong64.HasLASX {
+		feature |= LASX
+	}
+}
+
+func (feature Feature) euclidean(a, b []uint16) float32 {
+	if feature&LASX == LASX {
+		return lasx_euclidean_bf16(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), int64(len(a)))
+	}
 	return euclidean(a, b)
 }
