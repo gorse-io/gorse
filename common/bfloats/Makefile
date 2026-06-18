@@ -1,5 +1,5 @@
 GO ?= go
-GOAT ?= goat
+GOAT ?= $(GO) tool goat
 GOAT_TARGET_AVX ?= amd64
 GOAT_TARGET_NEON ?= arm64
 GOAT_TARGET_RVV ?= riscv64

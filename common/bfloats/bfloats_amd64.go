@@ -23,8 +23,8 @@ import (
 	"golang.org/x/sys/cpu"
 )
 
-//go:generate sh -c "set -e; tmp=$$(mktemp -d); out=$$tmp/bfloats; mkdir -p $$out; goat -o $$out -O 3 -m avx2 src/bfloats_avx.c; cp $$out/bfloats_avx.go $$out/bfloats_avx.s ."
-//go:generate sh -c "set -e; tmp=$$(mktemp -d); out=$$tmp/bfloats; mkdir -p $$out; goat -o $$out -O 3 -m avx -m avx512f -m avx512bw src/bfloats_avx512.c; cp $$out/bfloats_avx512.go $$out/bfloats_avx512.s ."
+//go:generate sh -c "set -e; tmp=$$(mktemp -d); out=$$tmp/bfloats; mkdir -p $$out; go tool goat -o $$out -O 3 -m avx2 src/bfloats_avx.c; cp $$out/bfloats_avx.go $$out/bfloats_avx.s ."
+//go:generate sh -c "set -e; tmp=$$(mktemp -d); out=$$tmp/bfloats; mkdir -p $$out; go tool goat -o $$out -O 3 -m avx -m avx512f -m avx512bw src/bfloats_avx512.c; cp $$out/bfloats_avx512.go $$out/bfloats_avx512.s ."
 
 type Feature uint64
 
