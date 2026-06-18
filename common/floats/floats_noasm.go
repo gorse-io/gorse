@@ -1,4 +1,4 @@
-//go:build noasm || (!amd64 && !arm64 && !riscv64)
+//go:build noasm || (!amd64 && !arm64 && !riscv64 && !loong64)
 
 // Copyright 2025 gorse Project Authors
 //
