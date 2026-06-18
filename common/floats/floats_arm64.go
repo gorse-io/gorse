@@ -21,7 +21,7 @@ import (
 	"unsafe"
 )
 
-//go:generate goat src/floats_neon.c -O3
+//go:generate go tool goat src/floats_neon.c -O3
 
 type Feature uint64
 
