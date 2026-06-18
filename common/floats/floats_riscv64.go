@@ -22,7 +22,7 @@ import (
 	"golang.org/x/sys/cpu"
 )
 
-//go:generate goat src/floats_rvv.c -O3 -march=rv64imafdv
+//go:generate go tool goat src/floats_rvv.c -O3 -march=rv64imafdv
 
 type Feature uint64
 

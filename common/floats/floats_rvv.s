@@ -824,11 +824,12 @@ LBB11_4:
 	WORD $0x0d067657        // vsetvli	a2, a2, e32, m1, ta, ma
 	WORD $0x02056487        // vle32.v	v9, (a0)
 	WORD $0x0205e507        // vle32.v	v10, (a1)
-	WORD $0x0d007557        // vsetvli	a0, zero, e32, m1, ta, ma
+	WORD $0x00000013        // nop
 	WORD $0x0a9514d7        // vfsub.vv	v9, v9, v10
 	WORD $0x0d067057        // vsetvli	zero, a2, e32, m1, ta, ma
 	WORD $0x929494d7        // vfmul.vv	v9, v9, v9
 	WORD $0x0e941457        // vfredosum.vs	v8, v9, v8
+	WORD $0x0d007557        // vsetvli	a0, zero, e32, m1, ta, ma
 	WORD $0x4e801457        // vfsqrt.v	v8, v8
 	WORD $0x42801557        // vfmv.f.s	fa0, v8
 	WORD $0xff040113        // addi	sp, s0, -16

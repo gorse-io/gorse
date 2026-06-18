@@ -18,7 +18,7 @@ package bfloats
 
 import "unsafe"
 
-//go:generate sh -c "set -e; tmp=$$(mktemp -d); out=$$tmp/bfloats; mkdir -p $$out; goat -o $$out -t arm64 -O 3 src/bfloats_neon.c; cp $$out/bfloats_neon.go $$out/bfloats_neon.s ."
+//go:generate sh -c "set -e; tmp=$$(mktemp -d); out=$$tmp/bfloats; mkdir -p $$out; go tool goat -o $$out -t arm64 -O 3 src/bfloats_neon.c; cp $$out/bfloats_neon.go $$out/bfloats_neon.s ."
 
 type Feature uint64
 
