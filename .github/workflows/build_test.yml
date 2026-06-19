@@ -272,7 +272,7 @@ jobs:
       - name: Install pre-requisites
         uses: awalsh128/cache-apt-pkgs-action@latest
         with:
-          packages: redis-tools
+          packages: redis-tools qemu-user-static
 
       - uses: actions/checkout@v5
         with:
@@ -291,6 +291,11 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: ./go.mod
+
+      - name: Test RISC-V floats
+        run: make -C common/floats test-rvv
+        env:
+          RISCV64_QEMU: qemu-riscv64-static
 
       - name: Test MariaDB
         run: go test ./storage/data ./storage/cache -run TestMySQL
