@@ -45,6 +45,9 @@ normalize_arch() {
     riscv64)
       printf 'riscv64'
       ;;
+    loong64 | loongarch64)
+      printf 'loong64'
+      ;;
     *)
       fail "unsupported architecture: $(uname -m)"
       ;;
@@ -85,7 +88,7 @@ main() {
   arch="$(normalize_arch)"
 
   case "${os}_${arch}" in
-    linux_amd64 | linux_arm64 | linux_riscv64 | darwin_arm64)
+    linux_amd64 | linux_arm64 | linux_loong64 | linux_riscv64 | darwin_arm64)
       ;;
     darwin_amd64)
       fail "unsupported platform: darwin_amd64. Release builds currently include darwin_arm64 only."
