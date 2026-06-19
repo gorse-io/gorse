@@ -6,8 +6,10 @@ GOAT ?= $(GO) tool goat
 GOAT_TARGET_AVX ?= amd64
 GOAT_TARGET_NEON ?= arm64
 GOAT_TARGET_RVV ?= riscv64
+GOAT_TARGET_LASX ?= loong64
 CLANG_RESOURCE_DIR ?= $(shell clang -print-resource-dir)
 GOAT_RVV_INCLUDE ?= $(CLANG_RESOURCE_DIR)/include
+LASX_OBJDUMP ?= loongarch64-linux-gnu-objdump
 QEMU_X86_64 ?= qemu-x86_64
 QEMU_X86_64_AVX_FLAGS ?= -cpu max,avx=on,fma=on
 QEMU_X86_64_AVX512_FLAGS ?= -cpu max,avx=on,fma=on,avx512f=on,avx512dq=on
@@ -15,12 +17,15 @@ QEMU_AARCH64 ?= qemu-aarch64
 QEMU_AARCH64_NEON_FLAGS ?= -cpu max
 RISCV64_QEMU ?= qemu-riscv64
 RISCV64_QEMU_FLAGS ?= -cpu max,v=true
+LOONG64_QEMU ?= qemu-loongarch64
+LOONG64_QEMU_FLAGS ?= -cpu max
 TEST_AVX_BINARY ?= .test-avx.amd64.test
 TEST_AVX512_BINARY ?= .test-avx512.amd64.test
 TEST_NEON_BINARY ?= .test-neon.arm64.test
 TEST_RVV_BINARY ?= .test-rvv.riscv64.test
+TEST_LASX_BINARY ?= .test-lasx.loong64.test
 
-.PHONY: avx avx512 neon rvv deps test-avx test-avx512 test-neon test-rvv
+.PHONY: avx avx512 neon rvv lasx deps test-avx test-avx512 test-neon test-rvv test-lasx
 
 avx:
 	$(GOAT) src/floats_avx.c -o . --target $(GOAT_TARGET_AVX) -O3 -mavx -mfma
@@ -34,12 +39,16 @@ neon:
 rvv:
 	$(GOAT) src/floats_rvv.c -o . --target $(GOAT_TARGET_RVV) -O3 -march=rv64imafdv -e=-isystem -e=$(GOAT_RVV_INCLUDE)
 
+lasx:
+	OBJDUMP=$(LASX_OBJDUMP) $(GOAT) src/floats_lasx.c -o ../floats --target $(GOAT_TARGET_LASX) -O3 -mlasx
+
 deps:
 	$(SUDO) $(APT) update
 	$(APT_INSTALL) \
 		gcc-x86-64-linux-gnu \
 		gcc-aarch64-linux-gnu \
 		gcc-riscv64-linux-gnu \
+		binutils-loongarch64-linux-gnu \
 		qemu-user
 
 test-avx:
@@ -65,3 +74,9 @@ test-rvv:
 	trap '$(RM) ./$(TEST_RVV_BINARY)' EXIT; \
 	GOOS=linux GOARCH=riscv64 CGO_ENABLED=0 $(GO) test -c -o $(TEST_RVV_BINARY) .; \
 	$(RISCV64_QEMU) $(RISCV64_QEMU_FLAGS) ./$(TEST_RVV_BINARY) -test.run '^TestV$$'
+
+test-lasx:
+	@set -e; \
+	trap '$(RM) ./$(TEST_LASX_BINARY)' EXIT; \
+	GOOS=linux GOARCH=loong64 CGO_ENABLED=0 $(GO) test -c -o $(TEST_LASX_BINARY) .; \
+	$(LOONG64_QEMU) $(LOONG64_QEMU_FLAGS) ./$(TEST_LASX_BINARY) -test.run '^TestLASX$$'
