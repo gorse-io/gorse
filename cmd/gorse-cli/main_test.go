@@ -569,9 +569,9 @@ func waitForInitialTask(t *testing.T, endpoint string) {
 			for _, task := range tasks {
 				if task.Name == "Load Dataset" {
 					switch task.Status {
-					case monitor.StatusComplete:
+					case string(monitor.StatusComplete):
 						return
-					case monitor.StatusFailed:
+					case string(monitor.StatusFailed):
 						require.Failf(t, "initial load dataset task failed", task.Error)
 					}
 				}

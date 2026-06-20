@@ -18,22 +18,112 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/go-resty/resty/v2"
-	"github.com/go-viper/mapstructure/v2"
-	"github.com/gorse-io/gorse/common/monitor"
-	"github.com/gorse-io/gorse/config"
-	"github.com/gorse-io/gorse/master"
-	"github.com/gorse-io/gorse/server"
-	"github.com/gorse-io/gorse/storage/data"
-	"github.com/gorse-io/gorse/storage/meta"
 )
 
 // AdminClient is a client for the Gorse admin API.
 type AdminClient struct {
 	client *resty.Client
+}
+
+type Status struct {
+	BinaryVersion          string
+	NumServers             int
+	NumWorkers             int
+	NumUsers               int
+	NumItems               int
+	NumUserLabels          int
+	NumItemLabels          int
+	NumTotalPosFeedback    int
+	NumValidPosFeedback    int
+	NumValidNegFeedback    int
+	PopularItemsUpdateTime time.Time
+	LatestItemsUpdateTime  time.Time
+	MatchingModelFitTime   time.Time
+	MatchingModelScore     any
+	RankingModelFitTime    time.Time
+	RankingModelScore      any
+}
+
+type FeedbackIterator struct {
+	Cursor   string
+	Feedback []Feedback
+}
+
+type Node struct {
+	UUID       string
+	Hostname   string
+	Type       string
+	Version    string
+	UpdateTime time.Time
+}
+
+type Progress struct {
+	Tracer     string
+	Name       string
+	Status     string
+	Error      string
+	Count      int
+	Total      int
+	StartTime  time.Time
+	FinishTime time.Time
+}
+
+type Item struct {
+	ItemId     string
+	IsHidden   bool
+	Categories []string
+	Timestamp  time.Time
+	Labels     any
+	Comment    string
+}
+
+type User struct {
+	UserId  string
+	Labels  any
+	Comment string
+}
+
+type FeedbackKey struct {
+	FeedbackType string
+	UserId       string
+	ItemId       string
+}
+
+type Feedback struct {
+	FeedbackKey
+	Value     float64
+	Timestamp time.Time
+	Updated   time.Time
+	Labels    any
+	Comment   string
+}
+
+type ScoredItem struct {
+	Item
+	Score float64
+}
+
+type ScoreUser struct {
+	User
+	Score float64
+}
+
+type DumpStats struct {
+	Users    int
+	Items    int
+	Feedback int
+	Duration time.Duration
+}
+
+func sortFeedback(feedback []Feedback) {
+	sort.Slice(feedback, func(i, j int) bool {
+		return feedback[i].Timestamp.After(feedback[j].Timestamp)
+	})
 }
 
 // NewAdminClient creates a new client for the Gorse admin API.
@@ -44,16 +134,16 @@ func NewAdminClient(endpoint, apiKey string) *AdminClient {
 	return &AdminClient{client: client}
 }
 
-func (c *AdminClient) GetCluster() ([]*meta.Node, error) {
-	return getJSON[[]*meta.Node](c, "/dashboard/cluster", nil)
+func (c *AdminClient) GetCluster() ([]Node, error) {
+	return getJSON[[]Node](c, "/dashboard/cluster", nil)
 }
 
-func (c *AdminClient) GetTasks() ([]monitor.Progress, error) {
-	return getJSON[[]monitor.Progress](c, "/dashboard/tasks", nil)
+func (c *AdminClient) GetTasks() ([]Progress, error) {
+	return getJSON[[]Progress](c, "/dashboard/tasks", nil)
 }
 
-func (c *AdminClient) GetConfig() (config.Config, error) {
-	return getJSON[config.Config](c, "/dashboard/config", nil)
+func (c *AdminClient) GetConfig() (map[string]any, error) {
+	return getJSON[map[string]any](c, "/dashboard/config", nil)
 }
 
 func (c *AdminClient) GetConfigMap() (map[string]any, error) {
@@ -64,8 +154,8 @@ func (c *AdminClient) GetConfigSchema() (map[string]any, error) {
 	return getJSON[map[string]any](c, "/dashboard/config/schema", nil)
 }
 
-func (c *AdminClient) UpdateConfig(configPatch map[string]any) (config.Config, error) {
-	var result config.Config
+func (c *AdminClient) UpdateConfig(configPatch map[string]any) (map[string]any, error) {
+	var result map[string]any
 	resp, err := c.client.R().
 		SetHeader("Content-Type", "application/json").
 		SetBody(configPatch).
@@ -94,12 +184,14 @@ func (c *AdminClient) ResetConfig() (map[string]any, error) {
 	return result, nil
 }
 
-func configToMap(configValue config.Config) (map[string]any, error) {
-	var configMap map[string]any
-	if err := mapstructure.Decode(configValue, &configMap); err != nil {
-		return nil, fmt.Errorf("failed to encode config: %w", err)
+func getConfigValue(configMap map[string]any, names ...string) (string, any, bool) {
+	for _, name := range names {
+		value, ok := configMap[name]
+		if ok {
+			return name, value, true
+		}
 	}
-	return formatConfigMap(configMap), nil
+	return "", nil, false
 }
 
 func formatConfigMap(configMap map[string]any) map[string]any {
@@ -138,62 +230,62 @@ func (c *AdminClient) GetCategories() ([]string, error) {
 	return getJSON[[]string](c, "/dashboard/categories", nil)
 }
 
-func (c *AdminClient) GetStats() (master.Status, error) {
-	return getJSON[master.Status](c, "/dashboard/stats", nil)
+func (c *AdminClient) GetStats() (Status, error) {
+	return getJSON[Status](c, "/dashboard/stats", nil)
 }
 
-func (c *AdminClient) GetFeedback(n int) (server.FeedbackIterator, error) {
+func (c *AdminClient) GetFeedback(n int) (FeedbackIterator, error) {
 	params := url.Values{}
 	addIntParam(params, "n", n)
-	return getJSON[server.FeedbackIterator](c, "/feedback", params)
+	return getJSON[FeedbackIterator](c, "/feedback", params)
 }
 
-func (c *AdminClient) GetTypedFeedback(feedbackType string, n int) (server.FeedbackIterator, error) {
+func (c *AdminClient) GetTypedFeedback(feedbackType string, n int) (FeedbackIterator, error) {
 	params := url.Values{}
 	addIntParam(params, "n", n)
-	return getJSON[server.FeedbackIterator](c, "/feedback/"+url.PathEscape(feedbackType), params)
+	return getJSON[FeedbackIterator](c, "/feedback/"+url.PathEscape(feedbackType), params)
 }
 
-func (c *AdminClient) GetUserItemFeedback(userID, itemID string) ([]data.Feedback, error) {
-	return getJSON[[]data.Feedback](c, "/feedback/"+url.PathEscape(userID)+"/"+url.PathEscape(itemID), nil)
+func (c *AdminClient) GetUserItemFeedback(userID, itemID string) ([]Feedback, error) {
+	return getJSON[[]Feedback](c, "/feedback/"+url.PathEscape(userID)+"/"+url.PathEscape(itemID), nil)
 }
 
-func (c *AdminClient) GetTypedUserItemFeedback(feedbackType, userID, itemID string) (data.Feedback, error) {
-	return getJSON[data.Feedback](c, "/feedback/"+url.PathEscape(feedbackType)+"/"+url.PathEscape(userID)+"/"+url.PathEscape(itemID), nil)
+func (c *AdminClient) GetTypedUserItemFeedback(feedbackType, userID, itemID string) (Feedback, error) {
+	return getJSON[Feedback](c, "/feedback/"+url.PathEscape(feedbackType)+"/"+url.PathEscape(userID)+"/"+url.PathEscape(itemID), nil)
 }
 
-func (c *AdminClient) GetUserFeedback(userID string) ([]data.Feedback, error) {
-	return getJSON[[]data.Feedback](c, "/user/"+url.PathEscape(userID)+"/feedback", nil)
+func (c *AdminClient) GetUserFeedback(userID string) ([]Feedback, error) {
+	return getJSON[[]Feedback](c, "/user/"+url.PathEscape(userID)+"/feedback", nil)
 }
 
-func (c *AdminClient) GetTypedUserFeedback(userID, feedbackType string) ([]data.Feedback, error) {
-	return getJSON[[]data.Feedback](c, "/user/"+url.PathEscape(userID)+"/feedback/"+url.PathEscape(feedbackType), nil)
+func (c *AdminClient) GetTypedUserFeedback(userID, feedbackType string) ([]Feedback, error) {
+	return getJSON[[]Feedback](c, "/user/"+url.PathEscape(userID)+"/feedback/"+url.PathEscape(feedbackType), nil)
 }
 
-func (c *AdminClient) GetItemFeedback(itemID string) ([]data.Feedback, error) {
-	return getJSON[[]data.Feedback](c, "/item/"+url.PathEscape(itemID)+"/feedback/", nil)
+func (c *AdminClient) GetItemFeedback(itemID string) ([]Feedback, error) {
+	return getJSON[[]Feedback](c, "/item/"+url.PathEscape(itemID)+"/feedback/", nil)
 }
 
-func (c *AdminClient) GetTypedItemFeedback(itemID, feedbackType string) ([]data.Feedback, error) {
-	return getJSON[[]data.Feedback](c, "/item/"+url.PathEscape(itemID)+"/feedback/"+url.PathEscape(feedbackType), nil)
+func (c *AdminClient) GetTypedItemFeedback(itemID, feedbackType string) ([]Feedback, error) {
+	return getJSON[[]Feedback](c, "/item/"+url.PathEscape(itemID)+"/feedback/"+url.PathEscape(feedbackType), nil)
 }
 
-func (c *AdminClient) GetLatest(n int, categories []string) ([]master.ScoredItem, error) {
+func (c *AdminClient) GetLatest(n int, categories []string) ([]ScoredItem, error) {
 	params := url.Values{}
 	addIntParam(params, "n", n)
 	addStringArrayParam(params, "category", categories)
-	return getJSON[[]master.ScoredItem](c, "/dashboard/latest", params)
+	return getJSON[[]ScoredItem](c, "/dashboard/latest", params)
 }
 
-func (c *AdminClient) GetNonPersonalized(name string, n int, userID string, categories []string) ([]master.ScoredItem, error) {
+func (c *AdminClient) GetNonPersonalized(name string, n int, userID string, categories []string) ([]ScoredItem, error) {
 	params := url.Values{}
 	addIntParam(params, "n", n)
 	addStringParam(params, "user-id", userID)
 	addStringArrayParam(params, "category", categories)
-	return getJSON[[]master.ScoredItem](c, "/dashboard/non-personalized/"+url.PathEscape(name), params)
+	return getJSON[[]ScoredItem](c, "/dashboard/non-personalized/"+url.PathEscape(name), params)
 }
 
-func (c *AdminClient) GetRecommend(userID, recommender, name string, n int, categories []string) ([]master.ScoredItem, error) {
+func (c *AdminClient) GetRecommend(userID, recommender, name string, n int, categories []string) ([]ScoredItem, error) {
 	path := "/dashboard/recommend/" + url.PathEscape(userID)
 	if recommender != "" {
 		path += "/" + url.PathEscape(recommender)
@@ -204,24 +296,24 @@ func (c *AdminClient) GetRecommend(userID, recommender, name string, n int, cate
 	params := url.Values{}
 	addIntParam(params, "n", n)
 	addStringArrayParam(params, "category", categories)
-	return getJSON[[]master.ScoredItem](c, path, params)
+	return getJSON[[]ScoredItem](c, path, params)
 }
 
-func (c *AdminClient) GetItemToItem(name, itemID string, n int, categories []string) ([]master.ScoredItem, error) {
+func (c *AdminClient) GetItemToItem(name, itemID string, n int, categories []string) ([]ScoredItem, error) {
 	params := url.Values{}
 	addIntParam(params, "n", n)
 	addStringArrayParam(params, "category", categories)
-	return getJSON[[]master.ScoredItem](c, "/dashboard/item-to-item/"+url.PathEscape(name)+"/"+url.PathEscape(itemID), params)
+	return getJSON[[]ScoredItem](c, "/dashboard/item-to-item/"+url.PathEscape(name)+"/"+url.PathEscape(itemID), params)
 }
 
-func (c *AdminClient) GetUserToUser(name, userID string, n int) ([]master.ScoreUser, error) {
+func (c *AdminClient) GetUserToUser(name, userID string, n int) ([]ScoreUser, error) {
 	params := url.Values{}
 	addIntParam(params, "n", n)
-	return getJSON[[]master.ScoreUser](c, "/dashboard/user-to-user/"+url.PathEscape(name)+"/"+url.PathEscape(userID), params)
+	return getJSON[[]ScoreUser](c, "/dashboard/user-to-user/"+url.PathEscape(name)+"/"+url.PathEscape(userID), params)
 }
 
-func (c *AdminClient) Restore(reader io.Reader) (*master.DumpStats, error) {
-	result := new(master.DumpStats)
+func (c *AdminClient) Restore(reader io.Reader) (*DumpStats, error) {
+	result := new(DumpStats)
 	resp, err := c.client.R().
 		SetHeader("Content-Type", "application/octet-stream").
 		SetBody(reader).
