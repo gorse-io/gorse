@@ -519,3 +519,20 @@ func (s *ValidateTestSuite) TestCacheStore() {
 	s.Database.CacheStore = "rediss+cluster://:password@192.168.1.11:6379?addr=192.168.0.5:6379"
 	s.NoError(s.Validate())
 }
+
+func (s *ValidateTestSuite) TestVectorStore() {
+	for _, vectorStore := range []string{
+		"",
+		"sqlite://:memory:",
+		"qdrant://localhost:6334",
+		"weaviate://localhost:8080",
+		"weaviates://localhost:8080",
+		"milvus://localhost:19530",
+	} {
+		s.Database.VectorStore = vectorStore
+		s.NoError(s.Validate())
+	}
+
+	s.Database.VectorStore = "mysql://localhost:3306/gorse"
+	s.Error(s.Validate())
+}
