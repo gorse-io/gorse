@@ -289,6 +289,13 @@ func fatal(cmd *cobra.Command, message string, suggestions ...string) {
 	os.Exit(1)
 }
 
+func fatalErr(cmd *cobra.Command, message string, err error) {
+	if err != nil {
+		message += ": " + err.Error()
+	}
+	fatal(cmd, message)
+}
+
 var contextCmd = &cobra.Command{
 	Use:   "context",
 	Short: "Manage Gorse CLI contexts",
