@@ -102,13 +102,10 @@ type RedisConfig struct {
 	MaxSearchResults int `mapstructure:"max_search_results" validate:"gt=0"`
 }
 type VectorConfig struct {
-	Quantization    string `mapstructure:"quantization"`
-	SQBits          int    `mapstructure:"sq_bits"`
-	PQSubvectors    int    `mapstructure:"pq_subvectors"`
-	PQBits          int    `mapstructure:"pq_bits"`
-	HNSWM           int    `mapstructure:"hnsw_m"`
-	HNSWEfConstruct int    `mapstructure:"hnsw_ef_construction"`
-	HNSWEfSearch    int    `mapstructure:"hnsw_ef_search"`
+	Quantization string `mapstructure:"quantization"`
+	SQBits       int    `mapstructure:"sq_bits"`
+	PQSubvectors int    `mapstructure:"pq_subvectors"`
+	PQBits       int    `mapstructure:"pq_bits"`
 }
 
 func (db *DatabaseConfig) StorageOptions(path string) []storage.Option {

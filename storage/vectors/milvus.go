@@ -110,8 +110,8 @@ func (db *Milvus) AddCollection(ctx context.Context, name string, dimensions int
 		return errors.NotSupportedf("distance method")
 	}
 
-	// Create HNSW index with configurable parameters
-	idx, err := entity.NewIndexHNSW(metricType, config.HNSWM, config.HNSWEfConstruct)
+	// Create HNSW index with internal default parameters.
+	idx, err := entity.NewIndexHNSW(metricType, defaultHNSWM, defaultHNSWEfConstruct)
 	if err != nil {
 		return errors.Trace(err)
 	}

@@ -106,10 +106,10 @@ func (db *Weaviate) AddCollection(ctx context.Context, name string, dimensions i
 
 	// 构建 VectorIndexConfig
 	vectorIndexConfig := map[string]any{
-		"distance": weaviateDistance,
-		"ef":       config.HNSWEfSearch,
-		"maxConnections": config.HNSWM,
-		"efConstruction": config.HNSWEfConstruct,
+		"distance":       weaviateDistance,
+		"ef":             defaultHNSWEfSearch,
+		"maxConnections": defaultHNSWM,
+		"efConstruction": defaultHNSWEfConstruct,
 	}
 
 	// PQ 量化配置

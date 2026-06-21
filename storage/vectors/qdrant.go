@@ -90,8 +90,7 @@ func (db *Qdrant) AddCollection(ctx context.Context, name string, dimensions int
 	}
 
 	// Note: Quantization support requires different API structure in qdrant-go-client v1.17.1
-	// SQ/PQ quantization configuration should be added via QuantizationConfig field in VectorParams
-	// For now, we only support HNSW parameters without quantization
+	// SQ/PQ quantization configuration should be added via QuantizationConfig field in VectorParams.
 	if config.Quantization != QuantizationNone {
 		return errors.NotSupportedf("quantization type %s for Qdrant via this API, configure quantization directly in Qdrant server", config.Quantization)
 	}
@@ -103,8 +102,8 @@ func (db *Qdrant) AddCollection(ctx context.Context, name string, dimensions int
 			Distance: qdrantDistance,
 		}),
 		HnswConfig: &qdrant.HnswConfigDiff{
-			M:           ptrUint64(uint64(config.HNSWM)),
-			EfConstruct: ptrUint64(uint64(config.HNSWEfConstruct)),
+			M:           ptrUint64(defaultHNSWM),
+			EfConstruct: ptrUint64(defaultHNSWEfConstruct),
 		},
 	})
 	if err != nil {
