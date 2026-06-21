@@ -115,10 +115,7 @@ func (db *Weaviate) AddCollection(ctx context.Context, name string, dimensions i
 	// PQ 量化配置
 	if config.Quantization == QuantizationPQ {
 		vectorIndexConfig["pq"] = map[string]any{
-			"enabled":       true,
-			"segments":      config.PQSubvectors,
-			"centroids":     1 << config.PQBits, // 2^bits
-			"trainingLimit": 100000,
+			"enabled": true,
 		}
 	}
 

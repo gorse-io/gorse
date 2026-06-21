@@ -50,9 +50,6 @@ const (
 type VectorConfig struct {
 	// 量化配置
 	Quantization QuantizationType // none | sq | pq
-	SQBits       int              // SQ 量化位数 (4 | 8)
-	PQSubvectors int              // PQ 子向量数量
-	PQBits       int              // PQ 每个子向量位数
 }
 
 // DefaultVectorConfig 返回默认向量配置

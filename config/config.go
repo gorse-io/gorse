@@ -103,9 +103,6 @@ type RedisConfig struct {
 }
 type VectorConfig struct {
 	Quantization string `mapstructure:"quantization"`
-	SQBits       int    `mapstructure:"sq_bits"`
-	PQSubvectors int    `mapstructure:"pq_subvectors"`
-	PQBits       int    `mapstructure:"pq_bits"`
 }
 
 func (db *DatabaseConfig) StorageOptions(path string) []storage.Option {
