@@ -11,6 +11,7 @@ type Options struct {
 	MaxIdleConns     int
 	ConnMaxLifetime  time.Duration
 	MaxSearchResults int
+	RedisClientName  string
 }
 
 type Option func(*Options)
@@ -42,6 +43,12 @@ func WithConnMaxLifetime(connMaxLifetime time.Duration) Option {
 func WithMaxSearchResults(limit int) Option {
 	return func(o *Options) {
 		o.MaxSearchResults = limit
+	}
+}
+
+func WithRedisClientName(clientName string) Option {
+	return func(o *Options) {
+		o.RedisClientName = clientName
 	}
 }
 

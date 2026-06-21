@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/gorse-io/gorse/common/expression"
+	"github.com/gorse-io/gorse/config"
 )
 
 // NoDatabase means that no database used.
@@ -31,6 +32,11 @@ func (NoDatabase) Optimize() error {
 
 // Init method of NoDatabase returns ErrNoDatabase.
 func (NoDatabase) Init() error {
+	return ErrNoDatabase
+}
+
+// Reconcile method of NoDatabase returns ErrNoDatabase.
+func (NoDatabase) Reconcile(_ config.SearchConfig) error {
 	return ErrNoDatabase
 }
 
@@ -65,6 +71,11 @@ func (NoDatabase) DeleteItem(_ context.Context, _ string) error {
 // GetItem method of NoDatabase returns ErrNoDatabase.
 func (NoDatabase) GetItem(_ context.Context, _ string) (Item, error) {
 	return Item{}, ErrNoDatabase
+}
+
+// SearchItems method of NoDatabase returns ErrNoDatabase.
+func (NoDatabase) SearchItems(_ context.Context, _ string, _ int) ([]ScoredItem, error) {
+	return nil, ErrNoDatabase
 }
 
 // GetItems method of NoDatabase returns ErrNoDatabase.

@@ -540,6 +540,10 @@ func (suite *baseTestSuite) TestTimeSeries() {
 		{Name: "a", Value: 3, Timestamp: ts.Add(2 * time.Second)},
 		{Name: "a", Value: 4, Timestamp: ts.Add(4 * time.Second)},
 	}, points)
+
+	points, err = suite.GetTimeSeriesPoints(ctx, "missing", ts.Add(2*time.Second), ts.Add(4*time.Second), time.Second)
+	suite.NoError(err)
+	suite.Equal([]TimeSeriesPoint{}, points)
 }
 
 func (suite *baseTestSuite) TestTimestampPrecision() {

@@ -4,6 +4,7 @@ linters:
     govet:
       disable:
         - composites
+        - inline
     staticcheck:
       checks:
         - all

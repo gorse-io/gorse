@@ -21,7 +21,9 @@ import (
 	"math"
 	"math/rand"
 	"net"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
@@ -40,6 +42,7 @@ import (
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
 	"github.com/gorse-io/gorse/storage/meta"
+	"github.com/gorse-io/gorse/storage/vectors"
 	"github.com/jellydator/ttlcache/v3"
 	"github.com/juju/errors"
 	"github.com/sashabaranov/go-openai"
@@ -95,9 +98,10 @@ type Master struct {
 	tokenCache   *ttlcache.Cache[string, UserInfo]
 
 	// events
-	ticker    *time.Ticker
-	scheduled chan struct{}
-	cancel    context.CancelFunc
+	ticker      *time.Ticker
+	scheduled   chan struct{}
+	cancel      context.CancelFunc
+	reconciling atomic.Bool
 }
 
 // NewMaster creates a master node.
@@ -149,7 +153,9 @@ func NewMaster(cfg *config.Config, cacheFolder string, standalone bool, configPa
 func (m *Master) Serve() {
 	// connect blob store
 	var err error
-	m.blobServer = blob.NewMasterStoreServer(m.Config.Blob.URI)
+	if !strings.Contains(m.Config.Blob.URI, "://") {
+		m.blobServer = blob.NewMasterStoreServer(m.Config.Blob.URI)
+	}
 	m.blobStore, err = blob.NewStore(m.Config.Blob, nil)
 	if err != nil {
 		log.Logger().Fatal("failed to create blob store", zap.Error(err))
@@ -184,6 +190,18 @@ func (m *Master) Serve() {
 	}
 	if err = m.CacheClient.Init(); err != nil {
 		log.Logger().Fatal("failed to init database", zap.Error(err))
+	}
+
+	// open vector store
+	if m.Config.Database.VectorStore != "" {
+		log.Logger().Info("opening vector store", zap.String("path", m.Config.Database.VectorStore))
+		m.VectorClient, err = vectors.Open(m.Config.Database.VectorStore, m.Config.Database.VectorTablePrefix)
+		if err != nil {
+			log.Logger().Fatal("failed to connect vector store", zap.Error(err))
+		}
+		if err = m.VectorClient.Init(); err != nil {
+			log.Logger().Fatal("failed to init vector store", zap.Error(err))
+		}
 	}
 
 	// load recommend config
@@ -258,7 +276,10 @@ func (m *Master) Serve() {
 		protocol.RegisterMasterServer(m.grpcServer, m)
 		protocol.RegisterCacheStoreServer(m.grpcServer, cache.NewProxyServer(m.CacheClient))
 		protocol.RegisterDataStoreServer(m.grpcServer, data.NewProxyServer(m.DataClient))
-		protocol.RegisterBlobStoreServer(m.grpcServer, m.blobServer)
+		protocol.RegisterVectorStoreServer(m.grpcServer, vectors.NewProxyServer(m.VectorClient))
+		if m.blobServer != nil {
+			protocol.RegisterBlobStoreServer(m.grpcServer, m.blobServer)
+		}
 		if err = m.grpcServer.Serve(lis); err != nil {
 			log.Logger().Fatal("failed to start rpc server", zap.Error(err))
 		}

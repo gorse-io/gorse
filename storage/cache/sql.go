@@ -54,7 +54,10 @@ func init() {
 			return nil, errors.Trace(err)
 		}
 		storage.ApplySQLPool(database.client, option)
-		database.gormDB, err = gorm.Open(postgres.New(postgres.Config{Conn: database.client}), storage.NewGORMConfig(tablePrefix))
+		database.gormDB, err = gorm.Open(postgres.New(postgres.Config{
+			DriverName: "postgres",
+			Conn:       database.client,
+		}), storage.NewGORMConfig(tablePrefix))
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
@@ -529,7 +532,7 @@ func (db *SQLDatabase) AddTimeSeriesPoints(ctx context.Context, points []TimeSer
 }
 
 func (db *SQLDatabase) GetTimeSeriesPoints(ctx context.Context, name string, begin, end time.Time, duration time.Duration) ([]TimeSeriesPoint, error) {
-	var points []TimeSeriesPoint
+	points := []TimeSeriesPoint{}
 	switch db.driver {
 	case Postgres:
 		if err := db.gormDB.WithContext(ctx).

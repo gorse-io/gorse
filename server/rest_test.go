@@ -570,14 +570,71 @@ func (suite *ServerTestSuite) TestItems() {
 		End()
 }
 
+func (suite *ServerTestSuite) TestSearchItems() {
+	t := suite.T()
+
+	apitest.New().
+		Handler(suite.handler).
+		Get("/api/items").
+		Header("X-API-Key", apiKey).
+		QueryParams(map[string]string{
+			"q": "running",
+			"n": "10",
+		}).
+		Expect(t).
+		Status(http.StatusBadRequest).
+		Body("item search is not supported because [recommend.search].columns is empty").
+		End()
+
+	suite.Config.Recommend.Search.Columns = []string{"item.ItemId", "item.Categories", "item.Labels.brand", "item.Comment"}
+	err := suite.DataClient.Reconcile(suite.Config.Recommend.Search)
+	suite.NoError(err)
+
+	items := []data.Item{
+		{
+			ItemId:     "running-shoes",
+			Categories: []string{"sports", "shoes"},
+			Labels: map[string]any{
+				"brand": "acme",
+			},
+			Comment: "Lightweight running shoes for marathon training",
+		},
+		{
+			ItemId:     "coffee-grinder",
+			Categories: []string{"kitchen"},
+			Labels: map[string]any{
+				"brand": "acme",
+			},
+			Comment: "Burr grinder for espresso and pour over coffee",
+		},
+	}
+	err = suite.DataClient.BatchInsertItems(t.Context(), items)
+	suite.NoError(err)
+	err = suite.DataClient.Optimize()
+	suite.NoError(err)
+
+	apitest.New().
+		Handler(suite.handler).
+		Get("/api/items").
+		Header("X-API-Key", apiKey).
+		QueryParams(map[string]string{
+			"q": "espresso",
+			"n": "10",
+		}).
+		Expect(t).
+		Status(http.StatusOK).
+		Body(suite.marshal(ItemIterator{Items: []data.Item{items[1]}})).
+		End()
+}
+
 func (suite *ServerTestSuite) TestFeedback() {
 	ctx := suite.T().Context()
 	t := suite.T()
 	// Insert ret
 	feedback := []data.Feedback{
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "0"}, Value: 1.0},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "1", ItemId: "2"}, Value: 1.0},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "2", ItemId: "4"}, Value: 1.0},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "1", ItemId: "2"}, Value: 1.0, Labels: []any{"positive", "mobile"}},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "2", ItemId: "4"}, Value: 1.0, Labels: map[string]any{"source": "rest", "rank": json.Number("2")}},
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "3", ItemId: "6"}, Value: 1.0},
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "4", ItemId: "8"}, Value: 1.0},
 	}
@@ -665,7 +722,7 @@ func (suite *ServerTestSuite) TestFeedback() {
 		Header("X-API-Key", apiKey).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(`[{"FeedbackType":"click", "UserId": "2", "ItemId": "4", "Timestamp":"0001-01-01T00:00:00Z", "Updated":"0001-01-01T00:00:00Z", "Comment":"", "Value":1}]`).
+		Body(suite.marshal([]data.Feedback{feedback[2]})).
 		End()
 	apitest.New().
 		Handler(suite.handler).
@@ -673,7 +730,7 @@ func (suite *ServerTestSuite) TestFeedback() {
 		Header("X-API-Key", apiKey).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(`[{"FeedbackType":"click", "UserId": "2", "ItemId": "4", "Timestamp":"0001-01-01T00:00:00Z", "Updated":"0001-01-01T00:00:00Z", "Comment":"", "Value":1}]`).
+		Body(suite.marshal([]data.Feedback{feedback[2]})).
 		End()
 	// test overwrite
 	apitest.New().

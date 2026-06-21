@@ -18,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gorse-io/gorse/config"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -31,6 +32,8 @@ func TestNoDatabase(t *testing.T) {
 	assert.ErrorIs(t, err, ErrNoDatabase)
 	err = database.Init()
 	assert.ErrorIs(t, err, ErrNoDatabase)
+	err = database.Reconcile(config.SearchConfig{})
+	assert.ErrorIs(t, err, ErrNoDatabase)
 	err = database.Ping()
 	assert.ErrorIs(t, err, ErrNoDatabase)
 	err = database.Purge()
@@ -43,6 +46,8 @@ func TestNoDatabase(t *testing.T) {
 	err = database.ModifyItem(ctx, "", ItemPatch{})
 	assert.ErrorIs(t, err, ErrNoDatabase)
 	_, err = database.GetItem(ctx, "")
+	assert.ErrorIs(t, err, ErrNoDatabase)
+	_, err = database.SearchItems(ctx, "", 0)
 	assert.ErrorIs(t, err, ErrNoDatabase)
 	_, _, err = database.GetItems(ctx, "", 0, nil)
 	assert.ErrorIs(t, err, ErrNoDatabase)

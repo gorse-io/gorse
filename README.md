@@ -64,7 +64,7 @@ For more information：
 
 ## Architecture
 
-Gorse is a single-node training and distributed prediction recommender system. Gorse stores data in MySQL, MongoDB, Postgres, or ClickHouse, with intermediate results cached in Redis, MySQL, MongoDB and Postgres.
+Gorse is a single-node training and distributed prediction recommender system. Gorse stores data in MySQL (MariaDB), MongoDB, Postgres, or ClickHouse, with intermediate results cached in Redis, MySQL (MariaDB), MongoDB and Postgres.
 
 1. The cluster consists of a master node, multiple worker nodes, and server nodes.
 1. The master node is responsible for model training, non-personalized recommendation, configuration management, and membership management.

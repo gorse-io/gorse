@@ -24,6 +24,7 @@ import (
 
 	"github.com/gorse-io/gorse/common/expression"
 	"github.com/gorse-io/gorse/common/jsonutil"
+	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/storage"
 	"github.com/juju/errors"
 )
@@ -88,6 +89,12 @@ type Item struct {
 	Comment    string    `mapstructure:"comment"`
 }
 
+// ScoredItem stores item metadata with its search relevance score.
+type ScoredItem struct {
+	Item  `gorm:"embedded" bson:",inline" mapstructure:",squash"`
+	Score float64 `gorm:"column:score" bson:"score" mapstructure:"score"`
+}
+
 // ItemPatch is the modification on an item.
 type ItemPatch struct {
 	IsHidden   *bool
@@ -123,6 +130,7 @@ type Feedback struct {
 	Value       float64   `gorm:"column:value" mapstructure:"value"`
 	Timestamp   time.Time `gorm:"column:time_stamp" mapstructure:"timestamp"`
 	Updated     time.Time `gorm:"column:updated" mapstructure:"updated"`
+	Labels      any       `gorm:"serializer:json" mapstructure:"labels"`
 	Comment     string    `gorm:"column:comment" mapstructure:"comment"`
 }
 
@@ -230,14 +238,15 @@ func NewScanOptions(opts ...ScanOption) ScanOptions {
 
 // GetOptions is the options for getting items.
 type GetOptions struct {
-	Categories  []string
-	SkipHidden  bool
-	ReturnId    bool
-	After       *time.Time
+	Categories []string
+	SkipHidden bool
+	ReturnId   bool
+	After      *time.Time
 }
 
 type Database interface {
 	Init() error
+	Reconcile(config.SearchConfig) error
 	Ping() error
 	Close() error
 	Optimize() error
@@ -246,6 +255,7 @@ type Database interface {
 	BatchGetItems(ctx context.Context, itemIds []string, opts GetOptions) ([]Item, error)
 	DeleteItem(ctx context.Context, itemId string) error
 	GetItem(ctx context.Context, itemId string) (Item, error)
+	SearchItems(ctx context.Context, query string, n int) ([]ScoredItem, error)
 	ModifyItem(ctx context.Context, itemId string, patch ItemPatch) error
 	GetItems(ctx context.Context, cursor string, n int, beginTime *time.Time) (string, []Item, error)
 	GetLatestItems(ctx context.Context, n int, categories []string, after *time.Time) ([]Item, error)

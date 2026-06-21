@@ -71,15 +71,18 @@ type Config struct {
 
 // DatabaseConfig is the configuration for the database.
 type DatabaseConfig struct {
-	DataStore        string      `mapstructure:"data_store" validate:"required,data_store"`   // database for data store
-	CacheStore       string      `mapstructure:"cache_store" validate:"required,cache_store"` // database for cache store
-	TablePrefix      string      `mapstructure:"table_prefix"`
-	DataTablePrefix  string      `mapstructure:"data_table_prefix"`
-	CacheTablePrefix string      `mapstructure:"cache_table_prefix"`
-	MySQL            MySQLConfig `mapstructure:"mysql"`
-	Postgres         SQLConfig   `mapstructure:"postgres"`
-	Redis            RedisConfig `mapstructure:"redis"`
-	Vector           VectorConfig `mapstructure:"vector"`
+	VectorStore       string       `mapstructure:"vector_store" validate:"omitempty,vector_store"`
+	DataStore         string       `mapstructure:"data_store" validate:"required,data_store"`   // database for data store
+	CacheStore        string       `mapstructure:"cache_store" validate:"required,cache_store"` // database for cache store
+	TablePrefix       string       `mapstructure:"table_prefix"`
+	DataTablePrefix   string       `mapstructure:"data_table_prefix"`
+	CacheTablePrefix  string       `mapstructure:"cache_table_prefix"`
+	CacheClientName   string       `mapstructure:"cache_client_name"`
+	VectorTablePrefix string       `mapstructure:"vector_table_prefix"`
+	MySQL             MySQLConfig  `mapstructure:"mysql"`
+	Postgres          SQLConfig    `mapstructure:"postgres"`
+	Redis             RedisConfig  `mapstructure:"redis"`
+	Vector            VectorConfig `mapstructure:"vector"`
 }
 
 type MySQLConfig struct {
@@ -108,7 +111,6 @@ type VectorConfig struct {
 	HNSWEfSearch    int    `mapstructure:"hnsw_ef_search"`
 }
 
-
 func (db *DatabaseConfig) StorageOptions(path string) []storage.Option {
 	if strings.HasPrefix(path, storage.MySQLPrefix) {
 		return []storage.Option{
@@ -129,6 +131,7 @@ func (db *DatabaseConfig) StorageOptions(path string) []storage.Option {
 		strings.HasPrefix(path, storage.RedisClusterPrefix) || strings.HasPrefix(path, storage.RedissClusterPrefix) {
 		return []storage.Option{
 			storage.WithMaxSearchResults(db.Redis.MaxSearchResults),
+			storage.WithRedisClientName(db.CacheClientName),
 		}
 	}
 	return nil
@@ -171,6 +174,7 @@ type RecommendConfig struct {
 	ContextSize     int                     `mapstructure:"context_size" validate:"gt=0"`
 	ActiveUserTTL   int                     `mapstructure:"active_user_ttl" validate:"gte=0"`
 	DataSource      DataSourceConfig        `mapstructure:"data_source"`
+	Search          SearchConfig            `mapstructure:"search"`
 	NonPersonalized []NonPersonalizedConfig `mapstructure:"non-personalized" validate:"dive"`
 	ItemToItem      []ItemToItemConfig      `mapstructure:"item-to-item" validate:"dive"`
 	UserToUser      []UserToUserConfig      `mapstructure:"user-to-user" validate:"dive"`
@@ -260,6 +264,10 @@ type DataSourceConfig struct {
 	ItemTTL               uint                                `mapstructure:"item_ttl" validate:"gte=0"`              // item-to-live of items
 }
 
+type SearchConfig struct {
+	Columns []string `mapstructure:"columns" validate:"dive,item_expr"`
+}
+
 type NonPersonalizedConfig struct {
 	Name   string `mapstructure:"name" json:"name"`
 	Score  string `mapstructure:"score" json:"score" validate:"required,item_expr"`
@@ -275,7 +283,7 @@ func (config *NonPersonalizedConfig) Hash() string {
 	hash.Write([]byte(config.Name))
 	hash.Write([]byte(config.Score))
 	hash.Write([]byte(config.Filter))
-	return hex.EncodeToString(hash.Sum(nil)[:])
+	return hex.EncodeToString(hash.Sum(nil))
 }
 
 type ItemToItemConfig struct {
@@ -302,7 +310,7 @@ func (config *ItemToItemConfig) Hash(cfg *RecommendConfig) string {
 			hash.Write([]byte(expr.String()))
 		}
 	}
-	return hex.EncodeToString(hash.Sum(nil)[:])
+	return hex.EncodeToString(hash.Sum(nil))
 }
 
 type UserToUserConfig struct {
@@ -328,7 +336,7 @@ func (config *UserToUserConfig) Hash(cfg *RecommendConfig) string {
 			hash.Write([]byte(expr.String()))
 		}
 	}
-	return hex.EncodeToString(hash.Sum(nil)[:])
+	return hex.EncodeToString(hash.Sum(nil))
 }
 
 type CollaborativeConfig struct {
@@ -352,7 +360,7 @@ func (config *CollaborativeConfig) Hash(cfg *RecommendConfig) string {
 	for _, expr := range cfg.DataSource.NegativeFeedbackTypes {
 		hash.Write([]byte(expr.String()))
 	}
-	return hex.EncodeToString(hash.Sum(nil)[:])
+	return hex.EncodeToString(hash.Sum(nil))
 }
 
 type EarlyStoppingConfig struct {
@@ -372,7 +380,7 @@ func (config *ExternalConfig) Hash() string {
 	hash := md5.New()
 	hash.Write([]byte(config.Name))
 	hash.Write([]byte(config.Script))
-	return hex.EncodeToString(hash.Sum(nil)[:])
+	return hex.EncodeToString(hash.Sum(nil))
 }
 
 type ReplacementConfig struct {
@@ -461,8 +469,9 @@ type AzureBlobConfig struct {
 func GetDefaultConfig() *Config {
 	return &Config{
 		Database: DatabaseConfig{
-			DataStore:  "sqlite://" + filepath.Join(MkDir(), "data.sqlite"),
-			CacheStore: "sqlite://" + filepath.Join(MkDir(), "cache.sqlite"),
+			DataStore:       "sqlite://" + filepath.Join(MkDir(), "data.sqlite"),
+			CacheStore:      "sqlite://" + filepath.Join(MkDir(), "cache.sqlite"),
+			CacheClientName: "gorse_cache_client",
 			MySQL: MySQLConfig{
 				IsolationLevel:  "READ-UNCOMMITTED",
 				MaxOpenConns:    0,
@@ -605,6 +614,7 @@ func setDefault() {
 	// [database]
 	viper.SetDefault("database.data_store", defaultConfig.Database.DataStore)
 	viper.SetDefault("database.cache_store", defaultConfig.Database.CacheStore)
+	viper.SetDefault("database.cache_client_name", defaultConfig.Database.CacheClientName)
 	// [database.mysql]
 	viper.SetDefault("database.mysql.isolation_level", defaultConfig.Database.MySQL.IsolationLevel)
 	viper.SetDefault("database.mysql.max_open_conns", defaultConfig.Database.MySQL.MaxOpenConns)
@@ -671,9 +681,12 @@ type configBinding struct {
 var bindings = []configBinding{
 	{"database.cache_store", "GORSE_CACHE_STORE"},
 	{"database.data_store", "GORSE_DATA_STORE"},
+	{"database.vector_store", "GORSE_VECTOR_STORE"},
 	{"database.table_prefix", "GORSE_TABLE_PREFIX"},
 	{"database.cache_table_prefix", "GORSE_CACHE_TABLE_PREFIX"},
+	{"database.cache_client_name", "GORSE_CACHE_CLIENT_NAME"},
 	{"database.data_table_prefix", "GORSE_DATA_TABLE_PREFIX"},
+	{"database.vector_table_prefix", "GORSE_VECTOR_TABLE_PREFIX"},
 	{"master.port", "GORSE_MASTER_PORT"},
 	{"master.host", "GORSE_MASTER_HOST"},
 	{"master.ssl_mode", "GORSE_MASTER_SSL_MODE"},
@@ -858,6 +871,23 @@ func (config *Config) Validate() error {
 	}); err != nil {
 		return errors.Trace(err)
 	}
+	if err := validate.RegisterValidation("vector_store", func(fl validator.FieldLevel) bool {
+		prefixes := []string{
+			storage.SQLitePrefix,
+			storage.QdrantPrefix,
+			storage.WeaviatePrefix,
+			storage.WeaviatesPrefix,
+			storage.MilvusPrefix,
+		}
+		for _, prefix := range prefixes {
+			if strings.HasPrefix(fl.Field().String(), prefix) {
+				return true
+			}
+		}
+		return false
+	}); err != nil {
+		return errors.Trace(err)
+	}
 	if err := validate.RegisterValidation("item_expr", func(fl validator.FieldLevel) bool {
 		if fl.Field().String() == "" {
 			// Empty expression is legal.
@@ -890,6 +920,14 @@ func (config *Config) Validate() error {
 			return ut.Add("cache_store", "unsupported cache storage backend", true) // see universal-translator for details
 		}, func(ut ut.Translator, fe validator.FieldError) string {
 			t, _ := ut.T("cache_store", fe.Field())
+			return t
+		}); err != nil {
+			return errors.Trace(err)
+		}
+		if err := validate.RegisterTranslation("vector_store", trans, func(ut ut.Translator) error {
+			return ut.Add("vector_store", "unsupported vector storage backend", true)
+		}, func(ut ut.Translator, fe validator.FieldError) string {
+			t, _ := ut.T("vector_store", fe.Field())
 			return t
 		}); err != nil {
 			return errors.Trace(err)

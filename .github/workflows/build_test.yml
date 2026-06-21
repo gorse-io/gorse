@@ -116,7 +116,7 @@ jobs:
 
     - name: Setup Milvus
       run: |
-        curl -sfL https://raw.githubusercontent.com/milvus-io/milvus/master/scripts/standalone_embed.sh -o standalone_embed.sh
+        curl -sfL https://raw.githubusercontent.com/milvus-io/milvus/6da09b8b02b1/scripts/standalone_embed.sh -o standalone_embed.sh
         bash standalone_embed.sh start
       working-directory: ${{ runner.temp }}
 
@@ -272,7 +272,7 @@ jobs:
       - name: Install pre-requisites
         uses: awalsh128/cache-apt-pkgs-action@latest
         with:
-          packages: redis-tools
+          packages: redis-tools qemu-user-static
 
       - uses: actions/checkout@v5
         with:
@@ -291,6 +291,16 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: ./go.mod
+
+      - name: Test RISC-V floats
+        run: make -C common/floats test-rvv
+        env:
+          RISCV64_QEMU: qemu-riscv64-static
+
+      - name: Test LoongArch LASX floats
+        run: make -C common/floats test-lasx
+        env:
+          LOONG64_QEMU: qemu-loongarch64-static
 
       - name: Test MariaDB
         run: go test ./storage/data ./storage/cache -run TestMySQL

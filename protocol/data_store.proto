@@ -67,6 +67,10 @@ message GetOptions {
   google.protobuf.Timestamp after = 4;
 }
 
+message ReconcileRequest { repeated string search_columns = 1; }
+
+message ReconcileResponse {}
+
 message BatchInsertItemsRequest { repeated Item items = 1; }
 
 message BatchInsertItemsResponse {}
@@ -85,6 +89,18 @@ message DeleteItemResponse {}
 message GetItemRequest { string item_id = 1; }
 
 message GetItemResponse { optional Item item = 1; }
+
+message SearchItemsRequest {
+  string query = 1;
+  int32 n = 2;
+}
+
+message ScoredItem {
+  Item item = 1;
+  double score = 2;
+}
+
+message SearchItemsResponse { repeated ScoredItem items = 1; }
 
 message ModifyItemRequest {
   string item_id = 1;
@@ -222,11 +238,13 @@ message GetLatestItemsResponse {
 
 service DataStore {
   rpc Ping(PingRequest) returns (PingResponse) {}
+  rpc Reconcile(ReconcileRequest) returns (ReconcileResponse) {}
   rpc BatchInsertItems(BatchInsertItemsRequest)
       returns (BatchInsertItemsResponse) {}
   rpc BatchGetItems(BatchGetItemsRequest) returns (BatchGetItemsResponse) {}
   rpc DeleteItem(DeleteItemRequest) returns (DeleteItemResponse) {}
   rpc GetItem(GetItemRequest) returns (GetItemResponse) {}
+  rpc SearchItems(SearchItemsRequest) returns (SearchItemsResponse) {}
   rpc ModifyItem(ModifyItemRequest) returns (ModifyItemResponse) {}
   rpc GetItems(GetItemsRequest) returns (GetItemsResponse) {}
   rpc GetItemFeedback(GetItemFeedbackRequest) returns (GetFeedbackResponse) {}

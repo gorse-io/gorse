@@ -409,7 +409,7 @@ func (m MongoDB) GetTimeSeriesPoints(ctx context.Context, name string, begin, en
 		return nil, errors.Trace(err)
 	}
 	defer cursor.Close(ctx)
-	var points []TimeSeriesPoint
+	points := []TimeSeriesPoint{}
 	for cursor.Next(ctx) {
 		var point TimeSeriesPoint
 		if err = cursor.Decode(&point); err != nil {

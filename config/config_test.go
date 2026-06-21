@@ -70,6 +70,7 @@ func TestUnmarshal(t *testing.T) {
 			assert.Equal(t, "mysql://gorse:gorse_pass@tcp(localhost:3306)/gorse", config.Database.DataStore)
 			assert.Equal(t, "gorse_", config.Database.TablePrefix)
 			assert.Equal(t, "gorse_cache_", config.Database.CacheTablePrefix)
+			assert.Equal(t, "gorse_cache_client", config.Database.CacheClientName)
 			assert.Equal(t, "gorse_data_", config.Database.DataTablePrefix)
 			assert.Equal(t, "READ-UNCOMMITTED", config.Database.MySQL.IsolationLevel)
 			assert.Equal(t, 0, config.Database.MySQL.MaxOpenConns)
@@ -193,9 +194,12 @@ func TestBindEnv(t *testing.T) {
 	variables := []environmentVariable{
 		{"GORSE_CACHE_STORE", "redis://<cache_store>"},
 		{"GORSE_DATA_STORE", "mysql://<data_store>"},
+		{"GORSE_VECTOR_STORE", "qdrant://<vector_store>"},
 		{"GORSE_TABLE_PREFIX", "gorse_"},
 		{"GORSE_DATA_TABLE_PREFIX", "gorse_data_"},
 		{"GORSE_CACHE_TABLE_PREFIX", "gorse_cache_"},
+		{"GORSE_CACHE_CLIENT_NAME", "gorse_cache_client_from_env"},
+		{"GORSE_VECTOR_TABLE_PREFIX", "gorse_vector_"},
 		{"GORSE_MASTER_PORT", "123"},
 		{"GORSE_MASTER_HOST", "<master_host>"},
 		{"GORSE_MASTER_SSL_MODE", "true"},
@@ -240,9 +244,12 @@ func TestBindEnv(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "redis://<cache_store>", config.Database.CacheStore)
 	assert.Equal(t, "mysql://<data_store>", config.Database.DataStore)
+	assert.Equal(t, "qdrant://<vector_store>", config.Database.VectorStore)
 	assert.Equal(t, "gorse_", config.Database.TablePrefix)
 	assert.Equal(t, "gorse_cache_", config.Database.CacheTablePrefix)
+	assert.Equal(t, "gorse_cache_client_from_env", config.Database.CacheClientName)
 	assert.Equal(t, "gorse_data_", config.Database.DataTablePrefix)
+	assert.Equal(t, "gorse_vector_", config.Database.VectorTablePrefix)
 	assert.Equal(t, 123, config.Master.Port)
 	assert.Equal(t, "<master_host>", config.Master.Host)
 	assert.Equal(t, true, config.Master.SSLMode)
@@ -491,6 +498,14 @@ func (s *ValidateTestSuite) TestRecommendersExistence() {
 	s.Error(s.Validate())
 }
 
+func (s *ValidateTestSuite) TestSearchColumns() {
+	s.Recommend.Search.Columns = []string{"item.Labels.description"}
+	s.NoError(s.Validate())
+
+	s.Recommend.Search.Columns = []string{"item.Labels."}
+	s.Error(s.Validate())
+}
+
 func TestValidate(t *testing.T) {
 	suite.Run(t, new(ValidateTestSuite))
 }
@@ -503,4 +518,21 @@ func (s *ValidateTestSuite) TestCacheStore() {
 	// Test that rediss+cluster:// prefix is accepted for cache_store
 	s.Database.CacheStore = "rediss+cluster://:password@192.168.1.11:6379?addr=192.168.0.5:6379"
 	s.NoError(s.Validate())
+}
+
+func (s *ValidateTestSuite) TestVectorStore() {
+	for _, vectorStore := range []string{
+		"",
+		"sqlite://:memory:",
+		"qdrant://localhost:6334",
+		"weaviate://localhost:8080",
+		"weaviates://localhost:8080",
+		"milvus://localhost:19530",
+	} {
+		s.Database.VectorStore = vectorStore
+		s.NoError(s.Validate())
+	}
+
+	s.Database.VectorStore = "mysql://localhost:3306/gorse"
+	s.Error(s.Validate())
 }

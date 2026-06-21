@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/gorse-io/gorse/common/expression"
+	"github.com/gorse-io/gorse/config"
 	"github.com/jaswdr/faker"
 	"github.com/juju/errors"
 	"github.com/samber/lo"
@@ -255,7 +256,7 @@ func (suite *baseTestSuite) TestFeedback() {
 	// insert feedbacks
 	timestamp := time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC)
 	feedback := []Feedback{
-		{FeedbackKey: FeedbackKey{positiveFeedbackType1, "0", "8"}, Value: 1, Timestamp: timestamp, Comment: "comment"},
+		{FeedbackKey: FeedbackKey{positiveFeedbackType1, "0", "8"}, Value: 1, Timestamp: timestamp, Labels: []string{"positive"}, Comment: "comment"},
 		{FeedbackKey: FeedbackKey{positiveFeedbackType1, "1", "6"}, Value: 1, Timestamp: timestamp, Comment: "comment"},
 		{FeedbackKey: FeedbackKey{positiveFeedbackType2, "2", "4"}, Value: 1, Timestamp: timestamp, Comment: "comment"},
 		{FeedbackKey: FeedbackKey{positiveFeedbackType2, "3", "2"}, Value: 1, Timestamp: timestamp, Comment: "comment"},
@@ -267,6 +268,7 @@ func (suite *baseTestSuite) TestFeedback() {
 	for i := range feedback {
 		feedback[i].Updated = feedback[i].Timestamp
 	}
+	feedback[0].Labels = []any{"positive"}
 	// other type
 	err = suite.Database.BatchInsertFeedback(ctx, []Feedback{{FeedbackKey: FeedbackKey{negativeFeedbackType, "0", "2"}}}, true, true, true)
 	suite.NoError(err)
@@ -386,6 +388,7 @@ func (suite *baseTestSuite) TestFeedback() {
 		FeedbackKey: FeedbackKey{positiveFeedbackType, "0", "8"},
 		Value:       100,
 		Timestamp:   time.Date(1996, 4, 8, 0, 0, 0, 0, time.UTC),
+		Labels:      []string{"override"},
 		Comment:     "override",
 	}}, true, true, true)
 	suite.NoError(err)
@@ -402,12 +405,14 @@ func (suite *baseTestSuite) TestFeedback() {
 	suite.Equal(1, len(ret))
 	suite.Equal(float64(100), ret[0].Value)
 	suite.Equal(time.Date(1996, 4, 8, 0, 0, 0, 0, time.UTC), ret[0].Timestamp)
+	suite.Equal([]any{"override"}, ret[0].Labels)
 	suite.Equal("override", ret[0].Comment)
 	// test not overwrite
 	err = suite.Database.BatchInsertFeedback(ctx, []Feedback{{
 		FeedbackKey: FeedbackKey{positiveFeedbackType, "0", "8"},
 		Value:       80,
 		Timestamp:   time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
+		Labels:      []string{"not_override"},
 		Comment:     "not_override",
 	}}, true, true, false)
 	suite.NoError(err)
@@ -418,6 +423,7 @@ func (suite *baseTestSuite) TestFeedback() {
 	suite.Equal(1, len(ret))
 	suite.Equal(float64(180), ret[0].Value)
 	suite.Equal(time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), ret[0].Timestamp)
+	suite.Equal([]any{"not_override"}, ret[0].Labels)
 	suite.Equal("not_override", ret[0].Comment)
 
 	// insert no feedback
@@ -951,6 +957,87 @@ func (suite *baseTestSuite) TestCollation() {
 	suite.NoError(err)
 	feedbacks := suite.getFeedbackStream(ctx, 10, WithBeginItemId("a"), WithEndItemId("B"))
 	suite.Empty(feedbacks)
+}
+
+func (suite *baseTestSuite) TestSearch() {
+	if suite.isClickHouse() {
+		suite.T().Skip("ClickHouse doesn't support item search")
+	}
+	ctx := suite.T().Context()
+	err := suite.Database.Reconcile(config.SearchConfig{Columns: []string{
+		"item.ItemId",
+		"item.Categories",
+		"item.Labels.brand",
+		"item.Comment",
+	}})
+	suite.NoError(err)
+
+	items := []Item{
+		{
+			ItemId:     "running-shoes",
+			Categories: []string{"sports", "shoes"},
+			Labels: map[string]any{
+				"brand": "acme",
+			},
+			Comment: "Lightweight running shoes for marathon training",
+		},
+		{
+			ItemId:     "trail-watch",
+			Categories: []string{"sports", "electronics"},
+			Labels: map[string]any{
+				"brand": "chrono",
+			},
+			Comment: "GPS watch for trail running and hiking",
+		},
+		{
+			ItemId:     "coffee-grinder",
+			Categories: []string{"kitchen"},
+			Labels: map[string]any{
+				"brand": "acme",
+			},
+			Comment: "Burr grinder for espresso and pour over coffee",
+		},
+		{
+			ItemId:     "office-chair",
+			Categories: []string{"office"},
+			Labels: map[string]any{
+				"brand": "ergon",
+			},
+			Comment: "Ergonomic chair with lumbar support",
+		},
+		{
+			ItemId:     "gorse-io:gorse",
+			Categories: []string{"repository"},
+			Labels: map[string]any{
+				"brand": "gorse",
+			},
+			Comment: "Open source recommender system",
+		},
+	}
+	err = suite.Database.BatchInsertItems(ctx, items)
+	suite.NoError(err)
+	err = suite.Database.Optimize()
+	suite.NoError(err)
+
+	searchItemIDs := func(query string, n int) []string {
+		result, err := suite.Database.SearchItems(ctx, query, n)
+		suite.NoError(err)
+		return lo.Map(result, func(item ScoredItem, _ int) string {
+			return item.ItemId
+		})
+	}
+
+	suite.ElementsMatch([]string{"gorse-io:gorse"}, searchItemIDs("gorse-io:gorse", 10))
+	suite.ElementsMatch([]string{"running-shoes", "trail-watch"}, searchItemIDs("running", 10))
+	suite.ElementsMatch([]string{"coffee-grinder"}, searchItemIDs("coffee", 10))
+	suite.ElementsMatch([]string{"trail-watch"}, searchItemIDs("electronics", 10))
+	suite.ElementsMatch([]string{"running-shoes", "coffee-grinder"}, searchItemIDs("acme", 10))
+	suite.Len(searchItemIDs("running", 1), 1)
+	result, err := suite.Database.SearchItems(ctx, "coffee", 10)
+	suite.NoError(err)
+	for _, item := range result {
+		suite.NotZero(item.Score)
+	}
 }
 
 func (suite *baseTestSuite) TestPurge() {

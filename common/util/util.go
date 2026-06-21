@@ -95,5 +95,5 @@ func MD5(s ...string) string {
 	for _, str := range s {
 		hash.Write([]byte(str))
 	}
-	return hex.EncodeToString(hash.Sum(nil)[:])
+	return hex.EncodeToString(hash.Sum(nil))
 }

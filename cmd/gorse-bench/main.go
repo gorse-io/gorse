@@ -58,9 +58,9 @@ var rootCmd = &cobra.Command{
 	},
 }
 
-var benchLLMCmd = &cobra.Command{
-	Use:   "llm",
-	Short: "Benchmark LLM models for ranking",
+var benchRerankerCmd = &cobra.Command{
+	Use:   "reranker",
+	Short: "Benchmark reranker models for ranking",
 	Run: func(cmd *cobra.Command, args []string) {
 		// Load configuration
 		configPath, _ := cmd.Flags().GetString("config")
@@ -93,7 +93,7 @@ var benchLLMCmd = &cobra.Command{
 
 		// Split dataset
 		var scores sync.Map
-		train, test := dataset.Split(0.2, 0)
+		train, test := dataset.SplitByUserTime(0.2)
 
 		table := tablewriter.NewWriter(os.Stdout)
 		table.Header([]string{"", "#interactions", "#positive", "#negative"})
@@ -106,7 +106,7 @@ var benchLLMCmd = &cobra.Command{
 
 		exportUserAUC, _ := cmd.Flags().GetBool("user-auc")
 		go EvaluateAFM(cfg, train, test, exportUserAUC, &scores)
-		EvaluateLLM(cfg, train, test, cfDataset.GetItems(), exportUserAUC, &scores)
+		EvaluateReranker(cfg, train, test, cfDataset.GetItems(), exportUserAUC, &scores)
 		data := [][]string{{"Ranker", "GAUC"}}
 		scores.Range(func(key, value any) bool {
 			data = append(data, []string{
@@ -176,7 +176,7 @@ func EvaluateAFM(cfg *config.Config, train, test *ctr.Dataset, exportUserAUC boo
 	var count float32
 	for userIndex, posIndices := range positives {
 		negIndices := negatives[userIndex]
-		if len(negIndices) == 0 || feedbackCount[userIndex] == 0 || feedbackCount[userIndex] > cfg.Recommend.ContextSize {
+		if len(posIndices) == 0 || len(negIndices) == 0 || feedbackCount[userIndex] == 0 || feedbackCount[userIndex] > cfg.Recommend.ContextSize {
 			continue
 		}
 		var posPredictions, negPredictions []float32
@@ -206,7 +206,7 @@ func EvaluateAFM(cfg *config.Config, train, test *ctr.Dataset, exportUserAUC boo
 	scores.Store("AFM", score)
 }
 
-func EvaluateLLM(cfg *config.Config, train, test *ctr.Dataset, items []data.Item, exportUserAUC bool, scores *sync.Map) {
+func EvaluateReranker(cfg *config.Config, train, test *ctr.Dataset, items []data.Item, exportUserAUC bool, scores *sync.Map) {
 	chat, err := logics.NewChatReranker(
 		cfg.Recommend.Ranker.RerankerAPI,
 		cfg.Recommend.Ranker.QueryTemplate,
@@ -249,7 +249,7 @@ func EvaluateLLM(cfg *config.Config, train, test *ctr.Dataset, items []data.Item
 		var err error
 		csvFile, err = os.Create(fmt.Sprintf("%s.csv", cfg.Recommend.Ranker.RerankerAPI.Model))
 		if err != nil {
-			log.Logger().Error("failed to create LLM.csv", zap.Error(err))
+			log.Logger().Error("failed to create reranker csv", zap.Error(err))
 			exportUserAUC = false
 		} else {
 			defer csvFile.Close()
@@ -264,7 +264,7 @@ func EvaluateLLM(cfg *config.Config, train, test *ctr.Dataset, items []data.Item
 	lo.Must0(parallel.ForEach(context.Background(), slices.Collect(maps.Keys(positives)), runtime.NumCPU(), func(_ int, userIndex int32) {
 		posIndices := positives[userIndex]
 		negIndices := negatives[userIndex]
-		if len(negIndices) == 0 {
+		if len(posIndices) == 0 || len(negIndices) == 0 {
 			return
 		}
 		candidates := make([]*data.Item, 0, len(posIndices)+len(negIndices))
@@ -555,9 +555,9 @@ var benchEmbeddingCmd = &cobra.Command{
 func init() {
 	rootCmd.PersistentFlags().StringP("config", "c", "", "Path to configuration file")
 	rootCmd.PersistentFlags().IntP("jobs", "j", runtime.NumCPU(), "Number of jobs to run in parallel")
-	rootCmd.AddCommand(benchLLMCmd)
+	rootCmd.AddCommand(benchRerankerCmd)
 	rootCmd.AddCommand(benchEmbeddingCmd)
-	benchLLMCmd.PersistentFlags().Bool("user-auc", false, "Export user-level AUC scores to CSV file")
+	benchRerankerCmd.PersistentFlags().Bool("user-auc", false, "Export user-level AUC scores to CSV file")
 	benchEmbeddingCmd.PersistentFlags().IntP("top", "k", 10, "Number of top items to evaluate for each user")
 	benchEmbeddingCmd.PersistentFlags().IntP("shots", "s", math.MaxInt, "Number of shots for each user")
 	benchEmbeddingCmd.PersistentFlags().Int("embedding-dimensions", 0, "Embedding dimensions")

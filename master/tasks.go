@@ -25,6 +25,7 @@ import (
 	"github.com/c-bata/goptuna"
 	"github.com/c-bata/goptuna/tpe"
 	mapset "github.com/deckarep/golang-set/v2"
+	"github.com/gorse-io/gorse/common/event"
 	"github.com/gorse-io/gorse/common/expression"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/common/monitor"
@@ -50,6 +51,18 @@ const batchSize = 10000
 func (m *Master) loadDataset(parent context.Context) (datasets Datasets, err error) {
 	ctx, span := m.tracer.Start(parent, "Load Dataset", 1)
 	defer span.End()
+
+	searchConfig := config.SearchConfig{Columns: append([]string(nil), m.Config.Recommend.Search.Columns...)}
+	go func() {
+		if !m.reconciling.CompareAndSwap(false, true) {
+			log.Logger().Info("skip reconciling data store since previous reconciliation is still running")
+			return
+		}
+		defer m.reconciling.Store(false)
+		if err := m.DataClient.Reconcile(searchConfig); err != nil {
+			log.Logger().Error("failed to reconcile data store", zap.Error(err))
+		}
+	}()
 
 	// Build non-personalized recommenders
 	initialStartTime := time.Now()
@@ -82,6 +95,12 @@ func (m *Master) loadDataset(parent context.Context) (datasets Datasets, err err
 	if err != nil {
 		return Datasets{}, errors.Trace(err)
 	}
+	go event.EventRecorder().RecordStorage(ctx, event.StorageEvent{
+		UserCount:     datasets.rankingDataset.CountUsers(),
+		ItemCount:     datasets.rankingDataset.CountItems(),
+		FeedbackCount: len(datasets.clickDataset.Target),
+		Timestamp:     datasets.rankingDataset.GetTimestamp(),
+	})
 
 	// save non-personalized recommenders to cache
 	for i, recommender := range nonPersonalizedRecommenders {
@@ -419,18 +438,17 @@ func (m *Master) LoadDataFromDatabase(
 
 	// create negative feedback set (highest priority)
 	var negativeSet []mapset.Set[int32]
+	var negativeTimestamps []map[int32]time.Time
 	if len(negFeedbackTypes) > 0 {
 		negativeSet = make([]mapset.Set[int32], dataSet.CountUsers())
+		negativeTimestamps = make([]map[int32]time.Time, dataSet.CountUsers())
 		for i := range negativeSet {
 			negativeSet[i] = mapset.NewSet[int32]()
 		}
 	}
 
-	// create positive set
-	positiveSet := make([]mapset.Set[int32], dataSet.CountUsers())
-	for i := range positiveSet {
-		positiveSet[i] = mapset.NewSet[int32]()
-	}
+	// create positive feedback map
+	positiveFeedback := make([]sync.Map, dataSet.CountUsers())
 
 	// split item groups
 	sort.Slice(items, func(i, j int) bool {
@@ -461,8 +479,14 @@ func (m *Master) LoadDataFromDatabase(
 					if itemIndex == dataset.NotId {
 						continue
 					}
-					negativeSet[userIndex].Add(itemIndex)
 					mu.Lock()
+					negativeSet[userIndex].Add(itemIndex)
+					if negativeTimestamps[userIndex] == nil {
+						negativeTimestamps[userIndex] = make(map[int32]time.Time)
+					}
+					if timestamp, ok := negativeTimestamps[userIndex][itemIndex]; !ok || f.Timestamp.After(timestamp) {
+						negativeTimestamps[userIndex][itemIndex] = f.Timestamp
+					}
 					explicitNegativeFeedbackCount++
 					evaluator.Add(f.FeedbackType, f.Value, userIndex, itemIndex, f.Timestamp)
 					mu.Unlock()
@@ -512,8 +536,16 @@ func (m *Master) LoadDataFromDatabase(
 				if negativeSet != nil && negativeSet[userIndex].Contains(itemIndex) {
 					continue
 				}
-				// insert feedback to positive set
-				positiveSet[userIndex].Add(itemIndex)
+				// insert feedback to positive map
+				for {
+					timestamp, loaded := positiveFeedback[userIndex].LoadOrStore(itemIndex, f.Timestamp)
+					if !loaded || !f.Timestamp.After(timestamp.(time.Time)) {
+						break
+					}
+					if positiveFeedback[userIndex].CompareAndSwap(itemIndex, timestamp, f.Timestamp) {
+						break
+					}
+				}
 
 				mu.Lock()
 				posFeedbackCount++
@@ -576,6 +608,7 @@ func (m *Master) LoadDataFromDatabase(
 
 	// create read set (implicit negative feedback)
 	readSet := make([]mapset.Set[int32], dataSet.CountUsers())
+	readTimestamps := make([]map[int32]time.Time, dataSet.CountUsers())
 	for i := range readSet {
 		readSet[i] = mapset.NewSet[int32]()
 	}
@@ -601,11 +634,18 @@ func (m *Master) LoadDataFromDatabase(
 					continue
 				}
 				// skip if already in negative feedback set or positive set
-				if (negativeSet != nil && negativeSet[userIndex].Contains(itemIndex)) || positiveSet[userIndex].Contains(itemIndex) {
+				_, hasPositiveFeedback := positiveFeedback[userIndex].Load(itemIndex)
+				if (negativeSet != nil && negativeSet[userIndex].Contains(itemIndex)) || hasPositiveFeedback {
 					continue
 				}
-				readSet[userIndex].Add(itemIndex)
 				mu.Lock()
+				readSet[userIndex].Add(itemIndex)
+				if readTimestamps[userIndex] == nil {
+					readTimestamps[userIndex] = make(map[int32]time.Time)
+				}
+				if timestamp, ok := readTimestamps[userIndex][itemIndex]; !ok || f.Timestamp.After(timestamp) {
+					readTimestamps[userIndex][itemIndex] = f.Timestamp
+				}
 				readFeedbackCount++
 				evaluator.Add(f.FeedbackType, f.Value, userIndex, itemIndex, f.Timestamp)
 				mu.Unlock()
@@ -657,35 +697,38 @@ func (m *Master) LoadDataFromDatabase(
 		}
 	}
 	ctrDataset.ItemEmbeddings = itemEmbeddings
-	for userIndex := range positiveSet {
+	for userIndex := range positiveFeedback {
 		// insert explicit negative feedback (highest priority)
 		if negativeSet != nil {
 			for _, itemIndex := range negativeSet[userIndex].ToSlice() {
 				ctrDataset.Users = append(ctrDataset.Users, int32(userIndex))
 				ctrDataset.Items = append(ctrDataset.Items, itemIndex)
 				ctrDataset.Target = append(ctrDataset.Target, -1)
+				ctrDataset.Timestamps = append(ctrDataset.Timestamps, negativeTimestamps[userIndex][itemIndex])
 				ctrDataset.NegativeCount++
 			}
 		}
 		// insert positive feedback
-		for _, itemIndex := range positiveSet[userIndex].ToSlice() {
+		positiveFeedback[userIndex].Range(func(itemIndex, timestamp any) bool {
 			ctrDataset.Users = append(ctrDataset.Users, int32(userIndex))
-			ctrDataset.Items = append(ctrDataset.Items, itemIndex)
+			ctrDataset.Items = append(ctrDataset.Items, itemIndex.(int32))
 			ctrDataset.Target = append(ctrDataset.Target, 1)
+			ctrDataset.Timestamps = append(ctrDataset.Timestamps, timestamp.(time.Time))
 			ctrDataset.PositiveCount++
-		}
+			return true
+		})
 		// insert read feedback (implicit negative)
 		for _, itemIndex := range readSet[userIndex].ToSlice() {
 			ctrDataset.Users = append(ctrDataset.Users, int32(userIndex))
 			ctrDataset.Items = append(ctrDataset.Items, itemIndex)
 			ctrDataset.Target = append(ctrDataset.Target, -1)
+			ctrDataset.Timestamps = append(ctrDataset.Timestamps, readTimestamps[userIndex][itemIndex])
 			ctrDataset.NegativeCount++
 		}
 		// release sets
 		if negativeSet != nil {
 			negativeSet[userIndex] = nil
 		}
-		positiveSet[userIndex] = nil
 		readSet[userIndex] = nil
 	}
 	log.Logger().Debug("created ranking dataset",

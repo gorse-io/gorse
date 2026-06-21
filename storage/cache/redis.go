@@ -41,10 +41,14 @@ func init() {
 			return nil, err
 		}
 		opt.Protocol = 2
+		option := storage.NewOptions(opts...)
+		if option.RedisClientName != "" {
+			opt.ClientName = option.RedisClientName
+		}
 		database := new(Redis)
 		database.client = redis.NewClient(opt)
 		database.TablePrefix = storage.TablePrefix(tablePrefix)
-		database.maxSearchResults = storage.NewOptions(opts...).MaxSearchResults
+		database.maxSearchResults = option.MaxSearchResults
 		if err = redisotel.InstrumentTracing(database.client, redisotel.WithAttributes(semconv.DBSystemRedis)); err != nil {
 			log.Logger().Error("failed to add tracing for redis", zap.Error(err))
 			return nil, errors.Trace(err)
@@ -63,10 +67,14 @@ func init() {
 			return nil, err
 		}
 		opt.Protocol = 2
+		option := storage.NewOptions(opts...)
+		if option.RedisClientName != "" {
+			opt.ClientName = option.RedisClientName
+		}
 		database := new(Redis)
 		database.client = redis.NewClusterClient(opt)
 		database.TablePrefix = storage.TablePrefix(tablePrefix)
-		database.maxSearchResults = storage.NewOptions(opts...).MaxSearchResults
+		database.maxSearchResults = option.MaxSearchResults
 		if err = redisotel.InstrumentTracing(database.client, redisotel.WithAttributes(semconv.DBSystemRedis)); err != nil {
 			log.Logger().Error("failed to add tracing for redis", zap.Error(err))
 			return nil, errors.Trace(err)
@@ -113,7 +121,7 @@ func (r *Redis) Init() error {
 			&redis.FieldSchema{FieldName: "categories", FieldType: redis.SearchFieldTypeTag, Separator: ";"},
 			&redis.FieldSchema{FieldName: "timestamp", FieldType: redis.SearchFieldTypeNumeric},
 		).Result()
-		if err != nil {
+		if err != nil && !strings.Contains(err.Error(), "Index already exists") {
 			return errors.Trace(err)
 		}
 	}
@@ -497,6 +505,10 @@ func (r *Redis) GetTimeSeriesPoints(ctx context.Context, name string, begin, end
 	result, err := r.client.TSRangeWithArgs(ctx, r.PointsTable()+":"+name, int(begin.UnixMilli()), int(end.UnixMilli()),
 		&redis.TSRangeOptions{Aggregator: redis.Last, BucketDuration: int(duration / time.Millisecond)}).Result()
 	if err != nil {
+		if redis.HasErrorPrefix(err, "TSDB: the key does not exist") ||
+			redis.HasErrorPrefix(err, "key does not exist") {
+			return []TimeSeriesPoint{}, nil
+		}
 		return nil, errors.Trace(err)
 	}
 	points := make([]TimeSeriesPoint, 0, len(result))

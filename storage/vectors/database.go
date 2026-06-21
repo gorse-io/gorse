@@ -89,6 +89,8 @@ type Creator func(path, tablePrefix string, opts ...storage.Option) (Database, e
 
 var creators = make(map[string]Creator)
 
+var ErrNoDatabase = errors.NotAssignedf("database")
+
 // Register a database creator.
 func Register(prefixes []string, creator Creator) {
 	for _, p := range prefixes {
