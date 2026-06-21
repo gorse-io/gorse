@@ -15,10 +15,14 @@
 package vectors
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"testing"
 
+	"github.com/gorse-io/gorse/protocol"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	"google.golang.org/grpc"
 )
@@ -55,4 +59,43 @@ func (suite *ProxyTestSuite) TearDownSuite() {
 
 func TestProxy(t *testing.T) {
 	suite.Run(t, new(ProxyTestSuite))
+}
+
+func TestProxyServerAddCollectionConfig(t *testing.T) {
+	database := new(recordingVectorDatabase)
+	server := NewProxyServer(database)
+
+	_, err := server.AddCollection(context.Background(), &protocol.AddCollectionRequest{
+		Name:       "test",
+		Dimensions: 16,
+		Distance:   protocol.Distance_Dot,
+		Config: &protocol.VectorConfig{
+			QuantizationType: string(QuantizationRQ),
+			QuantizationBits: 4,
+		},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "test", database.name)
+	assert.Equal(t, 16, database.dimensions)
+	assert.Equal(t, Dot, database.distance)
+	assert.Equal(t, VectorConfig{
+		Quantization:     QuantizationRQ,
+		QuantizationBits: 4,
+	}, database.config)
+}
+
+type recordingVectorDatabase struct {
+	NoDatabase
+	name       string
+	dimensions int
+	distance   Distance
+	config     VectorConfig
+}
+
+func (db *recordingVectorDatabase) AddCollection(_ context.Context, name string, dimensions int, distance Distance, config VectorConfig) error {
+	db.name = name
+	db.dimensions = dimensions
+	db.distance = distance
+	db.config = config
+	return nil
 }

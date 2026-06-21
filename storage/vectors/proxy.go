@@ -78,8 +78,7 @@ func (p *ProxyServer) AddCollection(ctx context.Context, request *protocol.AddCo
 	if err != nil {
 		return nil, err
 	}
-	// Use default config for now (protobuf needs to be regenerated for VectorConfig support)
-	config := DefaultVectorConfig()
+	config := protoVectorConfigToVectorConfig(request.GetConfig())
 	err = p.database.AddCollection(ctx, request.GetName(), int(request.GetDimensions()), distance, config)
 	if err != nil {
 		return nil, err
@@ -201,12 +200,11 @@ func (p ProxyClient) AddCollection(ctx context.Context, name string, dimensions 
 	if err != nil {
 		return err
 	}
-	// Note: VectorConfig is not yet supported in protobuf (needs regeneration)
-	// The config is ignored for now, using default config on server side
 	_, err = p.VectorStoreClient.AddCollection(ctx, &protocol.AddCollectionRequest{
 		Name:       name,
 		Dimensions: int32(dimensions),
 		Distance:   pbDistance,
+		Config:     vectorConfigToProtoVectorConfig(config),
 	})
 	return err
 }
@@ -286,4 +284,24 @@ func protoDistanceToDistance(distance protocol.Distance) (Distance, error) {
 	default:
 		return Cosine, errors.NotSupportedf("distance method")
 	}
+}
+
+func vectorConfigToProtoVectorConfig(config VectorConfig) *protocol.VectorConfig {
+	return &protocol.VectorConfig{
+		QuantizationType: string(config.Quantization),
+		QuantizationBits: int32(config.QuantizationBits),
+	}
+}
+
+func protoVectorConfigToVectorConfig(config *protocol.VectorConfig) VectorConfig {
+	vectorConfig := DefaultVectorConfig()
+	if config == nil {
+		return vectorConfig
+	}
+	vectorConfig.Quantization = QuantizationType(config.GetQuantizationType())
+	vectorConfig.QuantizationBits = int(config.GetQuantizationBits())
+	if vectorConfig.Quantization == "" {
+		vectorConfig.Quantization = QuantizationNone
+	}
+	return vectorConfig
 }

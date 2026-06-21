@@ -405,6 +405,7 @@ type AddCollectionRequest struct {
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	Dimensions    int32                  `protobuf:"varint,2,opt,name=dimensions,proto3" json:"dimensions,omitempty"`
 	Distance      Distance               `protobuf:"varint,3,opt,name=distance,proto3,enum=protocol.Distance" json:"distance,omitempty"`
+	Config        *VectorConfig          `protobuf:"bytes,4,opt,name=config,proto3" json:"config,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -458,6 +459,13 @@ func (x *AddCollectionRequest) GetDistance() Distance {
 		return x.Distance
 	}
 	return Distance_Unknown
+}
+
+func (x *AddCollectionRequest) GetConfig() *VectorConfig {
+	if x != nil {
+		return x.Config
+	}
+	return nil
 }
 
 type AddCollectionResponse struct {
@@ -890,13 +898,14 @@ const file_vector_store_proto_rawDesc = "" +
 	"dimensions\x18\x02 \x01(\x05R\n" +
 	"dimensions\x12.\n" +
 	"\bdistance\x18\x03 \x01(\x0e2\x12.protocol.DistanceR\bdistance\x12.\n" +
-	"\x06config\x18\x04 \x01(\v2\x16.protocol.VectorConfigR\x06config\"z\n" +
+	"\x06config\x18\x04 \x01(\v2\x16.protocol.VectorConfigR\x06config\"\xaa\x01\n" +
 	"\x14AddCollectionRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1e\n" +
 	"\n" +
 	"dimensions\x18\x02 \x01(\x05R\n" +
 	"dimensions\x12.\n" +
-	"\bdistance\x18\x03 \x01(\x0e2\x12.protocol.DistanceR\bdistance\"\x17\n" +
+	"\bdistance\x18\x03 \x01(\x0e2\x12.protocol.DistanceR\bdistance\x12.\n" +
+	"\x06config\x18\x04 \x01(\v2\x16.protocol.VectorConfigR\x06config\"\x17\n" +
 	"\x15AddCollectionResponse\"-\n" +
 	"\x17DeleteCollectionRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\"\x1a\n" +
@@ -979,28 +988,29 @@ var file_vector_store_proto_depIdxs = []int32{
 	0,  // 1: protocol.DescribeCollectionResponse.distance:type_name -> protocol.Distance
 	4,  // 2: protocol.DescribeCollectionResponse.config:type_name -> protocol.VectorConfig
 	0,  // 3: protocol.AddCollectionRequest.distance:type_name -> protocol.Distance
-	1,  // 4: protocol.AddVectorsRequest.vectors:type_name -> protocol.Vector
-	17, // 5: protocol.DeleteVectorsRequest.timestamp:type_name -> google.protobuf.Timestamp
-	1,  // 6: protocol.QueryVectorsResponse.vectors:type_name -> protocol.Vector
-	2,  // 7: protocol.VectorStore.ListCollections:input_type -> protocol.ListCollectionsRequest
-	5,  // 8: protocol.VectorStore.DescribeCollection:input_type -> protocol.DescribeCollectionRequest
-	7,  // 9: protocol.VectorStore.AddCollection:input_type -> protocol.AddCollectionRequest
-	9,  // 10: protocol.VectorStore.DeleteCollection:input_type -> protocol.DeleteCollectionRequest
-	11, // 11: protocol.VectorStore.AddVectors:input_type -> protocol.AddVectorsRequest
-	13, // 12: protocol.VectorStore.DeleteVectors:input_type -> protocol.DeleteVectorsRequest
-	15, // 13: protocol.VectorStore.QueryVectors:input_type -> protocol.QueryVectorsRequest
-	3,  // 14: protocol.VectorStore.ListCollections:output_type -> protocol.ListCollectionsResponse
-	6,  // 15: protocol.VectorStore.DescribeCollection:output_type -> protocol.DescribeCollectionResponse
-	8,  // 16: protocol.VectorStore.AddCollection:output_type -> protocol.AddCollectionResponse
-	10, // 17: protocol.VectorStore.DeleteCollection:output_type -> protocol.DeleteCollectionResponse
-	12, // 18: protocol.VectorStore.AddVectors:output_type -> protocol.AddVectorsResponse
-	14, // 19: protocol.VectorStore.DeleteVectors:output_type -> protocol.DeleteVectorsResponse
-	16, // 20: protocol.VectorStore.QueryVectors:output_type -> protocol.QueryVectorsResponse
-	14, // [14:21] is the sub-list for method output_type
-	7,  // [7:14] is the sub-list for method input_type
-	7,  // [7:7] is the sub-list for extension type_name
-	7,  // [7:7] is the sub-list for extension extendee
-	0,  // [0:7] is the sub-list for field type_name
+	4,  // 4: protocol.AddCollectionRequest.config:type_name -> protocol.VectorConfig
+	1,  // 5: protocol.AddVectorsRequest.vectors:type_name -> protocol.Vector
+	17, // 6: protocol.DeleteVectorsRequest.timestamp:type_name -> google.protobuf.Timestamp
+	1,  // 7: protocol.QueryVectorsResponse.vectors:type_name -> protocol.Vector
+	2,  // 8: protocol.VectorStore.ListCollections:input_type -> protocol.ListCollectionsRequest
+	5,  // 9: protocol.VectorStore.DescribeCollection:input_type -> protocol.DescribeCollectionRequest
+	7,  // 10: protocol.VectorStore.AddCollection:input_type -> protocol.AddCollectionRequest
+	9,  // 11: protocol.VectorStore.DeleteCollection:input_type -> protocol.DeleteCollectionRequest
+	11, // 12: protocol.VectorStore.AddVectors:input_type -> protocol.AddVectorsRequest
+	13, // 13: protocol.VectorStore.DeleteVectors:input_type -> protocol.DeleteVectorsRequest
+	15, // 14: protocol.VectorStore.QueryVectors:input_type -> protocol.QueryVectorsRequest
+	3,  // 15: protocol.VectorStore.ListCollections:output_type -> protocol.ListCollectionsResponse
+	6,  // 16: protocol.VectorStore.DescribeCollection:output_type -> protocol.DescribeCollectionResponse
+	8,  // 17: protocol.VectorStore.AddCollection:output_type -> protocol.AddCollectionResponse
+	10, // 18: protocol.VectorStore.DeleteCollection:output_type -> protocol.DeleteCollectionResponse
+	12, // 19: protocol.VectorStore.AddVectors:output_type -> protocol.AddVectorsResponse
+	14, // 20: protocol.VectorStore.DeleteVectors:output_type -> protocol.DeleteVectorsResponse
+	16, // 21: protocol.VectorStore.QueryVectors:output_type -> protocol.QueryVectorsResponse
+	15, // [15:22] is the sub-list for method output_type
+	8,  // [8:15] is the sub-list for method input_type
+	8,  // [8:8] is the sub-list for extension type_name
+	8,  // [8:8] is the sub-list for extension extendee
+	0,  // [0:8] is the sub-list for field type_name
 }
 
 func init() { file_vector_store_proto_init() }
