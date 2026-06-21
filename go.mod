@@ -98,7 +98,7 @@ require (
 	gorm.io/gorm v1.31.1
 	modernc.org/quickjs v0.17.1
 	modernc.org/sortutil v1.2.1
-	modernc.org/sqlite v1.47.0
+	modernc.org/sqlite v1.52.0
 	modernc.org/strutil v1.2.1
 )
 
@@ -273,18 +273,15 @@ require (
 	google.golang.org/genproto/googleapis/api v0.0.0-20260217215200-42d3e9bedb6d // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260311181403-84a4fc48630c // indirect
 	k8s.io/klog/v2 v2.140.0 // indirect
-	modernc.org/cc/v4 v4.27.1 // indirect
-	modernc.org/libc v1.70.0 // indirect
+	modernc.org/libc v1.72.3 // indirect
 	modernc.org/libquickjs v0.12.3 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
-	modernc.org/opt v0.1.4 // indirect
-	modernc.org/token v1.1.0 // indirect
 )
 
 replace (
 	gorm.io/driver/clickhouse v0.7.0 => github.com/gorse-io/clickhouse v0.3.3-0.20260331225025-ab309f55941d
-	gorm.io/driver/sqlite v1.6.0 => github.com/gorse-io/sqlite v1.3.3-0.20260331224015-eb865ec4453d
+	gorm.io/driver/sqlite v1.6.0 => github.com/gorse-io/sqlite v1.3.3-0.20260620140844-3b4da3e2b9f2
 )
 
 tool github.com/gorse-io/goat

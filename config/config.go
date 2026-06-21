@@ -71,15 +71,17 @@ type Config struct {
 
 // DatabaseConfig is the configuration for the database.
 type DatabaseConfig struct {
-	DataStore        string      `mapstructure:"data_store" validate:"required,data_store"`   // database for data store
-	CacheStore       string      `mapstructure:"cache_store" validate:"required,cache_store"` // database for cache store
-	TablePrefix      string      `mapstructure:"table_prefix"`
-	DataTablePrefix  string      `mapstructure:"data_table_prefix"`
-	CacheTablePrefix string      `mapstructure:"cache_table_prefix"`
-	CacheClientName  string      `mapstructure:"cache_client_name"`
-	MySQL            MySQLConfig `mapstructure:"mysql"`
-	Postgres         SQLConfig   `mapstructure:"postgres"`
-	Redis            RedisConfig `mapstructure:"redis"`
+	VectorStore       string      `mapstructure:"vector_store" validate:"omitempty,vector_store"`
+	DataStore         string      `mapstructure:"data_store" validate:"required,data_store"`   // database for data store
+	CacheStore        string      `mapstructure:"cache_store" validate:"required,cache_store"` // database for cache store
+	TablePrefix       string      `mapstructure:"table_prefix"`
+	DataTablePrefix   string      `mapstructure:"data_table_prefix"`
+	CacheTablePrefix  string      `mapstructure:"cache_table_prefix"`
+	CacheClientName   string      `mapstructure:"cache_client_name"`
+	VectorTablePrefix string      `mapstructure:"vector_table_prefix"`
+	MySQL             MySQLConfig `mapstructure:"mysql"`
+	Postgres          SQLConfig   `mapstructure:"postgres"`
+	Redis             RedisConfig `mapstructure:"redis"`
 }
 
 type MySQLConfig struct {
@@ -669,10 +671,12 @@ type configBinding struct {
 var bindings = []configBinding{
 	{"database.cache_store", "GORSE_CACHE_STORE"},
 	{"database.data_store", "GORSE_DATA_STORE"},
+	{"database.vector_store", "GORSE_VECTOR_STORE"},
 	{"database.table_prefix", "GORSE_TABLE_PREFIX"},
 	{"database.cache_table_prefix", "GORSE_CACHE_TABLE_PREFIX"},
 	{"database.cache_client_name", "GORSE_CACHE_CLIENT_NAME"},
 	{"database.data_table_prefix", "GORSE_DATA_TABLE_PREFIX"},
+	{"database.vector_table_prefix", "GORSE_VECTOR_TABLE_PREFIX"},
 	{"master.port", "GORSE_MASTER_PORT"},
 	{"master.host", "GORSE_MASTER_HOST"},
 	{"master.ssl_mode", "GORSE_MASTER_SSL_MODE"},
@@ -857,6 +861,23 @@ func (config *Config) Validate() error {
 	}); err != nil {
 		return errors.Trace(err)
 	}
+	if err := validate.RegisterValidation("vector_store", func(fl validator.FieldLevel) bool {
+		prefixes := []string{
+			storage.SQLitePrefix,
+			storage.QdrantPrefix,
+			storage.WeaviatePrefix,
+			storage.WeaviatesPrefix,
+			storage.MilvusPrefix,
+		}
+		for _, prefix := range prefixes {
+			if strings.HasPrefix(fl.Field().String(), prefix) {
+				return true
+			}
+		}
+		return false
+	}); err != nil {
+		return errors.Trace(err)
+	}
 	if err := validate.RegisterValidation("item_expr", func(fl validator.FieldLevel) bool {
 		if fl.Field().String() == "" {
 			// Empty expression is legal.
@@ -889,6 +910,14 @@ func (config *Config) Validate() error {
 			return ut.Add("cache_store", "unsupported cache storage backend", true) // see universal-translator for details
 		}, func(ut ut.Translator, fe validator.FieldError) string {
 			t, _ := ut.T("cache_store", fe.Field())
+			return t
+		}); err != nil {
+			return errors.Trace(err)
+		}
+		if err := validate.RegisterTranslation("vector_store", trans, func(ut ut.Translator) error {
+			return ut.Add("vector_store", "unsupported vector storage backend", true)
+		}, func(ut ut.Translator, fe validator.FieldError) string {
+			t, _ := ut.T("vector_store", fe.Field())
 			return t
 		}); err != nil {
 			return errors.Trace(err)
