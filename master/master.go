@@ -21,6 +21,7 @@ import (
 	"math"
 	"math/rand"
 	"net"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -34,10 +35,12 @@ import (
 	"github.com/gorse-io/gorse/common/util"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/dataset"
+	"github.com/gorse-io/gorse/model"
 	"github.com/gorse-io/gorse/model/cf"
 	"github.com/gorse-io/gorse/model/ctr"
 	"github.com/gorse-io/gorse/protocol"
 	"github.com/gorse-io/gorse/server"
+	"github.com/gorse-io/gorse/storage"
 	"github.com/gorse-io/gorse/storage/blob"
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
@@ -202,6 +205,9 @@ func (m *Master) Serve() {
 		if err = m.VectorClient.Init(); err != nil {
 			log.Logger().Fatal("failed to init vector store", zap.Error(err))
 		}
+		if err = m.initCollaborativeFilteringVectorCollection(context.Background()); err != nil {
+			log.Logger().Fatal("failed to init collaborative filtering vector collection", zap.Error(err))
+		}
 	}
 
 	// load recommend config
@@ -305,6 +311,67 @@ func (m *Master) Serve() {
 
 	// start http server
 	m.StartHttpServer()
+}
+
+func (m *Master) initCollaborativeFilteringVectorCollection(ctx context.Context) error {
+	vectorConfig := vectors.VectorConfig{
+		Quantization:     vectors.QuantizationType(m.Config.Database.Vector.QuantizationType),
+		QuantizationBits: m.Config.Database.Vector.QuantizationBits,
+	}
+	if vectorConfig.Quantization == "" {
+		vectorConfig.Quantization = vectors.QuantizationNone
+	}
+	dimension := model.Params(nil).GetInt(model.NFactors, 16)
+
+	collections, err := m.VectorClient.ListCollections(ctx)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	created := false
+	if !slices.Contains(collections, cache.CollaborativeFiltering) {
+		if err = m.VectorClient.AddCollection(ctx, cache.CollaborativeFiltering, dimension, vectors.Dot, vectorConfig); err != nil {
+			return errors.Trace(err)
+		}
+		created = true
+	}
+
+	info, err := m.VectorClient.DescribeCollection(ctx, cache.CollaborativeFiltering)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	if err = m.validateCollaborativeFilteringVectorCollection(info, dimension, vectorConfig, created); err != nil {
+		return errors.Trace(err)
+	}
+	log.Logger().Info("initialized collaborative filtering vector collection",
+		zap.String("collection", cache.CollaborativeFiltering),
+		zap.Int("dimension", info.Dimension),
+		zap.Int("distance", int(info.Distance)),
+		zap.String("quantization_type", string(info.Quantization)),
+		zap.Int("quantization_bits", info.QuantizationBits))
+	return nil
+}
+
+func (m *Master) validateCollaborativeFilteringVectorCollection(info *vectors.CollectionInfo, dimension int, config vectors.VectorConfig, created bool) error {
+	if info.Dimension != 0 && info.Dimension != dimension {
+		return errors.Errorf("collection %s dimension mismatch: expected %d, got %d", info.Name, dimension, info.Dimension)
+	}
+	if info.Distance != vectors.Dot {
+		return errors.Errorf("collection %s distance mismatch: expected %v, got %v", info.Name, vectors.Dot, info.Distance)
+	}
+	if info.Quantization != config.Quantization {
+		return errors.Errorf("collection %s quantization type mismatch: expected %s, got %s", info.Name, config.Quantization, info.Quantization)
+	}
+	if info.QuantizationBits != config.QuantizationBits {
+		if strings.HasPrefix(m.Config.Database.VectorStore, storage.MilvusPrefix) && !created {
+			log.Logger().Warn("skip validating Milvus RQ query bits from existing collection",
+				zap.String("collection", info.Name),
+				zap.Int("expected", config.QuantizationBits),
+				zap.Int("actual", info.QuantizationBits))
+			return nil
+		}
+		return errors.Errorf("collection %s quantization bits mismatch: expected %d, got %d", info.Name, config.QuantizationBits, info.QuantizationBits)
+	}
+	return nil
 }
 
 func (m *Master) Shutdown() {
