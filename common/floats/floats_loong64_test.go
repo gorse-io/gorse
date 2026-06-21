@@ -1,4 +1,4 @@
-//go:build !noasm && arm64
+//go:build !noasm
 
 // Copyright 2026 gorse Project Authors
 //
@@ -14,23 +14,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package bfloats
+package floats
 
-import "unsafe"
+import (
+	"testing"
 
-//go:generate sh -c "set -e; tmp=$$(mktemp -d); out=$$tmp/bfloats; mkdir -p $$out; go tool goat -o $$out -t arm64 -O 3 src/bfloats_neon.c; cp $$out/bfloats_neon.go $$out/bfloats_neon.s ."
-
-type Feature uint64
-
-const (
-	NEON Feature = 1 << iota
+	"github.com/stretchr/testify/suite"
 )
 
-var feature = NEON
-
-func (feature Feature) euclidean(a, b []uint16) float32 {
-	if feature&NEON == NEON {
-		return veuclidean_bf16(unsafe.Pointer(&a[0]), unsafe.Pointer(&b[0]), int64(len(a)))
-	}
-	return euclidean(a, b)
+func TestLASX(t *testing.T) {
+	suite.Run(t, &SIMDTestSuite{Feature: LASX})
 }

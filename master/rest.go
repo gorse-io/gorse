@@ -1669,16 +1669,6 @@ func writeError(response http.ResponseWriter, httpStatus int, message string) {
 	}
 }
 
-func (m *Master) checkAdmin(request *http.Request) bool {
-	if m.Config.Master.AdminAPIKey == "" {
-		return true
-	}
-	if request.Header.Get("X-API-Key") == m.Config.Master.AdminAPIKey {
-		return true
-	}
-	return false
-}
-
 const (
 	EOF            = int64(0)
 	UserStream     = int64(-1)
@@ -1723,7 +1713,7 @@ func readDump[T proto.Message](r io.Reader, data T) (int64, error) {
 }
 
 func (m *Master) dump(response http.ResponseWriter, request *http.Request) {
-	if !m.checkAdmin(request) {
+	if !m.checkLogin(request) {
 		writeError(response, http.StatusUnauthorized, "unauthorized")
 		return
 	}
@@ -1801,12 +1791,18 @@ func (m *Master) dump(response http.ResponseWriter, request *http.Request) {
 	feedbackStream, errChan := m.DataClient.GetFeedbackStream(context.Background(), batchSize, data.WithEndTime(*m.Config.Now()))
 	for feedbacks := range feedbackStream {
 		for _, feedback := range feedbacks {
+			labels, err := json.Marshal(feedback.Labels)
+			if err != nil {
+				writeError(response, http.StatusInternalServerError, err.Error())
+				return
+			}
 			if err := writeDump(response, &protocol.Feedback{
 				FeedbackType: feedback.FeedbackType,
 				UserId:       feedback.UserId,
 				ItemId:       feedback.ItemId,
 				Value:        feedback.Value,
 				Timestamp:    timestamppb.New(feedback.Timestamp),
+				Labels:       labels,
 				Comment:      feedback.Comment,
 			}); err != nil {
 				writeError(response, http.StatusInternalServerError, err.Error())
@@ -1921,6 +1917,12 @@ func (m *Master) Restore(r io.ReadCloser, delta *time.Duration) (stats DumpStats
 				if delta != nil {
 					timestamp = timestamp.Add(*delta)
 				}
+				var labels any
+				if len(feedback.Labels) > 0 {
+					if err = json.Unmarshal(feedback.Labels, &labels); err != nil {
+						return
+					}
+				}
 				feedbacks = append(feedbacks, data.Feedback{
 					FeedbackKey: data.FeedbackKey{
 						FeedbackType: feedback.FeedbackType,
@@ -1929,6 +1931,7 @@ func (m *Master) Restore(r io.ReadCloser, delta *time.Duration) (stats DumpStats
 					},
 					Value:     feedback.Value,
 					Timestamp: timestamp,
+					Labels:    labels,
 					Comment:   feedback.Comment,
 				})
 				stats.Feedback++
@@ -1953,7 +1956,7 @@ func (m *Master) Restore(r io.ReadCloser, delta *time.Duration) (stats DumpStats
 }
 
 func (m *Master) restore(response http.ResponseWriter, request *http.Request) {
-	if !m.checkAdmin(request) {
+	if !m.checkLogin(request) {
 		writeError(response, http.StatusUnauthorized, "unauthorized")
 		return
 	}
@@ -2032,7 +2035,7 @@ func (m *Master) chatCompletions(response http.ResponseWriter, request *http.Req
 		writeError(response, http.StatusMethodNotAllowed, "method not allowed")
 		return
 	}
-	if !m.checkAdmin(request) {
+	if !m.checkLogin(request) {
 		writeError(response, http.StatusUnauthorized, "unauthorized")
 		return
 	}

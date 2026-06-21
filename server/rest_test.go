@@ -633,8 +633,8 @@ func (suite *ServerTestSuite) TestFeedback() {
 	// Insert ret
 	feedback := []data.Feedback{
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "0"}, Value: 1.0},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "1", ItemId: "2"}, Value: 1.0},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "2", ItemId: "4"}, Value: 1.0},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "1", ItemId: "2"}, Value: 1.0, Labels: []any{"positive", "mobile"}},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "2", ItemId: "4"}, Value: 1.0, Labels: map[string]any{"source": "rest", "rank": json.Number("2")}},
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "3", ItemId: "6"}, Value: 1.0},
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "4", ItemId: "8"}, Value: 1.0},
 	}
@@ -722,7 +722,7 @@ func (suite *ServerTestSuite) TestFeedback() {
 		Header("X-API-Key", apiKey).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(`[{"FeedbackType":"click", "UserId": "2", "ItemId": "4", "Timestamp":"0001-01-01T00:00:00Z", "Updated":"0001-01-01T00:00:00Z", "Comment":"", "Value":1}]`).
+		Body(suite.marshal([]data.Feedback{feedback[2]})).
 		End()
 	apitest.New().
 		Handler(suite.handler).
@@ -730,7 +730,7 @@ func (suite *ServerTestSuite) TestFeedback() {
 		Header("X-API-Key", apiKey).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(`[{"FeedbackType":"click", "UserId": "2", "ItemId": "4", "Timestamp":"0001-01-01T00:00:00Z", "Updated":"0001-01-01T00:00:00Z", "Comment":"", "Value":1}]`).
+		Body(suite.marshal([]data.Feedback{feedback[2]})).
 		End()
 	// test overwrite
 	apitest.New().

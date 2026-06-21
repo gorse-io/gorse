@@ -177,6 +177,7 @@ require (
 	github.com/googleapis/gax-go/v2 v2.18.0 // indirect
 	github.com/gorilla/handlers v1.5.2 // indirect
 	github.com/gorilla/mux v1.8.1 // indirect
+	github.com/gorse-io/goat v0.2.1-0.20260618151728-201cbcf325ad // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.28.0 // indirect
 	github.com/hashicorp/go-version v1.8.0 // indirect
@@ -190,6 +191,7 @@ require (
 	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
+	github.com/klauspost/asmfmt v1.3.2 // indirect
 	github.com/klauspost/compress v1.18.4 // indirect
 	github.com/klauspost/crc32 v1.3.0 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
@@ -264,7 +266,7 @@ require (
 	golang.org/x/crypto v0.49.0 // indirect
 	golang.org/x/net v0.52.0 // indirect
 	golang.org/x/sync v0.20.0 // indirect
-	golang.org/x/text v0.35.0 // indirect
+	golang.org/x/text v0.36.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
 	gonum.org/v1/gonum v0.16.0 // indirect
 	google.golang.org/genproto v0.0.0-20260217215200-42d3e9bedb6d // indirect
@@ -281,3 +283,5 @@ replace (
 	gorm.io/driver/clickhouse v0.7.0 => github.com/gorse-io/clickhouse v0.3.3-0.20260331225025-ab309f55941d
 	gorm.io/driver/sqlite v1.6.0 => github.com/gorse-io/sqlite v1.3.3-0.20260620140844-3b4da3e2b9f2
 )
+
+tool github.com/gorse-io/goat

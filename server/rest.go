@@ -1550,6 +1550,7 @@ type Feedback struct {
 	data.FeedbackKey
 	Value     float64
 	Timestamp string
+	Labels    any
 	Comment   string
 }
 
@@ -1557,6 +1558,7 @@ func (f Feedback) ToDataFeedback() (data.Feedback, error) {
 	var feedback data.Feedback
 	feedback.FeedbackKey = f.FeedbackKey
 	feedback.Value = f.Value
+	feedback.Labels = f.Labels
 	feedback.Comment = f.Comment
 	if f.Timestamp != "" {
 		var err error
