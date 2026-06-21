@@ -46,10 +46,11 @@ func (suite *MilvusTestSuite) SetupSuite() {
 	suite.NoError(err)
 }
 
-func (suite *MilvusTestSuite) TestRaBitQQuantization() {
+func (suite *MilvusTestSuite) TestRQQuantization() {
 	ctx := suite.T().Context()
-	err := suite.Database.AddCollection(ctx, "rabitq", defaultVectorSize, Cosine, VectorConfig{
-		Quantization: QuantizationRaBitQ,
+	err := suite.Database.AddCollection(ctx, "rq", defaultVectorSize, Cosine, VectorConfig{
+		Quantization:     QuantizationRQ,
+		QuantizationBits: 6,
 	})
 	suite.NoError(err)
 
@@ -59,7 +60,7 @@ func (suite *MilvusTestSuite) TestRaBitQQuantization() {
 	vectorB[0] = 0.9
 	vectorB[1] = 0.1
 
-	err = suite.Database.AddVectors(ctx, "rabitq", []Vector{
+	err = suite.Database.AddVectors(ctx, "rq", []Vector{
 		{
 			Id:         "a",
 			Vector:     vectorA,
@@ -73,7 +74,7 @@ func (suite *MilvusTestSuite) TestRaBitQQuantization() {
 	})
 	suite.NoError(err)
 
-	results, err := suite.Database.QueryVectors(ctx, "rabitq", vectorA, []string{"common"}, 10)
+	results, err := suite.Database.QueryVectors(ctx, "rq", vectorA, []string{"common"}, 10)
 	suite.NoError(err)
 	suite.Len(results, 2)
 }

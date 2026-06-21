@@ -99,11 +99,6 @@ func (db *Weaviate) AddCollection(ctx context.Context, name string, dimensions i
 		return errors.NotSupportedf("distance method")
 	}
 
-	// Weaviate 不支持 SQ，只支持 PQ
-	if config.Quantization == QuantizationSQ {
-		return errors.NotSupportedf("SQ quantization for Weaviate")
-	}
-
 	// 构建 VectorIndexConfig
 	vectorIndexConfig := map[string]any{
 		"distance":       weaviateDistance,
@@ -111,12 +106,8 @@ func (db *Weaviate) AddCollection(ctx context.Context, name string, dimensions i
 		"maxConnections": defaultHNSWM,
 		"efConstruction": defaultHNSWEfConstruct,
 	}
-
-	// PQ 量化配置
-	if config.Quantization == QuantizationPQ {
-		vectorIndexConfig["pq"] = map[string]any{
-			"enabled": true,
-		}
+	if err := weaviateApplyQuantization(vectorIndexConfig, config); err != nil {
+		return errors.Trace(err)
 	}
 
 	class := &models.Class{
@@ -142,6 +133,36 @@ func (db *Weaviate) AddCollection(ctx context.Context, name string, dimensions i
 	}
 	err := db.client.Schema().ClassCreator().WithClass(class).Do(ctx)
 	return errors.Trace(err)
+}
+
+func weaviateApplyQuantization(vectorIndexConfig map[string]any, config VectorConfig) error {
+	switch config.Quantization {
+	case QuantizationNone, "":
+		return nil
+	case QuantizationSQ:
+		return errors.NotSupportedf("SQ quantization for Weaviate")
+	case QuantizationPQ:
+		vectorIndexConfig["pq"] = map[string]any{
+			"enabled": true,
+		}
+		return nil
+	case QuantizationRQ:
+		rq := map[string]any{
+			"enabled": true,
+		}
+		if config.QuantizationBits != 0 {
+			switch config.QuantizationBits {
+			case 1, 8:
+				rq["bits"] = config.QuantizationBits
+			default:
+				return errors.NotSupportedf("RQ quantization bits %d for Weaviate", config.QuantizationBits)
+			}
+		}
+		vectorIndexConfig["rq"] = rq
+		return nil
+	default:
+		return errors.NotSupportedf("quantization type %s for Weaviate", config.Quantization)
+	}
 }
 
 func (db *Weaviate) DeleteCollection(ctx context.Context, name string) error {

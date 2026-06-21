@@ -89,18 +89,18 @@ func (db *Qdrant) AddCollection(ctx context.Context, name string, dimensions int
 		return errors.NotSupportedf("distance method")
 	}
 
-	// Note: Quantization support requires different API structure in qdrant-go-client v1.17.1
-	// SQ/PQ quantization configuration should be added via QuantizationConfig field in VectorParams.
-	if config.Quantization != QuantizationNone {
-		return errors.NotSupportedf("quantization type %s for Qdrant via this API, configure quantization directly in Qdrant server", config.Quantization)
+	quantizationConfig, err := qdrantQuantizationConfig(config)
+	if err != nil {
+		return errors.Trace(err)
 	}
 
-	err := db.client.CreateCollection(ctx, &qdrant.CreateCollection{
+	err = db.client.CreateCollection(ctx, &qdrant.CreateCollection{
 		CollectionName: name,
 		VectorsConfig: qdrant.NewVectorsConfig(&qdrant.VectorParams{
 			Size:     uint64(dimensions),
 			Distance: qdrantDistance,
 		}),
+		QuantizationConfig: quantizationConfig,
 		HnswConfig: &qdrant.HnswConfigDiff{
 			M:           ptrUint64(defaultHNSWM),
 			EfConstruct: ptrUint64(defaultHNSWEfConstruct),
@@ -117,6 +117,42 @@ func (db *Qdrant) AddCollection(ctx context.Context, name string, dimensions int
 		FieldType:      qdrant.FieldType_FieldTypeInteger.Enum(),
 	})
 	return errors.Trace(err)
+}
+
+func qdrantQuantizationConfig(config VectorConfig) (*qdrant.QuantizationConfig, error) {
+	switch config.Quantization {
+	case QuantizationNone, "":
+		return nil, nil
+	case QuantizationRQ:
+		turbo := &qdrant.TurboQuantization{}
+		if config.QuantizationBits != 0 {
+			bits, err := qdrantTurboQuantBits(config.QuantizationBits)
+			if err != nil {
+				return nil, errors.Trace(err)
+			}
+			turbo.Bits = bits.Enum()
+		}
+		return qdrant.NewQuantizationTurbo(turbo), nil
+	case QuantizationSQ:
+		return nil, errors.NotSupportedf("SQ quantization for Qdrant")
+	case QuantizationPQ:
+		return nil, errors.NotSupportedf("PQ quantization for Qdrant")
+	default:
+		return nil, errors.NotSupportedf("quantization type %s for Qdrant", config.Quantization)
+	}
+}
+
+func qdrantTurboQuantBits(bits int) (qdrant.TurboQuantBitSize, error) {
+	switch bits {
+	case 1:
+		return qdrant.TurboQuantBitSize_Bits1, nil
+	case 2:
+		return qdrant.TurboQuantBitSize_Bits2, nil
+	case 4:
+		return qdrant.TurboQuantBitSize_Bits4, nil
+	default:
+		return 0, errors.NotSupportedf("RQ quantization bits %d for Qdrant", bits)
+	}
 }
 
 func (db *Qdrant) DeleteCollection(ctx context.Context, name string) error {

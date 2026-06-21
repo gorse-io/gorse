@@ -22,31 +22,41 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestMilvusRaBitQIndex(t *testing.T) {
-	idx, err := milvusIndex(entity.COSINE, QuantizationRaBitQ)
+func TestMilvusRQIndex(t *testing.T) {
+	idx, err := milvusIndex(entity.COSINE, VectorConfig{Quantization: QuantizationRQ})
 	require.NoError(t, err)
-	assert.Equal(t, milvusIVFRaBitQIndexType, idx.IndexType())
+	assert.Equal(t, milvusIVFRQIndexType, idx.IndexType())
 	assert.Equal(t, map[string]string{
-		"index_type":  string(milvusIVFRaBitQIndexType),
+		"index_type":  string(milvusIVFRQIndexType),
 		"metric_type": string(entity.COSINE),
 		"nlist":       "128",
 	}, idx.Params())
 }
 
-func TestMilvusRaBitQSearchParam(t *testing.T) {
+func TestMilvusRQSearchParam(t *testing.T) {
 	params := milvusSearchParam{
-		"nprobe":         defaultMilvusRaBitQNProbe,
-		"rbq_query_bits": defaultMilvusRaBitQQueryBits,
-		"refine_k":       defaultMilvusRaBitQRefineK,
+		"nprobe":         defaultMilvusRQNProbe,
+		"rbq_query_bits": defaultMilvusRQQueryBits,
+		"refine_k":       defaultMilvusRQRefineK,
 	}
 	params.AddRadius(0.8)
 	params.AddRangeFilter(0.1)
 
 	assert.Equal(t, map[string]interface{}{
-		"nprobe":         defaultMilvusRaBitQNProbe,
-		"rbq_query_bits": defaultMilvusRaBitQQueryBits,
-		"refine_k":       defaultMilvusRaBitQRefineK,
+		"nprobe":         defaultMilvusRQNProbe,
+		"rbq_query_bits": defaultMilvusRQQueryBits,
+		"refine_k":       defaultMilvusRQRefineK,
 		"radius":         0.8,
 		"range_filter":   0.1,
 	}, params.Params())
+}
+
+func TestMilvusRQQueryBits(t *testing.T) {
+	for _, bits := range []int{0, 1, 6, 8} {
+		actual, err := milvusRQQueryBits(bits)
+		require.NoError(t, err)
+		assert.Equal(t, bits, actual)
+	}
+	_, err := milvusRQQueryBits(9)
+	assert.Error(t, err)
 }

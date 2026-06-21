@@ -20,6 +20,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gorse-io/gorse/storage"
@@ -34,17 +35,19 @@ const (
 	milvusCategoriesField = "categories"
 	milvusTimestampField  = "timestamp"
 
-	milvusIVFRaBitQIndexType = entity.IndexType("IVF_RABITQ")
+	milvusIVFRQIndexType = entity.IndexType("IVF_RABITQ")
 
-	defaultMilvusIVFNList        = 128
-	defaultMilvusRaBitQNProbe    = 8
-	defaultMilvusRaBitQQueryBits = 0
-	defaultMilvusRaBitQRefineK   = 1
+	defaultMilvusIVFNList    = 128
+	defaultMilvusRQNProbe    = 8
+	defaultMilvusRQQueryBits = 0
+	defaultMilvusRQRefineK   = 1
 )
 
 func init() {
 	Register([]string{storage.MilvusPrefix}, func(path, tablePrefix string, opts ...storage.Option) (Database, error) {
-		database := new(Milvus)
+		database := &Milvus{
+			rqQueryBits: make(map[string]int),
+		}
 		u, err := url.Parse(path)
 		if err != nil {
 			return nil, errors.Trace(err)
@@ -60,7 +63,9 @@ func init() {
 }
 
 type Milvus struct {
-	client client.Client
+	client      client.Client
+	mu          sync.RWMutex
+	rqQueryBits map[string]int
 }
 
 func (db *Milvus) Init() error {
@@ -117,13 +122,16 @@ func (db *Milvus) AddCollection(ctx context.Context, name string, dimensions int
 		return errors.NotSupportedf("distance method")
 	}
 
-	idx, err := milvusIndex(metricType, config.Quantization)
+	idx, err := milvusIndex(metricType, config)
 	if err != nil {
 		return errors.Trace(err)
 	}
 	err = db.client.CreateIndex(ctx, name, milvusVectorField, idx, false)
 	if err != nil {
 		return errors.Trace(err)
+	}
+	if config.Quantization == QuantizationRQ {
+		db.setRQQueryBits(name, config.QuantizationBits)
 	}
 
 	scalarIdx := entity.NewScalarIndex()
@@ -146,6 +154,7 @@ func (db *Milvus) DeleteCollection(ctx context.Context, name string) error {
 		return errors.NotFoundf("collection %s", name)
 	}
 	err = db.client.DropCollection(ctx, name)
+	db.deleteRQQueryBits(name)
 	return errors.Trace(err)
 }
 
@@ -242,22 +251,25 @@ func (db *Milvus) QueryVectors(ctx context.Context, collection string, q []float
 	return vectors, nil
 }
 
-func milvusIndex(metricType entity.MetricType, quantization QuantizationType) (entity.Index, error) {
-	switch quantization {
+func milvusIndex(metricType entity.MetricType, config VectorConfig) (entity.Index, error) {
+	switch config.Quantization {
 	case QuantizationNone, "":
 		return entity.NewIndexHNSW(metricType, defaultHNSWM, defaultHNSWEfConstruct)
-	case QuantizationRaBitQ:
+	case QuantizationRQ:
+		if _, err := milvusRQQueryBits(config.QuantizationBits); err != nil {
+			return nil, errors.Trace(err)
+		}
 		params := map[string]string{
 			"metric_type": string(metricType),
 			"nlist":       strconv.Itoa(defaultMilvusIVFNList),
 		}
-		return entity.NewGenericIndex(milvusVectorField, milvusIVFRaBitQIndexType, params), nil
+		return entity.NewGenericIndex(milvusVectorField, milvusIVFRQIndexType, params), nil
 	case QuantizationPQ:
 		return nil, errors.NotSupportedf("PQ quantization for Milvus")
 	case QuantizationSQ:
 		return nil, errors.NotSupportedf("SQ quantization for Milvus")
 	default:
-		return nil, errors.NotSupportedf("quantization type %s for Milvus", quantization)
+		return nil, errors.NotSupportedf("quantization type %s for Milvus", config.Quantization)
 	}
 }
 
@@ -270,15 +282,43 @@ func (db *Milvus) searchParam(ctx context.Context, collection string) (entity.Se
 		return nil, errors.NotFoundf("index for collection %s", collection)
 	}
 	switch indexes[0].IndexType() {
-	case milvusIVFRaBitQIndexType:
+	case milvusIVFRQIndexType:
 		return milvusSearchParam{
-			"nprobe":         defaultMilvusRaBitQNProbe,
-			"rbq_query_bits": defaultMilvusRaBitQQueryBits,
-			"refine_k":       defaultMilvusRaBitQRefineK,
+			"nprobe":         defaultMilvusRQNProbe,
+			"rbq_query_bits": db.getRQQueryBits(collection),
+			"refine_k":       defaultMilvusRQRefineK,
 		}, nil
 	default:
 		return entity.NewIndexHNSWSearchParam(defaultHNSWEfSearch)
 	}
+}
+
+func milvusRQQueryBits(bits int) (int, error) {
+	if bits < 0 || bits > 8 {
+		return 0, errors.NotSupportedf("RQ quantization bits %d for Milvus", bits)
+	}
+	return bits, nil
+}
+
+func (db *Milvus) setRQQueryBits(collection string, bits int) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	db.rqQueryBits[collection] = bits
+}
+
+func (db *Milvus) getRQQueryBits(collection string) int {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+	if bits, ok := db.rqQueryBits[collection]; ok {
+		return bits
+	}
+	return defaultMilvusRQQueryBits
+}
+
+func (db *Milvus) deleteRQQueryBits(collection string) {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	delete(db.rqQueryBits, collection)
 }
 
 type milvusSearchParam map[string]any

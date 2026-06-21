@@ -35,10 +35,10 @@ const (
 type QuantizationType string
 
 const (
-	QuantizationNone   QuantizationType = "none"   // 无量化 (float32)
-	QuantizationSQ     QuantizationType = "sq"     // 标量量化
-	QuantizationPQ     QuantizationType = "pq"     // 乘积量化
-	QuantizationRaBitQ QuantizationType = "rabitq" // RaBitQ 量化
+	QuantizationNone QuantizationType = "none" // 无量化 (float32)
+	QuantizationSQ   QuantizationType = "sq"   // 标量量化
+	QuantizationPQ   QuantizationType = "pq"   // 乘积量化
+	QuantizationRQ   QuantizationType = "rq"   // 旋转量化/RaBitQ/TurboQuant
 )
 
 const (
@@ -50,7 +50,9 @@ const (
 // VectorConfig 向量配置
 type VectorConfig struct {
 	// 量化配置
-	Quantization QuantizationType // none | sq | pq | rabitq
+	Quantization QuantizationType // none | sq | pq | rq
+	// 量化位数, 0 表示使用后端默认值
+	QuantizationBits int
 }
 
 // DefaultVectorConfig 返回默认向量配置
