@@ -1,6 +1,6 @@
 [database]
 
-# The database for caching, support Redis, MySQL, Postgres and MongoDB:
+# The database for caching, support Redis (and Valkey), MySQL, Postgres and MongoDB:
 #   redis://<user>:<password>@<host>:<port>/<db_number>
 #   rediss://<user>:<password>@<host>:<port>/<db_number>
 #   redis+cluster://<user>:<password>@<host>:<port>[?addr=<host2>:<port2>&addr=<host3>:<port3>]

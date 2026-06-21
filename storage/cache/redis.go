@@ -45,15 +45,17 @@ func init() {
 		if option.RedisClientName != "" {
 			opt.ClientName = option.RedisClientName
 		}
-		database := new(Redis)
-		database.client = redis.NewClient(opt)
-		database.TablePrefix = storage.TablePrefix(tablePrefix)
-		database.maxSearchResults = option.MaxSearchResults
-		if err = redisotel.InstrumentTracing(database.client, redisotel.WithAttributes(semconv.DBSystemRedis)); err != nil {
+		client := redis.NewClient(opt)
+		tp := storage.TablePrefix(tablePrefix)
+		maxSearch := option.MaxSearchResults
+		if err = redisotel.InstrumentTracing(client, redisotel.WithAttributes(semconv.DBSystemRedis)); err != nil {
 			log.Logger().Error("failed to add tracing for redis", zap.Error(err))
 			return nil, errors.Trace(err)
 		}
-		return database, nil
+		if isValkey(client) {
+			return &RedisValkey{Redis{TablePrefix: tp, client: client, maxSearchResults: maxSearch}}, nil
+		}
+		return &Redis{TablePrefix: tp, client: client, maxSearchResults: maxSearch}, nil
 	})
 	Register([]string{storage.RedisClusterPrefix, storage.RedissClusterPrefix}, func(path, tablePrefix string, opts ...storage.Option) (Database, error) {
 		var newURL string
@@ -71,16 +73,31 @@ func init() {
 		if option.RedisClientName != "" {
 			opt.ClientName = option.RedisClientName
 		}
-		database := new(Redis)
-		database.client = redis.NewClusterClient(opt)
-		database.TablePrefix = storage.TablePrefix(tablePrefix)
-		database.maxSearchResults = option.MaxSearchResults
-		if err = redisotel.InstrumentTracing(database.client, redisotel.WithAttributes(semconv.DBSystemRedis)); err != nil {
+		client := redis.NewClusterClient(opt)
+		tp := storage.TablePrefix(tablePrefix)
+		maxSearch := option.MaxSearchResults
+		if err = redisotel.InstrumentTracing(client, redisotel.WithAttributes(semconv.DBSystemRedis)); err != nil {
 			log.Logger().Error("failed to add tracing for redis", zap.Error(err))
 			return nil, errors.Trace(err)
 		}
-		return database, nil
+		if isValkey(client) {
+			return &RedisValkey{Redis{TablePrefix: tp, client: client, maxSearchResults: maxSearch}}, nil
+		}
+		return &Redis{TablePrefix: tp, client: client, maxSearchResults: maxSearch}, nil
 	})
+}
+
+func isValkey(client redis.UniversalClient) bool {
+	info, err := client.Info(context.Background(), "server").Result()
+	if err != nil {
+		return false
+	}
+	for line := range strings.SplitSeq(info, "\n") {
+		if strings.TrimSpace(line) == "server_name:valkey" {
+			return true
+		}
+	}
+	return false
 }
 
 // Redis cache storage.

@@ -5,6 +5,12 @@ services:
     ports:
       - 6379:6379
 
+  # Valkey with valkey-search 1.2.0+ (full-text search support).
+  valkey:
+    image: valkey/valkey-bundle:latest
+    ports:
+      - 6380:6379
+
   mysql:
     image: mysql:8.0
     ports:
