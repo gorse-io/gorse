@@ -31,14 +31,14 @@ const (
 	Dot
 )
 
-// QuantizationType 量化类型
+// QuantizationType represents a vector quantization type.
 type QuantizationType string
 
 const (
-	QuantizationNone QuantizationType = "none" // 无量化 (float32)
-	QuantizationSQ   QuantizationType = "sq"   // 标量量化
-	QuantizationPQ   QuantizationType = "pq"   // 乘积量化
-	QuantizationRQ   QuantizationType = "rq"   // 旋转量化/RaBitQ/TurboQuant
+	QuantizationNone QuantizationType = "none" // No quantization (float32)
+	QuantizationSQ   QuantizationType = "sq"   // Scalar quantization
+	QuantizationPQ   QuantizationType = "pq"   // Product quantization
+	QuantizationRQ   QuantizationType = "rq"   // Rotational quantization/RaBitQ/TurboQuant
 )
 
 const (
@@ -47,15 +47,15 @@ const (
 	defaultHNSWEfSearch    = 64
 )
 
-// VectorConfig 向量配置
+// VectorConfig configures vector storage.
 type VectorConfig struct {
-	// 量化配置
+	// Quantization configures the vector quantization type.
 	Quantization QuantizationType // none | sq | pq | rq
-	// 量化位数, 0 表示使用后端默认值
+	// QuantizationBits is the number of quantization bits. 0 uses the backend default.
 	QuantizationBits int
 }
 
-// DefaultVectorConfig 返回默认向量配置
+// DefaultVectorConfig returns the default vector config.
 func DefaultVectorConfig() VectorConfig {
 	return VectorConfig{
 		Quantization: QuantizationNone,

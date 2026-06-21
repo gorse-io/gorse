@@ -99,7 +99,7 @@ func (db *Weaviate) AddCollection(ctx context.Context, name string, dimensions i
 		return errors.NotSupportedf("distance method")
 	}
 
-	// 构建 VectorIndexConfig
+	// Build VectorIndexConfig.
 	vectorIndexConfig := map[string]any{
 		"distance":       weaviateDistance,
 		"ef":             defaultHNSWEfSearch,

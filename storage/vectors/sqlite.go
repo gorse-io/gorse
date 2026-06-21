@@ -75,7 +75,7 @@ func (db *SQLite) ListCollections(ctx context.Context) ([]string, error) {
 }
 
 func (db *SQLite) AddCollection(ctx context.Context, name string, dimensions int, distance Distance, config VectorConfig) error {
-	// SQLite 不支持量化
+	// SQLite does not support quantization.
 	if config.Quantization != QuantizationNone {
 		return errors.NotSupportedf("quantization type %s for SQLite", config.Quantization)
 	}
