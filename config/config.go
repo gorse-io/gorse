@@ -102,7 +102,7 @@ type RedisConfig struct {
 	MaxSearchResults int `mapstructure:"max_search_results" validate:"gt=0"`
 }
 type VectorConfig struct {
-	Quantization string `mapstructure:"quantization"`
+	Quantization string `mapstructure:"quantization" validate:"omitempty,oneof=none sq pq rabitq"`
 }
 
 func (db *DatabaseConfig) StorageOptions(path string) []storage.Option {
@@ -480,6 +480,9 @@ func GetDefaultConfig() *Config {
 			Redis: RedisConfig{
 				MaxSearchResults: 10000,
 			},
+			Vector: VectorConfig{
+				Quantization: "none",
+			},
 		},
 		Master: MasterConfig{
 			Port:            8086,
@@ -620,6 +623,8 @@ func setDefault() {
 	viper.SetDefault("database.postgres.conn_max_lifetime", defaultConfig.Database.Postgres.ConnMaxLifetime)
 	// [database.redis]
 	viper.SetDefault("database.redis.max_search_results", defaultConfig.Database.Redis.MaxSearchResults)
+	// [database.vector]
+	viper.SetDefault("database.vector.quantization", defaultConfig.Database.Vector.Quantization)
 	// [master]
 	viper.SetDefault("master.port", defaultConfig.Master.Port)
 	viper.SetDefault("master.host", defaultConfig.Master.Host)
@@ -681,6 +686,7 @@ var bindings = []configBinding{
 	{"database.cache_client_name", "GORSE_CACHE_CLIENT_NAME"},
 	{"database.data_table_prefix", "GORSE_DATA_TABLE_PREFIX"},
 	{"database.vector_table_prefix", "GORSE_VECTOR_TABLE_PREFIX"},
+	{"database.vector.quantization", "GORSE_VECTOR_QUANTIZATION"},
 	{"master.port", "GORSE_MASTER_PORT"},
 	{"master.host", "GORSE_MASTER_HOST"},
 	{"master.ssl_mode", "GORSE_MASTER_SSL_MODE"},

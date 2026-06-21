@@ -67,6 +67,12 @@ conn_max_lifetime = "1m"
 # The maximum number of results to be returned by the FT.SEARCH command if LIMIT is used
 max_search_results = 10000
 
+[database.vector]
+
+# Quantization strategy for vector collections: none, sq, pq, rabitq.
+# The rabitq strategy is available for vector databases that support RaBitQ, such as Milvus IVF_RABITQ.
+quantization = "none"
+
 [master]
 
 # GRPC port of the master node. The default value is 8086.

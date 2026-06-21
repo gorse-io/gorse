@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -32,6 +33,13 @@ const (
 	milvusVectorField     = "vector"
 	milvusCategoriesField = "categories"
 	milvusTimestampField  = "timestamp"
+
+	milvusIVFRaBitQIndexType = entity.IndexType("IVF_RABITQ")
+
+	defaultMilvusIVFNList        = 128
+	defaultMilvusRaBitQNProbe    = 8
+	defaultMilvusRaBitQQueryBits = 0
+	defaultMilvusRaBitQRefineK   = 1
 )
 
 func init() {
@@ -81,9 +89,8 @@ func (db *Milvus) ListCollections(ctx context.Context) ([]string, error) {
 
 func (db *Milvus) AddCollection(ctx context.Context, name string, dimensions int, distance Distance, config VectorConfig) error {
 	// Milvus SQ support requires Int8Vector which may not be available in older SDK versions
-	// For now, we only support PQ as index-level quantization
 	if config.Quantization == QuantizationSQ {
-		return errors.NotSupportedf("SQ quantization for Milvus, use PQ instead")
+		return errors.NotSupportedf("SQ quantization for Milvus")
 	}
 
 	schema := entity.NewSchema().WithName(name).WithDescription("gorse collection").
@@ -110,8 +117,7 @@ func (db *Milvus) AddCollection(ctx context.Context, name string, dimensions int
 		return errors.NotSupportedf("distance method")
 	}
 
-	// Create HNSW index with internal default parameters.
-	idx, err := entity.NewIndexHNSW(metricType, defaultHNSWM, defaultHNSWEfConstruct)
+	idx, err := milvusIndex(metricType, config.Quantization)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -186,7 +192,10 @@ func (db *Milvus) QueryVectors(ctx context.Context, collection string, q []float
 		expr = strings.Join(conditions, " or ")
 	}
 
-	searchParam, _ := entity.NewIndexHNSWSearchParam(64)
+	searchParam, err := db.searchParam(ctx, collection)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
 	results, err := db.client.Search(ctx, collection, []string{}, expr, []string{milvusIdField, milvusCategoriesField}, []entity.Vector{entity.FloatVector(q)}, milvusVectorField, entity.COSINE, topK, searchParam, client.WithSearchQueryConsistencyLevel(entity.ClStrong))
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -231,6 +240,63 @@ func (db *Milvus) QueryVectors(ctx context.Context, collection string, q []float
 		}
 	}
 	return vectors, nil
+}
+
+func milvusIndex(metricType entity.MetricType, quantization QuantizationType) (entity.Index, error) {
+	switch quantization {
+	case QuantizationNone, "":
+		return entity.NewIndexHNSW(metricType, defaultHNSWM, defaultHNSWEfConstruct)
+	case QuantizationRaBitQ:
+		params := map[string]string{
+			"metric_type": string(metricType),
+			"nlist":       strconv.Itoa(defaultMilvusIVFNList),
+		}
+		return entity.NewGenericIndex(milvusVectorField, milvusIVFRaBitQIndexType, params), nil
+	case QuantizationPQ:
+		return nil, errors.NotSupportedf("PQ quantization for Milvus")
+	case QuantizationSQ:
+		return nil, errors.NotSupportedf("SQ quantization for Milvus")
+	default:
+		return nil, errors.NotSupportedf("quantization type %s for Milvus", quantization)
+	}
+}
+
+func (db *Milvus) searchParam(ctx context.Context, collection string) (entity.SearchParam, error) {
+	indexes, err := db.client.DescribeIndex(ctx, collection, milvusVectorField)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	if len(indexes) == 0 {
+		return nil, errors.NotFoundf("index for collection %s", collection)
+	}
+	switch indexes[0].IndexType() {
+	case milvusIVFRaBitQIndexType:
+		return milvusSearchParam{
+			"nprobe":         defaultMilvusRaBitQNProbe,
+			"rbq_query_bits": defaultMilvusRaBitQQueryBits,
+			"refine_k":       defaultMilvusRaBitQRefineK,
+		}, nil
+	default:
+		return entity.NewIndexHNSWSearchParam(defaultHNSWEfSearch)
+	}
+}
+
+type milvusSearchParam map[string]any
+
+func (p milvusSearchParam) Params() map[string]any {
+	params := make(map[string]any, len(p))
+	for k, v := range p {
+		params[k] = v
+	}
+	return params
+}
+
+func (p milvusSearchParam) AddRadius(radius float64) {
+	p["radius"] = radius
+}
+
+func (p milvusSearchParam) AddRangeFilter(rangeFilter float64) {
+	p["range_filter"] = rangeFilter
 }
 
 func milvusStringsToBytes(ss [][]string) [][][]byte {
