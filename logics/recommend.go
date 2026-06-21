@@ -43,6 +43,7 @@ type Recommender struct {
 	config      config.RecommendConfig
 	cacheClient cache.Database
 	dataClient  data.Database
+	weightExpr  *expression.FeedbackWeightExpression
 
 	online       bool
 	coldstart    bool
@@ -55,6 +56,10 @@ type Recommender struct {
 type RecommenderFunc func(ctx context.Context) ([]cache.Score, string, error)
 
 func NewRecommender(config config.RecommendConfig, cacheClient cache.Database, dataClient data.Database, online bool, userId string, categories []string) (*Recommender, error) {
+	weightExpr, err := expression.NewFeedbackWeightExpression(config.DataSource.FeedbackWeight)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
 	// Load user feedback
 	userFeedback, err := dataClient.GetUserFeedback(context.Background(), userId, new(time.Now()))
 	if err != nil {
@@ -78,6 +83,7 @@ func NewRecommender(config config.RecommendConfig, cacheClient cache.Database, d
 		config:       config,
 		cacheClient:  cacheClient,
 		dataClient:   dataClient,
+		weightExpr:   weightExpr,
 		userId:       userId,
 		userFeedback: userFeedback,
 		online:       online,
@@ -249,11 +255,12 @@ func (r *Recommender) recommendItemToItem(name string) RecommenderFunc {
 				}
 			}
 		}
-		// collect scores
+		// collect scores with weighted aggregation
 		scores := make(map[string]float64)
 		categories := make(map[string][]string)
 		digests := mapset.NewSet[string]()
 		for _, feedback := range userFeedback {
+			fbWeight := float64(r.weightExpr.Evaluate(feedback.FeedbackType, feedback.Value))
 			similarItems, err := r.cacheClient.SearchScores(ctx, cache.ItemToItem, cache.Key(name, feedback.ItemId), r.categories, 0, r.config.CacheSize)
 			if err != nil {
 				return nil, "", errors.Trace(err)
@@ -264,7 +271,8 @@ func (r *Recommender) recommendItemToItem(name string) RecommenderFunc {
 			}
 			for _, item := range similarItems {
 				if !r.excludeSet.Contains(item.Id) {
-					scores[item.Id] += item.Score
+					// weighted score aggregation
+					scores[item.Id] += item.Score * fbWeight
 					categories[item.Id] = item.Categories
 					digests.Add(digest)
 				}

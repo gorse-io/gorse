@@ -163,6 +163,8 @@ type Dataset struct {
 	ItemEmbeddingIndex     *dataset.Index
 	PositiveCount          int
 	NegativeCount          int
+	// Weight support
+	Weights []float32 // Computed weight for each sample (set by tasks)
 }
 
 // CountUsers returns the number of users.
@@ -264,6 +266,15 @@ func (dataset *Dataset) Get(i int) ([]int32, []float32, [][]uint16, float32) {
 		values = append(values, contextValues...)
 	}
 	return indices, values, embedding, dataset.Target[i]
+}
+
+// GetWeight returns the weight for the i-th sample.
+// Returns 1.0 if no weight is set (default behavior).
+func (dataset *Dataset) GetWeight(i int) float32 {
+	if dataset.Weights != nil && i < len(dataset.Weights) {
+		return dataset.Weights[i]
+	}
+	return 1.0
 }
 
 // LoadLibFMFile loads libFM format file.
@@ -369,6 +380,9 @@ func (dataset *Dataset) Split(ratio float32, seed int64) (*Dataset, *Dataset) {
 			}
 			testSet.Target = append(testSet.Target, dataset.Target[i])
 			testSet.Timestamps = append(testSet.Timestamps, dataset.Timestamps[i])
+			if dataset.Weights != nil {
+				testSet.Weights = append(testSet.Weights, dataset.Weights[i])
+			}
 			if dataset.Target[i] > 0 {
 				testSet.PositiveCount++
 			} else {
@@ -383,6 +397,9 @@ func (dataset *Dataset) Split(ratio float32, seed int64) (*Dataset, *Dataset) {
 			}
 			trainSet.Target = append(trainSet.Target, dataset.Target[i])
 			trainSet.Timestamps = append(trainSet.Timestamps, dataset.Timestamps[i])
+			if dataset.Weights != nil {
+				trainSet.Weights = append(trainSet.Weights, dataset.Weights[i])
+			}
 			if dataset.Target[i] > 0 {
 				trainSet.PositiveCount++
 			} else {
@@ -452,6 +469,9 @@ func (dataset *Dataset) appendSample(dst *Dataset, i int) {
 	}
 	dst.Target = append(dst.Target, dataset.Target[i])
 	dst.Timestamps = append(dst.Timestamps, dataset.Timestamps[i])
+	if dataset.Weights != nil {
+		dst.Weights = append(dst.Weights, dataset.Weights[i])
+	}
 	if dataset.Target[i] > 0 {
 		dst.PositiveCount++
 	} else {
