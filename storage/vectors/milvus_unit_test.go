@@ -60,3 +60,14 @@ func TestMilvusRQQueryBits(t *testing.T) {
 	_, err := milvusRQQueryBits(9)
 	assert.Error(t, err)
 }
+
+func TestMilvusVectorDimension(t *testing.T) {
+	collection := &entity.Collection{
+		Schema: entity.NewSchema().
+			WithName("test").
+			WithField(entity.NewField().WithName(milvusVectorField).WithDataType(entity.FieldTypeFloatVector).WithDim(64)),
+	}
+	dimension, err := milvusVectorDimension(collection)
+	require.NoError(t, err)
+	assert.Equal(t, 64, dimension)
+}

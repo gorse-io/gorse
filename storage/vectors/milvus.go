@@ -92,6 +92,40 @@ func (db *Milvus) ListCollections(ctx context.Context) ([]string, error) {
 	return names, nil
 }
 
+func (db *Milvus) DescribeCollection(ctx context.Context, name string) (*CollectionInfo, error) {
+	collection, err := db.client.DescribeCollection(ctx, name)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	dimension, err := milvusVectorDimension(collection)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	indexes, err := db.client.DescribeIndex(ctx, name, milvusVectorField)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	if len(indexes) == 0 {
+		return nil, errors.NotFoundf("index for collection %s", name)
+	}
+	distance, err := milvusMetricTypeToDistance(entity.MetricType(indexes[0].Params()["metric_type"]))
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	config := DefaultVectorConfig()
+	switch indexes[0].IndexType() {
+	case milvusIVFRQIndexType:
+		config.Quantization = QuantizationRQ
+		config.QuantizationBits = db.getRQQueryBits(name)
+	}
+	return &CollectionInfo{
+		Name:         name,
+		Dimension:    dimension,
+		Distance:     distance,
+		VectorConfig: config,
+	}, nil
+}
+
 func (db *Milvus) AddCollection(ctx context.Context, name string, dimensions int, distance Distance, config VectorConfig) error {
 	// Milvus SQ support requires Int8Vector which may not be available in older SDK versions
 	if config.Quantization == QuantizationSQ {
@@ -143,6 +177,35 @@ func (db *Milvus) AddCollection(ctx context.Context, name string, dimensions int
 	// Load collection
 	err = db.client.LoadCollection(ctx, name, false)
 	return errors.Trace(err)
+}
+
+func milvusVectorDimension(collection *entity.Collection) (int, error) {
+	if collection == nil || collection.Schema == nil {
+		return 0, errors.NotFoundf("collection schema")
+	}
+	for _, field := range collection.Schema.Fields {
+		if field.Name == milvusVectorField {
+			dimension, err := strconv.Atoi(field.TypeParams[entity.TypeParamDim])
+			if err != nil {
+				return 0, errors.Trace(err)
+			}
+			return dimension, nil
+		}
+	}
+	return 0, errors.NotFoundf("vector field")
+}
+
+func milvusMetricTypeToDistance(metricType entity.MetricType) (Distance, error) {
+	switch metricType {
+	case "", entity.COSINE:
+		return Cosine, nil
+	case entity.L2:
+		return Euclidean, nil
+	case entity.IP:
+		return Dot, nil
+	default:
+		return Cosine, errors.NotSupportedf("distance method %s", metricType)
+	}
 }
 
 func (db *Milvus) DeleteCollection(ctx context.Context, name string) error {

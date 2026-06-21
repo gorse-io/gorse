@@ -31,6 +31,9 @@ func (NoDatabase) Close() error { return ErrNoDatabase }
 func (NoDatabase) ListCollections(_ context.Context) ([]string, error) {
 	return nil, ErrNoDatabase
 }
+func (NoDatabase) DescribeCollection(_ context.Context, _ string) (*CollectionInfo, error) {
+	return nil, ErrNoDatabase
+}
 func (NoDatabase) AddCollection(_ context.Context, _ string, _ int, _ Distance, _ VectorConfig) error {
 	return ErrNoDatabase
 }

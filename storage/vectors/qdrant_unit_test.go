@@ -57,3 +57,22 @@ func TestQdrantTurboQuantBits(t *testing.T) {
 	_, err := qdrantTurboQuantBits(8)
 	assert.Error(t, err)
 }
+
+func TestQdrantVectorConfig(t *testing.T) {
+	config, err := qdrantVectorConfig(qdrant.NewQuantizationTurbo(&qdrant.TurboQuantization{
+		Bits: qdrant.TurboQuantBitSize_Bits2.Enum(),
+	}))
+	require.NoError(t, err)
+	assert.Equal(t, VectorConfig{
+		Quantization:     QuantizationRQ,
+		QuantizationBits: 2,
+	}, config)
+}
+
+func TestQdrantVectorConfigDefaultBits(t *testing.T) {
+	config, err := qdrantVectorConfig(qdrant.NewQuantizationTurbo(&qdrant.TurboQuantization{}))
+	require.NoError(t, err)
+	assert.Equal(t, VectorConfig{
+		Quantization: QuantizationRQ,
+	}, config)
+}

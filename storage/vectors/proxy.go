@@ -53,6 +53,26 @@ func (p *ProxyServer) ListCollections(ctx context.Context, _ *protocol.ListColle
 	return &protocol.ListCollectionsResponse{Collections: collections}, nil
 }
 
+func (p *ProxyServer) DescribeCollection(ctx context.Context, request *protocol.DescribeCollectionRequest) (*protocol.DescribeCollectionResponse, error) {
+	info, err := p.database.DescribeCollection(ctx, request.GetName())
+	if err != nil {
+		return nil, err
+	}
+	distance, err := distanceToProtoDistance(info.Distance)
+	if err != nil {
+		return nil, err
+	}
+	return &protocol.DescribeCollectionResponse{
+		Name:       info.Name,
+		Dimensions: int32(info.Dimension),
+		Distance:   distance,
+		Config: &protocol.VectorConfig{
+			QuantizationType: string(info.Quantization),
+			QuantizationBits: int32(info.QuantizationBits),
+		},
+	}, nil
+}
+
 func (p *ProxyServer) AddCollection(ctx context.Context, request *protocol.AddCollectionRequest) (*protocol.AddCollectionResponse, error) {
 	distance, err := protoDistanceToDistance(request.GetDistance())
 	if err != nil {
@@ -152,6 +172,28 @@ func (p ProxyClient) ListCollections(ctx context.Context) ([]string, error) {
 		return nil, err
 	}
 	return resp.Collections, nil
+}
+
+func (p ProxyClient) DescribeCollection(ctx context.Context, name string) (*CollectionInfo, error) {
+	resp, err := p.VectorStoreClient.DescribeCollection(ctx, &protocol.DescribeCollectionRequest{Name: name})
+	if err != nil {
+		return nil, err
+	}
+	distance, err := protoDistanceToDistance(resp.GetDistance())
+	if err != nil {
+		return nil, err
+	}
+	config := DefaultVectorConfig()
+	if resp.GetConfig() != nil {
+		config.Quantization = QuantizationType(resp.GetConfig().GetQuantizationType())
+		config.QuantizationBits = int(resp.GetConfig().GetQuantizationBits())
+	}
+	return &CollectionInfo{
+		Name:         resp.GetName(),
+		Dimension:    int(resp.GetDimensions()),
+		Distance:     distance,
+		VectorConfig: config,
+	}, nil
 }
 
 func (p ProxyClient) AddCollection(ctx context.Context, name string, dimensions int, distance Distance, config VectorConfig) error {

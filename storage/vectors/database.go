@@ -55,6 +55,14 @@ type VectorConfig struct {
 	QuantizationBits int
 }
 
+// CollectionInfo describes a vector collection.
+type CollectionInfo struct {
+	Name      string
+	Dimension int
+	Distance  Distance
+	VectorConfig
+}
+
 // DefaultVectorConfig returns the default vector config.
 func DefaultVectorConfig() VectorConfig {
 	return VectorConfig{
@@ -75,6 +83,7 @@ type Database interface {
 	Optimize() error
 	Close() error
 	ListCollections(ctx context.Context) ([]string, error)
+	DescribeCollection(ctx context.Context, name string) (*CollectionInfo, error)
 	AddCollection(ctx context.Context, name string, dimensions int, distance Distance, config VectorConfig) error
 	DeleteCollection(ctx context.Context, name string) error
 	AddVectors(ctx context.Context, collection string, vectors []Vector) error

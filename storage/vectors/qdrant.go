@@ -76,6 +76,42 @@ func (db *Qdrant) ListCollections(ctx context.Context) ([]string, error) {
 	return db.client.ListCollections(ctx)
 }
 
+func (db *Qdrant) DescribeCollection(ctx context.Context, name string) (*CollectionInfo, error) {
+	info, err := db.client.GetCollectionInfo(ctx, name)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	params := info.GetConfig().GetParams().GetVectorsConfig().GetParams()
+	if params == nil {
+		paramsMap := info.GetConfig().GetParams().GetVectorsConfig().GetParamsMap()
+		if paramsMap == nil || len(paramsMap.GetMap()) == 0 {
+			return nil, errors.NotFoundf("vector params for collection %s", name)
+		}
+		for _, vectorParams := range paramsMap.GetMap() {
+			params = vectorParams
+			break
+		}
+	}
+	distance, err := qdrantDistanceToDistance(params.GetDistance())
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	quantizationConfig := params.GetQuantizationConfig()
+	if quantizationConfig == nil {
+		quantizationConfig = info.GetConfig().GetQuantizationConfig()
+	}
+	config, err := qdrantVectorConfig(quantizationConfig)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	return &CollectionInfo{
+		Name:         name,
+		Dimension:    int(params.GetSize()),
+		Distance:     distance,
+		VectorConfig: config,
+	}, nil
+}
+
 func (db *Qdrant) AddCollection(ctx context.Context, name string, dimensions int, distance Distance, config VectorConfig) error {
 	var qdrantDistance qdrant.Distance
 	switch distance {
@@ -142,6 +178,36 @@ func qdrantQuantizationConfig(config VectorConfig) (*qdrant.QuantizationConfig, 
 	}
 }
 
+func qdrantVectorConfig(config *qdrant.QuantizationConfig) (VectorConfig, error) {
+	if config == nil {
+		return DefaultVectorConfig(), nil
+	}
+	if turbo := config.GetTurboquant(); turbo != nil {
+		bits := 0
+		if turbo.Bits != nil {
+			var err error
+			bits, err = qdrantTurboQuantBitSizeToBits(turbo.GetBits())
+			if err != nil {
+				return VectorConfig{}, errors.Trace(err)
+			}
+		}
+		return VectorConfig{
+			Quantization:     QuantizationRQ,
+			QuantizationBits: bits,
+		}, nil
+	}
+	if config.GetScalar() != nil {
+		return VectorConfig{}, errors.NotSupportedf("SQ quantization for Qdrant")
+	}
+	if config.GetProduct() != nil {
+		return VectorConfig{}, errors.NotSupportedf("PQ quantization for Qdrant")
+	}
+	if config.GetBinary() != nil {
+		return VectorConfig{}, errors.NotSupportedf("binary quantization for Qdrant")
+	}
+	return DefaultVectorConfig(), nil
+}
+
 func qdrantTurboQuantBits(bits int) (qdrant.TurboQuantBitSize, error) {
 	switch bits {
 	case 1:
@@ -152,6 +218,32 @@ func qdrantTurboQuantBits(bits int) (qdrant.TurboQuantBitSize, error) {
 		return qdrant.TurboQuantBitSize_Bits4, nil
 	default:
 		return 0, errors.NotSupportedf("RQ quantization bits %d for Qdrant", bits)
+	}
+}
+
+func qdrantTurboQuantBitSizeToBits(bits qdrant.TurboQuantBitSize) (int, error) {
+	switch bits {
+	case qdrant.TurboQuantBitSize_Bits1:
+		return 1, nil
+	case qdrant.TurboQuantBitSize_Bits2:
+		return 2, nil
+	case qdrant.TurboQuantBitSize_Bits4:
+		return 4, nil
+	default:
+		return 0, errors.NotSupportedf("RQ quantization bits %s for Qdrant", bits.String())
+	}
+}
+
+func qdrantDistanceToDistance(distance qdrant.Distance) (Distance, error) {
+	switch distance {
+	case qdrant.Distance_Cosine:
+		return Cosine, nil
+	case qdrant.Distance_Euclid:
+		return Euclidean, nil
+	case qdrant.Distance_Dot:
+		return Dot, nil
+	default:
+		return Cosine, errors.NotSupportedf("distance method %s", distance.String())
 	}
 }
 

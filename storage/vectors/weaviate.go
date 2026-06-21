@@ -16,7 +16,9 @@ package vectors
 
 import (
 	"context"
+	"encoding/json"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -84,6 +86,30 @@ func (db *Weaviate) ListCollections(ctx context.Context) ([]string, error) {
 		names = append(names, uncapitalize(class.Class))
 	}
 	return names, nil
+}
+
+func (db *Weaviate) DescribeCollection(ctx context.Context, name string) (*CollectionInfo, error) {
+	class, err := db.client.Schema().ClassGetter().WithClassName(capitalize(name)).Do(ctx)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	vectorIndexConfig, ok := class.VectorIndexConfig.(map[string]any)
+	if !ok {
+		return nil, errors.Errorf("failed to parse vector index config for collection %s", name)
+	}
+	distance, err := weaviateDistanceToDistance(stringValue(vectorIndexConfig["distance"]))
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	config, err := weaviateVectorConfig(vectorIndexConfig)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	return &CollectionInfo{
+		Name:         name,
+		Distance:     distance,
+		VectorConfig: config,
+	}, nil
 }
 
 func (db *Weaviate) AddCollection(ctx context.Context, name string, dimensions int, distance Distance, config VectorConfig) error {
@@ -162,6 +188,82 @@ func weaviateApplyQuantization(vectorIndexConfig map[string]any, config VectorCo
 		return nil
 	default:
 		return errors.NotSupportedf("quantization type %s for Weaviate", config.Quantization)
+	}
+}
+
+func weaviateVectorConfig(vectorIndexConfig map[string]any) (VectorConfig, error) {
+	if quantizationConfig, ok := mapValue(vectorIndexConfig["rq"]); ok && boolValue(quantizationConfig["enabled"]) {
+		bits, err := intValue(quantizationConfig["bits"])
+		if err != nil {
+			return VectorConfig{}, errors.Trace(err)
+		}
+		return VectorConfig{
+			Quantization:     QuantizationRQ,
+			QuantizationBits: bits,
+		}, nil
+	}
+	if quantizationConfig, ok := mapValue(vectorIndexConfig["pq"]); ok && boolValue(quantizationConfig["enabled"]) {
+		return VectorConfig{Quantization: QuantizationPQ}, nil
+	}
+	if quantizationConfig, ok := mapValue(vectorIndexConfig["sq"]); ok && boolValue(quantizationConfig["enabled"]) {
+		return VectorConfig{Quantization: QuantizationSQ}, nil
+	}
+	return DefaultVectorConfig(), nil
+}
+
+func weaviateDistanceToDistance(distance string) (Distance, error) {
+	switch distance {
+	case "", "cosine":
+		return Cosine, nil
+	case "l2-squared":
+		return Euclidean, nil
+	case "dot":
+		return Dot, nil
+	default:
+		return Cosine, errors.NotSupportedf("distance method %s", distance)
+	}
+}
+
+func mapValue(value any) (map[string]any, bool) {
+	switch typed := value.(type) {
+	case map[string]any:
+		return typed, true
+	default:
+		return nil, false
+	}
+}
+
+func stringValue(value any) string {
+	if s, ok := value.(string); ok {
+		return s
+	}
+	return ""
+}
+
+func boolValue(value any) bool {
+	if b, ok := value.(bool); ok {
+		return b
+	}
+	return false
+}
+
+func intValue(value any) (int, error) {
+	switch typed := value.(type) {
+	case nil:
+		return 0, nil
+	case int:
+		return typed, nil
+	case int64:
+		return int(typed), nil
+	case float64:
+		return int(typed), nil
+	case json.Number:
+		i, err := typed.Int64()
+		return int(i), err
+	case string:
+		return strconv.Atoi(typed)
+	default:
+		return 0, errors.NotSupportedf("integer value %T", value)
 	}
 }
 

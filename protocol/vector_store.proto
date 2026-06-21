@@ -38,6 +38,20 @@ message ListCollectionsRequest {}
 
 message ListCollectionsResponse { repeated string collections = 1; }
 
+message VectorConfig {
+  string quantization_type = 1;
+  int32 quantization_bits = 2;
+}
+
+message DescribeCollectionRequest { string name = 1; }
+
+message DescribeCollectionResponse {
+  string name = 1;
+  int32 dimensions = 2;
+  Distance distance = 3;
+  VectorConfig config = 4;
+}
+
 message AddCollectionRequest {
   string name = 1;
   int32 dimensions = 2;
@@ -75,6 +89,7 @@ message QueryVectorsResponse { repeated Vector vectors = 1; }
 
 service VectorStore {
   rpc ListCollections(ListCollectionsRequest) returns (ListCollectionsResponse) {}
+  rpc DescribeCollection(DescribeCollectionRequest) returns (DescribeCollectionResponse) {}
   rpc AddCollection(AddCollectionRequest) returns (AddCollectionResponse) {}
   rpc DeleteCollection(DeleteCollectionRequest) returns (DeleteCollectionResponse) {}
   rpc AddVectors(AddVectorsRequest) returns (AddVectorsResponse) {}

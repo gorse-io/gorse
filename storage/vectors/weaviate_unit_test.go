@@ -53,3 +53,27 @@ func TestWeaviateRQInvalidBits(t *testing.T) {
 	})
 	assert.Error(t, err)
 }
+
+func TestWeaviateVectorConfig(t *testing.T) {
+	config, err := weaviateVectorConfig(map[string]any{
+		"rq": map[string]any{
+			"enabled": true,
+			"bits":    float64(8),
+		},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, VectorConfig{
+		Quantization:     QuantizationRQ,
+		QuantizationBits: 8,
+	}, config)
+}
+
+func TestWeaviateVectorConfigDefaultBits(t *testing.T) {
+	config, err := weaviateVectorConfig(map[string]any{
+		"rq": map[string]any{
+			"enabled": true,
+		},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, VectorConfig{Quantization: QuantizationRQ}, config)
+}
