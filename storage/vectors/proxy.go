@@ -300,8 +300,5 @@ func protoVectorConfigToVectorConfig(config *protocol.VectorConfig) VectorConfig
 	}
 	vectorConfig.Quantization = QuantizationType(config.GetQuantizationType())
 	vectorConfig.QuantizationBits = int(config.GetQuantizationBits())
-	if vectorConfig.Quantization == "" {
-		vectorConfig.Quantization = QuantizationNone
-	}
 	return vectorConfig
 }

@@ -35,16 +35,16 @@ const (
 type QuantizationType string
 
 const (
-	QuantizationNone QuantizationType = "none" // No quantization (float32)
-	QuantizationSQ   QuantizationType = "sq"   // Scalar quantization
-	QuantizationPQ   QuantizationType = "pq"   // Product quantization
-	QuantizationRQ   QuantizationType = "rq"   // Rotational quantization/RaBitQ/TurboQuant
+	QuantizationNone QuantizationType = ""   // No quantization (float32)
+	QuantizationSQ   QuantizationType = "sq" // Scalar quantization
+	QuantizationPQ   QuantizationType = "pq" // Product quantization
+	QuantizationRQ   QuantizationType = "rq" // Rotational quantization/RaBitQ/TurboQuant
 )
 
 // VectorConfig configures vector storage.
 type VectorConfig struct {
 	// Quantization configures the vector quantization type.
-	Quantization QuantizationType // none | sq | pq | rq
+	Quantization QuantizationType // "" | sq | pq | rq
 	// QuantizationBits is the number of quantization bits. 0 uses the backend default.
 	QuantizationBits int
 }

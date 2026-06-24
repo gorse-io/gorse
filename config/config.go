@@ -102,7 +102,7 @@ type RedisConfig struct {
 	MaxSearchResults int `mapstructure:"max_search_results" validate:"gt=0"`
 }
 type VectorConfig struct {
-	QuantizationType string `mapstructure:"quantization_type" validate:"omitempty,oneof=none sq pq rq"`
+	QuantizationType string `mapstructure:"quantization_type" validate:"omitempty,oneof=sq pq rq"`
 	QuantizationBits int    `mapstructure:"quantization_bits" validate:"gte=0"`
 }
 
@@ -482,7 +482,7 @@ func GetDefaultConfig() *Config {
 				MaxSearchResults: 10000,
 			},
 			Vector: VectorConfig{
-				QuantizationType: "none",
+				QuantizationType: "",
 			},
 		},
 		Master: MasterConfig{

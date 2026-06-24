@@ -318,9 +318,6 @@ func (m *Master) initCollaborativeFilteringVectorCollection(ctx context.Context)
 		Quantization:     vectors.QuantizationType(m.Config.Database.Vector.QuantizationType),
 		QuantizationBits: m.Config.Database.Vector.QuantizationBits,
 	}
-	if vectorConfig.Quantization == "" {
-		vectorConfig.Quantization = vectors.QuantizationNone
-	}
 	dimension := model.Params(nil).GetInt(model.NFactors, 16)
 
 	collections, err := m.VectorClient.ListCollections(ctx)

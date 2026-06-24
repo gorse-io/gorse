@@ -160,7 +160,7 @@ func (db *Weaviate) AddCollection(ctx context.Context, name string, dimensions i
 
 func weaviateApplyQuantization(vectorIndexConfig map[string]any, config VectorConfig) error {
 	switch config.Quantization {
-	case QuantizationNone, "":
+	case QuantizationNone:
 		return nil
 	case QuantizationSQ:
 		return errors.NotSupportedf("SQ quantization for Weaviate")

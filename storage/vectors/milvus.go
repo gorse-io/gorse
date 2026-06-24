@@ -316,7 +316,7 @@ func (db *Milvus) QueryVectors(ctx context.Context, collection string, q []float
 
 func milvusIndex(metricType entity.MetricType, config VectorConfig) (entity.Index, error) {
 	switch config.Quantization {
-	case QuantizationNone, "":
+	case QuantizationNone:
 		return entity.NewIndexHNSW(metricType, 16, 200)
 	case QuantizationRQ:
 		if _, err := milvusRQQueryBits(config.QuantizationBits); err != nil {

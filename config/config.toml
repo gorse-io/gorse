@@ -69,9 +69,9 @@ max_search_results = 10000
 
 [database.vector]
 
-# Quantization type for vector collections: none, sq, pq, rq.
+# Quantization type for vector collections: "", sq, pq, rq.
 # The rq type maps to RaBitQ, Rotational Quantization, or TurboQuant depending on the vector database.
-quantization_type = "none"
+quantization_type = ""
 
 # Quantization bits. Set to 0 to use the vector database default.
 quantization_bits = 0

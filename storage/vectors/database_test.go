@@ -47,6 +47,16 @@ func (suite *vectorsTestSuite) TestCollections() {
 	// create collection
 	err = suite.Database.AddCollection(ctx, "test", defaultVectorSize, Cosine, VectorConfig{})
 	suite.NoError(err)
+	// describe collection
+	info, err := suite.Database.DescribeCollection(ctx, "test")
+	suite.NoError(err)
+	suite.Equal("test", info.Name)
+	if info.Dimension != 0 {
+		suite.Equal(defaultVectorSize, info.Dimension)
+	}
+	suite.Equal(Cosine, info.Distance)
+	suite.Equal(QuantizationNone, info.Quantization)
+	suite.Zero(info.QuantizationBits)
 	// list collections
 	collections, err = suite.Database.ListCollections(ctx)
 	suite.NoError(err)

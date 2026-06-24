@@ -153,7 +153,7 @@ func (db *Qdrant) AddCollection(ctx context.Context, name string, dimensions int
 
 func qdrantQuantizationConfig(config VectorConfig) (*qdrant.QuantizationConfig, error) {
 	switch config.Quantization {
-	case QuantizationNone, "":
+	case QuantizationNone:
 		return nil, nil
 	case QuantizationRQ:
 		turbo := &qdrant.TurboQuantization{}
