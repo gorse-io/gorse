@@ -137,10 +137,6 @@ func (db *Qdrant) AddCollection(ctx context.Context, name string, dimensions int
 			Distance: qdrantDistance,
 		}),
 		QuantizationConfig: quantizationConfig,
-		HnswConfig: &qdrant.HnswConfigDiff{
-			M:           ptrUint64(defaultHNSWM),
-			EfConstruct: ptrUint64(defaultHNSWEfConstruct),
-		},
 	})
 	if err != nil {
 		return errors.Trace(err)
@@ -148,7 +144,7 @@ func (db *Qdrant) AddCollection(ctx context.Context, name string, dimensions int
 
 	_, err = db.client.CreateFieldIndex(ctx, &qdrant.CreateFieldIndexCollection{
 		CollectionName: name,
-		Wait:           ptrBool(true),
+		Wait:           new(true),
 		FieldName:      qdrantPayloadTimestampKey,
 		FieldType:      qdrant.FieldType_FieldTypeInteger.Enum(),
 	})
@@ -180,7 +176,7 @@ func qdrantQuantizationConfig(config VectorConfig) (*qdrant.QuantizationConfig, 
 
 func qdrantVectorConfig(config *qdrant.QuantizationConfig) (VectorConfig, error) {
 	if config == nil {
-		return DefaultVectorConfig(), nil
+		return VectorConfig{}, nil
 	}
 	if turbo := config.GetTurboquant(); turbo != nil {
 		bits := 0
@@ -205,7 +201,7 @@ func qdrantVectorConfig(config *qdrant.QuantizationConfig) (VectorConfig, error)
 	if config.GetBinary() != nil {
 		return VectorConfig{}, errors.NotSupportedf("binary quantization for Qdrant")
 	}
-	return DefaultVectorConfig(), nil
+	return VectorConfig{}, nil
 }
 
 func qdrantTurboQuantBits(bits int) (qdrant.TurboQuantBitSize, error) {
@@ -294,7 +290,7 @@ func (db *Qdrant) QueryVectors(ctx context.Context, collection string, q []float
 	request := &qdrant.QueryPoints{
 		CollectionName: collection,
 		Query:          qdrant.NewQueryDense(q),
-		Limit:          ptrUint64(uint64(topK)),
+		Limit:          new(uint64(topK)),
 		WithPayload:    qdrant.NewWithPayloadEnable(true),
 		WithVectors:    qdrant.NewWithVectorsEnable(true),
 	}
@@ -370,13 +366,4 @@ func qdrantVectorOutput(output *qdrant.VectorsOutput) []float32 {
 		return nil
 	}
 	return vector.GetDenseVector().GetData()
-}
-
-// Helper functions for pointer types
-func ptrBool(v bool) *bool {
-	return &v
-}
-
-func ptrUint64(v uint64) *uint64 {
-	return &v
 }

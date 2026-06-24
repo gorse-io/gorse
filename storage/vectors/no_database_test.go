@@ -42,8 +42,8 @@ func TestNoDatabase(t *testing.T) {
 		assert.ErrorIs(t, err, ErrNoDatabase)
 		assert.Nil(t, info)
 
-		assert.ErrorIs(t, database.AddCollection(ctx, "test", 4, Cosine, DefaultVectorConfig()), ErrNoDatabase)
-		assert.ErrorIs(t, database.AddCollection(ctx, "test", 4, Dot, DefaultVectorConfig()), ErrNoDatabase)
+		assert.ErrorIs(t, database.AddCollection(ctx, "test", 4, Cosine, VectorConfig{}), ErrNoDatabase)
+		assert.ErrorIs(t, database.AddCollection(ctx, "test", 4, Dot, VectorConfig{}), ErrNoDatabase)
 		assert.ErrorIs(t, database.DeleteCollection(ctx, "test"), ErrNoDatabase)
 		assert.ErrorIs(t, database.DeleteCollection(ctx, "missing"), ErrNoDatabase)
 	})

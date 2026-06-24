@@ -127,10 +127,7 @@ func (db *Weaviate) AddCollection(ctx context.Context, name string, dimensions i
 
 	// Build VectorIndexConfig.
 	vectorIndexConfig := map[string]any{
-		"distance":       weaviateDistance,
-		"ef":             defaultHNSWEfSearch,
-		"maxConnections": defaultHNSWM,
-		"efConstruction": defaultHNSWEfConstruct,
+		"distance": weaviateDistance,
 	}
 	if err := weaviateApplyQuantization(vectorIndexConfig, config); err != nil {
 		return errors.Trace(err)
@@ -208,7 +205,7 @@ func weaviateVectorConfig(vectorIndexConfig map[string]any) (VectorConfig, error
 	if quantizationConfig, ok := mapValue(vectorIndexConfig["sq"]); ok && boolValue(quantizationConfig["enabled"]) {
 		return VectorConfig{Quantization: QuantizationSQ}, nil
 	}
-	return DefaultVectorConfig(), nil
+	return VectorConfig{}, nil
 }
 
 func weaviateDistanceToDistance(distance string) (Distance, error) {

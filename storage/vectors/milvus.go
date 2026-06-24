@@ -112,7 +112,7 @@ func (db *Milvus) DescribeCollection(ctx context.Context, name string) (*Collect
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	config := DefaultVectorConfig()
+	config := VectorConfig{}
 	switch indexes[0].IndexType() {
 	case milvusIVFRQIndexType:
 		config.Quantization = QuantizationRQ
@@ -317,7 +317,7 @@ func (db *Milvus) QueryVectors(ctx context.Context, collection string, q []float
 func milvusIndex(metricType entity.MetricType, config VectorConfig) (entity.Index, error) {
 	switch config.Quantization {
 	case QuantizationNone, "":
-		return entity.NewIndexHNSW(metricType, defaultHNSWM, defaultHNSWEfConstruct)
+		return entity.NewIndexHNSW(metricType, 16, 200)
 	case QuantizationRQ:
 		if _, err := milvusRQQueryBits(config.QuantizationBits); err != nil {
 			return nil, errors.Trace(err)
@@ -352,7 +352,7 @@ func (db *Milvus) searchParam(ctx context.Context, collection string) (entity.Se
 			"refine_k":       defaultMilvusRQRefineK,
 		}, nil
 	default:
-		return entity.NewIndexHNSWSearchParam(defaultHNSWEfSearch)
+		return entity.NewIndexHNSWSearchParam(100)
 	}
 }
 

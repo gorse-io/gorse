@@ -182,7 +182,7 @@ func (p ProxyClient) DescribeCollection(ctx context.Context, name string) (*Coll
 	if err != nil {
 		return nil, err
 	}
-	config := DefaultVectorConfig()
+	config := VectorConfig{}
 	if resp.GetConfig() != nil {
 		config.Quantization = QuantizationType(resp.GetConfig().GetQuantizationType())
 		config.QuantizationBits = int(resp.GetConfig().GetQuantizationBits())
@@ -294,7 +294,7 @@ func vectorConfigToProtoVectorConfig(config VectorConfig) *protocol.VectorConfig
 }
 
 func protoVectorConfigToVectorConfig(config *protocol.VectorConfig) VectorConfig {
-	vectorConfig := DefaultVectorConfig()
+	vectorConfig := VectorConfig{}
 	if config == nil {
 		return vectorConfig
 	}

@@ -41,12 +41,6 @@ const (
 	QuantizationRQ   QuantizationType = "rq"   // Rotational quantization/RaBitQ/TurboQuant
 )
 
-const (
-	defaultHNSWM           = 16
-	defaultHNSWEfConstruct = 200
-	defaultHNSWEfSearch    = 64
-)
-
 // VectorConfig configures vector storage.
 type VectorConfig struct {
 	// Quantization configures the vector quantization type.
@@ -61,13 +55,6 @@ type CollectionInfo struct {
 	Dimension int
 	Distance  Distance
 	VectorConfig
-}
-
-// DefaultVectorConfig returns the default vector config.
-func DefaultVectorConfig() VectorConfig {
-	return VectorConfig{
-		Quantization: QuantizationNone,
-	}
 }
 
 type Vector struct {
