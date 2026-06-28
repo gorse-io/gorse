@@ -22,6 +22,8 @@ import (
 	"github.com/gorse-io/gorse/protocol"
 	"github.com/juju/errors"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -56,6 +58,9 @@ func (p *ProxyServer) ListCollections(ctx context.Context, _ *protocol.ListColle
 func (p *ProxyServer) DescribeCollection(ctx context.Context, request *protocol.DescribeCollectionRequest) (*protocol.DescribeCollectionResponse, error) {
 	info, err := p.database.DescribeCollection(ctx, request.GetName())
 	if err != nil {
+		if errors.Is(err, errors.NotFound) {
+			return nil, status.Error(codes.NotFound, err.Error())
+		}
 		return nil, err
 	}
 	distance, err := distanceToProtoDistance(info.Distance)
@@ -176,6 +181,9 @@ func (p ProxyClient) ListCollections(ctx context.Context) ([]string, error) {
 func (p ProxyClient) DescribeCollection(ctx context.Context, name string) (*CollectionInfo, error) {
 	resp, err := p.VectorStoreClient.DescribeCollection(ctx, &protocol.DescribeCollectionRequest{Name: name})
 	if err != nil {
+		if status.Code(err) == codes.NotFound {
+			return nil, errors.NotFoundf("collection %s", name)
+		}
 		return nil, err
 	}
 	distance, err := protoDistanceToDistance(resp.GetDistance())

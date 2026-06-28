@@ -24,6 +24,8 @@ import (
 	"github.com/gorse-io/gorse/storage"
 	"github.com/juju/errors"
 	"github.com/qdrant/go-client/qdrant"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 const (
@@ -79,6 +81,9 @@ func (db *Qdrant) ListCollections(ctx context.Context) ([]string, error) {
 func (db *Qdrant) DescribeCollection(ctx context.Context, name string) (*CollectionInfo, error) {
 	info, err := db.client.GetCollectionInfo(ctx, name)
 	if err != nil {
+		if status.Code(err) == codes.NotFound {
+			return nil, errors.NotFoundf("collection %s", name)
+		}
 		return nil, errors.Trace(err)
 	}
 	params := info.GetConfig().GetParams().GetVectorsConfig().GetParams()
@@ -272,6 +277,7 @@ func (db *Qdrant) AddVectors(ctx context.Context, collection string, vectors []V
 	}
 	_, err := db.client.Upsert(ctx, &qdrant.UpsertPoints{
 		CollectionName: collection,
+		Wait:           new(true),
 		Points:         points,
 	})
 	return errors.Trace(err)
@@ -281,6 +287,7 @@ func (db *Qdrant) DeleteVectors(ctx context.Context, collection string, timestam
 	lt := float64(timestamp.UnixMilli())
 	_, err := db.client.Delete(ctx, &qdrant.DeletePoints{
 		CollectionName: collection,
+		Wait:           new(true),
 		Points: qdrant.NewPointsSelectorFilter(&qdrant.Filter{
 			Must: []*qdrant.Condition{
 				qdrant.NewRange(qdrantPayloadTimestampKey, &qdrant.Range{Lt: &lt}),

@@ -21,7 +21,6 @@ import (
 	"math"
 	"math/rand"
 	"net"
-	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -40,7 +39,6 @@ import (
 	"github.com/gorse-io/gorse/model/ctr"
 	"github.com/gorse-io/gorse/protocol"
 	"github.com/gorse-io/gorse/server"
-	"github.com/gorse-io/gorse/storage"
 	"github.com/gorse-io/gorse/storage/blob"
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
@@ -320,27 +318,35 @@ func (m *Master) initCollaborativeFilteringVectorCollection(ctx context.Context)
 	}
 	dimension := model.Params(nil).GetInt(model.NFactors, 16)
 
-	collections, err := m.VectorClient.ListCollections(ctx)
-	if err != nil {
+	info, err := m.VectorClient.DescribeCollection(ctx, vectors.CollaborativeFiltering)
+	if errors.Is(err, errors.NotFound) {
+		info = nil
+	} else if err != nil {
 		return errors.Trace(err)
-	}
-	created := false
-	if !slices.Contains(collections, cache.CollaborativeFiltering) {
-		if err = m.VectorClient.AddCollection(ctx, cache.CollaborativeFiltering, dimension, vectors.Dot, vectorConfig); err != nil {
+	} else if err = m.checkCollaborativeFilteringVectorCollection(info, dimension, vectorConfig); err != nil {
+		log.Logger().Warn("recreating collaborative filtering vector collection",
+			zap.String("collection", vectors.CollaborativeFiltering),
+			zap.Error(err))
+		if err = m.VectorClient.DeleteCollection(ctx, vectors.CollaborativeFiltering); err != nil && !errors.Is(err, errors.NotFound) {
 			return errors.Trace(err)
 		}
-		created = true
+		info = nil
 	}
 
-	info, err := m.VectorClient.DescribeCollection(ctx, cache.CollaborativeFiltering)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	if err = m.validateCollaborativeFilteringVectorCollection(info, dimension, vectorConfig, created); err != nil {
-		return errors.Trace(err)
+	if info == nil {
+		if err = m.VectorClient.AddCollection(ctx, vectors.CollaborativeFiltering, dimension, vectors.Dot, vectorConfig); err != nil {
+			return errors.Trace(err)
+		}
+		info, err = m.VectorClient.DescribeCollection(ctx, vectors.CollaborativeFiltering)
+		if err != nil {
+			return errors.Trace(err)
+		}
+		if err = m.checkCollaborativeFilteringVectorCollection(info, dimension, vectorConfig); err != nil {
+			return errors.Trace(err)
+		}
 	}
 	log.Logger().Info("initialized collaborative filtering vector collection",
-		zap.String("collection", cache.CollaborativeFiltering),
+		zap.String("collection", vectors.CollaborativeFiltering),
 		zap.Int("dimension", info.Dimension),
 		zap.Int("distance", int(info.Distance)),
 		zap.String("quantization_type", string(info.Type)),
@@ -348,24 +354,14 @@ func (m *Master) initCollaborativeFilteringVectorCollection(ctx context.Context)
 	return nil
 }
 
-func (m *Master) validateCollaborativeFilteringVectorCollection(info *vectors.CollectionInfo, dimension int, config vectors.VectorConfig, created bool) error {
+func (m *Master) checkCollaborativeFilteringVectorCollection(info *vectors.CollectionInfo, dimension int, config vectors.VectorConfig) error {
 	if info.Dimension != 0 && info.Dimension != dimension {
 		return errors.Errorf("collection %s dimension mismatch: expected %d, got %d", info.Name, dimension, info.Dimension)
-	}
-	if info.Distance != vectors.Dot {
-		return errors.Errorf("collection %s distance mismatch: expected %v, got %v", info.Name, vectors.Dot, info.Distance)
 	}
 	if info.Type != config.Type {
 		return errors.Errorf("collection %s quantization type mismatch: expected %s, got %s", info.Name, config.Type, info.Type)
 	}
-	if info.Bits != config.Bits {
-		if strings.HasPrefix(m.Config.Database.VectorStore, storage.MilvusPrefix) && !created {
-			log.Logger().Warn("skip validating Milvus RQ query bits from existing collection",
-				zap.String("collection", info.Name),
-				zap.Int("expected", config.Bits),
-				zap.Int("actual", info.Bits))
-			return nil
-		}
+	if config.Bits > 0 && info.Bits != config.Bits {
 		return errors.Errorf("collection %s quantization bits mismatch: expected %d, got %d", info.Name, config.Bits, info.Bits)
 	}
 	return nil

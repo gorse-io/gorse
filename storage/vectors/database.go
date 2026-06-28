@@ -39,6 +39,8 @@ const (
 	QuantizationSQ   QuantizationType = "sq" // Scalar quantization
 	QuantizationPQ   QuantizationType = "pq" // Product quantization
 	QuantizationRQ   QuantizationType = "rq" // Rotational quantization/RaBitQ/TurboQuant
+
+	CollaborativeFiltering = "collaborative_filtering"
 )
 
 func (q QuantizationType) String() string {

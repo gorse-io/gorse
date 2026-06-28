@@ -16,6 +16,7 @@ package vectors
 
 import (
 	"context"
+	"net/http"
 	"net/url"
 	"strings"
 	"time"
@@ -25,6 +26,7 @@ import (
 	"github.com/gorse-io/gorse/storage"
 	"github.com/juju/errors"
 	"github.com/weaviate/weaviate-go-client/v4/weaviate"
+	"github.com/weaviate/weaviate-go-client/v4/weaviate/fault"
 	"github.com/weaviate/weaviate-go-client/v4/weaviate/filters"
 	"github.com/weaviate/weaviate-go-client/v4/weaviate/graphql"
 	"github.com/weaviate/weaviate/entities/models"
@@ -89,6 +91,10 @@ func (db *Weaviate) ListCollections(ctx context.Context) ([]string, error) {
 func (db *Weaviate) DescribeCollection(ctx context.Context, name string) (*CollectionInfo, error) {
 	class, err := db.client.Schema().ClassGetter().WithClassName(capitalize(name)).Do(ctx)
 	if err != nil {
+		var clientErr *fault.WeaviateClientError
+		if errors.As(err, &clientErr) && clientErr.StatusCode == http.StatusNotFound {
+			return nil, errors.NotFoundf("collection %s", name)
+		}
 		return nil, errors.Trace(err)
 	}
 	vectorIndexConfig, ok := class.VectorIndexConfig.(map[string]any)

@@ -44,6 +44,7 @@ require (
 	github.com/mailru/go-clickhouse/v2 v2.5.1
 	github.com/matttproud/golang_protobuf_extensions v1.0.4
 	github.com/milvus-io/milvus/client/v2 v2.6.5
+	github.com/milvus-io/milvus/pkg/v2 v2.6.7-0.20251201120310-af64f2acba38
 	github.com/minio/minio-go/v7 v7.0.99
 	github.com/modern-go/reflect2 v1.0.2
 	github.com/nikolalohinski/gonja/v2 v2.7.0
@@ -219,7 +220,6 @@ require (
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mattn/go-runewidth v0.0.21 // indirect
 	github.com/milvus-io/milvus-proto/go-api/v2 v2.6.17 // indirect
-	github.com/milvus-io/milvus/pkg/v2 v2.6.7-0.20251201120310-af64f2acba38 // indirect
 	github.com/minio/blake2b-simd v0.0.0-20160723061019-3f5f724cb5b1 // indirect
 	github.com/minio/crc64nvme v1.1.1 // indirect
 	github.com/minio/md5-simd v1.1.2 // indirect

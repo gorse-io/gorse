@@ -17,6 +17,7 @@ package vectors
 import (
 	"time"
 
+	"github.com/juju/errors"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -64,6 +65,9 @@ func (suite *vectorsTestSuite) TestCollections() {
 	// delete collection
 	err = suite.Database.DeleteCollection(ctx, "test")
 	suite.NoError(err)
+	// describe deleted collection
+	_, err = suite.Database.DescribeCollection(ctx, "test")
+	suite.True(errors.Is(err, errors.NotFound), err)
 	// list collections
 	collections, err = suite.Database.ListCollections(ctx)
 	suite.NoError(err)

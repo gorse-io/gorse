@@ -24,6 +24,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/storage"
 	"github.com/juju/errors"
 	_ "modernc.org/sqlite/vec"
@@ -121,9 +122,10 @@ func (db *SQLite) AddCollection(ctx context.Context, name string, dimensions int
 	case Euclidean:
 		metric = "l2"
 	case Dot:
-		metric = "ip"
+		log.Logger().Warn("SQLite does not support inner product distance, using cosine distance instead")
+		metric = "cosine"
 	default:
-		return errors.NotSupportedf("distance method")
+		return errors.NotSupportedf("distance method %v", distance)
 	}
 	_, err := db.db.ExecContext(ctx, fmt.Sprintf("CREATE VIRTUAL TABLE %s USING vec0(id TEXT, categories TEXT, timestamp INTEGER, vector FLOAT[%d] distance_metric=%s)", name, dimensions, metric))
 	return errors.Trace(err)

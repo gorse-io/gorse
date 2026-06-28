@@ -28,6 +28,7 @@ import (
 	"github.com/milvus-io/milvus/client/v2/entity"
 	"github.com/milvus-io/milvus/client/v2/index"
 	"github.com/milvus-io/milvus/client/v2/milvusclient"
+	"github.com/milvus-io/milvus/pkg/v2/util/merr"
 )
 
 const (
@@ -88,6 +89,9 @@ func (db *Milvus) ListCollections(ctx context.Context) ([]string, error) {
 func (db *Milvus) DescribeCollection(ctx context.Context, name string) (*CollectionInfo, error) {
 	collection, err := db.client.DescribeCollection(ctx, milvusclient.NewDescribeCollectionOption(name))
 	if err != nil {
+		if errors.Is(err, merr.ErrCollectionNotFound) {
+			return nil, errors.NotFoundf("collection %s", name)
+		}
 		return nil, errors.Trace(err)
 	}
 	dimension, err := milvusVectorDimension(collection)
