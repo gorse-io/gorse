@@ -16,6 +16,7 @@ package vectors
 
 import (
 	"context"
+	"net/http"
 	"net/url"
 	"strings"
 	"time"
@@ -25,6 +26,7 @@ import (
 	"github.com/gorse-io/gorse/storage"
 	"github.com/juju/errors"
 	"github.com/weaviate/weaviate-go-client/v4/weaviate"
+	"github.com/weaviate/weaviate-go-client/v4/weaviate/fault"
 	"github.com/weaviate/weaviate-go-client/v4/weaviate/filters"
 	"github.com/weaviate/weaviate-go-client/v4/weaviate/graphql"
 	"github.com/weaviate/weaviate/entities/models"
@@ -86,7 +88,42 @@ func (db *Weaviate) ListCollections(ctx context.Context) ([]string, error) {
 	return names, nil
 }
 
-func (db *Weaviate) AddCollection(ctx context.Context, name string, dimensions int, distance Distance) error {
+func (db *Weaviate) DescribeCollection(ctx context.Context, name string) (*CollectionInfo, error) {
+	class, err := db.client.Schema().ClassGetter().WithClassName(capitalize(name)).Do(ctx)
+	if err != nil {
+		var clientErr *fault.WeaviateClientError
+		if errors.As(err, &clientErr) && clientErr.StatusCode == http.StatusNotFound {
+			return nil, errors.NotFoundf("collection %s", name)
+		}
+		return nil, errors.Trace(err)
+	}
+	vectorIndexConfig, ok := class.VectorIndexConfig.(map[string]any)
+	if !ok {
+		return nil, errors.Errorf("failed to parse vector index config for collection %s", name)
+	}
+	var distance Distance
+	switch distanceValue := vectorIndexConfig["distance"].(string); distanceValue {
+	case "", "cosine":
+		distance = Cosine
+	case "l2-squared":
+		distance = Euclidean
+	case "dot":
+		distance = Dot
+	default:
+		return nil, errors.NotSupportedf("distance method %s", distanceValue)
+	}
+	config, err := weaviateVectorConfig(vectorIndexConfig)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	return &CollectionInfo{
+		Name:         name,
+		Distance:     distance,
+		VectorConfig: config,
+	}, nil
+}
+
+func (db *Weaviate) AddCollection(ctx context.Context, name string, dimensions int, distance Distance, config VectorConfig) error {
 	var weaviateDistance string
 	switch distance {
 	case Cosine:
@@ -98,6 +135,15 @@ func (db *Weaviate) AddCollection(ctx context.Context, name string, dimensions i
 	default:
 		return errors.NotSupportedf("distance method")
 	}
+
+	// Build VectorIndexConfig.
+	vectorIndexConfig := map[string]any{
+		"distance": weaviateDistance,
+	}
+	if err := weaviateApplyQuantization(vectorIndexConfig, config); err != nil {
+		return errors.Trace(err)
+	}
+
 	class := &models.Class{
 		Class:      capitalize(name),
 		Vectorizer: "none",
@@ -117,12 +163,60 @@ func (db *Weaviate) AddCollection(ctx context.Context, name string, dimensions i
 				IndexRangeFilters: new(true),
 			},
 		},
-		VectorIndexConfig: map[string]any{
-			"distance": weaviateDistance,
-		},
+		VectorIndexConfig: vectorIndexConfig,
 	}
 	err := db.client.Schema().ClassCreator().WithClass(class).Do(ctx)
 	return errors.Trace(err)
+}
+
+func weaviateApplyQuantization(vectorIndexConfig map[string]any, config VectorConfig) error {
+	switch config.Type {
+	case QuantizationNone:
+		return nil
+	case QuantizationSQ:
+		vectorIndexConfig["sq"] = map[string]any{
+			"enabled": true,
+		}
+		if config.Bits != 0 {
+			return errors.NotSupportedf("quantization bits for SQ")
+		}
+		return nil
+	case QuantizationPQ:
+		vectorIndexConfig["pq"] = map[string]any{
+			"enabled": true,
+		}
+		if config.Bits != 0 {
+			return errors.NotSupportedf("quantization bits for PQ")
+		}
+		return nil
+	case QuantizationRQ:
+		rq := map[string]any{
+			"enabled": true,
+		}
+		if config.Bits != 0 {
+			rq["bits"] = config.Bits
+		}
+		vectorIndexConfig["rq"] = rq
+		return nil
+	default:
+		return errors.NotSupportedf("quantization type %s for Weaviate", config.Type)
+	}
+}
+
+func weaviateVectorConfig(vectorIndexConfig map[string]any) (VectorConfig, error) {
+	if quantizationConfig, ok := vectorIndexConfig["rq"].(map[string]any); ok && quantizationConfig["enabled"].(bool) {
+		return VectorConfig{
+			Type: QuantizationRQ,
+			Bits: int(quantizationConfig["bits"].(float64)),
+		}, nil
+	}
+	if quantizationConfig, ok := vectorIndexConfig["pq"].(map[string]any); ok && quantizationConfig["enabled"].(bool) {
+		return VectorConfig{Type: QuantizationPQ}, nil
+	}
+	if quantizationConfig, ok := vectorIndexConfig["sq"].(map[string]any); ok && quantizationConfig["enabled"].(bool) {
+		return VectorConfig{Type: QuantizationSQ}, nil
+	}
+	return VectorConfig{}, nil
 }
 
 func (db *Weaviate) DeleteCollection(ctx context.Context, name string) error {

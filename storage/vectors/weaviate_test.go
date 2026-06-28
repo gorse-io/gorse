@@ -46,6 +46,15 @@ func (suite *WeaviateTestSuite) SetupSuite() {
 	suite.NoError(err)
 }
 
+func (suite *WeaviateTestSuite) TestQuantization() {
+	suite.testQuantization(QuantizationNone, 0)
+	suite.testQuantization(QuantizationSQ, 0)
+	suite.testQuantization(QuantizationRQ, 0)
+	suite.testQuantization(QuantizationRQ, 1)
+	suite.testQuantization(QuantizationRQ, 8)
+	suite.testQuantization(QuantizationPQ, 0)
+}
+
 func TestWeaviate(t *testing.T) {
 	suite.Run(t, new(WeaviateTestSuite))
 }

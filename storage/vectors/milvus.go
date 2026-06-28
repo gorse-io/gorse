@@ -18,13 +18,17 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/gorse-io/gorse/storage"
 	"github.com/juju/errors"
-	"github.com/milvus-io/milvus-sdk-go/v2/client"
-	"github.com/milvus-io/milvus-sdk-go/v2/entity"
+	"github.com/milvus-io/milvus/client/v2/column"
+	"github.com/milvus-io/milvus/client/v2/entity"
+	"github.com/milvus-io/milvus/client/v2/index"
+	"github.com/milvus-io/milvus/client/v2/milvusclient"
+	"github.com/milvus-io/milvus/pkg/v2/util/merr"
 )
 
 const (
@@ -32,16 +36,23 @@ const (
 	milvusVectorField     = "vector"
 	milvusCategoriesField = "categories"
 	milvusTimestampField  = "timestamp"
+
+	milvusIVFRQIndexType = index.IvfRabitQ
+
+	defaultMilvusIVFNList  = 128
+	defaultMilvusPQBits    = 8
+	defaultMilvusRQNProbe  = 8
+	defaultMilvusRQRefineK = 1
 )
 
 func init() {
 	Register([]string{storage.MilvusPrefix}, func(path, tablePrefix string, opts ...storage.Option) (Database, error) {
-		database := new(Milvus)
+		database := &Milvus{}
 		u, err := url.Parse(path)
 		if err != nil {
 			return nil, errors.Trace(err)
 		}
-		database.client, err = client.NewClient(context.Background(), client.Config{
+		database.client, err = milvusclient.New(context.Background(), &milvusclient.ClientConfig{
 			Address: u.Host,
 		})
 		if err != nil {
@@ -52,7 +63,7 @@ func init() {
 }
 
 type Milvus struct {
-	client client.Client
+	client *milvusclient.Client
 }
 
 func (db *Milvus) Init() error {
@@ -64,29 +75,81 @@ func (db *Milvus) Optimize() error {
 }
 
 func (db *Milvus) Close() error {
-	return db.client.Close()
+	return db.client.Close(context.Background())
 }
 
 func (db *Milvus) ListCollections(ctx context.Context) ([]string, error) {
-	collections, err := db.client.ListCollections(ctx)
+	collections, err := db.client.ListCollections(ctx, milvusclient.NewListCollectionOption())
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	var names []string
-	for _, collection := range collections {
-		names = append(names, collection.Name)
-	}
-	return names, nil
+	return collections, nil
 }
 
-func (db *Milvus) AddCollection(ctx context.Context, name string, dimensions int, distance Distance) error {
+func (db *Milvus) DescribeCollection(ctx context.Context, name string) (*CollectionInfo, error) {
+	collection, err := db.client.DescribeCollection(ctx, milvusclient.NewDescribeCollectionOption(name))
+	if err != nil {
+		if errors.Is(err, merr.ErrCollectionNotFound) {
+			return nil, errors.NotFoundf("collection %s", name)
+		}
+		return nil, errors.Trace(err)
+	}
+	dimension, err := milvusVectorDimension(collection)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	idx, err := db.client.DescribeIndex(ctx, milvusclient.NewDescribeIndexOption(name, milvusVectorField))
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	var distance Distance
+	switch metricType := entity.MetricType(idx.Params()[index.MetricTypeKey]); metricType {
+	case "", entity.COSINE:
+		distance = Cosine
+	case entity.L2:
+		distance = Euclidean
+	case entity.IP:
+		distance = Dot
+	default:
+		return nil, errors.NotSupportedf("distance method %s", metricType)
+	}
+	config := VectorConfig{}
+	switch index.IndexType(idx.Params()[index.IndexTypeKey]) {
+	case milvusIVFRQIndexType:
+		config.Type = QuantizationRQ
+	case index.IvfSQ8:
+		config.Type = QuantizationSQ
+		config.Bits = 8
+	case index.IvfPQ:
+		config.Type = QuantizationPQ
+		m, err := strconv.Atoi(idx.Params()["m"])
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		nbits, err := strconv.Atoi(idx.Params()["nbits"])
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		if dimension > 0 {
+			config.Bits = m * nbits / dimension
+		}
+	}
+	return &CollectionInfo{
+		Name:         name,
+		Dimension:    dimension,
+		Distance:     distance,
+		VectorConfig: config,
+	}, nil
+}
+
+func (db *Milvus) AddCollection(ctx context.Context, name string, dimensions int, distance Distance, config VectorConfig) error {
 	schema := entity.NewSchema().WithName(name).WithDescription("gorse collection").
 		WithField(entity.NewField().WithName(milvusIdField).WithDataType(entity.FieldTypeVarChar).WithMaxLength(65535).WithIsPrimaryKey(true)).
 		WithField(entity.NewField().WithName(milvusCategoriesField).WithDataType(entity.FieldTypeArray).WithElementType(entity.FieldTypeVarChar).WithMaxCapacity(100).WithMaxLength(65535)).
 		WithField(entity.NewField().WithName(milvusTimestampField).WithDataType(entity.FieldTypeInt64)).
 		WithField(entity.NewField().WithName(milvusVectorField).WithDataType(entity.FieldTypeFloatVector).WithDim(int64(dimensions)))
 
-	err := db.client.CreateCollection(ctx, schema, entity.DefaultShardNumber)
+	err := db.client.CreateCollection(ctx, milvusclient.NewCreateCollectionOption(name, schema).WithShardNum(entity.DefaultShardNumber))
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -103,34 +166,60 @@ func (db *Milvus) AddCollection(ctx context.Context, name string, dimensions int
 	default:
 		return errors.NotSupportedf("distance method")
 	}
-	idx, err := entity.NewIndexHNSW(metricType, 8, 200)
+
+	idx, err := milvusIndex(metricType, dimensions, config)
 	if err != nil {
 		return errors.Trace(err)
 	}
-	err = db.client.CreateIndex(ctx, name, milvusVectorField, idx, false)
+	indexTask, err := db.client.CreateIndex(ctx, milvusclient.NewCreateIndexOption(name, milvusVectorField, idx).WithIndexName(milvusVectorField))
 	if err != nil {
 		return errors.Trace(err)
 	}
-	scalarIdx := entity.NewScalarIndex()
-	err = db.client.CreateIndex(ctx, name, milvusTimestampField, scalarIdx, false)
+	if err = indexTask.Await(ctx); err != nil {
+		return errors.Trace(err)
+	}
+
+	indexTask, err = db.client.CreateIndex(ctx, milvusclient.NewCreateIndexOption(name, milvusTimestampField, index.NewSortedIndex()).WithIndexName(milvusTimestampField))
 	if err != nil {
+		return errors.Trace(err)
+	}
+	if err = indexTask.Await(ctx); err != nil {
 		return errors.Trace(err)
 	}
 
 	// Load collection
-	err = db.client.LoadCollection(ctx, name, false)
-	return errors.Trace(err)
+	loadTask, err := db.client.LoadCollection(ctx, milvusclient.NewLoadCollectionOption(name))
+	if err != nil {
+		return errors.Trace(err)
+	}
+	return errors.Trace(loadTask.Await(ctx))
+}
+
+func milvusVectorDimension(collection *entity.Collection) (int, error) {
+	if collection == nil || collection.Schema == nil {
+		return 0, errors.NotFoundf("collection schema")
+	}
+	for _, field := range collection.Schema.Fields {
+		if field.Name == milvusVectorField {
+			dimension, err := strconv.Atoi(field.TypeParams[entity.TypeParamDim])
+			if err != nil {
+				return 0, errors.Trace(err)
+			}
+			return dimension, nil
+		}
+	}
+	return 0, errors.NotFoundf("vector field")
 }
 
 func (db *Milvus) DeleteCollection(ctx context.Context, name string) error {
-	exists, err := db.client.HasCollection(ctx, name)
+	exists, err := db.client.HasCollection(ctx, milvusclient.NewHasCollectionOption(name))
 	if err != nil {
 		return errors.Trace(err)
 	}
 	if !exists {
 		return errors.NotFoundf("collection %s", name)
 	}
-	err = db.client.DropCollection(ctx, name)
+	err = db.client.DropCollection(ctx, milvusclient.NewDropCollectionOption(name))
 	return errors.Trace(err)
 }
 
@@ -149,17 +238,17 @@ func (db *Milvus) AddVectors(ctx context.Context, collection string, vectors []V
 		data = append(data, v.Vector)
 	}
 
-	idCol := entity.NewColumnVarChar(milvusIdField, ids)
-	categoriesCol := entity.NewColumnVarCharArray(milvusCategoriesField, milvusStringsToBytes(categories))
-	timestampCol := entity.NewColumnInt64(milvusTimestampField, timestamps)
-	vectorCol := entity.NewColumnFloatVector(milvusVectorField, len(data[0]), data)
+	idCol := column.NewColumnVarChar(milvusIdField, ids)
+	categoriesCol := column.NewColumnVarCharArray(milvusCategoriesField, categories)
+	timestampCol := column.NewColumnInt64(milvusTimestampField, timestamps)
+	vectorCol := column.NewColumnFloatVector(milvusVectorField, len(data[0]), data)
 
-	_, err := db.client.Upsert(ctx, collection, "", idCol, categoriesCol, timestampCol, vectorCol)
+	_, err := db.client.Upsert(ctx, milvusclient.NewColumnBasedInsertOption(collection, idCol, categoriesCol, timestampCol, vectorCol))
 	return errors.Trace(err)
 }
 
 func (db *Milvus) DeleteVectors(ctx context.Context, collection string, timestamp time.Time) error {
-	err := db.client.Delete(ctx, collection, "", fmt.Sprintf("%s < %d", milvusTimestampField, timestamp.UnixMilli()))
+	_, err := db.client.Delete(ctx, milvusclient.NewDeleteOption(collection).WithExpr(fmt.Sprintf("%s < %d", milvusTimestampField, timestamp.UnixMilli())))
 	return errors.Trace(err)
 }
 
@@ -177,30 +266,42 @@ func (db *Milvus) QueryVectors(ctx context.Context, collection string, q []float
 		expr = strings.Join(conditions, " or ")
 	}
 
-	searchParam, _ := entity.NewIndexHNSWSearchParam(64)
-	results, err := db.client.Search(ctx, collection, []string{}, expr, []string{milvusIdField, milvusCategoriesField}, []entity.Vector{entity.FloatVector(q)}, milvusVectorField, entity.COSINE, topK, searchParam, client.WithSearchQueryConsistencyLevel(entity.ClStrong))
+	searchParam, err := db.searchParam(ctx, collection)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	results, err := db.client.Search(ctx, milvusclient.NewSearchOption(collection, topK, []entity.Vector{entity.FloatVector(q)}).
+		WithANNSField(milvusVectorField).
+		WithFilter(expr).
+		WithOutputFields(milvusIdField, milvusCategoriesField).
+		WithAnnParam(searchParam).
+		WithConsistencyLevel(entity.ClStrong))
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
 
 	var vectors []Vector
 	for _, result := range results {
-		var idCol *entity.ColumnVarChar
-		if col := result.Fields.GetColumn(milvusIdField); col != nil {
-			idCol = col.(*entity.ColumnVarChar)
-		} else if result.IDs != nil {
-			idCol = result.IDs.(*entity.ColumnVarChar)
+		if result.Err != nil {
+			return nil, errors.Trace(result.Err)
 		}
 
-		var categoriesCol *entity.ColumnVarCharArray
-		if col := result.Fields.GetColumn(milvusCategoriesField); col != nil {
-			categoriesCol = col.(*entity.ColumnVarCharArray)
+		var idCol *column.ColumnVarChar
+		if col := result.GetColumn(milvusIdField); col != nil {
+			idCol = col.(*column.ColumnVarChar)
+		} else if result.IDs != nil {
+			idCol = result.IDs.(*column.ColumnVarChar)
+		}
+
+		var categoriesCol *column.ColumnVarCharArray
+		if col := result.GetColumn(milvusCategoriesField); col != nil {
+			categoriesCol = col.(*column.ColumnVarCharArray)
 		}
 
 		for i := 0; i < result.ResultCount; i++ {
 			var id string
 			if idCol != nil {
-				id, err = idCol.ValueByIdx(i)
+				id, err = idCol.Value(i)
 				if err != nil {
 					return nil, errors.Trace(err)
 				}
@@ -208,11 +309,10 @@ func (db *Milvus) QueryVectors(ctx context.Context, collection string, q []float
 
 			var cats []string
 			if categoriesCol != nil {
-				catsValue, err := categoriesCol.ValueByIdx(i)
+				cats, err = categoriesCol.Value(i)
 				if err != nil {
 					return nil, errors.Trace(err)
 				}
-				cats = milvusBytesToStrings(catsValue)
 			}
 
 			vectors = append(vectors, Vector{
@@ -224,21 +324,51 @@ func (db *Milvus) QueryVectors(ctx context.Context, collection string, q []float
 	return vectors, nil
 }
 
-func milvusStringsToBytes(ss [][]string) [][][]byte {
-	res := make([][][]byte, len(ss))
-	for i, s1 := range ss {
-		res[i] = make([][]byte, len(s1))
-		for j, s2 := range s1 {
-			res[i][j] = []byte(s2)
+func milvusIndex(metricType entity.MetricType, dimensions int, config VectorConfig) (index.Index, error) {
+	switch config.Type {
+	case QuantizationNone:
+		return index.NewHNSWIndex(metricType, 16, 200), nil
+	case QuantizationRQ:
+		if config.Bits != 0 {
+			return nil, errors.NotSupportedf("RQ quantization bits %d for Milvus", config.Bits)
 		}
+		return index.NewIvfRabitQIndex(metricType, defaultMilvusIVFNList), nil
+	case QuantizationPQ:
+		bits := config.Bits
+		if bits == 0 {
+			bits = defaultMilvusPQBits
+		}
+		if bits <= 0 || dimensions <= 0 || dimensions*bits%defaultMilvusPQBits != 0 {
+			return nil, errors.NotSupportedf("PQ quantization bits %d for Milvus", config.Bits)
+		}
+		m := dimensions * bits / defaultMilvusPQBits
+		if m <= 0 || m > dimensions || dimensions%m != 0 {
+			return nil, errors.NotSupportedf("PQ quantization bits %d for Milvus", config.Bits)
+		}
+		return index.NewIvfPQIndex(metricType, defaultMilvusIVFNList, m, defaultMilvusPQBits), nil
+	case QuantizationSQ:
+		if config.Bits != 0 && config.Bits != 8 {
+			return nil, errors.NotSupportedf("SQ quantization bits %d for Milvus", config.Bits)
+		}
+		return index.NewIvfSQ8Index(metricType, defaultMilvusIVFNList), nil
+	default:
+		return nil, errors.NotSupportedf("quantization type %s for Milvus", config.Type)
 	}
-	return res
 }
 
-func milvusBytesToStrings(bs [][]byte) []string {
-	res := make([]string, len(bs))
-	for i, b := range bs {
-		res[i] = string(b)
+func (db *Milvus) searchParam(ctx context.Context, collection string) (index.AnnParam, error) {
+	idx, err := db.client.DescribeIndex(ctx, milvusclient.NewDescribeIndexOption(collection, milvusVectorField))
+	if err != nil {
+		return nil, errors.Trace(err)
 	}
-	return res
+	switch index.IndexType(idx.Params()[index.IndexTypeKey]) {
+	case milvusIVFRQIndexType:
+		return index.NewIvfRabitQAnnParam(defaultMilvusRQNProbe).WithRefineK(defaultMilvusRQRefineK), nil
+	case index.IvfPQ, index.IvfSQ8:
+		searchParam := index.NewCustomAnnParam()
+		searchParam.WithExtraParam("nprobe", defaultMilvusRQNProbe)
+		return searchParam, nil
+	default:
+		return index.NewHNSWAnnParam(100), nil
+	}
 }

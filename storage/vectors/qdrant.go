@@ -24,6 +24,8 @@ import (
 	"github.com/gorse-io/gorse/storage"
 	"github.com/juju/errors"
 	"github.com/qdrant/go-client/qdrant"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 const (
@@ -76,7 +78,40 @@ func (db *Qdrant) ListCollections(ctx context.Context) ([]string, error) {
 	return db.client.ListCollections(ctx)
 }
 
-func (db *Qdrant) AddCollection(ctx context.Context, name string, dimensions int, distance Distance) error {
+func (db *Qdrant) DescribeCollection(ctx context.Context, name string) (*CollectionInfo, error) {
+	info, err := db.client.GetCollectionInfo(ctx, name)
+	if err != nil {
+		if status.Code(err) == codes.NotFound {
+			return nil, errors.NotFoundf("collection %s", name)
+		}
+		return nil, errors.Trace(err)
+	}
+	params := info.GetConfig().GetParams().GetVectorsConfig().GetParams()
+	var distance Distance
+	switch params.GetDistance() {
+	case qdrant.Distance_Cosine:
+		distance = Cosine
+	case qdrant.Distance_Euclid:
+		distance = Euclidean
+	case qdrant.Distance_Dot:
+		distance = Dot
+	default:
+		return nil, errors.NotSupportedf("distance method %s", params.GetDistance().String())
+	}
+	quantizationConfig := info.GetConfig().GetQuantizationConfig()
+	config, err := qdrantVectorConfig(quantizationConfig)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	return &CollectionInfo{
+		Name:         name,
+		Dimension:    int(params.GetSize()),
+		Distance:     distance,
+		VectorConfig: config,
+	}, nil
+}
+
+func (db *Qdrant) AddCollection(ctx context.Context, name string, dimensions int, distance Distance, config VectorConfig) error {
 	var qdrantDistance qdrant.Distance
 	switch distance {
 	case Cosine:
@@ -88,16 +123,24 @@ func (db *Qdrant) AddCollection(ctx context.Context, name string, dimensions int
 	default:
 		return errors.NotSupportedf("distance method")
 	}
-	err := db.client.CreateCollection(ctx, &qdrant.CreateCollection{
+
+	quantizationConfig, err := qdrantQuantizationConfig(config)
+	if err != nil {
+		return errors.Trace(err)
+	}
+
+	err = db.client.CreateCollection(ctx, &qdrant.CreateCollection{
 		CollectionName: name,
 		VectorsConfig: qdrant.NewVectorsConfig(&qdrant.VectorParams{
 			Size:     uint64(dimensions),
 			Distance: qdrantDistance,
 		}),
+		QuantizationConfig: quantizationConfig,
 	})
 	if err != nil {
 		return errors.Trace(err)
 	}
+
 	_, err = db.client.CreateFieldIndex(ctx, &qdrant.CreateFieldIndexCollection{
 		CollectionName: name,
 		Wait:           new(true),
@@ -105,6 +148,111 @@ func (db *Qdrant) AddCollection(ctx context.Context, name string, dimensions int
 		FieldType:      qdrant.FieldType_FieldTypeInteger.Enum(),
 	})
 	return errors.Trace(err)
+}
+
+func qdrantQuantizationConfig(config VectorConfig) (*qdrant.QuantizationConfig, error) {
+	switch config.Type {
+	case QuantizationNone:
+		return nil, nil
+	case QuantizationRQ:
+		turbo := &qdrant.TurboQuantization{}
+		if config.Bits != 0 {
+			switch config.Bits {
+			case 1:
+				turbo.Bits = qdrant.TurboQuantBitSize_Bits1.Enum()
+			case 2:
+				turbo.Bits = qdrant.TurboQuantBitSize_Bits2.Enum()
+			case 4:
+				turbo.Bits = qdrant.TurboQuantBitSize_Bits4.Enum()
+			default:
+				return nil, errors.NotSupportedf("RQ quantization bits %d for Qdrant", config.Bits)
+			}
+		}
+		return qdrant.NewQuantizationTurbo(turbo), nil
+	case QuantizationSQ:
+		if config.Bits != 0 && config.Bits != 8 {
+			return nil, errors.NotSupportedf("SQ quantization bits for Qdrant")
+		}
+		return qdrant.NewQuantizationScalar(&qdrant.ScalarQuantization{
+			Type: qdrant.QuantizationType_Int8,
+		}), nil
+	case QuantizationPQ:
+		product := &qdrant.ProductQuantization{}
+		if config.Bits != 0 {
+			switch config.Bits {
+			case 8:
+				product.Compression = qdrant.CompressionRatio_x4
+			case 4:
+				product.Compression = qdrant.CompressionRatio_x8
+			case 2:
+				product.Compression = qdrant.CompressionRatio_x16
+			case 1:
+				product.Compression = qdrant.CompressionRatio_x32
+			default:
+				return nil, errors.NotSupportedf("PQ quantization bits %d for Qdrant", config.Bits)
+			}
+		}
+		return qdrant.NewQuantizationProduct(product), nil
+	default:
+		return nil, errors.NotSupportedf("quantization type %s for Qdrant", config.Type)
+	}
+}
+
+func qdrantVectorConfig(config *qdrant.QuantizationConfig) (VectorConfig, error) {
+	if config == nil {
+		return VectorConfig{}, nil
+	}
+	if turbo := config.GetTurboquant(); turbo != nil {
+		bits := 0
+		if turbo.Bits != nil {
+			switch turbo.GetBits() {
+			case qdrant.TurboQuantBitSize_Bits1:
+				bits = 1
+			case qdrant.TurboQuantBitSize_Bits2:
+				bits = 2
+			case qdrant.TurboQuantBitSize_Bits4:
+				bits = 4
+			default:
+				return VectorConfig{}, errors.NotSupportedf("RQ quantization bits %s for Qdrant", turbo.GetBits().String())
+			}
+		}
+		return VectorConfig{
+			Type: QuantizationRQ,
+			Bits: bits,
+		}, nil
+	}
+	if scalar := config.GetScalar(); scalar != nil {
+		if scalar.GetType() != qdrant.QuantizationType_Int8 {
+			return VectorConfig{}, errors.NotSupportedf("SQ quantization type %s for Qdrant", scalar.GetType().String())
+		}
+		return VectorConfig{
+			Type: QuantizationSQ,
+			Bits: 8,
+		}, nil
+	}
+	if product := config.GetProduct(); product != nil {
+		var bits int
+		switch product.GetCompression() {
+		case qdrant.CompressionRatio_x4:
+			bits = 8
+		case qdrant.CompressionRatio_x8:
+			bits = 4
+		case qdrant.CompressionRatio_x16:
+			bits = 2
+		case qdrant.CompressionRatio_x32:
+			bits = 1
+		default:
+			return VectorConfig{}, errors.NotSupportedf("PQ quantization compression %s for Qdrant", product.GetCompression().String())
+		}
+		return VectorConfig{
+			Type: QuantizationPQ,
+			Bits: bits,
+		}, nil
+	}
+	if config.GetBinary() != nil {
+		return VectorConfig{}, errors.NotSupportedf("binary quantization for Qdrant")
+	}
+	return VectorConfig{}, nil
 }
 
 func (db *Qdrant) DeleteCollection(ctx context.Context, name string) error {
@@ -129,6 +277,7 @@ func (db *Qdrant) AddVectors(ctx context.Context, collection string, vectors []V
 	}
 	_, err := db.client.Upsert(ctx, &qdrant.UpsertPoints{
 		CollectionName: collection,
+		Wait:           new(true),
 		Points:         points,
 	})
 	return errors.Trace(err)
@@ -138,6 +287,7 @@ func (db *Qdrant) DeleteVectors(ctx context.Context, collection string, timestam
 	lt := float64(timestamp.UnixMilli())
 	_, err := db.client.Delete(ctx, &qdrant.DeletePoints{
 		CollectionName: collection,
+		Wait:           new(true),
 		Points: qdrant.NewPointsSelectorFilter(&qdrant.Filter{
 			Must: []*qdrant.Condition{
 				qdrant.NewRange(qdrantPayloadTimestampKey, &qdrant.Range{Lt: &lt}),

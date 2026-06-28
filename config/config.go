@@ -71,17 +71,18 @@ type Config struct {
 
 // DatabaseConfig is the configuration for the database.
 type DatabaseConfig struct {
-	VectorStore       string      `mapstructure:"vector_store" validate:"omitempty,vector_store"`
-	DataStore         string      `mapstructure:"data_store" validate:"required,data_store"`   // database for data store
-	CacheStore        string      `mapstructure:"cache_store" validate:"required,cache_store"` // database for cache store
-	TablePrefix       string      `mapstructure:"table_prefix"`
-	DataTablePrefix   string      `mapstructure:"data_table_prefix"`
-	CacheTablePrefix  string      `mapstructure:"cache_table_prefix"`
-	CacheClientName   string      `mapstructure:"cache_client_name"`
-	VectorTablePrefix string      `mapstructure:"vector_table_prefix"`
-	MySQL             MySQLConfig `mapstructure:"mysql"`
-	Postgres          SQLConfig   `mapstructure:"postgres"`
-	Redis             RedisConfig `mapstructure:"redis"`
+	DataStore         string       `mapstructure:"data_store" validate:"required,data_store"`      // database for data store
+	CacheStore        string       `mapstructure:"cache_store" validate:"required,cache_store"`    // database for cache store
+	VectorStore       string       `mapstructure:"vector_store" validate:"omitempty,vector_store"` // database for vector indices
+	TablePrefix       string       `mapstructure:"table_prefix"`
+	DataTablePrefix   string       `mapstructure:"data_table_prefix"`
+	CacheTablePrefix  string       `mapstructure:"cache_table_prefix"`
+	CacheClientName   string       `mapstructure:"cache_client_name"`
+	VectorTablePrefix string       `mapstructure:"vector_table_prefix"`
+	MySQL             MySQLConfig  `mapstructure:"mysql"`
+	Postgres          SQLConfig    `mapstructure:"postgres"`
+	Redis             RedisConfig  `mapstructure:"redis"`
+	Vector            VectorConfig `mapstructure:"vector"`
 }
 
 type MySQLConfig struct {
@@ -99,6 +100,10 @@ type SQLConfig struct {
 
 type RedisConfig struct {
 	MaxSearchResults int `mapstructure:"max_search_results" validate:"gt=0"`
+}
+type VectorConfig struct {
+	QuantizationType string `mapstructure:"quantization_type" validate:"omitempty,oneof=sq pq rq"`
+	QuantizationBits int    `mapstructure:"quantization_bits" validate:"gte=0"`
 }
 
 func (db *DatabaseConfig) StorageOptions(path string) []storage.Option {
@@ -476,6 +481,9 @@ func GetDefaultConfig() *Config {
 			Redis: RedisConfig{
 				MaxSearchResults: 10000,
 			},
+			Vector: VectorConfig{
+				QuantizationType: "",
+			},
 		},
 		Master: MasterConfig{
 			Port:            8086,
@@ -616,6 +624,9 @@ func setDefault() {
 	viper.SetDefault("database.postgres.conn_max_lifetime", defaultConfig.Database.Postgres.ConnMaxLifetime)
 	// [database.redis]
 	viper.SetDefault("database.redis.max_search_results", defaultConfig.Database.Redis.MaxSearchResults)
+	// [database.vector]
+	viper.SetDefault("database.vector.quantization_type", defaultConfig.Database.Vector.QuantizationType)
+	viper.SetDefault("database.vector.quantization_bits", defaultConfig.Database.Vector.QuantizationBits)
 	// [master]
 	viper.SetDefault("master.port", defaultConfig.Master.Port)
 	viper.SetDefault("master.host", defaultConfig.Master.Host)
@@ -677,6 +688,8 @@ var bindings = []configBinding{
 	{"database.cache_client_name", "GORSE_CACHE_CLIENT_NAME"},
 	{"database.data_table_prefix", "GORSE_DATA_TABLE_PREFIX"},
 	{"database.vector_table_prefix", "GORSE_VECTOR_TABLE_PREFIX"},
+	{"database.vector.quantization_type", "GORSE_VECTOR_QUANTIZATION_TYPE"},
+	{"database.vector.quantization_bits", "GORSE_VECTOR_QUANTIZATION_BITS"},
 	{"master.port", "GORSE_MASTER_PORT"},
 	{"master.host", "GORSE_MASTER_HOST"},
 	{"master.ssl_mode", "GORSE_MASTER_SSL_MODE"},

@@ -200,6 +200,8 @@ func TestBindEnv(t *testing.T) {
 		{"GORSE_CACHE_TABLE_PREFIX", "gorse_cache_"},
 		{"GORSE_CACHE_CLIENT_NAME", "gorse_cache_client_from_env"},
 		{"GORSE_VECTOR_TABLE_PREFIX", "gorse_vector_"},
+		{"GORSE_VECTOR_QUANTIZATION_TYPE", "rq"},
+		{"GORSE_VECTOR_QUANTIZATION_BITS", "8"},
 		{"GORSE_MASTER_PORT", "123"},
 		{"GORSE_MASTER_HOST", "<master_host>"},
 		{"GORSE_MASTER_SSL_MODE", "true"},
@@ -250,6 +252,8 @@ func TestBindEnv(t *testing.T) {
 	assert.Equal(t, "gorse_cache_client_from_env", config.Database.CacheClientName)
 	assert.Equal(t, "gorse_data_", config.Database.DataTablePrefix)
 	assert.Equal(t, "gorse_vector_", config.Database.VectorTablePrefix)
+	assert.Equal(t, "rq", config.Database.Vector.QuantizationType)
+	assert.Equal(t, 8, config.Database.Vector.QuantizationBits)
 	assert.Equal(t, 123, config.Master.Port)
 	assert.Equal(t, "<master_host>", config.Master.Host)
 	assert.Equal(t, true, config.Master.SSLMode)

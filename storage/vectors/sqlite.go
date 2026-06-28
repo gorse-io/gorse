@@ -19,9 +19,12 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/storage"
 	"github.com/juju/errors"
 	_ "modernc.org/sqlite/vec"
@@ -44,6 +47,8 @@ func init() {
 type SQLite struct {
 	db *sql.DB
 }
+
+var sqliteVectorPattern = regexp.MustCompile(`(?i)vector\s+FLOAT\[(\d+)\].*distance_metric=([a-z0-9_-]+)`)
 
 func (db *SQLite) Init() error {
 	return nil
@@ -74,7 +79,42 @@ func (db *SQLite) ListCollections(ctx context.Context) ([]string, error) {
 	return names, nil
 }
 
-func (db *SQLite) AddCollection(ctx context.Context, name string, dimensions int, distance Distance) error {
+func (db *SQLite) DescribeCollection(ctx context.Context, name string) (*CollectionInfo, error) {
+	var sqlStmt string
+	err := db.db.QueryRowContext(ctx, "SELECT sql FROM sqlite_master WHERE type='table' AND name=? AND sql LIKE '%USING vec0%'", name).Scan(&sqlStmt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, errors.NotFoundf("collection %s", name)
+	}
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+
+	matches := sqliteVectorPattern.FindStringSubmatch(sqlStmt)
+	if len(matches) != 3 {
+		return nil, errors.Errorf("failed to parse SQLite collection %s", name)
+	}
+	dimensions, err := strconv.Atoi(matches[1])
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	distance, err := sqliteDistanceToDistance(matches[2])
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	return &CollectionInfo{
+		Name:      name,
+		Dimension: dimensions,
+		Distance:  distance,
+		VectorConfig: VectorConfig{
+			Type: QuantizationNone,
+		},
+	}, nil
+}
+
+func (db *SQLite) AddCollection(ctx context.Context, name string, dimensions int, distance Distance, config VectorConfig) error {
+	if config.Type != QuantizationNone {
+		return errors.NotSupportedf("quantization type %s for SQLite", config.Type)
+	}
 	var metric string
 	switch distance {
 	case Cosine:
@@ -82,12 +122,26 @@ func (db *SQLite) AddCollection(ctx context.Context, name string, dimensions int
 	case Euclidean:
 		metric = "l2"
 	case Dot:
-		metric = "ip"
+		log.Logger().Warn("SQLite does not support inner product distance, using cosine distance instead")
+		metric = "cosine"
 	default:
-		return errors.NotSupportedf("distance method")
+		return errors.NotSupportedf("distance method %v", distance)
 	}
 	_, err := db.db.ExecContext(ctx, fmt.Sprintf("CREATE VIRTUAL TABLE %s USING vec0(id TEXT, categories TEXT, timestamp INTEGER, vector FLOAT[%d] distance_metric=%s)", name, dimensions, metric))
 	return errors.Trace(err)
+}
+
+func sqliteDistanceToDistance(distance string) (Distance, error) {
+	switch distance {
+	case "cosine":
+		return Cosine, nil
+	case "l2":
+		return Euclidean, nil
+	case "ip":
+		return Dot, nil
+	default:
+		return Cosine, errors.NotSupportedf("distance method %s", distance)
+	}
 }
 
 func (db *SQLite) DeleteCollection(ctx context.Context, name string) error {

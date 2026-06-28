@@ -46,6 +46,15 @@ func (suite *MilvusTestSuite) SetupSuite() {
 	suite.NoError(err)
 }
 
+func (suite *MilvusTestSuite) TestQuantization() {
+	suite.testQuantization(QuantizationNone, 0)
+	suite.testQuantization(QuantizationRQ, 0)
+	suite.testQuantization(QuantizationSQ, 0)
+	suite.testQuantization(QuantizationSQ, 8)
+	suite.testQuantization(QuantizationPQ, 0)
+	suite.testQuantization(QuantizationPQ, 8)
+}
+
 func TestMilvus(t *testing.T) {
 	suite.Run(t, new(MilvusTestSuite))
 }

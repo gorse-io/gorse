@@ -46,6 +46,21 @@ func (suite *QdrantTestSuite) SetupSuite() {
 	suite.NoError(err)
 }
 
+func (suite *QdrantTestSuite) TestQuantization() {
+	suite.testQuantization(QuantizationNone, 0)
+	suite.testQuantization(QuantizationRQ, 0)
+	suite.testQuantization(QuantizationRQ, 1)
+	suite.testQuantization(QuantizationRQ, 2)
+	suite.testQuantization(QuantizationRQ, 4)
+	suite.testQuantization(QuantizationSQ, 0)
+	suite.testQuantization(QuantizationSQ, 8)
+	suite.testQuantization(QuantizationPQ, 0)
+	suite.testQuantization(QuantizationPQ, 1)
+	suite.testQuantization(QuantizationPQ, 2)
+	suite.testQuantization(QuantizationPQ, 4)
+	suite.testQuantization(QuantizationPQ, 8)
+}
+
 func TestQdrant(t *testing.T) {
 	suite.Run(t, new(QdrantTestSuite))
 }

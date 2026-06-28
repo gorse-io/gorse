@@ -22,6 +22,8 @@ import (
 	"github.com/gorse-io/gorse/protocol"
 	"github.com/juju/errors"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -53,12 +55,36 @@ func (p *ProxyServer) ListCollections(ctx context.Context, _ *protocol.ListColle
 	return &protocol.ListCollectionsResponse{Collections: collections}, nil
 }
 
+func (p *ProxyServer) DescribeCollection(ctx context.Context, request *protocol.DescribeCollectionRequest) (*protocol.DescribeCollectionResponse, error) {
+	info, err := p.database.DescribeCollection(ctx, request.GetName())
+	if err != nil {
+		if errors.Is(err, errors.NotFound) {
+			return nil, status.Error(codes.NotFound, err.Error())
+		}
+		return nil, err
+	}
+	distance, err := distanceToProtoDistance(info.Distance)
+	if err != nil {
+		return nil, err
+	}
+	return &protocol.DescribeCollectionResponse{
+		Name:       info.Name,
+		Dimensions: int32(info.Dimension),
+		Distance:   distance,
+		Config: &protocol.VectorConfig{
+			QuantizationType: string(info.Type),
+			QuantizationBits: int32(info.Bits),
+		},
+	}, nil
+}
+
 func (p *ProxyServer) AddCollection(ctx context.Context, request *protocol.AddCollectionRequest) (*protocol.AddCollectionResponse, error) {
 	distance, err := protoDistanceToDistance(request.GetDistance())
 	if err != nil {
 		return nil, err
 	}
-	err = p.database.AddCollection(ctx, request.GetName(), int(request.GetDimensions()), distance)
+	config := protoVectorConfigToVectorConfig(request.GetConfig())
+	err = p.database.AddCollection(ctx, request.GetName(), int(request.GetDimensions()), distance, config)
 	if err != nil {
 		return nil, err
 	}
@@ -152,7 +178,32 @@ func (p ProxyClient) ListCollections(ctx context.Context) ([]string, error) {
 	return resp.Collections, nil
 }
 
-func (p ProxyClient) AddCollection(ctx context.Context, name string, dimensions int, distance Distance) error {
+func (p ProxyClient) DescribeCollection(ctx context.Context, name string) (*CollectionInfo, error) {
+	resp, err := p.VectorStoreClient.DescribeCollection(ctx, &protocol.DescribeCollectionRequest{Name: name})
+	if err != nil {
+		if status.Code(err) == codes.NotFound {
+			return nil, errors.NotFoundf("collection %s", name)
+		}
+		return nil, err
+	}
+	distance, err := protoDistanceToDistance(resp.GetDistance())
+	if err != nil {
+		return nil, err
+	}
+	config := VectorConfig{}
+	if resp.GetConfig() != nil {
+		config.Type = QuantizationType(resp.GetConfig().GetQuantizationType())
+		config.Bits = int(resp.GetConfig().GetQuantizationBits())
+	}
+	return &CollectionInfo{
+		Name:         resp.GetName(),
+		Dimension:    int(resp.GetDimensions()),
+		Distance:     distance,
+		VectorConfig: config,
+	}, nil
+}
+
+func (p ProxyClient) AddCollection(ctx context.Context, name string, dimensions int, distance Distance, config VectorConfig) error {
 	pbDistance, err := distanceToProtoDistance(distance)
 	if err != nil {
 		return err
@@ -161,6 +212,7 @@ func (p ProxyClient) AddCollection(ctx context.Context, name string, dimensions 
 		Name:       name,
 		Dimensions: int32(dimensions),
 		Distance:   pbDistance,
+		Config:     vectorConfigToProtoVectorConfig(config),
 	})
 	return err
 }
@@ -240,4 +292,21 @@ func protoDistanceToDistance(distance protocol.Distance) (Distance, error) {
 	default:
 		return Cosine, errors.NotSupportedf("distance method")
 	}
+}
+
+func vectorConfigToProtoVectorConfig(config VectorConfig) *protocol.VectorConfig {
+	return &protocol.VectorConfig{
+		QuantizationType: string(config.Type),
+		QuantizationBits: int32(config.Bits),
+	}
+}
+
+func protoVectorConfigToVectorConfig(config *protocol.VectorConfig) VectorConfig {
+	vectorConfig := VectorConfig{}
+	if config == nil {
+		return vectorConfig
+	}
+	vectorConfig.Type = QuantizationType(config.GetQuantizationType())
+	vectorConfig.Bits = int(config.GetQuantizationBits())
+	return vectorConfig
 }

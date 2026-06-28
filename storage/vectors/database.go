@@ -31,6 +31,49 @@ const (
 	Dot
 )
 
+// QuantizationType represents a vector quantization type.
+type QuantizationType string
+
+const (
+	QuantizationNone QuantizationType = ""   // No quantization (float32)
+	QuantizationSQ   QuantizationType = "sq" // Scalar quantization
+	QuantizationPQ   QuantizationType = "pq" // Product quantization
+	QuantizationRQ   QuantizationType = "rq" // Rotational quantization/RaBitQ/TurboQuant
+
+	CollaborativeFiltering = "collaborative_filtering"
+)
+
+func (q QuantizationType) String() string {
+	switch q {
+	case QuantizationNone:
+		return ""
+	case QuantizationSQ:
+		return "sq"
+	case QuantizationPQ:
+		return "pq"
+	case QuantizationRQ:
+		return "rq"
+	default:
+		return "unknown"
+	}
+}
+
+// VectorConfig configures vector storage.
+type VectorConfig struct {
+	// Type configures the vector quantization type.
+	Type QuantizationType // "" | sq | pq | rq
+	// Bits is the number of quantization bits. 0 uses the backend default.
+	Bits int
+}
+
+// CollectionInfo describes a vector collection.
+type CollectionInfo struct {
+	Name      string
+	Dimension int
+	Distance  Distance
+	VectorConfig
+}
+
 type Vector struct {
 	Id         string
 	Vector     []float32
@@ -44,7 +87,8 @@ type Database interface {
 	Optimize() error
 	Close() error
 	ListCollections(ctx context.Context) ([]string, error)
-	AddCollection(ctx context.Context, name string, dimensions int, distance Distance) error
+	DescribeCollection(ctx context.Context, name string) (*CollectionInfo, error)
+	AddCollection(ctx context.Context, name string, dimensions int, distance Distance, config VectorConfig) error
 	DeleteCollection(ctx context.Context, name string) error
 	AddVectors(ctx context.Context, collection string, vectors []Vector) error
 	DeleteVectors(ctx context.Context, collection string, timestamp time.Time) error
