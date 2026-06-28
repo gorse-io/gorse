@@ -46,37 +46,13 @@ func (suite *MilvusTestSuite) SetupSuite() {
 	suite.NoError(err)
 }
 
-func (suite *MilvusTestSuite) TestRQQuantization() {
-	ctx := suite.T().Context()
-	err := suite.Database.AddCollection(ctx, "rq", defaultVectorSize, Cosine, VectorConfig{
-		Quantization:     QuantizationRQ,
-		QuantizationBits: 6,
-	})
-	suite.NoError(err)
-
-	vectorA := make([]float32, defaultVectorSize)
-	vectorA[0] = 1
-	vectorB := make([]float32, defaultVectorSize)
-	vectorB[0] = 0.9
-	vectorB[1] = 0.1
-
-	err = suite.Database.AddVectors(ctx, "rq", []Vector{
-		{
-			Id:         "a",
-			Vector:     vectorA,
-			Categories: []string{"cat-a", "common"},
-		},
-		{
-			Id:         "b",
-			Vector:     vectorB,
-			Categories: []string{"cat-b", "common"},
-		},
-	})
-	suite.NoError(err)
-
-	results, err := suite.Database.QueryVectors(ctx, "rq", vectorA, []string{"common"}, 10)
-	suite.NoError(err)
-	suite.Len(results, 2)
+func (suite *MilvusTestSuite) TestQuantization() {
+	suite.testQuantization(QuantizationNone, 0)
+	suite.testQuantization(QuantizationRQ, 0)
+	suite.testQuantization(QuantizationSQ, 0)
+	suite.testQuantization(QuantizationSQ, 8)
+	suite.testQuantization(QuantizationPQ, 0)
+	suite.testQuantization(QuantizationPQ, 8)
 }
 
 func TestMilvus(t *testing.T) {
