@@ -21,26 +21,26 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 
+	"github.com/fatih/color"
 	gorse "github.com/gorse-io/gorse-go"
+	"github.com/gorse-io/gorse/common/util"
+	"github.com/samber/lo"
 	"github.com/sashabaranov/go-openai"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
 
 const (
-	chatSearchItemsToolName = "SearchItems"
-	chatSearchItemsDefaultN = 10
-	chatSearchItemsMaxN     = 20
-	chatMaxToolIterations   = 6
+	maxIterations           = 10
+	minEmbeddingDimensions  = 8
+	fulltextSearchTool      = "FullTextSearch"
+	fulltextSearchDefaultN  = 10
+	fulltextSearchItemsMaxN = 20
 )
-
-const chatReActSystemPrompt = `You are a Gorse recommendation assistant.
-Use a ReAct loop internally: reason about whether a tool is needed, call a tool when useful, observe its result, and repeat until you can answer.
-Use SearchItems when the user asks about items that may exist in the Gorse item catalog.
-Do not expose hidden reasoning or raw tool-call JSON unless the user explicitly asks for raw data.`
 
 var chatCmd = &cobra.Command{
 	Use:   "chat [message...]",
@@ -52,6 +52,9 @@ var chatCmd = &cobra.Command{
   cat prompt.txt | gorse-cli chat`,
 	Args: cobra.ArbitraryArgs,
 	Run: func(cmd *cobra.Command, args []string) {
+		client := newChatClient(cmd)
+		gorseClient := newGorseClient(cmd)
+
 		message := strings.TrimSpace(strings.Join(args, " "))
 		if message == "" {
 			if file, ok := cmd.InOrStdin().(*os.File); ok && term.IsTerminal(int(file.Fd())) {
@@ -59,245 +62,192 @@ var chatCmd = &cobra.Command{
 			}
 			content, err := io.ReadAll(cmd.InOrStdin())
 			if err != nil {
-				fatal(cmd, err.Error())
+				fmt.Fprintln(os.Stderr, "failed to read message from stdin:", err)
+				os.Exit(1)
 			}
 			message = strings.TrimSpace(string(content))
 		}
 		if message == "" {
-			fatal(cmd,
-				"missing chat message.",
-				"Pass a prompt:",
-				"  gorse-cli chat \"How should I tune recommendations?\"",
-				"Or pipe stdin:",
-				"  echo \"How should I tune recommendations?\" | gorse-cli chat",
-			)
+			fmt.Fprintln(os.Stderr, "no message provided")
+			os.Exit(1)
 		}
-		if err := runChatReAct(cmd, newChatClient(cmd), newGorseClient(cmd), message, cmd.OutOrStdout()); err != nil {
-			fatal(cmd, err.Error())
+		messages := []openai.ChatCompletionMessage{
+			{Role: openai.ChatMessageRoleSystem, Content: `Use a ReAct loop internally: reason about whether a tool is needed, call a tool when useful, observe its result, and repeat until you can answer.`},
+			{Role: openai.ChatMessageRoleUser, Content: message},
 		}
+
+		for range maxIterations {
+			stream, err := client.CreateChatCompletionStream(cmd.Context(), openai.ChatCompletionRequest{
+				Messages:          messages,
+				Tools:             tools,
+				ToolChoice:        "auto",
+				ParallelToolCalls: false,
+			})
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "failed to create chat completion stream: %v\n", err)
+				os.Exit(1)
+			}
+			content, toolCalls := readChatCompletionStream(stream)
+			if err := stream.Close(); err != nil {
+				fmt.Fprintf(os.Stderr, "failed to close chat completion stream: %v\n", err)
+				os.Exit(1)
+			}
+			if len(toolCalls) == 0 {
+				return
+			}
+			messages = append(messages, openai.ChatCompletionMessage{
+				Role:      openai.ChatMessageRoleAssistant,
+				Content:   content,
+				ToolCalls: toolCalls,
+			})
+			for _, toolCall := range toolCalls {
+				messages = append(messages, callTool(cmd.Context(), gorseClient, toolCall))
+			}
+		}
+
+		fmt.Fprintf(os.Stderr, "tool call limit exceeded after %d iterations", maxIterations)
+		os.Exit(1)
 	},
 }
 
-type adminTransport struct {
+type transport struct {
 	apiKey string
-	base   http.RoundTripper
 }
 
-func (t adminTransport) RoundTrip(request *http.Request) (*http.Response, error) {
+func (t transport) RoundTrip(request *http.Request) (*http.Response, error) {
 	if t.apiKey != "" {
 		request = request.Clone(request.Context())
 		request.Header.Set("X-Api-Key", t.apiKey)
 	}
-	base := t.base
-	if base == nil {
-		base = http.DefaultTransport
-	}
-	return base.RoundTrip(request)
+	return http.DefaultTransport.RoundTrip(request)
 }
 
 func newChatClient(cmd *cobra.Command) *openai.Client {
 	endpoint, apiKey := requireEndpointAndKey(cmd)
 	clientConfig := openai.DefaultConfig("")
-	clientConfig.BaseURL = strings.TrimRight(endpoint, "/") + "/api"
+	clientConfig.BaseURL = lo.Must(url.JoinPath(endpoint, "/api"))
 	clientConfig.HTTPClient = &http.Client{
-		Transport: adminTransport{apiKey: apiKey},
+		Transport: transport{apiKey: apiKey},
 	}
 	return openai.NewClientWithConfig(clientConfig)
 }
 
-func runChatReAct(cmd *cobra.Command, client *openai.Client, gorseClient *gorse.GorseClient, message string, output io.Writer) error {
-	messages := []openai.ChatCompletionMessage{
-		{Role: openai.ChatMessageRoleSystem, Content: chatReActSystemPrompt},
-		{Role: openai.ChatMessageRoleUser, Content: message},
-	}
-	tools := chatTools()
-
-	for range chatMaxToolIterations {
-		stream, err := client.CreateChatCompletionStream(cmd.Context(), openai.ChatCompletionRequest{
-			Messages:          messages,
-			Tools:             tools,
-			ToolChoice:        "auto",
-			ParallelToolCalls: false,
-		})
-		if err != nil {
-			return fmt.Errorf("failed to create chat completion stream: %w", err)
-		}
-		streamedCompletion, err := readChatCompletionStream(stream, output)
-		closeErr := stream.Close()
-		if err != nil {
-			return fmt.Errorf("failed to read chat completion stream: %w", err)
-		}
-		if closeErr != nil {
-			return fmt.Errorf("failed to close chat completion stream: %w", closeErr)
-		}
-
-		if len(streamedCompletion.ToolCalls) == 0 {
-			if strings.TrimSpace(streamedCompletion.Content) == "" {
-				return errors.New("chat completion returned an empty message")
-			}
-			_, err = fmt.Fprintln(output)
-			return err
-		}
-
-		messages = append(messages, openai.ChatCompletionMessage{
-			Role:      openai.ChatMessageRoleAssistant,
-			Content:   streamedCompletion.Content,
-			ToolCalls: streamedCompletion.ToolCalls,
-		})
-		for _, toolCall := range streamedCompletion.ToolCalls {
-			messages = append(messages, executeChatTool(cmd.Context(), gorseClient, toolCall))
-		}
-	}
-
-	return fmt.Errorf("tool call limit exceeded after %d iterations", chatMaxToolIterations)
-}
-
-type streamedChatCompletion struct {
-	Content   string
-	ToolCalls []openai.ToolCall
-}
-
-func readChatCompletionStream(stream *openai.ChatCompletionStream, output io.Writer) (streamedChatCompletion, error) {
-	var result streamedChatCompletion
-	var content strings.Builder
+func readChatCompletionStream(stream *openai.ChatCompletionStream) (content string, toolCalls []openai.ToolCall) {
 	for {
 		response, err := stream.Recv()
 		if errors.Is(err, io.EOF) {
-			result.Content = content.String()
-			return result, nil
+			fmt.Println()
+			return
 		}
 		if err != nil {
-			return result, err
+			fmt.Fprintf(os.Stderr, "failed to receive chat completion stream: %v\n", err)
+			os.Exit(1)
 		}
 		for _, choice := range response.Choices {
 			if choice.Delta.Content != "" {
-				content.WriteString(choice.Delta.Content)
-				if output != nil {
-					if _, err := io.WriteString(output, choice.Delta.Content); err != nil {
-						return result, err
-					}
-					flushChatOutput(output)
-				}
+				content += choice.Delta.Content
+				fmt.Print(choice.Delta.Content)
 			}
-			for _, toolCall := range choice.Delta.ToolCalls {
-				result.appendToolCall(toolCall)
+			for _, delta := range choice.Delta.ToolCalls {
+				index := len(toolCalls)
+				if delta.Index != nil {
+					index = *delta.Index
+				}
+				for len(toolCalls) <= index {
+					toolCalls = append(toolCalls, openai.ToolCall{})
+				}
+				if delta.ID != "" {
+					toolCalls[index].ID = delta.ID
+				}
+				if delta.Type != "" {
+					toolCalls[index].Type = delta.Type
+				}
+				toolCalls[index].Function.Name += delta.Function.Name
+				toolCalls[index].Function.Arguments += delta.Function.Arguments
 			}
 		}
 	}
 }
 
-func flushChatOutput(output io.Writer) {
-	switch flusher := output.(type) {
-	case interface{ Flush() error }:
-		_ = flusher.Flush()
-	case interface{ Flush() }:
-		flusher.Flush()
-	}
-}
-
-func (r *streamedChatCompletion) appendToolCall(delta openai.ToolCall) {
-	index := len(r.ToolCalls)
-	if delta.Index != nil {
-		index = *delta.Index
-	}
-	for len(r.ToolCalls) <= index {
-		r.ToolCalls = append(r.ToolCalls, openai.ToolCall{})
-	}
-
-	toolCall := &r.ToolCalls[index]
-	if delta.ID != "" {
-		toolCall.ID = delta.ID
-	}
-	if delta.Type != "" {
-		toolCall.Type = delta.Type
-	}
-	toolCall.Function.Name += delta.Function.Name
-	toolCall.Function.Arguments += delta.Function.Arguments
-}
-
-func chatTools() []openai.Tool {
-	return []openai.Tool{{
-		Type: openai.ToolTypeFunction,
-		Function: &openai.FunctionDefinition{
-			Name:        chatSearchItemsToolName,
-			Description: "Search items in the Gorse item catalog by full-text query.",
-			Parameters: map[string]any{
-				"type": "object",
-				"properties": map[string]any{
-					"query": map[string]any{
-						"type":        "string",
-						"description": "Full-text search query for item IDs, categories, labels, or comments configured in [recommend.search].columns.",
-					},
-					"n": map[string]any{
-						"type":        "integer",
-						"description": fmt.Sprintf("Maximum number of items to return. Defaults to %d and is capped at %d.", chatSearchItemsDefaultN, chatSearchItemsMaxN),
-						"minimum":     1,
-						"maximum":     chatSearchItemsMaxN,
-					},
+var tools = []openai.Tool{{
+	Type: openai.ToolTypeFunction,
+	Function: &openai.FunctionDefinition{
+		Name:        fulltextSearchTool,
+		Description: "Search items in the Gorse item catalog by full-text query.",
+		Parameters: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"query": map[string]any{
+					"type":        "string",
+					"description": "Full-text search query for items.",
 				},
-				"required":             []string{"query"},
-				"additionalProperties": false,
+				"n": map[string]any{
+					"type":        "integer",
+					"description": fmt.Sprintf("Maximum number of items to return. Defaults to %d and is capped at %d.", fulltextSearchDefaultN, fulltextSearchItemsMaxN),
+					"minimum":     1,
+					"maximum":     fulltextSearchItemsMaxN,
+				},
 			},
+			"required":             []string{"query"},
+			"additionalProperties": false,
 		},
-	}}
-}
+	},
+}}
 
-type chatSearchItemsArguments struct {
-	Query string `json:"query"`
-	N     int    `json:"n,omitempty"`
-}
-
-func executeChatTool(ctx context.Context, gorseClient *gorse.GorseClient, toolCall openai.ToolCall) openai.ChatCompletionMessage {
+func callTool(ctx context.Context, gorseClient *gorse.GorseClient, toolCall openai.ToolCall) openai.ChatCompletionMessage {
+	color.HiBlack(toolCall.Function.Name + " " + toolCall.Function.Arguments)
 	switch toolCall.Function.Name {
-	case chatSearchItemsToolName:
-		return executeChatSearchItems(ctx, gorseClient, toolCall)
+	case fulltextSearchTool:
+		return callFulltextSearch(ctx, gorseClient, toolCall)
 	default:
-		return chatToolObservation(toolCall, map[string]string{
-			"error": "unknown tool: " + toolCall.Function.Name,
-		})
+		return newToolMessage(toolCall, fmt.Sprintf("unknown tool: %s", toolCall.Function.Name))
 	}
 }
 
-func executeChatSearchItems(ctx context.Context, gorseClient *gorse.GorseClient, toolCall openai.ToolCall) openai.ChatCompletionMessage {
-	var args chatSearchItemsArguments
+func callFulltextSearch(ctx context.Context, gorseClient *gorse.GorseClient, toolCall openai.ToolCall) openai.ChatCompletionMessage {
+	var args struct {
+		Query string `json:"query"`
+		N     int    `json:"n,omitempty"`
+	}
 	if err := json.Unmarshal([]byte(toolCall.Function.Arguments), &args); err != nil {
-		return chatToolObservation(toolCall, map[string]string{
-			"error": "invalid SearchItems arguments: " + err.Error(),
-		})
+		return newToolMessage(toolCall, fmt.Sprintf("invalid SearchItems arguments: %s", err.Error()))
 	}
 	args.Query = strings.TrimSpace(args.Query)
 	if args.Query == "" {
-		return chatToolObservation(toolCall, map[string]string{
-			"error": "SearchItems query is required",
-		})
+		return newToolMessage(toolCall, "SearchItems query is required. Please provide a valid query.")
 	}
 	if args.N <= 0 {
-		args.N = chatSearchItemsDefaultN
+		args.N = fulltextSearchDefaultN
 	}
-	if args.N > chatSearchItemsMaxN {
-		args.N = chatSearchItemsMaxN
+	if args.N > fulltextSearchItemsMaxN {
+		args.N = fulltextSearchItemsMaxN
 	}
 
 	items, err := gorseClient.SearchItems(ctx, args.Query, args.N)
 	if err != nil {
-		return chatToolObservation(toolCall, map[string]string{
-			"error": err.Error(),
-		})
+		return newToolMessage(toolCall, err.Error())
 	}
-	return chatToolObservation(toolCall, map[string]any{
-		"query": args.Query,
-		"items": items.Items,
-	})
+	for i := range items.Items {
+		items.Items[i].Labels = util.RemoveEmbeddings(items.Items[i].Labels, minEmbeddingDimensions)
+	}
+	var result strings.Builder
+	result.WriteString(fmt.Sprintf("Found %d items for query '%s':\n", len(items.Items), args.Query))
+	for i, item := range items.Items {
+		b, err := json.Marshal(item)
+		if err != nil {
+			return newToolMessage(toolCall, fmt.Sprintf("failed to encode item %d: %s", i, err.Error()))
+		}
+		result.Write(b)
+		result.WriteByte('\n')
+	}
+	return newToolMessage(toolCall, result.String())
 }
 
-func chatToolObservation(toolCall openai.ToolCall, value any) openai.ChatCompletionMessage {
-	content, err := json.Marshal(value)
-	if err != nil {
-		content = []byte(fmt.Sprintf(`{"error":"failed to encode tool result: %s"}`, err.Error()))
-	}
+func newToolMessage(toolCall openai.ToolCall, content string) openai.ChatCompletionMessage {
+	color.HiBlack(content)
 	return openai.ChatCompletionMessage{
 		Role:       openai.ChatMessageRoleTool,
-		Content:    string(content),
+		Content:    content,
 		Name:       toolCall.Function.Name,
 		ToolCallID: toolCall.ID,
 	}
