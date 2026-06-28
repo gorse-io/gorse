@@ -16,9 +16,7 @@ package vectors
 
 import (
 	"context"
-	"encoding/json"
 	"net/url"
-	"strconv"
 	"strings"
 	"time"
 
@@ -97,9 +95,16 @@ func (db *Weaviate) DescribeCollection(ctx context.Context, name string) (*Colle
 	if !ok {
 		return nil, errors.Errorf("failed to parse vector index config for collection %s", name)
 	}
-	distance, err := weaviateDistanceToDistance(stringValue(vectorIndexConfig["distance"]))
-	if err != nil {
-		return nil, errors.Trace(err)
+	var distance Distance
+	switch distanceValue := vectorIndexConfig["distance"].(string); distanceValue {
+	case "", "cosine":
+		distance = Cosine
+	case "l2-squared":
+		distance = Euclidean
+	case "dot":
+		distance = Dot
+	default:
+		return nil, errors.NotSupportedf("distance method %s", distanceValue)
 	}
 	config, err := weaviateVectorConfig(vectorIndexConfig)
 	if err != nil {
@@ -159,109 +164,53 @@ func (db *Weaviate) AddCollection(ctx context.Context, name string, dimensions i
 }
 
 func weaviateApplyQuantization(vectorIndexConfig map[string]any, config VectorConfig) error {
-	switch config.Quantization {
+	switch config.Type {
 	case QuantizationNone:
 		return nil
 	case QuantizationSQ:
-		return errors.NotSupportedf("SQ quantization for Weaviate")
+		vectorIndexConfig["sq"] = map[string]any{
+			"enabled": true,
+		}
+		if config.Bits != 0 {
+			return errors.NotSupportedf("quantization bits for SQ")
+		}
+		return nil
 	case QuantizationPQ:
 		vectorIndexConfig["pq"] = map[string]any{
 			"enabled": true,
+		}
+		if config.Bits != 0 {
+			return errors.NotSupportedf("quantization bits for PQ")
 		}
 		return nil
 	case QuantizationRQ:
 		rq := map[string]any{
 			"enabled": true,
 		}
-		if config.QuantizationBits != 0 {
-			switch config.QuantizationBits {
-			case 1, 8:
-				rq["bits"] = config.QuantizationBits
-			default:
-				return errors.NotSupportedf("RQ quantization bits %d for Weaviate", config.QuantizationBits)
-			}
+		if config.Bits != 0 {
+			rq["bits"] = config.Bits
 		}
 		vectorIndexConfig["rq"] = rq
 		return nil
 	default:
-		return errors.NotSupportedf("quantization type %s for Weaviate", config.Quantization)
+		return errors.NotSupportedf("quantization type %s for Weaviate", config.Type)
 	}
 }
 
 func weaviateVectorConfig(vectorIndexConfig map[string]any) (VectorConfig, error) {
-	if quantizationConfig, ok := mapValue(vectorIndexConfig["rq"]); ok && boolValue(quantizationConfig["enabled"]) {
-		bits, err := intValue(quantizationConfig["bits"])
-		if err != nil {
-			return VectorConfig{}, errors.Trace(err)
-		}
+	if quantizationConfig, ok := vectorIndexConfig["rq"].(map[string]any); ok && quantizationConfig["enabled"].(bool) {
 		return VectorConfig{
-			Quantization:     QuantizationRQ,
-			QuantizationBits: bits,
+			Type: QuantizationRQ,
+			Bits: int(quantizationConfig["bits"].(float64)),
 		}, nil
 	}
-	if quantizationConfig, ok := mapValue(vectorIndexConfig["pq"]); ok && boolValue(quantizationConfig["enabled"]) {
-		return VectorConfig{Quantization: QuantizationPQ}, nil
+	if quantizationConfig, ok := vectorIndexConfig["pq"].(map[string]any); ok && quantizationConfig["enabled"].(bool) {
+		return VectorConfig{Type: QuantizationPQ}, nil
 	}
-	if quantizationConfig, ok := mapValue(vectorIndexConfig["sq"]); ok && boolValue(quantizationConfig["enabled"]) {
-		return VectorConfig{Quantization: QuantizationSQ}, nil
+	if quantizationConfig, ok := vectorIndexConfig["sq"].(map[string]any); ok && quantizationConfig["enabled"].(bool) {
+		return VectorConfig{Type: QuantizationSQ}, nil
 	}
 	return VectorConfig{}, nil
-}
-
-func weaviateDistanceToDistance(distance string) (Distance, error) {
-	switch distance {
-	case "", "cosine":
-		return Cosine, nil
-	case "l2-squared":
-		return Euclidean, nil
-	case "dot":
-		return Dot, nil
-	default:
-		return Cosine, errors.NotSupportedf("distance method %s", distance)
-	}
-}
-
-func mapValue(value any) (map[string]any, bool) {
-	switch typed := value.(type) {
-	case map[string]any:
-		return typed, true
-	default:
-		return nil, false
-	}
-}
-
-func stringValue(value any) string {
-	if s, ok := value.(string); ok {
-		return s
-	}
-	return ""
-}
-
-func boolValue(value any) bool {
-	if b, ok := value.(bool); ok {
-		return b
-	}
-	return false
-}
-
-func intValue(value any) (int, error) {
-	switch typed := value.(type) {
-	case nil:
-		return 0, nil
-	case int:
-		return typed, nil
-	case int64:
-		return int(typed), nil
-	case float64:
-		return int(typed), nil
-	case json.Number:
-		i, err := typed.Int64()
-		return int(i), err
-	case string:
-		return strconv.Atoi(typed)
-	default:
-		return 0, errors.NotSupportedf("integer value %T", value)
-	}
 }
 
 func (db *Weaviate) DeleteCollection(ctx context.Context, name string) error {

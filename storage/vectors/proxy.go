@@ -67,8 +67,8 @@ func (p *ProxyServer) DescribeCollection(ctx context.Context, request *protocol.
 		Dimensions: int32(info.Dimension),
 		Distance:   distance,
 		Config: &protocol.VectorConfig{
-			QuantizationType: string(info.Quantization),
-			QuantizationBits: int32(info.QuantizationBits),
+			QuantizationType: string(info.Type),
+			QuantizationBits: int32(info.Bits),
 		},
 	}, nil
 }
@@ -184,8 +184,8 @@ func (p ProxyClient) DescribeCollection(ctx context.Context, name string) (*Coll
 	}
 	config := VectorConfig{}
 	if resp.GetConfig() != nil {
-		config.Quantization = QuantizationType(resp.GetConfig().GetQuantizationType())
-		config.QuantizationBits = int(resp.GetConfig().GetQuantizationBits())
+		config.Type = QuantizationType(resp.GetConfig().GetQuantizationType())
+		config.Bits = int(resp.GetConfig().GetQuantizationBits())
 	}
 	return &CollectionInfo{
 		Name:         resp.GetName(),
@@ -288,8 +288,8 @@ func protoDistanceToDistance(distance protocol.Distance) (Distance, error) {
 
 func vectorConfigToProtoVectorConfig(config VectorConfig) *protocol.VectorConfig {
 	return &protocol.VectorConfig{
-		QuantizationType: string(config.Quantization),
-		QuantizationBits: int32(config.QuantizationBits),
+		QuantizationType: string(config.Type),
+		QuantizationBits: int32(config.Bits),
 	}
 }
 
@@ -298,7 +298,7 @@ func protoVectorConfigToVectorConfig(config *protocol.VectorConfig) VectorConfig
 	if config == nil {
 		return vectorConfig
 	}
-	vectorConfig.Quantization = QuantizationType(config.GetQuantizationType())
-	vectorConfig.QuantizationBits = int(config.GetQuantizationBits())
+	vectorConfig.Type = QuantizationType(config.GetQuantizationType())
+	vectorConfig.Bits = int(config.GetQuantizationBits())
 	return vectorConfig
 }

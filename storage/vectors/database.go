@@ -41,12 +41,27 @@ const (
 	QuantizationRQ   QuantizationType = "rq" // Rotational quantization/RaBitQ/TurboQuant
 )
 
+func (q QuantizationType) String() string {
+	switch q {
+	case QuantizationNone:
+		return ""
+	case QuantizationSQ:
+		return "sq"
+	case QuantizationPQ:
+		return "pq"
+	case QuantizationRQ:
+		return "rq"
+	default:
+		return "unknown"
+	}
+}
+
 // VectorConfig configures vector storage.
 type VectorConfig struct {
-	// Quantization configures the vector quantization type.
-	Quantization QuantizationType // "" | sq | pq | rq
-	// QuantizationBits is the number of quantization bits. 0 uses the backend default.
-	QuantizationBits int
+	// Type configures the vector quantization type.
+	Type QuantizationType // "" | sq | pq | rq
+	// Bits is the number of quantization bits. 0 uses the backend default.
+	Bits int
 }
 
 // CollectionInfo describes a vector collection.

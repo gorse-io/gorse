@@ -315,8 +315,8 @@ func (m *Master) Serve() {
 
 func (m *Master) initCollaborativeFilteringVectorCollection(ctx context.Context) error {
 	vectorConfig := vectors.VectorConfig{
-		Quantization:     vectors.QuantizationType(m.Config.Database.Vector.QuantizationType),
-		QuantizationBits: m.Config.Database.Vector.QuantizationBits,
+		Type: vectors.QuantizationType(m.Config.Database.Vector.QuantizationType),
+		Bits: m.Config.Database.Vector.QuantizationBits,
 	}
 	dimension := model.Params(nil).GetInt(model.NFactors, 16)
 
@@ -343,8 +343,8 @@ func (m *Master) initCollaborativeFilteringVectorCollection(ctx context.Context)
 		zap.String("collection", cache.CollaborativeFiltering),
 		zap.Int("dimension", info.Dimension),
 		zap.Int("distance", int(info.Distance)),
-		zap.String("quantization_type", string(info.Quantization)),
-		zap.Int("quantization_bits", info.QuantizationBits))
+		zap.String("quantization_type", string(info.Type)),
+		zap.Int("quantization_bits", info.Bits))
 	return nil
 }
 
@@ -355,18 +355,18 @@ func (m *Master) validateCollaborativeFilteringVectorCollection(info *vectors.Co
 	if info.Distance != vectors.Dot {
 		return errors.Errorf("collection %s distance mismatch: expected %v, got %v", info.Name, vectors.Dot, info.Distance)
 	}
-	if info.Quantization != config.Quantization {
-		return errors.Errorf("collection %s quantization type mismatch: expected %s, got %s", info.Name, config.Quantization, info.Quantization)
+	if info.Type != config.Type {
+		return errors.Errorf("collection %s quantization type mismatch: expected %s, got %s", info.Name, config.Type, info.Type)
 	}
-	if info.QuantizationBits != config.QuantizationBits {
+	if info.Bits != config.Bits {
 		if strings.HasPrefix(m.Config.Database.VectorStore, storage.MilvusPrefix) && !created {
 			log.Logger().Warn("skip validating Milvus RQ query bits from existing collection",
 				zap.String("collection", info.Name),
-				zap.Int("expected", config.QuantizationBits),
-				zap.Int("actual", info.QuantizationBits))
+				zap.Int("expected", config.Bits),
+				zap.Int("actual", info.Bits))
 			return nil
 		}
-		return errors.Errorf("collection %s quantization bits mismatch: expected %d, got %d", info.Name, config.QuantizationBits, info.QuantizationBits)
+		return errors.Errorf("collection %s quantization bits mismatch: expected %d, got %d", info.Name, config.Bits, info.Bits)
 	}
 	return nil
 }

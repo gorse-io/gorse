@@ -68,8 +68,8 @@ func (s *MasterTestSuite) TestInitCollaborativeFilteringVectorCollection() {
 	s.Equal(cache.CollaborativeFiltering, info.Name)
 	s.Equal(16, info.Dimension)
 	s.Equal(vectors.Dot, info.Distance)
-	s.Equal(vectors.QuantizationRQ, info.Quantization)
-	s.Equal(4, info.QuantizationBits)
+	s.Equal(vectors.QuantizationRQ, info.Type)
+	s.Equal(4, info.Bits)
 }
 
 func TestMaster(t *testing.T) {

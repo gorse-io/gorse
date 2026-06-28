@@ -105,17 +105,15 @@ func (db *SQLite) DescribeCollection(ctx context.Context, name string) (*Collect
 		Dimension: dimensions,
 		Distance:  distance,
 		VectorConfig: VectorConfig{
-			Quantization: QuantizationNone,
+			Type: QuantizationNone,
 		},
 	}, nil
 }
 
 func (db *SQLite) AddCollection(ctx context.Context, name string, dimensions int, distance Distance, config VectorConfig) error {
-	// SQLite does not support quantization.
-	if config.Quantization != QuantizationNone {
-		return errors.NotSupportedf("quantization type %s for SQLite", config.Quantization)
+	if config.Type != QuantizationNone {
+		return errors.NotSupportedf("quantization type %s for SQLite", config.Type)
 	}
-
 	var metric string
 	switch distance {
 	case Cosine:

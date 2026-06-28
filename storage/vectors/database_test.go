@@ -51,12 +51,12 @@ func (suite *vectorsTestSuite) TestCollections() {
 	info, err := suite.Database.DescribeCollection(ctx, "test")
 	suite.NoError(err)
 	suite.Equal("test", info.Name)
-	if info.Dimension != 0 {
+	if info.Dimension > 0 {
 		suite.Equal(defaultVectorSize, info.Dimension)
 	}
 	suite.Equal(Cosine, info.Distance)
-	suite.Equal(QuantizationNone, info.Quantization)
-	suite.Zero(info.QuantizationBits)
+	suite.Equal(QuantizationNone, info.Type)
+	suite.Zero(info.Bits)
 	// list collections
 	collections, err = suite.Database.ListCollections(ctx)
 	suite.NoError(err)
@@ -158,4 +158,49 @@ func (suite *vectorsTestSuite) TestDeleteVectors() {
 	suite.NoError(err)
 	suite.Len(results, 1)
 	suite.Equal("new", results[0].Id)
+}
+
+func (suite *vectorsTestSuite) testQuantization(quantization QuantizationType, bits int) {
+	suite.T().Helper()
+	ctx := suite.T().Context()
+
+	err := suite.Database.AddCollection(ctx, "test_quantization", defaultVectorSize, Cosine, VectorConfig{
+		Type: quantization,
+		Bits: bits,
+	})
+	suite.Require().NoError(err)
+
+	cfg, err := suite.Database.DescribeCollection(ctx, "test_quantization")
+	suite.NoError(err)
+	suite.Equal(quantization, cfg.Type)
+	if bits > 0 {
+		suite.Equal(bits, cfg.Bits)
+	}
+
+	vectorA := make([]float32, defaultVectorSize)
+	vectorA[0] = 1
+	vectorB := make([]float32, defaultVectorSize)
+	vectorB[0] = 0.9
+	vectorB[1] = 0.1
+
+	err = suite.Database.AddVectors(ctx, "test_quantization", []Vector{
+		{
+			Id:         "a",
+			Vector:     vectorA,
+			Categories: []string{"cat-a", "common"},
+		},
+		{
+			Id:         "b",
+			Vector:     vectorB,
+			Categories: []string{"cat-b", "common"},
+		},
+	})
+	suite.NoError(err)
+
+	results, err := suite.Database.QueryVectors(ctx, "test_quantization", vectorA, []string{"common"}, 10)
+	suite.NoError(err)
+	suite.Len(results, 2)
+
+	err = suite.Database.DeleteCollection(ctx, "test_quantization")
+	suite.NoError(err)
 }
