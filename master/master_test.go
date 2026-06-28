@@ -77,15 +77,15 @@ func (s *MasterTestSuite) TestInitCollaborativeFilteringVectorCollection() {
 func (s *MasterTestSuite) TestInitCollaborativeFilteringVectorCollectionRecreateOnMismatch() {
 	ctx := context.Background()
 
-	err := s.VectorClient.AddCollection(ctx, cache.CollaborativeFiltering, 8, vectors.Cosine, vectors.VectorConfig{})
+	err := s.VectorClient.AddCollection(ctx, vectors.CollaborativeFiltering, 8, vectors.Cosine, vectors.VectorConfig{})
 	s.Require().NoError(err)
 
 	err = s.initCollaborativeFilteringVectorCollection(ctx)
 	s.Require().NoError(err)
 
-	info, err := s.VectorClient.DescribeCollection(ctx, cache.CollaborativeFiltering)
+	info, err := s.VectorClient.DescribeCollection(ctx, vectors.CollaborativeFiltering)
 	s.Require().NoError(err)
-	s.Equal(cache.CollaborativeFiltering, info.Name)
+	s.Equal(vectors.CollaborativeFiltering, info.Name)
 	s.Equal(16, info.Dimension)
 	s.Equal(vectors.Cosine, info.Distance)
 	s.Equal(vectors.QuantizationNone, info.Type)
