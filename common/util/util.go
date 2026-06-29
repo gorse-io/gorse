@@ -17,7 +17,9 @@ package util
 import (
 	"crypto/md5"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"reflect"
 	"sort"
 	"strings"
 
@@ -41,6 +43,93 @@ func RepeatFloat32s(n int, value float32) []float32 {
 		a[i] = value
 	}
 	return a
+}
+
+// RemoveEmbeddings recursively removes embeddings from a JSON-like value.
+func RemoveEmbeddings(value any, maxValues int) any {
+	if isLongFloatArray(value, maxValues) {
+		return nil
+	}
+	v := indirectValue(reflect.ValueOf(value))
+	if !v.IsValid() {
+		return nil
+	}
+	switch v.Kind() {
+	case reflect.Map:
+		if v.Type().Key().Kind() != reflect.String {
+			return value
+		}
+		result := make(map[string]any, v.Len())
+		iter := v.MapRange()
+		for iter.Next() {
+			result[iter.Key().String()] = RemoveEmbeddings(valueFromReflect(iter.Value()), maxValues)
+		}
+		return result
+	case reflect.Slice, reflect.Array:
+		result := make([]any, 0, v.Len())
+		for i := 0; i < v.Len(); i++ {
+			result = append(result, RemoveEmbeddings(valueFromReflect(v.Index(i)), maxValues))
+		}
+		return result
+	default:
+		return value
+	}
+}
+
+func isLongFloatArray(value any, maxValues int) bool {
+	v := indirectValue(reflect.ValueOf(value))
+	if !v.IsValid() || (v.Kind() != reflect.Slice && v.Kind() != reflect.Array) {
+		return false
+	}
+	if maxValues < 0 {
+		maxValues = 0
+	}
+	if v.Len() <= maxValues {
+		return false
+	}
+	for i := 0; i < v.Len(); i++ {
+		if !isFloatValue(valueFromReflect(v.Index(i))) {
+			return false
+		}
+	}
+	return true
+}
+
+func isFloatValue(value any) bool {
+	switch typed := indirectInterface(value).(type) {
+	case float64, float32:
+		return true
+	case json.Number:
+		_, err := typed.Float64()
+		return err == nil
+	default:
+		return false
+	}
+}
+
+func valueFromReflect(v reflect.Value) any {
+	v = indirectValue(v)
+	if !v.IsValid() {
+		return nil
+	}
+	if v.CanInterface() {
+		return v.Interface()
+	}
+	return fmt.Sprint(v)
+}
+
+func indirectInterface(value any) any {
+	return valueFromReflect(reflect.ValueOf(value))
+}
+
+func indirectValue(v reflect.Value) reflect.Value {
+	for v.IsValid() && (v.Kind() == reflect.Interface || v.Kind() == reflect.Pointer) {
+		if v.IsNil() {
+			return reflect.Value{}
+		}
+		v = v.Elem()
+	}
+	return v
 }
 
 // NewMatrix32 creates a 2D matrix of 32-bit floats.

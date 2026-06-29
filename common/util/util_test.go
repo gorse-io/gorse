@@ -15,6 +15,7 @@
 package util
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -39,6 +40,56 @@ func TestRangeInt(t *testing.T) {
 func TestRepeatFloat32s(t *testing.T) {
 	a := RepeatFloat32s(3, 0.1)
 	assert.Equal(t, []float32{0.1, 0.1, 0.1}, a)
+}
+
+func TestRemoveLongFloatArrays(t *testing.T) {
+	labels := map[string]any{
+		"title":       "item title",
+		"embedding":   []any{0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9},
+		"shortScores": []any{0.1, 0.2, 0.3},
+		"nested": map[string]any{
+			"description": "keep me",
+			"embedding":   []float32{0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9},
+		},
+		"variants": []any{
+			map[string]any{
+				"name":      "variant a",
+				"embedding": []float64{0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9},
+			},
+			[]float64{0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9},
+			"plain text",
+		},
+		"jsonNumbers": []any{
+			json.Number("0.1"),
+			json.Number("0.2"),
+			json.Number("0.3"),
+			json.Number("0.4"),
+			json.Number("0.5"),
+			json.Number("0.6"),
+			json.Number("0.7"),
+			json.Number("0.8"),
+			json.Number("0.9"),
+		},
+	}
+
+	assert.Equal(t, map[string]any{
+		"title":       "item title",
+		"shortScores": []any{0.1, 0.2, 0.3},
+		"nested": map[string]any{
+			"description": "keep me",
+		},
+		"variants": []any{
+			map[string]any{
+				"name": "variant a",
+			},
+			"plain text",
+		},
+	}, RemoveEmbeddings(labels, 8))
+}
+
+func TestRemoveLongFloatArraysRoot(t *testing.T) {
+	assert.Nil(t, RemoveEmbeddings([]float64{0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9}, 8))
+	assert.Equal(t, []any{0.1, 0.2, 0.3}, RemoveEmbeddings([]float64{0.1, 0.2, 0.3}, 8))
 }
 
 func TestNewMatrixInt(t *testing.T) {
