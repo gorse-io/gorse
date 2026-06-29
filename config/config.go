@@ -71,9 +71,9 @@ type Config struct {
 
 // DatabaseConfig is the configuration for the database.
 type DatabaseConfig struct {
-	DataStore         string       `mapstructure:"data_store" validate:"required,data_store"`      // database for data store
-	CacheStore        string       `mapstructure:"cache_store" validate:"required,cache_store"`    // database for cache store
-	VectorStore       string       `mapstructure:"vector_store" validate:"omitempty,vector_store"` // database for vector indices
+	DataStore         string       `mapstructure:"data_store" validate:"required,data_store"`     // database for data store
+	CacheStore        string       `mapstructure:"cache_store" validate:"required,cache_store"`   // database for cache store
+	VectorStore       string       `mapstructure:"vector_store" validate:"required,vector_store"` // database for vector indices
 	TablePrefix       string       `mapstructure:"table_prefix"`
 	DataTablePrefix   string       `mapstructure:"data_table_prefix"`
 	CacheTablePrefix  string       `mapstructure:"cache_table_prefix"`
@@ -466,6 +466,7 @@ func GetDefaultConfig() *Config {
 		Database: DatabaseConfig{
 			DataStore:       "sqlite://" + filepath.Join(MkDir(), "data.sqlite"),
 			CacheStore:      "sqlite://" + filepath.Join(MkDir(), "cache.sqlite"),
+			VectorStore:     "sqlite://" + filepath.Join(MkDir(), "vector.sqlite"),
 			CacheClientName: "gorse_cache_client",
 			MySQL: MySQLConfig{
 				IsolationLevel:  "READ-UNCOMMITTED",
@@ -612,6 +613,11 @@ func setDefault() {
 	// [database]
 	viper.SetDefault("database.data_store", defaultConfig.Database.DataStore)
 	viper.SetDefault("database.cache_store", defaultConfig.Database.CacheStore)
+	viper.SetDefault("database.vector_store", defaultConfig.Database.VectorStore)
+	viper.SetDefault("database.table_prefix", defaultConfig.Database.TablePrefix)
+	viper.SetDefault("database.data_table_prefix", defaultConfig.Database.DataTablePrefix)
+	viper.SetDefault("database.cache_table_prefix", defaultConfig.Database.CacheTablePrefix)
+	viper.SetDefault("database.vector_table_prefix", defaultConfig.Database.VectorTablePrefix)
 	viper.SetDefault("database.cache_client_name", defaultConfig.Database.CacheClientName)
 	// [database.mysql]
 	viper.SetDefault("database.mysql.isolation_level", defaultConfig.Database.MySQL.IsolationLevel)
