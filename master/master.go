@@ -136,12 +136,13 @@ func NewMaster(cfg *config.Config, cacheFolder string, standalone bool, configPa
 		tracer:       monitor.NewTracer("master"),
 		openAIClient: openai.NewClientWithConfig(clientConfig),
 		RestServer: server.RestServer{
-			Config:      cfg,
-			CacheClient: cache.NoDatabase{},
-			DataClient:  data.NoDatabase{},
-			HttpHost:    cfg.Master.HttpHost,
-			HttpPort:    cfg.Master.HttpPort,
-			WebService:  new(restful.WebService),
+			Config:       cfg,
+			CacheClient:  cache.NoDatabase{},
+			DataClient:   data.NoDatabase{},
+			VectorClient: vectors.NoDatabase{},
+			HttpHost:     cfg.Master.HttpHost,
+			HttpPort:     cfg.Master.HttpPort,
+			WebService:   new(restful.WebService),
 		},
 		ticker:    time.NewTicker(duration),
 		scheduled: make(chan struct{}, 1),
@@ -194,18 +195,16 @@ func (m *Master) Serve() {
 	}
 
 	// open vector store
-	if m.Config.Database.VectorStore != "" {
-		log.Logger().Info("opening vector store", zap.String("path", m.Config.Database.VectorStore))
-		m.VectorClient, err = vectors.Open(m.Config.Database.VectorStore, m.Config.Database.VectorTablePrefix)
-		if err != nil {
-			log.Logger().Fatal("failed to connect vector store", zap.Error(err))
-		}
-		if err = m.VectorClient.Init(); err != nil {
-			log.Logger().Fatal("failed to init vector store", zap.Error(err))
-		}
-		if err = m.initCollaborativeFilteringVectorCollection(context.Background()); err != nil {
-			log.Logger().Fatal("failed to init collaborative filtering vector collection", zap.Error(err))
-		}
+	log.Logger().Info("opening vector store", zap.String("path", m.Config.Database.VectorStore))
+	m.VectorClient, err = vectors.Open(m.Config.Database.VectorStore, m.Config.Database.VectorTablePrefix)
+	if err != nil {
+		log.Logger().Fatal("failed to connect vector store", zap.Error(err))
+	}
+	if err = m.VectorClient.Init(); err != nil {
+		log.Logger().Fatal("failed to init vector store", zap.Error(err))
+	}
+	if err = m.initCollaborativeFilteringVectorCollection(context.Background()); err != nil {
+		log.Logger().Fatal("failed to init collaborative filtering vector collection", zap.Error(err))
 	}
 
 	// load recommend config
