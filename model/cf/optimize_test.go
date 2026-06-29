@@ -98,6 +98,14 @@ func (m *mockMatrixFactorizationForSearch) SuggestParams(trial goptuna.Trial) mo
 	}
 }
 
+type zeroScoreMatrixFactorizationForSearch struct {
+	mockMatrixFactorizationForSearch
+}
+
+func (m *zeroScoreMatrixFactorizationForSearch) Fit(_ context.Context, _, _ dataset.CFSplit, _ *FitConfig) Score {
+	return Score{}
+}
+
 func TestTPE(t *testing.T) {
 	search := NewModelSearch(map[string]ModelCreator{
 		"mock": func() MatrixFactorization {
@@ -120,4 +128,21 @@ func TestTPE(t *testing.T) {
 		model.InitStdDev: float64(4),
 	}, result.Params)
 	assert.Equal(t, Score{NDCG: 12}, result.Score)
+}
+
+func TestModelSearchKeepsZeroScoreResult(t *testing.T) {
+	search := NewModelSearch(map[string]ModelCreator{
+		"mock": func() MatrixFactorization {
+			return &zeroScoreMatrixFactorizationForSearch{}
+		},
+	}, nil, nil, nil)
+	study, err := goptuna.CreateStudy("TestModelSearchKeepsZeroScoreResult",
+		goptuna.StudyOptionDirection(goptuna.StudyDirectionMaximize),
+		goptuna.StudyOptionSampler(tpe.NewSampler()))
+	assert.NoError(t, err)
+	err = study.Optimize(search.Objective, 1)
+	assert.NoError(t, err)
+	result := search.Result()
+	assert.Equal(t, "mock", result.Type)
+	assert.Equal(t, Score{}, result.Score)
 }

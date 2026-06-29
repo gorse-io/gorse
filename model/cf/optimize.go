@@ -69,7 +69,7 @@ func (ms *ModelSearch) Objective(trial goptuna.Trial) (float64, error) {
 	m := ms.modelCreators[modelType]()
 	m.SetParams(m.SuggestParams(trial))
 	score := m.Fit(ms.ctx, ms.trainSet, ms.valSet, ms.config)
-	if score.NDCG > ms.result.Score.NDCG {
+	if ms.result.Type == "" || score.NDCG > ms.result.Score.NDCG {
 		ms.result.Type = modelType
 		ms.result.Params = m.GetParams()
 		ms.result.Score = score
