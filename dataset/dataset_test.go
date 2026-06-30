@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"math"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 
@@ -192,6 +193,46 @@ func TestDataset_AddFeedback(t *testing.T) {
 		assert.Len(t, dataSet.timestamps[i], 10-i)
 		assert.InDelta(t, math32.Log(float32(10)/float32(10-i)), userIDF[i], 1e-2)
 		assert.InDelta(t, math32.Log(float32(10)/float32(i+1)), itemIDF[i], 1e-2)
+	}
+}
+
+func TestAddFeedbackRace(t *testing.T) {
+	const numUsers, numItems = 16, 32
+	const numWorkers = 4
+	dataSet := NewDataset(time.Now(), numUsers, numItems)
+	for i := range numUsers {
+		dataSet.AddUser(data.User{UserId: fmt.Sprintf("user%d", i)})
+	}
+	for i := range numItems {
+		dataSet.AddItem(data.Item{ItemId: fmt.Sprintf("item%d", i)})
+	}
+
+	var wg sync.WaitGroup
+	timestamp := time.Unix(1700000000, 0)
+	for workerIndex := range numWorkers {
+		wg.Add(1)
+		go func(workerIndex int) {
+			defer wg.Done()
+			for itemIndex := workerIndex; itemIndex < numItems; itemIndex += numWorkers {
+				for userIndex := range numUsers {
+					dataSet.AddFeedback(
+						fmt.Sprintf("user%d", userIndex),
+						fmt.Sprintf("item%d", itemIndex),
+						timestamp,
+					)
+				}
+			}
+		}(workerIndex)
+	}
+	wg.Wait()
+
+	assert.Equal(t, numUsers*numItems, dataSet.CountFeedback())
+	for itemIndex := range numItems {
+		assert.Len(t, dataSet.GetItemFeedback()[itemIndex], numUsers)
+		assert.Equal(t, int32(numUsers), dataSet.GetItemDict().Freq(int32(itemIndex)))
+	}
+	for userIndex := range numUsers {
+		assert.Len(t, dataSet.GetUserFeedback()[userIndex], numItems)
 	}
 }
 
