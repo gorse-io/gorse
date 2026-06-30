@@ -39,7 +39,9 @@ func (m *Master) GetMeta(ctx context.Context, nodeInfo *protocol.NodeInfo) (*pro
 		return nil, err
 	}
 	// marshall config
+	m.configMutex.RLock()
 	s, err := json.Marshal(m.Config)
+	m.configMutex.RUnlock()
 	if err != nil {
 		return nil, err
 	}

@@ -29,12 +29,24 @@ import (
 
 type ProxyServer struct {
 	protocol.UnimplementedVectorStoreServer
-	database Database
-	server   *grpc.Server
+	database       Database
+	databaseGetter func() Database
+	server         *grpc.Server
 }
 
 func NewProxyServer(database Database) *ProxyServer {
 	return &ProxyServer{database: database}
+}
+
+func NewDynamicProxyServer(databaseGetter func() Database) *ProxyServer {
+	return &ProxyServer{databaseGetter: databaseGetter}
+}
+
+func (p *ProxyServer) getDatabase() Database {
+	if p.databaseGetter != nil {
+		return p.databaseGetter()
+	}
+	return p.database
 }
 
 func (p *ProxyServer) Serve(lis net.Listener) error {
@@ -48,7 +60,7 @@ func (p *ProxyServer) Stop() {
 }
 
 func (p *ProxyServer) ListCollections(ctx context.Context, _ *protocol.ListCollectionsRequest) (*protocol.ListCollectionsResponse, error) {
-	collections, err := p.database.ListCollections(ctx)
+	collections, err := p.getDatabase().ListCollections(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -56,7 +68,7 @@ func (p *ProxyServer) ListCollections(ctx context.Context, _ *protocol.ListColle
 }
 
 func (p *ProxyServer) DescribeCollection(ctx context.Context, request *protocol.DescribeCollectionRequest) (*protocol.DescribeCollectionResponse, error) {
-	info, err := p.database.DescribeCollection(ctx, request.GetName())
+	info, err := p.getDatabase().DescribeCollection(ctx, request.GetName())
 	if err != nil {
 		if errors.Is(err, errors.NotFound) {
 			return nil, status.Error(codes.NotFound, err.Error())
@@ -84,7 +96,7 @@ func (p *ProxyServer) AddCollection(ctx context.Context, request *protocol.AddCo
 		return nil, err
 	}
 	config := protoVectorConfigToVectorConfig(request.GetConfig())
-	err = p.database.AddCollection(ctx, request.GetName(), int(request.GetDimensions()), distance, config)
+	err = p.getDatabase().AddCollection(ctx, request.GetName(), int(request.GetDimensions()), distance, config)
 	if err != nil {
 		return nil, err
 	}
@@ -92,7 +104,7 @@ func (p *ProxyServer) AddCollection(ctx context.Context, request *protocol.AddCo
 }
 
 func (p *ProxyServer) DeleteCollection(ctx context.Context, request *protocol.DeleteCollectionRequest) (*protocol.DeleteCollectionResponse, error) {
-	err := p.database.DeleteCollection(ctx, request.GetName())
+	err := p.getDatabase().DeleteCollection(ctx, request.GetName())
 	if err != nil {
 		return nil, err
 	}
@@ -113,7 +125,7 @@ func (p *ProxyServer) AddVectors(ctx context.Context, request *protocol.AddVecto
 			Timestamp:  timestamp,
 		}
 	}
-	err := p.database.AddVectors(ctx, request.GetCollection(), vectors)
+	err := p.getDatabase().AddVectors(ctx, request.GetCollection(), vectors)
 	if err != nil {
 		return nil, err
 	}
@@ -125,7 +137,7 @@ func (p *ProxyServer) DeleteVectors(ctx context.Context, request *protocol.Delet
 	if request.GetTimestamp() != nil {
 		timestamp = request.GetTimestamp().AsTime()
 	}
-	err := p.database.DeleteVectors(ctx, request.GetCollection(), timestamp)
+	err := p.getDatabase().DeleteVectors(ctx, request.GetCollection(), timestamp)
 	if err != nil {
 		return nil, err
 	}
@@ -133,7 +145,7 @@ func (p *ProxyServer) DeleteVectors(ctx context.Context, request *protocol.Delet
 }
 
 func (p *ProxyServer) QueryVectors(ctx context.Context, request *protocol.QueryVectorsRequest) (*protocol.QueryVectorsResponse, error) {
-	results, err := p.database.QueryVectors(ctx, request.GetCollection(), request.GetQuery(), request.GetCategories(), int(request.GetTopK()))
+	results, err := p.getDatabase().QueryVectors(ctx, request.GetCollection(), request.GetQuery(), request.GetCategories(), int(request.GetTopK()))
 	if err != nil {
 		return nil, err
 	}

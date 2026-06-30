@@ -172,6 +172,22 @@ func TestUnmarshal(t *testing.T) {
 	}
 }
 
+func TestLoadConfigDoesNotReusePreviousFile(t *testing.T) {
+	tempDir := t.TempDir()
+	firstConfig := filepath.Join(tempDir, "first.toml")
+	secondConfig := filepath.Join(tempDir, "second.toml")
+	assert.NoError(t, os.WriteFile(firstConfig, []byte("[server]\ndefault_n = 42\n"), 0644))
+	assert.NoError(t, os.WriteFile(secondConfig, []byte(""), 0644))
+
+	first, err := LoadConfig(firstConfig)
+	assert.NoError(t, err)
+	assert.Equal(t, 42, first.Server.DefaultN)
+
+	second, err := LoadConfig(secondConfig)
+	assert.NoError(t, err)
+	assert.Equal(t, GetDefaultConfig().Server.DefaultN, second.Server.DefaultN)
+}
+
 func TestSetDefault(t *testing.T) {
 	for _, binding := range bindings {
 		t.Setenv(binding.env, "")

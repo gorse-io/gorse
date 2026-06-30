@@ -16,7 +16,6 @@ package master
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"math"
 	"math/rand"
@@ -75,6 +74,7 @@ type Master struct {
 	configPath     string
 	standalone     bool
 	openAIClient   *openai.Client
+	configMutex    sync.RWMutex
 
 	// cluster meta cache
 	metaStore  meta.Database
@@ -207,19 +207,13 @@ func (m *Master) Serve() {
 		log.Logger().Fatal("failed to init collaborative filtering vector collection", zap.Error(err))
 	}
 
-	// load recommend config
-	metaStr, err := m.metaStore.Get(meta.RECOMMEND_CONFIG)
-	if err != nil && !errors.Is(err, errors.NotFound) {
-		log.Logger().Error("failed to load recommend config", zap.Error(err))
-	} else if metaStr != nil {
-		err = json.Unmarshal([]byte(*metaStr), &m.Config.Recommend)
-		if err != nil {
-			log.Logger().Error("failed to unmarshal recommend config", zap.Error(err))
-		}
+	// load config overrides
+	if err = m.applyRecommendOverride(m.Config); err != nil {
+		log.Logger().Error("failed to apply config overrides", zap.Error(err))
 	}
 
 	// load collective filtering model meta
-	metaStr, err = m.metaStore.Get(meta.COLLABORATIVE_FILTERING_MODEL)
+	metaStr, err := m.metaStore.Get(meta.COLLABORATIVE_FILTERING_MODEL)
 	if err != nil && !errors.Is(err, errors.NotFound) {
 		log.Logger().Error("failed to load collaborative filtering meta", zap.Error(err))
 	} else if metaStr != nil {
@@ -248,6 +242,7 @@ func (m *Master) Serve() {
 		}
 	}
 
+	go m.watchConfigFile(context.Background())
 	go m.RunTasksLoop()
 
 	// start rpc server
@@ -277,9 +272,21 @@ func (m *Master) Serve() {
 		}
 		m.grpcServer = grpc.NewServer(opts...)
 		protocol.RegisterMasterServer(m.grpcServer, m)
-		protocol.RegisterCacheStoreServer(m.grpcServer, cache.NewProxyServer(m.CacheClient))
-		protocol.RegisterDataStoreServer(m.grpcServer, data.NewProxyServer(m.DataClient))
-		protocol.RegisterVectorStoreServer(m.grpcServer, vectors.NewProxyServer(m.VectorClient))
+		protocol.RegisterCacheStoreServer(m.grpcServer, cache.NewDynamicProxyServer(func() cache.Database {
+			m.configMutex.RLock()
+			defer m.configMutex.RUnlock()
+			return m.CacheClient
+		}))
+		protocol.RegisterDataStoreServer(m.grpcServer, data.NewDynamicProxyServer(func() data.Database {
+			m.configMutex.RLock()
+			defer m.configMutex.RUnlock()
+			return m.DataClient
+		}))
+		protocol.RegisterVectorStoreServer(m.grpcServer, vectors.NewDynamicProxyServer(func() vectors.Database {
+			m.configMutex.RLock()
+			defer m.configMutex.RUnlock()
+			return m.VectorClient
+		}))
 		if m.blobServer != nil {
 			protocol.RegisterBlobStoreServer(m.grpcServer, m.blobServer)
 		}

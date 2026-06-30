@@ -51,10 +51,14 @@ import (
 )
 
 func init() {
-	viper.SetOptions(viper.WithDecodeHook(mapstructure.ComposeDecodeHookFunc(
+	viper.SetOptions(configViperOptions()...)
+}
+
+func configViperOptions() []viper.Option {
+	return []viper.Option{viper.WithDecodeHook(mapstructure.ComposeDecodeHookFunc(
 		mapstructure.StringToTimeDurationHookFunc(),
 		StringToFeedbackTypeHookFunc(),
-	)))
+	))}
 }
 
 // Config is the configuration for the engine.
@@ -608,76 +612,80 @@ func (config *TracingConfig) Equal(other TracingConfig) bool {
 		config.Ratio == other.Ratio
 }
 
-func setDefault() {
+func setDefault(vipers ...*viper.Viper) {
+	v := viper.GetViper()
+	if len(vipers) > 0 {
+		v = vipers[0]
+	}
 	defaultConfig := GetDefaultConfig()
 	// [database]
-	viper.SetDefault("database.data_store", defaultConfig.Database.DataStore)
-	viper.SetDefault("database.cache_store", defaultConfig.Database.CacheStore)
-	viper.SetDefault("database.vector_store", defaultConfig.Database.VectorStore)
-	viper.SetDefault("database.table_prefix", defaultConfig.Database.TablePrefix)
-	viper.SetDefault("database.data_table_prefix", defaultConfig.Database.DataTablePrefix)
-	viper.SetDefault("database.cache_table_prefix", defaultConfig.Database.CacheTablePrefix)
-	viper.SetDefault("database.vector_table_prefix", defaultConfig.Database.VectorTablePrefix)
-	viper.SetDefault("database.cache_client_name", defaultConfig.Database.CacheClientName)
+	v.SetDefault("database.data_store", defaultConfig.Database.DataStore)
+	v.SetDefault("database.cache_store", defaultConfig.Database.CacheStore)
+	v.SetDefault("database.vector_store", defaultConfig.Database.VectorStore)
+	v.SetDefault("database.table_prefix", defaultConfig.Database.TablePrefix)
+	v.SetDefault("database.data_table_prefix", defaultConfig.Database.DataTablePrefix)
+	v.SetDefault("database.cache_table_prefix", defaultConfig.Database.CacheTablePrefix)
+	v.SetDefault("database.vector_table_prefix", defaultConfig.Database.VectorTablePrefix)
+	v.SetDefault("database.cache_client_name", defaultConfig.Database.CacheClientName)
 	// [database.mysql]
-	viper.SetDefault("database.mysql.isolation_level", defaultConfig.Database.MySQL.IsolationLevel)
-	viper.SetDefault("database.mysql.max_open_conns", defaultConfig.Database.MySQL.MaxOpenConns)
-	viper.SetDefault("database.mysql.max_idle_conns", defaultConfig.Database.MySQL.MaxIdleConns)
-	viper.SetDefault("database.mysql.conn_max_lifetime", defaultConfig.Database.MySQL.ConnMaxLifetime)
+	v.SetDefault("database.mysql.isolation_level", defaultConfig.Database.MySQL.IsolationLevel)
+	v.SetDefault("database.mysql.max_open_conns", defaultConfig.Database.MySQL.MaxOpenConns)
+	v.SetDefault("database.mysql.max_idle_conns", defaultConfig.Database.MySQL.MaxIdleConns)
+	v.SetDefault("database.mysql.conn_max_lifetime", defaultConfig.Database.MySQL.ConnMaxLifetime)
 	// [database.postgres]
-	viper.SetDefault("database.postgres.max_open_conns", defaultConfig.Database.Postgres.MaxOpenConns)
-	viper.SetDefault("database.postgres.max_idle_conns", defaultConfig.Database.Postgres.MaxIdleConns)
-	viper.SetDefault("database.postgres.conn_max_lifetime", defaultConfig.Database.Postgres.ConnMaxLifetime)
+	v.SetDefault("database.postgres.max_open_conns", defaultConfig.Database.Postgres.MaxOpenConns)
+	v.SetDefault("database.postgres.max_idle_conns", defaultConfig.Database.Postgres.MaxIdleConns)
+	v.SetDefault("database.postgres.conn_max_lifetime", defaultConfig.Database.Postgres.ConnMaxLifetime)
 	// [database.redis]
-	viper.SetDefault("database.redis.max_search_results", defaultConfig.Database.Redis.MaxSearchResults)
+	v.SetDefault("database.redis.max_search_results", defaultConfig.Database.Redis.MaxSearchResults)
 	// [database.vector]
-	viper.SetDefault("database.vector.quantization_type", defaultConfig.Database.Vector.QuantizationType)
-	viper.SetDefault("database.vector.quantization_bits", defaultConfig.Database.Vector.QuantizationBits)
+	v.SetDefault("database.vector.quantization_type", defaultConfig.Database.Vector.QuantizationType)
+	v.SetDefault("database.vector.quantization_bits", defaultConfig.Database.Vector.QuantizationBits)
 	// [master]
-	viper.SetDefault("master.port", defaultConfig.Master.Port)
-	viper.SetDefault("master.host", defaultConfig.Master.Host)
-	viper.SetDefault("master.http_port", defaultConfig.Master.HttpPort)
-	viper.SetDefault("master.http_host", defaultConfig.Master.HttpHost)
-	viper.SetDefault("master.http_cors_domains", defaultConfig.Master.HttpCorsDomains)
-	viper.SetDefault("master.http_cors_methods", defaultConfig.Master.HttpCorsMethods)
-	viper.SetDefault("master.n_jobs", defaultConfig.Master.NumJobs)
-	viper.SetDefault("master.meta_timeout", defaultConfig.Master.MetaTimeout)
+	v.SetDefault("master.port", defaultConfig.Master.Port)
+	v.SetDefault("master.host", defaultConfig.Master.Host)
+	v.SetDefault("master.http_port", defaultConfig.Master.HttpPort)
+	v.SetDefault("master.http_host", defaultConfig.Master.HttpHost)
+	v.SetDefault("master.http_cors_domains", defaultConfig.Master.HttpCorsDomains)
+	v.SetDefault("master.http_cors_methods", defaultConfig.Master.HttpCorsMethods)
+	v.SetDefault("master.n_jobs", defaultConfig.Master.NumJobs)
+	v.SetDefault("master.meta_timeout", defaultConfig.Master.MetaTimeout)
 	// [server]
-	viper.SetDefault("server.api_key", defaultConfig.Server.APIKey)
-	viper.SetDefault("server.default_n", defaultConfig.Server.DefaultN)
-	viper.SetDefault("server.clock_error", defaultConfig.Server.ClockError)
-	viper.SetDefault("server.auto_insert_user", defaultConfig.Server.AutoInsertUser)
-	viper.SetDefault("server.auto_insert_item", defaultConfig.Server.AutoInsertItem)
-	viper.SetDefault("server.cache_expire", defaultConfig.Server.CacheExpire)
+	v.SetDefault("server.api_key", defaultConfig.Server.APIKey)
+	v.SetDefault("server.default_n", defaultConfig.Server.DefaultN)
+	v.SetDefault("server.clock_error", defaultConfig.Server.ClockError)
+	v.SetDefault("server.auto_insert_user", defaultConfig.Server.AutoInsertUser)
+	v.SetDefault("server.auto_insert_item", defaultConfig.Server.AutoInsertItem)
+	v.SetDefault("server.cache_expire", defaultConfig.Server.CacheExpire)
 	// [recommend]
-	viper.SetDefault("recommend.cache_size", defaultConfig.Recommend.CacheSize)
-	viper.SetDefault("recommend.cache_expire", defaultConfig.Recommend.CacheExpire)
-	viper.SetDefault("recommend.context_size", defaultConfig.Recommend.ContextSize)
+	v.SetDefault("recommend.cache_size", defaultConfig.Recommend.CacheSize)
+	v.SetDefault("recommend.cache_expire", defaultConfig.Recommend.CacheExpire)
+	v.SetDefault("recommend.context_size", defaultConfig.Recommend.ContextSize)
 	// [recommend.collaborative]
-	viper.SetDefault("recommend.collaborative.type", defaultConfig.Recommend.Collaborative.Type)
-	viper.SetDefault("recommend.collaborative.fit_period", defaultConfig.Recommend.Collaborative.FitPeriod)
-	viper.SetDefault("recommend.collaborative.fit_epoch", defaultConfig.Recommend.Collaborative.FitEpoch)
-	viper.SetDefault("recommend.collaborative.optimize_period", defaultConfig.Recommend.Collaborative.OptimizePeriod)
-	viper.SetDefault("recommend.collaborative.optimize_trials", defaultConfig.Recommend.Collaborative.OptimizeTrials)
+	v.SetDefault("recommend.collaborative.type", defaultConfig.Recommend.Collaborative.Type)
+	v.SetDefault("recommend.collaborative.fit_period", defaultConfig.Recommend.Collaborative.FitPeriod)
+	v.SetDefault("recommend.collaborative.fit_epoch", defaultConfig.Recommend.Collaborative.FitEpoch)
+	v.SetDefault("recommend.collaborative.optimize_period", defaultConfig.Recommend.Collaborative.OptimizePeriod)
+	v.SetDefault("recommend.collaborative.optimize_trials", defaultConfig.Recommend.Collaborative.OptimizeTrials)
 	// [recommend.replacement]
-	viper.SetDefault("recommend.replacement.enable_replacement", defaultConfig.Recommend.Replacement.EnableReplacement)
-	viper.SetDefault("recommend.replacement.positive_replacement_decay", defaultConfig.Recommend.Replacement.PositiveReplacementDecay)
-	viper.SetDefault("recommend.replacement.read_replacement_decay", defaultConfig.Recommend.Replacement.ReadReplacementDecay)
+	v.SetDefault("recommend.replacement.enable_replacement", defaultConfig.Recommend.Replacement.EnableReplacement)
+	v.SetDefault("recommend.replacement.positive_replacement_decay", defaultConfig.Recommend.Replacement.PositiveReplacementDecay)
+	v.SetDefault("recommend.replacement.read_replacement_decay", defaultConfig.Recommend.Replacement.ReadReplacementDecay)
 	// [recommend.ranker]
-	viper.SetDefault("recommend.ranker.type", defaultConfig.Recommend.Ranker.Type)
-	viper.SetDefault("recommend.ranker.cache_expire", defaultConfig.Recommend.Ranker.CacheExpire)
-	viper.SetDefault("recommend.ranker.fit_period", defaultConfig.Recommend.Ranker.FitPeriod)
-	viper.SetDefault("recommend.ranker.fit_epoch", defaultConfig.Recommend.Ranker.FitEpoch)
-	viper.SetDefault("recommend.ranker.optimize_period", defaultConfig.Recommend.Ranker.OptimizePeriod)
-	viper.SetDefault("recommend.ranker.optimize_trials", defaultConfig.Recommend.Ranker.OptimizeTrials)
-	viper.SetDefault("recommend.ranker.recommenders", defaultConfig.Recommend.Ranker.Recommenders)
+	v.SetDefault("recommend.ranker.type", defaultConfig.Recommend.Ranker.Type)
+	v.SetDefault("recommend.ranker.cache_expire", defaultConfig.Recommend.Ranker.CacheExpire)
+	v.SetDefault("recommend.ranker.fit_period", defaultConfig.Recommend.Ranker.FitPeriod)
+	v.SetDefault("recommend.ranker.fit_epoch", defaultConfig.Recommend.Ranker.FitEpoch)
+	v.SetDefault("recommend.ranker.optimize_period", defaultConfig.Recommend.Ranker.OptimizePeriod)
+	v.SetDefault("recommend.ranker.optimize_trials", defaultConfig.Recommend.Ranker.OptimizeTrials)
+	v.SetDefault("recommend.ranker.recommenders", defaultConfig.Recommend.Ranker.Recommenders)
 	// [recommend.fallback]
-	viper.SetDefault("recommend.fallback", defaultConfig.Recommend.Fallback)
+	v.SetDefault("recommend.fallback", defaultConfig.Recommend.Fallback)
 	// [tracing]
-	viper.SetDefault("tracing.exporter", defaultConfig.Tracing.Exporter)
-	viper.SetDefault("tracing.sampler", defaultConfig.Tracing.Sampler)
+	v.SetDefault("tracing.exporter", defaultConfig.Tracing.Exporter)
+	v.SetDefault("tracing.sampler", defaultConfig.Tracing.Sampler)
 	// [blob]
-	viper.SetDefault("blob.uri", defaultConfig.Blob.URI)
+	v.SetDefault("blob.uri", defaultConfig.Blob.URI)
 }
 
 type configBinding struct {
@@ -735,12 +743,13 @@ var bindings = []configBinding{
 
 // LoadConfig loads configuration from toml file.
 func LoadConfig(path string) (*Config, error) {
+	v := viper.NewWithOptions(configViperOptions()...)
 	// set default config
-	setDefault()
+	setDefault(v)
 
 	// bind environment bindings
 	for _, binding := range bindings {
-		err := viper.BindEnv(binding.key, binding.env)
+		err := v.BindEnv(binding.key, binding.env)
 		if err != nil {
 			log.Logger().Fatal("failed to bind a Viper key to a ENV variable", zap.Error(err))
 		}
@@ -757,8 +766,8 @@ func LoadConfig(path string) (*Config, error) {
 			}
 		} else {
 			// load config file
-			viper.SetConfigFile(path)
-			if err := viper.ReadInConfig(); err != nil {
+			v.SetConfigFile(path)
+			if err := v.ReadInConfig(); err != nil {
 				return nil, errors.Trace(err)
 			}
 		}
@@ -768,7 +777,7 @@ func LoadConfig(path string) (*Config, error) {
 
 	// unmarshal config file
 	var conf Config
-	if err := viper.Unmarshal(&conf); err != nil {
+	if err := v.Unmarshal(&conf); err != nil {
 		return nil, errors.Trace(err)
 	}
 
