@@ -173,6 +173,9 @@ func TestRPC(t *testing.T) {
 
 func TestReloadConfigFromFileUpdatesMeta(t *testing.T) {
 	m := newMockMasterRPC(t)
+	defer func() {
+		assert.NoError(t, m.metaStore.Close())
+	}()
 	configPath := filepath.Join(t.TempDir(), "config.toml")
 	assert.NoError(t, os.WriteFile(configPath, []byte("[server]\ndefault_n = 42\n"), 0644))
 	m.configPath = configPath
