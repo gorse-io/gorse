@@ -265,6 +265,7 @@ func (s *MasterTestSuite) TestLoadDataFromDatabase() {
 					FeedbackType: "positive",
 				},
 				Timestamp: time.Now(),
+				Labels:    map[string]any{"source": "positive"},
 			})
 		}
 		// negative feedback
@@ -279,6 +280,7 @@ func (s *MasterTestSuite) TestLoadDataFromDatabase() {
 					FeedbackType: "negative",
 				},
 				Timestamp: time.Now(),
+				Labels:    map[string]any{"source": "negative"},
 			})
 		}
 	}
@@ -301,6 +303,12 @@ func (s *MasterTestSuite) TestLoadDataFromDatabase() {
 	s.Equal(int32(5), datasets.clickTrainSet.Index.CountUserLabels())
 	s.Equal(int32(3), datasets.clickTestSet.Index.CountItemLabels())
 	s.Equal(int32(5), datasets.clickTestSet.Index.CountUserLabels())
+	s.Equal(int32(2), datasets.clickTrainSet.Index.CountContextLabels())
+	s.Equal(int32(2), datasets.clickTestSet.Index.CountContextLabels())
+	s.ElementsMatch([]string{"source.positive", "source.negative"}, datasets.clickTrainSet.Index.GetContextLabels())
+	s.True(lo.SomeBy(datasets.clickTrainSet.ContextLabels, func(labels []lo.Tuple2[int32, float32]) bool {
+		return len(labels) > 0
+	}))
 	s.Equal(110, datasets.clickTrainSet.Count()+datasets.clickTestSet.Count())
 	s.Equal(55, datasets.clickTrainSet.PositiveCount+datasets.clickTestSet.PositiveCount)
 	s.Equal(55, datasets.clickTrainSet.NegativeCount+datasets.clickTestSet.NegativeCount)
