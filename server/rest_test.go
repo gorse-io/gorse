@@ -26,6 +26,7 @@ import (
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
+	"github.com/gorse-io/gorse/storage/vectors"
 	"github.com/samber/lo/mutable"
 	"github.com/steinfletcher/apitest"
 	"github.com/stretchr/testify/assert"
@@ -49,10 +50,14 @@ func (suite *ServerTestSuite) SetupSuite() {
 	suite.NoError(err)
 	suite.CacheClient, err = cache.Open(fmt.Sprintf("sqlite://%s/cache.db", suite.T().TempDir()), "")
 	suite.NoError(err)
+	suite.VectorClient, err = vectors.Open(fmt.Sprintf("sqlite://%s/vector.db", suite.T().TempDir()), "")
+	suite.NoError(err)
 	// init database
 	err = suite.DataClient.Init()
 	suite.NoError(err)
 	err = suite.CacheClient.Init()
+	suite.NoError(err)
+	err = suite.VectorClient.Init()
 	suite.NoError(err)
 
 	suite.WebService = new(restful.WebService)
@@ -66,6 +71,8 @@ func (suite *ServerTestSuite) TearDownSuite() {
 	err := suite.DataClient.Close()
 	suite.NoError(err)
 	err = suite.CacheClient.Close()
+	suite.NoError(err)
+	err = suite.VectorClient.Close()
 	suite.NoError(err)
 }
 
@@ -777,6 +784,36 @@ func (suite *ServerTestSuite) TestFeedback() {
 		Status(http.StatusOK).
 		Body(`{"RowAffected": 1}`).
 		End()
+}
+
+func (suite *ServerTestSuite) TestEmbeddingItemToItemRecommend() {
+	ctx := suite.T().Context()
+	now := time.Unix(0, 0)
+	suite.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "embedding", Type: "embedding", Column: "item.Labels.embedding"}}
+	suite.NoError(suite.DataClient.BatchInsertItems(ctx, []data.Item{
+		{ItemId: "source", Labels: map[string]any{"embedding": []float32{0, 0}}, Timestamp: now},
+		{ItemId: "near", Labels: map[string]any{"embedding": []float32{0.1, 0}}, Categories: []string{"movie"}, Timestamp: now},
+		{ItemId: "far", Labels: map[string]any{"embedding": []float32{10, 0}}, Categories: []string{"movie"}, Timestamp: now},
+		{ItemId: "hidden", Labels: map[string]any{"embedding": []float32{0.05, 0}}, Categories: []string{"movie"}, IsHidden: true, Timestamp: now},
+	}))
+	suite.NoError(suite.VectorClient.AddCollection(ctx, vectors.ItemToItemCollection("embedding"), 2, vectors.Euclidean, vectors.VectorConfig{}))
+	suite.NoError(suite.VectorClient.AddVectors(ctx, vectors.ItemToItemCollection("embedding"), []vectors.Vector{
+		{Id: "source", Vector: []float32{0, 0}, Timestamp: now},
+		{Id: "near", Vector: []float32{0.1, 0}, Categories: []string{"movie"}, Timestamp: now},
+		{Id: "far", Vector: []float32{10, 0}, Categories: []string{"movie"}, Timestamp: now},
+		{Id: "hidden", Vector: []float32{0.05, 0}, Categories: []string{"movie"}, IsHidden: true, Timestamp: now},
+	}))
+
+	expected := suite.marshal([]cache.Score{
+		{Id: "near", Score: 2, Categories: []string{"movie"}},
+		{Id: "far", Score: 1, Categories: []string{"movie"}},
+	})
+	apitest.New().Handler(suite.handler).Get("/api/item/"+"source"+"/neighbors").
+		Query("category", "movie").Header("X-API-Key", apiKey).
+		Expect(suite.T()).Status(http.StatusOK).Body(expected).End()
+	apitest.New().Handler(suite.handler).Get("/api/item-to-item/embedding/source").
+		Query("category", "movie").Header("X-API-Key", apiKey).
+		Expect(suite.T()).Status(http.StatusOK).Body(expected).End()
 }
 
 func (suite *ServerTestSuite) TestNonPersonalizedRecommend() {

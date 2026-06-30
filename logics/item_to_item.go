@@ -190,33 +190,40 @@ func newEmbeddingItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.T
 }
 
 func (e *embeddingItemToItem) Push(item *data.Item, _ []int32) {
-	// Evaluate filter function
-	result, err := expr.Run(e.columnFunc, map[string]any{
+	v, ok := ExtractItemEmbedding(item, e.columnFunc)
+	if !ok {
+		return
+	}
+	bf16 := bfloats.FromFloat32(v)
+	// Check dimension
+	e.itemsLock.Lock()
+	if e.dimension == 0 && len(bf16) > 0 {
+		e.dimension = len(bf16)
+	} else if e.dimension != len(bf16) {
+		log.Logger().Error("invalid column dimension", zap.Int("dimension", len(bf16)))
+		e.itemsLock.Unlock()
+		return
+	}
+	e.itemsLock.Unlock()
+	e.pushItem(item, bf16)
+}
+
+func ExtractItemEmbedding(item *data.Item, columnFunc *vm.Program) ([]float32, bool) {
+	result, err := expr.Run(columnFunc, map[string]any{
 		"item": item,
 	})
 	if err != nil {
 		log.Logger().Error("failed to evaluate column expression",
 			zap.Any("item", item), zap.Error(err))
-		return
+		return nil, false
 	}
-	// Convert column to BF16 vector
 	v, ok := bfloats.FromAny(result)
 	if !ok {
 		log.Logger().Error("failed to convert column to BF16 slice",
 			zap.Any("column", result))
-		return
+		return nil, false
 	}
-	// Check dimension
-	e.itemsLock.Lock()
-	if e.dimension == 0 && len(v) > 0 {
-		e.dimension = len(v)
-	} else if e.dimension != len(v) {
-		log.Logger().Error("invalid column dimension", zap.Int("dimension", len(v)))
-		e.itemsLock.Unlock()
-		return
-	}
-	e.itemsLock.Unlock()
-	e.pushItem(item, v)
+	return bfloats.ToFloat32(v), true
 }
 
 type tagsItemToItem struct {

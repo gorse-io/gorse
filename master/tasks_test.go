@@ -22,9 +22,11 @@ import (
 
 	"github.com/gorse-io/gorse/common/expression"
 	"github.com/gorse-io/gorse/config"
+	"github.com/gorse-io/gorse/dataset"
 	"github.com/gorse-io/gorse/logics"
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
+	"github.com/gorse-io/gorse/storage/vectors"
 	"github.com/samber/lo"
 )
 
@@ -129,6 +131,27 @@ func (s *MasterTestSuite) TestFindItemToItem() {
 	similar, err = s.CacheClient.SearchScores(ctx, cache.ItemToItem, cache.Key("default", "9"), nil, 0, 100)
 	s.NoError(err)
 	s.Equal([]string{"7", "5", "3"}, cache.ConvertDocumentsToValues(similar))
+}
+
+func (s *MasterTestSuite) TestUpdateEmbeddingItemToItemWritesVectors() {
+	ctx := s.T().Context()
+	now := time.Now()
+	dataSet := dataset.NewDataset(now, 0, 3)
+	dataSet.AddItem(data.Item{ItemId: "source", Labels: map[string]any{"embedding": []float32{0, 0}}, Timestamp: now})
+	dataSet.AddItem(data.Item{ItemId: "near", Labels: map[string]any{"embedding": []float32{0.1, 0}}, Categories: []string{"movie"}, Timestamp: now})
+	dataSet.AddItem(data.Item{ItemId: "hidden", Labels: map[string]any{"embedding": []float32{0.05, 0}}, Categories: []string{"movie"}, IsHidden: true, Timestamp: now})
+
+	s.Config.Recommend.CacheSize = 2
+	s.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "embedding", Type: "embedding", Column: "item.Labels.embedding"}}
+	s.NoError(s.updateItemToItem(ctx, dataSet))
+
+	results, err := s.VectorClient.QueryVectors(ctx, vectors.ItemToItemCollection("embedding"), []float32{0, 0}, []string{"movie"}, 10)
+	s.NoError(err)
+	s.Equal([]string{"near"}, lo.Map(results, func(result vectors.Vector, _ int) string { return result.Id }))
+
+	cached, err := s.CacheClient.SearchScores(ctx, cache.ItemToItem, cache.Key("embedding", "source"), nil, 0, 10)
+	s.NoError(err)
+	s.Empty(cached)
 }
 
 func (s *MasterTestSuite) TestUserToUser() {
@@ -398,7 +421,7 @@ func (s *MasterTestSuite) TestNegativeFeedbackPriority() {
 	s.Equal(5, datasets.clickTrainSet.NegativeCount+datasets.clickTestSet.NegativeCount)
 
 	// Verify negative feedback items are excluded from recommendations
-	recommender, err := logics.NewRecommender(s.Config.Recommend, s.CacheClient, s.DataClient, true, "1", nil)
+	recommender, err := logics.NewRecommender(s.Config.Recommend, s.CacheClient, s.DataClient, s.VectorClient, true, "1", nil)
 	s.NoError(err)
 	excludeSet := recommender.ExcludeSet()
 	// User 1 should have item 0 in exclude set (due to dislike)

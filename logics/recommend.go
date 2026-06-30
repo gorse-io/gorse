@@ -20,12 +20,14 @@ import (
 	"time"
 
 	mapset "github.com/deckarep/golang-set/v2"
+	"github.com/expr-lang/expr"
 	"github.com/gorse-io/gorse/common/expression"
 	"github.com/gorse-io/gorse/common/heap"
 	"github.com/gorse-io/gorse/common/util"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
+	"github.com/gorse-io/gorse/storage/vectors"
 	"github.com/juju/errors"
 	"github.com/samber/lo"
 )
@@ -40,9 +42,10 @@ const (
 )
 
 type Recommender struct {
-	config      config.RecommendConfig
-	cacheClient cache.Database
-	dataClient  data.Database
+	config       config.RecommendConfig
+	cacheClient  cache.Database
+	dataClient   data.Database
+	vectorClient vectors.Database
 
 	online       bool
 	coldstart    bool
@@ -54,7 +57,7 @@ type Recommender struct {
 
 type RecommenderFunc func(ctx context.Context) ([]cache.Score, string, error)
 
-func NewRecommender(config config.RecommendConfig, cacheClient cache.Database, dataClient data.Database, online bool, userId string, categories []string) (*Recommender, error) {
+func NewRecommender(config config.RecommendConfig, cacheClient cache.Database, dataClient data.Database, vectorClient vectors.Database, online bool, userId string, categories []string) (*Recommender, error) {
 	// Load user feedback
 	userFeedback, err := dataClient.GetUserFeedback(context.Background(), userId, new(time.Now()))
 	if err != nil {
@@ -78,6 +81,7 @@ func NewRecommender(config config.RecommendConfig, cacheClient cache.Database, d
 		config:       config,
 		cacheClient:  cacheClient,
 		dataClient:   dataClient,
+		vectorClient: vectorClient,
 		userId:       userId,
 		userFeedback: userFeedback,
 		online:       online,
@@ -238,6 +242,11 @@ func (r *Recommender) recommendCollaborative(ctx context.Context) ([]cache.Score
 
 func (r *Recommender) recommendItemToItem(name string) RecommenderFunc {
 	return func(ctx context.Context) ([]cache.Score, string, error) {
+		for _, itemToItemConfig := range r.config.ItemToItem {
+			if itemToItemConfig.Name == name && itemToItemConfig.Type == "embedding" {
+				return r.recommendEmbeddingItemToItem(ctx, itemToItemConfig)
+			}
+		}
 		// filter positive feedbacks
 		data.SortFeedbacks(r.userFeedback)
 		userFeedback := make([]data.Feedback, 0, r.config.CacheSize)
@@ -284,6 +293,76 @@ func (r *Recommender) recommendItemToItem(name string) RecommenderFunc {
 			}
 		}), strings.Join(digests.ToSlice(), ""), nil
 	}
+}
+
+func QueryEmbeddingItemToItem(ctx context.Context, dataClient data.Database, vectorClient vectors.Database, itemToItemConfig config.ItemToItemConfig, itemId string, categories []string, n int) ([]cache.Score, error) {
+	items, err := dataClient.BatchGetItems(ctx, []string{itemId}, data.GetOptions{})
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	if len(items) == 0 {
+		return nil, nil
+	}
+	columnFunc, err := expr.Compile(itemToItemConfig.Column, expr.Env(map[string]any{
+		"item": data.Item{},
+	}))
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	embedding, ok := ExtractItemEmbedding(&items[0], columnFunc)
+	if !ok {
+		return nil, nil
+	}
+	neighbors, err := vectorClient.QueryVectors(ctx, vectors.ItemToItemCollection(itemToItemConfig.Name), embedding, categories, n+1)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	scores := make([]cache.Score, 0, len(neighbors))
+	for i, neighbor := range neighbors {
+		if neighbor.Id != itemId {
+			scores = append(scores, cache.Score{Id: neighbor.Id, Score: float64(len(neighbors) - i), Categories: neighbor.Categories})
+		}
+	}
+	if n > 0 && len(scores) > n {
+		scores = scores[:n]
+	}
+	return scores, nil
+}
+
+func (r *Recommender) recommendEmbeddingItemToItem(ctx context.Context, itemToItemConfig config.ItemToItemConfig) ([]cache.Score, string, error) {
+	// filter positive feedbacks
+	data.SortFeedbacks(r.userFeedback)
+	userFeedback := make([]data.Feedback, 0, r.config.CacheSize)
+	for _, feedback := range r.userFeedback {
+		if expression.MatchFeedbackTypeExpressions(r.config.DataSource.PositiveFeedbackTypes, feedback.FeedbackType, feedback.Value) {
+			userFeedback = append(userFeedback, feedback)
+			if r.online && r.config.ContextSize <= len(userFeedback) {
+				break
+			}
+		}
+	}
+	scores := make(map[string]float64)
+	categories := make(map[string][]string)
+	for _, feedback := range userFeedback {
+		neighbors, err := QueryEmbeddingItemToItem(ctx, r.dataClient, r.vectorClient, itemToItemConfig, feedback.ItemId, r.categories, r.config.CacheSize)
+		if err != nil {
+			return nil, "", errors.Trace(err)
+		}
+		for _, neighbor := range neighbors {
+			if !r.excludeSet.Contains(neighbor.Id) {
+				scores[neighbor.Id] += neighbor.Score
+				categories[neighbor.Id] = neighbor.Categories
+			}
+		}
+	}
+	filter := heap.NewTopKFilter[string, float64](r.config.CacheSize)
+	for id, score := range scores {
+		filter.Push(id, score)
+	}
+	elems := filter.PopAll()
+	return lo.Map(elems, func(elem heap.Elem[string, float64], _ int) cache.Score {
+		return cache.Score{Id: elem.Value, Score: elem.Weight, Categories: categories[elem.Value]}
+	}), itemToItemConfig.Hash(&r.config), nil
 }
 
 func (r *Recommender) recommendUserToUser(name string) RecommenderFunc {

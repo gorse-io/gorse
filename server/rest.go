@@ -769,9 +769,45 @@ func (s *RestServer) getNonPersonalized(request *restful.Request, response *rest
 func (s *RestServer) getItemToItem(request *restful.Request, response *restful.Response) {
 	name := request.PathParameter("name")
 	itemId := request.PathParameter("item-id")
-	categories := request.QueryParameters("category")
+	categories := ReadCategories(request, nil)
+	for _, itemToItemConfig := range s.Config.Recommend.ItemToItem {
+		if itemToItemConfig.Name == name && itemToItemConfig.Type == "embedding" {
+			s.searchEmbeddingItemToItem(itemToItemConfig, itemId, categories, request, response)
+			return
+		}
+	}
 	s.SetLastModified(request, response, cache.Key(cache.ItemToItemUpdateTime, name, itemId))
 	s.SearchDocuments(cache.ItemToItem, cache.Key(name, itemId), categories, nil, request, response)
+}
+
+func (s *RestServer) searchEmbeddingItemToItem(itemToItemConfig config.ItemToItemConfig, itemId string, categories []string, request *restful.Request, response *restful.Response) {
+	var (
+		n      int
+		offset int
+		err    error
+	)
+	if offset, err = ParseInt(request, "offset", 0); err != nil {
+		BadRequest(response, err)
+		return
+	}
+	if n, err = ParseInt(request, "n", s.Config.Server.DefaultN); err != nil {
+		BadRequest(response, err)
+		return
+	}
+	results, err := logics.QueryEmbeddingItemToItem(request.Request.Context(), s.DataClient, s.VectorClient, itemToItemConfig, itemId, categories, offset+n)
+	if err != nil {
+		InternalServerError(response, err)
+		return
+	}
+	if offset < len(results) {
+		results = results[offset:]
+	} else {
+		results = nil
+	}
+	if n > 0 && len(results) > n {
+		results = results[:n]
+	}
+	Ok(response, results)
 }
 
 func (s *RestServer) getUserToUser(request *restful.Request, response *restful.Response) {
@@ -830,7 +866,12 @@ func (s *RestServer) getItemNeighbors(request *restful.Request, response *restfu
 		PageNotFound(response, errors.New("item-to-item recommendation is not enabled"))
 		return
 	} else {
-		name := s.Config.Recommend.ItemToItem[0].Name
+		itemToItemConfig := s.Config.Recommend.ItemToItem[0]
+		if itemToItemConfig.Type == "embedding" {
+			s.searchEmbeddingItemToItem(itemToItemConfig, itemId, categories, request, response)
+			return
+		}
+		name := itemToItemConfig.Name
 		s.SetLastModified(request, response, cache.Key(cache.ItemToItemUpdateTime, name, itemId))
 		s.SearchDocuments(cache.ItemToItem, cache.Key(name, itemId), categories, nil, request, response)
 	}
@@ -889,7 +930,7 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 		return
 	}
 	// online recommendation
-	recommender, err := logics.NewRecommender(s.Config.Recommend, s.CacheClient, s.DataClient, true, userId, categories)
+	recommender, err := logics.NewRecommender(s.Config.Recommend, s.CacheClient, s.DataClient, s.VectorClient, true, userId, categories)
 	if err != nil {
 		InternalServerError(response, err)
 		return
