@@ -16,6 +16,7 @@ package vectors
 
 import (
 	"context"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -42,10 +43,22 @@ const (
 	QuantizationRQ   QuantizationType = "rq" // Rotational quantization/RaBitQ/TurboQuant
 
 	CollaborativeFiltering = "collaborative_filtering"
+	ItemToItemPrefix       = "item_to_item"
 )
 
 func CollaborativeFilteringCollection(id int64) string {
 	return CollaborativeFiltering + "_" + strconv.FormatInt(id, 10)
+}
+
+var vectorCollectionNamePattern = regexp.MustCompile(`[^A-Za-z0-9_]`)
+
+func ItemToItemCollection(name string) string {
+	name = strings.TrimSpace(name)
+	name = vectorCollectionNamePattern.ReplaceAllString(name, "_")
+	if name == "" {
+		name = "default"
+	}
+	return ItemToItemPrefix + "_" + name
 }
 
 func (q QuantizationType) String() string {
