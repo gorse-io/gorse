@@ -124,6 +124,11 @@ func TestUnmarshal(t *testing.T) {
 			assert.Equal(t, "most_starred_weekly", config.Recommend.NonPersonalized[0].Name)
 			assert.Equal(t, "count(feedback, .FeedbackType == 'star')", config.Recommend.NonPersonalized[0].Score)
 			assert.Equal(t, "(now() - item.Timestamp).Hours() < 168", config.Recommend.NonPersonalized[0].Filter)
+			// [recommend.agent]
+			assert.Len(t, config.Recommend.Agent, 1)
+			assert.Equal(t, "assistant", config.Recommend.Agent[0].Name)
+			assert.Equal(t, 4, config.Recommend.Agent[0].MaxIterations)
+			assert.Contains(t, config.Recommend.Agent[0].PromptTemplate, "{{ user_id }}")
 			// [recommend.collaborative]
 			assert.Equal(t, "mf", config.Recommend.Collaborative.Type)
 			assert.Equal(t, 60*time.Minute, config.Recommend.Collaborative.FitPeriod)
@@ -417,6 +422,26 @@ func TestExternalConfig(t *testing.T) {
 	assert.NotEqual(t, a.Hash(), b.Hash())
 }
 
+func TestAgentConfig(t *testing.T) {
+	a := AgentConfig{}
+	b := AgentConfig{}
+	assert.Equal(t, a.Hash(), b.Hash())
+
+	a = AgentConfig{Name: "a"}
+	b = AgentConfig{Name: "b"}
+	assert.NotEqual(t, a.Hash(), b.Hash())
+	assert.Equal(t, "agent/a", a.FullName())
+	assert.Equal(t, "agent/b", b.FullName())
+
+	a = AgentConfig{PromptTemplate: "a"}
+	b = AgentConfig{PromptTemplate: "b"}
+	assert.NotEqual(t, a.Hash(), b.Hash())
+
+	a = AgentConfig{MaxIterations: 1}
+	b = AgentConfig{MaxIterations: 2}
+	assert.NotEqual(t, a.Hash(), b.Hash())
+}
+
 func TestRecommendConfig(t *testing.T) {
 	a := RecommendConfig{}
 	b := RecommendConfig{}
@@ -445,6 +470,12 @@ func TestRecommendConfig(t *testing.T) {
 	assert.NotEqual(t, a.Hash(), b.Hash())
 	a.External = []ExternalConfig{}
 	b.External = []ExternalConfig{}
+
+	a.Agent = []AgentConfig{{Name: "a"}}
+	b.Agent = []AgentConfig{{Name: "b"}}
+	assert.NotEqual(t, a.Hash(), b.Hash())
+	a.Agent = []AgentConfig{}
+	b.Agent = []AgentConfig{}
 
 	a.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{expression.MustParseFeedbackTypeExpression("like")}
 	b.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{expression.MustParseFeedbackTypeExpression("star")}
