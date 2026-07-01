@@ -95,6 +95,10 @@ func (suite *ItemToItemTestSuite) TestEmbeddingItemToItemVectorWriter() {
 	}()
 
 	timestamp := time.Now()
+	suite.NoError(vectorClient.AddCollection(ctx, vectors.ItemToItemCollection("embedding"), 2, vectors.Euclidean, vectors.VectorConfig{}))
+	suite.NoError(vectorClient.AddVectors(ctx, vectors.ItemToItemCollection("embedding"), []vectors.Vector{
+		{Id: "old", Vector: []float32{0.01, 0}, Categories: []string{"movie"}, Timestamp: timestamp.Add(-time.Hour)},
+	}))
 	writer, err := NewEmbeddingItemToItemVectorWriter(ctx, config.ItemToItemConfig{
 		Name:   "embedding",
 		Type:   "embedding",
@@ -107,7 +111,7 @@ func (suite *ItemToItemTestSuite) TestEmbeddingItemToItemVectorWriter() {
 	writer.Push(&data.Item{ItemId: "bad", Labels: map[string]any{"embedding": []float32{0, 0, 0}}, Categories: []string{"movie"}, Timestamp: timestamp}, nil)
 	writer.Push(&data.Item{ItemId: "hidden", Labels: map[string]any{"embedding": []float32{0.05, 0}}, Categories: []string{"movie"}, IsHidden: true, Timestamp: timestamp}, nil)
 	suite.Equal(2, writer.Dimension())
-	suite.NoError(writer.Flush())
+	suite.NoError(writer.Finish())
 
 	results, err := vectorClient.QueryVectors(ctx, vectors.ItemToItemCollection("embedding"), []float32{0, 0}, []string{"movie"}, 10)
 	suite.NoError(err)

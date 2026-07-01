@@ -852,16 +852,13 @@ func (m *Master) updateEmbeddingItemToItemVectors(parent context.Context, datase
 	}); err != nil {
 		return errors.Trace(err)
 	}
-	if err = writer.Flush(); err != nil {
+	if err = writer.Finish(); err != nil {
 		return errors.Trace(err)
 	}
 	if writer.Dimension() == 0 {
 		log.Logger().Warn("skip embedding item-to-item vector update since no valid embedding found",
 			zap.String("name", itemToItemConfig.Name))
 		return nil
-	}
-	if err = m.VectorClient.DeleteVectors(ctx, writer.Collection(), dataset.GetTimestamp()); err != nil {
-		return errors.Trace(err)
 	}
 	for _, item := range dataset.GetItems() {
 		subset := cache.Key(itemToItemConfig.Name, item.ItemId)
