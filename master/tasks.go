@@ -746,13 +746,53 @@ func (m *Master) updateItemToItem(parent context.Context, dataset *dataset.Datas
 	}
 	itemToItemConfigs := make([]config.ItemToItemConfig, 0, len(m.Config.Recommend.ItemToItem))
 	for _, cfg := range m.Config.Recommend.ItemToItem {
-		if cfg.Type == "embedding" {
-			if err := m.updateEmbeddingItemToItemVectors(parent, dataset, cfg); err != nil {
+		if cfg.Type != "embedding" {
+			itemToItemConfigs = append(itemToItemConfigs, cfg)
+			continue
+		}
+
+		ctx, span := m.tracer.Start(parent, "Update embedding item-to-item vectors", len(dataset.GetItems()))
+		vectorConfig := vectors.VectorConfig{
+			Type: vectors.QuantizationType(m.Config.Database.Vector.QuantizationType),
+			Bits: m.Config.Database.Vector.QuantizationBits,
+		}
+		writer, err := logics.NewEmbeddingItemToItemVectorWriter(ctx, cfg, dataset.GetTimestamp(), m.VectorClient, vectorConfig, batchSize)
+		if err != nil {
+			span.End()
+			return errors.Trace(err)
+		}
+		if err = parallel.ForEach(ctx, dataset.GetItems(), m.Config.Master.NumJobs, func(i int, item data.Item) {
+			writer.Push(&item, dataset.GetItemFeedback()[i])
+			span.Add(1)
+		}); err != nil {
+			span.End()
+			return errors.Trace(err)
+		}
+		if err = writer.Finish(); err != nil {
+			span.End()
+			return errors.Trace(err)
+		}
+		if writer.Dimension() == 0 {
+			log.Logger().Warn("skip embedding item-to-item vector update since no valid embedding found",
+				zap.String("name", cfg.Name))
+			span.End()
+			continue
+		}
+		for _, item := range dataset.GetItems() {
+			subset := cache.Key(cfg.Name, item.ItemId)
+			if err = m.CacheClient.DeleteScores(ctx, []string{cache.ItemToItem}, cache.ScoreCondition{Subset: &subset}); err != nil {
+				span.End()
 				return errors.Trace(err)
 			}
-		} else {
-			itemToItemConfigs = append(itemToItemConfigs, cfg)
+			if err = m.CacheClient.Set(ctx,
+				cache.String(cache.Key(cache.ItemToItemDigest, cfg.Name, item.ItemId), cfg.Hash(&m.Config.Recommend)),
+				cache.Time(cache.Key(cache.ItemToItemUpdateTime, cfg.Name, item.ItemId), time.Now()),
+			); err != nil {
+				span.End()
+				return errors.Trace(err)
+			}
 		}
+		span.End()
 	}
 	if len(itemToItemConfigs) == 0 {
 		return nil
@@ -828,47 +868,6 @@ func (m *Master) updateItemToItem(parent context.Context, dataset *dataset.Datas
 				span.Add(1)
 			}
 		}); err != nil {
-			return errors.Trace(err)
-		}
-	}
-	return nil
-}
-
-func (m *Master) updateEmbeddingItemToItemVectors(parent context.Context, dataset *dataset.Dataset, itemToItemConfig config.ItemToItemConfig) error {
-	ctx, span := m.tracer.Start(parent, "Update embedding item-to-item vectors", len(dataset.GetItems()))
-	defer span.End()
-
-	vectorConfig := vectors.VectorConfig{
-		Type: vectors.QuantizationType(m.Config.Database.Vector.QuantizationType),
-		Bits: m.Config.Database.Vector.QuantizationBits,
-	}
-	writer, err := logics.NewEmbeddingItemToItemVectorWriter(ctx, itemToItemConfig, dataset.GetTimestamp(), m.VectorClient, vectorConfig, batchSize)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	if err = parallel.ForEach(ctx, dataset.GetItems(), m.Config.Master.NumJobs, func(i int, item data.Item) {
-		writer.Push(&item, dataset.GetItemFeedback()[i])
-		span.Add(1)
-	}); err != nil {
-		return errors.Trace(err)
-	}
-	if err = writer.Finish(); err != nil {
-		return errors.Trace(err)
-	}
-	if writer.Dimension() == 0 {
-		log.Logger().Warn("skip embedding item-to-item vector update since no valid embedding found",
-			zap.String("name", itemToItemConfig.Name))
-		return nil
-	}
-	for _, item := range dataset.GetItems() {
-		subset := cache.Key(itemToItemConfig.Name, item.ItemId)
-		if err = m.CacheClient.DeleteScores(ctx, []string{cache.ItemToItem}, cache.ScoreCondition{Subset: &subset}); err != nil {
-			return errors.Trace(err)
-		}
-		if err = m.CacheClient.Set(ctx,
-			cache.String(cache.Key(cache.ItemToItemDigest, itemToItemConfig.Name, item.ItemId), itemToItemConfig.Hash(&m.Config.Recommend)),
-			cache.Time(cache.Key(cache.ItemToItemUpdateTime, itemToItemConfig.Name, item.ItemId), time.Now()),
-		); err != nil {
 			return errors.Trace(err)
 		}
 	}
