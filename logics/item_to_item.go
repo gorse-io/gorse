@@ -298,7 +298,7 @@ func (w *EmbeddingItemToItemVectorWriter) Push(item *data.Item, _ []int32) {
 	}
 }
 
-func (w *EmbeddingItemToItemVectorWriter) Flush() error {
+func (w *EmbeddingItemToItemVectorWriter) Finish() error {
 	w.lock.Lock()
 	defer w.lock.Unlock()
 	if w.err != nil {
@@ -308,6 +308,13 @@ func (w *EmbeddingItemToItemVectorWriter) Flush() error {
 		w.err = err
 		return err
 	}
+	if w.dimension == 0 {
+		return nil
+	}
+	if err := w.vectorClient.DeleteVectors(w.ctx, w.collection, w.timestamp); err != nil {
+		w.err = jujerrors.Trace(err)
+		return w.err
+	}
 	return nil
 }
 
@@ -315,10 +322,6 @@ func (w *EmbeddingItemToItemVectorWriter) Dimension() int {
 	w.lock.Lock()
 	defer w.lock.Unlock()
 	return w.dimension
-}
-
-func (w *EmbeddingItemToItemVectorWriter) Collection() string {
-	return w.collection
 }
 
 func (w *EmbeddingItemToItemVectorWriter) ensureCollection() error {
