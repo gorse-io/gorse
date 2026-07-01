@@ -772,7 +772,7 @@ func (s *RestServer) getItemToItem(request *restful.Request, response *restful.R
 	categories := ReadCategories(request, nil)
 	for _, itemToItemConfig := range s.Config.Recommend.ItemToItem {
 		if itemToItemConfig.Name == name && itemToItemConfig.Type == "embedding" {
-			s.searchEmbeddingItemToItem(itemToItemConfig, itemId, categories, request, response)
+			s.SearchEmbeddings(itemToItemConfig, itemId, categories, request, response)
 			return
 		}
 	}
@@ -780,7 +780,7 @@ func (s *RestServer) getItemToItem(request *restful.Request, response *restful.R
 	s.SearchDocuments(cache.ItemToItem, cache.Key(name, itemId), categories, nil, request, response)
 }
 
-func (s *RestServer) searchEmbeddingItemToItem(itemToItemConfig config.ItemToItemConfig, itemId string, categories []string, request *restful.Request, response *restful.Response) {
+func (s *RestServer) SearchEmbeddings(itemToItemConfig config.ItemToItemConfig, itemId string, categories []string, request *restful.Request, response *restful.Response) {
 	var (
 		n      int
 		offset int
@@ -868,7 +868,7 @@ func (s *RestServer) getItemNeighbors(request *restful.Request, response *restfu
 	} else {
 		itemToItemConfig := s.Config.Recommend.ItemToItem[0]
 		if itemToItemConfig.Type == "embedding" {
-			s.searchEmbeddingItemToItem(itemToItemConfig, itemId, categories, request, response)
+			s.SearchEmbeddings(itemToItemConfig, itemId, categories, request, response)
 			return
 		}
 		name := itemToItemConfig.Name
