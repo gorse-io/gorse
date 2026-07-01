@@ -127,7 +127,7 @@ func (db *SQLite) AddCollection(ctx context.Context, name string, dimensions int
 	default:
 		return errors.NotSupportedf("distance method %v", distance)
 	}
-	_, err := db.db.ExecContext(ctx, fmt.Sprintf("CREATE VIRTUAL TABLE %s USING vec0(id TEXT, categories TEXT, timestamp INTEGER, vector FLOAT[%d] distance_metric=%s)", name, dimensions, metric))
+	_, err := db.db.ExecContext(ctx, fmt.Sprintf("CREATE VIRTUAL TABLE %s USING vec0(id TEXT, is_hidden INTEGER, categories TEXT, timestamp INTEGER, vector FLOAT[%d] distance_metric=%s)", name, dimensions, metric))
 	return errors.Trace(err)
 }
 
@@ -165,7 +165,7 @@ func (db *SQLite) AddVectors(ctx context.Context, collection string, vectors []V
 	if err != nil {
 		return errors.Trace(err)
 	}
-	stmt, err := tx.PrepareContext(ctx, fmt.Sprintf("INSERT INTO %s(id, categories, timestamp, vector) VALUES(?, ?, ?, ?)", collection))
+	stmt, err := tx.PrepareContext(ctx, fmt.Sprintf("INSERT INTO %s(id, is_hidden, categories, timestamp, vector) VALUES(?, ?, ?, ?, ?)", collection))
 	if err != nil {
 		_ = tx.Rollback()
 		return errors.Trace(err)
@@ -184,7 +184,7 @@ func (db *SQLite) AddVectors(ctx context.Context, collection string, vectors []V
 			return errors.Trace(err)
 		}
 		timestamp := v.Timestamp.UnixMilli()
-		_, err = stmt.ExecContext(ctx, v.Id, string(categories), timestamp, string(vectorJson))
+		_, err = stmt.ExecContext(ctx, v.Id, v.IsHidden, string(categories), timestamp, string(vectorJson))
 		if err != nil {
 			_ = tx.Rollback()
 			return errors.Trace(err)
@@ -208,7 +208,7 @@ func (db *SQLite) QueryVectors(ctx context.Context, collection string, q []float
 		return nil, errors.Trace(err)
 	}
 
-	query := fmt.Sprintf("SELECT id, categories FROM %s WHERE vector MATCH ? AND k = ? ", collection)
+	query := fmt.Sprintf("SELECT id, categories FROM %s WHERE vector MATCH ? AND k = ? AND is_hidden = 0 ", collection)
 	var args []any
 	args = append(args, string(qJson), topK)
 

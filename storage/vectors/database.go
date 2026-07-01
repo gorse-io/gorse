@@ -41,7 +41,12 @@ const (
 	QuantizationRQ   QuantizationType = "rq" // Rotational quantization/RaBitQ/TurboQuant
 
 	CollaborativeFiltering = "collaborative_filtering"
+	ItemToItemPrefix       = "item_to_item"
 )
+
+func ItemToItemCollection(name string) string {
+	return ItemToItemPrefix + "_" + name
+}
 
 func (q QuantizationType) String() string {
 	switch q {

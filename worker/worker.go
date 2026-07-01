@@ -113,10 +113,11 @@ func NewWorker(
 ) *Worker {
 	return &Worker{
 		Pipeline: Pipeline{
-			Config:      config.GetDefaultConfig(),
-			CacheClient: new(cache.NoDatabase),
-			DataClient:  new(data.NoDatabase),
-			Jobs:        jobs,
+			Config:       config.GetDefaultConfig(),
+			CacheClient:  new(cache.NoDatabase),
+			DataClient:   new(data.NoDatabase),
+			VectorClient: vectors.NoDatabase{},
+			Jobs:         jobs,
 		},
 		vectorStore:   vectors.NoDatabase{},
 		randGenerator: util.NewRand(time.Now().UTC().UnixNano()),
@@ -218,6 +219,7 @@ func (w *Worker) Sync() {
 					goto sleep
 				}
 			}
+			w.VectorClient = w.vectorStore
 			w.vectorPath = w.Config.Database.VectorStore
 			w.vectorPrefix = w.Config.Database.VectorTablePrefix
 		}

@@ -40,6 +40,7 @@ import (
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
 	"github.com/gorse-io/gorse/storage/meta"
+	"github.com/gorse-io/gorse/storage/vectors"
 	"github.com/gorse-io/gorse/worker"
 	"github.com/juju/errors"
 	"github.com/samber/lo"
@@ -743,13 +744,66 @@ func (m *Master) updateItemToItem(parent context.Context, dataset *dataset.Datas
 	if len(m.Config.Recommend.ItemToItem) == 0 {
 		return nil
 	}
+	itemToItemConfigs := make([]config.ItemToItemConfig, 0, len(m.Config.Recommend.ItemToItem))
+	for _, cfg := range m.Config.Recommend.ItemToItem {
+		if cfg.Type != "embedding" {
+			itemToItemConfigs = append(itemToItemConfigs, cfg)
+			continue
+		}
+
+		ctx, span := m.tracer.Start(parent, "Update embedding item-to-item vectors", len(dataset.GetItems()))
+		vectorConfig := vectors.VectorConfig{
+			Type: vectors.QuantizationType(m.Config.Database.Vector.QuantizationType),
+			Bits: m.Config.Database.Vector.QuantizationBits,
+		}
+		writer, err := logics.NewEmbeddingItemToItemVectorWriter(ctx, cfg, dataset.GetTimestamp(), m.VectorClient, vectorConfig, batchSize)
+		if err != nil {
+			span.End()
+			return errors.Trace(err)
+		}
+		if err = parallel.ForEach(ctx, dataset.GetItems(), m.Config.Master.NumJobs, func(i int, item data.Item) {
+			writer.Push(&item, dataset.GetItemFeedback()[i])
+			span.Add(1)
+		}); err != nil {
+			span.End()
+			return errors.Trace(err)
+		}
+		if err = writer.Finish(); err != nil {
+			span.End()
+			return errors.Trace(err)
+		}
+		if writer.Dimension() == 0 {
+			log.Logger().Warn("skip embedding item-to-item vector update since no valid embedding found",
+				zap.String("name", cfg.Name))
+			span.End()
+			continue
+		}
+		for _, item := range dataset.GetItems() {
+			subset := cache.Key(cfg.Name, item.ItemId)
+			if err = m.CacheClient.DeleteScores(ctx, []string{cache.ItemToItem}, cache.ScoreCondition{Subset: &subset}); err != nil {
+				span.End()
+				return errors.Trace(err)
+			}
+			if err = m.CacheClient.Set(ctx,
+				cache.String(cache.Key(cache.ItemToItemDigest, cfg.Name, item.ItemId), cfg.Hash(&m.Config.Recommend)),
+				cache.Time(cache.Key(cache.ItemToItemUpdateTime, cfg.Name, item.ItemId), time.Now()),
+			); err != nil {
+				span.End()
+				return errors.Trace(err)
+			}
+		}
+		span.End()
+	}
+	if len(itemToItemConfigs) == 0 {
+		return nil
+	}
 	ctx, span := m.tracer.Start(parent, "Generate item-to-item recommendation",
-		len(dataset.GetItems())*(len(m.Config.Recommend.ItemToItem))*2)
+		len(dataset.GetItems())*(len(itemToItemConfigs))*2)
 	defer span.End()
 
 	// Build item-to-item recommenders
-	itemToItemRecommenders := make([]logics.ItemToItem, 0, len(m.Config.Recommend.ItemToItem))
-	for _, cfg := range m.Config.Recommend.ItemToItem {
+	itemToItemRecommenders := make([]logics.ItemToItem, 0, len(itemToItemConfigs))
+	for _, cfg := range itemToItemConfigs {
 		recommender, err := logics.NewItemToItem(cfg, m.Config.Recommend.CacheSize, dataset.GetTimestamp(), &logics.ItemToItemOptions{
 			TagsIDF:      dataset.GetItemColumnValuesIDF(),
 			UsersIDF:     dataset.GetUserIDF(),
@@ -775,7 +829,7 @@ func (m *Master) updateItemToItem(parent context.Context, dataset *dataset.Datas
 	for i, recommender := range itemToItemRecommenders {
 		if err := parallel.For(ctx, recommender.Count(), m.Config.Master.NumJobs, func(j int) {
 			item := recommender.Get(j)
-			itemToItemConfig := m.Config.Recommend.ItemToItem[i]
+			itemToItemConfig := itemToItemConfigs[i]
 			if m.needUpdateItemToItem(ctx, item.ItemId, itemToItemConfig) {
 				defer span.Add(1)
 				score := recommender.PopAll(j)

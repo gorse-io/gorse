@@ -25,13 +25,15 @@ import (
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
+	"github.com/gorse-io/gorse/storage/vectors"
 	"github.com/stretchr/testify/suite"
 )
 
 type RecommenderTestSuite struct {
 	suite.Suite
-	dataClient  data.Database
-	cacheClient cache.Database
+	dataClient   data.Database
+	cacheClient  cache.Database
+	vectorClient vectors.Database
 }
 
 func (suite *RecommenderTestSuite) SetupSuite() {
@@ -41,10 +43,14 @@ func (suite *RecommenderTestSuite) SetupSuite() {
 	suite.NoError(err)
 	suite.cacheClient, err = cache.Open(fmt.Sprintf("sqlite://%s/cache.db", suite.T().TempDir()), "")
 	suite.NoError(err)
+	suite.vectorClient, err = vectors.Open(fmt.Sprintf("sqlite://%s/vector.db", suite.T().TempDir()), "")
+	suite.NoError(err)
 	// init database
 	err = suite.dataClient.Init()
 	suite.NoError(err)
 	err = suite.cacheClient.Init()
+	suite.NoError(err)
+	err = suite.vectorClient.Init()
 	suite.NoError(err)
 }
 
@@ -53,6 +59,49 @@ func (suite *RecommenderTestSuite) TearDownSuite() {
 	suite.NoError(err)
 	err = suite.cacheClient.Close()
 	suite.NoError(err)
+	err = suite.vectorClient.Close()
+	suite.NoError(err)
+}
+
+func (suite *RecommenderTestSuite) TestEmbeddingItemToItemUsesVectorStore() {
+	ctx := suite.T().Context()
+	err := suite.vectorClient.AddCollection(ctx, vectors.ItemToItemCollection("embedding"), 2, vectors.Euclidean, vectors.VectorConfig{})
+	suite.NoError(err)
+	now := time.Unix(0, 0)
+	err = suite.dataClient.BatchInsertItems(ctx, []data.Item{
+		{ItemId: "source", Labels: map[string]any{"embedding": []float32{0, 0}}, Timestamp: now},
+		{ItemId: "near", Labels: map[string]any{"embedding": []float32{0.1, 0}}, Timestamp: now, Categories: []string{"movie"}},
+		{ItemId: "far", Labels: map[string]any{"embedding": []float32{10, 0}}, Timestamp: now, Categories: []string{"movie"}},
+		{ItemId: "hidden", Labels: map[string]any{"embedding": []float32{0.05, 0}}, Timestamp: now, Categories: []string{"movie"}, IsHidden: true},
+	})
+	suite.NoError(err)
+	err = suite.vectorClient.AddVectors(ctx, vectors.ItemToItemCollection("embedding"), []vectors.Vector{
+		{Id: "source", Vector: []float32{0, 0}, Timestamp: now},
+		{Id: "near", Vector: []float32{0.1, 0}, Categories: []string{"movie"}, Timestamp: now},
+		{Id: "far", Vector: []float32{10, 0}, Categories: []string{"movie"}, Timestamp: now},
+		{Id: "hidden", Vector: []float32{0.05, 0}, Categories: []string{"movie"}, IsHidden: true, Timestamp: now},
+	})
+	suite.NoError(err)
+	err = suite.dataClient.BatchInsertFeedback(ctx, []data.Feedback{{
+		FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "embedding_user", ItemId: "source"},
+	}}, true, true, false)
+	suite.NoError(err)
+	err = suite.cacheClient.AddScores(ctx, cache.ItemToItem, cache.Key("embedding", "source"), []cache.Score{{Id: "stale", Score: 100}})
+	suite.NoError(err)
+
+	cfg := config.RecommendConfig{
+		CacheSize: 2,
+		DataSource: config.DataSourceConfig{
+			PositiveFeedbackTypes: []expression.FeedbackTypeExpression{{FeedbackType: "click"}},
+		},
+		ItemToItem: []config.ItemToItemConfig{{Name: "embedding", Type: "embedding", Column: "item.Labels.embedding"}},
+	}
+	recommender, err := NewRecommender(cfg, suite.cacheClient, suite.dataClient, suite.vectorClient, true, "embedding_user", []string{"movie"})
+	suite.NoError(err)
+	scores, digest, err := recommender.recommendItemToItem("embedding")(ctx)
+	suite.NoError(err)
+	suite.Equal(cfg.ItemToItem[0].Hash(&cfg), digest)
+	suite.Equal([]string{"near", "far"}, cache.ConvertDocumentsToValues(scores))
 }
 
 func (suite *RecommenderTestSuite) TestLatest() {
@@ -82,7 +131,7 @@ func (suite *RecommenderTestSuite) TestLatest() {
 	err = suite.dataClient.BatchInsertFeedback(suite.T().Context(), feedback, true, true, false)
 	suite.NoError(err)
 
-	recommender, err := NewRecommender(config.RecommendConfig{CacheSize: 10}, suite.cacheClient, suite.dataClient, true, "user_1", nil)
+	recommender, err := NewRecommender(config.RecommendConfig{CacheSize: 10}, suite.cacheClient, suite.dataClient, suite.vectorClient, true, "user_1", nil)
 	suite.NoError(err)
 	scores, digest, err := recommender.recommendLatest(suite.T().Context())
 	suite.NoError(err)
@@ -94,7 +143,7 @@ func (suite *RecommenderTestSuite) TestLatest() {
 		}
 	}
 
-	recommender, err = NewRecommender(config.RecommendConfig{CacheSize: 10}, suite.cacheClient, suite.dataClient, true, "user_1", []string{"cat_1"})
+	recommender, err = NewRecommender(config.RecommendConfig{CacheSize: 10}, suite.cacheClient, suite.dataClient, suite.vectorClient, true, "user_1", []string{"cat_1"})
 	suite.NoError(err)
 	scores, digest, err = recommender.recommendLatest(suite.T().Context())
 	suite.NoError(err)
@@ -136,7 +185,7 @@ func (suite *RecommenderTestSuite) TestCollaborative() {
 	err = suite.dataClient.BatchInsertFeedback(suite.T().Context(), feedback, true, true, false)
 	suite.NoError(err)
 
-	recommender, err := NewRecommender(config.RecommendConfig{CacheSize: 10}, suite.cacheClient, suite.dataClient, true, "user_1", nil)
+	recommender, err := NewRecommender(config.RecommendConfig{CacheSize: 10}, suite.cacheClient, suite.dataClient, suite.vectorClient, true, "user_1", nil)
 	suite.NoError(err)
 	scores, digest, err := recommender.recommendCollaborative(suite.T().Context())
 	suite.NoError(err)
@@ -148,7 +197,7 @@ func (suite *RecommenderTestSuite) TestCollaborative() {
 		}
 	}
 
-	recommender, err = NewRecommender(config.RecommendConfig{CacheSize: 10}, suite.cacheClient, suite.dataClient, true, "user_1", []string{"cat_1"})
+	recommender, err = NewRecommender(config.RecommendConfig{CacheSize: 10}, suite.cacheClient, suite.dataClient, suite.vectorClient, true, "user_1", []string{"cat_1"})
 	suite.NoError(err)
 	scores, digest, err = recommender.recommendCollaborative(suite.T().Context())
 	suite.NoError(err)
@@ -192,7 +241,7 @@ func (suite *RecommenderTestSuite) TestNonPersonalized() {
 	err = suite.dataClient.BatchInsertFeedback(suite.T().Context(), feedback, true, true, false)
 	suite.NoError(err)
 
-	recommender, err := NewRecommender(config.RecommendConfig{CacheSize: 10}, suite.cacheClient, suite.dataClient, true, "user_1", nil)
+	recommender, err := NewRecommender(config.RecommendConfig{CacheSize: 10}, suite.cacheClient, suite.dataClient, suite.vectorClient, true, "user_1", nil)
 	suite.NoError(err)
 	recommendFunc := recommender.recommendNonPersonalized("a")
 	scores, digest, err := recommendFunc(suite.T().Context())
@@ -205,7 +254,7 @@ func (suite *RecommenderTestSuite) TestNonPersonalized() {
 		}
 	}
 
-	recommender, err = NewRecommender(config.RecommendConfig{CacheSize: 10}, suite.cacheClient, suite.dataClient, true, "user_1", []string{"cat_1"})
+	recommender, err = NewRecommender(config.RecommendConfig{CacheSize: 10}, suite.cacheClient, suite.dataClient, suite.vectorClient, true, "user_1", []string{"cat_1"})
 	suite.NoError(err)
 	recommendFunc = recommender.recommendNonPersonalized("a")
 	scores, digest, err = recommendFunc(suite.T().Context())
@@ -250,7 +299,7 @@ func (suite *RecommenderTestSuite) TestExternal() {
 			Name:   "test",
 		}},
 	}
-	recommender, err := NewRecommender(cfg, suite.cacheClient, suite.dataClient, true, "user_1", nil)
+	recommender, err := NewRecommender(cfg, suite.cacheClient, suite.dataClient, suite.vectorClient, true, "user_1", nil)
 	suite.NoError(err)
 	recommendFunc := recommender.recommendExternal("test")
 	scores, digest, err := recommendFunc(suite.T().Context())
@@ -299,7 +348,7 @@ func (suite *RecommenderTestSuite) TestUserToUser() {
 			PositiveFeedbackTypes: []expression.FeedbackTypeExpression{{FeedbackType: "click"}},
 			ItemTTL:               1,
 		},
-	}, suite.cacheClient, suite.dataClient, true, "user_1", nil)
+	}, suite.cacheClient, suite.dataClient, suite.vectorClient, true, "user_1", nil)
 	suite.NoError(err)
 	scores, digest, err := recommender.recommendUserToUser("test")(suite.T().Context())
 	suite.NoError(err)

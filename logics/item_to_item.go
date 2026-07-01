@@ -36,6 +36,8 @@ import (
 	"github.com/gorse-io/gorse/dataset"
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
+	"github.com/gorse-io/gorse/storage/vectors"
+	jujerrors "github.com/juju/errors"
 	"github.com/nikolalohinski/gonja/v2"
 	"github.com/nikolalohinski/gonja/v2/exec"
 	"github.com/samber/lo"
@@ -190,33 +192,173 @@ func newEmbeddingItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.T
 }
 
 func (e *embeddingItemToItem) Push(item *data.Item, _ []int32) {
-	// Evaluate filter function
-	result, err := expr.Run(e.columnFunc, map[string]any{
+	v, ok := ExtractItemEmbedding(item, e.columnFunc)
+	if !ok {
+		return
+	}
+	bf16 := bfloats.FromFloat32(v)
+	// Check dimension
+	e.itemsLock.Lock()
+	if e.dimension == 0 && len(bf16) > 0 {
+		e.dimension = len(bf16)
+	} else if e.dimension != len(bf16) {
+		log.Logger().Error("invalid column dimension", zap.Int("dimension", len(bf16)))
+		e.itemsLock.Unlock()
+		return
+	}
+	e.itemsLock.Unlock()
+	e.pushItem(item, bf16)
+}
+
+func ExtractItemEmbedding(item *data.Item, columnFunc *vm.Program) ([]float32, bool) {
+	result, err := expr.Run(columnFunc, map[string]any{
 		"item": item,
 	})
 	if err != nil {
 		log.Logger().Error("failed to evaluate column expression",
 			zap.Any("item", item), zap.Error(err))
-		return
+		return nil, false
 	}
-	// Convert column to BF16 vector
 	v, ok := bfloats.FromAny(result)
 	if !ok {
 		log.Logger().Error("failed to convert column to BF16 slice",
 			zap.Any("column", result))
+		return nil, false
+	}
+	return bfloats.ToFloat32(v), true
+}
+
+type EmbeddingItemToItemVectorWriter struct {
+	ctx          context.Context
+	collection   string
+	timestamp    time.Time
+	columnFunc   *vm.Program
+	vectorClient vectors.Database
+	vectorConfig vectors.VectorConfig
+	batchSize    int
+
+	lock        sync.Mutex
+	dimension   int
+	buffer      []vectors.Vector
+	initialized bool
+	err         error
+}
+
+func NewEmbeddingItemToItemVectorWriter(ctx context.Context, cfg config.ItemToItemConfig, timestamp time.Time, vectorClient vectors.Database, vectorConfig vectors.VectorConfig, batchSize int) (*EmbeddingItemToItemVectorWriter, error) {
+	columnFunc, err := expr.Compile(cfg.Column, expr.Env(map[string]any{
+		"item": data.Item{},
+	}))
+	if err != nil {
+		return nil, err
+	}
+	if batchSize <= 0 {
+		batchSize = 1024
+	}
+	return &EmbeddingItemToItemVectorWriter{
+		ctx:          ctx,
+		collection:   vectors.ItemToItemCollection(cfg.Name),
+		timestamp:    timestamp,
+		columnFunc:   columnFunc,
+		vectorClient: vectorClient,
+		vectorConfig: vectorConfig,
+		batchSize:    batchSize,
+	}, nil
+}
+
+func (w *EmbeddingItemToItemVectorWriter) Push(item *data.Item, _ []int32) {
+	embedding, ok := ExtractItemEmbedding(item, w.columnFunc)
+	if !ok || len(embedding) == 0 {
 		return
 	}
-	// Check dimension
-	e.itemsLock.Lock()
-	if e.dimension == 0 && len(v) > 0 {
-		e.dimension = len(v)
-	} else if e.dimension != len(v) {
-		log.Logger().Error("invalid column dimension", zap.Int("dimension", len(v)))
-		e.itemsLock.Unlock()
+	w.lock.Lock()
+	defer w.lock.Unlock()
+	if w.err != nil {
 		return
 	}
-	e.itemsLock.Unlock()
-	e.pushItem(item, v)
+	if w.dimension == 0 {
+		w.dimension = len(embedding)
+	} else if w.dimension != len(embedding) {
+		log.Logger().Error("invalid item embedding dimension",
+			zap.String("item_id", item.ItemId), zap.Int("dimension", len(embedding)), zap.Int("expected_dimension", w.dimension))
+		return
+	}
+	if err := w.ensureCollection(); err != nil {
+		w.err = err
+		return
+	}
+	w.buffer = append(w.buffer, vectors.Vector{
+		Id:         item.ItemId,
+		Vector:     embedding,
+		IsHidden:   item.IsHidden,
+		Categories: item.Categories,
+		Timestamp:  w.timestamp,
+	})
+	if len(w.buffer) >= w.batchSize {
+		w.err = w.flushLocked()
+	}
+}
+
+func (w *EmbeddingItemToItemVectorWriter) Finish() error {
+	w.lock.Lock()
+	defer w.lock.Unlock()
+	if w.err != nil {
+		return w.err
+	}
+	if err := w.flushLocked(); err != nil {
+		w.err = err
+		return err
+	}
+	if w.dimension == 0 {
+		return nil
+	}
+	if err := w.vectorClient.DeleteVectors(w.ctx, w.collection, w.timestamp); err != nil {
+		w.err = jujerrors.Trace(err)
+		return w.err
+	}
+	return nil
+}
+
+func (w *EmbeddingItemToItemVectorWriter) Dimension() int {
+	w.lock.Lock()
+	defer w.lock.Unlock()
+	return w.dimension
+}
+
+func (w *EmbeddingItemToItemVectorWriter) ensureCollection() error {
+	if w.initialized {
+		return nil
+	}
+	info, err := w.vectorClient.DescribeCollection(w.ctx, w.collection)
+	if jujerrors.Is(err, jujerrors.NotFound) {
+		info = nil
+	} else if err != nil {
+		return jujerrors.Trace(err)
+	} else if (info.Dimension != 0 && info.Dimension != w.dimension) || info.Distance != vectors.Euclidean || info.Type != w.vectorConfig.Type || (w.vectorConfig.Bits > 0 && info.Bits != w.vectorConfig.Bits) {
+		log.Logger().Warn("recreating embedding item-to-item vector collection",
+			zap.String("collection", w.collection), zap.Int("dimension", w.dimension))
+		if err = w.vectorClient.DeleteCollection(w.ctx, w.collection); err != nil && !jujerrors.Is(err, jujerrors.NotFound) {
+			return jujerrors.Trace(err)
+		}
+		info = nil
+	}
+	if info == nil {
+		if err = w.vectorClient.AddCollection(w.ctx, w.collection, w.dimension, vectors.Euclidean, w.vectorConfig); err != nil {
+			return jujerrors.Trace(err)
+		}
+	}
+	w.initialized = true
+	return nil
+}
+
+func (w *EmbeddingItemToItemVectorWriter) flushLocked() error {
+	if len(w.buffer) == 0 {
+		return nil
+	}
+	if err := w.vectorClient.AddVectors(w.ctx, w.collection, w.buffer); err != nil {
+		return jujerrors.Trace(err)
+	}
+	w.buffer = w.buffer[:0]
+	return nil
 }
 
 type tagsItemToItem struct {

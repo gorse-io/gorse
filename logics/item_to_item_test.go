@@ -15,6 +15,7 @@
 package logics
 
 import (
+	"fmt"
 	"strconv"
 	"testing"
 	"time"
@@ -24,6 +25,8 @@ import (
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/dataset"
 	"github.com/gorse-io/gorse/storage/data"
+	"github.com/gorse-io/gorse/storage/vectors"
+	"github.com/samber/lo"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -80,6 +83,39 @@ func (suite *ItemToItemTestSuite) TestColumnFunc() {
 		Labels: []float32{0.1, 0.2, 0.3},
 	}, nil)
 	suite.Equal(2, item2item.Count())
+}
+
+func (suite *ItemToItemTestSuite) TestEmbeddingItemToItemVectorWriter() {
+	ctx := suite.T().Context()
+	vectorClient, err := vectors.Open(fmt.Sprintf("sqlite://%s/vector.db", suite.T().TempDir()), "")
+	suite.NoError(err)
+	suite.NoError(vectorClient.Init())
+	defer func() {
+		suite.NoError(vectorClient.Close())
+	}()
+
+	timestamp := time.Now()
+	suite.NoError(vectorClient.AddCollection(ctx, vectors.ItemToItemCollection("embedding"), 2, vectors.Euclidean, vectors.VectorConfig{}))
+	suite.NoError(vectorClient.AddVectors(ctx, vectors.ItemToItemCollection("embedding"), []vectors.Vector{
+		{Id: "old", Vector: []float32{0.01, 0}, Categories: []string{"movie"}, Timestamp: timestamp.Add(-time.Hour)},
+	}))
+	writer, err := NewEmbeddingItemToItemVectorWriter(ctx, config.ItemToItemConfig{
+		Name:   "embedding",
+		Type:   "embedding",
+		Column: "item.Labels.embedding",
+	}, timestamp, vectorClient, vectors.VectorConfig{}, 2)
+	suite.NoError(err)
+
+	writer.Push(&data.Item{ItemId: "a", Labels: map[string]any{"embedding": []float32{0, 0}}, Categories: []string{"movie"}, Timestamp: timestamp}, nil)
+	writer.Push(&data.Item{ItemId: "b", Labels: map[string]any{"embedding": []float32{0.1, 0}}, Categories: []string{"movie"}, Timestamp: timestamp}, nil)
+	writer.Push(&data.Item{ItemId: "bad", Labels: map[string]any{"embedding": []float32{0, 0, 0}}, Categories: []string{"movie"}, Timestamp: timestamp}, nil)
+	writer.Push(&data.Item{ItemId: "hidden", Labels: map[string]any{"embedding": []float32{0.05, 0}}, Categories: []string{"movie"}, IsHidden: true, Timestamp: timestamp}, nil)
+	suite.Equal(2, writer.Dimension())
+	suite.NoError(writer.Finish())
+
+	results, err := vectorClient.QueryVectors(ctx, vectors.ItemToItemCollection("embedding"), []float32{0, 0}, []string{"movie"}, 10)
+	suite.NoError(err)
+	suite.Equal([]string{"a", "b"}, lo.Map(results, func(result vectors.Vector, _ int) string { return result.Id }))
 }
 
 func (suite *ItemToItemTestSuite) TestEmbedding() {
