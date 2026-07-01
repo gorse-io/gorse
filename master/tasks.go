@@ -25,7 +25,6 @@ import (
 	"github.com/c-bata/goptuna"
 	"github.com/c-bata/goptuna/tpe"
 	mapset "github.com/deckarep/golang-set/v2"
-	"github.com/expr-lang/expr"
 	"github.com/gorse-io/gorse/common/event"
 	"github.com/gorse-io/gorse/common/expression"
 	"github.com/gorse-io/gorse/common/log"
@@ -839,70 +838,29 @@ func (m *Master) updateEmbeddingItemToItemVectors(parent context.Context, datase
 	ctx, span := m.tracer.Start(parent, "Update embedding item-to-item vectors", len(dataset.GetItems()))
 	defer span.End()
 
-	columnFunc, err := expr.Compile(itemToItemConfig.Column, expr.Env(map[string]any{
-		"item": data.Item{},
-	}))
-	if err != nil {
-		return errors.Trace(err)
-	}
-
-	collection := vectors.ItemToItemCollection(itemToItemConfig.Name)
 	vectorConfig := vectors.VectorConfig{
 		Type: vectors.QuantizationType(m.Config.Database.Vector.QuantizationType),
 		Bits: m.Config.Database.Vector.QuantizationBits,
 	}
-	var pending []vectors.Vector
-	var dimension int
-	for _, item := range dataset.GetItems() {
-		embedding, ok := logics.ExtractItemEmbedding(&item, columnFunc)
-		if !ok {
-			span.Add(1)
-			continue
-		}
-		if dimension == 0 {
-			dimension = len(embedding)
-		} else if dimension != len(embedding) {
-			log.Logger().Error("invalid item embedding dimension",
-				zap.String("item_id", item.ItemId), zap.Int("dimension", len(embedding)), zap.Int("expected_dimension", dimension))
-			span.Add(1)
-			continue
-		}
-		pending = append(pending, vectors.Vector{
-			Id:         item.ItemId,
-			Vector:     embedding,
-			IsHidden:   item.IsHidden,
-			Categories: item.Categories,
-			Timestamp:  dataset.GetTimestamp(),
-		})
-		span.Add(1)
+	writer, err := logics.NewEmbeddingItemToItemVectorWriter(ctx, itemToItemConfig, dataset.GetTimestamp(), m.VectorClient, vectorConfig, batchSize)
+	if err != nil {
+		return errors.Trace(err)
 	}
-	if dimension == 0 || len(pending) == 0 {
+	if err = parallel.ForEach(ctx, dataset.GetItems(), m.Config.Master.NumJobs, func(i int, item data.Item) {
+		writer.Push(&item, dataset.GetItemFeedback()[i])
+		span.Add(1)
+	}); err != nil {
+		return errors.Trace(err)
+	}
+	if err = writer.Flush(); err != nil {
+		return errors.Trace(err)
+	}
+	if writer.Dimension() == 0 {
 		log.Logger().Warn("skip embedding item-to-item vector update since no valid embedding found",
 			zap.String("name", itemToItemConfig.Name))
 		return nil
 	}
-	info, err := m.VectorClient.DescribeCollection(ctx, collection)
-	if errors.Is(err, errors.NotFound) {
-		info = nil
-	} else if err != nil {
-		return errors.Trace(err)
-	} else if info.Dimension != 0 && info.Dimension != dimension || info.Distance != vectors.Euclidean || info.Type != vectorConfig.Type || (vectorConfig.Bits > 0 && info.Bits != vectorConfig.Bits) {
-		log.Logger().Warn("recreating embedding item-to-item vector collection",
-			zap.String("collection", collection), zap.Int("dimension", dimension))
-		if err = m.VectorClient.DeleteCollection(ctx, collection); err != nil && !errors.Is(err, errors.NotFound) {
-			return errors.Trace(err)
-		}
-		info = nil
-	}
-	if info == nil {
-		if err = m.VectorClient.AddCollection(ctx, collection, dimension, vectors.Euclidean, vectorConfig); err != nil {
-			return errors.Trace(err)
-		}
-	}
-	if err = m.VectorClient.AddVectors(ctx, collection, pending); err != nil {
-		return errors.Trace(err)
-	}
-	if err = m.VectorClient.DeleteVectors(ctx, collection, dataset.GetTimestamp()); err != nil {
+	if err = m.VectorClient.DeleteVectors(ctx, writer.Collection(), dataset.GetTimestamp()); err != nil {
 		return errors.Trace(err)
 	}
 	for _, item := range dataset.GetItems() {
