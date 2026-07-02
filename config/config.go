@@ -50,11 +50,13 @@ import (
 	"go.uber.org/zap"
 )
 
+var configViperOptions = []viper.Option{viper.WithDecodeHook(mapstructure.ComposeDecodeHookFunc(
+	mapstructure.StringToTimeDurationHookFunc(),
+	StringToFeedbackTypeHookFunc(),
+))}
+
 func init() {
-	viper.SetOptions(viper.WithDecodeHook(mapstructure.ComposeDecodeHookFunc(
-		mapstructure.StringToTimeDurationHookFunc(),
-		StringToFeedbackTypeHookFunc(),
-	)))
+	viper.SetOptions(configViperOptions...)
 }
 
 // Config is the configuration for the engine.
@@ -735,6 +737,8 @@ var bindings = []configBinding{
 
 // LoadConfig loads configuration from toml file.
 func LoadConfig(path string) (*Config, error) {
+	viper.Reset()
+	viper.SetOptions(configViperOptions...)
 	// set default config
 	setDefault()
 

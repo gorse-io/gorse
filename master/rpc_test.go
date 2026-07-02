@@ -171,6 +171,30 @@ func TestRPC(t *testing.T) {
 	rpcServer.Stop()
 }
 
+func TestReloadConfig(t *testing.T) {
+	m := newMockMasterRPC(t)
+	defer func() {
+		assert.NoError(t, m.metaStore.Close())
+	}()
+	configPath := filepath.Join(t.TempDir(), "config.toml")
+	assert.NoError(t, os.WriteFile(configPath, []byte("[server]\ndefault_n = 42\n"), 0644))
+	m.configPath = configPath
+
+	err := m.reloadConfigFromFile()
+	assert.NoError(t, err)
+
+	metaResp, err := m.GetMeta(t.Context(), &protocol.NodeInfo{
+		NodeType:      protocol.NodeType_Server,
+		Uuid:          "server1",
+		BinaryVersion: "v0.0.0",
+		Hostname:      "test",
+	})
+	assert.NoError(t, err)
+	var cfg config.Config
+	assert.NoError(t, json.Unmarshal([]byte(metaResp.Config), &cfg))
+	assert.Equal(t, 42, cfg.Server.DefaultN)
+}
+
 func generateToTempFile(t *testing.T) (string, string, string) {
 	// Generate Certificate Authority
 	ca := testcerts.NewCA()
