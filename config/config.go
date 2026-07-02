@@ -61,14 +61,15 @@ func init() {
 
 // Config is the configuration for the engine.
 type Config struct {
-	Database  DatabaseConfig  `mapstructure:"database"`
-	Master    MasterConfig    `mapstructure:"master"`
-	Server    ServerConfig    `mapstructure:"server"`
-	Recommend RecommendConfig `mapstructure:"recommend"`
-	Tracing   TracingConfig   `mapstructure:"tracing"`
-	OIDC      OIDCConfig      `mapstructure:"oidc"`
-	OpenAI    OpenAIConfig    `mapstructure:"openai"`
-	Blob      BlobConfig      `mapstructure:"blob"`
+	Database   DatabaseConfig   `mapstructure:"database"`
+	Master     MasterConfig     `mapstructure:"master"`
+	Server     ServerConfig     `mapstructure:"server"`
+	Recommend  RecommendConfig  `mapstructure:"recommend"`
+	Tracing    TracingConfig    `mapstructure:"tracing"`
+	OIDC       OIDCConfig       `mapstructure:"oidc"`
+	OpenAI     OpenAIConfig     `mapstructure:"openai"`
+	Blob       BlobConfig       `mapstructure:"blob"`
+	DataLimits DataLimitsConfig `mapstructure:"data_limits"`
 }
 
 // DatabaseConfig is the configuration for the database.
@@ -463,6 +464,20 @@ type AzureBlobConfig struct {
 	ConnectionString string `mapstructure:"connection_string"`
 }
 
+// DataLimitsConfig is the configuration for data size limits.
+type DataLimitsConfig struct {
+	MaxUsersCount          int `mapstructure:"max_users_count" validate:"gte=0"`           // Max total number of Users (0 = no limit)
+	MaxItemsCount          int `mapstructure:"max_items_count" validate:"gte=0"`           // Max total number of Items (0 = no limit)
+	MaxItemLabelsSize      int `mapstructure:"max_item_labels_size" validate:"gte=0"`      // Max size of Item Labels in bytes (0 = no limit)
+	MaxItemCommentSize     int `mapstructure:"max_item_comment_size" validate:"gte=0"`     // Max size of Item Comment in bytes (0 = no limit)
+	MaxItemCategoriesCount int `mapstructure:"max_item_categories_count" validate:"gte=0"` // Max number of Categories per item (0 = no limit)
+	MaxItemCategoriesSize  int `mapstructure:"max_item_categories_size" validate:"gte=0"`  // Max size of Item Categories in bytes (0 = no limit)
+	MaxUserLabelsSize      int `mapstructure:"max_user_labels_size" validate:"gte=0"`      // Max size of User Labels in bytes (0 = no limit)
+	MaxUserCommentSize     int `mapstructure:"max_user_comment_size" validate:"gte=0"`     // Max size of User Comment in bytes (0 = no limit)
+	MaxFeedbackLabelsSize  int `mapstructure:"max_feedback_labels_size" validate:"gte=0"`  // Max size of Feedback Labels in bytes (0 = no limit)
+	MaxFeedbackCommentSize int `mapstructure:"max_feedback_comment_size" validate:"gte=0"` // Max size of Feedback Comment in bytes (0 = no limit)
+}
+
 func GetDefaultConfig() *Config {
 	return &Config{
 		Database: DatabaseConfig{
@@ -537,6 +552,18 @@ func GetDefaultConfig() *Config {
 		},
 		Blob: BlobConfig{
 			URI: MkDir("blob"),
+		},
+		DataLimits: DataLimitsConfig{
+			MaxUsersCount:          0, // No limit by default
+			MaxItemsCount:          0, // No limit by default
+			MaxItemLabelsSize:      0, // No limit by default
+			MaxItemCommentSize:     0, // No limit by default
+			MaxItemCategoriesCount: 0, // No limit by default
+			MaxItemCategoriesSize:  0, // No limit by default
+			MaxUserLabelsSize:      0, // No limit by default
+			MaxUserCommentSize:     0, // No limit by default
+			MaxFeedbackLabelsSize:  0, // No limit by default
+			MaxFeedbackCommentSize: 0, // No limit by default
 		},
 	}
 }
@@ -680,6 +707,17 @@ func setDefault() {
 	viper.SetDefault("tracing.sampler", defaultConfig.Tracing.Sampler)
 	// [blob]
 	viper.SetDefault("blob.uri", defaultConfig.Blob.URI)
+	// [data_limits]
+	viper.SetDefault("data_limits.max_users_count", defaultConfig.DataLimits.MaxUsersCount)
+	viper.SetDefault("data_limits.max_items_count", defaultConfig.DataLimits.MaxItemsCount)
+	viper.SetDefault("data_limits.max_item_labels_size", defaultConfig.DataLimits.MaxItemLabelsSize)
+	viper.SetDefault("data_limits.max_item_comment_size", defaultConfig.DataLimits.MaxItemCommentSize)
+	viper.SetDefault("data_limits.max_item_categories_count", defaultConfig.DataLimits.MaxItemCategoriesCount)
+	viper.SetDefault("data_limits.max_item_categories_size", defaultConfig.DataLimits.MaxItemCategoriesSize)
+	viper.SetDefault("data_limits.max_user_labels_size", defaultConfig.DataLimits.MaxUserLabelsSize)
+	viper.SetDefault("data_limits.max_user_comment_size", defaultConfig.DataLimits.MaxUserCommentSize)
+	viper.SetDefault("data_limits.max_feedback_labels_size", defaultConfig.DataLimits.MaxFeedbackLabelsSize)
+	viper.SetDefault("data_limits.max_feedback_comment_size", defaultConfig.DataLimits.MaxFeedbackCommentSize)
 }
 
 type configBinding struct {
@@ -733,6 +771,16 @@ var bindings = []configBinding{
 	{"recommend.ranker.reranker_api.url", "RERANKER_URL"},
 	{"recommend.ranker.reranker_api.model", "RERANKER_MODEL"},
 	{"recommend.ranker.reranker_api.auth_token", "RERANKER_AUTH_TOKEN"},
+	{"data_limits.max_users_count", "GORSE_DATA_LIMITS_MAX_USERS_COUNT"},
+	{"data_limits.max_items_count", "GORSE_DATA_LIMITS_MAX_ITEMS_COUNT"},
+	{"data_limits.max_item_labels_size", "GORSE_DATA_LIMITS_MAX_ITEM_LABELS_SIZE"},
+	{"data_limits.max_item_comment_size", "GORSE_DATA_LIMITS_MAX_ITEM_COMMENT_SIZE"},
+	{"data_limits.max_item_categories_count", "GORSE_DATA_LIMITS_MAX_ITEM_CATEGORIES_COUNT"},
+	{"data_limits.max_item_categories_size", "GORSE_DATA_LIMITS_MAX_ITEM_CATEGORIES_SIZE"},
+	{"data_limits.max_user_labels_size", "GORSE_DATA_LIMITS_MAX_USER_LABELS_SIZE"},
+	{"data_limits.max_user_comment_size", "GORSE_DATA_LIMITS_MAX_USER_COMMENT_SIZE"},
+	{"data_limits.max_feedback_labels_size", "GORSE_DATA_LIMITS_MAX_FEEDBACK_LABELS_SIZE"},
+	{"data_limits.max_feedback_comment_size", "GORSE_DATA_LIMITS_MAX_FEEDBACK_COMMENT_SIZE"},
 }
 
 // LoadConfig loads configuration from toml file.

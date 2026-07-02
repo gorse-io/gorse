@@ -1124,3 +1124,36 @@ func benchmarkCountItems(b *testing.B, db Database) {
 		require.Equal(b, 100000, n)
 	}
 }
+
+func TestValidateDataLimits(t *testing.T) {
+	comment := "toolong"
+	limits := DataLimits{
+		MaxItemLabelsSize:      5,
+		MaxItemCommentSize:     3,
+		MaxItemCategoriesCount: 1,
+		MaxItemCategoriesSize:  5,
+		MaxUserLabelsSize:      5,
+		MaxUserCommentSize:     3,
+		MaxFeedbackLabelsSize:  5,
+		MaxFeedbackCommentSize: 3,
+	}
+
+	assert.NoError(t, ValidateItemSize(Item{Labels: []string{"a"}, Comment: "abc", Categories: []string{}}, limits))
+	assert.Error(t, ValidateItemSize(Item{Labels: []string{"abcdef"}}, limits))
+	assert.Error(t, ValidateItemSize(Item{Comment: "toolong"}, limits))
+	assert.Error(t, ValidateItemSize(Item{Categories: []string{"a", "b"}}, limits))
+	assert.Error(t, ValidateItemSize(Item{Categories: []string{"abcdef"}}, limits))
+	assert.NoError(t, ValidateItemPatchSize(ItemPatch{Comment: &comment}, DataLimits{}))
+	assert.Error(t, ValidateItemPatchSize(ItemPatch{Comment: &comment}, limits))
+	assert.Error(t, ValidateItemPatchSize(ItemPatch{Categories: []string{"a", "b"}}, limits))
+
+	assert.NoError(t, ValidateUserSize(User{Labels: []string{"a"}, Comment: "abc"}, limits))
+	assert.Error(t, ValidateUserSize(User{Labels: []string{"abcdef"}}, limits))
+	assert.Error(t, ValidateUserSize(User{Comment: "toolong"}, limits))
+	assert.NoError(t, ValidateUserPatchSize(UserPatch{Comment: &comment}, DataLimits{}))
+	assert.Error(t, ValidateUserPatchSize(UserPatch{Comment: &comment}, limits))
+
+	assert.NoError(t, ValidateFeedbackSize(Feedback{Labels: []string{"a"}, Comment: "abc"}, limits))
+	assert.Error(t, ValidateFeedbackSize(Feedback{Labels: []string{"abcdef"}}, limits))
+	assert.Error(t, ValidateFeedbackSize(Feedback{Comment: "toolong"}, limits))
+}

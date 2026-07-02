@@ -1,29 +1,29 @@
 [database]
 
 # The database for caching, support Redis, MySQL, Postgres and MongoDB:
-#   redis://<user>:<password>@<host>:<port>/<db_number>
+#   redis://<user>:***@<host>:<port>/<db_number>
 #   rediss://<user>:<password>@<host>:<port>/<db_number>
 #   redis+cluster://<user>:<password>@<host>:<port>[?addr=<host2>:<port2>&addr=<host3>:<port3>]
 #   rediss+cluster://<user>:<password>@<host>:<port>[?addr=<host2>:<port2>&addr=<host3>:<port3>]
-#   mysql://[username[:password]@][protocol[(address)]]/dbname[?param1=value1&...&paramN=valueN]
-#   postgres://bob:secret@1.2.3.4:5432/mydb?sslmode=verify-full
-#   postgresql://bob:secret@1.2.3.4:5432/mydb?sslmode=verify-full
-#   mongodb://[username:password@]host1[:port1][,...hostN[:portN]][/[defaultauthdb][?options]]
-#   mongodb+srv://[username:password@]host1[:port1][,...hostN[:portN]][/[defaultauthdb][?options]]
+#   mysql://[username[:***@][protocol[(address)]]/dbname[?param1=value1&...&paramN=valueN]
+#   postgres://bob:***@1.2.3.4:5432/mydb?sslmode=verify-full
+#   postgresql://bob:***@1.2.3.4:5432/mydb?sslmode=verify-full
+#   mongodb://[username:***@]host1[:port1][,...hostN[:portN]][/[defaultauthdb][?options]]
+#   mongodb+srv://[username:***@]host1[:port1][,...hostN[:portN]][/[defaultauthdb][?options]]
 #   sqlite://<path>
 cache_store = "redis://localhost:6379/0"
 
 # The database for persist data, support MySQL, Postgres, ClickHouse and MongoDB:
-#   mysql://[username[:password]@][protocol[(address)]]/dbname[?param1=value1&...&paramN=valueN]
-#   postgres://bob:secret@1.2.3.4:5432/mydb?sslmode=verify-full
-#   postgresql://bob:secret@1.2.3.4:5432/mydb?sslmode=verify-full
+#   mysql://[username[:***@][protocol[(address)]]/dbname[?param1=value1&...&paramN=valueN]
+#   postgres://bob:***@1.2.3.4:5432/mydb?sslmode=verify-full
+#   postgresql://bob:***@1.2.3.4:5432/mydb?sslmode=verify-full
 #   clickhouse://user:password@host[:port]/database?param1=value1&...&paramN=valueN
 #   chhttp://user:password@host[:port]/database?param1=value1&...&paramN=valueN
 #   chhttps://user:password@host[:port]/database?param1=value1&...&paramN=valueN
-#   mongodb://[username:password@]host1[:port1][,...hostN[:portN]][/[defaultauthdb][?options]]
-#   mongodb+srv://[username:password@]host1[:port1][,...hostN[:portN]][/[defaultauthdb][?options]]
+#   mongodb://[username:***@]host1[:port1][,...hostN[:portN]][/[defaultauthdb][?options]]
+#   mongodb+srv://[username:***@]host1[:port1][,...hostN[:portN]][/[defaultauthdb][?options]]
 #   sqlite://<path>
-data_store = "mysql://gorse:gorse_pass@tcp(localhost:3306)/gorse"
+data_store = "mysql://gorse:***@tcp(localhost:3306)/gorse"
 
 # The database for vector indices, support SQLite, Qdrant, Weaviate and Milvus:
 #   sqlite://<path>
@@ -442,3 +442,35 @@ embedding_tpm = 1200000
 
 # Log file for OpenAI API.
 log_file = "openai.log"
+
+[data_limits]
+
+# Maximum total number of Users. 0 means no limit.
+max_users_count = 0
+
+# Maximum total number of Items. 0 means no limit.
+max_items_count = 0
+
+# Maximum size of Item Labels in bytes. Multi-byte UTF-8 characters count by bytes. 0 means no limit.
+max_item_labels_size = 0
+
+# Maximum size of Item Comment in bytes. Multi-byte UTF-8 characters count by bytes. 0 means no limit.
+max_item_comment_size = 0
+
+# Maximum number of Categories per item. 0 means no limit.
+max_item_categories_count = 0
+
+# Maximum size of Item Categories JSON in bytes. Multi-byte UTF-8 characters count by bytes. 0 means no limit.
+max_item_categories_size = 0
+
+# Maximum size of User Labels in bytes. Multi-byte UTF-8 characters count by bytes. 0 means no limit.
+max_user_labels_size = 0
+
+# Maximum size of User Comment in bytes. Multi-byte UTF-8 characters count by bytes. 0 means no limit.
+max_user_comment_size = 0
+
+# Maximum size of Feedback Labels in bytes. Multi-byte UTF-8 characters count by bytes. 0 means no limit.
+max_feedback_labels_size = 0
+
+# Maximum size of Feedback Comment in bytes. Multi-byte UTF-8 characters count by bytes. 0 means no limit.
+max_feedback_comment_size = 0
