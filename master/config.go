@@ -39,20 +39,6 @@ import (
 
 const configReloadDebounce = time.Second
 
-func (m *Master) loadConfigWithOverrides() (*config.Config, error) {
-	newConfig, err := config.LoadConfig(m.configPath)
-	if err != nil {
-		return nil, err
-	}
-	if err = m.applyRecommendOverride(newConfig); err != nil {
-		return nil, err
-	}
-	if err = newConfig.Validate(); err != nil {
-		return nil, err
-	}
-	return newConfig, nil
-}
-
 func (m *Master) applyRecommendOverride(cfg *config.Config) error {
 	metaStr, err := m.metaStore.Get(meta.RECOMMEND_CONFIG)
 	if err != nil && !errors.Is(err, errors.NotFound) {
@@ -67,17 +53,21 @@ func (m *Master) applyRecommendOverride(cfg *config.Config) error {
 	return nil
 }
 
-func (m *Master) reloadConfigFromFile(reason string) {
-	newConfig, err := m.loadConfigWithOverrides()
+func (m *Master) reloadConfigFromFile() error {
+	newConfig, err := config.LoadConfig(m.configPath)
 	if err != nil {
-		log.Logger().Error("failed to reload config", zap.String("reason", reason), zap.Error(err))
-		return
+		return errors.Trace(err)
+	}
+	if err = m.applyRecommendOverride(newConfig); err != nil {
+		return errors.Trace(err)
+	}
+	if err = newConfig.Validate(); err != nil {
+		return errors.Trace(err)
 	}
 	if err = m.applyConfig(newConfig); err != nil {
-		log.Logger().Error("failed to apply reloaded config", zap.String("reason", reason), zap.Error(err))
-		return
+		return errors.Trace(err)
 	}
-	log.Logger().Info("reloaded config", zap.String("reason", reason), zap.String("path", m.configPath))
+	return nil
 }
 
 func (m *Master) watchConfigFile(ctx context.Context) {
@@ -107,20 +97,6 @@ func (m *Master) watchConfigFile(ctx context.Context) {
 
 	var timer *time.Timer
 	var timerC <-chan time.Time
-	resetTimer := func() {
-		if timer == nil {
-			timer = time.NewTimer(configReloadDebounce)
-		} else {
-			if !timer.Stop() {
-				select {
-				case <-timer.C:
-				default:
-				}
-			}
-			timer.Reset(configReloadDebounce)
-		}
-		timerC = timer.C
-	}
 	for {
 		select {
 		case <-ctx.Done():
@@ -137,7 +113,18 @@ func (m *Master) watchConfigFile(ctx context.Context) {
 				continue
 			}
 			if event.Op&(fsnotify.Write|fsnotify.Create|fsnotify.Rename|fsnotify.Chmod) != 0 {
-				resetTimer()
+				if timer == nil {
+					timer = time.NewTimer(configReloadDebounce)
+				} else {
+					if !timer.Stop() {
+						select {
+						case <-timer.C:
+						default:
+						}
+					}
+					timer.Reset(configReloadDebounce)
+				}
+				timerC = timer.C
 			}
 		case err, ok := <-watcher.Errors:
 			if !ok {
@@ -146,7 +133,11 @@ func (m *Master) watchConfigFile(ctx context.Context) {
 			log.Logger().Error("failed to watch config file", zap.Error(err))
 		case <-timerC:
 			timerC = nil
-			m.reloadConfigFromFile("file changed")
+			if err = m.reloadConfigFromFile(); err != nil {
+				log.Logger().Error("failed to reload config file", zap.String("path", absPath), zap.Error(err))
+			} else {
+				log.Logger().Info("reloaded config file", zap.String("path", absPath))
+			}
 		}
 	}
 }

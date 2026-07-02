@@ -18,6 +18,7 @@ require (
 	github.com/emicklei/go-restful/v3 v3.13.0
 	github.com/evanphx/json-patch/v5 v5.9.11
 	github.com/expr-lang/expr v1.17.8
+	github.com/fsnotify/fsnotify v1.9.0
 	github.com/fsouza/fake-gcs-server v1.54.0
 	github.com/fxtlabs/primes v0.0.0-20150821004651-dad82d10a449
 	github.com/go-openapi/strfmt v0.26.1
@@ -147,7 +148,6 @@ require (
 	github.com/erraggy/oastools v1.36.1 // indirect
 	github.com/fatih/color v1.18.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
-	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.7.0 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.12 // indirect
 	github.com/getsentry/sentry-go v0.30.0 // indirect

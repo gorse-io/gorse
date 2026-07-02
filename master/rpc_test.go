@@ -180,7 +180,8 @@ func TestReloadConfig(t *testing.T) {
 	assert.NoError(t, os.WriteFile(configPath, []byte("[server]\ndefault_n = 42\n"), 0644))
 	m.configPath = configPath
 
-	m.reloadConfigFromFile("test")
+	err := m.reloadConfigFromFile()
+	assert.NoError(t, err)
 
 	metaResp, err := m.GetMeta(t.Context(), &protocol.NodeInfo{
 		NodeType:      protocol.NodeType_Server,
