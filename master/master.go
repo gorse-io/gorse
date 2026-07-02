@@ -74,7 +74,7 @@ type Master struct {
 	configPath     string
 	standalone     bool
 	openAIClient   *openai.Client
-	configMutex    sync.RWMutex
+	ConfigMutex    sync.RWMutex
 
 	// cluster meta cache
 	metaStore  meta.Database
@@ -272,19 +272,19 @@ func (m *Master) Serve() {
 		}
 		m.grpcServer = grpc.NewServer(opts...)
 		protocol.RegisterMasterServer(m.grpcServer, m)
-		protocol.RegisterCacheStoreServer(m.grpcServer, cache.NewDynamicProxyServer(func() cache.Database {
-			m.configMutex.RLock()
-			defer m.configMutex.RUnlock()
+		protocol.RegisterCacheStoreServer(m.grpcServer, cache.NewProxyServer(func() cache.Database {
+			m.ConfigMutex.RLock()
+			defer m.ConfigMutex.RUnlock()
 			return m.CacheClient
 		}))
-		protocol.RegisterDataStoreServer(m.grpcServer, data.NewDynamicProxyServer(func() data.Database {
-			m.configMutex.RLock()
-			defer m.configMutex.RUnlock()
+		protocol.RegisterDataStoreServer(m.grpcServer, data.NewProxyServer(func() data.Database {
+			m.ConfigMutex.RLock()
+			defer m.ConfigMutex.RUnlock()
 			return m.DataClient
 		}))
-		protocol.RegisterVectorStoreServer(m.grpcServer, vectors.NewDynamicProxyServer(func() vectors.Database {
-			m.configMutex.RLock()
-			defer m.configMutex.RUnlock()
+		protocol.RegisterVectorStoreServer(m.grpcServer, vectors.NewProxyServer(func() vectors.Database {
+			m.ConfigMutex.RLock()
+			defer m.ConfigMutex.RUnlock()
 			return m.VectorClient
 		}))
 		if m.blobServer != nil {

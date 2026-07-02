@@ -31,24 +31,12 @@ import (
 
 type ProxyServer struct {
 	protocol.UnimplementedDataStoreServer
-	database       Database
-	databaseGetter func() Database
-	server         *grpc.Server
+	database func() Database
+	server   *grpc.Server
 }
 
-func NewProxyServer(database Database) *ProxyServer {
+func NewProxyServer(database func() Database) *ProxyServer {
 	return &ProxyServer{database: database}
-}
-
-func NewDynamicProxyServer(databaseGetter func() Database) *ProxyServer {
-	return &ProxyServer{databaseGetter: databaseGetter}
-}
-
-func (p *ProxyServer) getDatabase() Database {
-	if p.databaseGetter != nil {
-		return p.databaseGetter()
-	}
-	return p.database
 }
 
 func (p *ProxyServer) Serve(lis net.Listener) error {
@@ -62,7 +50,7 @@ func (p *ProxyServer) Stop() {
 }
 
 func (p *ProxyServer) Ping(_ context.Context, _ *protocol.PingRequest) (*protocol.PingResponse, error) {
-	return &protocol.PingResponse{}, p.getDatabase().Ping()
+	return &protocol.PingResponse{}, p.database().Ping()
 }
 
 func feedbackToPB(feedback []Feedback) ([]*protocol.Feedback, error) {
@@ -112,7 +100,7 @@ func feedbackFromPB(pbFeedback []*protocol.Feedback) ([]Feedback, error) {
 }
 
 func (p *ProxyServer) Reconcile(_ context.Context, in *protocol.ReconcileRequest) (*protocol.ReconcileResponse, error) {
-	err := p.getDatabase().Reconcile(config.SearchConfig{Columns: in.SearchColumns})
+	err := p.database().Reconcile(config.SearchConfig{Columns: in.SearchColumns})
 	return &protocol.ReconcileResponse{}, err
 }
 
@@ -133,7 +121,7 @@ func (p *ProxyServer) BatchInsertItems(ctx context.Context, in *protocol.BatchIn
 			Comment:    item.Comment,
 		}
 	}
-	err := p.getDatabase().BatchInsertItems(ctx, items)
+	err := p.database().BatchInsertItems(ctx, items)
 	return &protocol.BatchInsertItemsResponse{}, err
 }
 
@@ -148,7 +136,7 @@ func (p *ProxyServer) BatchGetItems(ctx context.Context, in *protocol.BatchGetIt
 			opts.After = &t
 		}
 	}
-	items, err := p.getDatabase().BatchGetItems(ctx, in.ItemIds, opts)
+	items, err := p.database().BatchGetItems(ctx, in.ItemIds, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -171,12 +159,12 @@ func (p *ProxyServer) BatchGetItems(ctx context.Context, in *protocol.BatchGetIt
 }
 
 func (p *ProxyServer) DeleteItem(ctx context.Context, in *protocol.DeleteItemRequest) (*protocol.DeleteItemResponse, error) {
-	err := p.getDatabase().DeleteItem(ctx, in.ItemId)
+	err := p.database().DeleteItem(ctx, in.ItemId)
 	return &protocol.DeleteItemResponse{}, err
 }
 
 func (p *ProxyServer) GetItem(ctx context.Context, in *protocol.GetItemRequest) (*protocol.GetItemResponse, error) {
-	item, err := p.getDatabase().GetItem(ctx, in.ItemId)
+	item, err := p.database().GetItem(ctx, in.ItemId)
 	if err != nil {
 		if errors.Is(err, errors.NotFound) {
 			return &protocol.GetItemResponse{}, nil
@@ -200,7 +188,7 @@ func (p *ProxyServer) GetItem(ctx context.Context, in *protocol.GetItemRequest) 
 }
 
 func (p *ProxyServer) SearchItems(ctx context.Context, in *protocol.SearchItemsRequest) (*protocol.SearchItemsResponse, error) {
-	items, err := p.getDatabase().SearchItems(ctx, in.Query, int(in.N))
+	items, err := p.database().SearchItems(ctx, in.Query, int(in.N))
 	if err != nil {
 		return nil, err
 	}
@@ -237,7 +225,7 @@ func (p *ProxyServer) ModifyItem(ctx context.Context, in *protocol.ModifyItemReq
 	if in.Patch.Timestamp != nil {
 		timestamp = new(in.Patch.Timestamp.AsTime())
 	}
-	err := p.getDatabase().ModifyItem(ctx, in.ItemId, ItemPatch{
+	err := p.database().ModifyItem(ctx, in.ItemId, ItemPatch{
 		IsHidden:   in.Patch.IsHidden,
 		Categories: in.Patch.Categories,
 		Labels:     labels,
@@ -252,7 +240,7 @@ func (p *ProxyServer) GetItems(ctx context.Context, in *protocol.GetItemsRequest
 	if in.BeginTime != nil {
 		beginTime = new(in.BeginTime.AsTime())
 	}
-	cursor, items, err := p.getDatabase().GetItems(ctx, in.Cursor, int(in.N), beginTime)
+	cursor, items, err := p.database().GetItems(ctx, in.Cursor, int(in.N), beginTime)
 	if err != nil {
 		return nil, err
 	}
@@ -279,7 +267,7 @@ func (p *ProxyServer) GetItemFeedback(ctx context.Context, in *protocol.GetItemF
 	for _, t := range in.FeedbackTypes {
 		types = append(types, t.FeedbackType)
 	}
-	feedback, err := p.getDatabase().GetItemFeedback(ctx, in.ItemId, types...)
+	feedback, err := p.database().GetItemFeedback(ctx, in.ItemId, types...)
 	if err != nil {
 		return nil, err
 	}
@@ -304,17 +292,17 @@ func (p *ProxyServer) BatchInsertUsers(ctx context.Context, in *protocol.BatchIn
 			Comment: user.Comment,
 		}
 	}
-	err := p.getDatabase().BatchInsertUsers(ctx, users)
+	err := p.database().BatchInsertUsers(ctx, users)
 	return &protocol.BatchInsertUsersResponse{}, err
 }
 
 func (p *ProxyServer) DeleteUser(ctx context.Context, in *protocol.DeleteUserRequest) (*protocol.DeleteUserResponse, error) {
-	err := p.getDatabase().DeleteUser(ctx, in.UserId)
+	err := p.database().DeleteUser(ctx, in.UserId)
 	return &protocol.DeleteUserResponse{}, err
 }
 
 func (p *ProxyServer) GetUser(ctx context.Context, in *protocol.GetUserRequest) (*protocol.GetUserResponse, error) {
-	user, err := p.getDatabase().GetUser(ctx, in.UserId)
+	user, err := p.database().GetUser(ctx, in.UserId)
 	if err != nil {
 		if errors.Is(err, errors.NotFound) {
 			return &protocol.GetUserResponse{}, nil
@@ -342,7 +330,7 @@ func (p *ProxyServer) ModifyUser(ctx context.Context, in *protocol.ModifyUserReq
 			return nil, err
 		}
 	}
-	err := p.getDatabase().ModifyUser(ctx, in.UserId, UserPatch{
+	err := p.database().ModifyUser(ctx, in.UserId, UserPatch{
 		Labels:  labels,
 		Comment: in.Patch.Comment,
 	})
@@ -350,7 +338,7 @@ func (p *ProxyServer) ModifyUser(ctx context.Context, in *protocol.ModifyUserReq
 }
 
 func (p *ProxyServer) GetUsers(ctx context.Context, in *protocol.GetUsersRequest) (*protocol.GetUsersResponse, error) {
-	cursor, users, err := p.getDatabase().GetUsers(ctx, in.Cursor, int(in.N))
+	cursor, users, err := p.database().GetUsers(ctx, in.Cursor, int(in.N))
 	if err != nil {
 		return nil, err
 	}
@@ -378,7 +366,7 @@ func (p *ProxyServer) GetUserFeedback(ctx context.Context, in *protocol.GetUserF
 	for i, t := range in.FeedbackTypes {
 		types[i].FromPB(t)
 	}
-	feedback, err := p.getDatabase().GetUserFeedback(ctx, in.UserId, endTime, types...)
+	feedback, err := p.database().GetUserFeedback(ctx, in.UserId, endTime, types...)
 	if err != nil {
 		return nil, err
 	}
@@ -394,7 +382,7 @@ func (p *ProxyServer) GetUserItemFeedback(ctx context.Context, in *protocol.GetU
 	for _, t := range in.FeedbackTypes {
 		types = append(types, t.FeedbackType)
 	}
-	feedback, err := p.getDatabase().GetUserItemFeedback(ctx, in.UserId, in.ItemId, types...)
+	feedback, err := p.database().GetUserItemFeedback(ctx, in.UserId, in.ItemId, types...)
 	if err != nil {
 		return nil, err
 	}
@@ -406,7 +394,7 @@ func (p *ProxyServer) GetUserItemFeedback(ctx context.Context, in *protocol.GetU
 }
 
 func (p *ProxyServer) DeleteUserItemFeedback(ctx context.Context, in *protocol.DeleteUserItemFeedbackRequest) (*protocol.DeleteUserItemFeedbackResponse, error) {
-	count, err := p.getDatabase().DeleteUserItemFeedback(ctx, in.UserId, in.ItemId, in.FeedbackTypes...)
+	count, err := p.database().DeleteUserItemFeedback(ctx, in.UserId, in.ItemId, in.FeedbackTypes...)
 	return &protocol.DeleteUserItemFeedbackResponse{Count: int32(count)}, err
 }
 
@@ -415,7 +403,7 @@ func (p *ProxyServer) BatchInsertFeedback(ctx context.Context, in *protocol.Batc
 	if err != nil {
 		return nil, err
 	}
-	err = p.getDatabase().BatchInsertFeedback(ctx, feedback, in.InsertUser, in.InsertItem, in.Overwrite)
+	err = p.database().BatchInsertFeedback(ctx, feedback, in.InsertUser, in.InsertItem, in.Overwrite)
 	return &protocol.BatchInsertFeedbackResponse{}, err
 }
 
@@ -431,7 +419,7 @@ func (p *ProxyServer) GetFeedback(ctx context.Context, in *protocol.GetFeedbackR
 	for _, t := range in.FeedbackTypes {
 		types = append(types, t.FeedbackType)
 	}
-	cursor, feedback, err := p.getDatabase().GetFeedback(ctx, in.Cursor, int(in.N), beginTime, endTime, types...)
+	cursor, feedback, err := p.database().GetFeedback(ctx, in.Cursor, int(in.N), beginTime, endTime, types...)
 	if err != nil {
 		return nil, err
 	}
@@ -443,7 +431,7 @@ func (p *ProxyServer) GetFeedback(ctx context.Context, in *protocol.GetFeedbackR
 }
 
 func (p *ProxyServer) GetUserStream(in *protocol.GetUserStreamRequest, stream grpc.ServerStreamingServer[protocol.GetUserStreamResponse]) error {
-	usersChan, errChan := p.getDatabase().GetUserStream(stream.Context(), int(in.BatchSize))
+	usersChan, errChan := p.database().GetUserStream(stream.Context(), int(in.BatchSize))
 	for users := range usersChan {
 		pbUsers := make([]*protocol.User, len(users))
 		for i, user := range users {
@@ -470,7 +458,7 @@ func (p *ProxyServer) GetItemStream(in *protocol.GetItemStreamRequest, stream gr
 	if in.TimeLimit != nil {
 		timeLimit = new(in.TimeLimit.AsTime())
 	}
-	itemsChan, errChan := p.getDatabase().GetItemStream(stream.Context(), int(in.BatchSize), timeLimit)
+	itemsChan, errChan := p.database().GetItemStream(stream.Context(), int(in.BatchSize), timeLimit)
 	for items := range itemsChan {
 		pbItems := make([]*protocol.Item, len(items))
 		for i, item := range items {
@@ -525,7 +513,7 @@ func (p *ProxyServer) GetFeedbackStream(in *protocol.GetFeedbackStreamRequest, s
 	if in.ScanOptions.OrderByItemId {
 		opts = append(opts, WithOrderByItemId())
 	}
-	feedbackChan, errChan := p.getDatabase().GetFeedbackStream(stream.Context(), int(in.BatchSize), opts...)
+	feedbackChan, errChan := p.database().GetFeedbackStream(stream.Context(), int(in.BatchSize), opts...)
 	for feedback := range feedbackChan {
 		pbFeedback, err := feedbackToPB(feedback)
 		if err != nil {
@@ -540,17 +528,17 @@ func (p *ProxyServer) GetFeedbackStream(in *protocol.GetFeedbackStreamRequest, s
 }
 
 func (p *ProxyServer) CountUsers(ctx context.Context, in *protocol.CountUsersRequest) (*protocol.CountUsersResponse, error) {
-	count, err := p.getDatabase().CountUsers(ctx)
+	count, err := p.database().CountUsers(ctx)
 	return &protocol.CountUsersResponse{Count: int32(count)}, err
 }
 
 func (p *ProxyServer) CountItems(ctx context.Context, in *protocol.CountItemsRequest) (*protocol.CountItemsResponse, error) {
-	count, err := p.getDatabase().CountItems(ctx)
+	count, err := p.database().CountItems(ctx)
 	return &protocol.CountItemsResponse{Count: int32(count)}, err
 }
 
 func (p *ProxyServer) CountFeedback(ctx context.Context, in *protocol.CountFeedbackRequest) (*protocol.CountFeedbackResponse, error) {
-	count, err := p.getDatabase().CountFeedback(ctx)
+	count, err := p.database().CountFeedback(ctx)
 	return &protocol.CountFeedbackResponse{Count: int32(count)}, err
 }
 
@@ -560,7 +548,7 @@ func (p *ProxyServer) GetLatestItems(ctx context.Context, in *protocol.GetLatest
 		t := in.After.AsTime()
 		after = &t
 	}
-	items, err := p.getDatabase().GetLatestItems(ctx, int(in.N), in.Categories, after)
+	items, err := p.database().GetLatestItems(ctx, int(in.N), in.Categories, after)
 	if err != nil {
 		return nil, err
 	}

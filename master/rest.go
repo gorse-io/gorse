@@ -558,9 +558,9 @@ func (m *Master) postConfig(request *restful.Request, response *restful.Response
 		server.BadRequest(response, err)
 		return
 	}
-	m.configMutex.RLock()
+	m.ConfigMutex.RLock()
 	configForValidation := *m.Config
-	m.configMutex.RUnlock()
+	m.ConfigMutex.RUnlock()
 	configForValidation.Recommend = newConfig.Recommend
 	if err = configForValidation.Validate(); err != nil {
 		server.BadRequest(response, err)
@@ -584,10 +584,10 @@ func (m *Master) postConfig(request *restful.Request, response *restful.Response
 
 func (m *Master) getConfig(_ *restful.Request, response *restful.Response) {
 	var configMap map[string]any
-	m.configMutex.RLock()
+	m.ConfigMutex.RLock()
 	err := mapstructure.Decode(m.Config, &configMap)
 	dashboardRedacted := m.Config.Master.DashboardRedacted
-	m.configMutex.RUnlock()
+	m.ConfigMutex.RUnlock()
 	if err != nil {
 		server.InternalServerError(response, err)
 		return

@@ -42,7 +42,7 @@ func (suite *ProxyTestSuite) SetupSuite() {
 	// start server
 	lis, err := net.Listen("tcp", "localhost:0")
 	suite.NoError(err)
-	suite.server = NewProxyServer(suite.sqlite)
+	suite.server = NewProxyServer(func() Database { return suite.sqlite })
 	go func() {
 		err = suite.server.Serve(lis)
 		suite.NoError(err)

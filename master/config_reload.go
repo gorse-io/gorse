@@ -156,9 +156,9 @@ func (m *Master) watchConfigFile(ctx context.Context) {
 }
 
 func (m *Master) applyConfig(newConfig *config.Config) error {
-	m.configMutex.RLock()
+	m.ConfigMutex.RLock()
 	oldConfig := *m.Config
-	m.configMutex.RUnlock()
+	m.ConfigMutex.RUnlock()
 
 	var nextDataClient data.Database
 	if !reflect.DeepEqual(oldConfig.Database, newConfig.Database) &&
@@ -277,7 +277,7 @@ func (m *Master) applyConfig(newConfig *config.Config) error {
 		log.Logger().Warn("OIDC changes require restart")
 	}
 
-	m.configMutex.Lock()
+	m.ConfigMutex.Lock()
 	if nextDataClient != nil {
 		oldDataClient := m.DataClient
 		m.DataClient = nextDataClient
@@ -309,7 +309,7 @@ func (m *Master) applyConfig(newConfig *config.Config) error {
 	}
 	m.Config = newConfig
 	m.RestServer.Config = newConfig
-	m.configMutex.Unlock()
+	m.ConfigMutex.Unlock()
 
 	closeReloadClients(nextDataClient, nextCacheClient, nextVectorClient)
 
