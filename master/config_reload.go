@@ -27,12 +27,8 @@ import (
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/common/parallel"
 	"github.com/gorse-io/gorse/config"
-	"github.com/gorse-io/gorse/model"
 	"github.com/gorse-io/gorse/storage/blob"
-	"github.com/gorse-io/gorse/storage/cache"
-	"github.com/gorse-io/gorse/storage/data"
 	"github.com/gorse-io/gorse/storage/meta"
-	"github.com/gorse-io/gorse/storage/vectors"
 	"github.com/juju/errors"
 	"github.com/sashabaranov/go-openai"
 	"go.opentelemetry.io/otel"
@@ -160,75 +156,9 @@ func (m *Master) applyConfig(newConfig *config.Config) error {
 	oldConfig := *m.Config
 	m.ConfigMutex.RUnlock()
 
-	var nextDataClient data.Database
-	if !reflect.DeepEqual(oldConfig.Database, newConfig.Database) &&
-		(oldConfig.Database.DataStore != newConfig.Database.DataStore ||
-			oldConfig.Database.DataTablePrefix != newConfig.Database.DataTablePrefix ||
-			!reflect.DeepEqual(oldConfig.Database.MySQL, newConfig.Database.MySQL) ||
-			!reflect.DeepEqual(oldConfig.Database.Postgres, newConfig.Database.Postgres)) {
-		dataOpts := newConfig.Database.StorageOptions(newConfig.Database.DataStore)
-		var err error
-		nextDataClient, err = data.Open(newConfig.Database.DataStore, newConfig.Database.DataTablePrefix, dataOpts...)
-		if err != nil {
-			return errors.Trace(err)
-		}
-		if err = nextDataClient.Init(); err != nil {
-			_ = nextDataClient.Close()
-			return errors.Trace(err)
-		}
-	}
-
-	var nextCacheClient cache.Database
-	if !reflect.DeepEqual(oldConfig.Database, newConfig.Database) &&
-		(oldConfig.Database.CacheStore != newConfig.Database.CacheStore ||
-			oldConfig.Database.CacheTablePrefix != newConfig.Database.CacheTablePrefix ||
-			oldConfig.Database.CacheClientName != newConfig.Database.CacheClientName ||
-			!reflect.DeepEqual(oldConfig.Database.Redis, newConfig.Database.Redis) ||
-			!reflect.DeepEqual(oldConfig.Database.MySQL, newConfig.Database.MySQL) ||
-			!reflect.DeepEqual(oldConfig.Database.Postgres, newConfig.Database.Postgres)) {
-		cacheOpts := newConfig.Database.StorageOptions(newConfig.Database.CacheStore)
-		var err error
-		nextCacheClient, err = cache.Open(newConfig.Database.CacheStore, newConfig.Database.CacheTablePrefix, cacheOpts...)
-		if err != nil {
-			if nextDataClient != nil {
-				_ = nextDataClient.Close()
-			}
-			return errors.Trace(err)
-		}
-		if err = nextCacheClient.Init(); err != nil {
-			if nextDataClient != nil {
-				_ = nextDataClient.Close()
-			}
-			_ = nextCacheClient.Close()
-			return errors.Trace(err)
-		}
-	}
-
-	var nextVectorClient vectors.Database
-	if oldConfig.Database.VectorStore != newConfig.Database.VectorStore ||
-		oldConfig.Database.VectorTablePrefix != newConfig.Database.VectorTablePrefix {
-		var err error
-		if newConfig.Database.VectorStore == "" {
-			nextVectorClient = vectors.NoDatabase{}
-		} else {
-			nextVectorClient, err = vectors.Open(newConfig.Database.VectorStore, newConfig.Database.VectorTablePrefix)
-			if err != nil {
-				closeReloadClients(nextDataClient, nextCacheClient, nil)
-				return errors.Trace(err)
-			}
-			if err = nextVectorClient.Init(); err != nil {
-				closeReloadClients(nextDataClient, nextCacheClient, nextVectorClient)
-				return errors.Trace(err)
-			}
-			if err = initCollaborativeFilteringVectorCollection(nextVectorClient, newConfig); err != nil {
-				closeReloadClients(nextDataClient, nextCacheClient, nextVectorClient)
-				return errors.Trace(err)
-			}
-		}
-	} else if !reflect.DeepEqual(oldConfig.Database.Vector, newConfig.Database.Vector) {
-		log.Logger().Warn("vector collection config changes require restart",
-			zap.String("quantization_type", newConfig.Database.Vector.QuantizationType),
-			zap.Int("quantization_bits", newConfig.Database.Vector.QuantizationBits))
+	if !reflect.DeepEqual(oldConfig.Database, newConfig.Database) {
+		log.Logger().Warn("database changes require restart")
+		newConfig.Database = oldConfig.Database
 	}
 
 	var nextBlobStore blob.Store
@@ -239,7 +169,6 @@ func (m *Master) applyConfig(newConfig *config.Config) error {
 			var err error
 			nextBlobStore, err = blob.NewStore(newConfig.Blob, nil)
 			if err != nil {
-				closeReloadClients(nextDataClient, nextCacheClient, nextVectorClient)
 				return errors.Trace(err)
 			}
 		}
@@ -256,7 +185,6 @@ func (m *Master) applyConfig(newConfig *config.Config) error {
 		var err error
 		nextTracerProvider, err = newConfig.Tracing.NewTracerProvider()
 		if err != nil {
-			closeReloadClients(nextDataClient, nextCacheClient, nextVectorClient)
 			return errors.Trace(err)
 		}
 	}
@@ -278,21 +206,6 @@ func (m *Master) applyConfig(newConfig *config.Config) error {
 	}
 
 	m.ConfigMutex.Lock()
-	if nextDataClient != nil {
-		oldDataClient := m.DataClient
-		m.DataClient = nextDataClient
-		nextDataClient = oldDataClient
-	}
-	if nextCacheClient != nil {
-		oldCacheClient := m.CacheClient
-		m.CacheClient = nextCacheClient
-		nextCacheClient = oldCacheClient
-	}
-	if nextVectorClient != nil {
-		oldVectorClient := m.VectorClient
-		m.VectorClient = nextVectorClient
-		nextVectorClient = oldVectorClient
-	}
 	if nextBlobStore != nil {
 		m.blobStore = nextBlobStore
 	}
@@ -311,8 +224,6 @@ func (m *Master) applyConfig(newConfig *config.Config) error {
 	m.RestServer.Config = newConfig
 	m.ConfigMutex.Unlock()
 
-	closeReloadClients(nextDataClient, nextCacheClient, nextVectorClient)
-
 	if !reflect.DeepEqual(oldConfig.Recommend, newConfig.Recommend) ||
 		oldConfig.Master.NumJobs != newConfig.Master.NumJobs {
 		m.cancel()
@@ -322,60 +233,4 @@ func (m *Master) applyConfig(newConfig *config.Config) error {
 		}
 	}
 	return nil
-}
-
-func closeReloadClients(dataClient data.Database, cacheClient cache.Database, vectorClient vectors.Database) {
-	if dataClient != nil {
-		_ = dataClient.Close()
-	}
-	if cacheClient != nil {
-		_ = cacheClient.Close()
-	}
-	if vectorClient != nil {
-		_ = vectorClient.Close()
-	}
-}
-
-func initCollaborativeFilteringVectorCollection(vectorClient vectors.Database, cfg *config.Config) error {
-	vectorConfig := vectors.VectorConfig{
-		Type: vectors.QuantizationType(cfg.Database.Vector.QuantizationType),
-		Bits: cfg.Database.Vector.QuantizationBits,
-	}
-	dimension := model.Params(nil).GetInt(model.NFactors, 16)
-
-	collections, err := vectorClient.ListCollections(context.Background())
-	if err != nil {
-		return errors.Trace(err)
-	}
-	if !contains(collections, vectors.CollaborativeFiltering) {
-		if err = vectorClient.AddCollection(context.Background(), vectors.CollaborativeFiltering, dimension, vectors.Dot, vectorConfig); err != nil {
-			return errors.Trace(err)
-		}
-	}
-	info, err := vectorClient.DescribeCollection(context.Background(), vectors.CollaborativeFiltering)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	if info.Dimension != 0 && info.Dimension != dimension {
-		return errors.Errorf("collection %s dimension mismatch: expected %d, got %d", info.Name, dimension, info.Dimension)
-	}
-	if info.Distance != vectors.Dot {
-		return errors.Errorf("collection %s distance mismatch: expected %v, got %v", info.Name, vectors.Dot, info.Distance)
-	}
-	if info.Type != vectorConfig.Type {
-		return errors.Errorf("collection %s quantization type mismatch: expected %s, got %s", info.Name, vectorConfig.Type, info.Type)
-	}
-	if vectorConfig.Bits > 0 && info.Bits != vectorConfig.Bits {
-		return errors.Errorf("collection %s quantization bits mismatch: expected %d, got %d", info.Name, vectorConfig.Bits, info.Bits)
-	}
-	return nil
-}
-
-func contains(values []string, value string) bool {
-	for _, v := range values {
-		if v == value {
-			return true
-		}
-	}
-	return false
 }

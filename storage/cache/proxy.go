@@ -30,11 +30,11 @@ import (
 
 type ProxyServer struct {
 	protocol.UnimplementedCacheStoreServer
-	database func() Database
+	database Database
 	server   *grpc.Server
 }
 
-func NewProxyServer(database func() Database) *ProxyServer {
+func NewProxyServer(database Database) *ProxyServer {
 	return &ProxyServer{database: database}
 }
 
@@ -49,11 +49,11 @@ func (p *ProxyServer) Stop() {
 }
 
 func (p *ProxyServer) Ping(context.Context, *protocol.PingRequest) (*protocol.PingResponse, error) {
-	return &protocol.PingResponse{}, p.database().Ping()
+	return &protocol.PingResponse{}, p.database.Ping()
 }
 
 func (p *ProxyServer) Get(ctx context.Context, request *protocol.GetRequest) (*protocol.GetResponse, error) {
-	value := p.database().Get(ctx, request.GetName())
+	value := p.database.Get(ctx, request.GetName())
 	if !value.Exists() {
 		return &protocol.GetResponse{}, nil
 	}
@@ -68,19 +68,19 @@ func (p *ProxyServer) Set(ctx context.Context, request *protocol.SetRequest) (*p
 			value: value.GetValue(),
 		}
 	}
-	return &protocol.SetResponse{}, p.database().Set(ctx, values...)
+	return &protocol.SetResponse{}, p.database.Set(ctx, values...)
 }
 
 func (p *ProxyServer) Delete(ctx context.Context, request *protocol.DeleteRequest) (*protocol.DeleteResponse, error) {
-	return &protocol.DeleteResponse{}, p.database().Delete(ctx, request.GetName())
+	return &protocol.DeleteResponse{}, p.database.Delete(ctx, request.GetName())
 }
 
 func (p *ProxyServer) Push(ctx context.Context, request *protocol.PushRequest) (*protocol.PushResponse, error) {
-	return &protocol.PushResponse{}, p.database().Push(ctx, request.GetName(), request.GetValue())
+	return &protocol.PushResponse{}, p.database.Push(ctx, request.GetName(), request.GetValue())
 }
 
 func (p *ProxyServer) Pop(ctx context.Context, request *protocol.PopRequest) (*protocol.PopResponse, error) {
-	value, err := p.database().Pop(ctx, request.GetName())
+	value, err := p.database.Pop(ctx, request.GetName())
 	if err != nil {
 		if errors.Is(err, io.EOF) {
 			return &protocol.PopResponse{}, nil
@@ -91,7 +91,7 @@ func (p *ProxyServer) Pop(ctx context.Context, request *protocol.PopRequest) (*p
 }
 
 func (p *ProxyServer) Remain(ctx context.Context, request *protocol.RemainRequest) (*protocol.RemainResponse, error) {
-	count, err := p.database().Remain(ctx, request.GetName())
+	count, err := p.database.Remain(ctx, request.GetName())
 	if err != nil {
 		return nil, err
 	}
@@ -109,11 +109,11 @@ func (p *ProxyServer) AddScores(ctx context.Context, request *protocol.AddScores
 			Timestamp:  doc.GetTimestamp().AsTime(),
 		}
 	}
-	return &protocol.AddScoresResponse{}, p.database().AddScores(ctx, request.GetCollection(), request.GetSubset(), scores)
+	return &protocol.AddScoresResponse{}, p.database.AddScores(ctx, request.GetCollection(), request.GetSubset(), scores)
 }
 
 func (p *ProxyServer) SearchScores(ctx context.Context, request *protocol.SearchScoresRequest) (*protocol.SearchScoresResponse, error) {
-	resp, err := p.database().SearchScores(ctx, request.GetCollection(), request.GetSubset(), request.GetQuery(), int(request.GetBegin()), int(request.GetEnd()))
+	resp, err := p.database.SearchScores(ctx, request.GetCollection(), request.GetSubset(), request.GetQuery(), int(request.GetBegin()), int(request.GetEnd()))
 	if err != nil {
 		return nil, err
 	}
@@ -135,7 +135,7 @@ func (p *ProxyServer) DeleteScores(ctx context.Context, request *protocol.Delete
 	if request.Condition.Before != nil {
 		before = new(request.Condition.Before.AsTime())
 	}
-	return &protocol.DeleteScoresResponse{}, p.database().DeleteScores(ctx, request.GetCollection(), ScoreCondition{
+	return &protocol.DeleteScoresResponse{}, p.database.DeleteScores(ctx, request.GetCollection(), ScoreCondition{
 		Subset: request.Condition.Subset,
 		Id:     request.Condition.Id,
 		Before: before,
@@ -143,7 +143,7 @@ func (p *ProxyServer) DeleteScores(ctx context.Context, request *protocol.Delete
 }
 
 func (p *ProxyServer) UpdateScores(ctx context.Context, request *protocol.UpdateScoresRequest) (*protocol.UpdateScoresResponse, error) {
-	return &protocol.UpdateScoresResponse{}, p.database().UpdateScores(ctx, request.GetCollection(), request.Subset, request.GetId(), ScorePatch{
+	return &protocol.UpdateScoresResponse{}, p.database.UpdateScores(ctx, request.GetCollection(), request.Subset, request.GetId(), ScorePatch{
 		IsHidden:   request.GetPatch().IsHidden,
 		Categories: request.GetPatch().Categories,
 		Score:      request.GetPatch().Score,
@@ -151,7 +151,7 @@ func (p *ProxyServer) UpdateScores(ctx context.Context, request *protocol.Update
 }
 
 func (p *ProxyServer) ScanScores(request *protocol.ScanScoresRequest, stream grpc.ServerStreamingServer[protocol.ScanScoresResponse]) error {
-	err := p.database().ScanScores(stream.Context(), func(collection, id, subset string, timestamp time.Time) error {
+	err := p.database.ScanScores(stream.Context(), func(collection, id, subset string, timestamp time.Time) error {
 		return stream.Send(&protocol.ScanScoresResponse{
 			Collection: collection,
 			Id:         id,
@@ -174,11 +174,11 @@ func (p *ProxyServer) AddTimeSeriesPoints(ctx context.Context, request *protocol
 			Value:     point.Value,
 		}
 	}
-	return &protocol.AddTimeSeriesPointsResponse{}, p.database().AddTimeSeriesPoints(ctx, points)
+	return &protocol.AddTimeSeriesPointsResponse{}, p.database.AddTimeSeriesPoints(ctx, points)
 }
 
 func (p *ProxyServer) GetTimeSeriesPoints(ctx context.Context, request *protocol.GetTimeSeriesPointsRequest) (*protocol.GetTimeSeriesPointsResponse, error) {
-	resp, err := p.database().GetTimeSeriesPoints(ctx, request.GetName(), request.GetBegin().AsTime(), request.GetEnd().AsTime(), time.Duration(request.GetDuration()))
+	resp, err := p.database.GetTimeSeriesPoints(ctx, request.GetName(), request.GetBegin().AsTime(), request.GetEnd().AsTime(), time.Duration(request.GetDuration()))
 	if err != nil {
 		return nil, err
 	}

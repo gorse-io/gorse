@@ -272,21 +272,9 @@ func (m *Master) Serve() {
 		}
 		m.grpcServer = grpc.NewServer(opts...)
 		protocol.RegisterMasterServer(m.grpcServer, m)
-		protocol.RegisterCacheStoreServer(m.grpcServer, cache.NewProxyServer(func() cache.Database {
-			m.ConfigMutex.RLock()
-			defer m.ConfigMutex.RUnlock()
-			return m.CacheClient
-		}))
-		protocol.RegisterDataStoreServer(m.grpcServer, data.NewProxyServer(func() data.Database {
-			m.ConfigMutex.RLock()
-			defer m.ConfigMutex.RUnlock()
-			return m.DataClient
-		}))
-		protocol.RegisterVectorStoreServer(m.grpcServer, vectors.NewProxyServer(func() vectors.Database {
-			m.ConfigMutex.RLock()
-			defer m.ConfigMutex.RUnlock()
-			return m.VectorClient
-		}))
+		protocol.RegisterCacheStoreServer(m.grpcServer, cache.NewProxyServer(m.CacheClient))
+		protocol.RegisterDataStoreServer(m.grpcServer, data.NewProxyServer(m.DataClient))
+		protocol.RegisterVectorStoreServer(m.grpcServer, vectors.NewProxyServer(m.VectorClient))
 		if m.blobServer != nil {
 			protocol.RegisterBlobStoreServer(m.grpcServer, m.blobServer)
 		}
