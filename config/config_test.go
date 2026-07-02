@@ -172,7 +172,7 @@ func TestUnmarshal(t *testing.T) {
 	}
 }
 
-func TestLoadConfigDoesNotReusePreviousFile(t *testing.T) {
+func TestReloadConfig(t *testing.T) {
 	tempDir := t.TempDir()
 	firstConfig := filepath.Join(tempDir, "first.toml")
 	secondConfig := filepath.Join(tempDir, "second.toml")
