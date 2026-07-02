@@ -171,7 +171,7 @@ func TestRPC(t *testing.T) {
 	rpcServer.Stop()
 }
 
-func TestReloadConfigFromFileUpdatesMeta(t *testing.T) {
+func TestReloadConfig(t *testing.T) {
 	m := newMockMasterRPC(t)
 	defer func() {
 		assert.NoError(t, m.metaStore.Close())
