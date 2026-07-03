@@ -32,6 +32,7 @@ import (
 	"github.com/gorse-io/gorse/model/ctr"
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
+	"github.com/gorse-io/gorse/storage/vectors"
 	"github.com/juju/errors"
 	"github.com/samber/lo"
 	"go.uber.org/atomic"
@@ -80,6 +81,7 @@ type Pipeline struct {
 	Config                   *config.Config
 	CacheClient              cache.Database
 	DataClient               data.Database
+	VectorClient             vectors.Database
 	Tracer                   *monitor.Monitor
 	Jobs                     int
 	MatrixFactorizationItems *logics.MatrixFactorizationItems
@@ -151,7 +153,7 @@ func (p *Pipeline) Recommend(ctx context.Context, users []data.User, progress fu
 		updateUserCount.Add(1)
 
 		recommendTime := time.Now()
-		recommender, err := logics.NewRecommender(p.Config.Recommend, p.CacheClient, p.DataClient, false, userId, nil)
+		recommender, err := logics.NewRecommender(p.Config.Recommend, p.CacheClient, p.DataClient, p.VectorClient, false, userId, nil)
 		if err != nil {
 			log.Logger().Error("failed to create recommender", zap.String("user_id", userId), zap.Error(err))
 			return
@@ -161,15 +163,10 @@ func (p *Pipeline) Recommend(ctx context.Context, users []data.User, progress fu
 			return
 		}
 
-		// Update collaborative filtering recommendation.
-		if !strings.EqualFold(p.Config.Recommend.Collaborative.Type, "none") && p.MatrixFactorizationUsers != nil && p.MatrixFactorizationItems != nil {
+		// Load collaborative filtering user embedding for on-demand vector search.
+		if !strings.EqualFold(p.Config.Recommend.Collaborative.Type, "none") && p.MatrixFactorizationUsers != nil {
 			if userEmbedding, ok := p.MatrixFactorizationUsers.Get(userId); ok {
-				err = p.updateCollaborativeRecommend(ctx, p.MatrixFactorizationItems, userId, userEmbedding, recommender.ExcludeSet(), itemCache)
-				if err != nil {
-					log.Logger().Error("failed to recommend by collaborative filtering",
-						zap.String("user_id", userId), zap.Error(err))
-					return
-				}
+				recommender.SetCollaborativeUserEmbedding(userEmbedding)
 			} else if !p.dontskipColdStartUsers {
 				// skip users without collaborative filtering embeddings
 				return
@@ -366,56 +363,6 @@ func (p *Pipeline) checkRecommendCacheOutOfDate(ctx context.Context, userId stri
 		return timeoutTime.Before(time.Now())
 	}
 	return true
-}
-
-func (p *Pipeline) updateCollaborativeRecommend(
-	ctx context.Context,
-	items *logics.MatrixFactorizationItems,
-	userId string,
-	userEmbedding []float32,
-	excludeSet mapset.Set[string],
-	itemCache *ItemCache,
-) error {
-	localStartTime := time.Now()
-	scores := items.Search(userEmbedding, p.Config.Recommend.CacheSize+excludeSet.Cardinality())
-	// update categories
-	itemsMap, err := itemCache.GetMap(ctx, lo.Map(scores, func(score cache.Score, _ int) string {
-		return score.Id
-	}))
-	if err != nil {
-		return errors.Trace(err)
-	}
-	// remove excluded items and non-existing items
-	recommend := make([]cache.Score, 0, len(scores))
-	for i := range scores {
-		if item, exist := itemsMap[scores[i].Id]; exist && !excludeSet.Contains(item.ItemId) {
-			recommend = append(recommend, cache.Score{
-				Id:         scores[i].Id,
-				Score:      scores[i].Score,
-				Categories: item.Categories,
-				// the scores use the timestamp of the ranking index, which is only refreshed every so often.
-				// if we don't overwrite the timestamp here, the code below will delete all scores that were
-				// just written.
-				Timestamp: localStartTime,
-			})
-		}
-	}
-	if err := p.CacheClient.AddScores(ctx, cache.CollaborativeFiltering, userId, recommend); err != nil {
-		log.Logger().Error("failed to cache collaborative filtering recommendation result", zap.String("user_id", userId), zap.Error(err))
-		return errors.Trace(err)
-	}
-	if err := p.CacheClient.Set(ctx,
-		cache.Time(cache.Key(cache.CollaborativeFilteringUpdateTime, userId), localStartTime),
-		cache.String(cache.Key(cache.CollaborativeFilteringDigest, userId), p.Config.Recommend.Collaborative.Hash(&p.Config.Recommend)),
-	); err != nil {
-		log.Logger().Error("failed to cache collaborative filtering recommendation time", zap.String("user_id", userId), zap.Error(err))
-		return errors.Trace(err)
-	}
-	if err := p.CacheClient.DeleteScores(ctx, []string{cache.CollaborativeFiltering}, cache.ScoreCondition{Before: &localStartTime, Subset: new(userId)}); err != nil {
-		log.Logger().Error("failed to delete stale collaborative filtering recommendation result", zap.String("user_id", userId), zap.Error(err))
-		return errors.Trace(err)
-	}
-	return nil
 }
 
 // rankByClickTroughRate ranks items by predicted click-through-rate.

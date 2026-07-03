@@ -319,7 +319,7 @@ func (m *Master) Serve() {
 	if err = m.VectorClient.Init(); err != nil {
 		log.Logger().Fatal("failed to init vector store", zap.Error(err))
 	}
-	if err = m.initCollaborativeFilteringVectorCollection(context.Background()); err != nil {
+	if err = m.initCollaborativeFilteringVectorCollection(context.Background(), model.Params(nil).GetInt(model.NFactors, 16)); err != nil {
 		log.Logger().Fatal("failed to init collaborative filtering vector collection", zap.Error(err))
 	}
 
@@ -421,13 +421,11 @@ func (m *Master) Serve() {
 	m.StartHttpServer()
 }
 
-func (m *Master) initCollaborativeFilteringVectorCollection(ctx context.Context) error {
+func (m *Master) initCollaborativeFilteringVectorCollection(ctx context.Context, dimension int) error {
 	vectorConfig := vectors.VectorConfig{
 		Type: vectors.QuantizationType(m.Config.Database.Vector.QuantizationType),
 		Bits: m.Config.Database.Vector.QuantizationBits,
 	}
-	dimension := model.Params(nil).GetInt(model.NFactors, 16)
-
 	info, err := m.VectorClient.DescribeCollection(ctx, vectors.CollaborativeFiltering)
 	if errors.Is(err, errors.NotFound) {
 		info = nil

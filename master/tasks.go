@@ -41,6 +41,7 @@ import (
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
 	"github.com/gorse-io/gorse/storage/meta"
+	"github.com/gorse-io/gorse/storage/vectors"
 	"github.com/gorse-io/gorse/worker"
 	"github.com/juju/errors"
 	"github.com/samber/lo"
@@ -1048,14 +1049,50 @@ func (m *Master) trainCollaborativeFiltering(parent context.Context, trainSet, t
 	fitSpan.End()
 
 	_, indexSpan := monitor.Start(ctx, "Index", trainSet.CountItems())
-	matrixFactorizationItems := logics.NewMatrixFactorizationItems(time.Now())
-	if err := parallel.For(ctx, trainSet.CountItems(), m.Config.Master.NumJobs, func(i int) {
-		defer indexSpan.Add(1)
+	modelTimestamp := time.Now()
+	matrixFactorizationItemVectors := make([]vectors.Vector, 0, trainSet.CountItems())
+	for i := 0; i < trainSet.CountItems(); i++ {
+		indexSpan.Add(1)
 		if itemId, ok := trainSet.GetItemDict().String(int32(i)); ok && collaborativeFilteringModel.IsItemPredictable(int32(i)) {
-			matrixFactorizationItems.Add(itemId, collaborativeFilteringModel.GetItemFactor(int32(i)))
+			matrixFactorizationItemVectors = append(matrixFactorizationItemVectors, vectors.Vector{
+				Id:        itemId,
+				Vector:    collaborativeFilteringModel.GetItemFactor(int32(i)),
+				Timestamp: modelTimestamp,
+			})
 		}
-	}); err != nil {
-		return errors.Trace(err)
+	}
+	if len(matrixFactorizationItemVectors) > 0 {
+		if err := m.initCollaborativeFilteringVectorCollection(ctx, len(matrixFactorizationItemVectors[0].Vector)); err != nil {
+			return errors.Trace(err)
+		}
+		for start := 0; start < len(matrixFactorizationItemVectors); start += batchSize {
+			end := start + batchSize
+			if end > len(matrixFactorizationItemVectors) {
+				end = len(matrixFactorizationItemVectors)
+			}
+			itemIds := lo.Map(matrixFactorizationItemVectors[start:end], func(vector vectors.Vector, _ int) string {
+				return vector.Id
+			})
+			items, err := m.DataClient.BatchGetItems(ctx, itemIds, data.GetOptions{})
+			if err != nil {
+				return errors.Trace(err)
+			}
+			itemMap := lo.SliceToMap(items, func(item data.Item) (string, data.Item) {
+				return item.ItemId, item
+			})
+			for i := start; i < end; i++ {
+				if item, ok := itemMap[matrixFactorizationItemVectors[i].Id]; ok {
+					matrixFactorizationItemVectors[i].IsHidden = item.IsHidden
+					matrixFactorizationItemVectors[i].Categories = item.Categories
+				}
+			}
+			if err = m.VectorClient.AddVectors(ctx, vectors.CollaborativeFiltering, matrixFactorizationItemVectors[start:end]); err != nil {
+				return errors.Trace(err)
+			}
+		}
+		if err := m.VectorClient.DeleteVectors(ctx, vectors.CollaborativeFiltering, modelTimestamp); err != nil {
+			return errors.Trace(err)
+		}
 	}
 	span.Add(1)
 	indexSpan.End()
@@ -1085,11 +1122,6 @@ func (m *Master) trainCollaborativeFiltering(parent context.Context, trainSet, t
 	w, done, err := m.blobStore.Create(strconv.FormatInt(collaborativeFilteringModelId, 10))
 	if err != nil {
 		log.Logger().Error("failed to create blob for collaborative filtering model",
-			zap.Int64("id", collaborativeFilteringModelId), zap.Error(err))
-		return err
-	}
-	if err = matrixFactorizationItems.Marshal(w); err != nil {
-		log.Logger().Error("failed to matrix factorization items",
 			zap.Int64("id", collaborativeFilteringModelId), zap.Error(err))
 		return err
 	}
@@ -1323,13 +1355,6 @@ func (m *Master) collectGarbage(parent context.Context, dataSet *dataset.Dataset
 				return cfg.Name == splits[0]
 			}) {
 				return m.CacheClient.DeleteScores(ctx, []string{cache.ItemToItem}, cache.ScoreCondition{
-					Subset: new(subset),
-					Before: new(dataSet.GetTimestamp()),
-				})
-			}
-		case cache.CollaborativeFiltering:
-			if dataSet.GetUserDict().Id(subset) == dataset.NotId {
-				return m.CacheClient.DeleteScores(ctx, []string{cache.CollaborativeFiltering}, cache.ScoreCondition{
 					Subset: new(subset),
 					Before: new(dataSet.GetTimestamp()),
 				})

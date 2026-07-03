@@ -15,11 +15,13 @@
 package worker
 
 import (
+	"bytes"
 	"context"
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math/rand"
 	"net"
 	"net/http"
@@ -118,10 +120,11 @@ func NewWorker(
 ) *Worker {
 	return &Worker{
 		Pipeline: Pipeline{
-			Config:      config.GetDefaultConfig(),
-			CacheClient: new(cache.NoDatabase),
-			DataClient:  new(data.NoDatabase),
-			Jobs:        jobs,
+			Config:       config.GetDefaultConfig(),
+			CacheClient:  new(cache.NoDatabase),
+			DataClient:   new(data.NoDatabase),
+			VectorClient: vectors.NoDatabase{},
+			Jobs:         jobs,
 		},
 		vectorStore:   vectors.NoDatabase{},
 		randGenerator: util.NewRand(time.Now().UTC().UnixNano()),
@@ -226,6 +229,7 @@ func (w *Worker) Sync() {
 			}
 			w.vectorPath = w.Config.Database.VectorStore
 			w.vectorPrefix = w.Config.Database.VectorTablePrefix
+			w.VectorClient = w.vectorStore
 		}
 
 		// synchronize collaborative filtering model
@@ -280,19 +284,39 @@ func (w *Worker) Pull() {
 			if err != nil {
 				log.Logger().Error("failed to open collaborative filtering model", zap.Error(err))
 			} else {
-				items := logics.NewMatrixFactorizationItems(time.Time{})
-				users := logics.NewMatrixFactorizationUsers()
-				if err = items.Unmarshal(r); err != nil {
-					log.Logger().Error("failed to unmarshal matrix factorization items", zap.Error(err))
-				} else if err = users.Unmarshal(r); err != nil {
-					log.Logger().Error("failed to unmarshal matrix factorization users", zap.Error(err))
+				content, readErr := io.ReadAll(r)
+				if closeErr := r.Close(); closeErr != nil {
+					log.Logger().Error("failed to close collaborative filtering model", zap.Error(closeErr))
+				}
+				if readErr != nil {
+					log.Logger().Error("failed to read collaborative filtering model", zap.Error(readErr))
 				} else {
-					w.MatrixFactorizationItems = items
-					w.MatrixFactorizationUsers = users
-					w.collaborativeFilteringModelId = w.latestCollaborativeFilteringModelId
-					log.Logger().Info("synced collaborative filtering model",
-						zap.Int64("id", w.collaborativeFilteringModelId))
-					pulled = true
+					users := logics.NewMatrixFactorizationUsers()
+					err = users.Unmarshal(bytes.NewReader(content))
+					if err != nil {
+						// Backward compatibility: older blobs stored item index before user embeddings.
+						items := logics.NewMatrixFactorizationItems(time.Time{})
+						legacyReader := bytes.NewReader(content)
+						if legacyErr := items.Unmarshal(legacyReader); legacyErr != nil {
+							log.Logger().Error("failed to unmarshal matrix factorization users", zap.Error(err))
+						} else if legacyErr = users.Unmarshal(legacyReader); legacyErr != nil {
+							log.Logger().Error("failed to unmarshal matrix factorization users", zap.Error(legacyErr))
+						} else {
+							w.MatrixFactorizationItems = items
+							w.MatrixFactorizationUsers = users
+							w.collaborativeFilteringModelId = w.latestCollaborativeFilteringModelId
+							log.Logger().Info("synced collaborative filtering model",
+								zap.Int64("id", w.collaborativeFilteringModelId))
+							pulled = true
+						}
+					} else {
+						w.MatrixFactorizationItems = nil
+						w.MatrixFactorizationUsers = users
+						w.collaborativeFilteringModelId = w.latestCollaborativeFilteringModelId
+						log.Logger().Info("synced collaborative filtering model",
+							zap.Int64("id", w.collaborativeFilteringModelId))
+						pulled = true
+					}
 				}
 			}
 		}

@@ -15,6 +15,7 @@
 package logics
 
 import (
+	"context"
 	"io"
 	"sync"
 	"time"
@@ -24,6 +25,7 @@ import (
 	"github.com/gorse-io/gorse/common/floats"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/storage/cache"
+	"github.com/gorse-io/gorse/storage/vectors"
 	"github.com/pkg/errors"
 	"github.com/samber/lo"
 	"go.uber.org/zap"
@@ -76,6 +78,21 @@ func (items *MatrixFactorizationItems) Search(v []float32, n int) []cache.Score 
 			Timestamp: items.timestamp,
 		}
 	})
+}
+
+func QueryCollaborativeFiltering(ctx context.Context, vectorClient vectors.Database, embedding []float32, categories []string, n int) ([]cache.Score, error) {
+	items, err := vectorClient.QueryVectors(ctx, vectors.CollaborativeFiltering, embedding, categories, n)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	return lo.Map(items, func(item vectors.Vector, index int) cache.Score {
+		return cache.Score{
+			Id:         item.Id,
+			Score:      float64(len(items) - index),
+			Categories: item.Categories,
+			Timestamp:  item.Timestamp,
+		}
+	}), nil
 }
 
 func (items *MatrixFactorizationItems) Marshal(w io.Writer) error {

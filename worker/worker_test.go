@@ -43,6 +43,7 @@ import (
 	"github.com/gorse-io/gorse/protocol"
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
+	"github.com/gorse-io/gorse/storage/vectors"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
@@ -65,10 +66,14 @@ func (suite *WorkerTestSuite) SetupSuite() {
 	suite.NoError(err)
 	suite.CacheClient, err = cache.Open(fmt.Sprintf("sqlite://%s/cache.db", suite.T().TempDir()), "")
 	suite.NoError(err)
+	suite.VectorClient, err = vectors.Open(fmt.Sprintf("sqlite://%s/vector.db", suite.T().TempDir()), "")
+	suite.NoError(err)
 	// init database
 	err = suite.DataClient.Init()
 	suite.NoError(err)
 	err = suite.CacheClient.Init()
+	suite.NoError(err)
+	err = suite.VectorClient.Init()
 	suite.NoError(err)
 }
 
@@ -76,6 +81,8 @@ func (suite *WorkerTestSuite) TearDownSuite() {
 	err := suite.DataClient.Close()
 	suite.NoError(err)
 	err = suite.CacheClient.Close()
+	suite.NoError(err)
+	err = suite.VectorClient.Close()
 	suite.NoError(err)
 }
 
@@ -93,9 +100,13 @@ func (suite *WorkerTestSuite) SetupTest() {
 	suite.dontskipColdStartUsers = true
 	// reset random generator
 	suite.randGenerator = rand.New(rand.NewSource(0))
-	// reset index
+	// reset models and vectors
 	suite.MatrixFactorizationItems = nil
+	suite.MatrixFactorizationUsers = nil
 	suite.ClickThroughRateModel = nil
+	_ = suite.VectorClient.DeleteCollection(context.Background(), vectors.CollaborativeFiltering)
+	err = suite.VectorClient.AddCollection(context.Background(), vectors.CollaborativeFiltering, 2, vectors.Dot, vectors.VectorConfig{})
+	suite.NoError(err)
 }
 
 func (suite *WorkerTestSuite) TestPullUsers() {
@@ -179,12 +190,18 @@ func (suite *WorkerTestSuite) TestRecommendCollaborative() {
 	suite.NoError(err)
 
 	// create mock model
-	suite.MatrixFactorizationItems = logics.NewMatrixFactorizationItems(time.Time{})
+	matrixFactorizationItemVectors := make([]vectors.Vector, 0, 10)
 	for i := range 10 {
-		suite.MatrixFactorizationItems.Add(strconv.Itoa(i), []float32{float32(i)})
+		vector := vectors.Vector{Id: strconv.Itoa(i), Vector: []float32{float32(i), 1}}
+		if i == 1 || i == 3 {
+			vector.Categories = []string{"*"}
+		}
+		matrixFactorizationItemVectors = append(matrixFactorizationItemVectors, vector)
 	}
+	err = suite.VectorClient.AddVectors(ctx, vectors.CollaborativeFiltering, matrixFactorizationItemVectors)
+	suite.NoError(err)
 	suite.MatrixFactorizationUsers = logics.NewMatrixFactorizationUsers()
-	suite.MatrixFactorizationUsers.Add("0", []float32{1})
+	suite.MatrixFactorizationUsers.Add("0", []float32{1, 0})
 	suite.Recommend(ctx, []data.User{{UserId: "0"}}, nil)
 
 	// read recommend time
@@ -194,10 +211,10 @@ func (suite *WorkerTestSuite) TestRecommendCollaborative() {
 	recommends, err := suite.CacheClient.SearchScores(ctx, cache.Recommend, "0", nil, 0, -1)
 	suite.NoError(err)
 	suite.Equal([]cache.Score{
-		{Id: "3", Score: 3, Categories: []string{"*"}, Timestamp: recommendTime},
-		{Id: "2", Score: 2, Timestamp: recommendTime},
-		{Id: "1", Score: 1, Categories: []string{"*"}, Timestamp: recommendTime},
-		{Id: "0", Score: 0, Timestamp: recommendTime},
+		{Id: "3", Score: 4, Categories: []string{"*"}, Timestamp: recommendTime},
+		{Id: "2", Score: 3, Timestamp: recommendTime},
+		{Id: "1", Score: 2, Categories: []string{"*"}, Timestamp: recommendTime},
+		{Id: "0", Score: 1, Timestamp: recommendTime},
 	}, recommends)
 }
 
@@ -438,14 +455,14 @@ func (suite *WorkerTestSuite) TestRecommend() {
 	suite.Config.Recommend.NonPersonalized = []config.NonPersonalizedConfig{{Name: "popular"}}
 	suite.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "default"}}
 	suite.Config.Recommend.UserToUser = []config.UserToUserConfig{{Name: "default"}}
-	suite.MatrixFactorizationItems = logics.NewMatrixFactorizationItems(time.Time{})
-	suite.MatrixFactorizationItems.Add("4", []float32{4})
+	err := suite.VectorClient.AddVectors(ctx, vectors.CollaborativeFiltering, []vectors.Vector{{Id: "4", Vector: []float32{4, 1}}})
+	suite.NoError(err)
 	suite.MatrixFactorizationUsers = logics.NewMatrixFactorizationUsers()
-	suite.MatrixFactorizationUsers.Add("0", []float32{1})
+	suite.MatrixFactorizationUsers.Add("0", []float32{1, 0})
 	suite.ClickThroughRateModel = new(mockFactorizationMachine)
 
 	// insert items
-	err := suite.DataClient.BatchInsertItems(ctx, []data.Item{
+	err = suite.DataClient.BatchInsertItems(ctx, []data.Item{
 		{ItemId: "0", Timestamp: time.Unix(0, 0)},
 		{ItemId: "1", Timestamp: time.Unix(1, 0)},
 		{ItemId: "2", Timestamp: time.Unix(2, 0)},
@@ -502,14 +519,14 @@ func (suite *WorkerTestSuite) TestRecommendRankerNone() {
 	suite.Config.Recommend.NonPersonalized = []config.NonPersonalizedConfig{{Name: "popular"}}
 	suite.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "default"}}
 	suite.Config.Recommend.UserToUser = []config.UserToUserConfig{{Name: "default"}}
-	suite.MatrixFactorizationItems = logics.NewMatrixFactorizationItems(time.Time{})
-	suite.MatrixFactorizationItems.Add("4", []float32{4})
+	err := suite.VectorClient.AddVectors(ctx, vectors.CollaborativeFiltering, []vectors.Vector{{Id: "4", Vector: []float32{4, 1}}})
+	suite.NoError(err)
 	suite.MatrixFactorizationUsers = logics.NewMatrixFactorizationUsers()
-	suite.MatrixFactorizationUsers.Add("0", []float32{1})
+	suite.MatrixFactorizationUsers.Add("0", []float32{1, 0})
 	suite.ClickThroughRateModel = new(mockFactorizationMachine)
 
 	// insert items
-	err := suite.DataClient.BatchInsertItems(ctx, []data.Item{
+	err = suite.DataClient.BatchInsertItems(ctx, []data.Item{
 		{ItemId: "0", Timestamp: time.Unix(0, 0)},
 		{ItemId: "1", Timestamp: time.Unix(1, 0)},
 		{ItemId: "2", Timestamp: time.Unix(2, 0)},

@@ -64,7 +64,7 @@ func (s *MasterTestSuite) TearDownTest() {
 }
 
 func (s *MasterTestSuite) TestInitCollaborativeFilteringVectorCollection() {
-	err := s.initCollaborativeFilteringVectorCollection(context.Background())
+	err := s.initCollaborativeFilteringVectorCollection(context.Background(), 16)
 	s.Require().NoError(err)
 
 	collections, err := s.VectorClient.ListCollections(context.Background())
@@ -83,10 +83,10 @@ func (s *MasterTestSuite) TestInitCollaborativeFilteringVectorCollection() {
 func (s *MasterTestSuite) TestInitCollaborativeFilteringVectorCollectionRecreateOnMismatch() {
 	ctx := context.Background()
 
-	err := s.VectorClient.AddCollection(ctx, vectors.CollaborativeFiltering, 8, vectors.Cosine, vectors.VectorConfig{})
+	err := s.VectorClient.AddCollection(ctx, vectors.CollaborativeFiltering, 8, vectors.Dot, vectors.VectorConfig{})
 	s.Require().NoError(err)
 
-	err = s.initCollaborativeFilteringVectorCollection(ctx)
+	err = s.initCollaborativeFilteringVectorCollection(ctx, 16)
 	s.Require().NoError(err)
 
 	info, err := s.VectorClient.DescribeCollection(ctx, vectors.CollaborativeFiltering)
