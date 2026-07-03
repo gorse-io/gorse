@@ -621,18 +621,16 @@ func (suite *ServerTestSuite) TestQuota() {
 		Expect(t).
 		Status(http.StatusTooManyRequests).
 		End()
-
-	comment := "toolong"
 	apitest.New().
 		Handler(suite.handler).
 		Patch("/api/user/oversized-user-comment").
 		Header("X-API-Key", apiKey).
-		JSON(data.UserPatch{Comment: &comment}).
+		JSON(data.UserPatch{Comment: new("toolong")}).
 		Expect(t).
 		Status(http.StatusTooManyRequests).
 		End()
-
 	suite.Config.Quota.MaxCommentSize = 0
+
 	suite.Config.Quota.MaxLabelsSize = 5
 	apitest.New().
 		Handler(suite.handler).
@@ -642,8 +640,8 @@ func (suite *ServerTestSuite) TestQuota() {
 		Expect(t).
 		Status(http.StatusTooManyRequests).
 		End()
-
 	suite.Config.Quota.MaxLabelsSize = 0
+
 	suite.Config.Quota.MaxCommentSize = 3
 	apitest.New().
 		Handler(suite.handler).
@@ -653,18 +651,16 @@ func (suite *ServerTestSuite) TestQuota() {
 		Expect(t).
 		Status(http.StatusTooManyRequests).
 		End()
-
-	itemComment := "toolong"
 	apitest.New().
 		Handler(suite.handler).
 		Patch("/api/item/oversized-item-comment").
 		Header("X-API-Key", apiKey).
-		JSON(data.ItemPatch{Comment: &itemComment}).
+		JSON(data.ItemPatch{Comment: new("toolong")}).
 		Expect(t).
 		Status(http.StatusTooManyRequests).
 		End()
-
 	suite.Config.Quota.MaxCommentSize = 0
+
 	suite.Config.Quota.MaxLabelsSize = 5
 	apitest.New().
 		Handler(suite.handler).
@@ -674,8 +670,8 @@ func (suite *ServerTestSuite) TestQuota() {
 		Expect(t).
 		Status(http.StatusTooManyRequests).
 		End()
-
 	suite.Config.Quota.MaxLabelsSize = 0
+
 	suite.Config.Quota.MaxCategoriesCount = 1
 	apitest.New().
 		Handler(suite.handler).
@@ -685,8 +681,8 @@ func (suite *ServerTestSuite) TestQuota() {
 		Expect(t).
 		Status(http.StatusTooManyRequests).
 		End()
-
 	suite.Config.Quota.MaxCategoriesCount = 0
+
 	suite.Config.Quota.MaxCategoriesSize = 5
 	apitest.New().
 		Handler(suite.handler).
@@ -696,8 +692,8 @@ func (suite *ServerTestSuite) TestQuota() {
 		Expect(t).
 		Status(http.StatusTooManyRequests).
 		End()
-
 	suite.Config.Quota.MaxCategoriesSize = 0
+
 	suite.Config.Quota.MaxLabelsSize = 5
 	apitest.New().
 		Handler(suite.handler).
@@ -707,8 +703,8 @@ func (suite *ServerTestSuite) TestQuota() {
 		Expect(t).
 		Status(http.StatusTooManyRequests).
 		End()
-
 	suite.Config.Quota.MaxLabelsSize = 0
+
 	suite.Config.Quota.MaxCommentSize = 3
 	apitest.New().
 		Handler(suite.handler).
