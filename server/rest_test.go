@@ -588,15 +588,7 @@ func (suite *ServerTestSuite) TestQuota() {
 		Header("X-API-Key", apiKey).
 		JSON(data.User{UserId: "limited-user-2"}).
 		Expect(t).
-		Status(http.StatusBadRequest).
-		End()
-	apitest.New().
-		Handler(suite.handler).
-		Post("/api/users").
-		Header("X-API-Key", apiKey).
-		JSON([]data.User{{UserId: "limited-user-1", Comment: "updated"}}).
-		Expect(t).
-		Status(http.StatusOK).
+		Status(http.StatusTooManyRequests).
 		End()
 	suite.Config.Quota.MaxUsersCount = 0
 
@@ -615,15 +607,7 @@ func (suite *ServerTestSuite) TestQuota() {
 		Header("X-API-Key", apiKey).
 		JSON(Item{ItemId: "limited-item-2"}).
 		Expect(t).
-		Status(http.StatusBadRequest).
-		End()
-	apitest.New().
-		Handler(suite.handler).
-		Post("/api/items").
-		Header("X-API-Key", apiKey).
-		JSON([]Item{{ItemId: "limited-item-1", Comment: "updated"}}).
-		Expect(t).
-		Status(http.StatusOK).
+		Status(http.StatusTooManyRequests).
 		End()
 	suite.Config.Quota.MaxItemsCount = 0
 
@@ -635,7 +619,7 @@ func (suite *ServerTestSuite) TestQuota() {
 		Header("X-API-Key", apiKey).
 		JSON(apittestUser).
 		Expect(t).
-		Status(http.StatusBadRequest).
+		Status(http.StatusTooManyRequests).
 		End()
 
 	comment := "toolong"
@@ -645,7 +629,7 @@ func (suite *ServerTestSuite) TestQuota() {
 		Header("X-API-Key", apiKey).
 		JSON(data.UserPatch{Comment: &comment}).
 		Expect(t).
-		Status(http.StatusBadRequest).
+		Status(http.StatusTooManyRequests).
 		End()
 
 	suite.Config.Quota.MaxCommentSize = 0
@@ -656,7 +640,7 @@ func (suite *ServerTestSuite) TestQuota() {
 		Header("X-API-Key", apiKey).
 		JSON([]data.User{{UserId: "oversized-user-labels", Labels: []string{"abcdef"}}}).
 		Expect(t).
-		Status(http.StatusBadRequest).
+		Status(http.StatusTooManyRequests).
 		End()
 
 	suite.Config.Quota.MaxLabelsSize = 0
@@ -667,7 +651,7 @@ func (suite *ServerTestSuite) TestQuota() {
 		Header("X-API-Key", apiKey).
 		JSON(Item{ItemId: "oversized-item-comment", Comment: "toolong"}).
 		Expect(t).
-		Status(http.StatusBadRequest).
+		Status(http.StatusTooManyRequests).
 		End()
 
 	itemComment := "toolong"
@@ -677,7 +661,7 @@ func (suite *ServerTestSuite) TestQuota() {
 		Header("X-API-Key", apiKey).
 		JSON(data.ItemPatch{Comment: &itemComment}).
 		Expect(t).
-		Status(http.StatusBadRequest).
+		Status(http.StatusTooManyRequests).
 		End()
 
 	suite.Config.Quota.MaxCommentSize = 0
@@ -688,7 +672,7 @@ func (suite *ServerTestSuite) TestQuota() {
 		Header("X-API-Key", apiKey).
 		JSON([]Item{{ItemId: "oversized-item-labels", Labels: []string{"abcdef"}}}).
 		Expect(t).
-		Status(http.StatusBadRequest).
+		Status(http.StatusTooManyRequests).
 		End()
 
 	suite.Config.Quota.MaxLabelsSize = 0
@@ -699,7 +683,7 @@ func (suite *ServerTestSuite) TestQuota() {
 		Header("X-API-Key", apiKey).
 		JSON(Item{ItemId: "too-many-categories", Categories: []string{"a", "b"}}).
 		Expect(t).
-		Status(http.StatusBadRequest).
+		Status(http.StatusTooManyRequests).
 		End()
 
 	suite.Config.Quota.MaxCategoriesCount = 0
@@ -710,7 +694,7 @@ func (suite *ServerTestSuite) TestQuota() {
 		Header("X-API-Key", apiKey).
 		JSON(Item{ItemId: "oversized-categories", Categories: []string{"abcdef"}}).
 		Expect(t).
-		Status(http.StatusBadRequest).
+		Status(http.StatusTooManyRequests).
 		End()
 
 	suite.Config.Quota.MaxCategoriesSize = 0
@@ -721,7 +705,7 @@ func (suite *ServerTestSuite) TestQuota() {
 		Header("X-API-Key", apiKey).
 		JSON([]Feedback{{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "u", ItemId: "i"}, Labels: []string{"abcdef"}}}).
 		Expect(t).
-		Status(http.StatusBadRequest).
+		Status(http.StatusTooManyRequests).
 		End()
 
 	suite.Config.Quota.MaxLabelsSize = 0
@@ -732,7 +716,7 @@ func (suite *ServerTestSuite) TestQuota() {
 		Header("X-API-Key", apiKey).
 		JSON([]Feedback{{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "u", ItemId: "i"}, Comment: "toolong"}}).
 		Expect(t).
-		Status(http.StatusBadRequest).
+		Status(http.StatusTooManyRequests).
 		End()
 }
 
