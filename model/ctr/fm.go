@@ -25,8 +25,8 @@ import (
 
 	"github.com/c-bata/goptuna"
 	"github.com/chewxy/math32"
-	"github.com/gorse-io/gorse/common/encoding"
 	"github.com/gorse-io/gorse/common/bfloats"
+	"github.com/gorse-io/gorse/common/encoding"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/common/nn"
@@ -74,6 +74,28 @@ func NewAFM(params model.Params) *AFM {
 	fm := new(AFM)
 	fm.SetParams(params)
 	return fm
+}
+
+func init() {
+	Register("FM", []string{headerAFM, headerAFM2}, func(params model.Params) FactorizationMachines {
+		return NewAFM(params)
+	}, func(m FactorizationMachines) (string, bool) {
+		fm, ok := m.(*AFM)
+		if !ok {
+			return "", false
+		}
+		if fm.autoScale {
+			return headerAFM2, true
+		}
+		return headerAFM, true
+	}, func(header string, r io.Reader) (FactorizationMachines, error) {
+		var fm AFM
+		fm.autoScale = header == headerAFM2
+		if err := fm.Unmarshal(r); err != nil {
+			return nil, errors.Trace(err)
+		}
+		return &fm, nil
+	})
 }
 
 func (fm *AFM) SuggestParams(trial goptuna.Trial) model.Params {

@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 	"reflect"
+	"sort"
 	"time"
 
 	"github.com/bits-and-blooms/bitset"
@@ -113,6 +114,60 @@ type MatrixFactorization interface {
 	Marshal(w io.Writer) error
 	// Unmarshal model from byte stream.
 	Unmarshal(r io.Reader) error
+}
+
+// Creator creates a matrix factorization model with parameters.
+type Creator func(params model.Params) MatrixFactorization
+
+type modelInfo struct {
+	modelType string
+	modelName string
+	creator   Creator
+}
+
+var (
+	modelInfosByType        = make(map[string]modelInfo)
+	modelInfosByName        = make(map[string]modelInfo)
+	modelNamesByReflectType = make(map[reflect.Type]string)
+)
+
+// Register a matrix factorization model creator.
+func Register(modelType, modelName string, creator Creator) {
+	info := modelInfo{modelType: modelType, modelName: modelName, creator: creator}
+	modelInfosByType[modelType] = info
+	modelInfosByName[modelName] = info
+	modelNamesByReflectType[reflect.TypeOf(creator(nil))] = modelName
+}
+
+// NewModel creates a matrix factorization model by type.
+func NewModel(modelType string, params model.Params) (MatrixFactorization, error) {
+	info, ok := modelInfosByType[modelType]
+	if !ok {
+		return nil, fmt.Errorf("unknown model: %v", modelType)
+	}
+	return info.creator(params), nil
+}
+
+// RegisteredModelCreators returns all registered model creators for hyper-parameter search.
+func RegisteredModelCreators() map[string]ModelCreator {
+	creators := make(map[string]ModelCreator, len(modelInfosByType))
+	for modelType, info := range modelInfosByType {
+		creator := info.creator
+		creators[modelType] = func() MatrixFactorization {
+			return creator(nil)
+		}
+	}
+	return creators
+}
+
+// RegisteredModelTypes returns all registered model types.
+func RegisteredModelTypes() []string {
+	modelTypes := make([]string, 0, len(modelInfosByType))
+	for modelType := range modelInfosByType {
+		modelTypes = append(modelTypes, modelType)
+	}
+	sort.Strings(modelTypes)
+	return modelTypes
 }
 
 type BaseMatrixFactorization struct {
@@ -307,14 +362,10 @@ func (baseModel *BaseMatrixFactorization) Invalid() bool {
 }
 
 func GetModelName(m Model) string {
-	switch m.(type) {
-	case *BPR:
-		return "bpr"
-	case *ALS:
-		return "als"
-	default:
-		return reflect.TypeOf(m).String()
+	if name, ok := modelNamesByReflectType[reflect.TypeOf(m)]; ok {
+		return name
 	}
+	return reflect.TypeOf(m).String()
 }
 
 func MarshalModel(w io.Writer, m Model) error {
@@ -332,21 +383,24 @@ func UnmarshalModel(r io.Reader) (MatrixFactorization, error) {
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	switch name {
-	case "bpr":
-		var bpr BPR
-		if err := bpr.Unmarshal(r); err != nil {
-			return nil, errors.Trace(err)
-		}
-		return &bpr, nil
-	case "als":
-		var als ALS
-		if err := als.Unmarshal(r); err != nil {
-			return nil, errors.Trace(err)
-		}
-		return &als, nil
+	info, ok := modelInfosByName[name]
+	if !ok {
+		return nil, fmt.Errorf("unknown model %v", name)
 	}
-	return nil, fmt.Errorf("unknown model %v", name)
+	m := info.creator(nil)
+	if err := m.Unmarshal(r); err != nil {
+		return nil, errors.Trace(err)
+	}
+	return m, nil
+}
+
+func init() {
+	Register("BPR", "bpr", func(params model.Params) MatrixFactorization {
+		return NewBPR(params)
+	})
+	Register("ALS", "als", func(params model.Params) MatrixFactorization {
+		return NewALS(params)
+	})
 }
 
 // BPR means Bayesian Personal Ranking, is a pairwise learning algorithm for matrix factorization

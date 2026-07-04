@@ -27,6 +27,25 @@ import (
 
 const benchDelta = 0.01
 
+func TestRegisterModel(t *testing.T) {
+	bpr, err := NewModel("BPR", model.Params{model.NEpochs: 1})
+	assert.NoError(t, err)
+	assert.IsType(t, &BPR{}, bpr)
+	assert.Equal(t, "bpr", GetModelName(bpr))
+
+	als, err := NewModel("ALS", model.Params{model.NEpochs: 1})
+	assert.NoError(t, err)
+	assert.IsType(t, &ALS{}, als)
+	assert.Equal(t, "als", GetModelName(als))
+
+	_, err = NewModel("unknown", nil)
+	assert.Error(t, err)
+	assert.Contains(t, RegisteredModelTypes(), "BPR")
+	assert.Contains(t, RegisteredModelTypes(), "ALS")
+	assert.Contains(t, RegisteredModelCreators(), "BPR")
+	assert.Contains(t, RegisteredModelCreators(), "ALS")
+}
+
 func newFitConfig(_ int) *FitConfig {
 	cfg := NewFitConfig().SetVerbose(1).SetJobs(runtime.NumCPU())
 	return cfg

@@ -1098,14 +1098,13 @@ func (m *Master) trainCollaborativeFiltering(parent context.Context, trainSet, t
 }
 
 func (m *Master) newCollaborativeFilteringModel(modelType string, params model.Params) cf.MatrixFactorization {
-	switch modelType {
-	case "BPR":
-		return cf.NewBPR(params)
-	case "ALS":
-		return cf.NewALS(params)
-	default:
-		return cf.NewBPR(params)
+	model, err := cf.NewModel(modelType, params)
+	if err != nil {
+		log.Logger().Warn("failed to create collaborative filtering model, fallback to BPR",
+			zap.String("model_type", modelType), zap.Error(err))
+		model, _ = cf.NewModel("BPR", params)
 	}
+	return model
 }
 
 func (m *Master) trainClickThroughRatePrediction(parent context.Context, trainSet, testSet *ctr.Dataset) error {
@@ -1142,7 +1141,16 @@ func (m *Master) trainClickThroughRatePrediction(parent context.Context, trainSe
 			zap.Float32("Recall", m.clickThroughRateTarget.Score.Recall),
 			zap.Any("params", clickThroughRateParams))
 	}
-	clickModel := ctr.NewAFM(clickThroughRateParams)
+	clickModel, err := ctr.NewModel(clickThroughRateType, clickThroughRateParams)
+	if err != nil {
+		log.Logger().Warn("failed to create click-through rate model, fallback to FM",
+			zap.String("model_type", clickThroughRateType), zap.Error(err))
+		clickModel, err = ctr.NewModel("FM", clickThroughRateParams)
+		if err != nil {
+			m.clickThroughRateModelMutex.Unlock()
+			return errors.Trace(err)
+		}
+	}
 	m.clickThroughRateModelMutex.Unlock()
 
 	startFitTime := time.Now()
@@ -1315,14 +1323,7 @@ func (m *Master) optimizeCollaborativeFiltering(parent context.Context, trainSet
 		return nil
 	}
 
-	search := cf.NewModelSearch(map[string]cf.ModelCreator{
-		"BPR": func() cf.MatrixFactorization {
-			return cf.NewBPR(nil)
-		},
-		"ALS": func() cf.MatrixFactorization {
-			return cf.NewALS(nil)
-		},
-	}, trainSet, testSet,
+	search := cf.NewModelSearch(cf.RegisteredModelCreators(), trainSet, testSet,
 		cf.NewFitConfig().
 			SetJobs(m.Config.Master.NumJobs).
 			SetPatience(m.Config.Recommend.Collaborative.EarlyStopping.Patience)).
@@ -1365,11 +1366,7 @@ func (m *Master) optimizeClickThroughRatePrediction(parent context.Context, trai
 		return nil
 	}
 
-	search := ctr.NewModelSearch(map[string]ctr.ModelCreator{
-		"FM": func() ctr.FactorizationMachines {
-			return ctr.NewAFM(nil)
-		},
-	}, trainSet, testSet,
+	search := ctr.NewModelSearch(ctr.RegisteredModelCreators(), trainSet, testSet,
 		ctr.NewFitConfig().
 			SetJobs(m.Config.Master.NumJobs).
 			SetPatience(m.Config.Recommend.Ranker.EarlyStopping.Patience)).
