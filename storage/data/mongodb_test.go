@@ -17,6 +17,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/gorse-io/gorse/common/log"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
@@ -41,6 +42,7 @@ type MongoTestSuite struct {
 }
 
 func (suite *MongoTestSuite) SetupSuite() {
+	log.SetTestLogger(suite.T())
 	ctx := suite.T().Context()
 	var err error
 	// create database

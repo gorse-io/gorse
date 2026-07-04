@@ -15,6 +15,7 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/master"
@@ -66,7 +67,12 @@ type CLITestSuite struct {
 	endpoint string
 }
 
+func (s *CLITestSuite) SetupSuite() {
+	log.SetTestLogger(s.T())
+}
+
 func (s *CLITestSuite) SetupTest() {
+	log.SetTestLogger(s.T())
 	s.m, s.endpoint = newTestMaster(s.T())
 
 	ctx := s.T().Context()

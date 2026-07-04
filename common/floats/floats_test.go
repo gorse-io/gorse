@@ -17,6 +17,7 @@ package floats
 import (
 	"testing"
 
+	"github.com/gorse-io/gorse/common/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 )
@@ -38,7 +39,6 @@ func TestZero(t *testing.T) {
 	Zero(a)
 	assert.Equal(t, []float32{0, 0, 0, 0, 0, 0}, a)
 }
-
 
 func TestAdd(t *testing.T) {
 	a := []float32{1, 2, 3, 4}
@@ -180,6 +180,14 @@ func TestEuclidean(t *testing.T) {
 
 type NativeTestSuite struct {
 	suite.Suite
+}
+
+func (suite *NativeTestSuite) SetupTest() {
+	log.SetTestLogger(suite.T())
+}
+
+func (suite *NativeTestSuite) SetupSuite() {
+	log.SetTestLogger(suite.T())
 }
 
 func (suite *NativeTestSuite) TestDot() {

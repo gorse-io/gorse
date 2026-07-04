@@ -48,6 +48,7 @@ type RedisTestSuite struct {
 }
 
 func (suite *RedisTestSuite) SetupSuite() {
+	log.SetTestLogger(suite.T())
 	var err error
 	suite.Database, err = Open(redisDSN, "gorse_")
 	suite.NoError(err)

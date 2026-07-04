@@ -19,6 +19,7 @@ import (
 	"net"
 	"testing"
 
+	"github.com/gorse-io/gorse/common/log"
 	"github.com/stretchr/testify/suite"
 	"google.golang.org/grpc"
 )
@@ -31,6 +32,7 @@ type ProxyTestSuite struct {
 }
 
 func (suite *ProxyTestSuite) SetupSuite() {
+	log.SetTestLogger(suite.T())
 	var err error
 	path := fmt.Sprintf("sqlite://%s/sqlite.db", suite.T().TempDir())
 	suite.sqlite, err = Open(path, "gorse_")

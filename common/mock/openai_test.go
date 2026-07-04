@@ -19,6 +19,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gorse-io/gorse/common/log"
 	"github.com/juju/errors"
 	"github.com/sashabaranov/go-openai"
 	"github.com/stretchr/testify/suite"
@@ -30,7 +31,12 @@ type OpenAITestSuite struct {
 	client *openai.Client
 }
 
+func (suite *OpenAITestSuite) SetupTest() {
+	log.SetTestLogger(suite.T())
+}
+
 func (suite *OpenAITestSuite) SetupSuite() {
+	log.SetTestLogger(suite.T())
 	// Start mock server
 	suite.server = NewOpenAIServer()
 	go func() {

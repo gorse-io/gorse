@@ -23,6 +23,7 @@ import (
 
 	"github.com/emicklei/go-restful/v3"
 	"github.com/gorse-io/gorse/common/expression"
+	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
@@ -41,6 +42,7 @@ type ServerTestSuite struct {
 }
 
 func (suite *ServerTestSuite) SetupSuite() {
+	log.SetTestLogger(suite.T())
 	// create mock redis server
 	var err error
 	// open database
@@ -70,6 +72,7 @@ func (suite *ServerTestSuite) TearDownSuite() {
 }
 
 func (suite *ServerTestSuite) SetupTest() {
+	log.SetTestLogger(suite.T())
 	err := suite.DataClient.Purge()
 	suite.NoError(err)
 	err = suite.CacheClient.Purge()

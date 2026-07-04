@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/gorse-io/gorse/common/expression"
+	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
@@ -34,7 +35,12 @@ type RecommenderTestSuite struct {
 	cacheClient cache.Database
 }
 
+func (suite *RecommenderTestSuite) SetupTest() {
+	log.SetTestLogger(suite.T())
+}
+
 func (suite *RecommenderTestSuite) SetupSuite() {
+	log.SetTestLogger(suite.T())
 	var err error
 	// open database
 	suite.dataClient, err = data.Open(fmt.Sprintf("sqlite://%s/data.db", suite.T().TempDir()), "")

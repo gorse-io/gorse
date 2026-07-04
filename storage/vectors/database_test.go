@@ -17,6 +17,7 @@ package vectors
 import (
 	"time"
 
+	"github.com/gorse-io/gorse/common/log"
 	"github.com/juju/errors"
 	"github.com/stretchr/testify/suite"
 )
@@ -29,6 +30,7 @@ type vectorsTestSuite struct {
 }
 
 func (suite *vectorsTestSuite) SetupTest() {
+	log.SetTestLogger(suite.T())
 	// purge
 	ctx := suite.T().Context()
 	collections, err := suite.Database.ListCollections(ctx)

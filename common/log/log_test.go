@@ -60,6 +60,27 @@ func TestSetProductionLogger(t *testing.T) {
 	assert.FileExists(t, temp+"/gorse/gorse.log")
 }
 
+func TestSetTestLogger(t *testing.T) {
+	oldLogger := Logger()
+	oldOpenAILogger := OpenAILogger()
+	oldAccessLogger := accessLogger
+
+	t.Run("redirect", func(t *testing.T) {
+		SetTestLogger(t)
+
+		assert.NotSame(t, oldLogger, Logger())
+		assert.NotSame(t, oldOpenAILogger, OpenAILogger())
+		assert.NotSame(t, oldAccessLogger, accessLogger)
+		Logger().Info("test")
+		OpenAILogger().Info("test")
+		AccessLogger().Info("test")
+	})
+
+	assert.Same(t, oldLogger, Logger())
+	assert.Same(t, oldOpenAILogger, OpenAILogger())
+	assert.Same(t, oldAccessLogger, accessLogger)
+}
+
 func TestRedactDBURL(t *testing.T) {
 	assert.Equal(t, "sqlite://data/data.sqlite", RedactDBURL("sqlite://data/data.sqlite"))
 	assert.Equal(t, "mysql://xxxxx:xxxxxxxxxx@tcp(localhost:3306)/gorse?parseTime=true", RedactDBURL("mysql://gorse:gorse_pass@tcp(localhost:3306)/gorse?parseTime=true"))

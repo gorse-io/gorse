@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/gorse-io/gorse/common/expression"
+	"github.com/gorse-io/gorse/common/log"
 	"github.com/sclevine/yj/convert"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
@@ -494,7 +495,12 @@ type ValidateTestSuite struct {
 	*Config
 }
 
+func (s *ValidateTestSuite) SetupSuite() {
+	log.SetTestLogger(s.T())
+}
+
 func (s *ValidateTestSuite) SetupTest() {
+	log.SetTestLogger(s.T())
 	s.Config = GetDefaultConfig()
 	s.Database.CacheStore = "redis://localhost:6379/0"
 	s.Database.DataStore = "mysql://gorse:gorse_pass@tcp(localhost:3306)/gorse"

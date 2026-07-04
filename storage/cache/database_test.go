@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/fxtlabs/primes"
+	"github.com/gorse-io/gorse/common/log"
 	"github.com/juju/errors"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
@@ -43,6 +44,7 @@ func (suite *baseTestSuite) TearDownSuite() {
 }
 
 func (suite *baseTestSuite) SetupTest() {
+	log.SetTestLogger(suite.T())
 	err := suite.Database.Ping()
 	suite.NoError(err)
 	err = suite.Database.Purge()

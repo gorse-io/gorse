@@ -21,6 +21,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/storage"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -51,6 +52,7 @@ type MySQLTestSuite struct {
 }
 
 func (suite *MySQLTestSuite) SetupSuite() {
+	log.SetTestLogger(suite.T())
 	// create database
 	databaseComm, err := sql.Open("mysql", mySqlDSN[len(storage.MySQLPrefix):])
 	suite.NoError(err)
@@ -86,6 +88,7 @@ type PostgresTestSuite struct {
 }
 
 func (suite *PostgresTestSuite) SetupSuite() {
+	log.SetTestLogger(suite.T())
 	var err error
 	// create database
 	databaseComm, err := sql.Open("postgres", postgresDSN+"?sslmode=disable")
@@ -114,6 +117,7 @@ type ClickHouseTestSuite struct {
 }
 
 func (suite *ClickHouseTestSuite) SetupSuite() {
+	log.SetTestLogger(suite.T())
 	var err error
 	// create database
 	databaseComm, err := sql.Open("chhttp", "http://"+clickhouseDSN[len(storage.ClickhousePrefix):])
@@ -142,6 +146,7 @@ type SQLiteTestSuite struct {
 }
 
 func (suite *SQLiteTestSuite) SetupSuite() {
+	log.SetTestLogger(suite.T())
 	var err error
 	// create database
 	path := fmt.Sprintf("sqlite://%s/sqlite.db", suite.T().TempDir())

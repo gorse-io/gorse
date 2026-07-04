@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/gorse-io/gorse/common/expression"
+	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/config"
 	"github.com/jaswdr/faker"
 	"github.com/juju/errors"
@@ -158,6 +159,7 @@ func (suite *baseTestSuite) TearDownSuite() {
 }
 
 func (suite *baseTestSuite) SetupTest() {
+	log.SetTestLogger(suite.T())
 	err := suite.Database.Ping()
 	suite.NoError(err)
 	err = suite.Database.Purge()

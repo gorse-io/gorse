@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/storage/data"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
@@ -29,7 +30,12 @@ type PipelineTestSuite struct {
 	dataClient data.Database
 }
 
+func (suite *PipelineTestSuite) SetupTest() {
+	log.SetTestLogger(suite.T())
+}
+
 func (suite *PipelineTestSuite) SetupSuite() {
+	log.SetTestLogger(suite.T())
 	var err error
 	suite.dataClient, err = data.Open(fmt.Sprintf("sqlite://%s/data.db", suite.T().TempDir()), "")
 	suite.NoError(err)

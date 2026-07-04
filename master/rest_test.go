@@ -30,6 +30,7 @@ import (
 	"github.com/emicklei/go-restful/v3"
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/gorse-io/gorse/common/expression"
+	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/common/mock"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/protocol"
@@ -81,7 +82,12 @@ type MasterAPITestSuite struct {
 	cookie       string
 }
 
+func (suite *MasterAPITestSuite) SetupSuite() {
+	log.SetTestLogger(suite.T())
+}
+
 func (suite *MasterAPITestSuite) SetupTest() {
+	log.SetTestLogger(suite.T())
 	// open database
 	var err error
 	suite.Config = config.GetDefaultConfig()

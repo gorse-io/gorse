@@ -121,7 +121,7 @@ jobs:
       working-directory: ${{ runner.temp }}
 
     - name: Test
-      run: go test -timeout 30m -v ./... -coverprofile=coverage.txt -covermode=atomic -coverpkg=./...
+      run: go test -timeout 30m ./... -coverprofile=coverage.txt -covermode=atomic -coverpkg=./...
       env:
         # MySQL
         MYSQL_URI: mysql://root:password@tcp(localhost:${{ job.services.mysql.ports[3306] }})/
@@ -181,7 +181,7 @@ jobs:
         go-version-file: ./go.mod
 
     - name: Test
-      run: go test -timeout 20m -v ./... -skip "TestPostgres|TestMySQL|TestMongo|TestRedis|TestClickHouse|TestMilvus|TestQdrant|TestWeaviate"
+      run: go test -timeout 20m ./... -skip "TestPostgres|TestMySQL|TestMongo|TestRedis|TestClickHouse|TestMilvus|TestQdrant|TestWeaviate"
 
   unit_test_windows:
     strategy:
@@ -215,7 +215,7 @@ jobs:
         go-version-file: ./go.mod
 
     - name: Test
-      run: go test -timeout 20m -v ./... -skip "TestPostgres|TestMySQL|TestMongo|TestRedis|TestClickHouse|TestMilvus|TestQdrant|TestWeaviate"
+      run: go test -timeout 20m ./... -skip "TestPostgres|TestMySQL|TestMongo|TestRedis|TestClickHouse|TestMilvus|TestQdrant|TestWeaviate"
 
   integrate_test:
     name: integrate tests

@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/gorse-io/gorse/common/floats"
+	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/common/mock"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/dataset"
@@ -29,6 +30,14 @@ import (
 
 type ItemToItemTestSuite struct {
 	suite.Suite
+}
+
+func (suite *ItemToItemTestSuite) SetupTest() {
+	log.SetTestLogger(suite.T())
+}
+
+func (suite *ItemToItemTestSuite) SetupSuite() {
+	log.SetTestLogger(suite.T())
 }
 
 func (suite *ItemToItemTestSuite) TestColumnFunc() {

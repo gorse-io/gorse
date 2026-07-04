@@ -18,6 +18,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/gorse-io/gorse/common/log"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -41,6 +42,7 @@ type QdrantTestSuite struct {
 }
 
 func (suite *QdrantTestSuite) SetupSuite() {
+	log.SetTestLogger(suite.T())
 	var err error
 	suite.Database, err = Open(qdrantUri, "gorse_")
 	suite.NoError(err)

@@ -30,6 +30,7 @@ import (
 
 	"github.com/c-bata/goptuna"
 	"github.com/gorse-io/gorse/common/expression"
+	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/common/reranker"
 	"github.com/gorse-io/gorse/common/util"
@@ -55,6 +56,7 @@ type WorkerTestSuite struct {
 }
 
 func (suite *WorkerTestSuite) SetupSuite() {
+	log.SetTestLogger(suite.T())
 	// open database
 	var err error
 	suite.Tracer = monitor.NewTracer("test")
@@ -78,6 +80,7 @@ func (suite *WorkerTestSuite) TearDownSuite() {
 }
 
 func (suite *WorkerTestSuite) SetupTest() {
+	log.SetTestLogger(suite.T())
 	err := suite.DataClient.Purge()
 	suite.NoError(err)
 	err = suite.CacheClient.Purge()

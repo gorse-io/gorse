@@ -19,6 +19,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/dataset"
 	"github.com/gorse-io/gorse/storage/data"
@@ -27,6 +28,14 @@ import (
 
 type UserToUserTestSuite struct {
 	suite.Suite
+}
+
+func (suite *UserToUserTestSuite) SetupTest() {
+	log.SetTestLogger(suite.T())
+}
+
+func (suite *UserToUserTestSuite) SetupSuite() {
+	log.SetTestLogger(suite.T())
 }
 
 func (suite *UserToUserTestSuite) TestEmbedding() {

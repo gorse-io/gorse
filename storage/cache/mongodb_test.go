@@ -43,6 +43,7 @@ type MongoTestSuite struct {
 }
 
 func (suite *MongoTestSuite) SetupSuite() {
+	log.SetTestLogger(suite.T())
 	ctx := suite.T().Context()
 	var err error
 	// create database

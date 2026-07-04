@@ -20,6 +20,7 @@ import (
 	"time"
 
 	client "github.com/gorse-io/gorse-go"
+	"github.com/gorse-io/gorse/common/log"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -38,7 +39,12 @@ type GorseClientTestSuite struct {
 	client *client.GorseClient
 }
 
+func (suite *GorseClientTestSuite) SetupTest() {
+	log.SetTestLogger(suite.T())
+}
+
 func (suite *GorseClientTestSuite) SetupSuite() {
+	log.SetTestLogger(suite.T())
 	if serverEndpoint == "" || dashboardEndpoint == "" {
 		suite.T().Skip("GORSE_SERVER_ENDPOINT or GORSE_DASHBOARD_ENDPOINT is not set")
 	}

@@ -18,6 +18,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/storage/cache"
@@ -31,7 +32,12 @@ type MasterTestSuite struct {
 	Master
 }
 
+func (s *MasterTestSuite) SetupSuite() {
+	log.SetTestLogger(s.T())
+}
+
 func (s *MasterTestSuite) SetupTest() {
+	log.SetTestLogger(s.T())
 	// open database
 	var err error
 	s.tracer = monitor.NewTracer("test")

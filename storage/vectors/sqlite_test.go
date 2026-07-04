@@ -17,6 +17,7 @@ package vectors
 import (
 	"testing"
 
+	"github.com/gorse-io/gorse/common/log"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -25,6 +26,7 @@ type SQLiteTestSuite struct {
 }
 
 func (suite *SQLiteTestSuite) SetupSuite() {
+	log.SetTestLogger(suite.T())
 	var err error
 	suite.Database, err = Open("sqlite://:memory:", "gorse_")
 	suite.NoError(err)

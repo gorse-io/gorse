@@ -28,6 +28,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest"
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
@@ -89,6 +90,25 @@ func CloseLogger() {
 	if err != nil {
 		panic(err)
 	}
+}
+
+// SetTestLogger redirects Gorse logs to t.Log until the test finishes.
+func SetTestLogger(t testing.TB) {
+	t.Helper()
+	oldLogger := logger
+	oldOpenAILogger := openaiLogger
+	oldAccessLogger := accessLogger
+
+	testLogger := zaptest.NewLogger(t, zaptest.Level(zap.DebugLevel))
+	logger = testLogger
+	openaiLogger = testLogger
+	accessLogger = testLogger
+
+	t.Cleanup(func() {
+		logger = oldLogger
+		openaiLogger = oldOpenAILogger
+		accessLogger = oldAccessLogger
+	})
 }
 
 func AddFlags(flagSet *pflag.FlagSet) {
