@@ -23,11 +23,9 @@ import (
 // Used when no vector store is configured.
 type NoDatabase struct{}
 
-func (NoDatabase) Init() error { return ErrNoDatabase }
-func (NoDatabase) Optimize() error {
-	return ErrNoDatabase
-}
-func (NoDatabase) Close() error { return ErrNoDatabase }
+func (NoDatabase) Init() error                                { return ErrNoDatabase }
+func (NoDatabase) Optimize(_ context.Context, _ string) error { return nil }
+func (NoDatabase) Close() error                               { return ErrNoDatabase }
 func (NoDatabase) ListCollections(_ context.Context) ([]string, error) {
 	return nil, ErrNoDatabase
 }

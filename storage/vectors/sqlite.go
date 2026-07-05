@@ -54,7 +54,7 @@ func (db *SQLite) Init() error {
 	return nil
 }
 
-func (db *SQLite) Optimize() error {
+func (db *SQLite) Optimize(_ context.Context, _ string) error {
 	return nil
 }
 

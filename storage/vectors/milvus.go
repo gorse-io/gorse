@@ -70,7 +70,7 @@ func (db *Milvus) Init() error {
 	return nil
 }
 
-func (db *Milvus) Optimize() error {
+func (db *Milvus) Optimize(_ context.Context, _ string) error {
 	return nil
 }
 

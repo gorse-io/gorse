@@ -68,7 +68,7 @@ func (db *Weaviate) Init() error {
 	return nil
 }
 
-func (db *Weaviate) Optimize() error {
+func (db *Weaviate) Optimize(_ context.Context, _ string) error {
 	return nil
 }
 

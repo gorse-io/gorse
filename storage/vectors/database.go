@@ -84,7 +84,7 @@ type Vector struct {
 
 type Database interface {
 	Init() error
-	Optimize() error
+	Optimize(ctx context.Context, name string) error
 	Close() error
 	ListCollections(ctx context.Context) ([]string, error)
 	DescribeCollection(ctx context.Context, name string) (*CollectionInfo, error)

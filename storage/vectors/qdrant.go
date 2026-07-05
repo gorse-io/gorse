@@ -66,7 +66,7 @@ func (db *Qdrant) Init() error {
 	return nil
 }
 
-func (db *Qdrant) Optimize() error {
+func (db *Qdrant) Optimize(_ context.Context, _ string) error {
 	return nil
 }
 

@@ -162,7 +162,7 @@ func (p ProxyClient) Init() error {
 	return nil
 }
 
-func (p ProxyClient) Optimize() error {
+func (p ProxyClient) Optimize(_ context.Context, _ string) error {
 	return nil
 }
 
