@@ -575,6 +575,10 @@ func (s *ValidateTestSuite) TestVectorStore() {
 		"weaviate://localhost:8080",
 		"weaviates://localhost:8080",
 		"milvus://localhost:19530",
+		"redis://localhost:6379/0",
+		"rediss://localhost:6379/0",
+		"redis+cluster://:password@192.168.1.11:6379?addr=192.168.0.5:6379&addr=192.168.0.7:6379",
+		"rediss+cluster://:password@192.168.1.11:6379?addr=192.168.0.5:6379",
 	} {
 		s.Database.VectorStore = vectorStore
 		s.NoError(s.Validate())

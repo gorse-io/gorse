@@ -923,6 +923,10 @@ func (config *Config) Validate() error {
 			storage.WeaviatePrefix,
 			storage.WeaviatesPrefix,
 			storage.MilvusPrefix,
+			storage.RedisPrefix,
+			storage.RedissPrefix,
+			storage.RedisClusterPrefix,
+			storage.RedissClusterPrefix,
 		}
 		for _, prefix := range prefixes {
 			if strings.HasPrefix(fl.Field().String(), prefix) {
