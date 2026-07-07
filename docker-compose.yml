@@ -47,7 +47,7 @@ services:
   #     - clickhouse_data:/var/lib/clickhouse
 
   # redis:
-  #   image: redis/redis-stack
+  #   image: redis:8
   #   restart: unless-stopped
   #   ports:
   #     - 6379:6379

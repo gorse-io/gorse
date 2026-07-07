@@ -64,7 +64,7 @@ jobs:
           --health-retries=5
 
       redis:
-        image: redis/redis-stack:6.2.6-v9
+        image: redis:8
         ports:
           - 6379
 
@@ -272,20 +272,10 @@ jobs:
       - name: Install pre-requisites
         uses: awalsh128/cache-apt-pkgs-action@latest
         with:
-          packages: redis-tools qemu-user-static
-
-      - uses: actions/checkout@v5
-        with:
-          repository: gorse-cloud/redis-stack
-          path: redis-stack
+          packages: qemu-user-static
 
       - name: Setup Redis cluster
-        run: |
-          docker compose -f redis-stack/docker-compose.yml --project-directory redis-stack up -d
-          for i in {1..5}; do
-            redis-cli -p 7005 ping | grep PONG && break
-            sleep 10
-          done
+        uses: gorse-cloud/redis-cluster@v1.0.0
 
       - uses: actions/checkout@v2
       - uses: actions/setup-go@v5
