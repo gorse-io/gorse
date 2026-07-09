@@ -35,16 +35,12 @@ var (
 )
 
 func init() {
-	// get environment variables
-	env := func(key, defaultValue string) string {
-		if value := os.Getenv(key); value != "" {
-			return value
-		}
-		return defaultValue
-	}
-	mySqlDSN = env("MYSQL_URI", "mysql://root:password@tcp(127.0.0.1:3306)/")
-	postgresDSN = env("POSTGRES_URI", "postgres://gorse:gorse_pass@127.0.0.1/")
-	clickhouseDSN = env("CLICKHOUSE_URI", "clickhouse://127.0.0.1:8123/")
+	// os.Setenv("MYSQL_URI", "mysql://root:password@tcp(127.0.0.1:3306)/")
+	// os.Setenv("POSTGRES_URI", "postgres://gorse:gorse_pass@127.0.0.1/")
+	// os.Setenv("CLICKHOUSE_URI", "clickhouse://127.0.0.1:8123/")
+	mySqlDSN = os.Getenv("MYSQL_URI")
+	postgresDSN = os.Getenv("POSTGRES_URI")
+	clickhouseDSN = os.Getenv("CLICKHOUSE_URI")
 }
 
 type MySQLTestSuite struct {
@@ -80,6 +76,9 @@ func (suite *MySQLTestSuite) TestInit() {
 }
 
 func TestMySQL(t *testing.T) {
+	if mySqlDSN == "" {
+		t.Skip("MYSQL_URI is not set, skipping MySQL test")
+	}
 	suite.Run(t, new(MySQLTestSuite))
 }
 
@@ -109,6 +108,9 @@ func (suite *PostgresTestSuite) SetupSuite() {
 }
 
 func TestPostgres(t *testing.T) {
+	if postgresDSN == "" {
+		t.Skip("POSTGRES_URI is not set, skipping PostgreSQL test")
+	}
 	suite.Run(t, new(PostgresTestSuite))
 }
 
@@ -138,6 +140,9 @@ func (suite *ClickHouseTestSuite) SetupSuite() {
 }
 
 func TestClickHouse(t *testing.T) {
+	if clickhouseDSN == "" {
+		t.Skip("CLICKHOUSE_URI is not set, skipping ClickHouse test")
+	}
 	suite.Run(t, new(ClickHouseTestSuite))
 }
 
@@ -176,6 +181,9 @@ func assertQuery(t *testing.T, connection *sql.DB, sql string, expected string) 
 }
 
 func BenchmarkMySQL_CountItems(b *testing.B) {
+	if mySqlDSN == "" {
+		b.Skip("MYSQL_URI is not set, skipping MySQL benchmark")
+	}
 	// create database
 	database, err := Open(mySqlDSN, "gorse_")
 	require.NoError(b, err)
@@ -197,6 +205,9 @@ func BenchmarkMySQL_CountItems(b *testing.B) {
 }
 
 func BenchmarkPostgres_CountItems(b *testing.B) {
+	if postgresDSN == "" {
+		b.Skip("POSTGRES_URI is not set, skipping PostgreSQL benchmark")
+	}
 	// create database
 	database, err := Open(postgresDSN+"gorse_data_test?sslmode=disable", "gorse_")
 	require.NoError(b, err)
@@ -210,6 +221,9 @@ func BenchmarkPostgres_CountItems(b *testing.B) {
 }
 
 func BenchmarkClickHouse_CountItems(b *testing.B) {
+	if clickhouseDSN == "" {
+		b.Skip("CLICKHOUSE_URI is not set, skipping ClickHouse benchmark")
+	}
 	// create database
 	databaseComm, err := sql.Open("chhttp", "http://"+clickhouseDSN[len(storage.ClickhousePrefix):])
 	require.NoError(b, err)

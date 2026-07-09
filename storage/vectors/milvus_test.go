@@ -27,14 +27,8 @@ var (
 )
 
 func init() {
-	// get environment variables
-	env := func(key, defaultValue string) string {
-		if value := os.Getenv(key); value != "" {
-			return value
-		}
-		return defaultValue
-	}
-	milvusUri = env("MILVUS_URI", "milvus://127.0.0.1:19530")
+	// os.Setenv("MILVUS_URI", "milvus://127.0.0.1:19530")
+	milvusUri = os.Getenv("MILVUS_URI")
 }
 
 type MilvusTestSuite struct {
@@ -58,5 +52,8 @@ func (suite *MilvusTestSuite) TestQuantization() {
 }
 
 func TestMilvus(t *testing.T) {
+	if milvusUri == "" {
+		t.Skip("MILVUS_URI is not set, skipping Milvus test")
+	}
 	suite.Run(t, new(MilvusTestSuite))
 }

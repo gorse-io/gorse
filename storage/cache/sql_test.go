@@ -33,15 +33,10 @@ var (
 )
 
 func init() {
-	// get environment variables
-	env := func(key, defaultValue string) string {
-		if value := os.Getenv(key); value != "" {
-			return value
-		}
-		return defaultValue
-	}
-	mySqlDSN = env("MYSQL_URI", "mysql://root:password@tcp(127.0.0.1:3306)/")
-	postgresDSN = env("POSTGRES_URI", "postgres://gorse:gorse_pass@127.0.0.1/")
+	// os.Setenv("MYSQL_URI", "mysql://root:password@tcp(127.0.0.1:3306)/")
+	// os.Setenv("POSTGRES_URI", "postgres://gorse:gorse_pass@127.0.0.1/")
+	mySqlDSN = os.Getenv("MYSQL_URI")
+	postgresDSN = os.Getenv("POSTGRES_URI")
 }
 
 type PostgresTestSuite struct {
@@ -70,6 +65,9 @@ func (suite *PostgresTestSuite) SetupSuite() {
 }
 
 func TestPostgres(t *testing.T) {
+	if postgresDSN == "" {
+		t.Skip("POSTGRES_URI is not set, skipping PostgreSQL test")
+	}
 	suite.Run(t, new(PostgresTestSuite))
 }
 
@@ -108,6 +106,9 @@ func (suite *MySQLTestSuite) TestInit() {
 }
 
 func TestMySQL(t *testing.T) {
+	if mySqlDSN == "" {
+		t.Skip("MYSQL_URI is not set, skipping MySQL test")
+	}
 	suite.Run(t, new(MySQLTestSuite))
 }
 

@@ -27,14 +27,8 @@ var (
 )
 
 func init() {
-	// get environment variables
-	env := func(key, defaultValue string) string {
-		if value := os.Getenv(key); value != "" {
-			return value
-		}
-		return defaultValue
-	}
-	qdrantUri = env("QDRANT_URI", "qdrant://127.0.0.1:6334")
+	// os.Setenv("QDRANT_URI", "qdrant://127.0.0.1:6334")
+	qdrantUri = os.Getenv("QDRANT_URI")
 }
 
 type QdrantTestSuite struct {
@@ -64,5 +58,8 @@ func (suite *QdrantTestSuite) TestQuantization() {
 }
 
 func TestQdrant(t *testing.T) {
+	if qdrantUri == "" {
+		t.Skip("QDRANT_URI is not set, skipping Qdrant test")
+	}
 	suite.Run(t, new(QdrantTestSuite))
 }

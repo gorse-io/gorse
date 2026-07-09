@@ -27,14 +27,8 @@ var (
 )
 
 func init() {
-	// get environment variables
-	env := func(key, defaultValue string) string {
-		if value := os.Getenv(key); value != "" {
-			return value
-		}
-		return defaultValue
-	}
-	weaviateUri = env("WEAVIATE_URI", "weaviate://127.0.0.1:8080")
+	// os.Setenv("WEAVIATE_URI", "weaviate://127.0.0.1:8080")
+	weaviateUri = os.Getenv("WEAVIATE_URI")
 }
 
 type WeaviateTestSuite struct {
@@ -58,5 +52,8 @@ func (suite *WeaviateTestSuite) TestQuantization() {
 }
 
 func TestWeaviate(t *testing.T) {
+	if weaviateUri == "" {
+		t.Skip("WEAVIATE_URI is not set, skipping Weaviate test")
+	}
 	suite.Run(t, new(WeaviateTestSuite))
 }
