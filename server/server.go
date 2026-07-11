@@ -24,6 +24,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/emicklei/go-restful/v3"
@@ -62,6 +63,9 @@ type Server struct {
 	tlsConfig    *util.TLSConfig
 	testMode     bool
 	cacheFile    string
+	done         chan struct{}
+	shutdown     sync.Once
+	syncWait     sync.WaitGroup
 }
 
 // NewServer creates a server node.
@@ -78,6 +82,7 @@ func NewServer(
 		masterPort: masterPort,
 		tlsConfig:  tlsConfig,
 		cacheFile:  cacheFile,
+		done:       make(chan struct{}),
 		RestServer: RestServer{
 			Config:       config.GetDefaultConfig(),
 			CacheClient:  new(cache.NoDatabase),
@@ -124,7 +129,11 @@ func (s *Server) Serve() {
 	}
 	s.masterClient = protocol.NewMasterClient(s.conn)
 
-	go s.Sync()
+	s.syncWait.Add(1)
+	go func() {
+		defer s.syncWait.Done()
+		s.Sync()
+	}()
 	container := restful.NewContainer()
 	s.StartHttpServer(container)
 }
@@ -143,10 +152,29 @@ func (s *Server) ServerName() (string, error) {
 }
 
 func (s *Server) Shutdown() {
-	err := s.HttpServer.Shutdown(context.TODO())
-	if err != nil {
-		log.Logger().Fatal("failed to shutdown http server", zap.Error(err))
-	}
+	s.shutdown.Do(func() {
+		close(s.done)
+		if s.HttpServer != nil {
+			if err := s.HttpServer.Shutdown(context.TODO()); err != nil {
+				log.Logger().Error("failed to shutdown http server", zap.Error(err))
+			}
+		}
+		if s.conn != nil {
+			if err := s.conn.Close(); err != nil {
+				log.Logger().Error("failed to close master connection", zap.Error(err))
+			}
+		}
+		s.syncWait.Wait()
+		if err := s.DataClient.Close(); err != nil {
+			log.Logger().Error("failed to close data database", zap.Error(err))
+		}
+		if err := s.CacheClient.Close(); err != nil {
+			log.Logger().Error("failed to close cache database", zap.Error(err))
+		}
+		if err := s.VectorClient.Close(); err != nil {
+			log.Logger().Error("failed to close vector database", zap.Error(err))
+		}
+	})
 }
 
 // Sync this server to the master.
@@ -242,6 +270,10 @@ func (s *Server) Sync() {
 		if s.testMode {
 			return
 		}
-		time.Sleep(s.Config.Master.MetaTimeout)
+		select {
+		case <-time.After(s.Config.Master.MetaTimeout):
+		case <-s.done:
+			return
+		}
 	}
 }
