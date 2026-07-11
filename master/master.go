@@ -485,6 +485,19 @@ func (m *Master) Shutdown() {
 	}
 	// stop grpc server
 	m.grpcServer.GracefulStop()
+	// close databases
+	if err = m.metaStore.Close(); err != nil {
+		log.Logger().Error("failed to close meta database", zap.Error(err))
+	}
+	if err = m.DataClient.Close(); err != nil {
+		log.Logger().Error("failed to close data database", zap.Error(err))
+	}
+	if err = m.CacheClient.Close(); err != nil {
+		log.Logger().Error("failed to close cache database", zap.Error(err))
+	}
+	if err = m.VectorClient.Close(); err != nil {
+		log.Logger().Error("failed to close vector database", zap.Error(err))
+	}
 }
 
 func (m *Master) RunTasksLoop() {
