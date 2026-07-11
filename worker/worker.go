@@ -100,8 +100,7 @@ type Worker struct {
 	syncedChan   chan struct{} // meta synced events
 	pulledChan   chan struct{} // model pulled events
 	done         chan struct{}
-	stopOnce     sync.Once
-	shutdownOnce sync.Once
+	shutdown     sync.Once
 	syncWait     sync.WaitGroup
 	httpServer   *http.Server
 }
@@ -342,37 +341,34 @@ func (w *Worker) ServeHTTP() {
 	}
 }
 
-func (w *Worker) Stop() {
-	w.stopOnce.Do(func() {
+func (w *Worker) Shutdown() {
+	w.shutdown.Do(func() {
 		close(w.done)
 		w.ticker.Stop()
 	})
 }
 
-func (w *Worker) Shutdown() {
-	w.shutdownOnce.Do(func() {
-		w.Stop()
-		if w.httpServer != nil {
-			if err := w.httpServer.Shutdown(context.TODO()); err != nil {
-				log.Logger().Error("failed to shutdown http server", zap.Error(err))
-			}
+func (w *Worker) close() {
+	if w.httpServer != nil {
+		if err := w.httpServer.Shutdown(context.TODO()); err != nil {
+			log.Logger().Error("failed to shutdown http server", zap.Error(err))
 		}
-		if w.conn != nil {
-			if err := w.conn.Close(); err != nil {
-				log.Logger().Error("failed to close master connection", zap.Error(err))
-			}
+	}
+	if w.conn != nil {
+		if err := w.conn.Close(); err != nil {
+			log.Logger().Error("failed to close master connection", zap.Error(err))
 		}
-		w.syncWait.Wait()
-		if err := w.DataClient.Close(); err != nil {
-			log.Logger().Error("failed to close data database", zap.Error(err))
-		}
-		if err := w.CacheClient.Close(); err != nil {
-			log.Logger().Error("failed to close cache database", zap.Error(err))
-		}
-		if err := w.vectorStore.Close(); err != nil {
-			log.Logger().Error("failed to close vector database", zap.Error(err))
-		}
-	})
+	}
+	w.syncWait.Wait()
+	if err := w.DataClient.Close(); err != nil {
+		log.Logger().Error("failed to close data database", zap.Error(err))
+	}
+	if err := w.CacheClient.Close(); err != nil {
+		log.Logger().Error("failed to close cache database", zap.Error(err))
+	}
+	if err := w.vectorStore.Close(); err != nil {
+		log.Logger().Error("failed to close vector database", zap.Error(err))
+	}
 }
 
 func writeJSON(w http.ResponseWriter, content any) {
@@ -418,6 +414,7 @@ func (w *Worker) Serve() {
 		log.Logger().Fatal("failed to connect master", zap.Error(err))
 	}
 	w.masterClient = protocol.NewMasterClient(w.conn)
+	defer w.close()
 
 	w.syncWait.Add(1)
 	go func() {

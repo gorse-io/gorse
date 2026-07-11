@@ -72,10 +72,9 @@ var workerCommand = &cobra.Command{
 			sigint := make(chan os.Signal, 1)
 			signal.Notify(sigint, os.Interrupt)
 			<-sigint
-			w.Stop()
+			w.Shutdown()
 		}()
 		w.Serve()
-		w.Shutdown()
 		log.Logger().Info("stop gorse worker successfully")
 	},
 }
