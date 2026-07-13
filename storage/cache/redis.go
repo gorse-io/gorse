@@ -18,7 +18,6 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"io"
 	"strconv"
 	"strings"
 	"time"
@@ -232,26 +231,6 @@ func (r *Redis) Get(ctx context.Context, key string) *ReturnValue {
 // Delete object from Redis.
 func (r *Redis) Delete(ctx context.Context, key string) error {
 	return r.client.Del(ctx, r.Key(key)).Err()
-}
-
-func (r *Redis) Push(ctx context.Context, name string, message string) error {
-	_, err := r.client.ZAdd(ctx, r.Key(name), redis.Z{Member: message, Score: float64(time.Now().UnixNano())}).Result()
-	return err
-}
-
-func (r *Redis) Pop(ctx context.Context, name string) (string, error) {
-	z, err := r.client.ZPopMin(ctx, r.Key(name), 1).Result()
-	if err != nil {
-		return "", errors.Trace(err)
-	}
-	if len(z) == 0 {
-		return "", io.EOF
-	}
-	return z[0].Member.(string), nil
-}
-
-func (r *Redis) Remain(ctx context.Context, name string) (int64, error) {
-	return r.client.ZCard(ctx, r.Key(name)).Result()
 }
 
 func (r *Redis) documentKey(collection, subset, value string) string {

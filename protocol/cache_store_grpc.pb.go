@@ -37,9 +37,6 @@ const (
 	CacheStore_Get_FullMethodName                 = "/protocol.CacheStore/Get"
 	CacheStore_Set_FullMethodName                 = "/protocol.CacheStore/Set"
 	CacheStore_Delete_FullMethodName              = "/protocol.CacheStore/Delete"
-	CacheStore_Push_FullMethodName                = "/protocol.CacheStore/Push"
-	CacheStore_Pop_FullMethodName                 = "/protocol.CacheStore/Pop"
-	CacheStore_Remain_FullMethodName              = "/protocol.CacheStore/Remain"
 	CacheStore_AddScores_FullMethodName           = "/protocol.CacheStore/AddScores"
 	CacheStore_SearchScores_FullMethodName        = "/protocol.CacheStore/SearchScores"
 	CacheStore_DeleteScores_FullMethodName        = "/protocol.CacheStore/DeleteScores"
@@ -57,9 +54,6 @@ type CacheStoreClient interface {
 	Get(ctx context.Context, in *GetRequest, opts ...grpc.CallOption) (*GetResponse, error)
 	Set(ctx context.Context, in *SetRequest, opts ...grpc.CallOption) (*SetResponse, error)
 	Delete(ctx context.Context, in *DeleteRequest, opts ...grpc.CallOption) (*DeleteResponse, error)
-	Push(ctx context.Context, in *PushRequest, opts ...grpc.CallOption) (*PushResponse, error)
-	Pop(ctx context.Context, in *PopRequest, opts ...grpc.CallOption) (*PopResponse, error)
-	Remain(ctx context.Context, in *RemainRequest, opts ...grpc.CallOption) (*RemainResponse, error)
 	AddScores(ctx context.Context, in *AddScoresRequest, opts ...grpc.CallOption) (*AddScoresResponse, error)
 	SearchScores(ctx context.Context, in *SearchScoresRequest, opts ...grpc.CallOption) (*SearchScoresResponse, error)
 	DeleteScores(ctx context.Context, in *DeleteScoresRequest, opts ...grpc.CallOption) (*DeleteScoresResponse, error)
@@ -111,36 +105,6 @@ func (c *cacheStoreClient) Delete(ctx context.Context, in *DeleteRequest, opts .
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(DeleteResponse)
 	err := c.cc.Invoke(ctx, CacheStore_Delete_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *cacheStoreClient) Push(ctx context.Context, in *PushRequest, opts ...grpc.CallOption) (*PushResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(PushResponse)
-	err := c.cc.Invoke(ctx, CacheStore_Push_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *cacheStoreClient) Pop(ctx context.Context, in *PopRequest, opts ...grpc.CallOption) (*PopResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(PopResponse)
-	err := c.cc.Invoke(ctx, CacheStore_Pop_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *cacheStoreClient) Remain(ctx context.Context, in *RemainRequest, opts ...grpc.CallOption) (*RemainResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(RemainResponse)
-	err := c.cc.Invoke(ctx, CacheStore_Remain_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -234,9 +198,6 @@ type CacheStoreServer interface {
 	Get(context.Context, *GetRequest) (*GetResponse, error)
 	Set(context.Context, *SetRequest) (*SetResponse, error)
 	Delete(context.Context, *DeleteRequest) (*DeleteResponse, error)
-	Push(context.Context, *PushRequest) (*PushResponse, error)
-	Pop(context.Context, *PopRequest) (*PopResponse, error)
-	Remain(context.Context, *RemainRequest) (*RemainResponse, error)
 	AddScores(context.Context, *AddScoresRequest) (*AddScoresResponse, error)
 	SearchScores(context.Context, *SearchScoresRequest) (*SearchScoresResponse, error)
 	DeleteScores(context.Context, *DeleteScoresRequest) (*DeleteScoresResponse, error)
@@ -265,15 +226,6 @@ func (UnimplementedCacheStoreServer) Set(context.Context, *SetRequest) (*SetResp
 }
 func (UnimplementedCacheStoreServer) Delete(context.Context, *DeleteRequest) (*DeleteResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Delete not implemented")
-}
-func (UnimplementedCacheStoreServer) Push(context.Context, *PushRequest) (*PushResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method Push not implemented")
-}
-func (UnimplementedCacheStoreServer) Pop(context.Context, *PopRequest) (*PopResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method Pop not implemented")
-}
-func (UnimplementedCacheStoreServer) Remain(context.Context, *RemainRequest) (*RemainResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method Remain not implemented")
 }
 func (UnimplementedCacheStoreServer) AddScores(context.Context, *AddScoresRequest) (*AddScoresResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AddScores not implemented")
@@ -385,60 +337,6 @@ func _CacheStore_Delete_Handler(srv interface{}, ctx context.Context, dec func(i
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(CacheStoreServer).Delete(ctx, req.(*DeleteRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _CacheStore_Push_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(PushRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(CacheStoreServer).Push(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: CacheStore_Push_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(CacheStoreServer).Push(ctx, req.(*PushRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _CacheStore_Pop_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(PopRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(CacheStoreServer).Pop(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: CacheStore_Pop_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(CacheStoreServer).Pop(ctx, req.(*PopRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _CacheStore_Remain_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RemainRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(CacheStoreServer).Remain(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: CacheStore_Remain_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(CacheStoreServer).Remain(ctx, req.(*RemainRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -584,18 +482,6 @@ var CacheStore_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Delete",
 			Handler:    _CacheStore_Delete_Handler,
-		},
-		{
-			MethodName: "Push",
-			Handler:    _CacheStore_Push_Handler,
-		},
-		{
-			MethodName: "Pop",
-			Handler:    _CacheStore_Pop_Handler,
-		},
-		{
-			MethodName: "Remain",
-			Handler:    _CacheStore_Remain_Handler,
 		},
 		{
 			MethodName: "AddScores",

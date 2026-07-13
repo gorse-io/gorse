@@ -222,10 +222,6 @@ type Database interface {
 	Get(ctx context.Context, name string) *ReturnValue
 	Delete(ctx context.Context, name string) error
 
-	Push(ctx context.Context, name, value string) error
-	Pop(ctx context.Context, name string) (string, error)
-	Remain(ctx context.Context, name string) (int64, error)
-
 	AddScores(ctx context.Context, collection, subset string, documents []Score) error
 	SearchScores(ctx context.Context, collection, subset string, query []string, begin, end int) ([]Score, error)
 	DeleteScores(ctx context.Context, collection []string, condition ScoreCondition) error

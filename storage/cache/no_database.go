@@ -58,18 +58,6 @@ func (NoDatabase) Delete(_ context.Context, _ string) error {
 	return ErrNoDatabase
 }
 
-func (NoDatabase) Push(_ context.Context, _, _ string) error {
-	return ErrNoDatabase
-}
-
-func (NoDatabase) Pop(_ context.Context, _ string) (string, error) {
-	return "", ErrNoDatabase
-}
-
-func (NoDatabase) Remain(_ context.Context, _ string) (int64, error) {
-	return 0, ErrNoDatabase
-}
-
 func (NoDatabase) AddScores(_ context.Context, _, _ string, _ []Score) error {
 	return ErrNoDatabase
 }

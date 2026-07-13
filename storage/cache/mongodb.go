@@ -16,7 +16,6 @@ package cache
 
 import (
 	"context"
-	"io"
 	"time"
 
 	"github.com/gorse-io/gorse/storage"
@@ -76,25 +75,6 @@ func (m MongoDB) Init() error {
 		if err = d.CreateCollection(ctx, m.ValuesTable()); err != nil {
 			return errors.Trace(err)
 		}
-	}
-	_, err = d.Collection(m.MessageTable()).Indexes().CreateMany(ctx, []mongo.IndexModel{
-		{
-			// update set ... where name = ? and value = ?
-			Keys: bson.D{
-				{"name", 1},
-				{"value", 1},
-			},
-		},
-		{
-			// select * from messages where name = ? order by timestamp asc limit 1
-			Keys: bson.D{
-				{"name", 1},
-				{"timestamp", 1},
-			},
-		},
-	})
-	if err != nil {
-		return errors.Trace(err)
 	}
 	_, err = d.Collection(m.DocumentTable()).Indexes().CreateMany(ctx, []mongo.IndexModel{
 		{
@@ -210,35 +190,6 @@ func (m MongoDB) Delete(ctx context.Context, name string) error {
 	c := m.client.Database(m.dbName).Collection(m.ValuesTable())
 	_, err := c.DeleteOne(ctx, bson.M{"_id": bson.M{"$eq": name}})
 	return errors.Trace(err)
-}
-
-func (m MongoDB) Push(ctx context.Context, name, value string) error {
-	_, err := m.client.Database(m.dbName).Collection(m.MessageTable()).UpdateOne(ctx,
-		bson.M{"name": name, "value": value},
-		bson.M{"$set": bson.M{"name": name, "value": value, "timestamp": time.Now().UnixNano()}},
-		options.Update().SetUpsert(true))
-	return err
-}
-
-func (m MongoDB) Pop(ctx context.Context, name string) (string, error) {
-	result := m.client.Database(m.dbName).Collection(m.MessageTable()).FindOneAndDelete(ctx,
-		bson.M{"name": name}, options.FindOneAndDelete().SetSort(bson.M{"timestamp": 1}))
-	if err := result.Err(); err == mongo.ErrNoDocuments {
-		return "", io.EOF
-	} else if err != nil {
-		return "", errors.Trace(err)
-	}
-	var b bson.M
-	if err := result.Decode(&b); err != nil {
-		return "", errors.Trace(err)
-	}
-	return b["value"].(string), nil
-}
-
-func (m MongoDB) Remain(ctx context.Context, name string) (int64, error) {
-	return m.client.Database(m.dbName).Collection(m.MessageTable()).CountDocuments(ctx, bson.M{
-		"name": name,
-	})
 }
 
 func (m MongoDB) AddScores(ctx context.Context, collection, subset string, documents []Score) error {

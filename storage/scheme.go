@@ -148,10 +148,6 @@ func (tp TablePrefix) SetsTable() string {
 	return string(tp) + "sets"
 }
 
-func (tp TablePrefix) MessageTable() string {
-	return string(tp) + "message"
-}
-
 func (tp TablePrefix) DocumentTable() string {
 	return string(tp) + "documents"
 }
