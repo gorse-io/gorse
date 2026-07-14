@@ -140,8 +140,8 @@ func NewReturnValue(value string, exists bool) *ReturnValue {
 	return &ReturnValue{value: value, exists: exists}
 }
 
-// NewReturnValueWithError creates a return value containing an error.
-func NewReturnValueWithError(err error) *ReturnValue {
+// NewReturnError creates a return value containing an error.
+func NewReturnError(err error) *ReturnValue {
 	return &ReturnValue{err: err}
 }
 
