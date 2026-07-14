@@ -394,8 +394,8 @@ github.com/gorilla/websocket v1.5.0 h1:PPwGk2jz7EePpoHN/+ClbZu8SPxiqlu12wZP/3sWm
 github.com/gorilla/websocket v1.5.0/go.mod h1:YR8l580nyteQvAITg2hZ9XVh4b55+EU/adAjf1fMHhE=
 github.com/gorse-io/clickhouse v0.3.3-0.20260331225025-ab309f55941d h1:ehE+4aaZ1kU2x6fB/OtsgAfZ8UOnB6bFygI4URyolVs=
 github.com/gorse-io/clickhouse v0.3.3-0.20260331225025-ab309f55941d/go.mod h1:6aZpl8cJgPkqNVeZiEgQJ+yLCC0NyDfv7gF/3/pJywU=
-github.com/gorse-io/dashboard v0.0.0-20260614030520-940c6f9c303b h1:PoauwfuuZH3X+STWxjAZ6imImdhgt6jHtTyMfl0/M1Y=
-github.com/gorse-io/dashboard v0.0.0-20260614030520-940c6f9c303b/go.mod h1:qz7Y16kcH61Qxr6uQtq7a1FbSujErfr020SZH1SVX3g=
+github.com/gorse-io/dashboard v0.0.0-20260707154127-4d85e8b2b261 h1:KBM1V2vhe2Fq4dhrFtj1u7E7Cmg0V8RNRlXnFoOQnTE=
+github.com/gorse-io/dashboard v0.0.0-20260707154127-4d85e8b2b261/go.mod h1:qz7Y16kcH61Qxr6uQtq7a1FbSujErfr020SZH1SVX3g=
 github.com/gorse-io/goat v0.2.1-0.20260618151728-201cbcf325ad h1:HESEie1ivHg8yI9Qnej4Cu+AP8w8gQ9gqpYcnV5zC7Q=
 github.com/gorse-io/goat v0.2.1-0.20260618151728-201cbcf325ad/go.mod h1:NjwKvGIyhFveMjnUdYrngJYvYLqK0aK7Qdp7QJWkBLo=
 github.com/gorse-io/gorse-go v0.5.0-alpha.3.0.20260613082921-062d740c10a2 h1:tx7eKfedcqWXNGzO6T5CG8asT5UnwHBkdYKKbZS4z7E=
