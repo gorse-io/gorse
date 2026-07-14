@@ -236,3 +236,24 @@ func TestFactorizationMachines_Classification_Synthesis(t *testing.T) {
 		fitConfig.Jobs,
 	), 4)
 }
+
+func TestFactorizationMachines_NoEmbeddings(t *testing.T) {
+	dataSet := newSynthesisDataset()
+	dataSet.ItemEmbeddingIndex = dataset.NewMapIndex()
+	dataSet.ItemEmbeddingDimension = nil
+	dataSet.ItemEmbeddings = nil
+
+	m := NewAFM(nil)
+	m.Init(dataSet)
+
+	buf := bytes.NewBuffer(nil)
+	assert.NoError(t, MarshalModel(buf, m))
+	clone, err := UnmarshalModel(buf)
+	assert.NoError(t, err)
+
+	batch := clone.(BatchInference)
+	inputs := []lo.Tuple4[string, string, []Label, []Label]{{A: "u0", B: "i0"}}
+	assert.Equal(t,
+		batch.BatchPredict(inputs, [][]Embedding{{}}, 1),
+		batch.BatchPredict(inputs, [][]Embedding{{{Name: "unexpected", Value: []uint16{1}}}}, 1))
+}

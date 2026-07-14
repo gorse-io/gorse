@@ -207,6 +207,9 @@ func (fm *AFM) BatchPredict(inputs []lo.Tuple4[string, string, []Label, []Label]
 	e := make([][][]uint16, len(inputs))
 	for i := range inputs {
 		e[i] = make([][]uint16, len(fm.embeddingDim))
+		if fm.embeddingIndex == nil {
+			continue
+		}
 		for _, embedding := range embeddings[i] {
 			itemIndex := fm.embeddingIndex.ToNumber(embedding.Name)
 			if itemIndex == dataset.NotId {
