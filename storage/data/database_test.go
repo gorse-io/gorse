@@ -1032,6 +1032,7 @@ func (suite *baseTestSuite) TestSearch() {
 	suite.ElementsMatch([]string{"gorse-io:gorse"}, searchItemIDs("gorse-io:gorse", 10))
 	suite.ElementsMatch([]string{"running-shoes", "trail-watch"}, searchItemIDs("running", 10))
 	suite.ElementsMatch([]string{"coffee-grinder"}, searchItemIDs("coffee", 10))
+	suite.ElementsMatch([]string{"running-shoes", "trail-watch", "coffee-grinder"}, searchItemIDs("running coffee", 10))
 	suite.ElementsMatch([]string{"trail-watch"}, searchItemIDs("electronics", 10))
 	suite.ElementsMatch([]string{"running-shoes", "coffee-grinder"}, searchItemIDs("acme", 10))
 	suite.Len(searchItemIDs("running", 1), 1)

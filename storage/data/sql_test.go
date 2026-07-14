@@ -75,6 +75,26 @@ func (suite *MySQLTestSuite) TestInit() {
 	assertQuery(suite.T(), connection, "SELECT @@sql_mode", "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION")
 }
 
+func TestPostgresAnyTokenSearchQuery(t *testing.T) {
+	query, args := postgresAnyTokenSearchQuery(" running  coffee ")
+	assert.Equal(t, "plainto_tsquery('simple', ?) || plainto_tsquery('simple', ?)", query)
+	assert.Equal(t, []any{"running", "coffee"}, args)
+
+	query, args = postgresAnyTokenSearchQuery(`foo -bar OR "baz`)
+	assert.Equal(t, "plainto_tsquery('simple', ?) || plainto_tsquery('simple', ?) || plainto_tsquery('simple', ?) || plainto_tsquery('simple', ?)", query)
+	assert.Equal(t, []any{"foo", "-bar", "OR", `"baz`}, args)
+
+	query, args = postgresAnyTokenSearchQuery("  ")
+	assert.Empty(t, query)
+	assert.Empty(t, args)
+}
+
+func TestSQLiteAnyTokenSearchQuery(t *testing.T) {
+	assert.Equal(t, `"running" OR "coffee"`, sqliteAnyTokenSearchQuery(" running  coffee "))
+	assert.Equal(t, `"gorse-io:gorse"`, sqliteAnyTokenSearchQuery("gorse-io:gorse"))
+	assert.Empty(t, sqliteAnyTokenSearchQuery("  "))
+}
+
 func TestMySQL(t *testing.T) {
 	if mySqlDSN == "" {
 		t.Skip("MYSQL_URI is not set, skipping MySQL test")

@@ -388,10 +388,10 @@ func (s *CLITestSuite) TestSearchItems() {
 	s.Require().NoError(err)
 
 	lines := strings.Split(strings.TrimSpace(out), "\n")
-	s.Require().Len(lines, 2)
+	s.Require().Len(lines, 3)
 	s.Require().Regexp(`^ITEM-ID\s+COMMENT\s+CATEGORIES\s+IS-HIDDEN\s+TIMESTAMP\s+LABELS$`, lines[0])
 	s.Require().Regexp(`^item-1\s+raw item\s+\["news"\]\s+false\s+2026-01-01T01:00:00Z\s+\{"embedding":"\[0\.1, 0\.2, 0\.3, \.\.\.\] \(10 values\)"\}$`, lines[1])
-	s.Require().NotContains(out, "listed item")
+	s.Require().Regexp(`^item-2\s+listed item\s+\["books"\]\s+false\s+2026-01-01T02:00:00Z\s+\{"description":"`+strings.Repeat("x", 120)+`"\}$`, lines[2])
 	s.Require().NotContains(out, "┌")
 	s.Require().NotContains(out, "│")
 	s.Require().NotContains(out, "└")
