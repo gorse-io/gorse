@@ -36,7 +36,7 @@ services:
   #     - mongo_data:/data/db
 
   # clickhouse:
-  #   image: clickhouse/clickhouse-server:22
+  #   image: clickhouse/clickhouse-server:26.2
   #   ports:
   #     - 8123:8123
   #   environment:
