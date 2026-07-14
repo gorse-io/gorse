@@ -107,6 +107,16 @@ type Value struct {
 	value string
 }
 
+// Name returns the name of the value.
+func (v Value) Name() string {
+	return v.name
+}
+
+// Value returns the raw string representation of the value.
+func (v Value) Value() string {
+	return v.value
+}
+
 func String(name, value string) Value {
 	return Value{name: name, value: value}
 }
@@ -123,6 +133,16 @@ type ReturnValue struct {
 	value  string
 	err    error
 	exists bool
+}
+
+// NewReturnValue creates a return value with the specified existence state.
+func NewReturnValue(value string, exists bool) *ReturnValue {
+	return &ReturnValue{value: value, exists: exists}
+}
+
+// NewReturnValueWithError creates a return value containing an error.
+func NewReturnValueWithError(err error) *ReturnValue {
+	return &ReturnValue{err: err}
 }
 
 func (r *ReturnValue) String() (string, error) {
