@@ -770,16 +770,13 @@ func sqliteSearchColumn(column, qualifier string) (string, bool) {
 	return "", false
 }
 
-func sqlitePlainTextSearchQuery(query string) string {
+func sqliteAnyTokenSearchQuery(query string) string {
 	terms := strings.Fields(query)
-	if len(terms) == 0 {
-		return `""`
-	}
 	quotedTerms := make([]string, len(terms))
 	for i, term := range terms {
 		quotedTerms[i] = `"` + strings.ReplaceAll(term, `"`, `""`) + `"`
 	}
-	return strings.Join(quotedTerms, " ")
+	return strings.Join(quotedTerms, " OR ")
 }
 
 func (d *SQLDatabase) dropMySQLIndexIfExists(tableName, indexName string) error {
@@ -970,11 +967,19 @@ func (d *SQLDatabase) SearchItems(ctx context.Context, query string, n int) ([]S
 	var tx *gorm.DB
 	switch d.driver {
 	case Postgres:
+		terms := strings.Fields(query)
+		queries := make([]string, len(terms))
+		args := make([]any, len(terms))
+		for i, term := range terms {
+			queries[i] = "plainto_tsquery('simple', ?)"
+			args[i] = term
+		}
+		searchQuery := strings.Join(queries, " || ")
 		tx = d.gormDB.WithContext(ctx).
 			Table(d.ItemsTable()).
-			Select(fmt.Sprintf("item_id, is_hidden, categories, time_stamp, labels, comment, ts_rank(%s, plainto_tsquery('simple', ?)) AS score", d.searchVector), query).
-			Where(fmt.Sprintf("%s @@ plainto_tsquery('simple', ?)", d.searchVector), query).
-			Order(clause.Expr{SQL: fmt.Sprintf("ts_rank(%s, plainto_tsquery('simple', ?)) DESC", d.searchVector), Vars: []any{query}}).
+			Select(fmt.Sprintf("item_id, is_hidden, categories, time_stamp, labels, comment, ts_rank(%s, %s) AS score", d.searchVector, searchQuery), args...).
+			Where(fmt.Sprintf("%s @@ (%s)", d.searchVector, searchQuery), args...).
+			Order(clause.Expr{SQL: fmt.Sprintf("ts_rank(%s, %s) DESC", d.searchVector, searchQuery), Vars: args}).
 			Limit(n)
 	case MySQL:
 		tx = d.gormDB.WithContext(ctx).
@@ -984,7 +989,7 @@ func (d *SQLDatabase) SearchItems(ctx context.Context, query string, n int) ([]S
 			Order(clause.Expr{SQL: fmt.Sprintf("MATCH(%s) AGAINST (? IN NATURAL LANGUAGE MODE) DESC", mysqlSearchDocumentColumn), Vars: []any{query}}).
 			Limit(n)
 	case SQLite:
-		query = sqlitePlainTextSearchQuery(query)
+		query = sqliteAnyTokenSearchQuery(query)
 		tx = d.gormDB.WithContext(ctx).
 			Table(fmt.Sprintf("%s AS items", d.ItemsTable())).
 			Select(fmt.Sprintf("items.item_id, items.is_hidden, items.categories, items.time_stamp, items.labels, items.comment, -bm25(%s) AS score", searchIndexName)).
