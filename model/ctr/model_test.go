@@ -237,7 +237,7 @@ func TestFactorizationMachines_Classification_Synthesis(t *testing.T) {
 	), 4)
 }
 
-func TestAFMBatchPredictIgnoreEmbeddingsWithoutIndex(t *testing.T) {
+func TestFactorizationMachines_NoEmbeddings(t *testing.T) {
 	dataSet := newSynthesisDataset()
 	dataSet.ItemEmbeddingIndex = dataset.NewMapIndex()
 	dataSet.ItemEmbeddingDimension = nil
