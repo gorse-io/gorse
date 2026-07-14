@@ -54,7 +54,7 @@ jobs:
           --health-retries 5
 
       clickhouse:
-        image: clickhouse/clickhouse-server:23
+        image: clickhouse/clickhouse-server:26.2
         ports:
           - 8123
         options: >-

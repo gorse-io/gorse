@@ -32,7 +32,7 @@ services:
       MONGO_INITDB_ROOT_PASSWORD: password
 
   clickhouse:
-    image: clickhouse/clickhouse-server:23
+    image: clickhouse/clickhouse-server:26.2
     ports:
       - 8123:8123
   

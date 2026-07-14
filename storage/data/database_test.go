@@ -962,9 +962,6 @@ func (suite *baseTestSuite) TestCollation() {
 }
 
 func (suite *baseTestSuite) TestSearch() {
-	if suite.isClickHouse() {
-		suite.T().Skip("ClickHouse doesn't support item search")
-	}
 	ctx := suite.T().Context()
 	err := suite.Database.Reconcile(config.SearchConfig{Columns: []string{
 		"item.ItemId",

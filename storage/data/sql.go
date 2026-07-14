@@ -253,11 +253,12 @@ type SQLDatabase struct {
 }
 
 const (
-	searchIndexName               = "gorse_search_index"
-	mysqlSearchDocumentColumn     = "gorse_search_document"
-	sqliteSearchInsertTriggerName = searchIndexName + "_insert"
-	sqliteSearchUpdateTriggerName = searchIndexName + "_update"
-	sqliteSearchDeleteTriggerName = searchIndexName + "_delete"
+	searchIndexName                = "gorse_search_index"
+	mysqlSearchDocumentColumn      = "gorse_search_document"
+	clickHouseSearchDocumentColumn = "gorse_search_document"
+	sqliteSearchInsertTriggerName  = searchIndexName + "_insert"
+	sqliteSearchUpdateTriggerName  = searchIndexName + "_update"
+	sqliteSearchDeleteTriggerName  = searchIndexName + "_delete"
 )
 
 // Optimize is used by ClickHouse only.
@@ -528,6 +529,33 @@ func (d *SQLDatabase) Reconcile(searchConfig config.SearchConfig) error {
 		if err = d.gormDB.Exec(fmt.Sprintf("CREATE FULLTEXT INDEX %s ON %s(%s)", searchIndexName, d.ItemsTable(), mysqlSearchDocumentColumn)).Error; err != nil {
 			return errors.Trace(err)
 		}
+	case ClickHouse:
+		searchDocument := buildClickHouseSearchDocument(searchConfig.Columns)
+		if searchDocument == "" {
+			return nil
+		}
+		matched, err := d.clickHouseSearchIndexMatches(searchDocument)
+		if err != nil {
+			return errors.Trace(err)
+		}
+		if matched {
+			return nil
+		}
+		if err = d.gormDB.Exec(fmt.Sprintf("ALTER TABLE %s DROP INDEX IF EXISTS %s", d.ItemsTable(), searchIndexName)).Error; err != nil {
+			return errors.Trace(err)
+		}
+		if err = d.gormDB.Exec(fmt.Sprintf("ALTER TABLE %s DROP COLUMN IF EXISTS %s", d.ItemsTable(), clickHouseSearchDocumentColumn)).Error; err != nil {
+			return errors.Trace(err)
+		}
+		if err = d.gormDB.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s String MATERIALIZED %s", d.ItemsTable(), clickHouseSearchDocumentColumn, searchDocument)).Error; err != nil {
+			return errors.Trace(err)
+		}
+		if err = d.gormDB.Exec(fmt.Sprintf("ALTER TABLE %s ADD INDEX %s %s TYPE text(tokenizer = splitByNonAlpha, preprocessor = lowerUTF8(%s))", d.ItemsTable(), searchIndexName, clickHouseSearchDocumentColumn, clickHouseSearchDocumentColumn)).Error; err != nil {
+			return errors.Trace(err)
+		}
+		if err = d.gormDB.Exec(fmt.Sprintf("ALTER TABLE %s MATERIALIZE INDEX %s SETTINGS mutations_sync = 2", d.ItemsTable(), searchIndexName)).Error; err != nil {
+			return errors.Trace(err)
+		}
 	case SQLite:
 		searchDocument := buildSQLiteSearchDocument(searchConfig.Columns, "")
 		newSearchDocument := buildSQLiteSearchDocument(searchConfig.Columns, "new")
@@ -581,6 +609,28 @@ func (d *SQLDatabase) postgresSearchIndexMatches(searchVector string) (bool, err
 		return false, nil
 	}
 	return searchExpressionContainsAll(indexDef, strings.Split(searchVector, " || ")), nil
+}
+
+func (d *SQLDatabase) clickHouseSearchIndexMatches(searchDocument string) (bool, error) {
+	var column struct {
+		DefaultKind       string `gorm:"column:default_kind"`
+		DefaultExpression string `gorm:"column:default_expression"`
+	}
+	if err := d.gormDB.Raw("SELECT default_kind, default_expression FROM system.columns WHERE database = currentDatabase() AND table = ? AND name = ?", d.ItemsTable(), clickHouseSearchDocumentColumn).Scan(&column).Error; err != nil {
+		return false, errors.Trace(err)
+	}
+	if column.DefaultKind != "MATERIALIZED" || normalizeSearchIndexExpression(column.DefaultExpression) != normalizeSearchIndexExpression(searchDocument) {
+		return false, nil
+	}
+	var index struct {
+		Expression string `gorm:"column:expr"`
+		Type       string `gorm:"column:type_full"`
+	}
+	if err := d.gormDB.Raw("SELECT expr, type_full FROM system.data_skipping_indices WHERE database = currentDatabase() AND table = ? AND name = ?", d.ItemsTable(), searchIndexName).Scan(&index).Error; err != nil {
+		return false, errors.Trace(err)
+	}
+	expectedType := fmt.Sprintf("text(tokenizer = splitByNonAlpha, preprocessor = lowerUTF8(%s))", clickHouseSearchDocumentColumn)
+	return index.Expression == clickHouseSearchDocumentColumn && normalizeSearchIndexExpression(index.Type) == normalizeSearchIndexExpression(expectedType), nil
 }
 
 func (d *SQLDatabase) mysqlSearchIndexMatches(tableName, searchDocument string) (bool, error) {
@@ -690,6 +740,47 @@ func isPostgresJSONPathElement(s string) bool {
 		return false
 	}
 	return true
+}
+
+func buildClickHouseSearchDocument(columns []string) string {
+	searchColumns := make([]string, 0, len(columns))
+	for _, column := range columns {
+		searchColumn, ok := clickHouseSearchColumn(column)
+		if !ok {
+			continue
+		}
+		searchColumns = append(searchColumns, searchColumn)
+	}
+	if len(searchColumns) == 0 {
+		return ""
+	}
+	sort.Strings(searchColumns)
+	if len(searchColumns) == 1 {
+		return searchColumns[0]
+	}
+	return fmt.Sprintf("concat(%s)", strings.Join(searchColumns, ", ' ', "))
+}
+
+func clickHouseSearchColumn(column string) (string, bool) {
+	switch column {
+	case "item.ItemId":
+		return "item_id", true
+	case "item.Categories":
+		return "categories", true
+	case "item.Comment":
+		return "comment", true
+	case "item.Labels":
+		return "labels", true
+	default:
+		const labelsPrefix = "item.Labels."
+		if len(column) > len(labelsPrefix) && strings.HasPrefix(column, labelsPrefix) {
+			path := strings.Split(column[len(labelsPrefix):], ".")
+			if lo.EveryBy(path, isPostgresJSONPathElement) {
+				return fmt.Sprintf("JSONExtractRaw(labels, '%s')", strings.Join(path, "', '")), true
+			}
+		}
+	}
+	return "", false
 }
 
 func buildMySQLSearchDocument(columns []string) string {
@@ -992,6 +1083,13 @@ func (d *SQLDatabase) SearchItems(ctx context.Context, query string, n int) ([]S
 			Select(fmt.Sprintf("item_id, is_hidden, categories, time_stamp, labels, comment, MATCH(%s) AGAINST (? IN NATURAL LANGUAGE MODE) AS score", mysqlSearchDocumentColumn), query).
 			Where(fmt.Sprintf("MATCH(%s) AGAINST (? IN NATURAL LANGUAGE MODE)", mysqlSearchDocumentColumn), query).
 			Order(clause.Expr{SQL: fmt.Sprintf("MATCH(%s) AGAINST (? IN NATURAL LANGUAGE MODE) DESC", mysqlSearchDocumentColumn), Vars: []any{query}}).
+			Limit(n)
+	case ClickHouse:
+		tx = d.gormDB.WithContext(ctx).
+			Table(d.ItemsTable()+" FINAL").
+			Select("item_id, is_hidden, categories, time_stamp, labels, comment, toFloat64(1) AS score").
+			Where(fmt.Sprintf("hasAnyTokens(%s, ?)", clickHouseSearchDocumentColumn), query).
+			Order("item_id").
 			Limit(n)
 	case SQLite:
 		query = sqliteAnyTokenSearchQuery(query)
