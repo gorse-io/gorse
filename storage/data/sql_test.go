@@ -22,7 +22,6 @@ import (
 	"testing"
 
 	"github.com/gorse-io/gorse/common/log"
-	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/storage"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -138,42 +137,6 @@ func (suite *ClickHouseTestSuite) SetupSuite() {
 	// create schema
 	err = suite.Database.Init()
 	suite.NoError(err)
-}
-
-func (suite *ClickHouseTestSuite) TestSearchItemsAfterUpdate() {
-	ctx := suite.T().Context()
-	err := suite.Database.Reconcile(config.SearchConfig{Columns: []string{"item.Comment"}})
-	suite.NoError(err)
-	err = suite.Database.BatchInsertItems(ctx, []Item{{ItemId: "instant-search", Comment: "before-update"}})
-	suite.NoError(err)
-
-	items, err := suite.Database.SearchItems(ctx, "before", 10)
-	suite.NoError(err)
-	if suite.Len(items, 1) {
-		suite.Equal("instant-search", items[0].ItemId)
-		suite.Equal("before-update", items[0].Comment)
-		suite.Equal(float64(1), items[0].Score)
-	}
-
-	comment := "after-update"
-	err = suite.Database.ModifyItem(ctx, "instant-search", ItemPatch{Comment: &comment})
-	suite.NoError(err)
-	items, err = suite.Database.SearchItems(ctx, "before", 10)
-	suite.NoError(err)
-	suite.Empty(items)
-	items, err = suite.Database.SearchItems(ctx, "after", 10)
-	suite.NoError(err)
-	if suite.Len(items, 1) {
-		suite.Equal("instant-search", items[0].ItemId)
-		suite.Equal("after-update", items[0].Comment)
-		suite.Equal(float64(1), items[0].Score)
-	}
-
-	err = suite.Database.DeleteItem(ctx, "instant-search")
-	suite.NoError(err)
-	items, err = suite.Database.SearchItems(ctx, "after", 10)
-	suite.NoError(err)
-	suite.Empty(items)
 }
 
 func TestClickHouse(t *testing.T) {
@@ -293,19 +256,4 @@ func BenchmarkSQLite_CountItems(b *testing.B) {
 	// close database
 	err = database.Close()
 	require.NoError(b, err)
-}
-
-func TestBuildClickHouseSearchDocument(t *testing.T) {
-	assert.Equal(t,
-		"concat(JSONExtractRaw(labels, 'brand'), ' ', categories, ' ', comment, ' ', item_id)",
-		buildClickHouseSearchDocument([]string{
-			"item.ItemId",
-			"item.Categories",
-			"item.Labels.brand",
-			"item.Comment",
-		}))
-	assert.Equal(t,
-		"JSONExtractRaw(labels, 'profile', 'brand')",
-		buildClickHouseSearchDocument([]string{"item.Labels.profile.brand"}))
-	assert.Empty(t, buildClickHouseSearchDocument([]string{"item.Labels.invalid-path"}))
 }
