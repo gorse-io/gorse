@@ -1098,6 +1098,15 @@ func (suite *ServerTestSuite) TestUserToUser() {
 
 func (suite *ServerTestSuite) TestDeleteFeedback() {
 	t := suite.T()
+	// Get nonexistent typed feedback.
+	apitest.New().
+		Handler(suite.handler).
+		Get("/api/feedback/missing/missing/missing").
+		Header("X-API-Key", apiKey).
+		Expect(t).
+		Status(http.StatusOK).
+		Body("{}").
+		End()
 	// Insert feedback
 	feedback := []data.Feedback{
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "type1", UserId: "2", ItemId: "3"}},
