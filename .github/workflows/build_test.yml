@@ -54,9 +54,12 @@ jobs:
           --health-retries 5
 
       clickhouse:
-        image: clickhouse/clickhouse-server:23
+        image: clickhouse/clickhouse-server:26.2
         ports:
           - 8123
+        env:
+          CLICKHOUSE_USER: gorse
+          CLICKHOUSE_PASSWORD: gorse_pass
         options: >-
           --health-cmd="clickhouse-client --query 'SELECT 1'" 
           --health-interval=10s 
@@ -130,7 +133,7 @@ jobs:
         # MongoDB
         MONGO_URI: mongodb://root:password@localhost:${{ job.services.mongo.ports[27017] }}/
         # ClickHouse
-        CLICKHOUSE_URI: clickhouse://localhost:${{ job.services.clickhouse.ports[8123] }}/
+        CLICKHOUSE_URI: clickhouse://gorse:gorse_pass@localhost:${{ job.services.clickhouse.ports[8123] }}/
         # Redis
         REDIS_URI: redis://localhost:${{ job.services.redis.ports[6379] }}/
         # S3
