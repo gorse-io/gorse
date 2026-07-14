@@ -14,7 +14,7 @@ services:
       - mysql_data:/var/lib/mysql
 
   # postgres:
-  #   image: postgres:11
+  #   image: postgres:10.0
   #   ports:
   #     - 5432:5432
   #   environment:
