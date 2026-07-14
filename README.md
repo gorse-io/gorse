@@ -2,11 +2,11 @@
 
 <img width=160 src="assets/gorse.png"/>
 
-![](https://img.shields.io/github/go-mod/go-version/zhenghaoz/gorse)
-[![build](https://github.com/zhenghaoz/gorse/workflows/build/badge.svg)](https://github.com/zhenghaoz/gorse/actions?query=workflow%3Abuild)
+![](https://img.shields.io/github/go-mod/go-version/gorse-io/gorse)
+[![build](https://github.com/gorse-io/gorse/workflows/build/badge.svg)](https://github.com/gorse-io/gorse/actions?query=workflow%3Abuild)
 [![codecov](https://codecov.io/gh/gorse-io/gorse/branch/master/graph/badge.svg)](https://codecov.io/gh/gorse-io/gorse)
-[![Go Report Card](https://goreportcard.com/badge/github.com/zhenghaoz/gorse)](https://goreportcard.com/report/github.com/zhenghaoz/gorse)
-[![GoDoc](https://godoc.org/github.com/zhenghaoz/gorse?status.svg)](https://godoc.org/github.com/zhenghaoz/gorse)
+[![Go Report Card](https://goreportcard.com/badge/github.com/gorse-io/gorse)](https://goreportcard.com/report/github.com/gorse-io/gorse)
+[![GoDoc](https://godoc.org/github.com/gorse-io/gorse?status.svg)](https://godoc.org/github.com/gorse-io/gorse)
 [![Discord](https://img.shields.io/discord/830635934210588743)](https://discord.gg/x6gAtNNkAE)
 [![Twitter Follow](https://img.shields.io/twitter/follow/gorse_io?label=Follow&style=social)](https://twitter.com/gorse_io)
 
@@ -108,8 +108,8 @@ In addition, the administrator can perform system monitoring, data import and ex
 
 ## Contributors
 
-<a href="https://github.com/zhenghaoz/gorse/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=zhenghaoz/gorse" />
+<a href="https://github.com/gorse-io/gorse/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=gorse-io/gorse" />
 </a>
 
 Any contribution is appreciated: report a bug, give advice or create a pull request. Read [CONTRIBUTING.md](CONTRIBUTING.md) for more information.
