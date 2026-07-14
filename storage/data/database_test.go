@@ -1035,6 +1035,9 @@ func (suite *baseTestSuite) TestSearch() {
 	suite.ElementsMatch([]string{"running-shoes", "trail-watch", "coffee-grinder"}, searchItemIDs("running coffee", 10))
 	suite.ElementsMatch([]string{"trail-watch"}, searchItemIDs("electronics", 10))
 	suite.ElementsMatch([]string{"running-shoes", "coffee-grinder"}, searchItemIDs("acme", 10))
+	if database, ok := suite.Database.(*SQLDatabase); ok && (database.driver == Postgres || database.driver == SQLite) {
+		suite.Empty(searchItemIDs("  ", 10))
+	}
 	suite.Len(searchItemIDs("running", 1), 1)
 	result, err := suite.Database.SearchItems(ctx, "coffee", 10)
 	suite.NoError(err)
