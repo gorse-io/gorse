@@ -1201,6 +1201,7 @@ func (s *RestServer) modifyUser(request *restful.Request, response *restful.Resp
 	}
 	// insert modify timestamp
 	if err := s.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastModifyUserTime, userId), time.Now())); err != nil {
+		InternalServerError(response, err)
 		return
 	}
 	Ok(response, Success{RowAffected: 1})
@@ -1544,6 +1545,7 @@ func (s *RestServer) modifyItem(request *restful.Request, response *restful.Resp
 	}
 	// insert modify timestamp
 	if err := s.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastModifyItemTime, itemId), time.Now())); err != nil {
+		InternalServerError(response, err)
 		return
 	}
 	Ok(response, Success{RowAffected: 1})

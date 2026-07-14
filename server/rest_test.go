@@ -719,6 +719,38 @@ func (suite *ServerTestSuite) TestQuota() {
 		End()
 }
 
+func (suite *ServerTestSuite) TestModifyCacheError() {
+	t := suite.T()
+	ctx := t.Context()
+	err := suite.DataClient.BatchInsertUsers(ctx, []data.User{{UserId: "user"}})
+	suite.NoError(err)
+	err = suite.DataClient.BatchInsertItems(ctx, []data.Item{{ItemId: "item"}})
+	suite.NoError(err)
+
+	cacheClient := suite.CacheClient
+	suite.CacheClient = cache.NoDatabase{}
+	defer func() {
+		suite.CacheClient = cacheClient
+	}()
+
+	apitest.New().
+		Handler(suite.handler).
+		Patch("/api/user/user").
+		Header("X-API-Key", apiKey).
+		JSON(data.UserPatch{Comment: new("modified")}).
+		Expect(t).
+		Status(http.StatusInternalServerError).
+		End()
+	apitest.New().
+		Handler(suite.handler).
+		Patch("/api/item/item").
+		Header("X-API-Key", apiKey).
+		JSON(data.ItemPatch{Comment: new("modified")}).
+		Expect(t).
+		Status(http.StatusInternalServerError).
+		End()
+}
+
 func (suite *ServerTestSuite) TestSearchItems() {
 	t := suite.T()
 
