@@ -31,10 +31,18 @@ type AdminClientTestSuite struct {
 
 func (suite *AdminClientTestSuite) SetupSuite() {
 	suite.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		suite.Equal("/api/dashboard/categories", r.URL.Path)
 		suite.Equal("secret", r.Header.Get("X-Api-Key"))
 		w.Header().Set("Content-Type", "application/json")
-		_, err := w.Write([]byte(`["news","tech"]`))
+		var response string
+		switch r.URL.Path {
+		case "/api/dashboard/categories":
+			response = `["news","tech"]`
+		case "/api/user/alice":
+			response = `{"UserId":"alice"}`
+		default:
+			suite.Fail("unexpected request path", r.URL.Path)
+		}
+		_, err := w.Write([]byte(response))
 		suite.NoError(err)
 	}))
 	suite.client = client.NewAdminClient(suite.server.URL, "secret")
@@ -48,6 +56,12 @@ func (suite *AdminClientTestSuite) TestGetCategories() {
 	categories, err := suite.client.GetCategories()
 	suite.NoError(err)
 	suite.Equal([]string{"news", "tech"}, categories)
+}
+
+func (suite *AdminClientTestSuite) TestGetUser() {
+	user, err := suite.client.GetUser(suite.T().Context(), "alice")
+	suite.NoError(err)
+	suite.Equal("alice", user.UserId)
 }
 
 func TestAdminClient(t *testing.T) {

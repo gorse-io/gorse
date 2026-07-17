@@ -22,10 +22,12 @@ import (
 	"time"
 
 	"github.com/go-resty/resty/v2"
+	client "github.com/gorse-io/gorse-go"
 )
 
 // AdminClient is a client for the Gorse admin API.
 type AdminClient struct {
+	*client.GorseClient
 	client *resty.Client
 }
 
@@ -121,10 +123,14 @@ type DumpStats struct {
 
 // NewAdminClient creates a new client for the Gorse admin API.
 func NewAdminClient(endpoint, apiKey string) *AdminClient {
-	client := resty.New()
-	client.SetBaseURL(strings.TrimRight(endpoint, "/") + "/api")
-	client.SetHeader("X-Api-Key", apiKey)
-	return &AdminClient{client: client}
+	endpoint = strings.TrimRight(endpoint, "/")
+	adminClient := resty.New()
+	adminClient.SetBaseURL(endpoint + "/api")
+	adminClient.SetHeader("X-Api-Key", apiKey)
+	return &AdminClient{
+		GorseClient: client.NewGorseClient(endpoint, apiKey),
+		client:      adminClient,
+	}
 }
 
 func (c *AdminClient) GetCluster() ([]Node, error) {
