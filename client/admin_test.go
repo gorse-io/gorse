@@ -20,20 +20,36 @@ import (
 	"testing"
 
 	"github.com/gorse-io/gorse/client"
-	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/suite"
 )
 
-func TestAdminClient(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		require.Equal(t, "/api/dashboard/categories", r.URL.Path)
-		require.Equal(t, "secret", r.Header.Get("X-Api-Key"))
+type AdminClientTestSuite struct {
+	suite.Suite
+	client *client.AdminClient
+	server *httptest.Server
+}
+
+func (suite *AdminClientTestSuite) SetupSuite() {
+	suite.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		suite.Equal("/api/dashboard/categories", r.URL.Path)
+		suite.Equal("secret", r.Header.Get("X-Api-Key"))
 		w.Header().Set("Content-Type", "application/json")
 		_, err := w.Write([]byte(`["news","tech"]`))
-		require.NoError(t, err)
+		suite.NoError(err)
 	}))
-	defer server.Close()
+	suite.client = client.NewAdminClient(suite.server.URL, "secret")
+}
 
-	categories, err := client.NewAdminClient(server.URL, "secret").GetCategories()
-	require.NoError(t, err)
-	require.Equal(t, []string{"news", "tech"}, categories)
+func (suite *AdminClientTestSuite) TearDownSuite() {
+	suite.server.Close()
+}
+
+func (suite *AdminClientTestSuite) TestGetCategories() {
+	categories, err := suite.client.GetCategories()
+	suite.NoError(err)
+	suite.Equal([]string{"news", "tech"}, categories)
+}
+
+func TestAdminClient(t *testing.T) {
+	suite.Run(t, new(AdminClientTestSuite))
 }
