@@ -39,6 +39,11 @@ func (suite *AdminClientTestSuite) SetupSuite() {
 			response = `["news","tech"]`
 		case "/api/user/alice":
 			response = `{"UserId":"alice"}`
+		case "/api/feedback/click":
+			suite.Equal("1", r.URL.Query().Get("n"))
+			response = `{"Feedback":[]}`
+		case "/api/feedback/alice/item", "/api/user/alice/feedback", "/api/item/item/feedback/":
+			response = `[]`
 		default:
 			suite.Fail("unexpected request path", r.URL.Path)
 		}
@@ -62,6 +67,17 @@ func (suite *AdminClientTestSuite) TestGetUser() {
 	user, err := suite.client.GetUser(suite.T().Context(), "alice")
 	suite.NoError(err)
 	suite.Equal("alice", user.UserId)
+}
+
+func (suite *AdminClientTestSuite) TestGetFeedback() {
+	_, err := suite.client.GetTypedFeedback("click", 1)
+	suite.NoError(err)
+	_, err = suite.client.GetUserItemFeedback("alice", "item")
+	suite.NoError(err)
+	_, err = suite.client.GetUserFeedback("alice")
+	suite.NoError(err)
+	_, err = suite.client.GetItemFeedback("item")
+	suite.NoError(err)
 }
 
 func TestAdminClient(t *testing.T) {
