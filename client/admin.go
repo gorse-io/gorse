@@ -12,13 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package client
 
 import (
 	"fmt"
 	"io"
 	"net/url"
-	"sort"
 	"strings"
 	"time"
 
@@ -120,12 +119,6 @@ type DumpStats struct {
 	Duration time.Duration
 }
 
-func sortFeedback(feedback []Feedback) {
-	sort.Slice(feedback, func(i, j int) bool {
-		return feedback[i].Timestamp.After(feedback[j].Timestamp)
-	})
-}
-
 // NewAdminClient creates a new client for the Gorse admin API.
 func NewAdminClient(endpoint, apiKey string) *AdminClient {
 	client := resty.New()
@@ -182,48 +175,6 @@ func (c *AdminClient) ResetConfig() (map[string]any, error) {
 		return result, newAdminAPIError(resp)
 	}
 	return result, nil
-}
-
-func getConfigValue(configMap map[string]any, names ...string) (string, any, bool) {
-	for _, name := range names {
-		value, ok := configMap[name]
-		if ok {
-			return name, value, true
-		}
-	}
-	return "", nil, false
-}
-
-func formatConfigMap(configMap map[string]any) map[string]any {
-	formatted := make(map[string]any, len(configMap))
-	for key, value := range configMap {
-		formatted[key] = formatConfigValue(value)
-	}
-	return formatted
-}
-
-func formatConfigValue(value any) any {
-	switch v := value.(type) {
-	case time.Duration:
-		s := v.String()
-		if strings.HasSuffix(s, "m0s") {
-			s = s[:len(s)-2]
-		}
-		if strings.HasSuffix(s, "h0m") {
-			s = s[:len(s)-2]
-		}
-		return s
-	case map[string]any:
-		return formatConfigMap(v)
-	case []any:
-		formatted := make([]any, len(v))
-		for i, item := range v {
-			formatted[i] = formatConfigValue(item)
-		}
-		return formatted
-	default:
-		return v
-	}
 }
 
 func (c *AdminClient) GetCategories() ([]string, error) {

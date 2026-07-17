@@ -25,6 +25,7 @@ import (
 
 	jsonpatch "github.com/evanphx/json-patch/v5"
 	gorse "github.com/gorse-io/gorse-go"
+	adminclient "github.com/gorse-io/gorse/client"
 	"github.com/gorse-io/gorse/cmd/version"
 	"github.com/samber/lo"
 	"github.com/spf13/cobra"
@@ -88,9 +89,9 @@ func newGorseClient(cmd *cobra.Command) *gorse.GorseClient {
 	return gorse.NewGorseClient(strings.TrimRight(endpoint, "/"), apiKey)
 }
 
-func newAdminClient(cmd *cobra.Command) *AdminClient {
+func newAdminClient(cmd *cobra.Command) *adminclient.AdminClient {
 	endpoint, apiKey := requireEndpointAndKey(cmd)
-	return NewAdminClient(endpoint, apiKey)
+	return adminclient.NewAdminClient(endpoint, apiKey)
 }
 
 // getCmd is the parent command for get operations
@@ -423,14 +424,14 @@ var getFeedbackCmd = &cobra.Command{
 		itemID := lo.Must(cmd.Flags().GetString("item"))
 		client := newAdminClient(cmd)
 		var (
-			feedback []Feedback
+			feedback []adminclient.Feedback
 			err      error
 		)
 		switch {
 		case userID != "" && itemID != "" && feedbackType != "":
 			record, requestErr := client.GetTypedUserItemFeedback(feedbackType, userID, itemID)
 			err = requestErr
-			feedback = []Feedback{record}
+			feedback = []adminclient.Feedback{record}
 		case userID != "" && itemID != "":
 			feedback, err = client.GetUserItemFeedback(userID, itemID)
 		case userID != "" && feedbackType != "":

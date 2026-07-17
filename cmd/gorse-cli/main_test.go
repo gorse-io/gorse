@@ -15,6 +15,7 @@ import (
 	"time"
 	"unsafe"
 
+	adminclient "github.com/gorse-io/gorse/client"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/config"
@@ -567,7 +568,7 @@ func waitForMaster(t *testing.T, endpoint string) {
 
 func waitForInitialTask(t *testing.T, endpoint string) {
 	t.Helper()
-	client := NewAdminClient(endpoint, testAPIKey)
+	client := adminclient.NewAdminClient(endpoint, testAPIKey)
 	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
 		tasks, err := client.GetTasks()
