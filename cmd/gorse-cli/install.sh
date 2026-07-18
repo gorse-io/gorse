@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-set -euo pipefail
+set -eu
 
 REPO="${GORSE_REPO:-gorse-io/gorse}"
 VERSION="${GORSE_CLI_VERSION:-latest}"
