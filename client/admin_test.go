@@ -45,7 +45,9 @@ func (suite *AdminClientTestSuite) SetupSuite() {
 	cfg.Database.CacheStore = "sqlite://" + filepath.Join(tempDir, "cache.db")
 	cfg.Blob.URI = filepath.Join(tempDir, "blob")
 	cfg.Master.Host = "127.0.0.1"
+	cfg.Master.Port = 18086
 	cfg.Master.HttpHost = "127.0.0.1"
+	cfg.Master.HttpPort = 18088
 	cfg.Master.AdminAPIKey = "secret"
 	cfg.OpenAI.AuthToken = "test"
 
