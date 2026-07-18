@@ -43,6 +43,7 @@ func (suite *AdminClientTestSuite) SetupSuite() {
 	cfg := config.GetDefaultConfig()
 	cfg.Database.DataStore = "sqlite://" + filepath.Join(tempDir, "data.db")
 	cfg.Database.CacheStore = "sqlite://" + filepath.Join(tempDir, "cache.db")
+	cfg.Database.VectorStore = "sqlite://" + filepath.Join(tempDir, "vector.db")
 	cfg.Blob.URI = filepath.Join(tempDir, "blob")
 	cfg.Master.Host = "127.0.0.1"
 	cfg.Master.Port = 18086
