@@ -64,11 +64,6 @@ func (suite *AdminClientTestSuite) SetupSuite() {
 		{Id: "news", Score: 2},
 		{Id: "tech", Score: 1},
 	}))
-	suite.Require().NoError(suite.master.CacheClient.AddTimeSeriesPoints(ctx, []cache.TimeSeriesPoint{{
-		Name:      "requests",
-		Timestamp: time.Date(2026, 1, 1, 1, 0, 0, 0, time.UTC),
-		Value:     1,
-	}}))
 }
 
 func (suite *AdminClientTestSuite) TearDownSuite() {
@@ -82,6 +77,11 @@ func (suite *AdminClientTestSuite) TestGetCategories() {
 }
 
 func (suite *AdminClientTestSuite) TestGetTimeseries() {
+	suite.Require().NoError(suite.master.CacheClient.AddTimeSeriesPoints(suite.T().Context(), []cache.TimeSeriesPoint{{
+		Name:      "requests",
+		Timestamp: time.Date(2026, 1, 1, 1, 0, 0, 0, time.UTC),
+		Value:     1,
+	}}))
 	points, err := suite.client.GetTimeseries("requests", "2026-01-01T00:00:00Z", "2026-01-02T00:00:00Z", "1h")
 	suite.NoError(err)
 	suite.Equal("requests", points[0].Name)
