@@ -61,14 +61,25 @@ function Install-Binary {
     Copy-Item -Force -Path $Source -Destination $Destination
 }
 
-function Test-PathEntry {
+function ConvertTo-NormalizedPath {
     param([string]$Directory)
 
-    $fullDirectory = [IO.Path]::GetFullPath($Directory).TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
-    $entries = ($env:Path -split [IO.Path]::PathSeparator) | Where-Object { $_ }
+    $expandedDirectory = [Environment]::ExpandEnvironmentVariables($Directory.Trim().Trim('"'))
+    return [IO.Path]::GetFullPath($expandedDirectory).TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+}
+
+function Test-PathEntry {
+    param(
+        [AllowNull()]
+        [string]$PathValue,
+        [string]$Directory
+    )
+
+    $fullDirectory = ConvertTo-NormalizedPath $Directory
+    $entries = ($PathValue -split [IO.Path]::PathSeparator) | Where-Object { $_ }
     foreach ($entry in $entries) {
         try {
-            $fullEntry = [IO.Path]::GetFullPath($entry).TrimEnd([IO.Path]::DirectorySeparatorChar, [IO.Path]::AltDirectorySeparatorChar)
+            $fullEntry = ConvertTo-NormalizedPath $entry
             if ([string]::Equals($fullEntry, $fullDirectory, [StringComparison]::OrdinalIgnoreCase)) {
                 return $true
             }
@@ -77,6 +88,31 @@ function Test-PathEntry {
         }
     }
     return $false
+}
+
+function Add-InstallDirToPath {
+    $userPath = [Environment]::GetEnvironmentVariable("Path", [EnvironmentVariableTarget]::User)
+    $machinePath = [Environment]::GetEnvironmentVariable("Path", [EnvironmentVariableTarget]::Machine)
+
+    if (-not (Test-PathEntry $userPath $InstallDir) -and -not (Test-PathEntry $machinePath $InstallDir)) {
+        $newUserPath = if ([string]::IsNullOrWhiteSpace($userPath)) {
+            $InstallDir
+        } else {
+            $userPath.TrimEnd([IO.Path]::PathSeparator) + [IO.Path]::PathSeparator + $InstallDir
+        }
+        [Environment]::SetEnvironmentVariable("Path", $newUserPath, [EnvironmentVariableTarget]::User)
+        Write-Log "Added ${InstallDir} to the user PATH."
+    }
+
+    # Environment variable changes are process-local. Update this PowerShell
+    # process as well so direct script invocations can use the CLI immediately.
+    if (-not (Test-PathEntry $env:Path $InstallDir)) {
+        $env:Path = if ([string]::IsNullOrWhiteSpace($env:Path)) {
+            $InstallDir
+        } else {
+            $env:Path.TrimEnd([IO.Path]::PathSeparator) + [IO.Path]::PathSeparator + $InstallDir
+        }
+    }
 }
 
 function Main {
@@ -102,10 +138,8 @@ function Main {
         $destination = Join-Path $InstallDir $BinaryName
         Install-Binary $tmpFile $destination
         Write-Log "Installed ${BinaryName} to ${destination}"
-
-        if (-not (Test-PathEntry $InstallDir)) {
-            Write-Log "Add ${InstallDir} to PATH to run ${BinaryName} from any terminal."
-        }
+        Add-InstallDirToPath
+        Write-Log "Run '${BinaryName} --version' to verify the installation. Open a new terminal if necessary."
     } finally {
         Remove-Item -Recurse -Force $tmpDir -ErrorAction SilentlyContinue
     }
