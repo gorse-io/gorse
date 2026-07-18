@@ -121,6 +121,12 @@ type DumpStats struct {
 	Duration time.Duration
 }
 
+type TimeSeriesPoint struct {
+	Name      string
+	Timestamp time.Time
+	Value     float64
+}
+
 // NewAdminClient creates a new client for the Gorse admin API.
 func NewAdminClient(endpoint, apiKey string) *AdminClient {
 	endpoint = strings.TrimRight(endpoint, "/")
@@ -189,6 +195,20 @@ func (c *AdminClient) GetCategories() ([]string, error) {
 
 func (c *AdminClient) GetStats() (Status, error) {
 	return get[Status](c, "/dashboard/stats", nil)
+}
+
+func (c *AdminClient) GetTimeseries(name, begin, end, duration string) ([]TimeSeriesPoint, error) {
+	params := url.Values{}
+	if begin != "" {
+		params.Set("begin", begin)
+	}
+	if end != "" {
+		params.Set("end", end)
+	}
+	if duration != "" {
+		params.Set("duration", duration)
+	}
+	return get[[]TimeSeriesPoint](c, "/dashboard/timeseries/"+url.PathEscape(name), params)
 }
 
 func (c *AdminClient) GetFeedback(n int) (FeedbackIterator, error) {
