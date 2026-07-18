@@ -57,13 +57,6 @@ func (suite *AdminClientTestSuite) SetupSuite() {
 	endpoint := fmt.Sprintf("http://%s:%d", cfg.Master.HttpHost, cfg.Master.HttpPort)
 	waitForMaster(suite.T(), endpoint)
 	suite.client = client.NewAdminClient(endpoint, cfg.Master.AdminAPIKey)
-
-	ctx := suite.T().Context()
-	suite.Require().NoError(suite.master.DataClient.BatchInsertUsers(ctx, []data.User{{UserId: "alice"}}))
-	suite.Require().NoError(suite.master.CacheClient.AddScores(ctx, cache.ItemCategories, "", []cache.Score{
-		{Id: "news", Score: 2},
-		{Id: "tech", Score: 1},
-	}))
 }
 
 func (suite *AdminClientTestSuite) TearDownSuite() {
@@ -71,6 +64,10 @@ func (suite *AdminClientTestSuite) TearDownSuite() {
 }
 
 func (suite *AdminClientTestSuite) TestGetCategories() {
+	suite.Require().NoError(suite.master.CacheClient.AddScores(suite.T().Context(), cache.ItemCategories, "", []cache.Score{
+		{Id: "news", Score: 2},
+		{Id: "tech", Score: 1},
+	}))
 	categories, err := suite.client.GetCategories()
 	suite.NoError(err)
 	suite.Equal([]string{"news", "tech"}, categories)
@@ -90,6 +87,7 @@ func (suite *AdminClientTestSuite) TestGetTimeseries() {
 }
 
 func (suite *AdminClientTestSuite) TestGetUser() {
+	suite.Require().NoError(suite.master.DataClient.BatchInsertUsers(suite.T().Context(), []data.User{{UserId: "alice"}}))
 	user, err := suite.client.GetUser(suite.T().Context(), "alice")
 	suite.NoError(err)
 	suite.Equal("alice", user.UserId)
