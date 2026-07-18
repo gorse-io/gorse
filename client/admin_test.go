@@ -15,47 +15,64 @@
 package client_test
 
 import (
+	"fmt"
+	"net"
 	"net/http"
-	"net/http/httptest"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/gorse-io/gorse/client"
+	"github.com/gorse-io/gorse/common/log"
+	"github.com/gorse-io/gorse/config"
+	"github.com/gorse-io/gorse/master"
+	"github.com/gorse-io/gorse/storage/cache"
+	"github.com/gorse-io/gorse/storage/data"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
 
 type AdminClientTestSuite struct {
 	suite.Suite
 	client *client.AdminClient
-	server *httptest.Server
+	master *master.Master
 }
 
 func (suite *AdminClientTestSuite) SetupSuite() {
-	suite.server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		suite.Equal("secret", r.Header.Get("X-Api-Key"))
-		w.Header().Set("Content-Type", "application/json")
-		var response string
-		switch r.URL.Path {
-		case "/api/dashboard/categories":
-			response = `["news","tech"]`
-		case "/api/dashboard/timeseries/requests":
-			suite.Equal("2026-01-01T00:00:00Z", r.URL.Query().Get("begin"))
-			suite.Equal("2026-01-02T00:00:00Z", r.URL.Query().Get("end"))
-			suite.Equal("1h", r.URL.Query().Get("duration"))
-			response = `[{"Name":"requests","Timestamp":"2026-01-01T01:00:00Z","Value":1}]`
-		case "/api/user/alice":
-			response = `{"UserId":"alice"}`
-		default:
-			suite.Fail("unexpected request path", r.URL.Path)
-		}
-		_, err := w.Write([]byte(response))
-		suite.NoError(err)
+	log.SetTestLogger(suite.T())
+	tempDir := suite.T().TempDir()
+	cfg := config.GetDefaultConfig()
+	cfg.Database.DataStore = "sqlite://" + filepath.Join(tempDir, "data.db")
+	cfg.Database.CacheStore = "sqlite://" + filepath.Join(tempDir, "cache.db")
+	cfg.Blob.URI = filepath.Join(tempDir, "blob")
+	cfg.Master.Host = "127.0.0.1"
+	cfg.Master.Port = freePort(suite.T())
+	cfg.Master.HttpHost = "127.0.0.1"
+	cfg.Master.HttpPort = freePort(suite.T())
+	cfg.Master.AdminAPIKey = "secret"
+	cfg.OpenAI.AuthToken = "test"
+
+	suite.master = master.NewMaster(cfg, tempDir, true, "")
+	go suite.master.Serve()
+	endpoint := fmt.Sprintf("http://%s:%d", cfg.Master.HttpHost, cfg.Master.HttpPort)
+	waitForMaster(suite.T(), endpoint)
+	suite.client = client.NewAdminClient(endpoint, cfg.Master.AdminAPIKey)
+
+	ctx := suite.T().Context()
+	suite.Require().NoError(suite.master.DataClient.BatchInsertUsers(ctx, []data.User{{UserId: "alice"}}))
+	suite.Require().NoError(suite.master.CacheClient.AddScores(ctx, cache.ItemCategories, "", []cache.Score{
+		{Id: "news", Score: 2},
+		{Id: "tech", Score: 1},
 	}))
-	suite.client = client.NewAdminClient(suite.server.URL, "secret")
+	suite.Require().NoError(suite.master.CacheClient.AddTimeSeriesPoints(ctx, []cache.TimeSeriesPoint{{
+		Name:      "requests",
+		Timestamp: time.Date(2026, 1, 1, 1, 0, 0, 0, time.UTC),
+		Value:     1,
+	}}))
 }
 
 func (suite *AdminClientTestSuite) TearDownSuite() {
-	suite.server.Close()
+	suite.master.Shutdown()
 }
 
 func (suite *AdminClientTestSuite) TestGetCategories() {
@@ -80,4 +97,29 @@ func (suite *AdminClientTestSuite) TestGetUser() {
 
 func TestAdminClient(t *testing.T) {
 	suite.Run(t, new(AdminClientTestSuite))
+}
+
+func freePort(t *testing.T) int {
+	t.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	defer listener.Close()
+	return listener.Addr().(*net.TCPAddr).Port
+}
+
+func waitForMaster(t *testing.T, endpoint string) {
+	t.Helper()
+	client := http.Client{Timeout: time.Second}
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		resp, err := client.Get(endpoint + "/api/health/live")
+		if err == nil {
+			_ = resp.Body.Close()
+			if resp.StatusCode == http.StatusOK {
+				return
+			}
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	require.Fail(t, "master didn't become ready")
 }
