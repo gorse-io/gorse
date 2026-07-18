@@ -16,7 +16,6 @@ package client_test
 
 import (
 	"fmt"
-	"net"
 	"net/http"
 	"path/filepath"
 	"testing"
@@ -46,7 +45,6 @@ func (suite *AdminClientTestSuite) SetupSuite() {
 	cfg.Database.CacheStore = "sqlite://" + filepath.Join(tempDir, "cache.db")
 	cfg.Blob.URI = filepath.Join(tempDir, "blob")
 	cfg.Master.Host = "127.0.0.1"
-	cfg.Master.Port, cfg.Master.HttpPort = freePorts(suite.T())
 	cfg.Master.HttpHost = "127.0.0.1"
 	cfg.Master.AdminAPIKey = "secret"
 	cfg.OpenAI.AuthToken = "test"
@@ -94,17 +92,6 @@ func (suite *AdminClientTestSuite) TestGetUser() {
 
 func TestAdminClient(t *testing.T) {
 	suite.Run(t, new(AdminClientTestSuite))
-}
-
-func freePorts(t *testing.T) (int, int) {
-	t.Helper()
-	grpcListener, err := net.Listen("tcp", "127.0.0.1:0")
-	require.NoError(t, err)
-	defer grpcListener.Close()
-	httpListener, err := net.Listen("tcp", "127.0.0.1:0")
-	require.NoError(t, err)
-	defer httpListener.Close()
-	return grpcListener.Addr().(*net.TCPAddr).Port, httpListener.Addr().(*net.TCPAddr).Port
 }
 
 func waitForMaster(t *testing.T, endpoint string) {
