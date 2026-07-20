@@ -45,7 +45,7 @@ func TestSetEventRecorder(t *testing.T) {
 		Method:       "GET",
 		Route:        "/api/recommend/{user-id}",
 		StatusCode:   200,
-		ResponseTime: 10,
+		ResponseTime: 10 * time.Millisecond,
 		Timestamp:    now,
 		RemoteAddr:   "127.0.0.1",
 	}

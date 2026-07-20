@@ -95,10 +95,12 @@ func (m *Master) loadDataset(parent context.Context) (datasets Datasets, err err
 	if err != nil {
 		return Datasets{}, errors.Trace(err)
 	}
-	m.recordStorageUsage(ctx,
-		datasets.rankingDataset.CountUsers(),
-		datasets.rankingDataset.CountItems(),
-		len(datasets.clickDataset.Target))
+	go event.Emit(context.WithoutCancel(ctx), event.Snapshot{
+		UserCount:     int64(datasets.rankingDataset.CountUsers()),
+		ItemCount:     int64(datasets.rankingDataset.CountItems()),
+		FeedbackCount: int64(len(datasets.clickDataset.Target)),
+		Timestamp:     time.Now(),
+	})
 
 	// save non-personalized recommenders to cache
 	for i, recommender := range nonPersonalizedRecommenders {
@@ -221,18 +223,6 @@ func (m *Master) loadDataset(parent context.Context) (datasets Datasets, err err
 
 	LoadDatasetTotalSeconds.Set(time.Since(initialStartTime).Seconds())
 	return
-}
-
-func (m *Master) recordStorageUsage(ctx context.Context, userCount, itemCount, feedbackCount int) {
-	ctx = context.WithoutCancel(ctx)
-	go func() {
-		event.Emit(ctx, event.Snapshot{
-			UserCount:     int64(userCount),
-			ItemCount:     int64(itemCount),
-			FeedbackCount: int64(feedbackCount),
-			Timestamp:     time.Now(),
-		})
-	}()
 }
 
 // runLoadDatasetTask loads dataset.

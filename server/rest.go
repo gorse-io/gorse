@@ -74,12 +74,18 @@ type RestServer struct {
 	HttpServer *http.Server
 }
 
-type countingReadCloser struct {
+type CountingReadCloser struct {
 	io.ReadCloser
 	bytesRead int64
 }
 
-func (r *countingReadCloser) Read(p []byte) (int, error) {
+func NewCountingReadCloser(r io.ReadCloser) *CountingReadCloser {
+	return &CountingReadCloser{
+		ReadCloser: r,
+	}
+}
+
+func (r *CountingReadCloser) Read(p []byte) (int, error) {
 	n, err := r.ReadCloser.Read(p)
 	r.bytesRead += int64(n)
 	return n, err
@@ -144,10 +150,10 @@ func (s *RestServer) LogFilter(req *restful.Request, resp *restful.Response, cha
 	requestId := uuid.New().String()
 	resp.AddHeader("X-Request-ID", requestId)
 
-	var requestBody *countingReadCloser
+	var requestReader *CountingReadCloser
 	if req.Request.Body != nil {
-		requestBody = &countingReadCloser{ReadCloser: req.Request.Body}
-		req.Request.Body = requestBody
+		requestReader = NewCountingReadCloser(req.Request.Body)
+		req.Request.Body = requestReader
 	}
 	start := time.Now()
 	chain.ProcessFilter(req, resp)
@@ -158,8 +164,8 @@ func (s *RestServer) LogFilter(req *restful.Request, resp *restful.Response, cha
 		req.Request.URL.Path != "/api/dashboard/tasks" {
 		route := req.SelectedRoute().Path()
 		var requestBytes int64
-		if requestBody != nil {
-			requestBytes = requestBody.bytesRead
+		if requestReader != nil {
+			requestBytes = requestReader.bytesRead
 		}
 		log.AccessLogger().Info(fmt.Sprintf("%s %s", req.Request.Method, req.Request.URL.Path),
 			zap.String("request_id", requestId),
@@ -173,7 +179,7 @@ func (s *RestServer) LogFilter(req *restful.Request, resp *restful.Response, cha
 			RequestBytes:  requestBytes,
 			ResponseBytes: int64(resp.ContentLength()),
 			StatusCode:    resp.StatusCode(),
-			ResponseTime:  responseTime.Milliseconds(),
+			ResponseTime:  responseTime,
 			Timestamp:     start,
 			RemoteAddr:    req.Request.RemoteAddr,
 		})

@@ -27,9 +27,9 @@ type Request struct {
 	Route        string // API route template (e.g., /api/recommend/{user-id})
 
 	// Response metadata
-	StatusCode    int   // HTTP response status code
-	ResponseTime  int64 // Response time in milliseconds
-	ResponseBytes int64 // Number of response body bytes written by the handler
+	StatusCode    int           // HTTP response status code
+	ResponseTime  time.Duration // Response time
+	ResponseBytes int64         // Number of response body bytes written by the handler
 
 	// Additional metadata
 	Timestamp  time.Time // Event timestamp
