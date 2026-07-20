@@ -1983,3 +1983,30 @@ func (d *SQLDatabase) CountFeedback(ctx context.Context) (int, error) {
 	}
 	return int(count), errors.Trace(err)
 }
+
+func (d *SQLDatabase) CountUsersExact(ctx context.Context) (int, error) {
+	return d.countExact(ctx, d.UsersTable(), true)
+}
+
+func (d *SQLDatabase) CountItemsExact(ctx context.Context) (int, error) {
+	return d.countExact(ctx, d.ItemsTable(), true)
+}
+
+func (d *SQLDatabase) CountFeedbackExact(ctx context.Context) (int, error) {
+	if d.driver == ClickHouse {
+		var count int64
+		err := d.gormDB.WithContext(ctx).Table(d.FeedbackTable()).
+			Select("uniqExact(tuple(feedback_type, user_id, item_id))").Scan(&count).Error
+		return int(count), errors.Trace(err)
+	}
+	return d.countExact(ctx, d.FeedbackTable(), false)
+}
+
+func (d *SQLDatabase) countExact(ctx context.Context, table string, final bool) (int, error) {
+	if d.driver == ClickHouse && final {
+		table += " FINAL"
+	}
+	var count int64
+	err := d.gormDB.WithContext(ctx).Table(table).Count(&count).Error
+	return int(count), errors.Trace(err)
+}

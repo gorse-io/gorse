@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/pprof"
 	"strconv"
@@ -71,6 +72,17 @@ type RestServer struct {
 	DisableLog bool
 	WebService *restful.WebService
 	HttpServer *http.Server
+}
+
+type countingReadCloser struct {
+	io.ReadCloser
+	bytesRead int64
+}
+
+func (r *countingReadCloser) Read(p []byte) (int, error) {
+	n, err := r.ReadCloser.Read(p)
+	r.bytesRead += int64(n)
+	return n, err
 }
 
 // StartHttpServer starts the REST-ful API server.
@@ -132,6 +144,11 @@ func (s *RestServer) LogFilter(req *restful.Request, resp *restful.Response, cha
 	requestId := uuid.New().String()
 	resp.AddHeader("X-Request-ID", requestId)
 
+	var requestBody *countingReadCloser
+	if req.Request.Body != nil {
+		requestBody = &countingReadCloser{ReadCloser: req.Request.Body}
+		req.Request.Body = requestBody
+	}
 	start := time.Now()
 	chain.ProcessFilter(req, resp)
 	responseTime := time.Since(start)
@@ -139,19 +156,27 @@ func (s *RestServer) LogFilter(req *restful.Request, resp *restful.Response, cha
 	// Log access
 	if !s.DisableLog && req.Request.URL.Path != "/api/dashboard/cluster" &&
 		req.Request.URL.Path != "/api/dashboard/tasks" {
+		route := req.SelectedRoute().Path()
+		var requestBytes int64
+		if requestBody != nil {
+			requestBytes = requestBody.bytesRead
+		}
 		log.AccessLogger().Info(fmt.Sprintf("%s %s", req.Request.Method, req.Request.URL.Path),
 			zap.String("request_id", requestId),
 			zap.Int("status_code", resp.StatusCode()),
 			zap.Duration("response_time", responseTime),
 			zap.String("remote_addr", req.Request.RemoteAddr))
-		go event.EventRecorder().RecordAPI(req.Request.Context(), event.APIEvent{
-			RequestID:    requestId,
-			Method:       req.Request.Method,
-			Path:         req.Request.URL.Path,
-			StatusCode:   resp.StatusCode(),
-			ResponseTime: responseTime.Milliseconds(),
-			Timestamp:    start,
-			RemoteAddr:   req.Request.RemoteAddr,
+		go event.EventRecorder().RecordAPI(context.WithoutCancel(req.Request.Context()), event.APIEvent{
+			RequestID:     requestId,
+			Method:        req.Request.Method,
+			Route:         route,
+			Path:          route,
+			RequestBytes:  requestBytes,
+			ResponseBytes: int64(resp.ContentLength()),
+			StatusCode:    resp.StatusCode(),
+			ResponseTime:  responseTime.Milliseconds(),
+			Timestamp:     start,
+			RemoteAddr:    req.Request.RemoteAddr,
 		})
 	}
 }

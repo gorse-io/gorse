@@ -24,7 +24,12 @@ type APIEvent struct {
 	// Request metadata
 	RequestID string // Unique request identifier (X-Request-ID)
 	Method    string // HTTP method (GET, POST, PUT, DELETE, PATCH)
-	Path      string // API path (e.g., /api/recommend/{user-id})
+	Route     string // API route template (e.g., /api/recommend/{user-id})
+	Path      string // Deprecated: use Route instead; contains the route template for compatibility
+
+	// Payload processing metadata
+	RequestBytes  int64 // Number of request body bytes read by the handler
+	ResponseBytes int64 // Number of response body bytes written by the handler
 
 	// Response metadata
 	StatusCode   int       // HTTP response status code
@@ -37,10 +42,13 @@ type APIEvent struct {
 
 // StorageEvent represents data storage usage for billing purposes.
 type StorageEvent struct {
-	UserCount     int       // Number of users in storage
-	ItemCount     int       // Number of items in storage
-	FeedbackCount int       // Number of feedbacks in storage
-	Timestamp     time.Time // Event timestamp
+	UserCount     int // Number of users in storage
+	ItemCount     int // Number of items in storage
+	FeedbackCount int // Number of feedbacks in storage
+
+	ObservedAt     time.Time // Time when storage usage was measured
+	DatasetBuiltAt time.Time // Time when the current recommendation dataset was built
+	Timestamp      time.Time // Deprecated: use ObservedAt instead
 }
 
 type Recorder interface {

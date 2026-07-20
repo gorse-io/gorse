@@ -1088,3 +1088,18 @@ func (db *MongoDB) CountFeedback(ctx context.Context) (int, error) {
 	n, err := db.client.Database(db.dbName).Collection(db.FeedbackTable()).EstimatedDocumentCount(ctx)
 	return int(n), err
 }
+
+func (db *MongoDB) CountUsersExact(ctx context.Context) (int, error) {
+	n, err := db.client.Database(db.dbName).Collection(db.UsersTable()).CountDocuments(ctx, bson.D{})
+	return int(n), err
+}
+
+func (db *MongoDB) CountItemsExact(ctx context.Context) (int, error) {
+	n, err := db.client.Database(db.dbName).Collection(db.ItemsTable()).CountDocuments(ctx, bson.D{})
+	return int(n), err
+}
+
+func (db *MongoDB) CountFeedbackExact(ctx context.Context) (int, error) {
+	n, err := db.client.Database(db.dbName).Collection(db.FeedbackTable()).CountDocuments(ctx, bson.D{})
+	return int(n), err
+}
