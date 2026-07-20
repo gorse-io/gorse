@@ -200,6 +200,11 @@ func (suite *baseTestSuite) TestUsers() {
 	count, err := suite.Database.CountUsers(ctx)
 	suite.NoError(err)
 	suite.Equal(10, count)
+	if exactCounter, ok := suite.Database.(ExactCounter); ok {
+		count, err = exactCounter.CountUsersExact(ctx)
+		suite.NoError(err)
+		suite.Equal(10, count)
+	}
 	// Get users
 	users := suite.getUsers(ctx, 3)
 	suite.Equal(10, len(users))
@@ -291,6 +296,11 @@ func (suite *baseTestSuite) TestFeedback() {
 	count, err := suite.Database.CountFeedback(ctx)
 	suite.NoError(err)
 	suite.Equal(12, count)
+	if exactCounter, ok := suite.Database.(ExactCounter); ok {
+		count, err = exactCounter.CountFeedbackExact(ctx)
+		suite.NoError(err)
+		suite.Equal(12, count)
+	}
 	// Get feedback
 	ret := suite.getFeedback(ctx, 3, nil, new(time.Now()), positiveFeedbackType1, positiveFeedbackType2)
 	suite.Equal(feedback, ret)
@@ -536,6 +546,11 @@ func (suite *baseTestSuite) TestItems() {
 	count, err := suite.Database.CountItems(ctx)
 	suite.NoError(err)
 	suite.Equal(5, count)
+	if exactCounter, ok := suite.Database.(ExactCounter); ok {
+		count, err = exactCounter.CountItemsExact(ctx)
+		suite.NoError(err)
+		suite.Equal(5, count)
+	}
 	// Get items
 	totalItems := suite.getItems(ctx, 3)
 	suite.Equal(items, totalItems)
