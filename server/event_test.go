@@ -28,24 +28,24 @@ import (
 )
 
 type channelEventRecorder struct {
-	apiEvents chan event.APIEvent
+	apiEvents chan event.Request
 	ctxErrors chan error
 }
 
-func (r *channelEventRecorder) RecordAPI(ctx context.Context, e event.APIEvent) {
+func (r *channelEventRecorder) EmitRequest(ctx context.Context, e event.Request) {
 	r.apiEvents <- e
 	r.ctxErrors <- ctx.Err()
 }
 
-func (r *channelEventRecorder) RecordStorage(context.Context, event.StorageEvent) {}
+func (r *channelEventRecorder) EmitSnapshot(context.Context, event.Snapshot) {}
 
 func TestLogFilterRecordsBillingDimensions(t *testing.T) {
 	recorder := &channelEventRecorder{
-		apiEvents: make(chan event.APIEvent, 1),
+		apiEvents: make(chan event.Request, 1),
 		ctxErrors: make(chan error, 1),
 	}
-	event.SetEventRecorder(recorder)
-	t.Cleanup(func() { event.SetEventRecorder(&event.NopRecorder{}) })
+	event.SetEventHandler(recorder)
+	t.Cleanup(func() { event.SetEventHandler(&event.NopHandler{}) })
 
 	restServer := &RestServer{}
 	service := new(restful.WebService)

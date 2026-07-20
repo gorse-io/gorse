@@ -95,7 +95,10 @@ func (m *Master) loadDataset(parent context.Context) (datasets Datasets, err err
 	if err != nil {
 		return Datasets{}, errors.Trace(err)
 	}
-	m.recordStorageUsage(ctx, datasets.rankingDataset.GetTimestamp())
+	m.recordStorageUsage(ctx,
+		datasets.rankingDataset.CountUsers(),
+		datasets.rankingDataset.CountItems(),
+		len(datasets.clickDataset.Target))
 
 	// save non-personalized recommenders to cache
 	for i, recommender := range nonPersonalizedRecommenders {
@@ -220,41 +223,14 @@ func (m *Master) loadDataset(parent context.Context) (datasets Datasets, err err
 	return
 }
 
-func (m *Master) recordStorageUsage(ctx context.Context, datasetBuiltAt time.Time) {
-	recorder := event.EventRecorder()
-	if _, ok := recorder.(*event.NopRecorder); ok {
-		return
-	}
+func (m *Master) recordStorageUsage(ctx context.Context, userCount, itemCount, feedbackCount int) {
 	ctx = context.WithoutCancel(ctx)
 	go func() {
-		counter, ok := m.DataClient.(data.ExactCounter)
-		if !ok {
-			log.Logger().Error("data store does not support exact counting for storage usage")
-			return
-		}
-		userCount, err := counter.CountUsersExact(ctx)
-		if err != nil {
-			log.Logger().Error("failed to count users for storage usage", zap.Error(err))
-			return
-		}
-		itemCount, err := counter.CountItemsExact(ctx)
-		if err != nil {
-			log.Logger().Error("failed to count items for storage usage", zap.Error(err))
-			return
-		}
-		feedbackCount, err := counter.CountFeedbackExact(ctx)
-		if err != nil {
-			log.Logger().Error("failed to count feedback for storage usage", zap.Error(err))
-			return
-		}
-		observedAt := time.Now()
-		recorder.RecordStorage(ctx, event.StorageEvent{
-			UserCount:      userCount,
-			ItemCount:      itemCount,
-			FeedbackCount:  feedbackCount,
-			ObservedAt:     observedAt,
-			DatasetBuiltAt: datasetBuiltAt,
-			Timestamp:      observedAt,
+		event.Emit(ctx, event.Snapshot{
+			UserCount:     int64(userCount),
+			ItemCount:     int64(itemCount),
+			FeedbackCount: int64(feedbackCount),
+			Timestamp:     time.Now(),
 		})
 	}()
 }

@@ -278,13 +278,6 @@ type Database interface {
 	CountFeedback(ctx context.Context) (int, error)
 }
 
-// ExactCounter counts all records without using database statistics or estimates.
-type ExactCounter interface {
-	CountUsersExact(ctx context.Context) (int, error)
-	CountItemsExact(ctx context.Context) (int, error)
-	CountFeedbackExact(ctx context.Context) (int, error)
-}
-
 // Creator creates a database instance.
 type Creator func(path, tablePrefix string, opts ...storage.Option) (Database, error)
 
