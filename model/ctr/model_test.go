@@ -257,3 +257,36 @@ func TestFactorizationMachines_NoEmbeddings(t *testing.T) {
 		batch.BatchPredict(inputs, [][]Embedding{{}}, 1),
 		batch.BatchPredict(inputs, [][]Embedding{{{Name: "unexpected", Value: []uint16{1}}}}, 1))
 }
+
+func TestFactorizationMachines_PredictWithMoreFeaturesThanTraining(t *testing.T) {
+	dataSet := newSynthesisDataset()
+	// Only the first user-item pair is present in the training set, while the index
+	// also contains users and items with more labels.
+	dataSet.UserLabels[0] = dataSet.UserLabels[0][:1]
+	dataSet.ItemLabels[0] = dataSet.ItemLabels[0][:1]
+	dataSet.Users = []int32{0}
+	dataSet.Items = []int32{0}
+	dataSet.Target = []float32{1}
+
+	m := NewAFM(nil)
+	m.Init(dataSet)
+	assert.Equal(t, 4, m.numDimension)
+
+	inputs := []lo.Tuple4[string, string, []Label, []Label]{
+		{A: "u0", B: "i0", C: []Label{{Name: "ul0", Value: 1}}, D: []Label{{Name: "il0", Value: 1}}},
+		{
+			A: "u1",
+			B: "i1",
+			C: []Label{{Name: "ul0", Value: 1}, {Name: "ul1", Value: 1}, {Name: "ul2", Value: 1}},
+			D: []Label{{Name: "il0", Value: 1}, {Name: "il1", Value: 1}, {Name: "il2", Value: 1}},
+		},
+	}
+	embeddings := make([][]Embedding, len(inputs))
+
+	batchPredictions := m.BatchPredict(inputs, embeddings, 1)
+	assert.Len(t, batchPredictions, len(inputs))
+	for i := range inputs {
+		prediction := m.BatchPredict(inputs[i:i+1], embeddings[i:i+1], 1)
+		assert.InDelta(t, prediction[0], batchPredictions[i], 1e-5)
+	}
+}
