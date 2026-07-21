@@ -20,7 +20,6 @@ import (
 	"io"
 	"net/http"
 	"strconv"
-	"sync"
 	"testing"
 	"time"
 
@@ -96,21 +95,18 @@ func (suite *ServerTestSuite) marshal(v any) string {
 }
 
 type requestsHandler struct {
-	mu       sync.Mutex
-	requests []event.Request
+	requests chan event.Request
 }
 
 func (h *requestsHandler) EmitRequest(_ context.Context, request event.Request) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	h.requests = append(h.requests, request)
+	h.requests <- request
 }
 
 func (h *requestsHandler) EmitSnapshot(context.Context, event.Snapshot) {}
 
 func (suite *ServerTestSuite) TestEmitRequest() {
 	handler := &requestsHandler{
-		requests: make([]event.Request, 0),
+		requests: make(chan event.Request, 1),
 	}
 	event.SetEventHandler(handler)
 	suite.T().Cleanup(func() { event.SetEventHandler(&event.NopHandler{}) })
@@ -131,8 +127,8 @@ func (suite *ServerTestSuite) TestEmitRequest() {
 	responseBytes, err := io.ReadAll(result.Response.Body)
 	suite.Require().NoError(err)
 
-	if suite.Len(handler.requests, 1) {
-		req := handler.requests[0]
+	select {
+	case req := <-handler.requests:
 		suite.Equal(result.Response.Header.Get("X-Request-ID"), req.RequestID)
 		suite.EqualValues(len(body), req.RequestBytes)
 		suite.Equal(http.MethodPost, req.Method)
@@ -143,6 +139,8 @@ func (suite *ServerTestSuite) TestEmitRequest() {
 		suite.False(req.Timestamp.Before(before))
 		suite.False(req.Timestamp.After(after))
 		suite.Empty(req.RemoteAddr)
+	case <-time.After(time.Second):
+		suite.Fail("request event was not emitted")
 	}
 }
 

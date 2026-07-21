@@ -19,7 +19,6 @@ import (
 	"fmt"
 	"runtime"
 	"strconv"
-	"sync"
 	"time"
 
 	"github.com/gorse-io/gorse/common/event"
@@ -213,16 +212,13 @@ func (s *MasterTestSuite) TestUserToUser() {
 }
 
 type snapshotHandler struct {
-	mu        sync.Mutex
-	snapshots []event.Snapshot
+	snapshots chan event.Snapshot
 }
 
 func (h *snapshotHandler) EmitRequest(context.Context, event.Request) {}
 
 func (h *snapshotHandler) EmitSnapshot(_ context.Context, snapshot event.Snapshot) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	h.snapshots = append(h.snapshots, snapshot)
+	h.snapshots <- snapshot
 }
 
 func (s *MasterTestSuite) TestEmitSnapshot() {
@@ -246,7 +242,7 @@ func (s *MasterTestSuite) TestEmitSnapshot() {
 	s.NoError(s.DataClient.BatchInsertItems(ctx, items))
 	s.NoError(s.DataClient.BatchInsertFeedback(ctx, feedbacks, false, false, false))
 
-	handler := new(snapshotHandler)
+	handler := &snapshotHandler{snapshots: make(chan event.Snapshot, 1)}
 	event.SetEventHandler(handler)
 	s.T().Cleanup(func() { event.SetEventHandler(&event.NopHandler{}) })
 
@@ -254,8 +250,8 @@ func (s *MasterTestSuite) TestEmitSnapshot() {
 	s.Require().NoError(err)
 	s.Equal(1, datasets.clickTrainSet.Count()+datasets.clickTestSet.Count())
 
-	if s.Len(handler.snapshots, 1) {
-		snapshot := handler.snapshots[0]
+	select {
+	case snapshot := <-handler.snapshots:
 		s.Equal(int64(len(users)), snapshot.UserCount)
 		s.Equal(DeepSize(users), snapshot.UserBytes)
 		s.Equal(int64(len(items)), snapshot.ItemCount)
@@ -263,6 +259,8 @@ func (s *MasterTestSuite) TestEmitSnapshot() {
 		s.Equal(int64(len(feedbacks))*2, snapshot.FeedbackCount)
 		s.Equal(DeepSize(feedbacks)*2, snapshot.FeedbackBytes)
 		s.False(snapshot.Timestamp.IsZero())
+	case <-time.After(time.Second):
+		s.Fail("snapshot was not emitted")
 	}
 }
 
