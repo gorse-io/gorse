@@ -49,12 +49,29 @@ import (
 
 const batchSize = 10000
 
-func DeepSize[T any](values []T) int64 {
+func deepSize[T any](values []T) int64 {
 	var size int64
 	for _, value := range values {
 		size += int64(sizeof.DeepSize(value))
 	}
 	return size
+}
+
+func countFeedback(feedback []data.Feedback, excluded ...[]expression.FeedbackTypeExpression) (count, size int64) {
+	for _, f := range feedback {
+		duplicated := false
+		for _, expressions := range excluded {
+			if expression.MatchFeedbackTypeExpressions(expressions, f.FeedbackType, f.Value) {
+				duplicated = true
+				break
+			}
+		}
+		if !duplicated {
+			count++
+			size += int64(sizeof.DeepSize(f))
+		}
+	}
+	return
 }
 
 func (m *Master) loadDataset(parent context.Context) (datasets Datasets, err error) {
@@ -324,7 +341,7 @@ func (m *Master) LoadDataFromDatabase(
 	userChan, errChan := database.GetUserStream(newCtx, batchSize)
 	for users := range userChan {
 		snapshot.UserCount += int64(len(users))
-		snapshot.UserBytes += DeepSize(users)
+		snapshot.UserBytes += deepSize(users)
 		for _, user := range users {
 			dataSet.AddUser(user)
 			userIndex := dataSet.GetUserDict().Id(user.UserId)
@@ -381,7 +398,7 @@ func (m *Master) LoadDataFromDatabase(
 	itemChan, errChan := database.GetItemStream(newCtx, batchSize, itemTimeLimit)
 	for batchItems := range itemChan {
 		snapshot.ItemCount += int64(len(batchItems))
-		snapshot.ItemBytes += DeepSize(batchItems)
+		snapshot.ItemBytes += deepSize(batchItems)
 		items = append(items, batchItems...)
 		for _, item := range batchItems {
 			dataSet.AddItem(item)
@@ -481,8 +498,9 @@ func (m *Master) LoadDataFromDatabase(
 				data.WithFeedbackTypes(negFeedbackTypes...),
 				data.WithOrderByItemId())
 			for feedback := range feedbackChan {
-				feedbackCount.Add(int64(len(feedback)))
-				feedbackBytes.Add(DeepSize(feedback))
+				count, size := countFeedback(feedback)
+				feedbackCount.Add(count)
+				feedbackBytes.Add(size)
 				for _, f := range feedback {
 					userIndex := dataSet.GetUserDict().Id(f.UserId)
 					if userIndex == dataset.NotId {
@@ -535,8 +553,9 @@ func (m *Master) LoadDataFromDatabase(
 			data.WithFeedbackTypes(posFeedbackTypes...),
 			data.WithOrderByItemId())
 		for feedback := range feedbackChan {
-			feedbackCount.Add(int64(len(feedback)))
-			feedbackBytes.Add(DeepSize(feedback))
+			count, size := countFeedback(feedback, negFeedbackTypes)
+			feedbackCount.Add(count)
+			feedbackBytes.Add(size)
 			for _, f := range feedback {
 				// convert user and item id to index
 				userIndex := dataSet.GetUserDict().Id(f.UserId)
@@ -639,8 +658,9 @@ func (m *Master) LoadDataFromDatabase(
 			data.WithEndTime(*m.Config.Now()),
 			data.WithFeedbackTypes(readTypes...))
 		for feedback := range feedbackChan {
-			feedbackCount.Add(int64(len(feedback)))
-			feedbackBytes.Add(DeepSize(feedback))
+			count, size := countFeedback(feedback, negFeedbackTypes, posFeedbackTypes)
+			feedbackCount.Add(count)
+			feedbackBytes.Add(size)
 			for _, f := range feedback {
 				userIndex := dataSet.GetUserDict().Id(f.UserId)
 				if userIndex == dataset.NotId {

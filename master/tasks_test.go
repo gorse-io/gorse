@@ -253,11 +253,11 @@ func (s *MasterTestSuite) TestEmitSnapshot() {
 	select {
 	case snapshot := <-handler.snapshots:
 		s.Equal(int64(len(users)), snapshot.UserCount)
-		s.Equal(DeepSize(users), snapshot.UserBytes)
+		s.Equal(deepSize(users), snapshot.UserBytes)
 		s.Equal(int64(len(items)), snapshot.ItemCount)
-		s.Equal(DeepSize(items), snapshot.ItemBytes)
-		s.Equal(int64(len(feedbacks))*2, snapshot.FeedbackCount)
-		s.Equal(DeepSize(feedbacks)*2, snapshot.FeedbackBytes)
+		s.Equal(deepSize(items), snapshot.ItemBytes)
+		s.Equal(int64(len(feedbacks)), snapshot.FeedbackCount)
+		s.Equal(deepSize(feedbacks), snapshot.FeedbackBytes)
 		s.False(snapshot.Timestamp.IsZero())
 	case <-time.After(time.Second):
 		s.Fail("snapshot was not emitted")
