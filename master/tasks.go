@@ -20,6 +20,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/c-bata/goptuna"
@@ -47,6 +48,14 @@ import (
 )
 
 const batchSize = 10000
+
+func DeepSize[T any](values []T) int64 {
+	var size int64
+	for _, value := range values {
+		size += int64(sizeof.DeepSize(value))
+	}
+	return size
+}
 
 func (m *Master) loadDataset(parent context.Context) (datasets Datasets, err error) {
 	ctx, span := m.tracer.Start(parent, "Load Dataset", 1)
@@ -84,7 +93,8 @@ func (m *Master) loadDataset(parent context.Context) (datasets Datasets, err err
 	evaluator := NewOnlineEvaluator(
 		m.Config.Recommend.DataSource.PositiveFeedbackTypes,
 		m.Config.Recommend.DataSource.ReadFeedbackTypes)
-	datasets.clickDataset, datasets.rankingDataset, err = m.LoadDataFromDatabase(ctx, m.DataClient,
+	var snapshot event.Snapshot
+	datasets.clickDataset, datasets.rankingDataset, snapshot, err = m.LoadDataFromDatabase(ctx, m.DataClient,
 		m.Config.Recommend.DataSource.PositiveFeedbackTypes,
 		m.Config.Recommend.DataSource.NegativeFeedbackTypes,
 		m.Config.Recommend.DataSource.ReadFeedbackTypes,
@@ -95,12 +105,7 @@ func (m *Master) loadDataset(parent context.Context) (datasets Datasets, err err
 	if err != nil {
 		return Datasets{}, errors.Trace(err)
 	}
-	go event.Emit(context.WithoutCancel(ctx), event.Snapshot{
-		UserCount:     int64(datasets.rankingDataset.CountUsers()),
-		ItemCount:     int64(datasets.rankingDataset.CountItems()),
-		FeedbackCount: int64(len(datasets.clickDataset.Target)),
-		Timestamp:     time.Now(),
-	})
+	go event.Emit(context.WithoutCancel(ctx), snapshot)
 
 	// save non-personalized recommenders to cache
 	for i, recommender := range nonPersonalizedRecommenders {
@@ -278,19 +283,19 @@ func (m *Master) LoadDataFromDatabase(
 	itemTTL, positiveFeedbackTTL uint,
 	evaluator *OnlineEvaluator,
 	nonPersonalizedRecommenders []*logics.NonPersonalized,
-) (ctrDataset *ctr.Dataset, dataSet *dataset.Dataset, err error) {
+) (ctrDataset *ctr.Dataset, dataSet *dataset.Dataset, snapshot event.Snapshot, err error) {
 	// Estimate the number of users, items, and feedbacks
-	estimatedNumUsers, err := m.DataClient.CountUsers(ctx)
+	estimatedNumUsers, err := database.CountUsers(ctx)
 	if err != nil {
-		return nil, nil, errors.Trace(err)
+		return nil, nil, event.Snapshot{}, errors.Trace(err)
 	}
-	estimatedNumItems, err := m.DataClient.CountItems(ctx)
+	estimatedNumItems, err := database.CountItems(ctx)
 	if err != nil {
-		return nil, nil, errors.Trace(err)
+		return nil, nil, event.Snapshot{}, errors.Trace(err)
 	}
-	estimatedNumFeedbacks, err := m.DataClient.CountFeedback(ctx)
+	estimatedNumFeedbacks, err := database.CountFeedback(ctx)
 	if err != nil {
-		return nil, nil, errors.Trace(err)
+		return nil, nil, event.Snapshot{}, errors.Trace(err)
 	}
 
 	dataSet = dataset.NewDataset(time.Now(), estimatedNumUsers, estimatedNumItems)
@@ -318,6 +323,8 @@ func (m *Master) LoadDataFromDatabase(
 	start := time.Now()
 	userChan, errChan := database.GetUserStream(newCtx, batchSize)
 	for users := range userChan {
+		snapshot.UserCount += int64(len(users))
+		snapshot.UserBytes += DeepSize(users)
 		for _, user := range users {
 			dataSet.AddUser(user)
 			userIndex := dataSet.GetUserDict().Id(user.UserId)
@@ -353,7 +360,7 @@ func (m *Master) LoadDataFromDatabase(
 		span.Add(len(users))
 	}
 	if err = <-errChan; err != nil {
-		return nil, nil, errors.Trace(err)
+		return nil, nil, event.Snapshot{}, errors.Trace(err)
 	}
 	log.Logger().Debug("pulled users from database",
 		zap.Int("n_users", dataSet.CountUsers()),
@@ -373,6 +380,8 @@ func (m *Master) LoadDataFromDatabase(
 	start = time.Now()
 	itemChan, errChan := database.GetItemStream(newCtx, batchSize, itemTimeLimit)
 	for batchItems := range itemChan {
+		snapshot.ItemCount += int64(len(batchItems))
+		snapshot.ItemBytes += DeepSize(batchItems)
 		items = append(items, batchItems...)
 		for _, item := range batchItems {
 			dataSet.AddItem(item)
@@ -428,7 +437,7 @@ func (m *Master) LoadDataFromDatabase(
 		span.Add(len(batchItems))
 	}
 	if err = <-errChan; err != nil {
-		return nil, nil, errors.Trace(err)
+		return nil, nil, event.Snapshot{}, errors.Trace(err)
 	}
 	log.Logger().Debug("pulled items from database",
 		zap.Int("n_items", dataSet.CountItems()),
@@ -458,6 +467,8 @@ func (m *Master) LoadDataFromDatabase(
 
 	// STEP 3: pull explicit negative feedback (highest priority)
 	var mu sync.Mutex
+	var feedbackCount atomic.Int64
+	var feedbackBytes atomic.Int64
 	start = time.Now()
 	var explicitNegativeFeedbackCount int
 	if len(negFeedbackTypes) > 0 {
@@ -470,6 +481,8 @@ func (m *Master) LoadDataFromDatabase(
 				data.WithFeedbackTypes(negFeedbackTypes...),
 				data.WithOrderByItemId())
 			for feedback := range feedbackChan {
+				feedbackCount.Add(int64(len(feedback)))
+				feedbackBytes.Add(DeepSize(feedback))
 				for _, f := range feedback {
 					userIndex := dataSet.GetUserDict().Id(f.UserId)
 					if userIndex == dataset.NotId {
@@ -499,7 +512,7 @@ func (m *Master) LoadDataFromDatabase(
 			return nil
 		})
 		if err != nil {
-			return nil, nil, errors.Trace(err)
+			return nil, nil, event.Snapshot{}, errors.Trace(err)
 		}
 	}
 	log.Logger().Debug("pulled explicit negative feedback from database",
@@ -522,6 +535,8 @@ func (m *Master) LoadDataFromDatabase(
 			data.WithFeedbackTypes(posFeedbackTypes...),
 			data.WithOrderByItemId())
 		for feedback := range feedbackChan {
+			feedbackCount.Add(int64(len(feedback)))
+			feedbackBytes.Add(DeepSize(feedback))
 			for _, f := range feedback {
 				// convert user and item id to index
 				userIndex := dataSet.GetUserDict().Id(f.UserId)
@@ -599,7 +614,7 @@ func (m *Master) LoadDataFromDatabase(
 		return nil
 	})
 	if err != nil {
-		return nil, nil, errors.Trace(err)
+		return nil, nil, event.Snapshot{}, errors.Trace(err)
 	}
 	log.Logger().Debug("pulled positive feedback from database",
 		zap.Int("n_positive_feedback", posFeedbackCount),
@@ -624,6 +639,8 @@ func (m *Master) LoadDataFromDatabase(
 			data.WithEndTime(*m.Config.Now()),
 			data.WithFeedbackTypes(readTypes...))
 		for feedback := range feedbackChan {
+			feedbackCount.Add(int64(len(feedback)))
+			feedbackBytes.Add(DeepSize(feedback))
 			for _, f := range feedback {
 				userIndex := dataSet.GetUserDict().Id(f.UserId)
 				if userIndex == dataset.NotId {
@@ -658,7 +675,7 @@ func (m *Master) LoadDataFromDatabase(
 		return nil
 	})
 	if err != nil {
-		return nil, nil, errors.Trace(err)
+		return nil, nil, event.Snapshot{}, errors.Trace(err)
 	}
 	log.Logger().Debug("pulled read feedback from database",
 		zap.Int("n_read_feedback", readFeedbackCount),
@@ -736,7 +753,10 @@ func (m *Master) LoadDataFromDatabase(
 		zap.Int("n_valid_negative", ctrDataset.NegativeCount),
 		zap.Duration("used_time", time.Since(start)))
 	LoadDatasetStepSecondsVec.WithLabelValues("create_ranking_dataset").Set(time.Since(start).Seconds())
-	return ctrDataset, dataSet, nil
+	snapshot.FeedbackCount = feedbackCount.Load()
+	snapshot.FeedbackBytes = feedbackBytes.Load()
+	snapshot.Timestamp = time.Now()
+	return ctrDataset, dataSet, snapshot, nil
 }
 
 func (m *Master) updateItemToItem(parent context.Context, dataset *dataset.Dataset) error {

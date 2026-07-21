@@ -15,11 +15,14 @@
 package master
 
 import (
+	"context"
 	"fmt"
 	"runtime"
 	"strconv"
+	"sync"
 	"time"
 
+	"github.com/gorse-io/gorse/common/event"
 	"github.com/gorse-io/gorse/common/expression"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/logics"
@@ -83,7 +86,7 @@ func (s *MasterTestSuite) TestFindItemToItem() {
 	}
 
 	// load mock dataset
-	_, dataSet, err := s.LoadDataFromDatabase(s.T().Context(), s.DataClient,
+	_, dataSet, _, err := s.LoadDataFromDatabase(s.T().Context(), s.DataClient,
 		[]expression.FeedbackTypeExpression{expression.MustParseFeedbackTypeExpression("FeedbackType")},
 		nil, nil, 0, 0, NewOnlineEvaluator(nil, nil), nil)
 	s.NoError(err)
@@ -170,7 +173,7 @@ func (s *MasterTestSuite) TestUserToUser() {
 	s.NoError(err)
 	err = s.DataClient.BatchInsertFeedback(ctx, feedbacks, true, true, true)
 	s.NoError(err)
-	_, dataSet, err := s.LoadDataFromDatabase(s.T().Context(), s.DataClient,
+	_, dataSet, _, err := s.LoadDataFromDatabase(s.T().Context(), s.DataClient,
 		[]expression.FeedbackTypeExpression{expression.MustParseFeedbackTypeExpression("FeedbackType")},
 		nil, nil, 0, 0, NewOnlineEvaluator(nil, nil), nil)
 	s.NoError(err)
@@ -207,6 +210,60 @@ func (s *MasterTestSuite) TestUserToUser() {
 	similar, err = s.CacheClient.SearchScores(ctx, cache.UserToUser, cache.Key("default", "9"), nil, 0, 100)
 	s.NoError(err)
 	s.Equal([]string{"7", "5", "3"}, cache.ConvertDocumentsToValues(similar))
+}
+
+type snapshotHandler struct {
+	mu        sync.Mutex
+	snapshots []event.Snapshot
+}
+
+func (h *snapshotHandler) EmitRequest(context.Context, event.Request) {}
+
+func (h *snapshotHandler) EmitSnapshot(_ context.Context, snapshot event.Snapshot) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.snapshots = append(h.snapshots, snapshot)
+}
+
+func (s *MasterTestSuite) TestEmitSnapshot() {
+	ctx := s.T().Context()
+	s.Config = &config.Config{}
+	s.Config.Master.NumJobs = 1
+	s.Config.Recommend.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{
+		expression.MustParseFeedbackTypeExpression("positive"),
+	}
+	s.Config.Recommend.DataSource.NegativeFeedbackTypes = []expression.FeedbackTypeExpression{
+		expression.MustParseFeedbackTypeExpression("negative"),
+	}
+
+	users := []data.User{{UserId: "0"}, {UserId: "1"}}
+	items := []data.Item{{ItemId: "0"}, {ItemId: "1"}}
+	feedbacks := []data.Feedback{
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "positive", UserId: "0", ItemId: "0"}},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "negative", UserId: "0", ItemId: "0"}},
+	}
+	s.NoError(s.DataClient.BatchInsertUsers(ctx, users))
+	s.NoError(s.DataClient.BatchInsertItems(ctx, items))
+	s.NoError(s.DataClient.BatchInsertFeedback(ctx, feedbacks, false, false, false))
+
+	handler := new(snapshotHandler)
+	event.SetEventHandler(handler)
+	s.T().Cleanup(func() { event.SetEventHandler(&event.NopHandler{}) })
+
+	datasets, err := s.loadDataset(ctx)
+	s.Require().NoError(err)
+	s.Equal(1, datasets.clickTrainSet.Count()+datasets.clickTestSet.Count())
+
+	if s.Len(handler.snapshots, 1) {
+		snapshot := handler.snapshots[0]
+		s.Equal(int64(len(users)), snapshot.UserCount)
+		s.Equal(DeepSize(users), snapshot.UserBytes)
+		s.Equal(int64(len(items)), snapshot.ItemCount)
+		s.Equal(DeepSize(items), snapshot.ItemBytes)
+		s.Equal(int64(len(feedbacks))*2, snapshot.FeedbackCount)
+		s.Equal(DeepSize(feedbacks)*2, snapshot.FeedbackBytes)
+		s.False(snapshot.Timestamp.IsZero())
+	}
 }
 
 func (s *MasterTestSuite) TestLoadDataFromDatabase() {
