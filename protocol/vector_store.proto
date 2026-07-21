@@ -88,11 +88,16 @@ message QueryVectorsRequest {
 
 message QueryVectorsResponse { repeated Vector vectors = 1; }
 
+message CountVectorsRequest { string collection = 1; }
+
+message CountVectorsResponse { int64 count = 1; }
+
 service VectorStore {
   rpc ListCollections(ListCollectionsRequest) returns (ListCollectionsResponse) {}
   rpc DescribeCollection(DescribeCollectionRequest) returns (DescribeCollectionResponse) {}
   rpc AddCollection(AddCollectionRequest) returns (AddCollectionResponse) {}
   rpc DeleteCollection(DeleteCollectionRequest) returns (DeleteCollectionResponse) {}
+  rpc CountVectors(CountVectorsRequest) returns (CountVectorsResponse) {}
   rpc AddVectors(AddVectorsRequest) returns (AddVectorsResponse) {}
   rpc DeleteVectors(DeleteVectorsRequest) returns (DeleteVectorsResponse) {}
   rpc QueryVectors(QueryVectorsRequest) returns (QueryVectorsResponse) {}

@@ -157,6 +157,12 @@ func (db *SQLite) DeleteCollection(ctx context.Context, name string) error {
 	return errors.Trace(err)
 }
 
+func (db *SQLite) CountVectors(ctx context.Context, collection string) (int64, error) {
+	var count int64
+	err := db.db.QueryRowContext(ctx, fmt.Sprintf("SELECT COUNT(*) FROM %s", collection)).Scan(&count)
+	return count, errors.Trace(err)
+}
+
 func (db *SQLite) AddVectors(ctx context.Context, collection string, vectors []Vector) error {
 	if len(vectors) == 0 {
 		return nil

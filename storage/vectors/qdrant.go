@@ -259,6 +259,14 @@ func (db *Qdrant) DeleteCollection(ctx context.Context, name string) error {
 	return db.client.DeleteCollection(ctx, name)
 }
 
+func (db *Qdrant) CountVectors(ctx context.Context, collection string) (int64, error) {
+	count, err := db.client.Count(ctx, &qdrant.CountPoints{
+		CollectionName: collection,
+		Exact:          new(true),
+	})
+	return int64(count), errors.Trace(err)
+}
+
 func (db *Qdrant) AddVectors(ctx context.Context, collection string, vectors []Vector) error {
 	if len(vectors) == 0 {
 		return nil

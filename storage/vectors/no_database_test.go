@@ -49,6 +49,10 @@ func TestNoDatabase(t *testing.T) {
 	})
 
 	t.Run("vectors", func(t *testing.T) {
+		count, err := database.CountVectors(ctx, "test")
+		assert.ErrorIs(t, err, ErrNoDatabase)
+		assert.Zero(t, count)
+
 		assert.ErrorIs(t, database.AddVectors(ctx, "test", []Vector{
 			{Id: "a", Vector: []float32{1, 0, 0, 0}, Categories: []string{"cat-a"}},
 		}), ErrNoDatabase)

@@ -36,6 +36,9 @@ func (NoDatabase) AddCollection(_ context.Context, _ string, _ int, _ Distance, 
 	return ErrNoDatabase
 }
 func (NoDatabase) DeleteCollection(_ context.Context, _ string) error { return ErrNoDatabase }
+func (NoDatabase) CountVectors(_ context.Context, _ string) (int64, error) {
+	return 0, ErrNoDatabase
+}
 func (NoDatabase) AddVectors(_ context.Context, _ string, _ []Vector) error {
 	return ErrNoDatabase
 }

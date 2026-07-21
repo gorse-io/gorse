@@ -223,6 +223,15 @@ func (db *Milvus) DeleteCollection(ctx context.Context, name string) error {
 	return errors.Trace(err)
 }
 
+func (db *Milvus) CountVectors(ctx context.Context, collection string) (int64, error) {
+	stats, err := db.client.GetCollectionStats(ctx, milvusclient.NewGetCollectionStatsOption(collection))
+	if err != nil {
+		return 0, errors.Trace(err)
+	}
+	count, err := strconv.ParseInt(stats["row_count"], 10, 64)
+	return count, errors.Trace(err)
+}
+
 func (db *Milvus) AddVectors(ctx context.Context, collection string, vectors []Vector) error {
 	if len(vectors) == 0 {
 		return nil

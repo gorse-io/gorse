@@ -79,6 +79,42 @@ func (suite *vectorsTestSuite) TestCollections() {
 	suite.Error(err)
 }
 
+func (suite *vectorsTestSuite) TestCountVectors() {
+	ctx := suite.T().Context()
+	err := suite.Database.AddCollection(ctx, "test", defaultVectorSize, Cosine, VectorConfig{})
+	suite.NoError(err)
+
+	count, err := suite.Database.CountVectors(ctx, "test")
+	suite.NoError(err)
+	suite.Zero(count)
+
+	cutoff := time.Now().UTC().Truncate(time.Millisecond)
+	err = suite.Database.AddVectors(ctx, "test", []Vector{
+		{
+			Id:        "old",
+			Vector:    make([]float32, defaultVectorSize),
+			Timestamp: cutoff.Add(-time.Hour),
+		},
+		{
+			Id:        "new",
+			Vector:    make([]float32, defaultVectorSize),
+			Timestamp: cutoff,
+		},
+	})
+	suite.NoError(err)
+
+	count, err = suite.Database.CountVectors(ctx, "test")
+	suite.NoError(err)
+	suite.Equal(int64(2), count)
+
+	err = suite.Database.DeleteVectors(ctx, "test", cutoff)
+	suite.NoError(err)
+
+	count, err = suite.Database.CountVectors(ctx, "test")
+	suite.NoError(err)
+	suite.Equal(int64(1), count)
+}
+
 func (suite *vectorsTestSuite) TestVectors() {
 	ctx := suite.T().Context()
 	err := suite.Database.AddCollection(ctx, "test", defaultVectorSize, Cosine, VectorConfig{})

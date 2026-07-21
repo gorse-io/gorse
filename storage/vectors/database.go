@@ -90,6 +90,7 @@ type Database interface {
 	DescribeCollection(ctx context.Context, name string) (*CollectionInfo, error)
 	AddCollection(ctx context.Context, name string, dimensions int, distance Distance, config VectorConfig) error
 	DeleteCollection(ctx context.Context, name string) error
+	CountVectors(ctx context.Context, collection string) (int64, error)
 	AddVectors(ctx context.Context, collection string, vectors []Vector) error
 	DeleteVectors(ctx context.Context, collection string, timestamp time.Time) error
 	QueryVectors(ctx context.Context, collection string, q []float32, categories []string, topK int) ([]Vector, error)

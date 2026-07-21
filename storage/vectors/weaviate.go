@@ -231,6 +231,43 @@ func (db *Weaviate) DeleteCollection(ctx context.Context, name string) error {
 	return errors.Trace(err)
 }
 
+func (db *Weaviate) CountVectors(ctx context.Context, collection string) (int64, error) {
+	result, err := db.client.GraphQL().Aggregate().
+		WithClassName(capitalize(collection)).
+		WithFields(graphql.Field{
+			Name:   "meta",
+			Fields: []graphql.Field{{Name: "count"}},
+		}).
+		Do(ctx)
+	if err != nil {
+		return 0, errors.Trace(err)
+	}
+	if len(result.Errors) > 0 {
+		return 0, errors.New(result.Errors[0].Message)
+	}
+	aggregate, ok := result.Data["Aggregate"].(map[string]any)
+	if !ok {
+		return 0, errors.Errorf("failed to parse aggregate response for collection %s", collection)
+	}
+	groups, ok := aggregate[capitalize(collection)].([]any)
+	if !ok || len(groups) == 0 {
+		return 0, errors.Errorf("failed to parse aggregate response for collection %s", collection)
+	}
+	group, ok := groups[0].(map[string]any)
+	if !ok {
+		return 0, errors.Errorf("failed to parse aggregate response for collection %s", collection)
+	}
+	meta, ok := group["meta"].(map[string]any)
+	if !ok {
+		return 0, errors.Errorf("failed to parse aggregate response for collection %s", collection)
+	}
+	count, ok := meta["count"].(float64)
+	if !ok {
+		return 0, errors.Errorf("failed to parse aggregate response for collection %s", collection)
+	}
+	return int64(count), nil
+}
+
 func (db *Weaviate) AddVectors(ctx context.Context, collection string, vectors []Vector) error {
 	if len(vectors) == 0 {
 		return nil

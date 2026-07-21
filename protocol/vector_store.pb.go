@@ -872,6 +872,94 @@ func (x *QueryVectorsResponse) GetVectors() []*Vector {
 	return nil
 }
 
+type CountVectorsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Collection    string                 `protobuf:"bytes,1,opt,name=collection,proto3" json:"collection,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CountVectorsRequest) Reset() {
+	*x = CountVectorsRequest{}
+	mi := &file_vector_store_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CountVectorsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CountVectorsRequest) ProtoMessage() {}
+
+func (x *CountVectorsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_vector_store_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CountVectorsRequest.ProtoReflect.Descriptor instead.
+func (*CountVectorsRequest) Descriptor() ([]byte, []int) {
+	return file_vector_store_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *CountVectorsRequest) GetCollection() string {
+	if x != nil {
+		return x.Collection
+	}
+	return ""
+}
+
+type CountVectorsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Count         int64                  `protobuf:"varint,1,opt,name=count,proto3" json:"count,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CountVectorsResponse) Reset() {
+	*x = CountVectorsResponse{}
+	mi := &file_vector_store_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CountVectorsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CountVectorsResponse) ProtoMessage() {}
+
+func (x *CountVectorsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_vector_store_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CountVectorsResponse.ProtoReflect.Descriptor instead.
+func (*CountVectorsResponse) Descriptor() ([]byte, []int) {
+	return file_vector_store_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *CountVectorsResponse) GetCount() int64 {
+	if x != nil {
+		return x.Count
+	}
+	return 0
+}
+
 var File_vector_store_proto protoreflect.FileDescriptor
 
 const file_vector_store_proto_rawDesc = "" +
@@ -932,18 +1020,25 @@ const file_vector_store_proto_rawDesc = "" +
 	"categories\x12\x13\n" +
 	"\x05top_k\x18\x04 \x01(\x05R\x04topK\"B\n" +
 	"\x14QueryVectorsResponse\x12*\n" +
-	"\avectors\x18\x01 \x03(\v2\x10.protocol.VectorR\avectors*;\n" +
+	"\avectors\x18\x01 \x03(\v2\x10.protocol.VectorR\avectors\"5\n" +
+	"\x13CountVectorsRequest\x12\x1e\n" +
+	"\n" +
+	"collection\x18\x01 \x01(\tR\n" +
+	"collection\",\n" +
+	"\x14CountVectorsResponse\x12\x14\n" +
+	"\x05count\x18\x01 \x01(\x03R\x05count*;\n" +
 	"\bDistance\x12\v\n" +
 	"\aUnknown\x10\x00\x12\n" +
 	"\n" +
 	"\x06Cosine\x10\x01\x12\r\n" +
 	"\tEuclidean\x10\x02\x12\a\n" +
-	"\x03Dot\x10\x032\xeb\x04\n" +
+	"\x03Dot\x10\x032\xbc\x05\n" +
 	"\vVectorStore\x12X\n" +
 	"\x0fListCollections\x12 .protocol.ListCollectionsRequest\x1a!.protocol.ListCollectionsResponse\"\x00\x12a\n" +
 	"\x12DescribeCollection\x12#.protocol.DescribeCollectionRequest\x1a$.protocol.DescribeCollectionResponse\"\x00\x12R\n" +
 	"\rAddCollection\x12\x1e.protocol.AddCollectionRequest\x1a\x1f.protocol.AddCollectionResponse\"\x00\x12[\n" +
-	"\x10DeleteCollection\x12!.protocol.DeleteCollectionRequest\x1a\".protocol.DeleteCollectionResponse\"\x00\x12I\n" +
+	"\x10DeleteCollection\x12!.protocol.DeleteCollectionRequest\x1a\".protocol.DeleteCollectionResponse\"\x00\x12O\n" +
+	"\fCountVectors\x12\x1d.protocol.CountVectorsRequest\x1a\x1e.protocol.CountVectorsResponse\"\x00\x12I\n" +
 	"\n" +
 	"AddVectors\x12\x1b.protocol.AddVectorsRequest\x1a\x1c.protocol.AddVectorsResponse\"\x00\x12R\n" +
 	"\rDeleteVectors\x12\x1e.protocol.DeleteVectorsRequest\x1a\x1f.protocol.DeleteVectorsResponse\"\x00\x12O\n" +
@@ -962,7 +1057,7 @@ func file_vector_store_proto_rawDescGZIP() []byte {
 }
 
 var file_vector_store_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_vector_store_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
+var file_vector_store_proto_msgTypes = make([]protoimpl.MessageInfo, 18)
 var file_vector_store_proto_goTypes = []any{
 	(Distance)(0),                      // 0: protocol.Distance
 	(*Vector)(nil),                     // 1: protocol.Vector
@@ -981,33 +1076,37 @@ var file_vector_store_proto_goTypes = []any{
 	(*DeleteVectorsResponse)(nil),      // 14: protocol.DeleteVectorsResponse
 	(*QueryVectorsRequest)(nil),        // 15: protocol.QueryVectorsRequest
 	(*QueryVectorsResponse)(nil),       // 16: protocol.QueryVectorsResponse
-	(*timestamppb.Timestamp)(nil),      // 17: google.protobuf.Timestamp
+	(*CountVectorsRequest)(nil),        // 17: protocol.CountVectorsRequest
+	(*CountVectorsResponse)(nil),       // 18: protocol.CountVectorsResponse
+	(*timestamppb.Timestamp)(nil),      // 19: google.protobuf.Timestamp
 }
 var file_vector_store_proto_depIdxs = []int32{
-	17, // 0: protocol.Vector.timestamp:type_name -> google.protobuf.Timestamp
+	19, // 0: protocol.Vector.timestamp:type_name -> google.protobuf.Timestamp
 	0,  // 1: protocol.DescribeCollectionResponse.distance:type_name -> protocol.Distance
 	4,  // 2: protocol.DescribeCollectionResponse.config:type_name -> protocol.VectorConfig
 	0,  // 3: protocol.AddCollectionRequest.distance:type_name -> protocol.Distance
 	4,  // 4: protocol.AddCollectionRequest.config:type_name -> protocol.VectorConfig
 	1,  // 5: protocol.AddVectorsRequest.vectors:type_name -> protocol.Vector
-	17, // 6: protocol.DeleteVectorsRequest.timestamp:type_name -> google.protobuf.Timestamp
+	19, // 6: protocol.DeleteVectorsRequest.timestamp:type_name -> google.protobuf.Timestamp
 	1,  // 7: protocol.QueryVectorsResponse.vectors:type_name -> protocol.Vector
 	2,  // 8: protocol.VectorStore.ListCollections:input_type -> protocol.ListCollectionsRequest
 	5,  // 9: protocol.VectorStore.DescribeCollection:input_type -> protocol.DescribeCollectionRequest
 	7,  // 10: protocol.VectorStore.AddCollection:input_type -> protocol.AddCollectionRequest
 	9,  // 11: protocol.VectorStore.DeleteCollection:input_type -> protocol.DeleteCollectionRequest
-	11, // 12: protocol.VectorStore.AddVectors:input_type -> protocol.AddVectorsRequest
-	13, // 13: protocol.VectorStore.DeleteVectors:input_type -> protocol.DeleteVectorsRequest
-	15, // 14: protocol.VectorStore.QueryVectors:input_type -> protocol.QueryVectorsRequest
-	3,  // 15: protocol.VectorStore.ListCollections:output_type -> protocol.ListCollectionsResponse
-	6,  // 16: protocol.VectorStore.DescribeCollection:output_type -> protocol.DescribeCollectionResponse
-	8,  // 17: protocol.VectorStore.AddCollection:output_type -> protocol.AddCollectionResponse
-	10, // 18: protocol.VectorStore.DeleteCollection:output_type -> protocol.DeleteCollectionResponse
-	12, // 19: protocol.VectorStore.AddVectors:output_type -> protocol.AddVectorsResponse
-	14, // 20: protocol.VectorStore.DeleteVectors:output_type -> protocol.DeleteVectorsResponse
-	16, // 21: protocol.VectorStore.QueryVectors:output_type -> protocol.QueryVectorsResponse
-	15, // [15:22] is the sub-list for method output_type
-	8,  // [8:15] is the sub-list for method input_type
+	17, // 12: protocol.VectorStore.CountVectors:input_type -> protocol.CountVectorsRequest
+	11, // 13: protocol.VectorStore.AddVectors:input_type -> protocol.AddVectorsRequest
+	13, // 14: protocol.VectorStore.DeleteVectors:input_type -> protocol.DeleteVectorsRequest
+	15, // 15: protocol.VectorStore.QueryVectors:input_type -> protocol.QueryVectorsRequest
+	3,  // 16: protocol.VectorStore.ListCollections:output_type -> protocol.ListCollectionsResponse
+	6,  // 17: protocol.VectorStore.DescribeCollection:output_type -> protocol.DescribeCollectionResponse
+	8,  // 18: protocol.VectorStore.AddCollection:output_type -> protocol.AddCollectionResponse
+	10, // 19: protocol.VectorStore.DeleteCollection:output_type -> protocol.DeleteCollectionResponse
+	18, // 20: protocol.VectorStore.CountVectors:output_type -> protocol.CountVectorsResponse
+	12, // 21: protocol.VectorStore.AddVectors:output_type -> protocol.AddVectorsResponse
+	14, // 22: protocol.VectorStore.DeleteVectors:output_type -> protocol.DeleteVectorsResponse
+	16, // 23: protocol.VectorStore.QueryVectors:output_type -> protocol.QueryVectorsResponse
+	16, // [16:24] is the sub-list for method output_type
+	8,  // [8:16] is the sub-list for method input_type
 	8,  // [8:8] is the sub-list for extension type_name
 	8,  // [8:8] is the sub-list for extension extendee
 	0,  // [0:8] is the sub-list for field type_name
@@ -1024,7 +1123,7 @@ func file_vector_store_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_vector_store_proto_rawDesc), len(file_vector_store_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   16,
+			NumMessages:   18,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

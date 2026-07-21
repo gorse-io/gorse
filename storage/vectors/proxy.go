@@ -99,6 +99,14 @@ func (p *ProxyServer) DeleteCollection(ctx context.Context, request *protocol.De
 	return &protocol.DeleteCollectionResponse{}, nil
 }
 
+func (p *ProxyServer) CountVectors(ctx context.Context, request *protocol.CountVectorsRequest) (*protocol.CountVectorsResponse, error) {
+	count, err := p.database.CountVectors(ctx, request.GetCollection())
+	if err != nil {
+		return nil, err
+	}
+	return &protocol.CountVectorsResponse{Count: count}, nil
+}
+
 func (p *ProxyServer) AddVectors(ctx context.Context, request *protocol.AddVectorsRequest) (*protocol.AddVectorsResponse, error) {
 	vectors := make([]Vector, len(request.Vectors))
 	for i, vector := range request.Vectors {
@@ -220,6 +228,14 @@ func (p ProxyClient) AddCollection(ctx context.Context, name string, dimensions 
 func (p ProxyClient) DeleteCollection(ctx context.Context, name string) error {
 	_, err := p.VectorStoreClient.DeleteCollection(ctx, &protocol.DeleteCollectionRequest{Name: name})
 	return err
+}
+
+func (p ProxyClient) CountVectors(ctx context.Context, collection string) (int64, error) {
+	resp, err := p.VectorStoreClient.CountVectors(ctx, &protocol.CountVectorsRequest{Collection: collection})
+	if err != nil {
+		return 0, err
+	}
+	return resp.GetCount(), nil
 }
 
 func (p ProxyClient) AddVectors(ctx context.Context, collection string, vectors []Vector) error {
