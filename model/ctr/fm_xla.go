@@ -154,13 +154,14 @@ func (fm *AFM) forwardGraph(ctx *mlx_context.Context, indices, values *graph.Nod
 	ctx = ctx.Checked(false)
 	g := indices.Graph()
 	batchSize := indices.Shape().Dimensions[0]
+	numDimension := indices.Shape().Dimensions[1]
 
 	// V: Embedding(numFeatures, nFactors)
 	vCtx := ctx.In("V")
 	v := layers.Embedding(vCtx, indices, dtypes.F32, fm.numFeatures, fm.nFactors) // [batchSize, numDimension, nFactors]
 
 	// x: values [batchSize, numDimension, 1]
-	x := graph.Reshape(values, batchSize, fm.numDimension, 1)
+	x := graph.Reshape(values, batchSize, numDimension, 1)
 
 	// vx: BMM(v, x, true, false) -> [batchSize, nFactors, 1]
 	// contracting axes: [1] (numDimension), batch axes: [0]
@@ -257,9 +258,13 @@ func (fm *AFM) BatchInternalPredict(x []lo.Tuple2[[]int32, []float32], e [][][]u
 		start := b * fm.batchSize
 		end := min(start+fm.batchSize, len(x))
 		batchSize := end - start
+		numDimension := fm.numDimension
+		for i := start; i < end; i++ {
+			numDimension = max(numDimension, len(scaledX[i].A))
+		}
 
-		indicesData := make([]int32, batchSize*fm.numDimension)
-		valuesData := make([]float32, batchSize*fm.numDimension)
+		indicesData := make([]int32, batchSize*numDimension)
+		valuesData := make([]float32, batchSize*numDimension)
 		additionalData := make([][]float32, len(fm.embeddingDim))
 		for i := range additionalData {
 			additionalData[i] = make([]float32, batchSize*fm.embeddingDim[i])
@@ -268,8 +273,8 @@ func (fm *AFM) BatchInternalPredict(x []lo.Tuple2[[]int32, []float32], e [][][]u
 		for i := 0; i < batchSize; i++ {
 			row := scaledX[start+i]
 			for j := 0; j < len(row.A); j++ {
-				indicesData[i*fm.numDimension+j] = row.A[j]
-				valuesData[i*fm.numDimension+j] = row.B[j]
+				indicesData[i*numDimension+j] = row.A[j]
+				valuesData[i*numDimension+j] = row.B[j]
 			}
 			for j := range fm.embeddingDim {
 				if len(e[start+i]) > j && len(e[start+i][j]) == fm.embeddingDim[j] {
@@ -279,8 +284,8 @@ func (fm *AFM) BatchInternalPredict(x []lo.Tuple2[[]int32, []float32], e [][][]u
 		}
 
 		inputs := []any{
-			tensors.FromFlatDataAndDimensions(indicesData, batchSize, fm.numDimension),
-			tensors.FromFlatDataAndDimensions(valuesData, batchSize, fm.numDimension),
+			tensors.FromFlatDataAndDimensions(indicesData, batchSize, numDimension),
+			tensors.FromFlatDataAndDimensions(valuesData, batchSize, numDimension),
 		}
 		for i := range additionalData {
 			inputs = append(inputs, tensors.FromFlatDataAndDimensions(additionalData[i], batchSize, fm.embeddingDim[i]))
