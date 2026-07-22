@@ -26,6 +26,16 @@ type MockHandler struct {
 	mock.Mock
 }
 
+type channelHandler struct {
+	requests chan Request
+}
+
+func (h *channelHandler) EmitRequest(_ context.Context, request Request) {
+	h.requests <- request
+}
+
+func (h *channelHandler) EmitSnapshot(context.Context, Snapshot) {}
+
 func (m *MockHandler) EmitRequest(ctx context.Context, event Request) {
 	m.Called(ctx, event)
 }
@@ -63,4 +73,28 @@ func TestSetEventRecorder(t *testing.T) {
 	Emit(t.Context(), request)
 	Emit(t.Context(), snapshot)
 	handler.AssertExpectations(t)
+}
+
+func TestEmitAsyncCapturesHandler(t *testing.T) {
+	t.Cleanup(func() {
+		SetEventHandler(&NopHandler{})
+	})
+
+	request := Request{RequestID: "request-id"}
+	first := &channelHandler{requests: make(chan Request, 1)}
+	second := &channelHandler{requests: make(chan Request, 1)}
+	SetEventHandler(first)
+	EmitAsync(t.Context(), request)
+	SetEventHandler(second)
+
+	select {
+	case actual := <-first.requests:
+		if actual != request {
+			t.Fatalf("unexpected request: %+v", actual)
+		}
+	case actual := <-second.requests:
+		t.Fatalf("request was emitted to replacement handler: %+v", actual)
+	case <-time.After(time.Second):
+		t.Fatal("request was not emitted")
+	}
 }

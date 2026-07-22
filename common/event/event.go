@@ -16,6 +16,7 @@ package event
 
 import (
 	"context"
+	"sync"
 	"time"
 )
 
@@ -57,17 +58,37 @@ func (n *NopHandler) EmitRequest(ctx context.Context, event Request) {}
 
 func (n *NopHandler) EmitSnapshot(ctx context.Context, event Snapshot) {}
 
-var handler Handler = &NopHandler{}
+var (
+	handlerMu sync.RWMutex
+	handler   Handler = &NopHandler{}
+)
 
 func SetEventHandler(r Handler) {
+	handlerMu.Lock()
+	defer handlerMu.Unlock()
 	handler = r
 }
 
-func Emit[T Request | Snapshot](ctx context.Context, event T) {
+func getEventHandler() Handler {
+	handlerMu.RLock()
+	defer handlerMu.RUnlock()
+	return handler
+}
+
+func emit[T Request | Snapshot](handler Handler, ctx context.Context, event T) {
 	switch e := any(event).(type) {
 	case Request:
 		handler.EmitRequest(ctx, e)
 	case Snapshot:
 		handler.EmitSnapshot(ctx, e)
 	}
+}
+
+func Emit[T Request | Snapshot](ctx context.Context, event T) {
+	emit(getEventHandler(), ctx, event)
+}
+
+func EmitAsync[T Request | Snapshot](ctx context.Context, event T) {
+	handler := getEventHandler()
+	go emit(handler, ctx, event)
 }

@@ -122,7 +122,7 @@ func (m *Master) loadDataset(parent context.Context) (datasets Datasets, err err
 	if err != nil {
 		return Datasets{}, errors.Trace(err)
 	}
-	go event.Emit(context.WithoutCancel(ctx), snapshot)
+	event.EmitAsync(context.WithoutCancel(ctx), snapshot)
 
 	// save non-personalized recommenders to cache
 	for i, recommender := range nonPersonalizedRecommenders {
