@@ -105,10 +105,15 @@ type Master struct {
 	tokenCache   *ttlcache.Cache[string, UserInfo]
 
 	// events
-	ticker      *time.Ticker
-	scheduled   chan struct{}
-	cancel      context.CancelFunc
-	reconciling atomic.Bool
+	ticker       *time.Ticker
+	scheduled    chan struct{}
+	taskDone     chan struct{}
+	taskWait     sync.WaitGroup
+	taskStop     sync.Once
+	taskMutex    sync.Mutex
+	taskStopping bool
+	cancel       context.CancelFunc
+	reconciling  atomic.Bool
 }
 
 // NewMaster creates a master node.
@@ -152,6 +157,7 @@ func NewMaster(cfg *config.Config, cacheFolder string, standalone bool, configPa
 		},
 		ticker:    time.NewTicker(duration),
 		scheduled: make(chan struct{}, 1),
+		taskDone:  make(chan struct{}),
 		cancel:    func() {},
 	}
 	return m
@@ -359,7 +365,11 @@ func (m *Master) Serve() {
 	}
 
 	go m.watchConfigFile(context.Background())
-	go m.RunTasksLoop()
+	m.taskWait.Add(1)
+	go func() {
+		defer m.taskWait.Done()
+		m.RunTasksLoop()
+	}()
 
 	// start rpc server
 	go func() {
@@ -478,6 +488,7 @@ func (m *Master) checkCollaborativeFilteringVectorCollection(info *vectors.Colle
 }
 
 func (m *Master) Shutdown() {
+	m.stopTasks()
 	// stop http server
 	err := m.HttpServer.Shutdown(context.TODO())
 	if err != nil {
@@ -508,17 +519,45 @@ func (m *Master) RunTasksLoop() {
 	}
 	for {
 		select {
+		case <-m.taskDone:
+			return
 		case <-m.ticker.C:
 		case <-m.scheduled:
 		}
 
 		// download dataset
-		var ctx context.Context
-		ctx, m.cancel = context.WithCancel(context.Background())
+		ctx, cancel := context.WithCancel(context.Background())
+		m.taskMutex.Lock()
+		if m.taskStopping {
+			m.taskMutex.Unlock()
+			cancel()
+			return
+		}
+		m.cancel = cancel
+		m.taskMutex.Unlock()
 		err := m.runLoadDatasetTask(ctx)
+		cancel()
 		if err != nil {
 			log.Logger().Error("failed to load ranking dataset", zap.Error(err))
 			continue
 		}
 	}
+}
+
+func (m *Master) cancelTask() {
+	m.taskMutex.Lock()
+	defer m.taskMutex.Unlock()
+	m.cancel()
+}
+
+func (m *Master) stopTasks() {
+	m.taskStop.Do(func() {
+		m.taskMutex.Lock()
+		m.taskStopping = true
+		close(m.taskDone)
+		m.ticker.Stop()
+		m.cancel()
+		m.taskMutex.Unlock()
+	})
+	m.taskWait.Wait()
 }

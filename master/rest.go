@@ -579,7 +579,7 @@ func (m *Master) postConfig(request *restful.Request, response *restful.Response
 	m.Config.Recommend = newConfig.Recommend
 	m.ConfigMutex.Unlock()
 
-	m.cancel()
+	m.cancelTask()
 	select {
 	case m.scheduled <- struct{}{}:
 	default:
@@ -617,7 +617,7 @@ func (m *Master) deleteConfig(_request *restful.Request, response *restful.Respo
 	m.Config.Recommend = newConfig.Recommend
 	m.ConfigMutex.Unlock()
 
-	m.cancel()
+	m.cancelTask()
 	select {
 	case m.scheduled <- struct{}{}:
 	default:
@@ -1359,7 +1359,7 @@ func (m *Master) importExportUsers(response http.ResponseWriter, request *http.R
 			}
 		}
 
-		m.cancel()
+		m.cancelTask()
 		select {
 		case m.scheduled <- struct{}{}:
 		default:
@@ -1482,7 +1482,7 @@ func (m *Master) importExportItems(response http.ResponseWriter, request *http.R
 			}
 		}
 
-		m.cancel()
+		m.cancelTask()
 		select {
 		case m.scheduled <- struct{}{}:
 		default:
@@ -1609,7 +1609,7 @@ func (m *Master) importExportFeedback(response http.ResponseWriter, request *htt
 			}
 		}
 
-		m.cancel()
+		m.cancelTask()
 		select {
 		case m.scheduled <- struct{}{}:
 		default:
@@ -1980,7 +1980,7 @@ func (m *Master) restore(response http.ResponseWriter, request *http.Request) {
 		return
 	}
 
-	m.cancel()
+	m.cancelTask()
 	select {
 	case m.scheduled <- struct{}{}:
 	default:

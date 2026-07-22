@@ -17,6 +17,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/common/monitor"
@@ -100,4 +101,42 @@ func (s *MasterTestSuite) TestInitCollaborativeFilteringVectorCollectionRecreate
 
 func TestMaster(t *testing.T) {
 	suite.Run(t, new(MasterTestSuite))
+}
+
+func TestStopTasksWaitsForRunningTask(t *testing.T) {
+	m := NewMaster(config.GetDefaultConfig(), t.TempDir(), true, "")
+	t.Cleanup(m.ticker.Stop)
+
+	taskCanceled := make(chan struct{})
+	allowTaskToFinish := make(chan struct{})
+	m.taskWait.Add(1)
+	go func() {
+		defer m.taskWait.Done()
+		<-m.taskDone
+		close(taskCanceled)
+		<-allowTaskToFinish
+	}()
+
+	stopped := make(chan struct{})
+	go func() {
+		m.stopTasks()
+		close(stopped)
+	}()
+
+	select {
+	case <-taskCanceled:
+	case <-time.After(time.Second):
+		t.Fatal("task was not canceled")
+	}
+	select {
+	case <-stopped:
+		t.Fatal("stopTasks returned before the running task finished")
+	default:
+	}
+	close(allowTaskToFinish)
+	select {
+	case <-stopped:
+	case <-time.After(time.Second):
+		t.Fatal("stopTasks did not wait for the running task")
+	}
 }
