@@ -454,7 +454,7 @@ func (s *MasterTestSuite) TestNegativeFeedbackPriority() {
 	s.Equal(5, datasets.clickTrainSet.NegativeCount+datasets.clickTestSet.NegativeCount)
 
 	// Verify negative feedback items are excluded from recommendations
-	recommender, err := logics.NewRecommender(s.Config.Recommend, s.CacheClient, s.DataClient, vectors.NoDatabase{}, true, "1", nil)
+	recommender, err := logics.NewRecommender(s.Config.Recommend, s.CacheClient, s.DataClient, vectors.NoDatabase{}, nil, true, "1", nil)
 	s.NoError(err)
 	excludeSet := recommender.ExcludeSet()
 	// User 1 should have item 0 in exclude set (due to dislike)

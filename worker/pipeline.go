@@ -153,7 +153,7 @@ func (p *Pipeline) Recommend(ctx context.Context, users []data.User, progress fu
 		updateUserCount.Add(1)
 
 		recommendTime := time.Now()
-		recommender, err := logics.NewRecommender(p.Config.Recommend, p.CacheClient, p.DataClient, p.VectorClient, false, userId, nil)
+		recommender, err := logics.NewRecommender(p.Config.Recommend, p.CacheClient, p.DataClient, p.VectorClient, p.MatrixFactorizationUsers, false, userId, nil)
 		if err != nil {
 			log.Logger().Error("failed to create recommender", zap.String("user_id", userId), zap.Error(err))
 			return
@@ -165,9 +165,7 @@ func (p *Pipeline) Recommend(ctx context.Context, users []data.User, progress fu
 
 		// Load collaborative filtering user embedding for on-demand vector search.
 		if !strings.EqualFold(p.Config.Recommend.Collaborative.Type, "none") && p.MatrixFactorizationUsers != nil {
-			if userEmbedding, ok := p.MatrixFactorizationUsers.Get(userId); ok {
-				recommender.SetCollaborativeUserEmbedding(userEmbedding)
-			} else if !p.dontskipColdStartUsers {
+			if _, ok := p.MatrixFactorizationUsers.Get(userId); !ok && !p.dontskipColdStartUsers {
 				// skip users without collaborative filtering embeddings
 				return
 			}

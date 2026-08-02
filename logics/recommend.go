@@ -46,18 +46,18 @@ type Recommender struct {
 	dataClient   data.Database
 	vectorClient vectors.Database
 
-	online                     bool
-	coldstart                  bool
-	userId                     string
-	userFeedback               []data.Feedback
-	categories                 []string
-	excludeSet                 mapset.Set[string]
-	collaborativeUserEmbedding []float32
+	online       bool
+	coldstart    bool
+	userId       string
+	userFeedback []data.Feedback
+	categories   []string
+	excludeSet   mapset.Set[string]
+	users        *MatrixFactorizationUsers
 }
 
 type RecommenderFunc func(ctx context.Context) ([]cache.Score, string, error)
 
-func NewRecommender(config config.RecommendConfig, cacheClient cache.Database, dataClient data.Database, vectorClient vectors.Database, online bool, userId string, categories []string) (*Recommender, error) {
+func NewRecommender(config config.RecommendConfig, cacheClient cache.Database, dataClient data.Database, vectorClient vectors.Database, users *MatrixFactorizationUsers, online bool, userId string, categories []string) (*Recommender, error) {
 	// Load user feedback
 	userFeedback, err := dataClient.GetUserFeedback(context.Background(), userId, new(time.Now()))
 	if err != nil {
@@ -88,6 +88,7 @@ func NewRecommender(config config.RecommendConfig, cacheClient cache.Database, d
 		coldstart:    coldstart,
 		categories:   categories,
 		excludeSet:   excludeSet,
+		users:        users,
 	}, nil
 }
 
@@ -101,10 +102,6 @@ func (r *Recommender) UserFeedback() []data.Feedback {
 
 func (r *Recommender) IsColdStart() bool {
 	return r.coldstart
-}
-
-func (r *Recommender) SetCollaborativeUserEmbedding(embedding []float32) {
-	r.collaborativeUserEmbedding = embedding
 }
 
 func (r *Recommender) Recommend(ctx context.Context, limit int) (result []cache.Score, err error) {
@@ -229,13 +226,25 @@ func (r *Recommender) recommendNonPersonalized(name string) RecommenderFunc {
 
 func (r *Recommender) recommendCollaborative(ctx context.Context) ([]cache.Score, string, error) {
 	digest := r.config.Collaborative.Hash(&r.config)
-	if len(r.collaborativeUserEmbedding) == 0 {
+	if r.users == nil {
 		return nil, digest, nil
 	}
-	items, err := QueryCollaborativeFiltering(ctx, r.vectorClient, r.collaborativeUserEmbedding, r.categories, r.config.CacheSize+r.excludeSet.Cardinality())
+	userEmbedding, ok := r.users.Get(r.userId)
+	if !ok || len(userEmbedding) == 0 {
+		return nil, digest, nil
+	}
+	scoredVectors, err := r.vectorClient.QueryVectors(ctx, vectors.CollaborativeFiltering, userEmbedding, r.categories, r.config.CacheSize+r.excludeSet.Cardinality())
 	if err != nil {
 		return nil, "", errors.Trace(err)
 	}
+	items := lo.Map(scoredVectors, func(item vectors.ScoredVector, index int) cache.Score {
+		return cache.Score{
+			Id:         item.Id,
+			Score:      float64(len(scoredVectors) - index),
+			Categories: item.Categories,
+			Timestamp:  item.Timestamp,
+		}
+	})
 	return lo.Filter(items, func(item cache.Score, index int) bool {
 		return !r.excludeSet.Contains(item.Id)
 	}), digest, nil
