@@ -1359,6 +1359,13 @@ func (m *Master) collectGarbage(parent context.Context, dataSet *dataset.Dataset
 					Before: new(dataSet.GetTimestamp()),
 				})
 			}
+		case cache.CollaborativeFiltering:
+			if dataSet.GetUserDict().Id(subset) == dataset.NotId {
+				return m.CacheClient.DeleteScores(ctx, []string{cache.CollaborativeFiltering}, cache.ScoreCondition{
+					Subset: new(subset),
+					Before: new(dataSet.GetTimestamp()),
+				})
+			}
 		}
 		return nil
 	})

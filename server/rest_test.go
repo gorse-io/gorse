@@ -1661,6 +1661,13 @@ func (suite *ServerTestSuite) TestGetRecommendsFallbackCollaborativeFiltering() 
 		{Id: "3", Score: 97, Categories: []string{"*"}},
 		{Id: "4", Score: 96, Categories: []string{"*"}}})
 	suite.NoError(err)
+	// insert collaborative filtering recommendation
+	err = suite.CacheClient.AddScores(ctx, cache.CollaborativeFiltering, "0", []cache.Score{
+		{Id: "13", Score: 79, Categories: []string{"*"}},
+		{Id: "14", Score: 78, Categories: []string{"*"}},
+		{Id: "15", Score: 77, Categories: []string{"*"}},
+		{Id: "16", Score: 76, Categories: []string{"*"}}})
+	suite.NoError(err)
 	// test collaborative filtering
 	suite.Config.Recommend.Fallback.Recommenders = []string{"collaborative"}
 	apitest.New().
@@ -1672,7 +1679,7 @@ func (suite *ServerTestSuite) TestGetRecommendsFallbackCollaborativeFiltering() 
 		}).
 		Expect(suite.T()).
 		Status(http.StatusOK).
-		Body(suite.marshal([]string{"1", "2", "3", "4"})).
+		Body(suite.marshal([]string{"1", "2", "3", "4", "13", "14", "15", "16"})).
 		End()
 	apitest.New().
 		Handler(suite.handler).
@@ -1683,7 +1690,7 @@ func (suite *ServerTestSuite) TestGetRecommendsFallbackCollaborativeFiltering() 
 		}).
 		Expect(suite.T()).
 		Status(http.StatusOK).
-		Body(suite.marshal([]string{"1", "2", "3", "4"})).
+		Body(suite.marshal([]string{"1", "2", "3", "4", "13", "14", "15", "16"})).
 		End()
 }
 

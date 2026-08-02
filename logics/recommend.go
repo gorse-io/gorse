@@ -26,7 +26,6 @@ import (
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
-	"github.com/gorse-io/gorse/storage/vectors"
 	"github.com/juju/errors"
 	"github.com/samber/lo"
 )
@@ -41,10 +40,9 @@ const (
 )
 
 type Recommender struct {
-	config       config.RecommendConfig
-	cacheClient  cache.Database
-	dataClient   data.Database
-	vectorClient vectors.Database
+	config      config.RecommendConfig
+	cacheClient cache.Database
+	dataClient  data.Database
 
 	online       bool
 	coldstart    bool
@@ -52,12 +50,11 @@ type Recommender struct {
 	userFeedback []data.Feedback
 	categories   []string
 	excludeSet   mapset.Set[string]
-	users        *MatrixFactorizationUsers
 }
 
 type RecommenderFunc func(ctx context.Context) ([]cache.Score, string, error)
 
-func NewRecommender(config config.RecommendConfig, cacheClient cache.Database, dataClient data.Database, vectorClient vectors.Database, users *MatrixFactorizationUsers, online bool, userId string, categories []string) (*Recommender, error) {
+func NewRecommender(config config.RecommendConfig, cacheClient cache.Database, dataClient data.Database, online bool, userId string, categories []string) (*Recommender, error) {
 	// Load user feedback
 	userFeedback, err := dataClient.GetUserFeedback(context.Background(), userId, new(time.Now()))
 	if err != nil {
@@ -81,14 +78,12 @@ func NewRecommender(config config.RecommendConfig, cacheClient cache.Database, d
 		config:       config,
 		cacheClient:  cacheClient,
 		dataClient:   dataClient,
-		vectorClient: vectorClient,
 		userId:       userId,
 		userFeedback: userFeedback,
 		online:       online,
 		coldstart:    coldstart,
 		categories:   categories,
 		excludeSet:   excludeSet,
-		users:        users,
 	}, nil
 }
 
@@ -225,26 +220,17 @@ func (r *Recommender) recommendNonPersonalized(name string) RecommenderFunc {
 }
 
 func (r *Recommender) recommendCollaborative(ctx context.Context) ([]cache.Score, string, error) {
-	digest := r.config.Collaborative.Hash(&r.config)
-	if r.users == nil {
-		return nil, digest, nil
-	}
-	userEmbedding, ok := r.users.Get(r.userId)
-	if !ok || len(userEmbedding) == 0 {
-		return nil, digest, nil
-	}
-	scoredVectors, err := r.vectorClient.QueryVectors(ctx, vectors.CollaborativeFiltering, userEmbedding, r.categories, r.config.CacheSize+r.excludeSet.Cardinality())
+	// fetch items from cache
+	items, err := r.cacheClient.SearchScores(ctx, cache.CollaborativeFiltering, r.userId, r.categories, 0, r.config.CacheSize)
 	if err != nil {
 		return nil, "", errors.Trace(err)
 	}
-	items := lo.Map(scoredVectors, func(item vectors.ScoredVector, index int) cache.Score {
-		return cache.Score{
-			Id:         item.Id,
-			Score:      float64(len(scoredVectors) - index),
-			Categories: item.Categories,
-			Timestamp:  item.Timestamp,
-		}
-	})
+	// read digest
+	digest, err := r.cacheClient.Get(ctx, cache.Key(cache.CollaborativeFilteringDigest, r.userId)).String()
+	if err != nil {
+		return nil, "", errors.Trace(err)
+	}
+	// remove excluded items
 	return lo.Filter(items, func(item cache.Score, index int) bool {
 		return !r.excludeSet.Contains(item.Id)
 	}), digest, nil

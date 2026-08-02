@@ -27,7 +27,6 @@ import (
 	"github.com/gorse-io/gorse/logics"
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
-	"github.com/gorse-io/gorse/storage/vectors"
 	"github.com/samber/lo"
 )
 
@@ -454,7 +453,7 @@ func (s *MasterTestSuite) TestNegativeFeedbackPriority() {
 	s.Equal(5, datasets.clickTrainSet.NegativeCount+datasets.clickTestSet.NegativeCount)
 
 	// Verify negative feedback items are excluded from recommendations
-	recommender, err := logics.NewRecommender(s.Config.Recommend, s.CacheClient, s.DataClient, vectors.NoDatabase{}, nil, true, "1", nil)
+	recommender, err := logics.NewRecommender(s.Config.Recommend, s.CacheClient, s.DataClient, true, "1", nil)
 	s.NoError(err)
 	excludeSet := recommender.ExcludeSet()
 	// User 1 should have item 0 in exclude set (due to dislike)
@@ -674,6 +673,18 @@ func (s *MasterTestSuite) TestGarbageCollection() {
 	})
 	s.NoError(err)
 
+	// insert collaborative filtering cache
+	err = s.CacheClient.AddScores(ctx, cache.CollaborativeFiltering, "1", []cache.Score{
+		{Id: "1", Score: 1, Categories: []string{""}},
+		{Id: "2", Score: 2, Categories: []string{""}},
+	})
+	s.NoError(err)
+	err = s.CacheClient.AddScores(ctx, cache.CollaborativeFiltering, "3", []cache.Score{
+		{Id: "1", Score: 1, Categories: []string{""}},
+		{Id: "2", Score: 2, Categories: []string{""}},
+	})
+	s.NoError(err)
+
 	// load dataset and run garbage collection
 	datasets, err := s.loadDataset(ctx)
 	s.NoError(err)
@@ -709,6 +720,14 @@ func (s *MasterTestSuite) TestGarbageCollection() {
 	similar, err = s.CacheClient.SearchScores(ctx, cache.UserToUser, cache.Key("unknown", "1"), nil, 0, 100)
 	s.NoError(err)
 	s.Empty(similar)
+
+	// check collaborative filtering cache
+	cf, err := s.CacheClient.SearchScores(ctx, cache.CollaborativeFiltering, "1", nil, 0, 100)
+	s.NoError(err)
+	s.Equal([]string{"2", "1"}, cache.ConvertDocumentsToValues(cf))
+	cf, err = s.CacheClient.SearchScores(ctx, cache.CollaborativeFiltering, "3", nil, 0, 100)
+	s.NoError(err)
+	s.Empty(cf)
 }
 
 func (s *MasterTestSuite) TestLoadDataFromDatabaseInParallel() {

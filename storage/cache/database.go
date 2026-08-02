@@ -27,18 +27,21 @@ import (
 )
 
 const (
-	NonPersonalized           = "non-personalized"
-	NonPersonalizedDigest     = "non-personalized_digest"
-	NonPersonalizedUpdateTime = "non-personalized_update_time"
-	ItemToItem                = "item-to-item"
-	ItemToItemDigest          = "item-to-item_digest"
-	ItemToItemUpdateTime      = "item-to-item_update_time"
-	UserToUser                = "user-to-user"
-	UserToUserDigest          = "user-to-user_digest"
-	UserToUserUpdateTime      = "user-to-user_update_time"
-	Recommend                 = "recommend"
-	RecommendDigest           = "recommend_digest"
-	RecommendUpdateTime       = "recommend_update_time"
+	NonPersonalized                  = "non-personalized"
+	NonPersonalizedDigest            = "non-personalized_digest"
+	NonPersonalizedUpdateTime        = "non-personalized_update_time"
+	ItemToItem                       = "item-to-item"
+	ItemToItemDigest                 = "item-to-item_digest"
+	ItemToItemUpdateTime             = "item-to-item_update_time"
+	UserToUser                       = "user-to-user"
+	UserToUserDigest                 = "user-to-user_digest"
+	UserToUserUpdateTime             = "user-to-user_update_time"
+	CollaborativeFiltering           = "collaborative-filtering"
+	CollaborativeFilteringDigest     = "collaborative-filtering_digest"
+	CollaborativeFilteringUpdateTime = "collaborative-filtering_update_time"
+	Recommend                        = "recommend"
+	RecommendDigest                  = "recommend_digest"
+	RecommendUpdateTime              = "recommend_update_time"
 
 	// ItemCategories is the set of item categories. The format of key:
 	//	Global item categories - item_categories
