@@ -145,12 +145,15 @@ func (p *ProxyServer) QueryVectors(ctx context.Context, request *protocol.QueryV
 	if err != nil {
 		return nil, err
 	}
-	pbVectors := make([]*protocol.Vector, len(results))
+	pbVectors := make([]*protocol.ScoredVector, len(results))
 	for i, result := range results {
-		pbVectors[i] = &protocol.Vector{
-			Id:         result.Id,
-			Values:     result.Vector,
-			Categories: result.Categories,
+		pbVectors[i] = &protocol.ScoredVector{
+			Vector: &protocol.Vector{
+				Id:         result.Id,
+				Values:     result.Vector.Vector,
+				Categories: result.Categories,
+			},
+			Score: result.Score,
 		}
 	}
 	return &protocol.QueryVectorsResponse{Vectors: pbVectors}, nil
@@ -263,7 +266,7 @@ func (p ProxyClient) DeleteVectors(ctx context.Context, collection string, times
 	return err
 }
 
-func (p ProxyClient) QueryVectors(ctx context.Context, collection string, q []float32, categories []string, topK int) ([]Vector, error) {
+func (p ProxyClient) QueryVectors(ctx context.Context, collection string, q []float32, categories []string, topK int) ([]ScoredVector, error) {
 	resp, err := p.VectorStoreClient.QueryVectors(ctx, &protocol.QueryVectorsRequest{
 		Collection: collection,
 		Query:      q,
@@ -273,12 +276,16 @@ func (p ProxyClient) QueryVectors(ctx context.Context, collection string, q []fl
 	if err != nil {
 		return nil, err
 	}
-	results := make([]Vector, len(resp.Vectors))
-	for i, vector := range resp.Vectors {
-		results[i] = Vector{
-			Id:         vector.GetId(),
-			Vector:     vector.GetValues(),
-			Categories: vector.GetCategories(),
+	results := make([]ScoredVector, len(resp.Vectors))
+	for i, scored := range resp.Vectors {
+		vector := scored.GetVector()
+		results[i] = ScoredVector{
+			Vector: Vector{
+				Id:         vector.GetId(),
+				Vector:     vector.GetValues(),
+				Categories: vector.GetCategories(),
+			},
+			Score: scored.GetScore(),
 		}
 	}
 	return results, nil

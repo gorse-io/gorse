@@ -305,9 +305,9 @@ func (db *Qdrant) DeleteVectors(ctx context.Context, collection string, timestam
 	return errors.Trace(err)
 }
 
-func (db *Qdrant) QueryVectors(ctx context.Context, collection string, q []float32, categories []string, topK int) ([]Vector, error) {
+func (db *Qdrant) QueryVectors(ctx context.Context, collection string, q []float32, categories []string, topK int) ([]ScoredVector, error) {
 	if topK <= 0 {
-		return []Vector{}, nil
+		return []ScoredVector{}, nil
 	}
 	request := &qdrant.QueryPoints{
 		CollectionName: collection,
@@ -327,12 +327,15 @@ func (db *Qdrant) QueryVectors(ctx context.Context, collection string, q []float
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	results := make([]Vector, 0, len(response))
+	results := make([]ScoredVector, 0, len(response))
 	for _, scored := range response {
-		results = append(results, Vector{
-			Id:         qdrantId(scored.GetPayload()),
-			Vector:     qdrantVectorOutput(scored.GetVectors()),
-			Categories: qdrantCategories(scored.GetPayload()),
+		results = append(results, ScoredVector{
+			Vector: Vector{
+				Id:         qdrantId(scored.GetPayload()),
+				Vector:     qdrantVectorOutput(scored.GetVectors()),
+				Categories: qdrantCategories(scored.GetPayload()),
+			},
+			Score: scored.GetScore(),
 		})
 	}
 	return results, nil

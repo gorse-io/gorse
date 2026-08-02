@@ -82,6 +82,12 @@ type Vector struct {
 	Timestamp  time.Time `json:"-"`
 }
 
+// ScoredVector is a vector with a similarity score. Higher scores indicate greater similarity.
+type ScoredVector struct {
+	Vector
+	Score float32
+}
+
 type Database interface {
 	Init() error
 	Optimize(ctx context.Context, name string) error
@@ -93,7 +99,7 @@ type Database interface {
 	CountVectors(ctx context.Context, collection string) (int64, error)
 	AddVectors(ctx context.Context, collection string, vectors []Vector) error
 	DeleteVectors(ctx context.Context, collection string, timestamp time.Time) error
-	QueryVectors(ctx context.Context, collection string, q []float32, categories []string, topK int) ([]Vector, error)
+	QueryVectors(ctx context.Context, collection string, q []float32, categories []string, topK int) ([]ScoredVector, error)
 }
 
 // Creator creates a database instance.
