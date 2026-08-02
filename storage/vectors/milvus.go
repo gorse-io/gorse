@@ -261,9 +261,9 @@ func (db *Milvus) DeleteVectors(ctx context.Context, collection string, timestam
 	return errors.Trace(err)
 }
 
-func (db *Milvus) QueryVectors(ctx context.Context, collection string, q []float32, categories []string, topK int) ([]Vector, error) {
+func (db *Milvus) QueryVectors(ctx context.Context, collection string, q []float32, categories []string, topK int) ([]ScoredVector, error) {
 	if topK <= 0 {
-		return []Vector{}, nil
+		return []ScoredVector{}, nil
 	}
 
 	var expr string
@@ -275,7 +275,7 @@ func (db *Milvus) QueryVectors(ctx context.Context, collection string, q []float
 		expr = strings.Join(conditions, " or ")
 	}
 
-	searchParam, err := db.searchParam(ctx, collection)
+	searchParam, distance, err := db.searchParam(ctx, collection)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -289,7 +289,7 @@ func (db *Milvus) QueryVectors(ctx context.Context, collection string, q []float
 		return nil, errors.Trace(err)
 	}
 
-	var vectors []Vector
+	var vectors []ScoredVector
 	for _, result := range results {
 		if result.Err != nil {
 			return nil, errors.Trace(result.Err)
@@ -324,9 +324,16 @@ func (db *Milvus) QueryVectors(ctx context.Context, collection string, q []float
 				}
 			}
 
-			vectors = append(vectors, Vector{
-				Id:         id,
-				Categories: cats,
+			score := result.Scores[i]
+			if distance == Euclidean {
+				score = -score
+			}
+			vectors = append(vectors, ScoredVector{
+				Vector: Vector{
+					Id:         id,
+					Categories: cats,
+				},
+				Score: score,
 			})
 		}
 	}
@@ -365,19 +372,30 @@ func milvusIndex(metricType entity.MetricType, dimensions int, config VectorConf
 	}
 }
 
-func (db *Milvus) searchParam(ctx context.Context, collection string) (index.AnnParam, error) {
+func (db *Milvus) searchParam(ctx context.Context, collection string) (index.AnnParam, Distance, error) {
 	idx, err := db.client.DescribeIndex(ctx, milvusclient.NewDescribeIndexOption(collection, milvusVectorField))
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, Cosine, errors.Trace(err)
+	}
+	var distance Distance
+	switch metricType := entity.MetricType(idx.Params()[index.MetricTypeKey]); metricType {
+	case "", entity.COSINE:
+		distance = Cosine
+	case entity.L2:
+		distance = Euclidean
+	case entity.IP:
+		distance = Dot
+	default:
+		return nil, Cosine, errors.NotSupportedf("distance method %s", metricType)
 	}
 	switch index.IndexType(idx.Params()[index.IndexTypeKey]) {
 	case milvusIVFRQIndexType:
-		return index.NewIvfRabitQAnnParam(defaultMilvusRQNProbe).WithRefineK(defaultMilvusRQRefineK), nil
+		return index.NewIvfRabitQAnnParam(defaultMilvusRQNProbe).WithRefineK(defaultMilvusRQRefineK), distance, nil
 	case index.IvfPQ, index.IvfSQ8:
 		searchParam := index.NewCustomAnnParam()
 		searchParam.WithExtraParam("nprobe", defaultMilvusRQNProbe)
-		return searchParam, nil
+		return searchParam, distance, nil
 	default:
-		return index.NewHNSWAnnParam(100), nil
+		return index.NewHNSWAnnParam(100), distance, nil
 	}
 }

@@ -34,6 +34,11 @@ message Vector {
   google.protobuf.Timestamp timestamp = 4;
 }
 
+message ScoredVector {
+  Vector vector = 1;
+  float score = 2;
+}
+
 message ListCollectionsRequest {}
 
 message ListCollectionsResponse { repeated string collections = 1; }
@@ -86,7 +91,9 @@ message QueryVectorsRequest {
   int32 top_k = 4;
 }
 
-message QueryVectorsResponse { repeated Vector vectors = 1; }
+message QueryVectorsResponse {
+  repeated ScoredVector vectors = 1;
+}
 
 message CountVectorsRequest { string collection = 1; }
 

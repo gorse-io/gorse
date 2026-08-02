@@ -156,6 +156,58 @@ func (x *Vector) GetTimestamp() *timestamppb.Timestamp {
 	return nil
 }
 
+type ScoredVector struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Vector        *Vector                `protobuf:"bytes,1,opt,name=vector,proto3" json:"vector,omitempty"`
+	Score         float32                `protobuf:"fixed32,2,opt,name=score,proto3" json:"score,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ScoredVector) Reset() {
+	*x = ScoredVector{}
+	mi := &file_vector_store_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ScoredVector) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ScoredVector) ProtoMessage() {}
+
+func (x *ScoredVector) ProtoReflect() protoreflect.Message {
+	mi := &file_vector_store_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ScoredVector.ProtoReflect.Descriptor instead.
+func (*ScoredVector) Descriptor() ([]byte, []int) {
+	return file_vector_store_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *ScoredVector) GetVector() *Vector {
+	if x != nil {
+		return x.Vector
+	}
+	return nil
+}
+
+func (x *ScoredVector) GetScore() float32 {
+	if x != nil {
+		return x.Score
+	}
+	return 0
+}
+
 type ListCollectionsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -164,7 +216,7 @@ type ListCollectionsRequest struct {
 
 func (x *ListCollectionsRequest) Reset() {
 	*x = ListCollectionsRequest{}
-	mi := &file_vector_store_proto_msgTypes[1]
+	mi := &file_vector_store_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -176,7 +228,7 @@ func (x *ListCollectionsRequest) String() string {
 func (*ListCollectionsRequest) ProtoMessage() {}
 
 func (x *ListCollectionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vector_store_proto_msgTypes[1]
+	mi := &file_vector_store_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -189,7 +241,7 @@ func (x *ListCollectionsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListCollectionsRequest.ProtoReflect.Descriptor instead.
 func (*ListCollectionsRequest) Descriptor() ([]byte, []int) {
-	return file_vector_store_proto_rawDescGZIP(), []int{1}
+	return file_vector_store_proto_rawDescGZIP(), []int{2}
 }
 
 type ListCollectionsResponse struct {
@@ -201,7 +253,7 @@ type ListCollectionsResponse struct {
 
 func (x *ListCollectionsResponse) Reset() {
 	*x = ListCollectionsResponse{}
-	mi := &file_vector_store_proto_msgTypes[2]
+	mi := &file_vector_store_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -213,7 +265,7 @@ func (x *ListCollectionsResponse) String() string {
 func (*ListCollectionsResponse) ProtoMessage() {}
 
 func (x *ListCollectionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vector_store_proto_msgTypes[2]
+	mi := &file_vector_store_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -226,7 +278,7 @@ func (x *ListCollectionsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListCollectionsResponse.ProtoReflect.Descriptor instead.
 func (*ListCollectionsResponse) Descriptor() ([]byte, []int) {
-	return file_vector_store_proto_rawDescGZIP(), []int{2}
+	return file_vector_store_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *ListCollectionsResponse) GetCollections() []string {
@@ -246,7 +298,7 @@ type VectorConfig struct {
 
 func (x *VectorConfig) Reset() {
 	*x = VectorConfig{}
-	mi := &file_vector_store_proto_msgTypes[3]
+	mi := &file_vector_store_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -258,7 +310,7 @@ func (x *VectorConfig) String() string {
 func (*VectorConfig) ProtoMessage() {}
 
 func (x *VectorConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_vector_store_proto_msgTypes[3]
+	mi := &file_vector_store_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -271,7 +323,7 @@ func (x *VectorConfig) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VectorConfig.ProtoReflect.Descriptor instead.
 func (*VectorConfig) Descriptor() ([]byte, []int) {
-	return file_vector_store_proto_rawDescGZIP(), []int{3}
+	return file_vector_store_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *VectorConfig) GetQuantizationType() string {
@@ -297,7 +349,7 @@ type DescribeCollectionRequest struct {
 
 func (x *DescribeCollectionRequest) Reset() {
 	*x = DescribeCollectionRequest{}
-	mi := &file_vector_store_proto_msgTypes[4]
+	mi := &file_vector_store_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -309,7 +361,7 @@ func (x *DescribeCollectionRequest) String() string {
 func (*DescribeCollectionRequest) ProtoMessage() {}
 
 func (x *DescribeCollectionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vector_store_proto_msgTypes[4]
+	mi := &file_vector_store_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -322,7 +374,7 @@ func (x *DescribeCollectionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DescribeCollectionRequest.ProtoReflect.Descriptor instead.
 func (*DescribeCollectionRequest) Descriptor() ([]byte, []int) {
-	return file_vector_store_proto_rawDescGZIP(), []int{4}
+	return file_vector_store_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *DescribeCollectionRequest) GetName() string {
@@ -344,7 +396,7 @@ type DescribeCollectionResponse struct {
 
 func (x *DescribeCollectionResponse) Reset() {
 	*x = DescribeCollectionResponse{}
-	mi := &file_vector_store_proto_msgTypes[5]
+	mi := &file_vector_store_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -356,7 +408,7 @@ func (x *DescribeCollectionResponse) String() string {
 func (*DescribeCollectionResponse) ProtoMessage() {}
 
 func (x *DescribeCollectionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vector_store_proto_msgTypes[5]
+	mi := &file_vector_store_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -369,7 +421,7 @@ func (x *DescribeCollectionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DescribeCollectionResponse.ProtoReflect.Descriptor instead.
 func (*DescribeCollectionResponse) Descriptor() ([]byte, []int) {
-	return file_vector_store_proto_rawDescGZIP(), []int{5}
+	return file_vector_store_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *DescribeCollectionResponse) GetName() string {
@@ -412,7 +464,7 @@ type AddCollectionRequest struct {
 
 func (x *AddCollectionRequest) Reset() {
 	*x = AddCollectionRequest{}
-	mi := &file_vector_store_proto_msgTypes[6]
+	mi := &file_vector_store_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -424,7 +476,7 @@ func (x *AddCollectionRequest) String() string {
 func (*AddCollectionRequest) ProtoMessage() {}
 
 func (x *AddCollectionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vector_store_proto_msgTypes[6]
+	mi := &file_vector_store_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -437,7 +489,7 @@ func (x *AddCollectionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddCollectionRequest.ProtoReflect.Descriptor instead.
 func (*AddCollectionRequest) Descriptor() ([]byte, []int) {
-	return file_vector_store_proto_rawDescGZIP(), []int{6}
+	return file_vector_store_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *AddCollectionRequest) GetName() string {
@@ -476,7 +528,7 @@ type AddCollectionResponse struct {
 
 func (x *AddCollectionResponse) Reset() {
 	*x = AddCollectionResponse{}
-	mi := &file_vector_store_proto_msgTypes[7]
+	mi := &file_vector_store_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -488,7 +540,7 @@ func (x *AddCollectionResponse) String() string {
 func (*AddCollectionResponse) ProtoMessage() {}
 
 func (x *AddCollectionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vector_store_proto_msgTypes[7]
+	mi := &file_vector_store_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -501,7 +553,7 @@ func (x *AddCollectionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddCollectionResponse.ProtoReflect.Descriptor instead.
 func (*AddCollectionResponse) Descriptor() ([]byte, []int) {
-	return file_vector_store_proto_rawDescGZIP(), []int{7}
+	return file_vector_store_proto_rawDescGZIP(), []int{8}
 }
 
 type DeleteCollectionRequest struct {
@@ -513,7 +565,7 @@ type DeleteCollectionRequest struct {
 
 func (x *DeleteCollectionRequest) Reset() {
 	*x = DeleteCollectionRequest{}
-	mi := &file_vector_store_proto_msgTypes[8]
+	mi := &file_vector_store_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -525,7 +577,7 @@ func (x *DeleteCollectionRequest) String() string {
 func (*DeleteCollectionRequest) ProtoMessage() {}
 
 func (x *DeleteCollectionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vector_store_proto_msgTypes[8]
+	mi := &file_vector_store_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -538,7 +590,7 @@ func (x *DeleteCollectionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteCollectionRequest.ProtoReflect.Descriptor instead.
 func (*DeleteCollectionRequest) Descriptor() ([]byte, []int) {
-	return file_vector_store_proto_rawDescGZIP(), []int{8}
+	return file_vector_store_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *DeleteCollectionRequest) GetName() string {
@@ -556,7 +608,7 @@ type DeleteCollectionResponse struct {
 
 func (x *DeleteCollectionResponse) Reset() {
 	*x = DeleteCollectionResponse{}
-	mi := &file_vector_store_proto_msgTypes[9]
+	mi := &file_vector_store_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -568,7 +620,7 @@ func (x *DeleteCollectionResponse) String() string {
 func (*DeleteCollectionResponse) ProtoMessage() {}
 
 func (x *DeleteCollectionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vector_store_proto_msgTypes[9]
+	mi := &file_vector_store_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -581,7 +633,7 @@ func (x *DeleteCollectionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteCollectionResponse.ProtoReflect.Descriptor instead.
 func (*DeleteCollectionResponse) Descriptor() ([]byte, []int) {
-	return file_vector_store_proto_rawDescGZIP(), []int{9}
+	return file_vector_store_proto_rawDescGZIP(), []int{10}
 }
 
 type AddVectorsRequest struct {
@@ -594,7 +646,7 @@ type AddVectorsRequest struct {
 
 func (x *AddVectorsRequest) Reset() {
 	*x = AddVectorsRequest{}
-	mi := &file_vector_store_proto_msgTypes[10]
+	mi := &file_vector_store_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -606,7 +658,7 @@ func (x *AddVectorsRequest) String() string {
 func (*AddVectorsRequest) ProtoMessage() {}
 
 func (x *AddVectorsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vector_store_proto_msgTypes[10]
+	mi := &file_vector_store_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -619,7 +671,7 @@ func (x *AddVectorsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddVectorsRequest.ProtoReflect.Descriptor instead.
 func (*AddVectorsRequest) Descriptor() ([]byte, []int) {
-	return file_vector_store_proto_rawDescGZIP(), []int{10}
+	return file_vector_store_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *AddVectorsRequest) GetCollection() string {
@@ -644,7 +696,7 @@ type AddVectorsResponse struct {
 
 func (x *AddVectorsResponse) Reset() {
 	*x = AddVectorsResponse{}
-	mi := &file_vector_store_proto_msgTypes[11]
+	mi := &file_vector_store_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -656,7 +708,7 @@ func (x *AddVectorsResponse) String() string {
 func (*AddVectorsResponse) ProtoMessage() {}
 
 func (x *AddVectorsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vector_store_proto_msgTypes[11]
+	mi := &file_vector_store_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -669,7 +721,7 @@ func (x *AddVectorsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddVectorsResponse.ProtoReflect.Descriptor instead.
 func (*AddVectorsResponse) Descriptor() ([]byte, []int) {
-	return file_vector_store_proto_rawDescGZIP(), []int{11}
+	return file_vector_store_proto_rawDescGZIP(), []int{12}
 }
 
 type DeleteVectorsRequest struct {
@@ -682,7 +734,7 @@ type DeleteVectorsRequest struct {
 
 func (x *DeleteVectorsRequest) Reset() {
 	*x = DeleteVectorsRequest{}
-	mi := &file_vector_store_proto_msgTypes[12]
+	mi := &file_vector_store_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -694,7 +746,7 @@ func (x *DeleteVectorsRequest) String() string {
 func (*DeleteVectorsRequest) ProtoMessage() {}
 
 func (x *DeleteVectorsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vector_store_proto_msgTypes[12]
+	mi := &file_vector_store_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -707,7 +759,7 @@ func (x *DeleteVectorsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteVectorsRequest.ProtoReflect.Descriptor instead.
 func (*DeleteVectorsRequest) Descriptor() ([]byte, []int) {
-	return file_vector_store_proto_rawDescGZIP(), []int{12}
+	return file_vector_store_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *DeleteVectorsRequest) GetCollection() string {
@@ -732,7 +784,7 @@ type DeleteVectorsResponse struct {
 
 func (x *DeleteVectorsResponse) Reset() {
 	*x = DeleteVectorsResponse{}
-	mi := &file_vector_store_proto_msgTypes[13]
+	mi := &file_vector_store_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -744,7 +796,7 @@ func (x *DeleteVectorsResponse) String() string {
 func (*DeleteVectorsResponse) ProtoMessage() {}
 
 func (x *DeleteVectorsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vector_store_proto_msgTypes[13]
+	mi := &file_vector_store_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -757,7 +809,7 @@ func (x *DeleteVectorsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteVectorsResponse.ProtoReflect.Descriptor instead.
 func (*DeleteVectorsResponse) Descriptor() ([]byte, []int) {
-	return file_vector_store_proto_rawDescGZIP(), []int{13}
+	return file_vector_store_proto_rawDescGZIP(), []int{14}
 }
 
 type QueryVectorsRequest struct {
@@ -772,7 +824,7 @@ type QueryVectorsRequest struct {
 
 func (x *QueryVectorsRequest) Reset() {
 	*x = QueryVectorsRequest{}
-	mi := &file_vector_store_proto_msgTypes[14]
+	mi := &file_vector_store_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -784,7 +836,7 @@ func (x *QueryVectorsRequest) String() string {
 func (*QueryVectorsRequest) ProtoMessage() {}
 
 func (x *QueryVectorsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vector_store_proto_msgTypes[14]
+	mi := &file_vector_store_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -797,7 +849,7 @@ func (x *QueryVectorsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QueryVectorsRequest.ProtoReflect.Descriptor instead.
 func (*QueryVectorsRequest) Descriptor() ([]byte, []int) {
-	return file_vector_store_proto_rawDescGZIP(), []int{14}
+	return file_vector_store_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *QueryVectorsRequest) GetCollection() string {
@@ -830,14 +882,14 @@ func (x *QueryVectorsRequest) GetTopK() int32 {
 
 type QueryVectorsResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Vectors       []*Vector              `protobuf:"bytes,1,rep,name=vectors,proto3" json:"vectors,omitempty"`
+	Vectors       []*ScoredVector        `protobuf:"bytes,1,rep,name=vectors,proto3" json:"vectors,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *QueryVectorsResponse) Reset() {
 	*x = QueryVectorsResponse{}
-	mi := &file_vector_store_proto_msgTypes[15]
+	mi := &file_vector_store_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -849,7 +901,7 @@ func (x *QueryVectorsResponse) String() string {
 func (*QueryVectorsResponse) ProtoMessage() {}
 
 func (x *QueryVectorsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vector_store_proto_msgTypes[15]
+	mi := &file_vector_store_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -862,10 +914,10 @@ func (x *QueryVectorsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QueryVectorsResponse.ProtoReflect.Descriptor instead.
 func (*QueryVectorsResponse) Descriptor() ([]byte, []int) {
-	return file_vector_store_proto_rawDescGZIP(), []int{15}
+	return file_vector_store_proto_rawDescGZIP(), []int{16}
 }
 
-func (x *QueryVectorsResponse) GetVectors() []*Vector {
+func (x *QueryVectorsResponse) GetVectors() []*ScoredVector {
 	if x != nil {
 		return x.Vectors
 	}
@@ -881,7 +933,7 @@ type CountVectorsRequest struct {
 
 func (x *CountVectorsRequest) Reset() {
 	*x = CountVectorsRequest{}
-	mi := &file_vector_store_proto_msgTypes[16]
+	mi := &file_vector_store_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -893,7 +945,7 @@ func (x *CountVectorsRequest) String() string {
 func (*CountVectorsRequest) ProtoMessage() {}
 
 func (x *CountVectorsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vector_store_proto_msgTypes[16]
+	mi := &file_vector_store_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -906,7 +958,7 @@ func (x *CountVectorsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CountVectorsRequest.ProtoReflect.Descriptor instead.
 func (*CountVectorsRequest) Descriptor() ([]byte, []int) {
-	return file_vector_store_proto_rawDescGZIP(), []int{16}
+	return file_vector_store_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *CountVectorsRequest) GetCollection() string {
@@ -925,7 +977,7 @@ type CountVectorsResponse struct {
 
 func (x *CountVectorsResponse) Reset() {
 	*x = CountVectorsResponse{}
-	mi := &file_vector_store_proto_msgTypes[17]
+	mi := &file_vector_store_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -937,7 +989,7 @@ func (x *CountVectorsResponse) String() string {
 func (*CountVectorsResponse) ProtoMessage() {}
 
 func (x *CountVectorsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vector_store_proto_msgTypes[17]
+	mi := &file_vector_store_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -950,7 +1002,7 @@ func (x *CountVectorsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CountVectorsResponse.ProtoReflect.Descriptor instead.
 func (*CountVectorsResponse) Descriptor() ([]byte, []int) {
-	return file_vector_store_proto_rawDescGZIP(), []int{17}
+	return file_vector_store_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *CountVectorsResponse) GetCount() int64 {
@@ -971,7 +1023,10 @@ const file_vector_store_proto_rawDesc = "" +
 	"\n" +
 	"categories\x18\x03 \x03(\tR\n" +
 	"categories\x128\n" +
-	"\ttimestamp\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\ttimestamp\"\x18\n" +
+	"\ttimestamp\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\ttimestamp\"N\n" +
+	"\fScoredVector\x12(\n" +
+	"\x06vector\x18\x01 \x01(\v2\x10.protocol.VectorR\x06vector\x12\x14\n" +
+	"\x05score\x18\x02 \x01(\x02R\x05score\"\x18\n" +
 	"\x16ListCollectionsRequest\";\n" +
 	"\x17ListCollectionsResponse\x12 \n" +
 	"\vcollections\x18\x01 \x03(\tR\vcollections\"h\n" +
@@ -1018,9 +1073,9 @@ const file_vector_store_proto_rawDesc = "" +
 	"\n" +
 	"categories\x18\x03 \x03(\tR\n" +
 	"categories\x12\x13\n" +
-	"\x05top_k\x18\x04 \x01(\x05R\x04topK\"B\n" +
-	"\x14QueryVectorsResponse\x12*\n" +
-	"\avectors\x18\x01 \x03(\v2\x10.protocol.VectorR\avectors\"5\n" +
+	"\x05top_k\x18\x04 \x01(\x05R\x04topK\"H\n" +
+	"\x14QueryVectorsResponse\x120\n" +
+	"\avectors\x18\x01 \x03(\v2\x16.protocol.ScoredVectorR\avectors\"5\n" +
 	"\x13CountVectorsRequest\x12\x1e\n" +
 	"\n" +
 	"collection\x18\x01 \x01(\tR\n" +
@@ -1057,59 +1112,61 @@ func file_vector_store_proto_rawDescGZIP() []byte {
 }
 
 var file_vector_store_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_vector_store_proto_msgTypes = make([]protoimpl.MessageInfo, 18)
+var file_vector_store_proto_msgTypes = make([]protoimpl.MessageInfo, 19)
 var file_vector_store_proto_goTypes = []any{
 	(Distance)(0),                      // 0: protocol.Distance
 	(*Vector)(nil),                     // 1: protocol.Vector
-	(*ListCollectionsRequest)(nil),     // 2: protocol.ListCollectionsRequest
-	(*ListCollectionsResponse)(nil),    // 3: protocol.ListCollectionsResponse
-	(*VectorConfig)(nil),               // 4: protocol.VectorConfig
-	(*DescribeCollectionRequest)(nil),  // 5: protocol.DescribeCollectionRequest
-	(*DescribeCollectionResponse)(nil), // 6: protocol.DescribeCollectionResponse
-	(*AddCollectionRequest)(nil),       // 7: protocol.AddCollectionRequest
-	(*AddCollectionResponse)(nil),      // 8: protocol.AddCollectionResponse
-	(*DeleteCollectionRequest)(nil),    // 9: protocol.DeleteCollectionRequest
-	(*DeleteCollectionResponse)(nil),   // 10: protocol.DeleteCollectionResponse
-	(*AddVectorsRequest)(nil),          // 11: protocol.AddVectorsRequest
-	(*AddVectorsResponse)(nil),         // 12: protocol.AddVectorsResponse
-	(*DeleteVectorsRequest)(nil),       // 13: protocol.DeleteVectorsRequest
-	(*DeleteVectorsResponse)(nil),      // 14: protocol.DeleteVectorsResponse
-	(*QueryVectorsRequest)(nil),        // 15: protocol.QueryVectorsRequest
-	(*QueryVectorsResponse)(nil),       // 16: protocol.QueryVectorsResponse
-	(*CountVectorsRequest)(nil),        // 17: protocol.CountVectorsRequest
-	(*CountVectorsResponse)(nil),       // 18: protocol.CountVectorsResponse
-	(*timestamppb.Timestamp)(nil),      // 19: google.protobuf.Timestamp
+	(*ScoredVector)(nil),               // 2: protocol.ScoredVector
+	(*ListCollectionsRequest)(nil),     // 3: protocol.ListCollectionsRequest
+	(*ListCollectionsResponse)(nil),    // 4: protocol.ListCollectionsResponse
+	(*VectorConfig)(nil),               // 5: protocol.VectorConfig
+	(*DescribeCollectionRequest)(nil),  // 6: protocol.DescribeCollectionRequest
+	(*DescribeCollectionResponse)(nil), // 7: protocol.DescribeCollectionResponse
+	(*AddCollectionRequest)(nil),       // 8: protocol.AddCollectionRequest
+	(*AddCollectionResponse)(nil),      // 9: protocol.AddCollectionResponse
+	(*DeleteCollectionRequest)(nil),    // 10: protocol.DeleteCollectionRequest
+	(*DeleteCollectionResponse)(nil),   // 11: protocol.DeleteCollectionResponse
+	(*AddVectorsRequest)(nil),          // 12: protocol.AddVectorsRequest
+	(*AddVectorsResponse)(nil),         // 13: protocol.AddVectorsResponse
+	(*DeleteVectorsRequest)(nil),       // 14: protocol.DeleteVectorsRequest
+	(*DeleteVectorsResponse)(nil),      // 15: protocol.DeleteVectorsResponse
+	(*QueryVectorsRequest)(nil),        // 16: protocol.QueryVectorsRequest
+	(*QueryVectorsResponse)(nil),       // 17: protocol.QueryVectorsResponse
+	(*CountVectorsRequest)(nil),        // 18: protocol.CountVectorsRequest
+	(*CountVectorsResponse)(nil),       // 19: protocol.CountVectorsResponse
+	(*timestamppb.Timestamp)(nil),      // 20: google.protobuf.Timestamp
 }
 var file_vector_store_proto_depIdxs = []int32{
-	19, // 0: protocol.Vector.timestamp:type_name -> google.protobuf.Timestamp
-	0,  // 1: protocol.DescribeCollectionResponse.distance:type_name -> protocol.Distance
-	4,  // 2: protocol.DescribeCollectionResponse.config:type_name -> protocol.VectorConfig
-	0,  // 3: protocol.AddCollectionRequest.distance:type_name -> protocol.Distance
-	4,  // 4: protocol.AddCollectionRequest.config:type_name -> protocol.VectorConfig
-	1,  // 5: protocol.AddVectorsRequest.vectors:type_name -> protocol.Vector
-	19, // 6: protocol.DeleteVectorsRequest.timestamp:type_name -> google.protobuf.Timestamp
-	1,  // 7: protocol.QueryVectorsResponse.vectors:type_name -> protocol.Vector
-	2,  // 8: protocol.VectorStore.ListCollections:input_type -> protocol.ListCollectionsRequest
-	5,  // 9: protocol.VectorStore.DescribeCollection:input_type -> protocol.DescribeCollectionRequest
-	7,  // 10: protocol.VectorStore.AddCollection:input_type -> protocol.AddCollectionRequest
-	9,  // 11: protocol.VectorStore.DeleteCollection:input_type -> protocol.DeleteCollectionRequest
-	17, // 12: protocol.VectorStore.CountVectors:input_type -> protocol.CountVectorsRequest
-	11, // 13: protocol.VectorStore.AddVectors:input_type -> protocol.AddVectorsRequest
-	13, // 14: protocol.VectorStore.DeleteVectors:input_type -> protocol.DeleteVectorsRequest
-	15, // 15: protocol.VectorStore.QueryVectors:input_type -> protocol.QueryVectorsRequest
-	3,  // 16: protocol.VectorStore.ListCollections:output_type -> protocol.ListCollectionsResponse
-	6,  // 17: protocol.VectorStore.DescribeCollection:output_type -> protocol.DescribeCollectionResponse
-	8,  // 18: protocol.VectorStore.AddCollection:output_type -> protocol.AddCollectionResponse
-	10, // 19: protocol.VectorStore.DeleteCollection:output_type -> protocol.DeleteCollectionResponse
-	18, // 20: protocol.VectorStore.CountVectors:output_type -> protocol.CountVectorsResponse
-	12, // 21: protocol.VectorStore.AddVectors:output_type -> protocol.AddVectorsResponse
-	14, // 22: protocol.VectorStore.DeleteVectors:output_type -> protocol.DeleteVectorsResponse
-	16, // 23: protocol.VectorStore.QueryVectors:output_type -> protocol.QueryVectorsResponse
-	16, // [16:24] is the sub-list for method output_type
-	8,  // [8:16] is the sub-list for method input_type
-	8,  // [8:8] is the sub-list for extension type_name
-	8,  // [8:8] is the sub-list for extension extendee
-	0,  // [0:8] is the sub-list for field type_name
+	20, // 0: protocol.Vector.timestamp:type_name -> google.protobuf.Timestamp
+	1,  // 1: protocol.ScoredVector.vector:type_name -> protocol.Vector
+	0,  // 2: protocol.DescribeCollectionResponse.distance:type_name -> protocol.Distance
+	5,  // 3: protocol.DescribeCollectionResponse.config:type_name -> protocol.VectorConfig
+	0,  // 4: protocol.AddCollectionRequest.distance:type_name -> protocol.Distance
+	5,  // 5: protocol.AddCollectionRequest.config:type_name -> protocol.VectorConfig
+	1,  // 6: protocol.AddVectorsRequest.vectors:type_name -> protocol.Vector
+	20, // 7: protocol.DeleteVectorsRequest.timestamp:type_name -> google.protobuf.Timestamp
+	2,  // 8: protocol.QueryVectorsResponse.vectors:type_name -> protocol.ScoredVector
+	3,  // 9: protocol.VectorStore.ListCollections:input_type -> protocol.ListCollectionsRequest
+	6,  // 10: protocol.VectorStore.DescribeCollection:input_type -> protocol.DescribeCollectionRequest
+	8,  // 11: protocol.VectorStore.AddCollection:input_type -> protocol.AddCollectionRequest
+	10, // 12: protocol.VectorStore.DeleteCollection:input_type -> protocol.DeleteCollectionRequest
+	18, // 13: protocol.VectorStore.CountVectors:input_type -> protocol.CountVectorsRequest
+	12, // 14: protocol.VectorStore.AddVectors:input_type -> protocol.AddVectorsRequest
+	14, // 15: protocol.VectorStore.DeleteVectors:input_type -> protocol.DeleteVectorsRequest
+	16, // 16: protocol.VectorStore.QueryVectors:input_type -> protocol.QueryVectorsRequest
+	4,  // 17: protocol.VectorStore.ListCollections:output_type -> protocol.ListCollectionsResponse
+	7,  // 18: protocol.VectorStore.DescribeCollection:output_type -> protocol.DescribeCollectionResponse
+	9,  // 19: protocol.VectorStore.AddCollection:output_type -> protocol.AddCollectionResponse
+	11, // 20: protocol.VectorStore.DeleteCollection:output_type -> protocol.DeleteCollectionResponse
+	19, // 21: protocol.VectorStore.CountVectors:output_type -> protocol.CountVectorsResponse
+	13, // 22: protocol.VectorStore.AddVectors:output_type -> protocol.AddVectorsResponse
+	15, // 23: protocol.VectorStore.DeleteVectors:output_type -> protocol.DeleteVectorsResponse
+	17, // 24: protocol.VectorStore.QueryVectors:output_type -> protocol.QueryVectorsResponse
+	17, // [17:25] is the sub-list for method output_type
+	9,  // [9:17] is the sub-list for method input_type
+	9,  // [9:9] is the sub-list for extension type_name
+	9,  // [9:9] is the sub-list for extension extendee
+	0,  // [0:9] is the sub-list for field type_name
 }
 
 func init() { file_vector_store_proto_init() }
@@ -1123,7 +1180,7 @@ func file_vector_store_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_vector_store_proto_rawDesc), len(file_vector_store_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   18,
+			NumMessages:   19,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

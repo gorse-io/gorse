@@ -119,13 +119,12 @@ func (suite *vectorsTestSuite) TestVectors() {
 	results, err = suite.Database.QueryVectors(ctx, "test", vectorA, []string{"common"}, 10)
 	suite.NoError(err)
 	suite.Len(results, 2)
-	ids := map[string]bool{}
+	suite.Equal("a", results[0].Id)
+	suite.Equal("b", results[1].Id)
+	suite.Greater(results[0].Score, results[1].Score)
 	for _, result := range results {
-		ids[result.Id] = true
 		suite.NotEmpty(result.Categories)
 	}
-	suite.True(ids["a"])
-	suite.True(ids["b"])
 
 	results, err = suite.Database.QueryVectors(ctx, "test", vectorA, nil, 1)
 	suite.NoError(err)
@@ -133,6 +132,26 @@ func (suite *vectorsTestSuite) TestVectors() {
 	for _, result := range results {
 		suite.NotEmpty(result.Categories)
 	}
+}
+
+func (suite *vectorsTestSuite) TestDot() {
+	ctx := suite.T().Context()
+	err := suite.Database.AddCollection(ctx, "test_dot", defaultVectorSize, Dot, VectorConfig{})
+	suite.Require().NoError(err)
+
+	query := []float32{1, 0, 0, 0}
+	err = suite.Database.AddVectors(ctx, "test_dot", []Vector{
+		{Id: "a", Vector: []float32{2, 0, 0, 0}},
+		{Id: "b", Vector: []float32{1, 1, 0, 0}},
+	})
+	suite.Require().NoError(err)
+
+	results, err := suite.Database.QueryVectors(ctx, "test_dot", query, nil, 2)
+	suite.Require().NoError(err)
+	suite.Require().Len(results, 2)
+	suite.Equal("a", results[0].Id)
+	suite.Equal("b", results[1].Id)
+	suite.Greater(results[0].Score, results[1].Score)
 }
 
 func (suite *vectorsTestSuite) TestDeleteVectors() {

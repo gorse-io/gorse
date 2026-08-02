@@ -300,14 +300,15 @@ func (db *Weaviate) DeleteVectors(ctx context.Context, collection string, timest
 	return errors.Trace(err)
 }
 
-func (db *Weaviate) QueryVectors(ctx context.Context, collection string, q []float32, categories []string, topK int) ([]Vector, error) {
+func (db *Weaviate) QueryVectors(ctx context.Context, collection string, q []float32, categories []string, topK int) ([]ScoredVector, error) {
 	if topK <= 0 {
-		return []Vector{}, nil
+		return []ScoredVector{}, nil
 	}
 
 	fields := []graphql.Field{
 		{Name: "originalId"},
 		{Name: weaviatePayloadCategoriesKey},
+		{Name: "_additional", Fields: []graphql.Field{{Name: "distance"}}},
 	}
 
 	explore := db.client.GraphQL().NearVectorArgBuilder().WithVector(q)
@@ -347,7 +348,7 @@ func (db *Weaviate) QueryVectors(ctx context.Context, collection string, q []flo
 
 	data := result.Data["Get"].(map[string]any)
 	items := data[capitalize(collection)].([]any)
-	results := make([]Vector, 0, len(items))
+	results := make([]ScoredVector, 0, len(items))
 	for _, item := range items {
 		m := item.(map[string]any)
 		id := m["originalId"].(string)
@@ -357,9 +358,14 @@ func (db *Weaviate) QueryVectors(ctx context.Context, collection string, q []flo
 				cats = append(cats, c.(string))
 			}
 		}
-		results = append(results, Vector{
-			Id:         id,
-			Categories: cats,
+		additional := m["_additional"].(map[string]any)
+		distance := additional["distance"].(float64)
+		results = append(results, ScoredVector{
+			Vector: Vector{
+				Id:         id,
+				Categories: cats,
+			},
+			Score: -float32(distance),
 		})
 	}
 	return results, nil

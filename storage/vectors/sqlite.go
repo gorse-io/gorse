@@ -204,9 +204,9 @@ func (db *SQLite) DeleteVectors(ctx context.Context, collection string, timestam
 	return errors.Trace(err)
 }
 
-func (db *SQLite) QueryVectors(ctx context.Context, collection string, q []float32, categories []string, topK int) ([]Vector, error) {
+func (db *SQLite) QueryVectors(ctx context.Context, collection string, q []float32, categories []string, topK int) ([]ScoredVector, error) {
 	if topK <= 0 {
-		return []Vector{}, nil
+		return []ScoredVector{}, nil
 	}
 
 	qJson, err := json.Marshal(q)
@@ -214,7 +214,7 @@ func (db *SQLite) QueryVectors(ctx context.Context, collection string, q []float
 		return nil, errors.Trace(err)
 	}
 
-	query := fmt.Sprintf("SELECT id, categories FROM %s WHERE vector MATCH ? AND k = ? ", collection)
+	query := fmt.Sprintf("SELECT id, categories, distance FROM %s WHERE vector MATCH ? AND k = ? ", collection)
 	var args []any
 	args = append(args, string(qJson), topK)
 
@@ -234,16 +234,18 @@ func (db *SQLite) QueryVectors(ctx context.Context, collection string, q []float
 	}
 	defer rows.Close()
 
-	var results []Vector
+	var results []ScoredVector
 	for rows.Next() {
-		var v Vector
+		var v ScoredVector
 		var categoriesStr string
-		if err := rows.Scan(&v.Id, &categoriesStr); err != nil {
+		var distance float32
+		if err := rows.Scan(&v.Id, &categoriesStr, &distance); err != nil {
 			return nil, errors.Trace(err)
 		}
 		if err := json.Unmarshal([]byte(categoriesStr), &v.Categories); err != nil {
 			return nil, errors.Trace(err)
 		}
+		v.Score = -distance
 		results = append(results, v)
 	}
 	return results, nil
