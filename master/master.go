@@ -427,6 +427,9 @@ func (m *Master) initCollaborativeFilteringVectorCollection(ctx context.Context)
 		Bits: m.Config.Database.Vector.QuantizationBits,
 	}
 	dimension := model.Params(nil).GetInt(model.NFactors, 16)
+	if err := vectors.ValidateCollectionConfig(ctx, m.VectorClient, vectors.CollaborativeFiltering, dimension, vectors.Dot, vectorConfig); err != nil {
+		return errors.Trace(err)
+	}
 
 	info, err := m.VectorClient.DescribeCollection(ctx, vectors.CollaborativeFiltering)
 	if errors.Is(err, errors.NotFound) {
@@ -467,6 +470,9 @@ func (m *Master) initCollaborativeFilteringVectorCollection(ctx context.Context)
 func (m *Master) checkCollaborativeFilteringVectorCollection(info *vectors.CollectionInfo, dimension int, config vectors.VectorConfig) error {
 	if info.Dimension != 0 && info.Dimension != dimension {
 		return errors.Errorf("collection %s dimension mismatch: expected %d, got %d", info.Name, dimension, info.Dimension)
+	}
+	if info.Distance != vectors.Dot {
+		return errors.Errorf("collection %s distance mismatch: expected %d, got %d", info.Name, vectors.Dot, info.Distance)
 	}
 	if info.Type != config.Type {
 		return errors.Errorf("collection %s quantization type mismatch: expected %s, got %s", info.Name, config.Type, info.Type)

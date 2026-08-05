@@ -26,7 +26,7 @@ import (
 
 type ProxyTestSuite struct {
 	vectorsTestSuite
-	sqlite     Database
+	backend    Database
 	server     *ProxyServer
 	clientConn *grpc.ClientConn
 }
@@ -34,12 +34,13 @@ type ProxyTestSuite struct {
 func (suite *ProxyTestSuite) SetupSuite() {
 	log.SetTestLogger(suite.T())
 	var err error
-	path := fmt.Sprintf("sqlite://%s/sqlite.db", suite.T().TempDir())
-	suite.sqlite, err = Open(path, "gorse_")
+	path := fmt.Sprintf("zvec://%s/vectors", suite.T().TempDir())
+	suite.backend, err = Open(path, "gorse_")
 	suite.NoError(err)
+	suite.NoError(suite.backend.Init())
 	lis, err := net.Listen("tcp", "localhost:0")
 	suite.NoError(err)
-	suite.server = NewProxyServer(suite.sqlite)
+	suite.server = NewProxyServer(suite.backend)
 	go func() {
 		err = suite.server.Serve(lis)
 		suite.NoError(err)
@@ -52,7 +53,7 @@ func (suite *ProxyTestSuite) SetupSuite() {
 func (suite *ProxyTestSuite) TearDownSuite() {
 	suite.server.Stop()
 	suite.NoError(suite.clientConn.Close())
-	suite.NoError(suite.sqlite.Close())
+	suite.NoError(suite.backend.Close())
 }
 
 func TestProxy(t *testing.T) {

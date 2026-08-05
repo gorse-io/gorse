@@ -69,7 +69,7 @@ func TestUnmarshal(t *testing.T) {
 			// [database]
 			assert.Equal(t, "redis://localhost:6379/0", config.Database.CacheStore)
 			assert.Equal(t, "mysql://gorse:gorse_pass@tcp(localhost:3306)/gorse", config.Database.DataStore)
-			assert.Equal(t, "sqlite://vector.db", config.Database.VectorStore)
+			assert.Equal(t, "zvec://vector.zvec", config.Database.VectorStore)
 			assert.Equal(t, "gorse_", config.Database.TablePrefix)
 			assert.Equal(t, "gorse_cache_", config.Database.CacheTablePrefix)
 			assert.Equal(t, "gorse_cache_client", config.Database.CacheClientName)
@@ -570,7 +570,7 @@ func (s *ValidateTestSuite) TestVectorStore() {
 	s.Error(s.Validate())
 
 	for _, vectorStore := range []string{
-		"sqlite://:memory:",
+		"zvec://vectors",
 		"qdrant://localhost:6334",
 		"weaviate://localhost:8080",
 		"weaviates://localhost:8080",
@@ -579,6 +579,9 @@ func (s *ValidateTestSuite) TestVectorStore() {
 		s.Database.VectorStore = vectorStore
 		s.NoError(s.Validate())
 	}
+
+	s.Database.VectorStore = "sqlite://:memory:"
+	s.Error(s.Validate())
 
 	s.Database.VectorStore = "mysql://localhost:3306/gorse"
 	s.Error(s.Validate())

@@ -102,6 +102,22 @@ type Database interface {
 	QueryVectors(ctx context.Context, collection string, q []float32, categories []string, topK int) ([]ScoredVector, error)
 }
 
+// CollectionConfigValidator validates a collection configuration without
+// changing persistent state. Backends should implement it when collection
+// creation can reject otherwise valid Gorse configuration.
+type CollectionConfigValidator interface {
+	ValidateCollectionConfig(ctx context.Context, name string, dimensions int, distance Distance, config VectorConfig) error
+}
+
+// ValidateCollectionConfig asks a backend to validate collection creation
+// before callers perform destructive schema replacement.
+func ValidateCollectionConfig(ctx context.Context, database Database, name string, dimensions int, distance Distance, config VectorConfig) error {
+	if validator, ok := database.(CollectionConfigValidator); ok {
+		return errors.Trace(validator.ValidateCollectionConfig(ctx, name, dimensions, distance, config))
+	}
+	return nil
+}
+
 // Creator creates a database instance.
 type Creator func(path, tablePrefix string, opts ...storage.Option) (Database, error)
 
