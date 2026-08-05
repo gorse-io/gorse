@@ -468,6 +468,9 @@ func (m *Master) checkCollaborativeFilteringVectorCollection(info *vectors.Colle
 	if info.Dimension != 0 && info.Dimension != dimension {
 		return errors.Errorf("collection %s dimension mismatch: expected %d, got %d", info.Name, dimension, info.Dimension)
 	}
+	if info.Distance != vectors.Dot {
+		return errors.Errorf("collection %s distance mismatch: expected %d, got %d", info.Name, vectors.Dot, info.Distance)
+	}
 	if info.Type != config.Type {
 		return errors.Errorf("collection %s quantization type mismatch: expected %s, got %s", info.Name, config.Type, info.Type)
 	}

@@ -18,20 +18,28 @@ import (
 	"testing"
 
 	"github.com/gorse-io/gorse/common/log"
+	"github.com/gorse-io/gorse/storage"
 	"github.com/stretchr/testify/suite"
 )
 
-type SQLiteTestSuite struct {
+type ZvecTestSuite struct {
 	vectorsTestSuite
+	root string
 }
 
-func (suite *SQLiteTestSuite) SetupSuite() {
+func (suite *ZvecTestSuite) SetupSuite() {
 	log.SetTestLogger(suite.T())
+	suite.root = suite.T().TempDir()
 	var err error
-	suite.Database, err = Open("sqlite://:memory:", "gorse_")
-	suite.NoError(err)
+	suite.Database, err = Open(storage.ZvecPrefix+suite.root, "gorse_")
+	suite.Require().NoError(err)
+	suite.Require().NoError(suite.Database.Init())
 }
 
-func TestSQLite(t *testing.T) {
-	suite.Run(t, new(SQLiteTestSuite))
+func (suite *ZvecTestSuite) TearDownSuite() {
+	suite.NoError(suite.Database.Close())
+}
+
+func TestZvec(t *testing.T) {
+	suite.Run(t, new(ZvecTestSuite))
 }
