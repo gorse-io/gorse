@@ -46,7 +46,7 @@ func (s *MasterTestSuite) SetupTest() {
 	s.NoError(err)
 	s.CacheClient, err = cache.Open(fmt.Sprintf("sqlite://%s/cache.db", s.T().TempDir()), "")
 	s.NoError(err)
-	s.VectorClient, err = vectors.Open(fmt.Sprintf("zvec://%s/vector.zvec", s.T().TempDir()), "")
+	s.VectorClient, err = vectors.Open(fmt.Sprintf("zvec://%s/vectors", s.T().TempDir()), "")
 	s.NoError(err)
 	// init database
 	err = s.DataClient.Init()

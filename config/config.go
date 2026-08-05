@@ -479,7 +479,7 @@ func GetDefaultConfig() *Config {
 		Database: DatabaseConfig{
 			DataStore:       "sqlite://" + filepath.Join(MkDir(), "data.sqlite"),
 			CacheStore:      "sqlite://" + filepath.Join(MkDir(), "cache.sqlite"),
-			VectorStore:     storage.ZvecPrefix + filepath.Join(MkDir(), "vector.zvec"),
+			VectorStore:     storage.ZvecPrefix + filepath.Join(MkDir(), "vectors"),
 			CacheClientName: "gorse_cache_client",
 			MySQL: MySQLConfig{
 				IsolationLevel:  "READ-UNCOMMITTED",

@@ -31,7 +31,7 @@ data_store = "mysql://gorse:gorse_pass@tcp(localhost:3306)/gorse"
 #   weaviate://<host>:<port>
 #   weaviates://<host>:<port>
 #   milvus://<host>:<port>
-vector_store = "zvec://vector.zvec"
+vector_store = "zvec://vectors"
 
 # The naming prefix for tables (collections, keys) in databases. The default value is empty.
 table_prefix = ""
