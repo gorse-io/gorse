@@ -24,6 +24,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gorse-io/gorse/storage"
@@ -44,17 +45,16 @@ func init() {
 		if root == "" {
 			return nil, errors.New("zvec path is empty")
 		}
-		return &Zvec{root: root, tablePrefix: tablePrefix, collections: make(map[string]*zvecdb.Collection)}, nil
+		return &Zvec{root: root, tablePrefix: tablePrefix}, nil
 	})
 }
 
 // Zvec stores each Gorse vector collection in a zvec collection directory.
 type Zvec struct {
-	mu          sync.RWMutex
 	root        string
 	tablePrefix string
-	collections map[string]*zvecdb.Collection
-	closed      bool
+	collections sync.Map // map[string]*zvecdb.Collection
+	closed      atomic.Bool
 }
 
 func (db *Zvec) Init() error {
@@ -66,15 +66,34 @@ func (db *Zvec) Init() error {
 		return errors.Trace(err)
 	}
 
-	db.mu.Lock()
-	defer db.mu.Unlock()
-	if db.closed {
+	if db.closed.Load() {
 		return errors.New("zvec database is closed")
 	}
-	if len(db.collections) != 0 {
+	hasCollections := false
+	db.collections.Range(func(_, _ any) bool {
+		hasCollections = true
+		return false
+	})
+	if hasCollections {
 		return nil
 	}
+	type openedCollection struct {
+		name       string
+		collection *zvecdb.Collection
+	}
+	opened := make([]openedCollection, 0, len(entries))
+	cleanup := func() {
+		for _, item := range opened {
+			if db.collections.CompareAndDelete(item.name, item.collection) {
+				_ = item.collection.Close()
+			}
+		}
+	}
 	for _, entry := range entries {
+		if db.closed.Load() {
+			cleanup()
+			return errors.New("zvec database is closed")
+		}
 		if !entry.IsDir() {
 			continue
 		}
@@ -87,13 +106,18 @@ func (db *Zvec) Init() error {
 		}
 		collection, err := zvecdb.Open(context.Background(), filepath.Join(db.root, entry.Name()), zvecdb.CollectionOptions{})
 		if err != nil {
-			for _, opened := range db.collections {
-				_ = opened.Close()
-			}
-			clear(db.collections)
+			cleanup()
 			return errors.Trace(err)
 		}
-		db.collections[name] = collection
+		if _, loaded := db.collections.LoadOrStore(name, collection); loaded {
+			_ = collection.Close()
+			continue
+		}
+		opened = append(opened, openedCollection{name: name, collection: collection})
+	}
+	if db.closed.Load() {
+		cleanup()
+		return errors.New("zvec database is closed")
 	}
 	return nil
 }
@@ -107,22 +131,19 @@ func (db *Zvec) Optimize(ctx context.Context, name string) error {
 }
 
 func (db *Zvec) Close() error {
-	db.mu.Lock()
-	if db.closed {
-		db.mu.Unlock()
+	if !db.closed.CompareAndSwap(false, true) {
 		return nil
 	}
-	db.closed = true
-	collections := db.collections
-	db.collections = nil
-	db.mu.Unlock()
 
 	var errs []error
-	for _, collection := range collections {
-		if err := collection.Close(); err != nil {
-			errs = append(errs, err)
+	db.collections.Range(func(key, value any) bool {
+		if db.collections.CompareAndDelete(key, value) {
+			if err := value.(*zvecdb.Collection).Close(); err != nil {
+				errs = append(errs, err)
+			}
 		}
-	}
+		return true
+	})
 	return stderrors.Join(errs...)
 }
 
@@ -130,15 +151,14 @@ func (db *Zvec) ListCollections(ctx context.Context) ([]string, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, errors.Trace(err)
 	}
-	db.mu.RLock()
-	defer db.mu.RUnlock()
-	if db.closed {
+	if db.closed.Load() {
 		return nil, errors.New("zvec database is closed")
 	}
-	collections := make([]string, 0, len(db.collections))
-	for name := range db.collections {
-		collections = append(collections, name)
-	}
+	collections := make([]string, 0)
+	db.collections.Range(func(key, _ any) bool {
+		collections = append(collections, key.(string))
+		return true
+	})
 	sort.Strings(collections)
 	return collections, nil
 }
@@ -176,19 +196,26 @@ func (db *Zvec) AddCollection(ctx context.Context, name string, dimensions int, 
 	}
 	physicalName := db.tablePrefix + name
 
-	db.mu.Lock()
-	defer db.mu.Unlock()
-	if db.closed {
+	if db.closed.Load() {
 		return errors.New("zvec database is closed")
 	}
-	if _, found := db.collections[name]; found {
+	if _, found := db.collections.Load(name); found {
 		return errors.AlreadyExistsf("collection %s", name)
 	}
 	collection, err := zvecdb.CreateAndOpen(ctx, filepath.Join(db.root, physicalName), schema, zvecdb.CollectionOptions{})
 	if err != nil {
 		return errors.Trace(err)
 	}
-	db.collections[name] = collection
+	if _, loaded := db.collections.LoadOrStore(name, collection); loaded {
+		_ = collection.Close()
+		return errors.AlreadyExistsf("collection %s", name)
+	}
+	if db.closed.Load() {
+		if db.collections.CompareAndDelete(name, collection) {
+			_ = collection.Close()
+		}
+		return errors.New("zvec database is closed")
+	}
 	return nil
 }
 
@@ -221,19 +248,20 @@ func (db *Zvec) collectionSchema(ctx context.Context, name string, dimensions in
 }
 
 func (db *Zvec) DeleteCollection(ctx context.Context, name string) error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
-	if db.closed {
+	if db.closed.Load() {
 		return errors.New("zvec database is closed")
 	}
-	collection, found := db.collections[name]
+	value, found := db.collections.LoadAndDelete(name)
 	if !found {
 		return errors.NotFoundf("collection %s", name)
 	}
+	collection := value.(*zvecdb.Collection)
 	if err := collection.Destroy(ctx); err != nil {
+		if !db.closed.Load() {
+			db.collections.LoadOrStore(name, collection)
+		}
 		return errors.Trace(err)
 	}
-	delete(db.collections, name)
 	return nil
 }
 
@@ -345,16 +373,14 @@ func (db *Zvec) QueryVectors(ctx context.Context, name string, q []float32, cate
 }
 
 func (db *Zvec) collection(name string) (*zvecdb.Collection, error) {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
-	if db.closed {
+	if db.closed.Load() {
 		return nil, errors.New("zvec database is closed")
 	}
-	collection, found := db.collections[name]
+	value, found := db.collections.Load(name)
 	if !found {
 		return nil, errors.NotFoundf("collection %s", name)
 	}
-	return collection, nil
+	return value.(*zvecdb.Collection), nil
 }
 
 func distanceToZvec(distance Distance) (zvecdb.MetricType, error) {

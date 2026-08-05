@@ -15,8 +15,10 @@
 package vectors
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	"github.com/gorse-io/gorse/common/log"
@@ -96,6 +98,102 @@ func TestZvecReopen(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, results, 1)
 	require.Equal(t, "a", results[0].Id)
+}
+
+func TestZvecConcurrentCollectionWrites(t *testing.T) {
+	log.SetTestLogger(t)
+	ctx := t.Context()
+	database, err := Open(storage.ZvecPrefix+filepath.Join(t.TempDir(), "vectors"), "gorse_")
+	require.NoError(t, err)
+	require.NoError(t, database.Init())
+	t.Cleanup(func() { require.NoError(t, database.Close()) })
+
+	const collectionCount = 8
+	readerReady := make(chan struct{})
+	readerDone := make(chan struct{})
+	readerErr := make(chan error, 1)
+	go func() {
+		close(readerReady)
+		for {
+			select {
+			case <-readerDone:
+				readerErr <- nil
+				return
+			default:
+				if _, err := database.ListCollections(ctx); err != nil {
+					readerErr <- err
+					return
+				}
+			}
+		}
+	}()
+	<-readerReady
+
+	errCh := make(chan error, collectionCount)
+	var waitGroup sync.WaitGroup
+	for i := range collectionCount {
+		waitGroup.Add(1)
+		go func() {
+			defer waitGroup.Done()
+			errCh <- database.AddCollection(ctx, fmt.Sprintf("collection_%d", i), defaultVectorSize, Dot, VectorConfig{})
+		}()
+	}
+	waitGroup.Wait()
+	close(errCh)
+	for err := range errCh {
+		require.NoError(t, err)
+	}
+
+	collections, err := database.ListCollections(ctx)
+	require.NoError(t, err)
+	require.Len(t, collections, collectionCount)
+
+	errCh = make(chan error, collectionCount)
+	for _, collection := range collections {
+		waitGroup.Add(1)
+		go func() {
+			defer waitGroup.Done()
+			errCh <- database.DeleteCollection(ctx, collection)
+		}()
+	}
+	waitGroup.Wait()
+	close(errCh)
+	for err := range errCh {
+		require.NoError(t, err)
+	}
+
+	collections, err = database.ListCollections(ctx)
+	require.NoError(t, err)
+	require.Empty(t, collections)
+	close(readerDone)
+	require.NoError(t, <-readerErr)
+}
+
+func TestZvecConcurrentClose(t *testing.T) {
+	log.SetTestLogger(t)
+	ctx := t.Context()
+	database, err := Open(storage.ZvecPrefix+filepath.Join(t.TempDir(), "vectors"), "gorse_")
+	require.NoError(t, err)
+	require.NoError(t, database.Init())
+	require.NoError(t, database.AddCollection(ctx, "collection", defaultVectorSize, Dot, VectorConfig{}))
+
+	const closerCount = 8
+	errCh := make(chan error, closerCount)
+	var waitGroup sync.WaitGroup
+	for range closerCount {
+		waitGroup.Add(1)
+		go func() {
+			defer waitGroup.Done()
+			errCh <- database.Close()
+		}()
+	}
+	waitGroup.Wait()
+	close(errCh)
+	for err := range errCh {
+		require.NoError(t, err)
+	}
+	_, err = database.ListCollections(ctx)
+	require.ErrorContains(t, err, "zvec database is closed")
 }
 
 func TestZvec(t *testing.T) {
