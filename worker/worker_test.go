@@ -66,7 +66,7 @@ func (suite *WorkerTestSuite) SetupSuite() {
 	suite.NoError(err)
 	suite.CacheClient, err = cache.Open(fmt.Sprintf("sqlite://%s/cache.db", suite.T().TempDir()), "")
 	suite.NoError(err)
-	suite.VectorClient, err = vectors.Open(fmt.Sprintf("sqlite://%s/vector.db", suite.T().TempDir()), "")
+	suite.VectorClient, err = vectors.Open(fmt.Sprintf("zvec://%s/vectors", suite.T().TempDir()), "")
 	suite.NoError(err)
 	// init database
 	err = suite.DataClient.Init()
@@ -212,9 +212,9 @@ func (suite *WorkerTestSuite) TestRecommendCollaborative() {
 	suite.NoError(err)
 	suite.Equal([]cache.Score{
 		{Id: "3", Score: 4, Categories: []string{"*"}, Timestamp: recommendTime},
-		{Id: "2", Score: 3, Timestamp: recommendTime},
+		{Id: "2", Score: 3, Categories: []string{}, Timestamp: recommendTime},
 		{Id: "1", Score: 2, Categories: []string{"*"}, Timestamp: recommendTime},
-		{Id: "0", Score: 1, Timestamp: recommendTime},
+		{Id: "0", Score: 1, Categories: []string{}, Timestamp: recommendTime},
 	}, recommends)
 }
 

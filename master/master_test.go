@@ -102,7 +102,7 @@ func (s *MasterTestSuite) TestInitCollaborativeFilteringVectorCollectionRecreate
 	ctx := context.Background()
 	s.Require().NoError(s.VectorClient.AddCollection(ctx, vectors.CollaborativeFiltering, 16, vectors.Cosine, vectors.VectorConfig{}))
 
-	s.Require().NoError(s.initCollaborativeFilteringVectorCollection(ctx))
+	s.Require().NoError(s.initCollaborativeFilteringVectorCollection(ctx, 16))
 	info, err := s.VectorClient.DescribeCollection(ctx, vectors.CollaborativeFiltering)
 	s.Require().NoError(err)
 	s.Equal(vectors.Dot, info.Distance)
