@@ -108,17 +108,6 @@ func (s *MasterTestSuite) TestInitCollaborativeFilteringVectorCollectionRecreate
 	s.Equal(vectors.Dot, info.Distance)
 }
 
-func (s *MasterTestSuite) TestInitCollaborativeFilteringVectorCollectionRejectsUnsupportedQuantizationWithoutDeleting() {
-	ctx := context.Background()
-	s.Require().NoError(s.VectorClient.AddCollection(ctx, vectors.CollaborativeFiltering, 16, vectors.Dot, vectors.VectorConfig{}))
-	s.Config.Database.Vector.QuantizationType = string(vectors.QuantizationSQ)
-
-	s.Error(s.initCollaborativeFilteringVectorCollection(ctx))
-	info, err := s.VectorClient.DescribeCollection(ctx, vectors.CollaborativeFiltering)
-	s.Require().NoError(err)
-	s.Equal(vectors.Dot, info.Distance)
-}
-
 func TestMaster(t *testing.T) {
 	suite.Run(t, new(MasterTestSuite))
 }

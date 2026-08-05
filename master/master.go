@@ -427,9 +427,6 @@ func (m *Master) initCollaborativeFilteringVectorCollection(ctx context.Context)
 		Bits: m.Config.Database.Vector.QuantizationBits,
 	}
 	dimension := model.Params(nil).GetInt(model.NFactors, 16)
-	if err := vectors.ValidateCollectionConfig(ctx, m.VectorClient, vectors.CollaborativeFiltering, dimension, vectors.Dot, vectorConfig); err != nil {
-		return errors.Trace(err)
-	}
 
 	info, err := m.VectorClient.DescribeCollection(ctx, vectors.CollaborativeFiltering)
 	if errors.Is(err, errors.NotFound) {

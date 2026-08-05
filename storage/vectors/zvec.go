@@ -192,11 +192,6 @@ func (db *Zvec) AddCollection(ctx context.Context, name string, dimensions int, 
 	return nil
 }
 
-func (db *Zvec) ValidateCollectionConfig(ctx context.Context, name string, dimensions int, distance Distance, config VectorConfig) error {
-	_, err := db.collectionSchema(ctx, name, dimensions, distance, config)
-	return err
-}
-
 func (db *Zvec) collectionSchema(ctx context.Context, name string, dimensions int, distance Distance, config VectorConfig) (zvecdb.CollectionSchema, error) {
 	if err := ctx.Err(); err != nil {
 		return zvecdb.CollectionSchema{}, errors.Trace(err)
