@@ -36,13 +36,15 @@ const (
 	ItemToItemRecommender      = "item-to-item/"
 	UserToUserRecommender      = "user-to-user/"
 	ExternalRecommender        = "external/"
+	AgentRecommender           = "agent/"
 	CollaborativeRecommender   = "collaborative"
 )
 
 type Recommender struct {
-	config      config.RecommendConfig
-	cacheClient cache.Database
-	dataClient  data.Database
+	config       config.RecommendConfig
+	openAIConfig config.OpenAIConfig
+	cacheClient  cache.Database
+	dataClient   data.Database
 
 	online       bool
 	coldstart    bool
@@ -54,7 +56,11 @@ type Recommender struct {
 
 type RecommenderFunc func(ctx context.Context) ([]cache.Score, string, error)
 
-func NewRecommender(config config.RecommendConfig, cacheClient cache.Database, dataClient data.Database, online bool, userId string, categories []string) (*Recommender, error) {
+func NewRecommender(cfg config.RecommendConfig, cacheClient cache.Database, dataClient data.Database, online bool, userId string, categories []string, openAIConfigs ...config.OpenAIConfig) (*Recommender, error) {
+	var openAIConfig config.OpenAIConfig
+	if len(openAIConfigs) > 0 {
+		openAIConfig = openAIConfigs[0]
+	}
 	// Load user feedback
 	userFeedback, err := dataClient.GetUserFeedback(context.Background(), userId, new(time.Now()))
 	if err != nil {
@@ -64,18 +70,19 @@ func NewRecommender(config config.RecommendConfig, cacheClient cache.Database, d
 	coldstart := true
 	for _, feedback := range userFeedback {
 		// Negative feedback items should always be excluded (highest priority)
-		if expression.MatchFeedbackTypeExpressions(config.DataSource.NegativeFeedbackTypes, feedback.FeedbackType, feedback.Value) {
+		if expression.MatchFeedbackTypeExpressions(cfg.DataSource.NegativeFeedbackTypes, feedback.FeedbackType, feedback.Value) {
 			excludeSet.Add(feedback.ItemId)
-		} else if !config.Replacement.EnableReplacement || !online {
+		} else if !cfg.Replacement.EnableReplacement || !online {
 			// Other feedback items are excluded unless replacement is enabled
 			excludeSet.Add(feedback.ItemId)
 		}
-		if expression.MatchFeedbackTypeExpressions(config.DataSource.PositiveFeedbackTypes, feedback.FeedbackType, feedback.Value) {
+		if expression.MatchFeedbackTypeExpressions(cfg.DataSource.PositiveFeedbackTypes, feedback.FeedbackType, feedback.Value) {
 			coldstart = false
 		}
 	}
 	return &Recommender{
-		config:       config,
+		config:       cfg,
+		openAIConfig: openAIConfig,
 		cacheClient:  cacheClient,
 		dataClient:   dataClient,
 		userId:       userId,
@@ -167,6 +174,9 @@ func (r *Recommender) parse(fullname string) (RecommenderFunc, error) {
 	} else if after, ok := strings.CutPrefix(fullname, ExternalRecommender); ok {
 		name := after
 		return r.recommendExternal(name), nil
+	} else if after, ok := strings.CutPrefix(fullname, AgentRecommender); ok {
+		name := after
+		return r.recommendAgent(name), nil
 	} else {
 		return nil, errors.Errorf("unknown recommender: %s", fullname)
 	}
@@ -385,5 +395,27 @@ func (r *Recommender) recommendExternal(name string) RecommenderFunc {
 			}
 		}
 		return scores, externalConfig.Hash(), nil
+	}
+}
+
+func (r *Recommender) recommendAgent(name string) RecommenderFunc {
+	return func(ctx context.Context) ([]cache.Score, string, error) {
+		var agentConfig config.AgentConfig
+		for _, cfg := range r.config.Agent {
+			if cfg.Name == name {
+				agentConfig = cfg
+				break
+			}
+		}
+		agent, err := NewAgent(agentConfig, r.openAIConfig, r.dataClient, r.userId, r.userFeedback,
+			r.categories, r.excludeSet, r.config.CacheSize)
+		if err != nil {
+			return nil, "", errors.Trace(err)
+		}
+		scores, err := agent.Recommend(ctx)
+		if err != nil {
+			return nil, "", errors.Trace(err)
+		}
+		return scores, agentConfig.Hash(), nil
 	}
 }

@@ -151,7 +151,7 @@ func (p *Pipeline) Recommend(ctx context.Context, users []data.User, progress fu
 		updateUserCount.Add(1)
 
 		recommendTime := time.Now()
-		recommender, err := logics.NewRecommender(p.Config.Recommend, p.CacheClient, p.DataClient, false, userId, nil)
+		recommender, err := logics.NewRecommender(p.Config.Recommend, p.CacheClient, p.DataClient, false, userId, nil, p.Config.OpenAI)
 		if err != nil {
 			log.Logger().Error("failed to create recommender", zap.String("user_id", userId), zap.Error(err))
 			return
