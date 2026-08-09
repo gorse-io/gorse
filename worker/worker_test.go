@@ -211,10 +211,10 @@ func (suite *WorkerTestSuite) TestRecommendCollaborative() {
 	recommends, err := suite.CacheClient.SearchScores(ctx, cache.Recommend, "0", nil, 0, -1)
 	suite.NoError(err)
 	suite.Equal([]cache.Score{
-		{Id: "3", Score: 4, Categories: []string{"*"}, Timestamp: recommendTime},
-		{Id: "2", Score: 3, Categories: []string{}, Timestamp: recommendTime},
-		{Id: "1", Score: 2, Categories: []string{"*"}, Timestamp: recommendTime},
-		{Id: "0", Score: 1, Categories: []string{}, Timestamp: recommendTime},
+		{Id: "3", Score: 3, Categories: []string{"*"}, Timestamp: recommendTime},
+		{Id: "2", Score: 2, Categories: []string{}, Timestamp: recommendTime},
+		{Id: "1", Score: 1, Categories: []string{"*"}, Timestamp: recommendTime},
+		{Id: "0", Score: 0, Categories: []string{}, Timestamp: recommendTime},
 	}, recommends)
 }
 

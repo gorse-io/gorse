@@ -1062,9 +1062,6 @@ func (m *Master) trainCollaborativeFiltering(parent context.Context, trainSet, t
 		}
 	}
 	if len(matrixFactorizationItemVectors) > 0 {
-		if err := m.initCollaborativeFilteringVectorCollection(ctx, len(matrixFactorizationItemVectors[0].Vector)); err != nil {
-			return errors.Trace(err)
-		}
 		for start := 0; start < len(matrixFactorizationItemVectors); start += batchSize {
 			end := start + batchSize
 			if end > len(matrixFactorizationItemVectors) {

@@ -15,13 +15,11 @@
 package worker
 
 import (
-	"bytes"
 	"context"
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"io"
 	"math/rand"
 	"net"
 	"net/http"
@@ -284,39 +282,19 @@ func (w *Worker) Pull() {
 			if err != nil {
 				log.Logger().Error("failed to open collaborative filtering model", zap.Error(err))
 			} else {
-				content, readErr := io.ReadAll(r)
+				users := logics.NewMatrixFactorizationUsers()
+				err = users.Unmarshal(r)
 				if closeErr := r.Close(); closeErr != nil {
 					log.Logger().Error("failed to close collaborative filtering model", zap.Error(closeErr))
 				}
-				if readErr != nil {
-					log.Logger().Error("failed to read collaborative filtering model", zap.Error(readErr))
+				if err != nil {
+					log.Logger().Error("failed to unmarshal matrix factorization users", zap.Error(err))
 				} else {
-					users := logics.NewMatrixFactorizationUsers()
-					err = users.Unmarshal(bytes.NewReader(content))
-					if err != nil {
-						// Backward compatibility: older blobs stored item index before user embeddings.
-						items := logics.NewMatrixFactorizationItems(time.Time{})
-						legacyReader := bytes.NewReader(content)
-						if legacyErr := items.Unmarshal(legacyReader); legacyErr != nil {
-							log.Logger().Error("failed to unmarshal matrix factorization users", zap.Error(err))
-						} else if legacyErr = users.Unmarshal(legacyReader); legacyErr != nil {
-							log.Logger().Error("failed to unmarshal matrix factorization users", zap.Error(legacyErr))
-						} else {
-							w.MatrixFactorizationItems = items
-							w.MatrixFactorizationUsers = users
-							w.collaborativeFilteringModelId = w.latestCollaborativeFilteringModelId
-							log.Logger().Info("synced collaborative filtering model",
-								zap.Int64("id", w.collaborativeFilteringModelId))
-							pulled = true
-						}
-					} else {
-						w.MatrixFactorizationItems = nil
-						w.MatrixFactorizationUsers = users
-						w.collaborativeFilteringModelId = w.latestCollaborativeFilteringModelId
-						log.Logger().Info("synced collaborative filtering model",
-							zap.Int64("id", w.collaborativeFilteringModelId))
-						pulled = true
-					}
+					w.MatrixFactorizationUsers = users
+					w.collaborativeFilteringModelId = w.latestCollaborativeFilteringModelId
+					log.Logger().Info("synced collaborative filtering model",
+						zap.Int64("id", w.collaborativeFilteringModelId))
+					pulled = true
 				}
 			}
 		}

@@ -388,11 +388,11 @@ func (p *Pipeline) updateCollaborativeRecommend(
 		return errors.Trace(err)
 	}
 	recommend := make([]cache.Score, 0, len(scoredVectors))
-	for i, vector := range scoredVectors {
+	for _, vector := range scoredVectors {
 		if !excludeSet.Contains(vector.Id) {
 			recommend = append(recommend, cache.Score{
 				Id:         vector.Id,
-				Score:      float64(len(scoredVectors) - i),
+				Score:      float64(vector.Score),
 				Categories: vector.Categories,
 				Timestamp:  localStartTime,
 			})
