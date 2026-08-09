@@ -197,15 +197,13 @@ func (p *Pipeline) Recommend(ctx context.Context, users []data.User, progress fu
 
 		// Update collaborative filtering recommendation.
 		if !strings.EqualFold(p.Config.Recommend.Collaborative.Type, "none") {
-			userEmbedding, matrixFactorizationID := p.GetMatrixFactorization(userId)
-			if userEmbedding != nil {
-				if updateErr := p.updateCollaborativeRecommend(ctx, matrixFactorizationID, userId, userEmbedding, recommender.ExcludeSet()); updateErr != nil {
+			if userEmbedding, matrixFactorizationID := p.GetMatrixFactorization(userId); userEmbedding != nil {
+				if err := p.updateCollaborativeRecommend(ctx, matrixFactorizationID, userId, userEmbedding, recommender.ExcludeSet()); err != nil {
 					log.Logger().Error("failed to recommend by collaborative filtering",
-						zap.String("user_id", userId), zap.Error(updateErr))
+						zap.String("user_id", userId), zap.Error(err))
 					return
 				}
-			}
-			if matrixFactorizationID > 0 && userEmbedding == nil && !p.dontskipColdStartUsers {
+			} else if !p.dontskipColdStartUsers {
 				// skip users without collaborative filtering embeddings
 				return
 			}

@@ -1049,43 +1049,57 @@ func (m *Master) trainCollaborativeFiltering(parent context.Context, trainSet, t
 	fitSpan.End()
 
 	collaborativeFilteringModelId := time.Now().UnixMilli()
-	_, indexSpan := monitor.Start(ctx, "Index", trainSet.CountItems())
-	modelTimestamp := time.Now()
-	matrixFactorizationItemVectors := make([]vectors.Vector, 0, trainSet.CountItems())
-	for i := 0; i < trainSet.CountItems(); i++ {
-		indexSpan.Add(1)
-		if itemId, ok := trainSet.GetItemDict().String(int32(i)); ok && collaborativeFilteringModel.IsItemPredictable(int32(i)) {
-			matrixFactorizationItemVectors = append(matrixFactorizationItemVectors, vectors.Vector{
-				Id:        itemId,
-				Vector:    collaborativeFilteringModel.GetItemFactor(int32(i)),
-				Timestamp: modelTimestamp,
-			})
-		}
-	}
-	if err := m.writeCollaborativeFilteringItems(ctx, collaborativeFilteringModelId, matrixFactorizationItemVectors); err != nil {
+	collection := vectors.CollaborativeFilteringCollection(collaborativeFilteringModelId)
+
+	indexCtx, indexSpan := monitor.Start(ctx, "Index", trainSet.CountItems())
+	if err := m.VectorClient.AddCollection(indexCtx, collection, len(collaborativeFilteringModel.GetItemFactor(0)), vectors.Dot, vectors.VectorConfig{
+		Type: vectors.QuantizationType(m.Config.Database.Vector.QuantizationType),
+		Bits: m.Config.Database.Vector.QuantizationBits,
+	}); err != nil {
+		indexSpan.Fail(err)
 		return errors.Trace(err)
 	}
-	modelPublished := false
-	blobUploaded := false
-	modelBlobName := strconv.FormatInt(collaborativeFilteringModelId, 10)
-	defer func() {
-		if modelPublished {
-			return
-		}
-		collection := vectors.CollaborativeFilteringCollection(collaborativeFilteringModelId)
-		if cleanupErr := m.VectorClient.DeleteCollection(context.Background(), collection); cleanupErr != nil && !errors.Is(cleanupErr, errors.NotFound) {
-			log.Logger().Error("failed to clean up unpublished collaborative filtering vector collection",
-				zap.String("collection", collection), zap.Error(cleanupErr))
-		}
-		if blobUploaded {
-			if cleanupErr := m.blobStore.Remove(modelBlobName); cleanupErr != nil {
-				log.Logger().Error("failed to clean up unpublished collaborative filtering model",
-					zap.String("blob", modelBlobName), zap.Error(cleanupErr))
+	for start := 0; start < trainSet.CountItems(); start += batchSize {
+		end := min(start+batchSize, trainSet.CountItems())
+		itemVectors := make([]vectors.Vector, 0, end-start)
+		for i := start; i < end; i++ {
+			if itemId, ok := trainSet.GetItemDict().String(int32(i)); ok && collaborativeFilteringModel.IsItemPredictable(int32(i)) {
+				itemVectors = append(itemVectors, vectors.Vector{
+					Id:        itemId,
+					Vector:    collaborativeFilteringModel.GetItemFactor(int32(i)),
+					Timestamp: time.UnixMilli(collaborativeFilteringModelId),
+				})
 			}
 		}
-	}()
-	span.Add(1)
+		if len(itemVectors) == 0 {
+			indexSpan.Add(end - start)
+			continue
+		}
+		itemIds := lo.Map(itemVectors, func(vector vectors.Vector, _ int) string {
+			return vector.Id
+		})
+		items, err := m.DataClient.BatchGetItems(indexCtx, itemIds, data.GetOptions{})
+		if err != nil {
+			indexSpan.Fail(err)
+			return errors.Trace(err)
+		}
+		itemMap := lo.SliceToMap(items, func(item data.Item) (string, data.Item) {
+			return item.ItemId, item
+		})
+		for i := range itemVectors {
+			if item, ok := itemMap[itemVectors[i].Id]; ok {
+				itemVectors[i].IsHidden = item.IsHidden
+				itemVectors[i].Categories = item.Categories
+			}
+		}
+		if err = m.VectorClient.AddVectors(indexCtx, collection, itemVectors); err != nil {
+			indexSpan.Fail(err)
+			return errors.Trace(err)
+		}
+		indexSpan.Add(end - start)
+	}
 	indexSpan.End()
+	span.Add(1)
 
 	matrixFactorizationUsers := logics.NewMatrixFactorizationUsers()
 	for i := 0; i < trainSet.CountUsers(); i++ {
@@ -1104,7 +1118,7 @@ func (m *Master) trainCollaborativeFiltering(parent context.Context, trainSet, t
 	}
 
 	// upload model
-	w, done, err := m.blobStore.Create(modelBlobName)
+	w, done, err := m.blobStore.Create(strconv.FormatInt(collaborativeFilteringModelId, 10))
 	if err != nil {
 		log.Logger().Error("failed to create blob for collaborative filtering model",
 			zap.Int64("id", collaborativeFilteringModelId), zap.Error(err))
@@ -1121,24 +1135,22 @@ func (m *Master) trainCollaborativeFiltering(parent context.Context, trainSet, t
 		return err
 	}
 	<-done
-	blobUploaded = true
 
 	// update meta
-	nextMeta := meta.Model[cf.Score]{
+	collaborativeFilteringMeta := meta.Model[cf.Score]{
 		ID:     collaborativeFilteringModelId,
 		Type:   collaborativeFilteringType,
 		Params: collaborativeFilteringParams,
 		Score:  score,
 	}
-	if err = m.metaStore.Put(meta.COLLABORATIVE_FILTERING_MODEL, nextMeta.ToJSON()); err != nil {
+	if err = m.metaStore.Put(meta.COLLABORATIVE_FILTERING_MODEL, collaborativeFilteringMeta.ToJSON()); err != nil {
 		log.Logger().Error("failed to write collaborative filtering model meta", zap.Error(err))
 		return err
 	}
 	m.collaborativeFilteringModelMutex.Lock()
-	m.collaborativeFilteringMeta = nextMeta
+	m.collaborativeFilteringMeta = collaborativeFilteringMeta
 	m.collaborativeFilteringTrainSetSize = trainSet.CountFeedback()
 	m.collaborativeFilteringModelMutex.Unlock()
-	modelPublished = true
 	log.Logger().Info("write collaborative filtering model meta",
 		zap.Int64("id", collaborativeFilteringModelId),
 		zap.Float32("ndcg", score.NDCG),
@@ -1156,62 +1168,6 @@ func (m *Master) trainCollaborativeFiltering(parent context.Context, trainSet, t
 	}
 
 	m.removeOutOfDateModels()
-	return nil
-}
-
-func (m *Master) writeCollaborativeFilteringItems(ctx context.Context, modelID int64, itemVectors []vectors.Vector) (err error) {
-	if len(itemVectors) == 0 {
-		return errors.New("no predictable item found for collaborative filtering")
-	}
-	collection := vectors.CollaborativeFilteringCollection(modelID)
-	// A collection with a not-yet-published model ID can only be an orphan
-	// left by an interrupted training attempt. Recreate it to keep model
-	// collections immutable and prevent stale vectors from being published.
-	if _, describeErr := m.VectorClient.DescribeCollection(ctx, collection); describeErr == nil {
-		if err = m.VectorClient.DeleteCollection(ctx, collection); err != nil {
-			return errors.Trace(err)
-		}
-	} else if !errors.Is(describeErr, errors.NotFound) {
-		return errors.Trace(describeErr)
-	}
-	if err = m.VectorClient.AddCollection(ctx, collection, len(itemVectors[0].Vector), vectors.Dot, vectors.VectorConfig{
-		Type: vectors.QuantizationType(m.Config.Database.Vector.QuantizationType),
-		Bits: m.Config.Database.Vector.QuantizationBits,
-	}); err != nil {
-		return errors.Trace(err)
-	}
-	succeeded := false
-	defer func() {
-		if !succeeded {
-			if cleanupErr := m.VectorClient.DeleteCollection(context.Background(), collection); cleanupErr != nil && !errors.Is(cleanupErr, errors.NotFound) {
-				log.Logger().Error("failed to clean up collaborative filtering vector collection",
-					zap.String("collection", collection), zap.Error(cleanupErr))
-			}
-		}
-	}()
-	for start := 0; start < len(itemVectors); start += batchSize {
-		end := min(start+batchSize, len(itemVectors))
-		itemIds := lo.Map(itemVectors[start:end], func(vector vectors.Vector, _ int) string {
-			return vector.Id
-		})
-		items, getErr := m.DataClient.BatchGetItems(ctx, itemIds, data.GetOptions{})
-		if getErr != nil {
-			return errors.Trace(getErr)
-		}
-		itemMap := lo.SliceToMap(items, func(item data.Item) (string, data.Item) {
-			return item.ItemId, item
-		})
-		for i := start; i < end; i++ {
-			if item, ok := itemMap[itemVectors[i].Id]; ok {
-				itemVectors[i].IsHidden = item.IsHidden
-				itemVectors[i].Categories = item.Categories
-			}
-		}
-		if err = m.VectorClient.AddVectors(ctx, collection, itemVectors[start:end]); err != nil {
-			return errors.Trace(err)
-		}
-	}
-	succeeded = true
 	return nil
 }
 

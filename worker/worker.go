@@ -282,11 +282,7 @@ func (w *Worker) Pull() {
 				log.Logger().Error("failed to open collaborative filtering model", zap.Error(err))
 			} else {
 				users := logics.NewMatrixFactorizationUsers()
-				err = users.Unmarshal(r)
-				if closeErr := r.Close(); closeErr != nil {
-					log.Logger().Error("failed to close collaborative filtering model", zap.Error(closeErr))
-				}
-				if err != nil {
+				if err = users.Unmarshal(r); err != nil {
 					log.Logger().Error("failed to unmarshal matrix factorization users", zap.Error(err))
 				} else if err := w.UpdateMatrixFactorization(context.Background(), w.latestCollaborativeFilteringModelId, users); err != nil {
 					log.Logger().Error("failed to install collaborative filtering model", zap.Error(err))

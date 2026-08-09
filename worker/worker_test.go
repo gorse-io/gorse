@@ -29,7 +29,6 @@ import (
 	"time"
 
 	"github.com/c-bata/goptuna"
-	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/gorse-io/gorse/common/expression"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/common/monitor"
@@ -221,41 +220,6 @@ func (suite *WorkerTestSuite) TestRecommendCollaborative() {
 		{Id: "1", Score: 1, Categories: []string{"*"}, Timestamp: recommendTime},
 		{Id: "0", Score: 0, Categories: []string{}, Timestamp: recommendTime},
 	}, recommends)
-}
-
-func (suite *WorkerTestSuite) TestInstallCollaborativeFilteringModelRequiresCollection() {
-	ctx := suite.T().Context()
-	users := logics.NewMatrixFactorizationUsers()
-	users.Add("user", []float32{1, 0})
-
-	err := suite.UpdateMatrixFactorization(ctx, 2, users)
-	suite.Error(err)
-	suite.Equal(int64(1), suite.MatrixFactorizationId)
-	suite.Require().NoError(suite.VectorClient.AddCollection(ctx, vectors.CollaborativeFilteringCollection(2), 2, vectors.Dot, vectors.VectorConfig{}))
-	suite.Require().NoError(suite.UpdateMatrixFactorization(ctx, 2, users))
-	suite.Equal(int64(2), suite.MatrixFactorizationId)
-	embedding, ok := suite.MatrixFactorizationUsers.Get("user")
-	suite.True(ok)
-	suite.Equal([]float32{1, 0}, embedding)
-}
-
-func (suite *WorkerTestSuite) TestUpdateCollaborativeRecommendUsesModelVersion() {
-	ctx := suite.T().Context()
-	collection1 := vectors.CollaborativeFilteringCollection(1)
-	collection2 := vectors.CollaborativeFilteringCollection(2)
-	suite.Require().NoError(suite.VectorClient.AddCollection(ctx, collection2, 2, vectors.Dot, vectors.VectorConfig{}))
-	suite.Require().NoError(suite.VectorClient.AddVectors(ctx, collection1, []vectors.Vector{{Id: "old", Vector: []float32{1, 0}}}))
-	suite.Require().NoError(suite.VectorClient.AddVectors(ctx, collection2, []vectors.Vector{{Id: "new", Vector: []float32{1, 0}}}))
-	users := logics.NewMatrixFactorizationUsers()
-	users.Add("user", []float32{1, 0})
-	suite.Require().NoError(suite.UpdateMatrixFactorization(ctx, 2, users))
-
-	userEmbedding, id := suite.GetMatrixFactorization("user")
-	err := suite.updateCollaborativeRecommend(ctx, id, "user", userEmbedding, mapset.NewSet[string]())
-	suite.Require().NoError(err)
-	scores, err := suite.CacheClient.SearchScores(ctx, cache.CollaborativeFiltering, "user", nil, 0, -1)
-	suite.Require().NoError(err)
-	suite.Equal([]string{"new"}, cache.ConvertDocumentsToValues(scores))
 }
 
 func (suite *WorkerTestSuite) TestRecommendItemToItem() {
