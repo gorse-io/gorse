@@ -1164,6 +1164,16 @@ func (m *Master) writeCollaborativeFilteringItems(ctx context.Context, modelID i
 		return errors.New("no predictable item found for collaborative filtering")
 	}
 	collection := vectors.CollaborativeFilteringCollection(modelID)
+	// A collection with a not-yet-published model ID can only be an orphan
+	// left by an interrupted training attempt. Recreate it to keep model
+	// collections immutable and prevent stale vectors from being published.
+	if _, describeErr := m.VectorClient.DescribeCollection(ctx, collection); describeErr == nil {
+		if err = m.VectorClient.DeleteCollection(ctx, collection); err != nil {
+			return errors.Trace(err)
+		}
+	} else if !errors.Is(describeErr, errors.NotFound) {
+		return errors.Trace(describeErr)
+	}
 	if err = m.initCollaborativeFilteringVectorCollection(ctx, collection, len(itemVectors[0].Vector)); err != nil {
 		return errors.Trace(err)
 	}
