@@ -222,6 +222,30 @@ func (suite *WorkerTestSuite) TestRecommendCollaborative() {
 	}, recommends)
 }
 
+func (suite *WorkerTestSuite) TestRecommendColdStart() {
+	ctx := suite.T().Context()
+	suite.MatrixFactorizationId = 0
+	suite.MatrixFactorizationUsers = nil
+	suite.dontskipColdStartUsers = false
+	suite.Config.Recommend.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{expression.MustParseFeedbackTypeExpression("click")}
+
+	err := suite.DataClient.BatchInsertItems(ctx, []data.Item{
+		{ItemId: "0", Timestamp: time.Unix(1, 0)},
+		{ItemId: "1", Timestamp: time.Unix(2, 0)},
+	})
+	suite.Require().NoError(err)
+	err = suite.DataClient.BatchInsertFeedback(ctx, []data.Feedback{{
+		FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "0"},
+	}}, true, true, true)
+	suite.Require().NoError(err)
+
+	suite.Recommend(ctx, []data.User{{UserId: "0"}}, nil)
+	recommends, err := suite.CacheClient.SearchScores(ctx, cache.Recommend, "0", nil, 0, -1)
+	suite.Require().NoError(err)
+	suite.Require().NotEmpty(recommends)
+	suite.Equal("1", recommends[0].Id)
+}
+
 func (suite *WorkerTestSuite) TestRecommendItemToItem() {
 	ctx := suite.T().Context()
 	suite.Config.Recommend.Ranker.Recommenders = []string{"item-to-item/default"}

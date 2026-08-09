@@ -112,14 +112,13 @@ func (p *Pipeline) GetMatrixFactorizationId() int64 {
 	return p.MatrixFactorizationId
 }
 
-func (p *Pipeline) GetMatrixFactorization(userID string) ([]float32, int64) {
+func (p *Pipeline) GetMatrixFactorization() (*logics.MatrixFactorizationUsers, int64) {
 	p.MatrixFactorizationMutex.RLock()
 	defer p.MatrixFactorizationMutex.RUnlock()
 	if p.MatrixFactorizationUsers == nil {
 		return nil, 0
 	}
-	userEmbedding, _ := p.MatrixFactorizationUsers.Get(userID)
-	return userEmbedding, p.MatrixFactorizationId
+	return p.MatrixFactorizationUsers, p.MatrixFactorizationId
 }
 
 func (p *Pipeline) Recommend(ctx context.Context, users []data.User, progress func(completed, throughput int)) {
@@ -196,8 +195,8 @@ func (p *Pipeline) Recommend(ctx context.Context, users []data.User, progress fu
 		}
 
 		// Update collaborative filtering recommendation.
-		if !strings.EqualFold(p.Config.Recommend.Collaborative.Type, "none") {
-			if userEmbedding, matrixFactorizationID := p.GetMatrixFactorization(userId); userEmbedding != nil {
+		if matrixFactorizationUsers, matrixFactorizationID := p.GetMatrixFactorization(); !strings.EqualFold(p.Config.Recommend.Collaborative.Type, "none") && matrixFactorizationUsers != nil {
+			if userEmbedding, ok := matrixFactorizationUsers.Get(userId); ok {
 				if err := p.updateCollaborativeRecommend(ctx, matrixFactorizationID, userId, userEmbedding, recommender.ExcludeSet()); err != nil {
 					log.Logger().Error("failed to recommend by collaborative filtering",
 						zap.String("user_id", userId), zap.Error(err))
