@@ -1059,15 +1059,19 @@ func (m *Master) trainCollaborativeFiltering(parent context.Context, trainSet, t
 		indexSpan.Fail(err)
 		return errors.Trace(err)
 	}
+	items := trainSet.GetItems()
 	for start := 0; start < trainSet.CountItems(); start += batchSize {
 		end := min(start+batchSize, trainSet.CountItems())
 		itemVectors := make([]vectors.Vector, 0, end-start)
 		for i := start; i < end; i++ {
-			if itemId, ok := trainSet.GetItemDict().String(int32(i)); ok && collaborativeFilteringModel.IsItemPredictable(int32(i)) {
+			if collaborativeFilteringModel.IsItemPredictable(int32(i)) {
+				item := items[i]
 				itemVectors = append(itemVectors, vectors.Vector{
-					Id:        itemId,
-					Vector:    collaborativeFilteringModel.GetItemFactor(int32(i)),
-					Timestamp: time.UnixMilli(collaborativeFilteringModelId),
+					Id:         item.ItemId,
+					Vector:     collaborativeFilteringModel.GetItemFactor(int32(i)),
+					IsHidden:   item.IsHidden,
+					Categories: item.Categories,
+					Timestamp:  time.UnixMilli(collaborativeFilteringModelId),
 				})
 			}
 		}
@@ -1075,24 +1079,7 @@ func (m *Master) trainCollaborativeFiltering(parent context.Context, trainSet, t
 			indexSpan.Add(end - start)
 			continue
 		}
-		itemIds := lo.Map(itemVectors, func(vector vectors.Vector, _ int) string {
-			return vector.Id
-		})
-		items, err := m.DataClient.BatchGetItems(indexCtx, itemIds, data.GetOptions{})
-		if err != nil {
-			indexSpan.Fail(err)
-			return errors.Trace(err)
-		}
-		itemMap := lo.SliceToMap(items, func(item data.Item) (string, data.Item) {
-			return item.ItemId, item
-		})
-		for i := range itemVectors {
-			if item, ok := itemMap[itemVectors[i].Id]; ok {
-				itemVectors[i].IsHidden = item.IsHidden
-				itemVectors[i].Categories = item.Categories
-			}
-		}
-		if err = m.VectorClient.AddVectors(indexCtx, collection, itemVectors); err != nil {
+		if err := m.VectorClient.AddVectors(indexCtx, collection, itemVectors); err != nil {
 			indexSpan.Fail(err)
 			return errors.Trace(err)
 		}
