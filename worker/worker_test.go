@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/c-bata/goptuna"
+	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/gorse-io/gorse/common/expression"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/common/monitor"
@@ -103,9 +104,14 @@ func (suite *WorkerTestSuite) SetupTest() {
 	// reset models and vectors
 	suite.MatrixFactorizationItems = nil
 	suite.MatrixFactorizationUsers = nil
+	suite.collaborativeFilteringModelId = 1
 	suite.ClickThroughRateModel = nil
-	_ = suite.VectorClient.DeleteCollection(context.Background(), vectors.CollaborativeFiltering)
-	err = suite.VectorClient.AddCollection(context.Background(), vectors.CollaborativeFiltering, 2, vectors.Dot, vectors.VectorConfig{})
+	collections, err := suite.VectorClient.ListCollections(context.Background())
+	suite.Require().NoError(err)
+	for _, collection := range collections {
+		suite.Require().NoError(suite.VectorClient.DeleteCollection(context.Background(), collection))
+	}
+	err = suite.VectorClient.AddCollection(context.Background(), vectors.CollaborativeFilteringCollection(suite.collaborativeFilteringModelId), 2, vectors.Dot, vectors.VectorConfig{})
 	suite.NoError(err)
 }
 
@@ -198,7 +204,7 @@ func (suite *WorkerTestSuite) TestRecommendCollaborative() {
 		}
 		matrixFactorizationItemVectors = append(matrixFactorizationItemVectors, vector)
 	}
-	err = suite.VectorClient.AddVectors(ctx, vectors.CollaborativeFiltering, matrixFactorizationItemVectors)
+	err = suite.VectorClient.AddVectors(ctx, vectors.CollaborativeFilteringCollection(suite.collaborativeFilteringModelId), matrixFactorizationItemVectors)
 	suite.NoError(err)
 	suite.MatrixFactorizationUsers = logics.NewMatrixFactorizationUsers()
 	suite.MatrixFactorizationUsers.Add("0", []float32{1, 0})
@@ -216,6 +222,37 @@ func (suite *WorkerTestSuite) TestRecommendCollaborative() {
 		{Id: "1", Score: 1, Categories: []string{"*"}, Timestamp: recommendTime},
 		{Id: "0", Score: 0, Categories: []string{}, Timestamp: recommendTime},
 	}, recommends)
+}
+
+func (suite *WorkerTestSuite) TestInstallCollaborativeFilteringModelRequiresCollection() {
+	ctx := suite.T().Context()
+	users := logics.NewMatrixFactorizationUsers()
+	users.Add("user", []float32{1, 0})
+
+	err := suite.installCollaborativeFilteringModel(ctx, 2, nil, users)
+	suite.Error(err)
+	suite.Equal(int64(1), suite.collaborativeFilteringModelId)
+	suite.Require().NoError(suite.VectorClient.AddCollection(ctx, vectors.CollaborativeFilteringCollection(2), 2, vectors.Dot, vectors.VectorConfig{}))
+	suite.Require().NoError(suite.installCollaborativeFilteringModel(ctx, 2, nil, users))
+	suite.Equal(int64(2), suite.collaborativeFilteringModelId)
+	embedding, ok := suite.MatrixFactorizationUsers.Get("user")
+	suite.True(ok)
+	suite.Equal([]float32{1, 0}, embedding)
+}
+
+func (suite *WorkerTestSuite) TestUpdateCollaborativeRecommendUsesModelVersion() {
+	ctx := suite.T().Context()
+	collection1 := vectors.CollaborativeFilteringCollection(1)
+	collection2 := vectors.CollaborativeFilteringCollection(2)
+	suite.Require().NoError(suite.VectorClient.AddCollection(ctx, collection2, 2, vectors.Dot, vectors.VectorConfig{}))
+	suite.Require().NoError(suite.VectorClient.AddVectors(ctx, collection1, []vectors.Vector{{Id: "old", Vector: []float32{1, 0}}}))
+	suite.Require().NoError(suite.VectorClient.AddVectors(ctx, collection2, []vectors.Vector{{Id: "new", Vector: []float32{1, 0}}}))
+
+	err := suite.updateCollaborativeRecommend(ctx, 2, "user", []float32{1, 0}, mapset.NewSet[string]())
+	suite.Require().NoError(err)
+	scores, err := suite.CacheClient.SearchScores(ctx, cache.CollaborativeFiltering, "user", nil, 0, -1)
+	suite.Require().NoError(err)
+	suite.Equal([]string{"new"}, cache.ConvertDocumentsToValues(scores))
 }
 
 func (suite *WorkerTestSuite) TestRecommendItemToItem() {
@@ -455,7 +492,7 @@ func (suite *WorkerTestSuite) TestRecommend() {
 	suite.Config.Recommend.NonPersonalized = []config.NonPersonalizedConfig{{Name: "popular"}}
 	suite.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "default"}}
 	suite.Config.Recommend.UserToUser = []config.UserToUserConfig{{Name: "default"}}
-	err := suite.VectorClient.AddVectors(ctx, vectors.CollaborativeFiltering, []vectors.Vector{{Id: "4", Vector: []float32{4, 1}}})
+	err := suite.VectorClient.AddVectors(ctx, vectors.CollaborativeFilteringCollection(suite.collaborativeFilteringModelId), []vectors.Vector{{Id: "4", Vector: []float32{4, 1}}})
 	suite.NoError(err)
 	suite.MatrixFactorizationUsers = logics.NewMatrixFactorizationUsers()
 	suite.MatrixFactorizationUsers.Add("0", []float32{1, 0})
@@ -519,7 +556,7 @@ func (suite *WorkerTestSuite) TestRecommendRankerNone() {
 	suite.Config.Recommend.NonPersonalized = []config.NonPersonalizedConfig{{Name: "popular"}}
 	suite.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "default"}}
 	suite.Config.Recommend.UserToUser = []config.UserToUserConfig{{Name: "default"}}
-	err := suite.VectorClient.AddVectors(ctx, vectors.CollaborativeFiltering, []vectors.Vector{{Id: "4", Vector: []float32{4, 1}}})
+	err := suite.VectorClient.AddVectors(ctx, vectors.CollaborativeFilteringCollection(suite.collaborativeFilteringModelId), []vectors.Vector{{Id: "4", Vector: []float32{4, 1}}})
 	suite.NoError(err)
 	suite.MatrixFactorizationUsers = logics.NewMatrixFactorizationUsers()
 	suite.MatrixFactorizationUsers.Add("0", []float32{1, 0})

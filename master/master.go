@@ -37,7 +37,6 @@ import (
 	"github.com/gorse-io/gorse/common/util"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/dataset"
-	"github.com/gorse-io/gorse/model"
 	"github.com/gorse-io/gorse/model/cf"
 	"github.com/gorse-io/gorse/model/ctr"
 	"github.com/gorse-io/gorse/protocol"
@@ -89,6 +88,7 @@ type Master struct {
 
 	// collaborative filtering
 	collaborativeFilteringModelMutex   sync.RWMutex
+	collaborativeFilteringLastModelID  int64
 	collaborativeFilteringTrainSetSize int
 	collaborativeFilteringMeta         meta.Model[cf.Score]
 	collaborativeFilteringTarget       meta.Model[cf.Score]
@@ -319,10 +319,6 @@ func (m *Master) Serve() {
 	if err = m.VectorClient.Init(); err != nil {
 		log.Logger().Fatal("failed to init vector store", zap.Error(err))
 	}
-	if err = m.initCollaborativeFilteringVectorCollection(context.Background(), model.Params(nil).GetInt(model.NFactors, 16)); err != nil {
-		log.Logger().Fatal("failed to init collaborative filtering vector collection", zap.Error(err))
-	}
-
 	// load config overrides
 	if err = m.applyRecommendOverride(m.Config); err != nil {
 		log.Logger().Error("failed to apply config overrides", zap.Error(err))
@@ -421,31 +417,31 @@ func (m *Master) Serve() {
 	m.StartHttpServer()
 }
 
-func (m *Master) initCollaborativeFilteringVectorCollection(ctx context.Context, dimension int) error {
+func (m *Master) initCollaborativeFilteringVectorCollection(ctx context.Context, collection string, dimension int) error {
 	vectorConfig := vectors.VectorConfig{
 		Type: vectors.QuantizationType(m.Config.Database.Vector.QuantizationType),
 		Bits: m.Config.Database.Vector.QuantizationBits,
 	}
-	info, err := m.VectorClient.DescribeCollection(ctx, vectors.CollaborativeFiltering)
+	info, err := m.VectorClient.DescribeCollection(ctx, collection)
 	if errors.Is(err, errors.NotFound) {
 		info = nil
 	} else if err != nil {
 		return errors.Trace(err)
 	} else if err = m.checkCollaborativeFilteringVectorCollection(info, dimension, vectorConfig); err != nil {
 		log.Logger().Warn("recreating collaborative filtering vector collection",
-			zap.String("collection", vectors.CollaborativeFiltering),
+			zap.String("collection", collection),
 			zap.Error(err))
-		if err = m.VectorClient.DeleteCollection(ctx, vectors.CollaborativeFiltering); err != nil && !errors.Is(err, errors.NotFound) {
+		if err = m.VectorClient.DeleteCollection(ctx, collection); err != nil && !errors.Is(err, errors.NotFound) {
 			return errors.Trace(err)
 		}
 		info = nil
 	}
 
 	if info == nil {
-		if err = m.VectorClient.AddCollection(ctx, vectors.CollaborativeFiltering, dimension, vectors.Dot, vectorConfig); err != nil {
+		if err = m.VectorClient.AddCollection(ctx, collection, dimension, vectors.Dot, vectorConfig); err != nil {
 			return errors.Trace(err)
 		}
-		info, err = m.VectorClient.DescribeCollection(ctx, vectors.CollaborativeFiltering)
+		info, err = m.VectorClient.DescribeCollection(ctx, collection)
 		if err != nil {
 			return errors.Trace(err)
 		}
@@ -454,7 +450,7 @@ func (m *Master) initCollaborativeFilteringVectorCollection(ctx context.Context,
 		}
 	}
 	log.Logger().Info("initialized collaborative filtering vector collection",
-		zap.String("collection", vectors.CollaborativeFiltering),
+		zap.String("collection", collection),
 		zap.Int("dimension", info.Dimension),
 		zap.Int("distance", int(info.Distance)),
 		zap.String("quantization_type", string(info.Type)),

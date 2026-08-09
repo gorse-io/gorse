@@ -78,16 +78,43 @@ func compressLabelsEmbeddings(pool *strutil.GoPool, labels any) any {
 }
 
 type Pipeline struct {
-	Config                   *config.Config
-	CacheClient              cache.Database
-	DataClient               data.Database
-	VectorClient             vectors.Database
-	Tracer                   *monitor.Monitor
-	Jobs                     int
-	MatrixFactorizationItems *logics.MatrixFactorizationItems
-	MatrixFactorizationUsers *logics.MatrixFactorizationUsers
-	ClickThroughRateModel    ctr.FactorizationMachines
-	dontskipColdStartUsers   bool
+	Config                           *config.Config
+	CacheClient                      cache.Database
+	DataClient                       data.Database
+	VectorClient                     vectors.Database
+	Tracer                           *monitor.Monitor
+	Jobs                             int
+	MatrixFactorizationItems         *logics.MatrixFactorizationItems
+	MatrixFactorizationUsers         *logics.MatrixFactorizationUsers
+	collaborativeFilteringModelMutex sync.RWMutex
+	collaborativeFilteringModelId    int64
+	ClickThroughRateModel            ctr.FactorizationMachines
+	dontskipColdStartUsers           bool
+}
+
+func (p *Pipeline) installCollaborativeFilteringModel(
+	ctx context.Context,
+	modelID int64,
+	items *logics.MatrixFactorizationItems,
+	users *logics.MatrixFactorizationUsers,
+) error {
+	if items == nil {
+		if _, err := p.VectorClient.DescribeCollection(ctx, vectors.CollaborativeFilteringCollection(modelID)); err != nil {
+			return errors.Trace(err)
+		}
+	}
+	p.collaborativeFilteringModelMutex.Lock()
+	p.MatrixFactorizationItems = items
+	p.MatrixFactorizationUsers = users
+	p.collaborativeFilteringModelId = modelID
+	p.collaborativeFilteringModelMutex.Unlock()
+	return nil
+}
+
+func (p *Pipeline) activeCollaborativeFilteringModelID() int64 {
+	p.collaborativeFilteringModelMutex.RLock()
+	defer p.collaborativeFilteringModelMutex.RUnlock()
+	return p.collaborativeFilteringModelId
 }
 
 func (p *Pipeline) Recommend(ctx context.Context, users []data.User, progress func(completed, throughput int)) {
@@ -164,15 +191,14 @@ func (p *Pipeline) Recommend(ctx context.Context, users []data.User, progress fu
 		}
 
 		// Update collaborative filtering recommendation.
-		if !strings.EqualFold(p.Config.Recommend.Collaborative.Type, "none") && p.MatrixFactorizationUsers != nil {
-			if userEmbedding, ok := p.MatrixFactorizationUsers.Get(userId); ok {
-				err = p.updateCollaborativeRecommend(ctx, userId, userEmbedding, recommender.ExcludeSet())
-				if err != nil {
-					log.Logger().Error("failed to recommend by collaborative filtering",
-						zap.String("user_id", userId), zap.Error(err))
-					return
-				}
-			} else if !p.dontskipColdStartUsers {
+		if !strings.EqualFold(p.Config.Recommend.Collaborative.Type, "none") {
+			found, available, updateErr := p.updateCollaborativeRecommendForUser(ctx, userId, recommender.ExcludeSet())
+			if updateErr != nil {
+				log.Logger().Error("failed to recommend by collaborative filtering",
+					zap.String("user_id", userId), zap.Error(updateErr))
+				return
+			}
+			if available && !found && !p.dontskipColdStartUsers {
 				// skip users without collaborative filtering embeddings
 				return
 			}
@@ -370,8 +396,26 @@ func (p *Pipeline) checkRecommendCacheOutOfDate(ctx context.Context, userId stri
 	return true
 }
 
+func (p *Pipeline) updateCollaborativeRecommendForUser(
+	ctx context.Context,
+	userID string,
+	excludeSet mapset.Set[string],
+) (found, available bool, err error) {
+	p.collaborativeFilteringModelMutex.RLock()
+	defer p.collaborativeFilteringModelMutex.RUnlock()
+	if p.MatrixFactorizationUsers == nil {
+		return false, false, nil
+	}
+	userEmbedding, ok := p.MatrixFactorizationUsers.Get(userID)
+	if !ok {
+		return false, true, nil
+	}
+	return true, true, p.updateCollaborativeRecommend(ctx, p.collaborativeFilteringModelId, userID, userEmbedding, excludeSet)
+}
+
 func (p *Pipeline) updateCollaborativeRecommend(
 	ctx context.Context,
+	modelID int64,
 	userId string,
 	userEmbedding []float32,
 	excludeSet mapset.Set[string],
@@ -379,7 +423,7 @@ func (p *Pipeline) updateCollaborativeRecommend(
 	localStartTime := time.Now()
 	scoredVectors, err := p.VectorClient.QueryVectors(
 		ctx,
-		vectors.CollaborativeFiltering,
+		vectors.CollaborativeFilteringCollection(modelID),
 		userEmbedding,
 		nil,
 		p.Config.Recommend.CacheSize+excludeSet.Cardinality(),
