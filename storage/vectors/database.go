@@ -44,8 +44,8 @@ const (
 	CollaborativeFiltering = "collaborative_filtering"
 )
 
-func CollaborativeFilteringCollection(modelID int64) string {
-	return CollaborativeFiltering + "_" + strconv.FormatInt(modelID, 10)
+func CollaborativeFilteringCollection(id int64) string {
+	return CollaborativeFiltering + "_" + strconv.FormatInt(id, 10)
 }
 
 func (q QuantizationType) String() string {

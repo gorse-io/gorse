@@ -1048,7 +1048,7 @@ func (m *Master) trainCollaborativeFiltering(parent context.Context, trainSet, t
 	span.Add(1)
 	fitSpan.End()
 
-	collaborativeFilteringModelId := m.nextCollaborativeFilteringModelID()
+	collaborativeFilteringModelId := time.Now().UnixMilli()
 	_, indexSpan := monitor.Start(ctx, "Index", trainSet.CountItems())
 	modelTimestamp := time.Now()
 	matrixFactorizationItemVectors := make([]vectors.Vector, 0, trainSet.CountItems())
@@ -1213,14 +1213,6 @@ func (m *Master) writeCollaborativeFilteringItems(ctx context.Context, modelID i
 	}
 	succeeded = true
 	return nil
-}
-
-func (m *Master) nextCollaborativeFilteringModelID() int64 {
-	m.collaborativeFilteringModelMutex.Lock()
-	defer m.collaborativeFilteringModelMutex.Unlock()
-	next := max(time.Now().UnixMilli(), m.collaborativeFilteringMeta.ID+1, m.collaborativeFilteringLastModelID+1)
-	m.collaborativeFilteringLastModelID = next
-	return next
 }
 
 func (m *Master) newCollaborativeFilteringModel(modelType string, params model.Params) cf.MatrixFactorization {
@@ -1526,13 +1518,12 @@ func (m *Master) optimizeClickThroughRatePrediction(parent context.Context, trai
 // updateRecommend updates recommendations for all user in standalone mode.
 func (m *Master) updateRecommend(ctx context.Context) error {
 	pipeline := &worker.Pipeline{
-		Config:                      m.Config,
-		DataClient:                  m.DataClient,
-		CacheClient:                 m.CacheClient,
-		Tracer:                      m.tracer,
-		Jobs:                        m.Config.Master.NumJobs,
-		CollaborativeFilteringItems: logics.NewMatrixFactorizationItems(time.Time{}),
-		MatrixFactorizationUsers:    logics.NewMatrixFactorizationUsers(),
+		Config:       m.Config,
+		DataClient:   m.DataClient,
+		CacheClient:  m.CacheClient,
+		VectorClient: m.VectorClient,
+		Tracer:       m.tracer,
+		Jobs:         m.Config.Master.NumJobs,
 	}
 
 	// load matrix factorization model
@@ -1543,10 +1534,16 @@ func (m *Master) updateRecommend(ctx context.Context) error {
 				zap.Int64("id", m.collaborativeFilteringMeta.ID), zap.Error(err))
 			return errors.Trace(err)
 		}
-		if err = pipeline.CollaborativeFilteringItems.Unmarshal(r); err != nil {
-			log.Logger().Error("failed to unmarshal matrix factorization items", zap.Error(err))
-		} else if err = pipeline.MatrixFactorizationUsers.Unmarshal(r); err != nil {
+		users := logics.NewMatrixFactorizationUsers()
+		if err = users.Unmarshal(r); err != nil {
 			log.Logger().Error("failed to unmarshal matrix factorization users", zap.Error(err))
+			return errors.Trace(err)
+		}
+		if err = r.Close(); err != nil {
+			return errors.Trace(err)
+		}
+		if err = pipeline.UpdateMatrixFactorization(ctx, m.collaborativeFilteringMeta.ID, users); err != nil {
+			return errors.Trace(err)
 		}
 	}
 

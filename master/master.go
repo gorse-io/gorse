@@ -88,7 +88,6 @@ type Master struct {
 
 	// collaborative filtering
 	collaborativeFilteringModelMutex   sync.RWMutex
-	collaborativeFilteringLastModelID  int64
 	collaborativeFilteringTrainSetSize int
 	collaborativeFilteringMeta         meta.Model[cf.Score]
 	collaborativeFilteringTarget       meta.Model[cf.Score]

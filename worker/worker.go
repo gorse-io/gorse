@@ -288,8 +288,8 @@ func (w *Worker) Pull() {
 				}
 				if err != nil {
 					log.Logger().Error("failed to unmarshal matrix factorization users", zap.Error(err))
-				} else if installErr := w.UpdateMatrixFactorization(context.Background(), w.latestCollaborativeFilteringModelId, users); installErr != nil {
-					log.Logger().Error("failed to install collaborative filtering model", zap.Error(installErr))
+				} else if err := w.UpdateMatrixFactorization(context.Background(), w.latestCollaborativeFilteringModelId, users); err != nil {
+					log.Logger().Error("failed to install collaborative filtering model", zap.Error(err))
 				} else {
 					log.Logger().Info("synced collaborative filtering model",
 						zap.Int64("id", w.GetMatrixFactorizationId()))
