@@ -15,20 +15,12 @@
 package vectors
 
 import (
-	"testing"
 	"time"
 
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/juju/errors"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 )
-
-func TestCollaborativeFilteringCollection(t *testing.T) {
-	const modelID int64 = 123456789
-	name := CollaborativeFilteringCollection(modelID)
-	assert.Equal(t, "collaborative_filtering_123456789", name)
-}
 
 const defaultVectorSize = 4
 

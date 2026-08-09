@@ -1174,7 +1174,10 @@ func (m *Master) writeCollaborativeFilteringItems(ctx context.Context, modelID i
 	} else if !errors.Is(describeErr, errors.NotFound) {
 		return errors.Trace(describeErr)
 	}
-	if err = m.initCollaborativeFilteringVectorCollection(ctx, collection, len(itemVectors[0].Vector)); err != nil {
+	if err = m.VectorClient.AddCollection(ctx, collection, len(itemVectors[0].Vector), vectors.Dot, vectors.VectorConfig{
+		Type: vectors.QuantizationType(m.Config.Database.Vector.QuantizationType),
+		Bits: m.Config.Database.Vector.QuantizationBits,
+	}); err != nil {
 		return errors.Trace(err)
 	}
 	succeeded := false
@@ -1523,13 +1526,13 @@ func (m *Master) optimizeClickThroughRatePrediction(parent context.Context, trai
 // updateRecommend updates recommendations for all user in standalone mode.
 func (m *Master) updateRecommend(ctx context.Context) error {
 	pipeline := &worker.Pipeline{
-		Config:                   m.Config,
-		DataClient:               m.DataClient,
-		CacheClient:              m.CacheClient,
-		Tracer:                   m.tracer,
-		Jobs:                     m.Config.Master.NumJobs,
-		MatrixFactorizationItems: logics.NewMatrixFactorizationItems(time.Time{}),
-		MatrixFactorizationUsers: logics.NewMatrixFactorizationUsers(),
+		Config:                      m.Config,
+		DataClient:                  m.DataClient,
+		CacheClient:                 m.CacheClient,
+		Tracer:                      m.tracer,
+		Jobs:                        m.Config.Master.NumJobs,
+		CollaborativeFilteringItems: logics.NewMatrixFactorizationItems(time.Time{}),
+		MatrixFactorizationUsers:    logics.NewMatrixFactorizationUsers(),
 	}
 
 	// load matrix factorization model
@@ -1540,7 +1543,7 @@ func (m *Master) updateRecommend(ctx context.Context) error {
 				zap.Int64("id", m.collaborativeFilteringMeta.ID), zap.Error(err))
 			return errors.Trace(err)
 		}
-		if err = pipeline.MatrixFactorizationItems.Unmarshal(r); err != nil {
+		if err = pipeline.CollaborativeFilteringItems.Unmarshal(r); err != nil {
 			log.Logger().Error("failed to unmarshal matrix factorization items", zap.Error(err))
 		} else if err = pipeline.MatrixFactorizationUsers.Unmarshal(r); err != nil {
 			log.Logger().Error("failed to unmarshal matrix factorization users", zap.Error(err))

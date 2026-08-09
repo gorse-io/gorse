@@ -417,63 +417,6 @@ func (m *Master) Serve() {
 	m.StartHttpServer()
 }
 
-func (m *Master) initCollaborativeFilteringVectorCollection(ctx context.Context, collection string, dimension int) error {
-	vectorConfig := vectors.VectorConfig{
-		Type: vectors.QuantizationType(m.Config.Database.Vector.QuantizationType),
-		Bits: m.Config.Database.Vector.QuantizationBits,
-	}
-	info, err := m.VectorClient.DescribeCollection(ctx, collection)
-	if errors.Is(err, errors.NotFound) {
-		info = nil
-	} else if err != nil {
-		return errors.Trace(err)
-	} else if err = m.checkCollaborativeFilteringVectorCollection(info, dimension, vectorConfig); err != nil {
-		log.Logger().Warn("recreating collaborative filtering vector collection",
-			zap.String("collection", collection),
-			zap.Error(err))
-		if err = m.VectorClient.DeleteCollection(ctx, collection); err != nil && !errors.Is(err, errors.NotFound) {
-			return errors.Trace(err)
-		}
-		info = nil
-	}
-
-	if info == nil {
-		if err = m.VectorClient.AddCollection(ctx, collection, dimension, vectors.Dot, vectorConfig); err != nil {
-			return errors.Trace(err)
-		}
-		info, err = m.VectorClient.DescribeCollection(ctx, collection)
-		if err != nil {
-			return errors.Trace(err)
-		}
-		if err = m.checkCollaborativeFilteringVectorCollection(info, dimension, vectorConfig); err != nil {
-			return errors.Trace(err)
-		}
-	}
-	log.Logger().Info("initialized collaborative filtering vector collection",
-		zap.String("collection", collection),
-		zap.Int("dimension", info.Dimension),
-		zap.Int("distance", int(info.Distance)),
-		zap.String("quantization_type", string(info.Type)),
-		zap.Int("quantization_bits", info.Bits))
-	return nil
-}
-
-func (m *Master) checkCollaborativeFilteringVectorCollection(info *vectors.CollectionInfo, dimension int, config vectors.VectorConfig) error {
-	if info.Dimension != 0 && info.Dimension != dimension {
-		return errors.Errorf("collection %s dimension mismatch: expected %d, got %d", info.Name, dimension, info.Dimension)
-	}
-	if info.Distance != vectors.Dot {
-		return errors.Errorf("collection %s distance mismatch: expected %d, got %d", info.Name, vectors.Dot, info.Distance)
-	}
-	if info.Type != config.Type {
-		return errors.Errorf("collection %s quantization type mismatch: expected %s, got %s", info.Name, config.Type, info.Type)
-	}
-	if config.Bits > 0 && info.Bits != config.Bits {
-		return errors.Errorf("collection %s quantization bits mismatch: expected %d, got %d", info.Name, config.Bits, info.Bits)
-	}
-	return nil
-}
-
 func (m *Master) Shutdown() {
 	// stop http server
 	err := m.HttpServer.Shutdown(context.TODO())

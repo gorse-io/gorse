@@ -78,43 +78,48 @@ func compressLabelsEmbeddings(pool *strutil.GoPool, labels any) any {
 }
 
 type Pipeline struct {
-	Config                           *config.Config
-	CacheClient                      cache.Database
-	DataClient                       data.Database
-	VectorClient                     vectors.Database
-	Tracer                           *monitor.Monitor
-	Jobs                             int
-	MatrixFactorizationItems         *logics.MatrixFactorizationItems
-	MatrixFactorizationUsers         *logics.MatrixFactorizationUsers
-	collaborativeFilteringModelMutex sync.RWMutex
-	collaborativeFilteringModelId    int64
-	ClickThroughRateModel            ctr.FactorizationMachines
-	dontskipColdStartUsers           bool
+	Config                   *config.Config
+	CacheClient              cache.Database
+	DataClient               data.Database
+	VectorClient             vectors.Database
+	Tracer                   *monitor.Monitor
+	Jobs                     int
+	MatrixFactorizationId    int64
+	MatrixFactorizationUsers *logics.MatrixFactorizationUsers
+	MatrixFactorizationMutex sync.RWMutex
+	ClickThroughRateModel    ctr.FactorizationMachines
+	dontskipColdStartUsers   bool
 }
 
-func (p *Pipeline) installCollaborativeFilteringModel(
+func (p *Pipeline) UpdateMatrixFactorization(
 	ctx context.Context,
-	modelID int64,
-	items *logics.MatrixFactorizationItems,
+	id int64,
 	users *logics.MatrixFactorizationUsers,
 ) error {
-	if items == nil {
-		if _, err := p.VectorClient.DescribeCollection(ctx, vectors.CollaborativeFilteringCollection(modelID)); err != nil {
-			return errors.Trace(err)
-		}
+	if _, err := p.VectorClient.DescribeCollection(ctx, vectors.CollaborativeFilteringCollection(id)); err != nil {
+		return errors.Trace(err)
 	}
-	p.collaborativeFilteringModelMutex.Lock()
-	p.MatrixFactorizationItems = items
+	p.MatrixFactorizationMutex.Lock()
 	p.MatrixFactorizationUsers = users
-	p.collaborativeFilteringModelId = modelID
-	p.collaborativeFilteringModelMutex.Unlock()
+	p.MatrixFactorizationId = id
+	p.MatrixFactorizationMutex.Unlock()
 	return nil
 }
 
-func (p *Pipeline) activeCollaborativeFilteringModelID() int64 {
-	p.collaborativeFilteringModelMutex.RLock()
-	defer p.collaborativeFilteringModelMutex.RUnlock()
-	return p.collaborativeFilteringModelId
+func (p *Pipeline) GetMatrixFactorizationId() int64 {
+	p.MatrixFactorizationMutex.RLock()
+	defer p.MatrixFactorizationMutex.RUnlock()
+	return p.MatrixFactorizationId
+}
+
+func (p *Pipeline) GetMatrixFactorization(userID string) ([]float32, int64) {
+	p.MatrixFactorizationMutex.RLock()
+	defer p.MatrixFactorizationMutex.RUnlock()
+	if p.MatrixFactorizationUsers == nil {
+		return nil, 0
+	}
+	userEmbedding, _ := p.MatrixFactorizationUsers.Get(userID)
+	return userEmbedding, p.MatrixFactorizationId
 }
 
 func (p *Pipeline) Recommend(ctx context.Context, users []data.User, progress func(completed, throughput int)) {
@@ -192,13 +197,15 @@ func (p *Pipeline) Recommend(ctx context.Context, users []data.User, progress fu
 
 		// Update collaborative filtering recommendation.
 		if !strings.EqualFold(p.Config.Recommend.Collaborative.Type, "none") {
-			found, available, updateErr := p.updateCollaborativeRecommendForUser(ctx, userId, recommender.ExcludeSet())
-			if updateErr != nil {
-				log.Logger().Error("failed to recommend by collaborative filtering",
-					zap.String("user_id", userId), zap.Error(updateErr))
-				return
+			userEmbedding, matrixFactorizationID := p.GetMatrixFactorization(userId)
+			if userEmbedding != nil {
+				if updateErr := p.updateCollaborativeRecommend(ctx, matrixFactorizationID, userId, userEmbedding, recommender.ExcludeSet()); updateErr != nil {
+					log.Logger().Error("failed to recommend by collaborative filtering",
+						zap.String("user_id", userId), zap.Error(updateErr))
+					return
+				}
 			}
-			if available && !found && !p.dontskipColdStartUsers {
+			if matrixFactorizationID > 0 && userEmbedding == nil && !p.dontskipColdStartUsers {
 				// skip users without collaborative filtering embeddings
 				return
 			}
@@ -396,34 +403,17 @@ func (p *Pipeline) checkRecommendCacheOutOfDate(ctx context.Context, userId stri
 	return true
 }
 
-func (p *Pipeline) updateCollaborativeRecommendForUser(
-	ctx context.Context,
-	userID string,
-	excludeSet mapset.Set[string],
-) (found, available bool, err error) {
-	p.collaborativeFilteringModelMutex.RLock()
-	defer p.collaborativeFilteringModelMutex.RUnlock()
-	if p.MatrixFactorizationUsers == nil {
-		return false, false, nil
-	}
-	userEmbedding, ok := p.MatrixFactorizationUsers.Get(userID)
-	if !ok {
-		return false, true, nil
-	}
-	return true, true, p.updateCollaborativeRecommend(ctx, p.collaborativeFilteringModelId, userID, userEmbedding, excludeSet)
-}
-
 func (p *Pipeline) updateCollaborativeRecommend(
 	ctx context.Context,
-	modelID int64,
-	userId string,
+	matrixFactorizationID int64,
+	userID string,
 	userEmbedding []float32,
 	excludeSet mapset.Set[string],
 ) error {
 	localStartTime := time.Now()
 	scoredVectors, err := p.VectorClient.QueryVectors(
 		ctx,
-		vectors.CollaborativeFilteringCollection(modelID),
+		vectors.CollaborativeFilteringCollection(matrixFactorizationID),
 		userEmbedding,
 		nil,
 		p.Config.Recommend.CacheSize+excludeSet.Cardinality(),
@@ -442,19 +432,19 @@ func (p *Pipeline) updateCollaborativeRecommend(
 			})
 		}
 	}
-	if err := p.CacheClient.AddScores(ctx, cache.CollaborativeFiltering, userId, recommend); err != nil {
-		log.Logger().Error("failed to cache collaborative filtering recommendation result", zap.String("user_id", userId), zap.Error(err))
+	if err := p.CacheClient.AddScores(ctx, cache.CollaborativeFiltering, userID, recommend); err != nil {
+		log.Logger().Error("failed to cache collaborative filtering recommendation result", zap.String("user_id", userID), zap.Error(err))
 		return errors.Trace(err)
 	}
 	if err := p.CacheClient.Set(ctx,
-		cache.Time(cache.Key(cache.CollaborativeFilteringUpdateTime, userId), localStartTime),
-		cache.String(cache.Key(cache.CollaborativeFilteringDigest, userId), p.Config.Recommend.Collaborative.Hash(&p.Config.Recommend)),
+		cache.Time(cache.Key(cache.CollaborativeFilteringUpdateTime, userID), localStartTime),
+		cache.String(cache.Key(cache.CollaborativeFilteringDigest, userID), p.Config.Recommend.Collaborative.Hash(&p.Config.Recommend)),
 	); err != nil {
-		log.Logger().Error("failed to cache collaborative filtering recommendation time", zap.String("user_id", userId), zap.Error(err))
+		log.Logger().Error("failed to cache collaborative filtering recommendation time", zap.String("user_id", userID), zap.Error(err))
 		return errors.Trace(err)
 	}
-	if err := p.CacheClient.DeleteScores(ctx, []string{cache.CollaborativeFiltering}, cache.ScoreCondition{Before: &localStartTime, Subset: new(userId)}); err != nil {
-		log.Logger().Error("failed to delete stale collaborative filtering recommendation result", zap.String("user_id", userId), zap.Error(err))
+	if err := p.CacheClient.DeleteScores(ctx, []string{cache.CollaborativeFiltering}, cache.ScoreCondition{Before: &localStartTime, Subset: new(userID)}); err != nil {
+		log.Logger().Error("failed to delete stale collaborative filtering recommendation result", zap.String("user_id", userID), zap.Error(err))
 		return errors.Trace(err)
 	}
 	return nil
