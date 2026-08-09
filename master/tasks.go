@@ -41,6 +41,7 @@ import (
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
 	"github.com/gorse-io/gorse/storage/meta"
+	"github.com/gorse-io/gorse/storage/vectors"
 	"github.com/gorse-io/gorse/worker"
 	"github.com/juju/errors"
 	"github.com/samber/lo"
@@ -1047,18 +1048,45 @@ func (m *Master) trainCollaborativeFiltering(parent context.Context, trainSet, t
 	span.Add(1)
 	fitSpan.End()
 
-	_, indexSpan := monitor.Start(ctx, "Index", trainSet.CountItems())
-	matrixFactorizationItems := logics.NewMatrixFactorizationItems(time.Now())
-	if err := parallel.For(ctx, trainSet.CountItems(), m.Config.Master.NumJobs, func(i int) {
-		defer indexSpan.Add(1)
-		if itemId, ok := trainSet.GetItemDict().String(int32(i)); ok && collaborativeFilteringModel.IsItemPredictable(int32(i)) {
-			matrixFactorizationItems.Add(itemId, collaborativeFilteringModel.GetItemFactor(int32(i)))
-		}
+	collaborativeFilteringModelId := time.Now().UnixMilli()
+	collection := vectors.CollaborativeFilteringCollection(collaborativeFilteringModelId)
+
+	indexCtx, indexSpan := monitor.Start(ctx, "Index", trainSet.CountItems())
+	if err := m.VectorClient.AddCollection(indexCtx, collection, len(collaborativeFilteringModel.GetItemFactor(0)), vectors.Dot, vectors.VectorConfig{
+		Type: vectors.QuantizationType(m.Config.Database.Vector.QuantizationType),
+		Bits: m.Config.Database.Vector.QuantizationBits,
 	}); err != nil {
+		indexSpan.Fail(err)
 		return errors.Trace(err)
 	}
-	span.Add(1)
+	items := trainSet.GetItems()
+	for start := 0; start < trainSet.CountItems(); start += batchSize {
+		end := min(start+batchSize, trainSet.CountItems())
+		itemVectors := make([]vectors.Vector, 0, end-start)
+		for i := start; i < end; i++ {
+			if collaborativeFilteringModel.IsItemPredictable(int32(i)) {
+				item := items[i]
+				itemVectors = append(itemVectors, vectors.Vector{
+					Id:         item.ItemId,
+					Vector:     collaborativeFilteringModel.GetItemFactor(int32(i)),
+					IsHidden:   item.IsHidden,
+					Categories: item.Categories,
+					Timestamp:  time.UnixMilli(collaborativeFilteringModelId),
+				})
+			}
+		}
+		if len(itemVectors) == 0 {
+			indexSpan.Add(end - start)
+			continue
+		}
+		if err := m.VectorClient.AddVectors(indexCtx, collection, itemVectors); err != nil {
+			indexSpan.Fail(err)
+			return errors.Trace(err)
+		}
+		indexSpan.Add(end - start)
+	}
 	indexSpan.End()
+	span.Add(1)
 
 	matrixFactorizationUsers := logics.NewMatrixFactorizationUsers()
 	for i := 0; i < trainSet.CountUsers(); i++ {
@@ -1067,11 +1095,6 @@ func (m *Master) trainCollaborativeFiltering(parent context.Context, trainSet, t
 		}
 	}
 
-	// update ranking model
-	m.collaborativeFilteringModelMutex.Lock()
-	m.collaborativeFilteringTrainSetSize = trainSet.CountFeedback()
-	m.collaborativeFilteringModelMutex.Unlock()
-	collaborativeFilteringModelId := time.Now().UnixMilli()
 	log.Logger().Info("fit collaborative filtering model completed",
 		zap.Int64("id", collaborativeFilteringModelId))
 	CollaborativeFilteringNDCG10.Set(float64(score.NDCG))
@@ -1088,11 +1111,6 @@ func (m *Master) trainCollaborativeFiltering(parent context.Context, trainSet, t
 			zap.Int64("id", collaborativeFilteringModelId), zap.Error(err))
 		return err
 	}
-	if err = matrixFactorizationItems.Marshal(w); err != nil {
-		log.Logger().Error("failed to matrix factorization items",
-			zap.Int64("id", collaborativeFilteringModelId), zap.Error(err))
-		return err
-	}
 	if err = matrixFactorizationUsers.Marshal(w); err != nil {
 		log.Logger().Error("failed to matrix factorization users",
 			zap.Int64("id", collaborativeFilteringModelId), zap.Error(err))
@@ -1106,22 +1124,25 @@ func (m *Master) trainCollaborativeFiltering(parent context.Context, trainSet, t
 	<-done
 
 	// update meta
-	m.collaborativeFilteringModelMutex.Lock()
-	m.collaborativeFilteringMeta.ID = collaborativeFilteringModelId
-	m.collaborativeFilteringMeta.Type = collaborativeFilteringType
-	m.collaborativeFilteringMeta.Params = collaborativeFilteringParams
-	m.collaborativeFilteringMeta.Score = score
-	m.collaborativeFilteringModelMutex.Unlock()
-	if err = m.metaStore.Put(meta.COLLABORATIVE_FILTERING_MODEL, m.collaborativeFilteringMeta.ToJSON()); err != nil {
+	collaborativeFilteringMeta := meta.Model[cf.Score]{
+		ID:     collaborativeFilteringModelId,
+		Type:   collaborativeFilteringType,
+		Params: collaborativeFilteringParams,
+		Score:  score,
+	}
+	if err = m.metaStore.Put(meta.COLLABORATIVE_FILTERING_MODEL, collaborativeFilteringMeta.ToJSON()); err != nil {
 		log.Logger().Error("failed to write collaborative filtering model meta", zap.Error(err))
 		return err
-	} else {
-		log.Logger().Info("write collaborative filtering model meta",
-			zap.Int64("id", collaborativeFilteringModelId),
-			zap.Float32("ndcg", score.NDCG),
-			zap.Float32("recall", score.Recall),
-			zap.Float32("precision", score.Precision))
 	}
+	m.collaborativeFilteringModelMutex.Lock()
+	m.collaborativeFilteringMeta = collaborativeFilteringMeta
+	m.collaborativeFilteringTrainSetSize = trainSet.CountFeedback()
+	m.collaborativeFilteringModelMutex.Unlock()
+	log.Logger().Info("write collaborative filtering model meta",
+		zap.Int64("id", collaborativeFilteringModelId),
+		zap.Float32("ndcg", score.NDCG),
+		zap.Float32("recall", score.Recall),
+		zap.Float32("precision", score.Precision))
 
 	// update statistics
 	if err = m.CacheClient.AddTimeSeriesPoints(ctx, []cache.TimeSeriesPoint{
@@ -1440,13 +1461,12 @@ func (m *Master) optimizeClickThroughRatePrediction(parent context.Context, trai
 // updateRecommend updates recommendations for all user in standalone mode.
 func (m *Master) updateRecommend(ctx context.Context) error {
 	pipeline := &worker.Pipeline{
-		Config:                   m.Config,
-		DataClient:               m.DataClient,
-		CacheClient:              m.CacheClient,
-		Tracer:                   m.tracer,
-		Jobs:                     m.Config.Master.NumJobs,
-		MatrixFactorizationItems: logics.NewMatrixFactorizationItems(time.Time{}),
-		MatrixFactorizationUsers: logics.NewMatrixFactorizationUsers(),
+		Config:       m.Config,
+		DataClient:   m.DataClient,
+		CacheClient:  m.CacheClient,
+		VectorClient: m.VectorClient,
+		Tracer:       m.tracer,
+		Jobs:         m.Config.Master.NumJobs,
 	}
 
 	// load matrix factorization model
@@ -1457,10 +1477,16 @@ func (m *Master) updateRecommend(ctx context.Context) error {
 				zap.Int64("id", m.collaborativeFilteringMeta.ID), zap.Error(err))
 			return errors.Trace(err)
 		}
-		if err = pipeline.MatrixFactorizationItems.Unmarshal(r); err != nil {
-			log.Logger().Error("failed to unmarshal matrix factorization items", zap.Error(err))
-		} else if err = pipeline.MatrixFactorizationUsers.Unmarshal(r); err != nil {
+		users := logics.NewMatrixFactorizationUsers()
+		if err = users.Unmarshal(r); err != nil {
 			log.Logger().Error("failed to unmarshal matrix factorization users", zap.Error(err))
+			return errors.Trace(err)
+		}
+		if err = r.Close(); err != nil {
+			return errors.Trace(err)
+		}
+		if err = pipeline.UpdateMatrixFactorization(ctx, m.collaborativeFilteringMeta.ID, users); err != nil {
+			return errors.Trace(err)
 		}
 	}
 

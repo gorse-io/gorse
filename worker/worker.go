@@ -58,8 +58,7 @@ type Worker struct {
 	Pipeline
 	testMode bool
 
-	collaborativeFilteringModelId int64
-	clickThroughRateModelId       int64
+	clickThroughRateModelId int64
 
 	// worker config
 	workerName string
@@ -118,10 +117,11 @@ func NewWorker(
 ) *Worker {
 	return &Worker{
 		Pipeline: Pipeline{
-			Config:      config.GetDefaultConfig(),
-			CacheClient: new(cache.NoDatabase),
-			DataClient:  new(data.NoDatabase),
-			Jobs:        jobs,
+			Config:       config.GetDefaultConfig(),
+			CacheClient:  new(cache.NoDatabase),
+			DataClient:   new(data.NoDatabase),
+			VectorClient: vectors.NoDatabase{},
+			Jobs:         jobs,
 		},
 		vectorStore:   vectors.NoDatabase{},
 		randGenerator: util.NewRand(time.Now().UTC().UnixNano()),
@@ -226,13 +226,14 @@ func (w *Worker) Sync() {
 			}
 			w.vectorPath = w.Config.Database.VectorStore
 			w.vectorPrefix = w.Config.Database.VectorTablePrefix
+			w.VectorClient = w.vectorStore
 		}
 
 		// synchronize collaborative filtering model
 		w.latestCollaborativeFilteringModelId = meta.CollaborativeFilteringModelId
-		if w.latestCollaborativeFilteringModelId > w.collaborativeFilteringModelId {
+		if w.latestCollaborativeFilteringModelId > w.GetMatrixFactorizationId() {
 			log.Logger().Info("new ranking model found",
-				zap.Int64("old_version", w.collaborativeFilteringModelId),
+				zap.Int64("old_version", w.GetMatrixFactorizationId()),
 				zap.Int64("new_version", w.latestCollaborativeFilteringModelId))
 
 			select {
@@ -274,24 +275,20 @@ func (w *Worker) Pull() {
 		pulled := false
 
 		// pull ranking model
-		if w.latestCollaborativeFilteringModelId > w.collaborativeFilteringModelId {
+		if w.latestCollaborativeFilteringModelId > w.GetMatrixFactorizationId() {
 			log.Logger().Info("start pull collaborative filtering model")
 			r, err := w.blobStore.Open(strconv.FormatInt(w.latestCollaborativeFilteringModelId, 10))
 			if err != nil {
 				log.Logger().Error("failed to open collaborative filtering model", zap.Error(err))
 			} else {
-				items := logics.NewMatrixFactorizationItems(time.Time{})
 				users := logics.NewMatrixFactorizationUsers()
-				if err = items.Unmarshal(r); err != nil {
-					log.Logger().Error("failed to unmarshal matrix factorization items", zap.Error(err))
-				} else if err = users.Unmarshal(r); err != nil {
+				if err = users.Unmarshal(r); err != nil {
 					log.Logger().Error("failed to unmarshal matrix factorization users", zap.Error(err))
+				} else if err := w.UpdateMatrixFactorization(context.Background(), w.latestCollaborativeFilteringModelId, users); err != nil {
+					log.Logger().Error("failed to install collaborative filtering model", zap.Error(err))
 				} else {
-					w.MatrixFactorizationItems = items
-					w.MatrixFactorizationUsers = users
-					w.collaborativeFilteringModelId = w.latestCollaborativeFilteringModelId
 					log.Logger().Info("synced collaborative filtering model",
-						zap.Int64("id", w.collaborativeFilteringModelId))
+						zap.Int64("id", w.GetMatrixFactorizationId()))
 					pulled = true
 				}
 			}

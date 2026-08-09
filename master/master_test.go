@@ -14,7 +14,6 @@
 package master
 
 import (
-	"context"
 	"fmt"
 	"testing"
 
@@ -61,51 +60,6 @@ func (s *MasterTestSuite) TearDownTest() {
 	s.NoError(s.DataClient.Close())
 	s.NoError(s.CacheClient.Close())
 	s.NoError(s.VectorClient.Close())
-}
-
-func (s *MasterTestSuite) TestInitCollaborativeFilteringVectorCollection() {
-	err := s.initCollaborativeFilteringVectorCollection(context.Background())
-	s.Require().NoError(err)
-
-	collections, err := s.VectorClient.ListCollections(context.Background())
-	s.NoError(err)
-	s.Contains(collections, vectors.CollaborativeFiltering)
-
-	info, err := s.VectorClient.DescribeCollection(context.Background(), vectors.CollaborativeFiltering)
-	s.Require().NoError(err)
-	s.Equal(vectors.CollaborativeFiltering, info.Name)
-	s.Equal(16, info.Dimension)
-	s.Equal(vectors.Dot, info.Distance)
-	s.Equal(vectors.QuantizationNone, info.Type)
-	s.Zero(info.Bits)
-}
-
-func (s *MasterTestSuite) TestInitCollaborativeFilteringVectorCollectionRecreateOnMismatch() {
-	ctx := context.Background()
-
-	err := s.VectorClient.AddCollection(ctx, vectors.CollaborativeFiltering, 8, vectors.Cosine, vectors.VectorConfig{})
-	s.Require().NoError(err)
-
-	err = s.initCollaborativeFilteringVectorCollection(ctx)
-	s.Require().NoError(err)
-
-	info, err := s.VectorClient.DescribeCollection(ctx, vectors.CollaborativeFiltering)
-	s.Require().NoError(err)
-	s.Equal(vectors.CollaborativeFiltering, info.Name)
-	s.Equal(16, info.Dimension)
-	s.Equal(vectors.Dot, info.Distance)
-	s.Equal(vectors.QuantizationNone, info.Type)
-	s.Zero(info.Bits)
-}
-
-func (s *MasterTestSuite) TestInitCollaborativeFilteringVectorCollectionRecreateOnDistanceMismatch() {
-	ctx := context.Background()
-	s.Require().NoError(s.VectorClient.AddCollection(ctx, vectors.CollaborativeFiltering, 16, vectors.Cosine, vectors.VectorConfig{}))
-
-	s.Require().NoError(s.initCollaborativeFilteringVectorCollection(ctx))
-	info, err := s.VectorClient.DescribeCollection(ctx, vectors.CollaborativeFiltering)
-	s.Require().NoError(err)
-	s.Equal(vectors.Dot, info.Distance)
 }
 
 func TestMaster(t *testing.T) {

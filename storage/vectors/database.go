@@ -16,6 +16,7 @@ package vectors
 
 import (
 	"context"
+	"strconv"
 	"strings"
 	"time"
 
@@ -42,6 +43,10 @@ const (
 
 	CollaborativeFiltering = "collaborative_filtering"
 )
+
+func CollaborativeFilteringCollection(id int64) string {
+	return CollaborativeFiltering + "_" + strconv.FormatInt(id, 10)
+}
 
 func (q QuantizationType) String() string {
 	switch q {
