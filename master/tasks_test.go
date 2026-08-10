@@ -55,7 +55,7 @@ func (s *MasterTestSuite) TestRemoveOutOfDateModels() {
 	s.collaborativeFilteringMeta = meta.Model[cf.Score]{ID: 100}
 	s.clickThroughRateMeta = meta.Model[ctr.Score]{ID: 150}
 
-	for _, id := range []int64{100, 150, 200, 300, 400} {
+	for _, id := range []int64{50, 100, 150, 200, 300, 400} {
 		w, done, err := s.blobStore.Create(strconv.FormatInt(id, 10))
 		s.Require().NoError(err)
 		_, err = w.Write([]byte("model"))
@@ -63,10 +63,17 @@ func (s *MasterTestSuite) TestRemoveOutOfDateModels() {
 		s.Require().NoError(w.Close())
 		<-done
 	}
+	w, done, err := s.blobStore.Create("invalid")
+	s.Require().NoError(err)
+	_, err = w.Write([]byte("model"))
+	s.Require().NoError(err)
+	s.Require().NoError(w.Close())
+	<-done
 	for _, id := range []int64{100, 200, 300, 400, 500} {
 		s.Require().NoError(s.VectorClient.AddCollection(ctx,
 			vectors.CollaborativeFilteringCollection(id), 2, vectors.Dot, vectors.VectorConfig{}))
 	}
+	s.Require().NoError(s.VectorClient.AddCollection(ctx, "collaborative_filtering_invalid", 2, vectors.Dot, vectors.VectorConfig{}))
 	s.Require().NoError(s.VectorClient.AddCollection(ctx, "unrelated", 2, vectors.Dot, vectors.VectorConfig{}))
 
 	s.removeOutOfDateModels()
@@ -77,11 +84,12 @@ func (s *MasterTestSuite) TestRemoveOutOfDateModels() {
 		vectors.CollaborativeFilteringCollection(100),
 		vectors.CollaborativeFilteringCollection(300),
 		vectors.CollaborativeFilteringCollection(400),
+		"collaborative_filtering_invalid",
 		"unrelated",
 	}, collections)
 	files, err := s.blobStore.List()
 	s.Require().NoError(err)
-	s.ElementsMatch([]string{"100", "150", "300", "400"}, files)
+	s.ElementsMatch([]string{"100", "150", "300", "400", "invalid"}, files)
 }
 
 func (s *MasterTestSuite) TestRemoveOutOfDateModelsRetry() {
