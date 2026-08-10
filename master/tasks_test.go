@@ -25,10 +25,122 @@ import (
 	"github.com/gorse-io/gorse/common/expression"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/logics"
+	"github.com/gorse-io/gorse/model/cf"
+	"github.com/gorse-io/gorse/model/ctr"
+	"github.com/gorse-io/gorse/storage/blob"
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
+	"github.com/gorse-io/gorse/storage/meta"
+	"github.com/gorse-io/gorse/storage/vectors"
 	"github.com/samber/lo"
 )
+
+type failOnceBlobStore struct {
+	blob.Store
+	name   string
+	failed bool
+}
+
+func (s *failOnceBlobStore) Remove(name string) error {
+	if name == s.name && !s.failed {
+		s.failed = true
+		return fmt.Errorf("failed to remove %s", name)
+	}
+	return s.Store.Remove(name)
+}
+
+type failOnceVectorDatabase struct {
+	vectors.Database
+	name   string
+	failed bool
+}
+
+func (d *failOnceVectorDatabase) DeleteCollection(ctx context.Context, name string) error {
+	if name == d.name && !d.failed {
+		d.failed = true
+		return fmt.Errorf("failed to delete %s", name)
+	}
+	return d.Database.DeleteCollection(ctx, name)
+}
+
+func (s *MasterTestSuite) TestRemoveOutOfDateModels() {
+	ctx := s.T().Context()
+	s.blobStore = &failOnceBlobStore{Store: blob.NewPOSIX(s.T().TempDir()), name: "50"}
+	s.collaborativeFilteringMeta = meta.Model[cf.Score]{ID: 100}
+	s.clickThroughRateMeta = meta.Model[ctr.Score]{ID: 150}
+
+	for _, id := range []int64{50, 100, 150, 200, 300, 400} {
+		w, done, err := s.blobStore.Create(strconv.FormatInt(id, 10))
+		s.Require().NoError(err)
+		_, err = w.Write([]byte("model"))
+		s.Require().NoError(err)
+		s.Require().NoError(w.Close())
+		<-done
+	}
+	w, done, err := s.blobStore.Create("invalid")
+	s.Require().NoError(err)
+	_, err = w.Write([]byte("model"))
+	s.Require().NoError(err)
+	s.Require().NoError(w.Close())
+	<-done
+	for _, id := range []int64{100, 200, 300, 400, 500} {
+		s.Require().NoError(s.VectorClient.AddCollection(ctx,
+			vectors.CollaborativeFilteringCollection(id), 2, vectors.Dot, vectors.VectorConfig{}))
+	}
+	s.Require().NoError(s.VectorClient.AddCollection(ctx, "collaborative_filtering_invalid", 2, vectors.Dot, vectors.VectorConfig{}))
+	s.Require().NoError(s.VectorClient.AddCollection(ctx, "unrelated", 2, vectors.Dot, vectors.VectorConfig{}))
+
+	s.removeOutOfDateModels(ctx)
+	s.removeOutOfDateModels(ctx)
+
+	collections, err := s.VectorClient.ListCollections(ctx)
+	s.Require().NoError(err)
+	s.ElementsMatch([]string{
+		vectors.CollaborativeFilteringCollection(100),
+		vectors.CollaborativeFilteringCollection(300),
+		vectors.CollaborativeFilteringCollection(400),
+		"collaborative_filtering_invalid",
+		"unrelated",
+	}, collections)
+	files, err := s.blobStore.List()
+	s.Require().NoError(err)
+	s.ElementsMatch([]string{"100", "150", "300", "400", "invalid"}, files)
+}
+
+func (s *MasterTestSuite) TestRemoveOutOfDateModelsRetry() {
+	ctx := s.T().Context()
+	s.blobStore = &failOnceBlobStore{Store: blob.NewPOSIX(s.T().TempDir()), name: "200"}
+	s.VectorClient = &failOnceVectorDatabase{
+		Database: s.VectorClient,
+		name:     vectors.CollaborativeFilteringCollection(200),
+	}
+	s.collaborativeFilteringMeta = meta.Model[cf.Score]{ID: 100}
+	s.clickThroughRateMeta = meta.Model[ctr.Score]{ID: 150}
+
+	for _, id := range []int64{100, 150, 200, 300, 400} {
+		w, done, err := s.blobStore.Create(strconv.FormatInt(id, 10))
+		s.Require().NoError(err)
+		_, err = w.Write([]byte("model"))
+		s.Require().NoError(err)
+		s.Require().NoError(w.Close())
+		<-done
+	}
+	for _, id := range []int64{100, 200, 300, 400} {
+		s.Require().NoError(s.VectorClient.AddCollection(ctx,
+			vectors.CollaborativeFilteringCollection(id), 2, vectors.Dot, vectors.VectorConfig{}))
+	}
+
+	s.removeOutOfDateModels(ctx)
+	s.removeOutOfDateModels(ctx)
+	s.removeOutOfDateModels(ctx)
+
+	collections, err := s.VectorClient.ListCollections(ctx)
+	s.Require().NoError(err)
+	s.NotContains(collections, vectors.CollaborativeFilteringCollection(200))
+	files, err := s.blobStore.List()
+	s.Require().NoError(err)
+	s.NotContains(files, "200")
+}
 
 func (s *MasterTestSuite) TestFindItemToItem() {
 	ctx := s.T().Context()
