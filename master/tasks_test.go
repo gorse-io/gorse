@@ -90,8 +90,8 @@ func (s *MasterTestSuite) TestRemoveOutOfDateModels() {
 	s.Require().NoError(s.VectorClient.AddCollection(ctx, "collaborative_filtering_invalid", 2, vectors.Dot, vectors.VectorConfig{}))
 	s.Require().NoError(s.VectorClient.AddCollection(ctx, "unrelated", 2, vectors.Dot, vectors.VectorConfig{}))
 
-	s.removeOutOfDateModels()
-	s.removeOutOfDateModels()
+	s.removeOutOfDateModels(ctx)
+	s.removeOutOfDateModels(ctx)
 
 	collections, err := s.VectorClient.ListCollections(ctx)
 	s.Require().NoError(err)
@@ -130,9 +130,9 @@ func (s *MasterTestSuite) TestRemoveOutOfDateModelsRetry() {
 			vectors.CollaborativeFilteringCollection(id), 2, vectors.Dot, vectors.VectorConfig{}))
 	}
 
-	s.removeOutOfDateModels()
-	s.removeOutOfDateModels()
-	s.removeOutOfDateModels()
+	s.removeOutOfDateModels(ctx)
+	s.removeOutOfDateModels(ctx)
+	s.removeOutOfDateModels(ctx)
 
 	collections, err := s.VectorClient.ListCollections(ctx)
 	s.Require().NoError(err)

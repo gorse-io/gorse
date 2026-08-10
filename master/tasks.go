@@ -1154,7 +1154,7 @@ func (m *Master) trainCollaborativeFiltering(parent context.Context, trainSet, t
 		return nil
 	}
 
-	m.removeOutOfDateModels()
+	m.removeOutOfDateModels(ctx)
 	return nil
 }
 
@@ -1275,11 +1275,11 @@ func (m *Master) trainClickThroughRatePrediction(parent context.Context, trainSe
 		return err
 	}
 
-	m.removeOutOfDateModels()
+	m.removeOutOfDateModels(ctx)
 	return nil
 }
 
-func (m *Master) removeOutOfDateModels() {
+func (m *Master) removeOutOfDateModels(ctx context.Context) {
 	m.collaborativeFilteringModelMutex.RLock()
 	m.clickThroughRateModelMutex.RLock()
 	collaborativeFilteringModelID := m.collaborativeFilteringMeta.ID
@@ -1303,7 +1303,6 @@ func (m *Master) removeOutOfDateModels() {
 		models[id] = file
 	}
 
-	ctx := context.Background()
 	collections, err := m.VectorClient.ListCollections(ctx)
 	if err != nil {
 		log.Logger().Error("failed to list collections in vector store", zap.Error(err))
