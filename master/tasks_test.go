@@ -49,9 +49,23 @@ func (s *failOnceBlobStore) Remove(name string) error {
 	return s.Store.Remove(name)
 }
 
+type failOnceVectorDatabase struct {
+	vectors.Database
+	name   string
+	failed bool
+}
+
+func (d *failOnceVectorDatabase) DeleteCollection(ctx context.Context, name string) error {
+	if name == d.name && !d.failed {
+		d.failed = true
+		return fmt.Errorf("failed to delete %s", name)
+	}
+	return d.Database.DeleteCollection(ctx, name)
+}
+
 func (s *MasterTestSuite) TestRemoveOutOfDateModels() {
 	ctx := s.T().Context()
-	s.blobStore = blob.NewPOSIX(s.T().TempDir())
+	s.blobStore = &failOnceBlobStore{Store: blob.NewPOSIX(s.T().TempDir()), name: "50"}
 	s.collaborativeFilteringMeta = meta.Model[cf.Score]{ID: 100}
 	s.clickThroughRateMeta = meta.Model[ctr.Score]{ID: 150}
 
@@ -77,6 +91,7 @@ func (s *MasterTestSuite) TestRemoveOutOfDateModels() {
 	s.Require().NoError(s.VectorClient.AddCollection(ctx, "unrelated", 2, vectors.Dot, vectors.VectorConfig{}))
 
 	s.removeOutOfDateModels()
+	s.removeOutOfDateModels()
 
 	collections, err := s.VectorClient.ListCollections(ctx)
 	s.Require().NoError(err)
@@ -95,6 +110,10 @@ func (s *MasterTestSuite) TestRemoveOutOfDateModels() {
 func (s *MasterTestSuite) TestRemoveOutOfDateModelsRetry() {
 	ctx := s.T().Context()
 	s.blobStore = &failOnceBlobStore{Store: blob.NewPOSIX(s.T().TempDir()), name: "200"}
+	s.VectorClient = &failOnceVectorDatabase{
+		Database: s.VectorClient,
+		name:     vectors.CollaborativeFilteringCollection(200),
+	}
 	s.collaborativeFilteringMeta = meta.Model[cf.Score]{ID: 100}
 	s.clickThroughRateMeta = meta.Model[ctr.Score]{ID: 150}
 
@@ -111,6 +130,7 @@ func (s *MasterTestSuite) TestRemoveOutOfDateModelsRetry() {
 			vectors.CollaborativeFilteringCollection(id), 2, vectors.Dot, vectors.VectorConfig{}))
 	}
 
+	s.removeOutOfDateModels()
 	s.removeOutOfDateModels()
 	s.removeOutOfDateModels()
 
