@@ -1282,7 +1282,9 @@ func (m *Master) trainClickThroughRatePrediction(parent context.Context, trainSe
 func (m *Master) removeOutOfDateModels() {
 	m.collaborativeFilteringModelMutex.RLock()
 	m.clickThroughRateModelMutex.RLock()
-	timestamp := min(m.collaborativeFilteringMeta.ID, m.clickThroughRateMeta.ID)
+	collaborativeFilteringModelID := m.collaborativeFilteringMeta.ID
+	clickThroughRateModelID := m.clickThroughRateMeta.ID
+	timestamp := min(collaborativeFilteringModelID, clickThroughRateModelID)
 	m.clickThroughRateModelMutex.RUnlock()
 	m.collaborativeFilteringModelMutex.RUnlock()
 
@@ -1291,13 +1293,69 @@ func (m *Master) removeOutOfDateModels() {
 		log.Logger().Error("failed to list models in blob store", zap.Error(err))
 		return
 	}
+	models := make(map[int64]string)
 	for _, file := range files {
 		id, err := strconv.ParseInt(file, 10, 64)
 		if err != nil {
 			log.Logger().Info("failed to parse model id", zap.String("file", file), zap.Error(err))
 			continue
 		}
-		if id < timestamp {
+		models[id] = file
+	}
+
+	ctx := context.Background()
+	collections, err := m.VectorClient.ListCollections(ctx)
+	if err != nil {
+		log.Logger().Error("failed to list collections in vector store", zap.Error(err))
+		return
+	}
+	const collaborativeFilteringCollectionPrefix = vectors.CollaborativeFiltering + "_"
+	collaborativeFilteringCollections := make(map[int64]string)
+	completeCollaborativeFilteringModels := make([]int64, 0)
+	for _, collection := range collections {
+		if !strings.HasPrefix(collection, collaborativeFilteringCollectionPrefix) {
+			continue
+		}
+		id, err := strconv.ParseInt(strings.TrimPrefix(collection, collaborativeFilteringCollectionPrefix), 10, 64)
+		if err != nil || vectors.CollaborativeFilteringCollection(id) != collection {
+			continue
+		}
+		collaborativeFilteringCollections[id] = collection
+		if _, ok := models[id]; ok {
+			completeCollaborativeFilteringModels = append(completeCollaborativeFilteringModels, id)
+		}
+	}
+	sort.Slice(completeCollaborativeFilteringModels, func(i, j int) bool {
+		return completeCollaborativeFilteringModels[i] > completeCollaborativeFilteringModels[j]
+	})
+	keepCollaborativeFilteringModels := mapset.NewSet[int64](collaborativeFilteringModelID)
+	for _, id := range completeCollaborativeFilteringModels[:min(2, len(completeCollaborativeFilteringModels))] {
+		keepCollaborativeFilteringModels.Add(id)
+	}
+
+	for id, collection := range collaborativeFilteringCollections {
+		if keepCollaborativeFilteringModels.Contains(id) {
+			continue
+		}
+		if file, ok := models[id]; ok && id != clickThroughRateModelID {
+			if err = m.blobStore.Remove(file); err != nil {
+				log.Logger().Error("failed to delete collaborative filtering model from blob store",
+					zap.Int64("id", id), zap.Error(err))
+				continue
+			}
+			delete(models, id)
+			log.Logger().Info("deleted out-of-date collaborative filtering model from blob store", zap.Int64("id", id))
+		}
+		if err = m.VectorClient.DeleteCollection(ctx, collection); err != nil {
+			log.Logger().Error("failed to delete collaborative filtering index from vector store",
+				zap.Int64("id", id), zap.Error(err))
+			continue
+		}
+		log.Logger().Info("deleted out-of-date collaborative filtering index from vector store", zap.Int64("id", id))
+	}
+
+	for id, file := range models {
+		if id < timestamp && !keepCollaborativeFilteringModels.Contains(id) {
 			if err = m.blobStore.Remove(file); err != nil {
 				log.Logger().Error("failed to delete model from blob store", zap.Int64("id", id), zap.Error(err))
 			} else {
