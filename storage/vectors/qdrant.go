@@ -30,6 +30,7 @@ import (
 
 const (
 	qdrantPayloadCategoriesKey = "categories"
+	qdrantPayloadHiddenKey     = "hidden"
 	qdrantPayloadIdKey         = "id"
 	qdrantPayloadTimestampKey  = "timestamp"
 )
@@ -146,6 +147,15 @@ func (db *Qdrant) AddCollection(ctx context.Context, name string, dimensions int
 		Wait:           new(true),
 		FieldName:      qdrantPayloadTimestampKey,
 		FieldType:      qdrant.FieldType_FieldTypeInteger.Enum(),
+	})
+	if err != nil {
+		return errors.Trace(err)
+	}
+	_, err = db.client.CreateFieldIndex(ctx, &qdrant.CreateFieldIndexCollection{
+		CollectionName: name,
+		Wait:           new(true),
+		FieldName:      qdrantPayloadHiddenKey,
+		FieldType:      qdrant.FieldType_FieldTypeBool.Enum(),
 	})
 	return errors.Trace(err)
 }
@@ -277,6 +287,7 @@ func (db *Qdrant) AddVectors(ctx context.Context, collection string, vectors []V
 			Id: qdrant.NewID(uuid.NewMD5(uuid.NameSpaceURL, []byte(vector.Id)).String()),
 			Payload: map[string]*qdrant.Value{
 				qdrantPayloadCategoriesKey: qdrantListValue(vector.Categories),
+				qdrantPayloadHiddenKey:     qdrant.NewValueBool(vector.IsHidden),
 				qdrantPayloadIdKey:         qdrant.NewValueString(vector.Id),
 				qdrantPayloadTimestampKey:  qdrant.NewValueInt(vector.Timestamp.UnixMilli()),
 			},
@@ -315,13 +326,13 @@ func (db *Qdrant) QueryVectors(ctx context.Context, collection string, q []float
 		Limit:          new(uint64(topK)),
 		WithPayload:    qdrant.NewWithPayloadEnable(true),
 		WithVectors:    qdrant.NewWithVectorsEnable(true),
+		Filter: &qdrant.Filter{Must: []*qdrant.Condition{
+			qdrant.NewMatchBool(qdrantPayloadHiddenKey, false),
+		}},
 	}
 	if len(categories) > 0 {
-		request.Filter = &qdrant.Filter{
-			Must: []*qdrant.Condition{
-				qdrant.NewMatchKeywords(qdrantPayloadCategoriesKey, categories...),
-			},
-		}
+		request.Filter.Must = append(request.Filter.Must,
+			qdrant.NewMatchKeywords(qdrantPayloadCategoriesKey, categories...))
 	}
 	response, err := db.client.Query(ctx, request)
 	if err != nil {
@@ -333,6 +344,7 @@ func (db *Qdrant) QueryVectors(ctx context.Context, collection string, q []float
 			Vector: Vector{
 				Id:         qdrantId(scored.GetPayload()),
 				Vector:     qdrantVectorOutput(scored.GetVectors()),
+				IsHidden:   qdrantHidden(scored.GetPayload()),
 				Categories: qdrantCategories(scored.GetPayload()),
 			},
 			Score: scored.GetScore(),
@@ -349,6 +361,13 @@ func qdrantId(payload map[string]*qdrant.Value) string {
 		return value.GetStringValue()
 	}
 	return ""
+}
+
+func qdrantHidden(payload map[string]*qdrant.Value) bool {
+	if value, ok := payload[qdrantPayloadHiddenKey]; ok {
+		return value.GetBoolValue()
+	}
+	return false
 }
 
 func qdrantListValue(items []string) *qdrant.Value {

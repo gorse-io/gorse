@@ -35,6 +35,7 @@ const (
 	milvusIdField         = "id"
 	milvusVectorField     = "vector"
 	milvusCategoriesField = "categories"
+	milvusHiddenField     = "hidden"
 	milvusTimestampField  = "timestamp"
 
 	milvusIVFRQIndexType = index.IvfRabitQ
@@ -146,6 +147,7 @@ func (db *Milvus) AddCollection(ctx context.Context, name string, dimensions int
 	schema := entity.NewSchema().WithName(name).WithDescription("gorse collection").
 		WithField(entity.NewField().WithName(milvusIdField).WithDataType(entity.FieldTypeVarChar).WithMaxLength(65535).WithIsPrimaryKey(true)).
 		WithField(entity.NewField().WithName(milvusCategoriesField).WithDataType(entity.FieldTypeArray).WithElementType(entity.FieldTypeVarChar).WithMaxCapacity(100).WithMaxLength(65535)).
+		WithField(entity.NewField().WithName(milvusHiddenField).WithDataType(entity.FieldTypeBool)).
 		WithField(entity.NewField().WithName(milvusTimestampField).WithDataType(entity.FieldTypeInt64)).
 		WithField(entity.NewField().WithName(milvusVectorField).WithDataType(entity.FieldTypeFloatVector).WithDim(int64(dimensions)))
 
@@ -224,11 +226,17 @@ func (db *Milvus) DeleteCollection(ctx context.Context, name string) error {
 }
 
 func (db *Milvus) CountVectors(ctx context.Context, collection string) (int64, error) {
-	stats, err := db.client.GetCollectionStats(ctx, milvusclient.NewGetCollectionStatsOption(collection))
+	result, err := db.client.Query(ctx, milvusclient.NewQueryOption(collection).
+		WithOutputFields("count(*)").
+		WithConsistencyLevel(entity.ClStrong))
 	if err != nil {
 		return 0, errors.Trace(err)
 	}
-	count, err := strconv.ParseInt(stats["row_count"], 10, 64)
+	countCol, ok := result.GetColumn("count(*)").(*column.ColumnInt64)
+	if !ok {
+		return 0, errors.Errorf("failed to parse vector count for collection %s", collection)
+	}
+	count, err := countCol.Value(0)
 	return count, errors.Trace(err)
 }
 
@@ -238,21 +246,24 @@ func (db *Milvus) AddVectors(ctx context.Context, collection string, vectors []V
 	}
 	ids := make([]string, 0, len(vectors))
 	categories := make([][]string, 0, len(vectors))
+	hidden := make([]bool, 0, len(vectors))
 	timestamps := make([]int64, 0, len(vectors))
 	data := make([][]float32, 0, len(vectors))
 	for _, v := range vectors {
 		ids = append(ids, v.Id)
 		categories = append(categories, v.Categories)
+		hidden = append(hidden, v.IsHidden)
 		timestamps = append(timestamps, v.Timestamp.UnixMilli())
 		data = append(data, v.Vector)
 	}
 
 	idCol := column.NewColumnVarChar(milvusIdField, ids)
 	categoriesCol := column.NewColumnVarCharArray(milvusCategoriesField, categories)
+	hiddenCol := column.NewColumnBool(milvusHiddenField, hidden)
 	timestampCol := column.NewColumnInt64(milvusTimestampField, timestamps)
 	vectorCol := column.NewColumnFloatVector(milvusVectorField, len(data[0]), data)
 
-	_, err := db.client.Upsert(ctx, milvusclient.NewColumnBasedInsertOption(collection, idCol, categoriesCol, timestampCol, vectorCol))
+	_, err := db.client.Upsert(ctx, milvusclient.NewColumnBasedInsertOption(collection, idCol, categoriesCol, hiddenCol, timestampCol, vectorCol))
 	return errors.Trace(err)
 }
 
@@ -266,25 +277,29 @@ func (db *Milvus) QueryVectors(ctx context.Context, collection string, q []float
 		return []ScoredVector{}, nil
 	}
 
-	var expr string
+	expr := fmt.Sprintf("%s == false", milvusHiddenField)
 	if len(categories) > 0 {
 		var conditions []string
-		for _, category := range categories {
-			conditions = append(conditions, fmt.Sprintf("array_contains(%s, '%s')", milvusCategoriesField, category))
+		for i := range categories {
+			conditions = append(conditions, fmt.Sprintf("array_contains(%s, {category_%d})", milvusCategoriesField, i))
 		}
-		expr = strings.Join(conditions, " or ")
+		expr += " and (" + strings.Join(conditions, " or ") + ")"
 	}
 
 	searchParam, distance, err := db.searchParam(ctx, collection)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	results, err := db.client.Search(ctx, milvusclient.NewSearchOption(collection, topK, []entity.Vector{entity.FloatVector(q)}).
+	searchOption := milvusclient.NewSearchOption(collection, topK, []entity.Vector{entity.FloatVector(q)}).
 		WithANNSField(milvusVectorField).
 		WithFilter(expr).
-		WithOutputFields(milvusIdField, milvusCategoriesField).
+		WithOutputFields(milvusIdField, milvusCategoriesField, milvusHiddenField).
 		WithAnnParam(searchParam).
-		WithConsistencyLevel(entity.ClStrong))
+		WithConsistencyLevel(entity.ClStrong)
+	for i, category := range categories {
+		searchOption.WithTemplateParam(fmt.Sprintf("category_%d", i), category)
+	}
+	results, err := db.client.Search(ctx, searchOption)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -307,6 +322,11 @@ func (db *Milvus) QueryVectors(ctx context.Context, collection string, q []float
 			categoriesCol = col.(*column.ColumnVarCharArray)
 		}
 
+		var hiddenCol *column.ColumnBool
+		if col := result.GetColumn(milvusHiddenField); col != nil {
+			hiddenCol = col.(*column.ColumnBool)
+		}
+
 		for i := 0; i < result.ResultCount; i++ {
 			var id string
 			if idCol != nil {
@@ -324,6 +344,14 @@ func (db *Milvus) QueryVectors(ctx context.Context, collection string, q []float
 				}
 			}
 
+			var hidden bool
+			if hiddenCol != nil {
+				hidden, err = hiddenCol.Value(i)
+				if err != nil {
+					return nil, errors.Trace(err)
+				}
+			}
+
 			score := result.Scores[i]
 			if distance == Euclidean {
 				score = -score
@@ -331,6 +359,7 @@ func (db *Milvus) QueryVectors(ctx context.Context, collection string, q []float
 			vectors = append(vectors, ScoredVector{
 				Vector: Vector{
 					Id:         id,
+					IsHidden:   hidden,
 					Categories: cats,
 				},
 				Score: score,
