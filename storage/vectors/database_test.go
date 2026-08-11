@@ -134,15 +134,15 @@ func (suite *vectorsTestSuite) TestVectors() {
 	}
 }
 
-func (suite *vectorsTestSuite) testHidden() {
+func (suite *vectorsTestSuite) TestHidden() {
 	ctx := suite.T().Context()
 	err := suite.Database.AddCollection(ctx, "test_hidden", defaultVectorSize, Cosine, VectorConfig{})
 	suite.Require().NoError(err)
 
 	query := []float32{1, 0, 0, 0}
 	err = suite.Database.AddVectors(ctx, "test_hidden", []Vector{
-		{Id: "visible", Vector: []float32{0.9, 0.1, 0, 0}},
-		{Id: "hidden", Vector: query, IsHidden: true},
+		{Id: "visible", Vector: []float32{0.9, 0.1, 0, 0}, Categories: []string{"common", "quo'te"}},
+		{Id: "hidden", Vector: query, IsHidden: true, Categories: []string{"common", "quo'te"}},
 	})
 	suite.Require().NoError(err)
 
@@ -151,6 +151,16 @@ func (suite *vectorsTestSuite) testHidden() {
 	suite.Equal(int64(2), count)
 
 	results, err := suite.Database.QueryVectors(ctx, "test_hidden", query, nil, 10)
+	suite.Require().NoError(err)
+	suite.Require().Len(results, 1)
+	suite.Equal("visible", results[0].Id)
+
+	results, err = suite.Database.QueryVectors(ctx, "test_hidden", query, []string{"common"}, 10)
+	suite.Require().NoError(err)
+	suite.Require().Len(results, 1)
+	suite.Equal("visible", results[0].Id)
+
+	results, err = suite.Database.QueryVectors(ctx, "test_hidden", query, []string{"quo'te"}, 10)
 	suite.Require().NoError(err)
 	suite.Require().Len(results, 1)
 	suite.Equal("visible", results[0].Id)

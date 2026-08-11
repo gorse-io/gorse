@@ -40,10 +40,6 @@ func (suite *ZvecTestSuite) TearDownSuite() {
 	suite.NoError(suite.Database.Close())
 }
 
-func (suite *ZvecTestSuite) TestHidden() {
-	suite.testHidden()
-}
-
 func TestZvec(t *testing.T) {
 	suite.Run(t, new(ZvecTestSuite))
 }

@@ -34,6 +34,7 @@ import (
 
 const (
 	weaviatePayloadCategoriesKey = "categories"
+	weaviatePayloadHiddenKey     = "hidden"
 	weaviatePayloadTimestampKey  = "timestamp"
 )
 
@@ -155,6 +156,11 @@ func (db *Weaviate) AddCollection(ctx context.Context, name string, dimensions i
 			{
 				Name:     weaviatePayloadCategoriesKey,
 				DataType: []string{"string[]"},
+			},
+			{
+				Name:            weaviatePayloadHiddenKey,
+				DataType:        []string{"boolean"},
+				IndexFilterable: new(true),
 			},
 			{
 				Name:              weaviatePayloadTimestampKey,
@@ -280,6 +286,7 @@ func (db *Weaviate) AddVectors(ctx context.Context, collection string, vectors [
 			Properties: map[string]any{
 				"originalId":                 vector.Id,
 				weaviatePayloadCategoriesKey: vector.Categories,
+				weaviatePayloadHiddenKey:     vector.IsHidden,
 				weaviatePayloadTimestampKey:  vector.Timestamp,
 			},
 			Vector: models.C11yVector(vector.Vector),
@@ -308,6 +315,7 @@ func (db *Weaviate) QueryVectors(ctx context.Context, collection string, q []flo
 	fields := []graphql.Field{
 		{Name: "originalId"},
 		{Name: weaviatePayloadCategoriesKey},
+		{Name: weaviatePayloadHiddenKey},
 		{Name: "_additional", Fields: []graphql.Field{{Name: "distance"}}},
 	}
 
@@ -318,6 +326,10 @@ func (db *Weaviate) QueryVectors(ctx context.Context, collection string, q []flo
 		WithNearVector(explore).
 		WithLimit(topK)
 
+	where := filters.Where().
+		WithPath([]string{weaviatePayloadHiddenKey}).
+		WithOperator(filters.Equal).
+		WithValueBoolean(false)
 	if len(categories) > 0 {
 		operands := make([]*filters.WhereBuilder, 0, len(categories))
 		for _, category := range categories {
@@ -326,16 +338,19 @@ func (db *Weaviate) QueryVectors(ctx context.Context, collection string, q []flo
 				WithOperator(filters.ContainsAny).
 				WithValueString(category))
 		}
-		var where *filters.WhereBuilder
+		var categoriesWhere *filters.WhereBuilder
 		if len(operands) == 1 {
-			where = operands[0]
+			categoriesWhere = operands[0]
 		} else {
-			where = filters.Where().
+			categoriesWhere = filters.Where().
 				WithOperator(filters.Or).
 				WithOperands(operands)
 		}
-		builder = builder.WithWhere(where)
+		where = filters.Where().
+			WithOperator(filters.And).
+			WithOperands([]*filters.WhereBuilder{where, categoriesWhere})
 	}
+	builder = builder.WithWhere(where)
 
 	result, err := builder.Do(ctx)
 	if err != nil {
@@ -363,6 +378,7 @@ func (db *Weaviate) QueryVectors(ctx context.Context, collection string, q []flo
 		results = append(results, ScoredVector{
 			Vector: Vector{
 				Id:         id,
+				IsHidden:   m[weaviatePayloadHiddenKey].(bool),
 				Categories: cats,
 			},
 			Score: -float32(distance),
