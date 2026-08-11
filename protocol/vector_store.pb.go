@@ -94,6 +94,7 @@ type Vector struct {
 	Values        []float32              `protobuf:"fixed32,2,rep,packed,name=values,proto3" json:"values,omitempty"`
 	Categories    []string               `protobuf:"bytes,3,rep,name=categories,proto3" json:"categories,omitempty"`
 	Timestamp     *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
+	IsHidden      bool                   `protobuf:"varint,5,opt,name=is_hidden,json=isHidden,proto3" json:"is_hidden,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -154,6 +155,13 @@ func (x *Vector) GetTimestamp() *timestamppb.Timestamp {
 		return x.Timestamp
 	}
 	return nil
+}
+
+func (x *Vector) GetIsHidden() bool {
+	if x != nil {
+		return x.IsHidden
+	}
+	return false
 }
 
 type ScoredVector struct {
@@ -1016,14 +1024,15 @@ var File_vector_store_proto protoreflect.FileDescriptor
 
 const file_vector_store_proto_rawDesc = "" +
 	"\n" +
-	"\x12vector_store.proto\x12\bprotocol\x1a\x1fgoogle/protobuf/timestamp.proto\"\x8a\x01\n" +
+	"\x12vector_store.proto\x12\bprotocol\x1a\x1fgoogle/protobuf/timestamp.proto\"\xa7\x01\n" +
 	"\x06Vector\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x16\n" +
 	"\x06values\x18\x02 \x03(\x02R\x06values\x12\x1e\n" +
 	"\n" +
 	"categories\x18\x03 \x03(\tR\n" +
 	"categories\x128\n" +
-	"\ttimestamp\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\ttimestamp\"N\n" +
+	"\ttimestamp\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\ttimestamp\x12\x1b\n" +
+	"\tis_hidden\x18\x05 \x01(\bR\bisHidden\"N\n" +
 	"\fScoredVector\x12(\n" +
 	"\x06vector\x18\x01 \x01(\v2\x10.protocol.VectorR\x06vector\x12\x14\n" +
 	"\x05score\x18\x02 \x01(\x02R\x05score\"\x18\n" +

@@ -117,6 +117,7 @@ func (p *ProxyServer) AddVectors(ctx context.Context, request *protocol.AddVecto
 		vectors[i] = Vector{
 			Id:         vector.GetId(),
 			Vector:     vector.GetValues(),
+			IsHidden:   vector.GetIsHidden(),
 			Categories: vector.GetCategories(),
 			Timestamp:  timestamp,
 		}
@@ -151,6 +152,7 @@ func (p *ProxyServer) QueryVectors(ctx context.Context, request *protocol.QueryV
 			Vector: &protocol.Vector{
 				Id:         result.Id,
 				Values:     result.Vector.Vector,
+				IsHidden:   result.IsHidden,
 				Categories: result.Categories,
 			},
 			Score: result.Score,
@@ -247,6 +249,7 @@ func (p ProxyClient) AddVectors(ctx context.Context, collection string, vectors 
 		pbVectors[i] = &protocol.Vector{
 			Id:         vector.Id,
 			Values:     vector.Vector,
+			IsHidden:   vector.IsHidden,
 			Categories: vector.Categories,
 			Timestamp:  timestamppb.New(vector.Timestamp),
 		}
@@ -283,6 +286,7 @@ func (p ProxyClient) QueryVectors(ctx context.Context, collection string, q []fl
 			Vector: Vector{
 				Id:         vector.GetId(),
 				Vector:     vector.GetValues(),
+				IsHidden:   vector.GetIsHidden(),
 				Categories: vector.GetCategories(),
 			},
 			Score: scored.GetScore(),

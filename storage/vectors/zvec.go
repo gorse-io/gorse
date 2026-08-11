@@ -322,14 +322,14 @@ func (db *Zvec) QueryVectors(ctx context.Context, name string, q []float32, cate
 	if err != nil {
 		return nil, err
 	}
-	filter := ""
+	filter := fmt.Sprintf("%s = false", zvecHiddenField)
 	if len(categories) > 0 {
 		quoted := make([]string, len(categories))
 		for i, category := range categories {
 			escaped := strings.NewReplacer(`\`, `\\`, `'`, `\'`).Replace(category)
 			quoted[i] = "'" + escaped + "'"
 		}
-		filter = fmt.Sprintf("%s CONTAIN_ANY (%s)", zvecCategoriesField, strings.Join(quoted, ", "))
+		filter += fmt.Sprintf(" AND %s CONTAIN_ANY (%s)", zvecCategoriesField, strings.Join(quoted, ", "))
 	}
 	documents, err := collection.Query(ctx, zvecdb.VectorQuery{
 		Field:       zvecVectorField,

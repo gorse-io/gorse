@@ -56,6 +56,10 @@ func (suite *ProxyTestSuite) TearDownSuite() {
 	suite.NoError(suite.backend.Close())
 }
 
+func (suite *ProxyTestSuite) TestHidden() {
+	suite.testHidden()
+}
+
 func TestProxy(t *testing.T) {
 	suite.Run(t, new(ProxyTestSuite))
 }
