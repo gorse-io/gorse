@@ -331,21 +331,10 @@ func (db *Weaviate) QueryVectors(ctx context.Context, collection string, q []flo
 		WithOperator(filters.Equal).
 		WithValueBoolean(false)
 	if len(categories) > 0 {
-		operands := make([]*filters.WhereBuilder, 0, len(categories))
-		for _, category := range categories {
-			operands = append(operands, filters.Where().
-				WithPath([]string{weaviatePayloadCategoriesKey}).
-				WithOperator(filters.ContainsAny).
-				WithValueString(category))
-		}
-		var categoriesWhere *filters.WhereBuilder
-		if len(operands) == 1 {
-			categoriesWhere = operands[0]
-		} else {
-			categoriesWhere = filters.Where().
-				WithOperator(filters.Or).
-				WithOperands(operands)
-		}
+		categoriesWhere := filters.Where().
+			WithPath([]string{weaviatePayloadCategoriesKey}).
+			WithOperator(filters.ContainsAny).
+			WithValueString(categories...)
 		where = filters.Where().
 			WithOperator(filters.And).
 			WithOperands([]*filters.WhereBuilder{where, categoriesWhere})

@@ -126,6 +126,10 @@ func (suite *vectorsTestSuite) TestVectors() {
 		suite.NotEmpty(result.Categories)
 	}
 
+	results, err = suite.Database.QueryVectors(ctx, "test", vectorA, []string{"cat-a", "cat-b"}, 10)
+	suite.NoError(err)
+	suite.Len(results, 2)
+
 	results, err = suite.Database.QueryVectors(ctx, "test", vectorA, nil, 1)
 	suite.NoError(err)
 	suite.NotEmpty(results)
