@@ -153,30 +153,28 @@ func (d *Dataset) GetCategories() map[string]int {
 
 // GetUserIDF returns the IDF of users.
 //
-//	IDF(u) = log(I/freq(u))
+//	IDF(u) = log(1 + I/freq(u))
 //
 // I is the number of items.
 // freq(u) is the frequency of user u in all feedback.
 func (d *Dataset) GetUserIDF() []float32 {
 	idf := make([]float32, d.userDict.Count())
 	for i := int32(0); i < d.userDict.Count(); i++ {
-		// Since zero IDF will cause NaN in the future, we set the minimum value to 1e-3.
-		idf[i] = max(math32.Log(float32(len(d.items))/float32(d.userDict.Freq(i))), 1e-3)
+		idf[i] = math32.Log(1 + float32(len(d.items))/float32(d.userDict.Freq(i)))
 	}
 	return idf
 }
 
 // GetItemIDF returns the IDF of items.
 //
-//	IDF(i) = log(U/freq(i))
+//	IDF(i) = log(1 + U/freq(i))
 //
 // U is the number of users.
 // freq(i) is the frequency of item i in all feedback.
 func (d *Dataset) GetItemIDF() []float32 {
 	idf := make([]float32, d.itemDict.Count())
 	for i := int32(0); i < d.itemDict.Count(); i++ {
-		// Since zero IDF will cause NaN in the future, we set the minimum value to 1e-3.
-		idf[i] = max(math32.Log(float32(len(d.users))/float32(d.itemDict.Freq(i))), 1e-3)
+		idf[i] = math32.Log(1 + float32(len(d.users))/float32(d.itemDict.Freq(i)))
 	}
 	return idf
 }
@@ -184,8 +182,7 @@ func (d *Dataset) GetItemIDF() []float32 {
 func (d *Dataset) GetUserColumnValuesIDF() []float32 {
 	idf := make([]float32, d.userLabels.values.Count())
 	for i := int32(0); i < d.userLabels.values.Count(); i++ {
-		// Since zero IDF will cause NaN in the future, we set the minimum value to 1e-3.
-		idf[i] = max(math32.Log(float32(len(d.users))/float32(d.userLabels.values.Freq(i))), 1e-3)
+		idf[i] = math32.Log(1 + float32(len(d.users))/float32(d.userLabels.values.Freq(i)))
 	}
 	return idf
 }
@@ -193,8 +190,7 @@ func (d *Dataset) GetUserColumnValuesIDF() []float32 {
 func (d *Dataset) GetItemColumnValuesIDF() []float32 {
 	idf := make([]float32, d.itemLabels.values.Count())
 	for i := int32(0); i < d.itemLabels.values.Count(); i++ {
-		// Since zero IDF will cause NaN in the future, we set the minimum value to 1e-3.
-		idf[i] = max(math32.Log(float32(len(d.items))/float32(d.itemLabels.values.Freq(i))), 1e-3)
+		idf[i] = math32.Log(1 + float32(len(d.items))/float32(d.itemLabels.values.Freq(i)))
 	}
 	return idf
 }

@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"github.com/cenkalti/backoff/v5"
-	"github.com/chewxy/math32"
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/expr-lang/expr"
 	"github.com/expr-lang/expr/vm"
@@ -107,6 +106,10 @@ type baseItemToItem[T any] struct {
 	index      *ann.HNSW[T]
 	items      []*data.Item
 	itemsLock  sync.Mutex
+	// innerProduct indicates that index distances are negative inner-product
+	// similarities. Such distances need explicit self/zero-similarity filtering
+	// and conversion back to similarity scores.
+	innerProduct bool
 	// Hidden items are stored separately without adding to the index,
 	// and they have neighbors but are not neighbors of other items.
 	hiddenItems   []*data.Item
@@ -150,23 +153,40 @@ func (b *baseItemToItem[T]) PopAll(i int) []cache.Score {
 	if i < len(b.items) {
 		// Non-hidden item: search by index
 		var err error
-		results, err = b.index.SearchIndex(i, b.n+1, true)
+		results, err = b.index.SearchIndex(i, b.n+1, !b.innerProduct)
 		if err != nil {
 			log.Logger().Error("failed to search index", zap.Error(err))
 			return nil
 		}
 	} else {
 		// Hidden item: search by vector
-		results = b.index.SearchVector(b.hiddenVectors[i-len(b.items)], b.n, true)
+		results = b.index.SearchVector(b.hiddenVectors[i-len(b.items)], b.n, !b.innerProduct)
 	}
-	return lo.Map(results, func(v lo.Tuple2[int, float32], _ int) cache.Score {
-		return cache.Score{
+	scores := make([]cache.Score, 0, b.n)
+	for _, v := range results {
+		if b.innerProduct {
+			if i < len(b.items) && v.A == i {
+				continue
+			}
+			if v.B >= 0 {
+				continue
+			}
+		}
+		score := 1.0 / (1.0 + float64(v.B))
+		if b.innerProduct {
+			score = -float64(v.B)
+		}
+		scores = append(scores, cache.Score{
 			Id:         b.items[v.A].ItemId,
 			Categories: b.items[v.A].Categories,
-			Score:      1.0 / (1.0 + float64(v.B)),
+			Score:      score,
 			Timestamp:  b.timestamp,
+		})
+		if len(scores) == b.n {
+			break
 		}
-	})
+	}
+	return scores
 }
 
 type embeddingItemToItem struct {
@@ -376,11 +396,12 @@ func newTagsItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time, 
 	}
 	t := &tagsItemToItem{IDF: idf}
 	t.baseItemToItem = baseItemToItem[[]dataset.ID]{
-		name:       cfg.Name,
-		n:          n,
-		timestamp:  timestamp,
-		columnFunc: columnFunc,
-		index:      ann.NewHNSW(t.distance),
+		name:         cfg.Name,
+		n:            n,
+		timestamp:    timestamp,
+		columnFunc:   columnFunc,
+		index:        ann.NewHNSW(t.distance),
+		innerProduct: true,
 	}
 	return t, nil
 }
@@ -414,10 +435,11 @@ func newUsersItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time,
 	}
 	u := &usersItemToItem{IDF: idf}
 	u.baseItemToItem = baseItemToItem[[]int32]{
-		name:      cfg.Name,
-		n:         n,
-		timestamp: timestamp,
-		index:     ann.NewHNSW(u.distance),
+		name:         cfg.Name,
+		n:            n,
+		timestamp:    timestamp,
+		index:        ann.NewHNSW(u.distance),
+		innerProduct: true,
 	}
 	return u, nil
 }
@@ -440,10 +462,11 @@ func newAutoItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time, 
 		uIDF: uIDF,
 	}
 	a.baseItemToItem = baseItemToItem[lo.Tuple2[[]dataset.ID, []int32]]{
-		name:      cfg.Name,
-		n:         n,
-		timestamp: timestamp,
-		index:     ann.NewHNSW[lo.Tuple2[[]dataset.ID, []int32]](a.distance),
+		name:         cfg.Name,
+		n:            n,
+		timestamp:    timestamp,
+		index:        ann.NewHNSW[lo.Tuple2[[]dataset.ID, []int32]](a.distance),
+		innerProduct: true,
 	}
 	return a, nil
 }
@@ -466,28 +489,14 @@ func (a *autoItemToItem) distance(u, v lo.Tuple2[[]dataset.ID, []int32]) float32
 type IDF[T dataset.ID | int32] []float32
 
 func (idf IDF[T]) distance(a, b []T) float32 {
-	commonSum, commonCount := idf.weightedSumCommonElements(a, b)
-	if len(a) == len(b) && commonCount == float32(len(a)) {
-		// If two items have the same tags, its distance is zero.
-		return 0
-	} else if commonCount > 0 && len(a) > 0 && len(b) > 0 {
-		// Add shrinkage to avoid division by zero
-		return 1 - commonSum*commonCount/
-			math32.Sqrt(idf.weightedSum(a))/
-			math32.Sqrt(idf.weightedSum(b))/
-			(commonCount+100)
-	} else {
-		// If two items have no common tags, its distance is one.
-		return 1
-	}
+	return -idf.similarity(a, b)
 }
 
-func (idf IDF[T]) weightedSumCommonElements(a, b []T) (float32, float32) {
-	i, j, sum, count := 0, 0, float32(0), float32(0)
+func (idf IDF[T]) similarity(a, b []T) float32 {
+	i, j, sum := 0, 0, float32(0)
 	for i < len(a) && j < len(b) {
 		if a[i] == b[j] {
 			sum += idf[a[i]]
-			count++
 			i++
 			j++
 		} else if a[i] < b[j] {
@@ -495,14 +504,6 @@ func (idf IDF[T]) weightedSumCommonElements(a, b []T) (float32, float32) {
 		} else if a[i] > b[j] {
 			j++
 		}
-	}
-	return sum, count
-}
-
-func (idf IDF[T]) weightedSum(a []T) float32 {
-	var sum float32
-	for _, i := range a {
-		sum += idf[i]
 	}
 	return sum
 }
