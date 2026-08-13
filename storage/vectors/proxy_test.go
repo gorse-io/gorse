@@ -34,7 +34,7 @@ type ProxyTestSuite struct {
 func (suite *ProxyTestSuite) SetupSuite() {
 	log.SetTestLogger(suite.T())
 	var err error
-	path := fmt.Sprintf("zvec://%s/vectors", suite.T().TempDir())
+	path := fmt.Sprintf("xvec://%s/vectors", suite.T().TempDir())
 	suite.backend, err = Open(path, "gorse_")
 	suite.NoError(err)
 	suite.NoError(suite.backend.Init())

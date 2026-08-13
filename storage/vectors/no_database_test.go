@@ -54,17 +54,17 @@ func TestNoDatabase(t *testing.T) {
 		assert.Zero(t, count)
 
 		assert.ErrorIs(t, database.AddVectors(ctx, "test", []Vector{
-			{Id: "a", Vector: []float32{1, 0, 0, 0}, Categories: []string{"cat-a"}},
+			{Id: "a", Values: []float32{1, 0, 0, 0}, Categories: []string{"cat-a"}},
 		}), ErrNoDatabase)
 		assert.ErrorIs(t, database.AddVectors(ctx, "test", nil), ErrNoDatabase)
 		assert.ErrorIs(t, database.DeleteVectors(ctx, "test", time.Now()), ErrNoDatabase)
 		assert.ErrorIs(t, database.DeleteVectors(ctx, "missing", time.Time{}), ErrNoDatabase)
 
-		results, err := database.QueryVectors(ctx, "test", []float32{1, 0, 0, 0}, []string{"cat-a"}, 10)
+		results, err := database.QueryVectors(ctx, "test", Vector{Values: []float32{1, 0, 0, 0}}, []string{"cat-a"}, 10)
 		assert.ErrorIs(t, err, ErrNoDatabase)
 		assert.Nil(t, results)
 
-		results, err = database.QueryVectors(ctx, "missing", nil, nil, 0)
+		results, err = database.QueryVectors(ctx, "missing", Vector{}, nil, 0)
 		assert.ErrorIs(t, err, ErrNoDatabase)
 		assert.Nil(t, results)
 	})

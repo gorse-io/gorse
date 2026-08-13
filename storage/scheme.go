@@ -79,7 +79,7 @@ const (
 	CHHTTPPrefix        = "chhttp://"
 	CHHTTPSPrefix       = "chhttps://"
 	SQLitePrefix        = "sqlite://"
-	ZvecPrefix          = "zvec://"
+	XvecPrefix          = "xvec://"
 	RedisPrefix         = "redis://"
 	RedissPrefix        = "rediss://"
 	RedisClusterPrefix  = "redis+cluster://"

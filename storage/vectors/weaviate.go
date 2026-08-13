@@ -289,7 +289,7 @@ func (db *Weaviate) AddVectors(ctx context.Context, collection string, vectors [
 				weaviatePayloadHiddenKey:     vector.IsHidden,
 				weaviatePayloadTimestampKey:  vector.Timestamp,
 			},
-			Vector: models.C11yVector(vector.Vector),
+			Vector: models.C11yVector(vector.Values),
 		})
 	}
 	_, err := db.client.Batch().ObjectsBatcher().WithObjects(objects...).Do(ctx)
@@ -307,7 +307,7 @@ func (db *Weaviate) DeleteVectors(ctx context.Context, collection string, timest
 	return errors.Trace(err)
 }
 
-func (db *Weaviate) QueryVectors(ctx context.Context, collection string, q []float32, categories []string, topK int) ([]ScoredVector, error) {
+func (db *Weaviate) QueryVectors(ctx context.Context, collection string, q Vector, categories []string, topK int) ([]ScoredVector, error) {
 	if topK <= 0 {
 		return []ScoredVector{}, nil
 	}
@@ -319,7 +319,7 @@ func (db *Weaviate) QueryVectors(ctx context.Context, collection string, q []flo
 		{Name: "_additional", Fields: []graphql.Field{{Name: "distance"}}},
 	}
 
-	explore := db.client.GraphQL().NearVectorArgBuilder().WithVector(q)
+	explore := db.client.GraphQL().NearVectorArgBuilder().WithVector(q.Values)
 	builder := db.client.GraphQL().Get().
 		WithClassName(capitalize(collection)).
 		WithFields(fields...).

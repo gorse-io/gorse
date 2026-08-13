@@ -33,6 +33,7 @@ const (
 	qdrantPayloadHiddenKey     = "hidden"
 	qdrantPayloadIdKey         = "id"
 	qdrantPayloadTimestampKey  = "timestamp"
+	qdrantVectorName           = "vector"
 )
 
 func init() {
@@ -87,7 +88,14 @@ func (db *Qdrant) DescribeCollection(ctx context.Context, name string) (*Collect
 		}
 		return nil, errors.Trace(err)
 	}
-	params := info.GetConfig().GetParams().GetVectorsConfig().GetParams()
+	collectionParams := info.GetConfig().GetParams()
+	if _, ok := collectionParams.GetSparseVectorsConfig().GetMap()[qdrantVectorName]; ok {
+		return &CollectionInfo{Name: name, Dimension: 0, Distance: Dot}, nil
+	}
+	params, ok := collectionParams.GetVectorsConfig().GetParamsMap().GetMap()[qdrantVectorName]
+	if !ok {
+		return nil, errors.NotFoundf("vector field %s", qdrantVectorName)
+	}
 	var distance Distance
 	switch params.GetDistance() {
 	case qdrant.Distance_Cosine:
@@ -113,6 +121,20 @@ func (db *Qdrant) DescribeCollection(ctx context.Context, name string) (*Collect
 }
 
 func (db *Qdrant) AddCollection(ctx context.Context, name string, dimensions int, distance Distance, config VectorConfig) error {
+	if dimensions == 0 {
+		if distance != Dot {
+			return errors.NotSupportedf("distance method for sparse vector")
+		}
+		if config != (VectorConfig{}) {
+			return errors.NotSupportedf("quantization for sparse vector")
+		}
+		return db.createCollection(ctx, name, &qdrant.CreateCollection{
+			CollectionName: name,
+			SparseVectorsConfig: qdrant.NewSparseVectorsConfig(map[string]*qdrant.SparseVectorParams{
+				qdrantVectorName: {},
+			}),
+		})
+	}
 	var qdrantDistance qdrant.Distance
 	switch distance {
 	case Cosine:
@@ -130,14 +152,20 @@ func (db *Qdrant) AddCollection(ctx context.Context, name string, dimensions int
 		return errors.Trace(err)
 	}
 
-	err = db.client.CreateCollection(ctx, &qdrant.CreateCollection{
+	return db.createCollection(ctx, name, &qdrant.CreateCollection{
 		CollectionName: name,
-		VectorsConfig: qdrant.NewVectorsConfig(&qdrant.VectorParams{
-			Size:     uint64(dimensions),
-			Distance: qdrantDistance,
+		VectorsConfig: qdrant.NewVectorsConfigMap(map[string]*qdrant.VectorParams{
+			qdrantVectorName: {
+				Size:     uint64(dimensions),
+				Distance: qdrantDistance,
+			},
 		}),
 		QuantizationConfig: quantizationConfig,
 	})
+}
+
+func (db *Qdrant) createCollection(ctx context.Context, name string, request *qdrant.CreateCollection) error {
+	err := db.client.CreateCollection(ctx, request)
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -283,6 +311,13 @@ func (db *Qdrant) AddVectors(ctx context.Context, collection string, vectors []V
 	}
 	points := make([]*qdrant.PointStruct, 0, len(vectors))
 	for _, vector := range vectors {
+		var value *qdrant.Vector
+		if len(vector.Indices) > 0 {
+			value = qdrant.NewVectorSparse(vector.Indices, vector.Values)
+		} else {
+			value = qdrant.NewVectorDense(vector.Values)
+		}
+		values := qdrant.NewVectorsMap(map[string]*qdrant.Vector{qdrantVectorName: value})
 		points = append(points, &qdrant.PointStruct{
 			Id: qdrant.NewID(uuid.NewMD5(uuid.NameSpaceURL, []byte(vector.Id)).String()),
 			Payload: map[string]*qdrant.Value{
@@ -291,7 +326,7 @@ func (db *Qdrant) AddVectors(ctx context.Context, collection string, vectors []V
 				qdrantPayloadIdKey:         qdrant.NewValueString(vector.Id),
 				qdrantPayloadTimestampKey:  qdrant.NewValueInt(vector.Timestamp.UnixMilli()),
 			},
-			Vectors: qdrant.NewVectorsDense(vector.Vector),
+			Vectors: values,
 		})
 	}
 	_, err := db.client.Upsert(ctx, &qdrant.UpsertPoints{
@@ -316,13 +351,12 @@ func (db *Qdrant) DeleteVectors(ctx context.Context, collection string, timestam
 	return errors.Trace(err)
 }
 
-func (db *Qdrant) QueryVectors(ctx context.Context, collection string, q []float32, categories []string, topK int) ([]ScoredVector, error) {
+func (db *Qdrant) QueryVectors(ctx context.Context, collection string, q Vector, categories []string, topK int) ([]ScoredVector, error) {
 	if topK <= 0 {
 		return []ScoredVector{}, nil
 	}
 	request := &qdrant.QueryPoints{
 		CollectionName: collection,
-		Query:          qdrant.NewQueryDense(q),
 		Limit:          new(uint64(topK)),
 		WithPayload:    qdrant.NewWithPayloadEnable(true),
 		WithVectors:    qdrant.NewWithVectorsEnable(true),
@@ -330,6 +364,13 @@ func (db *Qdrant) QueryVectors(ctx context.Context, collection string, q []float
 			qdrant.NewMatchBool(qdrantPayloadHiddenKey, false),
 		}},
 	}
+	if len(q.Indices) > 0 {
+		request.Query = qdrant.NewQuerySparse(q.Indices, q.Values)
+	} else {
+		request.Query = qdrant.NewQueryDense(q.Values)
+	}
+	request.Using = new(qdrantVectorName)
+	request.WithVectors = qdrant.NewWithVectorsInclude(qdrantVectorName)
 	if len(categories) > 0 {
 		request.Filter.Must = append(request.Filter.Must,
 			qdrant.NewMatchKeywords(qdrantPayloadCategoriesKey, categories...))
@@ -340,10 +381,12 @@ func (db *Qdrant) QueryVectors(ctx context.Context, collection string, q []float
 	}
 	results := make([]ScoredVector, 0, len(response))
 	for _, scored := range response {
+		vector := qdrantVector(scored.GetVectors())
 		results = append(results, ScoredVector{
 			Vector: Vector{
 				Id:         qdrantId(scored.GetPayload()),
-				Vector:     qdrantVectorOutput(scored.GetVectors()),
+				Values:     vector.Values,
+				Indices:    vector.Indices,
 				IsHidden:   qdrantHidden(scored.GetPayload()),
 				Categories: qdrantCategories(scored.GetPayload()),
 			},
@@ -400,14 +443,18 @@ func qdrantCategories(payload map[string]*qdrant.Value) []string {
 	return categories
 }
 
-func qdrantVectorOutput(output *qdrant.VectorsOutput) []float32 {
-	if output == nil {
-		return nil
+func qdrantVector(output *qdrant.VectorsOutput) Vector {
+	if output != nil {
+		if named := output.GetVectors(); named != nil {
+			if vector := named.GetVectors()[qdrantVectorName]; vector != nil {
+				if sparse := vector.GetSparseVector(); sparse != nil {
+					return Vector{Indices: sparse.GetIndices(), Values: sparse.GetValues()}
+				}
+				if dense := vector.GetDenseVector(); dense != nil {
+					return Vector{Values: dense.GetData()}
+				}
+			}
+		}
 	}
-
-	vector := output.GetVector()
-	if vector == nil {
-		return nil
-	}
-	return vector.GetDenseVector().GetData()
+	return Vector{}
 }

@@ -479,7 +479,7 @@ func GetDefaultConfig() *Config {
 		Database: DatabaseConfig{
 			DataStore:       "sqlite://" + filepath.Join(MkDir(), "data.sqlite"),
 			CacheStore:      "sqlite://" + filepath.Join(MkDir(), "cache.sqlite"),
-			VectorStore:     storage.ZvecPrefix + filepath.Join(MkDir(), "vectors"),
+			VectorStore:     storage.XvecPrefix + filepath.Join(MkDir(), "vectors"),
 			CacheClientName: "gorse_cache_client",
 			MySQL: MySQLConfig{
 				IsolationLevel:  "READ-UNCOMMITTED",
@@ -918,7 +918,7 @@ func (config *Config) Validate() error {
 	}
 	if err := validate.RegisterValidation("vector_store", func(fl validator.FieldLevel) bool {
 		prefixes := []string{
-			storage.ZvecPrefix,
+			storage.XvecPrefix,
 			storage.QdrantPrefix,
 			storage.WeaviatePrefix,
 			storage.WeaviatesPrefix,

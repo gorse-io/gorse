@@ -45,6 +45,6 @@ func (NoDatabase) AddVectors(_ context.Context, _ string, _ []Vector) error {
 func (NoDatabase) DeleteVectors(_ context.Context, _ string, _ time.Time) error {
 	return ErrNoDatabase
 }
-func (NoDatabase) QueryVectors(_ context.Context, _ string, _ []float32, _ []string, _ int) ([]ScoredVector, error) {
+func (NoDatabase) QueryVectors(_ context.Context, _ string, _ Vector, _ []string, _ int) ([]ScoredVector, error) {
 	return nil, ErrNoDatabase
 }

@@ -66,7 +66,7 @@ func (suite *WorkerTestSuite) SetupSuite() {
 	suite.NoError(err)
 	suite.CacheClient, err = cache.Open(fmt.Sprintf("sqlite://%s/cache.db", suite.T().TempDir()), "")
 	suite.NoError(err)
-	suite.VectorClient, err = vectors.Open(fmt.Sprintf("zvec://%s/vectors", suite.T().TempDir()), "")
+	suite.VectorClient, err = vectors.Open(fmt.Sprintf("xvec://%s/vectors", suite.T().TempDir()), "")
 	suite.NoError(err)
 	// init database
 	err = suite.DataClient.Init()
@@ -196,7 +196,7 @@ func (suite *WorkerTestSuite) TestRecommendCollaborative() {
 	// create mock model
 	matrixFactorizationItemVectors := make([]vectors.Vector, 0, 10)
 	for i := range 10 {
-		vector := vectors.Vector{Id: strconv.Itoa(i), Vector: []float32{float32(i), 1}}
+		vector := vectors.Vector{Id: strconv.Itoa(i), Values: []float32{float32(i), 1}}
 		if i == 1 || i == 3 {
 			vector.Categories = []string{"*"}
 		}
@@ -483,7 +483,7 @@ func (suite *WorkerTestSuite) TestRecommend() {
 	suite.Config.Recommend.NonPersonalized = []config.NonPersonalizedConfig{{Name: "popular"}}
 	suite.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "default"}}
 	suite.Config.Recommend.UserToUser = []config.UserToUserConfig{{Name: "default"}}
-	err := suite.VectorClient.AddVectors(ctx, vectors.CollaborativeFilteringCollection(suite.MatrixFactorizationId), []vectors.Vector{{Id: "4", Vector: []float32{4, 1}}})
+	err := suite.VectorClient.AddVectors(ctx, vectors.CollaborativeFilteringCollection(suite.MatrixFactorizationId), []vectors.Vector{{Id: "4", Values: []float32{4, 1}}})
 	suite.NoError(err)
 	suite.MatrixFactorizationUsers = logics.NewMatrixFactorizationUsers()
 	suite.MatrixFactorizationUsers.Add("0", []float32{1, 0})
@@ -547,7 +547,7 @@ func (suite *WorkerTestSuite) TestRecommendRankerNone() {
 	suite.Config.Recommend.NonPersonalized = []config.NonPersonalizedConfig{{Name: "popular"}}
 	suite.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "default"}}
 	suite.Config.Recommend.UserToUser = []config.UserToUserConfig{{Name: "default"}}
-	err := suite.VectorClient.AddVectors(ctx, vectors.CollaborativeFilteringCollection(suite.MatrixFactorizationId), []vectors.Vector{{Id: "4", Vector: []float32{4, 1}}})
+	err := suite.VectorClient.AddVectors(ctx, vectors.CollaborativeFilteringCollection(suite.MatrixFactorizationId), []vectors.Vector{{Id: "4", Values: []float32{4, 1}}})
 	suite.NoError(err)
 	suite.MatrixFactorizationUsers = logics.NewMatrixFactorizationUsers()
 	suite.MatrixFactorizationUsers.Add("0", []float32{1, 0})

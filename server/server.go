@@ -240,7 +240,7 @@ func (s *Server) Sync() {
 
 		// connect to vector store
 		if s.vectorPath != s.Config.Database.VectorStore || s.vectorPrefix != s.Config.Database.VectorTablePrefix {
-			if strings.HasPrefix(s.Config.Database.VectorStore, storage.ZvecPrefix) {
+			if strings.HasPrefix(s.Config.Database.VectorStore, storage.XvecPrefix) {
 				log.Logger().Info("connect vector store via master")
 				s.VectorClient = vectors.NewProxyClient(s.conn)
 			} else {

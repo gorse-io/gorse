@@ -35,6 +35,10 @@ type WeaviateTestSuite struct {
 	vectorsTestSuite
 }
 
+func (suite *WeaviateTestSuite) TestSparse() {
+	suite.T().Skip("sparse vectors are not supported")
+}
+
 func (suite *WeaviateTestSuite) SetupSuite() {
 	log.SetTestLogger(suite.T())
 	var err error

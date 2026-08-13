@@ -144,12 +144,25 @@ func (db *Milvus) DescribeCollection(ctx context.Context, name string) (*Collect
 }
 
 func (db *Milvus) AddCollection(ctx context.Context, name string, dimensions int, distance Distance, config VectorConfig) error {
+	if dimensions == 0 {
+		if distance != Dot {
+			return errors.NotSupportedf("distance method for sparse vector")
+		}
+		if config != (VectorConfig{}) {
+			return errors.NotSupportedf("quantization for sparse vector")
+		}
+	}
+
 	schema := entity.NewSchema().WithName(name).WithDescription("gorse collection").
 		WithField(entity.NewField().WithName(milvusIdField).WithDataType(entity.FieldTypeVarChar).WithMaxLength(65535).WithIsPrimaryKey(true)).
 		WithField(entity.NewField().WithName(milvusCategoriesField).WithDataType(entity.FieldTypeArray).WithElementType(entity.FieldTypeVarChar).WithMaxCapacity(100).WithMaxLength(65535)).
 		WithField(entity.NewField().WithName(milvusHiddenField).WithDataType(entity.FieldTypeBool)).
-		WithField(entity.NewField().WithName(milvusTimestampField).WithDataType(entity.FieldTypeInt64)).
-		WithField(entity.NewField().WithName(milvusVectorField).WithDataType(entity.FieldTypeFloatVector).WithDim(int64(dimensions)))
+		WithField(entity.NewField().WithName(milvusTimestampField).WithDataType(entity.FieldTypeInt64))
+	if dimensions == 0 {
+		schema.WithField(entity.NewField().WithName(milvusVectorField).WithDataType(entity.FieldTypeSparseVector))
+	} else {
+		schema.WithField(entity.NewField().WithName(milvusVectorField).WithDataType(entity.FieldTypeFloatVector).WithDim(int64(dimensions)))
+	}
 
 	err := db.client.CreateCollection(ctx, milvusclient.NewCreateCollectionOption(name, schema).WithShardNum(entity.DefaultShardNumber))
 	if err != nil {
@@ -169,7 +182,12 @@ func (db *Milvus) AddCollection(ctx context.Context, name string, dimensions int
 		return errors.NotSupportedf("distance method")
 	}
 
-	idx, err := milvusIndex(metricType, dimensions, config)
+	var idx index.Index
+	if dimensions == 0 {
+		idx = index.NewSparseInvertedIndex(entity.IP, 0)
+	} else {
+		idx, err = milvusIndex(metricType, dimensions, config)
+	}
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -203,6 +221,9 @@ func milvusVectorDimension(collection *entity.Collection) (int, error) {
 	}
 	for _, field := range collection.Schema.Fields {
 		if field.Name == milvusVectorField {
+			if field.DataType == entity.FieldTypeSparseVector {
+				return 0, nil
+			}
 			dimension, err := strconv.Atoi(field.TypeParams[entity.TypeParamDim])
 			if err != nil {
 				return 0, errors.Trace(err)
@@ -249,19 +270,35 @@ func (db *Milvus) AddVectors(ctx context.Context, collection string, vectors []V
 	hidden := make([]bool, 0, len(vectors))
 	timestamps := make([]int64, 0, len(vectors))
 	data := make([][]float32, 0, len(vectors))
+	sparseData := make([]entity.SparseEmbedding, 0, len(vectors))
 	for _, v := range vectors {
 		ids = append(ids, v.Id)
 		categories = append(categories, v.Categories)
 		hidden = append(hidden, v.IsHidden)
 		timestamps = append(timestamps, v.Timestamp.UnixMilli())
-		data = append(data, v.Vector)
+		data = append(data, v.Values)
+		if len(v.Indices) > 0 {
+			sparse, err := entity.NewSliceSparseEmbedding(v.Indices, v.Values)
+			if err != nil {
+				return errors.Trace(err)
+			}
+			sparseData = append(sparseData, sparse)
+		}
 	}
 
 	idCol := column.NewColumnVarChar(milvusIdField, ids)
 	categoriesCol := column.NewColumnVarCharArray(milvusCategoriesField, categories)
 	hiddenCol := column.NewColumnBool(milvusHiddenField, hidden)
 	timestampCol := column.NewColumnInt64(milvusTimestampField, timestamps)
-	vectorCol := column.NewColumnFloatVector(milvusVectorField, len(data[0]), data)
+	var vectorCol column.Column
+	if len(sparseData) > 0 {
+		if len(sparseData) != len(vectors) {
+			return errors.Errorf("cannot mix dense and sparse vectors")
+		}
+		vectorCol = column.NewColumnSparseVectors(milvusVectorField, sparseData)
+	} else {
+		vectorCol = column.NewColumnFloatVector(milvusVectorField, len(data[0]), data)
+	}
 
 	_, err := db.client.Upsert(ctx, milvusclient.NewColumnBasedInsertOption(collection, idCol, categoriesCol, hiddenCol, timestampCol, vectorCol))
 	return errors.Trace(err)
@@ -272,7 +309,7 @@ func (db *Milvus) DeleteVectors(ctx context.Context, collection string, timestam
 	return errors.Trace(err)
 }
 
-func (db *Milvus) QueryVectors(ctx context.Context, collection string, q []float32, categories []string, topK int) ([]ScoredVector, error) {
+func (db *Milvus) QueryVectors(ctx context.Context, collection string, q Vector, categories []string, topK int) ([]ScoredVector, error) {
 	if topK <= 0 {
 		return []ScoredVector{}, nil
 	}
@@ -290,7 +327,16 @@ func (db *Milvus) QueryVectors(ctx context.Context, collection string, q []float
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	searchOption := milvusclient.NewSearchOption(collection, topK, []entity.Vector{entity.FloatVector(q)}).
+	var query entity.Vector
+	if len(q.Indices) > 0 {
+		query, err = entity.NewSliceSparseEmbedding(q.Indices, q.Values)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+	} else {
+		query = entity.FloatVector(q.Values)
+	}
+	searchOption := milvusclient.NewSearchOption(collection, topK, []entity.Vector{query}).
 		WithANNSField(milvusVectorField).
 		WithFilter(expr).
 		WithOutputFields(milvusIdField, milvusCategoriesField, milvusHiddenField).
@@ -418,6 +464,8 @@ func (db *Milvus) searchParam(ctx context.Context, collection string) (index.Ann
 		return nil, Cosine, errors.NotSupportedf("distance method %s", metricType)
 	}
 	switch index.IndexType(idx.Params()[index.IndexTypeKey]) {
+	case index.SparseInverted, index.SparseWAND:
+		return index.NewSparseAnnParam(), distance, nil
 	case milvusIVFRQIndexType:
 		return index.NewIvfRabitQAnnParam(defaultMilvusRQNProbe).WithRefineK(defaultMilvusRQRefineK), distance, nil
 	case index.IvfPQ, index.IvfSQ8:
