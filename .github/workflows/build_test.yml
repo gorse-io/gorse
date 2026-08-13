@@ -217,6 +217,30 @@ jobs:
       with:
         go-version-file: ./go.mod
 
+    - name: Set up Windows ARM64 C toolchain
+      if: matrix.os == 'windows-11-arm'
+      id: msys2
+      uses: msys2/setup-msys2@v2
+      with:
+        msystem: CLANGARM64
+        update: true
+        install: mingw-w64-clang-aarch64-gcc-compat
+
+    - name: Configure Windows ARM64 C compiler
+      if: matrix.os == 'windows-11-arm'
+      shell: pwsh
+      run: |
+        $cc = Join-Path '${{ steps.msys2.outputs.msys2-location }}' 'clangarm64\bin\gcc.exe'
+        $target = & $cc -dumpmachine
+        if ($LASTEXITCODE -ne 0) {
+          exit $LASTEXITCODE
+        }
+        if ($target -ne 'aarch64-w64-windows-gnu') {
+          Write-Error "Unexpected C compiler target: $target"
+          exit 1
+        }
+        "CC=$cc" >> $env:GITHUB_ENV
+
     - name: Test
       run: go test -timeout 20m ./...
 
