@@ -33,6 +33,7 @@ message Vector {
   repeated string categories = 3;
   google.protobuf.Timestamp timestamp = 4;
   bool is_hidden = 5;
+  repeated uint32 indices = 6;
 }
 
 message ScoredVector {
@@ -87,7 +88,7 @@ message DeleteVectorsResponse {}
 
 message QueryVectorsRequest {
   string collection = 1;
-  repeated float query = 2;
+  Vector query = 2;
   repeated string categories = 3;
   int32 top_k = 4;
 }

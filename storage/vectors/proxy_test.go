@@ -31,10 +31,6 @@ type ProxyTestSuite struct {
 	clientConn *grpc.ClientConn
 }
 
-func (suite *ProxyTestSuite) TestSparse() {
-	suite.T().Skip("sparse vectors are not supported by the proxy backend")
-}
-
 func (suite *ProxyTestSuite) SetupSuite() {
 	log.SetTestLogger(suite.T())
 	var err error
