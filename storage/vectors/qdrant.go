@@ -33,7 +33,7 @@ const (
 	qdrantPayloadHiddenKey     = "hidden"
 	qdrantPayloadIdKey         = "id"
 	qdrantPayloadTimestampKey  = "timestamp"
-	qdrantSparseVectorName     = "vector"
+	qdrantVectorName           = "vector"
 )
 
 func init() {
@@ -89,10 +89,13 @@ func (db *Qdrant) DescribeCollection(ctx context.Context, name string) (*Collect
 		return nil, errors.Trace(err)
 	}
 	collectionParams := info.GetConfig().GetParams()
-	if _, ok := collectionParams.GetSparseVectorsConfig().GetMap()[qdrantSparseVectorName]; ok {
+	if _, ok := collectionParams.GetSparseVectorsConfig().GetMap()[qdrantVectorName]; ok {
 		return &CollectionInfo{Name: name, Dimension: 0, Distance: Dot}, nil
 	}
-	params := collectionParams.GetVectorsConfig().GetParams()
+	params, ok := collectionParams.GetVectorsConfig().GetParamsMap().GetMap()[qdrantVectorName]
+	if !ok {
+		return nil, errors.NotFoundf("vector field %s", qdrantVectorName)
+	}
 	var distance Distance
 	switch params.GetDistance() {
 	case qdrant.Distance_Cosine:
@@ -128,7 +131,7 @@ func (db *Qdrant) AddCollection(ctx context.Context, name string, dimensions int
 		return db.createCollection(ctx, name, &qdrant.CreateCollection{
 			CollectionName: name,
 			SparseVectorsConfig: qdrant.NewSparseVectorsConfig(map[string]*qdrant.SparseVectorParams{
-				qdrantSparseVectorName: {},
+				qdrantVectorName: {},
 			}),
 		})
 	}
@@ -151,9 +154,11 @@ func (db *Qdrant) AddCollection(ctx context.Context, name string, dimensions int
 
 	return db.createCollection(ctx, name, &qdrant.CreateCollection{
 		CollectionName: name,
-		VectorsConfig: qdrant.NewVectorsConfig(&qdrant.VectorParams{
-			Size:     uint64(dimensions),
-			Distance: qdrantDistance,
+		VectorsConfig: qdrant.NewVectorsConfigMap(map[string]*qdrant.VectorParams{
+			qdrantVectorName: {
+				Size:     uint64(dimensions),
+				Distance: qdrantDistance,
+			},
 		}),
 		QuantizationConfig: quantizationConfig,
 	})
@@ -306,12 +311,13 @@ func (db *Qdrant) AddVectors(ctx context.Context, collection string, vectors []V
 	}
 	points := make([]*qdrant.PointStruct, 0, len(vectors))
 	for _, vector := range vectors {
-		values := qdrant.NewVectorsDense(vector.Values)
+		var value *qdrant.Vector
 		if len(vector.Indices) > 0 {
-			values = qdrant.NewVectorsMap(map[string]*qdrant.Vector{
-				qdrantSparseVectorName: qdrant.NewVectorSparse(vector.Indices, vector.Values),
-			})
+			value = qdrant.NewVectorSparse(vector.Indices, vector.Values)
+		} else {
+			value = qdrant.NewVectorDense(vector.Values)
 		}
+		values := qdrant.NewVectorsMap(map[string]*qdrant.Vector{qdrantVectorName: value})
 		points = append(points, &qdrant.PointStruct{
 			Id: qdrant.NewID(uuid.NewMD5(uuid.NameSpaceURL, []byte(vector.Id)).String()),
 			Payload: map[string]*qdrant.Value{
@@ -360,11 +366,11 @@ func (db *Qdrant) QueryVectors(ctx context.Context, collection string, q Vector,
 	}
 	if len(q.Indices) > 0 {
 		request.Query = qdrant.NewQuerySparse(q.Indices, q.Values)
-		request.Using = new(qdrantSparseVectorName)
-		request.WithVectors = qdrant.NewWithVectorsInclude(qdrantSparseVectorName)
 	} else {
 		request.Query = qdrant.NewQueryDense(q.Values)
 	}
+	request.Using = new(qdrantVectorName)
+	request.WithVectors = qdrant.NewWithVectorsInclude(qdrantVectorName)
 	if len(categories) > 0 {
 		request.Filter.Must = append(request.Filter.Must,
 			qdrant.NewMatchKeywords(qdrantPayloadCategoriesKey, categories...))
@@ -440,24 +446,15 @@ func qdrantCategories(payload map[string]*qdrant.Value) []string {
 func qdrantVector(output *qdrant.VectorsOutput) Vector {
 	if output != nil {
 		if named := output.GetVectors(); named != nil {
-			if vector := named.GetVectors()[qdrantSparseVectorName]; vector != nil {
+			if vector := named.GetVectors()[qdrantVectorName]; vector != nil {
 				if sparse := vector.GetSparseVector(); sparse != nil {
 					return Vector{Indices: sparse.GetIndices(), Values: sparse.GetValues()}
+				}
+				if dense := vector.GetDenseVector(); dense != nil {
+					return Vector{Values: dense.GetData()}
 				}
 			}
 		}
 	}
-	return Vector{Values: qdrantVectorOutput(output)}
-}
-
-func qdrantVectorOutput(output *qdrant.VectorsOutput) []float32 {
-	if output == nil {
-		return nil
-	}
-
-	vector := output.GetVector()
-	if vector == nil {
-		return nil
-	}
-	return vector.GetDenseVector().GetData()
+	return Vector{}
 }
