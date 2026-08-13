@@ -82,6 +82,7 @@ type CollectionInfo struct {
 type Vector struct {
 	Id         string
 	Vector     []float32
+	Indices    []uint32
 	IsHidden   bool      `json:"-"`
 	Categories []string  `json:"-" gorm:"type:text;serializer:json"`
 	Timestamp  time.Time `json:"-"`
