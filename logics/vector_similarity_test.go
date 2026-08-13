@@ -132,7 +132,7 @@ func TestItemToItemUsesVectorDatabase(t *testing.T) {
 			}
 			require.NoError(t, recommender.Finish())
 
-			collection := vectors.ItemToItemCollection(test.config.Name)
+			collection := vectors.ItemToItemCollection(test.config.Name, test.config.Type)
 			info, err := database.DescribeCollection(ctx, collection)
 			require.NoError(t, err)
 			require.Equal(t, test.dimension, info.Dimension)
@@ -242,7 +242,7 @@ func TestUserToUserUsesVectorDatabase(t *testing.T) {
 			}
 			require.NoError(t, recommender.Finish())
 
-			collection := vectors.UserToUserCollection(test.config.Name)
+			collection := vectors.UserToUserCollection(test.config.Name, test.config.Type)
 			info, err := database.DescribeCollection(ctx, collection)
 			require.NoError(t, err)
 			require.Equal(t, test.dimension, info.Dimension)

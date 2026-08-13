@@ -999,8 +999,8 @@ func (suite *ServerTestSuite) TestEmbeddingItemToItemRecommend() {
 		{ItemId: "far", Labels: map[string]any{"embedding": []float32{10, 0}}, Categories: []string{"movie"}, Timestamp: now},
 		{ItemId: "hidden", Labels: map[string]any{"embedding": []float32{0.05, 0}}, Categories: []string{"movie"}, IsHidden: true, Timestamp: now},
 	}))
-	suite.NoError(suite.VectorClient.AddCollection(ctx, vectors.ItemToItemCollection("embedding"), 2, vectors.Euclidean, vectors.VectorConfig{}))
-	suite.NoError(suite.VectorClient.AddVectors(ctx, vectors.ItemToItemCollection("embedding"), []vectors.Vector{
+	suite.NoError(suite.VectorClient.AddCollection(ctx, vectors.ItemToItemCollection("embedding", "embedding"), 2, vectors.Euclidean, vectors.VectorConfig{}))
+	suite.NoError(suite.VectorClient.AddVectors(ctx, vectors.ItemToItemCollection("embedding", "embedding"), []vectors.Vector{
 		{Id: "source", Values: []float32{0, 0}, Timestamp: now},
 		{Id: "near", Values: []float32{0.1, 0}, Categories: []string{"movie"}, Timestamp: now},
 		{Id: "far", Values: []float32{10, 0}, Categories: []string{"movie"}, Timestamp: now},

@@ -50,12 +50,12 @@ func CollaborativeFilteringCollection(id int64) string {
 	return CollaborativeFiltering + "_" + strconv.FormatInt(id, 10)
 }
 
-func ItemToItemCollection(name string) string {
-	return ItemToItemPrefix + "_" + name
+func ItemToItemCollection(name, similarityType string) string {
+	return ItemToItemPrefix + "_" + name + "_" + similarityType
 }
 
-func UserToUserCollection(name string) string {
-	return UserToUserPrefix + "_" + name
+func UserToUserCollection(name, similarityType string) string {
+	return UserToUserPrefix + "_" + name + "_" + similarityType
 }
 
 func (q QuantizationType) String() string {
