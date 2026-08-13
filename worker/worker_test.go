@@ -66,7 +66,7 @@ func (suite *WorkerTestSuite) SetupSuite() {
 	suite.NoError(err)
 	suite.CacheClient, err = cache.Open(fmt.Sprintf("sqlite://%s/cache.db", suite.T().TempDir()), "")
 	suite.NoError(err)
-	suite.VectorClient, err = vectors.Open(fmt.Sprintf("zvec://%s/vectors", suite.T().TempDir()), "")
+	suite.VectorClient, err = vectors.Open(fmt.Sprintf("xvec://%s/vectors", suite.T().TempDir()), "")
 	suite.NoError(err)
 	// init database
 	err = suite.DataClient.Init()

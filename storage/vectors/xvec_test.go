@@ -22,28 +22,24 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
-type ZvecTestSuite struct {
+type XvecTestSuite struct {
 	vectorsTestSuite
 	root string
 }
 
-func (suite *ZvecTestSuite) TestSparse() {
-	suite.T().Skip("sparse vectors are not supported")
-}
-
-func (suite *ZvecTestSuite) SetupSuite() {
+func (suite *XvecTestSuite) SetupSuite() {
 	log.SetTestLogger(suite.T())
 	suite.root = suite.T().TempDir()
 	var err error
-	suite.Database, err = Open(storage.ZvecPrefix+suite.root, "gorse_")
+	suite.Database, err = Open(storage.XvecPrefix+suite.root, "gorse_")
 	suite.Require().NoError(err)
 	suite.Require().NoError(suite.Database.Init())
 }
 
-func (suite *ZvecTestSuite) TearDownSuite() {
+func (suite *XvecTestSuite) TearDownSuite() {
 	suite.NoError(suite.Database.Close())
 }
 
-func TestZvec(t *testing.T) {
-	suite.Run(t, new(ZvecTestSuite))
+func TestXvec(t *testing.T) {
+	suite.Run(t, new(XvecTestSuite))
 }
