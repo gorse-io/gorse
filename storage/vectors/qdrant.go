@@ -291,7 +291,7 @@ func (db *Qdrant) AddVectors(ctx context.Context, collection string, vectors []V
 				qdrantPayloadIdKey:         qdrant.NewValueString(vector.Id),
 				qdrantPayloadTimestampKey:  qdrant.NewValueInt(vector.Timestamp.UnixMilli()),
 			},
-			Vectors: qdrant.NewVectorsDense(vector.Vector),
+			Vectors: qdrant.NewVectorsDense(vector.Values),
 		})
 	}
 	_, err := db.client.Upsert(ctx, &qdrant.UpsertPoints{
@@ -316,13 +316,13 @@ func (db *Qdrant) DeleteVectors(ctx context.Context, collection string, timestam
 	return errors.Trace(err)
 }
 
-func (db *Qdrant) QueryVectors(ctx context.Context, collection string, q []float32, categories []string, topK int) ([]ScoredVector, error) {
+func (db *Qdrant) QueryVectors(ctx context.Context, collection string, q Vector, categories []string, topK int) ([]ScoredVector, error) {
 	if topK <= 0 {
 		return []ScoredVector{}, nil
 	}
 	request := &qdrant.QueryPoints{
 		CollectionName: collection,
-		Query:          qdrant.NewQueryDense(q),
+		Query:          qdrant.NewQueryDense(q.Values),
 		Limit:          new(uint64(topK)),
 		WithPayload:    qdrant.NewWithPayloadEnable(true),
 		WithVectors:    qdrant.NewWithVectorsEnable(true),
@@ -343,7 +343,7 @@ func (db *Qdrant) QueryVectors(ctx context.Context, collection string, q []float
 		results = append(results, ScoredVector{
 			Vector: Vector{
 				Id:         qdrantId(scored.GetPayload()),
-				Vector:     qdrantVectorOutput(scored.GetVectors()),
+				Values:     qdrantVectorOutput(scored.GetVectors()),
 				IsHidden:   qdrantHidden(scored.GetPayload()),
 				Categories: qdrantCategories(scored.GetPayload()),
 			},

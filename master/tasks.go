@@ -1068,7 +1068,7 @@ func (m *Master) trainCollaborativeFiltering(parent context.Context, trainSet, t
 				item := items[i]
 				itemVectors = append(itemVectors, vectors.Vector{
 					Id:         item.ItemId,
-					Vector:     collaborativeFilteringModel.GetItemFactor(int32(i)),
+					Values:     collaborativeFilteringModel.GetItemFactor(int32(i)),
 					IsHidden:   item.IsHidden,
 					Categories: item.Categories,
 					Timestamp:  time.UnixMilli(collaborativeFilteringModelId),

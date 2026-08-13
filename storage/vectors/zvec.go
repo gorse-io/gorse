@@ -292,7 +292,7 @@ func (db *Zvec) AddVectors(ctx context.Context, name string, vectors []Vector) e
 	documents := make([]zvecdb.Document, len(vectors))
 	for i, vector := range vectors {
 		document := zvecdb.Document{PrimaryKey: vector.Id, Fields: map[string]any{
-			zvecVectorField:     zvecdb.VectorFP32(vector.Vector),
+			zvecVectorField:     zvecdb.VectorFP32(vector.Values),
 			zvecCategoriesField: zvecdb.StringArray(vector.Categories),
 			zvecTimestampField:  vector.Timestamp.UnixMilli(),
 			zvecHiddenField:     vector.IsHidden,
@@ -314,7 +314,7 @@ func (db *Zvec) DeleteVectors(ctx context.Context, name string, timestamp time.T
 	return errors.Trace(collection.DeleteByFilter(ctx, fmt.Sprintf("%s < %d", zvecTimestampField, timestamp.UnixMilli())))
 }
 
-func (db *Zvec) QueryVectors(ctx context.Context, name string, q []float32, categories []string, topK int) ([]ScoredVector, error) {
+func (db *Zvec) QueryVectors(ctx context.Context, name string, q Vector, categories []string, topK int) ([]ScoredVector, error) {
 	if topK <= 0 {
 		return []ScoredVector{}, nil
 	}
@@ -333,7 +333,7 @@ func (db *Zvec) QueryVectors(ctx context.Context, name string, q []float32, cate
 	}
 	documents, err := collection.Query(ctx, zvecdb.VectorQuery{
 		Field:       zvecVectorField,
-		DenseVector: zvecdb.VectorFP32(q),
+		DenseVector: zvecdb.VectorFP32(q.Values),
 		TopK:        topK,
 		Filter:      filter,
 		Projection: zvecdb.Projection{
@@ -365,7 +365,7 @@ func (db *Zvec) QueryVectors(ctx context.Context, name string, q []float32, cate
 			result.IsHidden = value.(bool)
 		}
 		if value, found := document.Field(zvecVectorField); found {
-			result.Vector.Vector = []float32(value.(zvecdb.VectorFP32))
+			result.Vector.Values = []float32(value.(zvecdb.VectorFP32))
 		}
 		results[i] = result
 	}

@@ -411,7 +411,7 @@ func (p *Pipeline) updateCollaborativeRecommend(
 	scoredVectors, err := p.VectorClient.QueryVectors(
 		ctx,
 		vectors.CollaborativeFilteringCollection(matrixFactorizationID),
-		userEmbedding,
+		vectors.Vector{Values: userEmbedding},
 		nil,
 		p.Config.Recommend.CacheSize+excludeSet.Cardinality(),
 	)

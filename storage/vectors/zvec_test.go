@@ -27,6 +27,10 @@ type ZvecTestSuite struct {
 	root string
 }
 
+func (suite *ZvecTestSuite) TestSparse() {
+	suite.T().Skip("sparse vectors are not supported")
+}
+
 func (suite *ZvecTestSuite) SetupSuite() {
 	log.SetTestLogger(suite.T())
 	suite.root = suite.T().TempDir()

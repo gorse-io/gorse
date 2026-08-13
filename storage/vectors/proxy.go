@@ -116,7 +116,7 @@ func (p *ProxyServer) AddVectors(ctx context.Context, request *protocol.AddVecto
 		}
 		vectors[i] = Vector{
 			Id:         vector.GetId(),
-			Vector:     vector.GetValues(),
+			Values:     vector.GetValues(),
 			IsHidden:   vector.GetIsHidden(),
 			Categories: vector.GetCategories(),
 			Timestamp:  timestamp,
@@ -142,7 +142,7 @@ func (p *ProxyServer) DeleteVectors(ctx context.Context, request *protocol.Delet
 }
 
 func (p *ProxyServer) QueryVectors(ctx context.Context, request *protocol.QueryVectorsRequest) (*protocol.QueryVectorsResponse, error) {
-	results, err := p.database.QueryVectors(ctx, request.GetCollection(), request.GetQuery(), request.GetCategories(), int(request.GetTopK()))
+	results, err := p.database.QueryVectors(ctx, request.GetCollection(), Vector{Values: request.GetQuery()}, request.GetCategories(), int(request.GetTopK()))
 	if err != nil {
 		return nil, err
 	}
@@ -151,7 +151,7 @@ func (p *ProxyServer) QueryVectors(ctx context.Context, request *protocol.QueryV
 		pbVectors[i] = &protocol.ScoredVector{
 			Vector: &protocol.Vector{
 				Id:         result.Id,
-				Values:     result.Vector.Vector,
+				Values:     result.Vector.Values,
 				IsHidden:   result.IsHidden,
 				Categories: result.Categories,
 			},
@@ -248,7 +248,7 @@ func (p ProxyClient) AddVectors(ctx context.Context, collection string, vectors 
 	for i, vector := range vectors {
 		pbVectors[i] = &protocol.Vector{
 			Id:         vector.Id,
-			Values:     vector.Vector,
+			Values:     vector.Values,
 			IsHidden:   vector.IsHidden,
 			Categories: vector.Categories,
 			Timestamp:  timestamppb.New(vector.Timestamp),
@@ -269,10 +269,10 @@ func (p ProxyClient) DeleteVectors(ctx context.Context, collection string, times
 	return err
 }
 
-func (p ProxyClient) QueryVectors(ctx context.Context, collection string, q []float32, categories []string, topK int) ([]ScoredVector, error) {
+func (p ProxyClient) QueryVectors(ctx context.Context, collection string, q Vector, categories []string, topK int) ([]ScoredVector, error) {
 	resp, err := p.VectorStoreClient.QueryVectors(ctx, &protocol.QueryVectorsRequest{
 		Collection: collection,
-		Query:      q,
+		Query:      q.Values,
 		Categories: categories,
 		TopK:       int32(topK),
 	})
@@ -285,7 +285,7 @@ func (p ProxyClient) QueryVectors(ctx context.Context, collection string, q []fl
 		results[i] = ScoredVector{
 			Vector: Vector{
 				Id:         vector.GetId(),
-				Vector:     vector.GetValues(),
+				Values:     vector.GetValues(),
 				IsHidden:   vector.GetIsHidden(),
 				Categories: vector.GetCategories(),
 			},

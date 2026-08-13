@@ -81,7 +81,7 @@ type CollectionInfo struct {
 
 type Vector struct {
 	Id         string
-	Vector     []float32
+	Values     []float32
 	Indices    []uint32
 	IsHidden   bool      `json:"-"`
 	Categories []string  `json:"-" gorm:"type:text;serializer:json"`
@@ -105,7 +105,7 @@ type Database interface {
 	CountVectors(ctx context.Context, collection string) (int64, error)
 	AddVectors(ctx context.Context, collection string, vectors []Vector) error
 	DeleteVectors(ctx context.Context, collection string, timestamp time.Time) error
-	QueryVectors(ctx context.Context, collection string, q []float32, categories []string, topK int) ([]ScoredVector, error)
+	QueryVectors(ctx context.Context, collection string, q Vector, categories []string, topK int) ([]ScoredVector, error)
 }
 
 // Creator creates a database instance.
