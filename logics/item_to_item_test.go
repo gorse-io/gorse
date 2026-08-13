@@ -158,6 +158,31 @@ func (suite *ItemToItemTestSuite) TestHidden() {
 	}
 }
 
+func (suite *ItemToItemTestSuite) TestIDFInnerProduct() {
+	idf := IDF[dataset.ID]{0, 1, 2, 3, 4}
+
+	suite.InDelta(5, idf.similarity([]dataset.ID{1, 2, 3}, []dataset.ID{2, 3, 4}), 1e-6)
+	suite.InDelta(0, idf.similarity([]dataset.ID{1}, []dataset.ID{4}), 1e-6)
+}
+
+func (suite *ItemToItemTestSuite) TestTagsInnerProductScores() {
+	item2item, err := newTagsItemToItem(config.ItemToItemConfig{
+		Column: "item.Labels",
+	}, 2, time.Now(), []float32{0, 1, 2})
+	suite.NoError(err)
+
+	item2item.Push(&data.Item{ItemId: "query", Labels: []dataset.ID{1, 2}}, nil)
+	item2item.Push(&data.Item{ItemId: "idf-2", Labels: []dataset.ID{2}}, nil)
+	item2item.Push(&data.Item{ItemId: "idf-1", Labels: []dataset.ID{1}}, nil)
+
+	scores := item2item.PopAll(0)
+	suite.Require().Len(scores, 2)
+	suite.Equal("idf-2", scores[0].Id)
+	suite.InDelta(2, scores[0].Score, 1e-6)
+	suite.Equal("idf-1", scores[1].Id)
+	suite.InDelta(1, scores[1].Score, 1e-6)
+}
+
 func (suite *ItemToItemTestSuite) TestTags() {
 	timestamp := time.Now()
 	idf := make([]float32, 101)

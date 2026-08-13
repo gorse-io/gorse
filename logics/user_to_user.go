@@ -70,13 +70,14 @@ func NewUserToUser(cfg config.UserToUserConfig, n int, timestamp time.Time, opts
 }
 
 type baseUserToUser[T any] struct {
-	name       string
-	n          int
-	timestamp  time.Time
-	columnFunc *vm.Program
-	index      *ann.HNSW[T]
-	users      []*data.User
-	usersLock  sync.Mutex
+	name         string
+	n            int
+	timestamp    time.Time
+	columnFunc   *vm.Program
+	index        *ann.HNSW[T]
+	users        []*data.User
+	usersLock    sync.Mutex
+	innerProduct bool
 }
 
 func (b *baseUserToUser[T]) Users() []*data.User {
@@ -88,18 +89,32 @@ func (b *baseUserToUser[T]) Timestamp() time.Time {
 }
 
 func (b *baseUserToUser[T]) PopAll(i int) []cache.Score {
-	scores, err := b.index.SearchIndex(i, b.n+1, true)
+	results, err := b.index.SearchIndex(i, b.n+1, !b.innerProduct)
 	if err != nil {
 		log.Logger().Error("failed to search index", zap.Error(err))
 		return nil
 	}
-	return lo.Map(scores, func(v lo.Tuple2[int, float32], _ int) cache.Score {
-		return cache.Score{
-			Id:        b.users[v.A].UserId,
-			Score:     1.0 / (1.0 + float64(v.B)),
-			Timestamp: b.timestamp,
+	scores := make([]cache.Score, 0, b.n)
+	for _, v := range results {
+		if b.innerProduct {
+			if v.A == i || v.B >= 0 {
+				continue
+			}
 		}
-	})
+		score := 1.0 / (1.0 + float64(v.B))
+		if b.innerProduct {
+			score = -float64(v.B)
+		}
+		scores = append(scores, cache.Score{
+			Id:        b.users[v.A].UserId,
+			Score:     score,
+			Timestamp: b.timestamp,
+		})
+		if len(scores) == b.n {
+			break
+		}
+	}
+	return scores
 }
 
 type embeddingUserToUser struct {
@@ -172,11 +187,12 @@ func newTagsUserToUser(cfg config.UserToUserConfig, n int, timestamp time.Time, 
 	}
 	t := &tagsUserToUser{IDF: idf}
 	t.baseUserToUser = baseUserToUser[[]dataset.ID]{
-		name:       cfg.Name,
-		n:          n,
-		timestamp:  timestamp,
-		columnFunc: columnFunc,
-		index:      ann.NewHNSW[[]dataset.ID](t.distance),
+		name:         cfg.Name,
+		n:            n,
+		timestamp:    timestamp,
+		columnFunc:   columnFunc,
+		index:        ann.NewHNSW[[]dataset.ID](t.distance),
+		innerProduct: true,
 	}
 	return t, nil
 }
@@ -216,10 +232,11 @@ func newItemsUserToUser(cfg config.UserToUserConfig, n int, timestamp time.Time,
 	}
 	i := &itemsUserToUser{IDF: idf}
 	i.baseUserToUser = baseUserToUser[[]int32]{
-		name:      cfg.Name,
-		n:         n,
-		timestamp: timestamp,
-		index:     ann.NewHNSW[[]int32](i.distance),
+		name:         cfg.Name,
+		n:            n,
+		timestamp:    timestamp,
+		index:        ann.NewHNSW[[]int32](i.distance),
+		innerProduct: true,
 	}
 	return i, nil
 }
@@ -249,10 +266,11 @@ func newAutoUserToUser(cfg config.UserToUserConfig, n int, timestamp time.Time, 
 		iIDF: iIDF,
 	}
 	a.baseUserToUser = baseUserToUser[lo.Tuple2[[]dataset.ID, []int32]]{
-		name:      cfg.Name,
-		n:         n,
-		timestamp: timestamp,
-		index:     ann.NewHNSW[lo.Tuple2[[]dataset.ID, []int32]](a.distance),
+		name:         cfg.Name,
+		n:            n,
+		timestamp:    timestamp,
+		index:        ann.NewHNSW[lo.Tuple2[[]dataset.ID, []int32]](a.distance),
+		innerProduct: true,
 	}
 	return a, nil
 }

@@ -61,6 +61,22 @@ func (suite *UserToUserTestSuite) TestEmbedding() {
 	}
 }
 
+func (suite *UserToUserTestSuite) TestIDFInnerProductScores() {
+	user2user, err := newItemsUserToUser(config.UserToUserConfig{}, 2, time.Now(), []float32{0, 1, 2})
+	suite.NoError(err)
+
+	user2user.Push(&data.User{UserId: "query"}, []int32{1, 2})
+	user2user.Push(&data.User{UserId: "idf-2"}, []int32{2})
+	user2user.Push(&data.User{UserId: "idf-1"}, []int32{1})
+
+	scores := user2user.PopAll(0)
+	suite.Require().Len(scores, 2)
+	suite.Equal("idf-2", scores[0].Id)
+	suite.InDelta(2, scores[0].Score, 1e-6)
+	suite.Equal("idf-1", scores[1].Id)
+	suite.InDelta(1, scores[1].Score, 1e-6)
+}
+
 func (suite *UserToUserTestSuite) TestTags() {
 	timestamp := time.Now()
 	idf := make([]float32, 101)
