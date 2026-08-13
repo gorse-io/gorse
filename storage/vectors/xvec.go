@@ -28,7 +28,7 @@ import (
 	"time"
 
 	"github.com/gorse-io/gorse/storage"
-	xvecdb "github.com/gorse-io/xvec"
+	"github.com/gorse-io/xvec"
 	"github.com/juju/errors"
 )
 
@@ -53,7 +53,7 @@ func init() {
 type Xvec struct {
 	root        string
 	tablePrefix string
-	collections sync.Map // map[string]*xvecdb.Collection
+	collections sync.Map // map[string]*xvec.Collection
 	closed      atomic.Bool
 }
 
@@ -79,7 +79,7 @@ func (db *Xvec) Init() error {
 	}
 	type openedCollection struct {
 		name       string
-		collection *xvecdb.Collection
+		collection *xvec.Collection
 	}
 	opened := make([]openedCollection, 0, len(entries))
 	cleanup := func() {
@@ -104,7 +104,7 @@ func (db *Xvec) Init() error {
 		if name == "" {
 			continue
 		}
-		collection, err := xvecdb.Open(context.Background(), filepath.Join(db.root, entry.Name()), xvecdb.CollectionOptions{})
+		collection, err := xvec.Open(context.Background(), filepath.Join(db.root, entry.Name()), xvec.CollectionOptions{})
 		if err != nil {
 			cleanup()
 			return errors.Trace(err)
@@ -127,7 +127,7 @@ func (db *Xvec) Optimize(ctx context.Context, name string) error {
 	if err != nil {
 		return err
 	}
-	return errors.Trace(collection.Optimize(ctx, xvecdb.OptimizeOptions{}))
+	return errors.Trace(collection.Optimize(ctx, xvec.OptimizeOptions{}))
 }
 
 func (db *Xvec) Close() error {
@@ -138,7 +138,7 @@ func (db *Xvec) Close() error {
 	var errs []error
 	db.collections.Range(func(key, value any) bool {
 		if db.collections.CompareAndDelete(key, value) {
-			if err := value.(*xvecdb.Collection).Close(); err != nil {
+			if err := value.(*xvec.Collection).Close(); err != nil {
 				errs = append(errs, err)
 			}
 		}
@@ -175,11 +175,11 @@ func (db *Xvec) DescribeCollection(ctx context.Context, name string) (*Collectio
 	if !found {
 		return nil, errors.Errorf("xvec collection %s has no vector field", name)
 	}
-	var metric xvecdb.MetricType
+	var metric xvec.MetricType
 	switch params := field.EffectiveIndex().(type) {
-	case xvecdb.DiskANNIndexParams:
+	case xvec.DiskANNIndexParams:
 		metric = params.Metric
-	case xvecdb.FlatIndexParams:
+	case xvec.FlatIndexParams:
 		metric = params.Metric
 	default:
 		return nil, errors.Errorf("xvec collection %s uses an unsupported vector index", name)
@@ -207,7 +207,7 @@ func (db *Xvec) AddCollection(ctx context.Context, name string, dimensions int, 
 	if _, found := db.collections.Load(name); found {
 		return errors.AlreadyExistsf("collection %s", name)
 	}
-	collection, err := xvecdb.CreateAndOpen(ctx, filepath.Join(db.root, physicalName), schema, xvecdb.CollectionOptions{})
+	collection, err := xvec.CreateAndOpen(ctx, filepath.Join(db.root, physicalName), schema, xvec.CollectionOptions{})
 	if err != nil {
 		return errors.Trace(err)
 	}
@@ -224,38 +224,38 @@ func (db *Xvec) AddCollection(ctx context.Context, name string, dimensions int, 
 	return nil
 }
 
-func (db *Xvec) collectionSchema(ctx context.Context, name string, dimensions int, distance Distance, config VectorConfig) (xvecdb.CollectionSchema, error) {
+func (db *Xvec) collectionSchema(ctx context.Context, name string, dimensions int, distance Distance, config VectorConfig) (xvec.CollectionSchema, error) {
 	if err := ctx.Err(); err != nil {
-		return xvecdb.CollectionSchema{}, errors.Trace(err)
+		return xvec.CollectionSchema{}, errors.Trace(err)
 	}
 	if dimensions < 0 || uint64(dimensions) > uint64(math.MaxUint32) {
-		return xvecdb.CollectionSchema{}, errors.Errorf("invalid vector dimension %d", dimensions)
+		return xvec.CollectionSchema{}, errors.Errorf("invalid vector dimension %d", dimensions)
 	}
 	if config.Type != QuantizationNone {
-		return xvecdb.CollectionSchema{}, errors.NotSupportedf("quantization type %s for xvec", config.Type)
+		return xvec.CollectionSchema{}, errors.NotSupportedf("quantization type %s for xvec", config.Type)
 	}
 	metric, err := distanceToXvec(distance)
 	if err != nil {
-		return xvecdb.CollectionSchema{}, err
+		return xvec.CollectionSchema{}, err
 	}
-	var vectorField xvecdb.FieldSchema
+	var vectorField xvec.FieldSchema
 	if dimensions == 0 {
 		if distance != Dot {
-			return xvecdb.CollectionSchema{}, errors.NotSupportedf("distance method for sparse vector")
+			return xvec.CollectionSchema{}, errors.NotSupportedf("distance method for sparse vector")
 		}
-		vectorField = xvecdb.FieldSchema{Name: xvecVectorField, DataType: xvecdb.DataTypeSparseVectorFP32, Index: xvecdb.NewFlatIndexParams(metric)}
+		vectorField = xvec.FieldSchema{Name: xvecVectorField, DataType: xvec.DataTypeSparseVectorFP32, Index: xvec.NewFlatIndexParams(metric)}
 	} else {
-		vectorField = xvecdb.FieldSchema{Name: xvecVectorField, DataType: xvecdb.DataTypeVectorFP32, Dimension: uint32(dimensions), Index: xvecdb.NewDiskANNIndexParams(metric)}
+		vectorField = xvec.FieldSchema{Name: xvecVectorField, DataType: xvec.DataTypeVectorFP32, Dimension: uint32(dimensions), Index: xvec.NewDiskANNIndexParams(metric)}
 	}
 	physicalName := db.tablePrefix + name
-	schema := xvecdb.NewCollectionSchema(physicalName,
-		xvecdb.FieldSchema{Name: xvecCategoriesField, DataType: xvecdb.DataTypeArrayString, Index: xvecdb.NewInvertIndexParams()},
-		xvecdb.FieldSchema{Name: xvecTimestampField, DataType: xvecdb.DataTypeInt64, Index: xvecdb.NewInvertIndexParams()},
-		xvecdb.NewField(xvecHiddenField, xvecdb.DataTypeBool),
+	schema := xvec.NewCollectionSchema(physicalName,
+		xvec.FieldSchema{Name: xvecCategoriesField, DataType: xvec.DataTypeArrayString, Index: xvec.NewInvertIndexParams()},
+		xvec.FieldSchema{Name: xvecTimestampField, DataType: xvec.DataTypeInt64, Index: xvec.NewInvertIndexParams()},
+		xvec.NewField(xvecHiddenField, xvec.DataTypeBool),
 		vectorField,
 	)
 	if err := schema.Validate(); err != nil {
-		return xvecdb.CollectionSchema{}, errors.Trace(err)
+		return xvec.CollectionSchema{}, errors.Trace(err)
 	}
 	return schema, nil
 }
@@ -268,7 +268,7 @@ func (db *Xvec) DeleteCollection(ctx context.Context, name string) error {
 	if !found {
 		return errors.NotFoundf("collection %s", name)
 	}
-	collection := value.(*xvecdb.Collection)
+	collection := value.(*xvec.Collection)
 	if err := collection.Destroy(ctx); err != nil {
 		if !db.closed.Load() {
 			db.collections.LoadOrStore(name, collection)
@@ -302,15 +302,15 @@ func (db *Xvec) AddVectors(ctx context.Context, name string, vectors []Vector) e
 		return err
 	}
 	schema := collection.Schema()
-	documents := make([]xvecdb.Document, len(vectors))
+	documents := make([]xvec.Document, len(vectors))
 	for i, vector := range vectors {
-		var value any = xvecdb.VectorFP32(vector.Values)
+		var value any = xvec.VectorFP32(vector.Values)
 		if len(vector.Indices) > 0 {
-			value = xvecdb.SparseVectorFP32{Indices: vector.Indices, Values: vector.Values}
+			value = xvec.SparseVectorFP32{Indices: vector.Indices, Values: vector.Values}
 		}
-		document := xvecdb.Document{PrimaryKey: vector.Id, Fields: map[string]any{
+		document := xvec.Document{PrimaryKey: vector.Id, Fields: map[string]any{
 			xvecVectorField:     value,
-			xvecCategoriesField: xvecdb.StringArray(vector.Categories),
+			xvecCategoriesField: xvec.StringArray(vector.Categories),
 			xvecTimestampField:  vector.Timestamp.UnixMilli(),
 			xvecHiddenField:     vector.IsHidden,
 		}}
@@ -348,21 +348,21 @@ func (db *Xvec) QueryVectors(ctx context.Context, name string, q Vector, categor
 		}
 		filter += fmt.Sprintf(" AND %s CONTAIN_ANY (%s)", xvecCategoriesField, strings.Join(quoted, ", "))
 	}
-	query := xvecdb.VectorQuery{
+	query := xvec.VectorQuery{
 		Field:  xvecVectorField,
 		TopK:   topK,
 		Filter: filter,
-		Projection: xvecdb.Projection{
+		Projection: xvec.Projection{
 			OutputFields:   []string{xvecCategoriesField, xvecTimestampField, xvecHiddenField},
 			IncludeVectors: true,
 		},
 	}
 	if len(q.Indices) > 0 {
-		query.SparseVector = xvecdb.SparseVectorFP32{Indices: q.Indices, Values: q.Values}
-		query.Params = xvecdb.NewFlatQueryParams()
+		query.SparseVector = xvec.SparseVectorFP32{Indices: q.Indices, Values: q.Values}
+		query.Params = xvec.NewFlatQueryParams()
 	} else {
-		query.DenseVector = xvecdb.VectorFP32(q.Values)
-		query.Params = xvecdb.NewDiskANNQueryParams()
+		query.DenseVector = xvec.VectorFP32(q.Values)
+		query.Params = xvec.NewDiskANNQueryParams()
 	}
 	documents, err := collection.Query(ctx, query)
 	if err != nil {
@@ -382,7 +382,7 @@ func (db *Xvec) QueryVectors(ctx context.Context, name string, q Vector, categor
 			result.Score = -result.Score
 		}
 		if value, found := document.Field(xvecCategoriesField); found {
-			result.Categories = []string(value.(xvecdb.StringArray))
+			result.Categories = []string(value.(xvec.StringArray))
 		}
 		if value, found := document.Field(xvecTimestampField); found {
 			result.Timestamp = time.UnixMilli(value.(int64))
@@ -392,9 +392,9 @@ func (db *Xvec) QueryVectors(ctx context.Context, name string, q Vector, categor
 		}
 		if value, found := document.Field(xvecVectorField); found {
 			switch vector := value.(type) {
-			case xvecdb.VectorFP32:
+			case xvec.VectorFP32:
 				result.Vector.Values = []float32(vector)
-			case xvecdb.SparseVectorFP32:
+			case xvec.SparseVectorFP32:
 				result.Vector.Indices = vector.Indices
 				result.Vector.Values = vector.Values
 			}
@@ -404,7 +404,7 @@ func (db *Xvec) QueryVectors(ctx context.Context, name string, q Vector, categor
 	return results, nil
 }
 
-func (db *Xvec) collection(name string) (*xvecdb.Collection, error) {
+func (db *Xvec) collection(name string) (*xvec.Collection, error) {
 	if db.closed.Load() {
 		return nil, errors.New("xvec database is closed")
 	}
@@ -412,29 +412,29 @@ func (db *Xvec) collection(name string) (*xvecdb.Collection, error) {
 	if !found {
 		return nil, errors.NotFoundf("collection %s", name)
 	}
-	return value.(*xvecdb.Collection), nil
+	return value.(*xvec.Collection), nil
 }
 
-func distanceToXvec(distance Distance) (xvecdb.MetricType, error) {
+func distanceToXvec(distance Distance) (xvec.MetricType, error) {
 	switch distance {
 	case Cosine:
-		return xvecdb.MetricTypeCosine, nil
+		return xvec.MetricTypeCosine, nil
 	case Euclidean:
-		return xvecdb.MetricTypeL2, nil
+		return xvec.MetricTypeL2, nil
 	case Dot:
-		return xvecdb.MetricTypeIP, nil
+		return xvec.MetricTypeIP, nil
 	default:
-		return xvecdb.MetricTypeUndefined, errors.NotSupportedf("distance method %v", distance)
+		return xvec.MetricTypeUndefined, errors.NotSupportedf("distance method %v", distance)
 	}
 }
 
-func xvecDistance(metric xvecdb.MetricType) (Distance, error) {
+func xvecDistance(metric xvec.MetricType) (Distance, error) {
 	switch metric {
-	case xvecdb.MetricTypeCosine:
+	case xvec.MetricTypeCosine:
 		return Cosine, nil
-	case xvecdb.MetricTypeL2:
+	case xvec.MetricTypeL2:
 		return Euclidean, nil
-	case xvecdb.MetricTypeIP:
+	case xvec.MetricTypeIP:
 		return Dot, nil
 	default:
 		return Cosine, errors.NotSupportedf("xvec metric %s", metric)
