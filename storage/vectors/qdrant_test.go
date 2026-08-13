@@ -35,10 +35,6 @@ type QdrantTestSuite struct {
 	vectorsTestSuite
 }
 
-func (suite *QdrantTestSuite) TestSparse() {
-	suite.T().Skip("sparse vectors are not supported")
-}
-
 func (suite *QdrantTestSuite) SetupSuite() {
 	log.SetTestLogger(suite.T())
 	var err error
