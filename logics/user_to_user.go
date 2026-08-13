@@ -4,7 +4,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-// http://www.apache.org/licenses/LICENSE-2.0
+//     http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -15,6 +15,7 @@
 package logics
 
 import (
+	"context"
 	"slices"
 	"sync"
 	"time"
@@ -22,94 +23,147 @@ import (
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/expr-lang/expr"
 	"github.com/expr-lang/expr/vm"
-	"github.com/gorse-io/gorse/common/ann"
-	"github.com/gorse-io/gorse/common/floats"
+	"github.com/gorse-io/gorse/common/bfloats"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/dataset"
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
+	"github.com/gorse-io/gorse/storage/vectors"
 	"github.com/pkg/errors"
 	"github.com/samber/lo"
 	"go.uber.org/zap"
 )
 
 type UserToUserOptions struct {
-	TagsIDF  []float32
-	ItemsIDF []float32
+	Context      context.Context
+	VectorClient vectors.Database
+	VectorConfig vectors.VectorConfig
+	BatchSize    int
+	TagsIDF      []float32
+	ItemsIDF     []float32
 }
 
 type UserToUser interface {
 	Users() []*data.User
 	Push(user *data.User, feedback []int32)
+	Finish() error
 	PopAll(i int) []cache.Score
 	Timestamp() time.Time
 }
 
 func NewUserToUser(cfg config.UserToUserConfig, n int, timestamp time.Time, opts *UserToUserOptions) (UserToUser, error) {
+	if opts == nil || opts.VectorClient == nil {
+		return nil, errors.New("vector database is required for user-to-user")
+	}
 	switch cfg.Type {
 	case "embedding":
-		return newEmbeddingUserToUser(cfg, n, timestamp)
+		return newEmbeddingUserToUser(cfg, n, timestamp, opts)
 	case "tags":
-		if opts == nil || opts.TagsIDF == nil {
+		if opts.TagsIDF == nil {
 			return nil, errors.New("tags IDF is required for tags user-to-user")
 		}
-		return newTagsUserToUser(cfg, n, timestamp, opts.TagsIDF)
+		return newTagsUserToUser(cfg, n, timestamp, opts, opts.TagsIDF)
 	case "items":
-		if opts == nil || opts.ItemsIDF == nil {
+		if opts.ItemsIDF == nil {
 			return nil, errors.New("items IDF is required for items user-to-user")
 		}
-		return newItemsUserToUser(cfg, n, timestamp, opts.ItemsIDF)
+		return newItemsUserToUser(cfg, n, timestamp, opts, opts.ItemsIDF)
 	case "auto":
-		if opts == nil || opts.TagsIDF == nil || opts.ItemsIDF == nil {
+		if opts.TagsIDF == nil || opts.ItemsIDF == nil {
 			return nil, errors.New("tags IDF and items IDF are required for auto user-to-user")
 		}
-		return newAutoUserToUser(cfg, n, timestamp, opts.TagsIDF, opts.ItemsIDF)
+		return newAutoUserToUser(cfg, n, timestamp, opts, opts.TagsIDF, opts.ItemsIDF)
+	default:
+		return nil, errors.New("unknown user-to-user method")
 	}
-	return nil, errors.New("unknown user-to-user method")
 }
 
-type baseUserToUser[T any] struct {
-	name         string
+type baseUserToUser struct {
+	ctx          context.Context
 	n            int
 	timestamp    time.Time
-	columnFunc   *vm.Program
-	index        *ann.HNSW[T]
-	users        []*data.User
-	usersLock    sync.Mutex
-	innerProduct bool
+	collection   string
+	distance     vectors.Distance
+	scoreScale   float64
+	vectorClient vectors.Database
+	writer       *similarityVectorWriter
+
+	mu      sync.Mutex
+	users   []*data.User
+	queries []vectors.Vector
 }
 
-func (b *baseUserToUser[T]) Users() []*data.User {
-	return b.users
+func newBaseUserToUser(cfg config.UserToUserConfig, n int, timestamp time.Time, opts *UserToUserOptions, sparse bool) *baseUserToUser {
+	distance := vectors.Euclidean
+	if sparse {
+		distance = vectors.Dot
+	}
+	collection := vectors.UserToUserCollection(cfg.Name)
+	return &baseUserToUser{
+		ctx:          opts.Context,
+		n:            n,
+		timestamp:    timestamp,
+		collection:   collection,
+		distance:     distance,
+		scoreScale:   1,
+		vectorClient: opts.VectorClient,
+		writer: newSimilarityVectorWriter(opts.Context, opts.VectorClient, collection, distance,
+			opts.VectorConfig, timestamp, opts.BatchSize, sparse),
+	}
 }
 
-func (b *baseUserToUser[T]) Timestamp() time.Time {
+func (b *baseUserToUser) Users() []*data.User {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return slices.Clone(b.users)
+}
+
+func (b *baseUserToUser) Timestamp() time.Time {
 	return b.timestamp
 }
 
-func (b *baseUserToUser[T]) PopAll(i int) []cache.Score {
-	results, err := b.index.SearchIndex(i, b.n+1, !b.innerProduct)
+func (b *baseUserToUser) push(user *data.User, query vectors.Vector) {
+	stored := query
+	stored.Id = user.UserId
+	written := b.writer.Push(stored)
+	if !written && (!b.writer.sparse || len(query.Indices) > 0) {
+		return
+	}
+	b.mu.Lock()
+	b.users = append(b.users, user)
+	b.queries = append(b.queries, query)
+	b.mu.Unlock()
+}
+
+func (b *baseUserToUser) Finish() error {
+	return b.writer.Finish()
+}
+
+func (b *baseUserToUser) PopAll(i int) []cache.Score {
+	b.mu.Lock()
+	user := b.users[i]
+	query := b.queries[i]
+	b.mu.Unlock()
+	if len(query.Values) == 0 {
+		return []cache.Score{}
+	}
+	neighbors, err := b.vectorClient.QueryVectors(b.ctx, b.collection, query, nil, b.n+1)
 	if err != nil {
-		log.Logger().Error("failed to search index", zap.Error(err))
+		log.Logger().Error("failed to query user-to-user vectors",
+			zap.String("collection", b.collection), zap.String("user_id", user.UserId), zap.Error(err))
 		return nil
 	}
-	scores := make([]cache.Score, 0, b.n)
-	for _, v := range results {
-		if b.innerProduct {
-			if v.A == i || v.B >= 0 {
-				continue
-			}
+	scores := make([]cache.Score, 0, min(b.n, len(neighbors)))
+	for _, neighbor := range neighbors {
+		if neighbor.Id == user.UserId || b.distance == vectors.Dot && neighbor.Score <= 0 {
+			continue
 		}
-		score := 1.0 / (1.0 + float64(v.B))
-		if b.innerProduct {
-			score = -float64(v.B)
+		score := float64(neighbor.Score) * b.scoreScale
+		if b.distance == vectors.Euclidean {
+			score = 1 / (1 - float64(neighbor.Score))
 		}
-		scores = append(scores, cache.Score{
-			Id:        b.users[v.A].UserId,
-			Score:     score,
-			Timestamp: b.timestamp,
-		})
+		scores = append(scores, cache.Score{Id: neighbor.Id, Score: score, Timestamp: b.timestamp})
 		if len(scores) == b.n {
 			break
 		}
@@ -118,181 +172,95 @@ func (b *baseUserToUser[T]) PopAll(i int) []cache.Score {
 }
 
 type embeddingUserToUser struct {
-	baseUserToUser[[]float32]
-	dimension int
+	*baseUserToUser
+	columnFunc *vm.Program
 }
 
-func newEmbeddingUserToUser(cfg config.UserToUserConfig, n int, timestamp time.Time) (UserToUser, error) {
-	// Compile column expression
-	columnFunc, err := expr.Compile(cfg.Column, expr.Env(map[string]any{
-		"user": data.User{},
-	}))
+func newEmbeddingUserToUser(cfg config.UserToUserConfig, n int, timestamp time.Time, opts *UserToUserOptions) (UserToUser, error) {
+	columnFunc, err := expr.Compile(cfg.Column, expr.Env(map[string]any{"user": data.User{}}))
 	if err != nil {
 		return nil, err
 	}
-	return &embeddingUserToUser{baseUserToUser: baseUserToUser[[]float32]{
-		name:       cfg.Name,
-		n:          n,
-		timestamp:  timestamp,
-		columnFunc: columnFunc,
-		index:      ann.NewHNSW[[]float32](floats.Euclidean),
-		users:      []*data.User{},
-	}}, nil
+	return &embeddingUserToUser{baseUserToUser: newBaseUserToUser(cfg, n, timestamp, opts, false), columnFunc: columnFunc}, nil
 }
 
 func (e *embeddingUserToUser) Push(user *data.User, _ []int32) {
-	// Evaluate filter function
-	result, err := expr.Run(e.columnFunc, map[string]any{
-		"user": user,
-	})
+	result, err := expr.Run(e.columnFunc, map[string]any{"user": user})
 	if err != nil {
 		log.Logger().Error("failed to evaluate column expression", zap.Error(err))
 		return
 	}
-	// Check column type
-	v, ok := result.([]float32)
-	if !ok {
-		log.Logger().Error("invalid column type", zap.Any("column", result))
+	value, ok := bfloats.FromAny(result)
+	if !ok || len(value) == 0 {
+		log.Logger().Error("invalid embedding column type", zap.Any("column", result))
 		return
 	}
-	// Check dimension
-	e.usersLock.Lock()
-	if e.dimension == 0 && len(v) > 0 {
-		e.dimension = len(v)
-	} else if e.dimension != len(v) {
-		log.Logger().Error("invalid dimension", zap.Int("expected", e.dimension), zap.Int("actual", len(v)))
-		return
-	}
-	// Push user
-	e.users = append(e.users, nil)
-	e.usersLock.Unlock()
-	j := e.index.Add(v)
-	e.usersLock.Lock()
-	e.users[j] = user
-	e.usersLock.Unlock()
+	e.push(user, vectors.Vector{Values: bfloats.ToFloat32(value)})
 }
 
 type tagsUserToUser struct {
-	baseUserToUser[[]dataset.ID]
-	IDF[dataset.ID]
+	*baseUserToUser
+	columnFunc *vm.Program
+	idf        []float32
 }
 
-func newTagsUserToUser(cfg config.UserToUserConfig, n int, timestamp time.Time, idf []float32) (UserToUser, error) {
-	// Compile column expression
-	columnFunc, err := expr.Compile(cfg.Column, expr.Env(map[string]any{
-		"user": data.User{},
-	}))
+func newTagsUserToUser(cfg config.UserToUserConfig, n int, timestamp time.Time, opts *UserToUserOptions, idf []float32) (UserToUser, error) {
+	columnFunc, err := expr.Compile(cfg.Column, expr.Env(map[string]any{"user": data.User{}}))
 	if err != nil {
 		return nil, err
 	}
-	t := &tagsUserToUser{IDF: idf}
-	t.baseUserToUser = baseUserToUser[[]dataset.ID]{
-		name:         cfg.Name,
-		n:            n,
-		timestamp:    timestamp,
-		columnFunc:   columnFunc,
-		index:        ann.NewHNSW[[]dataset.ID](t.distance),
-		innerProduct: true,
-	}
-	return t, nil
+	return &tagsUserToUser{baseUserToUser: newBaseUserToUser(cfg, n, timestamp, opts, true), columnFunc: columnFunc, idf: idf}, nil
 }
 
 func (t *tagsUserToUser) Push(user *data.User, _ []int32) {
-	// Evaluate filter function
-	result, err := expr.Run(t.columnFunc, map[string]any{
-		"user": user,
-	})
+	result, err := expr.Run(t.columnFunc, map[string]any{"user": user})
 	if err != nil {
 		log.Logger().Error("failed to evaluate column expression", zap.Error(err))
 		return
 	}
-	// Extract tags
-	tSet := mapset.NewSet[dataset.ID]()
-	flatten(result, tSet)
-	v := tSet.ToSlice()
-	slices.Sort(v)
-	// Push user
-	t.usersLock.Lock()
-	t.users = append(t.users, nil)
-	t.usersLock.Unlock()
-	j := t.index.Add(v)
-	t.usersLock.Lock()
-	t.users[j] = user
-	t.usersLock.Unlock()
+	tags := mapset.NewSet[dataset.ID]()
+	flatten(result, tags)
+	ids := tags.ToSlice()
+	slices.Sort(ids)
+	t.push(user, newSparseVector(ids, t.idf, 0))
 }
 
 type itemsUserToUser struct {
-	baseUserToUser[[]int32]
-	IDF[int32]
+	*baseUserToUser
+	idf []float32
 }
 
-func newItemsUserToUser(cfg config.UserToUserConfig, n int, timestamp time.Time, idf []float32) (UserToUser, error) {
+func newItemsUserToUser(cfg config.UserToUserConfig, n int, timestamp time.Time, opts *UserToUserOptions, idf []float32) (UserToUser, error) {
 	if cfg.Column != "" {
 		return nil, errors.New("column is not supported in items user-to-user")
 	}
-	i := &itemsUserToUser{IDF: idf}
-	i.baseUserToUser = baseUserToUser[[]int32]{
-		name:         cfg.Name,
-		n:            n,
-		timestamp:    timestamp,
-		index:        ann.NewHNSW[[]int32](i.distance),
-		innerProduct: true,
-	}
-	return i, nil
+	return &itemsUserToUser{baseUserToUser: newBaseUserToUser(cfg, n, timestamp, opts, true), idf: idf}, nil
 }
 
 func (i *itemsUserToUser) Push(user *data.User, feedback []int32) {
-	// Sort feedback
 	slices.Sort(feedback)
-	// Push user
-	i.usersLock.Lock()
-	i.users = append(i.users, nil)
-	i.usersLock.Unlock()
-	j := i.index.Add(feedback)
-	i.usersLock.Lock()
-	i.users[j] = user
-	i.usersLock.Unlock()
+	i.push(user, newSparseVector(feedback, i.idf, 0))
 }
 
 type autoUserToUser struct {
-	baseUserToUser[lo.Tuple2[[]dataset.ID, []int32]]
-	tIDF IDF[dataset.ID]
-	iIDF IDF[int32]
+	*baseUserToUser
+	tagsIDF  []float32
+	itemsIDF []float32
 }
 
-func newAutoUserToUser(cfg config.UserToUserConfig, n int, timestamp time.Time, tIDF, iIDF []float32) (UserToUser, error) {
-	a := &autoUserToUser{
-		tIDF: tIDF,
-		iIDF: iIDF,
-	}
-	a.baseUserToUser = baseUserToUser[lo.Tuple2[[]dataset.ID, []int32]]{
-		name:         cfg.Name,
-		n:            n,
-		timestamp:    timestamp,
-		index:        ann.NewHNSW[lo.Tuple2[[]dataset.ID, []int32]](a.distance),
-		innerProduct: true,
-	}
-	return a, nil
+func newAutoUserToUser(cfg config.UserToUserConfig, n int, timestamp time.Time, opts *UserToUserOptions, tagsIDF, itemsIDF []float32) (UserToUser, error) {
+	base := newBaseUserToUser(cfg, n, timestamp, opts, true)
+	base.scoreScale = .5
+	return &autoUserToUser{baseUserToUser: base, tagsIDF: tagsIDF, itemsIDF: itemsIDF}, nil
 }
 
 func (a *autoUserToUser) Push(user *data.User, feedback []int32) {
-	// Extract tags
-	tSet := mapset.NewSet[dataset.ID]()
-	flatten(user.Labels, tSet)
-	t := tSet.ToSlice()
-	slices.Sort(t)
-	// Sort feedback
+	tags := mapset.NewSet[dataset.ID]()
+	flatten(user.Labels, tags)
+	tagIDs := tags.ToSlice()
+	slices.Sort(tagIDs)
 	slices.Sort(feedback)
-	// Push user
-	a.usersLock.Lock()
-	a.users = append(a.users, nil)
-	a.usersLock.Unlock()
-	j := a.index.Add(lo.Tuple2[[]dataset.ID, []int32]{A: t, B: feedback})
-	a.usersLock.Lock()
-	a.users[j] = user
-	a.usersLock.Unlock()
-}
-
-func (a *autoUserToUser) distance(u, v lo.Tuple2[[]dataset.ID, []int32]) float32 {
-	return (a.tIDF.distance(u.A, v.A) + a.iIDF.distance(u.B, v.B)) / 2
+	vector := newSparseVector(tagIDs, a.tagsIDF, 0)
+	vector = appendSparseVector(vector, newSparseVector(feedback, a.itemsIDF, uint32(len(a.tagsIDF))))
+	a.push(user, vector)
 }

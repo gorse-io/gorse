@@ -258,7 +258,7 @@ func (s *MasterTestSuite) TestUpdateEmbeddingItemToItemWritesVectors() {
 	s.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "embedding", Type: "embedding", Column: "item.Labels.embedding"}}
 	s.NoError(s.updateItemToItem(ctx, dataSet))
 
-	results, err := s.VectorClient.QueryVectors(ctx, vectors.ItemToItemCollection("embedding"), []float32{0, 0}, []string{"movie"}, 10)
+	results, err := s.VectorClient.QueryVectors(ctx, vectors.ItemToItemCollection("embedding"), vectors.Vector{Values: []float32{0, 0}}, []string{"movie"}, 10)
 	s.NoError(err)
 	s.Equal([]string{"near"}, lo.Map(results, func(result vectors.ScoredVector, _ int) string { return result.Id }))
 

@@ -40,9 +40,10 @@ func (suite *UserToUserTestSuite) SetupSuite() {
 
 func (suite *UserToUserTestSuite) TestEmbedding() {
 	timestamp := time.Now()
+	opts := &UserToUserOptions{Context: suite.T().Context(), VectorClient: openTrackingVectorDatabase(suite.T())}
 	user2user, err := newEmbeddingUserToUser(config.UserToUserConfig{
 		Column: "user.Labels.description",
-	}, 10, timestamp)
+	}, 10, timestamp, opts)
 	suite.NoError(err)
 
 	for i := range 100 {
@@ -54,6 +55,7 @@ func (suite *UserToUserTestSuite) TestEmbedding() {
 		}, nil)
 	}
 
+	suite.NoError(user2user.Finish())
 	scores := user2user.PopAll(0)
 	suite.Len(scores, 10)
 	for i := 1; i <= 10; i++ {
@@ -62,13 +64,15 @@ func (suite *UserToUserTestSuite) TestEmbedding() {
 }
 
 func (suite *UserToUserTestSuite) TestIDFInnerProductScores() {
-	user2user, err := newItemsUserToUser(config.UserToUserConfig{}, 2, time.Now(), []float32{0, 1, 2})
+	opts := &UserToUserOptions{Context: suite.T().Context(), VectorClient: openTrackingVectorDatabase(suite.T())}
+	user2user, err := newItemsUserToUser(config.UserToUserConfig{}, 2, time.Now(), opts, []float32{0, 1, 2})
 	suite.NoError(err)
 
 	user2user.Push(&data.User{UserId: "query"}, []int32{1, 2})
 	user2user.Push(&data.User{UserId: "idf-2"}, []int32{2})
 	user2user.Push(&data.User{UserId: "idf-1"}, []int32{1})
 
+	suite.NoError(user2user.Finish())
 	scores := user2user.PopAll(0)
 	suite.Require().Len(scores, 2)
 	suite.Equal("idf-2", scores[0].Id)
@@ -79,13 +83,14 @@ func (suite *UserToUserTestSuite) TestIDFInnerProductScores() {
 
 func (suite *UserToUserTestSuite) TestTags() {
 	timestamp := time.Now()
+	opts := &UserToUserOptions{Context: suite.T().Context(), VectorClient: openTrackingVectorDatabase(suite.T())}
 	idf := make([]float32, 101)
 	for i := range idf {
 		idf[i] = 1
 	}
 	user2user, err := newTagsUserToUser(config.UserToUserConfig{
 		Column: "user.Labels",
-	}, 10, timestamp, idf)
+	}, 10, timestamp, opts, idf)
 	suite.NoError(err)
 
 	for i := range 100 {
@@ -99,6 +104,7 @@ func (suite *UserToUserTestSuite) TestTags() {
 		}, nil)
 	}
 
+	suite.NoError(user2user.Finish())
 	scores := user2user.PopAll(0)
 	suite.Len(scores, 10)
 	for i := 1; i <= 10; i++ {
@@ -108,11 +114,12 @@ func (suite *UserToUserTestSuite) TestTags() {
 
 func (suite *UserToUserTestSuite) TestItems() {
 	timestamp := time.Now()
+	opts := &UserToUserOptions{Context: suite.T().Context(), VectorClient: openTrackingVectorDatabase(suite.T())}
 	idf := make([]float32, 101)
 	for i := range idf {
 		idf[i] = 1
 	}
-	user2user, err := newItemsUserToUser(config.UserToUserConfig{}, 10, timestamp, idf)
+	user2user, err := newItemsUserToUser(config.UserToUserConfig{}, 10, timestamp, opts, idf)
 	suite.NoError(err)
 
 	for i := range 100 {
@@ -123,6 +130,7 @@ func (suite *UserToUserTestSuite) TestItems() {
 		user2user.Push(&data.User{UserId: strconv.Itoa(i)}, feedback)
 	}
 
+	suite.NoError(user2user.Finish())
 	scores := user2user.PopAll(0)
 	suite.Len(scores, 10)
 	for i := 1; i <= 10; i++ {
@@ -132,11 +140,12 @@ func (suite *UserToUserTestSuite) TestItems() {
 
 func (suite *UserToUserTestSuite) TestAuto() {
 	timestamp := time.Now()
+	opts := &UserToUserOptions{Context: suite.T().Context(), VectorClient: openTrackingVectorDatabase(suite.T())}
 	idf := make([]float32, 101)
 	for i := range idf {
 		idf[i] = 1
 	}
-	user2user, err := newAutoUserToUser(config.UserToUserConfig{}, 10, timestamp, idf, idf)
+	user2user, err := newAutoUserToUser(config.UserToUserConfig{}, 10, timestamp, opts, idf, idf)
 	suite.NoError(err)
 
 	for i := range 100 {
@@ -156,6 +165,7 @@ func (suite *UserToUserTestSuite) TestAuto() {
 		user2user.Push(user, feedback)
 	}
 
+	suite.NoError(user2user.Finish())
 	scores0 := user2user.PopAll(0)
 	suite.Len(scores0, 10)
 	scores1 := user2user.PopAll(1)

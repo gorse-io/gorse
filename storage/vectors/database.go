@@ -43,6 +43,7 @@ const (
 
 	CollaborativeFiltering = "collaborative_filtering"
 	ItemToItemPrefix       = "item_to_item"
+	UserToUserPrefix       = "user_to_user"
 )
 
 func CollaborativeFilteringCollection(id int64) string {
@@ -51,6 +52,10 @@ func CollaborativeFilteringCollection(id int64) string {
 
 func ItemToItemCollection(name string) string {
 	return ItemToItemPrefix + "_" + name
+}
+
+func UserToUserCollection(name string) string {
+	return UserToUserPrefix + "_" + name
 }
 
 func (q QuantizationType) String() string {

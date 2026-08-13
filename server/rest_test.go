@@ -56,7 +56,7 @@ func (suite *ServerTestSuite) SetupSuite() {
 	suite.NoError(err)
 	suite.CacheClient, err = cache.Open(fmt.Sprintf("sqlite://%s/cache.db", suite.T().TempDir()), "")
 	suite.NoError(err)
-	suite.VectorClient, err = vectors.Open(fmt.Sprintf("zvec://%s/vectors", suite.T().TempDir()), "")
+	suite.VectorClient, err = vectors.Open(fmt.Sprintf("xvec://%s/vectors", suite.T().TempDir()), "")
 	suite.NoError(err)
 	// init database
 	err = suite.DataClient.Init()
@@ -1001,10 +1001,10 @@ func (suite *ServerTestSuite) TestEmbeddingItemToItemRecommend() {
 	}))
 	suite.NoError(suite.VectorClient.AddCollection(ctx, vectors.ItemToItemCollection("embedding"), 2, vectors.Euclidean, vectors.VectorConfig{}))
 	suite.NoError(suite.VectorClient.AddVectors(ctx, vectors.ItemToItemCollection("embedding"), []vectors.Vector{
-		{Id: "source", Vector: []float32{0, 0}, Timestamp: now},
-		{Id: "near", Vector: []float32{0.1, 0}, Categories: []string{"movie"}, Timestamp: now},
-		{Id: "far", Vector: []float32{10, 0}, Categories: []string{"movie"}, Timestamp: now},
-		{Id: "hidden", Vector: []float32{0.05, 0}, Categories: []string{"movie"}, IsHidden: true, Timestamp: now},
+		{Id: "source", Values: []float32{0, 0}, Timestamp: now},
+		{Id: "near", Values: []float32{0.1, 0}, Categories: []string{"movie"}, Timestamp: now},
+		{Id: "far", Values: []float32{10, 0}, Categories: []string{"movie"}, Timestamp: now},
+		{Id: "hidden", Values: []float32{0.05, 0}, Categories: []string{"movie"}, IsHidden: true, Timestamp: now},
 	}))
 
 	expected := suite.marshal([]cache.Score{
