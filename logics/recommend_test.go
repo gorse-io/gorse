@@ -71,7 +71,7 @@ func (suite *RecommenderTestSuite) TearDownSuite() {
 
 func (suite *RecommenderTestSuite) TestEmbeddingItemToItemUsesVectorStore() {
 	ctx := suite.T().Context()
-	err := suite.vectorClient.AddCollection(ctx, vectors.ItemToItemCollection("embedding", "embedding"), 2, vectors.Euclidean, vectors.VectorConfig{})
+	err := suite.vectorClient.AddCollection(ctx, vectors.ItemToItemCollection("embedding"), 2, vectors.Euclidean, vectors.VectorConfig{})
 	suite.NoError(err)
 	now := time.Unix(0, 0)
 	err = suite.dataClient.BatchInsertItems(ctx, []data.Item{
@@ -81,7 +81,7 @@ func (suite *RecommenderTestSuite) TestEmbeddingItemToItemUsesVectorStore() {
 		{ItemId: "hidden", Labels: map[string]any{"embedding": []float32{0.05, 0}}, Timestamp: now, Categories: []string{"movie"}, IsHidden: true},
 	})
 	suite.NoError(err)
-	err = suite.vectorClient.AddVectors(ctx, vectors.ItemToItemCollection("embedding", "embedding"), []vectors.Vector{
+	err = suite.vectorClient.AddVectors(ctx, vectors.ItemToItemCollection("embedding"), []vectors.Vector{
 		{Id: "source", Values: []float32{0, 0}, Timestamp: now},
 		{Id: "near", Values: []float32{0.1, 0}, Categories: []string{"movie"}, Timestamp: now},
 		{Id: "far", Values: []float32{10, 0}, Categories: []string{"movie"}, Timestamp: now},

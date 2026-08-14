@@ -99,7 +99,7 @@ func newBaseUserToUser(cfg config.UserToUserConfig, n int, timestamp time.Time, 
 	if sparse {
 		distance = vectors.Dot
 	}
-	collection := vectors.UserToUserCollection(cfg.Name, cfg.Type)
+	collection := vectors.UserToUserCollection(cfg.Name)
 	return &baseUserToUser{
 		ctx:          opts.Context,
 		n:            n,

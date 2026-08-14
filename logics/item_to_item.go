@@ -123,7 +123,7 @@ func newBaseItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time, 
 	if sparse {
 		distance = vectors.Dot
 	}
-	collection := vectors.ItemToItemCollection(cfg.Name, cfg.Type)
+	collection := vectors.ItemToItemCollection(cfg.Name)
 	return &baseItemToItem{
 		ctx:          opts.Context,
 		n:            n,
@@ -260,7 +260,7 @@ func NewEmbeddingItemToItemVectorWriter(ctx context.Context, cfg config.ItemToIt
 	}
 	return &EmbeddingItemToItemVectorWriter{
 		columnFunc: columnFunc,
-		writer: newSimilarityVectorWriter(ctx, vectorClient, vectors.ItemToItemCollection(cfg.Name, cfg.Type), vectors.Euclidean,
+		writer: newSimilarityVectorWriter(ctx, vectorClient, vectors.ItemToItemCollection(cfg.Name), vectors.Euclidean,
 			vectorConfig, timestamp, batchSize, false),
 	}, nil
 }

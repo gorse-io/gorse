@@ -313,7 +313,7 @@ func QueryEmbeddingItemToItem(ctx context.Context, dataClient data.Database, vec
 	if !ok {
 		return nil, nil
 	}
-	neighbors, err := vectorClient.QueryVectors(ctx, vectors.ItemToItemCollection(itemToItemConfig.Name, itemToItemConfig.Type), vectors.Vector{Values: embedding}, categories, n+1)
+	neighbors, err := vectorClient.QueryVectors(ctx, vectors.ItemToItemCollection(itemToItemConfig.Name), vectors.Vector{Values: embedding}, categories, n+1)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}

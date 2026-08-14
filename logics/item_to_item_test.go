@@ -105,8 +105,8 @@ func (suite *ItemToItemTestSuite) TestEmbeddingItemToItemVectorWriter() {
 	}()
 
 	timestamp := time.Now()
-	suite.NoError(vectorClient.AddCollection(ctx, vectors.ItemToItemCollection("embedding", "embedding"), 2, vectors.Euclidean, vectors.VectorConfig{}))
-	suite.NoError(vectorClient.AddVectors(ctx, vectors.ItemToItemCollection("embedding", "embedding"), []vectors.Vector{
+	suite.NoError(vectorClient.AddCollection(ctx, vectors.ItemToItemCollection("embedding"), 2, vectors.Euclidean, vectors.VectorConfig{}))
+	suite.NoError(vectorClient.AddVectors(ctx, vectors.ItemToItemCollection("embedding"), []vectors.Vector{
 		{Id: "old", Values: []float32{0.01, 0}, Categories: []string{"movie"}, Timestamp: timestamp.Add(-time.Hour)},
 	}))
 	writer, err := NewEmbeddingItemToItemVectorWriter(ctx, config.ItemToItemConfig{
@@ -123,7 +123,7 @@ func (suite *ItemToItemTestSuite) TestEmbeddingItemToItemVectorWriter() {
 	suite.Equal(2, writer.Dimension())
 	suite.NoError(writer.Finish())
 
-	results, err := vectorClient.QueryVectors(ctx, vectors.ItemToItemCollection("embedding", "embedding"), vectors.Vector{Values: []float32{0, 0}}, []string{"movie"}, 10)
+	results, err := vectorClient.QueryVectors(ctx, vectors.ItemToItemCollection("embedding"), vectors.Vector{Values: []float32{0, 0}}, []string{"movie"}, 10)
 	suite.NoError(err)
 	suite.Equal([]string{"a", "b"}, lo.Map(results, func(result vectors.ScoredVector, _ int) string { return result.Id }))
 }
@@ -335,7 +335,6 @@ func (suite *ItemToItemTestSuite) TestChat() {
 	database := openTrackingVectorDatabase(suite.T())
 	opts := &ItemToItemOptions{Context: suite.T().Context(), VectorClient: database}
 	item2item, err := newChatItemToItem(config.ItemToItemConfig{
-		Type:   "chat",
 		Column: "item.Labels.embeddings",
 		Prompt: "Please generate similar items for {{ item.Labels.title }}.",
 	}, 10, timestamp, opts, config.OpenAIConfig{
@@ -364,7 +363,7 @@ func (suite *ItemToItemTestSuite) TestChat() {
 	for i := 1; i <= 10; i++ {
 		suite.Equal(strconv.Itoa(i), scores[i-1].Id)
 	}
-	suite.Greater(database.queryCount(vectors.ItemToItemCollection("", "chat")), 0)
+	suite.Greater(database.queryCount(vectors.ItemToItemCollection("")), 0)
 }
 
 func TestItemToItem(t *testing.T) {
