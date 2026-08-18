@@ -1,33 +1,19 @@
-// Copyright 2024 gorse Project Authors
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-// http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// Copyright 2021 zhenghaoz <zhangzhenghao@hotmail.com>. All rights reserved.
+// Use of this source code is governed by a MIT-style
+// license that can be found in the LICENSE file.
 
 package logics
 
 import (
-	"fmt"
-	"strconv"
 	"testing"
 	"time"
 
-	"github.com/gorse-io/gorse/common/floats"
 	"github.com/gorse-io/gorse/common/log"
-	"github.com/gorse-io/gorse/common/mock"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/dataset"
+	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
 	"github.com/gorse-io/gorse/storage/vectors"
-	"github.com/samber/lo"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -39,186 +25,58 @@ func (suite *ItemToItemTestSuite) SetupTest() {
 	log.SetTestLogger(suite.T())
 }
 
-func (suite *ItemToItemTestSuite) SetupSuite() {
-	log.SetTestLogger(suite.T())
-}
-
-func (suite *ItemToItemTestSuite) TestColumnFunc() {
-	opts := &ItemToItemOptions{Context: suite.T().Context(), VectorClient: openTrackingVectorDatabase(suite.T())}
-	item2item, err := newEmbeddingItemToItem(config.ItemToItemConfig{
-		Column: "item.Labels.description",
-	}, 10, time.Now(), opts)
+func (suite *ItemToItemTestSuite) newWriter(cfg config.ItemToItemConfig, tagsIDF, usersIDF []float32) (ItemToItem, vectors.Database) {
+	vectorClient := openTrackingVectorDatabase(suite.T())
+	writer, err := NewItemToItem(cfg, time.Now(), &ItemToItemOptions{
+		Context: suite.T().Context(), VectorClient: vectorClient, TagsIDF: tagsIDF, UsersIDF: usersIDF,
+	})
 	suite.NoError(err)
-
-	// Push success
-	item2item.Push(&data.Item{
-		ItemId: "1",
-		Labels: map[string]any{
-			"description": []float32{0.1, 0.2, 0.3},
-		},
-	}, nil)
-	suite.Equal(1, item2item.Count())
-
-	// Hidden
-	item2item.Push(&data.Item{
-		ItemId:   "2",
-		IsHidden: true,
-		Labels: map[string]any{
-			"description": []float32{0.1, 0.2, 0.3},
-		},
-	}, nil)
-	suite.Equal(2, item2item.Count())
-
-	// Dimension does not match
-	item2item.Push(&data.Item{
-		ItemId: "1",
-		Labels: map[string]any{
-			"description": []float32{0.1, 0.2},
-		},
-	}, nil)
-	suite.Equal(2, item2item.Count())
-
-	// Type does not match
-	item2item.Push(&data.Item{
-		ItemId: "1",
-		Labels: map[string]any{
-			"description": "hello",
-		},
-	}, nil)
-	suite.Equal(2, item2item.Count())
-
-	// Column does not exist
-	item2item.Push(&data.Item{
-		ItemId: "2",
-		Labels: []float32{0.1, 0.2, 0.3},
-	}, nil)
-	suite.Equal(2, item2item.Count())
-}
-
-func (suite *ItemToItemTestSuite) TestEmbeddingItemToItemVectorWriter() {
-	ctx := suite.T().Context()
-	vectorClient, err := vectors.Open(fmt.Sprintf("xvec://%s/vectors", suite.T().TempDir()), "")
-	suite.NoError(err)
-	suite.NoError(vectorClient.Init())
-	defer func() {
-		suite.NoError(vectorClient.Close())
-	}()
-
-	timestamp := time.Now()
-	suite.NoError(vectorClient.AddCollection(ctx, vectors.ItemToItemCollection("embedding"), 2, vectors.Euclidean, vectors.VectorConfig{}))
-	suite.NoError(vectorClient.AddVectors(ctx, vectors.ItemToItemCollection("embedding"), []vectors.Vector{
-		{Id: "old", Values: []float32{0.01, 0}, Categories: []string{"movie"}, Timestamp: timestamp.Add(-time.Hour)},
-	}))
-	writer, err := NewEmbeddingItemToItemVectorWriter(ctx, config.ItemToItemConfig{
-		Name:   "embedding",
-		Type:   "embedding",
-		Column: "item.Labels.embedding",
-	}, timestamp, vectorClient, vectors.VectorConfig{}, 2)
-	suite.NoError(err)
-
-	writer.Push(&data.Item{ItemId: "a", Labels: map[string]any{"embedding": []float32{0, 0}}, Categories: []string{"movie"}, Timestamp: timestamp}, nil)
-	writer.Push(&data.Item{ItemId: "b", Labels: map[string]any{"embedding": []float32{0.1, 0}}, Categories: []string{"movie"}, Timestamp: timestamp}, nil)
-	writer.Push(&data.Item{ItemId: "bad", Labels: map[string]any{"embedding": []float32{0, 0, 0}}, Categories: []string{"movie"}, Timestamp: timestamp}, nil)
-	writer.Push(&data.Item{ItemId: "hidden", Labels: map[string]any{"embedding": []float32{0.05, 0}}, Categories: []string{"movie"}, IsHidden: true, Timestamp: timestamp}, nil)
-	suite.Equal(2, writer.Dimension())
-	suite.NoError(writer.Finish())
-
-	results, err := vectorClient.QueryVectors(ctx, vectors.ItemToItemCollection("embedding"), vectors.Vector{Values: []float32{0, 0}}, []string{"movie"}, 10)
-	suite.NoError(err)
-	suite.Equal([]string{"a", "b"}, lo.Map(results, func(result vectors.ScoredVector, _ int) string { return result.Id }))
+	return writer, vectorClient
 }
 
 func (suite *ItemToItemTestSuite) TestEmbedding() {
-	timestamp := time.Now()
-	opts := &ItemToItemOptions{Context: suite.T().Context(), VectorClient: openTrackingVectorDatabase(suite.T())}
-	item2item, err := newEmbeddingItemToItem(config.ItemToItemConfig{
-		Column: "item.Labels.description",
-	}, 10, timestamp, opts)
+	cfg := config.ItemToItemConfig{Name: "embedding", Type: "embedding", Column: "item.Labels.description"}
+	writer, vectorClient := suite.newWriter(cfg, nil, nil)
+	writer.Push(&data.Item{ItemId: "source", Labels: map[string]any{"description": []float32{0, 0}}}, nil)
+	writer.Push(&data.Item{ItemId: "near", Labels: map[string]any{"description": []float32{0.1, 0}}}, nil)
+	writer.Push(&data.Item{ItemId: "far", Labels: map[string]any{"description": []float32{1, 0}}}, nil)
+	writer.Push(&data.Item{ItemId: "invalid", Labels: map[string]any{"description": "invalid"}}, nil)
+	writer.Push(&data.Item{ItemId: "wrong-dimension", Labels: map[string]any{"description": []float32{0, 0, 0}}}, nil)
+	suite.NoError(writer.Finish())
+
+	scores, err := QueryItemToItem(suite.T().Context(), vectorClient, cfg, "source", nil, 2)
 	suite.NoError(err)
-
-	for i := range 100 {
-		item2item.Push(&data.Item{
-			ItemId: strconv.Itoa(i),
-			Labels: map[string]any{
-				"description": []float32{0.1 * float32(i), 0.2 * float32(i), 0.3 * float32(i)},
-			},
-		}, nil)
-	}
-
-	suite.NoError(item2item.Finish())
-	scores := item2item.PopAll(0)
-	suite.Len(scores, 10)
-	for i := 1; i <= 10; i++ {
-		suite.Equal(strconv.Itoa(i), scores[i-1].Id)
-	}
+	suite.Require().Len(scores, 2)
+	suite.Equal("near", scores[0].Id)
+	suite.Equal("far", scores[1].Id)
 }
 
 func (suite *ItemToItemTestSuite) TestHidden() {
-	timestamp := time.Now()
-	opts := &ItemToItemOptions{Context: suite.T().Context(), VectorClient: openTrackingVectorDatabase(suite.T())}
-	item2item, err := newEmbeddingItemToItem(config.ItemToItemConfig{
-		Column: "item.Labels.description",
-	}, 2, timestamp, opts)
+	cfg := config.ItemToItemConfig{Name: "hidden", Type: "embedding", Column: "item.Labels.description"}
+	writer, vectorClient := suite.newWriter(cfg, nil, nil)
+	writer.Push(&data.Item{ItemId: "visible_1", Labels: map[string]any{"description": []float32{0, 0}}}, nil)
+	writer.Push(&data.Item{ItemId: "visible_2", Labels: map[string]any{"description": []float32{0.1, 0}}}, nil)
+	writer.Push(&data.Item{ItemId: "hidden", IsHidden: true, Labels: map[string]any{"description": []float32{0.05, 0}}}, nil)
+	suite.NoError(writer.Finish())
+
+	visibleScores, err := QueryItemToItem(suite.T().Context(), vectorClient, cfg, "visible_1", nil, 10)
 	suite.NoError(err)
-
-	item2item.Push(&data.Item{
-		ItemId: "visible_1",
-		Labels: map[string]any{
-			"description": []float32{0.0, 0.0, 0.0},
-		},
-	}, nil)
-	item2item.Push(&data.Item{
-		ItemId: "visible_2",
-		Labels: map[string]any{
-			"description": []float32{0.1, 0.0, 0.0},
-		},
-	}, nil)
-	item2item.Push(&data.Item{
-		ItemId:   "hidden_1",
-		IsHidden: true,
-		Labels: map[string]any{
-			"description": []float32{0.05, 0.0, 0.0},
-		},
-	}, nil)
-
-	suite.Equal(3, item2item.Count())
-
-	suite.NoError(item2item.Finish())
-	// hidden item should have similar items generated from non-hidden index
-	hiddenScores := item2item.PopAll(2)
-	suite.Len(hiddenScores, 2)
-	for _, score := range hiddenScores {
-		suite.NotEqual("hidden_1", score.Id)
-	}
-
-	// non-hidden item should never get hidden item in similarity results
-	visibleScores := item2item.PopAll(0)
-	suite.Len(visibleScores, 1)
-	for _, score := range visibleScores {
-		suite.NotEqual("hidden_1", score.Id)
-	}
+	suite.Equal([]string{"visible_2"}, scoreIDs(visibleScores))
+	hiddenScores, err := QueryItemToItem(suite.T().Context(), vectorClient, cfg, "hidden", nil, 10)
+	suite.NoError(err)
+	suite.Equal([]string{"visible_1", "visible_2"}, scoreIDs(hiddenScores))
 }
 
-func (suite *ItemToItemTestSuite) TestIDFInnerProduct() {
-	idf := IDF[dataset.ID]{0, 1, 2, 3, 4}
+func (suite *ItemToItemTestSuite) TestTags() {
+	cfg := config.ItemToItemConfig{Name: "tags", Type: "tags", Column: "item.Labels"}
+	writer, vectorClient := suite.newWriter(cfg, []float32{0, 1, 2}, nil)
+	writer.Push(&data.Item{ItemId: "query", Labels: []dataset.ID{1, 2}}, nil)
+	writer.Push(&data.Item{ItemId: "idf-2", Labels: []dataset.ID{2}}, nil)
+	writer.Push(&data.Item{ItemId: "idf-1", Labels: []dataset.ID{1}}, nil)
+	suite.NoError(writer.Finish())
 
-	suite.InDelta(5, idf.similarity([]dataset.ID{1, 2, 3}, []dataset.ID{2, 3, 4}), 1e-6)
-	suite.InDelta(0, idf.similarity([]dataset.ID{1}, []dataset.ID{4}), 1e-6)
-}
-
-func (suite *ItemToItemTestSuite) TestTagsInnerProductScores() {
-	opts := &ItemToItemOptions{Context: suite.T().Context(), VectorClient: openTrackingVectorDatabase(suite.T())}
-	item2item, err := newTagsItemToItem(config.ItemToItemConfig{
-		Column: "item.Labels",
-	}, 2, time.Now(), opts, []float32{0, 1, 2})
+	scores, err := QueryItemToItem(suite.T().Context(), vectorClient, cfg, "query", nil, 2)
 	suite.NoError(err)
-
-	item2item.Push(&data.Item{ItemId: "query", Labels: []dataset.ID{1, 2}}, nil)
-	item2item.Push(&data.Item{ItemId: "idf-2", Labels: []dataset.ID{2}}, nil)
-	item2item.Push(&data.Item{ItemId: "idf-1", Labels: []dataset.ID{1}}, nil)
-
-	suite.NoError(item2item.Finish())
-	scores := item2item.PopAll(0)
 	suite.Require().Len(scores, 2)
 	suite.Equal("idf-2", scores[0].Id)
 	suite.InDelta(2, scores[0].Score, 1e-6)
@@ -226,144 +84,50 @@ func (suite *ItemToItemTestSuite) TestTagsInnerProductScores() {
 	suite.InDelta(1, scores[1].Score, 1e-6)
 }
 
-func (suite *ItemToItemTestSuite) TestTags() {
-	timestamp := time.Now()
-	opts := &ItemToItemOptions{Context: suite.T().Context(), VectorClient: openTrackingVectorDatabase(suite.T())}
-	idf := make([]float32, 101)
-	for i := range idf {
-		idf[i] = 1
-	}
-	item2item, err := newTagsItemToItem(config.ItemToItemConfig{
-		Column: "item.Labels",
-	}, 10, timestamp, opts, idf)
-	suite.NoError(err)
-
-	for i := range 100 {
-		labels := make(map[string]any)
-		for j := 1; j <= 100-i; j++ {
-			labels[strconv.Itoa(j)] = []dataset.ID{dataset.ID(j)}
-		}
-		item2item.Push(&data.Item{
-			ItemId: strconv.Itoa(i),
-			Labels: labels,
-		}, nil)
-	}
-
-	suite.NoError(item2item.Finish())
-	scores := item2item.PopAll(0)
-	suite.Len(scores, 10)
-	for i := 1; i <= 10; i++ {
-		suite.Equal(strconv.Itoa(i), scores[i-1].Id)
-	}
-}
-
 func (suite *ItemToItemTestSuite) TestUsers() {
-	timestamp := time.Now()
-	opts := &ItemToItemOptions{Context: suite.T().Context(), VectorClient: openTrackingVectorDatabase(suite.T())}
-	idf := make([]float32, 101)
-	for i := range idf {
-		idf[i] = 1
-	}
-	item2item, err := newUsersItemToItem(config.ItemToItemConfig{}, 10, timestamp, opts, idf)
+	cfg := config.ItemToItemConfig{Name: "users", Type: "users"}
+	writer, vectorClient := suite.newWriter(cfg, nil, []float32{0, 1, 2})
+	writer.Push(&data.Item{ItemId: "query"}, []int32{1, 2})
+	writer.Push(&data.Item{ItemId: "idf-2"}, []int32{2})
+	writer.Push(&data.Item{ItemId: "idf-1"}, []int32{1})
+	suite.NoError(writer.Finish())
+
+	scores, err := QueryItemToItem(suite.T().Context(), vectorClient, cfg, "query", nil, 2)
 	suite.NoError(err)
-
-	for i := range 100 {
-		feedback := make([]int32, 0, 100-i)
-		for j := 1; j <= 100-i; j++ {
-			feedback = append(feedback, int32(j))
-		}
-		item2item.Push(&data.Item{ItemId: strconv.Itoa(i)}, feedback)
-	}
-
-	suite.NoError(item2item.Finish())
-	scores := item2item.PopAll(0)
-	suite.Len(scores, 10)
-	for i := 1; i <= 10; i++ {
-		suite.Equal(strconv.Itoa(i), scores[i-1].Id)
-	}
+	suite.Require().Len(scores, 2)
+	suite.Equal("idf-2", scores[0].Id)
+	suite.InDelta(2, scores[0].Score, 1e-6)
+	suite.Equal("idf-1", scores[1].Id)
+	suite.InDelta(1, scores[1].Score, 1e-6)
 }
 
 func (suite *ItemToItemTestSuite) TestAuto() {
-	timestamp := time.Now()
-	opts := &ItemToItemOptions{Context: suite.T().Context(), VectorClient: openTrackingVectorDatabase(suite.T())}
-	idf := make([]float32, 101)
-	for i := range idf {
-		idf[i] = 1
-	}
-	item2item, err := newAutoItemToItem(config.ItemToItemConfig{}, 10, timestamp, opts, idf, idf)
+	cfg := config.ItemToItemConfig{Name: "auto", Type: "auto"}
+	idf := []float32{0, 1, 2}
+	writer, vectorClient := suite.newWriter(cfg, idf, idf)
+	writer.Push(&data.Item{ItemId: "query", Labels: []dataset.ID{1}}, []int32{1})
+	writer.Push(&data.Item{ItemId: "same", Labels: []dataset.ID{1}}, []int32{1})
+	suite.NoError(writer.Finish())
+
+	scores, err := QueryItemToItem(suite.T().Context(), vectorClient, cfg, "query", nil, 1)
 	suite.NoError(err)
-
-	for i := range 100 {
-		item := &data.Item{ItemId: strconv.Itoa(i)}
-		feedback := make([]int32, 0, 100-i)
-		if i%2 == 0 {
-			labels := make(map[string]any)
-			for j := 1; j <= 100-i; j++ {
-				labels[strconv.Itoa(j)] = []dataset.ID{dataset.ID(j)}
-			}
-			item.Labels = labels
-		} else {
-			for j := 1; j <= 100-i; j++ {
-				feedback = append(feedback, int32(j))
-			}
-		}
-		item2item.Push(item, feedback)
-	}
-
-	suite.NoError(item2item.Finish())
-	scores0 := item2item.PopAll(0)
-	suite.Len(scores0, 10)
-	for i := 1; i <= 10; i++ {
-		suite.Equal(strconv.Itoa(i*2), scores0[i-1].Id)
-	}
-	scores1 := item2item.PopAll(1)
-	suite.Len(scores1, 10)
-	for i := 1; i <= 10; i++ {
-		suite.Equal(strconv.Itoa(i*2+1), scores1[i-1].Id)
-	}
+	suite.Require().Len(scores, 1)
+	suite.Equal("same", scores[0].Id)
+	suite.InDelta(1, scores[0].Score, 1e-6)
 }
 
-func (suite *ItemToItemTestSuite) TestChat() {
-	mockAI := mock.NewOpenAIServer()
-	go func() {
-		_ = mockAI.Start()
-	}()
-	mockAI.Ready()
-	defer mockAI.Close()
+func (suite *ItemToItemTestSuite) TestIDFInnerProduct() {
+	idf := IDF[dataset.ID]{0, 1, 2, 3, 4}
+	suite.InDelta(5, idf.similarity([]dataset.ID{1, 2, 3}, []dataset.ID{2, 3, 4}), 1e-6)
+	suite.InDelta(0, idf.similarity([]dataset.ID{1}, []dataset.ID{4}), 1e-6)
+}
 
-	timestamp := time.Now()
-	database := openTrackingVectorDatabase(suite.T())
-	opts := &ItemToItemOptions{Context: suite.T().Context(), VectorClient: database}
-	item2item, err := newChatItemToItem(config.ItemToItemConfig{
-		Column: "item.Labels.embeddings",
-		Prompt: "Please generate similar items for {{ item.Labels.title }}.",
-	}, 10, timestamp, opts, config.OpenAIConfig{
-		BaseURL:             mockAI.BaseURL(),
-		AuthToken:           mockAI.AuthToken(),
-		ChatCompletionModel: "deepseek-r1",
-		EmbeddingModel:      "text-similarity-ada-001",
-	})
-	suite.NoError(err)
-
-	for i := range 100 {
-		embedding := mock.Hash("Please generate similar items for item_0.")
-		floats.AddConst(embedding, float32(i+1))
-		item2item.Push(&data.Item{
-			ItemId: strconv.Itoa(i),
-			Labels: map[string]any{
-				"title":      "item_" + strconv.Itoa(i),
-				"embeddings": embedding,
-			},
-		}, nil)
+func scoreIDs(scores []cache.Score) []string {
+	ids := make([]string, len(scores))
+	for i := range scores {
+		ids[i] = scores[i].Id
 	}
-
-	suite.NoError(item2item.Finish())
-	scores := item2item.PopAll(0)
-	suite.Len(scores, 10)
-	for i := 1; i <= 10; i++ {
-		suite.Equal(strconv.Itoa(i), scores[i-1].Id)
-	}
-	suite.Greater(database.queryCount(vectors.ItemToItemCollection("")), 0)
+	return ids
 }
 
 func TestItemToItem(t *testing.T) {

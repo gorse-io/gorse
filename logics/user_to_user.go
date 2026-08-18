@@ -17,7 +17,6 @@ package logics
 import (
 	"context"
 	"slices"
-	"sync"
 	"time"
 
 	mapset "github.com/deckarep/golang-set/v2"
@@ -27,7 +26,6 @@ import (
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/dataset"
-	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
 	"github.com/gorse-io/gorse/storage/vectors"
 	"github.com/pkg/errors"
@@ -45,130 +43,60 @@ type UserToUserOptions struct {
 }
 
 type UserToUser interface {
-	Users() []*data.User
 	Push(user *data.User, feedback []int32)
 	Finish() error
-	PopAll(i int) []cache.Score
-	Timestamp() time.Time
 }
 
-func NewUserToUser(cfg config.UserToUserConfig, n int, timestamp time.Time, opts *UserToUserOptions) (UserToUser, error) {
+func NewUserToUser(cfg config.UserToUserConfig, timestamp time.Time, opts *UserToUserOptions) (UserToUser, error) {
 	if opts == nil || opts.VectorClient == nil {
 		return nil, errors.New("vector database is required for user-to-user")
 	}
 	switch cfg.Type {
 	case "embedding":
-		return newEmbeddingUserToUser(cfg, n, timestamp, opts)
+		return newEmbeddingUserToUser(cfg, timestamp, opts)
 	case "tags":
 		if opts.TagsIDF == nil {
 			return nil, errors.New("tags IDF is required for tags user-to-user")
 		}
-		return newTagsUserToUser(cfg, n, timestamp, opts, opts.TagsIDF)
+		return newTagsUserToUser(cfg, timestamp, opts, opts.TagsIDF)
 	case "items":
 		if opts.ItemsIDF == nil {
 			return nil, errors.New("items IDF is required for items user-to-user")
 		}
-		return newItemsUserToUser(cfg, n, timestamp, opts, opts.ItemsIDF)
+		return newItemsUserToUser(cfg, timestamp, opts, opts.ItemsIDF)
 	case "auto":
 		if opts.TagsIDF == nil || opts.ItemsIDF == nil {
 			return nil, errors.New("tags IDF and items IDF are required for auto user-to-user")
 		}
-		return newAutoUserToUser(cfg, n, timestamp, opts, opts.TagsIDF, opts.ItemsIDF)
+		return newAutoUserToUser(cfg, timestamp, opts, opts.TagsIDF, opts.ItemsIDF)
 	default:
 		return nil, errors.New("unknown user-to-user method")
 	}
 }
 
 type baseUserToUser struct {
-	ctx          context.Context
-	n            int
-	timestamp    time.Time
-	collection   string
-	distance     vectors.Distance
-	scoreScale   float64
-	vectorClient vectors.Database
-	writer       *similarityVectorWriter
-
-	mu      sync.Mutex
-	users   []*data.User
-	queries []vectors.Vector
+	writer *similarityVectorWriter
 }
 
-func newBaseUserToUser(cfg config.UserToUserConfig, n int, timestamp time.Time, opts *UserToUserOptions, sparse bool) *baseUserToUser {
+func newBaseUserToUser(cfg config.UserToUserConfig, timestamp time.Time, opts *UserToUserOptions, sparse bool) *baseUserToUser {
 	distance := vectors.Euclidean
 	if sparse {
 		distance = vectors.Dot
 	}
 	collection := vectors.UserToUserCollection(cfg.Name)
 	return &baseUserToUser{
-		ctx:          opts.Context,
-		n:            n,
-		timestamp:    timestamp,
-		collection:   collection,
-		distance:     distance,
-		scoreScale:   1,
-		vectorClient: opts.VectorClient,
 		writer: newSimilarityVectorWriter(opts.Context, opts.VectorClient, collection, distance,
 			opts.VectorConfig, timestamp, opts.BatchSize, sparse),
 	}
 }
 
-func (b *baseUserToUser) Users() []*data.User {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-	return slices.Clone(b.users)
-}
-
-func (b *baseUserToUser) Timestamp() time.Time {
-	return b.timestamp
-}
-
 func (b *baseUserToUser) push(user *data.User, query vectors.Vector) {
-	stored := query
-	stored.Id = user.UserId
-	written := b.writer.Push(stored)
-	if !written && (!b.writer.sparse || len(query.Indices) > 0) {
-		return
-	}
-	b.mu.Lock()
-	b.users = append(b.users, user)
-	b.queries = append(b.queries, query)
-	b.mu.Unlock()
+	query.Id = user.UserId
+	b.writer.Push(query)
 }
 
 func (b *baseUserToUser) Finish() error {
 	return b.writer.Finish()
-}
-
-func (b *baseUserToUser) PopAll(i int) []cache.Score {
-	b.mu.Lock()
-	user := b.users[i]
-	query := b.queries[i]
-	b.mu.Unlock()
-	if len(query.Values) == 0 {
-		return []cache.Score{}
-	}
-	neighbors, err := b.vectorClient.QueryVectors(b.ctx, b.collection, query, nil, b.n+1)
-	if err != nil {
-		log.Logger().Error("failed to query user-to-user vectors",
-			zap.String("collection", b.collection), zap.String("user_id", user.UserId), zap.Error(err))
-		return nil
-	}
-	scores := make([]cache.Score, 0, min(b.n, len(neighbors)))
-	for _, neighbor := range neighbors {
-		if neighbor.Id == user.UserId || b.distance == vectors.Dot && neighbor.Score <= 0 {
-			continue
-		}
-		score := float64(neighbor.Score) * b.scoreScale
-		if b.distance == vectors.Euclidean {
-			score = 1 / (1 - float64(neighbor.Score))
-		}
-		scores = append(scores, cache.Score{Id: neighbor.Id, Score: score, Timestamp: b.timestamp})
-		if len(scores) == b.n {
-			break
-		}
-	}
-	return scores
 }
 
 type embeddingUserToUser struct {
@@ -176,12 +104,12 @@ type embeddingUserToUser struct {
 	columnFunc *vm.Program
 }
 
-func newEmbeddingUserToUser(cfg config.UserToUserConfig, n int, timestamp time.Time, opts *UserToUserOptions) (UserToUser, error) {
+func newEmbeddingUserToUser(cfg config.UserToUserConfig, timestamp time.Time, opts *UserToUserOptions) (UserToUser, error) {
 	columnFunc, err := expr.Compile(cfg.Column, expr.Env(map[string]any{"user": data.User{}}))
 	if err != nil {
 		return nil, err
 	}
-	return &embeddingUserToUser{baseUserToUser: newBaseUserToUser(cfg, n, timestamp, opts, false), columnFunc: columnFunc}, nil
+	return &embeddingUserToUser{baseUserToUser: newBaseUserToUser(cfg, timestamp, opts, false), columnFunc: columnFunc}, nil
 }
 
 func (e *embeddingUserToUser) Push(user *data.User, _ []int32) {
@@ -204,12 +132,12 @@ type tagsUserToUser struct {
 	idf        []float32
 }
 
-func newTagsUserToUser(cfg config.UserToUserConfig, n int, timestamp time.Time, opts *UserToUserOptions, idf []float32) (UserToUser, error) {
+func newTagsUserToUser(cfg config.UserToUserConfig, timestamp time.Time, opts *UserToUserOptions, idf []float32) (UserToUser, error) {
 	columnFunc, err := expr.Compile(cfg.Column, expr.Env(map[string]any{"user": data.User{}}))
 	if err != nil {
 		return nil, err
 	}
-	return &tagsUserToUser{baseUserToUser: newBaseUserToUser(cfg, n, timestamp, opts, true), columnFunc: columnFunc, idf: idf}, nil
+	return &tagsUserToUser{baseUserToUser: newBaseUserToUser(cfg, timestamp, opts, true), columnFunc: columnFunc, idf: idf}, nil
 }
 
 func (t *tagsUserToUser) Push(user *data.User, _ []int32) {
@@ -230,11 +158,11 @@ type itemsUserToUser struct {
 	idf []float32
 }
 
-func newItemsUserToUser(cfg config.UserToUserConfig, n int, timestamp time.Time, opts *UserToUserOptions, idf []float32) (UserToUser, error) {
+func newItemsUserToUser(cfg config.UserToUserConfig, timestamp time.Time, opts *UserToUserOptions, idf []float32) (UserToUser, error) {
 	if cfg.Column != "" {
 		return nil, errors.New("column is not supported in items user-to-user")
 	}
-	return &itemsUserToUser{baseUserToUser: newBaseUserToUser(cfg, n, timestamp, opts, true), idf: idf}, nil
+	return &itemsUserToUser{baseUserToUser: newBaseUserToUser(cfg, timestamp, opts, true), idf: idf}, nil
 }
 
 func (i *itemsUserToUser) Push(user *data.User, feedback []int32) {
@@ -248,10 +176,12 @@ type autoUserToUser struct {
 	itemsIDF []float32
 }
 
-func newAutoUserToUser(cfg config.UserToUserConfig, n int, timestamp time.Time, opts *UserToUserOptions, tagsIDF, itemsIDF []float32) (UserToUser, error) {
-	base := newBaseUserToUser(cfg, n, timestamp, opts, true)
-	base.scoreScale = .5
-	return &autoUserToUser{baseUserToUser: base, tagsIDF: tagsIDF, itemsIDF: itemsIDF}, nil
+func newAutoUserToUser(cfg config.UserToUserConfig, timestamp time.Time, opts *UserToUserOptions, tagsIDF, itemsIDF []float32) (UserToUser, error) {
+	return &autoUserToUser{
+		baseUserToUser: newBaseUserToUser(cfg, timestamp, opts, true),
+		tagsIDF:        tagsIDF,
+		itemsIDF:       itemsIDF,
+	}, nil
 }
 
 func (a *autoUserToUser) Push(user *data.User, feedback []int32) {

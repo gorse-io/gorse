@@ -803,34 +803,60 @@ func (s *RestServer) getItemToItem(request *restful.Request, response *restful.R
 	itemId := request.PathParameter("item-id")
 	categories := ReadCategories(request, nil)
 	for _, itemToItemConfig := range s.Config.Recommend.ItemToItem {
-		if itemToItemConfig.Name == name && itemToItemConfig.Type == "embedding" {
-			s.SearchEmbeddings(itemToItemConfig, itemId, categories, request, response)
+		if itemToItemConfig.Name == name {
+			s.SearchItemToItem(itemToItemConfig, itemId, categories, request, response)
 			return
 		}
 	}
-	s.SetLastModified(request, response, cache.Key(cache.ItemToItemUpdateTime, name, itemId))
-	s.SearchDocuments(cache.ItemToItem, cache.Key(name, itemId), categories, nil, request, response)
+	PageNotFound(response, errors.Errorf("item-to-item recommender %s not found", name))
 }
 
-func (s *RestServer) SearchEmbeddings(itemToItemConfig config.ItemToItemConfig, itemId string, categories []string, request *restful.Request, response *restful.Response) {
-	var (
-		n      int
-		offset int
-		err    error
-	)
-	if offset, err = ParseInt(request, "offset", 0); err != nil {
+func (s *RestServer) SearchItemToItem(itemToItemConfig config.ItemToItemConfig, itemId string, categories []string, request *restful.Request, response *restful.Response) {
+	ctx := request.Request.Context()
+	offset, err := ParseInt(request, "offset", 0)
+	if err != nil {
 		BadRequest(response, err)
 		return
 	}
-	if n, err = ParseInt(request, "n", s.Config.Server.DefaultN); err != nil {
+	n, err := ParseInt(request, "n", s.Config.Server.DefaultN)
+	if err != nil {
 		BadRequest(response, err)
 		return
 	}
-	results, err := logics.QueryEmbeddingItemToItem(request.Request.Context(), s.DataClient, s.VectorClient, itemToItemConfig, itemId, categories, offset+n)
+	readItems := mapset.NewSet[string]()
+	if userId := request.QueryParameter("user-id"); userId != "" {
+		feedback, err := s.DataClient.GetUserFeedback(ctx, userId, s.Config.Now())
+		if err != nil {
+			InternalServerError(response, err)
+			return
+		}
+		for _, f := range feedback {
+			readItems.Add(f.ItemId)
+		}
+	}
+	queryN := max(offset+n+readItems.Cardinality(), s.Config.Recommend.CacheSize)
+	results, err := logics.QueryItemToItem(ctx, s.VectorClient, itemToItemConfig, itemId, nil, queryN)
 	if err != nil {
 		InternalServerError(response, err)
 		return
 	}
+	items, err := s.DataClient.BatchGetItems(ctx, cache.ConvertDocumentsToValues(results), data.GetOptions{})
+	if err != nil {
+		InternalServerError(response, err)
+		return
+	}
+	visibleItems := mapset.NewSet[string]()
+	for _, item := range items {
+		categoryMatched := len(categories) == 0 || lo.SomeBy(categories, func(category string) bool {
+			return lo.Contains(item.Categories, category)
+		})
+		if !item.IsHidden && categoryMatched {
+			visibleItems.Add(item.ItemId)
+		}
+	}
+	results = lo.Filter(results, func(result cache.Score, _ int) bool {
+		return visibleItems.Contains(result.Id) && !readItems.Contains(result.Id)
+	})
 	if offset < len(results) {
 		results = results[offset:]
 	} else {
@@ -845,8 +871,40 @@ func (s *RestServer) SearchEmbeddings(itemToItemConfig config.ItemToItemConfig, 
 func (s *RestServer) getUserToUser(request *restful.Request, response *restful.Response) {
 	name := request.PathParameter("name")
 	userId := request.PathParameter("user-id")
-	s.SetLastModified(request, response, cache.Key(cache.UserToUserUpdateTime, name, userId))
-	s.SearchDocuments(cache.UserToUser, cache.Key(name, userId), nil, nil, request, response)
+	for _, userToUserConfig := range s.Config.Recommend.UserToUser {
+		if userToUserConfig.Name == name {
+			s.SearchUserToUser(userToUserConfig, userId, request, response)
+			return
+		}
+	}
+	PageNotFound(response, errors.Errorf("user-to-user recommender %s not found", name))
+}
+
+func (s *RestServer) SearchUserToUser(userToUserConfig config.UserToUserConfig, userId string, request *restful.Request, response *restful.Response) {
+	offset, err := ParseInt(request, "offset", 0)
+	if err != nil {
+		BadRequest(response, err)
+		return
+	}
+	n, err := ParseInt(request, "n", s.Config.Server.DefaultN)
+	if err != nil {
+		BadRequest(response, err)
+		return
+	}
+	results, err := logics.QueryUserToUser(request.Request.Context(), s.VectorClient, userToUserConfig, userId, offset+n)
+	if err != nil {
+		InternalServerError(response, err)
+		return
+	}
+	if offset < len(results) {
+		results = results[offset:]
+	} else {
+		results = nil
+	}
+	if n > 0 && len(results) > n {
+		results = results[:n]
+	}
+	Ok(response, results)
 }
 
 func (s *RestServer) SetLastModified(request *restful.Request, response *restful.Response, key string) {
@@ -899,13 +957,7 @@ func (s *RestServer) getItemNeighbors(request *restful.Request, response *restfu
 		return
 	} else {
 		itemToItemConfig := s.Config.Recommend.ItemToItem[0]
-		if itemToItemConfig.Type == "embedding" {
-			s.SearchEmbeddings(itemToItemConfig, itemId, categories, request, response)
-			return
-		}
-		name := itemToItemConfig.Name
-		s.SetLastModified(request, response, cache.Key(cache.ItemToItemUpdateTime, name, itemId))
-		s.SearchDocuments(cache.ItemToItem, cache.Key(name, itemId), categories, nil, request, response)
+		s.SearchItemToItem(itemToItemConfig, itemId, categories, request, response)
 	}
 }
 
@@ -917,9 +969,7 @@ func (s *RestServer) getUserNeighbors(request *restful.Request, response *restfu
 		PageNotFound(response, errors.New("user-to-user recommendation is not enabled"))
 		return
 	} else {
-		name := s.Config.Recommend.UserToUser[0].Name
-		s.SetLastModified(request, response, cache.Key(cache.UserToUserUpdateTime, name, userId))
-		s.SearchDocuments(cache.UserToUser, cache.Key(name, userId), nil, nil, request, response)
+		s.SearchUserToUser(s.Config.Recommend.UserToUser[0], userId, request, response)
 	}
 }
 
@@ -1014,7 +1064,7 @@ func (s *RestServer) sessionRecommend(request *restful.Request, response *restfu
 		PageNotFound(response, errors.New("item-to-item recommendation is not enabled"))
 		return
 	}
-	name := s.Config.Recommend.ItemToItem[0].Name
+	itemToItemConfig := s.Config.Recommend.ItemToItem[0]
 
 	if request != nil && request.Request != nil {
 		ctx = request.Request.Context()
@@ -1031,6 +1081,10 @@ func (s *RestServer) sessionRecommend(request *restful.Request, response *restfu
 		return
 	}
 	category := request.PathParameter("category")
+	var categories []string
+	if category != "" {
+		categories = []string{category}
+	}
 	offset, err := ParseInt(request, "offset", 0)
 	if err != nil {
 		BadRequest(response, err)
@@ -1063,11 +1117,28 @@ func (s *RestServer) sessionRecommend(request *restful.Request, response *restfu
 	usedFeedbackCount := 0
 	for _, feedback := range userFeedback {
 		// load similar items
-		similarItems, err := s.CacheClient.SearchScores(ctx, cache.ItemToItem, cache.Key(name, feedback.ItemId), []string{category}, 0, s.Config.Recommend.CacheSize)
+		similarItems, err := logics.QueryItemToItem(ctx, s.VectorClient, itemToItemConfig, feedback.ItemId, nil, s.Config.Recommend.CacheSize)
 		if err != nil {
 			BadRequest(response, err)
 			return
 		}
+		items, err := s.DataClient.BatchGetItems(ctx, cache.ConvertDocumentsToValues(similarItems), data.GetOptions{})
+		if err != nil {
+			InternalServerError(response, err)
+			return
+		}
+		visibleItems := mapset.NewSet[string]()
+		for _, item := range items {
+			categoryMatched := len(categories) == 0 || lo.SomeBy(categories, func(category string) bool {
+				return lo.Contains(item.Categories, category)
+			})
+			if !item.IsHidden && categoryMatched {
+				visibleItems.Add(item.ItemId)
+			}
+		}
+		similarItems = lo.Filter(similarItems, func(item cache.Score, _ int) bool {
+			return visibleItems.Contains(item.Id)
+		})
 		// add unseen items
 		// similarItems = s.FilterOutHiddenScores(response, similarItems, "")
 		for _, item := range similarItems {

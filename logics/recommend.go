@@ -20,7 +20,6 @@ import (
 	"time"
 
 	mapset "github.com/deckarep/golang-set/v2"
-	"github.com/expr-lang/expr"
 	"github.com/gorse-io/gorse/common/expression"
 	"github.com/gorse-io/gorse/common/heap"
 	"github.com/gorse-io/gorse/common/util"
@@ -240,14 +239,56 @@ func (r *Recommender) recommendCollaborative(ctx context.Context) ([]cache.Score
 	}), digest, nil
 }
 
+func QueryItemToItem(ctx context.Context, vectorClient vectors.Database, itemToItemConfig config.ItemToItemConfig, itemId string, categories []string, n int) ([]cache.Score, error) {
+	collection := vectors.ItemToItemCollection(itemToItemConfig.Name)
+	queries, err := vectorClient.GetVectors(ctx, collection, []string{itemId})
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	if len(queries) == 0 {
+		return nil, nil
+	}
+	neighbors, err := vectorClient.QueryVectors(ctx, collection, queries[0], categories, n+1)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	distance := vectors.Dot
+	if itemToItemConfig.Type == "embedding" {
+		distance = vectors.Euclidean
+	}
+	scoreScale := 1.0
+	if itemToItemConfig.Type == "auto" {
+		scoreScale = .5
+	}
+	scores := make([]cache.Score, 0, min(n, len(neighbors)))
+	for _, neighbor := range neighbors {
+		if neighbor.Id == itemId || distance == vectors.Dot && neighbor.Score <= 0 {
+			continue
+		}
+		score := float64(neighbor.Score) * scoreScale
+		if distance == vectors.Euclidean {
+			score = 1 / (1 - score)
+		}
+		scores = append(scores, cache.Score{Id: neighbor.Id, Score: score, Categories: neighbor.Categories})
+		if len(scores) == n {
+			break
+		}
+	}
+	return scores, nil
+}
+
 func (r *Recommender) recommendItemToItem(name string) RecommenderFunc {
 	return func(ctx context.Context) ([]cache.Score, string, error) {
-		for _, itemToItemConfig := range r.config.ItemToItem {
-			if itemToItemConfig.Name == name && itemToItemConfig.Type == "embedding" {
-				return r.recommendEmbeddingItemToItem(ctx, itemToItemConfig)
+		var itemToItemConfig *config.ItemToItemConfig
+		for i := range r.config.ItemToItem {
+			if r.config.ItemToItem[i].Name == name {
+				itemToItemConfig = &r.config.ItemToItem[i]
+				break
 			}
 		}
-		// filter positive feedbacks
+		if itemToItemConfig == nil {
+			return nil, "", errors.NotFoundf("item-to-item recommender %s", name)
+		}
 		data.SortFeedbacks(r.userFeedback)
 		userFeedback := make([]data.Feedback, 0, r.config.CacheSize)
 		for _, feedback := range r.userFeedback {
@@ -258,123 +299,84 @@ func (r *Recommender) recommendItemToItem(name string) RecommenderFunc {
 				}
 			}
 		}
-		// collect scores
 		scores := make(map[string]float64)
 		categories := make(map[string][]string)
-		digests := mapset.NewSet[string]()
 		for _, feedback := range userFeedback {
-			similarItems, err := r.cacheClient.SearchScores(ctx, cache.ItemToItem, cache.Key(name, feedback.ItemId), r.categories, 0, r.config.CacheSize)
+			neighbors, err := QueryItemToItem(ctx, r.vectorClient, *itemToItemConfig, feedback.ItemId, r.categories, r.config.CacheSize)
 			if err != nil {
 				return nil, "", errors.WithStack(err)
 			}
-			digest, err := r.cacheClient.Get(ctx, cache.Key(cache.ItemToItemDigest, name, feedback.ItemId)).String()
-			if err != nil {
-				return nil, "", errors.WithStack(err)
-			}
-			for _, item := range similarItems {
-				if !r.excludeSet.Contains(item.Id) {
-					scores[item.Id] += item.Score
-					categories[item.Id] = item.Categories
-					digests.Add(digest)
+			for _, neighbor := range neighbors {
+				if !r.excludeSet.Contains(neighbor.Id) {
+					scores[neighbor.Id] += neighbor.Score
+					categories[neighbor.Id] = neighbor.Categories
 				}
 			}
 		}
-		// collect top scores
 		filter := heap.NewTopKFilter[string, float64](r.config.CacheSize)
 		for id, score := range scores {
 			filter.Push(id, score)
 		}
 		elems := filter.PopAll()
 		return lo.Map(elems, func(elem heap.Elem[string, float64], _ int) cache.Score {
-			return cache.Score{
-				Id:         elem.Value,
-				Score:      elem.Weight,
-				Categories: categories[elem.Value],
-			}
-		}), strings.Join(digests.ToSlice(), ""), nil
+			return cache.Score{Id: elem.Value, Score: elem.Weight, Categories: categories[elem.Value]}
+		}), itemToItemConfig.Hash(&r.config), nil
 	}
 }
 
-func QueryEmbeddingItemToItem(ctx context.Context, dataClient data.Database, vectorClient vectors.Database, itemToItemConfig config.ItemToItemConfig, itemId string, categories []string, n int) ([]cache.Score, error) {
-	items, err := dataClient.BatchGetItems(ctx, []string{itemId}, data.GetOptions{})
+func QueryUserToUser(ctx context.Context, vectorClient vectors.Database, userToUserConfig config.UserToUserConfig, userId string, n int) ([]cache.Score, error) {
+	collection := vectors.UserToUserCollection(userToUserConfig.Name)
+	queries, err := vectorClient.GetVectors(ctx, collection, []string{userId})
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	if len(items) == 0 {
+	if len(queries) == 0 {
 		return nil, nil
 	}
-	columnFunc, err := expr.Compile(itemToItemConfig.Column, expr.Env(map[string]any{
-		"item": data.Item{},
-	}))
+	neighbors, err := vectorClient.QueryVectors(ctx, collection, queries[0], nil, n+1)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
-	embedding, ok := ExtractItemEmbedding(&items[0], columnFunc)
-	if !ok {
-		return nil, nil
+	distance := vectors.Dot
+	if userToUserConfig.Type == "embedding" {
+		distance = vectors.Euclidean
 	}
-	neighbors, err := vectorClient.QueryVectors(ctx, vectors.ItemToItemCollection(itemToItemConfig.Name), vectors.Vector{Values: embedding}, categories, n+1)
-	if err != nil {
-		return nil, errors.Trace(err)
+	scoreScale := 1.0
+	if userToUserConfig.Type == "auto" {
+		scoreScale = .5
 	}
-	scores := make([]cache.Score, 0, len(neighbors))
-	for i, neighbor := range neighbors {
-		if neighbor.Id != itemId {
-			scores = append(scores, cache.Score{Id: neighbor.Id, Score: float64(len(neighbors) - i), Categories: neighbor.Categories})
+	scores := make([]cache.Score, 0, min(n, len(neighbors)))
+	for _, neighbor := range neighbors {
+		if neighbor.Id == userId || distance == vectors.Dot && neighbor.Score <= 0 {
+			continue
 		}
-	}
-	if n > 0 && len(scores) > n {
-		scores = scores[:n]
+		score := float64(neighbor.Score) * scoreScale
+		if distance == vectors.Euclidean {
+			score = 1 / (1 - score)
+		}
+		scores = append(scores, cache.Score{Id: neighbor.Id, Score: score})
+		if len(scores) == n {
+			break
+		}
 	}
 	return scores, nil
 }
 
-func (r *Recommender) recommendEmbeddingItemToItem(ctx context.Context, itemToItemConfig config.ItemToItemConfig) ([]cache.Score, string, error) {
-	// filter positive feedbacks
-	data.SortFeedbacks(r.userFeedback)
-	userFeedback := make([]data.Feedback, 0, r.config.CacheSize)
-	for _, feedback := range r.userFeedback {
-		if expression.MatchFeedbackTypeExpressions(r.config.DataSource.PositiveFeedbackTypes, feedback.FeedbackType, feedback.Value) {
-			userFeedback = append(userFeedback, feedback)
-			if r.online && r.config.ContextSize <= len(userFeedback) {
+func (r *Recommender) recommendUserToUser(name string) RecommenderFunc {
+	return func(ctx context.Context) ([]cache.Score, string, error) {
+		var userToUserConfig *config.UserToUserConfig
+		for i := range r.config.UserToUser {
+			if r.config.UserToUser[i].Name == name {
+				userToUserConfig = &r.config.UserToUser[i]
 				break
 			}
 		}
-	}
-	scores := make(map[string]float64)
-	categories := make(map[string][]string)
-	for _, feedback := range userFeedback {
-		neighbors, err := QueryEmbeddingItemToItem(ctx, r.dataClient, r.vectorClient, itemToItemConfig, feedback.ItemId, r.categories, r.config.CacheSize)
-		if err != nil {
-			return nil, "", errors.Trace(err)
+		if userToUserConfig == nil {
+			return nil, "", errors.NotFoundf("user-to-user recommender %s", name)
 		}
-		for _, neighbor := range neighbors {
-			if !r.excludeSet.Contains(neighbor.Id) {
-				scores[neighbor.Id] += neighbor.Score
-				categories[neighbor.Id] = neighbor.Categories
-			}
-		}
-	}
-	filter := heap.NewTopKFilter[string, float64](r.config.CacheSize)
-	for id, score := range scores {
-		filter.Push(id, score)
-	}
-	elems := filter.PopAll()
-	return lo.Map(elems, func(elem heap.Elem[string, float64], _ int) cache.Score {
-		return cache.Score{Id: elem.Value, Score: elem.Weight, Categories: categories[elem.Value]}
-	}), itemToItemConfig.Hash(&r.config), nil
-}
-
-func (r *Recommender) recommendUserToUser(name string) RecommenderFunc {
-	return func(ctx context.Context) ([]cache.Score, string, error) {
 		scores := make(map[string]float64)
 		// load similar users
-		similarUsers, err := r.cacheClient.SearchScores(ctx, cache.UserToUser, cache.Key(name, r.userId), nil, 0, r.config.CacheSize)
-		if err != nil {
-			return nil, "", errors.WithStack(err)
-		}
-		// read digest
-		digest, err := r.cacheClient.Get(ctx, cache.Key(cache.UserToUserDigest, name, r.userId)).String()
+		similarUsers, err := QueryUserToUser(ctx, r.vectorClient, *userToUserConfig, r.userId, r.config.CacheSize)
 		if err != nil {
 			return nil, "", errors.WithStack(err)
 		}
@@ -427,7 +429,7 @@ func (r *Recommender) recommendUserToUser(name string) RecommenderFunc {
 				})
 			}
 		}
-		return results, digest, nil
+		return results, userToUserConfig.Hash(&r.config), nil
 	}
 }
 

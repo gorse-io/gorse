@@ -41,9 +41,8 @@ func (suite *UserToUserTestSuite) SetupSuite() {
 func (suite *UserToUserTestSuite) TestEmbedding() {
 	timestamp := time.Now()
 	opts := &UserToUserOptions{Context: suite.T().Context(), VectorClient: openTrackingVectorDatabase(suite.T())}
-	user2user, err := newEmbeddingUserToUser(config.UserToUserConfig{
-		Column: "user.Labels.description",
-	}, 10, timestamp, opts)
+	cfg := config.UserToUserConfig{Name: "embedding", Type: "embedding", Column: "user.Labels.description"}
+	user2user, err := newEmbeddingUserToUser(cfg, timestamp, opts)
 	suite.NoError(err)
 
 	for i := range 100 {
@@ -56,7 +55,8 @@ func (suite *UserToUserTestSuite) TestEmbedding() {
 	}
 
 	suite.NoError(user2user.Finish())
-	scores := user2user.PopAll(0)
+	scores, err := QueryUserToUser(suite.T().Context(), opts.VectorClient, cfg, "0", 10)
+	suite.NoError(err)
 	suite.Len(scores, 10)
 	for i := 1; i <= 10; i++ {
 		suite.Equal(strconv.Itoa(i), scores[i-1].Id)
@@ -65,7 +65,8 @@ func (suite *UserToUserTestSuite) TestEmbedding() {
 
 func (suite *UserToUserTestSuite) TestIDFInnerProductScores() {
 	opts := &UserToUserOptions{Context: suite.T().Context(), VectorClient: openTrackingVectorDatabase(suite.T())}
-	user2user, err := newItemsUserToUser(config.UserToUserConfig{}, 2, time.Now(), opts, []float32{0, 1, 2})
+	cfg := config.UserToUserConfig{Name: "items-idf", Type: "items"}
+	user2user, err := newItemsUserToUser(cfg, time.Now(), opts, []float32{0, 1, 2})
 	suite.NoError(err)
 
 	user2user.Push(&data.User{UserId: "query"}, []int32{1, 2})
@@ -73,7 +74,8 @@ func (suite *UserToUserTestSuite) TestIDFInnerProductScores() {
 	user2user.Push(&data.User{UserId: "idf-1"}, []int32{1})
 
 	suite.NoError(user2user.Finish())
-	scores := user2user.PopAll(0)
+	scores, err := QueryUserToUser(suite.T().Context(), opts.VectorClient, cfg, "query", 2)
+	suite.NoError(err)
 	suite.Require().Len(scores, 2)
 	suite.Equal("idf-2", scores[0].Id)
 	suite.InDelta(2, scores[0].Score, 1e-6)
@@ -88,9 +90,8 @@ func (suite *UserToUserTestSuite) TestTags() {
 	for i := range idf {
 		idf[i] = 1
 	}
-	user2user, err := newTagsUserToUser(config.UserToUserConfig{
-		Column: "user.Labels",
-	}, 10, timestamp, opts, idf)
+	cfg := config.UserToUserConfig{Name: "tags", Type: "tags", Column: "user.Labels"}
+	user2user, err := newTagsUserToUser(cfg, timestamp, opts, idf)
 	suite.NoError(err)
 
 	for i := range 100 {
@@ -105,7 +106,8 @@ func (suite *UserToUserTestSuite) TestTags() {
 	}
 
 	suite.NoError(user2user.Finish())
-	scores := user2user.PopAll(0)
+	scores, err := QueryUserToUser(suite.T().Context(), opts.VectorClient, cfg, "0", 10)
+	suite.NoError(err)
 	suite.Len(scores, 10)
 	for i := 1; i <= 10; i++ {
 		suite.Equal(strconv.Itoa(i), scores[i-1].Id)
@@ -119,7 +121,8 @@ func (suite *UserToUserTestSuite) TestItems() {
 	for i := range idf {
 		idf[i] = 1
 	}
-	user2user, err := newItemsUserToUser(config.UserToUserConfig{}, 10, timestamp, opts, idf)
+	cfg := config.UserToUserConfig{Name: "items", Type: "items"}
+	user2user, err := newItemsUserToUser(cfg, timestamp, opts, idf)
 	suite.NoError(err)
 
 	for i := range 100 {
@@ -131,7 +134,8 @@ func (suite *UserToUserTestSuite) TestItems() {
 	}
 
 	suite.NoError(user2user.Finish())
-	scores := user2user.PopAll(0)
+	scores, err := QueryUserToUser(suite.T().Context(), opts.VectorClient, cfg, "0", 10)
+	suite.NoError(err)
 	suite.Len(scores, 10)
 	for i := 1; i <= 10; i++ {
 		suite.Equal(strconv.Itoa(i), scores[i-1].Id)
@@ -145,7 +149,8 @@ func (suite *UserToUserTestSuite) TestAuto() {
 	for i := range idf {
 		idf[i] = 1
 	}
-	user2user, err := newAutoUserToUser(config.UserToUserConfig{}, 10, timestamp, opts, idf, idf)
+	cfg := config.UserToUserConfig{Name: "auto", Type: "auto"}
+	user2user, err := newAutoUserToUser(cfg, timestamp, opts, idf, idf)
 	suite.NoError(err)
 
 	for i := range 100 {
@@ -166,9 +171,11 @@ func (suite *UserToUserTestSuite) TestAuto() {
 	}
 
 	suite.NoError(user2user.Finish())
-	scores0 := user2user.PopAll(0)
+	scores0, err := QueryUserToUser(suite.T().Context(), opts.VectorClient, cfg, "0", 10)
+	suite.NoError(err)
 	suite.Len(scores0, 10)
-	scores1 := user2user.PopAll(1)
+	scores1, err := QueryUserToUser(suite.T().Context(), opts.VectorClient, cfg, "1", 10)
+	suite.NoError(err)
 	suite.Len(scores1, 10)
 }
 

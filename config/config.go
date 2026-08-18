@@ -286,9 +286,8 @@ func (config *NonPersonalizedConfig) Hash() string {
 
 type ItemToItemConfig struct {
 	Name   string `mapstructure:"name" json:"name"`
-	Type   string `mapstructure:"type" json:"type" validate:"oneof=embedding tags users chat auto"`
+	Type   string `mapstructure:"type" json:"type" validate:"oneof=embedding tags users auto"`
 	Column string `mapstructure:"column" json:"column" validate:"item_expr"`
-	Prompt string `mapstructure:"prompt" json:"prompt"`
 }
 
 func (config *ItemToItemConfig) FullName() string {

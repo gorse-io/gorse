@@ -786,7 +786,7 @@ func (m *Master) updateItemToItem(parent context.Context, dataset *dataset.Datas
 		return nil
 	}
 	ctx, span := m.tracer.Start(parent, "Generate item-to-item recommendation",
-		len(dataset.GetItems())*(len(m.Config.Recommend.ItemToItem))*2)
+		len(dataset.GetItems())*len(m.Config.Recommend.ItemToItem))
 	defer span.End()
 
 	vectorConfig := vectors.VectorConfig{
@@ -795,14 +795,13 @@ func (m *Master) updateItemToItem(parent context.Context, dataset *dataset.Datas
 	}
 	itemToItemRecommenders := make([]logics.ItemToItem, 0, len(m.Config.Recommend.ItemToItem))
 	for _, cfg := range m.Config.Recommend.ItemToItem {
-		recommender, err := logics.NewItemToItem(cfg, m.Config.Recommend.CacheSize, dataset.GetTimestamp(), &logics.ItemToItemOptions{
+		recommender, err := logics.NewItemToItem(cfg, dataset.GetTimestamp(), &logics.ItemToItemOptions{
 			Context:      ctx,
 			VectorClient: m.VectorClient,
 			VectorConfig: vectorConfig,
 			BatchSize:    batchSize,
 			TagsIDF:      dataset.GetItemColumnValuesIDF(),
 			UsersIDF:     dataset.GetUserIDF(),
-			OpenAIConfig: m.Config.OpenAI,
 		})
 		if err != nil {
 			return errors.WithStack(err)
@@ -824,106 +823,7 @@ func (m *Master) updateItemToItem(parent context.Context, dataset *dataset.Datas
 			return errors.Trace(err)
 		}
 	}
-
-	// Save item-to-item recommendations to cache
-	for i, recommender := range itemToItemRecommenders {
-		itemToItemConfig := m.Config.Recommend.ItemToItem[i]
-		if itemToItemConfig.Type == "embedding" {
-			for _, item := range dataset.GetItems() {
-				subset := cache.Key(itemToItemConfig.Name, item.ItemId)
-				if err := m.CacheClient.DeleteScores(ctx, []string{cache.ItemToItem}, cache.ScoreCondition{Subset: &subset}); err != nil {
-					return errors.Trace(err)
-				}
-				if err := m.CacheClient.Set(ctx,
-					cache.String(cache.Key(cache.ItemToItemDigest, itemToItemConfig.Name, item.ItemId), itemToItemConfig.Hash(&m.Config.Recommend)),
-					cache.Time(cache.Key(cache.ItemToItemUpdateTime, itemToItemConfig.Name, item.ItemId), time.Now()),
-				); err != nil {
-					return errors.Trace(err)
-				}
-				span.Add(1)
-			}
-			continue
-		}
-		if err := parallel.For(ctx, recommender.Count(), m.Config.Master.NumJobs, func(j int) {
-			item := recommender.Get(j)
-			if m.needUpdateItemToItem(ctx, item.ItemId, itemToItemConfig) {
-				defer span.Add(1)
-				score := recommender.PopAll(j)
-				if score == nil {
-					return
-				}
-				log.Logger().Debug("update item-to-item recommendation",
-					zap.String("item_id", item.ItemId),
-					zap.String("name", itemToItemConfig.Name),
-					zap.Int("n_recommendations", len(score)))
-				// Save item-to-item recommendation to cache
-				if err := m.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key(itemToItemConfig.Name, item.ItemId), score); err != nil {
-					log.Logger().Error("failed to save item-to-item recommendation to cache",
-						zap.String("item_id", item.ItemId), zap.Error(err))
-					return
-				}
-				// Save item-to-item digest and last update time to cache
-				if err := m.CacheClient.Set(ctx,
-					cache.String(cache.Key(cache.ItemToItemDigest, itemToItemConfig.Name, item.ItemId), itemToItemConfig.Hash(&m.Config.Recommend)),
-					cache.Time(cache.Key(cache.ItemToItemUpdateTime, itemToItemConfig.Name, item.ItemId), time.Now()),
-				); err != nil {
-					log.Logger().Error("failed to save item-to-item digest to cache",
-						zap.String("item_id", item.ItemId), zap.Error(err))
-					return
-				}
-				// Remove stale item-to-item recommendation
-				if err := m.CacheClient.DeleteScores(ctx, []string{cache.ItemToItem}, cache.ScoreCondition{
-					Subset: new(cache.Key(itemToItemConfig.Name, item.ItemId)),
-					Before: new(recommender.Timestamp()),
-				}); err != nil {
-					log.Logger().Error("failed to remove stale item-to-item recommendation",
-						zap.String("item_id", item.ItemId), zap.Error(err))
-					return
-				}
-			} else {
-				span.Add(1)
-			}
-		}); err != nil {
-			return errors.WithStack(err)
-		}
-	}
 	return nil
-}
-
-// needUpdateItemToItem checks if item-to-item recommendation needs to be updated.
-func (m *Master) needUpdateItemToItem(ctx context.Context, itemId string, itemToItemConfig config.ItemToItemConfig) bool {
-	// check cache
-	items, err := m.CacheClient.SearchScores(ctx, cache.ItemToItem,
-		cache.Key(itemToItemConfig.Name, itemId), nil, 0, -1)
-	if err != nil {
-		log.Logger().Error("failed to fetch item-to-item recommendation",
-			zap.String("item_id", itemId), zap.Error(err))
-		return true
-	} else if len(items) == 0 {
-		return true
-	}
-
-	// check digest
-	digest, err := m.CacheClient.Get(ctx, cache.Key(cache.ItemToItemDigest, itemToItemConfig.Name, itemId)).String()
-	if err != nil {
-		if !errors.Is(err, storage.ErrNotFound) {
-			log.Logger().Error("failed to read item-to-item digest", zap.Error(err))
-		}
-		return true
-	}
-	if digest != itemToItemConfig.Hash(&m.Config.Recommend) {
-		return true
-	}
-
-	// check update time
-	updateTime, err := m.CacheClient.Get(ctx, cache.Key(cache.ItemToItemUpdateTime, itemToItemConfig.Name, itemId)).Time()
-	if err != nil {
-		if !errors.Is(err, storage.ErrNotFound) {
-			log.Logger().Error("failed to read last update item neighbors time", zap.Error(err))
-		}
-		return true
-	}
-	return updateTime.Before(time.Now().Add(-m.Config.Recommend.CacheExpire))
 }
 
 func (m *Master) updateUserToUser(parent context.Context, dataset *dataset.Dataset) error {
@@ -931,7 +831,7 @@ func (m *Master) updateUserToUser(parent context.Context, dataset *dataset.Datas
 		return nil
 	}
 	ctx, span := m.tracer.Start(parent, "Generate user-to-user recommendation",
-		len(dataset.GetUsers())*(len(m.Config.Recommend.UserToUser))*2)
+		len(dataset.GetUsers())*len(m.Config.Recommend.UserToUser))
 	defer span.End()
 
 	userToUserRecommenders := make([]logics.UserToUser, 0, len(m.Config.Recommend.UserToUser))
@@ -940,7 +840,7 @@ func (m *Master) updateUserToUser(parent context.Context, dataset *dataset.Datas
 		Bits: m.Config.Database.Vector.QuantizationBits,
 	}
 	for _, cfg := range m.Config.Recommend.UserToUser {
-		recommender, err := logics.NewUserToUser(cfg, m.Config.Recommend.CacheSize, dataset.GetTimestamp(), &logics.UserToUserOptions{
+		recommender, err := logics.NewUserToUser(cfg, dataset.GetTimestamp(), &logics.UserToUserOptions{
 			Context:      ctx,
 			VectorClient: m.VectorClient,
 			VectorConfig: vectorConfig,
@@ -968,79 +868,7 @@ func (m *Master) updateUserToUser(parent context.Context, dataset *dataset.Datas
 			return errors.Trace(err)
 		}
 	}
-
-	// Save user-to-user recommendations to cache
-	for i, recommender := range userToUserRecommenders {
-		if err := parallel.ForEach(ctx, recommender.Users(), m.Config.Master.NumJobs, func(j int, user *data.User) {
-			userToUserConfig := m.Config.Recommend.UserToUser[i]
-			if m.needUpdateUserToUser(ctx, user.UserId, userToUserConfig) {
-				score := recommender.PopAll(j)
-				if score == nil {
-					return
-				}
-				log.Logger().Debug("update user neighbors",
-					zap.String("user_id", user.UserId),
-					zap.Int("n_recommendations", len(score)))
-				// Save user-to-user recommendations to cache
-				if err := m.CacheClient.AddScores(ctx, cache.UserToUser, cache.Key(userToUserConfig.Name, user.UserId), score); err != nil {
-					log.Logger().Error("failed to save user neighbors to cache", zap.String("user_id", user.UserId), zap.Error(err))
-					return
-				}
-				// Save user-to-user digest and last update time to cache
-				if err := m.CacheClient.Set(ctx,
-					cache.String(cache.Key(cache.UserToUserDigest, cache.Key(userToUserConfig.Name, user.UserId)), userToUserConfig.Hash(&m.Config.Recommend)),
-					cache.Time(cache.Key(cache.UserToUserUpdateTime, cache.Key(userToUserConfig.Name, user.UserId)), time.Now()),
-				); err != nil {
-					log.Logger().Error("failed to save user neighbors digest to cache", zap.String("user_id", user.UserId), zap.Error(err))
-					return
-				}
-				// Delete stale user-to-user recommendations
-				if err := m.CacheClient.DeleteScores(ctx, []string{cache.UserToUser}, cache.ScoreCondition{
-					Subset: new(cache.Key(userToUserConfig.Name, user.UserId)),
-					Before: new(recommender.Timestamp()),
-				}); err != nil {
-					log.Logger().Error("failed to remove stale user neighbors", zap.String("user_id", user.UserId), zap.Error(err))
-				}
-			}
-			span.Add(1)
-		}); err != nil {
-			return errors.WithStack(err)
-		}
-	}
 	return nil
-}
-
-// needUpdateUserToUser checks if user-to-user recommendation needs to be updated.
-func (m *Master) needUpdateUserToUser(ctx context.Context, userId string, userToUserConfig config.UserToUserConfig) bool {
-	// check cache
-	if items, err := m.CacheClient.SearchScores(ctx, cache.UserToUser, cache.Key(userToUserConfig.Name, userId), nil, 0, -1); err != nil {
-		log.Logger().Error("failed to load user neighbors", zap.String("user_id", userId), zap.Error(err))
-		return true
-	} else if len(items) == 0 {
-		return true
-	}
-
-	// read digest
-	cacheDigest, err := m.CacheClient.Get(ctx, cache.Key(cache.UserToUserDigest, cache.Key(userToUserConfig.Name, userId))).String()
-	if err != nil {
-		if !errors.Is(err, storage.ErrNotFound) {
-			log.Logger().Error("failed to read user neighbors digest", zap.Error(err))
-		}
-		return true
-	}
-	if cacheDigest != userToUserConfig.Hash(&m.Config.Recommend) {
-		return true
-	}
-
-	// check update time
-	updateTime, err := m.CacheClient.Get(ctx, cache.Key(cache.UserToUserUpdateTime, cache.Key(userToUserConfig.Name, userId))).Time()
-	if err != nil {
-		if !errors.Is(err, storage.ErrNotFound) {
-			log.Logger().Error("failed to read last update user neighbors time", zap.Error(err))
-		}
-		return true
-	}
-	return updateTime.Before(time.Now().Add(-m.Config.Recommend.CacheExpire))
 }
 
 func (m *Master) trainCollaborativeFiltering(parent context.Context, trainSet, testSet dataset.CFSplit) error {
@@ -1417,34 +1245,6 @@ func (m *Master) collectGarbage(parent context.Context, dataSet *dataset.Dataset
 			}) {
 				return m.CacheClient.DeleteScores(ctx, []string{cache.NonPersonalized}, cache.ScoreCondition{
 					Subset: new(subset),
-				})
-			}
-		case cache.UserToUser:
-			splits := strings.Split(subset, "/")
-			if len(splits) != 2 {
-				log.Logger().Error("invalid subset", zap.String("subset", subset))
-				return nil
-			}
-			if dataSet.GetUserDict().Id(splits[1]) == dataset.NotId || !lo.ContainsBy(m.Config.Recommend.UserToUser, func(cfg config.UserToUserConfig) bool {
-				return cfg.Name == splits[0]
-			}) {
-				return m.CacheClient.DeleteScores(ctx, []string{cache.UserToUser}, cache.ScoreCondition{
-					Subset: new(subset),
-					Before: new(dataSet.GetTimestamp()),
-				})
-			}
-		case cache.ItemToItem:
-			splits := strings.Split(subset, "/")
-			if len(splits) != 2 {
-				log.Logger().Error("invalid subset", zap.String("subset", subset))
-				return nil
-			}
-			if dataSet.GetItemDict().Id(splits[1]) == dataset.NotId || !lo.ContainsBy(m.Config.Recommend.ItemToItem, func(cfg config.ItemToItemConfig) bool {
-				return cfg.Name == splits[0]
-			}) {
-				return m.CacheClient.DeleteScores(ctx, []string{cache.ItemToItem}, cache.ScoreCondition{
-					Subset: new(subset),
-					Before: new(dataSet.GetTimestamp()),
 				})
 			}
 		case cache.CollaborativeFiltering:

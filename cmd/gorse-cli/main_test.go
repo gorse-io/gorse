@@ -23,6 +23,7 @@ import (
 	"github.com/gorse-io/gorse/protocol"
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
+	"github.com/gorse-io/gorse/storage/vectors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/require"
@@ -115,11 +116,17 @@ func (s *CLITestSuite) SetupTest() {
 		{Id: "recommend-1", Score: 1, Categories: []string{"news"}},
 	}))
 	s.Require().NoError(s.m.CacheClient.Set(ctx, cache.String(cache.Key(cache.NonPersonalizedDigest, "popular"), "digest")))
-	s.Require().NoError(s.m.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key("neighbors", "item-1"), []cache.Score{
-		{Id: "similar-1", Score: 1, Categories: []string{"news"}},
+	itemCollection := vectors.ItemToItemCollection("neighbors")
+	_ = s.m.VectorClient.AddCollection(ctx, itemCollection, 0, vectors.Dot, vectors.VectorConfig{})
+	s.Require().NoError(s.m.VectorClient.AddVectors(ctx, itemCollection, []vectors.Vector{
+		{Id: "item-1", Indices: []uint32{0}, Values: []float32{1}},
+		{Id: "similar-1", Indices: []uint32{0}, Values: []float32{1}, Categories: []string{"news"}},
 	}))
-	s.Require().NoError(s.m.CacheClient.AddScores(ctx, cache.UserToUser, cache.Key("neighbors", "alice"), []cache.Score{
-		{Id: "neighbor-1", Score: 1},
+	collection := vectors.UserToUserCollection("neighbors")
+	_ = s.m.VectorClient.AddCollection(ctx, collection, 0, vectors.Dot, vectors.VectorConfig{})
+	s.Require().NoError(s.m.VectorClient.AddVectors(ctx, collection, []vectors.Vector{
+		{Id: "alice", Indices: []uint32{0}, Values: []float32{1}},
+		{Id: "neighbor-1", Indices: []uint32{0}, Values: []float32{1}},
 	}))
 	s.Require().NoError(s.m.CacheClient.AddTimeSeriesPoints(ctx, []cache.TimeSeriesPoint{{
 		Name:      "requests",
@@ -505,6 +512,8 @@ func newTestMaster(t *testing.T) (*master.Master, string) {
 	cfg.Master.DashboardUserName = "admin"
 	cfg.Master.DashboardPassword = "pass"
 	cfg.Recommend.Search.Columns = []string{"item.Comment"}
+	cfg.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "neighbors", Type: "tags", Column: "item.Labels"}}
+	cfg.Recommend.UserToUser = []config.UserToUserConfig{{Name: "neighbors", Type: "items"}}
 	cfg.OpenAI.AuthToken = "test"
 
 	m := master.NewMaster(cfg, tempDir, true, "")
@@ -531,6 +540,7 @@ func closeTestMasterStores(t *testing.T, m *master.Master) {
 	t.Helper()
 	require.NoError(t, m.DataClient.Close())
 	require.NoError(t, m.CacheClient.Close())
+	require.NoError(t, m.VectorClient.Close())
 
 	metaStoreValue := reflect.ValueOf(m).Elem().FieldByName("metaStore")
 	if metaStoreValue.IsNil() {

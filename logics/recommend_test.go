@@ -27,6 +27,7 @@ import (
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
 	"github.com/gorse-io/gorse/storage/vectors"
+	"github.com/samber/lo"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -92,8 +93,6 @@ func (suite *RecommenderTestSuite) TestEmbeddingItemToItemUsesVectorStore() {
 		FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "embedding_user", ItemId: "source"},
 	}}, true, true, false)
 	suite.NoError(err)
-	err = suite.cacheClient.AddScores(ctx, cache.ItemToItem, cache.Key("embedding", "source"), []cache.Score{{Id: "stale", Score: 100}})
-	suite.NoError(err)
 
 	cfg := config.RecommendConfig{
 		CacheSize: 2,
@@ -108,6 +107,36 @@ func (suite *RecommenderTestSuite) TestEmbeddingItemToItemUsesVectorStore() {
 	suite.NoError(err)
 	suite.Equal(cfg.ItemToItem[0].Hash(&cfg), digest)
 	suite.Equal([]string{"near", "far"}, cache.ConvertDocumentsToValues(scores))
+}
+
+func (suite *RecommenderTestSuite) TestItemToItemUsesVectorStore() {
+	ctx := suite.T().Context()
+	collection := vectors.ItemToItemCollection("tags-vector")
+	suite.NoError(suite.vectorClient.AddCollection(ctx, collection, 0, vectors.Dot, vectors.VectorConfig{}))
+	suite.NoError(suite.vectorClient.AddVectors(ctx, collection, []vectors.Vector{
+		{Id: "source", Indices: []uint32{0}, Values: []float32{1}},
+		{Id: "near", Indices: []uint32{0}, Values: []float32{2}},
+		{Id: "unrelated", Indices: []uint32{1}, Values: []float32{1}},
+	}))
+	suite.NoError(suite.dataClient.BatchInsertFeedback(ctx, []data.Feedback{{
+		FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "tags-vector-user", ItemId: "source"},
+	}}, true, true, false))
+
+	cfg := config.RecommendConfig{
+		CacheSize: 2,
+		DataSource: config.DataSourceConfig{
+			PositiveFeedbackTypes: []expression.FeedbackTypeExpression{{FeedbackType: "click"}},
+		},
+		ItemToItem: []config.ItemToItemConfig{{Name: "tags-vector", Type: "tags", Column: "item.Labels"}},
+	}
+	recommender, err := NewRecommender(cfg, suite.cacheClient, suite.dataClient, suite.vectorClient, true, "tags-vector-user", nil)
+	suite.NoError(err)
+	scores, digest, err := recommender.recommendItemToItem("tags-vector")(ctx)
+	suite.NoError(err)
+	suite.Equal(cfg.ItemToItem[0].Hash(&cfg), digest)
+	suite.Require().Len(scores, 1)
+	suite.Equal("near", scores[0].Id)
+	suite.InDelta(2, scores[0].Score, 1e-6)
 }
 
 func (suite *RecommenderTestSuite) TestLatest() {
@@ -341,28 +370,33 @@ func (suite *RecommenderTestSuite) TestUserToUser() {
 	err = suite.dataClient.BatchInsertFeedback(suite.T().Context(), feedback, true, true, false)
 	suite.NoError(err)
 
-	err = suite.cacheClient.AddScores(suite.T().Context(), cache.UserToUser, cache.Key("test", "user_1"), []cache.Score{
-		{Id: "user_2", Score: 1},
+	userToUserConfig := config.UserToUserConfig{Name: "test", Type: "embedding"}
+	err = suite.vectorClient.AddCollection(suite.T().Context(), vectors.UserToUserCollection("test"), 2, vectors.Euclidean, vectors.VectorConfig{})
+	suite.NoError(err)
+	err = suite.vectorClient.AddVectors(suite.T().Context(), vectors.UserToUserCollection("test"), []vectors.Vector{
+		{Id: "user_1", Values: []float32{0, 0}},
+		{Id: "user_2", Values: []float32{0.1, 0}},
 	})
 	suite.NoError(err)
-	err = suite.cacheClient.Set(suite.T().Context(), cache.String(cache.Key(cache.UserToUserDigest, "test", "user_1"), "digest"))
-	suite.NoError(err)
 
-	recommender, err := NewRecommender(config.RecommendConfig{
-		CacheSize: 10,
+	recommendConfig := config.RecommendConfig{
+		CacheSize:  10,
+		UserToUser: []config.UserToUserConfig{userToUserConfig},
 		DataSource: config.DataSourceConfig{
 			PositiveFeedbackTypes: []expression.FeedbackTypeExpression{{FeedbackType: "click"}},
 			ItemTTL:               1,
 		},
-	}, suite.cacheClient, suite.dataClient, suite.vectorClient, true, "user_1", nil)
+	}
+	recommender, err := NewRecommender(recommendConfig, suite.cacheClient, suite.dataClient, suite.vectorClient, true, "user_1", nil)
 	suite.NoError(err)
 	scores, digest, err := recommender.recommendUserToUser("test")(suite.T().Context())
 	suite.NoError(err)
-	suite.Equal("digest", digest)
-	suite.ElementsMatch([]cache.Score{
-		{Id: "item_20", Score: 1},
-		{Id: "item_21", Score: 1},
-	}, scores)
+	suite.Equal(userToUserConfig.Hash(&recommendConfig), digest)
+	suite.Require().Len(scores, 2)
+	suite.ElementsMatch([]string{"item_20", "item_21"}, lo.Map(scores, func(score cache.Score, _ int) string { return score.Id }))
+	for _, score := range scores {
+		suite.InDelta(1/1.01, score.Score, 1e-6)
+	}
 }
 
 func TestRecommenderTestSuite(t *testing.T) {

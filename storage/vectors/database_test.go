@@ -136,6 +136,15 @@ func (suite *vectorsTestSuite) TestVectors() {
 	for _, result := range results {
 		suite.NotEmpty(result.Categories)
 	}
+
+	queryVectors, err := suite.Database.GetVectors(ctx, "test", []string{"a"})
+	suite.NoError(err)
+	suite.Require().Len(queryVectors, 1)
+	results, err = suite.Database.QueryVectors(ctx, "test", queryVectors[0], nil, 10)
+	suite.NoError(err)
+	suite.Require().Len(results, 2)
+	suite.Equal("a", results[0].Id)
+	suite.Equal("b", results[1].Id)
 }
 
 func (suite *vectorsTestSuite) TestGetVectors() {

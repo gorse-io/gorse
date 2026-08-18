@@ -119,7 +119,7 @@ func TestItemToItemUsesVectorDatabase(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := t.Context()
 			database := openTrackingVectorDatabase(t)
-			recommender, err := NewItemToItem(test.config, 2, time.Now(), &ItemToItemOptions{
+			recommender, err := NewItemToItem(test.config, time.Now(), &ItemToItemOptions{
 				Context: ctx, VectorClient: database, TagsIDF: test.tagsIDF, UsersIDF: test.usersIDF,
 			})
 			require.NoError(t, err)
@@ -139,7 +139,8 @@ func TestItemToItemUsesVectorDatabase(t *testing.T) {
 			require.Equal(t, test.distance, info.Distance)
 			require.Len(t, database.written[collection], 3)
 
-			scores := recommender.PopAll(0)
+			scores, err := QueryItemToItem(ctx, database, test.config, "query", nil, 2)
+			require.NoError(t, err)
 			require.NotEmpty(t, scores)
 			require.Equal(t, test.want, scores[0].Id)
 			require.Equal(t, 1, database.queryCount(collection))
@@ -164,17 +165,20 @@ func TestItemToItemUsesVectorDatabase(t *testing.T) {
 func TestItemToItemVectorDatabasePreservesHiddenItemsAndCategories(t *testing.T) {
 	ctx := t.Context()
 	database := openTrackingVectorDatabase(t)
-	recommender, err := NewItemToItem(config.ItemToItemConfig{
+	cfg := config.ItemToItemConfig{
 		Name: "hidden", Type: "tags", Column: "item.Labels",
-	}, 5, time.Now(), &ItemToItemOptions{Context: ctx, VectorClient: database, TagsIDF: []float32{1}})
+	}
+	recommender, err := NewItemToItem(cfg, time.Now(), &ItemToItemOptions{Context: ctx, VectorClient: database, TagsIDF: []float32{1}})
 	require.NoError(t, err)
 	recommender.Push(&data.Item{ItemId: "visible", Labels: []dataset.ID{0}, Categories: []string{"movie"}}, nil)
 	recommender.Push(&data.Item{ItemId: "hidden", Labels: []dataset.ID{0}, IsHidden: true}, nil)
 	require.NoError(t, recommender.Finish())
 
-	visible := recommender.PopAll(0)
+	visible, err := QueryItemToItem(ctx, database, cfg, "visible", nil, 5)
+	require.NoError(t, err)
 	require.Empty(t, visible)
-	hidden := recommender.PopAll(1)
+	hidden, err := QueryItemToItem(ctx, database, cfg, "hidden", nil, 5)
+	require.NoError(t, err)
 	require.Len(t, hidden, 1)
 	require.Equal(t, "visible", hidden[0].Id)
 	require.Equal(t, []string{"movie"}, hidden[0].Categories)
@@ -229,7 +233,7 @@ func TestUserToUserUsesVectorDatabase(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			ctx := t.Context()
 			database := openTrackingVectorDatabase(t)
-			recommender, err := NewUserToUser(test.config, 2, time.Now(), &UserToUserOptions{
+			recommender, err := NewUserToUser(test.config, time.Now(), &UserToUserOptions{
 				Context: ctx, VectorClient: database, TagsIDF: test.tagsIDF, ItemsIDF: test.itemsIDF,
 			})
 			require.NoError(t, err)
@@ -249,7 +253,8 @@ func TestUserToUserUsesVectorDatabase(t *testing.T) {
 			require.Equal(t, test.distance, info.Distance)
 			require.Len(t, database.written[collection], 3)
 
-			scores := recommender.PopAll(0)
+			scores, err := QueryUserToUser(ctx, database, test.config, "query", 2)
+			require.NoError(t, err)
 			require.NotEmpty(t, scores)
 			require.Equal(t, test.want, scores[0].Id)
 			require.Equal(t, 1, database.queryCount(collection))
