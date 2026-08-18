@@ -17,9 +17,15 @@ package vectors
 import (
 	"os"
 	"testing"
+	"time"
 
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/juju/errors"
+	"github.com/milvus-io/milvus/client/v2/column"
+	"github.com/milvus-io/milvus/client/v2/entity"
+	"github.com/milvus-io/milvus/client/v2/milvusclient"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -65,4 +71,63 @@ func TestMilvus(t *testing.T) {
 		t.Skip("MILVUS_URI is not set, skipping Milvus test")
 	}
 	suite.Run(t, new(MilvusTestSuite))
+}
+
+func TestMilvusVectors(t *testing.T) {
+	timestampA := time.Now().UTC().Truncate(time.Millisecond)
+	timestampB := timestampA.Add(time.Second)
+	result := milvusclient.ResultSet{
+		ResultCount: 2,
+		Fields: milvusclient.DataSet{
+			column.NewColumnVarChar(milvusIdField, []string{"a", "b"}),
+			column.NewColumnVarCharArray(milvusCategoriesField, [][]string{{"cat-a"}, {"cat-b"}}),
+			column.NewColumnBool(milvusHiddenField, []bool{false, true}),
+			column.NewColumnInt64(milvusTimestampField, []int64{timestampA.UnixMilli(), timestampB.UnixMilli()}),
+			column.NewColumnFloatVector(milvusVectorField, 2, [][]float32{{1, 0}, {0, 1}}),
+		},
+	}
+	vectors, err := milvusVectors("test", []string{"b", "missing", "a"}, result)
+	require.NoError(t, err)
+	assert.Equal(t, []Vector{
+		{Id: "b", Values: []float32{0, 1}, IsHidden: true, Categories: []string{"cat-b"}, Timestamp: timestampB},
+		{Id: "a", Values: []float32{1, 0}, Categories: []string{"cat-a"}, Timestamp: timestampA},
+	}, vectors)
+
+	sparse, err := entity.NewSliceSparseEmbedding([]uint32{1, 100}, []float32{1, 2})
+	require.NoError(t, err)
+	result.ResultCount = 1
+	result.Fields = milvusclient.DataSet{
+		column.NewColumnVarChar(milvusIdField, []string{"sparse"}),
+		column.NewColumnVarCharArray(milvusCategoriesField, [][]string{{}}),
+		column.NewColumnBool(milvusHiddenField, []bool{false}),
+		column.NewColumnInt64(milvusTimestampField, []int64{timestampA.UnixMilli()}),
+		column.NewColumnSparseVectors(milvusVectorField, []entity.SparseEmbedding{sparse}),
+	}
+	vectors, err = milvusVectors("test", []string{"sparse"}, result)
+	require.NoError(t, err)
+	require.Len(t, vectors, 1)
+	assert.Equal(t, []uint32{1, 100}, vectors[0].Indices)
+	assert.Equal(t, []float32{1, 2}, vectors[0].Values)
+
+	valid := milvusclient.DataSet{
+		column.NewColumnVarChar(milvusIdField, []string{"a"}),
+		column.NewColumnVarCharArray(milvusCategoriesField, [][]string{{"cat-a"}}),
+		column.NewColumnBool(milvusHiddenField, []bool{false}),
+		column.NewColumnInt64(milvusTimestampField, []int64{timestampA.UnixMilli()}),
+		column.NewColumnFloatVector(milvusVectorField, 2, [][]float32{{1, 0}}),
+	}
+	tests := map[string]milvusclient.DataSet{
+		"missing id":         valid[1:],
+		"missing categories": {valid[0], valid[2], valid[3], valid[4]},
+		"missing hidden":     {valid[0], valid[1], valid[3], valid[4]},
+		"missing timestamp":  {valid[0], valid[1], valid[2], valid[4]},
+		"unsupported vector": {valid[0], valid[1], valid[2], valid[3], column.NewColumnInt64(milvusVectorField, []int64{1})},
+		"invalid id row":     {column.NewColumnVarChar(milvusIdField, nil), valid[1], valid[2], valid[3], valid[4]},
+	}
+	for name, fields := range tests {
+		t.Run(name, func(t *testing.T) {
+			_, err := milvusVectors("test", []string{"a"}, milvusclient.ResultSet{ResultCount: 1, Fields: fields})
+			assert.Error(t, err)
+		})
+	}
 }

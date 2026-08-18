@@ -315,6 +315,10 @@ func (db *Milvus) GetVectors(ctx context.Context, collection string, ids []strin
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
+	return milvusVectors(collection, ids, result)
+}
+
+func milvusVectors(collection string, ids []string, result milvusclient.ResultSet) ([]Vector, error) {
 	idCol, ok := result.GetColumn(milvusIdField).(*column.ColumnVarChar)
 	if !ok {
 		return nil, errors.Errorf("failed to parse vector ids for collection %s", collection)
