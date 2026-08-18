@@ -15,6 +15,7 @@
 package vectors
 
 import (
+	"context"
 	"os"
 	"testing"
 	"time"
@@ -130,4 +131,39 @@ func TestMilvusVectors(t *testing.T) {
 			assert.Error(t, err)
 		})
 	}
+}
+
+func TestGetMilvusVectors(t *testing.T) {
+	ctx := t.Context()
+	called := false
+	vectors, err := getMilvusVectors(ctx, "test", nil, func(context.Context, milvusclient.QueryOption) (milvusclient.ResultSet, error) {
+		called = true
+		return milvusclient.ResultSet{}, nil
+	})
+	require.NoError(t, err)
+	assert.Empty(t, vectors)
+	assert.False(t, called)
+
+	expectedErr := errors.New("query failed")
+	_, err = getMilvusVectors(ctx, "test", []string{"a"}, func(context.Context, milvusclient.QueryOption) (milvusclient.ResultSet, error) {
+		return milvusclient.ResultSet{}, expectedErr
+	})
+	assert.ErrorIs(t, err, expectedErr)
+
+	timestamp := time.Now().UTC().Truncate(time.Millisecond)
+	vectors, err = getMilvusVectors(ctx, "test", []string{"a"}, func(_ context.Context, option milvusclient.QueryOption) (milvusclient.ResultSet, error) {
+		request, err := option.Request()
+		require.NoError(t, err)
+		assert.Equal(t, "test", request.GetCollectionName())
+		return milvusclient.ResultSet{ResultCount: 1, Fields: milvusclient.DataSet{
+			column.NewColumnVarChar(milvusIdField, []string{"a"}),
+			column.NewColumnVarCharArray(milvusCategoriesField, [][]string{{"cat-a"}}),
+			column.NewColumnBool(milvusHiddenField, []bool{false}),
+			column.NewColumnInt64(milvusTimestampField, []int64{timestamp.UnixMilli()}),
+			column.NewColumnFloatVector(milvusVectorField, 2, [][]float32{{1, 0}}),
+		}}, nil
+	})
+	require.NoError(t, err)
+	require.Len(t, vectors, 1)
+	assert.Equal(t, "a", vectors[0].Id)
 }

@@ -192,6 +192,14 @@ func (suite *vectorsTestSuite) TestSparse() {
 	suite.Require().NoError(err)
 	suite.Equal(int64(3), count)
 
+	vectors, err := suite.Database.GetVectors(ctx, "test_sparse", []string{"match", "missing"})
+	suite.Require().NoError(err)
+	suite.Require().Len(vectors, 1)
+	suite.Equal("match", vectors[0].Id)
+	suite.Equal([]uint32{1, 100}, vectors[0].Indices)
+	suite.Equal([]float32{1, 2}, vectors[0].Values)
+	suite.Equal(cutoff, vectors[0].Timestamp)
+
 	results, err := suite.Database.QueryVectors(ctx, "test_sparse", Vector{
 		Indices: []uint32{1, 100},
 		Values:  []float32{1, 2},

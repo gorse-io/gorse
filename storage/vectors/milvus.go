@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -305,11 +306,17 @@ func (db *Milvus) AddVectors(ctx context.Context, collection string, vectors []V
 }
 
 func (db *Milvus) GetVectors(ctx context.Context, collection string, ids []string) ([]Vector, error) {
+	return getMilvusVectors(ctx, collection, ids, func(ctx context.Context, option milvusclient.QueryOption) (milvusclient.ResultSet, error) {
+		return db.client.Query(ctx, option)
+	})
+}
+
+func getMilvusVectors(ctx context.Context, collection string, ids []string, query func(context.Context, milvusclient.QueryOption) (milvusclient.ResultSet, error)) ([]Vector, error) {
 	if len(ids) == 0 {
 		return []Vector{}, nil
 	}
-	result, err := db.client.Query(ctx, milvusclient.NewQueryOption(collection).
-		WithIDs(column.NewColumnVarChar(milvusIdField, ids)).
+	result, err := query(ctx, milvusclient.NewQueryOption(collection).
+		WithIDs(column.NewColumnVarChar(milvusIdField, slices.Clone(ids))).
 		WithOutputFields(milvusIdField, milvusCategoriesField, milvusHiddenField, milvusTimestampField, milvusVectorField).
 		WithConsistencyLevel(entity.ClStrong))
 	if err != nil {
