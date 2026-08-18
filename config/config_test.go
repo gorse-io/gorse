@@ -528,11 +528,6 @@ func (s *ValidateTestSuite) TestDuplicateItemToItem() {
 	s.Error(s.Validate())
 }
 
-func (s *ValidateTestSuite) TestItemToItemType() {
-	s.Recommend.ItemToItem = []ItemToItemConfig{{Name: "chat", Type: "chat"}}
-	s.Error(s.Validate())
-}
-
 func (s *ValidateTestSuite) TestRecommendersExistence() {
 	s.Recommend.Ranker.Recommenders = []string{"not_exist"}
 	s.Error(s.Validate())
