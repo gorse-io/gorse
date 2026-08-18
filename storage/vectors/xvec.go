@@ -323,6 +323,50 @@ func (db *Xvec) AddVectors(ctx context.Context, name string, vectors []Vector) e
 	return errors.Trace(err)
 }
 
+func (db *Xvec) GetVectors(ctx context.Context, name string, ids []string) ([]Vector, error) {
+	if len(ids) == 0 {
+		return []Vector{}, nil
+	}
+	collection, err := db.collection(name)
+	if err != nil {
+		return nil, err
+	}
+	documents, err := collection.Fetch(ctx, ids, xvec.Projection{
+		OutputFields:   []string{xvecCategoriesField, xvecTimestampField, xvecHiddenField},
+		IncludeVectors: true,
+	})
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	vectors := make([]Vector, 0, len(documents))
+	for _, document := range documents {
+		if document == nil {
+			continue
+		}
+		vector := Vector{Id: document.PrimaryKey}
+		if value, found := document.Field(xvecCategoriesField); found {
+			vector.Categories = []string(value.(xvec.StringArray))
+		}
+		if value, found := document.Field(xvecTimestampField); found {
+			vector.Timestamp = time.UnixMilli(value.(int64)).UTC()
+		}
+		if value, found := document.Field(xvecHiddenField); found {
+			vector.IsHidden = value.(bool)
+		}
+		if value, found := document.Field(xvecVectorField); found {
+			switch value := value.(type) {
+			case xvec.VectorFP32:
+				vector.Values = []float32(value)
+			case xvec.SparseVectorFP32:
+				vector.Indices = value.Indices
+				vector.Values = value.Values
+			}
+		}
+		vectors = append(vectors, vector)
+	}
+	return vectors, nil
+}
+
 func (db *Xvec) DeleteVectors(ctx context.Context, name string, timestamp time.Time) error {
 	collection, err := db.collection(name)
 	if err != nil {

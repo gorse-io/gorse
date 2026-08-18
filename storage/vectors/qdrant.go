@@ -337,6 +337,38 @@ func (db *Qdrant) AddVectors(ctx context.Context, collection string, vectors []V
 	return errors.Trace(err)
 }
 
+func (db *Qdrant) GetVectors(ctx context.Context, collection string, ids []string) ([]Vector, error) {
+	if len(ids) == 0 {
+		return []Vector{}, nil
+	}
+	pointIDs := make([]*qdrant.PointId, len(ids))
+	for i, id := range ids {
+		pointIDs[i] = qdrant.NewID(uuid.NewMD5(uuid.NameSpaceURL, []byte(id)).String())
+	}
+	points, err := db.client.Get(ctx, &qdrant.GetPoints{
+		CollectionName: collection,
+		Ids:            pointIDs,
+		WithPayload:    qdrant.NewWithPayloadEnable(true),
+		WithVectors:    qdrant.NewWithVectorsInclude(qdrantVectorName),
+	})
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	vectors := make([]Vector, 0, len(points))
+	for _, point := range points {
+		value := qdrantVector(point.GetVectors())
+		vectors = append(vectors, Vector{
+			Id:         qdrantId(point.GetPayload()),
+			Values:     value.Values,
+			Indices:    value.Indices,
+			IsHidden:   qdrantHidden(point.GetPayload()),
+			Categories: qdrantCategories(point.GetPayload()),
+			Timestamp:  qdrantTimestamp(point.GetPayload()),
+		})
+	}
+	return orderVectors(ids, vectors), nil
+}
+
 func (db *Qdrant) DeleteVectors(ctx context.Context, collection string, timestamp time.Time) error {
 	lt := float64(timestamp.UnixMilli())
 	_, err := db.client.Delete(ctx, &qdrant.DeletePoints{
@@ -411,6 +443,13 @@ func qdrantHidden(payload map[string]*qdrant.Value) bool {
 		return value.GetBoolValue()
 	}
 	return false
+}
+
+func qdrantTimestamp(payload map[string]*qdrant.Value) time.Time {
+	if value, ok := payload[qdrantPayloadTimestampKey]; ok {
+		return time.UnixMilli(value.GetIntegerValue()).UTC()
+	}
+	return time.Time{}
 }
 
 func qdrantListValue(items []string) *qdrant.Value {

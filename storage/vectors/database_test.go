@@ -138,6 +138,38 @@ func (suite *vectorsTestSuite) TestVectors() {
 	}
 }
 
+func (suite *vectorsTestSuite) TestGetVectors() {
+	ctx := suite.T().Context()
+	err := suite.Database.AddCollection(ctx, "test", defaultVectorSize, Cosine, VectorConfig{})
+	suite.Require().NoError(err)
+
+	timestampA := time.Now().UTC().Truncate(time.Millisecond)
+	timestampB := timestampA.Add(time.Second)
+	vectorA := Vector{
+		Id:         "a",
+		Values:     []float32{1, 0, 0, 0},
+		Categories: []string{"cat-a", "common"},
+		Timestamp:  timestampA,
+	}
+	vectorB := Vector{
+		Id:         "b",
+		Values:     []float32{0, 1, 0, 0},
+		IsHidden:   true,
+		Categories: []string{"cat-b", "common"},
+		Timestamp:  timestampB,
+	}
+	err = suite.Database.AddVectors(ctx, "test", []Vector{vectorA, vectorB})
+	suite.Require().NoError(err)
+
+	results, err := suite.Database.GetVectors(ctx, "test", []string{"b", "missing", "a"})
+	suite.Require().NoError(err)
+	suite.Equal([]Vector{vectorB, vectorA}, results)
+
+	results, err = suite.Database.GetVectors(ctx, "test", nil)
+	suite.Require().NoError(err)
+	suite.Empty(results)
+}
+
 func (suite *vectorsTestSuite) TestSparse() {
 	ctx := suite.T().Context()
 	err := suite.Database.AddCollection(ctx, "test_sparse", 0, Dot, VectorConfig{})

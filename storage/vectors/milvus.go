@@ -304,6 +304,83 @@ func (db *Milvus) AddVectors(ctx context.Context, collection string, vectors []V
 	return errors.Trace(err)
 }
 
+func (db *Milvus) GetVectors(ctx context.Context, collection string, ids []string) ([]Vector, error) {
+	if len(ids) == 0 {
+		return []Vector{}, nil
+	}
+	result, err := db.client.Query(ctx, milvusclient.NewQueryOption(collection).
+		WithIDs(column.NewColumnVarChar(milvusIdField, ids)).
+		WithOutputFields(milvusIdField, milvusCategoriesField, milvusHiddenField, milvusTimestampField, milvusVectorField).
+		WithConsistencyLevel(entity.ClStrong))
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	idCol, ok := result.GetColumn(milvusIdField).(*column.ColumnVarChar)
+	if !ok {
+		return nil, errors.Errorf("failed to parse vector ids for collection %s", collection)
+	}
+	categoriesCol, ok := result.GetColumn(milvusCategoriesField).(*column.ColumnVarCharArray)
+	if !ok {
+		return nil, errors.Errorf("failed to parse vector categories for collection %s", collection)
+	}
+	hiddenCol, ok := result.GetColumn(milvusHiddenField).(*column.ColumnBool)
+	if !ok {
+		return nil, errors.Errorf("failed to parse vector visibility for collection %s", collection)
+	}
+	timestampCol, ok := result.GetColumn(milvusTimestampField).(*column.ColumnInt64)
+	if !ok {
+		return nil, errors.Errorf("failed to parse vector timestamps for collection %s", collection)
+	}
+	vectorCol := result.GetColumn(milvusVectorField)
+	vectors := make([]Vector, 0, result.Len())
+	for i := 0; i < result.Len(); i++ {
+		id, err := idCol.Value(i)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		categories, err := categoriesCol.Value(i)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		hidden, err := hiddenCol.Value(i)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		timestamp, err := timestampCol.Value(i)
+		if err != nil {
+			return nil, errors.Trace(err)
+		}
+		vector := Vector{
+			Id:         id,
+			IsHidden:   hidden,
+			Categories: categories,
+			Timestamp:  time.UnixMilli(timestamp).UTC(),
+		}
+		switch values := vectorCol.(type) {
+		case *column.ColumnFloatVector:
+			value, err := values.Value(i)
+			if err != nil {
+				return nil, errors.Trace(err)
+			}
+			vector.Values = []float32(value)
+		case *column.ColumnSparseFloatVector:
+			value, err := values.Value(i)
+			if err != nil {
+				return nil, errors.Trace(err)
+			}
+			vector.Indices = make([]uint32, value.Len())
+			vector.Values = make([]float32, value.Len())
+			for j := 0; j < value.Len(); j++ {
+				vector.Indices[j], vector.Values[j], _ = value.Get(j)
+			}
+		default:
+			return nil, errors.Errorf("failed to parse vector values for collection %s", collection)
+		}
+		vectors = append(vectors, vector)
+	}
+	return orderVectors(ids, vectors), nil
+}
+
 func (db *Milvus) DeleteVectors(ctx context.Context, collection string, timestamp time.Time) error {
 	_, err := db.client.Delete(ctx, milvusclient.NewDeleteOption(collection).WithExpr(fmt.Sprintf("%s < %d", milvusTimestampField, timestamp.UnixMilli())))
 	return errors.Trace(err)

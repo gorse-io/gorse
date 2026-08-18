@@ -39,6 +39,7 @@ const (
 	VectorStore_DeleteCollection_FullMethodName   = "/protocol.VectorStore/DeleteCollection"
 	VectorStore_CountVectors_FullMethodName       = "/protocol.VectorStore/CountVectors"
 	VectorStore_AddVectors_FullMethodName         = "/protocol.VectorStore/AddVectors"
+	VectorStore_GetVectors_FullMethodName         = "/protocol.VectorStore/GetVectors"
 	VectorStore_DeleteVectors_FullMethodName      = "/protocol.VectorStore/DeleteVectors"
 	VectorStore_QueryVectors_FullMethodName       = "/protocol.VectorStore/QueryVectors"
 )
@@ -53,6 +54,7 @@ type VectorStoreClient interface {
 	DeleteCollection(ctx context.Context, in *DeleteCollectionRequest, opts ...grpc.CallOption) (*DeleteCollectionResponse, error)
 	CountVectors(ctx context.Context, in *CountVectorsRequest, opts ...grpc.CallOption) (*CountVectorsResponse, error)
 	AddVectors(ctx context.Context, in *AddVectorsRequest, opts ...grpc.CallOption) (*AddVectorsResponse, error)
+	GetVectors(ctx context.Context, in *GetVectorsRequest, opts ...grpc.CallOption) (*GetVectorsResponse, error)
 	DeleteVectors(ctx context.Context, in *DeleteVectorsRequest, opts ...grpc.CallOption) (*DeleteVectorsResponse, error)
 	QueryVectors(ctx context.Context, in *QueryVectorsRequest, opts ...grpc.CallOption) (*QueryVectorsResponse, error)
 }
@@ -125,6 +127,16 @@ func (c *vectorStoreClient) AddVectors(ctx context.Context, in *AddVectorsReques
 	return out, nil
 }
 
+func (c *vectorStoreClient) GetVectors(ctx context.Context, in *GetVectorsRequest, opts ...grpc.CallOption) (*GetVectorsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetVectorsResponse)
+	err := c.cc.Invoke(ctx, VectorStore_GetVectors_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vectorStoreClient) DeleteVectors(ctx context.Context, in *DeleteVectorsRequest, opts ...grpc.CallOption) (*DeleteVectorsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(DeleteVectorsResponse)
@@ -155,6 +167,7 @@ type VectorStoreServer interface {
 	DeleteCollection(context.Context, *DeleteCollectionRequest) (*DeleteCollectionResponse, error)
 	CountVectors(context.Context, *CountVectorsRequest) (*CountVectorsResponse, error)
 	AddVectors(context.Context, *AddVectorsRequest) (*AddVectorsResponse, error)
+	GetVectors(context.Context, *GetVectorsRequest) (*GetVectorsResponse, error)
 	DeleteVectors(context.Context, *DeleteVectorsRequest) (*DeleteVectorsResponse, error)
 	QueryVectors(context.Context, *QueryVectorsRequest) (*QueryVectorsResponse, error)
 	mustEmbedUnimplementedVectorStoreServer()
@@ -184,6 +197,9 @@ func (UnimplementedVectorStoreServer) CountVectors(context.Context, *CountVector
 }
 func (UnimplementedVectorStoreServer) AddVectors(context.Context, *AddVectorsRequest) (*AddVectorsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AddVectors not implemented")
+}
+func (UnimplementedVectorStoreServer) GetVectors(context.Context, *GetVectorsRequest) (*GetVectorsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetVectors not implemented")
 }
 func (UnimplementedVectorStoreServer) DeleteVectors(context.Context, *DeleteVectorsRequest) (*DeleteVectorsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DeleteVectors not implemented")
@@ -320,6 +336,24 @@ func _VectorStore_AddVectors_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VectorStore_GetVectors_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetVectorsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VectorStoreServer).GetVectors(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: VectorStore_GetVectors_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VectorStoreServer).GetVectors(ctx, req.(*GetVectorsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _VectorStore_DeleteVectors_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(DeleteVectorsRequest)
 	if err := dec(in); err != nil {
@@ -386,6 +420,10 @@ var VectorStore_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "AddVectors",
 			Handler:    _VectorStore_AddVectors_Handler,
+		},
+		{
+			MethodName: "GetVectors",
+			Handler:    _VectorStore_GetVectors_Handler,
 		},
 		{
 			MethodName: "DeleteVectors",

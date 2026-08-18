@@ -104,8 +104,28 @@ type Database interface {
 	DeleteCollection(ctx context.Context, name string) error
 	CountVectors(ctx context.Context, collection string) (int64, error)
 	AddVectors(ctx context.Context, collection string, vectors []Vector) error
+	GetVectors(ctx context.Context, collection string, ids []string) ([]Vector, error)
 	DeleteVectors(ctx context.Context, collection string, timestamp time.Time) error
 	QueryVectors(ctx context.Context, collection string, q Vector, categories []string, topK int) ([]ScoredVector, error)
+}
+
+func orderVectors(ids []string, vectors []Vector) []Vector {
+	byID := make(map[string]Vector, len(vectors))
+	for _, vector := range vectors {
+		byID[vector.Id] = vector
+	}
+	ordered := make([]Vector, 0, len(vectors))
+	seen := make(map[string]struct{}, len(ids))
+	for _, id := range ids {
+		if _, exists := seen[id]; exists {
+			continue
+		}
+		seen[id] = struct{}{}
+		if vector, exists := byID[id]; exists {
+			ordered = append(ordered, vector)
+		}
+	}
+	return ordered
 }
 
 // Creator creates a database instance.

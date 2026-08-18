@@ -296,6 +296,83 @@ func (db *Weaviate) AddVectors(ctx context.Context, collection string, vectors [
 	return errors.Trace(err)
 }
 
+func (db *Weaviate) GetVectors(ctx context.Context, collection string, ids []string) ([]Vector, error) {
+	if len(ids) == 0 {
+		return []Vector{}, nil
+	}
+	objectIDs := make([]string, len(ids))
+	for i, id := range ids {
+		objectIDs[i] = uuid.NewMD5(uuid.NameSpaceURL, []byte(id)).String()
+	}
+	fields := []graphql.Field{
+		{Name: "originalId"},
+		{Name: weaviatePayloadCategoriesKey},
+		{Name: weaviatePayloadHiddenKey},
+		{Name: weaviatePayloadTimestampKey},
+		{Name: "_additional", Fields: []graphql.Field{{Name: "vector"}}},
+	}
+	result, err := db.client.GraphQL().Get().
+		WithClassName(capitalize(collection)).
+		WithFields(fields...).
+		WithWhere(filters.Where().
+			WithPath([]string{"id"}).
+			WithOperator(filters.ContainsAny).
+			WithValueString(objectIDs...)).
+		WithLimit(len(ids)).
+		Do(ctx)
+	if err != nil {
+		return nil, errors.Trace(err)
+	}
+	if len(result.Errors) > 0 {
+		return nil, errors.New(result.Errors[0].Message)
+	}
+	data, ok := result.Data["Get"].(map[string]any)
+	if !ok {
+		return nil, errors.Errorf("failed to parse vectors for collection %s", collection)
+	}
+	items, ok := data[capitalize(collection)].([]any)
+	if !ok {
+		return nil, errors.Errorf("failed to parse vectors for collection %s", collection)
+	}
+	vectors := make([]Vector, 0, len(items))
+	for _, item := range items {
+		properties, ok := item.(map[string]any)
+		if !ok {
+			return nil, errors.Errorf("failed to parse vector for collection %s", collection)
+		}
+		vector := Vector{
+			Id:       properties["originalId"].(string),
+			IsHidden: properties[weaviatePayloadHiddenKey].(bool),
+		}
+		if categories, ok := properties[weaviatePayloadCategoriesKey].([]any); ok {
+			vector.Categories = make([]string, len(categories))
+			for i, category := range categories {
+				vector.Categories[i] = category.(string)
+			}
+		}
+		if timestamp, ok := properties[weaviatePayloadTimestampKey].(string); ok {
+			vector.Timestamp, err = time.Parse(time.RFC3339Nano, timestamp)
+			if err != nil {
+				return nil, errors.Trace(err)
+			}
+		}
+		additional, ok := properties["_additional"].(map[string]any)
+		if !ok {
+			return nil, errors.Errorf("failed to parse vector values for collection %s", collection)
+		}
+		values, ok := additional["vector"].([]any)
+		if !ok {
+			return nil, errors.Errorf("failed to parse vector values for collection %s", collection)
+		}
+		vector.Values = make([]float32, len(values))
+		for i, value := range values {
+			vector.Values[i] = float32(value.(float64))
+		}
+		vectors = append(vectors, vector)
+	}
+	return orderVectors(ids, vectors), nil
+}
+
 func (db *Weaviate) DeleteVectors(ctx context.Context, collection string, timestamp time.Time) error {
 	_, err := db.client.Batch().ObjectsBatchDeleter().
 		WithClassName(capitalize(collection)).

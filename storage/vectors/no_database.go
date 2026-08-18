@@ -42,6 +42,9 @@ func (NoDatabase) CountVectors(_ context.Context, _ string) (int64, error) {
 func (NoDatabase) AddVectors(_ context.Context, _ string, _ []Vector) error {
 	return ErrNoDatabase
 }
+func (NoDatabase) GetVectors(_ context.Context, _ string, _ []string) ([]Vector, error) {
+	return nil, ErrNoDatabase
+}
 func (NoDatabase) DeleteVectors(_ context.Context, _ string, _ time.Time) error {
 	return ErrNoDatabase
 }
