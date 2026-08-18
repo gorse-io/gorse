@@ -161,7 +161,7 @@ func (suite *vectorsTestSuite) TestGetVectors() {
 	err = suite.Database.AddVectors(ctx, "test", []Vector{vectorA, vectorB})
 	suite.Require().NoError(err)
 
-	results, err := suite.Database.GetVectors(ctx, "test", []string{"b", "missing", "a"})
+	results, err := suite.Database.GetVectors(ctx, "test", []string{"b", "missing", "a", "b"})
 	suite.Require().NoError(err)
 	suite.Equal([]Vector{vectorB, vectorA}, results)
 

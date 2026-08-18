@@ -364,7 +364,7 @@ func (db *Xvec) GetVectors(ctx context.Context, name string, ids []string) ([]Ve
 		}
 		vectors = append(vectors, vector)
 	}
-	return vectors, nil
+	return orderVectors(ids, vectors), nil
 }
 
 func (db *Xvec) DeleteVectors(ctx context.Context, name string, timestamp time.Time) error {
