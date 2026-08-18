@@ -116,18 +116,6 @@ func (s *CLITestSuite) SetupTest() {
 		{Id: "recommend-1", Score: 1, Categories: []string{"news"}},
 	}))
 	s.Require().NoError(s.m.CacheClient.Set(ctx, cache.String(cache.Key(cache.NonPersonalizedDigest, "popular"), "digest")))
-	itemCollection := vectors.ItemToItemCollection("neighbors")
-	_ = s.m.VectorClient.AddCollection(ctx, itemCollection, 0, vectors.Dot, vectors.VectorConfig{})
-	s.Require().NoError(s.m.VectorClient.AddVectors(ctx, itemCollection, []vectors.Vector{
-		{Id: "item-1", Indices: []uint32{0}, Values: []float32{1}},
-		{Id: "similar-1", Indices: []uint32{0}, Values: []float32{1}, Categories: []string{"news"}},
-	}))
-	collection := vectors.UserToUserCollection("neighbors")
-	_ = s.m.VectorClient.AddCollection(ctx, collection, 0, vectors.Dot, vectors.VectorConfig{})
-	s.Require().NoError(s.m.VectorClient.AddVectors(ctx, collection, []vectors.Vector{
-		{Id: "alice", Indices: []uint32{0}, Values: []float32{1}},
-		{Id: "neighbor-1", Indices: []uint32{0}, Values: []float32{1}},
-	}))
 	s.Require().NoError(s.m.CacheClient.AddTimeSeriesPoints(ctx, []cache.TimeSeriesPoint{{
 		Name:      "requests",
 		Timestamp: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
@@ -289,6 +277,12 @@ func (s *CLITestSuite) TestRecommendItemToUser() {
 }
 
 func (s *CLITestSuite) TestRecommendItemToItem() {
+	collection := vectors.ItemToItemCollection("neighbors")
+	s.waitForCollection(collection)
+	s.Require().NoError(s.m.VectorClient.AddVectors(s.T().Context(), collection, []vectors.Vector{
+		{Id: "item-1", Indices: []uint32{0}, Values: []float32{1}},
+		{Id: "similar-1", Indices: []uint32{0}, Values: []float32{1}, Categories: []string{"news"}},
+	}))
 	s.requireScoredItemsOutput([]string{"recommend", "item-to-item", "neighbors", "item-1", "-n", "3", "--category", "news"},
 		`^similar-1\s+\["news"\]\s+false\s+2026-01-05T00:00:00Z\s+1$`,
 	)
@@ -300,10 +294,31 @@ func (s *CLITestSuite) requireScoredItemsOutput(args []string, rowRegexps ...str
 }
 
 func (s *CLITestSuite) TestRecommendUserToUser() {
+	collection := vectors.UserToUserCollection("neighbors")
+	s.waitForCollection(collection)
+	s.Require().NoError(s.m.VectorClient.AddVectors(s.T().Context(), collection, []vectors.Vector{
+		{Id: "alice", Indices: []uint32{0}, Values: []float32{1}},
+		{Id: "neighbor-1", Indices: []uint32{0}, Values: []float32{1}},
+	}))
 	s.requireCommandOutputLines([]string{"recommend", "user-to-user", "neighbors", "alice", "-n", "3"},
 		`^USER-ID\s+COMMENT\s+LABELS\s+SCORE$`,
 		`^neighbor-1\s+1$`,
 	)
+}
+
+func (s *CLITestSuite) waitForCollection(collection string) {
+	s.Require().Eventually(func() bool {
+		collections, err := s.m.VectorClient.ListCollections(s.T().Context())
+		if err != nil {
+			return false
+		}
+		for _, candidate := range collections {
+			if candidate == collection {
+				return true
+			}
+		}
+		return false
+	}, 30*time.Second, 50*time.Millisecond, "collection %s was not created", collection)
 }
 
 func (s *CLITestSuite) TestGetUser() {
