@@ -26,13 +26,13 @@ import (
 	"github.com/gorse-io/gorse/common/jsonutil"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/storage"
-	"github.com/juju/errors"
+	"github.com/pkg/errors"
 )
 
 var (
-	ErrUserNotExist = errors.NotFoundf("user")
-	ErrItemNotExist = errors.NotFoundf("item")
-	ErrNoDatabase   = errors.NotAssignedf("database")
+	ErrUserNotExist = errors.New("user not found")
+	ErrItemNotExist = errors.New("item not found")
+	ErrNoDatabase   = errors.New("database not assigned")
 )
 
 // ValidateLabels checks if labels are valid. Labels are valid if consists of:

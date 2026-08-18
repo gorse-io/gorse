@@ -21,7 +21,7 @@ import (
 	"time"
 
 	"github.com/gorse-io/gorse/storage"
-	"github.com/juju/errors"
+	"github.com/pkg/errors"
 )
 
 type Distance int
@@ -133,7 +133,10 @@ type Creator func(path, tablePrefix string, opts ...storage.Option) (Database, e
 
 var creators = make(map[string]Creator)
 
-var ErrNoDatabase = errors.NotAssignedf("database")
+var (
+	ErrNotFound   = errors.New("not found")
+	ErrNoDatabase = errors.New("database not assigned")
+)
 
 // Register a database creator.
 func Register(prefixes []string, creator Creator) {

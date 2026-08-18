@@ -20,7 +20,7 @@ import (
 	"time"
 
 	"github.com/gorse-io/gorse/protocol"
-	"github.com/juju/errors"
+	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -58,7 +58,7 @@ func (p *ProxyServer) ListCollections(ctx context.Context, _ *protocol.ListColle
 func (p *ProxyServer) DescribeCollection(ctx context.Context, request *protocol.DescribeCollectionRequest) (*protocol.DescribeCollectionResponse, error) {
 	info, err := p.database.DescribeCollection(ctx, request.GetName())
 	if err != nil {
-		if errors.Is(err, errors.NotFound) {
+		if errors.Is(err, ErrNotFound) {
 			return nil, status.Error(codes.NotFound, err.Error())
 		}
 		return nil, err
@@ -220,7 +220,7 @@ func (p ProxyClient) DescribeCollection(ctx context.Context, name string) (*Coll
 	resp, err := p.VectorStoreClient.DescribeCollection(ctx, &protocol.DescribeCollectionRequest{Name: name})
 	if err != nil {
 		if status.Code(err) == codes.NotFound {
-			return nil, errors.NotFoundf("collection %s", name)
+			return nil, errors.Wrapf(ErrNotFound, "collection %s", name)
 		}
 		return nil, err
 	}
@@ -360,7 +360,7 @@ func distanceToProtoDistance(distance Distance) (protocol.Distance, error) {
 	case Dot:
 		return protocol.Distance_Dot, nil
 	default:
-		return protocol.Distance_Unknown, errors.NotSupportedf("distance method")
+		return protocol.Distance_Unknown, errors.Errorf("distance method not supported")
 	}
 }
 
@@ -373,7 +373,7 @@ func protoDistanceToDistance(distance protocol.Distance) (Distance, error) {
 	case protocol.Distance_Dot:
 		return Dot, nil
 	default:
-		return Cosine, errors.NotSupportedf("distance method")
+		return Cosine, errors.Errorf("distance method not supported")
 	}
 }
 

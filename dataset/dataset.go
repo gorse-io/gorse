@@ -29,7 +29,7 @@ import (
 	"github.com/gorse-io/gorse/common/util"
 	"github.com/gorse-io/gorse/model"
 	"github.com/gorse-io/gorse/storage/data"
-	"github.com/juju/errors"
+	"github.com/pkg/errors"
 	"github.com/samber/lo"
 	"modernc.org/strutil"
 )
@@ -463,7 +463,7 @@ func loadTest(dataset *Dataset, path string) error {
 	// Open
 	file, err := os.Open(path)
 	if err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	defer file.Close()
 	// Read lines

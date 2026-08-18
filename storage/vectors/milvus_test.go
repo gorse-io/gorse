@@ -19,7 +19,7 @@ import (
 	"testing"
 
 	"github.com/gorse-io/gorse/common/log"
-	"github.com/juju/errors"
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -48,7 +48,7 @@ func (suite *MilvusTestSuite) TestInvalidSparseCollection() {
 	err := suite.Database.AddCollection(ctx, "test_invalid_sparse", 0, Cosine, VectorConfig{})
 	suite.Error(err)
 	_, err = suite.Database.DescribeCollection(ctx, "test_invalid_sparse")
-	suite.True(errors.Is(err, errors.NotFound), err)
+	suite.True(errors.Is(err, ErrNotFound), err)
 }
 
 func (suite *MilvusTestSuite) TestQuantization() {

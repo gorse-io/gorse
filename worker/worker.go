@@ -42,8 +42,8 @@ import (
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
 	"github.com/gorse-io/gorse/storage/vectors"
-	"github.com/juju/errors"
 	"github.com/lafikl/consistent"
+	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/samber/lo"
 	"go.uber.org/zap"
@@ -489,7 +489,7 @@ func (w *Worker) pullUsers(peers []string, me string) ([]data.User, error) {
 		for _, user := range batchUsers {
 			p, err := c.Get(user.UserId)
 			if err != nil {
-				return nil, errors.Trace(err)
+				return nil, errors.WithStack(err)
 			}
 			if p == me {
 				users = append(users, user)
@@ -497,7 +497,7 @@ func (w *Worker) pullUsers(peers []string, me string) ([]data.User, error) {
 		}
 	}
 	if err := <-errChan; err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.WithStack(err)
 	}
 	return users, nil
 }

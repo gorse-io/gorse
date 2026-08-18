@@ -36,7 +36,7 @@ import (
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/common/util"
 	"github.com/gorse-io/gorse/storage"
-	"github.com/juju/errors"
+	"github.com/pkg/errors"
 	"github.com/samber/lo"
 	"github.com/spf13/viper"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
@@ -246,7 +246,7 @@ func StringToFeedbackTypeHookFunc() mapstructure.DecodeHookFunc {
 		if f.Kind() == reflect.String && t == reflect.TypeFor[expression.FeedbackTypeExpression]() {
 			var expr expression.FeedbackTypeExpression
 			if err := expr.FromString(data.(string)); err != nil {
-				return nil, errors.Trace(err)
+				return nil, errors.WithStack(err)
 			}
 			return expr, nil // only convert string to FeedbackType
 		}
@@ -578,22 +578,22 @@ func (config *TracingConfig) NewTracerProvider() (trace.TracerProvider, error) {
 	case "zipkin":
 		exporter, err = zipkin.New(config.CollectorEndpoint)
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 	case "otlp":
 		client := otlptracegrpc.NewClient(otlptracegrpc.WithInsecure(), otlptracegrpc.WithEndpoint(config.CollectorEndpoint))
 		exporter, err = otlptrace.New(context.TODO(), client)
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 	case "otlphttp":
 		client := otlptracehttp.NewClient(otlptracehttp.WithInsecure(), otlptracehttp.WithEndpoint(config.CollectorEndpoint))
 		exporter, err = otlptrace.New(context.TODO(), client)
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 	default:
-		return nil, errors.NotSupportedf("exporter %s", config.Exporter)
+		return nil, errors.Errorf("exporter %s not supported", config.Exporter)
 	}
 
 	var sampler tracesdk.Sampler
@@ -605,7 +605,7 @@ func (config *TracingConfig) NewTracerProvider() (trace.TracerProvider, error) {
 	case "ratio":
 		sampler = tracesdk.TraceIDRatioBased(config.Ratio)
 	default:
-		return nil, errors.NotSupportedf("sampler %s", config.Sampler)
+		return nil, errors.Errorf("sampler %s not supported", config.Sampler)
 	}
 
 	return tracesdk.NewTracerProvider(
@@ -789,13 +789,13 @@ func LoadConfig(path string) (*Config, error) {
 			if os.IsNotExist(err) {
 				log.Logger().Warn("config file not found, use default config", zap.String("path", path))
 			} else {
-				return nil, errors.Trace(err)
+				return nil, errors.WithStack(err)
 			}
 		} else {
 			// load config file
 			viper.SetConfigFile(path)
 			if err := viper.ReadInConfig(); err != nil {
-				return nil, errors.Trace(err)
+				return nil, errors.WithStack(err)
 			}
 		}
 	} else {
@@ -805,12 +805,12 @@ func LoadConfig(path string) (*Config, error) {
 	// unmarshal config file
 	var conf Config
 	if err := viper.Unmarshal(&conf); err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.WithStack(err)
 	}
 
 	// validate config file
 	if err := conf.Validate(); err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.WithStack(err)
 	}
 
 	// apply table prefix
@@ -892,7 +892,7 @@ func (config *Config) Validate() error {
 		}
 		return false
 	}); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	if err := validate.RegisterValidation("cache_store", func(fl validator.FieldLevel) bool {
 		prefixes := []string{
@@ -914,7 +914,7 @@ func (config *Config) Validate() error {
 		}
 		return false
 	}); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	if err := validate.RegisterValidation("vector_store", func(fl validator.FieldLevel) bool {
 		prefixes := []string{
@@ -931,7 +931,7 @@ func (config *Config) Validate() error {
 		}
 		return false
 	}); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	if err := validate.RegisterValidation("item_expr", func(fl validator.FieldLevel) bool {
 		if fl.Field().String() == "" {
@@ -941,7 +941,7 @@ func (config *Config) Validate() error {
 		_, err := parser.Parse(fl.Field().String())
 		return err == nil
 	}); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	validate.RegisterTagNameFunc(func(fld reflect.StructField) string {
 		return strings.SplitN(fld.Tag.Get("mapstructure"), ",", 2)[0]
@@ -951,7 +951,7 @@ func (config *Config) Validate() error {
 		// translate errors
 		trans := ut.New(en.New()).GetFallback()
 		if err := en_translations.RegisterDefaultTranslations(validate, trans); err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		if err := validate.RegisterTranslation("data_store", trans, func(ut ut.Translator) error {
 			return ut.Add("data_store", "unsupported data storage backend", true) // see universal-translator for details
@@ -959,7 +959,7 @@ func (config *Config) Validate() error {
 			t, _ := ut.T("data_store", fe.Field())
 			return t
 		}); err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		if err := validate.RegisterTranslation("cache_store", trans, func(ut ut.Translator) error {
 			return ut.Add("cache_store", "unsupported cache storage backend", true) // see universal-translator for details
@@ -967,7 +967,7 @@ func (config *Config) Validate() error {
 			t, _ := ut.T("cache_store", fe.Field())
 			return t
 		}); err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		if err := validate.RegisterTranslation("vector_store", trans, func(ut ut.Translator) error {
 			return ut.Add("vector_store", "unsupported vector storage backend", true)
@@ -975,7 +975,7 @@ func (config *Config) Validate() error {
 			t, _ := ut.T("vector_store", fe.Field())
 			return t
 		}); err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		if err := validate.RegisterTranslation("item_expr", trans, func(ut ut.Translator) error {
 			return ut.Add("item_expr", "invalid item expression", true)
@@ -983,7 +983,7 @@ func (config *Config) Validate() error {
 			t, _ := ut.T("item_expr", fe.Field())
 			return t
 		}); err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		errs := err.(validator.ValidationErrors)
 		for _, e := range errs {

@@ -26,7 +26,7 @@ import (
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/protocol"
-	"github.com/juju/errors"
+	"github.com/pkg/errors"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -43,7 +43,7 @@ func NewStore(cfg config.BlobConfig, masterConn *grpc.ClientConn) (Store, error)
 	if strings.Contains(cfg.URI, "://") {
 		parsed, err := url.Parse(cfg.URI)
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 		switch parsed.Scheme {
 		case "s3":

@@ -23,7 +23,7 @@ import (
 
 	"github.com/araddon/dateparse"
 	"github.com/gorse-io/gorse/storage"
-	"github.com/juju/errors"
+	"github.com/pkg/errors"
 )
 
 const (
@@ -82,8 +82,9 @@ var ItemCache = []string{
 }
 
 var (
-	ErrObjectNotExist = errors.NotFoundf("object")
-	ErrNoDatabase     = errors.NotAssignedf("database")
+	ErrObjectNotExist = errors.New("object not found")
+	ErrNoDatabase     = errors.New("database not assigned")
+	ErrNotValid       = errors.New("not valid")
 )
 
 // Key creates key for cache. Empty field will be ignored.
@@ -174,7 +175,7 @@ func (r *ReturnValue) Time() (time.Time, error) {
 	}
 	t, err := dateparse.ParseAny(r.value)
 	if err != nil {
-		return time.Time{}, errors.Trace(err)
+		return time.Time{}, errors.WithStack(err)
 	}
 	return t.In(time.UTC), nil
 }
@@ -213,7 +214,7 @@ type ScoreCondition struct {
 
 func (condition *ScoreCondition) Check() error {
 	if condition.Id == nil && condition.Before == nil && condition.Subset == nil {
-		return errors.NotValidf("document condition")
+		return errors.Wrap(ErrNotValid, "document condition")
 	}
 	return nil
 }

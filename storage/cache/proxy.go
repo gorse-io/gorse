@@ -21,7 +21,7 @@ import (
 	"time"
 
 	"github.com/gorse-io/gorse/protocol"
-	"github.com/juju/errors"
+	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -184,15 +184,15 @@ func (p ProxyClient) Close() error {
 }
 
 func (p ProxyClient) Init() error {
-	return errors.MethodNotAllowedf("init is not allowed in proxy client")
+	return errors.Errorf("init is not allowed in proxy client")
 }
 
 func (p ProxyClient) Scan(_ func(string) error) error {
-	return errors.MethodNotAllowedf("scan is not allowed in proxy client")
+	return errors.Errorf("scan is not allowed in proxy client")
 }
 
 func (p ProxyClient) Purge() error {
-	return errors.MethodNotAllowedf("purge is not allowed in proxy client")
+	return errors.Errorf("purge is not allowed in proxy client")
 }
 
 func (p ProxyClient) Set(ctx context.Context, values ...Value) error {
@@ -274,7 +274,7 @@ func (p ProxyClient) SearchScores(ctx context.Context, collection, subset string
 
 func (p ProxyClient) DeleteScores(ctx context.Context, collection []string, condition ScoreCondition) error {
 	if err := condition.Check(); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	var before *timestamppb.Timestamp
 	if condition.Before != nil {

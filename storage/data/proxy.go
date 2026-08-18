@@ -24,7 +24,7 @@ import (
 	"github.com/gorse-io/gorse/common/expression"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/protocol"
-	"github.com/juju/errors"
+	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -166,7 +166,7 @@ func (p *ProxyServer) DeleteItem(ctx context.Context, in *protocol.DeleteItemReq
 func (p *ProxyServer) GetItem(ctx context.Context, in *protocol.GetItemRequest) (*protocol.GetItemResponse, error) {
 	item, err := p.database.GetItem(ctx, in.ItemId)
 	if err != nil {
-		if errors.Is(err, errors.NotFound) {
+		if errors.Is(err, ErrItemNotExist) {
 			return &protocol.GetItemResponse{}, nil
 		}
 		return nil, err
@@ -304,7 +304,7 @@ func (p *ProxyServer) DeleteUser(ctx context.Context, in *protocol.DeleteUserReq
 func (p *ProxyServer) GetUser(ctx context.Context, in *protocol.GetUserRequest) (*protocol.GetUserResponse, error) {
 	user, err := p.database.GetUser(ctx, in.UserId)
 	if err != nil {
-		if errors.Is(err, errors.NotFound) {
+		if errors.Is(err, ErrUserNotExist) {
 			return &protocol.GetUserResponse{}, nil
 		}
 		return nil, err
@@ -581,7 +581,7 @@ func NewProxyClient(conn *grpc.ClientConn) *ProxyClient {
 }
 
 func (p ProxyClient) Init() error {
-	return errors.MethodNotAllowedf("method Init is not allowed in ProxyClient")
+	return errors.Errorf("method Init is not allowed in ProxyClient")
 }
 
 func (p *ProxyClient) Reconcile(searchConfig config.SearchConfig) error {
@@ -603,7 +603,7 @@ func (p ProxyClient) Optimize() error {
 }
 
 func (p ProxyClient) Purge() error {
-	return errors.MethodNotAllowedf("method Purge is not allowed in ProxyClient")
+	return errors.Errorf("method Purge is not allowed in ProxyClient")
 }
 
 func (p ProxyClient) BatchInsertItems(ctx context.Context, items []Item) error {
@@ -673,7 +673,7 @@ func (p ProxyClient) GetItem(ctx context.Context, itemId string) (Item, error) {
 		return Item{}, err
 	}
 	if resp.Item == nil {
-		return Item{}, errors.Annotate(ErrItemNotExist, itemId)
+		return Item{}, errors.Wrap(ErrItemNotExist, itemId)
 	}
 	var labels any
 	if err = json.Unmarshal(resp.Item.Labels, &labels); err != nil {
@@ -843,7 +843,7 @@ func (p ProxyClient) GetUser(ctx context.Context, userId string) (User, error) {
 		return User{}, err
 	}
 	if resp.User == nil {
-		return User{}, errors.Annotate(ErrUserNotExist, userId)
+		return User{}, errors.Wrap(ErrUserNotExist, userId)
 	}
 	var labels any
 	if err = json.Unmarshal(resp.User.Labels, &labels); err != nil {

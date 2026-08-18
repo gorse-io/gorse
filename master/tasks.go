@@ -43,7 +43,7 @@ import (
 	"github.com/gorse-io/gorse/storage/meta"
 	"github.com/gorse-io/gorse/storage/vectors"
 	"github.com/gorse-io/gorse/worker"
-	"github.com/juju/errors"
+	"github.com/pkg/errors"
 	"github.com/samber/lo"
 	"go.uber.org/zap"
 )
@@ -97,7 +97,7 @@ func (m *Master) loadDataset(parent context.Context) (datasets Datasets, err err
 	for _, cfg := range m.Config.Recommend.NonPersonalized {
 		recommender, err := logics.NewNonPersonalized(cfg, m.Config.Recommend.CacheSize, initialStartTime)
 		if err != nil {
-			return Datasets{}, errors.Trace(err)
+			return Datasets{}, errors.WithStack(err)
 		}
 		nonPersonalizedRecommenders = append(nonPersonalizedRecommenders, recommender)
 	}
@@ -121,7 +121,7 @@ func (m *Master) loadDataset(parent context.Context) (datasets Datasets, err err
 		evaluator,
 		nonPersonalizedRecommenders)
 	if err != nil {
-		return Datasets{}, errors.Trace(err)
+		return Datasets{}, errors.WithStack(err)
 	}
 	go event.Emit(context.WithoutCancel(ctx), snapshot)
 
@@ -252,7 +252,7 @@ func (m *Master) loadDataset(parent context.Context) (datasets Datasets, err err
 func (m *Master) runLoadDatasetTask(ctx context.Context) error {
 	datasets, err := m.loadDataset(ctx)
 	if err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	useCollaborativeFilteringTasks := !strings.EqualFold(m.Config.Recommend.Collaborative.Type, "none")
 	useClickThroughRateTasks := strings.EqualFold(m.Config.Recommend.Ranker.Type, "fm")
@@ -305,15 +305,15 @@ func (m *Master) LoadDataFromDatabase(
 	// Estimate the number of users, items, and feedbacks
 	estimatedNumUsers, err := database.CountUsers(ctx)
 	if err != nil {
-		return nil, nil, event.Snapshot{}, errors.Trace(err)
+		return nil, nil, event.Snapshot{}, errors.WithStack(err)
 	}
 	estimatedNumItems, err := database.CountItems(ctx)
 	if err != nil {
-		return nil, nil, event.Snapshot{}, errors.Trace(err)
+		return nil, nil, event.Snapshot{}, errors.WithStack(err)
 	}
 	estimatedNumFeedbacks, err := database.CountFeedback(ctx)
 	if err != nil {
-		return nil, nil, event.Snapshot{}, errors.Trace(err)
+		return nil, nil, event.Snapshot{}, errors.WithStack(err)
 	}
 
 	dataSet = dataset.NewDataset(time.Now(), estimatedNumUsers, estimatedNumItems)
@@ -378,7 +378,7 @@ func (m *Master) LoadDataFromDatabase(
 		span.Add(len(users))
 	}
 	if err = <-errChan; err != nil {
-		return nil, nil, event.Snapshot{}, errors.Trace(err)
+		return nil, nil, event.Snapshot{}, errors.WithStack(err)
 	}
 	log.Logger().Debug("pulled users from database",
 		zap.Int("n_users", dataSet.CountUsers()),
@@ -455,7 +455,7 @@ func (m *Master) LoadDataFromDatabase(
 		span.Add(len(batchItems))
 	}
 	if err = <-errChan; err != nil {
-		return nil, nil, event.Snapshot{}, errors.Trace(err)
+		return nil, nil, event.Snapshot{}, errors.WithStack(err)
 	}
 	log.Logger().Debug("pulled items from database",
 		zap.Int("n_items", dataSet.CountItems()),
@@ -526,12 +526,12 @@ func (m *Master) LoadDataFromDatabase(
 				span.Add(len(feedback))
 			}
 			if err = <-errChan; err != nil {
-				return errors.Trace(err)
+				return errors.WithStack(err)
 			}
 			return nil
 		})
 		if err != nil {
-			return nil, nil, event.Snapshot{}, errors.Trace(err)
+			return nil, nil, event.Snapshot{}, errors.WithStack(err)
 		}
 	}
 	log.Logger().Debug("pulled explicit negative feedback from database",
@@ -629,12 +629,12 @@ func (m *Master) LoadDataFromDatabase(
 			}
 		}
 		if err = <-errChan; err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		return nil
 	})
 	if err != nil {
-		return nil, nil, event.Snapshot{}, errors.Trace(err)
+		return nil, nil, event.Snapshot{}, errors.WithStack(err)
 	}
 	log.Logger().Debug("pulled positive feedback from database",
 		zap.Int("n_positive_feedback", posFeedbackCount),
@@ -691,12 +691,12 @@ func (m *Master) LoadDataFromDatabase(
 			span.Add(len(feedback))
 		}
 		if err = <-errChan; err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		return nil
 	})
 	if err != nil {
-		return nil, nil, event.Snapshot{}, errors.Trace(err)
+		return nil, nil, event.Snapshot{}, errors.WithStack(err)
 	}
 	log.Logger().Debug("pulled read feedback from database",
 		zap.Int("n_read_feedback", readFeedbackCount),
@@ -797,7 +797,7 @@ func (m *Master) updateItemToItem(parent context.Context, dataset *dataset.Datas
 			OpenAIConfig: m.Config.OpenAI,
 		})
 		if err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		itemToItemRecommenders = append(itemToItemRecommenders, recommender)
 	}
@@ -809,7 +809,7 @@ func (m *Master) updateItemToItem(parent context.Context, dataset *dataset.Datas
 			span.Add(1)
 		}
 	}); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 
 	// Save item-to-item recommendations to cache
@@ -855,7 +855,7 @@ func (m *Master) updateItemToItem(parent context.Context, dataset *dataset.Datas
 				span.Add(1)
 			}
 		}); err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 	}
 	return nil
@@ -877,7 +877,7 @@ func (m *Master) needUpdateItemToItem(ctx context.Context, itemId string, itemTo
 	// check digest
 	digest, err := m.CacheClient.Get(ctx, cache.Key(cache.ItemToItemDigest, itemToItemConfig.Name, itemId)).String()
 	if err != nil {
-		if !errors.Is(err, errors.NotFound) {
+		if !errors.Is(err, cache.ErrObjectNotExist) {
 			log.Logger().Error("failed to read item-to-item digest", zap.Error(err))
 		}
 		return true
@@ -889,7 +889,7 @@ func (m *Master) needUpdateItemToItem(ctx context.Context, itemId string, itemTo
 	// check update time
 	updateTime, err := m.CacheClient.Get(ctx, cache.Key(cache.ItemToItemUpdateTime, itemToItemConfig.Name, itemId)).Time()
 	if err != nil {
-		if !errors.Is(err, errors.NotFound) {
+		if !errors.Is(err, cache.ErrObjectNotExist) {
 			log.Logger().Error("failed to read last update item neighbors time", zap.Error(err))
 		}
 		return true
@@ -912,7 +912,7 @@ func (m *Master) updateUserToUser(parent context.Context, dataset *dataset.Datas
 			ItemsIDF: dataset.GetItemIDF(),
 		})
 		if err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		userToUserRecommenders = append(userToUserRecommenders, recommender)
 	}
@@ -924,7 +924,7 @@ func (m *Master) updateUserToUser(parent context.Context, dataset *dataset.Datas
 			span.Add(1)
 		}
 	}); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 
 	// Save user-to-user recommendations to cache
@@ -962,7 +962,7 @@ func (m *Master) updateUserToUser(parent context.Context, dataset *dataset.Datas
 			}
 			span.Add(1)
 		}); err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 	}
 	return nil
@@ -981,7 +981,7 @@ func (m *Master) needUpdateUserToUser(ctx context.Context, userId string, userTo
 	// read digest
 	cacheDigest, err := m.CacheClient.Get(ctx, cache.Key(cache.UserToUserDigest, cache.Key(userToUserConfig.Name, userId))).String()
 	if err != nil {
-		if !errors.Is(err, errors.NotFound) {
+		if !errors.Is(err, cache.ErrObjectNotExist) {
 			log.Logger().Error("failed to read user neighbors digest", zap.Error(err))
 		}
 		return true
@@ -993,7 +993,7 @@ func (m *Master) needUpdateUserToUser(ctx context.Context, userId string, userTo
 	// check update time
 	updateTime, err := m.CacheClient.Get(ctx, cache.Key(cache.UserToUserUpdateTime, cache.Key(userToUserConfig.Name, userId))).Time()
 	if err != nil {
-		if !errors.Is(err, errors.NotFound) {
+		if !errors.Is(err, cache.ErrObjectNotExist) {
 			log.Logger().Error("failed to read last update user neighbors time", zap.Error(err))
 		}
 		return true
@@ -1057,7 +1057,7 @@ func (m *Master) trainCollaborativeFiltering(parent context.Context, trainSet, t
 		Bits: m.Config.Database.Vector.QuantizationBits,
 	}); err != nil {
 		indexSpan.Fail(err)
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	items := trainSet.GetItems()
 	for start := 0; start < trainSet.CountItems(); start += batchSize {
@@ -1081,7 +1081,7 @@ func (m *Master) trainCollaborativeFiltering(parent context.Context, trainSet, t
 		}
 		if err := m.VectorClient.AddVectors(indexCtx, collection, itemVectors); err != nil {
 			indexSpan.Fail(err)
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		indexSpan.Add(end - start)
 	}
@@ -1415,7 +1415,7 @@ func (m *Master) collectGarbage(parent context.Context, dataSet *dataset.Dataset
 		}
 		return nil
 	})
-	return errors.Trace(err)
+	return errors.WithStack(err)
 }
 
 func (m *Master) optimizeCollaborativeFiltering(parent context.Context, trainSet, testSet dataset.CFSplit) error {
@@ -1452,11 +1452,11 @@ func (m *Master) optimizeCollaborativeFiltering(parent context.Context, trainSet
 		goptuna.StudyOptionSampler(tpe.NewSampler()),
 		goptuna.StudyOptionLogger(log.NewOptunaLogger(log.Logger())))
 	if err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	study.WithContext(ctx)
 	if err = study.Optimize(search.Objective, m.Config.Recommend.Collaborative.OptimizeTrials); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	m.collaborativeFilteringModelMutex.Lock()
 	m.collaborativeFilteringTarget = search.Result()
@@ -1499,11 +1499,11 @@ func (m *Master) optimizeClickThroughRatePrediction(parent context.Context, trai
 		goptuna.StudyOptionSampler(tpe.NewSampler()),
 		goptuna.StudyOptionLogger(log.NewOptunaLogger(log.Logger())))
 	if err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	study.WithContext(ctx)
 	if err = study.Optimize(search.Objective, m.Config.Recommend.Ranker.OptimizeTrials); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	m.clickThroughRateModelMutex.Lock()
 	m.clickThroughRateTarget = search.Result()
@@ -1532,18 +1532,18 @@ func (m *Master) updateRecommend(ctx context.Context) error {
 		if err != nil {
 			log.Logger().Error("failed to load collaborative filtering model from blob store",
 				zap.Int64("id", m.collaborativeFilteringMeta.ID), zap.Error(err))
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		users := logics.NewMatrixFactorizationUsers()
 		if err = users.Unmarshal(r); err != nil {
 			log.Logger().Error("failed to unmarshal matrix factorization users", zap.Error(err))
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		if err = r.Close(); err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		if err = pipeline.UpdateMatrixFactorization(ctx, m.collaborativeFilteringMeta.ID, users); err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 	}
 
@@ -1552,12 +1552,12 @@ func (m *Master) updateRecommend(ctx context.Context) error {
 		r, err := m.blobStore.Open(strconv.FormatInt(m.clickThroughRateMeta.ID, 10))
 		if err != nil {
 			log.Logger().Error("failed to open click-through rate model", zap.Error(err))
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		pipeline.ClickThroughRateModel, err = ctr.UnmarshalModel(r)
 		if err != nil {
 			log.Logger().Error("failed to unmarshal click-through rate model", zap.Error(err))
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 	}
 
@@ -1565,7 +1565,7 @@ func (m *Master) updateRecommend(ctx context.Context) error {
 	users, err := m.pullAllUsers(ctx)
 	if err != nil {
 		log.Logger().Error("failed to pull users", zap.Error(err))
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 
 	pipeline.Recommend(ctx, users, func(completed, throughput int) {
@@ -1584,7 +1584,7 @@ func (m *Master) pullAllUsers(ctx context.Context) ([]data.User, error) {
 		users = append(users, batchUsers...)
 	}
 	if err := <-errChan; err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.WithStack(err)
 	}
 	return users, nil
 }

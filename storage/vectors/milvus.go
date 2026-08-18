@@ -24,12 +24,12 @@ import (
 	"time"
 
 	"github.com/gorse-io/gorse/storage"
-	"github.com/juju/errors"
 	"github.com/milvus-io/milvus/client/v2/column"
 	"github.com/milvus-io/milvus/client/v2/entity"
 	"github.com/milvus-io/milvus/client/v2/index"
 	"github.com/milvus-io/milvus/client/v2/milvusclient"
 	"github.com/milvus-io/milvus/pkg/v2/util/merr"
+	"github.com/pkg/errors"
 )
 
 const (
@@ -52,13 +52,13 @@ func init() {
 		database := &Milvus{}
 		u, err := url.Parse(path)
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 		database.client, err = milvusclient.New(context.Background(), &milvusclient.ClientConfig{
 			Address: u.Host,
 		})
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 		return database, nil
 	})
@@ -83,7 +83,7 @@ func (db *Milvus) Close() error {
 func (db *Milvus) ListCollections(ctx context.Context) ([]string, error) {
 	collections, err := db.client.ListCollections(ctx, milvusclient.NewListCollectionOption())
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.WithStack(err)
 	}
 	return collections, nil
 }
@@ -92,17 +92,17 @@ func (db *Milvus) DescribeCollection(ctx context.Context, name string) (*Collect
 	collection, err := db.client.DescribeCollection(ctx, milvusclient.NewDescribeCollectionOption(name))
 	if err != nil {
 		if errors.Is(err, merr.ErrCollectionNotFound) {
-			return nil, errors.NotFoundf("collection %s", name)
+			return nil, errors.Wrapf(ErrNotFound, "collection %s", name)
 		}
-		return nil, errors.Trace(err)
+		return nil, errors.WithStack(err)
 	}
 	dimension, err := milvusVectorDimension(collection)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.WithStack(err)
 	}
 	idx, err := db.client.DescribeIndex(ctx, milvusclient.NewDescribeIndexOption(name, milvusVectorField))
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.WithStack(err)
 	}
 	var distance Distance
 	switch metricType := entity.MetricType(idx.Params()[index.MetricTypeKey]); metricType {
@@ -113,7 +113,7 @@ func (db *Milvus) DescribeCollection(ctx context.Context, name string) (*Collect
 	case entity.IP:
 		distance = Dot
 	default:
-		return nil, errors.NotSupportedf("distance method %s", metricType)
+		return nil, errors.Errorf("distance method %s not supported", metricType)
 	}
 	config := VectorConfig{}
 	switch index.IndexType(idx.Params()[index.IndexTypeKey]) {
@@ -126,11 +126,11 @@ func (db *Milvus) DescribeCollection(ctx context.Context, name string) (*Collect
 		config.Type = QuantizationPQ
 		m, err := strconv.Atoi(idx.Params()["m"])
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 		nbits, err := strconv.Atoi(idx.Params()["nbits"])
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 		if dimension > 0 {
 			config.Bits = m * nbits / dimension
@@ -147,10 +147,10 @@ func (db *Milvus) DescribeCollection(ctx context.Context, name string) (*Collect
 func (db *Milvus) AddCollection(ctx context.Context, name string, dimensions int, distance Distance, config VectorConfig) error {
 	if dimensions == 0 {
 		if distance != Dot {
-			return errors.NotSupportedf("distance method for sparse vector")
+			return errors.Errorf("distance method for sparse vector not supported")
 		}
 		if config != (VectorConfig{}) {
-			return errors.NotSupportedf("quantization for sparse vector")
+			return errors.Errorf("quantization for sparse vector not supported")
 		}
 	}
 
@@ -167,7 +167,7 @@ func (db *Milvus) AddCollection(ctx context.Context, name string, dimensions int
 
 	err := db.client.CreateCollection(ctx, milvusclient.NewCreateCollectionOption(name, schema).WithShardNum(entity.DefaultShardNumber))
 	if err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 
 	// Create index
@@ -180,7 +180,7 @@ func (db *Milvus) AddCollection(ctx context.Context, name string, dimensions int
 	case Dot:
 		metricType = entity.IP
 	default:
-		return errors.NotSupportedf("distance method")
+		return errors.Errorf("distance method not supported")
 	}
 
 	var idx index.Index
@@ -190,35 +190,35 @@ func (db *Milvus) AddCollection(ctx context.Context, name string, dimensions int
 		idx, err = milvusIndex(metricType, dimensions, config)
 	}
 	if err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	indexTask, err := db.client.CreateIndex(ctx, milvusclient.NewCreateIndexOption(name, milvusVectorField, idx).WithIndexName(milvusVectorField))
 	if err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	if err = indexTask.Await(ctx); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 
 	indexTask, err = db.client.CreateIndex(ctx, milvusclient.NewCreateIndexOption(name, milvusTimestampField, index.NewSortedIndex()).WithIndexName(milvusTimestampField))
 	if err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	if err = indexTask.Await(ctx); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 
 	// Load collection
 	loadTask, err := db.client.LoadCollection(ctx, milvusclient.NewLoadCollectionOption(name))
 	if err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
-	return errors.Trace(loadTask.Await(ctx))
+	return errors.WithStack(loadTask.Await(ctx))
 }
 
 func milvusVectorDimension(collection *entity.Collection) (int, error) {
 	if collection == nil || collection.Schema == nil {
-		return 0, errors.NotFoundf("collection schema")
+		return 0, errors.Wrapf(ErrNotFound, "collection schema")
 	}
 	for _, field := range collection.Schema.Fields {
 		if field.Name == milvusVectorField {
@@ -227,24 +227,24 @@ func milvusVectorDimension(collection *entity.Collection) (int, error) {
 			}
 			dimension, err := strconv.Atoi(field.TypeParams[entity.TypeParamDim])
 			if err != nil {
-				return 0, errors.Trace(err)
+				return 0, errors.WithStack(err)
 			}
 			return dimension, nil
 		}
 	}
-	return 0, errors.NotFoundf("vector field")
+	return 0, errors.Wrapf(ErrNotFound, "vector field")
 }
 
 func (db *Milvus) DeleteCollection(ctx context.Context, name string) error {
 	exists, err := db.client.HasCollection(ctx, milvusclient.NewHasCollectionOption(name))
 	if err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	if !exists {
-		return errors.NotFoundf("collection %s", name)
+		return errors.Wrapf(ErrNotFound, "collection %s", name)
 	}
 	err = db.client.DropCollection(ctx, milvusclient.NewDropCollectionOption(name))
-	return errors.Trace(err)
+	return errors.WithStack(err)
 }
 
 func (db *Milvus) CountVectors(ctx context.Context, collection string) (int64, error) {
@@ -252,14 +252,14 @@ func (db *Milvus) CountVectors(ctx context.Context, collection string) (int64, e
 		WithOutputFields("count(*)").
 		WithConsistencyLevel(entity.ClStrong))
 	if err != nil {
-		return 0, errors.Trace(err)
+		return 0, errors.WithStack(err)
 	}
 	countCol, ok := result.GetColumn("count(*)").(*column.ColumnInt64)
 	if !ok {
 		return 0, errors.Errorf("failed to parse vector count for collection %s", collection)
 	}
 	count, err := countCol.Value(0)
-	return count, errors.Trace(err)
+	return count, errors.WithStack(err)
 }
 
 func (db *Milvus) AddVectors(ctx context.Context, collection string, vectors []Vector) error {
@@ -281,7 +281,7 @@ func (db *Milvus) AddVectors(ctx context.Context, collection string, vectors []V
 		if len(v.Indices) > 0 {
 			sparse, err := entity.NewSliceSparseEmbedding(v.Indices, v.Values)
 			if err != nil {
-				return errors.Trace(err)
+				return errors.WithStack(err)
 			}
 			sparseData = append(sparseData, sparse)
 		}
@@ -302,7 +302,7 @@ func (db *Milvus) AddVectors(ctx context.Context, collection string, vectors []V
 	}
 
 	_, err := db.client.Upsert(ctx, milvusclient.NewColumnBasedInsertOption(collection, idCol, categoriesCol, hiddenCol, timestampCol, vectorCol))
-	return errors.Trace(err)
+	return errors.WithStack(err)
 }
 
 func (db *Milvus) GetVectors(ctx context.Context, collection string, ids []string) ([]Vector, error) {
@@ -314,7 +314,7 @@ func (db *Milvus) GetVectors(ctx context.Context, collection string, ids []strin
 		WithOutputFields(milvusIdField, milvusCategoriesField, milvusHiddenField, milvusTimestampField, milvusVectorField).
 		WithConsistencyLevel(entity.ClStrong))
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.WithStack(err)
 	}
 	return milvusVectors(collection, ids, result)
 }
@@ -341,19 +341,19 @@ func milvusVectors(collection string, ids []string, result milvusclient.ResultSe
 	for i := 0; i < result.Len(); i++ {
 		id, err := idCol.Value(i)
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 		categories, err := categoriesCol.Value(i)
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 		hidden, err := hiddenCol.Value(i)
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 		timestamp, err := timestampCol.Value(i)
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 		vector := Vector{
 			Id:         id,
@@ -365,13 +365,13 @@ func milvusVectors(collection string, ids []string, result milvusclient.ResultSe
 		case *column.ColumnFloatVector:
 			value, err := values.Value(i)
 			if err != nil {
-				return nil, errors.Trace(err)
+				return nil, errors.WithStack(err)
 			}
 			vector.Values = []float32(value)
 		case *column.ColumnSparseFloatVector:
 			value, err := values.Value(i)
 			if err != nil {
-				return nil, errors.Trace(err)
+				return nil, errors.WithStack(err)
 			}
 			vector.Indices = make([]uint32, value.Len())
 			vector.Values = make([]float32, value.Len())
@@ -388,7 +388,7 @@ func milvusVectors(collection string, ids []string, result milvusclient.ResultSe
 
 func (db *Milvus) DeleteVectors(ctx context.Context, collection string, timestamp time.Time) error {
 	_, err := db.client.Delete(ctx, milvusclient.NewDeleteOption(collection).WithExpr(fmt.Sprintf("%s < %d", milvusTimestampField, timestamp.UnixMilli())))
-	return errors.Trace(err)
+	return errors.WithStack(err)
 }
 
 func (db *Milvus) QueryVectors(ctx context.Context, collection string, q Vector, categories []string, topK int) ([]ScoredVector, error) {
@@ -407,13 +407,13 @@ func (db *Milvus) QueryVectors(ctx context.Context, collection string, q Vector,
 
 	searchParam, distance, err := db.searchParam(ctx, collection)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.WithStack(err)
 	}
 	var query entity.Vector
 	if len(q.Indices) > 0 {
 		query, err = entity.NewSliceSparseEmbedding(q.Indices, q.Values)
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 	} else {
 		query = entity.FloatVector(q.Values)
@@ -429,13 +429,13 @@ func (db *Milvus) QueryVectors(ctx context.Context, collection string, q Vector,
 	}
 	results, err := db.client.Search(ctx, searchOption)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.WithStack(err)
 	}
 
 	var vectors []ScoredVector
 	for _, result := range results {
 		if result.Err != nil {
-			return nil, errors.Trace(result.Err)
+			return nil, errors.WithStack(result.Err)
 		}
 
 		var idCol *column.ColumnVarChar
@@ -460,7 +460,7 @@ func (db *Milvus) QueryVectors(ctx context.Context, collection string, q Vector,
 			if idCol != nil {
 				id, err = idCol.Value(i)
 				if err != nil {
-					return nil, errors.Trace(err)
+					return nil, errors.WithStack(err)
 				}
 			}
 
@@ -468,7 +468,7 @@ func (db *Milvus) QueryVectors(ctx context.Context, collection string, q Vector,
 			if categoriesCol != nil {
 				cats, err = categoriesCol.Value(i)
 				if err != nil {
-					return nil, errors.Trace(err)
+					return nil, errors.WithStack(err)
 				}
 			}
 
@@ -476,7 +476,7 @@ func (db *Milvus) QueryVectors(ctx context.Context, collection string, q Vector,
 			if hiddenCol != nil {
 				hidden, err = hiddenCol.Value(i)
 				if err != nil {
-					return nil, errors.Trace(err)
+					return nil, errors.WithStack(err)
 				}
 			}
 
@@ -503,7 +503,7 @@ func milvusIndex(metricType entity.MetricType, dimensions int, config VectorConf
 		return index.NewHNSWIndex(metricType, 16, 200), nil
 	case QuantizationRQ:
 		if config.Bits != 0 {
-			return nil, errors.NotSupportedf("RQ quantization bits %d for Milvus", config.Bits)
+			return nil, errors.Errorf("RQ quantization bits %d for Milvus not supported", config.Bits)
 		}
 		return index.NewIvfRabitQIndex(metricType, defaultMilvusIVFNList), nil
 	case QuantizationPQ:
@@ -512,27 +512,27 @@ func milvusIndex(metricType entity.MetricType, dimensions int, config VectorConf
 			bits = defaultMilvusPQBits
 		}
 		if bits <= 0 || dimensions <= 0 || dimensions*bits%defaultMilvusPQBits != 0 {
-			return nil, errors.NotSupportedf("PQ quantization bits %d for Milvus", config.Bits)
+			return nil, errors.Errorf("PQ quantization bits %d for Milvus not supported", config.Bits)
 		}
 		m := dimensions * bits / defaultMilvusPQBits
 		if m <= 0 || m > dimensions || dimensions%m != 0 {
-			return nil, errors.NotSupportedf("PQ quantization bits %d for Milvus", config.Bits)
+			return nil, errors.Errorf("PQ quantization bits %d for Milvus not supported", config.Bits)
 		}
 		return index.NewIvfPQIndex(metricType, defaultMilvusIVFNList, m, defaultMilvusPQBits), nil
 	case QuantizationSQ:
 		if config.Bits != 0 && config.Bits != 8 {
-			return nil, errors.NotSupportedf("SQ quantization bits %d for Milvus", config.Bits)
+			return nil, errors.Errorf("SQ quantization bits %d for Milvus not supported", config.Bits)
 		}
 		return index.NewIvfSQ8Index(metricType, defaultMilvusIVFNList), nil
 	default:
-		return nil, errors.NotSupportedf("quantization type %s for Milvus", config.Type)
+		return nil, errors.Errorf("quantization type %s for Milvus not supported", config.Type)
 	}
 }
 
 func (db *Milvus) searchParam(ctx context.Context, collection string) (index.AnnParam, Distance, error) {
 	idx, err := db.client.DescribeIndex(ctx, milvusclient.NewDescribeIndexOption(collection, milvusVectorField))
 	if err != nil {
-		return nil, Cosine, errors.Trace(err)
+		return nil, Cosine, errors.WithStack(err)
 	}
 	var distance Distance
 	switch metricType := entity.MetricType(idx.Params()[index.MetricTypeKey]); metricType {
@@ -543,7 +543,7 @@ func (db *Milvus) searchParam(ctx context.Context, collection string) (index.Ann
 	case entity.IP:
 		distance = Dot
 	default:
-		return nil, Cosine, errors.NotSupportedf("distance method %s", metricType)
+		return nil, Cosine, errors.Errorf("distance method %s not supported", metricType)
 	}
 	switch index.IndexType(idx.Params()[index.IndexTypeKey]) {
 	case index.SparseInverted, index.SparseWAND:

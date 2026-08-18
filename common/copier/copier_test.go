@@ -17,7 +17,7 @@ package copier
 import (
 	"testing"
 
-	"github.com/juju/errors"
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -29,11 +29,11 @@ func TestPrimitives(t *testing.T) {
 	assert.Equal(t, a, b)
 	// not a pointer
 	err = Copy(b, a)
-	assert.True(t, errors.Is(err, errors.NotValid))
+	assert.True(t, errors.Is(err, ErrNotValid))
 	// test type mismatch
 	var c bool
 	err = Copy(&c, a)
-	assert.True(t, errors.Is(err, errors.NotValid))
+	assert.True(t, errors.Is(err, ErrNotValid))
 	// copy to interface
 	var d any
 	err = Copy(&d, a)
@@ -120,7 +120,7 @@ func TestStruct(t *testing.T) {
 	// test type mismatch
 	var c Bar
 	err = Copy(&c, a)
-	assert.True(t, errors.Is(err, errors.NotValid))
+	assert.True(t, errors.Is(err, ErrNotValid))
 }
 
 func TestPtr(t *testing.T) {

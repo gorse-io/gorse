@@ -43,7 +43,7 @@ import (
 	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/dataset"
 	"github.com/gorse-io/gorse/model"
-	"github.com/juju/errors"
+	"github.com/pkg/errors"
 	"github.com/samber/lo"
 	"go.uber.org/zap"
 )
@@ -562,38 +562,38 @@ type savedVariable struct {
 func (fm *AFM) Marshal(w io.Writer) error {
 	// write params
 	if err := encoding.WriteGob(w, fm.Params); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	// write index
 	if err := dataset.MarshalUnifiedIndex(w, fm.Index); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	// write dataset stats
 	if err := encoding.WriteGob(w, fm.numFeatures); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	if err := encoding.WriteGob(w, fm.numDimension); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	if err := encoding.WriteGob(w, fm.embeddingDim); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	if len(fm.embeddingDim) > 0 {
 		if err := dataset.MarshalIndex(w, fm.embeddingIndex); err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 	}
 	// write scalers
 	if fm.autoScale {
 		if err := encoding.WriteGob(w, len(fm.Scalers)); err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		for idx, scaler := range fm.Scalers {
 			if err := encoding.WriteGob(w, idx); err != nil {
-				return errors.Trace(err)
+				return errors.WithStack(err)
 			}
 			if err := scaler.Marshal(w); err != nil {
-				return errors.Trace(err)
+				return errors.WithStack(err)
 			}
 		}
 	}
@@ -616,7 +616,7 @@ func (fm *AFM) Marshal(w io.Writer) error {
 		}
 	})
 	if err := encoding.WriteGob(w, variables); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	return nil
 }
@@ -625,45 +625,45 @@ func (fm *AFM) Unmarshal(r io.Reader) error {
 	// read params
 	err := encoding.ReadGob(r, &fm.Params)
 	if err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	fm.SetParams(fm.Params)
 	// read index
 	fm.Index, err = dataset.UnmarshalUnifiedIndex(r)
 	if err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	// read dataset stats
 	if err = encoding.ReadGob(r, &fm.numFeatures); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	if err = encoding.ReadGob(r, &fm.numDimension); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	if err = encoding.ReadGob(r, &fm.embeddingDim); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	if len(fm.embeddingDim) > 0 {
 		fm.embeddingIndex, err = dataset.UnmarshalIndex(r)
 		if err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 	}
 	// read scalers
 	if fm.autoScale {
 		var numScalers int
 		if err = encoding.ReadGob(r, &numScalers); err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		fm.Scalers = make(map[int32]*AutoScaler, numScalers)
 		for i := 0; i < numScalers; i++ {
 			var idx int32
 			if err = encoding.ReadGob(r, &idx); err != nil {
-				return errors.Trace(err)
+				return errors.WithStack(err)
 			}
 			scaler := NewAutoScaler()
 			if err = scaler.Unmarshal(r); err != nil {
-				return errors.Trace(err)
+				return errors.WithStack(err)
 			}
 			fm.Scalers[idx] = scaler
 		}
@@ -671,7 +671,7 @@ func (fm *AFM) Unmarshal(r io.Reader) error {
 	// read parameters
 	var variables map[string]savedVariable
 	if err = encoding.ReadGob(r, &variables); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	if fm.ctx == nil {
 		fm.ctx = mlx_context.New()
@@ -680,7 +680,7 @@ func (fm *AFM) Unmarshal(r io.Reader) error {
 		var err error
 		fm.backend, err = backends.New()
 		if err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 	}
 	for _, data := range variables {

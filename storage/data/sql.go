@@ -32,9 +32,9 @@ import (
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/storage"
-	"github.com/juju/errors"
 	_ "github.com/lib/pq"
 	_ "github.com/mailru/go-clickhouse/v2"
+	"github.com/pkg/errors"
 	"github.com/samber/lo"
 	semconv "go.opentelemetry.io/otel/semconv/v1.12.0"
 	"gorm.io/driver/clickhouse"
@@ -55,7 +55,7 @@ func init() {
 		// probe isolation variable name
 		isolationVarName, err := storage.ProbeMySQLIsolationVariableName(name)
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 		// append parameters
 		if name, err = storage.AppendMySQLParams(name, map[string]string{
@@ -63,7 +63,7 @@ func init() {
 			isolationVarName: fmt.Sprintf("'%s'", option.IsolationLevel),
 			"parseTime":      "true",
 		}); err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 		// connect to database
 		database := new(SQLDatabase)
@@ -73,12 +73,12 @@ func init() {
 			otelsql.WithAttributes(semconv.DBSystemMySQL),
 			otelsql.WithSpanOptions(otelsql.SpanOptions{DisableErrSkip: true}),
 		); err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 		storage.ApplySQLPool(database.client, option)
 		database.gormDB, err = gorm.Open(mysql.New(mysql.Config{Conn: database.client}), storage.NewGORMConfig(tablePrefix))
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 		return database, nil
 	})
@@ -92,7 +92,7 @@ func init() {
 			otelsql.WithAttributes(semconv.DBSystemPostgreSQL),
 			otelsql.WithSpanOptions(otelsql.SpanOptions{DisableErrSkip: true}),
 		); err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 		storage.ApplySQLPool(database.client, option)
 		database.gormDB, err = gorm.Open(postgres.New(postgres.Config{
@@ -100,7 +100,7 @@ func init() {
 			Conn:       database.client,
 		}), storage.NewGORMConfig(tablePrefix))
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 		return database, nil
 	})
@@ -108,7 +108,7 @@ func init() {
 		// replace schema
 		parsed, err := url.Parse(path)
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 		if strings.HasPrefix(path, storage.CHHTTPSPrefix) {
 			parsed.Scheme = "https"
@@ -123,11 +123,11 @@ func init() {
 			otelsql.WithAttributes(semconv.DBSystemKey.String("clickhouse")),
 			otelsql.WithSpanOptions(otelsql.SpanOptions{DisableErrSkip: true}),
 		); err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 		database.gormDB, err = gorm.Open(clickhouse.New(clickhouse.Config{Conn: database.client}), storage.NewGORMConfig(tablePrefix))
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 		return database, nil
 	})
@@ -139,7 +139,7 @@ func init() {
 			{"_pragma", "busy_timeout(10000)"},
 			{"_pragma", "journal_mode(wal)"},
 		}); err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 		// connect to database
 		database := new(SQLDatabase)
@@ -149,11 +149,11 @@ func init() {
 			otelsql.WithAttributes(semconv.DBSystemSqlite),
 			otelsql.WithSpanOptions(otelsql.SpanOptions{DisableErrSkip: true}),
 		); err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 		database.gormDB, err = gorm.Open(sqlite.Dialector{Conn: database.client}, storage.NewGORMConfig(tablePrefix))
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 		return database, nil
 	})
@@ -268,7 +268,7 @@ func (d *SQLDatabase) Optimize() error {
 			d.AggregatingFeedbackTable(), d.UserFeedbackTable(), d.ItemFeedbackTable(), d.LatestItemsTable()} {
 			_, err := d.client.Exec("OPTIMIZE TABLE " + tableName)
 			if err != nil {
-				return errors.Trace(err)
+				return errors.WithStack(err)
 			}
 		}
 	}
@@ -305,7 +305,7 @@ func (d *SQLDatabase) Init() error {
 		}
 		err := d.gormDB.Set("gorm:table_options", "ENGINE=InnoDB").AutoMigrate(Users{}, Items{}, Feedback{})
 		if err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 	case Postgres:
 		// create tables
@@ -334,7 +334,7 @@ func (d *SQLDatabase) Init() error {
 		}
 		err := d.gormDB.AutoMigrate(Users{}, Items{}, Feedback{})
 		if err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 	case SQLite:
 		// create tables
@@ -363,7 +363,7 @@ func (d *SQLDatabase) Init() error {
 		}
 		err := d.gormDB.AutoMigrate(Users{}, Items{}, Feedback{})
 		if err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 	case ClickHouse:
 		// create tables
@@ -378,7 +378,7 @@ func (d *SQLDatabase) Init() error {
 		}
 		err := d.gormDB.Set("gorm:table_options", "ENGINE = ReplacingMergeTree(version) ORDER BY item_id").AutoMigrate(Items{})
 		if err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		type Users struct {
 			UserId  string   `gorm:"column:user_id;type:String"`
@@ -388,7 +388,7 @@ func (d *SQLDatabase) Init() error {
 		}
 		err = d.gormDB.Set("gorm:table_options", "ENGINE = ReplacingMergeTree(version) ORDER BY user_id").AutoMigrate(Users{})
 		if err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		type Feedback struct {
 			FeedbackType string    `gorm:"column:feedback_type;type:String"`
@@ -402,7 +402,7 @@ func (d *SQLDatabase) Init() error {
 		}
 		err = d.gormDB.Set("gorm:table_options", "ENGINE = MergeTree ORDER BY (feedback_type, user_id, item_id)").AutoMigrate(Feedback{})
 		if err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		// create materialized views
 		type AggregatingFeedback struct {
@@ -417,38 +417,38 @@ func (d *SQLDatabase) Init() error {
 		}
 		err = d.gormDB.Set("gorm:table_options", "ENGINE = AggregatingMergeTree() ORDER BY (user_id, item_id, feedback_type)").AutoMigrate(AggregatingFeedback{})
 		if err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		err = d.gormDB.Exec(fmt.Sprintf("CREATE MATERIALIZED VIEW IF NOT EXISTS %s_mv TO %s AS "+
 			"SELECT feedback_type, user_id, item_id, sum(value) AS value, min(time_stamp) AS time_stamp, max(updated) AS updated, anyLast(labels) AS labels, anyLast(comment) AS comment "+
 			"FROM %s GROUP BY feedback_type, user_id, item_id",
 			d.AggregatingFeedbackTable(), d.AggregatingFeedbackTable(), d.FeedbackTable())).Error
 		if err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		type UserFeedback AggregatingFeedback
 		err = d.gormDB.Set("gorm:table_options", "ENGINE = AggregatingMergeTree() ORDER BY (user_id, item_id, feedback_type)").AutoMigrate(UserFeedback{})
 		if err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		err = d.gormDB.Exec(fmt.Sprintf("CREATE MATERIALIZED VIEW IF NOT EXISTS %s_mv TO %s AS "+
 			"SELECT feedback_type, user_id, item_id, sum(value) AS value, min(time_stamp) AS time_stamp, max(updated) AS updated, anyLast(labels) AS labels, anyLast(comment) AS comment "+
 			"FROM %s GROUP BY feedback_type, user_id, item_id",
 			d.UserFeedbackTable(), d.UserFeedbackTable(), d.FeedbackTable())).Error
 		if err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		type ItemFeedback AggregatingFeedback
 		err = d.gormDB.Set("gorm:table_options", "ENGINE = AggregatingMergeTree() ORDER BY (item_id, user_id, feedback_type)").AutoMigrate(ItemFeedback{})
 		if err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		err = d.gormDB.Exec(fmt.Sprintf("CREATE MATERIALIZED VIEW IF NOT EXISTS %s_mv TO %s AS "+
 			"SELECT feedback_type, user_id, item_id, sum(value) AS value, min(time_stamp) AS time_stamp, max(updated) AS updated, anyLast(labels) AS labels, anyLast(comment) AS comment "+
 			"FROM %s GROUP BY feedback_type, user_id, item_id",
 			d.ItemFeedbackTable(), d.ItemFeedbackTable(), d.FeedbackTable())).Error
 		if err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		type LatestItems struct {
 			ItemId     string    `gorm:"column:item_id;type:String"`
@@ -461,7 +461,7 @@ func (d *SQLDatabase) Init() error {
 		}
 		err = d.gormDB.Set("gorm:table_options", "ENGINE = ReplacingMergeTree(version) ORDER BY (time_stamp, item_id) SETTINGS index_granularity = 8192").AutoMigrate(LatestItems{})
 		if err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		// Create materialized view for latest items ordered by timestamp
 		err = d.gormDB.Exec(fmt.Sprintf("CREATE MATERIALIZED VIEW IF NOT EXISTS %s_latest_mv TO %s AS "+
@@ -469,7 +469,7 @@ func (d *SQLDatabase) Init() error {
 			"FROM %s",
 			d.ItemsTable(), d.LatestItemsTable(), d.ItemsTable())).Error
 		if err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 	}
 	return nil
@@ -492,17 +492,17 @@ func (d *SQLDatabase) Reconcile(searchConfig config.SearchConfig) error {
 		}
 		matched, err := d.postgresSearchIndexMatches(searchVector)
 		if err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		if matched {
 			d.searchVector = searchVector
 			return nil
 		}
 		if err = d.gormDB.Exec(fmt.Sprintf("DROP INDEX IF EXISTS %s", searchIndexName)).Error; err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		if err = d.gormDB.Exec(fmt.Sprintf("CREATE INDEX %s ON %s USING GIN ((%s))", searchIndexName, d.ItemsTable(), searchVector)).Error; err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		d.searchVector = searchVector
 	case MySQL:
@@ -512,22 +512,22 @@ func (d *SQLDatabase) Reconcile(searchConfig config.SearchConfig) error {
 		}
 		matched, err := d.mysqlSearchIndexMatches(d.ItemsTable(), searchDocument)
 		if err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		if matched {
 			return nil
 		}
 		if err = d.dropMySQLIndexIfExists(d.ItemsTable(), searchIndexName); err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		if err = d.dropMySQLColumnIfExists(d.ItemsTable(), mysqlSearchDocumentColumn); err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		if err = d.gormDB.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s TEXT GENERATED ALWAYS AS (%s) STORED", d.ItemsTable(), mysqlSearchDocumentColumn, searchDocument)).Error; err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		if err = d.gormDB.Exec(fmt.Sprintf("CREATE FULLTEXT INDEX %s ON %s(%s)", searchIndexName, d.ItemsTable(), mysqlSearchDocumentColumn)).Error; err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 	case ClickHouse:
 		searchDocument := buildClickHouseSearchDocument(searchConfig.Columns)
@@ -536,25 +536,25 @@ func (d *SQLDatabase) Reconcile(searchConfig config.SearchConfig) error {
 		}
 		matched, err := d.clickHouseSearchIndexMatches(searchDocument)
 		if err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		if matched {
 			return nil
 		}
 		if err = d.gormDB.Exec(fmt.Sprintf("ALTER TABLE %s DROP INDEX IF EXISTS %s", d.ItemsTable(), searchIndexName)).Error; err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		if err = d.gormDB.Exec(fmt.Sprintf("ALTER TABLE %s DROP COLUMN IF EXISTS %s", d.ItemsTable(), clickHouseSearchDocumentColumn)).Error; err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		if err = d.gormDB.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s String MATERIALIZED %s", d.ItemsTable(), clickHouseSearchDocumentColumn, searchDocument)).Error; err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		if err = d.gormDB.Exec(fmt.Sprintf("ALTER TABLE %s ADD INDEX %s %s TYPE text(tokenizer = splitByNonAlpha, preprocessor = lowerUTF8(%s))", d.ItemsTable(), searchIndexName, clickHouseSearchDocumentColumn, clickHouseSearchDocumentColumn)).Error; err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		if err = d.gormDB.Exec(fmt.Sprintf("ALTER TABLE %s MATERIALIZE INDEX %s SETTINGS mutations_sync = 2", d.ItemsTable(), searchIndexName)).Error; err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 	case SQLite:
 		searchDocument := buildSQLiteSearchDocument(searchConfig.Columns, "")
@@ -568,33 +568,33 @@ func (d *SQLDatabase) Reconcile(searchConfig config.SearchConfig) error {
 		deleteTriggerSQL := fmt.Sprintf("CREATE TRIGGER %s AFTER DELETE ON %s BEGIN DELETE FROM %s WHERE item_id = old.item_id AND search_document = %s; END", sqliteSearchDeleteTriggerName, d.ItemsTable(), searchIndexName, oldSearchDocument)
 		matched, err := d.sqliteSearchIndexMatches(insertTriggerSQL, updateTriggerSQL, deleteTriggerSQL)
 		if err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		if matched {
 			return nil
 		}
 		for _, triggerName := range []string{sqliteSearchInsertTriggerName, sqliteSearchUpdateTriggerName, sqliteSearchDeleteTriggerName} {
 			if err = d.gormDB.Exec(fmt.Sprintf("DROP TRIGGER IF EXISTS %s", triggerName)).Error; err != nil {
-				return errors.Trace(err)
+				return errors.WithStack(err)
 			}
 		}
 		if err = d.gormDB.Exec(fmt.Sprintf("DROP TABLE IF EXISTS %s", searchIndexName)).Error; err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		if err = d.gormDB.Exec(fmt.Sprintf("CREATE VIRTUAL TABLE %s USING fts5(item_id UNINDEXED, search_document)", searchIndexName)).Error; err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		if err = d.gormDB.Exec(fmt.Sprintf("INSERT INTO %s(item_id, search_document) SELECT item_id, %s FROM %s", searchIndexName, searchDocument, d.ItemsTable())).Error; err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		if err = d.gormDB.Exec(insertTriggerSQL).Error; err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		if err = d.gormDB.Exec(updateTriggerSQL).Error; err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		if err = d.gormDB.Exec(deleteTriggerSQL).Error; err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 	}
 	return nil
@@ -603,7 +603,7 @@ func (d *SQLDatabase) Reconcile(searchConfig config.SearchConfig) error {
 func (d *SQLDatabase) postgresSearchIndexMatches(searchVector string) (bool, error) {
 	var indexDef string
 	if err := d.gormDB.Raw("SELECT indexdef FROM pg_indexes WHERE schemaname = ANY(current_schemas(false)) AND tablename = ? AND indexname = ?", d.ItemsTable(), searchIndexName).Scan(&indexDef).Error; err != nil {
-		return false, errors.Trace(err)
+		return false, errors.WithStack(err)
 	}
 	if indexDef == "" {
 		return false, nil
@@ -617,7 +617,7 @@ func (d *SQLDatabase) clickHouseSearchIndexMatches(searchDocument string) (bool,
 		DefaultExpression string `gorm:"column:default_expression"`
 	}
 	if err := d.gormDB.Raw("SELECT default_kind, default_expression FROM system.columns WHERE database = currentDatabase() AND table = ? AND name = ?", d.ItemsTable(), clickHouseSearchDocumentColumn).Scan(&column).Error; err != nil {
-		return false, errors.Trace(err)
+		return false, errors.WithStack(err)
 	}
 	if column.DefaultKind != "MATERIALIZED" || normalizeSearchIndexExpression(column.DefaultExpression) != normalizeSearchIndexExpression(searchDocument) {
 		return false, nil
@@ -627,7 +627,7 @@ func (d *SQLDatabase) clickHouseSearchIndexMatches(searchDocument string) (bool,
 		Type       string `gorm:"column:type_full"`
 	}
 	if err := d.gormDB.Raw("SELECT expr, type_full FROM system.data_skipping_indices WHERE database = currentDatabase() AND table = ? AND name = ?", d.ItemsTable(), searchIndexName).Scan(&index).Error; err != nil {
-		return false, errors.Trace(err)
+		return false, errors.WithStack(err)
 	}
 	expectedType := fmt.Sprintf("text(tokenizer = splitByNonAlpha, preprocessor = lowerUTF8(%s))", clickHouseSearchDocumentColumn)
 	return index.Expression == clickHouseSearchDocumentColumn && normalizeSearchIndexExpression(index.Type) == normalizeSearchIndexExpression(expectedType), nil
@@ -636,14 +636,14 @@ func (d *SQLDatabase) clickHouseSearchIndexMatches(searchDocument string) (bool,
 func (d *SQLDatabase) mysqlSearchIndexMatches(tableName, searchDocument string) (bool, error) {
 	var indexCount int64
 	if err := d.gormDB.Raw("SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ? AND column_name = ?", tableName, searchIndexName, mysqlSearchDocumentColumn).Scan(&indexCount).Error; err != nil {
-		return false, errors.Trace(err)
+		return false, errors.WithStack(err)
 	}
 	if indexCount == 0 {
 		return false, nil
 	}
 	var generationExpression string
 	if err := d.gormDB.Raw("SELECT generation_expression FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?", tableName, mysqlSearchDocumentColumn).Scan(&generationExpression).Error; err != nil {
-		return false, errors.Trace(err)
+		return false, errors.WithStack(err)
 	}
 	return generationExpression != "" && (normalizeSearchIndexExpression(generationExpression) == normalizeSearchIndexExpression(searchDocument) || searchExpressionContainsAll(generationExpression, mysqlSearchDocumentParts(searchDocument))), nil
 }
@@ -652,7 +652,7 @@ func (d *SQLDatabase) sqliteSearchIndexMatches(triggerSQLs ...string) (bool, err
 	for _, triggerSQL := range triggerSQLs {
 		var existingSQL string
 		if err := d.gormDB.Raw("SELECT sql FROM sqlite_master WHERE type = 'trigger' AND name = ?", sqliteObjectName(triggerSQL)).Scan(&existingSQL).Error; err != nil {
-			return false, errors.Trace(err)
+			return false, errors.WithStack(err)
 		}
 		if existingSQL == "" || normalizeSearchIndexExpression(existingSQL) != normalizeSearchIndexExpression(triggerSQL) {
 			return false, nil
@@ -878,23 +878,23 @@ func sqliteAnyTokenSearchQuery(query string) string {
 func (d *SQLDatabase) dropMySQLIndexIfExists(tableName, indexName string) error {
 	var count int64
 	if err := d.gormDB.Raw("SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = ? AND index_name = ?", tableName, indexName).Scan(&count).Error; err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	if count == 0 {
 		return nil
 	}
-	return errors.Trace(d.gormDB.Exec(fmt.Sprintf("DROP INDEX %s ON %s", indexName, tableName)).Error)
+	return errors.WithStack(d.gormDB.Exec(fmt.Sprintf("DROP INDEX %s ON %s", indexName, tableName)).Error)
 }
 
 func (d *SQLDatabase) dropMySQLColumnIfExists(tableName, columnName string) error {
 	var count int64
 	if err := d.gormDB.Raw("SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?", tableName, columnName).Scan(&count).Error; err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	if count == 0 {
 		return nil
 	}
-	return errors.Trace(d.gormDB.Exec(fmt.Sprintf("ALTER TABLE %s DROP COLUMN %s", tableName, columnName)).Error)
+	return errors.WithStack(d.gormDB.Exec(fmt.Sprintf("ALTER TABLE %s DROP COLUMN %s", tableName, columnName)).Error)
 }
 
 // Close MySQL connection.
@@ -908,7 +908,7 @@ func (d *SQLDatabase) Purge() error {
 		for _, tableName := range tables {
 			err := d.gormDB.Exec(fmt.Sprintf("alter table %s delete where 1=1", tableName)).Error
 			if err != nil {
-				return errors.Trace(err)
+				return errors.WithStack(err)
 			}
 		}
 	} else {
@@ -916,7 +916,7 @@ func (d *SQLDatabase) Purge() error {
 		for _, tableName := range tables {
 			err := d.gormDB.Exec(fmt.Sprintf("DELETE FROM %s", tableName)).Error
 			if err != nil {
-				return errors.Trace(err)
+				return errors.WithStack(err)
 			}
 		}
 	}
@@ -938,7 +938,7 @@ func (d *SQLDatabase) BatchInsertItems(ctx context.Context, items []Item) error 
 			}
 		}
 		err := d.gormDB.Create(rows).Error
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	} else {
 		rows := make([]SQLItem, 0, len(items))
 		memo := mapset.NewSet[string]()
@@ -954,7 +954,7 @@ func (d *SQLDatabase) BatchInsertItems(ctx context.Context, items []Item) error 
 			Columns:   []clause.Column{{Name: "item_id"}},
 			DoUpdates: clause.AssignmentColumns([]string{"is_hidden", "categories", "time_stamp", "labels", "comment"}),
 		}).Create(rows).Error
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 }
 
@@ -976,7 +976,7 @@ func (d *SQLDatabase) BatchGetItems(ctx context.Context, itemIds []string, opts 
 	if len(opts.Categories) > 0 {
 		q, err := jsonutil.Marshal(opts.Categories)
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 		switch d.driver {
 		case Postgres:
@@ -1000,14 +1000,14 @@ func (d *SQLDatabase) BatchGetItems(ctx context.Context, itemIds []string, opts 
 	}
 	result, err := query.Rows()
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.WithStack(err)
 	}
 	defer result.Close()
 	var items []Item
 	for result.Next() {
 		var item Item
 		if err = d.gormDB.ScanRows(result, &item); err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 		items = append(items, item)
 	}
@@ -1017,17 +1017,17 @@ func (d *SQLDatabase) BatchGetItems(ctx context.Context, itemIds []string, opts 
 // DeleteItem deletes a item from MySQL.
 func (d *SQLDatabase) DeleteItem(ctx context.Context, itemId string) error {
 	if err := d.gormDB.WithContext(ctx).Delete(&SQLItem{ItemId: itemId}).Error; err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	if err := d.gormDB.WithContext(ctx).Delete(&Feedback{}, "item_id = ?", itemId).Error; err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	if d.driver == ClickHouse {
 		if err := d.gormDB.WithContext(ctx).Delete(&ItemFeedback{}, "item_id = ?", itemId).Error; err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		if err := d.gormDB.WithContext(ctx).Delete(&UserFeedback{}, "item_id = ?", itemId).Error; err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 	}
 	return nil
@@ -1042,17 +1042,17 @@ func (d *SQLDatabase) GetItem(ctx context.Context, itemId string) (Item, error) 
 		Select("item_id, is_hidden, categories, time_stamp, labels, comment").
 		Where("item_id = ?", itemId).Rows()
 	if err != nil {
-		return Item{}, errors.Trace(err)
+		return Item{}, errors.WithStack(err)
 	}
 	defer result.Close()
 	if result.Next() {
 		var item Item
 		if err = d.gormDB.ScanRows(result, &item); err != nil {
-			return Item{}, errors.Trace(err)
+			return Item{}, errors.WithStack(err)
 		}
 		return item, nil
 	}
-	return Item{}, errors.Annotate(ErrItemNotExist, itemId)
+	return Item{}, errors.Wrap(ErrItemNotExist, itemId)
 }
 
 // SearchItems searches items from the database.
@@ -1106,7 +1106,7 @@ func (d *SQLDatabase) SearchItems(ctx context.Context, query string, n int) ([]S
 
 	result, err := tx.Rows()
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.WithStack(err)
 	}
 	defer result.Close()
 
@@ -1114,11 +1114,11 @@ func (d *SQLDatabase) SearchItems(ctx context.Context, query string, n int) ([]S
 	for result.Next() {
 		var item ScoredItem
 		if err := d.gormDB.ScanRows(result, &item); err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 		items = append(items, item)
 	}
-	return items, errors.Trace(result.Err())
+	return items, errors.WithStack(result.Err())
 }
 
 // ModifyItem modify an item in MySQL.
@@ -1151,14 +1151,14 @@ func (d *SQLDatabase) ModifyItem(ctx context.Context, itemId string, patch ItemP
 		attributes["time_stamp"] = d.normalizeTimestampForWrite(*patch.Timestamp)
 	}
 	err := d.gormDB.WithContext(ctx).Model(&SQLItem{ItemId: itemId}).Updates(attributes).Error
-	return errors.Trace(err)
+	return errors.WithStack(err)
 }
 
 // GetItems returns items from MySQL.
 func (d *SQLDatabase) GetItems(ctx context.Context, cursor string, n int, timeLimit *time.Time) (string, []Item, error) {
 	buf, err := base64.StdEncoding.DecodeString(cursor)
 	if err != nil {
-		return "", nil, errors.Trace(err)
+		return "", nil, errors.WithStack(err)
 	}
 	cursorItem := string(buf)
 	tx := d.gormDB.WithContext(ctx).
@@ -1172,14 +1172,14 @@ func (d *SQLDatabase) GetItems(ctx context.Context, cursor string, n int, timeLi
 	}
 	result, err := tx.Order("item_id").Limit(n + 1).Rows()
 	if err != nil {
-		return "", nil, errors.Trace(err)
+		return "", nil, errors.WithStack(err)
 	}
 	items := make([]Item, 0)
 	defer result.Close()
 	for result.Next() {
 		var item Item
 		if err = d.gormDB.ScanRows(result, &item); err != nil {
-			return "", nil, errors.Trace(err)
+			return "", nil, errors.WithStack(err)
 		}
 		items = append(items, item)
 	}
@@ -1204,7 +1204,7 @@ func (d *SQLDatabase) GetLatestItems(ctx context.Context, n int, categories []st
 	if len(categories) > 0 {
 		q, err := jsonutil.Marshal(categories)
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 		switch d.driver {
 		case Postgres:
@@ -1220,14 +1220,14 @@ func (d *SQLDatabase) GetLatestItems(ctx context.Context, n int, categories []st
 	}
 	result, err := tx.Order("time_stamp DESC").Limit(n).Rows()
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.WithStack(err)
 	}
 	items := make([]Item, 0)
 	defer result.Close()
 	for result.Next() {
 		var item Item
 		if err = d.gormDB.ScanRows(result, &item); err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 		items = append(items, item)
 	}
@@ -1250,7 +1250,7 @@ func (d *SQLDatabase) GetItemStream(ctx context.Context, batchSize int, timeLimi
 		}
 		result, err := tx.Rows()
 		if err != nil {
-			errChan <- errors.Trace(err)
+			errChan <- errors.WithStack(err)
 			return
 		}
 		// fetch result
@@ -1259,7 +1259,7 @@ func (d *SQLDatabase) GetItemStream(ctx context.Context, batchSize int, timeLimi
 		for result.Next() {
 			var item Item
 			if err = d.gormDB.ScanRows(result, &item); err != nil {
-				errChan <- errors.Trace(err)
+				errChan <- errors.WithStack(err)
 				return
 			}
 			items = append(items, item)
@@ -1305,14 +1305,14 @@ func (d *SQLDatabase) GetItemFeedback(ctx context.Context, itemId string, feedba
 	}
 	result, err := tx.Rows()
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.WithStack(err)
 	}
 	feedbacks := make([]Feedback, 0)
 	defer result.Close()
 	for result.Next() {
 		var feedback Feedback
 		if err = d.gormDB.ScanRows(result, &feedback); err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 		feedbacks = append(feedbacks, feedback)
 	}
@@ -1334,7 +1334,7 @@ func (d *SQLDatabase) BatchInsertUsers(ctx context.Context, users []User) error 
 			}
 		}
 		err := d.gormDB.Create(rows).Error
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	} else {
 		rows := make([]SQLUser, 0, len(users))
 		memo := mapset.NewSet[string]()
@@ -1348,24 +1348,24 @@ func (d *SQLDatabase) BatchInsertUsers(ctx context.Context, users []User) error 
 			Columns:   []clause.Column{{Name: "user_id"}},
 			DoUpdates: clause.AssignmentColumns([]string{"labels", "comment"}),
 		}).Create(rows).Error
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 }
 
 // DeleteUser deletes a user from MySQL.
 func (d *SQLDatabase) DeleteUser(ctx context.Context, userId string) error {
 	if err := d.gormDB.WithContext(ctx).Delete(&SQLUser{UserId: userId}).Error; err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	if err := d.gormDB.WithContext(ctx).Delete(&Feedback{}, "user_id = ?", userId).Error; err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	if d.driver == ClickHouse {
 		if err := d.gormDB.WithContext(ctx).Delete(&ItemFeedback{}, "user_id = ?", userId).Error; err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		if err := d.gormDB.WithContext(ctx).Delete(&UserFeedback{}, "user_id = ?", userId).Error; err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 	}
 	return nil
@@ -1379,17 +1379,17 @@ func (d *SQLDatabase) GetUser(ctx context.Context, userId string) (User, error) 
 		Select("user_id, labels, comment").
 		Where("user_id = ?", userId).Rows()
 	if err != nil {
-		return User{}, errors.Trace(err)
+		return User{}, errors.WithStack(err)
 	}
 	defer result.Close()
 	if result.Next() {
 		var user User
 		if err = d.gormDB.ScanRows(result, &user); err != nil {
-			return User{}, errors.Trace(err)
+			return User{}, errors.WithStack(err)
 		}
 		return user, nil
 	}
-	return User{}, errors.Annotate(ErrUserNotExist, userId)
+	return User{}, errors.Wrap(ErrUserNotExist, userId)
 }
 
 // ModifyUser modify a user in MySQL.
@@ -1408,14 +1408,14 @@ func (d *SQLDatabase) ModifyUser(ctx context.Context, userId string, patch UserP
 		attributes["labels"] = string(text)
 	}
 	err := d.gormDB.WithContext(ctx).Model(&SQLUser{UserId: userId}).Updates(attributes).Error
-	return errors.Trace(err)
+	return errors.WithStack(err)
 }
 
 // GetUsers returns users from MySQL.
 func (d *SQLDatabase) GetUsers(ctx context.Context, cursor string, n int) (string, []User, error) {
 	buf, err := base64.StdEncoding.DecodeString(cursor)
 	if err != nil {
-		return "", nil, errors.Trace(err)
+		return "", nil, errors.WithStack(err)
 	}
 	cursorUser := string(buf)
 	tx := d.gormDB.WithContext(ctx).
@@ -1426,14 +1426,14 @@ func (d *SQLDatabase) GetUsers(ctx context.Context, cursor string, n int) (strin
 	}
 	result, err := tx.Order("user_id").Limit(n + 1).Rows()
 	if err != nil {
-		return "", nil, errors.Trace(err)
+		return "", nil, errors.WithStack(err)
 	}
 	users := make([]User, 0)
 	defer result.Close()
 	for result.Next() {
 		var user User
 		if err = d.gormDB.ScanRows(result, &user); err != nil {
-			return "", nil, errors.Trace(err)
+			return "", nil, errors.WithStack(err)
 		}
 		users = append(users, user)
 	}
@@ -1453,7 +1453,7 @@ func (d *SQLDatabase) GetUserStream(ctx context.Context, batchSize int) (chan []
 		// send query
 		result, err := d.gormDB.WithContext(ctx).Table(d.UsersTable()).Select("user_id, labels, comment").Rows()
 		if err != nil {
-			errChan <- errors.Trace(err)
+			errChan <- errors.WithStack(err)
 			return
 		}
 		// fetch result
@@ -1462,7 +1462,7 @@ func (d *SQLDatabase) GetUserStream(ctx context.Context, batchSize int) (chan []
 		for result.Next() {
 			var user User
 			if err = d.gormDB.ScanRows(result, &user); err != nil {
-				errChan <- errors.Trace(err)
+				errChan <- errors.WithStack(err)
 				return
 			}
 			users = append(users, user)
@@ -1513,14 +1513,14 @@ func (d *SQLDatabase) GetUserFeedback(ctx context.Context, userId string, endTim
 	}
 	result, err := tx.Rows()
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.WithStack(err)
 	}
 	feedbacks := make([]Feedback, 0)
 	defer result.Close()
 	for result.Next() {
 		var feedback Feedback
 		if err = d.gormDB.ScanRows(result, &feedback); err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 		feedbacks = append(feedbacks, feedback)
 	}
@@ -1556,7 +1556,7 @@ func (d *SQLDatabase) BatchInsertFeedback(ctx context.Context, feedback []Feedba
 				}
 			})).Error
 			if err != nil {
-				return errors.Trace(err)
+				return errors.WithStack(err)
 			}
 		} else {
 			err := tx.Clauses(clause.OnConflict{
@@ -1569,19 +1569,19 @@ func (d *SQLDatabase) BatchInsertFeedback(ctx context.Context, feedback []Feedba
 				}
 			})).Error
 			if err != nil {
-				return errors.Trace(err)
+				return errors.WithStack(err)
 			}
 		}
 	} else {
 		for _, user := range users.ToSlice() {
 			rs, err := tx.Table(d.UsersTable()).Select("user_id").Where("user_id = ?", user).Rows()
 			if err != nil {
-				return errors.Trace(err)
+				return errors.WithStack(err)
 			} else if !rs.Next() {
 				users.Remove(user)
 			}
 			if err = rs.Close(); err != nil {
-				return errors.Trace(err)
+				return errors.WithStack(err)
 			}
 		}
 	}
@@ -1599,7 +1599,7 @@ func (d *SQLDatabase) BatchInsertFeedback(ctx context.Context, feedback []Feedba
 				}
 			})).Error
 			if err != nil {
-				return errors.Trace(err)
+				return errors.WithStack(err)
 			}
 		} else {
 			err := tx.Clauses(clause.OnConflict{
@@ -1613,19 +1613,19 @@ func (d *SQLDatabase) BatchInsertFeedback(ctx context.Context, feedback []Feedba
 				}
 			})).Error
 			if err != nil {
-				return errors.Trace(err)
+				return errors.WithStack(err)
 			}
 		}
 	} else {
 		for _, item := range items.ToSlice() {
 			rs, err := tx.Table(d.ItemsTable()).Select("item_id").Where("item_id = ?", item).Rows()
 			if err != nil {
-				return errors.Trace(err)
+				return errors.WithStack(err)
 			} else if !rs.Next() {
 				items.Remove(item)
 			}
 			if err = rs.Close(); err != nil {
-				return errors.Trace(err)
+				return errors.WithStack(err)
 			}
 		}
 	}
@@ -1647,7 +1647,7 @@ func (d *SQLDatabase) BatchInsertFeedback(ctx context.Context, feedback []Feedba
 			return nil
 		}
 		err := tx.Create(rows).Error
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	} else {
 		rows := make([]Feedback, 0, len(feedback))
 		memo := make(map[lo.Tuple3[string, string, string]]struct{})
@@ -1695,7 +1695,7 @@ func (d *SQLDatabase) BatchInsertFeedback(ctx context.Context, feedback []Feedba
 			Columns:   []clause.Column{{Name: "feedback_type"}, {Name: "user_id"}, {Name: "item_id"}},
 			DoUpdates: updates,
 		}).Create(rows).Error
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 }
 
@@ -1703,7 +1703,7 @@ func (d *SQLDatabase) BatchInsertFeedback(ctx context.Context, feedback []Feedba
 func (d *SQLDatabase) GetFeedback(ctx context.Context, cursor string, n int, beginTime, endTime *time.Time, feedbackTypes ...string) (string, []Feedback, error) {
 	buf, err := base64.StdEncoding.DecodeString(cursor)
 	if err != nil {
-		return "", nil, errors.Trace(err)
+		return "", nil, errors.WithStack(err)
 	}
 	tx := d.gormDB.WithContext(ctx).Table(d.FeedbackTable()).Select("feedback_type, user_id, item_id, value, time_stamp, updated, labels, comment")
 	if len(buf) > 0 {
@@ -1729,14 +1729,14 @@ func (d *SQLDatabase) GetFeedback(ctx context.Context, cursor string, n int, beg
 	tx.Order("feedback_type, user_id, item_id").Limit(n + 1)
 	result, err := tx.Rows()
 	if err != nil {
-		return "", nil, errors.Trace(err)
+		return "", nil, errors.WithStack(err)
 	}
 	feedbacks := make([]Feedback, 0)
 	defer result.Close()
 	for result.Next() {
 		var feedback Feedback
 		if err = d.gormDB.ScanRows(result, &feedback); err != nil {
-			return "", nil, errors.Trace(err)
+			return "", nil, errors.WithStack(err)
 		}
 		feedbacks = append(feedbacks, feedback)
 	}
@@ -1744,7 +1744,7 @@ func (d *SQLDatabase) GetFeedback(ctx context.Context, cursor string, n int, beg
 		nextCursorKey := feedbacks[len(feedbacks)-1].FeedbackKey
 		nextCursor, err := jsonutil.Marshal(nextCursorKey)
 		if err != nil {
-			return "", nil, errors.Trace(err)
+			return "", nil, errors.WithStack(err)
 		}
 		return base64.StdEncoding.EncodeToString(nextCursor), feedbacks[:len(feedbacks)-1], nil
 	}
@@ -1795,7 +1795,7 @@ func (d *SQLDatabase) GetFeedbackStream(ctx context.Context, batchSize int, scan
 		}
 		result, err := tx.Rows()
 		if err != nil {
-			errChan <- errors.Trace(err)
+			errChan <- errors.WithStack(err)
 			return
 		}
 		// fetch result
@@ -1804,7 +1804,7 @@ func (d *SQLDatabase) GetFeedbackStream(ctx context.Context, batchSize int, scan
 		for result.Next() {
 			var feedback Feedback
 			if err = d.gormDB.ScanRows(result, &feedback); err != nil {
-				errChan <- errors.Trace(err)
+				errChan <- errors.WithStack(err)
 				return
 			}
 			feedbacks = append(feedbacks, feedback)
@@ -1842,14 +1842,14 @@ func (d *SQLDatabase) GetUserItemFeedback(ctx context.Context, userId, itemId st
 	}
 	result, err := tx.Rows()
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.WithStack(err)
 	}
 	feedbacks := make([]Feedback, 0)
 	defer result.Close()
 	for result.Next() {
 		var feedback Feedback
 		if err = d.gormDB.ScanRows(result, &feedback); err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 		feedbacks = append(feedbacks, feedback)
 	}
@@ -1865,22 +1865,22 @@ func (d *SQLDatabase) DeleteUserItemFeedback(ctx context.Context, userId, itemId
 		}
 		tx.Delete(value)
 		if tx.Error != nil {
-			return 0, errors.Trace(tx.Error)
+			return 0, errors.WithStack(tx.Error)
 		}
 		return int(tx.RowsAffected), nil
 	}
 	rowAffected, err := deleteUserItemFeedback(&Feedback{})
 	if err != nil {
-		return 0, errors.Trace(err)
+		return 0, errors.WithStack(err)
 	}
 	if d.driver == ClickHouse {
 		_, err = deleteUserItemFeedback(&UserFeedback{})
 		if err != nil {
-			return 0, errors.Trace(err)
+			return 0, errors.WithStack(err)
 		}
 		_, err = deleteUserItemFeedback(&ItemFeedback{})
 		if err != nil {
-			return 0, errors.Trace(err)
+			return 0, errors.WithStack(err)
 		}
 	}
 	return rowAffected, nil
@@ -1929,7 +1929,7 @@ func (d *SQLDatabase) CountUsers(ctx context.Context) (int, error) {
 	default:
 		err = d.gormDB.WithContext(ctx).Table(d.UsersTable()).Count(&count).Error
 	}
-	return int(count), errors.Trace(err)
+	return int(count), errors.WithStack(err)
 }
 
 func (d *SQLDatabase) CountItems(ctx context.Context) (int, error) {
@@ -1955,7 +1955,7 @@ func (d *SQLDatabase) CountItems(ctx context.Context) (int, error) {
 	default:
 		err = d.gormDB.WithContext(ctx).Table(d.ItemsTable()).Count(&count).Error
 	}
-	return int(count), errors.Trace(err)
+	return int(count), errors.WithStack(err)
 }
 
 func (d *SQLDatabase) CountFeedback(ctx context.Context) (int, error) {
@@ -1981,5 +1981,5 @@ func (d *SQLDatabase) CountFeedback(ctx context.Context) (int, error) {
 	default:
 		err = d.gormDB.WithContext(ctx).Table(d.FeedbackTable()).Count(&count).Error
 	}
-	return int(count), errors.Trace(err)
+	return int(count), errors.WithStack(err)
 }

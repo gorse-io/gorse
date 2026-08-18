@@ -25,7 +25,7 @@ import (
 	"github.com/gorse-io/gorse/common/expression"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/storage"
-	"github.com/juju/errors"
+	"github.com/pkg/errors"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -43,11 +43,11 @@ func init() {
 		clientOpts.ApplyURI(path)
 		var err error
 		if database.client, err = mongo.Connect(context.Background(), clientOpts); err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 		// parse DSN and extract database name
 		if cs, err := connstring.ParseAndValidate(path); err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		} else {
 			database.dbName = cs.Database
 			database.TablePrefix = storage.TablePrefix(tablePrefix)
@@ -120,7 +120,7 @@ func (db *MongoDB) Init() error {
 	var hasUsers, hasItems, hasFeedback bool
 	collections, err := d.ListCollectionNames(ctx, bson.M{})
 	if err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	for _, collectionName := range collections {
 		switch collectionName {
@@ -135,17 +135,17 @@ func (db *MongoDB) Init() error {
 	// create collections
 	if !hasUsers {
 		if err = d.CreateCollection(ctx, db.UsersTable()); err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 	}
 	if !hasItems {
 		if err = d.CreateCollection(ctx, db.ItemsTable()); err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 	}
 	if !hasFeedback {
 		if err = d.CreateCollection(ctx, db.FeedbackTable()); err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 	}
 	// create index
@@ -156,7 +156,7 @@ func (db *MongoDB) Init() error {
 		Options: options.Index().SetUnique(true),
 	})
 	if err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	_, err = d.Collection(db.ItemsTable()).Indexes().CreateOne(ctx, mongo.IndexModel{
 		Keys: bson.M{
@@ -165,7 +165,7 @@ func (db *MongoDB) Init() error {
 		Options: options.Index().SetUnique(true),
 	})
 	if err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	_, err = d.Collection(db.FeedbackTable()).Indexes().CreateOne(ctx, mongo.IndexModel{
 		Keys: bson.M{
@@ -174,7 +174,7 @@ func (db *MongoDB) Init() error {
 		Options: options.Index().SetUnique(true),
 	})
 	if err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	_, err = d.Collection(db.FeedbackTable()).Indexes().CreateOne(ctx, mongo.IndexModel{
 		Keys: bson.M{
@@ -182,7 +182,7 @@ func (db *MongoDB) Init() error {
 		},
 	})
 	if err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	_, err = d.Collection(db.FeedbackTable()).Indexes().CreateOne(ctx, mongo.IndexModel{
 		Keys: bson.M{
@@ -190,7 +190,7 @@ func (db *MongoDB) Init() error {
 		},
 	})
 	if err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	_, err = d.Collection(db.ItemsTable()).Indexes().CreateOne(ctx, mongo.IndexModel{
 		Keys: bson.M{
@@ -198,7 +198,7 @@ func (db *MongoDB) Init() error {
 		},
 	})
 	if err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	return nil
 }
@@ -229,32 +229,32 @@ func (db *MongoDB) Reconcile(searchConfig config.SearchConfig) error {
 	const searchIndexName = "gorse_search_index"
 	cursor, err := indexes.List(ctx)
 	if err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	defer cursor.Close(ctx)
 	for cursor.Next(ctx) {
 		var index bson.M
 		if err = cursor.Decode(&index); err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		if index["name"] == searchIndexName {
 			if mongoSearchIndexKeysMatch(index["key"], keys) {
 				return nil
 			}
 			if _, err = indexes.DropOne(ctx, searchIndexName); err != nil {
-				return errors.Trace(err)
+				return errors.WithStack(err)
 			}
 			break
 		}
 	}
 	if err = cursor.Err(); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	_, err = indexes.CreateOne(ctx, mongo.IndexModel{
 		Keys:    keys,
 		Options: options.Index().SetName(searchIndexName),
 	})
-	return errors.Trace(err)
+	return errors.WithStack(err)
 }
 
 func mongoSearchIndexKeysMatch(existing any, expected bson.D) bool {
@@ -312,7 +312,7 @@ func (db *MongoDB) Purge() error {
 		c := db.client.Database(db.dbName).Collection(tableName)
 		_, err := c.DeleteMany(context.Background(), bson.D{})
 		if err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 	}
 	return nil
@@ -332,7 +332,7 @@ func (db *MongoDB) BatchInsertItems(ctx context.Context, items []Item) error {
 			SetUpdate(bson.M{"$set": item}))
 	}
 	_, err := c.BulkWrite(ctx, models)
-	return errors.Trace(err)
+	return errors.WithStack(err)
 }
 
 func (db *MongoDB) BatchGetItems(ctx context.Context, itemIds []string, opts GetOptions) ([]Item, error) {
@@ -360,14 +360,14 @@ func (db *MongoDB) BatchGetItems(ctx context.Context, itemIds []string, opts Get
 	}
 	r, err := c.Find(ctx, filter, options.Find().SetProjection(optsFind))
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.WithStack(err)
 	}
 	items := make([]Item, 0)
 	defer r.Close(ctx)
 	for r.Next(ctx) {
 		var item Item
 		if err = r.Decode(&item); err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 		item.Labels = unpack(item.Labels)
 		items = append(items, item)
@@ -397,7 +397,7 @@ func (db *MongoDB) ModifyItem(ctx context.Context, itemId string, patch ItemPatc
 	// execute
 	c := db.client.Database(db.dbName).Collection(db.ItemsTable())
 	_, err := c.UpdateOne(ctx, bson.M{"itemid": bson.M{"$eq": itemId}}, bson.M{"$set": update})
-	return errors.Trace(err)
+	return errors.WithStack(err)
 }
 
 // DeleteItem deletes a item from MongoDB.
@@ -405,13 +405,13 @@ func (db *MongoDB) DeleteItem(ctx context.Context, itemId string) error {
 	c := db.client.Database(db.dbName).Collection(db.ItemsTable())
 	_, err := c.DeleteOne(ctx, bson.M{"itemid": itemId})
 	if err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	c = db.client.Database(db.dbName).Collection(db.FeedbackTable())
 	_, err = c.DeleteMany(ctx, bson.M{
 		"feedbackkey.itemid": bson.M{"$eq": itemId},
 	})
-	return errors.Trace(err)
+	return errors.WithStack(err)
 }
 
 // GetItem returns a item from MongoDB.
@@ -419,7 +419,7 @@ func (db *MongoDB) GetItem(ctx context.Context, itemId string) (item Item, err e
 	c := db.client.Database(db.dbName).Collection(db.ItemsTable())
 	r := c.FindOne(ctx, bson.M{"itemid": itemId})
 	if r.Err() == mongo.ErrNoDocuments {
-		err = errors.Annotate(ErrItemNotExist, itemId)
+		err = errors.Wrap(ErrItemNotExist, itemId)
 		return
 	}
 	err = r.Decode(&item)
@@ -438,26 +438,26 @@ func (db *MongoDB) SearchItems(ctx context.Context, query string, n int) ([]Scor
 		options.Find().SetLimit(int64(n)).SetProjection(bson.M{"score": bson.M{"$meta": "textScore"}}).SetSort(bson.M{"score": bson.M{"$meta": "textScore"}}),
 	)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.WithStack(err)
 	}
 	items := make([]ScoredItem, 0)
 	defer r.Close(ctx)
 	for r.Next(ctx) {
 		var item ScoredItem
 		if err = r.Decode(&item); err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 		item.Labels = unpack(item.Labels)
 		items = append(items, item)
 	}
-	return items, errors.Trace(r.Err())
+	return items, errors.WithStack(r.Err())
 }
 
 // GetItems returns items from MongoDB.
 func (db *MongoDB) GetItems(ctx context.Context, cursor string, n int, timeLimit *time.Time) (string, []Item, error) {
 	buf, err := base64.StdEncoding.DecodeString(cursor)
 	if err != nil {
-		return "", nil, errors.Trace(err)
+		return "", nil, errors.WithStack(err)
 	}
 	cursorItem := string(buf)
 	c := db.client.Database(db.dbName).Collection(db.ItemsTable())
@@ -537,7 +537,7 @@ func (db *MongoDB) GetItemStream(ctx context.Context, batchSize int, timeLimit *
 		}
 		r, err := c.Find(ctx, filter, opt)
 		if err != nil {
-			errChan <- errors.Trace(err)
+			errChan <- errors.WithStack(err)
 			return
 		}
 		// fetch result
@@ -546,7 +546,7 @@ func (db *MongoDB) GetItemStream(ctx context.Context, batchSize int, timeLimit *
 		for r.Next(ctx) {
 			var item Item
 			if err = r.Decode(&item); err != nil {
-				errChan <- errors.Trace(err)
+				errChan <- errors.WithStack(err)
 				return
 			}
 			item.Labels = unpack(item.Labels)
@@ -613,7 +613,7 @@ func (db *MongoDB) BatchInsertUsers(ctx context.Context, users []User) error {
 			SetUpdate(bson.M{"$set": user}))
 	}
 	_, err := c.BulkWrite(ctx, models)
-	return errors.Trace(err)
+	return errors.WithStack(err)
 }
 
 // ModifyUser modify a user in MongoDB.
@@ -629,7 +629,7 @@ func (db *MongoDB) ModifyUser(ctx context.Context, userId string, patch UserPatc
 	// execute
 	c := db.client.Database(db.dbName).Collection(db.UsersTable())
 	_, err := c.UpdateOne(ctx, bson.M{"userid": bson.M{"$eq": userId}}, bson.M{"$set": update})
-	return errors.Trace(err)
+	return errors.WithStack(err)
 }
 
 // DeleteUser deletes a user from MongoDB.
@@ -637,13 +637,13 @@ func (db *MongoDB) DeleteUser(ctx context.Context, userId string) error {
 	c := db.client.Database(db.dbName).Collection(db.UsersTable())
 	_, err := c.DeleteOne(ctx, bson.M{"userid": userId})
 	if err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	c = db.client.Database(db.dbName).Collection(db.FeedbackTable())
 	_, err = c.DeleteMany(ctx, bson.M{
 		"feedbackkey.userid": bson.M{"$eq": userId},
 	})
-	return errors.Trace(err)
+	return errors.WithStack(err)
 }
 
 // GetUser returns a user from MongoDB.
@@ -651,7 +651,7 @@ func (db *MongoDB) GetUser(ctx context.Context, userId string) (user User, err e
 	c := db.client.Database(db.dbName).Collection(db.UsersTable())
 	r := c.FindOne(ctx, bson.M{"userid": userId})
 	if r.Err() == mongo.ErrNoDocuments {
-		err = errors.Annotate(ErrUserNotExist, userId)
+		err = errors.Wrap(ErrUserNotExist, userId)
 		return
 	}
 	err = r.Decode(&user)
@@ -663,7 +663,7 @@ func (db *MongoDB) GetUser(ctx context.Context, userId string) (user User, err e
 func (db *MongoDB) GetUsers(ctx context.Context, cursor string, n int) (string, []User, error) {
 	buf, err := base64.StdEncoding.DecodeString(cursor)
 	if err != nil {
-		return "", nil, errors.Trace(err)
+		return "", nil, errors.WithStack(err)
 	}
 	cursorUser := string(buf)
 	c := db.client.Database(db.dbName).Collection(db.UsersTable())
@@ -705,7 +705,7 @@ func (db *MongoDB) GetUserStream(ctx context.Context, batchSize int) (chan []Use
 		opt := options.Find()
 		r, err := c.Find(ctx, bson.M{}, opt)
 		if err != nil {
-			errChan <- errors.Trace(err)
+			errChan <- errors.WithStack(err)
 			return
 		}
 		users := make([]User, 0, batchSize)
@@ -713,7 +713,7 @@ func (db *MongoDB) GetUserStream(ctx context.Context, batchSize int) (chan []Use
 		for r.Next(ctx) {
 			var user User
 			if err = r.Decode(&user); err != nil {
-				errChan <- errors.Trace(err)
+				errChan <- errors.WithStack(err)
 				return
 			}
 			user.Labels = unpack(user.Labels)
@@ -792,17 +792,17 @@ func (db *MongoDB) BatchInsertFeedback(ctx context.Context, feedback []Feedback,
 		c := db.client.Database(db.dbName).Collection(db.UsersTable())
 		_, err := c.BulkWrite(ctx, models)
 		if err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 	} else {
 		for _, userId := range userList {
 			_, err := db.GetUser(ctx, userId)
 			if err != nil {
-				if errors.Is(err, errors.NotFound) {
+				if errors.Is(err, ErrUserNotExist) {
 					users.Remove(userId)
 					continue
 				}
-				return errors.Trace(err)
+				return errors.WithStack(err)
 			}
 		}
 	}
@@ -819,17 +819,17 @@ func (db *MongoDB) BatchInsertFeedback(ctx context.Context, feedback []Feedback,
 		c := db.client.Database(db.dbName).Collection(db.ItemsTable())
 		_, err := c.BulkWrite(ctx, models)
 		if err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 	} else {
 		for _, itemId := range itemList {
 			_, err := db.GetItem(ctx, itemId)
 			if err != nil {
-				if errors.Is(err, errors.NotFound) {
+				if errors.Is(err, ErrItemNotExist) {
 					items.Remove(itemId)
 					continue
 				}
-				return errors.Trace(err)
+				return errors.WithStack(err)
 			}
 		}
 	}
@@ -873,14 +873,14 @@ func (db *MongoDB) BatchInsertFeedback(ctx context.Context, feedback []Feedback,
 		return nil
 	}
 	_, err := c.BulkWrite(ctx, models)
-	return errors.Trace(err)
+	return errors.WithStack(err)
 }
 
 // GetFeedback returns multiple feedback from MongoDB.
 func (db *MongoDB) GetFeedback(ctx context.Context, cursor string, n int, beginTime, endTime *time.Time, feedbackTypes ...string) (string, []Feedback, error) {
 	buf, err := base64.StdEncoding.DecodeString(cursor)
 	if err != nil {
-		return "", nil, errors.Trace(err)
+		return "", nil, errors.WithStack(err)
 	}
 	c := db.client.Database(db.dbName).Collection(db.FeedbackTable())
 	opt := options.Find()
@@ -998,7 +998,7 @@ func (db *MongoDB) GetFeedbackStream(ctx context.Context, batchSize int, scanOpt
 
 		r, err := c.Find(ctx, filter, opt)
 		if err != nil {
-			errChan <- errors.Trace(err)
+			errChan <- errors.WithStack(err)
 			return
 		}
 		feedbacks := make([]Feedback, 0, batchSize)
@@ -1006,7 +1006,7 @@ func (db *MongoDB) GetFeedbackStream(ctx context.Context, batchSize int, scanOpt
 		for r.Next(ctx) {
 			var feedback Feedback
 			if err = r.Decode(&feedback); err != nil {
-				errChan <- errors.Trace(err)
+				errChan <- errors.WithStack(err)
 				return
 			}
 			feedback.Labels = unpack(feedback.Labels)
