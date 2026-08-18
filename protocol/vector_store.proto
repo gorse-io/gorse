@@ -101,6 +101,13 @@ message CountVectorsRequest { string collection = 1; }
 
 message CountVectorsResponse { int64 count = 1; }
 
+message GetVectorsRequest {
+  string collection = 1;
+  repeated string ids = 2;
+}
+
+message GetVectorsResponse { repeated Vector vectors = 1; }
+
 service VectorStore {
   rpc ListCollections(ListCollectionsRequest) returns (ListCollectionsResponse) {}
   rpc DescribeCollection(DescribeCollectionRequest) returns (DescribeCollectionResponse) {}
@@ -108,6 +115,7 @@ service VectorStore {
   rpc DeleteCollection(DeleteCollectionRequest) returns (DeleteCollectionResponse) {}
   rpc CountVectors(CountVectorsRequest) returns (CountVectorsResponse) {}
   rpc AddVectors(AddVectorsRequest) returns (AddVectorsResponse) {}
+  rpc GetVectors(GetVectorsRequest) returns (GetVectorsResponse) {}
   rpc DeleteVectors(DeleteVectorsRequest) returns (DeleteVectorsResponse) {}
   rpc QueryVectors(QueryVectorsRequest) returns (QueryVectorsResponse) {}
 }

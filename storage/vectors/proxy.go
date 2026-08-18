@@ -130,6 +130,25 @@ func (p *ProxyServer) AddVectors(ctx context.Context, request *protocol.AddVecto
 	return &protocol.AddVectorsResponse{}, nil
 }
 
+func (p *ProxyServer) GetVectors(ctx context.Context, request *protocol.GetVectorsRequest) (*protocol.GetVectorsResponse, error) {
+	vectors, err := p.database.GetVectors(ctx, request.GetCollection(), request.GetIds())
+	if err != nil {
+		return nil, err
+	}
+	pbVectors := make([]*protocol.Vector, len(vectors))
+	for i, vector := range vectors {
+		pbVectors[i] = &protocol.Vector{
+			Id:         vector.Id,
+			Values:     vector.Values,
+			Indices:    vector.Indices,
+			IsHidden:   vector.IsHidden,
+			Categories: vector.Categories,
+			Timestamp:  timestamppb.New(vector.Timestamp),
+		}
+	}
+	return &protocol.GetVectorsResponse{Vectors: pbVectors}, nil
+}
+
 func (p *ProxyServer) DeleteVectors(ctx context.Context, request *protocol.DeleteVectorsRequest) (*protocol.DeleteVectorsResponse, error) {
 	timestamp := time.Time{}
 	if request.GetTimestamp() != nil {
@@ -266,6 +285,32 @@ func (p ProxyClient) AddVectors(ctx context.Context, collection string, vectors 
 		Vectors:    pbVectors,
 	})
 	return err
+}
+
+func (p ProxyClient) GetVectors(ctx context.Context, collection string, ids []string) ([]Vector, error) {
+	resp, err := p.VectorStoreClient.GetVectors(ctx, &protocol.GetVectorsRequest{
+		Collection: collection,
+		Ids:        ids,
+	})
+	if err != nil {
+		return nil, err
+	}
+	vectors := make([]Vector, len(resp.GetVectors()))
+	for i, vector := range resp.GetVectors() {
+		timestamp := time.Time{}
+		if vector.GetTimestamp() != nil {
+			timestamp = vector.GetTimestamp().AsTime()
+		}
+		vectors[i] = Vector{
+			Id:         vector.GetId(),
+			Values:     vector.GetValues(),
+			Indices:    vector.GetIndices(),
+			IsHidden:   vector.GetIsHidden(),
+			Categories: vector.GetCategories(),
+			Timestamp:  timestamp,
+		}
+	}
+	return vectors, nil
 }
 
 func (p ProxyClient) DeleteVectors(ctx context.Context, collection string, timestamp time.Time) error {
