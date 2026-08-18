@@ -46,7 +46,7 @@ func (suite *MilvusTestSuite) SetupSuite() {
 func (suite *MilvusTestSuite) TestInvalidSparseCollection() {
 	ctx := suite.T().Context()
 	err := suite.Database.AddCollection(ctx, "test_invalid_sparse", 0, Cosine, VectorConfig{})
-	suite.Error(err)
+	suite.ErrorIs(err, ErrNotSupported)
 	_, err = suite.Database.DescribeCollection(ctx, "test_invalid_sparse")
 	suite.True(errors.Is(err, ErrNotFound), err)
 }

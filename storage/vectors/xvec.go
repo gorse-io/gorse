@@ -241,7 +241,7 @@ func (db *Xvec) collectionSchema(ctx context.Context, name string, dimensions in
 	var vectorField xvec.FieldSchema
 	if dimensions == 0 {
 		if distance != Dot {
-			return xvec.CollectionSchema{}, errors.Errorf("distance method for sparse vector not supported")
+			return xvec.CollectionSchema{}, fmt.Errorf("distance method for sparse vector %w", ErrNotSupported)
 		}
 		vectorField = xvec.FieldSchema{Name: xvecVectorField, DataType: xvec.DataTypeSparseVectorFP32, Index: xvec.NewFlatIndexParams(metric)}
 	} else {

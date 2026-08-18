@@ -16,6 +16,7 @@ package vectors
 
 import (
 	"context"
+	"fmt"
 	"net/url"
 	"strconv"
 	"time"
@@ -123,7 +124,7 @@ func (db *Qdrant) DescribeCollection(ctx context.Context, name string) (*Collect
 func (db *Qdrant) AddCollection(ctx context.Context, name string, dimensions int, distance Distance, config VectorConfig) error {
 	if dimensions == 0 {
 		if distance != Dot {
-			return errors.Errorf("distance method for sparse vector not supported")
+			return fmt.Errorf("distance method for sparse vector %w", ErrNotSupported)
 		}
 		if config != (VectorConfig{}) {
 			return errors.Errorf("quantization for sparse vector not supported")
