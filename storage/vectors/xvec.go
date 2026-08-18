@@ -232,7 +232,7 @@ func (db *Xvec) collectionSchema(ctx context.Context, name string, dimensions in
 		return xvec.CollectionSchema{}, errors.Errorf("invalid vector dimension %d", dimensions)
 	}
 	if config.Type != QuantizationNone {
-		return xvec.CollectionSchema{}, errors.Errorf("quantization type %s for xvec not supported", config.Type)
+		return xvec.CollectionSchema{}, fmt.Errorf("quantization type %s for xvec %w", config.Type, ErrNotSupported)
 	}
 	metric, err := distanceToXvec(distance)
 	if err != nil {
@@ -468,7 +468,7 @@ func distanceToXvec(distance Distance) (xvec.MetricType, error) {
 	case Dot:
 		return xvec.MetricTypeIP, nil
 	default:
-		return xvec.MetricTypeUndefined, errors.Errorf("distance method %v not supported", distance)
+		return xvec.MetricTypeUndefined, fmt.Errorf("distance method %v %w", distance, ErrNotSupported)
 	}
 }
 
@@ -481,6 +481,6 @@ func xvecDistance(metric xvec.MetricType) (Distance, error) {
 	case xvec.MetricTypeIP:
 		return Dot, nil
 	default:
-		return Cosine, errors.Errorf("xvec metric %s not supported", metric)
+		return Cosine, fmt.Errorf("xvec metric %s %w", metric, ErrNotSupported)
 	}
 }

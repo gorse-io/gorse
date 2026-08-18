@@ -16,6 +16,7 @@ package vectors
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"time"
 
@@ -360,7 +361,7 @@ func distanceToProtoDistance(distance Distance) (protocol.Distance, error) {
 	case Dot:
 		return protocol.Distance_Dot, nil
 	default:
-		return protocol.Distance_Unknown, errors.Errorf("distance method not supported")
+		return protocol.Distance_Unknown, fmt.Errorf("distance method %w", ErrNotSupported)
 	}
 }
 
@@ -373,7 +374,7 @@ func protoDistanceToDistance(distance protocol.Distance) (Distance, error) {
 	case protocol.Distance_Dot:
 		return Dot, nil
 	default:
-		return Cosine, errors.Errorf("distance method not supported")
+		return Cosine, fmt.Errorf("distance method %w", ErrNotSupported)
 	}
 }
 

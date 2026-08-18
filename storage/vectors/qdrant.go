@@ -106,7 +106,7 @@ func (db *Qdrant) DescribeCollection(ctx context.Context, name string) (*Collect
 	case qdrant.Distance_Dot:
 		distance = Dot
 	default:
-		return nil, errors.Errorf("distance method %s not supported", params.GetDistance().String())
+		return nil, fmt.Errorf("distance method %s %w", params.GetDistance().String(), ErrNotSupported)
 	}
 	quantizationConfig := info.GetConfig().GetQuantizationConfig()
 	config, err := qdrantVectorConfig(quantizationConfig)
@@ -127,7 +127,7 @@ func (db *Qdrant) AddCollection(ctx context.Context, name string, dimensions int
 			return fmt.Errorf("distance method for sparse vector %w", ErrNotSupported)
 		}
 		if config != (VectorConfig{}) {
-			return errors.Errorf("quantization for sparse vector not supported")
+			return fmt.Errorf("quantization for sparse vector %w", ErrNotSupported)
 		}
 		return db.createCollection(ctx, name, &qdrant.CreateCollection{
 			CollectionName: name,
@@ -145,7 +145,7 @@ func (db *Qdrant) AddCollection(ctx context.Context, name string, dimensions int
 	case Dot:
 		qdrantDistance = qdrant.Distance_Dot
 	default:
-		return errors.Errorf("distance method not supported")
+		return fmt.Errorf("distance method %w", ErrNotSupported)
 	}
 
 	quantizationConfig, err := qdrantQuantizationConfig(config)
@@ -204,13 +204,13 @@ func qdrantQuantizationConfig(config VectorConfig) (*qdrant.QuantizationConfig, 
 			case 4:
 				turbo.Bits = qdrant.TurboQuantBitSize_Bits4.Enum()
 			default:
-				return nil, errors.Errorf("RQ quantization bits %d for Qdrant not supported", config.Bits)
+				return nil, fmt.Errorf("RQ quantization bits %d for Qdrant %w", config.Bits, ErrNotSupported)
 			}
 		}
 		return qdrant.NewQuantizationTurbo(turbo), nil
 	case QuantizationSQ:
 		if config.Bits != 0 && config.Bits != 8 {
-			return nil, errors.Errorf("SQ quantization bits for Qdrant not supported")
+			return nil, fmt.Errorf("SQ quantization bits for Qdrant %w", ErrNotSupported)
 		}
 		return qdrant.NewQuantizationScalar(&qdrant.ScalarQuantization{
 			Type: qdrant.QuantizationType_Int8,
@@ -228,12 +228,12 @@ func qdrantQuantizationConfig(config VectorConfig) (*qdrant.QuantizationConfig, 
 			case 1:
 				product.Compression = qdrant.CompressionRatio_x32
 			default:
-				return nil, errors.Errorf("PQ quantization bits %d for Qdrant not supported", config.Bits)
+				return nil, fmt.Errorf("PQ quantization bits %d for Qdrant %w", config.Bits, ErrNotSupported)
 			}
 		}
 		return qdrant.NewQuantizationProduct(product), nil
 	default:
-		return nil, errors.Errorf("quantization type %s for Qdrant not supported", config.Type)
+		return nil, fmt.Errorf("quantization type %s for Qdrant %w", config.Type, ErrNotSupported)
 	}
 }
 
@@ -252,7 +252,7 @@ func qdrantVectorConfig(config *qdrant.QuantizationConfig) (VectorConfig, error)
 			case qdrant.TurboQuantBitSize_Bits4:
 				bits = 4
 			default:
-				return VectorConfig{}, errors.Errorf("RQ quantization bits %s for Qdrant not supported", turbo.GetBits().String())
+				return VectorConfig{}, fmt.Errorf("RQ quantization bits %s for Qdrant %w", turbo.GetBits().String(), ErrNotSupported)
 			}
 		}
 		return VectorConfig{
@@ -262,7 +262,7 @@ func qdrantVectorConfig(config *qdrant.QuantizationConfig) (VectorConfig, error)
 	}
 	if scalar := config.GetScalar(); scalar != nil {
 		if scalar.GetType() != qdrant.QuantizationType_Int8 {
-			return VectorConfig{}, errors.Errorf("SQ quantization type %s for Qdrant not supported", scalar.GetType().String())
+			return VectorConfig{}, fmt.Errorf("SQ quantization type %s for Qdrant %w", scalar.GetType().String(), ErrNotSupported)
 		}
 		return VectorConfig{
 			Type: QuantizationSQ,
@@ -281,7 +281,7 @@ func qdrantVectorConfig(config *qdrant.QuantizationConfig) (VectorConfig, error)
 		case qdrant.CompressionRatio_x32:
 			bits = 1
 		default:
-			return VectorConfig{}, errors.Errorf("PQ quantization compression %s for Qdrant not supported", product.GetCompression().String())
+			return VectorConfig{}, fmt.Errorf("PQ quantization compression %s for Qdrant %w", product.GetCompression().String(), ErrNotSupported)
 		}
 		return VectorConfig{
 			Type: QuantizationPQ,
@@ -289,7 +289,7 @@ func qdrantVectorConfig(config *qdrant.QuantizationConfig) (VectorConfig, error)
 		}, nil
 	}
 	if config.GetBinary() != nil {
-		return VectorConfig{}, errors.Errorf("binary quantization for Qdrant not supported")
+		return VectorConfig{}, fmt.Errorf("binary quantization for Qdrant %w", ErrNotSupported)
 	}
 	return VectorConfig{}, nil
 }

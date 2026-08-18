@@ -113,7 +113,7 @@ func (db *Milvus) DescribeCollection(ctx context.Context, name string) (*Collect
 	case entity.IP:
 		distance = Dot
 	default:
-		return nil, errors.Errorf("distance method %s not supported", metricType)
+		return nil, fmt.Errorf("distance method %s %w", metricType, ErrNotSupported)
 	}
 	config := VectorConfig{}
 	switch index.IndexType(idx.Params()[index.IndexTypeKey]) {
@@ -150,7 +150,7 @@ func (db *Milvus) AddCollection(ctx context.Context, name string, dimensions int
 			return fmt.Errorf("distance method for sparse vector %w", ErrNotSupported)
 		}
 		if config != (VectorConfig{}) {
-			return errors.Errorf("quantization for sparse vector not supported")
+			return fmt.Errorf("quantization for sparse vector %w", ErrNotSupported)
 		}
 	}
 
@@ -180,7 +180,7 @@ func (db *Milvus) AddCollection(ctx context.Context, name string, dimensions int
 	case Dot:
 		metricType = entity.IP
 	default:
-		return errors.Errorf("distance method not supported")
+		return fmt.Errorf("distance method %w", ErrNotSupported)
 	}
 
 	var idx index.Index
@@ -503,7 +503,7 @@ func milvusIndex(metricType entity.MetricType, dimensions int, config VectorConf
 		return index.NewHNSWIndex(metricType, 16, 200), nil
 	case QuantizationRQ:
 		if config.Bits != 0 {
-			return nil, errors.Errorf("RQ quantization bits %d for Milvus not supported", config.Bits)
+			return nil, fmt.Errorf("RQ quantization bits %d for Milvus %w", config.Bits, ErrNotSupported)
 		}
 		return index.NewIvfRabitQIndex(metricType, defaultMilvusIVFNList), nil
 	case QuantizationPQ:
@@ -512,20 +512,20 @@ func milvusIndex(metricType entity.MetricType, dimensions int, config VectorConf
 			bits = defaultMilvusPQBits
 		}
 		if bits <= 0 || dimensions <= 0 || dimensions*bits%defaultMilvusPQBits != 0 {
-			return nil, errors.Errorf("PQ quantization bits %d for Milvus not supported", config.Bits)
+			return nil, fmt.Errorf("PQ quantization bits %d for Milvus %w", config.Bits, ErrNotSupported)
 		}
 		m := dimensions * bits / defaultMilvusPQBits
 		if m <= 0 || m > dimensions || dimensions%m != 0 {
-			return nil, errors.Errorf("PQ quantization bits %d for Milvus not supported", config.Bits)
+			return nil, fmt.Errorf("PQ quantization bits %d for Milvus %w", config.Bits, ErrNotSupported)
 		}
 		return index.NewIvfPQIndex(metricType, defaultMilvusIVFNList, m, defaultMilvusPQBits), nil
 	case QuantizationSQ:
 		if config.Bits != 0 && config.Bits != 8 {
-			return nil, errors.Errorf("SQ quantization bits %d for Milvus not supported", config.Bits)
+			return nil, fmt.Errorf("SQ quantization bits %d for Milvus %w", config.Bits, ErrNotSupported)
 		}
 		return index.NewIvfSQ8Index(metricType, defaultMilvusIVFNList), nil
 	default:
-		return nil, errors.Errorf("quantization type %s for Milvus not supported", config.Type)
+		return nil, fmt.Errorf("quantization type %s for Milvus %w", config.Type, ErrNotSupported)
 	}
 }
 
@@ -543,7 +543,7 @@ func (db *Milvus) searchParam(ctx context.Context, collection string) (index.Ann
 	case entity.IP:
 		distance = Dot
 	default:
-		return nil, Cosine, errors.Errorf("distance method %s not supported", metricType)
+		return nil, Cosine, fmt.Errorf("distance method %s %w", metricType, ErrNotSupported)
 	}
 	switch index.IndexType(idx.Params()[index.IndexTypeKey]) {
 	case index.SparseInverted, index.SparseWAND:

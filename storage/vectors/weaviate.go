@@ -16,6 +16,7 @@ package vectors
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -111,7 +112,7 @@ func (db *Weaviate) DescribeCollection(ctx context.Context, name string) (*Colle
 	case "dot":
 		distance = Dot
 	default:
-		return nil, errors.Errorf("distance method %s not supported", distanceValue)
+		return nil, fmt.Errorf("distance method %s %w", distanceValue, ErrNotSupported)
 	}
 	config, err := weaviateVectorConfig(vectorIndexConfig)
 	if err != nil {
@@ -134,7 +135,7 @@ func (db *Weaviate) AddCollection(ctx context.Context, name string, dimensions i
 	case Dot:
 		weaviateDistance = "dot"
 	default:
-		return errors.Errorf("distance method not supported")
+		return fmt.Errorf("distance method %w", ErrNotSupported)
 	}
 
 	// Build VectorIndexConfig.
@@ -184,7 +185,7 @@ func weaviateApplyQuantization(vectorIndexConfig map[string]any, config VectorCo
 			"enabled": true,
 		}
 		if config.Bits != 0 {
-			return errors.Errorf("quantization bits for SQ not supported")
+			return fmt.Errorf("quantization bits for SQ %w", ErrNotSupported)
 		}
 		return nil
 	case QuantizationPQ:
@@ -192,7 +193,7 @@ func weaviateApplyQuantization(vectorIndexConfig map[string]any, config VectorCo
 			"enabled": true,
 		}
 		if config.Bits != 0 {
-			return errors.Errorf("quantization bits for PQ not supported")
+			return fmt.Errorf("quantization bits for PQ %w", ErrNotSupported)
 		}
 		return nil
 	case QuantizationRQ:
@@ -205,7 +206,7 @@ func weaviateApplyQuantization(vectorIndexConfig map[string]any, config VectorCo
 		vectorIndexConfig["rq"] = rq
 		return nil
 	default:
-		return errors.Errorf("quantization type %s for Weaviate not supported", config.Type)
+		return fmt.Errorf("quantization type %s for Weaviate %w", config.Type, ErrNotSupported)
 	}
 }
 
