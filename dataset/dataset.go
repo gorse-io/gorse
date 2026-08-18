@@ -21,6 +21,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/chewxy/math32"
@@ -88,6 +89,7 @@ type Dataset struct {
 	userDict     *FreqDict
 	itemDict     *FreqDict
 	numFeedback  int
+	feedbackMu   sync.Mutex
 	categories   map[string]int
 }
 
@@ -112,6 +114,8 @@ func (d *Dataset) GetTimestamp() time.Time {
 }
 
 func (d *Dataset) CountFeedback() int {
+	d.feedbackMu.Lock()
+	defer d.feedbackMu.Unlock()
 	return d.numFeedback
 }
 
@@ -235,12 +239,18 @@ func (d *Dataset) AddItem(item data.Item) {
 func (d *Dataset) AddFeedback(userId, itemId string, timestamp time.Time) {
 	userIndex := d.userDict.Add(userId)
 	itemIndex := d.itemDict.Add(itemId)
+
+	d.itemDict.Lock(itemIndex)
 	d.itemFeedback[itemIndex] = append(d.itemFeedback[itemIndex], userIndex)
+	d.itemDict.Unlock(itemIndex)
+
 	d.userDict.Lock(userIndex)
 	defer d.userDict.Unlock(userIndex)
 	d.userFeedback[userIndex] = append(d.userFeedback[userIndex], itemIndex)
 	d.timestamps[userIndex] = append(d.timestamps[userIndex], timestamp)
+	d.feedbackMu.Lock()
 	d.numFeedback++
+	d.feedbackMu.Unlock()
 }
 
 func (d *Dataset) SampleUserNegatives(excludeSet CFSplit, numCandidates int) [][]int32 {
