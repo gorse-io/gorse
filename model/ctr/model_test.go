@@ -27,6 +27,17 @@ import (
 
 const classificationDelta = 0.01
 
+func TestRegisterModel(t *testing.T) {
+	fm, err := NewModel("FM", model.Params{model.NEpochs: 1})
+	assert.NoError(t, err)
+	assert.IsType(t, &AFM{}, fm)
+	assert.Contains(t, RegisteredModelTypes(), "FM")
+	assert.Contains(t, RegisteredModelCreators(), "FM")
+
+	_, err = NewModel("unknown", nil)
+	assert.Error(t, err)
+}
+
 func newFitConfigWithTestTracker() *FitConfig {
 	cfg := NewFitConfig().SetVerbose(1).SetJobs(runtime.NumCPU())
 	return cfg

@@ -18,12 +18,11 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"reflect"
+	"sort"
 
 	"github.com/gorse-io/gorse/common/encoding"
 	"github.com/gorse-io/gorse/dataset"
 	"github.com/gorse-io/gorse/model"
-	"github.com/juju/errors"
 	"github.com/samber/lo"
 	"go.uber.org/zap"
 )
@@ -97,6 +96,71 @@ type FactorizationMachines interface {
 	Marshal(w io.Writer) error
 }
 
+// Creator creates a factorization machine model with parameters.
+type Creator func(params model.Params) FactorizationMachines
+
+// Marshaller returns the storage header for a model instance.
+type Marshaller func(FactorizationMachines) (string, bool)
+
+// Unmarshaller creates and loads a model from a storage header and payload.
+type Unmarshaller func(header string, r io.Reader) (FactorizationMachines, error)
+
+type modelInfo struct {
+	modelType    string
+	creator      Creator
+	marshaller   Marshaller
+	unmarshaller Unmarshaller
+}
+
+var (
+	modelInfosByType     = make(map[string]modelInfo)
+	modelInfosByHeader   = make(map[string]modelInfo)
+	registeredModelTypes []string
+)
+
+// Register a factorization machine model creator.
+func Register(modelType string, headers []string, creator Creator, marshaller Marshaller, unmarshaller Unmarshaller) {
+	info := modelInfo{modelType: modelType, creator: creator, marshaller: marshaller, unmarshaller: unmarshaller}
+	modelInfosByType[modelType] = info
+	for _, header := range headers {
+		modelInfosByHeader[header] = info
+	}
+	registeredModelTypes = nil
+}
+
+// NewModel creates a factorization machine model by type.
+func NewModel(modelType string, params model.Params) (FactorizationMachines, error) {
+	info, ok := modelInfosByType[modelType]
+	if !ok {
+		return nil, fmt.Errorf("unknown model: %v", modelType)
+	}
+	return info.creator(params), nil
+}
+
+// RegisteredModelCreators returns all registered model creators for hyper-parameter search.
+func RegisteredModelCreators() map[string]ModelCreator {
+	creators := make(map[string]ModelCreator, len(modelInfosByType))
+	for modelType, info := range modelInfosByType {
+		creator := info.creator
+		creators[modelType] = func() FactorizationMachines {
+			return creator(nil)
+		}
+	}
+	return creators
+}
+
+// RegisteredModelTypes returns all registered model types.
+func RegisteredModelTypes() []string {
+	if registeredModelTypes == nil {
+		registeredModelTypes = make([]string, 0, len(modelInfosByType))
+		for modelType := range modelInfosByType {
+			registeredModelTypes = append(registeredModelTypes, modelType)
+		}
+		sort.Strings(registeredModelTypes)
+	}
+	return append([]string(nil), registeredModelTypes...)
+}
+
 type BatchInference interface {
 	BatchPredict(inputs []lo.Tuple4[string, string, []Label, []Label], e [][]Embedding, jobs int) []float32
 	BatchInternalPredict(x []lo.Tuple2[[]int32, []float32], e [][][]uint16, jobs int) []float32
@@ -112,19 +176,17 @@ func (b *BaseFactorizationMachines) Init(trainSet dataset.CTRSplit) {
 }
 
 func MarshalModel(w io.Writer, m FactorizationMachines) error {
-	// write header
-	var err error
-	switch fm := m.(type) {
-	case *AFM:
-		if !fm.autoScale {
-			err = encoding.WriteString(w, headerAFM)
-		} else {
-			err = encoding.WriteString(w, headerAFM2)
+	var header string
+	for _, info := range modelInfosByType {
+		var ok bool
+		if header, ok = info.marshaller(m); ok {
+			break
 		}
-	default:
-		return fmt.Errorf("unknown model: %v", reflect.TypeOf(m))
 	}
-	if err != nil {
+	if header == "" {
+		return fmt.Errorf("unknown model: %T", m)
+	}
+	if err := encoding.WriteString(w, header); err != nil {
 		return err
 	}
 	return m.Marshal(w)
@@ -136,14 +198,9 @@ func UnmarshalModel(r io.Reader) (FactorizationMachines, error) {
 	if err != nil {
 		return nil, err
 	}
-	switch header {
-	case headerAFM, headerAFM2:
-		var fm AFM
-		fm.autoScale = header == headerAFM2
-		if err := fm.Unmarshal(r); err != nil {
-			return nil, errors.Trace(err)
-		}
-		return &fm, nil
+	info, ok := modelInfosByHeader[header]
+	if !ok {
+		return nil, fmt.Errorf("unknown model: %v", header)
 	}
-	return nil, fmt.Errorf("unknown model: %v", header)
+	return info.unmarshaller(header, r)
 }
