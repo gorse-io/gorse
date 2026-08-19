@@ -85,7 +85,7 @@ func (db *Qdrant) DescribeCollection(ctx context.Context, name string) (*Collect
 	info, err := db.client.GetCollectionInfo(ctx, name)
 	if err != nil {
 		if status.Code(err) == codes.NotFound {
-			return nil, errors.Wrapf(ErrNotFound, "collection %s", name)
+			return nil, fmt.Errorf("collection %s: %w", name, ErrNotFound)
 		}
 		return nil, errors.WithStack(err)
 	}
@@ -95,7 +95,7 @@ func (db *Qdrant) DescribeCollection(ctx context.Context, name string) (*Collect
 	}
 	params, ok := collectionParams.GetVectorsConfig().GetParamsMap().GetMap()[qdrantVectorName]
 	if !ok {
-		return nil, errors.Wrapf(ErrNotFound, "vector field %s", qdrantVectorName)
+		return nil, fmt.Errorf("vector field %s: %w", qdrantVectorName, ErrNotFound)
 	}
 	var distance Distance
 	switch params.GetDistance() {

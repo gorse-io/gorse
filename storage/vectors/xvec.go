@@ -266,7 +266,7 @@ func (db *Xvec) DeleteCollection(ctx context.Context, name string) error {
 	}
 	value, found := db.collections.LoadAndDelete(name)
 	if !found {
-		return errors.Wrapf(ErrNotFound, "collection %s", name)
+		return fmt.Errorf("collection %s: %w", name, ErrNotFound)
 	}
 	collection := value.(*xvec.Collection)
 	if err := collection.Destroy(ctx); err != nil {
@@ -454,7 +454,7 @@ func (db *Xvec) collection(name string) (*xvec.Collection, error) {
 	}
 	value, found := db.collections.Load(name)
 	if !found {
-		return nil, errors.Wrapf(ErrNotFound, "collection %s", name)
+		return nil, fmt.Errorf("collection %s: %w", name, ErrNotFound)
 	}
 	return value.(*xvec.Collection), nil
 }

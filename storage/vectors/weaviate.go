@@ -95,7 +95,7 @@ func (db *Weaviate) DescribeCollection(ctx context.Context, name string) (*Colle
 	if err != nil {
 		var clientErr *fault.WeaviateClientError
 		if errors.As(err, &clientErr) && clientErr.StatusCode == http.StatusNotFound {
-			return nil, errors.Wrapf(ErrNotFound, "collection %s", name)
+			return nil, fmt.Errorf("collection %s: %w", name, ErrNotFound)
 		}
 		return nil, errors.WithStack(err)
 	}
@@ -232,7 +232,7 @@ func (db *Weaviate) DeleteCollection(ctx context.Context, name string) error {
 		return errors.WithStack(err)
 	}
 	if !exists {
-		return errors.Wrapf(ErrNotFound, "collection %s", name)
+		return fmt.Errorf("collection %s: %w", name, ErrNotFound)
 	}
 	err = db.client.Schema().ClassDeleter().WithClassName(capitalize(name)).Do(ctx)
 	return errors.WithStack(err)

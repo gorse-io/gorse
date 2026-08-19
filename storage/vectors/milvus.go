@@ -92,7 +92,7 @@ func (db *Milvus) DescribeCollection(ctx context.Context, name string) (*Collect
 	collection, err := db.client.DescribeCollection(ctx, milvusclient.NewDescribeCollectionOption(name))
 	if err != nil {
 		if errors.Is(err, merr.ErrCollectionNotFound) {
-			return nil, errors.Wrapf(ErrNotFound, "collection %s", name)
+			return nil, fmt.Errorf("collection %s: %w", name, ErrNotFound)
 		}
 		return nil, errors.WithStack(err)
 	}
@@ -218,7 +218,7 @@ func (db *Milvus) AddCollection(ctx context.Context, name string, dimensions int
 
 func milvusVectorDimension(collection *entity.Collection) (int, error) {
 	if collection == nil || collection.Schema == nil {
-		return 0, errors.Wrapf(ErrNotFound, "collection schema")
+		return 0, fmt.Errorf("collection schema: %w", ErrNotFound)
 	}
 	for _, field := range collection.Schema.Fields {
 		if field.Name == milvusVectorField {
@@ -232,7 +232,7 @@ func milvusVectorDimension(collection *entity.Collection) (int, error) {
 			return dimension, nil
 		}
 	}
-	return 0, errors.Wrapf(ErrNotFound, "vector field")
+	return 0, fmt.Errorf("vector field: %w", ErrNotFound)
 }
 
 func (db *Milvus) DeleteCollection(ctx context.Context, name string) error {
@@ -241,7 +241,7 @@ func (db *Milvus) DeleteCollection(ctx context.Context, name string) error {
 		return errors.WithStack(err)
 	}
 	if !exists {
-		return errors.Wrapf(ErrNotFound, "collection %s", name)
+		return fmt.Errorf("collection %s: %w", name, ErrNotFound)
 	}
 	err = db.client.DropCollection(ctx, milvusclient.NewDropCollectionOption(name))
 	return errors.WithStack(err)

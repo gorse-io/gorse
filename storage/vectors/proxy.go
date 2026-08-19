@@ -221,7 +221,7 @@ func (p ProxyClient) DescribeCollection(ctx context.Context, name string) (*Coll
 	resp, err := p.VectorStoreClient.DescribeCollection(ctx, &protocol.DescribeCollectionRequest{Name: name})
 	if err != nil {
 		if status.Code(err) == codes.NotFound {
-			return nil, errors.Wrapf(ErrNotFound, "collection %s", name)
+			return nil, fmt.Errorf("collection %s: %w", name, ErrNotFound)
 		}
 		return nil, err
 	}
