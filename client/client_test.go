@@ -113,7 +113,7 @@ func (suite *GorseClientTestSuite) TestUsers() {
 	suite.NoError(err)
 	suite.Equal(1, deleteAffect.RowAffected)
 	_, err = suite.client.GetUser(ctx, "1000")
-	suite.Equal("1000: user not found", err.Error())
+	suite.Equal("user 1000 not found", err.Error())
 }
 
 func (suite *GorseClientTestSuite) TestItems() {
@@ -167,7 +167,7 @@ func (suite *GorseClientTestSuite) TestItems() {
 	suite.NoError(err)
 	suite.Equal(1, deleteAffect.RowAffected)
 	_, err = suite.client.GetItem(ctx, "2000")
-	suite.Equal("2000: item not found", err.Error())
+	suite.Equal("item 2000 not found", err.Error())
 }
 
 func (suite *GorseClientTestSuite) TestFeedback() {
