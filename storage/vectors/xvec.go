@@ -205,7 +205,7 @@ func (db *Xvec) AddCollection(ctx context.Context, name string, dimensions int, 
 		return errors.New("xvec database is closed")
 	}
 	if _, found := db.collections.Load(name); found {
-		return errors.Errorf("collection %s already exists", name)
+		return fmt.Errorf("collection %s %w", name, ErrAlreadyExists)
 	}
 	collection, err := xvec.CreateAndOpen(ctx, filepath.Join(db.root, physicalName), schema, xvec.CollectionOptions{})
 	if err != nil {
@@ -213,7 +213,7 @@ func (db *Xvec) AddCollection(ctx context.Context, name string, dimensions int, 
 	}
 	if _, loaded := db.collections.LoadOrStore(name, collection); loaded {
 		_ = collection.Close()
-		return errors.Errorf("collection %s already exists", name)
+		return fmt.Errorf("collection %s %w", name, ErrAlreadyExists)
 	}
 	if db.closed.Load() {
 		if db.collections.CompareAndDelete(name, collection) {

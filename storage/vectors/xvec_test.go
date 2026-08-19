@@ -40,6 +40,12 @@ func (suite *XvecTestSuite) TearDownSuite() {
 	suite.NoError(suite.Database.Close())
 }
 
+func (suite *XvecTestSuite) TestAlreadyExists() {
+	ctx := suite.T().Context()
+	suite.Require().NoError(suite.Database.AddCollection(ctx, "test_already_exists", defaultVectorSize, Cosine, VectorConfig{}))
+	suite.ErrorIs(suite.Database.AddCollection(ctx, "test_already_exists", defaultVectorSize, Cosine, VectorConfig{}), ErrAlreadyExists)
+}
+
 func TestXvec(t *testing.T) {
 	suite.Run(t, new(XvecTestSuite))
 }

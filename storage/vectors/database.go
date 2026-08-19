@@ -134,9 +134,10 @@ type Creator func(path, tablePrefix string, opts ...storage.Option) (Database, e
 var creators = make(map[string]Creator)
 
 var (
-	ErrNotFound     = errors.New("not found")
-	ErrNoDatabase   = errors.New("database not assigned")
-	ErrNotSupported = errors.New("not supported")
+	ErrNotFound      = errors.New("not found")
+	ErrNoDatabase    = errors.New("database not assigned")
+	ErrNotSupported  = errors.New("not supported")
+	ErrAlreadyExists = errors.New("already exists")
 )
 
 // Register a database creator.
