@@ -81,18 +81,26 @@ func (suite *vectorsTestSuite) TestCollections() {
 
 func (suite *vectorsTestSuite) TestPurge() {
 	ctx := suite.T().Context()
-	for _, name := range []string{"first", "second"} {
+	collectionNames := []string{"first", "second"}
+	for _, name := range collectionNames {
 		err := suite.Database.AddCollection(ctx, name, defaultVectorSize, Cosine, VectorConfig{})
 		suite.Require().NoError(err)
 		err = suite.Database.AddVectors(ctx, name, []Vector{{Id: "vector", Values: []float32{1, 0, 0, 0}}})
 		suite.Require().NoError(err)
 	}
-
-	err := suite.Database.Purge()
-	suite.Require().NoError(err)
 	collections, err := suite.Database.ListCollections(ctx)
 	suite.Require().NoError(err)
+	suite.ElementsMatch(collectionNames, collections)
+
+	err = suite.Database.Purge()
+	suite.Require().NoError(err)
+	collections, err = suite.Database.ListCollections(ctx)
+	suite.Require().NoError(err)
 	suite.Empty(collections)
+	for _, name := range collectionNames {
+		_, err = suite.Database.DescribeCollection(ctx, name)
+		suite.ErrorIs(err, storage.ErrNotFound)
+	}
 
 	suite.NoError(suite.Database.Purge())
 }
