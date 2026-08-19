@@ -98,6 +98,7 @@ type Database interface {
 	Init() error
 	Optimize(ctx context.Context, name string) error
 	Close() error
+	Purge() error
 	ListCollections(ctx context.Context) ([]string, error)
 	DescribeCollection(ctx context.Context, name string) (*CollectionInfo, error)
 	AddCollection(ctx context.Context, name string, dimensions int, distance Distance, config VectorConfig) error
@@ -107,6 +108,20 @@ type Database interface {
 	GetVectors(ctx context.Context, collection string, ids []string) ([]Vector, error)
 	DeleteVectors(ctx context.Context, collection string, timestamp time.Time) error
 	QueryVectors(ctx context.Context, collection string, q Vector, categories []string, topK int) ([]ScoredVector, error)
+}
+
+func purge(database Database) error {
+	ctx := context.Background()
+	collections, err := database.ListCollections(ctx)
+	if err != nil {
+		return err
+	}
+	for _, collection := range collections {
+		if err = database.DeleteCollection(ctx, collection); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func orderVectors(ids []string, vectors []Vector) []Vector {

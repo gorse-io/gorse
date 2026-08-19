@@ -77,6 +77,10 @@ func (db *Qdrant) Close() error {
 	return db.client.Close()
 }
 
+func (db *Qdrant) Purge() error {
+	return purge(db)
+}
+
 func (db *Qdrant) ListCollections(ctx context.Context) ([]string, error) {
 	return db.client.ListCollections(ctx)
 }

@@ -28,6 +28,7 @@ type NoDatabase struct{}
 func (NoDatabase) Init() error                                { return storage.ErrNoDatabase }
 func (NoDatabase) Optimize(_ context.Context, _ string) error { return nil }
 func (NoDatabase) Close() error                               { return storage.ErrNoDatabase }
+func (NoDatabase) Purge() error                               { return storage.ErrNoDatabase }
 func (NoDatabase) ListCollections(_ context.Context) ([]string, error) {
 	return nil, storage.ErrNoDatabase
 }

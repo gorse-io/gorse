@@ -78,6 +78,10 @@ func (db *Weaviate) Close() error {
 	return nil
 }
 
+func (db *Weaviate) Purge() error {
+	return purge(db)
+}
+
 func (db *Weaviate) ListCollections(ctx context.Context) ([]string, error) {
 	s, err := db.client.Schema().Getter().Do(ctx)
 	if err != nil {

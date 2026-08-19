@@ -210,6 +210,10 @@ func (p ProxyClient) Close() error {
 	return nil
 }
 
+func (p ProxyClient) Purge() error {
+	return errors.New("purge is not allowed in proxy client")
+}
+
 func (p ProxyClient) ListCollections(ctx context.Context) ([]string, error) {
 	resp, err := p.VectorStoreClient.ListCollections(ctx, &protocol.ListCollectionsRequest{})
 	if err != nil {

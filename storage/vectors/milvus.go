@@ -80,6 +80,10 @@ func (db *Milvus) Close() error {
 	return db.client.Close(context.Background())
 }
 
+func (db *Milvus) Purge() error {
+	return purge(db)
+}
+
 func (db *Milvus) ListCollections(ctx context.Context) ([]string, error) {
 	collections, err := db.client.ListCollections(ctx, milvusclient.NewListCollectionOption())
 	if err != nil {

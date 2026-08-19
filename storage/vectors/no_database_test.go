@@ -31,6 +31,7 @@ func TestNoDatabase(t *testing.T) {
 	t.Run("lifecycle", func(t *testing.T) {
 		assert.ErrorIs(t, database.Init(), storage.ErrNoDatabase)
 		assert.NoError(t, database.Optimize(ctx, "test"))
+		assert.ErrorIs(t, database.Purge(), storage.ErrNoDatabase)
 		assert.ErrorIs(t, database.Close(), storage.ErrNoDatabase)
 	})
 

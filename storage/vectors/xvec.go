@@ -147,6 +147,10 @@ func (db *Xvec) Close() error {
 	return stderrors.Join(errs...)
 }
 
+func (db *Xvec) Purge() error {
+	return purge(db)
+}
+
 func (db *Xvec) ListCollections(ctx context.Context) ([]string, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, errors.WithStack(err)
