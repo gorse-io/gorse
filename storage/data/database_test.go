@@ -27,7 +27,6 @@ import (
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/config"
 	"github.com/jaswdr/faker"
-	"github.com/pkg/errors"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -217,7 +216,7 @@ func (suite *baseTestSuite) TestUsers() {
 	err = suite.Database.DeleteUser(ctx, "0")
 	suite.NoError(err)
 	_, err = suite.Database.GetUser(ctx, "0")
-	suite.True(errors.Is(err, ErrUserNotExist), err)
+	suite.ErrorIs(err, ErrUserNotExist)
 	// test override
 	err = suite.Database.BatchInsertUsers(ctx, []User{{UserId: "1", Comment: "override"}})
 	suite.NoError(err)
@@ -568,7 +567,7 @@ func (suite *baseTestSuite) TestItems() {
 	err = suite.Database.DeleteItem(ctx, "0")
 	suite.NoError(err)
 	_, err = suite.Database.GetItem(ctx, "0")
-	suite.True(errors.Is(err, ErrItemNotExist), err)
+	suite.ErrorIs(err, ErrItemNotExist)
 
 	// test override
 	err = suite.Database.BatchInsertItems(ctx, []Item{{ItemId: "4", IsHidden: false, Categories: []string{"b"}, Labels: []string{"o"}, Comment: "override"}})

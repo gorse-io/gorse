@@ -18,7 +18,6 @@ import (
 	"time"
 
 	"github.com/gorse-io/gorse/common/log"
-	"github.com/pkg/errors"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -69,7 +68,7 @@ func (suite *vectorsTestSuite) TestCollections() {
 	suite.NoError(err)
 	// describe deleted collection
 	_, err = suite.Database.DescribeCollection(ctx, "test")
-	suite.True(errors.Is(err, ErrNotFound), err)
+	suite.ErrorIs(err, ErrNotFound)
 	// list collections
 	collections, err = suite.Database.ListCollections(ctx)
 	suite.NoError(err)
@@ -217,7 +216,7 @@ func (suite *vectorsTestSuite) TestSparse() {
 	err = suite.Database.DeleteCollection(ctx, "test_sparse")
 	suite.Require().NoError(err)
 	_, err = suite.Database.DescribeCollection(ctx, "test_sparse")
-	suite.True(errors.Is(err, ErrNotFound), err)
+	suite.ErrorIs(err, ErrNotFound)
 }
 
 func (suite *vectorsTestSuite) TestHidden() {
