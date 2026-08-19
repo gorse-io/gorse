@@ -18,7 +18,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/gorse-io/gorse/storage"
 	"io"
 	"net"
 	"time"
@@ -26,6 +25,7 @@ import (
 	"github.com/gorse-io/gorse/common/expression"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/protocol"
+	"github.com/gorse-io/gorse/storage"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -675,7 +675,7 @@ func (p ProxyClient) GetItem(ctx context.Context, itemId string) (Item, error) {
 		return Item{}, err
 	}
 	if resp.Item == nil {
-		return Item{}, fmt.Errorf("item %s: %w", itemId, storage.ErrNotFound)
+		return Item{}, fmt.Errorf("item %s %w", itemId, storage.ErrNotFound)
 	}
 	var labels any
 	if err = json.Unmarshal(resp.Item.Labels, &labels); err != nil {
@@ -845,7 +845,7 @@ func (p ProxyClient) GetUser(ctx context.Context, userId string) (User, error) {
 		return User{}, err
 	}
 	if resp.User == nil {
-		return User{}, fmt.Errorf("user %s: %w", userId, storage.ErrNotFound)
+		return User{}, fmt.Errorf("user %s %w", userId, storage.ErrNotFound)
 	}
 	var labels any
 	if err = json.Unmarshal(resp.User.Labels, &labels); err != nil {

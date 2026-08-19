@@ -15,10 +15,10 @@
 package vectors
 
 import (
-	"github.com/gorse-io/gorse/storage"
 	"time"
 
 	"github.com/gorse-io/gorse/common/log"
+	"github.com/gorse-io/gorse/storage"
 	"github.com/stretchr/testify/suite"
 )
 

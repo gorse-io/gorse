@@ -17,11 +17,11 @@ package vectors
 import (
 	"context"
 	"fmt"
-	"github.com/gorse-io/gorse/storage"
 	"net"
 	"time"
 
 	"github.com/gorse-io/gorse/protocol"
+	"github.com/gorse-io/gorse/storage"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"

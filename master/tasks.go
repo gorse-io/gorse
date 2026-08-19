@@ -16,7 +16,6 @@ package master
 
 import (
 	"context"
-	"github.com/gorse-io/gorse/storage"
 	"sort"
 	"strconv"
 	"strings"
@@ -39,6 +38,7 @@ import (
 	"github.com/gorse-io/gorse/model"
 	"github.com/gorse-io/gorse/model/cf"
 	"github.com/gorse-io/gorse/model/ctr"
+	"github.com/gorse-io/gorse/storage"
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
 	"github.com/gorse-io/gorse/storage/meta"

@@ -15,7 +15,6 @@ package cache
 
 import (
 	"context"
-	"github.com/gorse-io/gorse/storage"
 	"math"
 	"math/rand"
 	"os"
@@ -25,6 +24,7 @@ import (
 
 	"github.com/fxtlabs/primes"
 	"github.com/gorse-io/gorse/common/log"
+	"github.com/gorse-io/gorse/storage"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"

@@ -16,8 +16,9 @@ package vectors
 
 import (
 	"context"
-	"github.com/gorse-io/gorse/storage"
 	"time"
+
+	"github.com/gorse-io/gorse/storage"
 )
 
 // NoDatabase is a no-op database that does nothing.

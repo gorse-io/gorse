@@ -15,11 +15,11 @@
 package data
 
 import (
-	"github.com/gorse-io/gorse/storage"
 	"testing"
 	"time"
 
 	"github.com/gorse-io/gorse/config"
+	"github.com/gorse-io/gorse/storage"
 	"github.com/stretchr/testify/assert"
 )
 

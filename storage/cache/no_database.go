@@ -16,8 +16,9 @@ package cache
 
 import (
 	"context"
-	"github.com/gorse-io/gorse/storage"
 	"time"
+
+	"github.com/gorse-io/gorse/storage"
 )
 
 // NoDatabase means no database used for cache.

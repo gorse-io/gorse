@@ -16,11 +16,11 @@ package data
 
 import (
 	"context"
-	"github.com/gorse-io/gorse/storage"
 	"time"
 
 	"github.com/gorse-io/gorse/common/expression"
 	"github.com/gorse-io/gorse/config"
+	"github.com/gorse-io/gorse/storage"
 )
 
 // NoDatabase means that no database used.

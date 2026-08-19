@@ -420,7 +420,7 @@ func (db *MongoDB) GetItem(ctx context.Context, itemId string) (item Item, err e
 	c := db.client.Database(db.dbName).Collection(db.ItemsTable())
 	r := c.FindOne(ctx, bson.M{"itemid": itemId})
 	if r.Err() == mongo.ErrNoDocuments {
-		err = fmt.Errorf("item %s: %w", itemId, storage.ErrNotFound)
+		err = fmt.Errorf("item %s %w", itemId, storage.ErrNotFound)
 		return
 	}
 	err = r.Decode(&item)
@@ -652,7 +652,7 @@ func (db *MongoDB) GetUser(ctx context.Context, userId string) (user User, err e
 	c := db.client.Database(db.dbName).Collection(db.UsersTable())
 	r := c.FindOne(ctx, bson.M{"userid": userId})
 	if r.Err() == mongo.ErrNoDocuments {
-		err = fmt.Errorf("user %s: %w", userId, storage.ErrNotFound)
+		err = fmt.Errorf("user %s %w", userId, storage.ErrNotFound)
 		return
 	}
 	err = r.Decode(&user)

@@ -15,10 +15,10 @@
 package vectors
 
 import (
-	"github.com/gorse-io/gorse/storage"
 	"testing"
 	"time"
 
+	"github.com/gorse-io/gorse/storage"
 	"github.com/stretchr/testify/assert"
 )
 
