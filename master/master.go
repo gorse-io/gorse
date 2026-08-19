@@ -41,6 +41,7 @@ import (
 	"github.com/gorse-io/gorse/model/ctr"
 	"github.com/gorse-io/gorse/protocol"
 	"github.com/gorse-io/gorse/server"
+	"github.com/gorse-io/gorse/storage"
 	"github.com/gorse-io/gorse/storage/blob"
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
@@ -158,7 +159,7 @@ func NewMaster(cfg *config.Config, cacheFolder string, standalone bool, configPa
 
 func (m *Master) applyRecommendOverride(cfg *config.Config) error {
 	metaStr, err := m.metaStore.Get(meta.RECOMMEND_CONFIG)
-	if err != nil {
+	if err != nil && !errors.Is(err, storage.ErrNotFound) {
 		return errors.WithStack(err)
 	}
 	if metaStr == nil {
@@ -325,7 +326,7 @@ func (m *Master) Serve() {
 
 	// load collective filtering model meta
 	metaStr, err := m.metaStore.Get(meta.COLLABORATIVE_FILTERING_MODEL)
-	if err != nil {
+	if err != nil && !errors.Is(err, storage.ErrNotFound) {
 		log.Logger().Error("failed to load collaborative filtering meta", zap.Error(err))
 	} else if metaStr != nil {
 		if err = m.collaborativeFilteringMeta.FromJSON(*metaStr); err != nil {
@@ -340,7 +341,7 @@ func (m *Master) Serve() {
 
 	// load click-through rate model
 	metaStr, err = m.metaStore.Get(meta.CLICK_THROUGH_RATE_MODEL)
-	if err != nil {
+	if err != nil && !errors.Is(err, storage.ErrNotFound) {
 		log.Logger().Error("failed to load click-through rate meta", zap.Error(err))
 	} else if metaStr != nil {
 		if err = m.clickThroughRateMeta.FromJSON(*metaStr); err != nil {
