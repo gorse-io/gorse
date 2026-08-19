@@ -29,7 +29,7 @@ import (
 	"github.com/gorse-io/gorse/common/util"
 	"github.com/gorse-io/gorse/dataset"
 	"github.com/gorse-io/gorse/model"
-	"github.com/juju/errors"
+	"github.com/pkg/errors"
 	"github.com/samber/lo"
 )
 
@@ -271,7 +271,7 @@ func LoadLibFMFile(path string) (features [][]lo.Tuple2[int32, float32], targets
 	// open file
 	file, err := os.Open(path)
 	if err != nil {
-		return nil, []float32{}, 0, errors.Trace(err)
+		return nil, []float32{}, 0, errors.WithStack(err)
 	}
 	defer file.Close()
 	// read lines
@@ -282,7 +282,7 @@ func LoadLibFMFile(path string) (features [][]lo.Tuple2[int32, float32], targets
 		// fetch target
 		target, err := strconv.ParseFloat(fields[0], 32)
 		if err != nil {
-			return nil, []float32{}, 0, errors.Trace(err)
+			return nil, []float32{}, 0, errors.WithStack(err)
 		}
 		targets = append(targets, float32(target))
 		// fetch features
@@ -294,11 +294,11 @@ func LoadLibFMFile(path string) (features [][]lo.Tuple2[int32, float32], targets
 				// append feature
 				feature, err := strconv.Atoi(k)
 				if err != nil {
-					return nil, []float32{}, 0, errors.Trace(err)
+					return nil, []float32{}, 0, errors.WithStack(err)
 				}
 				value, err := strconv.ParseFloat(v, 32)
 				if err != nil {
-					return nil, []float32{}, 0, errors.Trace(err)
+					return nil, []float32{}, 0, errors.WithStack(err)
 				}
 				lineFeatures = append(lineFeatures, lo.Tuple2[int32, float32]{
 					A: int32(feature),
@@ -311,7 +311,7 @@ func LoadLibFMFile(path string) (features [][]lo.Tuple2[int32, float32], targets
 	}
 	// check error
 	if err = scanner.Err(); err != nil {
-		return nil, []float32{}, 0, errors.Trace(err)
+		return nil, []float32{}, 0, errors.WithStack(err)
 	}
 	return
 }

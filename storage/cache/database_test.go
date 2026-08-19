@@ -24,7 +24,7 @@ import (
 
 	"github.com/fxtlabs/primes"
 	"github.com/gorse-io/gorse/common/log"
-	"github.com/juju/errors"
+	"github.com/gorse-io/gorse/storage"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
@@ -280,7 +280,7 @@ func (suite *baseTestSuite) TestDocument() {
 
 	// delete nothing
 	err = suite.DeleteScores(ctx, []string{"a"}, ScoreCondition{})
-	suite.ErrorIs(err, errors.NotValid)
+	suite.ErrorIs(err, storage.ErrInvalidArgument)
 	// delete by value
 	err = suite.DeleteScores(ctx, []string{"a"}, ScoreCondition{Id: new("5")})
 	suite.NoError(err)

@@ -17,37 +17,39 @@ package vectors
 import (
 	"context"
 	"time"
+
+	"github.com/gorse-io/gorse/storage"
 )
 
 // NoDatabase is a no-op database that does nothing.
 // Used when no vector store is configured.
 type NoDatabase struct{}
 
-func (NoDatabase) Init() error                                { return ErrNoDatabase }
+func (NoDatabase) Init() error                                { return storage.ErrNoDatabase }
 func (NoDatabase) Optimize(_ context.Context, _ string) error { return nil }
-func (NoDatabase) Close() error                               { return ErrNoDatabase }
+func (NoDatabase) Close() error                               { return storage.ErrNoDatabase }
 func (NoDatabase) ListCollections(_ context.Context) ([]string, error) {
-	return nil, ErrNoDatabase
+	return nil, storage.ErrNoDatabase
 }
 func (NoDatabase) DescribeCollection(_ context.Context, _ string) (*CollectionInfo, error) {
-	return nil, ErrNoDatabase
+	return nil, storage.ErrNoDatabase
 }
 func (NoDatabase) AddCollection(_ context.Context, _ string, _ int, _ Distance, _ VectorConfig) error {
-	return ErrNoDatabase
+	return storage.ErrNoDatabase
 }
-func (NoDatabase) DeleteCollection(_ context.Context, _ string) error { return ErrNoDatabase }
+func (NoDatabase) DeleteCollection(_ context.Context, _ string) error { return storage.ErrNoDatabase }
 func (NoDatabase) CountVectors(_ context.Context, _ string) (int64, error) {
-	return 0, ErrNoDatabase
+	return 0, storage.ErrNoDatabase
 }
 func (NoDatabase) AddVectors(_ context.Context, _ string, _ []Vector) error {
-	return ErrNoDatabase
+	return storage.ErrNoDatabase
 }
 func (NoDatabase) GetVectors(_ context.Context, _ string, _ []string) ([]Vector, error) {
-	return nil, ErrNoDatabase
+	return nil, storage.ErrNoDatabase
 }
 func (NoDatabase) DeleteVectors(_ context.Context, _ string, _ time.Time) error {
-	return ErrNoDatabase
+	return storage.ErrNoDatabase
 }
 func (NoDatabase) QueryVectors(_ context.Context, _ string, _ Vector, _ []string, _ int) ([]ScoredVector, error) {
-	return nil, ErrNoDatabase
+	return nil, storage.ErrNoDatabase
 }

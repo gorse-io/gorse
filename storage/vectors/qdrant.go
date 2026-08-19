@@ -16,13 +16,14 @@ package vectors
 
 import (
 	"context"
+	"fmt"
 	"net/url"
 	"strconv"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/gorse-io/gorse/storage"
-	"github.com/juju/errors"
+	"github.com/pkg/errors"
 	"github.com/qdrant/go-client/qdrant"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -41,20 +42,20 @@ func init() {
 		database := new(Qdrant)
 		u, err := url.Parse(path)
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 		host := u.Hostname()
 		port := u.Port()
 		portInt, err := strconv.Atoi(port)
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 		database.client, err = qdrant.NewClient(&qdrant.Config{
 			Host: host,
 			Port: portInt,
 		})
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 		return database, nil
 	})
@@ -84,9 +85,9 @@ func (db *Qdrant) DescribeCollection(ctx context.Context, name string) (*Collect
 	info, err := db.client.GetCollectionInfo(ctx, name)
 	if err != nil {
 		if status.Code(err) == codes.NotFound {
-			return nil, errors.NotFoundf("collection %s", name)
+			return nil, fmt.Errorf("collection %s: %w", name, storage.ErrNotFound)
 		}
-		return nil, errors.Trace(err)
+		return nil, errors.WithStack(err)
 	}
 	collectionParams := info.GetConfig().GetParams()
 	if _, ok := collectionParams.GetSparseVectorsConfig().GetMap()[qdrantVectorName]; ok {
@@ -94,7 +95,7 @@ func (db *Qdrant) DescribeCollection(ctx context.Context, name string) (*Collect
 	}
 	params, ok := collectionParams.GetVectorsConfig().GetParamsMap().GetMap()[qdrantVectorName]
 	if !ok {
-		return nil, errors.NotFoundf("vector field %s", qdrantVectorName)
+		return nil, fmt.Errorf("vector field %s: %w", qdrantVectorName, storage.ErrNotFound)
 	}
 	var distance Distance
 	switch params.GetDistance() {
@@ -105,12 +106,12 @@ func (db *Qdrant) DescribeCollection(ctx context.Context, name string) (*Collect
 	case qdrant.Distance_Dot:
 		distance = Dot
 	default:
-		return nil, errors.NotSupportedf("distance method %s", params.GetDistance().String())
+		return nil, fmt.Errorf("distance method %s %w", params.GetDistance().String(), storage.ErrNotSupported)
 	}
 	quantizationConfig := info.GetConfig().GetQuantizationConfig()
 	config, err := qdrantVectorConfig(quantizationConfig)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.WithStack(err)
 	}
 	return &CollectionInfo{
 		Name:         name,
@@ -123,10 +124,10 @@ func (db *Qdrant) DescribeCollection(ctx context.Context, name string) (*Collect
 func (db *Qdrant) AddCollection(ctx context.Context, name string, dimensions int, distance Distance, config VectorConfig) error {
 	if dimensions == 0 {
 		if distance != Dot {
-			return errors.NotSupportedf("distance method for sparse vector")
+			return fmt.Errorf("distance method for sparse vector %w", storage.ErrNotSupported)
 		}
 		if config != (VectorConfig{}) {
-			return errors.NotSupportedf("quantization for sparse vector")
+			return fmt.Errorf("quantization for sparse vector %w", storage.ErrNotSupported)
 		}
 		return db.createCollection(ctx, name, &qdrant.CreateCollection{
 			CollectionName: name,
@@ -144,12 +145,12 @@ func (db *Qdrant) AddCollection(ctx context.Context, name string, dimensions int
 	case Dot:
 		qdrantDistance = qdrant.Distance_Dot
 	default:
-		return errors.NotSupportedf("distance method")
+		return fmt.Errorf("distance method %w", storage.ErrNotSupported)
 	}
 
 	quantizationConfig, err := qdrantQuantizationConfig(config)
 	if err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 
 	return db.createCollection(ctx, name, &qdrant.CreateCollection{
@@ -167,7 +168,7 @@ func (db *Qdrant) AddCollection(ctx context.Context, name string, dimensions int
 func (db *Qdrant) createCollection(ctx context.Context, name string, request *qdrant.CreateCollection) error {
 	err := db.client.CreateCollection(ctx, request)
 	if err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 
 	_, err = db.client.CreateFieldIndex(ctx, &qdrant.CreateFieldIndexCollection{
@@ -177,7 +178,7 @@ func (db *Qdrant) createCollection(ctx context.Context, name string, request *qd
 		FieldType:      qdrant.FieldType_FieldTypeInteger.Enum(),
 	})
 	if err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	_, err = db.client.CreateFieldIndex(ctx, &qdrant.CreateFieldIndexCollection{
 		CollectionName: name,
@@ -185,7 +186,7 @@ func (db *Qdrant) createCollection(ctx context.Context, name string, request *qd
 		FieldName:      qdrantPayloadHiddenKey,
 		FieldType:      qdrant.FieldType_FieldTypeBool.Enum(),
 	})
-	return errors.Trace(err)
+	return errors.WithStack(err)
 }
 
 func qdrantQuantizationConfig(config VectorConfig) (*qdrant.QuantizationConfig, error) {
@@ -203,13 +204,13 @@ func qdrantQuantizationConfig(config VectorConfig) (*qdrant.QuantizationConfig, 
 			case 4:
 				turbo.Bits = qdrant.TurboQuantBitSize_Bits4.Enum()
 			default:
-				return nil, errors.NotSupportedf("RQ quantization bits %d for Qdrant", config.Bits)
+				return nil, fmt.Errorf("RQ quantization bits %d for Qdrant %w", config.Bits, storage.ErrNotSupported)
 			}
 		}
 		return qdrant.NewQuantizationTurbo(turbo), nil
 	case QuantizationSQ:
 		if config.Bits != 0 && config.Bits != 8 {
-			return nil, errors.NotSupportedf("SQ quantization bits for Qdrant")
+			return nil, fmt.Errorf("SQ quantization bits for Qdrant %w", storage.ErrNotSupported)
 		}
 		return qdrant.NewQuantizationScalar(&qdrant.ScalarQuantization{
 			Type: qdrant.QuantizationType_Int8,
@@ -227,12 +228,12 @@ func qdrantQuantizationConfig(config VectorConfig) (*qdrant.QuantizationConfig, 
 			case 1:
 				product.Compression = qdrant.CompressionRatio_x32
 			default:
-				return nil, errors.NotSupportedf("PQ quantization bits %d for Qdrant", config.Bits)
+				return nil, fmt.Errorf("PQ quantization bits %d for Qdrant %w", config.Bits, storage.ErrNotSupported)
 			}
 		}
 		return qdrant.NewQuantizationProduct(product), nil
 	default:
-		return nil, errors.NotSupportedf("quantization type %s for Qdrant", config.Type)
+		return nil, fmt.Errorf("quantization type %s for Qdrant %w", config.Type, storage.ErrNotSupported)
 	}
 }
 
@@ -251,7 +252,7 @@ func qdrantVectorConfig(config *qdrant.QuantizationConfig) (VectorConfig, error)
 			case qdrant.TurboQuantBitSize_Bits4:
 				bits = 4
 			default:
-				return VectorConfig{}, errors.NotSupportedf("RQ quantization bits %s for Qdrant", turbo.GetBits().String())
+				return VectorConfig{}, fmt.Errorf("RQ quantization bits %s for Qdrant %w", turbo.GetBits().String(), storage.ErrNotSupported)
 			}
 		}
 		return VectorConfig{
@@ -261,7 +262,7 @@ func qdrantVectorConfig(config *qdrant.QuantizationConfig) (VectorConfig, error)
 	}
 	if scalar := config.GetScalar(); scalar != nil {
 		if scalar.GetType() != qdrant.QuantizationType_Int8 {
-			return VectorConfig{}, errors.NotSupportedf("SQ quantization type %s for Qdrant", scalar.GetType().String())
+			return VectorConfig{}, fmt.Errorf("SQ quantization type %s for Qdrant %w", scalar.GetType().String(), storage.ErrNotSupported)
 		}
 		return VectorConfig{
 			Type: QuantizationSQ,
@@ -280,7 +281,7 @@ func qdrantVectorConfig(config *qdrant.QuantizationConfig) (VectorConfig, error)
 		case qdrant.CompressionRatio_x32:
 			bits = 1
 		default:
-			return VectorConfig{}, errors.NotSupportedf("PQ quantization compression %s for Qdrant", product.GetCompression().String())
+			return VectorConfig{}, fmt.Errorf("PQ quantization compression %s for Qdrant %w", product.GetCompression().String(), storage.ErrNotSupported)
 		}
 		return VectorConfig{
 			Type: QuantizationPQ,
@@ -288,7 +289,7 @@ func qdrantVectorConfig(config *qdrant.QuantizationConfig) (VectorConfig, error)
 		}, nil
 	}
 	if config.GetBinary() != nil {
-		return VectorConfig{}, errors.NotSupportedf("binary quantization for Qdrant")
+		return VectorConfig{}, fmt.Errorf("binary quantization for Qdrant %w", storage.ErrNotSupported)
 	}
 	return VectorConfig{}, nil
 }
@@ -302,7 +303,7 @@ func (db *Qdrant) CountVectors(ctx context.Context, collection string) (int64, e
 		CollectionName: collection,
 		Exact:          new(true),
 	})
-	return int64(count), errors.Trace(err)
+	return int64(count), errors.WithStack(err)
 }
 
 func (db *Qdrant) AddVectors(ctx context.Context, collection string, vectors []Vector) error {
@@ -334,7 +335,7 @@ func (db *Qdrant) AddVectors(ctx context.Context, collection string, vectors []V
 		Wait:           new(true),
 		Points:         points,
 	})
-	return errors.Trace(err)
+	return errors.WithStack(err)
 }
 
 func (db *Qdrant) GetVectors(ctx context.Context, collection string, ids []string) ([]Vector, error) {
@@ -352,7 +353,7 @@ func (db *Qdrant) GetVectors(ctx context.Context, collection string, ids []strin
 		WithVectors:    qdrant.NewWithVectorsInclude(qdrantVectorName),
 	})
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.WithStack(err)
 	}
 	vectors := make([]Vector, 0, len(points))
 	for _, point := range points {
@@ -380,7 +381,7 @@ func (db *Qdrant) DeleteVectors(ctx context.Context, collection string, timestam
 			},
 		}),
 	})
-	return errors.Trace(err)
+	return errors.WithStack(err)
 }
 
 func (db *Qdrant) QueryVectors(ctx context.Context, collection string, q Vector, categories []string, topK int) ([]ScoredVector, error) {
@@ -409,7 +410,7 @@ func (db *Qdrant) QueryVectors(ctx context.Context, collection string, q Vector,
 	}
 	response, err := db.client.Query(ctx, request)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.WithStack(err)
 	}
 	results := make([]ScoredVector, 0, len(response))
 	for _, scored := range response {

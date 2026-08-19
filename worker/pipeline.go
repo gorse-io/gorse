@@ -33,7 +33,7 @@ import (
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
 	"github.com/gorse-io/gorse/storage/vectors"
-	"github.com/juju/errors"
+	"github.com/pkg/errors"
 	"github.com/samber/lo"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
@@ -97,7 +97,7 @@ func (p *Pipeline) UpdateMatrixFactorization(
 	users *logics.MatrixFactorizationUsers,
 ) error {
 	if _, err := p.VectorClient.DescribeCollection(ctx, vectors.CollaborativeFilteringCollection(id)); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	p.MatrixFactorizationMutex.Lock()
 	p.MatrixFactorizationUsers = users
@@ -416,7 +416,7 @@ func (p *Pipeline) updateCollaborativeRecommend(
 		p.Config.Recommend.CacheSize+excludeSet.Cardinality(),
 	)
 	if err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	recommend := make([]cache.Score, 0, len(scoredVectors))
 	for _, vector := range scoredVectors {
@@ -431,18 +431,18 @@ func (p *Pipeline) updateCollaborativeRecommend(
 	}
 	if err := p.CacheClient.AddScores(ctx, cache.CollaborativeFiltering, userID, recommend); err != nil {
 		log.Logger().Error("failed to cache collaborative filtering recommendation result", zap.String("user_id", userID), zap.Error(err))
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	if err := p.CacheClient.Set(ctx,
 		cache.Time(cache.Key(cache.CollaborativeFilteringUpdateTime, userID), localStartTime),
 		cache.String(cache.Key(cache.CollaborativeFilteringDigest, userID), p.Config.Recommend.Collaborative.Hash(&p.Config.Recommend)),
 	); err != nil {
 		log.Logger().Error("failed to cache collaborative filtering recommendation time", zap.String("user_id", userID), zap.Error(err))
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	if err := p.CacheClient.DeleteScores(ctx, []string{cache.CollaborativeFiltering}, cache.ScoreCondition{Before: &localStartTime, Subset: new(userID)}); err != nil {
 		log.Logger().Error("failed to delete stale collaborative filtering recommendation result", zap.String("user_id", userID), zap.Error(err))
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	return nil
 }
@@ -461,7 +461,7 @@ func (p *Pipeline) rankByClickTroughRate(
 		return score.Id
 	}))
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.WithStack(err)
 	}
 	// rank by CTR
 	topItems := make([]cache.Score, 0, len(items))
@@ -513,7 +513,7 @@ func (p *Pipeline) rankByLLM(
 		return score.Id
 	}))
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.WithStack(err)
 	}
 	// convert feedback
 	data.SortFeedbacks(feedback)
@@ -530,7 +530,7 @@ func (p *Pipeline) rankByLLM(
 		return fb.ItemId
 	}))
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.WithStack(err)
 	}
 	feedbackItems := make([]*logics.FeedbackItem, 0, len(contextUserFeedback))
 	for _, fb := range contextUserFeedback {
@@ -546,7 +546,7 @@ func (p *Pipeline) rankByLLM(
 	parsed, err := ranker.Rank(ctx, user, feedbackItems, items)
 	pCtx.Attach()
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.WithStack(err)
 	}
 	// construct scores
 	var topItems []cache.Score
@@ -595,7 +595,7 @@ func (p *Pipeline) addReplacementCandidates(
 
 	items, err := itemCache.GetSlice(ctx, distinctItems.ToSlice())
 	if err != nil {
-		return nil, nil, nil, errors.Trace(err)
+		return nil, nil, nil, errors.WithStack(err)
 	}
 	// Only keep items that exist and aren't hidden in the cache.
 	for _, item := range items {
@@ -667,7 +667,7 @@ func (c *ItemCache) GetSlice(ctx context.Context, itemIds []string) ([]*data.Ite
 	}
 	response, err := c.Client.BatchGetItems(ctx, requests, data.GetOptions{})
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.WithStack(err)
 	}
 	for i := range response {
 		response[i].Labels = compressLabelsEmbeddings(c.Pool, response[i].Labels)
@@ -688,7 +688,7 @@ func (c *ItemCache) GetSlice(ctx context.Context, itemIds []string) ([]*data.Ite
 func (c *ItemCache) GetMap(ctx context.Context, itemIds []string) (map[string]*data.Item, error) {
 	items, err := c.GetSlice(ctx, itemIds)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.WithStack(err)
 	}
 	return lo.SliceToMap(items, func(item *data.Item) (string, *data.Item) {
 		return item.ItemId, item

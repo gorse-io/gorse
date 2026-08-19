@@ -41,6 +41,7 @@ import (
 	"github.com/gorse-io/gorse/model/cf"
 	"github.com/gorse-io/gorse/model/ctr"
 	"github.com/gorse-io/gorse/protocol"
+	"github.com/gorse-io/gorse/storage"
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
 	"github.com/gorse-io/gorse/storage/vectors"
@@ -955,8 +956,8 @@ func (suite *WorkerTestSuite) TestHealth() {
 	suite.Equal(http.StatusOK, w.Code)
 	suite.Equal(marshal(suite.T(), HealthStatus{
 		Ready:               false,
-		DataStoreError:      data.ErrNoDatabase,
-		CacheStoreError:     cache.ErrNoDatabase,
+		DataStoreError:      storage.ErrNoDatabase,
+		CacheStoreError:     storage.ErrNoDatabase,
 		DataStoreConnected:  false,
 		CacheStoreConnected: false,
 	}), w.Body.String())

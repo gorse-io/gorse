@@ -37,7 +37,6 @@ require (
 	github.com/invopop/jsonschema v0.13.0
 	github.com/jaswdr/faker v1.19.1
 	github.com/jellydator/ttlcache/v3 v3.4.0
-	github.com/juju/errors v1.0.0
 	github.com/juju/ratelimit v1.0.2
 	github.com/klauspost/cpuid/v2 v2.3.0
 	github.com/lafikl/consistent v0.0.0-20220512074542-bdd3606bfc3e

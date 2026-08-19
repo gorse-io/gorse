@@ -37,10 +37,11 @@ import (
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/logics"
+	"github.com/gorse-io/gorse/storage"
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
 	"github.com/gorse-io/gorse/storage/vectors"
-	"github.com/juju/errors"
+	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/samber/lo"
 	"github.com/swaggest/swgui/v5emb"
@@ -1246,7 +1247,7 @@ func (s *RestServer) getUser(request *restful.Request, response *restful.Respons
 	// get user
 	user, err := s.DataClient.GetUser(ctx, userId)
 	if err != nil {
-		if errors.Is(err, errors.NotFound) {
+		if errors.Is(err, storage.ErrNotFound) {
 			PageNotFound(response, err)
 		} else {
 			InternalServerError(response, err)
@@ -1631,7 +1632,7 @@ func (s *RestServer) getItem(request *restful.Request, response *restful.Respons
 	// Get item
 	item, err := s.DataClient.GetItem(ctx, itemId)
 	if err != nil {
-		if errors.Is(err, errors.NotFound) {
+		if errors.Is(err, storage.ErrNotFound) {
 			PageNotFound(response, err)
 		} else {
 			InternalServerError(response, err)

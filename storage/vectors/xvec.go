@@ -29,7 +29,7 @@ import (
 
 	"github.com/gorse-io/gorse/storage"
 	"github.com/gorse-io/xvec"
-	"github.com/juju/errors"
+	"github.com/pkg/errors"
 )
 
 const (
@@ -59,11 +59,11 @@ type Xvec struct {
 
 func (db *Xvec) Init() error {
 	if err := os.MkdirAll(db.root, 0o755); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	entries, err := os.ReadDir(db.root)
 	if err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 
 	if db.closed.Load() {
@@ -107,7 +107,7 @@ func (db *Xvec) Init() error {
 		collection, err := xvec.Open(context.Background(), filepath.Join(db.root, entry.Name()), xvec.CollectionOptions{})
 		if err != nil {
 			cleanup()
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		if _, loaded := db.collections.LoadOrStore(name, collection); loaded {
 			_ = collection.Close()
@@ -127,7 +127,7 @@ func (db *Xvec) Optimize(ctx context.Context, name string) error {
 	if err != nil {
 		return err
 	}
-	return errors.Trace(collection.Optimize(ctx, xvec.OptimizeOptions{}))
+	return errors.WithStack(collection.Optimize(ctx, xvec.OptimizeOptions{}))
 }
 
 func (db *Xvec) Close() error {
@@ -149,7 +149,7 @@ func (db *Xvec) Close() error {
 
 func (db *Xvec) ListCollections(ctx context.Context) ([]string, error) {
 	if err := ctx.Err(); err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.WithStack(err)
 	}
 	if db.closed.Load() {
 		return nil, errors.New("xvec database is closed")
@@ -165,7 +165,7 @@ func (db *Xvec) ListCollections(ctx context.Context) ([]string, error) {
 
 func (db *Xvec) DescribeCollection(ctx context.Context, name string) (*CollectionInfo, error) {
 	if err := ctx.Err(); err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.WithStack(err)
 	}
 	collection, err := db.collection(name)
 	if err != nil {
@@ -205,15 +205,15 @@ func (db *Xvec) AddCollection(ctx context.Context, name string, dimensions int, 
 		return errors.New("xvec database is closed")
 	}
 	if _, found := db.collections.Load(name); found {
-		return errors.AlreadyExistsf("collection %s", name)
+		return fmt.Errorf("collection %s %w", name, storage.ErrAlreadyExists)
 	}
 	collection, err := xvec.CreateAndOpen(ctx, filepath.Join(db.root, physicalName), schema, xvec.CollectionOptions{})
 	if err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	if _, loaded := db.collections.LoadOrStore(name, collection); loaded {
 		_ = collection.Close()
-		return errors.AlreadyExistsf("collection %s", name)
+		return fmt.Errorf("collection %s %w", name, storage.ErrAlreadyExists)
 	}
 	if db.closed.Load() {
 		if db.collections.CompareAndDelete(name, collection) {
@@ -226,13 +226,13 @@ func (db *Xvec) AddCollection(ctx context.Context, name string, dimensions int, 
 
 func (db *Xvec) collectionSchema(ctx context.Context, name string, dimensions int, distance Distance, config VectorConfig) (xvec.CollectionSchema, error) {
 	if err := ctx.Err(); err != nil {
-		return xvec.CollectionSchema{}, errors.Trace(err)
+		return xvec.CollectionSchema{}, errors.WithStack(err)
 	}
 	if dimensions < 0 || uint64(dimensions) > uint64(math.MaxUint32) {
 		return xvec.CollectionSchema{}, errors.Errorf("invalid vector dimension %d", dimensions)
 	}
 	if config.Type != QuantizationNone {
-		return xvec.CollectionSchema{}, errors.NotSupportedf("quantization type %s for xvec", config.Type)
+		return xvec.CollectionSchema{}, fmt.Errorf("quantization type %s for xvec %w", config.Type, storage.ErrNotSupported)
 	}
 	metric, err := distanceToXvec(distance)
 	if err != nil {
@@ -241,7 +241,7 @@ func (db *Xvec) collectionSchema(ctx context.Context, name string, dimensions in
 	var vectorField xvec.FieldSchema
 	if dimensions == 0 {
 		if distance != Dot {
-			return xvec.CollectionSchema{}, errors.NotSupportedf("distance method for sparse vector")
+			return xvec.CollectionSchema{}, fmt.Errorf("distance method for sparse vector %w", storage.ErrNotSupported)
 		}
 		vectorField = xvec.FieldSchema{Name: xvecVectorField, DataType: xvec.DataTypeSparseVectorFP32, Index: xvec.NewFlatIndexParams(metric)}
 	} else {
@@ -255,7 +255,7 @@ func (db *Xvec) collectionSchema(ctx context.Context, name string, dimensions in
 		vectorField,
 	)
 	if err := schema.Validate(); err != nil {
-		return xvec.CollectionSchema{}, errors.Trace(err)
+		return xvec.CollectionSchema{}, errors.WithStack(err)
 	}
 	return schema, nil
 }
@@ -266,21 +266,21 @@ func (db *Xvec) DeleteCollection(ctx context.Context, name string) error {
 	}
 	value, found := db.collections.LoadAndDelete(name)
 	if !found {
-		return errors.NotFoundf("collection %s", name)
+		return fmt.Errorf("collection %s: %w", name, storage.ErrNotFound)
 	}
 	collection := value.(*xvec.Collection)
 	if err := collection.Destroy(ctx); err != nil {
 		if !db.closed.Load() {
 			db.collections.LoadOrStore(name, collection)
 		}
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	return nil
 }
 
 func (db *Xvec) CountVectors(ctx context.Context, name string) (int64, error) {
 	if err := ctx.Err(); err != nil {
-		return 0, errors.Trace(err)
+		return 0, errors.WithStack(err)
 	}
 	collection, err := db.collection(name)
 	if err != nil {
@@ -315,12 +315,12 @@ func (db *Xvec) AddVectors(ctx context.Context, name string, vectors []Vector) e
 			xvecHiddenField:     vector.IsHidden,
 		}}
 		if err := document.Validate(schema); err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		documents[i] = document
 	}
 	_, err = collection.Upsert(ctx, documents)
-	return errors.Trace(err)
+	return errors.WithStack(err)
 }
 
 func (db *Xvec) GetVectors(ctx context.Context, name string, ids []string) ([]Vector, error) {
@@ -336,7 +336,7 @@ func (db *Xvec) GetVectors(ctx context.Context, name string, ids []string) ([]Ve
 		IncludeVectors: true,
 	})
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.WithStack(err)
 	}
 	vectors := make([]Vector, 0, len(documents))
 	for _, document := range documents {
@@ -372,7 +372,7 @@ func (db *Xvec) DeleteVectors(ctx context.Context, name string, timestamp time.T
 	if err != nil {
 		return err
 	}
-	return errors.Trace(collection.DeleteByFilter(ctx, fmt.Sprintf("%s < %d", xvecTimestampField, timestamp.UnixMilli())))
+	return errors.WithStack(collection.DeleteByFilter(ctx, fmt.Sprintf("%s < %d", xvecTimestampField, timestamp.UnixMilli())))
 }
 
 func (db *Xvec) QueryVectors(ctx context.Context, name string, q Vector, categories []string, topK int) ([]ScoredVector, error) {
@@ -410,7 +410,7 @@ func (db *Xvec) QueryVectors(ctx context.Context, name string, q Vector, categor
 	}
 	documents, err := collection.Query(ctx, query)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.WithStack(err)
 	}
 	info, err := db.DescribeCollection(ctx, name)
 	if err != nil {
@@ -454,7 +454,7 @@ func (db *Xvec) collection(name string) (*xvec.Collection, error) {
 	}
 	value, found := db.collections.Load(name)
 	if !found {
-		return nil, errors.NotFoundf("collection %s", name)
+		return nil, fmt.Errorf("collection %s: %w", name, storage.ErrNotFound)
 	}
 	return value.(*xvec.Collection), nil
 }
@@ -468,7 +468,7 @@ func distanceToXvec(distance Distance) (xvec.MetricType, error) {
 	case Dot:
 		return xvec.MetricTypeIP, nil
 	default:
-		return xvec.MetricTypeUndefined, errors.NotSupportedf("distance method %v", distance)
+		return xvec.MetricTypeUndefined, fmt.Errorf("distance method %v %w", distance, storage.ErrNotSupported)
 	}
 }
 
@@ -481,6 +481,6 @@ func xvecDistance(metric xvec.MetricType) (Distance, error) {
 	case xvec.MetricTypeIP:
 		return Dot, nil
 	default:
-		return Cosine, errors.NotSupportedf("xvec metric %s", metric)
+		return Cosine, fmt.Errorf("xvec metric %s %w", metric, storage.ErrNotSupported)
 	}
 }

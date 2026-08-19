@@ -17,71 +17,73 @@ package cache
 import (
 	"context"
 	"time"
+
+	"github.com/gorse-io/gorse/storage"
 )
 
 // NoDatabase means no database used for cache.
 type NoDatabase struct{}
 
-// Close method of NoDatabase returns ErrNoDatabase.
+// Close method of NoDatabase returns storage.ErrNoDatabase.
 func (NoDatabase) Close() error {
-	return ErrNoDatabase
+	return storage.ErrNoDatabase
 }
 
 func (NoDatabase) Ping() error {
-	return ErrNoDatabase
+	return storage.ErrNoDatabase
 }
 
-// Init method of NoDatabase returns ErrNoDatabase.
+// Init method of NoDatabase returns storage.ErrNoDatabase.
 func (NoDatabase) Init() error {
-	return ErrNoDatabase
+	return storage.ErrNoDatabase
 }
 
 func (NoDatabase) Scan(_ func(string) error) error {
-	return ErrNoDatabase
+	return storage.ErrNoDatabase
 }
 
 func (NoDatabase) Purge() error {
-	return ErrNoDatabase
+	return storage.ErrNoDatabase
 }
 
 func (NoDatabase) Set(_ context.Context, _ ...Value) error {
-	return ErrNoDatabase
+	return storage.ErrNoDatabase
 }
 
-// Get method of NoDatabase returns ErrNoDatabase.
+// Get method of NoDatabase returns storage.ErrNoDatabase.
 func (NoDatabase) Get(_ context.Context, _ string) *ReturnValue {
-	return &ReturnValue{err: ErrNoDatabase, exists: false}
+	return &ReturnValue{err: storage.ErrNoDatabase, exists: false}
 }
 
-// Delete method of NoDatabase returns ErrNoDatabase.
+// Delete method of NoDatabase returns storage.ErrNoDatabase.
 func (NoDatabase) Delete(_ context.Context, _ string) error {
-	return ErrNoDatabase
+	return storage.ErrNoDatabase
 }
 
 func (NoDatabase) AddScores(_ context.Context, _, _ string, _ []Score) error {
-	return ErrNoDatabase
+	return storage.ErrNoDatabase
 }
 
 func (NoDatabase) SearchScores(_ context.Context, _, _ string, _ []string, _, _ int) ([]Score, error) {
-	return nil, ErrNoDatabase
+	return nil, storage.ErrNoDatabase
 }
 
 func (NoDatabase) UpdateScores(context.Context, []string, *string, string, ScorePatch) error {
-	return ErrNoDatabase
+	return storage.ErrNoDatabase
 }
 
 func (NoDatabase) DeleteScores(_ context.Context, _ []string, _ ScoreCondition) error {
-	return ErrNoDatabase
+	return storage.ErrNoDatabase
 }
 
 func (NoDatabase) ScanScores(context.Context, func(collection, id, subset string, timestamp time.Time) error) error {
-	return ErrNoDatabase
+	return storage.ErrNoDatabase
 }
 
 func (NoDatabase) AddTimeSeriesPoints(_ context.Context, _ []TimeSeriesPoint) error {
-	return ErrNoDatabase
+	return storage.ErrNoDatabase
 }
 
 func (NoDatabase) GetTimeSeriesPoints(_ context.Context, _ string, _, _ time.Time, _ time.Duration) ([]TimeSeriesPoint, error) {
-	return nil, ErrNoDatabase
+	return nil, storage.ErrNoDatabase
 }

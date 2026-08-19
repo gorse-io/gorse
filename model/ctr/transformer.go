@@ -20,7 +20,7 @@ import (
 
 	"github.com/chewxy/math32"
 	"github.com/gorse-io/gorse/common/encoding"
-	"github.com/juju/errors"
+	"github.com/pkg/errors"
 )
 
 // MinMaxScaler transforms a single feature by scaling to [0, 1] range.
@@ -67,10 +67,10 @@ func (s *MinMaxScaler) Transform(value float32) float32 {
 // Marshal writes the scaler to a writer.
 func (s *MinMaxScaler) Marshal(w io.Writer) error {
 	if err := encoding.WriteGob(w, s.Min); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	if err := encoding.WriteGob(w, s.Max); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	return nil
 }
@@ -78,10 +78,10 @@ func (s *MinMaxScaler) Marshal(w io.Writer) error {
 // Unmarshal reads the scaler from a reader.
 func (s *MinMaxScaler) Unmarshal(r io.Reader) error {
 	if err := encoding.ReadGob(r, &s.Min); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	if err := encoding.ReadGob(r, &s.Max); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	return nil
 }
@@ -158,16 +158,16 @@ func (s *RobustScaler) Transform(value float32) float32 {
 // Marshal writes the scaler to a writer.
 func (s *RobustScaler) Marshal(w io.Writer) error {
 	if err := encoding.WriteGob(w, s.Median); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	if err := encoding.WriteGob(w, s.Q1); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	if err := encoding.WriteGob(w, s.Q3); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	if err := encoding.WriteGob(w, s.IQR); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	return nil
 }
@@ -175,16 +175,16 @@ func (s *RobustScaler) Marshal(w io.Writer) error {
 // Unmarshal reads the scaler from a reader.
 func (s *RobustScaler) Unmarshal(r io.Reader) error {
 	if err := encoding.ReadGob(r, &s.Median); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	if err := encoding.ReadGob(r, &s.Q1); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	if err := encoding.ReadGob(r, &s.Q3); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	if err := encoding.ReadGob(r, &s.IQR); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	return nil
 }
@@ -258,14 +258,14 @@ func (s *AutoScaler) Transform(value float32) float32 {
 // Marshal writes the scaler to a writer.
 func (s *AutoScaler) Marshal(w io.Writer) error {
 	if err := encoding.WriteGob(w, s.UseLog); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	if err := s.MinMax.Marshal(w); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	if !s.UseLog {
 		if err := s.Robust.Marshal(w); err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 	}
 	return nil
@@ -274,14 +274,14 @@ func (s *AutoScaler) Marshal(w io.Writer) error {
 // Unmarshal reads the scaler from a reader.
 func (s *AutoScaler) Unmarshal(r io.Reader) error {
 	if err := encoding.ReadGob(r, &s.UseLog); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	if err := s.MinMax.Unmarshal(r); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	if !s.UseLog {
 		if err := s.Robust.Unmarshal(r); err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 	}
 	return nil

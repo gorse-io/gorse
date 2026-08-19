@@ -45,13 +45,14 @@ import (
 	"github.com/gorse-io/gorse/model/ctr"
 	"github.com/gorse-io/gorse/protocol"
 	"github.com/gorse-io/gorse/server"
+	"github.com/gorse-io/gorse/storage"
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
 	"github.com/gorse-io/gorse/storage/meta"
 	"github.com/invopop/jsonschema"
-	"github.com/juju/errors"
 	"github.com/nikolalohinski/gonja/v2"
 	"github.com/nikolalohinski/gonja/v2/exec"
+	"github.com/pkg/errors"
 	"github.com/rakyll/statik/fs"
 	"github.com/samber/lo"
 	"github.com/sashabaranov/go-openai"
@@ -811,7 +812,7 @@ func (m *Master) getUser(request *restful.Request, response *restful.Response) {
 	// get user
 	user, err := m.DataClient.GetUser(ctx, userId)
 	if err != nil {
-		if errors.Is(err, errors.NotFound) {
+		if errors.Is(err, storage.ErrNotFound) {
 			server.PageNotFound(response, err)
 		} else {
 			server.InternalServerError(response, err)
@@ -819,11 +820,11 @@ func (m *Master) getUser(request *restful.Request, response *restful.Response) {
 		return
 	}
 	detail := User{User: user}
-	if detail.LastActiveTime, err = m.CacheClient.Get(ctx, cache.Key(cache.LastModifyUserTime, user.UserId)).Time(); err != nil && !errors.Is(err, errors.NotFound) {
+	if detail.LastActiveTime, err = m.CacheClient.Get(ctx, cache.Key(cache.LastModifyUserTime, user.UserId)).Time(); err != nil && !errors.Is(err, storage.ErrNotFound) {
 		server.InternalServerError(response, err)
 		return
 	}
-	if detail.LastUpdateTime, err = m.CacheClient.Get(ctx, cache.Key(cache.RecommendUpdateTime, user.UserId)).Time(); err != nil && !errors.Is(err, errors.NotFound) {
+	if detail.LastUpdateTime, err = m.CacheClient.Get(ctx, cache.Key(cache.RecommendUpdateTime, user.UserId)).Time(); err != nil && !errors.Is(err, storage.ErrNotFound) {
 		server.InternalServerError(response, err)
 		return
 	}
@@ -851,11 +852,11 @@ func (m *Master) getUsers(request *restful.Request, response *restful.Response) 
 	details := make([]User, len(users))
 	for i, user := range users {
 		details[i].User = user
-		if details[i].LastActiveTime, err = m.CacheClient.Get(ctx, cache.Key(cache.LastModifyUserTime, user.UserId)).Time(); err != nil && !errors.Is(err, errors.NotFound) {
+		if details[i].LastActiveTime, err = m.CacheClient.Get(ctx, cache.Key(cache.LastModifyUserTime, user.UserId)).Time(); err != nil && !errors.Is(err, storage.ErrNotFound) {
 			server.InternalServerError(response, err)
 			return
 		}
-		if details[i].LastUpdateTime, err = m.CacheClient.Get(ctx, cache.Key(cache.RecommendUpdateTime, user.UserId)).Time(); err != nil && !errors.Is(err, errors.NotFound) {
+		if details[i].LastUpdateTime, err = m.CacheClient.Get(ctx, cache.Key(cache.RecommendUpdateTime, user.UserId)).Time(); err != nil && !errors.Is(err, storage.ErrNotFound) {
 			server.InternalServerError(response, err)
 			return
 		}
@@ -1195,7 +1196,7 @@ func (m *Master) getRankerPrompt(request *restful.Request, response *restful.Res
 
 	user, err := m.DataClient.GetUser(ctx, userId)
 	if err != nil {
-		if errors.Is(err, errors.NotFound) {
+		if errors.Is(err, storage.ErrNotFound) {
 			server.PageNotFound(response, err)
 		} else {
 			server.InternalServerError(response, err)
@@ -1307,7 +1308,7 @@ func (m *Master) importExportUsers(response http.ResponseWriter, request *http.R
 			}
 		}
 		if err = <-errChan; err != nil {
-			server.InternalServerError(restful.NewResponse(response), errors.Trace(err))
+			server.InternalServerError(restful.NewResponse(response), errors.WithStack(err))
 			return
 		}
 	case http.MethodPost:
@@ -1405,7 +1406,7 @@ func (m *Master) importExportItems(response http.ResponseWriter, request *http.R
 			}
 		}
 		if err = <-errChan; err != nil {
-			server.InternalServerError(restful.NewResponse(response), errors.Trace(err))
+			server.InternalServerError(restful.NewResponse(response), errors.WithStack(err))
 			return
 		}
 	case http.MethodPost:
@@ -1523,7 +1524,7 @@ func (m *Master) importExportFeedback(response http.ResponseWriter, request *htt
 			}
 		}
 		if err = <-errChan; err != nil {
-			server.InternalServerError(restful.NewResponse(response), errors.Trace(err))
+			server.InternalServerError(restful.NewResponse(response), errors.WithStack(err))
 			return
 		}
 	case http.MethodPost:

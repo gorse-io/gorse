@@ -21,7 +21,7 @@ import (
 	"time"
 
 	"github.com/gorse-io/gorse/storage"
-	"github.com/juju/errors"
+	"github.com/pkg/errors"
 )
 
 type Distance int
@@ -132,8 +132,6 @@ func orderVectors(ids []string, vectors []Vector) []Vector {
 type Creator func(path, tablePrefix string, opts ...storage.Option) (Database, error)
 
 var creators = make(map[string]Creator)
-
-var ErrNoDatabase = errors.NotAssignedf("database")
 
 // Register a database creator.
 func Register(prefixes []string, creator Creator) {

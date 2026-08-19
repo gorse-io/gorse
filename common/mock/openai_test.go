@@ -20,7 +20,7 @@ import (
 	"testing"
 
 	"github.com/gorse-io/gorse/common/log"
-	"github.com/juju/errors"
+	"github.com/pkg/errors"
 	"github.com/sashabaranov/go-openai"
 	"github.com/stretchr/testify/suite"
 )

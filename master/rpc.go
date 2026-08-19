@@ -22,7 +22,7 @@ import (
 	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/protocol"
 	"github.com/gorse-io/gorse/storage/meta"
-	"github.com/juju/errors"
+	"github.com/pkg/errors"
 )
 
 // GetMeta returns latest configuration.

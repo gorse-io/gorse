@@ -16,6 +16,7 @@ package vectors
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -24,7 +25,7 @@ import (
 	"github.com/go-openapi/strfmt"
 	"github.com/google/uuid"
 	"github.com/gorse-io/gorse/storage"
-	"github.com/juju/errors"
+	"github.com/pkg/errors"
 	"github.com/weaviate/weaviate-go-client/v4/weaviate"
 	"github.com/weaviate/weaviate-go-client/v4/weaviate/fault"
 	"github.com/weaviate/weaviate-go-client/v4/weaviate/filters"
@@ -43,7 +44,7 @@ func init() {
 		database := new(Weaviate)
 		u, err := url.Parse(path)
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 		scheme := "http"
 		if strings.HasPrefix(path, storage.WeaviatesPrefix) {
@@ -55,7 +56,7 @@ func init() {
 		}
 		database.client, err = weaviate.NewClient(cfg)
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 		return database, nil
 	})
@@ -80,7 +81,7 @@ func (db *Weaviate) Close() error {
 func (db *Weaviate) ListCollections(ctx context.Context) ([]string, error) {
 	s, err := db.client.Schema().Getter().Do(ctx)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.WithStack(err)
 	}
 	var names []string
 	for _, class := range s.Classes {
@@ -94,9 +95,9 @@ func (db *Weaviate) DescribeCollection(ctx context.Context, name string) (*Colle
 	if err != nil {
 		var clientErr *fault.WeaviateClientError
 		if errors.As(err, &clientErr) && clientErr.StatusCode == http.StatusNotFound {
-			return nil, errors.NotFoundf("collection %s", name)
+			return nil, fmt.Errorf("collection %s: %w", name, storage.ErrNotFound)
 		}
-		return nil, errors.Trace(err)
+		return nil, errors.WithStack(err)
 	}
 	vectorIndexConfig, ok := class.VectorIndexConfig.(map[string]any)
 	if !ok {
@@ -111,11 +112,11 @@ func (db *Weaviate) DescribeCollection(ctx context.Context, name string) (*Colle
 	case "dot":
 		distance = Dot
 	default:
-		return nil, errors.NotSupportedf("distance method %s", distanceValue)
+		return nil, fmt.Errorf("distance method %s %w", distanceValue, storage.ErrNotSupported)
 	}
 	config, err := weaviateVectorConfig(vectorIndexConfig)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.WithStack(err)
 	}
 	return &CollectionInfo{
 		Name:         name,
@@ -134,7 +135,7 @@ func (db *Weaviate) AddCollection(ctx context.Context, name string, dimensions i
 	case Dot:
 		weaviateDistance = "dot"
 	default:
-		return errors.NotSupportedf("distance method")
+		return fmt.Errorf("distance method %w", storage.ErrNotSupported)
 	}
 
 	// Build VectorIndexConfig.
@@ -142,7 +143,7 @@ func (db *Weaviate) AddCollection(ctx context.Context, name string, dimensions i
 		"distance": weaviateDistance,
 	}
 	if err := weaviateApplyQuantization(vectorIndexConfig, config); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 
 	class := &models.Class{
@@ -172,7 +173,7 @@ func (db *Weaviate) AddCollection(ctx context.Context, name string, dimensions i
 		VectorIndexConfig: vectorIndexConfig,
 	}
 	err := db.client.Schema().ClassCreator().WithClass(class).Do(ctx)
-	return errors.Trace(err)
+	return errors.WithStack(err)
 }
 
 func weaviateApplyQuantization(vectorIndexConfig map[string]any, config VectorConfig) error {
@@ -184,7 +185,7 @@ func weaviateApplyQuantization(vectorIndexConfig map[string]any, config VectorCo
 			"enabled": true,
 		}
 		if config.Bits != 0 {
-			return errors.NotSupportedf("quantization bits for SQ")
+			return fmt.Errorf("quantization bits for SQ %w", storage.ErrNotSupported)
 		}
 		return nil
 	case QuantizationPQ:
@@ -192,7 +193,7 @@ func weaviateApplyQuantization(vectorIndexConfig map[string]any, config VectorCo
 			"enabled": true,
 		}
 		if config.Bits != 0 {
-			return errors.NotSupportedf("quantization bits for PQ")
+			return fmt.Errorf("quantization bits for PQ %w", storage.ErrNotSupported)
 		}
 		return nil
 	case QuantizationRQ:
@@ -205,7 +206,7 @@ func weaviateApplyQuantization(vectorIndexConfig map[string]any, config VectorCo
 		vectorIndexConfig["rq"] = rq
 		return nil
 	default:
-		return errors.NotSupportedf("quantization type %s for Weaviate", config.Type)
+		return fmt.Errorf("quantization type %s for Weaviate %w", config.Type, storage.ErrNotSupported)
 	}
 }
 
@@ -228,13 +229,13 @@ func weaviateVectorConfig(vectorIndexConfig map[string]any) (VectorConfig, error
 func (db *Weaviate) DeleteCollection(ctx context.Context, name string) error {
 	exists, err := db.client.Schema().ClassExistenceChecker().WithClassName(capitalize(name)).Do(ctx)
 	if err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	if !exists {
-		return errors.NotFoundf("collection %s", name)
+		return fmt.Errorf("collection %s: %w", name, storage.ErrNotFound)
 	}
 	err = db.client.Schema().ClassDeleter().WithClassName(capitalize(name)).Do(ctx)
-	return errors.Trace(err)
+	return errors.WithStack(err)
 }
 
 func (db *Weaviate) CountVectors(ctx context.Context, collection string) (int64, error) {
@@ -246,7 +247,7 @@ func (db *Weaviate) CountVectors(ctx context.Context, collection string) (int64,
 		}).
 		Do(ctx)
 	if err != nil {
-		return 0, errors.Trace(err)
+		return 0, errors.WithStack(err)
 	}
 	if len(result.Errors) > 0 {
 		return 0, errors.New(result.Errors[0].Message)
@@ -293,7 +294,7 @@ func (db *Weaviate) AddVectors(ctx context.Context, collection string, vectors [
 		})
 	}
 	_, err := db.client.Batch().ObjectsBatcher().WithObjects(objects...).Do(ctx)
-	return errors.Trace(err)
+	return errors.WithStack(err)
 }
 
 func (db *Weaviate) GetVectors(ctx context.Context, collection string, ids []string) ([]Vector, error) {
@@ -321,7 +322,7 @@ func (db *Weaviate) GetVectors(ctx context.Context, collection string, ids []str
 		WithLimit(len(ids)).
 		Do(ctx)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.WithStack(err)
 	}
 	if len(result.Errors) > 0 {
 		return nil, errors.New(result.Errors[0].Message)
@@ -353,7 +354,7 @@ func (db *Weaviate) GetVectors(ctx context.Context, collection string, ids []str
 		if timestamp, ok := properties[weaviatePayloadTimestampKey].(string); ok {
 			vector.Timestamp, err = time.Parse(time.RFC3339Nano, timestamp)
 			if err != nil {
-				return nil, errors.Trace(err)
+				return nil, errors.WithStack(err)
 			}
 		}
 		additional, ok := properties["_additional"].(map[string]any)
@@ -381,7 +382,7 @@ func (db *Weaviate) DeleteVectors(ctx context.Context, collection string, timest
 			WithOperator(filters.LessThan).
 			WithValueDate(timestamp)).
 		Do(ctx)
-	return errors.Trace(err)
+	return errors.WithStack(err)
 }
 
 func (db *Weaviate) QueryVectors(ctx context.Context, collection string, q Vector, categories []string, topK int) ([]ScoredVector, error) {
@@ -420,7 +421,7 @@ func (db *Weaviate) QueryVectors(ctx context.Context, collection string, q Vecto
 
 	result, err := builder.Do(ctx)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.WithStack(err)
 	}
 
 	if len(result.Errors) > 0 {

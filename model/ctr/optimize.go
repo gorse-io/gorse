@@ -21,7 +21,7 @@ import (
 	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/dataset"
 	"github.com/gorse-io/gorse/storage/meta"
-	"github.com/juju/errors"
+	"github.com/pkg/errors"
 	"golang.org/x/exp/maps"
 )
 
@@ -64,7 +64,7 @@ func (ms *ModelSearch) Objective(trial goptuna.Trial) (float64, error) {
 	}
 	modelType, err := trial.SuggestCategorical("Model", ms.modelTypes)
 	if err != nil {
-		return 0, errors.Trace(err)
+		return 0, errors.WithStack(err)
 	}
 	m := ms.modelCreators[modelType]()
 	m.SetParams(m.SuggestParams(trial))

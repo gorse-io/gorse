@@ -22,7 +22,7 @@ import (
 	"strings"
 
 	"github.com/go-sql-driver/mysql"
-	"github.com/juju/errors"
+	"github.com/pkg/errors"
 	"github.com/samber/lo"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -93,7 +93,7 @@ const (
 func AppendURLParams(rawURL string, params []lo.Tuple2[string, string]) (string, error) {
 	parsed, err := url.Parse(rawURL)
 	if err != nil {
-		return "", errors.Trace(err)
+		return "", errors.WithStack(err)
 	}
 	q := parsed.Query()
 	for _, tuple := range params {
@@ -106,7 +106,7 @@ func AppendURLParams(rawURL string, params []lo.Tuple2[string, string]) (string,
 func AppendMySQLParams(dsn string, params map[string]string) (string, error) {
 	cfg, err := mysql.ParseDSN(dsn)
 	if err != nil {
-		return "", errors.Trace(err)
+		return "", errors.WithStack(err)
 	}
 	if cfg.Params == nil {
 		cfg.Params = make(map[string]string)
@@ -122,18 +122,18 @@ func AppendMySQLParams(dsn string, params map[string]string) (string, error) {
 func ProbeMySQLIsolationVariableName(dsn string) (string, error) {
 	connection, err := sql.Open("mysql", dsn)
 	if err != nil {
-		return "", errors.Trace(err)
+		return "", errors.WithStack(err)
 	}
 	defer connection.Close()
 	rows, err := connection.Query("SHOW VARIABLES WHERE variable_name = 'transaction_isolation' OR variable_name = 'tx_isolation'")
 	if err != nil {
-		return "", errors.Trace(err)
+		return "", errors.WithStack(err)
 	}
 	defer rows.Close()
 	var name, value string
 	if rows.Next() {
 		if err = rows.Scan(&name, &value); err != nil {
-			return "", errors.Trace(err)
+			return "", errors.WithStack(err)
 		}
 	}
 	return name, nil

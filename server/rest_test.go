@@ -28,6 +28,7 @@ import (
 	"github.com/gorse-io/gorse/common/expression"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/config"
+	"github.com/gorse-io/gorse/storage"
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
 	"github.com/samber/lo/mutable"
@@ -2176,8 +2177,8 @@ func (suite *ServerTestSuite) TestHealth() {
 		Status(http.StatusOK).
 		Body(suite.marshal(HealthStatus{
 			Ready:               false,
-			DataStoreError:      data.ErrNoDatabase,
-			CacheStoreError:     cache.ErrNoDatabase,
+			DataStoreError:      storage.ErrNoDatabase,
+			CacheStoreError:     storage.ErrNoDatabase,
 			DataStoreConnected:  false,
 			CacheStoreConnected: false,
 		})).
@@ -2189,8 +2190,8 @@ func (suite *ServerTestSuite) TestHealth() {
 		Status(http.StatusServiceUnavailable).
 		Body(suite.marshal(HealthStatus{
 			Ready:               false,
-			DataStoreError:      data.ErrNoDatabase,
-			CacheStoreError:     cache.ErrNoDatabase,
+			DataStoreError:      storage.ErrNoDatabase,
+			CacheStoreError:     storage.ErrNoDatabase,
 			DataStoreConnected:  false,
 			CacheStoreConnected: false,
 		})).

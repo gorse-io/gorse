@@ -19,7 +19,7 @@ import (
 	"time"
 
 	"github.com/gorse-io/gorse/storage"
-	"github.com/juju/errors"
+	"github.com/pkg/errors"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -36,11 +36,11 @@ func init() {
 		clientOpts.ApplyURI(path)
 		var err error
 		if database.client, err = mongo.Connect(context.Background(), clientOpts); err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 		// parse DSN and extract database name
 		if cs, err := connstring.ParseAndValidate(path); err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		} else {
 			database.dbName = cs.Database
 			database.TablePrefix = storage.TablePrefix(tablePrefix)
@@ -62,7 +62,7 @@ func (m MongoDB) Init() error {
 	var hasValues bool
 	collections, err := d.ListCollectionNames(ctx, bson.M{})
 	if err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	for _, collectionName := range collections {
 		switch collectionName {
@@ -73,7 +73,7 @@ func (m MongoDB) Init() error {
 	// create collections
 	if !hasValues {
 		if err = d.CreateCollection(ctx, m.ValuesTable()); err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 	}
 	_, err = d.Collection(m.DocumentTable()).Indexes().CreateMany(ctx, []mongo.IndexModel{
@@ -95,7 +95,7 @@ func (m MongoDB) Init() error {
 		},
 	})
 	if err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	_, err = d.Collection(m.PointsTable()).Indexes().CreateMany(ctx, []mongo.IndexModel{
 		{
@@ -107,7 +107,7 @@ func (m MongoDB) Init() error {
 		},
 	})
 	if err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	return nil
 }
@@ -127,16 +127,16 @@ func (m MongoDB) Scan(work func(string) error) error {
 	valuesCollection := m.client.Database(m.dbName).Collection(m.ValuesTable())
 	valuesIterator, err := valuesCollection.Find(ctx, bson.M{})
 	if err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	defer valuesIterator.Close(ctx)
 	for valuesIterator.Next(ctx) {
 		var row bson.Raw
 		if err = valuesIterator.Decode(&row); err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		if err = work(row.Lookup("_id").StringValue()); err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 	}
 
@@ -149,7 +149,7 @@ func (m MongoDB) Purge() error {
 		c := m.client.Database(m.dbName).Collection(tableName)
 		_, err := c.DeleteMany(context.Background(), bson.D{})
 		if err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 	}
 	return nil
@@ -168,7 +168,7 @@ func (m MongoDB) Set(ctx context.Context, values ...Value) error {
 			SetUpdate(bson.M{"$set": bson.M{"_id": value.name, "value": value.value}}))
 	}
 	_, err := c.BulkWrite(ctx, models)
-	return errors.Trace(err)
+	return errors.WithStack(err)
 }
 
 func (m MongoDB) Get(ctx context.Context, name string) *ReturnValue {
@@ -177,10 +177,10 @@ func (m MongoDB) Get(ctx context.Context, name string) *ReturnValue {
 	if err := r.Err(); err == mongo.ErrNoDocuments {
 		return &ReturnValue{value: "", exists: false}
 	} else if err != nil {
-		return &ReturnValue{err: errors.Trace(err), exists: false}
+		return &ReturnValue{err: errors.WithStack(err), exists: false}
 	}
 	if raw, err := r.DecodeBytes(); err != nil {
-		return &ReturnValue{err: errors.Trace(err), exists: false}
+		return &ReturnValue{err: errors.WithStack(err), exists: false}
 	} else {
 		return &ReturnValue{value: raw.Lookup("value").StringValue(), exists: true}
 	}
@@ -189,7 +189,7 @@ func (m MongoDB) Get(ctx context.Context, name string) *ReturnValue {
 func (m MongoDB) Delete(ctx context.Context, name string) error {
 	c := m.client.Database(m.dbName).Collection(m.ValuesTable())
 	_, err := c.DeleteOne(ctx, bson.M{"_id": bson.M{"$eq": name}})
-	return errors.Trace(err)
+	return errors.WithStack(err)
 }
 
 func (m MongoDB) AddScores(ctx context.Context, collection, subset string, documents []Score) error {
@@ -213,7 +213,7 @@ func (m MongoDB) AddScores(ctx context.Context, collection, subset string, docum
 			}}))
 	}
 	_, err := m.client.Database(m.dbName).Collection(m.DocumentTable()).BulkWrite(ctx, models)
-	return errors.Trace(err)
+	return errors.WithStack(err)
 }
 
 func (m MongoDB) SearchScores(ctx context.Context, collection, subset string, query []string, begin, end int) ([]Score, error) {
@@ -231,13 +231,13 @@ func (m MongoDB) SearchScores(ctx context.Context, collection, subset string, qu
 	}
 	cur, err := m.client.Database(m.dbName).Collection(m.DocumentTable()).Find(ctx, filter, opt)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.WithStack(err)
 	}
 	documents := make([]Score, 0)
 	for cur.Next(ctx) {
 		var document Score
 		if err = cur.Decode(&document); err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 		documents = append(documents, document)
 	}
@@ -269,12 +269,12 @@ func (m MongoDB) UpdateScores(ctx context.Context, collections []string, subset 
 		update = append(update, bson.E{Key: "$set", Value: bson.M{"score": *patch.Score}})
 	}
 	_, err := m.client.Database(m.dbName).Collection(m.DocumentTable()).UpdateMany(ctx, filter, update)
-	return errors.Trace(err)
+	return errors.WithStack(err)
 }
 
 func (m MongoDB) DeleteScores(ctx context.Context, collections []string, condition ScoreCondition) error {
 	if err := condition.Check(); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	filter := bson.M{"collection": bson.M{"$in": collections}}
 	if condition.Subset != nil {
@@ -287,20 +287,20 @@ func (m MongoDB) DeleteScores(ctx context.Context, collections []string, conditi
 		filter["timestamp"] = bson.M{"$lt": condition.Before}
 	}
 	_, err := m.client.Database(m.dbName).Collection(m.DocumentTable()).DeleteMany(ctx, filter)
-	return errors.Trace(err)
+	return errors.WithStack(err)
 }
 
 func (m MongoDB) ScanScores(ctx context.Context, callback func(collection string, id string, subset string, timestamp time.Time) error) error {
 	cursor, err := m.client.Database(m.dbName).Collection(m.DocumentTable()).Find(ctx, bson.M{})
 	if err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	defer cursor.Close(ctx)
 	for cursor.Next(ctx) {
 		// check context cancellation
 		select {
 		case <-ctx.Done():
-			return errors.Trace(ctx.Err())
+			return errors.WithStack(ctx.Err())
 		default:
 		}
 		// decode document
@@ -309,7 +309,7 @@ func (m MongoDB) ScanScores(ctx context.Context, callback func(collection string
 		id := cursor.Current.Lookup("id").StringValue()
 		timestamp := cursor.Current.Lookup("timestamp").Time()
 		if err = callback(collection, id, subset, timestamp); err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 	}
 	return nil
@@ -329,7 +329,7 @@ func (m MongoDB) AddTimeSeriesPoints(ctx context.Context, points []TimeSeriesPoi
 			}}))
 	}
 	_, err := m.client.Database(m.dbName).Collection(m.PointsTable()).BulkWrite(ctx, models)
-	return errors.Trace(err)
+	return errors.WithStack(err)
 }
 
 func (m MongoDB) GetTimeSeriesPoints(ctx context.Context, name string, begin, end time.Time, duration time.Duration) ([]TimeSeriesPoint, error) {
@@ -357,19 +357,19 @@ func (m MongoDB) GetTimeSeriesPoints(ctx context.Context, name string, begin, en
 		{"$sort": bson.M{"timestamp": 1}},
 	})
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.WithStack(err)
 	}
 	defer cursor.Close(ctx)
 	points := []TimeSeriesPoint{}
 	for cursor.Next(ctx) {
 		var point TimeSeriesPoint
 		if err = cursor.Decode(&point); err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 		points = append(points, point)
 	}
 	if err = cursor.Err(); err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.WithStack(err)
 	}
 	return points, nil
 }
