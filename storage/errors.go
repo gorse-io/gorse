@@ -17,9 +17,9 @@ package storage
 import "github.com/pkg/errors"
 
 var (
-	ErrNotFound      = errors.New("not found")
-	ErrNoDatabase    = errors.New("database not assigned")
-	ErrNotValid      = errors.New("not valid")
-	ErrNotSupported  = errors.New("not supported")
-	ErrAlreadyExists = errors.New("already exists")
+	ErrNotFound        = errors.New("not found")
+	ErrNoDatabase      = errors.New("database not assigned")
+	ErrInvalidArgument = errors.New("invalid argument")
+	ErrNotSupported    = errors.New("not supported")
+	ErrAlreadyExists   = errors.New("already exists")
 )

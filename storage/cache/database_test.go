@@ -280,7 +280,7 @@ func (suite *baseTestSuite) TestDocument() {
 
 	// delete nothing
 	err = suite.DeleteScores(ctx, []string{"a"}, ScoreCondition{})
-	suite.ErrorIs(err, storage.ErrNotValid)
+	suite.ErrorIs(err, storage.ErrInvalidArgument)
 	// delete by value
 	err = suite.DeleteScores(ctx, []string{"a"}, ScoreCondition{Id: new("5")})
 	suite.NoError(err)

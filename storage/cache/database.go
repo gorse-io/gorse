@@ -209,7 +209,7 @@ type ScoreCondition struct {
 
 func (condition *ScoreCondition) Check() error {
 	if condition.Id == nil && condition.Before == nil && condition.Subset == nil {
-		return fmt.Errorf("document condition: %w", storage.ErrNotValid)
+		return fmt.Errorf("document condition: %w", storage.ErrInvalidArgument)
 	}
 	return nil
 }
