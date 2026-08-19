@@ -16,6 +16,7 @@ package logics
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -24,6 +25,7 @@ import (
 	"github.com/gorse-io/gorse/common/heap"
 	"github.com/gorse-io/gorse/common/util"
 	"github.com/gorse-io/gorse/config"
+	"github.com/gorse-io/gorse/storage"
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
 	"github.com/gorse-io/gorse/storage/vectors"
@@ -243,14 +245,14 @@ func QueryItemToItem(ctx context.Context, vectorClient vectors.Database, itemToI
 	collection := vectors.ItemToItemCollection(itemToItemConfig.Name)
 	queries, err := vectorClient.GetVectors(ctx, collection, []string{itemId})
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.WithStack(err)
 	}
 	if len(queries) == 0 {
 		return nil, nil
 	}
 	neighbors, err := vectorClient.QueryVectors(ctx, collection, queries[0], categories, n+1)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.WithStack(err)
 	}
 	distance := vectors.Dot
 	if itemToItemConfig.Type == "embedding" {
@@ -287,7 +289,7 @@ func (r *Recommender) recommendItemToItem(name string) RecommenderFunc {
 			}
 		}
 		if itemToItemConfig == nil {
-			return nil, "", errors.NotFoundf("item-to-item recommender %s", name)
+			return nil, "", fmt.Errorf("item-to-item recommender %s %w", name, storage.ErrNotFound)
 		}
 		data.SortFeedbacks(r.userFeedback)
 		userFeedback := make([]data.Feedback, 0, r.config.CacheSize)
@@ -328,14 +330,14 @@ func QueryUserToUser(ctx context.Context, vectorClient vectors.Database, userToU
 	collection := vectors.UserToUserCollection(userToUserConfig.Name)
 	queries, err := vectorClient.GetVectors(ctx, collection, []string{userId})
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.WithStack(err)
 	}
 	if len(queries) == 0 {
 		return nil, nil
 	}
 	neighbors, err := vectorClient.QueryVectors(ctx, collection, queries[0], nil, n+1)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.WithStack(err)
 	}
 	distance := vectors.Dot
 	if userToUserConfig.Type == "embedding" {
@@ -372,7 +374,7 @@ func (r *Recommender) recommendUserToUser(name string) RecommenderFunc {
 			}
 		}
 		if userToUserConfig == nil {
-			return nil, "", errors.NotFoundf("user-to-user recommender %s", name)
+			return nil, "", fmt.Errorf("user-to-user recommender %s %w", name, storage.ErrNotFound)
 		}
 		scores := make(map[string]float64)
 		// load similar users

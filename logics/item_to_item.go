@@ -28,7 +28,7 @@ import (
 	"github.com/gorse-io/gorse/dataset"
 	"github.com/gorse-io/gorse/storage/data"
 	"github.com/gorse-io/gorse/storage/vectors"
-	"github.com/juju/errors"
+	"github.com/pkg/errors"
 	"go.uber.org/zap"
 )
 

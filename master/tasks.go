@@ -38,7 +38,6 @@ import (
 	"github.com/gorse-io/gorse/model"
 	"github.com/gorse-io/gorse/model/cf"
 	"github.com/gorse-io/gorse/model/ctr"
-	"github.com/gorse-io/gorse/storage"
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
 	"github.com/gorse-io/gorse/storage/meta"
@@ -818,9 +817,12 @@ func (m *Master) updateItemToItem(parent context.Context, dataset *dataset.Datas
 	}); err != nil {
 		return errors.WithStack(err)
 	}
-	for _, recommender := range itemToItemRecommenders {
+	for i, recommender := range itemToItemRecommenders {
 		if err := recommender.Finish(); err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
+		}
+		if err := m.VectorClient.DeleteVectors(ctx, vectors.ItemToItemCollection(m.Config.Recommend.ItemToItem[i].Name), dataset.GetTimestamp()); err != nil {
+			return errors.WithStack(err)
 		}
 	}
 	return nil
@@ -863,9 +865,12 @@ func (m *Master) updateUserToUser(parent context.Context, dataset *dataset.Datas
 	}); err != nil {
 		return errors.WithStack(err)
 	}
-	for _, recommender := range userToUserRecommenders {
+	for i, recommender := range userToUserRecommenders {
 		if err := recommender.Finish(); err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
+		}
+		if err := m.VectorClient.DeleteVectors(ctx, vectors.UserToUserCollection(m.Config.Recommend.UserToUser[i].Name), dataset.GetTimestamp()); err != nil {
+			return errors.WithStack(err)
 		}
 	}
 	return nil

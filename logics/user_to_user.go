@@ -29,7 +29,6 @@ import (
 	"github.com/gorse-io/gorse/storage/data"
 	"github.com/gorse-io/gorse/storage/vectors"
 	"github.com/pkg/errors"
-	"github.com/samber/lo"
 	"go.uber.org/zap"
 )
 

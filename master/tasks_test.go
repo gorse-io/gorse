@@ -252,9 +252,15 @@ func (s *MasterTestSuite) TestUpdateEmbeddingItemToItemWritesVectors() {
 
 	s.Config.Recommend.CacheSize = 2
 	s.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "embedding", Type: "embedding", Column: "item.Labels.embedding"}}
+	collection := vectors.ItemToItemCollection("embedding")
+	s.NoError(s.VectorClient.AddCollection(ctx, collection, 2, vectors.Euclidean, vectors.VectorConfig{}))
+	s.NoError(s.VectorClient.AddVectors(ctx, collection, []vectors.Vector{{Id: "stale", Values: []float32{1, 1}, Timestamp: now.Add(-time.Hour)}}))
 	s.NoError(s.updateItemToItem(ctx, dataSet))
 
-	results, err := s.VectorClient.QueryVectors(ctx, vectors.ItemToItemCollection("embedding"), vectors.Vector{Values: []float32{0, 0}}, []string{"movie"}, 10)
+	stale, err := s.VectorClient.GetVectors(ctx, collection, []string{"stale"})
+	s.NoError(err)
+	s.Empty(stale)
+	results, err := s.VectorClient.QueryVectors(ctx, collection, vectors.Vector{Values: []float32{0, 0}}, []string{"movie"}, 10)
 	s.NoError(err)
 	s.Equal([]string{"near"}, lo.Map(results, func(result vectors.ScoredVector, _ int) string { return result.Id }))
 
@@ -306,7 +312,13 @@ func (s *MasterTestSuite) TestUserToUser() {
 
 	// similar items (common users)
 	s.Config.Recommend.UserToUser = []config.UserToUserConfig{{Name: "items", Type: "items"}}
+	collection := vectors.UserToUserCollection("items")
+	s.NoError(s.VectorClient.AddCollection(ctx, collection, 0, vectors.Dot, vectors.VectorConfig{}))
+	s.NoError(s.VectorClient.AddVectors(ctx, collection, []vectors.Vector{{Id: "stale", Indices: []uint32{0}, Values: []float32{1}, Timestamp: dataSet.GetTimestamp().Add(-time.Hour)}}))
 	s.NoError(s.updateUserToUser(s.T().Context(), dataSet))
+	stale, err := s.VectorClient.GetVectors(ctx, collection, []string{"stale"})
+	s.NoError(err)
+	s.Empty(stale)
 	similar, err := logics.QueryUserToUser(ctx, s.VectorClient, s.Config.Recommend.UserToUser[0], "9", s.Config.Recommend.CacheSize)
 	s.NoError(err)
 	s.Equal([]string{"7", "5", "3"}, cache.ConvertDocumentsToValues(similar))

@@ -16,13 +16,15 @@ package logics
 
 import (
 	"context"
+	"fmt"
 	"math"
 	"sync"
 	"time"
 
 	"github.com/gorse-io/gorse/common/log"
+	"github.com/gorse-io/gorse/storage"
 	"github.com/gorse-io/gorse/storage/vectors"
-	"github.com/juju/errors"
+	"github.com/pkg/errors"
 	"go.uber.org/zap"
 )
 
@@ -135,13 +137,6 @@ func (w *similarityVectorWriter) Finish() error {
 		w.err = err
 		return err
 	}
-	if !w.collectionExists {
-		return nil
-	}
-	if err := w.client.DeleteVectors(w.ctx, w.collection, w.timestamp); err != nil {
-		w.err = errors.Trace(err)
-		return w.err
-	}
 	return nil
 }
 
@@ -156,27 +151,27 @@ func (w *similarityVectorWriter) ensureCollectionLocked() error {
 		return nil
 	}
 	if w.client == nil {
-		return errors.NotAssignedf("vector database")
+		return fmt.Errorf("vector database %w", storage.ErrNoDatabase)
 	}
 	info, err := w.client.DescribeCollection(w.ctx, w.collection)
-	if errors.Is(err, errors.NotFound) {
+	if errors.Is(err, storage.ErrNotFound) {
 		info = nil
 	} else if err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	if info != nil && (info.Dimension != w.dimension || info.Distance != w.distance || info.Type != w.vectorConfig.Type || info.Bits != w.vectorConfig.Bits) {
 		log.Logger().Warn("recreating similarity vector collection",
 			zap.String("collection", w.collection),
 			zap.Int("dimension", w.dimension),
 			zap.Int("distance", int(w.distance)))
-		if err = w.client.DeleteCollection(w.ctx, w.collection); err != nil && !errors.Is(err, errors.NotFound) {
-			return errors.Trace(err)
+		if err = w.client.DeleteCollection(w.ctx, w.collection); err != nil && !errors.Is(err, storage.ErrNotFound) {
+			return errors.WithStack(err)
 		}
 		info = nil
 	}
 	if info == nil {
 		if err = w.client.AddCollection(w.ctx, w.collection, w.dimension, w.distance, w.vectorConfig); err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 	}
 	w.collectionExists = true
@@ -188,7 +183,7 @@ func (w *similarityVectorWriter) flushLocked() error {
 		return nil
 	}
 	if err := w.client.AddVectors(w.ctx, w.collection, w.buffer); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	w.buffer = w.buffer[:0]
 	return nil
