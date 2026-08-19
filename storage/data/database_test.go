@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/gorse-io/gorse/storage"
 	"reflect"
 	"strconv"
 	"testing"
@@ -216,7 +217,7 @@ func (suite *baseTestSuite) TestUsers() {
 	err = suite.Database.DeleteUser(ctx, "0")
 	suite.NoError(err)
 	_, err = suite.Database.GetUser(ctx, "0")
-	suite.ErrorIs(err, ErrUserNotExist)
+	suite.ErrorIs(err, storage.ErrNotFound)
 	// test override
 	err = suite.Database.BatchInsertUsers(ctx, []User{{UserId: "1", Comment: "override"}})
 	suite.NoError(err)
@@ -567,7 +568,7 @@ func (suite *baseTestSuite) TestItems() {
 	err = suite.Database.DeleteItem(ctx, "0")
 	suite.NoError(err)
 	_, err = suite.Database.GetItem(ctx, "0")
-	suite.ErrorIs(err, ErrItemNotExist)
+	suite.ErrorIs(err, storage.ErrNotFound)
 
 	// test override
 	err = suite.Database.BatchInsertItems(ctx, []Item{{ItemId: "4", IsHidden: false, Categories: []string{"b"}, Labels: []string{"o"}, Comment: "override"}})

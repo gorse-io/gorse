@@ -95,7 +95,7 @@ func (db *Weaviate) DescribeCollection(ctx context.Context, name string) (*Colle
 	if err != nil {
 		var clientErr *fault.WeaviateClientError
 		if errors.As(err, &clientErr) && clientErr.StatusCode == http.StatusNotFound {
-			return nil, fmt.Errorf("collection %s: %w", name, ErrNotFound)
+			return nil, fmt.Errorf("collection %s: %w", name, storage.ErrNotFound)
 		}
 		return nil, errors.WithStack(err)
 	}
@@ -112,7 +112,7 @@ func (db *Weaviate) DescribeCollection(ctx context.Context, name string) (*Colle
 	case "dot":
 		distance = Dot
 	default:
-		return nil, fmt.Errorf("distance method %s %w", distanceValue, ErrNotSupported)
+		return nil, fmt.Errorf("distance method %s %w", distanceValue, storage.ErrNotSupported)
 	}
 	config, err := weaviateVectorConfig(vectorIndexConfig)
 	if err != nil {
@@ -135,7 +135,7 @@ func (db *Weaviate) AddCollection(ctx context.Context, name string, dimensions i
 	case Dot:
 		weaviateDistance = "dot"
 	default:
-		return fmt.Errorf("distance method %w", ErrNotSupported)
+		return fmt.Errorf("distance method %w", storage.ErrNotSupported)
 	}
 
 	// Build VectorIndexConfig.
@@ -185,7 +185,7 @@ func weaviateApplyQuantization(vectorIndexConfig map[string]any, config VectorCo
 			"enabled": true,
 		}
 		if config.Bits != 0 {
-			return fmt.Errorf("quantization bits for SQ %w", ErrNotSupported)
+			return fmt.Errorf("quantization bits for SQ %w", storage.ErrNotSupported)
 		}
 		return nil
 	case QuantizationPQ:
@@ -193,7 +193,7 @@ func weaviateApplyQuantization(vectorIndexConfig map[string]any, config VectorCo
 			"enabled": true,
 		}
 		if config.Bits != 0 {
-			return fmt.Errorf("quantization bits for PQ %w", ErrNotSupported)
+			return fmt.Errorf("quantization bits for PQ %w", storage.ErrNotSupported)
 		}
 		return nil
 	case QuantizationRQ:
@@ -206,7 +206,7 @@ func weaviateApplyQuantization(vectorIndexConfig map[string]any, config VectorCo
 		vectorIndexConfig["rq"] = rq
 		return nil
 	default:
-		return fmt.Errorf("quantization type %s for Weaviate %w", config.Type, ErrNotSupported)
+		return fmt.Errorf("quantization type %s for Weaviate %w", config.Type, storage.ErrNotSupported)
 	}
 }
 
@@ -232,7 +232,7 @@ func (db *Weaviate) DeleteCollection(ctx context.Context, name string) error {
 		return errors.WithStack(err)
 	}
 	if !exists {
-		return fmt.Errorf("collection %s: %w", name, ErrNotFound)
+		return fmt.Errorf("collection %s: %w", name, storage.ErrNotFound)
 	}
 	err = db.client.Schema().ClassDeleter().WithClassName(capitalize(name)).Do(ctx)
 	return errors.WithStack(err)

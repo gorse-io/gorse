@@ -15,6 +15,7 @@
 package vectors
 
 import (
+	"github.com/gorse-io/gorse/storage"
 	"os"
 	"testing"
 
@@ -45,9 +46,9 @@ func (suite *MilvusTestSuite) SetupSuite() {
 func (suite *MilvusTestSuite) TestInvalidSparseCollection() {
 	ctx := suite.T().Context()
 	err := suite.Database.AddCollection(ctx, "test_invalid_sparse", 0, Cosine, VectorConfig{})
-	suite.ErrorIs(err, ErrNotSupported)
+	suite.ErrorIs(err, storage.ErrNotSupported)
 	_, err = suite.Database.DescribeCollection(ctx, "test_invalid_sparse")
-	suite.ErrorIs(err, ErrNotFound)
+	suite.ErrorIs(err, storage.ErrNotFound)
 }
 
 func (suite *MilvusTestSuite) TestQuantization() {

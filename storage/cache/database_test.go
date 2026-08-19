@@ -15,6 +15,7 @@ package cache
 
 import (
 	"context"
+	"github.com/gorse-io/gorse/storage"
 	"math"
 	"math/rand"
 	"os"
@@ -279,7 +280,7 @@ func (suite *baseTestSuite) TestDocument() {
 
 	// delete nothing
 	err = suite.DeleteScores(ctx, []string{"a"}, ScoreCondition{})
-	suite.ErrorIs(err, ErrNotValid)
+	suite.ErrorIs(err, storage.ErrNotValid)
 	// delete by value
 	err = suite.DeleteScores(ctx, []string{"a"}, ScoreCondition{Id: new("5")})
 	suite.NoError(err)

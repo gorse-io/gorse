@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/gorse-io/gorse/storage"
 	"io"
 	"net/http"
 	"net/http/pprof"
@@ -1246,7 +1247,7 @@ func (s *RestServer) getUser(request *restful.Request, response *restful.Respons
 	// get user
 	user, err := s.DataClient.GetUser(ctx, userId)
 	if err != nil {
-		if errors.Is(err, data.ErrUserNotExist) {
+		if errors.Is(err, storage.ErrNotFound) {
 			PageNotFound(response, err)
 		} else {
 			InternalServerError(response, err)
@@ -1631,7 +1632,7 @@ func (s *RestServer) getItem(request *restful.Request, response *restful.Respons
 	// Get item
 	item, err := s.DataClient.GetItem(ctx, itemId)
 	if err != nil {
-		if errors.Is(err, data.ErrItemNotExist) {
+		if errors.Is(err, storage.ErrNotFound) {
 			PageNotFound(response, err)
 		} else {
 			InternalServerError(response, err)

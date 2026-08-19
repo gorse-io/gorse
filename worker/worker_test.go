@@ -19,6 +19,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/gorse-io/gorse/storage"
 	"io"
 	"math/rand"
 	"net"
@@ -955,8 +956,8 @@ func (suite *WorkerTestSuite) TestHealth() {
 	suite.Equal(http.StatusOK, w.Code)
 	suite.Equal(marshal(suite.T(), HealthStatus{
 		Ready:               false,
-		DataStoreError:      data.ErrNoDatabase,
-		CacheStoreError:     cache.ErrNoDatabase,
+		DataStoreError:      storage.ErrNoDatabase,
+		CacheStoreError:     storage.ErrNoDatabase,
 		DataStoreConnected:  false,
 		CacheStoreConnected: false,
 	}), w.Body.String())

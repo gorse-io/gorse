@@ -15,6 +15,7 @@
 package vectors
 
 import (
+	"github.com/gorse-io/gorse/storage"
 	"testing"
 	"time"
 
@@ -28,47 +29,47 @@ func TestNoDatabase(t *testing.T) {
 	var database NoDatabase
 
 	t.Run("lifecycle", func(t *testing.T) {
-		assert.ErrorIs(t, database.Init(), ErrNoDatabase)
+		assert.ErrorIs(t, database.Init(), storage.ErrNoDatabase)
 		assert.NoError(t, database.Optimize(ctx, "test"))
-		assert.ErrorIs(t, database.Close(), ErrNoDatabase)
+		assert.ErrorIs(t, database.Close(), storage.ErrNoDatabase)
 	})
 
 	t.Run("collections", func(t *testing.T) {
 		collections, err := database.ListCollections(ctx)
-		assert.ErrorIs(t, err, ErrNoDatabase)
+		assert.ErrorIs(t, err, storage.ErrNoDatabase)
 		assert.Nil(t, collections)
 
 		info, err := database.DescribeCollection(ctx, "test")
-		assert.ErrorIs(t, err, ErrNoDatabase)
+		assert.ErrorIs(t, err, storage.ErrNoDatabase)
 		assert.Nil(t, info)
 
-		assert.ErrorIs(t, database.AddCollection(ctx, "test", 4, Cosine, VectorConfig{}), ErrNoDatabase)
-		assert.ErrorIs(t, database.AddCollection(ctx, "test", 4, Dot, VectorConfig{}), ErrNoDatabase)
-		assert.ErrorIs(t, database.DeleteCollection(ctx, "test"), ErrNoDatabase)
-		assert.ErrorIs(t, database.DeleteCollection(ctx, "missing"), ErrNoDatabase)
+		assert.ErrorIs(t, database.AddCollection(ctx, "test", 4, Cosine, VectorConfig{}), storage.ErrNoDatabase)
+		assert.ErrorIs(t, database.AddCollection(ctx, "test", 4, Dot, VectorConfig{}), storage.ErrNoDatabase)
+		assert.ErrorIs(t, database.DeleteCollection(ctx, "test"), storage.ErrNoDatabase)
+		assert.ErrorIs(t, database.DeleteCollection(ctx, "missing"), storage.ErrNoDatabase)
 	})
 
 	t.Run("vectors", func(t *testing.T) {
 		count, err := database.CountVectors(ctx, "test")
-		assert.ErrorIs(t, err, ErrNoDatabase)
+		assert.ErrorIs(t, err, storage.ErrNoDatabase)
 		assert.Zero(t, count)
 
 		assert.ErrorIs(t, database.AddVectors(ctx, "test", []Vector{
 			{Id: "a", Values: []float32{1, 0, 0, 0}, Categories: []string{"cat-a"}},
-		}), ErrNoDatabase)
-		assert.ErrorIs(t, database.AddVectors(ctx, "test", nil), ErrNoDatabase)
+		}), storage.ErrNoDatabase)
+		assert.ErrorIs(t, database.AddVectors(ctx, "test", nil), storage.ErrNoDatabase)
 		vectors, err := database.GetVectors(ctx, "test", []string{"a"})
-		assert.ErrorIs(t, err, ErrNoDatabase)
+		assert.ErrorIs(t, err, storage.ErrNoDatabase)
 		assert.Nil(t, vectors)
-		assert.ErrorIs(t, database.DeleteVectors(ctx, "test", time.Now()), ErrNoDatabase)
-		assert.ErrorIs(t, database.DeleteVectors(ctx, "missing", time.Time{}), ErrNoDatabase)
+		assert.ErrorIs(t, database.DeleteVectors(ctx, "test", time.Now()), storage.ErrNoDatabase)
+		assert.ErrorIs(t, database.DeleteVectors(ctx, "missing", time.Time{}), storage.ErrNoDatabase)
 
 		results, err := database.QueryVectors(ctx, "test", Vector{Values: []float32{1, 0, 0, 0}}, []string{"cat-a"}, 10)
-		assert.ErrorIs(t, err, ErrNoDatabase)
+		assert.ErrorIs(t, err, storage.ErrNoDatabase)
 		assert.Nil(t, results)
 
 		results, err = database.QueryVectors(ctx, "missing", Vector{}, nil, 0)
-		assert.ErrorIs(t, err, ErrNoDatabase)
+		assert.ErrorIs(t, err, storage.ErrNoDatabase)
 		assert.Nil(t, results)
 	})
 }

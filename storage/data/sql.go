@@ -1052,7 +1052,7 @@ func (d *SQLDatabase) GetItem(ctx context.Context, itemId string) (Item, error) 
 		}
 		return item, nil
 	}
-	return Item{}, errors.Wrap(ErrItemNotExist, itemId)
+	return Item{}, fmt.Errorf("item %s: %w", itemId, storage.ErrNotFound)
 }
 
 // SearchItems searches items from the database.
@@ -1389,7 +1389,7 @@ func (d *SQLDatabase) GetUser(ctx context.Context, userId string) (User, error) 
 		}
 		return user, nil
 	}
-	return User{}, errors.Wrap(ErrUserNotExist, userId)
+	return User{}, fmt.Errorf("user %s: %w", userId, storage.ErrNotFound)
 }
 
 // ModifyUser modify a user in MySQL.

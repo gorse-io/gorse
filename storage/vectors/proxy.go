@@ -17,6 +17,7 @@ package vectors
 import (
 	"context"
 	"fmt"
+	"github.com/gorse-io/gorse/storage"
 	"net"
 	"time"
 
@@ -59,7 +60,7 @@ func (p *ProxyServer) ListCollections(ctx context.Context, _ *protocol.ListColle
 func (p *ProxyServer) DescribeCollection(ctx context.Context, request *protocol.DescribeCollectionRequest) (*protocol.DescribeCollectionResponse, error) {
 	info, err := p.database.DescribeCollection(ctx, request.GetName())
 	if err != nil {
-		if errors.Is(err, ErrNotFound) {
+		if errors.Is(err, storage.ErrNotFound) {
 			return nil, status.Error(codes.NotFound, err.Error())
 		}
 		return nil, err
@@ -221,7 +222,7 @@ func (p ProxyClient) DescribeCollection(ctx context.Context, name string) (*Coll
 	resp, err := p.VectorStoreClient.DescribeCollection(ctx, &protocol.DescribeCollectionRequest{Name: name})
 	if err != nil {
 		if status.Code(err) == codes.NotFound {
-			return nil, fmt.Errorf("collection %s: %w", name, ErrNotFound)
+			return nil, fmt.Errorf("collection %s: %w", name, storage.ErrNotFound)
 		}
 		return nil, err
 	}
@@ -361,7 +362,7 @@ func distanceToProtoDistance(distance Distance) (protocol.Distance, error) {
 	case Dot:
 		return protocol.Distance_Dot, nil
 	default:
-		return protocol.Distance_Unknown, fmt.Errorf("distance method %w", ErrNotSupported)
+		return protocol.Distance_Unknown, fmt.Errorf("distance method %w", storage.ErrNotSupported)
 	}
 }
 
@@ -374,7 +375,7 @@ func protoDistanceToDistance(distance protocol.Distance) (Distance, error) {
 	case protocol.Distance_Dot:
 		return Dot, nil
 	default:
-		return Cosine, fmt.Errorf("distance method %w", ErrNotSupported)
+		return Cosine, fmt.Errorf("distance method %w", storage.ErrNotSupported)
 	}
 }
 

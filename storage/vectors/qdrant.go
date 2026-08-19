@@ -85,7 +85,7 @@ func (db *Qdrant) DescribeCollection(ctx context.Context, name string) (*Collect
 	info, err := db.client.GetCollectionInfo(ctx, name)
 	if err != nil {
 		if status.Code(err) == codes.NotFound {
-			return nil, fmt.Errorf("collection %s: %w", name, ErrNotFound)
+			return nil, fmt.Errorf("collection %s: %w", name, storage.ErrNotFound)
 		}
 		return nil, errors.WithStack(err)
 	}
@@ -95,7 +95,7 @@ func (db *Qdrant) DescribeCollection(ctx context.Context, name string) (*Collect
 	}
 	params, ok := collectionParams.GetVectorsConfig().GetParamsMap().GetMap()[qdrantVectorName]
 	if !ok {
-		return nil, fmt.Errorf("vector field %s: %w", qdrantVectorName, ErrNotFound)
+		return nil, fmt.Errorf("vector field %s: %w", qdrantVectorName, storage.ErrNotFound)
 	}
 	var distance Distance
 	switch params.GetDistance() {
@@ -106,7 +106,7 @@ func (db *Qdrant) DescribeCollection(ctx context.Context, name string) (*Collect
 	case qdrant.Distance_Dot:
 		distance = Dot
 	default:
-		return nil, fmt.Errorf("distance method %s %w", params.GetDistance().String(), ErrNotSupported)
+		return nil, fmt.Errorf("distance method %s %w", params.GetDistance().String(), storage.ErrNotSupported)
 	}
 	quantizationConfig := info.GetConfig().GetQuantizationConfig()
 	config, err := qdrantVectorConfig(quantizationConfig)
@@ -124,10 +124,10 @@ func (db *Qdrant) DescribeCollection(ctx context.Context, name string) (*Collect
 func (db *Qdrant) AddCollection(ctx context.Context, name string, dimensions int, distance Distance, config VectorConfig) error {
 	if dimensions == 0 {
 		if distance != Dot {
-			return fmt.Errorf("distance method for sparse vector %w", ErrNotSupported)
+			return fmt.Errorf("distance method for sparse vector %w", storage.ErrNotSupported)
 		}
 		if config != (VectorConfig{}) {
-			return fmt.Errorf("quantization for sparse vector %w", ErrNotSupported)
+			return fmt.Errorf("quantization for sparse vector %w", storage.ErrNotSupported)
 		}
 		return db.createCollection(ctx, name, &qdrant.CreateCollection{
 			CollectionName: name,
@@ -145,7 +145,7 @@ func (db *Qdrant) AddCollection(ctx context.Context, name string, dimensions int
 	case Dot:
 		qdrantDistance = qdrant.Distance_Dot
 	default:
-		return fmt.Errorf("distance method %w", ErrNotSupported)
+		return fmt.Errorf("distance method %w", storage.ErrNotSupported)
 	}
 
 	quantizationConfig, err := qdrantQuantizationConfig(config)
@@ -204,13 +204,13 @@ func qdrantQuantizationConfig(config VectorConfig) (*qdrant.QuantizationConfig, 
 			case 4:
 				turbo.Bits = qdrant.TurboQuantBitSize_Bits4.Enum()
 			default:
-				return nil, fmt.Errorf("RQ quantization bits %d for Qdrant %w", config.Bits, ErrNotSupported)
+				return nil, fmt.Errorf("RQ quantization bits %d for Qdrant %w", config.Bits, storage.ErrNotSupported)
 			}
 		}
 		return qdrant.NewQuantizationTurbo(turbo), nil
 	case QuantizationSQ:
 		if config.Bits != 0 && config.Bits != 8 {
-			return nil, fmt.Errorf("SQ quantization bits for Qdrant %w", ErrNotSupported)
+			return nil, fmt.Errorf("SQ quantization bits for Qdrant %w", storage.ErrNotSupported)
 		}
 		return qdrant.NewQuantizationScalar(&qdrant.ScalarQuantization{
 			Type: qdrant.QuantizationType_Int8,
@@ -228,12 +228,12 @@ func qdrantQuantizationConfig(config VectorConfig) (*qdrant.QuantizationConfig, 
 			case 1:
 				product.Compression = qdrant.CompressionRatio_x32
 			default:
-				return nil, fmt.Errorf("PQ quantization bits %d for Qdrant %w", config.Bits, ErrNotSupported)
+				return nil, fmt.Errorf("PQ quantization bits %d for Qdrant %w", config.Bits, storage.ErrNotSupported)
 			}
 		}
 		return qdrant.NewQuantizationProduct(product), nil
 	default:
-		return nil, fmt.Errorf("quantization type %s for Qdrant %w", config.Type, ErrNotSupported)
+		return nil, fmt.Errorf("quantization type %s for Qdrant %w", config.Type, storage.ErrNotSupported)
 	}
 }
 
@@ -252,7 +252,7 @@ func qdrantVectorConfig(config *qdrant.QuantizationConfig) (VectorConfig, error)
 			case qdrant.TurboQuantBitSize_Bits4:
 				bits = 4
 			default:
-				return VectorConfig{}, fmt.Errorf("RQ quantization bits %s for Qdrant %w", turbo.GetBits().String(), ErrNotSupported)
+				return VectorConfig{}, fmt.Errorf("RQ quantization bits %s for Qdrant %w", turbo.GetBits().String(), storage.ErrNotSupported)
 			}
 		}
 		return VectorConfig{
@@ -262,7 +262,7 @@ func qdrantVectorConfig(config *qdrant.QuantizationConfig) (VectorConfig, error)
 	}
 	if scalar := config.GetScalar(); scalar != nil {
 		if scalar.GetType() != qdrant.QuantizationType_Int8 {
-			return VectorConfig{}, fmt.Errorf("SQ quantization type %s for Qdrant %w", scalar.GetType().String(), ErrNotSupported)
+			return VectorConfig{}, fmt.Errorf("SQ quantization type %s for Qdrant %w", scalar.GetType().String(), storage.ErrNotSupported)
 		}
 		return VectorConfig{
 			Type: QuantizationSQ,
@@ -281,7 +281,7 @@ func qdrantVectorConfig(config *qdrant.QuantizationConfig) (VectorConfig, error)
 		case qdrant.CompressionRatio_x32:
 			bits = 1
 		default:
-			return VectorConfig{}, fmt.Errorf("PQ quantization compression %s for Qdrant %w", product.GetCompression().String(), ErrNotSupported)
+			return VectorConfig{}, fmt.Errorf("PQ quantization compression %s for Qdrant %w", product.GetCompression().String(), storage.ErrNotSupported)
 		}
 		return VectorConfig{
 			Type: QuantizationPQ,
@@ -289,7 +289,7 @@ func qdrantVectorConfig(config *qdrant.QuantizationConfig) (VectorConfig, error)
 		}, nil
 	}
 	if config.GetBinary() != nil {
-		return VectorConfig{}, fmt.Errorf("binary quantization for Qdrant %w", ErrNotSupported)
+		return VectorConfig{}, fmt.Errorf("binary quantization for Qdrant %w", storage.ErrNotSupported)
 	}
 	return VectorConfig{}, nil
 }

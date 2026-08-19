@@ -16,6 +16,7 @@ package master
 
 import (
 	"context"
+	"github.com/gorse-io/gorse/storage"
 	"sort"
 	"strconv"
 	"strings"
@@ -877,7 +878,7 @@ func (m *Master) needUpdateItemToItem(ctx context.Context, itemId string, itemTo
 	// check digest
 	digest, err := m.CacheClient.Get(ctx, cache.Key(cache.ItemToItemDigest, itemToItemConfig.Name, itemId)).String()
 	if err != nil {
-		if !errors.Is(err, cache.ErrObjectNotExist) {
+		if !errors.Is(err, storage.ErrNotFound) {
 			log.Logger().Error("failed to read item-to-item digest", zap.Error(err))
 		}
 		return true
@@ -889,7 +890,7 @@ func (m *Master) needUpdateItemToItem(ctx context.Context, itemId string, itemTo
 	// check update time
 	updateTime, err := m.CacheClient.Get(ctx, cache.Key(cache.ItemToItemUpdateTime, itemToItemConfig.Name, itemId)).Time()
 	if err != nil {
-		if !errors.Is(err, cache.ErrObjectNotExist) {
+		if !errors.Is(err, storage.ErrNotFound) {
 			log.Logger().Error("failed to read last update item neighbors time", zap.Error(err))
 		}
 		return true
@@ -981,7 +982,7 @@ func (m *Master) needUpdateUserToUser(ctx context.Context, userId string, userTo
 	// read digest
 	cacheDigest, err := m.CacheClient.Get(ctx, cache.Key(cache.UserToUserDigest, cache.Key(userToUserConfig.Name, userId))).String()
 	if err != nil {
-		if !errors.Is(err, cache.ErrObjectNotExist) {
+		if !errors.Is(err, storage.ErrNotFound) {
 			log.Logger().Error("failed to read user neighbors digest", zap.Error(err))
 		}
 		return true
@@ -993,7 +994,7 @@ func (m *Master) needUpdateUserToUser(ctx context.Context, userId string, userTo
 	// check update time
 	updateTime, err := m.CacheClient.Get(ctx, cache.Key(cache.UserToUserUpdateTime, cache.Key(userToUserConfig.Name, userId))).Time()
 	if err != nil {
-		if !errors.Is(err, cache.ErrObjectNotExist) {
+		if !errors.Is(err, storage.ErrNotFound) {
 			log.Logger().Error("failed to read last update user neighbors time", zap.Error(err))
 		}
 		return true

@@ -16,6 +16,7 @@ package cache
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"strconv"
 	"strings"
@@ -80,12 +81,6 @@ var ItemCache = []string{
 	ItemToItem,
 	Recommend,
 }
-
-var (
-	ErrObjectNotExist = errors.New("object not found")
-	ErrNoDatabase     = errors.New("database not assigned")
-	ErrNotValid       = errors.New("not valid")
-)
 
 // Key creates key for cache. Empty field will be ignored.
 func Key(keys ...string) string {
@@ -214,7 +209,7 @@ type ScoreCondition struct {
 
 func (condition *ScoreCondition) Check() error {
 	if condition.Id == nil && condition.Before == nil && condition.Subset == nil {
-		return errors.Wrap(ErrNotValid, "document condition")
+		return fmt.Errorf("document condition: %w", storage.ErrNotValid)
 	}
 	return nil
 }

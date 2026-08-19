@@ -92,7 +92,7 @@ func (db *Milvus) DescribeCollection(ctx context.Context, name string) (*Collect
 	collection, err := db.client.DescribeCollection(ctx, milvusclient.NewDescribeCollectionOption(name))
 	if err != nil {
 		if errors.Is(err, merr.ErrCollectionNotFound) {
-			return nil, fmt.Errorf("collection %s: %w", name, ErrNotFound)
+			return nil, fmt.Errorf("collection %s: %w", name, storage.ErrNotFound)
 		}
 		return nil, errors.WithStack(err)
 	}
@@ -113,7 +113,7 @@ func (db *Milvus) DescribeCollection(ctx context.Context, name string) (*Collect
 	case entity.IP:
 		distance = Dot
 	default:
-		return nil, fmt.Errorf("distance method %s %w", metricType, ErrNotSupported)
+		return nil, fmt.Errorf("distance method %s %w", metricType, storage.ErrNotSupported)
 	}
 	config := VectorConfig{}
 	switch index.IndexType(idx.Params()[index.IndexTypeKey]) {
@@ -147,10 +147,10 @@ func (db *Milvus) DescribeCollection(ctx context.Context, name string) (*Collect
 func (db *Milvus) AddCollection(ctx context.Context, name string, dimensions int, distance Distance, config VectorConfig) error {
 	if dimensions == 0 {
 		if distance != Dot {
-			return fmt.Errorf("distance method for sparse vector %w", ErrNotSupported)
+			return fmt.Errorf("distance method for sparse vector %w", storage.ErrNotSupported)
 		}
 		if config != (VectorConfig{}) {
-			return fmt.Errorf("quantization for sparse vector %w", ErrNotSupported)
+			return fmt.Errorf("quantization for sparse vector %w", storage.ErrNotSupported)
 		}
 	}
 
@@ -180,7 +180,7 @@ func (db *Milvus) AddCollection(ctx context.Context, name string, dimensions int
 	case Dot:
 		metricType = entity.IP
 	default:
-		return fmt.Errorf("distance method %w", ErrNotSupported)
+		return fmt.Errorf("distance method %w", storage.ErrNotSupported)
 	}
 
 	var idx index.Index
@@ -218,7 +218,7 @@ func (db *Milvus) AddCollection(ctx context.Context, name string, dimensions int
 
 func milvusVectorDimension(collection *entity.Collection) (int, error) {
 	if collection == nil || collection.Schema == nil {
-		return 0, fmt.Errorf("collection schema: %w", ErrNotFound)
+		return 0, fmt.Errorf("collection schema: %w", storage.ErrNotFound)
 	}
 	for _, field := range collection.Schema.Fields {
 		if field.Name == milvusVectorField {
@@ -232,7 +232,7 @@ func milvusVectorDimension(collection *entity.Collection) (int, error) {
 			return dimension, nil
 		}
 	}
-	return 0, fmt.Errorf("vector field: %w", ErrNotFound)
+	return 0, fmt.Errorf("vector field: %w", storage.ErrNotFound)
 }
 
 func (db *Milvus) DeleteCollection(ctx context.Context, name string) error {
@@ -241,7 +241,7 @@ func (db *Milvus) DeleteCollection(ctx context.Context, name string) error {
 		return errors.WithStack(err)
 	}
 	if !exists {
-		return fmt.Errorf("collection %s: %w", name, ErrNotFound)
+		return fmt.Errorf("collection %s: %w", name, storage.ErrNotFound)
 	}
 	err = db.client.DropCollection(ctx, milvusclient.NewDropCollectionOption(name))
 	return errors.WithStack(err)
@@ -503,7 +503,7 @@ func milvusIndex(metricType entity.MetricType, dimensions int, config VectorConf
 		return index.NewHNSWIndex(metricType, 16, 200), nil
 	case QuantizationRQ:
 		if config.Bits != 0 {
-			return nil, fmt.Errorf("RQ quantization bits %d for Milvus %w", config.Bits, ErrNotSupported)
+			return nil, fmt.Errorf("RQ quantization bits %d for Milvus %w", config.Bits, storage.ErrNotSupported)
 		}
 		return index.NewIvfRabitQIndex(metricType, defaultMilvusIVFNList), nil
 	case QuantizationPQ:
@@ -512,20 +512,20 @@ func milvusIndex(metricType entity.MetricType, dimensions int, config VectorConf
 			bits = defaultMilvusPQBits
 		}
 		if bits <= 0 || dimensions <= 0 || dimensions*bits%defaultMilvusPQBits != 0 {
-			return nil, fmt.Errorf("PQ quantization bits %d for Milvus %w", config.Bits, ErrNotSupported)
+			return nil, fmt.Errorf("PQ quantization bits %d for Milvus %w", config.Bits, storage.ErrNotSupported)
 		}
 		m := dimensions * bits / defaultMilvusPQBits
 		if m <= 0 || m > dimensions || dimensions%m != 0 {
-			return nil, fmt.Errorf("PQ quantization bits %d for Milvus %w", config.Bits, ErrNotSupported)
+			return nil, fmt.Errorf("PQ quantization bits %d for Milvus %w", config.Bits, storage.ErrNotSupported)
 		}
 		return index.NewIvfPQIndex(metricType, defaultMilvusIVFNList, m, defaultMilvusPQBits), nil
 	case QuantizationSQ:
 		if config.Bits != 0 && config.Bits != 8 {
-			return nil, fmt.Errorf("SQ quantization bits %d for Milvus %w", config.Bits, ErrNotSupported)
+			return nil, fmt.Errorf("SQ quantization bits %d for Milvus %w", config.Bits, storage.ErrNotSupported)
 		}
 		return index.NewIvfSQ8Index(metricType, defaultMilvusIVFNList), nil
 	default:
-		return nil, fmt.Errorf("quantization type %s for Milvus %w", config.Type, ErrNotSupported)
+		return nil, fmt.Errorf("quantization type %s for Milvus %w", config.Type, storage.ErrNotSupported)
 	}
 }
 
@@ -543,7 +543,7 @@ func (db *Milvus) searchParam(ctx context.Context, collection string) (index.Ann
 	case entity.IP:
 		distance = Dot
 	default:
-		return nil, Cosine, fmt.Errorf("distance method %s %w", metricType, ErrNotSupported)
+		return nil, Cosine, fmt.Errorf("distance method %s %w", metricType, storage.ErrNotSupported)
 	}
 	switch index.IndexType(idx.Params()[index.IndexTypeKey]) {
 	case index.SparseInverted, index.SparseWAND:

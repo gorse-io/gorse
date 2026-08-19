@@ -15,6 +15,7 @@
 package vectors
 
 import (
+	"github.com/gorse-io/gorse/storage"
 	"time"
 
 	"github.com/gorse-io/gorse/common/log"
@@ -68,7 +69,7 @@ func (suite *vectorsTestSuite) TestCollections() {
 	suite.NoError(err)
 	// describe deleted collection
 	_, err = suite.Database.DescribeCollection(ctx, "test")
-	suite.ErrorIs(err, ErrNotFound)
+	suite.ErrorIs(err, storage.ErrNotFound)
 	// list collections
 	collections, err = suite.Database.ListCollections(ctx)
 	suite.NoError(err)
@@ -216,7 +217,7 @@ func (suite *vectorsTestSuite) TestSparse() {
 	err = suite.Database.DeleteCollection(ctx, "test_sparse")
 	suite.Require().NoError(err)
 	_, err = suite.Database.DescribeCollection(ctx, "test_sparse")
-	suite.ErrorIs(err, ErrNotFound)
+	suite.ErrorIs(err, storage.ErrNotFound)
 }
 
 func (suite *vectorsTestSuite) TestHidden() {

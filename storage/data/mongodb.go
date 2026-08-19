@@ -18,6 +18,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"sort"
 	"time"
 
@@ -419,7 +420,7 @@ func (db *MongoDB) GetItem(ctx context.Context, itemId string) (item Item, err e
 	c := db.client.Database(db.dbName).Collection(db.ItemsTable())
 	r := c.FindOne(ctx, bson.M{"itemid": itemId})
 	if r.Err() == mongo.ErrNoDocuments {
-		err = errors.Wrap(ErrItemNotExist, itemId)
+		err = fmt.Errorf("item %s: %w", itemId, storage.ErrNotFound)
 		return
 	}
 	err = r.Decode(&item)
@@ -651,7 +652,7 @@ func (db *MongoDB) GetUser(ctx context.Context, userId string) (user User, err e
 	c := db.client.Database(db.dbName).Collection(db.UsersTable())
 	r := c.FindOne(ctx, bson.M{"userid": userId})
 	if r.Err() == mongo.ErrNoDocuments {
-		err = errors.Wrap(ErrUserNotExist, userId)
+		err = fmt.Errorf("user %s: %w", userId, storage.ErrNotFound)
 		return
 	}
 	err = r.Decode(&user)
@@ -798,7 +799,7 @@ func (db *MongoDB) BatchInsertFeedback(ctx context.Context, feedback []Feedback,
 		for _, userId := range userList {
 			_, err := db.GetUser(ctx, userId)
 			if err != nil {
-				if errors.Is(err, ErrUserNotExist) {
+				if errors.Is(err, storage.ErrNotFound) {
 					users.Remove(userId)
 					continue
 				}
@@ -825,7 +826,7 @@ func (db *MongoDB) BatchInsertFeedback(ctx context.Context, feedback []Feedback,
 		for _, itemId := range itemList {
 			_, err := db.GetItem(ctx, itemId)
 			if err != nil {
-				if errors.Is(err, ErrItemNotExist) {
+				if errors.Is(err, storage.ErrNotFound) {
 					items.Remove(itemId)
 					continue
 				}

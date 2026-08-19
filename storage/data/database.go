@@ -29,12 +29,6 @@ import (
 	"github.com/pkg/errors"
 )
 
-var (
-	ErrUserNotExist = errors.New("user not found")
-	ErrItemNotExist = errors.New("item not found")
-	ErrNoDatabase   = errors.New("database not assigned")
-)
-
 // ValidateLabels checks if labels are valid. Labels are valid if consists of:
 // - []string			slice of strings
 // - []float64			slice of numbers
