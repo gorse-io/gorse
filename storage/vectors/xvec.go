@@ -148,7 +148,11 @@ func (db *Xvec) Close() error {
 }
 
 func (db *Xvec) Purge() error {
-	return purge(db)
+	if db.closed.Load() {
+		return errors.New("xvec database is closed")
+	}
+	db.collections.Clear()
+	return errors.WithStack(os.RemoveAll(db.root))
 }
 
 func (db *Xvec) ListCollections(ctx context.Context) ([]string, error) {

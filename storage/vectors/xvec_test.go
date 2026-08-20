@@ -15,6 +15,7 @@
 package vectors
 
 import (
+	"os"
 	"testing"
 
 	"github.com/gorse-io/gorse/common/log"
@@ -38,6 +39,12 @@ func (suite *XvecTestSuite) SetupSuite() {
 
 func (suite *XvecTestSuite) TearDownSuite() {
 	suite.NoError(suite.Database.Close())
+}
+
+func (suite *XvecTestSuite) TestPurge() {
+	suite.vectorsTestSuite.TestPurge()
+	_, err := os.Stat(suite.root)
+	suite.ErrorIs(err, os.ErrNotExist)
 }
 
 func TestXvec(t *testing.T) {
