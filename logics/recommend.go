@@ -241,53 +241,9 @@ func (r *Recommender) recommendCollaborative(ctx context.Context) ([]cache.Score
 	}), digest, nil
 }
 
-func QueryItemToItem(ctx context.Context, vectorClient vectors.Database, itemToItemConfig config.ItemToItemConfig, itemId string, categories []string, n int) ([]cache.Score, error) {
-	collection := vectors.ItemToItemCollection(itemToItemConfig.Name)
-	queries, err := vectorClient.GetVectors(ctx, collection, []string{itemId})
-	if err != nil {
-		return nil, errors.WithStack(err)
-	}
-	if len(queries) == 0 {
-		return nil, nil
-	}
-	neighbors, err := vectorClient.QueryVectors(ctx, collection, queries[0], categories, n+1)
-	if err != nil {
-		return nil, errors.WithStack(err)
-	}
-	distance := vectors.Dot
-	if itemToItemConfig.Type == "embedding" {
-		distance = vectors.Euclidean
-	}
-	scoreScale := 1.0
-	if itemToItemConfig.Type == "auto" {
-		scoreScale = .5
-	}
-	scores := make([]cache.Score, 0, min(n, len(neighbors)))
-	for _, neighbor := range neighbors {
-		if neighbor.Id == itemId || distance == vectors.Dot && neighbor.Score <= 0 {
-			continue
-		}
-		score := float64(neighbor.Score) * scoreScale
-		if distance == vectors.Euclidean {
-			score = 1 / (1 - score)
-		}
-		scores = append(scores, cache.Score{Id: neighbor.Id, Score: score, Categories: neighbor.Categories})
-		if len(scores) == n {
-			break
-		}
-	}
-	return scores, nil
-}
-
 func (r *Recommender) recommendItemToItem(name string) RecommenderFunc {
 	return func(ctx context.Context) ([]cache.Score, string, error) {
-		var itemToItemConfig *config.ItemToItemConfig
-		for i := range r.config.ItemToItem {
-			if r.config.ItemToItem[i].Name == name {
-				itemToItemConfig = &r.config.ItemToItem[i]
-				break
-			}
-		}
+		itemToItemConfig := r.config.GetItemToItemConfig(name)
 		if itemToItemConfig == nil {
 			return nil, "", fmt.Errorf("item-to-item recommender %s %w", name, storage.ErrNotFound)
 		}
@@ -326,53 +282,9 @@ func (r *Recommender) recommendItemToItem(name string) RecommenderFunc {
 	}
 }
 
-func QueryUserToUser(ctx context.Context, vectorClient vectors.Database, userToUserConfig config.UserToUserConfig, userId string, n int) ([]cache.Score, error) {
-	collection := vectors.UserToUserCollection(userToUserConfig.Name)
-	queries, err := vectorClient.GetVectors(ctx, collection, []string{userId})
-	if err != nil {
-		return nil, errors.WithStack(err)
-	}
-	if len(queries) == 0 {
-		return nil, nil
-	}
-	neighbors, err := vectorClient.QueryVectors(ctx, collection, queries[0], nil, n+1)
-	if err != nil {
-		return nil, errors.WithStack(err)
-	}
-	distance := vectors.Dot
-	if userToUserConfig.Type == "embedding" {
-		distance = vectors.Euclidean
-	}
-	scoreScale := 1.0
-	if userToUserConfig.Type == "auto" {
-		scoreScale = .5
-	}
-	scores := make([]cache.Score, 0, min(n, len(neighbors)))
-	for _, neighbor := range neighbors {
-		if neighbor.Id == userId || distance == vectors.Dot && neighbor.Score <= 0 {
-			continue
-		}
-		score := float64(neighbor.Score) * scoreScale
-		if distance == vectors.Euclidean {
-			score = 1 / (1 - score)
-		}
-		scores = append(scores, cache.Score{Id: neighbor.Id, Score: score})
-		if len(scores) == n {
-			break
-		}
-	}
-	return scores, nil
-}
-
 func (r *Recommender) recommendUserToUser(name string) RecommenderFunc {
 	return func(ctx context.Context) ([]cache.Score, string, error) {
-		var userToUserConfig *config.UserToUserConfig
-		for i := range r.config.UserToUser {
-			if r.config.UserToUser[i].Name == name {
-				userToUserConfig = &r.config.UserToUser[i]
-				break
-			}
-		}
+		userToUserConfig := r.config.GetUserToUserConfig(name)
 		if userToUserConfig == nil {
 			return nil, "", fmt.Errorf("user-to-user recommender %s %w", name, storage.ErrNotFound)
 		}

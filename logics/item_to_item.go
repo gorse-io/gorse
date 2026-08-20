@@ -26,6 +26,7 @@ import (
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/dataset"
+	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
 	"github.com/gorse-io/gorse/storage/vectors"
 	"github.com/pkg/errors"
@@ -44,6 +45,44 @@ type ItemToItemOptions struct {
 type ItemToItem interface {
 	Push(item *data.Item, feedback []int32)
 	Finish() error
+}
+
+func QueryItemToItem(ctx context.Context, vectorClient vectors.Database, itemToItemConfig config.ItemToItemConfig, itemId string, categories []string, n int) ([]cache.Score, error) {
+	collection := vectors.ItemToItemCollection(itemToItemConfig.Name)
+	queries, err := vectorClient.GetVectors(ctx, collection, []string{itemId})
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	if len(queries) == 0 {
+		return nil, nil
+	}
+	neighbors, err := vectorClient.QueryVectors(ctx, collection, queries[0], categories, n+1)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	distance := vectors.Dot
+	if itemToItemConfig.Type == "embedding" {
+		distance = vectors.Euclidean
+	}
+	scoreScale := 1.0
+	if itemToItemConfig.Type == "auto" {
+		scoreScale = .5
+	}
+	scores := make([]cache.Score, 0, min(n, len(neighbors)))
+	for _, neighbor := range neighbors {
+		if neighbor.Id == itemId || distance == vectors.Dot && neighbor.Score <= 0 {
+			continue
+		}
+		score := float64(neighbor.Score) * scoreScale
+		if distance == vectors.Euclidean {
+			score = 1 / (1 - score)
+		}
+		scores = append(scores, cache.Score{Id: neighbor.Id, Score: score, Categories: neighbor.Categories})
+		if len(scores) == n {
+			break
+		}
+	}
+	return scores, nil
 }
 
 func NewItemToItem(cfg config.ItemToItemConfig, timestamp time.Time, opts *ItemToItemOptions) (ItemToItem, error) {

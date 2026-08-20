@@ -105,11 +105,8 @@ func (suite *WorkerTestSuite) SetupTest() {
 	suite.MatrixFactorizationUsers = nil
 	suite.MatrixFactorizationId = 1
 	suite.ClickThroughRateModel = nil
-	collections, err := suite.VectorClient.ListCollections(context.Background())
+	err = vectors.Purge(context.Background(), suite.VectorClient)
 	suite.Require().NoError(err)
-	for _, collection := range collections {
-		suite.Require().NoError(suite.VectorClient.DeleteCollection(context.Background(), collection))
-	}
 	err = suite.VectorClient.AddCollection(context.Background(), vectors.CollaborativeFilteringCollection(suite.MatrixFactorizationId), 2, vectors.Dot, vectors.VectorConfig{})
 	suite.NoError(err)
 }

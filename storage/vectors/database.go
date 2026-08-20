@@ -119,6 +119,20 @@ type Database interface {
 	QueryVectors(ctx context.Context, collection string, q Vector, categories []string, topK int) ([]ScoredVector, error)
 }
 
+// Purge deletes all collections from a vector database.
+func Purge(ctx context.Context, database Database) error {
+	collections, err := database.ListCollections(ctx)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+	for _, collection := range collections {
+		if err = database.DeleteCollection(ctx, collection); err != nil {
+			return errors.WithStack(err)
+		}
+	}
+	return nil
+}
+
 func orderVectors(ids []string, vectors []Vector) []Vector {
 	byID := make(map[string]Vector, len(vectors))
 	for _, vector := range vectors {

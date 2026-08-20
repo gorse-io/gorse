@@ -88,6 +88,8 @@ func (suite *ServerTestSuite) SetupTest() {
 	suite.NoError(err)
 	err = suite.CacheClient.Purge()
 	suite.NoError(err)
+	err = vectors.Purge(suite.T().Context(), suite.VectorClient)
+	suite.NoError(err)
 	// configuration
 	suite.Config = config.GetDefaultConfig()
 	suite.Config.Server.APIKey = apiKey
@@ -989,18 +991,18 @@ func (suite *ServerTestSuite) TestFeedback() {
 		End()
 }
 
-func (suite *ServerTestSuite) TestEmbeddingItemToItemRecommend() {
+func (suite *ServerTestSuite) TestItemToItem() {
 	ctx := suite.T().Context()
 	now := time.Unix(0, 0)
-	suite.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "embedding", Type: "embedding", Column: "item.Labels.embedding"}}
+	suite.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "default", Type: "embedding", Column: "item.Labels.embedding"}}
 	suite.NoError(suite.DataClient.BatchInsertItems(ctx, []data.Item{
 		{ItemId: "source", Labels: map[string]any{"embedding": []float32{0, 0}}, Timestamp: now},
 		{ItemId: "near", Labels: map[string]any{"embedding": []float32{0.1, 0}}, Categories: []string{"movie"}, Timestamp: now},
 		{ItemId: "far", Labels: map[string]any{"embedding": []float32{10, 0}}, Categories: []string{"movie"}, Timestamp: now},
 		{ItemId: "hidden", Labels: map[string]any{"embedding": []float32{0.05, 0}}, Categories: []string{"movie"}, IsHidden: true, Timestamp: now},
 	}))
-	suite.NoError(suite.VectorClient.AddCollection(ctx, vectors.ItemToItemCollection("embedding"), 2, vectors.Euclidean, vectors.VectorConfig{}))
-	suite.NoError(suite.VectorClient.AddVectors(ctx, vectors.ItemToItemCollection("embedding"), []vectors.Vector{
+	suite.NoError(suite.VectorClient.AddCollection(ctx, vectors.ItemToItemCollection("default"), 2, vectors.Euclidean, vectors.VectorConfig{}))
+	suite.NoError(suite.VectorClient.AddVectors(ctx, vectors.ItemToItemCollection("default"), []vectors.Vector{
 		{Id: "source", Values: []float32{0, 0}, Timestamp: now},
 		{Id: "near", Values: []float32{0.1, 0}, Categories: []string{"movie"}, Timestamp: now},
 		{Id: "far", Values: []float32{10, 0}, Categories: []string{"movie"}, Timestamp: now},
@@ -1014,7 +1016,7 @@ func (suite *ServerTestSuite) TestEmbeddingItemToItemRecommend() {
 	apitest.New().Handler(suite.handler).Get("/api/item/"+"source"+"/neighbors").
 		Query("category", "movie").Header("X-API-Key", apiKey).
 		Expect(suite.T()).Status(http.StatusOK).Body(expected).End()
-	apitest.New().Handler(suite.handler).Get("/api/item-to-item/embedding/source").
+	apitest.New().Handler(suite.handler).Get("/api/item-to-item/default/source").
 		Query("category", "movie").Header("X-API-Key", apiKey).
 		Expect(suite.T()).Status(http.StatusOK).Body(expected).End()
 }

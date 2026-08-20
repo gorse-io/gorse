@@ -1109,13 +1109,7 @@ func (m *Master) getNonPersonalized(request *restful.Request, response *restful.
 func (m *Master) getItemToItem(request *restful.Request, response *restful.Response) {
 	name := request.PathParameter("name")
 	itemId := request.PathParameter("item-id")
-	var itemToItemConfig *config.ItemToItemConfig
-	for i := range m.Config.Recommend.ItemToItem {
-		if m.Config.Recommend.ItemToItem[i].Name == name {
-			itemToItemConfig = &m.Config.Recommend.ItemToItem[i]
-			break
-		}
-	}
+	itemToItemConfig := m.Config.Recommend.GetItemToItemConfig(name)
 	if itemToItemConfig == nil {
 		server.PageNotFound(response, errors.Errorf("item-to-item recommender %s not found", name))
 		return
@@ -1177,13 +1171,7 @@ func (m *Master) getItemToItem(request *restful.Request, response *restful.Respo
 func (m *Master) getUserToUser(request *restful.Request, response *restful.Response) {
 	userId := request.PathParameter("user-id")
 	name := request.PathParameter("name")
-	var userToUserConfig *config.UserToUserConfig
-	for i := range m.Config.Recommend.UserToUser {
-		if m.Config.Recommend.UserToUser[i].Name == name {
-			userToUserConfig = &m.Config.Recommend.UserToUser[i]
-			break
-		}
-	}
+	userToUserConfig := m.Config.Recommend.GetUserToUserConfig(name)
 	if userToUserConfig == nil {
 		server.PageNotFound(response, errors.Errorf("user-to-user recommender %s not found", name))
 		return

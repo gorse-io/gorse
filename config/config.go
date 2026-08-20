@@ -202,6 +202,24 @@ func (r *RecommendConfig) ListRecommenders() []string {
 	return recommenders
 }
 
+func (r *RecommendConfig) GetItemToItemConfig(name string) *ItemToItemConfig {
+	for i := range r.ItemToItem {
+		if r.ItemToItem[i].Name == name {
+			return &r.ItemToItem[i]
+		}
+	}
+	return nil
+}
+
+func (r *RecommendConfig) GetUserToUserConfig(name string) *UserToUserConfig {
+	for i := range r.UserToUser {
+		if r.UserToUser[i].Name == name {
+			return &r.UserToUser[i]
+		}
+	}
+	return nil
+}
+
 func (r *RecommendConfig) Hash() string {
 	recommenders := mapset.NewSet(r.Ranker.Recommenders...)
 	if recommenders.IsEmpty() {

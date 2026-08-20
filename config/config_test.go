@@ -490,6 +490,18 @@ func TestRecommendConfig(t *testing.T) {
 	assert.Equal(t, a.Hash(), b.Hash())
 }
 
+func TestRecommendConfig_GetItemToItemConfig(t *testing.T) {
+	config := RecommendConfig{ItemToItem: []ItemToItemConfig{{Name: "a"}, {Name: "b"}}}
+	assert.Same(t, &config.ItemToItem[1], config.GetItemToItemConfig("b"))
+	assert.Nil(t, config.GetItemToItemConfig("missing"))
+}
+
+func TestRecommendConfig_GetUserToUserConfig(t *testing.T) {
+	config := RecommendConfig{UserToUser: []UserToUserConfig{{Name: "a"}, {Name: "b"}}}
+	assert.Same(t, &config.UserToUser[1], config.GetUserToUserConfig("b"))
+	assert.Nil(t, config.GetUserToUserConfig("missing"))
+}
+
 type ValidateTestSuite struct {
 	suite.Suite
 	*Config

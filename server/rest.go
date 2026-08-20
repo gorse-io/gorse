@@ -802,13 +802,12 @@ func (s *RestServer) getItemToItem(request *restful.Request, response *restful.R
 	name := request.PathParameter("name")
 	itemId := request.PathParameter("item-id")
 	categories := ReadCategories(request, nil)
-	for _, itemToItemConfig := range s.Config.Recommend.ItemToItem {
-		if itemToItemConfig.Name == name {
-			s.SearchItemToItem(itemToItemConfig, itemId, categories, request, response)
-			return
-		}
+	itemToItemConfig := s.Config.Recommend.GetItemToItemConfig(name)
+	if itemToItemConfig == nil {
+		PageNotFound(response, errors.Errorf("item-to-item recommender %s not found", name))
+		return
 	}
-	PageNotFound(response, errors.Errorf("item-to-item recommender %s not found", name))
+	s.SearchItemToItem(*itemToItemConfig, itemId, categories, request, response)
 }
 
 func (s *RestServer) SearchItemToItem(itemToItemConfig config.ItemToItemConfig, itemId string, categories []string, request *restful.Request, response *restful.Response) {
@@ -871,13 +870,12 @@ func (s *RestServer) SearchItemToItem(itemToItemConfig config.ItemToItemConfig, 
 func (s *RestServer) getUserToUser(request *restful.Request, response *restful.Response) {
 	name := request.PathParameter("name")
 	userId := request.PathParameter("user-id")
-	for _, userToUserConfig := range s.Config.Recommend.UserToUser {
-		if userToUserConfig.Name == name {
-			s.SearchUserToUser(userToUserConfig, userId, request, response)
-			return
-		}
+	userToUserConfig := s.Config.Recommend.GetUserToUserConfig(name)
+	if userToUserConfig == nil {
+		PageNotFound(response, errors.Errorf("user-to-user recommender %s not found", name))
+		return
 	}
-	PageNotFound(response, errors.Errorf("user-to-user recommender %s not found", name))
+	s.SearchUserToUser(*userToUserConfig, userId, request, response)
 }
 
 func (s *RestServer) SearchUserToUser(userToUserConfig config.UserToUserConfig, userId string, request *restful.Request, response *restful.Response) {

@@ -26,6 +26,7 @@ import (
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/dataset"
+	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
 	"github.com/gorse-io/gorse/storage/vectors"
 	"github.com/pkg/errors"
@@ -44,6 +45,44 @@ type UserToUserOptions struct {
 type UserToUser interface {
 	Push(user *data.User, feedback []int32)
 	Finish() error
+}
+
+func QueryUserToUser(ctx context.Context, vectorClient vectors.Database, userToUserConfig config.UserToUserConfig, userId string, n int) ([]cache.Score, error) {
+	collection := vectors.UserToUserCollection(userToUserConfig.Name)
+	queries, err := vectorClient.GetVectors(ctx, collection, []string{userId})
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	if len(queries) == 0 {
+		return nil, nil
+	}
+	neighbors, err := vectorClient.QueryVectors(ctx, collection, queries[0], nil, n+1)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	distance := vectors.Dot
+	if userToUserConfig.Type == "embedding" {
+		distance = vectors.Euclidean
+	}
+	scoreScale := 1.0
+	if userToUserConfig.Type == "auto" {
+		scoreScale = .5
+	}
+	scores := make([]cache.Score, 0, min(n, len(neighbors)))
+	for _, neighbor := range neighbors {
+		if neighbor.Id == userId || distance == vectors.Dot && neighbor.Score <= 0 {
+			continue
+		}
+		score := float64(neighbor.Score) * scoreScale
+		if distance == vectors.Euclidean {
+			score = 1 / (1 - score)
+		}
+		scores = append(scores, cache.Score{Id: neighbor.Id, Score: score})
+		if len(scores) == n {
+			break
+		}
+	}
+	return scores, nil
 }
 
 func NewUserToUser(cfg config.UserToUserConfig, timestamp time.Time, opts *UserToUserOptions) (UserToUser, error) {

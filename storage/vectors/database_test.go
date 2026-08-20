@@ -31,14 +31,18 @@ type vectorsTestSuite struct {
 
 func (suite *vectorsTestSuite) SetupTest() {
 	log.SetTestLogger(suite.T())
-	// purge
+	suite.NoError(Purge(suite.T().Context(), suite.Database))
+}
+
+func (suite *vectorsTestSuite) TestPurge() {
 	ctx := suite.T().Context()
+	suite.NoError(suite.Database.AddCollection(ctx, "a", defaultVectorSize, Cosine, VectorConfig{}))
+	suite.NoError(suite.Database.AddCollection(ctx, "b", defaultVectorSize, Cosine, VectorConfig{}))
+	suite.NoError(Purge(ctx, suite.Database))
+
 	collections, err := suite.Database.ListCollections(ctx)
 	suite.NoError(err)
-	for _, collection := range collections {
-		err = suite.Database.DeleteCollection(ctx, collection)
-		suite.NoError(err)
-	}
+	suite.Empty(collections)
 }
 
 func (suite *vectorsTestSuite) TestCollections() {
