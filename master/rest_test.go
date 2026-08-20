@@ -566,8 +566,8 @@ func (suite *MasterAPITestSuite) TestItemToItem() {
 		{Id: "2", Indices: []uint32{0}, Values: []float32{3}},
 	}))
 	items := []ScoredItem{
-		{Item: data.Item{ItemId: "1"}, Score: 4},
-		{Item: data.Item{ItemId: "2"}, Score: 3},
+		{Item: data.Item{ItemId: "1", Categories: []string{"movie", "drama"}}, Score: 4},
+		{Item: data.Item{ItemId: "2", Categories: []string{"movie"}}, Score: 3},
 	}
 	for _, item := range items {
 		suite.NoError(suite.DataClient.BatchInsertItems(ctx, []data.Item{item.Item}))
@@ -580,9 +580,18 @@ func (suite *MasterAPITestSuite) TestItemToItem() {
 		Status(http.StatusOK).
 		Body(marshal(suite.T(), items)).
 		End()
+	apitest.New().
+		Handler(suite.handler).
+		Get("/api/dashboard/item-to-item/neighbors/0").
+		Header("Cookie", suite.cookie).
+		QueryCollection(map[string][]string{"category": {"movie", "drama"}}).
+		Expect(suite.T()).
+		Status(http.StatusOK).
+		Body(marshal(suite.T(), items[:1])).
+		End()
 }
 
-func (suite *MasterAPITestSuite) TestSearchDocumentsOfUsers() {
+func (suite *MasterAPITestSuite) TestUserToUser() {
 	ctx := suite.T().Context()
 	suite.Config.Recommend.UserToUser = []config.UserToUserConfig{{Name: "neighbors", Type: "items"}}
 	collection := vectors.UserToUserCollection("neighbors")

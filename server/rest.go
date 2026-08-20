@@ -810,6 +810,26 @@ func (s *RestServer) getItemToItem(request *restful.Request, response *restful.R
 	s.SearchItemToItem(*itemToItemConfig, itemId, categories, request, response)
 }
 
+// FilterItems removes hidden items and items that don't contain all required categories.
+func FilterItems(ctx context.Context, dataClient data.Database, scores []cache.Score, categories []string) ([]cache.Score, error) {
+	items, err := dataClient.BatchGetItems(ctx, cache.ConvertDocumentsToValues(scores), data.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+	visibleItems := mapset.NewSet[string]()
+	for _, item := range items {
+		categoryMatched := len(categories) == 0 || lo.EveryBy(categories, func(category string) bool {
+			return lo.Contains(item.Categories, category)
+		})
+		if !item.IsHidden && categoryMatched {
+			visibleItems.Add(item.ItemId)
+		}
+	}
+	return lo.Filter(scores, func(score cache.Score, _ int) bool {
+		return visibleItems.Contains(score.Id)
+	}), nil
+}
+
 func (s *RestServer) SearchItemToItem(itemToItemConfig config.ItemToItemConfig, itemId string, categories []string, request *restful.Request, response *restful.Response) {
 	ctx := request.Request.Context()
 	offset, err := ParseInt(request, "offset", 0)
@@ -839,22 +859,13 @@ func (s *RestServer) SearchItemToItem(itemToItemConfig config.ItemToItemConfig, 
 		InternalServerError(response, err)
 		return
 	}
-	items, err := s.DataClient.BatchGetItems(ctx, cache.ConvertDocumentsToValues(results), data.GetOptions{})
+	results, err = FilterItems(ctx, s.DataClient, results, categories)
 	if err != nil {
 		InternalServerError(response, err)
 		return
 	}
-	visibleItems := mapset.NewSet[string]()
-	for _, item := range items {
-		categoryMatched := len(categories) == 0 || lo.SomeBy(categories, func(category string) bool {
-			return lo.Contains(item.Categories, category)
-		})
-		if !item.IsHidden && categoryMatched {
-			visibleItems.Add(item.ItemId)
-		}
-	}
 	results = lo.Filter(results, func(result cache.Score, _ int) bool {
-		return visibleItems.Contains(result.Id) && !readItems.Contains(result.Id)
+		return !readItems.Contains(result.Id)
 	})
 	if offset < len(results) {
 		results = results[offset:]
@@ -1120,23 +1131,11 @@ func (s *RestServer) sessionRecommend(request *restful.Request, response *restfu
 			BadRequest(response, err)
 			return
 		}
-		items, err := s.DataClient.BatchGetItems(ctx, cache.ConvertDocumentsToValues(similarItems), data.GetOptions{})
+		similarItems, err = FilterItems(ctx, s.DataClient, similarItems, categories)
 		if err != nil {
 			InternalServerError(response, err)
 			return
 		}
-		visibleItems := mapset.NewSet[string]()
-		for _, item := range items {
-			categoryMatched := len(categories) == 0 || lo.SomeBy(categories, func(category string) bool {
-				return lo.Contains(item.Categories, category)
-			})
-			if !item.IsHidden && categoryMatched {
-				visibleItems.Add(item.ItemId)
-			}
-		}
-		similarItems = lo.Filter(similarItems, func(item cache.Score, _ int) bool {
-			return visibleItems.Contains(item.Id)
-		})
 		// add unseen items
 		// similarItems = s.FilterOutHiddenScores(response, similarItems, "")
 		for _, item := range similarItems {

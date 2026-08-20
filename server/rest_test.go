@@ -997,21 +997,24 @@ func (suite *ServerTestSuite) TestItemToItem() {
 	suite.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "default", Type: "embedding", Column: "item.Labels.embedding"}}
 	suite.NoError(suite.DataClient.BatchInsertItems(ctx, []data.Item{
 		{ItemId: "source", Labels: map[string]any{"embedding": []float32{0, 0}}, Timestamp: now},
-		{ItemId: "near", Labels: map[string]any{"embedding": []float32{0.1, 0}}, Categories: []string{"movie"}, Timestamp: now},
+		{ItemId: "near", Labels: map[string]any{"embedding": []float32{0.1, 0}}, Categories: []string{"movie", "drama"}, Timestamp: now},
 		{ItemId: "far", Labels: map[string]any{"embedding": []float32{10, 0}}, Categories: []string{"movie"}, Timestamp: now},
 		{ItemId: "hidden", Labels: map[string]any{"embedding": []float32{0.05, 0}}, Categories: []string{"movie"}, IsHidden: true, Timestamp: now},
 	}))
 	suite.NoError(suite.VectorClient.AddCollection(ctx, vectors.ItemToItemCollection("default"), 2, vectors.Euclidean, vectors.VectorConfig{}))
 	suite.NoError(suite.VectorClient.AddVectors(ctx, vectors.ItemToItemCollection("default"), []vectors.Vector{
 		{Id: "source", Values: []float32{0, 0}, Timestamp: now},
-		{Id: "near", Values: []float32{0.1, 0}, Categories: []string{"movie"}, Timestamp: now},
+		{Id: "near", Values: []float32{0.1, 0}, Categories: []string{"movie", "drama"}, Timestamp: now},
 		{Id: "far", Values: []float32{10, 0}, Categories: []string{"movie"}, Timestamp: now},
 		{Id: "hidden", Values: []float32{0.05, 0}, Categories: []string{"movie"}, IsHidden: true, Timestamp: now},
 	}))
 
 	expected := suite.marshal([]cache.Score{
-		{Id: "near", Score: 0.9900990092071315, Categories: []string{"movie"}},
+		{Id: "near", Score: 0.9900990092071315, Categories: []string{"movie", "drama"}},
 		{Id: "far", Score: 0.009900990099009901, Categories: []string{"movie"}},
+	})
+	expectedAllCategories := suite.marshal([]cache.Score{
+		{Id: "near", Score: 0.9900990092071315, Categories: []string{"movie", "drama"}},
 	})
 	apitest.New().Handler(suite.handler).Get("/api/item/"+"source"+"/neighbors").
 		Query("category", "movie").Header("X-API-Key", apiKey).
@@ -1019,6 +1022,12 @@ func (suite *ServerTestSuite) TestItemToItem() {
 	apitest.New().Handler(suite.handler).Get("/api/item-to-item/default/source").
 		Query("category", "movie").Header("X-API-Key", apiKey).
 		Expect(suite.T()).Status(http.StatusOK).Body(expected).End()
+	apitest.New().Handler(suite.handler).Get("/api/item/"+"source"+"/neighbors").
+		QueryCollection(map[string][]string{"category": {"movie", "drama"}}).Header("X-API-Key", apiKey).
+		Expect(suite.T()).Status(http.StatusOK).Body(expectedAllCategories).End()
+	apitest.New().Handler(suite.handler).Get("/api/item-to-item/default/source").
+		QueryCollection(map[string][]string{"category": {"movie", "drama"}}).Header("X-API-Key", apiKey).
+		Expect(suite.T()).Status(http.StatusOK).Body(expectedAllCategories).End()
 }
 
 func (suite *ServerTestSuite) TestNonPersonalizedRecommend() {

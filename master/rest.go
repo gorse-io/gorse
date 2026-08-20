@@ -1131,23 +1131,11 @@ func (m *Master) getItemToItem(request *restful.Request, response *restful.Respo
 		server.InternalServerError(response, err)
 		return
 	}
-	storedItems, err := m.DataClient.BatchGetItems(ctx, cache.ConvertDocumentsToValues(scores), data.GetOptions{})
+	scores, err = server.FilterItems(ctx, m.DataClient, scores, categories)
 	if err != nil {
 		server.InternalServerError(response, err)
 		return
 	}
-	visibleItems := mapset.NewSet[string]()
-	for _, item := range storedItems {
-		categoryMatched := len(categories) == 0 || lo.SomeBy(categories, func(category string) bool {
-			return lo.Contains(item.Categories, category)
-		})
-		if !item.IsHidden && categoryMatched {
-			visibleItems.Add(item.ItemId)
-		}
-	}
-	scores = lo.Filter(scores, func(score cache.Score, _ int) bool {
-		return visibleItems.Contains(score.Id)
-	})
 	if offset < len(scores) {
 		scores = scores[offset:]
 	} else {
