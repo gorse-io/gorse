@@ -5,6 +5,7 @@
 package logics
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -19,19 +20,27 @@ import (
 
 type ItemToItemTestSuite struct {
 	suite.Suite
+	vectorClient vectors.Database
 }
 
 func (suite *ItemToItemTestSuite) SetupTest() {
 	log.SetTestLogger(suite.T())
+	var err error
+	suite.vectorClient, err = vectors.Open(fmt.Sprintf("xvec://%s/vectors", suite.T().TempDir()), "")
+	suite.NoError(err)
+	suite.NoError(suite.vectorClient.Init())
+}
+
+func (suite *ItemToItemTestSuite) TearDownTest() {
+	suite.NoError(suite.vectorClient.Close())
 }
 
 func (suite *ItemToItemTestSuite) newWriter(cfg config.ItemToItemConfig, tagsIDF, usersIDF []float32) (ItemToItem, vectors.Database) {
-	vectorClient := openTrackingVectorDatabase(suite.T())
 	writer, err := NewItemToItem(cfg, time.Now(), &ItemToItemOptions{
-		Context: suite.T().Context(), VectorClient: vectorClient, TagsIDF: tagsIDF, UsersIDF: usersIDF,
+		Context: suite.T().Context(), VectorClient: suite.vectorClient, TagsIDF: tagsIDF, UsersIDF: usersIDF,
 	})
 	suite.NoError(err)
-	return writer, vectorClient
+	return writer, suite.vectorClient
 }
 
 func (suite *ItemToItemTestSuite) TestEmbedding() {

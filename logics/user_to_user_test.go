@@ -15,6 +15,7 @@
 package logics
 
 import (
+	"fmt"
 	"strconv"
 	"testing"
 	"time"
@@ -23,24 +24,30 @@ import (
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/dataset"
 	"github.com/gorse-io/gorse/storage/data"
+	"github.com/gorse-io/gorse/storage/vectors"
 	"github.com/stretchr/testify/suite"
 )
 
 type UserToUserTestSuite struct {
 	suite.Suite
+	vectorClient vectors.Database
 }
 
 func (suite *UserToUserTestSuite) SetupTest() {
 	log.SetTestLogger(suite.T())
+	var err error
+	suite.vectorClient, err = vectors.Open(fmt.Sprintf("xvec://%s/vectors", suite.T().TempDir()), "")
+	suite.NoError(err)
+	suite.NoError(suite.vectorClient.Init())
 }
 
-func (suite *UserToUserTestSuite) SetupSuite() {
-	log.SetTestLogger(suite.T())
+func (suite *UserToUserTestSuite) TearDownTest() {
+	suite.NoError(suite.vectorClient.Close())
 }
 
 func (suite *UserToUserTestSuite) TestEmbedding() {
 	timestamp := time.Now()
-	opts := &UserToUserOptions{Context: suite.T().Context(), VectorClient: openTrackingVectorDatabase(suite.T())}
+	opts := &UserToUserOptions{Context: suite.T().Context(), VectorClient: suite.vectorClient}
 	cfg := config.UserToUserConfig{Name: "embedding", Type: "embedding", Column: "user.Labels.description"}
 	user2user, err := newEmbeddingUserToUser(cfg, timestamp, opts)
 	suite.NoError(err)
@@ -64,7 +71,7 @@ func (suite *UserToUserTestSuite) TestEmbedding() {
 }
 
 func (suite *UserToUserTestSuite) TestIDFInnerProductScores() {
-	opts := &UserToUserOptions{Context: suite.T().Context(), VectorClient: openTrackingVectorDatabase(suite.T())}
+	opts := &UserToUserOptions{Context: suite.T().Context(), VectorClient: suite.vectorClient}
 	cfg := config.UserToUserConfig{Name: "items-idf", Type: "items"}
 	user2user, err := newItemsUserToUser(cfg, time.Now(), opts, []float32{0, 1, 2})
 	suite.NoError(err)
@@ -85,7 +92,7 @@ func (suite *UserToUserTestSuite) TestIDFInnerProductScores() {
 
 func (suite *UserToUserTestSuite) TestTags() {
 	timestamp := time.Now()
-	opts := &UserToUserOptions{Context: suite.T().Context(), VectorClient: openTrackingVectorDatabase(suite.T())}
+	opts := &UserToUserOptions{Context: suite.T().Context(), VectorClient: suite.vectorClient}
 	idf := make([]float32, 101)
 	for i := range idf {
 		idf[i] = 1
@@ -116,7 +123,7 @@ func (suite *UserToUserTestSuite) TestTags() {
 
 func (suite *UserToUserTestSuite) TestItems() {
 	timestamp := time.Now()
-	opts := &UserToUserOptions{Context: suite.T().Context(), VectorClient: openTrackingVectorDatabase(suite.T())}
+	opts := &UserToUserOptions{Context: suite.T().Context(), VectorClient: suite.vectorClient}
 	idf := make([]float32, 101)
 	for i := range idf {
 		idf[i] = 1
@@ -144,7 +151,7 @@ func (suite *UserToUserTestSuite) TestItems() {
 
 func (suite *UserToUserTestSuite) TestAuto() {
 	timestamp := time.Now()
-	opts := &UserToUserOptions{Context: suite.T().Context(), VectorClient: openTrackingVectorDatabase(suite.T())}
+	opts := &UserToUserOptions{Context: suite.T().Context(), VectorClient: suite.vectorClient}
 	idf := make([]float32, 101)
 	for i := range idf {
 		idf[i] = 1

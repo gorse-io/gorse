@@ -27,7 +27,6 @@ import (
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
 	"github.com/gorse-io/gorse/storage/vectors"
-	"github.com/samber/lo"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -70,7 +69,7 @@ func (suite *RecommenderTestSuite) TearDownSuite() {
 	suite.NoError(err)
 }
 
-func (suite *RecommenderTestSuite) TestEmbeddingItemToItemUsesVectorStore() {
+func (suite *RecommenderTestSuite) TestItemToItem() {
 	ctx := suite.T().Context()
 	err := suite.vectorClient.AddCollection(ctx, vectors.ItemToItemCollection("embedding"), 2, vectors.Euclidean, vectors.VectorConfig{})
 	suite.NoError(err)
@@ -107,10 +106,7 @@ func (suite *RecommenderTestSuite) TestEmbeddingItemToItemUsesVectorStore() {
 	suite.NoError(err)
 	suite.Equal(cfg.ItemToItem[0].Hash(&cfg), digest)
 	suite.Equal([]string{"near", "far"}, cache.ConvertDocumentsToValues(scores))
-}
 
-func (suite *RecommenderTestSuite) TestItemToItemUsesVectorStore() {
-	ctx := suite.T().Context()
 	collection := vectors.ItemToItemCollection("tags-vector")
 	suite.NoError(suite.vectorClient.AddCollection(ctx, collection, 0, vectors.Dot, vectors.VectorConfig{}))
 	suite.NoError(suite.vectorClient.AddVectors(ctx, collection, []vectors.Vector{
@@ -122,16 +118,16 @@ func (suite *RecommenderTestSuite) TestItemToItemUsesVectorStore() {
 		FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "tags-vector-user", ItemId: "source"},
 	}}, true, true, false))
 
-	cfg := config.RecommendConfig{
+	cfg = config.RecommendConfig{
 		CacheSize: 2,
 		DataSource: config.DataSourceConfig{
 			PositiveFeedbackTypes: []expression.FeedbackTypeExpression{{FeedbackType: "click"}},
 		},
 		ItemToItem: []config.ItemToItemConfig{{Name: "tags-vector", Type: "tags", Column: "item.Labels"}},
 	}
-	recommender, err := NewRecommender(cfg, suite.cacheClient, suite.dataClient, suite.vectorClient, true, "tags-vector-user", nil)
+	recommender, err = NewRecommender(cfg, suite.cacheClient, suite.dataClient, suite.vectorClient, true, "tags-vector-user", nil)
 	suite.NoError(err)
-	scores, digest, err := recommender.recommendItemToItem("tags-vector")(ctx)
+	scores, digest, err = recommender.recommendItemToItem("tags-vector")(ctx)
 	suite.NoError(err)
 	suite.Equal(cfg.ItemToItem[0].Hash(&cfg), digest)
 	suite.Require().Len(scores, 1)
@@ -375,7 +371,7 @@ func (suite *RecommenderTestSuite) TestUserToUser() {
 	suite.NoError(err)
 	err = suite.vectorClient.AddVectors(suite.T().Context(), vectors.UserToUserCollection("test"), []vectors.Vector{
 		{Id: "user_1", Values: []float32{0, 0}},
-		{Id: "user_2", Values: []float32{0.1, 0}},
+		{Id: "user_2", Values: []float32{1, 0}},
 	})
 	suite.NoError(err)
 
@@ -392,11 +388,10 @@ func (suite *RecommenderTestSuite) TestUserToUser() {
 	scores, digest, err := recommender.recommendUserToUser("test")(suite.T().Context())
 	suite.NoError(err)
 	suite.Equal(userToUserConfig.Hash(&recommendConfig), digest)
-	suite.Require().Len(scores, 2)
-	suite.ElementsMatch([]string{"item_20", "item_21"}, lo.Map(scores, func(score cache.Score, _ int) string { return score.Id }))
-	for _, score := range scores {
-		suite.InDelta(1/1.01, score.Score, 1e-6)
-	}
+	suite.ElementsMatch([]cache.Score{
+		{Id: "item_20", Score: 0.5},
+		{Id: "item_21", Score: 0.5},
+	}, scores)
 }
 
 func TestRecommenderTestSuite(t *testing.T) {
