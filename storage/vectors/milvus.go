@@ -38,6 +38,7 @@ const (
 	milvusCategoriesField = "categories"
 	milvusHiddenField     = "hidden"
 	milvusTimestampField  = "timestamp"
+	milvusDefaultDatabase = "default"
 
 	milvusIVFRQIndexType = index.IvfRabitQ
 
@@ -49,13 +50,18 @@ const (
 
 func init() {
 	Register([]string{storage.MilvusPrefix}, func(path, tablePrefix string, opts ...storage.Option) (Database, error) {
-		database := &Milvus{}
 		u, err := url.Parse(path)
 		if err != nil {
 			return nil, errors.WithStack(err)
 		}
+		databaseName := strings.Trim(u.Path, "/")
+		if databaseName == "" {
+			databaseName = milvusDefaultDatabase
+		}
+		database := &Milvus{database: databaseName}
 		database.client, err = milvusclient.New(context.Background(), &milvusclient.ClientConfig{
 			Address: u.Host,
+			DBName:  databaseName,
 		})
 		if err != nil {
 			return nil, errors.WithStack(err)
@@ -65,7 +71,8 @@ func init() {
 }
 
 type Milvus struct {
-	client *milvusclient.Client
+	client   *milvusclient.Client
+	database string
 }
 
 func (db *Milvus) Init() error {
@@ -81,7 +88,20 @@ func (db *Milvus) Close() error {
 }
 
 func (db *Milvus) Purge() error {
-	return purge(db)
+	if db.database == milvusDefaultDatabase {
+		return fmt.Errorf("purging the default Milvus database %w", storage.ErrNotSupported)
+	}
+	ctx := context.Background()
+	if err := db.client.UseDatabase(ctx, milvusclient.NewUseDatabaseOption(milvusDefaultDatabase)); err != nil {
+		return errors.WithStack(err)
+	}
+	if err := db.client.DropDatabase(ctx, milvusclient.NewDropDatabaseOption(db.database)); err != nil {
+		return errors.WithStack(err)
+	}
+	if err := db.client.CreateDatabase(ctx, milvusclient.NewCreateDatabaseOption(db.database)); err != nil {
+		return errors.WithStack(err)
+	}
+	return errors.WithStack(db.client.UseDatabase(ctx, milvusclient.NewUseDatabaseOption(db.database)))
 }
 
 func (db *Milvus) ListCollections(ctx context.Context) ([]string, error) {

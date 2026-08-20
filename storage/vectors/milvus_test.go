@@ -15,13 +15,18 @@
 package vectors
 
 import (
+	"net/url"
 	"os"
+	"slices"
 	"testing"
 
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/storage"
+	"github.com/milvus-io/milvus/client/v2/milvusclient"
 	"github.com/stretchr/testify/suite"
 )
+
+const milvusTestDatabase = "gorse_vectors_test"
 
 var (
 	milvusUri string
@@ -38,9 +43,32 @@ type MilvusTestSuite struct {
 
 func (suite *MilvusTestSuite) SetupSuite() {
 	log.SetTestLogger(suite.T())
-	var err error
-	suite.Database, err = Open(milvusUri, "gorse_")
-	suite.NoError(err)
+	ctx := suite.T().Context()
+	u, err := url.Parse(milvusUri)
+	suite.Require().NoError(err)
+	u.Path = ""
+
+	adminDatabase, err := Open(u.String(), "gorse_")
+	suite.Require().NoError(err)
+	admin := adminDatabase.(*Milvus)
+	databases, err := admin.client.ListDatabase(ctx, milvusclient.NewListDatabaseOption())
+	suite.Require().NoError(err)
+	if slices.Contains(databases, milvusTestDatabase) {
+		err = admin.client.DropDatabase(ctx, milvusclient.NewDropDatabaseOption(milvusTestDatabase))
+		suite.Require().NoError(err)
+	}
+	err = admin.client.CreateDatabase(ctx, milvusclient.NewCreateDatabaseOption(milvusTestDatabase))
+	suite.Require().NoError(err)
+	suite.Require().NoError(adminDatabase.Close())
+
+	u.Path = "/" + milvusTestDatabase
+	suite.Database, err = Open(u.String(), "gorse_")
+	suite.Require().NoError(err)
+	suite.Equal(milvusTestDatabase, suite.Database.(*Milvus).database)
+}
+
+func (suite *MilvusTestSuite) TearDownSuite() {
+	suite.NoError(suite.Database.Close())
 }
 
 func (suite *MilvusTestSuite) TestInvalidSparseCollection() {
