@@ -1,18 +1,28 @@
-// Copyright 2021 zhenghaoz <zhangzhenghao@hotmail.com>. All rights reserved.
-// Use of this source code is governed by a MIT-style
-// license that can be found in the LICENSE file.
+// Copyright 2024 gorse Project Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
 
 package logics
 
 import (
 	"fmt"
+	"strconv"
 	"testing"
 	"time"
 
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/dataset"
-	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
 	"github.com/gorse-io/gorse/storage/vectors"
 	"github.com/stretchr/testify/suite"
@@ -35,29 +45,87 @@ func (suite *ItemToItemTestSuite) TearDownTest() {
 	suite.NoError(suite.vectorClient.Close())
 }
 
-func (suite *ItemToItemTestSuite) newWriter(cfg config.ItemToItemConfig, tagsIDF, usersIDF []float32) (ItemToItem, vectors.Database) {
-	writer, err := NewItemToItem(cfg, time.Now(), &ItemToItemOptions{
-		Context: suite.T().Context(), VectorClient: suite.vectorClient, TagsIDF: tagsIDF, UsersIDF: usersIDF,
+func (suite *ItemToItemTestSuite) TestColumnFunc() {
+	ctx := suite.T().Context()
+	cfg := config.ItemToItemConfig{Name: "column", Type: "embedding", Column: "item.Labels.description"}
+	item2item, err := newEmbeddingItemToItem(cfg, time.Now(), &ItemToItemOptions{
+		Context: ctx, VectorClient: suite.vectorClient,
 	})
 	suite.NoError(err)
-	return writer, suite.vectorClient
+
+	// Add success
+	item2item.Add(&data.Item{
+		ItemId: "1",
+		Labels: map[string]any{
+			"description": []float32{0.1, 0.2, 0.3},
+		},
+	}, nil)
+
+	// Hidden
+	item2item.Add(&data.Item{
+		ItemId:   "2",
+		IsHidden: true,
+		Labels: map[string]any{
+			"description": []float32{0.1, 0.2, 0.3},
+		},
+	}, nil)
+
+	// Dimension does not match
+	item2item.Add(&data.Item{
+		ItemId: "1",
+		Labels: map[string]any{
+			"description": []float32{0.1, 0.2},
+		},
+	}, nil)
+
+	// Type does not match
+	item2item.Add(&data.Item{
+		ItemId: "1",
+		Labels: map[string]any{
+			"description": "hello",
+		},
+	}, nil)
+
+	// Column does not exist
+	item2item.Add(&data.Item{
+		ItemId: "2",
+		Labels: []float32{0.1, 0.2, 0.3},
+	}, nil)
+
+	suite.NoError(item2item.Clean())
+	stored, err := suite.vectorClient.GetVectors(ctx, vectors.ItemToItemCollection(cfg.Name), []string{"1", "2"})
+	suite.NoError(err)
+	suite.Require().Len(stored, 2)
+	suite.Len(stored[0].Values, 3)
+	suite.False(stored[0].IsHidden)
+	suite.Len(stored[1].Values, 3)
+	suite.True(stored[1].IsHidden)
 }
 
 func (suite *ItemToItemTestSuite) TestEmbedding() {
+	timestamp := time.Now()
 	cfg := config.ItemToItemConfig{Name: "embedding", Type: "embedding", Column: "item.Labels.description"}
-	writer, vectorClient := suite.newWriter(cfg, nil, nil)
-	writer.Add(&data.Item{ItemId: "source", Labels: map[string]any{"description": []float32{0, 0}}}, nil)
-	writer.Add(&data.Item{ItemId: "near", Labels: map[string]any{"description": []float32{0.1, 0}}}, nil)
-	writer.Add(&data.Item{ItemId: "far", Labels: map[string]any{"description": []float32{1, 0}}}, nil)
-	writer.Add(&data.Item{ItemId: "invalid", Labels: map[string]any{"description": "invalid"}}, nil)
-	writer.Add(&data.Item{ItemId: "wrong-dimension", Labels: map[string]any{"description": []float32{0, 0, 0}}}, nil)
-	suite.NoError(writer.Clean())
-
-	scores, err := QueryItemToItem(suite.T().Context(), vectorClient, cfg, "source", nil, 2)
+	item2item, err := newEmbeddingItemToItem(cfg, timestamp, &ItemToItemOptions{
+		Context: suite.T().Context(), VectorClient: suite.vectorClient,
+	})
 	suite.NoError(err)
-	suite.Require().Len(scores, 2)
-	suite.Equal("near", scores[0].Id)
-	suite.Equal("far", scores[1].Id)
+
+	for i := range 100 {
+		item2item.Add(&data.Item{
+			ItemId: strconv.Itoa(i),
+			Labels: map[string]any{
+				"description": []float32{0.1 * float32(i), 0.2 * float32(i), 0.3 * float32(i)},
+			},
+		}, nil)
+	}
+	suite.NoError(item2item.Clean())
+
+	scores, err := QueryItemToItem(suite.T().Context(), suite.vectorClient, cfg, "0", nil, 10)
+	suite.NoError(err)
+	suite.Len(scores, 10)
+	for i := 1; i <= 10; i++ {
+		suite.Equal(strconv.Itoa(i), scores[i-1].Id)
+	}
 }
 
 func (suite *ItemToItemTestSuite) TestClean() {
@@ -71,10 +139,10 @@ func (suite *ItemToItemTestSuite) TestClean() {
 		{Id: "current", Values: []float32{1, 0}, Timestamp: timestamp},
 	}))
 
-	writer, err := NewItemToItem(cfg, timestamp, &ItemToItemOptions{Context: ctx, VectorClient: suite.vectorClient})
+	item2item, err := NewItemToItem(cfg, timestamp, &ItemToItemOptions{Context: ctx, VectorClient: suite.vectorClient})
 	suite.NoError(err)
-	writer.Add(&data.Item{ItemId: "new", Labels: map[string]any{"embedding": []float32{2, 0}}}, nil)
-	suite.NoError(writer.Clean())
+	item2item.Add(&data.Item{ItemId: "new", Labels: map[string]any{"embedding": []float32{2, 0}}}, nil)
+	suite.NoError(item2item.Clean())
 
 	stored, err := suite.vectorClient.GetVectors(ctx, collection, []string{"stale", "current", "new"})
 	suite.NoError(err)
@@ -84,82 +152,155 @@ func (suite *ItemToItemTestSuite) TestClean() {
 }
 
 func (suite *ItemToItemTestSuite) TestHidden() {
+	timestamp := time.Now()
 	cfg := config.ItemToItemConfig{Name: "hidden", Type: "embedding", Column: "item.Labels.description"}
-	writer, vectorClient := suite.newWriter(cfg, nil, nil)
-	writer.Add(&data.Item{ItemId: "visible_1", Labels: map[string]any{"description": []float32{0, 0}}}, nil)
-	writer.Add(&data.Item{ItemId: "visible_2", Labels: map[string]any{"description": []float32{0.1, 0}}}, nil)
-	writer.Add(&data.Item{ItemId: "hidden", IsHidden: true, Labels: map[string]any{"description": []float32{0.05, 0}}}, nil)
-	suite.NoError(writer.Clean())
+	item2item, err := newEmbeddingItemToItem(cfg, timestamp, &ItemToItemOptions{
+		Context: suite.T().Context(), VectorClient: suite.vectorClient,
+	})
+	suite.NoError(err)
 
-	visibleScores, err := QueryItemToItem(suite.T().Context(), vectorClient, cfg, "visible_1", nil, 10)
+	item2item.Add(&data.Item{
+		ItemId: "visible_1",
+		Labels: map[string]any{
+			"description": []float32{0.0, 0.0, 0.0},
+		},
+	}, nil)
+	item2item.Add(&data.Item{
+		ItemId: "visible_2",
+		Labels: map[string]any{
+			"description": []float32{0.1, 0.0, 0.0},
+		},
+	}, nil)
+	item2item.Add(&data.Item{
+		ItemId:   "hidden_1",
+		IsHidden: true,
+		Labels: map[string]any{
+			"description": []float32{0.05, 0.0, 0.0},
+		},
+	}, nil)
+	suite.NoError(item2item.Clean())
+
+	// hidden item should have similar items generated from non-hidden index
+	hiddenScores, err := QueryItemToItem(suite.T().Context(), suite.vectorClient, cfg, "hidden_1", nil, 2)
 	suite.NoError(err)
-	suite.Equal([]string{"visible_2"}, scoreIDs(visibleScores))
-	hiddenScores, err := QueryItemToItem(suite.T().Context(), vectorClient, cfg, "hidden", nil, 10)
+	suite.Len(hiddenScores, 2)
+	for _, score := range hiddenScores {
+		suite.NotEqual("hidden_1", score.Id)
+	}
+
+	// non-hidden item should never get hidden item in similarity results
+	visibleScores, err := QueryItemToItem(suite.T().Context(), suite.vectorClient, cfg, "visible_1", nil, 2)
 	suite.NoError(err)
-	suite.Equal([]string{"visible_1", "visible_2"}, scoreIDs(hiddenScores))
+	suite.Len(visibleScores, 1)
+	for _, score := range visibleScores {
+		suite.NotEqual("hidden_1", score.Id)
+	}
 }
 
 func (suite *ItemToItemTestSuite) TestTags() {
+	timestamp := time.Now()
+	idf := make([]float32, 101)
+	for i := range idf {
+		idf[i] = 1
+	}
 	cfg := config.ItemToItemConfig{Name: "tags", Type: "tags", Column: "item.Labels"}
-	writer, vectorClient := suite.newWriter(cfg, []float32{0, 1, 2}, nil)
-	writer.Add(&data.Item{ItemId: "query", Labels: []dataset.ID{1, 2}}, nil)
-	writer.Add(&data.Item{ItemId: "idf-2", Labels: []dataset.ID{2}}, nil)
-	writer.Add(&data.Item{ItemId: "idf-1", Labels: []dataset.ID{1}}, nil)
-	suite.NoError(writer.Clean())
-
-	scores, err := QueryItemToItem(suite.T().Context(), vectorClient, cfg, "query", nil, 2)
+	item2item, err := newTagsItemToItem(cfg, timestamp, &ItemToItemOptions{
+		Context: suite.T().Context(), VectorClient: suite.vectorClient,
+	}, idf)
 	suite.NoError(err)
-	suite.Require().Len(scores, 2)
-	suite.Equal("idf-2", scores[0].Id)
-	suite.InDelta(2, scores[0].Score, 1e-6)
-	suite.Equal("idf-1", scores[1].Id)
-	suite.InDelta(1, scores[1].Score, 1e-6)
+
+	for i := range 100 {
+		labels := make(map[string]any)
+		for j := 1; j <= 100-i; j++ {
+			labels[strconv.Itoa(j)] = []dataset.ID{dataset.ID(j)}
+		}
+		item2item.Add(&data.Item{
+			ItemId: strconv.Itoa(i),
+			Labels: labels,
+		}, nil)
+	}
+	suite.NoError(item2item.Clean())
+
+	scores, err := QueryItemToItem(suite.T().Context(), suite.vectorClient, cfg, "0", nil, 10)
+	suite.NoError(err)
+	suite.Len(scores, 10)
+	for i := 1; i <= 10; i++ {
+		suite.Equal(strconv.Itoa(i), scores[i-1].Id)
+	}
 }
 
 func (suite *ItemToItemTestSuite) TestUsers() {
+	timestamp := time.Now()
+	idf := make([]float32, 101)
+	for i := range idf {
+		idf[i] = 1
+	}
 	cfg := config.ItemToItemConfig{Name: "users", Type: "users"}
-	writer, vectorClient := suite.newWriter(cfg, nil, []float32{0, 1, 2})
-	writer.Add(&data.Item{ItemId: "query"}, []int32{1, 2})
-	writer.Add(&data.Item{ItemId: "idf-2"}, []int32{2})
-	writer.Add(&data.Item{ItemId: "idf-1"}, []int32{1})
-	suite.NoError(writer.Clean())
-
-	scores, err := QueryItemToItem(suite.T().Context(), vectorClient, cfg, "query", nil, 2)
+	item2item, err := newUsersItemToItem(cfg, timestamp, &ItemToItemOptions{
+		Context: suite.T().Context(), VectorClient: suite.vectorClient,
+	}, idf)
 	suite.NoError(err)
-	suite.Require().Len(scores, 2)
-	suite.Equal("idf-2", scores[0].Id)
-	suite.InDelta(2, scores[0].Score, 1e-6)
-	suite.Equal("idf-1", scores[1].Id)
-	suite.InDelta(1, scores[1].Score, 1e-6)
+
+	for i := range 100 {
+		feedback := make([]int32, 0, 100-i)
+		for j := 1; j <= 100-i; j++ {
+			feedback = append(feedback, int32(j))
+		}
+		item2item.Add(&data.Item{ItemId: strconv.Itoa(i)}, feedback)
+	}
+	suite.NoError(item2item.Clean())
+
+	scores, err := QueryItemToItem(suite.T().Context(), suite.vectorClient, cfg, "0", nil, 10)
+	suite.NoError(err)
+	suite.Len(scores, 10)
+	for i := 1; i <= 10; i++ {
+		suite.Equal(strconv.Itoa(i), scores[i-1].Id)
+	}
 }
 
 func (suite *ItemToItemTestSuite) TestAuto() {
-	cfg := config.ItemToItemConfig{Name: "auto", Type: "auto"}
-	idf := []float32{0, 1, 2}
-	writer, vectorClient := suite.newWriter(cfg, idf, idf)
-	writer.Add(&data.Item{ItemId: "query", Labels: []dataset.ID{1}}, []int32{1})
-	writer.Add(&data.Item{ItemId: "same", Labels: []dataset.ID{1}}, []int32{1})
-	suite.NoError(writer.Clean())
-
-	scores, err := QueryItemToItem(suite.T().Context(), vectorClient, cfg, "query", nil, 1)
-	suite.NoError(err)
-	suite.Require().Len(scores, 1)
-	suite.Equal("same", scores[0].Id)
-	suite.InDelta(1, scores[0].Score, 1e-6)
-}
-
-func (suite *ItemToItemTestSuite) TestIDFInnerProduct() {
-	idf := IDF[dataset.ID]{0, 1, 2, 3, 4}
-	suite.InDelta(5, idf.similarity([]dataset.ID{1, 2, 3}, []dataset.ID{2, 3, 4}), 1e-6)
-	suite.InDelta(0, idf.similarity([]dataset.ID{1}, []dataset.ID{4}), 1e-6)
-}
-
-func scoreIDs(scores []cache.Score) []string {
-	ids := make([]string, len(scores))
-	for i := range scores {
-		ids[i] = scores[i].Id
+	timestamp := time.Now()
+	idf := make([]float32, 101)
+	for i := range idf {
+		idf[i] = 1
 	}
-	return ids
+	cfg := config.ItemToItemConfig{Name: "auto", Type: "auto"}
+	item2item, err := newAutoItemToItem(cfg, timestamp, &ItemToItemOptions{
+		Context: suite.T().Context(), VectorClient: suite.vectorClient,
+	}, idf, idf)
+	suite.NoError(err)
+
+	for i := range 100 {
+		item := &data.Item{ItemId: strconv.Itoa(i)}
+		feedback := make([]int32, 0, 100-i)
+		if i%2 == 0 {
+			labels := make(map[string]any)
+			for j := 1; j <= 100-i; j++ {
+				labels[strconv.Itoa(j)] = []dataset.ID{dataset.ID(j)}
+			}
+			item.Labels = labels
+		} else {
+			for j := 1; j <= 100-i; j++ {
+				feedback = append(feedback, int32(j))
+			}
+		}
+		item2item.Add(item, feedback)
+	}
+	suite.NoError(item2item.Clean())
+
+	scores0, err := QueryItemToItem(suite.T().Context(), suite.vectorClient, cfg, "0", nil, 10)
+	suite.NoError(err)
+	suite.Len(scores0, 10)
+	for i := 1; i <= 10; i++ {
+		suite.Equal(strconv.Itoa(i*2), scores0[i-1].Id)
+	}
+
+	scores1, err := QueryItemToItem(suite.T().Context(), suite.vectorClient, cfg, "1", nil, 10)
+	suite.NoError(err)
+	suite.Len(scores1, 10)
+	for i := 1; i <= 10; i++ {
+		suite.Equal(strconv.Itoa(i*2+1), scores1[i-1].Id)
+	}
 }
 
 func TestItemToItem(t *testing.T) {

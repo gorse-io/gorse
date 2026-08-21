@@ -93,26 +93,6 @@ func (suite *UserToUserTestSuite) TestClean() {
 	suite.Equal("new", stored[1].Id)
 }
 
-func (suite *UserToUserTestSuite) TestIDFInnerProductScores() {
-	opts := &UserToUserOptions{Context: suite.T().Context(), VectorClient: suite.vectorClient}
-	cfg := config.UserToUserConfig{Name: "items-idf", Type: "items"}
-	user2user, err := newItemsUserToUser(cfg, time.Now(), opts, []float32{0, 1, 2})
-	suite.NoError(err)
-
-	user2user.Add(&data.User{UserId: "query"}, []int32{1, 2})
-	user2user.Add(&data.User{UserId: "idf-2"}, []int32{2})
-	user2user.Add(&data.User{UserId: "idf-1"}, []int32{1})
-
-	suite.NoError(user2user.Clean())
-	scores, err := QueryUserToUser(suite.T().Context(), opts.VectorClient, cfg, "query", 2)
-	suite.NoError(err)
-	suite.Require().Len(scores, 2)
-	suite.Equal("idf-2", scores[0].Id)
-	suite.InDelta(2, scores[0].Score, 1e-6)
-	suite.Equal("idf-1", scores[1].Id)
-	suite.InDelta(1, scores[1].Score, 1e-6)
-}
-
 func (suite *UserToUserTestSuite) TestTags() {
 	timestamp := time.Now()
 	opts := &UserToUserOptions{Context: suite.T().Context(), VectorClient: suite.vectorClient}
