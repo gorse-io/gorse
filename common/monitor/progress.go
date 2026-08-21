@@ -26,7 +26,7 @@ import (
 
 type spanKeyType string
 
-var spanKeyName = spanKeyType(uuid.New().String())
+var spanKeyName = spanKeyType(uuid.NewV4().String())
 
 type Status string
 

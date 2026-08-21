@@ -149,7 +149,7 @@ func (s *RestServer) StartHttpServer(container *restful.Container) {
 
 func (s *RestServer) LogFilter(req *restful.Request, resp *restful.Response, chain *restful.FilterChain) {
 	// generate request id
-	requestId := uuid.New().String()
+	requestId := uuid.NewV4().String()
 	resp.AddHeader("X-Request-ID", requestId)
 
 	var requestReader *CountingReadCloser
