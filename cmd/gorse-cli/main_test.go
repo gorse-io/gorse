@@ -277,9 +277,10 @@ func (s *CLITestSuite) TestRecommendItemToUser() {
 }
 
 func (s *CLITestSuite) TestRecommendItemToItem() {
+	ctx := s.T().Context()
 	collection := vectors.ItemToItemCollection("neighbors")
-	s.waitForCollection(collection)
-	s.Require().NoError(s.m.VectorClient.AddVectors(s.T().Context(), collection, []vectors.Vector{
+	s.Require().NoError(s.m.VectorClient.AddCollection(ctx, collection, 0, vectors.Dot, vectors.VectorConfig{}))
+	s.Require().NoError(s.m.VectorClient.AddVectors(ctx, collection, []vectors.Vector{
 		{Id: "item-1", Indices: []uint32{0}, Values: []float32{1}},
 		{Id: "similar-1", Indices: []uint32{0}, Values: []float32{1}, Categories: []string{"news"}},
 	}))
@@ -294,9 +295,10 @@ func (s *CLITestSuite) requireScoredItemsOutput(args []string, rowRegexps ...str
 }
 
 func (s *CLITestSuite) TestRecommendUserToUser() {
+	ctx := s.T().Context()
 	collection := vectors.UserToUserCollection("neighbors")
-	s.waitForCollection(collection)
-	s.Require().NoError(s.m.VectorClient.AddVectors(s.T().Context(), collection, []vectors.Vector{
+	s.Require().NoError(s.m.VectorClient.AddCollection(ctx, collection, 0, vectors.Dot, vectors.VectorConfig{}))
+	s.Require().NoError(s.m.VectorClient.AddVectors(ctx, collection, []vectors.Vector{
 		{Id: "alice", Indices: []uint32{0}, Values: []float32{1}},
 		{Id: "neighbor-1", Indices: []uint32{0}, Values: []float32{1}},
 	}))
@@ -304,21 +306,6 @@ func (s *CLITestSuite) TestRecommendUserToUser() {
 		`^USER-ID\s+COMMENT\s+LABELS\s+SCORE$`,
 		`^neighbor-1\s+1$`,
 	)
-}
-
-func (s *CLITestSuite) waitForCollection(collection string) {
-	s.Require().Eventually(func() bool {
-		collections, err := s.m.VectorClient.ListCollections(s.T().Context())
-		if err != nil {
-			return false
-		}
-		for _, candidate := range collections {
-			if candidate == collection {
-				return true
-			}
-		}
-		return false
-	}, 30*time.Second, 50*time.Millisecond, "collection %s was not created", collection)
 }
 
 func (s *CLITestSuite) TestGetUser() {
