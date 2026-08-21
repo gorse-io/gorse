@@ -880,7 +880,7 @@ func (m *Master) getRecommend(request *restful.Request, response *restful.Respon
 		return
 	}
 
-	recommender, err := logics.NewRecommender(m.Config.Recommend, m.CacheClient, m.DataClient, true, userId, categories)
+	recommender, err := logics.NewRecommender(m.Config.Recommend, m.CacheClient, m.DataClient, m.VectorClient, true, userId, categories)
 	if err != nil {
 		server.InternalServerError(response, err)
 		return
@@ -1109,16 +1109,94 @@ func (m *Master) getNonPersonalized(request *restful.Request, response *restful.
 func (m *Master) getItemToItem(request *restful.Request, response *restful.Response) {
 	name := request.PathParameter("name")
 	itemId := request.PathParameter("item-id")
+	itemToItemConfig := m.Config.Recommend.GetItemToItemConfig(name)
+	if itemToItemConfig == nil {
+		server.PageNotFound(response, errors.Errorf("item-to-item recommender %s not found", name))
+		return
+	}
+	offset, err := server.ParseInt(request, "offset", 0)
+	if err != nil {
+		server.BadRequest(response, err)
+		return
+	}
+	n, err := server.ParseInt(request, "n", m.Config.Server.DefaultN)
+	if err != nil {
+		server.BadRequest(response, err)
+		return
+	}
+	ctx := request.Request.Context()
 	categories := request.QueryParameters("category")
-	m.SetLastModified(request, response, cache.Key(cache.ItemToItemUpdateTime, name, itemId))
-	m.SearchDocuments(cache.ItemToItem, cache.Key(name, itemId), categories, m.GetItem, request, response)
+	scores, err := logics.QueryItemToItem(ctx, m.VectorClient, *itemToItemConfig, itemId, nil, max(offset+n, m.Config.Recommend.CacheSize))
+	if err != nil {
+		server.InternalServerError(response, err)
+		return
+	}
+	scores, err = server.FilterVisibleItemsByCategories(ctx, m.DataClient, scores, categories)
+	if err != nil {
+		server.InternalServerError(response, err)
+		return
+	}
+	if offset < len(scores) {
+		scores = scores[offset:]
+	} else {
+		scores = nil
+	}
+	if n > 0 && len(scores) > n {
+		scores = scores[:n]
+	}
+	items := make([]any, 0, len(scores))
+	for _, score := range scores {
+		item, err := m.GetItem(score)
+		if err != nil {
+			server.InternalServerError(response, err)
+			return
+		}
+		items = append(items, item)
+	}
+	server.Ok(response, items)
 }
 
 func (m *Master) getUserToUser(request *restful.Request, response *restful.Response) {
 	userId := request.PathParameter("user-id")
 	name := request.PathParameter("name")
-	m.SetLastModified(request, response, cache.Key(cache.UserToUserUpdateTime, name, userId))
-	m.SearchDocuments(cache.UserToUser, cache.Key(name, userId), nil, m.GetUser, request, response)
+	userToUserConfig := m.Config.Recommend.GetUserToUserConfig(name)
+	if userToUserConfig == nil {
+		server.PageNotFound(response, errors.Errorf("user-to-user recommender %s not found", name))
+		return
+	}
+	offset, err := server.ParseInt(request, "offset", 0)
+	if err != nil {
+		server.BadRequest(response, err)
+		return
+	}
+	n, err := server.ParseInt(request, "n", m.Config.Server.DefaultN)
+	if err != nil {
+		server.BadRequest(response, err)
+		return
+	}
+	scores, err := logics.QueryUserToUser(request.Request.Context(), m.VectorClient, *userToUserConfig, userId, offset+n)
+	if err != nil {
+		server.InternalServerError(response, err)
+		return
+	}
+	if offset < len(scores) {
+		scores = scores[offset:]
+	} else {
+		scores = nil
+	}
+	if n > 0 && len(scores) > n {
+		scores = scores[:n]
+	}
+	users := make([]any, 0, len(scores))
+	for _, score := range scores {
+		user, err := m.GetUser(score)
+		if err != nil {
+			server.InternalServerError(response, err)
+			return
+		}
+		users = append(users, user)
+	}
+	server.Ok(response, users)
 }
 
 func (m *Master) getExternal(request *restful.Request, response *restful.Response) {

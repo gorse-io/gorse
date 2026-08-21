@@ -15,143 +15,194 @@
 package logics
 
 import (
+	"fmt"
 	"strconv"
 	"testing"
 	"time"
 
-	"github.com/gorse-io/gorse/common/floats"
 	"github.com/gorse-io/gorse/common/log"
-	"github.com/gorse-io/gorse/common/mock"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/dataset"
 	"github.com/gorse-io/gorse/storage/data"
+	"github.com/gorse-io/gorse/storage/vectors"
 	"github.com/stretchr/testify/suite"
 )
 
 type ItemToItemTestSuite struct {
 	suite.Suite
+	vectorClient vectors.Database
 }
 
 func (suite *ItemToItemTestSuite) SetupTest() {
 	log.SetTestLogger(suite.T())
+	var err error
+	suite.vectorClient, err = vectors.Open(fmt.Sprintf("xvec://%s/vectors", suite.T().TempDir()), "")
+	suite.NoError(err)
+	suite.NoError(suite.vectorClient.Init())
 }
 
-func (suite *ItemToItemTestSuite) SetupSuite() {
-	log.SetTestLogger(suite.T())
+func (suite *ItemToItemTestSuite) TearDownTest() {
+	suite.NoError(suite.vectorClient.Close())
 }
 
 func (suite *ItemToItemTestSuite) TestColumnFunc() {
-	item2item, err := newEmbeddingItemToItem(config.ItemToItemConfig{
-		Column: "item.Labels.description",
-	}, 10, time.Now())
+	ctx := suite.T().Context()
+	cfg := config.ItemToItemConfig{Name: "column", Type: "embedding", Column: "item.Labels.description"}
+	collection := vectors.ItemToItemCollection(cfg.Name)
+	item2item, err := newEmbeddingItemToItem(cfg, time.Now(), &ItemToItemOptions{
+		Context: ctx, VectorClient: suite.vectorClient,
+	})
 	suite.NoError(err)
 
-	// Push success
-	item2item.Push(&data.Item{
+	// Add success
+	suite.NoError(item2item.Add(&data.Item{
 		ItemId: "1",
 		Labels: map[string]any{
 			"description": []float32{0.1, 0.2, 0.3},
 		},
-	}, nil)
-	suite.Equal(1, item2item.Count())
+	}, nil))
+	suite.NoError(item2item.Clean())
+	count, err := suite.vectorClient.CountVectors(ctx, collection)
+	suite.NoError(err)
+	suite.Equal(int64(1), count)
 
 	// Hidden
-	item2item.Push(&data.Item{
+	suite.NoError(item2item.Add(&data.Item{
 		ItemId:   "2",
 		IsHidden: true,
 		Labels: map[string]any{
 			"description": []float32{0.1, 0.2, 0.3},
 		},
-	}, nil)
-	suite.Equal(2, item2item.Count())
+	}, nil))
+	suite.NoError(item2item.Clean())
+	count, err = suite.vectorClient.CountVectors(ctx, collection)
+	suite.NoError(err)
+	suite.Equal(int64(2), count)
 
 	// Dimension does not match
-	item2item.Push(&data.Item{
+	suite.NoError(item2item.Add(&data.Item{
 		ItemId: "1",
 		Labels: map[string]any{
 			"description": []float32{0.1, 0.2},
 		},
-	}, nil)
-	suite.Equal(2, item2item.Count())
+	}, nil))
+	suite.NoError(item2item.Clean())
+	count, err = suite.vectorClient.CountVectors(ctx, collection)
+	suite.NoError(err)
+	suite.Equal(int64(2), count)
 
 	// Type does not match
-	item2item.Push(&data.Item{
+	suite.NoError(item2item.Add(&data.Item{
 		ItemId: "1",
 		Labels: map[string]any{
 			"description": "hello",
 		},
-	}, nil)
-	suite.Equal(2, item2item.Count())
+	}, nil))
+	suite.NoError(item2item.Clean())
+	count, err = suite.vectorClient.CountVectors(ctx, collection)
+	suite.NoError(err)
+	suite.Equal(int64(2), count)
 
 	// Column does not exist
-	item2item.Push(&data.Item{
+	suite.NoError(item2item.Add(&data.Item{
 		ItemId: "2",
 		Labels: []float32{0.1, 0.2, 0.3},
-	}, nil)
-	suite.Equal(2, item2item.Count())
+	}, nil))
+	suite.NoError(item2item.Clean())
+	count, err = suite.vectorClient.CountVectors(ctx, collection)
+	suite.NoError(err)
+	suite.Equal(int64(2), count)
 }
 
 func (suite *ItemToItemTestSuite) TestEmbedding() {
 	timestamp := time.Now()
-	item2item, err := newEmbeddingItemToItem(config.ItemToItemConfig{
-		Column: "item.Labels.description",
-	}, 10, timestamp)
+	cfg := config.ItemToItemConfig{Name: "embedding", Type: "embedding", Column: "item.Labels.description"}
+	item2item, err := newEmbeddingItemToItem(cfg, timestamp, &ItemToItemOptions{
+		Context: suite.T().Context(), VectorClient: suite.vectorClient,
+	})
 	suite.NoError(err)
 
 	for i := range 100 {
-		item2item.Push(&data.Item{
+		suite.NoError(item2item.Add(&data.Item{
 			ItemId: strconv.Itoa(i),
 			Labels: map[string]any{
 				"description": []float32{0.1 * float32(i), 0.2 * float32(i), 0.3 * float32(i)},
 			},
-		}, nil)
+		}, nil))
 	}
+	suite.NoError(item2item.Clean())
 
-	scores := item2item.PopAll(0)
+	scores, err := QueryItemToItem(suite.T().Context(), suite.vectorClient, cfg, "0", nil, 10)
+	suite.NoError(err)
 	suite.Len(scores, 10)
 	for i := 1; i <= 10; i++ {
 		suite.Equal(strconv.Itoa(i), scores[i-1].Id)
 	}
 }
 
+func (suite *ItemToItemTestSuite) TestClean() {
+	ctx := suite.T().Context()
+	timestamp := time.Now().UTC().Truncate(time.Millisecond)
+	cfg := config.ItemToItemConfig{Name: "cleanup", Type: "embedding", Column: "item.Labels.embedding"}
+	collection := vectors.ItemToItemCollection(cfg.Name)
+	suite.NoError(suite.vectorClient.AddCollection(ctx, collection, 2, vectors.Euclidean, vectors.VectorConfig{}))
+	suite.NoError(suite.vectorClient.AddVectors(ctx, collection, []vectors.Vector{
+		{Id: "stale", Values: []float32{0, 0}, Timestamp: timestamp.Add(-time.Hour)},
+		{Id: "current", Values: []float32{1, 0}, Timestamp: timestamp},
+	}))
+
+	item2item, err := NewItemToItem(cfg, timestamp, &ItemToItemOptions{Context: ctx, VectorClient: suite.vectorClient})
+	suite.NoError(err)
+	suite.NoError(item2item.Add(&data.Item{ItemId: "new", Labels: map[string]any{"embedding": []float32{2, 0}}}, nil))
+	suite.NoError(item2item.Clean())
+
+	stored, err := suite.vectorClient.GetVectors(ctx, collection, []string{"stale", "current", "new"})
+	suite.NoError(err)
+	suite.Require().Len(stored, 2)
+	suite.Equal("current", stored[0].Id)
+	suite.Equal("new", stored[1].Id)
+}
+
 func (suite *ItemToItemTestSuite) TestHidden() {
 	timestamp := time.Now()
-	item2item, err := newEmbeddingItemToItem(config.ItemToItemConfig{
-		Column: "item.Labels.description",
-	}, 2, timestamp)
+	cfg := config.ItemToItemConfig{Name: "hidden", Type: "embedding", Column: "item.Labels.description"}
+	item2item, err := newEmbeddingItemToItem(cfg, timestamp, &ItemToItemOptions{
+		Context: suite.T().Context(), VectorClient: suite.vectorClient,
+	})
 	suite.NoError(err)
 
-	item2item.Push(&data.Item{
+	suite.NoError(item2item.Add(&data.Item{
 		ItemId: "visible_1",
 		Labels: map[string]any{
 			"description": []float32{0.0, 0.0, 0.0},
 		},
-	}, nil)
-	item2item.Push(&data.Item{
+	}, nil))
+	suite.NoError(item2item.Add(&data.Item{
 		ItemId: "visible_2",
 		Labels: map[string]any{
 			"description": []float32{0.1, 0.0, 0.0},
 		},
-	}, nil)
-	item2item.Push(&data.Item{
+	}, nil))
+	suite.NoError(item2item.Add(&data.Item{
 		ItemId:   "hidden_1",
 		IsHidden: true,
 		Labels: map[string]any{
 			"description": []float32{0.05, 0.0, 0.0},
 		},
-	}, nil)
-
-	suite.Equal(3, item2item.Count())
+	}, nil))
+	suite.NoError(item2item.Clean())
 
 	// hidden item should have similar items generated from non-hidden index
-	hiddenScores := item2item.PopAll(2)
+	hiddenScores, err := QueryItemToItem(suite.T().Context(), suite.vectorClient, cfg, "hidden_1", nil, 2)
+	suite.NoError(err)
 	suite.Len(hiddenScores, 2)
 	for _, score := range hiddenScores {
 		suite.NotEqual("hidden_1", score.Id)
 	}
 
 	// non-hidden item should never get hidden item in similarity results
-	visibleScores := item2item.PopAll(0)
+	visibleScores, err := QueryItemToItem(suite.T().Context(), suite.vectorClient, cfg, "visible_1", nil, 2)
+	suite.NoError(err)
 	suite.Len(visibleScores, 1)
 	for _, score := range visibleScores {
 		suite.NotEqual("hidden_1", score.Id)
@@ -164,9 +215,10 @@ func (suite *ItemToItemTestSuite) TestTags() {
 	for i := range idf {
 		idf[i] = 1
 	}
-	item2item, err := newTagsItemToItem(config.ItemToItemConfig{
-		Column: "item.Labels",
-	}, 10, timestamp, idf)
+	cfg := config.ItemToItemConfig{Name: "tags", Type: "tags", Column: "item.Labels"}
+	item2item, err := newTagsItemToItem(cfg, timestamp, &ItemToItemOptions{
+		Context: suite.T().Context(), VectorClient: suite.vectorClient,
+	}, idf)
 	suite.NoError(err)
 
 	for i := range 100 {
@@ -174,13 +226,15 @@ func (suite *ItemToItemTestSuite) TestTags() {
 		for j := 1; j <= 100-i; j++ {
 			labels[strconv.Itoa(j)] = []dataset.ID{dataset.ID(j)}
 		}
-		item2item.Push(&data.Item{
+		suite.NoError(item2item.Add(&data.Item{
 			ItemId: strconv.Itoa(i),
 			Labels: labels,
-		}, nil)
+		}, nil))
 	}
+	suite.NoError(item2item.Clean())
 
-	scores := item2item.PopAll(0)
+	scores, err := QueryItemToItem(suite.T().Context(), suite.vectorClient, cfg, "0", nil, 10)
+	suite.NoError(err)
 	suite.Len(scores, 10)
 	for i := 1; i <= 10; i++ {
 		suite.Equal(strconv.Itoa(i), scores[i-1].Id)
@@ -193,7 +247,10 @@ func (suite *ItemToItemTestSuite) TestUsers() {
 	for i := range idf {
 		idf[i] = 1
 	}
-	item2item, err := newUsersItemToItem(config.ItemToItemConfig{}, 10, timestamp, idf)
+	cfg := config.ItemToItemConfig{Name: "users", Type: "users"}
+	item2item, err := newUsersItemToItem(cfg, timestamp, &ItemToItemOptions{
+		Context: suite.T().Context(), VectorClient: suite.vectorClient,
+	}, idf)
 	suite.NoError(err)
 
 	for i := range 100 {
@@ -201,10 +258,12 @@ func (suite *ItemToItemTestSuite) TestUsers() {
 		for j := 1; j <= 100-i; j++ {
 			feedback = append(feedback, int32(j))
 		}
-		item2item.Push(&data.Item{ItemId: strconv.Itoa(i)}, feedback)
+		suite.NoError(item2item.Add(&data.Item{ItemId: strconv.Itoa(i)}, feedback))
 	}
+	suite.NoError(item2item.Clean())
 
-	scores := item2item.PopAll(0)
+	scores, err := QueryItemToItem(suite.T().Context(), suite.vectorClient, cfg, "0", nil, 10)
+	suite.NoError(err)
 	suite.Len(scores, 10)
 	for i := 1; i <= 10; i++ {
 		suite.Equal(strconv.Itoa(i), scores[i-1].Id)
@@ -217,7 +276,10 @@ func (suite *ItemToItemTestSuite) TestAuto() {
 	for i := range idf {
 		idf[i] = 1
 	}
-	item2item, err := newAutoItemToItem(config.ItemToItemConfig{}, 10, timestamp, idf, idf)
+	cfg := config.ItemToItemConfig{Name: "auto", Type: "auto"}
+	item2item, err := newAutoItemToItem(cfg, timestamp, &ItemToItemOptions{
+		Context: suite.T().Context(), VectorClient: suite.vectorClient,
+	}, idf, idf)
 	suite.NoError(err)
 
 	for i := range 100 {
@@ -234,57 +296,22 @@ func (suite *ItemToItemTestSuite) TestAuto() {
 				feedback = append(feedback, int32(j))
 			}
 		}
-		item2item.Push(item, feedback)
+		suite.NoError(item2item.Add(item, feedback))
 	}
+	suite.NoError(item2item.Clean())
 
-	scores0 := item2item.PopAll(0)
+	scores0, err := QueryItemToItem(suite.T().Context(), suite.vectorClient, cfg, "0", nil, 10)
+	suite.NoError(err)
 	suite.Len(scores0, 10)
 	for i := 1; i <= 10; i++ {
 		suite.Equal(strconv.Itoa(i*2), scores0[i-1].Id)
 	}
-	scores1 := item2item.PopAll(1)
+
+	scores1, err := QueryItemToItem(suite.T().Context(), suite.vectorClient, cfg, "1", nil, 10)
+	suite.NoError(err)
 	suite.Len(scores1, 10)
 	for i := 1; i <= 10; i++ {
 		suite.Equal(strconv.Itoa(i*2+1), scores1[i-1].Id)
-	}
-}
-
-func (suite *ItemToItemTestSuite) TestChat() {
-	mockAI := mock.NewOpenAIServer()
-	go func() {
-		_ = mockAI.Start()
-	}()
-	mockAI.Ready()
-	defer mockAI.Close()
-
-	timestamp := time.Now()
-	item2item, err := newChatItemToItem(config.ItemToItemConfig{
-		Column: "item.Labels.embeddings",
-		Prompt: "Please generate similar items for {{ item.Labels.title }}.",
-	}, 10, timestamp, config.OpenAIConfig{
-		BaseURL:             mockAI.BaseURL(),
-		AuthToken:           mockAI.AuthToken(),
-		ChatCompletionModel: "deepseek-r1",
-		EmbeddingModel:      "text-similarity-ada-001",
-	})
-	suite.NoError(err)
-
-	for i := range 100 {
-		embedding := mock.Hash("Please generate similar items for item_0.")
-		floats.AddConst(embedding, float32(i+1))
-		item2item.Push(&data.Item{
-			ItemId: strconv.Itoa(i),
-			Labels: map[string]any{
-				"title":      "item_" + strconv.Itoa(i),
-				"embeddings": embedding,
-			},
-		}, nil)
-	}
-
-	scores := item2item.PopAll(0)
-	suite.Len(scores, 10)
-	for i := 1; i <= 10; i++ {
-		suite.Equal(strconv.Itoa(i), scores[i-1].Id)
 	}
 }
 

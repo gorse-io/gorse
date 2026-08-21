@@ -16,6 +16,7 @@ package logics
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -24,8 +25,10 @@ import (
 	"github.com/gorse-io/gorse/common/heap"
 	"github.com/gorse-io/gorse/common/util"
 	"github.com/gorse-io/gorse/config"
+	"github.com/gorse-io/gorse/storage"
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
+	"github.com/gorse-io/gorse/storage/vectors"
 	"github.com/pkg/errors"
 	"github.com/samber/lo"
 )
@@ -40,9 +43,10 @@ const (
 )
 
 type Recommender struct {
-	config      config.RecommendConfig
-	cacheClient cache.Database
-	dataClient  data.Database
+	config       config.RecommendConfig
+	cacheClient  cache.Database
+	dataClient   data.Database
+	vectorClient vectors.Database
 
 	online       bool
 	coldstart    bool
@@ -54,7 +58,7 @@ type Recommender struct {
 
 type RecommenderFunc func(ctx context.Context) ([]cache.Score, string, error)
 
-func NewRecommender(config config.RecommendConfig, cacheClient cache.Database, dataClient data.Database, online bool, userId string, categories []string) (*Recommender, error) {
+func NewRecommender(config config.RecommendConfig, cacheClient cache.Database, dataClient data.Database, vectorClient vectors.Database, online bool, userId string, categories []string) (*Recommender, error) {
 	// Load user feedback
 	userFeedback, err := dataClient.GetUserFeedback(context.Background(), userId, new(time.Now()))
 	if err != nil {
@@ -78,6 +82,7 @@ func NewRecommender(config config.RecommendConfig, cacheClient cache.Database, d
 		config:       config,
 		cacheClient:  cacheClient,
 		dataClient:   dataClient,
+		vectorClient: vectorClient,
 		userId:       userId,
 		userFeedback: userFeedback,
 		online:       online,
@@ -238,7 +243,10 @@ func (r *Recommender) recommendCollaborative(ctx context.Context) ([]cache.Score
 
 func (r *Recommender) recommendItemToItem(name string) RecommenderFunc {
 	return func(ctx context.Context) ([]cache.Score, string, error) {
-		// filter positive feedbacks
+		itemToItemConfig := r.config.GetItemToItemConfig(name)
+		if itemToItemConfig == nil {
+			return nil, "", fmt.Errorf("item-to-item recommender %s %w", name, storage.ErrNotFound)
+		}
 		data.SortFeedbacks(r.userFeedback)
 		userFeedback := make([]data.Feedback, 0, r.config.CacheSize)
 		for _, feedback := range r.userFeedback {
@@ -249,53 +257,40 @@ func (r *Recommender) recommendItemToItem(name string) RecommenderFunc {
 				}
 			}
 		}
-		// collect scores
 		scores := make(map[string]float64)
 		categories := make(map[string][]string)
-		digests := mapset.NewSet[string]()
 		for _, feedback := range userFeedback {
-			similarItems, err := r.cacheClient.SearchScores(ctx, cache.ItemToItem, cache.Key(name, feedback.ItemId), r.categories, 0, r.config.CacheSize)
+			neighbors, err := QueryItemToItem(ctx, r.vectorClient, *itemToItemConfig, feedback.ItemId, r.categories, r.config.CacheSize)
 			if err != nil {
 				return nil, "", errors.WithStack(err)
 			}
-			digest, err := r.cacheClient.Get(ctx, cache.Key(cache.ItemToItemDigest, name, feedback.ItemId)).String()
-			if err != nil {
-				return nil, "", errors.WithStack(err)
-			}
-			for _, item := range similarItems {
-				if !r.excludeSet.Contains(item.Id) {
-					scores[item.Id] += item.Score
-					categories[item.Id] = item.Categories
-					digests.Add(digest)
+			for _, neighbor := range neighbors {
+				if !r.excludeSet.Contains(neighbor.Id) {
+					scores[neighbor.Id] += neighbor.Score
+					categories[neighbor.Id] = neighbor.Categories
 				}
 			}
 		}
-		// collect top scores
 		filter := heap.NewTopKFilter[string, float64](r.config.CacheSize)
 		for id, score := range scores {
 			filter.Push(id, score)
 		}
 		elems := filter.PopAll()
 		return lo.Map(elems, func(elem heap.Elem[string, float64], _ int) cache.Score {
-			return cache.Score{
-				Id:         elem.Value,
-				Score:      elem.Weight,
-				Categories: categories[elem.Value],
-			}
-		}), strings.Join(digests.ToSlice(), ""), nil
+			return cache.Score{Id: elem.Value, Score: elem.Weight, Categories: categories[elem.Value]}
+		}), itemToItemConfig.Hash(&r.config), nil
 	}
 }
 
 func (r *Recommender) recommendUserToUser(name string) RecommenderFunc {
 	return func(ctx context.Context) ([]cache.Score, string, error) {
+		userToUserConfig := r.config.GetUserToUserConfig(name)
+		if userToUserConfig == nil {
+			return nil, "", fmt.Errorf("user-to-user recommender %s %w", name, storage.ErrNotFound)
+		}
 		scores := make(map[string]float64)
 		// load similar users
-		similarUsers, err := r.cacheClient.SearchScores(ctx, cache.UserToUser, cache.Key(name, r.userId), nil, 0, r.config.CacheSize)
-		if err != nil {
-			return nil, "", errors.WithStack(err)
-		}
-		// read digest
-		digest, err := r.cacheClient.Get(ctx, cache.Key(cache.UserToUserDigest, name, r.userId)).String()
+		similarUsers, err := QueryUserToUser(ctx, r.vectorClient, *userToUserConfig, r.userId, r.config.CacheSize)
 		if err != nil {
 			return nil, "", errors.WithStack(err)
 		}
@@ -348,7 +343,7 @@ func (r *Recommender) recommendUserToUser(name string) RecommenderFunc {
 				})
 			}
 		}
-		return results, digest, nil
+		return results, userToUserConfig.Hash(&r.config), nil
 	}
 }
 

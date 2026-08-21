@@ -202,6 +202,24 @@ func (r *RecommendConfig) ListRecommenders() []string {
 	return recommenders
 }
 
+func (r *RecommendConfig) GetItemToItemConfig(name string) *ItemToItemConfig {
+	for i := range r.ItemToItem {
+		if r.ItemToItem[i].Name == name {
+			return &r.ItemToItem[i]
+		}
+	}
+	return nil
+}
+
+func (r *RecommendConfig) GetUserToUserConfig(name string) *UserToUserConfig {
+	for i := range r.UserToUser {
+		if r.UserToUser[i].Name == name {
+			return &r.UserToUser[i]
+		}
+	}
+	return nil
+}
+
 func (r *RecommendConfig) Hash() string {
 	recommenders := mapset.NewSet(r.Ranker.Recommenders...)
 	if recommenders.IsEmpty() {
@@ -286,9 +304,8 @@ func (config *NonPersonalizedConfig) Hash() string {
 
 type ItemToItemConfig struct {
 	Name   string `mapstructure:"name" json:"name"`
-	Type   string `mapstructure:"type" json:"type" validate:"oneof=embedding tags users chat auto"`
+	Type   string `mapstructure:"type" json:"type" validate:"oneof=embedding tags users auto"`
 	Column string `mapstructure:"column" json:"column" validate:"item_expr"`
-	Prompt string `mapstructure:"prompt" json:"prompt"`
 }
 
 func (config *ItemToItemConfig) FullName() string {

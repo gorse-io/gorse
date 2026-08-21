@@ -4,7 +4,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-// http://www.apache.org/licenses/LICENSE-2.0
+//     http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -16,527 +16,245 @@ package logics
 
 import (
 	"context"
-	"errors"
 	"slices"
-	"strings"
-	"sync"
 	"time"
 
-	"github.com/cenkalti/backoff/v5"
-	"github.com/chewxy/math32"
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/expr-lang/expr"
 	"github.com/expr-lang/expr/vm"
-	"github.com/gorse-io/gorse/common/ann"
 	"github.com/gorse-io/gorse/common/bfloats"
-	"github.com/gorse-io/gorse/common/heap"
 	"github.com/gorse-io/gorse/common/log"
-	"github.com/gorse-io/gorse/common/parallel"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/dataset"
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
-	"github.com/nikolalohinski/gonja/v2"
-	"github.com/nikolalohinski/gonja/v2/exec"
-	"github.com/samber/lo"
-	"github.com/sashabaranov/go-openai"
-	"github.com/tiktoken-go/tokenizer"
+	"github.com/gorse-io/gorse/storage/vectors"
+	"github.com/pkg/errors"
 	"go.uber.org/zap"
 )
 
-var cl100kBaseTokenizer tokenizer.Codec
-
-func init() {
-	var err error
-	cl100kBaseTokenizer, err = tokenizer.Get(tokenizer.Cl100kBase)
-	if err != nil {
-		panic(err)
-	}
-}
-
 type ItemToItemOptions struct {
+	Context      context.Context
+	VectorClient vectors.Database
+	VectorConfig vectors.VectorConfig
+	BatchSize    int
 	TagsIDF      []float32
 	UsersIDF     []float32
-	OpenAIConfig config.OpenAIConfig
 }
 
 type ItemToItem interface {
-	Timestamp() time.Time
-	Count() int
-	Get(i int) *data.Item
-	Push(item *data.Item, feedback []int32)
-	PopAll(i int) []cache.Score
+	Add(item *data.Item, feedback []int32) error
+	Clean() error
 }
 
-func NewItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time, opts *ItemToItemOptions) (ItemToItem, error) {
+func QueryItemToItem(ctx context.Context, vectorClient vectors.Database, itemToItemConfig config.ItemToItemConfig, itemId string, categories []string, n int) ([]cache.Score, error) {
+	collection := vectors.ItemToItemCollection(itemToItemConfig.Name)
+	queries, err := vectorClient.GetVectors(ctx, collection, []string{itemId})
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	if len(queries) == 0 {
+		return nil, nil
+	}
+	neighbors, err := vectorClient.QueryVectors(ctx, collection, queries[0], categories, n+1)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	distance := vectors.Dot
+	if itemToItemConfig.Type == "embedding" {
+		distance = vectors.Euclidean
+	}
+	scoreScale := 1.0
+	if itemToItemConfig.Type == "auto" {
+		scoreScale = .5
+	}
+	scores := make([]cache.Score, 0, min(n, len(neighbors)))
+	for _, neighbor := range neighbors {
+		if neighbor.Id == itemId || distance == vectors.Dot && neighbor.Score <= 0 {
+			continue
+		}
+		score := float64(neighbor.Score) * scoreScale
+		if distance == vectors.Euclidean {
+			score = 1 / (1 - score)
+		}
+		scores = append(scores, cache.Score{Id: neighbor.Id, Score: score, Categories: neighbor.Categories})
+		if len(scores) == n {
+			break
+		}
+	}
+	return scores, nil
+}
+
+func NewItemToItem(cfg config.ItemToItemConfig, timestamp time.Time, opts *ItemToItemOptions) (ItemToItem, error) {
+	if opts == nil || opts.VectorClient == nil {
+		return nil, errors.New("vector database is required for item-to-item")
+	}
 	switch cfg.Type {
 	case "embedding":
-		return newEmbeddingItemToItem(cfg, n, timestamp)
+		return newEmbeddingItemToItem(cfg, timestamp, opts)
 	case "tags":
-		if opts == nil || opts.TagsIDF == nil {
+		if opts.TagsIDF == nil {
 			return nil, errors.New("tags IDF is required for tags item-to-item")
 		}
-		return newTagsItemToItem(cfg, n, timestamp, opts.TagsIDF)
+		return newTagsItemToItem(cfg, timestamp, opts, opts.TagsIDF)
 	case "users":
-		if opts == nil || opts.UsersIDF == nil {
+		if opts.UsersIDF == nil {
 			return nil, errors.New("users IDF is required for users item-to-item")
 		}
-		return newUsersItemToItem(cfg, n, timestamp, opts.UsersIDF)
+		return newUsersItemToItem(cfg, timestamp, opts, opts.UsersIDF)
 	case "auto":
-		if opts == nil || opts.TagsIDF == nil || opts.UsersIDF == nil {
+		if opts.TagsIDF == nil || opts.UsersIDF == nil {
 			return nil, errors.New("tags and users IDF are required for auto item-to-item")
 		}
-		return newAutoItemToItem(cfg, n, timestamp, opts.TagsIDF, opts.UsersIDF)
-	case "chat":
-		if opts == nil || opts.OpenAIConfig.BaseURL == "" || opts.OpenAIConfig.AuthToken == "" {
-			return nil, errors.New("OpenAI config is required for chat item-to-item")
-		}
-		return newChatItemToItem(cfg, n, timestamp, opts.OpenAIConfig)
+		return newAutoItemToItem(cfg, timestamp, opts, opts.TagsIDF, opts.UsersIDF)
 	default:
 		return nil, errors.New("invalid item-to-item type")
 	}
 }
 
-type baseItemToItem[T any] struct {
-	name       string
-	n          int
-	timestamp  time.Time
-	columnFunc *vm.Program
-	index      *ann.HNSW[T]
-	items      []*data.Item
-	itemsLock  sync.Mutex
-	// Hidden items are stored separately without adding to the index,
-	// and they have neighbors but are not neighbors of other items.
-	hiddenItems   []*data.Item
-	hiddenVectors []T
-}
-
-func (b *baseItemToItem[T]) Timestamp() time.Time {
-	return b.timestamp
-}
-
-func (b *baseItemToItem[T]) Count() int {
-	return len(b.items) + len(b.hiddenItems)
-}
-
-func (b *baseItemToItem[T]) Get(i int) *data.Item {
-	if i < len(b.items) {
-		return b.items[i]
+func newItemToItemVectorWriter(cfg config.ItemToItemConfig, timestamp time.Time, opts *ItemToItemOptions, sparse bool) *VectorWriter {
+	distance := vectors.Euclidean
+	if sparse {
+		distance = vectors.Dot
 	}
-	return b.hiddenItems[i-len(b.items)]
-}
-
-func (b *baseItemToItem[T]) pushItem(item *data.Item, v T) {
-	if item.IsHidden {
-		b.itemsLock.Lock()
-		b.hiddenItems = append(b.hiddenItems, item)
-		b.hiddenVectors = append(b.hiddenVectors, v)
-		b.itemsLock.Unlock()
-	} else {
-		b.itemsLock.Lock()
-		b.items = append(b.items, nil)
-		b.itemsLock.Unlock()
-		j := b.index.Add(v)
-		b.itemsLock.Lock()
-		b.items[j] = item
-		b.itemsLock.Unlock()
-	}
-}
-
-func (b *baseItemToItem[T]) PopAll(i int) []cache.Score {
-	var results []lo.Tuple2[int, float32]
-	if i < len(b.items) {
-		// Non-hidden item: search by index
-		var err error
-		results, err = b.index.SearchIndex(i, b.n+1, true)
-		if err != nil {
-			log.Logger().Error("failed to search index", zap.Error(err))
-			return nil
-		}
-	} else {
-		// Hidden item: search by vector
-		results = b.index.SearchVector(b.hiddenVectors[i-len(b.items)], b.n, true)
-	}
-	return lo.Map(results, func(v lo.Tuple2[int, float32], _ int) cache.Score {
-		return cache.Score{
-			Id:         b.items[v.A].ItemId,
-			Categories: b.items[v.A].Categories,
-			Score:      1.0 / (1.0 + float64(v.B)),
-			Timestamp:  b.timestamp,
-		}
-	})
+	return newSimilarityVectorWriter(opts.Context, opts.VectorClient, vectors.ItemToItemCollection(cfg.Name), distance,
+		opts.VectorConfig, timestamp, opts.BatchSize, sparse)
 }
 
 type embeddingItemToItem struct {
-	baseItemToItem[[]uint16]
-	dimension int
+	*VectorWriter
+	columnFunc *vm.Program
 }
 
-func newEmbeddingItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time) (*embeddingItemToItem, error) {
-	// Compile column expression
-	columnFunc, err := expr.Compile(cfg.Column, expr.Env(map[string]any{
-		"item": data.Item{},
-	}))
+func newEmbeddingItemToItem(cfg config.ItemToItemConfig, timestamp time.Time, opts *ItemToItemOptions) (*embeddingItemToItem, error) {
+	columnFunc, err := expr.Compile(cfg.Column, expr.Env(map[string]any{"item": data.Item{}}))
 	if err != nil {
 		return nil, err
 	}
-	return &embeddingItemToItem{baseItemToItem: baseItemToItem[[]uint16]{
-		name:       cfg.Name,
-		n:          n,
-		timestamp:  timestamp,
-		columnFunc: columnFunc,
-		index:      ann.NewHNSW(bfloats.Euclidean),
-	}}, nil
+	return &embeddingItemToItem{
+		VectorWriter: newItemToItemVectorWriter(cfg, timestamp, opts, false),
+		columnFunc:   columnFunc,
+	}, nil
 }
 
-func (e *embeddingItemToItem) Push(item *data.Item, _ []int32) {
-	// Evaluate filter function
-	result, err := expr.Run(e.columnFunc, map[string]any{
-		"item": item,
-	})
-	if err != nil {
-		log.Logger().Error("failed to evaluate column expression",
-			zap.Any("item", item), zap.Error(err))
-		return
+func (e *embeddingItemToItem) Add(item *data.Item, _ []int32) error {
+	embedding, ok := ExtractItemEmbedding(item, e.columnFunc)
+	if !ok || len(embedding) == 0 {
+		return nil
 	}
-	// Convert column to BF16 vector
+	return e.VectorWriter.Add(vectors.Vector{
+		Id:         item.ItemId,
+		Values:     embedding,
+		IsHidden:   item.IsHidden,
+		Categories: item.Categories,
+		Timestamp:  e.timestamp,
+	})
+}
+
+func ExtractItemEmbedding(item *data.Item, columnFunc *vm.Program) ([]float32, bool) {
+	result, err := expr.Run(columnFunc, map[string]any{"item": item})
+	if err != nil {
+		log.Logger().Error("failed to evaluate column expression", zap.Any("item", item), zap.Error(err))
+		return nil, false
+	}
 	v, ok := bfloats.FromAny(result)
 	if !ok {
-		log.Logger().Error("failed to convert column to BF16 slice",
-			zap.Any("column", result))
-		return
+		log.Logger().Error("failed to convert column to BF16 slice", zap.Any("column", result))
+		return nil, false
 	}
-	// Check dimension
-	e.itemsLock.Lock()
-	if e.dimension == 0 && len(v) > 0 {
-		e.dimension = len(v)
-	} else if e.dimension != len(v) {
-		log.Logger().Error("invalid column dimension", zap.Int("dimension", len(v)))
-		e.itemsLock.Unlock()
-		return
-	}
-	e.itemsLock.Unlock()
-	e.pushItem(item, v)
+	return bfloats.ToFloat32(v), true
 }
 
 type tagsItemToItem struct {
-	baseItemToItem[[]dataset.ID]
-	IDF[dataset.ID]
+	*VectorWriter
+	columnFunc *vm.Program
+	idf        []float32
 }
 
-func newTagsItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time, idf []float32) (ItemToItem, error) {
-	// Compile column expression
-	columnFunc, err := expr.Compile(cfg.Column, expr.Env(map[string]any{
-		"item": data.Item{},
-	}))
+func newTagsItemToItem(cfg config.ItemToItemConfig, timestamp time.Time, opts *ItemToItemOptions, idf []float32) (ItemToItem, error) {
+	columnFunc, err := expr.Compile(cfg.Column, expr.Env(map[string]any{"item": data.Item{}}))
 	if err != nil {
 		return nil, err
 	}
-	t := &tagsItemToItem{IDF: idf}
-	t.baseItemToItem = baseItemToItem[[]dataset.ID]{
-		name:       cfg.Name,
-		n:          n,
-		timestamp:  timestamp,
-		columnFunc: columnFunc,
-		index:      ann.NewHNSW(t.distance),
-	}
-	return t, nil
+	return &tagsItemToItem{VectorWriter: newItemToItemVectorWriter(cfg, timestamp, opts, true), columnFunc: columnFunc, idf: idf}, nil
 }
 
-func (t *tagsItemToItem) Push(item *data.Item, _ []int32) {
-	// Evaluate filter function
-	result, err := expr.Run(t.columnFunc, map[string]any{
-		"item": item,
-	})
+func (t *tagsItemToItem) Add(item *data.Item, _ []int32) error {
+	result, err := expr.Run(t.columnFunc, map[string]any{"item": item})
 	if err != nil {
-		log.Logger().Error("failed to evaluate column expression",
-			zap.Any("item", item), zap.Error(err))
-		return
+		log.Logger().Error("failed to evaluate column expression", zap.Any("item", item), zap.Error(err))
+		return nil
 	}
-	// Extract tags
-	tSet := mapset.NewSet[dataset.ID]()
-	flatten(result, tSet)
-	v := tSet.ToSlice()
-	slices.Sort(v)
-	t.pushItem(item, v)
+	tags := mapset.NewSet[dataset.ID]()
+	flatten(result, tags)
+	ids := tags.ToSlice()
+	slices.Sort(ids)
+	vector := newSparseVector(ids, t.idf, 0)
+	vector.Id = item.ItemId
+	vector.IsHidden = item.IsHidden
+	vector.Categories = item.Categories
+	vector.Timestamp = t.timestamp
+	return t.VectorWriter.Add(vector)
 }
 
 type usersItemToItem struct {
-	baseItemToItem[[]int32]
-	IDF[int32]
+	*VectorWriter
+	idf []float32
 }
 
-func newUsersItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time, idf []float32) (ItemToItem, error) {
+func newUsersItemToItem(cfg config.ItemToItemConfig, timestamp time.Time, opts *ItemToItemOptions, idf []float32) (ItemToItem, error) {
 	if cfg.Column != "" {
 		return nil, errors.New("column is not supported in users item-to-item")
 	}
-	u := &usersItemToItem{IDF: idf}
-	u.baseItemToItem = baseItemToItem[[]int32]{
-		name:      cfg.Name,
-		n:         n,
-		timestamp: timestamp,
-		index:     ann.NewHNSW(u.distance),
-	}
-	return u, nil
+	return &usersItemToItem{VectorWriter: newItemToItemVectorWriter(cfg, timestamp, opts, true), idf: idf}, nil
 }
 
-func (u *usersItemToItem) Push(item *data.Item, feedback []int32) {
-	// Sort feedback
+func (u *usersItemToItem) Add(item *data.Item, feedback []int32) error {
 	slices.Sort(feedback)
-	u.pushItem(item, feedback)
+	vector := newSparseVector(feedback, u.idf, 0)
+	vector.Id = item.ItemId
+	vector.IsHidden = item.IsHidden
+	vector.Categories = item.Categories
+	vector.Timestamp = u.timestamp
+	return u.VectorWriter.Add(vector)
 }
 
 type autoItemToItem struct {
-	baseItemToItem[lo.Tuple2[[]dataset.ID, []int32]]
-	tIDF IDF[dataset.ID]
-	uIDF IDF[int32]
+	*VectorWriter
+	tagsIDF  []float32
+	usersIDF []float32
 }
 
-func newAutoItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time, tIDF, uIDF []float32) (ItemToItem, error) {
-	a := &autoItemToItem{
-		tIDF: tIDF,
-		uIDF: uIDF,
-	}
-	a.baseItemToItem = baseItemToItem[lo.Tuple2[[]dataset.ID, []int32]]{
-		name:      cfg.Name,
-		n:         n,
-		timestamp: timestamp,
-		index:     ann.NewHNSW[lo.Tuple2[[]dataset.ID, []int32]](a.distance),
-	}
-	return a, nil
+func newAutoItemToItem(cfg config.ItemToItemConfig, timestamp time.Time, opts *ItemToItemOptions, tagsIDF, usersIDF []float32) (ItemToItem, error) {
+	return &autoItemToItem{VectorWriter: newItemToItemVectorWriter(cfg, timestamp, opts, true), tagsIDF: tagsIDF, usersIDF: usersIDF}, nil
 }
 
-func (a *autoItemToItem) Push(item *data.Item, feedback []int32) {
-	// Extract tags
-	tSet := mapset.NewSet[dataset.ID]()
-	flatten(item.Labels, tSet)
-	v := tSet.ToSlice()
-	slices.Sort(v)
-	// Sort feedback
+func (a *autoItemToItem) Add(item *data.Item, feedback []int32) error {
+	tags := mapset.NewSet[dataset.ID]()
+	flatten(item.Labels, tags)
+	tagIDs := tags.ToSlice()
+	slices.Sort(tagIDs)
 	slices.Sort(feedback)
-	a.pushItem(item, lo.Tuple2[[]dataset.ID, []int32]{A: v, B: feedback})
-}
-
-func (a *autoItemToItem) distance(u, v lo.Tuple2[[]dataset.ID, []int32]) float32 {
-	return (a.tIDF.distance(u.A, v.A) + a.uIDF.distance(u.B, v.B)) / 2
+	vector := newSparseVector(tagIDs, a.tagsIDF, 0)
+	vector = appendSparseVector(vector, feedback, a.usersIDF, uint32(len(a.tagsIDF)))
+	vector.Id = item.ItemId
+	vector.IsHidden = item.IsHidden
+	vector.Categories = item.Categories
+	vector.Timestamp = a.timestamp
+	return a.VectorWriter.Add(vector)
 }
 
 type IDF[T dataset.ID | int32] []float32
 
-func (idf IDF[T]) distance(a, b []T) float32 {
-	commonSum, commonCount := idf.weightedSumCommonElements(a, b)
-	if len(a) == len(b) && commonCount == float32(len(a)) {
-		// If two items have the same tags, its distance is zero.
-		return 0
-	} else if commonCount > 0 && len(a) > 0 && len(b) > 0 {
-		// Add shrinkage to avoid division by zero
-		return 1 - commonSum*commonCount/
-			math32.Sqrt(idf.weightedSum(a))/
-			math32.Sqrt(idf.weightedSum(b))/
-			(commonCount+100)
-	} else {
-		// If two items have no common tags, its distance is one.
-		return 1
-	}
-}
-
-func (idf IDF[T]) weightedSumCommonElements(a, b []T) (float32, float32) {
-	i, j, sum, count := 0, 0, float32(0), float32(0)
-	for i < len(a) && j < len(b) {
-		if a[i] == b[j] {
-			sum += idf[a[i]]
-			count++
-			i++
-			j++
-		} else if a[i] < b[j] {
-			i++
-		} else if a[i] > b[j] {
-			j++
-		}
-	}
-	return sum, count
-}
-
-func (idf IDF[T]) weightedSum(a []T) float32 {
-	var sum float32
-	for _, i := range a {
-		sum += idf[i]
-	}
-	return sum
-}
-
-func flatten(o any, tSet mapset.Set[dataset.ID]) {
-	switch typed := o.(type) {
+func flatten(o any, tags mapset.Set[dataset.ID]) {
+	switch value := o.(type) {
 	case dataset.ID:
-		tSet.Add(typed)
-		return
+		tags.Add(value)
 	case []dataset.ID:
-		tSet.Append(typed...)
-		return
+		tags.Append(value...)
 	case map[string]any:
-		for _, v := range typed {
-			flatten(v, tSet)
+		for _, child := range value {
+			flatten(child, tags)
 		}
 	}
-}
-
-type chatItemToItem struct {
-	*embeddingItemToItem
-	template            *exec.Template
-	client              *openai.Client
-	chatCompletionModel string
-	embeddingModel      string
-	embeddingDimensions int
-	poolSize            int
-}
-
-func newChatItemToItem(cfg config.ItemToItemConfig, n int, timestamp time.Time, openaiConfig config.OpenAIConfig) (*chatItemToItem, error) {
-	// create embedding item-to-item recommender
-	embedding, err := newEmbeddingItemToItem(cfg, n, timestamp)
-	if err != nil {
-		return nil, err
-	}
-	// parse template
-	template, err := gonja.FromString(cfg.Prompt)
-	if err != nil {
-		return nil, err
-	}
-	// create openai client
-	clientConfig := openai.DefaultConfig(openaiConfig.AuthToken)
-	clientConfig.BaseURL = openaiConfig.BaseURL
-	return &chatItemToItem{
-		embeddingItemToItem: embedding,
-		template:            template,
-		client:              openai.NewClientWithConfig(clientConfig),
-		chatCompletionModel: openaiConfig.ChatCompletionModel,
-		embeddingModel:      openaiConfig.EmbeddingModel,
-		embeddingDimensions: openaiConfig.EmbeddingDimensions,
-		poolSize:            min(openaiConfig.ChatCompletionRPM, openaiConfig.EmbeddingRPM),
-	}, nil
-}
-
-func (g *chatItemToItem) PopAll(i int) []cache.Score {
-	item := g.Get(i)
-	// evaluate column expression and get embedding vector
-	result, err := expr.Run(g.columnFunc, map[string]any{
-		"item": item,
-	})
-	if err != nil {
-		log.Logger().Error("failed to evaluate column expression",
-			zap.Any("item", item), zap.Error(err))
-		return nil
-	}
-	embedding0, ok := bfloats.FromAny(result)
-	if !ok {
-		log.Logger().Error("failed to convert column to BF16 slice",
-			zap.Any("column", result))
-		return nil
-	}
-	// render template
-	var buf strings.Builder
-	ctx := exec.NewContext(map[string]any{
-		"item": item,
-	})
-	if err := g.template.Execute(&buf, ctx); err != nil {
-		log.Logger().Error("failed to execute template", zap.Error(err))
-		return nil
-	}
-	// chat completion
-	start := time.Now()
-	ids, _, _ := cl100kBaseTokenizer.Encode(buf.String())
-	resp, err := backoff.Retry(context.Background(), func() (openai.ChatCompletionResponse, error) {
-		time.Sleep(parallel.ChatCompletionRequestsLimiter.Take(1))
-		time.Sleep(parallel.ChatCompletionTokensLimiter.Take(int64(len(ids))))
-		resp, err := g.client.CreateChatCompletion(context.Background(), openai.ChatCompletionRequest{
-			Model: g.chatCompletionModel,
-			Messages: []openai.ChatCompletionMessage{{
-				Role:    openai.ChatMessageRoleUser,
-				Content: buf.String(),
-			}},
-		})
-		if err == nil {
-			return resp, nil
-		}
-		if isThrottled(err) {
-			return openai.ChatCompletionResponse{}, err
-		}
-		return openai.ChatCompletionResponse{}, backoff.Permanent(err)
-	}, backoff.WithBackOff(backoff.NewExponentialBackOff()))
-	if err != nil {
-		log.Logger().Error("failed to chat completion", zap.String("item_id", item.ItemId), zap.Error(err))
-		return nil
-	}
-	duration := time.Since(start)
-	parsed := parseArrayFromCompletion(resp.Choices[0].Message.Content)
-	log.OpenAILogger().Info("chat completion",
-		zap.String("prompt", buf.String()),
-		zap.String("completion", resp.Choices[0].Message.Content),
-		zap.Strings("parsed", parsed),
-		zap.Int("prompt_tokens", resp.Usage.PromptTokens),
-		zap.Int("completion_tokens", resp.Usage.CompletionTokens),
-		zap.Int("total_tokens", resp.Usage.TotalTokens),
-		zap.Duration("duration", duration))
-	// message embedding
-	embeddings := make([][]float32, len(parsed))
-	for i, message := range parsed {
-		ids, _, _ := cl100kBaseTokenizer.Encode(message)
-		resp, err := backoff.Retry(context.Background(), func() (openai.EmbeddingResponse, error) {
-			time.Sleep(parallel.EmbeddingRequestsLimiter.Take(1))
-			time.Sleep(parallel.EmbeddingTokensLimiter.Take(int64(len(ids))))
-			resp, err := g.client.CreateEmbeddings(context.Background(), openai.EmbeddingRequest{
-				Input:      message,
-				Model:      openai.EmbeddingModel(g.embeddingModel),
-				Dimensions: g.embeddingDimensions,
-			})
-			if err == nil {
-				return resp, nil
-			}
-			if isThrottled(err) {
-				return openai.EmbeddingResponse{}, err
-			}
-			return openai.EmbeddingResponse{}, backoff.Permanent(err)
-		}, backoff.WithBackOff(backoff.NewExponentialBackOff()))
-		if err != nil {
-			log.Logger().Error("failed to create embeddings", zap.String("item_id", g.items[i].ItemId), zap.Error(err))
-			return nil
-		}
-		embeddings[i] = resp.Data[0].Embedding
-	}
-	// search index
-	pq := heap.NewPriorityQueue(true)
-	for _, embedding := range embeddings {
-		embeddingBF16 := bfloats.FromFloat32(embedding)
-		score0 := bfloats.Euclidean(embeddingBF16, embedding0)
-		scores := g.index.SearchVector(embeddingBF16, g.n+1, true)
-		for _, score := range scores {
-			if score.A != i {
-				pq.Push(int32(score.A), score.B*score0)
-				if pq.Len() > g.n {
-					pq.Pop()
-				}
-			}
-		}
-	}
-	scores := make([]cache.Score, pq.Len())
-	for i := pq.Len() - 1; i >= 0; i-- {
-		id, score := pq.Pop()
-		scores[i] = cache.Score{
-			Id:         g.items[id].ItemId,
-			Categories: g.items[id].Categories,
-			Score:      1.0 / (1.0 + float64(score)),
-			Timestamp:  g.timestamp,
-		}
-	}
-	return scores
-}
-
-func stripThinkInCompletion(s string) string {
-	if len(s) < 7 || s[:7] != "<think>" {
-		return s
-	}
-	_, after, ok := strings.Cut(s, "</think>")
-	if !ok {
-		return s
-	}
-	return after
 }

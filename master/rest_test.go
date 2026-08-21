@@ -38,6 +38,7 @@ import (
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
 	"github.com/gorse-io/gorse/storage/meta"
+	"github.com/gorse-io/gorse/storage/vectors"
 	"github.com/invopop/jsonschema"
 	"github.com/samber/lo"
 	"github.com/sashabaranov/go-openai"
@@ -100,12 +101,16 @@ func (suite *MasterAPITestSuite) SetupTest() {
 	suite.NoError(err)
 	suite.CacheClient, err = cache.Open(suite.Config.Database.CacheStore, "")
 	suite.NoError(err)
+	suite.VectorClient, err = vectors.Open(fmt.Sprintf("xvec://%s/vectors", suite.T().TempDir()), "")
+	suite.NoError(err)
 	// init database
 	err = suite.metaStore.Init()
 	suite.NoError(err)
 	err = suite.DataClient.Init()
 	suite.NoError(err)
 	err = suite.CacheClient.Init()
+	suite.NoError(err)
+	err = suite.VectorClient.Init()
 	suite.NoError(err)
 	// create server
 	suite.Config.Master.DashboardUserName = mockMasterUsername
@@ -144,6 +149,8 @@ func (suite *MasterAPITestSuite) TearDownTest() {
 	err = suite.DataClient.Close()
 	suite.NoError(err)
 	err = suite.CacheClient.Close()
+	suite.NoError(err)
+	err = suite.VectorClient.Close()
 	suite.NoError(err)
 	err = suite.openAIServer.Close()
 	suite.NoError(err)
@@ -499,8 +506,6 @@ func (suite *MasterAPITestSuite) TestSearchDocumentsOfItems() {
 	}
 	ctx := suite.T().Context()
 	operators := []ListOperator{
-		{"ItemToItem", cache.ItemToItem, cache.Key("neighbors", "0"), "", "/api/dashboard/item-to-item/neighbors/0"},
-		{"ItemToItemCategory", cache.ItemToItem, cache.Key("neighbors", "0"), "*", "/api/dashboard/item-to-item/neighbors/0"},
 		{"LatestItems", cache.NonPersonalized, "latest", "", "/api/dashboard/non-personalized/latest/"},
 		{"PopularItems", cache.NonPersonalized, "popular", "", "/api/dashboard/non-personalized/popular/"},
 		{"LatestItemsCategory", cache.NonPersonalized, "latest", "*", "/api/dashboard/non-personalized/latest/"},
@@ -550,47 +555,71 @@ func (suite *MasterAPITestSuite) TestSearchDocumentsOfItems() {
 	}
 }
 
-func (suite *MasterAPITestSuite) TestSearchDocumentsOfUsers() {
-	type ListOperator struct {
-		Prefix string
-		Label  string
-		Get    string
-	}
+func (suite *MasterAPITestSuite) TestItemToItem() {
 	ctx := suite.T().Context()
-	operators := []ListOperator{
-		{cache.UserToUser, cache.Key("neighbors", "0"), "/api/dashboard/user-to-user/neighbors/0/"},
+	suite.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "neighbors", Type: "tags", Column: "item.Labels"}}
+	collection := vectors.ItemToItemCollection("neighbors")
+	suite.NoError(suite.VectorClient.AddCollection(ctx, collection, 0, vectors.Dot, vectors.VectorConfig{}))
+	suite.NoError(suite.VectorClient.AddVectors(ctx, collection, []vectors.Vector{
+		{Id: "0", Indices: []uint32{0}, Values: []float32{1}},
+		{Id: "1", Indices: []uint32{0}, Values: []float32{4}},
+		{Id: "2", Indices: []uint32{0}, Values: []float32{3}},
+	}))
+	items := []ScoredItem{
+		{Item: data.Item{ItemId: "1", Categories: []string{"movie", "drama"}}, Score: 4},
+		{Item: data.Item{ItemId: "2", Categories: []string{"movie"}}, Score: 3},
 	}
-	lastModified := time.Now()
-	for _, operator := range operators {
-		suite.T().Logf("test RESTful API: %v", operator.Get)
-		// Put scores
-		scores := []cache.Score{
-			{Id: "0", Score: 100, Categories: []string{""}},
-			{Id: "1", Score: 99, Categories: []string{""}},
-			{Id: "2", Score: 98, Categories: []string{""}},
-			{Id: "3", Score: 97, Categories: []string{""}},
-			{Id: "4", Score: 96, Categories: []string{""}},
-		}
-		err := suite.CacheClient.AddScores(ctx, operator.Prefix, operator.Label, scores)
-		suite.NoError(err)
-		err = suite.CacheClient.Set(ctx, cache.Time(cache.Key(operator.Prefix+"_update_time", operator.Label), lastModified))
-		suite.NoError(err)
-		users := make([]ScoreUser, 0)
-		for _, score := range scores {
-			users = append(users, ScoreUser{User: data.User{UserId: score.Id}, Score: score.Score})
-			err = suite.DataClient.BatchInsertUsers(ctx, []data.User{{UserId: score.Id}})
-			suite.NoError(err)
-		}
-		apitest.New().
-			Handler(suite.handler).
-			Get(operator.Get).
-			Header("Cookie", suite.cookie).
-			Expect(suite.T()).
-			Status(http.StatusOK).
-			HeaderPresent("Last-Modified").
-			Body(marshal(suite.T(), users)).
-			End()
+	for _, item := range items {
+		suite.NoError(suite.DataClient.BatchInsertItems(ctx, []data.Item{item.Item}))
 	}
+	apitest.New().
+		Handler(suite.handler).
+		Get("/api/dashboard/item-to-item/neighbors/0").
+		Header("Cookie", suite.cookie).
+		Expect(suite.T()).
+		Status(http.StatusOK).
+		Body(marshal(suite.T(), items)).
+		End()
+	apitest.New().
+		Handler(suite.handler).
+		Get("/api/dashboard/item-to-item/neighbors/0").
+		Header("Cookie", suite.cookie).
+		QueryCollection(map[string][]string{"category": {"movie", "drama"}}).
+		Expect(suite.T()).
+		Status(http.StatusOK).
+		Body(marshal(suite.T(), items[:1])).
+		End()
+}
+
+func (suite *MasterAPITestSuite) TestUserToUser() {
+	ctx := suite.T().Context()
+	suite.Config.Recommend.UserToUser = []config.UserToUserConfig{{Name: "neighbors", Type: "items"}}
+	collection := vectors.UserToUserCollection("neighbors")
+	suite.NoError(suite.VectorClient.AddCollection(ctx, collection, 0, vectors.Dot, vectors.VectorConfig{}))
+	suite.NoError(suite.VectorClient.AddVectors(ctx, collection, []vectors.Vector{
+		{Id: "0", Indices: []uint32{0}, Values: []float32{1}},
+		{Id: "1", Indices: []uint32{0}, Values: []float32{4}},
+		{Id: "2", Indices: []uint32{0}, Values: []float32{3}},
+		{Id: "3", Indices: []uint32{0}, Values: []float32{2}},
+		{Id: "4", Indices: []uint32{0}, Values: []float32{1}},
+	}))
+	users := []ScoreUser{
+		{User: data.User{UserId: "1"}, Score: 4},
+		{User: data.User{UserId: "2"}, Score: 3},
+		{User: data.User{UserId: "3"}, Score: 2},
+		{User: data.User{UserId: "4"}, Score: 1},
+	}
+	for _, user := range users {
+		suite.NoError(suite.DataClient.BatchInsertUsers(ctx, []data.User{user.User}))
+	}
+	apitest.New().
+		Handler(suite.handler).
+		Get("/api/dashboard/user-to-user/neighbors/0/").
+		Header("Cookie", suite.cookie).
+		Expect(suite.T()).
+		Status(http.StatusOK).
+		Body(marshal(suite.T(), users)).
+		End()
 }
 
 func (suite *MasterAPITestSuite) TestFeedback() {

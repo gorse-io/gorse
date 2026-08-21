@@ -42,10 +42,20 @@ const (
 	QuantizationRQ   QuantizationType = "rq" // Rotational quantization/RaBitQ/TurboQuant
 
 	CollaborativeFiltering = "collaborative_filtering"
+	ItemToItemPrefix       = "item_to_item"
+	UserToUserPrefix       = "user_to_user"
 )
 
 func CollaborativeFilteringCollection(id int64) string {
 	return CollaborativeFiltering + "_" + strconv.FormatInt(id, 10)
+}
+
+func ItemToItemCollection(name string) string {
+	return ItemToItemPrefix + "_" + name
+}
+
+func UserToUserCollection(name string) string {
+	return UserToUserPrefix + "_" + name
 }
 
 func (q QuantizationType) String() string {
@@ -107,6 +117,20 @@ type Database interface {
 	GetVectors(ctx context.Context, collection string, ids []string) ([]Vector, error)
 	DeleteVectors(ctx context.Context, collection string, timestamp time.Time) error
 	QueryVectors(ctx context.Context, collection string, q Vector, categories []string, topK int) ([]ScoredVector, error)
+}
+
+// Purge deletes all collections from a vector database.
+func Purge(ctx context.Context, database Database) error {
+	collections, err := database.ListCollections(ctx)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+	for _, collection := range collections {
+		if err = database.DeleteCollection(ctx, collection); err != nil {
+			return errors.WithStack(err)
+		}
+	}
+	return nil
 }
 
 func orderVectors(ids []string, vectors []Vector) []Vector {

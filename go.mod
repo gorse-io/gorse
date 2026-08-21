@@ -10,7 +10,6 @@ require (
 	github.com/araddon/dateparse v0.0.0-20210429162001-6b43995a97de
 	github.com/bits-and-blooms/bitset v1.24.4
 	github.com/c-bata/goptuna v0.9.0
-	github.com/cenkalti/backoff/v5 v5.0.3
 	github.com/chewxy/math32 v1.11.1
 	github.com/coreos/go-oidc/v3 v3.17.0
 	github.com/deckarep/golang-set/v2 v2.8.0
@@ -66,7 +65,6 @@ require (
 	github.com/steinfletcher/apitest v1.6.0
 	github.com/stretchr/testify v1.11.1
 	github.com/swaggest/swgui v1.8.5
-	github.com/tiktoken-go/tokenizer v0.7.0
 	github.com/weaviate/weaviate v1.27.0
 	github.com/weaviate/weaviate-go-client/v4 v4.16.1
 	github.com/yuin/goldmark v1.7.16
@@ -131,6 +129,7 @@ require (
 	github.com/blevesearch/mmap-go v1.2.0 // indirect
 	github.com/buger/jsonparser v1.1.1 // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
+	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/cilium/ebpf v0.11.0 // indirect
 	github.com/clipperhouse/displaywidth v0.11.0 // indirect
@@ -149,7 +148,6 @@ require (
 	github.com/danieljoos/wincred v1.2.3 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
-	github.com/dlclark/regexp2 v1.11.5 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/envoyproxy/go-control-plane/envoy v1.36.0 // indirect

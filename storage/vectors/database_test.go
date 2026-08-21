@@ -31,14 +31,18 @@ type vectorsTestSuite struct {
 
 func (suite *vectorsTestSuite) SetupTest() {
 	log.SetTestLogger(suite.T())
-	// purge
+	suite.NoError(Purge(suite.T().Context(), suite.Database))
+}
+
+func (suite *vectorsTestSuite) TestPurge() {
 	ctx := suite.T().Context()
+	suite.NoError(suite.Database.AddCollection(ctx, "a", defaultVectorSize, Cosine, VectorConfig{}))
+	suite.NoError(suite.Database.AddCollection(ctx, "b", defaultVectorSize, Cosine, VectorConfig{}))
+	suite.NoError(Purge(ctx, suite.Database))
+
 	collections, err := suite.Database.ListCollections(ctx)
 	suite.NoError(err)
-	for _, collection := range collections {
-		err = suite.Database.DeleteCollection(ctx, collection)
-		suite.NoError(err)
-	}
+	suite.Empty(collections)
 }
 
 func (suite *vectorsTestSuite) TestCollections() {
@@ -137,6 +141,15 @@ func (suite *vectorsTestSuite) TestVectors() {
 	for _, result := range results {
 		suite.NotEmpty(result.Categories)
 	}
+
+	queryVectors, err := suite.Database.GetVectors(ctx, "test", []string{"a"})
+	suite.NoError(err)
+	suite.Require().Len(queryVectors, 1)
+	results, err = suite.Database.QueryVectors(ctx, "test", queryVectors[0], nil, 10)
+	suite.NoError(err)
+	suite.Require().Len(results, 2)
+	suite.Equal("a", results[0].Id)
+	suite.Equal("b", results[1].Id)
 }
 
 func (suite *vectorsTestSuite) TestGetVectors() {

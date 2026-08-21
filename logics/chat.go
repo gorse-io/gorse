@@ -25,7 +25,6 @@ import (
 	"github.com/gorse-io/gorse/storage/data"
 	"github.com/nikolalohinski/gonja/v2"
 	"github.com/nikolalohinski/gonja/v2/exec"
-	"github.com/sashabaranov/go-openai"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/text"
@@ -107,6 +106,17 @@ func (r *ChatReranker) Rank(ctx context.Context, user *data.User, feedback []*Fe
 // If the completion contains a JSON array, it will return each element in the array.
 // If the completion contains a JSON object, it will return the object as a string.
 // Otherwise, it will return the completion as a string.
+func stripThinkInCompletion(s string) string {
+	if len(s) < 7 || s[:7] != "<think>" {
+		return s
+	}
+	_, after, ok := strings.Cut(s, "</think>")
+	if !ok {
+		return s
+	}
+	return after
+}
+
 func parseArrayFromCompletion(completion string) []string {
 	source := []byte(stripThinkInCompletion(completion))
 	root := goldmark.DefaultParser().Parse(text.NewReader(source))
@@ -163,16 +173,4 @@ func parseArrayFromCompletion(completion string) []string {
 		}
 	}
 	return result
-}
-
-func isThrottled(err error) bool {
-	switch e := err.(type) {
-	case *openai.APIError:
-		if e.HTTPStatusCode == 429 {
-			return true
-		}
-	case *openai.RequestError:
-		return e.HTTPStatusCode == 504 || e.HTTPStatusCode == 520
-	}
-	return false
 }

@@ -105,11 +105,8 @@ func (suite *WorkerTestSuite) SetupTest() {
 	suite.MatrixFactorizationUsers = nil
 	suite.MatrixFactorizationId = 1
 	suite.ClickThroughRateModel = nil
-	collections, err := suite.VectorClient.ListCollections(context.Background())
+	err = vectors.Purge(context.Background(), suite.VectorClient)
 	suite.Require().NoError(err)
-	for _, collection := range collections {
-		suite.Require().NoError(suite.VectorClient.DeleteCollection(context.Background(), collection))
-	}
 	err = suite.VectorClient.AddCollection(context.Background(), vectors.CollaborativeFilteringCollection(suite.MatrixFactorizationId), 2, vectors.Dot, vectors.VectorConfig{})
 	suite.NoError(err)
 }
@@ -261,35 +258,21 @@ func (suite *WorkerTestSuite) TestRecommendItemToItem() {
 	}, true, true, true)
 	suite.NoError(err)
 
-	// insert similar items
-	err = suite.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key("default", "21"), []cache.Score{
-		{Id: "22", Score: 100000, Categories: []string{"*"}},
-		{Id: "25", Score: 1000000},
-		{Id: "29", Score: 1},
-	})
+	// insert item-to-item vectors
+	suite.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "default", Type: "tags", Column: "item.Labels"}}
+	collection := vectors.ItemToItemCollection("default")
+	err = suite.VectorClient.AddCollection(ctx, collection, 0, vectors.Dot, vectors.VectorConfig{})
 	suite.NoError(err)
-	err = suite.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key("default", "22"), []cache.Score{
-		{Id: "23", Score: 100000, Categories: []string{"*"}},
-		{Id: "25", Score: 1000000},
-		{Id: "28", Score: 1, Categories: []string{"*"}},
-		{Id: "29", Score: 1},
-	})
-	suite.NoError(err)
-	err = suite.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key("default", "23"), []cache.Score{
-		{Id: "24", Score: 100000, Categories: []string{"*"}},
-		{Id: "25", Score: 1000000},
-		{Id: "27", Score: 1},
-		{Id: "28", Score: 1, Categories: []string{"*"}},
-		{Id: "29", Score: 1},
-	})
-	suite.NoError(err)
-	err = suite.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key("default", "24"), []cache.Score{
-		{Id: "21", Score: 100000},
-		{Id: "25", Score: 1000000},
-		{Id: "26", Score: 1, Categories: []string{"*"}},
-		{Id: "27", Score: 1},
-		{Id: "28", Score: 1, Categories: []string{"*"}},
-		{Id: "29", Score: 1},
+	err = suite.VectorClient.AddVectors(ctx, collection, []vectors.Vector{
+		{Id: "21", Indices: []uint32{0}, Values: []float32{1}},
+		{Id: "22", Indices: []uint32{1}, Values: []float32{1}},
+		{Id: "23", Indices: []uint32{2}, Values: []float32{1}},
+		{Id: "24", Indices: []uint32{3}, Values: []float32{1}},
+		{Id: "25", Indices: []uint32{0, 1, 2, 3}, Values: []float32{100, 100, 100, 100}, IsHidden: true},
+		{Id: "26", Indices: []uint32{3}, Values: []float32{1}, Categories: []string{"*"}},
+		{Id: "27", Indices: []uint32{2, 3}, Values: []float32{1, 1}},
+		{Id: "28", Indices: []uint32{1, 2, 3}, Values: []float32{1, 1, 1}, Categories: []string{"*"}},
+		{Id: "29", Indices: []uint32{0, 1, 2, 3}, Values: []float32{1, 1, 1, 1}},
 	})
 	suite.NoError(err)
 
@@ -311,9 +294,9 @@ func (suite *WorkerTestSuite) TestRecommendItemToItem() {
 	recommends, err := suite.CacheClient.SearchScores(ctx, cache.Recommend, "0", nil, 0, 3)
 	suite.NoError(err)
 	suite.Equal([]cache.Score{
-		{Id: "29", Score: 4, Timestamp: recommendTime},
+		{Id: "29", Score: 4, Categories: []string{}, Timestamp: recommendTime},
 		{Id: "28", Score: 3, Categories: []string{"*"}, Timestamp: recommendTime},
-		{Id: "27", Score: 2, Timestamp: recommendTime},
+		{Id: "27", Score: 2, Categories: []string{}, Timestamp: recommendTime},
 	}, recommends)
 	recommends, err = suite.CacheClient.SearchScores(ctx, cache.Recommend, "0", []string{"*"}, 0, 3)
 	suite.NoError(err)
@@ -326,13 +309,17 @@ func (suite *WorkerTestSuite) TestRecommendItemToItem() {
 func (suite *WorkerTestSuite) TestRecommendUserToUser() {
 	ctx := suite.T().Context()
 	suite.Config.Recommend.Ranker.Recommenders = []string{"user-to-user/default"}
-	suite.Config.Recommend.UserToUser = []config.UserToUserConfig{{Name: "default"}}
+	suite.Config.Recommend.UserToUser = []config.UserToUserConfig{{Name: "default", Type: "items"}}
 	suite.Config.Recommend.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{expression.MustParseFeedbackTypeExpression("a")}
 	// insert similar users
-	err := suite.CacheClient.AddScores(ctx, cache.UserToUser, cache.Key("default", "0"), []cache.Score{
-		{Id: "1", Score: 2},
-		{Id: "2", Score: 1.5},
-		{Id: "3", Score: 1},
+	collection := vectors.UserToUserCollection("default")
+	err := suite.VectorClient.AddCollection(ctx, collection, 0, vectors.Dot, vectors.VectorConfig{})
+	suite.NoError(err)
+	err = suite.VectorClient.AddVectors(ctx, collection, []vectors.Vector{
+		{Id: "0", Indices: []uint32{0}, Values: []float32{1}},
+		{Id: "1", Indices: []uint32{0}, Values: []float32{2}},
+		{Id: "2", Indices: []uint32{0}, Values: []float32{1.5}},
+		{Id: "3", Indices: []uint32{0}, Values: []float32{1}},
 	})
 	suite.NoError(err)
 	// insert feedback
@@ -483,7 +470,7 @@ func (suite *WorkerTestSuite) TestRecommend() {
 	suite.Config.Recommend.CacheSize = 1
 	suite.Config.Recommend.NonPersonalized = []config.NonPersonalizedConfig{{Name: "popular"}}
 	suite.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "default"}}
-	suite.Config.Recommend.UserToUser = []config.UserToUserConfig{{Name: "default"}}
+	suite.Config.Recommend.UserToUser = []config.UserToUserConfig{{Name: "default", Type: "items"}}
 	err := suite.VectorClient.AddVectors(ctx, vectors.CollaborativeFilteringCollection(suite.MatrixFactorizationId), []vectors.Vector{{Id: "4", Values: []float32{4, 1}}})
 	suite.NoError(err)
 	suite.MatrixFactorizationUsers = logics.NewMatrixFactorizationUsers()
@@ -516,12 +503,24 @@ func (suite *WorkerTestSuite) TestRecommend() {
 	err = suite.CacheClient.AddScores(ctx, cache.NonPersonalized, "popular", []cache.Score{{Id: "3", Categories: []string{""}}})
 	suite.NoError(err)
 
-	// insert item-to-item recommendation
-	err = suite.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key("default", "0"), []cache.Score{{Id: "2"}})
+	// insert item-to-item vectors
+	itemCollection := vectors.ItemToItemCollection("default")
+	err = suite.VectorClient.AddCollection(ctx, itemCollection, 0, vectors.Dot, vectors.VectorConfig{})
+	suite.NoError(err)
+	err = suite.VectorClient.AddVectors(ctx, itemCollection, []vectors.Vector{
+		{Id: "0", Indices: []uint32{0}, Values: []float32{1}},
+		{Id: "2", Indices: []uint32{0}, Values: []float32{1}},
+	})
 	suite.NoError(err)
 
-	// insert user-to-user recommendation
-	err = suite.CacheClient.AddScores(ctx, cache.UserToUser, cache.Key("default", "0"), []cache.Score{{Id: "1"}})
+	// insert user-to-user vectors
+	userCollection := vectors.UserToUserCollection("default")
+	err = suite.VectorClient.AddCollection(ctx, userCollection, 0, vectors.Dot, vectors.VectorConfig{})
+	suite.NoError(err)
+	err = suite.VectorClient.AddVectors(ctx, userCollection, []vectors.Vector{
+		{Id: "0", Indices: []uint32{0}, Values: []float32{1}},
+		{Id: "1", Indices: []uint32{0}, Values: []float32{1}},
+	})
 	suite.NoError(err)
 
 	suite.Recommend(ctx, []data.User{{UserId: "0"}}, nil)
@@ -547,7 +546,7 @@ func (suite *WorkerTestSuite) TestRecommendRankerNone() {
 	suite.Config.Recommend.CacheSize = 1
 	suite.Config.Recommend.NonPersonalized = []config.NonPersonalizedConfig{{Name: "popular"}}
 	suite.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "default"}}
-	suite.Config.Recommend.UserToUser = []config.UserToUserConfig{{Name: "default"}}
+	suite.Config.Recommend.UserToUser = []config.UserToUserConfig{{Name: "default", Type: "items"}}
 	err := suite.VectorClient.AddVectors(ctx, vectors.CollaborativeFilteringCollection(suite.MatrixFactorizationId), []vectors.Vector{{Id: "4", Values: []float32{4, 1}}})
 	suite.NoError(err)
 	suite.MatrixFactorizationUsers = logics.NewMatrixFactorizationUsers()
@@ -576,12 +575,24 @@ func (suite *WorkerTestSuite) TestRecommendRankerNone() {
 	err = suite.CacheClient.AddScores(ctx, cache.NonPersonalized, "popular", []cache.Score{{Id: "3", Categories: []string{""}}})
 	suite.NoError(err)
 
-	// insert item-to-item recommendation
-	err = suite.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key("default", "0"), []cache.Score{{Id: "2"}})
+	// insert item-to-item vectors
+	itemCollection := vectors.ItemToItemCollection("default")
+	err = suite.VectorClient.AddCollection(ctx, itemCollection, 0, vectors.Dot, vectors.VectorConfig{})
+	suite.NoError(err)
+	err = suite.VectorClient.AddVectors(ctx, itemCollection, []vectors.Vector{
+		{Id: "0", Indices: []uint32{0}, Values: []float32{1}},
+		{Id: "2", Indices: []uint32{0}, Values: []float32{1}},
+	})
 	suite.NoError(err)
 
-	// insert user-to-user recommendation
-	err = suite.CacheClient.AddScores(ctx, cache.UserToUser, cache.Key("default", "0"), []cache.Score{{Id: "1"}})
+	// insert user-to-user vectors
+	userCollection := vectors.UserToUserCollection("default")
+	err = suite.VectorClient.AddCollection(ctx, userCollection, 0, vectors.Dot, vectors.VectorConfig{})
+	suite.NoError(err)
+	err = suite.VectorClient.AddVectors(ctx, userCollection, []vectors.Vector{
+		{Id: "0", Indices: []uint32{0}, Values: []float32{1}},
+		{Id: "1", Indices: []uint32{0}, Values: []float32{1}},
+	})
 	suite.NoError(err)
 
 	suite.Recommend(ctx, []data.User{{UserId: "0"}}, nil)
