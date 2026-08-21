@@ -24,7 +24,6 @@ import (
 	"github.com/gorse-io/gorse/common/event"
 	"github.com/gorse-io/gorse/common/expression"
 	"github.com/gorse-io/gorse/config"
-	"github.com/gorse-io/gorse/dataset"
 	"github.com/gorse-io/gorse/logics"
 	"github.com/gorse-io/gorse/model/cf"
 	"github.com/gorse-io/gorse/model/ctr"
@@ -240,30 +239,6 @@ func (s *MasterTestSuite) TestFindItemToItem() {
 	similar, err = logics.QueryItemToItem(ctx, s.VectorClient, s.Config.Recommend.ItemToItem[0], "9", nil, s.Config.Recommend.CacheSize)
 	s.NoError(err)
 	s.Equal([]string{"7", "5", "3"}, cache.ConvertDocumentsToValues(similar))
-}
-
-func (s *MasterTestSuite) TestUpdateEmbeddingItemToItemWritesVectors() {
-	ctx := s.T().Context()
-	now := time.Now()
-	dataSet := dataset.NewDataset(now, 0, 3)
-	dataSet.AddItem(data.Item{ItemId: "source", Labels: map[string]any{"embedding": []float32{0, 0}}, Timestamp: now})
-	dataSet.AddItem(data.Item{ItemId: "near", Labels: map[string]any{"embedding": []float32{0.1, 0}}, Categories: []string{"movie"}, Timestamp: now})
-	dataSet.AddItem(data.Item{ItemId: "hidden", Labels: map[string]any{"embedding": []float32{0.05, 0}}, Categories: []string{"movie"}, IsHidden: true, Timestamp: now})
-
-	s.Config.Recommend.CacheSize = 2
-	s.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "embedding", Type: "embedding", Column: "item.Labels.embedding"}}
-	collection := vectors.ItemToItemCollection("embedding")
-	s.NoError(s.VectorClient.AddCollection(ctx, collection, 2, vectors.Euclidean, vectors.VectorConfig{}))
-	s.NoError(s.VectorClient.AddVectors(ctx, collection, []vectors.Vector{{Id: "stale", Values: []float32{1, 1}, Timestamp: now.Add(-time.Hour)}}))
-	s.NoError(s.updateItemToItem(ctx, dataSet))
-
-	stale, err := s.VectorClient.GetVectors(ctx, collection, []string{"stale"})
-	s.NoError(err)
-	s.Empty(stale)
-	results, err := s.VectorClient.QueryVectors(ctx, collection, vectors.Vector{Values: []float32{0, 0}}, []string{"movie"}, 10)
-	s.NoError(err)
-	s.Equal([]string{"near"}, lo.Map(results, func(result vectors.ScoredVector, _ int) string { return result.Id }))
-
 }
 
 func (s *MasterTestSuite) TestUserToUser() {

@@ -1131,7 +1131,7 @@ func (m *Master) getItemToItem(request *restful.Request, response *restful.Respo
 		server.InternalServerError(response, err)
 		return
 	}
-	scores, err = server.FilterItems(ctx, m.DataClient, scores, categories)
+	scores, err = server.FilterVisibleItemsByCategories(ctx, m.DataClient, scores, categories)
 	if err != nil {
 		server.InternalServerError(response, err)
 		return

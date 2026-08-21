@@ -43,8 +43,8 @@ type ItemToItemOptions struct {
 }
 
 type ItemToItem interface {
-	Push(item *data.Item, feedback []int32)
-	Finish() error
+	Add(item *data.Item, feedback []int32)
+	Clean() error
 }
 
 func QueryItemToItem(ctx context.Context, vectorClient vectors.Database, itemToItemConfig config.ItemToItemConfig, itemId string, categories []string, n int) ([]cache.Score, error) {
@@ -134,8 +134,8 @@ func (b *baseItemToItem) push(item *data.Item, query vectors.Vector) {
 	b.writer.Push(query)
 }
 
-func (b *baseItemToItem) Finish() error {
-	return b.writer.Finish()
+func (b *baseItemToItem) Clean() error {
+	return b.writer.Clean()
 }
 
 type embeddingItemToItem struct {
@@ -154,7 +154,7 @@ func newEmbeddingItemToItem(cfg config.ItemToItemConfig, timestamp time.Time, op
 	}, nil
 }
 
-func (e *embeddingItemToItem) Push(item *data.Item, _ []int32) {
+func (e *embeddingItemToItem) Add(item *data.Item, _ []int32) {
 	embedding, ok := ExtractItemEmbedding(item, e.columnFunc)
 	if !ok || len(embedding) == 0 {
 		return
@@ -190,7 +190,7 @@ func newTagsItemToItem(cfg config.ItemToItemConfig, timestamp time.Time, opts *I
 	return &tagsItemToItem{baseItemToItem: newBaseItemToItem(cfg, timestamp, opts, true), columnFunc: columnFunc, idf: idf}, nil
 }
 
-func (t *tagsItemToItem) Push(item *data.Item, _ []int32) {
+func (t *tagsItemToItem) Add(item *data.Item, _ []int32) {
 	result, err := expr.Run(t.columnFunc, map[string]any{"item": item})
 	if err != nil {
 		log.Logger().Error("failed to evaluate column expression", zap.Any("item", item), zap.Error(err))
@@ -215,7 +215,7 @@ func newUsersItemToItem(cfg config.ItemToItemConfig, timestamp time.Time, opts *
 	return &usersItemToItem{baseItemToItem: newBaseItemToItem(cfg, timestamp, opts, true), idf: idf}, nil
 }
 
-func (u *usersItemToItem) Push(item *data.Item, feedback []int32) {
+func (u *usersItemToItem) Add(item *data.Item, feedback []int32) {
 	slices.Sort(feedback)
 	u.push(item, newSparseVector(feedback, u.idf, 0))
 }
@@ -230,7 +230,7 @@ func newAutoItemToItem(cfg config.ItemToItemConfig, timestamp time.Time, opts *I
 	return &autoItemToItem{baseItemToItem: newBaseItemToItem(cfg, timestamp, opts, true), tagsIDF: tagsIDF, usersIDF: usersIDF}, nil
 }
 
-func (a *autoItemToItem) Push(item *data.Item, feedback []int32) {
+func (a *autoItemToItem) Add(item *data.Item, feedback []int32) {
 	tags := mapset.NewSet[dataset.ID]()
 	flatten(item.Labels, tags)
 	tagIDs := tags.ToSlice()

@@ -811,8 +811,8 @@ func (s *RestServer) getItemToItem(request *restful.Request, response *restful.R
 	s.SearchItemToItem(*itemToItemConfig, itemId, categories, request, response)
 }
 
-// FilterItems removes hidden items and items that don't contain all required categories.
-func FilterItems(ctx context.Context, dataClient data.Database, scores []cache.Score, categories []string) ([]cache.Score, error) {
+// FilterVisibleItemsByCategories removes hidden items and items that don't contain all required categories.
+func FilterVisibleItemsByCategories(ctx context.Context, dataClient data.Database, scores []cache.Score, categories []string) ([]cache.Score, error) {
 	items, err := dataClient.BatchGetItems(ctx, cache.ConvertDocumentsToValues(scores), data.GetOptions{})
 	if err != nil {
 		return nil, err
@@ -860,7 +860,7 @@ func (s *RestServer) SearchItemToItem(itemToItemConfig config.ItemToItemConfig, 
 		InternalServerError(response, err)
 		return
 	}
-	results, err = FilterItems(ctx, s.DataClient, results, categories)
+	results, err = FilterVisibleItemsByCategories(ctx, s.DataClient, results, categories)
 	if err != nil {
 		InternalServerError(response, err)
 		return
@@ -1130,7 +1130,7 @@ func (s *RestServer) sessionRecommend(request *restful.Request, response *restfu
 			BadRequest(response, err)
 			return
 		}
-		similarItems, err = FilterItems(ctx, s.DataClient, similarItems, categories)
+		similarItems, err = FilterVisibleItemsByCategories(ctx, s.DataClient, similarItems, categories)
 		if err != nil {
 			InternalServerError(response, err)
 			return

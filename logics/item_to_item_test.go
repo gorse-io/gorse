@@ -46,12 +46,12 @@ func (suite *ItemToItemTestSuite) newWriter(cfg config.ItemToItemConfig, tagsIDF
 func (suite *ItemToItemTestSuite) TestEmbedding() {
 	cfg := config.ItemToItemConfig{Name: "embedding", Type: "embedding", Column: "item.Labels.description"}
 	writer, vectorClient := suite.newWriter(cfg, nil, nil)
-	writer.Push(&data.Item{ItemId: "source", Labels: map[string]any{"description": []float32{0, 0}}}, nil)
-	writer.Push(&data.Item{ItemId: "near", Labels: map[string]any{"description": []float32{0.1, 0}}}, nil)
-	writer.Push(&data.Item{ItemId: "far", Labels: map[string]any{"description": []float32{1, 0}}}, nil)
-	writer.Push(&data.Item{ItemId: "invalid", Labels: map[string]any{"description": "invalid"}}, nil)
-	writer.Push(&data.Item{ItemId: "wrong-dimension", Labels: map[string]any{"description": []float32{0, 0, 0}}}, nil)
-	suite.NoError(writer.Finish())
+	writer.Add(&data.Item{ItemId: "source", Labels: map[string]any{"description": []float32{0, 0}}}, nil)
+	writer.Add(&data.Item{ItemId: "near", Labels: map[string]any{"description": []float32{0.1, 0}}}, nil)
+	writer.Add(&data.Item{ItemId: "far", Labels: map[string]any{"description": []float32{1, 0}}}, nil)
+	writer.Add(&data.Item{ItemId: "invalid", Labels: map[string]any{"description": "invalid"}}, nil)
+	writer.Add(&data.Item{ItemId: "wrong-dimension", Labels: map[string]any{"description": []float32{0, 0, 0}}}, nil)
+	suite.NoError(writer.Clean())
 
 	scores, err := QueryItemToItem(suite.T().Context(), vectorClient, cfg, "source", nil, 2)
 	suite.NoError(err)
@@ -60,13 +60,36 @@ func (suite *ItemToItemTestSuite) TestEmbedding() {
 	suite.Equal("far", scores[1].Id)
 }
 
+func (suite *ItemToItemTestSuite) TestClean() {
+	ctx := suite.T().Context()
+	timestamp := time.Now().UTC().Truncate(time.Millisecond)
+	cfg := config.ItemToItemConfig{Name: "cleanup", Type: "embedding", Column: "item.Labels.embedding"}
+	collection := vectors.ItemToItemCollection(cfg.Name)
+	suite.NoError(suite.vectorClient.AddCollection(ctx, collection, 2, vectors.Euclidean, vectors.VectorConfig{}))
+	suite.NoError(suite.vectorClient.AddVectors(ctx, collection, []vectors.Vector{
+		{Id: "stale", Values: []float32{0, 0}, Timestamp: timestamp.Add(-time.Hour)},
+		{Id: "current", Values: []float32{1, 0}, Timestamp: timestamp},
+	}))
+
+	writer, err := NewItemToItem(cfg, timestamp, &ItemToItemOptions{Context: ctx, VectorClient: suite.vectorClient})
+	suite.NoError(err)
+	writer.Add(&data.Item{ItemId: "new", Labels: map[string]any{"embedding": []float32{2, 0}}}, nil)
+	suite.NoError(writer.Clean())
+
+	stored, err := suite.vectorClient.GetVectors(ctx, collection, []string{"stale", "current", "new"})
+	suite.NoError(err)
+	suite.Require().Len(stored, 2)
+	suite.Equal("current", stored[0].Id)
+	suite.Equal("new", stored[1].Id)
+}
+
 func (suite *ItemToItemTestSuite) TestHidden() {
 	cfg := config.ItemToItemConfig{Name: "hidden", Type: "embedding", Column: "item.Labels.description"}
 	writer, vectorClient := suite.newWriter(cfg, nil, nil)
-	writer.Push(&data.Item{ItemId: "visible_1", Labels: map[string]any{"description": []float32{0, 0}}}, nil)
-	writer.Push(&data.Item{ItemId: "visible_2", Labels: map[string]any{"description": []float32{0.1, 0}}}, nil)
-	writer.Push(&data.Item{ItemId: "hidden", IsHidden: true, Labels: map[string]any{"description": []float32{0.05, 0}}}, nil)
-	suite.NoError(writer.Finish())
+	writer.Add(&data.Item{ItemId: "visible_1", Labels: map[string]any{"description": []float32{0, 0}}}, nil)
+	writer.Add(&data.Item{ItemId: "visible_2", Labels: map[string]any{"description": []float32{0.1, 0}}}, nil)
+	writer.Add(&data.Item{ItemId: "hidden", IsHidden: true, Labels: map[string]any{"description": []float32{0.05, 0}}}, nil)
+	suite.NoError(writer.Clean())
 
 	visibleScores, err := QueryItemToItem(suite.T().Context(), vectorClient, cfg, "visible_1", nil, 10)
 	suite.NoError(err)
@@ -79,10 +102,10 @@ func (suite *ItemToItemTestSuite) TestHidden() {
 func (suite *ItemToItemTestSuite) TestTags() {
 	cfg := config.ItemToItemConfig{Name: "tags", Type: "tags", Column: "item.Labels"}
 	writer, vectorClient := suite.newWriter(cfg, []float32{0, 1, 2}, nil)
-	writer.Push(&data.Item{ItemId: "query", Labels: []dataset.ID{1, 2}}, nil)
-	writer.Push(&data.Item{ItemId: "idf-2", Labels: []dataset.ID{2}}, nil)
-	writer.Push(&data.Item{ItemId: "idf-1", Labels: []dataset.ID{1}}, nil)
-	suite.NoError(writer.Finish())
+	writer.Add(&data.Item{ItemId: "query", Labels: []dataset.ID{1, 2}}, nil)
+	writer.Add(&data.Item{ItemId: "idf-2", Labels: []dataset.ID{2}}, nil)
+	writer.Add(&data.Item{ItemId: "idf-1", Labels: []dataset.ID{1}}, nil)
+	suite.NoError(writer.Clean())
 
 	scores, err := QueryItemToItem(suite.T().Context(), vectorClient, cfg, "query", nil, 2)
 	suite.NoError(err)
@@ -96,10 +119,10 @@ func (suite *ItemToItemTestSuite) TestTags() {
 func (suite *ItemToItemTestSuite) TestUsers() {
 	cfg := config.ItemToItemConfig{Name: "users", Type: "users"}
 	writer, vectorClient := suite.newWriter(cfg, nil, []float32{0, 1, 2})
-	writer.Push(&data.Item{ItemId: "query"}, []int32{1, 2})
-	writer.Push(&data.Item{ItemId: "idf-2"}, []int32{2})
-	writer.Push(&data.Item{ItemId: "idf-1"}, []int32{1})
-	suite.NoError(writer.Finish())
+	writer.Add(&data.Item{ItemId: "query"}, []int32{1, 2})
+	writer.Add(&data.Item{ItemId: "idf-2"}, []int32{2})
+	writer.Add(&data.Item{ItemId: "idf-1"}, []int32{1})
+	suite.NoError(writer.Clean())
 
 	scores, err := QueryItemToItem(suite.T().Context(), vectorClient, cfg, "query", nil, 2)
 	suite.NoError(err)
@@ -114,9 +137,9 @@ func (suite *ItemToItemTestSuite) TestAuto() {
 	cfg := config.ItemToItemConfig{Name: "auto", Type: "auto"}
 	idf := []float32{0, 1, 2}
 	writer, vectorClient := suite.newWriter(cfg, idf, idf)
-	writer.Push(&data.Item{ItemId: "query", Labels: []dataset.ID{1}}, []int32{1})
-	writer.Push(&data.Item{ItemId: "same", Labels: []dataset.ID{1}}, []int32{1})
-	suite.NoError(writer.Finish())
+	writer.Add(&data.Item{ItemId: "query", Labels: []dataset.ID{1}}, []int32{1})
+	writer.Add(&data.Item{ItemId: "same", Labels: []dataset.ID{1}}, []int32{1})
+	suite.NoError(writer.Clean())
 
 	scores, err := QueryItemToItem(suite.T().Context(), vectorClient, cfg, "query", nil, 1)
 	suite.NoError(err)

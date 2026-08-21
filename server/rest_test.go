@@ -1153,8 +1153,8 @@ func (suite *ServerTestSuite) TestNonPersonalizedRecommend() {
 
 func (suite *ServerTestSuite) TestUserToUser() {
 	ctx := suite.T().Context()
-	suite.Config.Recommend.UserToUser = []config.UserToUserConfig{{Name: "neighbors", Type: "items"}}
-	collection := vectors.UserToUserCollection("neighbors")
+	suite.Config.Recommend.UserToUser = []config.UserToUserConfig{{Name: "default", Type: "items"}}
+	collection := vectors.UserToUserCollection("default")
 	err := suite.VectorClient.AddCollection(ctx, collection, 0, vectors.Dot, vectors.VectorConfig{})
 	suite.NoError(err)
 	err = suite.VectorClient.AddVectors(ctx, collection, []vectors.Vector{
@@ -1169,7 +1169,7 @@ func (suite *ServerTestSuite) TestUserToUser() {
 
 	apitest.New().
 		Handler(suite.handler).
-		Get("/api/user-to-user/neighbors/0").
+		Get("/api/user-to-user/default/0").
 		Header("X-API-Key", apiKey).
 		Expect(suite.T()).
 		Status(http.StatusOK).
@@ -1562,7 +1562,7 @@ func (suite *ServerTestSuite) TestGetRecommendsFallbackItemToItem() {
 
 func (suite *ServerTestSuite) TestGetRecommendsFallbackUserToUser() {
 	ctx := suite.T().Context()
-	suite.Config.Recommend.UserToUser = []config.UserToUserConfig{{Name: "fallback", Type: "items"}}
+	suite.Config.Recommend.UserToUser = []config.UserToUserConfig{{Name: "default", Type: "items"}}
 	// insert recommendation
 	err := suite.CacheClient.AddScores(ctx, cache.Recommend, "0",
 		[]cache.Score{{Id: "1", Score: 99}, {Id: "2", Score: 98}, {Id: "3", Score: 97}, {Id: "4", Score: 96}})
@@ -1584,7 +1584,7 @@ func (suite *ServerTestSuite) TestGetRecommendsFallbackUserToUser() {
 		Body(`{"RowAffected": 4}`).
 		End()
 	// insert similar users
-	collection := vectors.UserToUserCollection("fallback")
+	collection := vectors.UserToUserCollection("default")
 	err = suite.VectorClient.AddCollection(ctx, collection, 0, vectors.Dot, vectors.VectorConfig{})
 	suite.NoError(err)
 	err = suite.VectorClient.AddVectors(ctx, collection, []vectors.Vector{
@@ -1615,7 +1615,7 @@ func (suite *ServerTestSuite) TestGetRecommendsFallbackUserToUser() {
 	})
 	suite.NoError(err)
 	// test fallback
-	suite.Config.Recommend.Fallback.Recommenders = []string{"user-to-user/fallback"}
+	suite.Config.Recommend.Fallback.Recommenders = []string{"user-to-user/default"}
 	apitest.New().
 		Handler(suite.handler).
 		Get("/api/recommend/0").
@@ -1806,11 +1806,10 @@ func (suite *ServerTestSuite) TestSessionRecommend() {
 	suite.Config.Recommend.ContextSize = 4
 	suite.Config.Recommend.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{
 		expression.MustParseFeedbackTypeExpression("a")}
-	suite.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "default"}}
+	suite.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "default", Type: "tags", Column: "item.Labels"}}
 
 	// insert item-to-item vectors
-	suite.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "session", Type: "tags", Column: "item.Labels"}}
-	collection := vectors.ItemToItemCollection("session")
+	collection := vectors.ItemToItemCollection("default")
 	err := suite.VectorClient.AddCollection(ctx, collection, 0, vectors.Dot, vectors.VectorConfig{})
 	suite.NoError(err)
 	err = suite.VectorClient.AddVectors(ctx, collection, []vectors.Vector{
@@ -1893,7 +1892,7 @@ func (suite *ServerTestSuite) TestSessionRecommend() {
 
 func (suite *ServerTestSuite) TestVisibility() {
 	ctx := suite.T().Context()
-	suite.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "visibility", Type: "tags", Column: "item.Labels"}}
+	suite.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "default", Type: "tags", Column: "item.Labels"}}
 	// insert items: 0, 1, 2, 3, 4
 	var items []Item
 	for i := range 5 {
@@ -1925,7 +1924,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		})
 	}
 	mutable.Reverse(documents)
-	collection := vectors.ItemToItemCollection("visibility")
+	collection := vectors.ItemToItemCollection("default")
 	err := suite.VectorClient.AddCollection(ctx, collection, 0, vectors.Dot, vectors.VectorConfig{})
 	suite.NoError(err)
 	values := []vectors.Vector{{Id: "100", Indices: []uint32{0}, Values: []float32{1}}}

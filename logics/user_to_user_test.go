@@ -53,7 +53,7 @@ func (suite *UserToUserTestSuite) TestEmbedding() {
 	suite.NoError(err)
 
 	for i := range 100 {
-		user2user.Push(&data.User{
+		user2user.Add(&data.User{
 			UserId: strconv.Itoa(i),
 			Labels: map[string]any{
 				"description": []float32{0.1 * float32(i), 0.2 * float32(i), 0.3 * float32(i)},
@@ -61,7 +61,7 @@ func (suite *UserToUserTestSuite) TestEmbedding() {
 		}, nil)
 	}
 
-	suite.NoError(user2user.Finish())
+	suite.NoError(user2user.Clean())
 	scores, err := QueryUserToUser(suite.T().Context(), opts.VectorClient, cfg, "0", 10)
 	suite.NoError(err)
 	suite.Len(scores, 10)
@@ -70,17 +70,40 @@ func (suite *UserToUserTestSuite) TestEmbedding() {
 	}
 }
 
+func (suite *UserToUserTestSuite) TestClean() {
+	ctx := suite.T().Context()
+	timestamp := time.Now().UTC().Truncate(time.Millisecond)
+	cfg := config.UserToUserConfig{Name: "cleanup", Type: "embedding", Column: "user.Labels.embedding"}
+	collection := vectors.UserToUserCollection(cfg.Name)
+	suite.NoError(suite.vectorClient.AddCollection(ctx, collection, 2, vectors.Euclidean, vectors.VectorConfig{}))
+	suite.NoError(suite.vectorClient.AddVectors(ctx, collection, []vectors.Vector{
+		{Id: "stale", Values: []float32{0, 0}, Timestamp: timestamp.Add(-time.Hour)},
+		{Id: "current", Values: []float32{1, 0}, Timestamp: timestamp},
+	}))
+
+	writer, err := NewUserToUser(cfg, timestamp, &UserToUserOptions{Context: ctx, VectorClient: suite.vectorClient})
+	suite.NoError(err)
+	writer.Add(&data.User{UserId: "new", Labels: map[string]any{"embedding": []float32{2, 0}}}, nil)
+	suite.NoError(writer.Clean())
+
+	stored, err := suite.vectorClient.GetVectors(ctx, collection, []string{"stale", "current", "new"})
+	suite.NoError(err)
+	suite.Require().Len(stored, 2)
+	suite.Equal("current", stored[0].Id)
+	suite.Equal("new", stored[1].Id)
+}
+
 func (suite *UserToUserTestSuite) TestIDFInnerProductScores() {
 	opts := &UserToUserOptions{Context: suite.T().Context(), VectorClient: suite.vectorClient}
 	cfg := config.UserToUserConfig{Name: "items-idf", Type: "items"}
 	user2user, err := newItemsUserToUser(cfg, time.Now(), opts, []float32{0, 1, 2})
 	suite.NoError(err)
 
-	user2user.Push(&data.User{UserId: "query"}, []int32{1, 2})
-	user2user.Push(&data.User{UserId: "idf-2"}, []int32{2})
-	user2user.Push(&data.User{UserId: "idf-1"}, []int32{1})
+	user2user.Add(&data.User{UserId: "query"}, []int32{1, 2})
+	user2user.Add(&data.User{UserId: "idf-2"}, []int32{2})
+	user2user.Add(&data.User{UserId: "idf-1"}, []int32{1})
 
-	suite.NoError(user2user.Finish())
+	suite.NoError(user2user.Clean())
 	scores, err := QueryUserToUser(suite.T().Context(), opts.VectorClient, cfg, "query", 2)
 	suite.NoError(err)
 	suite.Require().Len(scores, 2)
@@ -106,13 +129,13 @@ func (suite *UserToUserTestSuite) TestTags() {
 		for j := 1; j <= 100-i; j++ {
 			labels[strconv.Itoa(j)] = []dataset.ID{dataset.ID(j)}
 		}
-		user2user.Push(&data.User{
+		user2user.Add(&data.User{
 			UserId: strconv.Itoa(i),
 			Labels: labels,
 		}, nil)
 	}
 
-	suite.NoError(user2user.Finish())
+	suite.NoError(user2user.Clean())
 	scores, err := QueryUserToUser(suite.T().Context(), opts.VectorClient, cfg, "0", 10)
 	suite.NoError(err)
 	suite.Len(scores, 10)
@@ -137,10 +160,10 @@ func (suite *UserToUserTestSuite) TestItems() {
 		for j := 1; j <= 100-i; j++ {
 			feedback = append(feedback, int32(j))
 		}
-		user2user.Push(&data.User{UserId: strconv.Itoa(i)}, feedback)
+		user2user.Add(&data.User{UserId: strconv.Itoa(i)}, feedback)
 	}
 
-	suite.NoError(user2user.Finish())
+	suite.NoError(user2user.Clean())
 	scores, err := QueryUserToUser(suite.T().Context(), opts.VectorClient, cfg, "0", 10)
 	suite.NoError(err)
 	suite.Len(scores, 10)
@@ -174,10 +197,10 @@ func (suite *UserToUserTestSuite) TestAuto() {
 				feedback = append(feedback, int32(j))
 			}
 		}
-		user2user.Push(user, feedback)
+		user2user.Add(user, feedback)
 	}
 
-	suite.NoError(user2user.Finish())
+	suite.NoError(user2user.Clean())
 	scores0, err := QueryUserToUser(suite.T().Context(), opts.VectorClient, cfg, "0", 10)
 	suite.NoError(err)
 	suite.Len(scores0, 10)

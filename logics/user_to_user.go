@@ -43,8 +43,8 @@ type UserToUserOptions struct {
 }
 
 type UserToUser interface {
-	Push(user *data.User, feedback []int32)
-	Finish() error
+	Add(user *data.User, feedback []int32)
+	Clean() error
 }
 
 func QueryUserToUser(ctx context.Context, vectorClient vectors.Database, userToUserConfig config.UserToUserConfig, userId string, n int) ([]cache.Score, error) {
@@ -133,8 +133,8 @@ func (b *baseUserToUser) push(user *data.User, query vectors.Vector) {
 	b.writer.Push(query)
 }
 
-func (b *baseUserToUser) Finish() error {
-	return b.writer.Finish()
+func (b *baseUserToUser) Clean() error {
+	return b.writer.Clean()
 }
 
 type embeddingUserToUser struct {
@@ -150,7 +150,7 @@ func newEmbeddingUserToUser(cfg config.UserToUserConfig, timestamp time.Time, op
 	return &embeddingUserToUser{baseUserToUser: newBaseUserToUser(cfg, timestamp, opts, false), columnFunc: columnFunc}, nil
 }
 
-func (e *embeddingUserToUser) Push(user *data.User, _ []int32) {
+func (e *embeddingUserToUser) Add(user *data.User, _ []int32) {
 	result, err := expr.Run(e.columnFunc, map[string]any{"user": user})
 	if err != nil {
 		log.Logger().Error("failed to evaluate column expression", zap.Error(err))
@@ -178,7 +178,7 @@ func newTagsUserToUser(cfg config.UserToUserConfig, timestamp time.Time, opts *U
 	return &tagsUserToUser{baseUserToUser: newBaseUserToUser(cfg, timestamp, opts, true), columnFunc: columnFunc, idf: idf}, nil
 }
 
-func (t *tagsUserToUser) Push(user *data.User, _ []int32) {
+func (t *tagsUserToUser) Add(user *data.User, _ []int32) {
 	result, err := expr.Run(t.columnFunc, map[string]any{"user": user})
 	if err != nil {
 		log.Logger().Error("failed to evaluate column expression", zap.Error(err))
@@ -203,7 +203,7 @@ func newItemsUserToUser(cfg config.UserToUserConfig, timestamp time.Time, opts *
 	return &itemsUserToUser{baseUserToUser: newBaseUserToUser(cfg, timestamp, opts, true), idf: idf}, nil
 }
 
-func (i *itemsUserToUser) Push(user *data.User, feedback []int32) {
+func (i *itemsUserToUser) Add(user *data.User, feedback []int32) {
 	slices.Sort(feedback)
 	i.push(user, newSparseVector(feedback, i.idf, 0))
 }
@@ -222,7 +222,7 @@ func newAutoUserToUser(cfg config.UserToUserConfig, timestamp time.Time, opts *U
 	}, nil
 }
 
-func (a *autoUserToUser) Push(user *data.User, feedback []int32) {
+func (a *autoUserToUser) Add(user *data.User, feedback []int32) {
 	tags := mapset.NewSet[dataset.ID]()
 	flatten(user.Labels, tags)
 	tagIDs := tags.ToSlice()

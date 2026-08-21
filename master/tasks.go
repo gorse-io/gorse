@@ -808,20 +808,17 @@ func (m *Master) updateItemToItem(parent context.Context, dataset *dataset.Datas
 		itemToItemRecommenders = append(itemToItemRecommenders, recommender)
 	}
 
-	// Push items to item-to-item recommenders
+	// Add items to item-to-item recommenders
 	if err := parallel.ForEach(ctx, dataset.GetItems(), m.Config.Master.NumJobs, func(i int, item data.Item) {
 		for _, recommender := range itemToItemRecommenders {
-			recommender.Push(&item, dataset.GetItemFeedback()[i])
+			recommender.Add(&item, dataset.GetItemFeedback()[i])
 			span.Add(1)
 		}
 	}); err != nil {
 		return errors.WithStack(err)
 	}
-	for i, recommender := range itemToItemRecommenders {
-		if err := recommender.Finish(); err != nil {
-			return errors.WithStack(err)
-		}
-		if err := m.VectorClient.DeleteVectors(ctx, vectors.ItemToItemCollection(m.Config.Recommend.ItemToItem[i].Name), dataset.GetTimestamp()); err != nil {
+	for _, recommender := range itemToItemRecommenders {
+		if err := recommender.Clean(); err != nil {
 			return errors.WithStack(err)
 		}
 	}
@@ -856,20 +853,17 @@ func (m *Master) updateUserToUser(parent context.Context, dataset *dataset.Datas
 		userToUserRecommenders = append(userToUserRecommenders, recommender)
 	}
 
-	// Push users to user-to-user recommender
+	// Add users to user-to-user recommender
 	if err := parallel.ForEach(ctx, dataset.GetUsers(), m.Config.Master.NumJobs, func(i int, user data.User) {
 		for _, recommender := range userToUserRecommenders {
-			recommender.Push(&user, dataset.GetUserFeedback()[i])
+			recommender.Add(&user, dataset.GetUserFeedback()[i])
 			span.Add(1)
 		}
 	}); err != nil {
 		return errors.WithStack(err)
 	}
-	for i, recommender := range userToUserRecommenders {
-		if err := recommender.Finish(); err != nil {
-			return errors.WithStack(err)
-		}
-		if err := m.VectorClient.DeleteVectors(ctx, vectors.UserToUserCollection(m.Config.Recommend.UserToUser[i].Name), dataset.GetTimestamp()); err != nil {
+	for _, recommender := range userToUserRecommenders {
+		if err := recommender.Clean(); err != nil {
 			return errors.WithStack(err)
 		}
 	}

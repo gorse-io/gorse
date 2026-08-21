@@ -121,7 +121,7 @@ func (w *similarityVectorWriter) Push(vector vectors.Vector) bool {
 	return w.err == nil
 }
 
-func (w *similarityVectorWriter) Finish() error {
+func (w *similarityVectorWriter) Clean() error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	if w.err != nil {
@@ -136,6 +136,10 @@ func (w *similarityVectorWriter) Finish() error {
 	if err := w.flushLocked(); err != nil {
 		w.err = err
 		return err
+	}
+	if err := w.client.DeleteVectors(w.ctx, w.collection, w.timestamp); err != nil && !errors.Is(err, storage.ErrNotFound) {
+		w.err = errors.WithStack(err)
+		return w.err
 	}
 	return nil
 }
