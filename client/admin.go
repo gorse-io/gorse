@@ -140,23 +140,23 @@ func NewAdminClient(endpoint, apiKey string) *AdminClient {
 }
 
 func (c *AdminClient) GetCluster() ([]Node, error) {
-	return get[[]Node](c, "/dashboard/cluster", nil)
+	return c.get[[]Node]("/dashboard/cluster", nil)
 }
 
 func (c *AdminClient) GetTasks() ([]Progress, error) {
-	return get[[]Progress](c, "/dashboard/tasks", nil)
+	return c.get[[]Progress]("/dashboard/tasks", nil)
 }
 
 func (c *AdminClient) GetConfig() (map[string]any, error) {
-	return get[map[string]any](c, "/dashboard/config", nil)
+	return c.get[map[string]any]("/dashboard/config", nil)
 }
 
 func (c *AdminClient) GetConfigMap() (map[string]any, error) {
-	return get[map[string]any](c, "/dashboard/config", nil)
+	return c.get[map[string]any]("/dashboard/config", nil)
 }
 
 func (c *AdminClient) GetConfigSchema() (map[string]any, error) {
-	return get[map[string]any](c, "/dashboard/config/schema", nil)
+	return c.get[map[string]any]("/dashboard/config/schema", nil)
 }
 
 func (c *AdminClient) UpdateConfig(configPatch map[string]any) (map[string]any, error) {
@@ -190,11 +190,11 @@ func (c *AdminClient) ResetConfig() (map[string]any, error) {
 }
 
 func (c *AdminClient) GetCategories() ([]string, error) {
-	return get[[]string](c, "/dashboard/categories", nil)
+	return c.get[[]string]("/dashboard/categories", nil)
 }
 
 func (c *AdminClient) GetStats() (Status, error) {
-	return get[Status](c, "/dashboard/stats", nil)
+	return c.get[Status]("/dashboard/stats", nil)
 }
 
 func (c *AdminClient) GetTimeseries(name, begin, end, duration string) ([]TimeSeriesPoint, error) {
@@ -208,7 +208,7 @@ func (c *AdminClient) GetTimeseries(name, begin, end, duration string) ([]TimeSe
 	if duration != "" {
 		params.Set("duration", duration)
 	}
-	return get[[]TimeSeriesPoint](c, "/dashboard/timeseries/"+url.PathEscape(name), params)
+	return c.get[[]TimeSeriesPoint]("/dashboard/timeseries/"+url.PathEscape(name), params)
 }
 
 func (c *AdminClient) GetFeedback(n int) (FeedbackIterator, error) {
@@ -216,7 +216,7 @@ func (c *AdminClient) GetFeedback(n int) (FeedbackIterator, error) {
 	if n != 0 {
 		params.Set("n", fmt.Sprint(n))
 	}
-	return get[FeedbackIterator](c, "/feedback", params)
+	return c.get[FeedbackIterator]("/feedback", params)
 }
 
 func (c *AdminClient) GetTypedFeedback(feedbackType string, n int) (FeedbackIterator, error) {
@@ -224,31 +224,31 @@ func (c *AdminClient) GetTypedFeedback(feedbackType string, n int) (FeedbackIter
 	if n != 0 {
 		params.Set("n", fmt.Sprint(n))
 	}
-	return get[FeedbackIterator](c, "/feedback/"+url.PathEscape(feedbackType), params)
+	return c.get[FeedbackIterator]("/feedback/"+url.PathEscape(feedbackType), params)
 }
 
 func (c *AdminClient) GetUserItemFeedback(userID, itemID string) ([]Feedback, error) {
-	return get[[]Feedback](c, "/feedback/"+url.PathEscape(userID)+"/"+url.PathEscape(itemID), nil)
+	return c.get[[]Feedback]("/feedback/"+url.PathEscape(userID)+"/"+url.PathEscape(itemID), nil)
 }
 
 func (c *AdminClient) GetTypedUserItemFeedback(feedbackType, userID, itemID string) (Feedback, error) {
-	return get[Feedback](c, "/feedback/"+url.PathEscape(feedbackType)+"/"+url.PathEscape(userID)+"/"+url.PathEscape(itemID), nil)
+	return c.get[Feedback]("/feedback/"+url.PathEscape(feedbackType)+"/"+url.PathEscape(userID)+"/"+url.PathEscape(itemID), nil)
 }
 
 func (c *AdminClient) GetUserFeedback(userID string) ([]Feedback, error) {
-	return get[[]Feedback](c, "/user/"+url.PathEscape(userID)+"/feedback", nil)
+	return c.get[[]Feedback]("/user/"+url.PathEscape(userID)+"/feedback", nil)
 }
 
 func (c *AdminClient) GetTypedUserFeedback(userID, feedbackType string) ([]Feedback, error) {
-	return get[[]Feedback](c, "/user/"+url.PathEscape(userID)+"/feedback/"+url.PathEscape(feedbackType), nil)
+	return c.get[[]Feedback]("/user/"+url.PathEscape(userID)+"/feedback/"+url.PathEscape(feedbackType), nil)
 }
 
 func (c *AdminClient) GetItemFeedback(itemID string) ([]Feedback, error) {
-	return get[[]Feedback](c, "/item/"+url.PathEscape(itemID)+"/feedback/", nil)
+	return c.get[[]Feedback]("/item/"+url.PathEscape(itemID)+"/feedback/", nil)
 }
 
 func (c *AdminClient) GetTypedItemFeedback(itemID, feedbackType string) ([]Feedback, error) {
-	return get[[]Feedback](c, "/item/"+url.PathEscape(itemID)+"/feedback/"+url.PathEscape(feedbackType), nil)
+	return c.get[[]Feedback]("/item/"+url.PathEscape(itemID)+"/feedback/"+url.PathEscape(feedbackType), nil)
 }
 
 func (c *AdminClient) GetLatest(n int, categories []string) ([]ScoredItem, error) {
@@ -259,7 +259,7 @@ func (c *AdminClient) GetLatest(n int, categories []string) ([]ScoredItem, error
 	for _, category := range categories {
 		params.Add("category", category)
 	}
-	return get[[]ScoredItem](c, "/dashboard/latest", params)
+	return c.get[[]ScoredItem]("/dashboard/latest", params)
 }
 
 func (c *AdminClient) GetNonPersonalized(name string, n int, userID string, categories []string) ([]ScoredItem, error) {
@@ -273,7 +273,7 @@ func (c *AdminClient) GetNonPersonalized(name string, n int, userID string, cate
 	for _, category := range categories {
 		params.Add("category", category)
 	}
-	return get[[]ScoredItem](c, "/dashboard/non-personalized/"+url.PathEscape(name), params)
+	return c.get[[]ScoredItem]("/dashboard/non-personalized/"+url.PathEscape(name), params)
 }
 
 func (c *AdminClient) GetRecommend(userID, recommender, name string, n int, categories []string) ([]ScoredItem, error) {
@@ -291,7 +291,7 @@ func (c *AdminClient) GetRecommend(userID, recommender, name string, n int, cate
 	for _, category := range categories {
 		params.Add("category", category)
 	}
-	return get[[]ScoredItem](c, path, params)
+	return c.get[[]ScoredItem](path, params)
 }
 
 func (c *AdminClient) GetItemToItem(name, itemID string, n int, categories []string) ([]ScoredItem, error) {
@@ -302,7 +302,7 @@ func (c *AdminClient) GetItemToItem(name, itemID string, n int, categories []str
 	for _, category := range categories {
 		params.Add("category", category)
 	}
-	return get[[]ScoredItem](c, "/dashboard/item-to-item/"+url.PathEscape(name)+"/"+url.PathEscape(itemID), params)
+	return c.get[[]ScoredItem]("/dashboard/item-to-item/"+url.PathEscape(name)+"/"+url.PathEscape(itemID), params)
 }
 
 func (c *AdminClient) GetUserToUser(name, userID string, n int) ([]ScoreUser, error) {
@@ -310,7 +310,7 @@ func (c *AdminClient) GetUserToUser(name, userID string, n int) ([]ScoreUser, er
 	if n != 0 {
 		params.Set("n", fmt.Sprint(n))
 	}
-	return get[[]ScoreUser](c, "/dashboard/user-to-user/"+url.PathEscape(name)+"/"+url.PathEscape(userID), params)
+	return c.get[[]ScoreUser]("/dashboard/user-to-user/"+url.PathEscape(name)+"/"+url.PathEscape(userID), params)
 }
 
 func (c *AdminClient) Restore(reader io.Reader) (*DumpStats, error) {
@@ -347,7 +347,7 @@ func (c *AdminClient) Dump(output io.Writer) error {
 	return nil
 }
 
-func get[T any](c *AdminClient, path string, params url.Values) (T, error) {
+func (c *AdminClient) get[T any](path string, params url.Values) (T, error) {
 	var result T
 	if len(params) > 0 {
 		path += "?" + params.Encode()

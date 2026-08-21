@@ -1934,15 +1934,13 @@ func (m *Master) Restore(r io.ReadCloser, delta *time.Duration) (stats DumpStats
 					}
 				}
 				feedbacks = append(feedbacks, data.Feedback{
-					FeedbackKey: data.FeedbackKey{
-						FeedbackType: feedback.FeedbackType,
-						UserId:       feedback.UserId,
-						ItemId:       feedback.ItemId,
-					},
-					Value:     feedback.Value,
-					Timestamp: timestamp,
-					Labels:    labels,
-					Comment:   feedback.Comment,
+					FeedbackType: feedback.FeedbackType,
+					UserId:       feedback.UserId,
+					ItemId:       feedback.ItemId,
+					Value:        feedback.Value,
+					Timestamp:    timestamp,
+					Labels:       labels,
+					Comment:      feedback.Comment,
 				})
 				stats.Feedback++
 				if len(feedbacks) == batchSize {
