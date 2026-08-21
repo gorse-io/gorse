@@ -19,14 +19,14 @@ import (
 	"sort"
 	"sync"
 	"time"
+	"uuid"
 
-	"github.com/google/uuid"
 	"github.com/gorse-io/gorse/protocol"
 )
 
 type spanKeyType string
 
-var spanKeyName = spanKeyType(uuid.New().String())
+var spanKeyName = spanKeyType(uuid.NewV4().String())
 
 type Status string
 

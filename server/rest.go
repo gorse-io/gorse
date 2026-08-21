@@ -24,12 +24,12 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"uuid"
 
 	"github.com/araddon/dateparse"
 	mapset "github.com/deckarep/golang-set/v2"
 	restfulspec "github.com/emicklei/go-restful-openapi/v2"
 	"github.com/emicklei/go-restful/v3"
-	"github.com/google/uuid"
 	"github.com/gorse-io/gorse/common/event"
 	"github.com/gorse-io/gorse/common/expression"
 	"github.com/gorse-io/gorse/common/heap"
@@ -119,6 +119,7 @@ func (s *RestServer) StartHttpServer(container *restful.Container) {
 	container.Handle("/debug/pprof/allocs", pprof.Handler("allocs"))
 	container.Handle("/debug/pprof/block", pprof.Handler("block"))
 	container.Handle("/debug/pprof/goroutine", pprof.Handler("goroutine"))
+	container.Handle("/debug/pprof/goroutineleak", pprof.Handler("goroutineleak"))
 	container.Handle("/debug/pprof/heap", pprof.Handler("heap"))
 	container.Handle("/debug/pprof/mutex", pprof.Handler("mutex"))
 	container.Handle("/debug/pprof/threadcreate", pprof.Handler("threadcreate"))
@@ -148,7 +149,7 @@ func (s *RestServer) StartHttpServer(container *restful.Container) {
 
 func (s *RestServer) LogFilter(req *restful.Request, resp *restful.Response, chain *restful.FilterChain) {
 	// generate request id
-	requestId := uuid.New().String()
+	requestId := uuid.NewV4().String()
 	resp.AddHeader("X-Request-ID", requestId)
 
 	var requestReader *CountingReadCloser
@@ -1045,12 +1046,10 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 		for _, itemId := range results {
 			// insert to data store
 			feedback := data.Feedback{
-				FeedbackKey: data.FeedbackKey{
-					UserId:       userId,
-					ItemId:       itemId,
-					FeedbackType: writeBackFeedback,
-				},
-				Timestamp: startTime.Add(writeBackDelay),
+				UserId:       userId,
+				ItemId:       itemId,
+				FeedbackType: writeBackFeedback,
+				Timestamp:    startTime.Add(writeBackDelay),
 			}
 			err = s.DataClient.BatchInsertFeedback(ctx, []data.Feedback{feedback}, false, false, false)
 			if err != nil {

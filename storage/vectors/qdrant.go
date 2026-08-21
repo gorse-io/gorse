@@ -404,9 +404,9 @@ func (db *Qdrant) QueryVectors(ctx context.Context, collection string, q Vector,
 	}
 	request.Using = new(qdrantVectorName)
 	request.WithVectors = qdrant.NewWithVectorsInclude(qdrantVectorName)
-	if len(categories) > 0 {
+	for _, category := range categories {
 		request.Filter.Must = append(request.Filter.Must,
-			qdrant.NewMatchKeywords(qdrantPayloadCategoriesKey, categories...))
+			qdrant.NewMatchKeyword(qdrantPayloadCategoriesKey, category))
 	}
 	response, err := db.client.Query(ctx, request)
 	if err != nil {

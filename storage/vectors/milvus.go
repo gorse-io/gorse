@@ -402,7 +402,7 @@ func (db *Milvus) QueryVectors(ctx context.Context, collection string, q Vector,
 		for i := range categories {
 			conditions = append(conditions, fmt.Sprintf("array_contains(%s, {category_%d})", milvusCategoriesField, i))
 		}
-		expr += " and (" + strings.Join(conditions, " or ") + ")"
+		expr += " and (" + strings.Join(conditions, " and ") + ")"
 	}
 
 	searchParam, distance, err := db.searchParam(ctx, collection)

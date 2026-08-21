@@ -3,7 +3,7 @@
 ############################
 # STEP 1 build executable binary
 ############################
-FROM --platform=$BUILDPLATFORM golang:1.26
+FROM --platform=$BUILDPLATFORM golang:1.27
 
 WORKDIR /src
 
