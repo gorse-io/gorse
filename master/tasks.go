@@ -81,7 +81,7 @@ func (m *Master) loadDataset(parent context.Context) (datasets Datasets, err err
 	defer span.End()
 
 	searchConfig := config.SearchConfig{Columns: append([]string(nil), m.Config.Recommend.Search.Columns...)}
-	go func() {
+	m.backgroundWaitGroup.Go(func() {
 		if !m.reconciling.CompareAndSwap(false, true) {
 			log.Logger().Info("skip reconciling data store since previous reconciliation is still running")
 			return
@@ -90,7 +90,7 @@ func (m *Master) loadDataset(parent context.Context) (datasets Datasets, err err
 		if err := m.DataClient.Reconcile(searchConfig); err != nil {
 			log.Logger().Error("failed to reconcile data store", zap.Error(err))
 		}
-	}()
+	})
 
 	// Build non-personalized recommenders
 	initialStartTime := time.Now()
