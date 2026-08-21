@@ -1,6 +1,6 @@
 module github.com/gorse-io/gorse
 
-go 1.26
+go 1.27
 
 require (
 	cloud.google.com/go/storage v1.61.3

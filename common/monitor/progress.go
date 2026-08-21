@@ -19,8 +19,8 @@ import (
 	"sort"
 	"sync"
 	"time"
+	"uuid"
 
-	"github.com/google/uuid"
 	"github.com/gorse-io/gorse/protocol"
 )
 
