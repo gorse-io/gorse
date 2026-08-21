@@ -53,12 +53,12 @@ func (suite *UserToUserTestSuite) TestEmbedding() {
 	suite.NoError(err)
 
 	for i := range 100 {
-		user2user.Add(&data.User{
+		suite.NoError(user2user.Add(&data.User{
 			UserId: strconv.Itoa(i),
 			Labels: map[string]any{
 				"description": []float32{0.1 * float32(i), 0.2 * float32(i), 0.3 * float32(i)},
 			},
-		}, nil)
+		}, nil))
 	}
 
 	suite.NoError(user2user.Clean())
@@ -83,7 +83,7 @@ func (suite *UserToUserTestSuite) TestClean() {
 
 	writer, err := NewUserToUser(cfg, timestamp, &UserToUserOptions{Context: ctx, VectorClient: suite.vectorClient})
 	suite.NoError(err)
-	writer.Add(&data.User{UserId: "new", Labels: map[string]any{"embedding": []float32{2, 0}}}, nil)
+	suite.NoError(writer.Add(&data.User{UserId: "new", Labels: map[string]any{"embedding": []float32{2, 0}}}, nil))
 	suite.NoError(writer.Clean())
 
 	stored, err := suite.vectorClient.GetVectors(ctx, collection, []string{"stale", "current", "new"})
@@ -109,10 +109,10 @@ func (suite *UserToUserTestSuite) TestTags() {
 		for j := 1; j <= 100-i; j++ {
 			labels[strconv.Itoa(j)] = []dataset.ID{dataset.ID(j)}
 		}
-		user2user.Add(&data.User{
+		suite.NoError(user2user.Add(&data.User{
 			UserId: strconv.Itoa(i),
 			Labels: labels,
-		}, nil)
+		}, nil))
 	}
 
 	suite.NoError(user2user.Clean())
@@ -140,7 +140,7 @@ func (suite *UserToUserTestSuite) TestItems() {
 		for j := 1; j <= 100-i; j++ {
 			feedback = append(feedback, int32(j))
 		}
-		user2user.Add(&data.User{UserId: strconv.Itoa(i)}, feedback)
+		suite.NoError(user2user.Add(&data.User{UserId: strconv.Itoa(i)}, feedback))
 	}
 
 	suite.NoError(user2user.Clean())
@@ -177,7 +177,7 @@ func (suite *UserToUserTestSuite) TestAuto() {
 				feedback = append(feedback, int32(j))
 			}
 		}
-		user2user.Add(user, feedback)
+		suite.NoError(user2user.Add(user, feedback))
 	}
 
 	suite.NoError(user2user.Clean())

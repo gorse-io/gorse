@@ -48,58 +48,70 @@ func (suite *ItemToItemTestSuite) TearDownTest() {
 func (suite *ItemToItemTestSuite) TestColumnFunc() {
 	ctx := suite.T().Context()
 	cfg := config.ItemToItemConfig{Name: "column", Type: "embedding", Column: "item.Labels.description"}
+	collection := vectors.ItemToItemCollection(cfg.Name)
 	item2item, err := newEmbeddingItemToItem(cfg, time.Now(), &ItemToItemOptions{
 		Context: ctx, VectorClient: suite.vectorClient,
 	})
 	suite.NoError(err)
 
 	// Add success
-	item2item.Add(&data.Item{
+	suite.NoError(item2item.Add(&data.Item{
 		ItemId: "1",
 		Labels: map[string]any{
 			"description": []float32{0.1, 0.2, 0.3},
 		},
-	}, nil)
+	}, nil))
+	suite.NoError(item2item.Clean())
+	count, err := suite.vectorClient.CountVectors(ctx, collection)
+	suite.NoError(err)
+	suite.Equal(int64(1), count)
 
 	// Hidden
-	item2item.Add(&data.Item{
+	suite.NoError(item2item.Add(&data.Item{
 		ItemId:   "2",
 		IsHidden: true,
 		Labels: map[string]any{
 			"description": []float32{0.1, 0.2, 0.3},
 		},
-	}, nil)
+	}, nil))
+	suite.NoError(item2item.Clean())
+	count, err = suite.vectorClient.CountVectors(ctx, collection)
+	suite.NoError(err)
+	suite.Equal(int64(2), count)
 
 	// Dimension does not match
-	item2item.Add(&data.Item{
+	suite.NoError(item2item.Add(&data.Item{
 		ItemId: "1",
 		Labels: map[string]any{
 			"description": []float32{0.1, 0.2},
 		},
-	}, nil)
+	}, nil))
+	suite.NoError(item2item.Clean())
+	count, err = suite.vectorClient.CountVectors(ctx, collection)
+	suite.NoError(err)
+	suite.Equal(int64(2), count)
 
 	// Type does not match
-	item2item.Add(&data.Item{
+	suite.NoError(item2item.Add(&data.Item{
 		ItemId: "1",
 		Labels: map[string]any{
 			"description": "hello",
 		},
-	}, nil)
+	}, nil))
+	suite.NoError(item2item.Clean())
+	count, err = suite.vectorClient.CountVectors(ctx, collection)
+	suite.NoError(err)
+	suite.Equal(int64(2), count)
 
 	// Column does not exist
-	item2item.Add(&data.Item{
+	suite.NoError(item2item.Add(&data.Item{
 		ItemId: "2",
 		Labels: []float32{0.1, 0.2, 0.3},
-	}, nil)
-
+	}, nil))
 	suite.NoError(item2item.Clean())
-	stored, err := suite.vectorClient.GetVectors(ctx, vectors.ItemToItemCollection(cfg.Name), []string{"1", "2"})
+	count, err = suite.vectorClient.CountVectors(ctx, collection)
 	suite.NoError(err)
-	suite.Require().Len(stored, 2)
-	suite.Len(stored[0].Values, 3)
-	suite.False(stored[0].IsHidden)
-	suite.Len(stored[1].Values, 3)
-	suite.True(stored[1].IsHidden)
+	suite.Equal(int64(2), count)
 }
 
 func (suite *ItemToItemTestSuite) TestEmbedding() {
@@ -111,12 +123,12 @@ func (suite *ItemToItemTestSuite) TestEmbedding() {
 	suite.NoError(err)
 
 	for i := range 100 {
-		item2item.Add(&data.Item{
+		suite.NoError(item2item.Add(&data.Item{
 			ItemId: strconv.Itoa(i),
 			Labels: map[string]any{
 				"description": []float32{0.1 * float32(i), 0.2 * float32(i), 0.3 * float32(i)},
 			},
-		}, nil)
+		}, nil))
 	}
 	suite.NoError(item2item.Clean())
 
@@ -141,7 +153,7 @@ func (suite *ItemToItemTestSuite) TestClean() {
 
 	item2item, err := NewItemToItem(cfg, timestamp, &ItemToItemOptions{Context: ctx, VectorClient: suite.vectorClient})
 	suite.NoError(err)
-	item2item.Add(&data.Item{ItemId: "new", Labels: map[string]any{"embedding": []float32{2, 0}}}, nil)
+	suite.NoError(item2item.Add(&data.Item{ItemId: "new", Labels: map[string]any{"embedding": []float32{2, 0}}}, nil))
 	suite.NoError(item2item.Clean())
 
 	stored, err := suite.vectorClient.GetVectors(ctx, collection, []string{"stale", "current", "new"})
@@ -159,25 +171,25 @@ func (suite *ItemToItemTestSuite) TestHidden() {
 	})
 	suite.NoError(err)
 
-	item2item.Add(&data.Item{
+	suite.NoError(item2item.Add(&data.Item{
 		ItemId: "visible_1",
 		Labels: map[string]any{
 			"description": []float32{0.0, 0.0, 0.0},
 		},
-	}, nil)
-	item2item.Add(&data.Item{
+	}, nil))
+	suite.NoError(item2item.Add(&data.Item{
 		ItemId: "visible_2",
 		Labels: map[string]any{
 			"description": []float32{0.1, 0.0, 0.0},
 		},
-	}, nil)
-	item2item.Add(&data.Item{
+	}, nil))
+	suite.NoError(item2item.Add(&data.Item{
 		ItemId:   "hidden_1",
 		IsHidden: true,
 		Labels: map[string]any{
 			"description": []float32{0.05, 0.0, 0.0},
 		},
-	}, nil)
+	}, nil))
 	suite.NoError(item2item.Clean())
 
 	// hidden item should have similar items generated from non-hidden index
@@ -214,10 +226,10 @@ func (suite *ItemToItemTestSuite) TestTags() {
 		for j := 1; j <= 100-i; j++ {
 			labels[strconv.Itoa(j)] = []dataset.ID{dataset.ID(j)}
 		}
-		item2item.Add(&data.Item{
+		suite.NoError(item2item.Add(&data.Item{
 			ItemId: strconv.Itoa(i),
 			Labels: labels,
-		}, nil)
+		}, nil))
 	}
 	suite.NoError(item2item.Clean())
 
@@ -246,7 +258,7 @@ func (suite *ItemToItemTestSuite) TestUsers() {
 		for j := 1; j <= 100-i; j++ {
 			feedback = append(feedback, int32(j))
 		}
-		item2item.Add(&data.Item{ItemId: strconv.Itoa(i)}, feedback)
+		suite.NoError(item2item.Add(&data.Item{ItemId: strconv.Itoa(i)}, feedback))
 	}
 	suite.NoError(item2item.Clean())
 
@@ -284,7 +296,7 @@ func (suite *ItemToItemTestSuite) TestAuto() {
 				feedback = append(feedback, int32(j))
 			}
 		}
-		item2item.Add(item, feedback)
+		suite.NoError(item2item.Add(item, feedback))
 	}
 	suite.NoError(item2item.Clean())
 

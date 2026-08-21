@@ -43,7 +43,7 @@ type ItemToItemOptions struct {
 }
 
 type ItemToItem interface {
-	Add(item *data.Item, feedback []int32)
+	Add(item *data.Item, feedback []int32) error
 	Clean() error
 }
 
@@ -112,34 +112,17 @@ func NewItemToItem(cfg config.ItemToItemConfig, timestamp time.Time, opts *ItemT
 	}
 }
 
-type baseItemToItem struct {
-	writer *similarityVectorWriter
-}
-
-func newBaseItemToItem(cfg config.ItemToItemConfig, timestamp time.Time, opts *ItemToItemOptions, sparse bool) *baseItemToItem {
+func newItemToItemVectorWriter(cfg config.ItemToItemConfig, timestamp time.Time, opts *ItemToItemOptions, sparse bool) *VectorWriter {
 	distance := vectors.Euclidean
 	if sparse {
 		distance = vectors.Dot
 	}
-	return &baseItemToItem{
-		writer: newSimilarityVectorWriter(opts.Context, opts.VectorClient, vectors.ItemToItemCollection(cfg.Name), distance,
-			opts.VectorConfig, timestamp, opts.BatchSize, sparse),
-	}
-}
-
-func (b *baseItemToItem) push(item *data.Item, query vectors.Vector) {
-	query.Id = item.ItemId
-	query.IsHidden = item.IsHidden
-	query.Categories = item.Categories
-	b.writer.Push(query)
-}
-
-func (b *baseItemToItem) Clean() error {
-	return b.writer.Clean()
+	return newSimilarityVectorWriter(opts.Context, opts.VectorClient, vectors.ItemToItemCollection(cfg.Name), distance,
+		opts.VectorConfig, timestamp, opts.BatchSize, sparse)
 }
 
 type embeddingItemToItem struct {
-	*baseItemToItem
+	*VectorWriter
 	columnFunc *vm.Program
 }
 
@@ -149,17 +132,23 @@ func newEmbeddingItemToItem(cfg config.ItemToItemConfig, timestamp time.Time, op
 		return nil, err
 	}
 	return &embeddingItemToItem{
-		baseItemToItem: newBaseItemToItem(cfg, timestamp, opts, false),
-		columnFunc:     columnFunc,
+		VectorWriter: newItemToItemVectorWriter(cfg, timestamp, opts, false),
+		columnFunc:   columnFunc,
 	}, nil
 }
 
-func (e *embeddingItemToItem) Add(item *data.Item, _ []int32) {
+func (e *embeddingItemToItem) Add(item *data.Item, _ []int32) error {
 	embedding, ok := ExtractItemEmbedding(item, e.columnFunc)
 	if !ok || len(embedding) == 0 {
-		return
+		return nil
 	}
-	e.push(item, vectors.Vector{Values: embedding})
+	return e.VectorWriter.Add(vectors.Vector{
+		Id:         item.ItemId,
+		Values:     embedding,
+		IsHidden:   item.IsHidden,
+		Categories: item.Categories,
+		Timestamp:  e.timestamp,
+	})
 }
 
 func ExtractItemEmbedding(item *data.Item, columnFunc *vm.Program) ([]float32, bool) {
@@ -177,7 +166,7 @@ func ExtractItemEmbedding(item *data.Item, columnFunc *vm.Program) ([]float32, b
 }
 
 type tagsItemToItem struct {
-	*baseItemToItem
+	*VectorWriter
 	columnFunc *vm.Program
 	idf        []float32
 }
@@ -187,24 +176,29 @@ func newTagsItemToItem(cfg config.ItemToItemConfig, timestamp time.Time, opts *I
 	if err != nil {
 		return nil, err
 	}
-	return &tagsItemToItem{baseItemToItem: newBaseItemToItem(cfg, timestamp, opts, true), columnFunc: columnFunc, idf: idf}, nil
+	return &tagsItemToItem{VectorWriter: newItemToItemVectorWriter(cfg, timestamp, opts, true), columnFunc: columnFunc, idf: idf}, nil
 }
 
-func (t *tagsItemToItem) Add(item *data.Item, _ []int32) {
+func (t *tagsItemToItem) Add(item *data.Item, _ []int32) error {
 	result, err := expr.Run(t.columnFunc, map[string]any{"item": item})
 	if err != nil {
 		log.Logger().Error("failed to evaluate column expression", zap.Any("item", item), zap.Error(err))
-		return
+		return nil
 	}
 	tags := mapset.NewSet[dataset.ID]()
 	flatten(result, tags)
 	ids := tags.ToSlice()
 	slices.Sort(ids)
-	t.push(item, newSparseVector(ids, t.idf, 0))
+	vector := newSparseVector(ids, t.idf, 0)
+	vector.Id = item.ItemId
+	vector.IsHidden = item.IsHidden
+	vector.Categories = item.Categories
+	vector.Timestamp = t.timestamp
+	return t.VectorWriter.Add(vector)
 }
 
 type usersItemToItem struct {
-	*baseItemToItem
+	*VectorWriter
 	idf []float32
 }
 
@@ -212,52 +206,45 @@ func newUsersItemToItem(cfg config.ItemToItemConfig, timestamp time.Time, opts *
 	if cfg.Column != "" {
 		return nil, errors.New("column is not supported in users item-to-item")
 	}
-	return &usersItemToItem{baseItemToItem: newBaseItemToItem(cfg, timestamp, opts, true), idf: idf}, nil
+	return &usersItemToItem{VectorWriter: newItemToItemVectorWriter(cfg, timestamp, opts, true), idf: idf}, nil
 }
 
-func (u *usersItemToItem) Add(item *data.Item, feedback []int32) {
+func (u *usersItemToItem) Add(item *data.Item, feedback []int32) error {
 	slices.Sort(feedback)
-	u.push(item, newSparseVector(feedback, u.idf, 0))
+	vector := newSparseVector(feedback, u.idf, 0)
+	vector.Id = item.ItemId
+	vector.IsHidden = item.IsHidden
+	vector.Categories = item.Categories
+	vector.Timestamp = u.timestamp
+	return u.VectorWriter.Add(vector)
 }
 
 type autoItemToItem struct {
-	*baseItemToItem
+	*VectorWriter
 	tagsIDF  []float32
 	usersIDF []float32
 }
 
 func newAutoItemToItem(cfg config.ItemToItemConfig, timestamp time.Time, opts *ItemToItemOptions, tagsIDF, usersIDF []float32) (ItemToItem, error) {
-	return &autoItemToItem{baseItemToItem: newBaseItemToItem(cfg, timestamp, opts, true), tagsIDF: tagsIDF, usersIDF: usersIDF}, nil
+	return &autoItemToItem{VectorWriter: newItemToItemVectorWriter(cfg, timestamp, opts, true), tagsIDF: tagsIDF, usersIDF: usersIDF}, nil
 }
 
-func (a *autoItemToItem) Add(item *data.Item, feedback []int32) {
+func (a *autoItemToItem) Add(item *data.Item, feedback []int32) error {
 	tags := mapset.NewSet[dataset.ID]()
 	flatten(item.Labels, tags)
 	tagIDs := tags.ToSlice()
 	slices.Sort(tagIDs)
 	slices.Sort(feedback)
 	vector := newSparseVector(tagIDs, a.tagsIDF, 0)
-	vector = appendSparseVector(vector, newSparseVector(feedback, a.usersIDF, uint32(len(a.tagsIDF))))
-	a.push(item, vector)
+	vector = appendSparseVector(vector, feedback, a.usersIDF, uint32(len(a.tagsIDF)))
+	vector.Id = item.ItemId
+	vector.IsHidden = item.IsHidden
+	vector.Categories = item.Categories
+	vector.Timestamp = a.timestamp
+	return a.VectorWriter.Add(vector)
 }
 
 type IDF[T dataset.ID | int32] []float32
-
-func (idf IDF[T]) similarity(a, b []T) float32 {
-	i, j, sum := 0, 0, float32(0)
-	for i < len(a) && j < len(b) {
-		if a[i] == b[j] {
-			sum += idf[a[i]]
-			i++
-			j++
-		} else if a[i] < b[j] {
-			i++
-		} else {
-			j++
-		}
-	}
-	return sum
-}
 
 func flatten(o any, tags mapset.Set[dataset.ID]) {
 	switch value := o.(type) {

@@ -811,7 +811,10 @@ func (m *Master) updateItemToItem(parent context.Context, dataset *dataset.Datas
 	// Add items to item-to-item recommenders
 	if err := parallel.ForEach(ctx, dataset.GetItems(), m.Config.Master.NumJobs, func(i int, item data.Item) {
 		for _, recommender := range itemToItemRecommenders {
-			recommender.Add(&item, dataset.GetItemFeedback()[i])
+			if err := recommender.Add(&item, dataset.GetItemFeedback()[i]); err != nil {
+				log.Logger().Error("failed to add item to item-to-item recommender",
+					zap.String("item_id", item.ItemId), zap.Error(err))
+			}
 			span.Add(1)
 		}
 	}); err != nil {
@@ -856,7 +859,10 @@ func (m *Master) updateUserToUser(parent context.Context, dataset *dataset.Datas
 	// Add users to user-to-user recommender
 	if err := parallel.ForEach(ctx, dataset.GetUsers(), m.Config.Master.NumJobs, func(i int, user data.User) {
 		for _, recommender := range userToUserRecommenders {
-			recommender.Add(&user, dataset.GetUserFeedback()[i])
+			if err := recommender.Add(&user, dataset.GetUserFeedback()[i]); err != nil {
+				log.Logger().Error("failed to add user to user-to-user recommender",
+					zap.String("user_id", user.UserId), zap.Error(err))
+			}
 			span.Add(1)
 		}
 	}); err != nil {

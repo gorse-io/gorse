@@ -43,7 +43,7 @@ type UserToUserOptions struct {
 }
 
 type UserToUser interface {
-	Add(user *data.User, feedback []int32)
+	Add(user *data.User, feedback []int32) error
 	Clean() error
 }
 
@@ -112,33 +112,18 @@ func NewUserToUser(cfg config.UserToUserConfig, timestamp time.Time, opts *UserT
 	}
 }
 
-type baseUserToUser struct {
-	writer *similarityVectorWriter
-}
-
-func newBaseUserToUser(cfg config.UserToUserConfig, timestamp time.Time, opts *UserToUserOptions, sparse bool) *baseUserToUser {
+func newUserToUserVectorWriter(cfg config.UserToUserConfig, timestamp time.Time, opts *UserToUserOptions, sparse bool) *VectorWriter {
 	distance := vectors.Euclidean
 	if sparse {
 		distance = vectors.Dot
 	}
 	collection := vectors.UserToUserCollection(cfg.Name)
-	return &baseUserToUser{
-		writer: newSimilarityVectorWriter(opts.Context, opts.VectorClient, collection, distance,
-			opts.VectorConfig, timestamp, opts.BatchSize, sparse),
-	}
-}
-
-func (b *baseUserToUser) push(user *data.User, query vectors.Vector) {
-	query.Id = user.UserId
-	b.writer.Push(query)
-}
-
-func (b *baseUserToUser) Clean() error {
-	return b.writer.Clean()
+	return newSimilarityVectorWriter(opts.Context, opts.VectorClient, collection, distance,
+		opts.VectorConfig, timestamp, opts.BatchSize, sparse)
 }
 
 type embeddingUserToUser struct {
-	*baseUserToUser
+	*VectorWriter
 	columnFunc *vm.Program
 }
 
@@ -147,25 +132,28 @@ func newEmbeddingUserToUser(cfg config.UserToUserConfig, timestamp time.Time, op
 	if err != nil {
 		return nil, err
 	}
-	return &embeddingUserToUser{baseUserToUser: newBaseUserToUser(cfg, timestamp, opts, false), columnFunc: columnFunc}, nil
+	return &embeddingUserToUser{
+		VectorWriter: newUserToUserVectorWriter(cfg, timestamp, opts, false),
+		columnFunc:   columnFunc,
+	}, nil
 }
 
-func (e *embeddingUserToUser) Add(user *data.User, _ []int32) {
+func (e *embeddingUserToUser) Add(user *data.User, _ []int32) error {
 	result, err := expr.Run(e.columnFunc, map[string]any{"user": user})
 	if err != nil {
 		log.Logger().Error("failed to evaluate column expression", zap.Error(err))
-		return
+		return nil
 	}
 	value, ok := bfloats.FromAny(result)
 	if !ok || len(value) == 0 {
 		log.Logger().Error("invalid embedding column type", zap.Any("column", result))
-		return
+		return nil
 	}
-	e.push(user, vectors.Vector{Values: bfloats.ToFloat32(value)})
+	return e.VectorWriter.Add(vectors.Vector{Id: user.UserId, Values: bfloats.ToFloat32(value), Timestamp: e.timestamp})
 }
 
 type tagsUserToUser struct {
-	*baseUserToUser
+	*VectorWriter
 	columnFunc *vm.Program
 	idf        []float32
 }
@@ -175,24 +163,31 @@ func newTagsUserToUser(cfg config.UserToUserConfig, timestamp time.Time, opts *U
 	if err != nil {
 		return nil, err
 	}
-	return &tagsUserToUser{baseUserToUser: newBaseUserToUser(cfg, timestamp, opts, true), columnFunc: columnFunc, idf: idf}, nil
+	return &tagsUserToUser{
+		VectorWriter: newUserToUserVectorWriter(cfg, timestamp, opts, true),
+		columnFunc:   columnFunc,
+		idf:          idf,
+	}, nil
 }
 
-func (t *tagsUserToUser) Add(user *data.User, _ []int32) {
+func (t *tagsUserToUser) Add(user *data.User, _ []int32) error {
 	result, err := expr.Run(t.columnFunc, map[string]any{"user": user})
 	if err != nil {
 		log.Logger().Error("failed to evaluate column expression", zap.Error(err))
-		return
+		return nil
 	}
 	tags := mapset.NewSet[dataset.ID]()
 	flatten(result, tags)
 	ids := tags.ToSlice()
 	slices.Sort(ids)
-	t.push(user, newSparseVector(ids, t.idf, 0))
+	vector := newSparseVector(ids, t.idf, 0)
+	vector.Id = user.UserId
+	vector.Timestamp = t.timestamp
+	return t.VectorWriter.Add(vector)
 }
 
 type itemsUserToUser struct {
-	*baseUserToUser
+	*VectorWriter
 	idf []float32
 }
 
@@ -200,35 +195,43 @@ func newItemsUserToUser(cfg config.UserToUserConfig, timestamp time.Time, opts *
 	if cfg.Column != "" {
 		return nil, errors.New("column is not supported in items user-to-user")
 	}
-	return &itemsUserToUser{baseUserToUser: newBaseUserToUser(cfg, timestamp, opts, true), idf: idf}, nil
+	return &itemsUserToUser{
+		VectorWriter: newUserToUserVectorWriter(cfg, timestamp, opts, true),
+		idf:          idf,
+	}, nil
 }
 
-func (i *itemsUserToUser) Add(user *data.User, feedback []int32) {
+func (i *itemsUserToUser) Add(user *data.User, feedback []int32) error {
 	slices.Sort(feedback)
-	i.push(user, newSparseVector(feedback, i.idf, 0))
+	vector := newSparseVector(feedback, i.idf, 0)
+	vector.Id = user.UserId
+	vector.Timestamp = i.timestamp
+	return i.VectorWriter.Add(vector)
 }
 
 type autoUserToUser struct {
-	*baseUserToUser
+	*VectorWriter
 	tagsIDF  []float32
 	itemsIDF []float32
 }
 
 func newAutoUserToUser(cfg config.UserToUserConfig, timestamp time.Time, opts *UserToUserOptions, tagsIDF, itemsIDF []float32) (UserToUser, error) {
 	return &autoUserToUser{
-		baseUserToUser: newBaseUserToUser(cfg, timestamp, opts, true),
-		tagsIDF:        tagsIDF,
-		itemsIDF:       itemsIDF,
+		VectorWriter: newUserToUserVectorWriter(cfg, timestamp, opts, true),
+		tagsIDF:      tagsIDF,
+		itemsIDF:     itemsIDF,
 	}, nil
 }
 
-func (a *autoUserToUser) Add(user *data.User, feedback []int32) {
+func (a *autoUserToUser) Add(user *data.User, feedback []int32) error {
 	tags := mapset.NewSet[dataset.ID]()
 	flatten(user.Labels, tags)
 	tagIDs := tags.ToSlice()
 	slices.Sort(tagIDs)
 	slices.Sort(feedback)
 	vector := newSparseVector(tagIDs, a.tagsIDF, 0)
-	vector = appendSparseVector(vector, newSparseVector(feedback, a.itemsIDF, uint32(len(a.tagsIDF))))
-	a.push(user, vector)
+	vector = appendSparseVector(vector, feedback, a.itemsIDF, uint32(len(a.tagsIDF)))
+	vector.Id = user.UserId
+	vector.Timestamp = a.timestamp
+	return a.VectorWriter.Add(vector)
 }

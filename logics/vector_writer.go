@@ -30,9 +30,9 @@ import (
 
 const defaultSimilarityVectorBatchSize = 1024
 
-// similarityVectorWriter owns collection validation and batched vector writes
+// VectorWriter owns collection validation and batched vector writes
 // for item-to-item and user-to-user recommenders.
-type similarityVectorWriter struct {
+type VectorWriter struct {
 	ctx          context.Context
 	client       vectors.Database
 	collection   string
@@ -43,11 +43,9 @@ type similarityVectorWriter struct {
 	sparse       bool
 
 	mu               sync.Mutex
-	dimension        int
-	dimensionKnown   bool
+	dimension        *int
 	collectionExists bool
 	buffer           []vectors.Vector
-	err              error
 }
 
 func newSimilarityVectorWriter(
@@ -59,14 +57,14 @@ func newSimilarityVectorWriter(
 	timestamp time.Time,
 	batchSize int,
 	sparse bool,
-) *similarityVectorWriter {
+) *VectorWriter {
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	if batchSize <= 0 {
 		batchSize = defaultSimilarityVectorBatchSize
 	}
-	writer := &similarityVectorWriter{
+	writer := &VectorWriter{
 		ctx:          ctx,
 		client:       client,
 		collection:   collection,
@@ -77,80 +75,44 @@ func newSimilarityVectorWriter(
 		sparse:       sparse,
 	}
 	if sparse {
-		writer.dimensionKnown = true
+		writer.dimension = new(int)
 		writer.vectorConfig = vectors.VectorConfig{}
 	}
 	return writer
 }
 
-func (w *similarityVectorWriter) Push(vector vectors.Vector) bool {
+func (w *VectorWriter) Add(vector vectors.Vector) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	if w.err != nil {
-		return false
-	}
 	if w.sparse {
 		if len(vector.Indices) == 0 || len(vector.Indices) != len(vector.Values) {
-			return false
+			return nil
 		}
 	} else {
 		if len(vector.Indices) != 0 || len(vector.Values) == 0 {
-			return false
-		}
-		if !w.dimensionKnown {
-			w.dimension = len(vector.Values)
-			w.dimensionKnown = true
-		} else if w.dimension != len(vector.Values) {
-			log.Logger().Error("invalid similarity vector dimension",
-				zap.String("collection", w.collection),
-				zap.String("id", vector.Id),
-				zap.Int("dimension", len(vector.Values)),
-				zap.Int("expected_dimension", w.dimension))
-			return false
+			return nil
 		}
 	}
-	if err := w.ensureCollectionLocked(); err != nil {
-		w.err = err
-		return false
-	}
-	vector.Timestamp = w.timestamp
 	w.buffer = append(w.buffer, vector)
 	if len(w.buffer) >= w.batchSize {
-		w.err = w.flushLocked()
-	}
-	return w.err == nil
-}
-
-func (w *similarityVectorWriter) Clean() error {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	if w.err != nil {
-		return w.err
-	}
-	if w.dimensionKnown {
-		if err := w.ensureCollectionLocked(); err != nil {
-			w.err = err
-			return err
-		}
-	}
-	if err := w.flushLocked(); err != nil {
-		w.err = err
-		return err
-	}
-	if err := w.client.DeleteVectors(w.ctx, w.collection, w.timestamp); err != nil && !errors.Is(err, storage.ErrNotFound) {
-		w.err = errors.WithStack(err)
-		return w.err
+		return w.flushLocked()
 	}
 	return nil
 }
 
-func (w *similarityVectorWriter) Dimension() int {
+func (w *VectorWriter) Clean() error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	return w.dimension
+	if err := w.flushLocked(); err != nil {
+		return err
+	}
+	if err := w.client.DeleteVectors(w.ctx, w.collection, w.timestamp); err != nil && !errors.Is(err, storage.ErrNotFound) {
+		return errors.WithStack(err)
+	}
+	return nil
 }
 
-func (w *similarityVectorWriter) ensureCollectionLocked() error {
+func (w *VectorWriter) ensureCollectionLocked() error {
 	if w.collectionExists {
 		return nil
 	}
@@ -163,10 +125,11 @@ func (w *similarityVectorWriter) ensureCollectionLocked() error {
 	} else if err != nil {
 		return errors.WithStack(err)
 	}
-	if info != nil && (info.Dimension != w.dimension || info.Distance != w.distance || info.Type != w.vectorConfig.Type || info.Bits != w.vectorConfig.Bits) {
+	dimension := *w.dimension
+	if info != nil && (info.Dimension != dimension || info.Distance != w.distance || info.Type != w.vectorConfig.Type || info.Bits != w.vectorConfig.Bits) {
 		log.Logger().Warn("recreating similarity vector collection",
 			zap.String("collection", w.collection),
-			zap.Int("dimension", w.dimension),
+			zap.Int("dimension", dimension),
 			zap.Int("distance", int(w.distance)))
 		if err = w.client.DeleteCollection(w.ctx, w.collection); err != nil && !errors.Is(err, storage.ErrNotFound) {
 			return errors.WithStack(err)
@@ -174,7 +137,7 @@ func (w *similarityVectorWriter) ensureCollectionLocked() error {
 		info = nil
 	}
 	if info == nil {
-		if err = w.client.AddCollection(w.ctx, w.collection, w.dimension, w.distance, w.vectorConfig); err != nil {
+		if err = w.client.AddCollection(w.ctx, w.collection, dimension, w.distance, w.vectorConfig); err != nil {
 			return errors.WithStack(err)
 		}
 	}
@@ -182,9 +145,42 @@ func (w *similarityVectorWriter) ensureCollectionLocked() error {
 	return nil
 }
 
-func (w *similarityVectorWriter) flushLocked() error {
+func (w *VectorWriter) flushLocked() error {
 	if len(w.buffer) == 0 {
 		return nil
+	}
+	if !w.sparse {
+		if w.dimension == nil {
+			counts := make(map[int]int)
+			for _, vector := range w.buffer {
+				counts[len(vector.Values)]++
+			}
+			dimension := len(w.buffer[0].Values)
+			for _, vector := range w.buffer {
+				candidate := len(vector.Values)
+				if counts[candidate] > counts[dimension] {
+					dimension = candidate
+				}
+			}
+			w.dimension = &dimension
+		}
+		dimension := *w.dimension
+		vectorsWithExpectedDimension := w.buffer[:0]
+		for _, vector := range w.buffer {
+			if len(vector.Values) != dimension {
+				log.Logger().Error("invalid similarity vector dimension",
+					zap.String("collection", w.collection),
+					zap.String("id", vector.Id),
+					zap.Int("dimension", len(vector.Values)),
+					zap.Int("expected_dimension", dimension))
+				continue
+			}
+			vectorsWithExpectedDimension = append(vectorsWithExpectedDimension, vector)
+		}
+		w.buffer = vectorsWithExpectedDimension
+	}
+	if err := w.ensureCollectionLocked(); err != nil {
+		return err
 	}
 	if err := w.client.AddVectors(w.ctx, w.collection, w.buffer); err != nil {
 		return errors.WithStack(err)
@@ -198,6 +194,10 @@ func newSparseVector[T ~int32](ids []T, idf []float32, offset uint32) vectors.Ve
 		Indices: make([]uint32, 0, len(ids)),
 		Values:  make([]float32, 0, len(ids)),
 	}
+	return appendSparseVector(vector, ids, idf, offset)
+}
+
+func appendSparseVector[T ~int32](vector vectors.Vector, ids []T, idf []float32, offset uint32) vectors.Vector {
 	for _, id := range ids {
 		if id < 0 || int(id) >= len(idf) || idf[id] <= 0 {
 			continue
@@ -206,10 +206,4 @@ func newSparseVector[T ~int32](ids []T, idf []float32, offset uint32) vectors.Ve
 		vector.Values = append(vector.Values, float32(math.Sqrt(float64(idf[id]))))
 	}
 	return vector
-}
-
-func appendSparseVector(dst, src vectors.Vector) vectors.Vector {
-	dst.Indices = append(dst.Indices, src.Indices...)
-	dst.Values = append(dst.Values, src.Values...)
-	return dst
 }
