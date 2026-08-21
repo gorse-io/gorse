@@ -105,15 +105,19 @@ type Master struct {
 	tokenCache   *ttlcache.Cache[string, UserInfo]
 
 	// events
-	ticker      *time.Ticker
-	scheduled   chan struct{}
-	cancel      context.CancelFunc
-	reconciling atomic.Bool
+	ticker              *time.Ticker
+	scheduled           chan struct{}
+	cancel              context.CancelFunc
+	backgroundContext   context.Context
+	backgroundCancel    context.CancelFunc
+	backgroundWaitGroup sync.WaitGroup
+	reconciling         atomic.Bool
 }
 
 // NewMaster creates a master node.
 func NewMaster(cfg *config.Config, cacheFolder string, standalone bool, configPath string) *Master {
 	rand.Seed(time.Now().UnixNano())
+	backgroundContext, backgroundCancel := context.WithCancel(context.Background())
 
 	// setup trace provider
 	tp, err := cfg.Tracing.NewTracerProvider()
@@ -150,9 +154,11 @@ func NewMaster(cfg *config.Config, cacheFolder string, standalone bool, configPa
 			HttpPort:     cfg.Master.HttpPort,
 			WebService:   new(restful.WebService),
 		},
-		ticker:    time.NewTicker(duration),
-		scheduled: make(chan struct{}, 1),
-		cancel:    func() {},
+		ticker:            time.NewTicker(duration),
+		scheduled:         make(chan struct{}, 1),
+		cancel:            func() {},
+		backgroundContext: backgroundContext,
+		backgroundCancel:  backgroundCancel,
 	}
 	return m
 }
@@ -354,8 +360,12 @@ func (m *Master) Serve() {
 		}
 	}
 
-	go m.watchConfigFile(context.Background())
-	go m.RunTasksLoop()
+	m.backgroundWaitGroup.Go(func() {
+		m.watchConfigFile(m.backgroundContext)
+	})
+	m.backgroundWaitGroup.Go(func() {
+		m.RunTasksLoop()
+	})
 
 	// start rpc server
 	go func() {
@@ -425,6 +435,10 @@ func (m *Master) Shutdown() {
 	}
 	// stop grpc server
 	m.grpcServer.GracefulStop()
+	// stop background tasks before closing databases
+	m.backgroundCancel()
+	m.ticker.Stop()
+	m.backgroundWaitGroup.Wait()
 	// close databases
 	if err = m.metaStore.Close(); err != nil {
 		log.Logger().Error("failed to close meta database", zap.Error(err))
@@ -448,14 +462,20 @@ func (m *Master) RunTasksLoop() {
 	}
 	for {
 		select {
+		case <-m.backgroundContext.Done():
+			return
 		case <-m.ticker.C:
 		case <-m.scheduled:
 		}
 
 		// download dataset
 		var ctx context.Context
-		ctx, m.cancel = context.WithCancel(context.Background())
+		ctx, m.cancel = context.WithCancel(m.backgroundContext)
 		err := m.runLoadDatasetTask(ctx)
+		m.cancel()
+		if m.backgroundContext.Err() != nil {
+			return
+		}
 		if err != nil {
 			log.Logger().Error("failed to load ranking dataset", zap.Error(err))
 			continue
