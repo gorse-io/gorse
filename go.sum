@@ -381,8 +381,8 @@ github.com/gorse-io/gorse-go v0.5.0-alpha.3.0.20260613082921-062d740c10a2 h1:tx7
 github.com/gorse-io/gorse-go v0.5.0-alpha.3.0.20260613082921-062d740c10a2/go.mod h1:ZxmVHzZPKm5pmEIlqaRDwK0rkfTRHlfziO033XZ+RW0=
 github.com/gorse-io/sqlite v1.3.3-0.20260620140844-3b4da3e2b9f2 h1:5URyKN9bYIO+WG3hbfaOkTBHmdLT4U8JQSe2vSEWJDE=
 github.com/gorse-io/sqlite v1.3.3-0.20260620140844-3b4da3e2b9f2/go.mod h1:2A/iJg34FXGCljLiSsmdilFooNtjmfQr7CmcD+2sh68=
-github.com/gorse-io/xvec v0.0.0-20260812164402-6979a74830c8 h1:Kaq9lnLlt9LvJcClgALQna89lwX1FsLOe/S/vQFX3PM=
-github.com/gorse-io/xvec v0.0.0-20260812164402-6979a74830c8/go.mod h1:Ga2ZBLZxjsBgxAiZznGc3r1DyZmEINl0j827aEc3tVw=
+github.com/gorse-io/xvec v0.0.0-20260821023012-cf0c34c6025f h1:IVQvoAE/aQ7i6xnFvrWf+9qbawpLVAYsDMrgKMkddO4=
+github.com/gorse-io/xvec v0.0.0-20260821023012-cf0c34c6025f/go.mod h1:Ga2ZBLZxjsBgxAiZznGc3r1DyZmEINl0j827aEc3tVw=
 github.com/grpc-ecosystem/go-grpc-middleware v1.4.0 h1:UH//fgunKIs4JdUbpDl1VZCDaL56wXCB/5+wF6uHfaI=
 github.com/grpc-ecosystem/go-grpc-middleware v1.4.0/go.mod h1:g5qyo/la0ALbONm6Vbp88Yd8NsDy6rZz+RcrMPxvld8=
 github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus v1.0.1 h1:qnpSQwGEnkcRpTqNOIR6bJbR0gAorgP9CSALpRcKoAA=

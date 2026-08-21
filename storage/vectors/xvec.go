@@ -390,7 +390,7 @@ func (db *Xvec) QueryVectors(ctx context.Context, name string, q Vector, categor
 			escaped := strings.NewReplacer(`\`, `\\`, `'`, `\'`).Replace(category)
 			quoted[i] = "'" + escaped + "'"
 		}
-		filter += fmt.Sprintf(" AND %s CONTAIN_ANY (%s)", xvecCategoriesField, strings.Join(quoted, ", "))
+		filter += fmt.Sprintf(" AND %s CONTAIN_ALL (%s)", xvecCategoriesField, strings.Join(quoted, ", "))
 	}
 	query := xvec.VectorQuery{
 		Field:  xvecVectorField,

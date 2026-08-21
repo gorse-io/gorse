@@ -126,9 +126,10 @@ func (suite *vectorsTestSuite) TestVectors() {
 		suite.NotEmpty(result.Categories)
 	}
 
-	results, err = suite.Database.QueryVectors(ctx, "test", Vector{Values: vectorA}, []string{"cat-a", "cat-b"}, 10)
+	results, err = suite.Database.QueryVectors(ctx, "test", Vector{Values: vectorA}, []string{"cat-a", "common"}, 10)
 	suite.NoError(err)
-	suite.Len(results, 2)
+	suite.Len(results, 1)
+	suite.Equal("a", results[0].Id)
 
 	results, err = suite.Database.QueryVectors(ctx, "test", Vector{Values: vectorA}, nil, 1)
 	suite.NoError(err)
