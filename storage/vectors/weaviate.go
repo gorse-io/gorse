@@ -411,7 +411,7 @@ func (db *Weaviate) QueryVectors(ctx context.Context, collection string, q Vecto
 	if len(categories) > 0 {
 		categoriesWhere := filters.Where().
 			WithPath([]string{weaviatePayloadCategoriesKey}).
-			WithOperator(filters.ContainsAny).
+			WithOperator(filters.ContainsAll).
 			WithValueString(categories...)
 		where = filters.Where().
 			WithOperator(filters.And).
