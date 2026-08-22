@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"sort"
 	"strings"
@@ -537,6 +538,107 @@ func formatConfig(configMap map[string]any) map[string]any {
 	})
 }
 
+const redactedConfigValue = "********"
+
+var redactedConfigKeys = map[string]struct{}{
+	"access_key_id":      {},
+	"account_key":        {},
+	"admin_api_key":      {},
+	"api_key":            {},
+	"auth_token":         {},
+	"client_secret":      {},
+	"connection_string":  {},
+	"dashboard_password": {},
+	"secret_access_key":  {},
+}
+
+func isCredentialQueryKey(key string) bool {
+	normalized := strings.NewReplacer("-", "", "_", "", ".", "").Replace(strings.ToLower(key))
+	switch normalized {
+	case "user", "username", "passwd", "pwd", "apikey", "accesskey", "accesskeyid", "credential", "credentials":
+		return true
+	default:
+		return strings.Contains(normalized, "password") ||
+			strings.Contains(normalized, "secret") ||
+			strings.HasSuffix(normalized, "token")
+	}
+}
+
+func redactDatabaseURL(rawURL string) string {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return redactedConfigValue
+	}
+
+	redactedURL := rawURL
+	if parsed.User != nil {
+		username := parsed.User.Username()
+		password, hasPassword := parsed.User.Password()
+		redactedURL = log.RedactDBURL(rawURL)
+		if redactedURL == rawURL && (username != "" || hasPassword && password != "") {
+			return redactedConfigValue
+		}
+		parsed, err = url.Parse(redactedURL)
+		if err != nil {
+			return redactedConfigValue
+		}
+	}
+
+	query, err := url.ParseQuery(parsed.RawQuery)
+	if err != nil {
+		return redactedConfigValue
+	}
+	changed := false
+	for key, values := range query {
+		if !isCredentialQueryKey(key) {
+			continue
+		}
+		for i, value := range values {
+			if value != "" {
+				values[i] = redactedConfigValue
+				changed = true
+			}
+		}
+	}
+	if changed {
+		parsed.RawQuery = query.Encode()
+		redactedURL = parsed.String()
+	}
+	return redactedURL
+}
+
+// redactConfig masks secrets in the dashboard config while preserving the full
+// configuration structure, including the database settings required by the UI.
+// Empty values are kept as-is; non-empty secrets are replaced with
+// redactedConfigValue, and data/cache/vector store URLs have credentials masked
+// in both userinfo and query parameters.
+func redactConfig(configMap map[string]any) {
+	for key, value := range configMap {
+		if _, ok := redactedConfigKeys[key]; ok {
+			if secret, ok := value.(string); ok && secret != "" {
+				configMap[key] = redactedConfigValue
+			}
+			continue
+		}
+		if key == "data_store" || key == "cache_store" || key == "vector_store" {
+			if rawURL, ok := value.(string); ok && rawURL != "" {
+				configMap[key] = redactDatabaseURL(rawURL)
+			}
+			continue
+		}
+		switch nested := value.(type) {
+		case map[string]any:
+			redactConfig(nested)
+		case []any:
+			for _, item := range nested {
+				if itemMap, ok := item.(map[string]any); ok {
+					redactConfig(itemMap)
+				}
+			}
+		}
+	}
+}
+
 func (m *Master) postConfig(request *restful.Request, response *restful.Response) {
 	var newConfigMap map[string]any
 	if err := request.ReadEntity(&newConfigMap); err != nil {
@@ -560,6 +662,14 @@ func (m *Master) postConfig(request *restful.Request, response *restful.Response
 		return
 	}
 	m.ConfigMutex.RLock()
+	dashboardRedacted := m.Config.Master.DashboardRedacted
+	// A config posted back from a redacted dashboard carries the
+	// redactedConfigValue placeholder for the reranker auth token. Restore the
+	// real token so posting a redacted configuration never overwrites the
+	// stored token (covered by TestConfig in rest_test.go).
+	if dashboardRedacted && newConfig.Recommend.Ranker.RerankerAPI.AuthToken == redactedConfigValue {
+		newConfig.Recommend.Ranker.RerankerAPI.AuthToken = m.Config.Recommend.Ranker.RerankerAPI.AuthToken
+	}
 	configForValidation := *m.Config
 	m.ConfigMutex.RUnlock()
 	configForValidation.Recommend = newConfig.Recommend
@@ -585,6 +695,16 @@ func (m *Master) postConfig(request *restful.Request, response *restful.Response
 	case m.scheduled <- struct{}{}:
 	default:
 	}
+	if dashboardRedacted {
+		var configMap map[string]any
+		if err = mapstructure.Decode(newConfig, &configMap); err != nil {
+			server.InternalServerError(response, err)
+			return
+		}
+		redactConfig(configMap)
+		server.Ok(response, formatConfig(configMap))
+		return
+	}
 	server.Ok(response, newConfig)
 }
 
@@ -599,7 +719,7 @@ func (m *Master) getConfig(_ *restful.Request, response *restful.Response) {
 		return
 	}
 	if dashboardRedacted {
-		delete(configMap, "database")
+		redactConfig(configMap)
 	}
 	server.Ok(response, formatConfig(configMap))
 }
