@@ -887,16 +887,19 @@ func (suite *MasterAPITestSuite) TestConfig() {
 		"account_key", suite.Config.Blob.Azure.AccountKey)
 	assertRedacted(redactedConfig["blob"].(map[string]any)["azure"].(map[string]any),
 		"connection_string", suite.Config.Blob.Azure.ConnectionString)
-	apitest.New().
-		Handler(suite.handler).
-		Post("/api/dashboard/config").
-		Header("Cookie", suite.cookie).
-		Header("Content-Type", "application/json").
-		Body(marshal(suite.T(), redactedConfig)).
-		Expect(suite.T()).
-		Status(http.StatusOK).
-		End()
+	postBody := marshal(suite.T(), redactedConfig)
+	req = httptest.NewRequest(http.MethodPost, "/api/dashboard/config", bytes.NewReader([]byte(postBody)))
+	req.Header.Set("Cookie", suite.cookie)
+	req.Header.Set("Content-Type", "application/json")
+	recorder = httptest.NewRecorder()
+	suite.handler.ServeHTTP(recorder, req)
+	suite.Equal(http.StatusOK, recorder.Code)
 	suite.Equal("reranker-auth-token-secret", suite.Config.Recommend.Ranker.RerankerAPI.AuthToken)
+	var postResponse map[string]any
+	suite.NoError(json.Unmarshal(recorder.Body.Bytes(), &postResponse))
+	postReranker := postResponse["recommend"].(map[string]any)["ranker"].(map[string]any)["reranker_api"].(map[string]any)
+	suite.Equal(redactedConfigValue, postReranker["auth_token"])
+	suite.NotEqual(suite.Config.Recommend.Ranker.RerankerAPI.AuthToken, postReranker["auth_token"])
 
 	suite.Config.Master.DashboardRedacted = false
 	newConfig := *suite.Config
