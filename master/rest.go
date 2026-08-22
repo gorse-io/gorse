@@ -537,6 +537,47 @@ func formatConfig(configMap map[string]any) map[string]any {
 	})
 }
 
+const redactedConfigValue = "********"
+
+var redactedConfigKeys = map[string]struct{}{
+	"access_key_id":      {},
+	"account_key":        {},
+	"admin_api_key":      {},
+	"api_key":            {},
+	"auth_token":         {},
+	"client_secret":      {},
+	"connection_string":  {},
+	"dashboard_password": {},
+	"secret_access_key":  {},
+}
+
+func redactConfig(configMap map[string]any) {
+	for key, value := range configMap {
+		if _, ok := redactedConfigKeys[key]; ok {
+			if secret, ok := value.(string); ok && secret != "" {
+				configMap[key] = redactedConfigValue
+			}
+			continue
+		}
+		if key == "data_store" || key == "cache_store" || key == "vector_store" {
+			if rawURL, ok := value.(string); ok && strings.Contains(rawURL, "@") {
+				configMap[key] = log.RedactDBURL(rawURL)
+			}
+			continue
+		}
+		switch nested := value.(type) {
+		case map[string]any:
+			redactConfig(nested)
+		case []any:
+			for _, item := range nested {
+				if itemMap, ok := item.(map[string]any); ok {
+					redactConfig(itemMap)
+				}
+			}
+		}
+	}
+}
+
 func (m *Master) postConfig(request *restful.Request, response *restful.Response) {
 	var newConfigMap map[string]any
 	if err := request.ReadEntity(&newConfigMap); err != nil {
@@ -560,6 +601,9 @@ func (m *Master) postConfig(request *restful.Request, response *restful.Response
 		return
 	}
 	m.ConfigMutex.RLock()
+	if m.Config.Master.DashboardRedacted && newConfig.Recommend.Ranker.RerankerAPI.AuthToken == redactedConfigValue {
+		newConfig.Recommend.Ranker.RerankerAPI.AuthToken = m.Config.Recommend.Ranker.RerankerAPI.AuthToken
+	}
 	configForValidation := *m.Config
 	m.ConfigMutex.RUnlock()
 	configForValidation.Recommend = newConfig.Recommend
@@ -599,7 +643,7 @@ func (m *Master) getConfig(_ *restful.Request, response *restful.Response) {
 		return
 	}
 	if dashboardRedacted {
-		delete(configMap, "database")
+		redactConfig(configMap)
 	}
 	server.Ok(response, formatConfig(configMap))
 }
