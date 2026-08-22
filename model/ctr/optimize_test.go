@@ -89,6 +89,14 @@ func (m *mockFactorizationMachineForSearch) SuggestParams(trial goptuna.Trial) m
 	}
 }
 
+type zeroScoreFactorizationMachineForSearch struct {
+	mockFactorizationMachineForSearch
+}
+
+func (m *zeroScoreFactorizationMachineForSearch) Fit(_ context.Context, _, _ dataset.CTRSplit, _ *FitConfig) Score {
+	return Score{}
+}
+
 func TestTPE(t *testing.T) {
 	search := NewModelSearch(map[string]ModelCreator{
 		"mock": func() FactorizationMachines {
@@ -111,4 +119,21 @@ func TestTPE(t *testing.T) {
 		model.InitStdDev: float64(4),
 	}, result.Params)
 	assert.Equal(t, Score{AUC: 12}, result.Score)
+}
+
+func TestModelSearchKeepsZeroScoreResult(t *testing.T) {
+	search := NewModelSearch(map[string]ModelCreator{
+		"mock": func() FactorizationMachines {
+			return &zeroScoreFactorizationMachineForSearch{}
+		},
+	}, nil, nil, nil)
+	study, err := goptuna.CreateStudy("TestModelSearchKeepsZeroScoreResult",
+		goptuna.StudyOptionDirection(goptuna.StudyDirectionMaximize),
+		goptuna.StudyOptionSampler(tpe.NewSampler()))
+	assert.NoError(t, err)
+	err = study.Optimize(search.Objective, 1)
+	assert.NoError(t, err)
+	result := search.Result()
+	assert.Equal(t, "mock", result.Type)
+	assert.Equal(t, Score{}, result.Score)
 }
