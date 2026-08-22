@@ -601,7 +601,8 @@ func (m *Master) postConfig(request *restful.Request, response *restful.Response
 		return
 	}
 	m.ConfigMutex.RLock()
-	if m.Config.Master.DashboardRedacted && newConfig.Recommend.Ranker.RerankerAPI.AuthToken == redactedConfigValue {
+	dashboardRedacted := m.Config.Master.DashboardRedacted
+	if dashboardRedacted && newConfig.Recommend.Ranker.RerankerAPI.AuthToken == redactedConfigValue {
 		newConfig.Recommend.Ranker.RerankerAPI.AuthToken = m.Config.Recommend.Ranker.RerankerAPI.AuthToken
 	}
 	configForValidation := *m.Config
@@ -628,6 +629,16 @@ func (m *Master) postConfig(request *restful.Request, response *restful.Response
 	select {
 	case m.scheduled <- struct{}{}:
 	default:
+	}
+	if dashboardRedacted {
+		var configMap map[string]any
+		if err = mapstructure.Decode(newConfig, &configMap); err != nil {
+			server.InternalServerError(response, err)
+			return
+		}
+		redactConfig(configMap)
+		server.Ok(response, formatConfig(configMap))
+		return
 	}
 	server.Ok(response, newConfig)
 }
