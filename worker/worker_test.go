@@ -730,6 +730,55 @@ func TestWorker_Sync(t *testing.T) {
 	master.Stop()
 }
 
+func TestWorker_SyncRecommend(t *testing.T) {
+	master := newMockMaster(t)
+	go master.Start(t)
+	address := <-master.addr
+	conn, err := grpc.Dial(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	assert.NoError(t, err)
+	serv := &Worker{
+		Pipeline: Pipeline{
+			Config:       config.GetDefaultConfig(),
+			CacheClient:  new(cache.NoDatabase),
+			DataClient:   new(data.NoDatabase),
+			VectorClient: vectors.NoDatabase{},
+			Tracer:       monitor.NewTracer("test"),
+			Jobs:         1,
+		},
+		testMode:     true,
+		conn:         conn,
+		masterClient: protocol.NewMasterClient(conn),
+		syncedChan:   make(chan struct{}, 1),
+		ticker:       time.NewTicker(time.Minute),
+	}
+
+	serv.Sync()
+	done := make(chan struct{})
+	finished := make(chan struct{})
+	go func() {
+		defer close(finished)
+		for {
+			select {
+			case <-done:
+				return
+			default:
+				serv.Sync()
+			}
+		}
+	}()
+
+	for range 10 {
+		serv.Recommend(t.Context(), []data.User{{UserId: "1"}}, nil)
+	}
+	close(done)
+	<-finished
+
+	assert.NoError(t, serv.DataClient.Close())
+	assert.NoError(t, serv.CacheClient.Close())
+	assert.NoError(t, conn.Close())
+	master.Stop()
+}
+
 type mockFactorizationMachine struct {
 	ctr.BaseFactorizationMachines
 }
