@@ -551,6 +551,11 @@ var redactedConfigKeys = map[string]struct{}{
 	"secret_access_key":  {},
 }
 
+// redactConfig masks secrets in the dashboard config while preserving the full
+// configuration structure, including the database settings required by the UI.
+// Empty values are kept as-is; non-empty secrets are replaced with
+// redactedConfigValue, and data/cache/vector store URLs have their credentials
+// stripped via log.RedactDBURL.
 func redactConfig(configMap map[string]any) {
 	for key, value := range configMap {
 		if _, ok := redactedConfigKeys[key]; ok {
@@ -602,6 +607,10 @@ func (m *Master) postConfig(request *restful.Request, response *restful.Response
 	}
 	m.ConfigMutex.RLock()
 	dashboardRedacted := m.Config.Master.DashboardRedacted
+	// A config posted back from a redacted dashboard carries the
+	// redactedConfigValue placeholder for the reranker auth token. Restore the
+	// real token so posting a redacted configuration never overwrites the
+	// stored token (covered by TestConfig in rest_test.go).
 	if dashboardRedacted && newConfig.Recommend.Ranker.RerankerAPI.AuthToken == redactedConfigValue {
 		newConfig.Recommend.Ranker.RerankerAPI.AuthToken = m.Config.Recommend.Ranker.RerankerAPI.AuthToken
 	}
