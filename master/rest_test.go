@@ -22,6 +22,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strconv"
 	"strings"
 	"testing"
@@ -839,9 +840,9 @@ func (suite *MasterAPITestSuite) TestConfig() {
 		End()
 
 	suite.Config.Master.DashboardRedacted = true
-	suite.Config.Database.DataStore = "mysql://data-user:data-password@tcp(localhost:3306)/gorse"
-	suite.Config.Database.CacheStore = "redis://cache-user:cache-password@localhost:6379"
-	suite.Config.Database.VectorStore = "qdrant://vector-user:vector-password@localhost:6334"
+	suite.Config.Database.DataStore = "postgres://localhost/gorse?user=data-user&password=data-password&sslmode=require"
+	suite.Config.Database.CacheStore = "redis://cache-user:cache-password@localhost:6379?password=cache-query-password&protocol=3"
+	suite.Config.Database.VectorStore = "qdrant://vector-user:vector-password@localhost:6334?api_key=vector-api-key&timeout=5"
 	suite.Config.Master.AdminAPIKey = "admin-api-key-secret"
 	suite.Config.Server.APIKey = "server-api-key-secret"
 	suite.Config.OIDC.ClientSecret = "oidc-client-secret"
@@ -862,9 +863,32 @@ func (suite *MasterAPITestSuite) TestConfig() {
 
 	databaseConfig, ok := redactedConfig["database"].(map[string]any)
 	suite.True(ok)
-	suite.Equal(log.RedactDBURL(suite.Config.Database.DataStore), databaseConfig["data_store"])
-	suite.Equal(log.RedactDBURL(suite.Config.Database.CacheStore), databaseConfig["cache_store"])
-	suite.Equal(log.RedactDBURL(suite.Config.Database.VectorStore), databaseConfig["vector_store"])
+	assertRedactedURL := func(value any, redactedKeys, preserved map[string]string) {
+		redactedURL, ok := value.(string)
+		suite.True(ok)
+		parsed, err := url.Parse(redactedURL)
+		suite.NoError(err)
+		for key, secret := range redactedKeys {
+			suite.Equal(redactedConfigValue, parsed.Query().Get(key))
+			suite.NotContains(redactedURL, secret)
+		}
+		for key, expected := range preserved {
+			suite.Equal(expected, parsed.Query().Get(key))
+		}
+	}
+	assertRedactedURL(databaseConfig["data_store"], map[string]string{
+		"user": "data-user", "password": "data-password",
+	}, map[string]string{"sslmode": "require"})
+	assertRedactedURL(databaseConfig["cache_store"], map[string]string{
+		"password": "cache-query-password",
+	}, map[string]string{"protocol": "3"})
+	assertRedactedURL(databaseConfig["vector_store"], map[string]string{
+		"api_key": "vector-api-key",
+	}, map[string]string{"timeout": "5"})
+	suite.NotContains(databaseConfig["cache_store"], "cache-user")
+	suite.NotContains(databaseConfig["cache_store"], "cache-password")
+	suite.NotContains(databaseConfig["vector_store"], "vector-user")
+	suite.NotContains(databaseConfig["vector_store"], "vector-password")
 	suite.Equal(suite.Config.Database.CacheClientName, databaseConfig["cache_client_name"])
 
 	assertRedacted := func(section map[string]any, key, secret string) {
