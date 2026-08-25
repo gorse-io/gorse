@@ -302,7 +302,7 @@ jobs:
           packages: qemu-user-static
 
       - name: Setup Redis cluster
-        uses: gorse-cloud/redis-cluster@v1.0.0
+        uses: gorse-io/redis-cluster@v1.0.0
 
       - uses: actions/checkout@v2
       - uses: actions/setup-go@v5
