@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	"github.com/gorse-io/gorse/common/log"
+	"github.com/qdrant/go-client/qdrant"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -55,6 +56,42 @@ func (suite *QdrantTestSuite) TestQuantization() {
 	suite.testQuantization(QuantizationPQ, 2)
 	suite.testQuantization(QuantizationPQ, 4)
 	suite.testQuantization(QuantizationPQ, 8)
+}
+
+func (suite *QdrantTestSuite) TestCategoryFilteringStrictMode() {
+	ctx := suite.T().Context()
+	db := suite.Database.(*Qdrant)
+	for _, test := range []struct {
+		name       string
+		dimensions int
+		query      Vector
+	}{
+		{name: "dense_categories", dimensions: defaultVectorSize, query: Vector{Values: []float32{1, 0, 0, 0}}},
+		{name: "sparse_categories", query: Vector{Indices: []uint32{1}, Values: []float32{1}}},
+	} {
+		suite.Run(test.name, func() {
+			suite.Require().NoError(db.AddCollection(ctx, test.name, test.dimensions, Dot, VectorConfig{}))
+			suite.Require().NoError(db.client.UpdateCollection(ctx, &qdrant.UpdateCollection{
+				CollectionName: test.name,
+				StrictModeConfig: &qdrant.StrictModeConfig{
+					Enabled:                    new(true),
+					UnindexedFilteringRetrieve: new(false),
+				},
+			}))
+			match := test.query
+			match.Id = "match"
+			match.Categories = []string{"common", "cat-a"}
+			other := test.query
+			other.Id = "other"
+			other.Categories = []string{"common", "cat-b"}
+			suite.Require().NoError(db.AddVectors(ctx, test.name, []Vector{match, other}))
+
+			results, err := db.QueryVectors(ctx, test.name, test.query, []string{"common", "cat-a"}, 10)
+			suite.Require().NoError(err)
+			suite.Require().Len(results, 1)
+			suite.Equal("match", results[0].Id)
+		})
+	}
 }
 
 func TestQdrant(t *testing.T) {
