@@ -44,16 +44,12 @@ func init() {
 }
 
 func TestAVX(t *testing.T) {
-	suite.Run(t, &SIMDTestSuite{Feature: AVX})
+	assert.Equal(t, "AVX+F16C", (AVX | F16C).String())
+	suite.Run(t, &SIMDTestSuite{Feature: AVX | F16C})
 }
 
 func TestAVX512(t *testing.T) {
 	suite.Run(t, &SIMDTestSuite{Feature: AVX512})
-}
-
-func TestF16C(t *testing.T) {
-	assert.Equal(t, "AVX+F16C", (AVX | F16C).String())
-	suite.Run(t, &SIMDTestSuite{Feature: AVX | F16C})
 }
 
 func initializeFloat32Array(n int) []float32 {

@@ -56,7 +56,7 @@ test-avx:
 	@set -e; \
 	trap '$(RM) ./$(TEST_AVX_BINARY)' EXIT; \
 	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 $(GO) test -c -o $(TEST_AVX_BINARY) .; \
-	$(QEMU_X86_64) $(QEMU_X86_64_AVX_FLAGS) ./$(TEST_AVX_BINARY) -test.run '^Test(AVX|F16C)$$'; \
+	$(QEMU_X86_64) $(QEMU_X86_64_AVX_FLAGS) ./$(TEST_AVX_BINARY) -test.run '^TestAVX$$'; \
 	$(QEMU_X86_64) $(QEMU_X86_64_AVX_NO_FMA_FLAGS) ./$(TEST_AVX_BINARY) -test.run '^TestAVX$$'
 
 test-avx512:
