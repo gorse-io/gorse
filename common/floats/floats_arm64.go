@@ -23,8 +23,7 @@ import (
 	"golang.org/x/sys/cpu"
 )
 
-//go:generate go tool goat src/floats_neon.c -O3
-//go:generate go tool goat src/floats_fp16_neon.c -O3 -march=armv8.2-a+fp16
+//go:generate go tool goat src/floats_neon.c -O3 -march=armv8.2-a+fp16
 
 type Feature uint64
 

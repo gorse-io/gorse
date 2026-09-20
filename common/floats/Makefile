@@ -28,15 +28,13 @@ TEST_LASX_BINARY ?= .test-lasx.loong64.test
 .PHONY: avx avx512 neon rvv lasx deps test-avx test-avx512 test-neon test-rvv test-lasx
 
 avx:
-	$(GOAT) src/floats_avx.c -o . --target $(GOAT_TARGET_AVX) -O3 -mavx -mfma
-	$(GOAT) src/floats_fp16_avx.c --target $(GOAT_TARGET_AVX) -O3 -mavx -mf16c
+	$(GOAT) src/floats_avx.c --target $(GOAT_TARGET_AVX) -O3 -mavx -mfma -mf16c
 
 avx512:
 	$(GOAT) src/floats_avx512.c -o . --target $(GOAT_TARGET_AVX) -O3 -mavx -mfma -mavx512f
 
 neon:
-	$(GOAT) src/floats_neon.c -o . --target $(GOAT_TARGET_NEON) -O3
-	$(GOAT) src/floats_fp16_neon.c --target $(GOAT_TARGET_NEON) -O3 -march=armv8.2-a+fp16
+	$(GOAT) src/floats_neon.c --target $(GOAT_TARGET_NEON) -O3 -march=armv8.2-a+fp16
 
 rvv:
 	$(GOAT) src/floats_rvv.c -o . --target $(GOAT_TARGET_RVV) -O3 -march=rv64imafdv -e=-isystem -e=$(GOAT_RVV_INCLUDE)

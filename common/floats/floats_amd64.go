@@ -24,8 +24,7 @@ import (
 	"golang.org/x/sys/cpu"
 )
 
-//go:generate go tool goat src/floats_avx.c -O3 -mavx
-//go:generate go tool goat src/floats_fp16_avx.c -O3 -mavx -mf16c
+//go:generate go tool goat src/floats_avx.c -O3 -mavx -mfma -mf16c
 //go:generate go tool goat src/floats_avx512.c -O3 -mavx -mfma -mavx512f
 
 type Feature uint64
