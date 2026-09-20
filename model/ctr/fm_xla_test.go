@@ -26,20 +26,23 @@ import (
 
 func TestCtrDatasetBatchUsesFloat16Embeddings(t *testing.T) {
 	dataSet := newSynthesisDataset()
-	fm := NewAFM(nil)
-	fm.Init(dataSet)
+	numDimension := 0
+	for i := 0; i < dataSet.Count(); i++ {
+		_, indices, _, _ := dataSet.Get(i)
+		numDimension = max(numDimension, len(indices))
+	}
+	embeddingDim := dataSet.GetItemEmbeddingDim()
 
 	batch := (&ctrDataset{
 		trainSet:     dataSet,
-		numFeatures:  fm.numFeatures,
-		numDimension: fm.numDimension,
-		embeddingDim: fm.embeddingDim,
+		numFeatures:  int(dataSet.GetIndex().Len()),
+		numDimension: numDimension,
+		embeddingDim: embeddingDim,
 		batchSize:    1,
-		scalers:      fm.Scalers,
 	}).batch(0)
 	t.Cleanup(func() { require.NoError(t, batch.Finalize()) })
 
-	require.Len(t, batch.Inputs, 2+len(fm.embeddingDim))
+	require.Len(t, batch.Inputs, 2+len(embeddingDim))
 	for i, input := range batch.Inputs[2:] {
 		require.Equal(t, dtypes.Float16, input.DType())
 		input.MustConstFlatData(func(flat any) {
