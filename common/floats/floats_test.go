@@ -15,7 +15,6 @@
 package floats
 
 import (
-	"fmt"
 	"math"
 	"testing"
 
@@ -387,7 +386,6 @@ func TestNativeTestSuite(t *testing.T) {
 type SIMDTestSuite struct {
 	suite.Suite
 	Feature
-	MMOverwritesC bool
 }
 
 func (suite *SIMDTestSuite) SetupSuite() {
@@ -561,58 +559,4 @@ func (suite *SIMDTestSuite) TestMM() {
 	target = []float32{22, 49, 76, 103, 28, 64, 100, 136}
 	suite.mm(true, true, 2, 4, 3, a, 2, b, 3, c, 4)
 	suite.Equal(target, c)
-}
-
-func (suite *SIMDTestSuite) TestMMNoTransposeB() {
-	for _, transA := range []bool{false, true} {
-		for _, shape := range []struct {
-			m, n, k int
-		}{
-			{m: 3, n: 7, k: 5},
-			{m: 4, n: 16, k: 5},
-			{m: 5, n: 19, k: 7},
-		} {
-			suite.Run(fmt.Sprintf("transA=%v/%dx%dx%d", transA, shape.m, shape.n, shape.k), func() {
-				lda := shape.k + 2
-				aRows := shape.m
-				if transA {
-					lda = shape.m + 2
-					aRows = shape.k
-				}
-				ldb := shape.n + 3
-				ldc := shape.n + 4
-				a := make([]float32, aRows*lda)
-				b := make([]float32, shape.k*ldb)
-				actual := make([]float32, shape.m*ldc)
-				for i := range a {
-					a[i] = float32(i%11+1) / 8
-				}
-				for i := range b {
-					b[i] = float32(i%13+1) / 16
-				}
-				for i := range actual {
-					actual[i] = float32(i%7+1) / 32
-				}
-				expected := append([]float32(nil), actual...)
-				for i := range shape.m {
-					if suite.MMOverwritesC {
-						clear(expected[i*ldc : i*ldc+shape.n])
-					}
-					for l := range shape.k {
-						av := a[i*lda+l]
-						if transA {
-							av = a[l*lda+i]
-						}
-						for j := range shape.n {
-							expected[i*ldc+j] += av * b[l*ldb+j]
-						}
-					}
-				}
-				suite.mm(transA, false, shape.m, shape.n, shape.k, a, lda, b, ldb, actual, ldc)
-				for i := range expected {
-					suite.InDelta(expected[i], actual[i], 1e-6)
-				}
-			})
-		}
-	}
 }

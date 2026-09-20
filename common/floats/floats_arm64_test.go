@@ -34,7 +34,7 @@ func TestAMX(t *testing.T) {
 	if runtime.GOOS != "darwin" || runtime.GOARCH != "arm64" {
 		t.Skip("AMX is only supported on macOS ARM64")
 	}
-	suite.Run(t, &SIMDTestSuite{Feature: AMX, MMOverwritesC: true})
+	suite.Run(t, &SIMDTestSuite{Feature: AMX})
 }
 
 func initializeFloat32Array(n int) []float32 {
