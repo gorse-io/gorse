@@ -15,6 +15,32 @@
 #include <arm_neon.h>
 #include <stdint.h>
 
+void vfrom_float32(float *a, uint16_t *dst, int64_t n) {
+    int64_t i = 0;
+    for (; i + 8 <= n; i += 8) {
+        float16x4_t low = vcvt_f16_f32(vld1q_f32(a + i));
+        float16x4_t high = vcvt_f16_f32(vld1q_f32(a + i + 4));
+        vst1q_u16(dst + i, vreinterpretq_u16_f16(vcombine_f16(low, high)));
+    }
+    for (; i < n; i++) {
+        float16x4_t value = vcvt_f16_f32(vdupq_n_f32(a[i]));
+        dst[i] = vget_lane_u16(vreinterpret_u16_f16(value), 0);
+    }
+}
+
+void vto_float32(uint16_t *a, float *dst, int64_t n) {
+    int64_t i = 0;
+    for (; i + 8 <= n; i += 8) {
+        float16x8_t value = vreinterpretq_f16_u16(vld1q_u16(a + i));
+        vst1q_f32(dst + i, vcvt_f32_f16(vget_low_f16(value)));
+        vst1q_f32(dst + i + 4, vcvt_f32_f16(vget_high_f16(value)));
+    }
+    for (; i < n; i++) {
+        float16x4_t value = vreinterpret_f16_u16(vdup_n_u16(a[i]));
+        dst[i] = vgetq_lane_f32(vcvt_f32_f16(value), 0);
+    }
+}
+
 void vmul_const_add_to(float *a, float *b, float *c, float *dst, long n) {
     for (int i = 0; i < n; i++) {
         dst[i] = a[i] * (*b) + c[i];

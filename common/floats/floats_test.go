@@ -15,12 +15,59 @@
 package floats
 
 import (
+	"math"
 	"testing"
 
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 )
+
+func TestFloat16Conversion(t *testing.T) {
+	values := []float32{
+		0,
+		float32(math.Copysign(0, -1)),
+		1,
+		-2,
+		float32(math.Ldexp(1, -24)),
+		float32(math.Ldexp(1, -25)),
+		1 + float32(math.Ldexp(1, -11)),
+		1 + float32(math.Ldexp(1, -10)),
+		65504,
+		float32(math.Inf(1)),
+		float32(math.Inf(-1)),
+	}
+	encoded := []uint16{
+		0x0000,
+		0x8000,
+		0x3c00,
+		0xc000,
+		0x0001,
+		0x0000,
+		0x3c00,
+		0x3c01,
+		0x7bff,
+		0x7c00,
+		0xfc00,
+	}
+
+	assert.Equal(t, encoded, FromFloat32(values))
+	assert.Equal(t, []float32{
+		0,
+		float32(math.Copysign(0, -1)),
+		1,
+		-2,
+		float32(math.Ldexp(1, -24)),
+		0,
+		1,
+		1 + float32(math.Ldexp(1, -10)),
+		65504,
+		float32(math.Inf(1)),
+		float32(math.Inf(-1)),
+	}, ToFloat32(encoded))
+	assert.Empty(t, FromFloat32(nil))
+	assert.Empty(t, ToFloat32(nil))
+}
 
 func TestMatZero(t *testing.T) {
 	a := [][]float32{
@@ -313,6 +360,42 @@ func (suite *SIMDTestSuite) SetupSuite() {
 	if feature&suite.Feature != suite.Feature {
 		suite.T().Skipf("%s is not supported", (suite.Feature - (feature & suite.Feature)).String())
 	}
+}
+
+func (suite *SIMDTestSuite) TestFromFloat32() {
+	a := []float32{
+		0,
+		float32(math.Copysign(0, -1)),
+		1,
+		-2,
+		float32(math.Ldexp(1, -24)),
+		float32(math.Ldexp(1, -25)),
+		1 + float32(math.Ldexp(1, -11)),
+		1 + float32(math.Ldexp(1, -10)),
+		65504,
+		0.1,
+		-0.2,
+		1.5,
+		2.5,
+		3.5,
+		4.5,
+		5.5,
+		6.5,
+	}
+	expected := make([]uint16, len(a))
+	fromFloat32(a, expected)
+	actual := make([]uint16, len(a))
+	suite.Feature.fromFloat32(a, actual)
+	suite.Equal(expected, actual)
+}
+
+func (suite *SIMDTestSuite) TestToFloat32() {
+	a := []uint16{0x0000, 0x8000, 0x0001, 0x03ff, 0x0400, 0x3c00, 0xc000, 0x2e66, 0xb266, 0x7bff, 0x7c00, 0xfc00, 0x3e00, 0x4100, 0x4300, 0x4480, 0x4580}
+	expected := make([]float32, len(a))
+	toFloat32(a, expected)
+	actual := make([]float32, len(a))
+	suite.Feature.toFloat32(a, actual)
+	suite.Equal(expected, actual)
 }
 
 func (suite *SIMDTestSuite) TestMulConstAddTo() {

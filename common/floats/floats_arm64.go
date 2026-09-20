@@ -40,6 +40,14 @@ func (feature Feature) String() string {
 	return strings.Join(features, "+")
 }
 
+func (Feature) fromFloat32(a []float32, dst []uint16) {
+	vfrom_float32(unsafe.Pointer(&a[0]), unsafe.Pointer(&dst[0]), int64(len(a)))
+}
+
+func (Feature) toFloat32(a []uint16, dst []float32) {
+	vto_float32(unsafe.Pointer(&a[0]), unsafe.Pointer(&dst[0]), int64(len(a)))
+}
+
 func (feature Feature) mulConstAddTo(a []float32, b float32, c, dst []float32) {
 	vmul_const_add_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), unsafe.Pointer(&c[0]), unsafe.Pointer(&dst[0]), int64(len(a)))
 }

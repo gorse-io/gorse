@@ -14,6 +14,54 @@
 
 #include <lasxintrin.h>
 
+void lasx_from_float32(float *a, unsigned short *dst, long n) {
+    long i = 0;
+    for (; i + 16 <= n; i += 16) {
+        unsigned short partial[16];
+        __m256 low = (__m256)__lasx_xvld(a + i, 0);
+        __m256 high = (__m256)__lasx_xvld(a + i + 8, 0);
+        __m256i converted = __lasx_xvfcvt_h_s(high, low);
+        __lasx_xvst(converted, partial, 0);
+        for (long j = 0; j < 4; j++) {
+            dst[i + j] = partial[j];
+            dst[i + j + 4] = partial[j + 8];
+            dst[i + j + 8] = partial[j + 4];
+            dst[i + j + 12] = partial[j + 12];
+        }
+    }
+    for (; i < n; i++) {
+        __m256 value = (__m256)__lasx_xvldrepl_w(a + i, 0);
+        __m256i converted = __lasx_xvfcvt_h_s(value, value);
+        dst[i] = (unsigned short)__lasx_xvpickve2gr_wu(converted, 0);
+    }
+}
+
+void lasx_to_float32(unsigned short *a, float *dst, long n) {
+    long i = 0;
+    for (; i + 16 <= n; i += 16) {
+        float low[8];
+        float high[8];
+        __m256i value = __lasx_xvld(a + i, 0);
+        __lasx_xvst((__m256i)__lasx_xvfcvtl_s_h(value), low, 0);
+        __lasx_xvst((__m256i)__lasx_xvfcvth_s_h(value), high, 0);
+        for (long j = 0; j < 4; j++) {
+            dst[i + j] = low[j];
+            dst[i + j + 4] = high[j];
+            dst[i + j + 8] = low[j + 4];
+            dst[i + j + 12] = high[j + 4];
+        }
+    }
+    for (; i < n; i++) {
+        __m256i value = __lasx_xvldrepl_h(a + i, 0);
+        __m256 converted = __lasx_xvfcvtl_s_h(value);
+        union {
+            unsigned int bits;
+            float value;
+        } scalar = { .bits = __lasx_xvpickve2gr_wu((__m256i)converted, 0) };
+        dst[i] = scalar.value;
+    }
+}
+
 void lasx_mul_const_add_to(float *a, float *b, float *c, float *dst, long n) {
     long epoch = n / 8;
     long remain = n % 8;

@@ -47,6 +47,14 @@ func (feature Feature) String() string {
 	}
 }
 
+func (Feature) fromFloat32(a []float32, dst []uint16) {
+	fromFloat32(a, dst)
+}
+
+func (Feature) toFloat32(a []uint16, dst []float32) {
+	toFloat32(a, dst)
+}
+
 func (feature Feature) mulConstAddTo(a []float32, b float32, c []float32, dst []float32) {
 	if feature&V == V {
 		vmul_const_add_to(unsafe.Pointer(&a[0]), unsafe.Pointer(&b), unsafe.Pointer(&c[0]), unsafe.Pointer(&dst[0]), int64(len(a)))
