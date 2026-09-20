@@ -15,12 +15,59 @@
 package floats
 
 import (
+	"math"
 	"testing"
 
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 )
+
+func TestFloat16Conversion(t *testing.T) {
+	values := []float32{
+		0,
+		float32(math.Copysign(0, -1)),
+		1,
+		-2,
+		float32(math.Ldexp(1, -24)),
+		float32(math.Ldexp(1, -25)),
+		1 + float32(math.Ldexp(1, -11)),
+		1 + float32(math.Ldexp(1, -10)),
+		65504,
+		float32(math.Inf(1)),
+		float32(math.Inf(-1)),
+	}
+	encoded := []uint16{
+		0x0000,
+		0x8000,
+		0x3c00,
+		0xc000,
+		0x0001,
+		0x0000,
+		0x3c00,
+		0x3c01,
+		0x7bff,
+		0x7c00,
+		0xfc00,
+	}
+
+	assert.Equal(t, encoded, FromFloat32(values))
+	assert.Equal(t, []float32{
+		0,
+		float32(math.Copysign(0, -1)),
+		1,
+		-2,
+		float32(math.Ldexp(1, -24)),
+		0,
+		1,
+		1 + float32(math.Ldexp(1, -10)),
+		65504,
+		float32(math.Inf(1)),
+		float32(math.Inf(-1)),
+	}, ToFloat32(encoded))
+	assert.Empty(t, FromFloat32(nil))
+	assert.Empty(t, ToFloat32(nil))
+}
 
 func TestMatZero(t *testing.T) {
 	a := [][]float32{
