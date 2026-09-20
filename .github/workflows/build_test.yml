@@ -147,6 +147,10 @@ jobs:
         # Weaviate
         WEAVIATE_URI: weaviate://localhost:${{ job.services.weaviate.ports[8080] }}/
 
+    - name: Test XLA
+      if: runner.arch == 'X64' || runner.arch == 'ARM64'
+      run: go test -tags xla -timeout 20m ./model/ctr
+
     - name: Upload coverage to Codecov
       if: matrix.os == 'ubuntu-latest'
       uses: codecov/codecov-action@v5
@@ -185,6 +189,10 @@ jobs:
 
     - name: Test
       run: go test -timeout 20m ./...
+
+    - name: Test XLA
+      if: runner.arch == 'ARM64'
+      run: go test -tags xla -timeout 20m ./model/ctr
 
   unit_test_windows:
     strategy:
@@ -243,6 +251,10 @@ jobs:
 
     - name: Test
       run: go test -timeout 20m ./...
+
+    - name: Test XLA
+      if: runner.arch == 'X64'
+      run: go test -tags xla -timeout 20m ./model/ctr
 
   integrate_test:
     name: integrate tests
