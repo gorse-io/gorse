@@ -22,7 +22,7 @@ import (
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/expr-lang/expr"
 	"github.com/expr-lang/expr/vm"
-	"github.com/gorse-io/gorse/common/bfloats"
+	"github.com/gorse-io/gorse/common/floats"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/dataset"
@@ -144,12 +144,12 @@ func (e *embeddingUserToUser) Add(user *data.User, _ []int32) error {
 		log.Logger().Error("failed to evaluate column expression", zap.Error(err))
 		return nil
 	}
-	value, ok := bfloats.FromAny(result)
+	value, ok := floats.FromAny(result)
 	if !ok || len(value) == 0 {
 		log.Logger().Error("invalid embedding column type", zap.Any("column", result))
 		return nil
 	}
-	return e.VectorWriter.Add(vectors.Vector{Id: user.UserId, Values: bfloats.ToFloat32(value), Timestamp: e.timestamp})
+	return e.VectorWriter.Add(vectors.Vector{Id: user.UserId, Values: floats.ToFloat32(value), Timestamp: e.timestamp})
 }
 
 type tagsUserToUser struct {

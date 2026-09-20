@@ -38,8 +38,8 @@ import (
 	"github.com/gomlx/gomlx/ml/train"
 	"github.com/gomlx/gomlx/ml/train/loss"
 	"github.com/gomlx/gomlx/ml/train/optimizer"
-	"github.com/gorse-io/gorse/common/bfloats"
 	"github.com/gorse-io/gorse/common/encoding"
+	"github.com/gorse-io/gorse/common/floats"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/dataset"
@@ -277,7 +277,7 @@ func (fm *AFM) BatchInternalPredict(x []lo.Tuple2[[]int32, []float32], e [][][]u
 			}
 			for j := range fm.embeddingDim {
 				if len(e[start+i]) > j && len(e[start+i][j]) == fm.embeddingDim[j] {
-					copy(additionalData[j][i*fm.embeddingDim[j]:], bfloats.ToFloat32(e[start+i][j]))
+					copy(additionalData[j][i*fm.embeddingDim[j]:], floats.ToFloat32(e[start+i][j]))
 				}
 			}
 		}
@@ -449,7 +449,7 @@ func (d *ctrDataset) batch(offset int) train.Batch {
 		}
 		for j := range d.embeddingDim {
 			if len(embeddings) > j && len(embeddings[j]) == d.embeddingDim[j] {
-				copy(additionalData[j][i*d.embeddingDim[j]:], bfloats.ToFloat32(embeddings[j]))
+				copy(additionalData[j][i*d.embeddingDim[j]:], floats.ToFloat32(embeddings[j]))
 			}
 		}
 		// Convert target from {-1, 1} to {0, 1} for GoMLX BinaryCrossentropy
