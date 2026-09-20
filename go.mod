@@ -1,6 +1,6 @@
 module github.com/gorse-io/gorse
 
-go 1.27
+go 1.27.0
 
 require (
 	cloud.google.com/go/storage v1.61.3
@@ -199,7 +199,7 @@ require (
 	github.com/gorilla/handlers v1.5.2 // indirect
 	github.com/gorilla/mux v1.8.1 // indirect
 	github.com/gorilla/websocket v1.5.0 // indirect
-	github.com/gorse-io/goat v0.2.1-0.20260618151728-201cbcf325ad // indirect
+	github.com/gorse-io/goat v0.2.2-0.20260901002732-5a437bfbbb1f // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware v1.4.0 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware/providers/prometheus v1.0.1 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.1.0 // indirect

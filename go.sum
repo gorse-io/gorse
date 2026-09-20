@@ -389,8 +389,8 @@ github.com/gorse-io/clickhouse v0.3.3-0.20260331225025-ab309f55941d h1:ehE+4aaZ1
 github.com/gorse-io/clickhouse v0.3.3-0.20260331225025-ab309f55941d/go.mod h1:6aZpl8cJgPkqNVeZiEgQJ+yLCC0NyDfv7gF/3/pJywU=
 github.com/gorse-io/dashboard v0.5.20260714 h1:Sy7G7Jw1JywSl5KYDSLiIYctKHBxom4qQmIn+aS1Z1c=
 github.com/gorse-io/dashboard v0.5.20260714/go.mod h1:qz7Y16kcH61Qxr6uQtq7a1FbSujErfr020SZH1SVX3g=
-github.com/gorse-io/goat v0.2.1-0.20260618151728-201cbcf325ad h1:HESEie1ivHg8yI9Qnej4Cu+AP8w8gQ9gqpYcnV5zC7Q=
-github.com/gorse-io/goat v0.2.1-0.20260618151728-201cbcf325ad/go.mod h1:NjwKvGIyhFveMjnUdYrngJYvYLqK0aK7Qdp7QJWkBLo=
+github.com/gorse-io/goat v0.2.2-0.20260901002732-5a437bfbbb1f h1:GugVsyRvt2e77P6MGHzg5ekn3ey8bjIME8Mz8zS5RCM=
+github.com/gorse-io/goat v0.2.2-0.20260901002732-5a437bfbbb1f/go.mod h1:gRNfHg2VIBM1rLZXr6LtS2BX+qVI8DKckQC9LBESUMk=
 github.com/gorse-io/gorse-go v0.5.0-alpha.3.0.20260613082921-062d740c10a2 h1:tx7eKfedcqWXNGzO6T5CG8asT5UnwHBkdYKKbZS4z7E=
 github.com/gorse-io/gorse-go v0.5.0-alpha.3.0.20260613082921-062d740c10a2/go.mod h1:ZxmVHzZPKm5pmEIlqaRDwK0rkfTRHlfziO033XZ+RW0=
 github.com/gorse-io/sqlite v1.3.3-0.20260620140844-3b4da3e2b9f2 h1:5URyKN9bYIO+WG3hbfaOkTBHmdLT4U8JQSe2vSEWJDE=
