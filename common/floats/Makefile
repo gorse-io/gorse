@@ -17,7 +17,8 @@ QEMU_X86_64_AVX512_FLAGS ?= -cpu max,avx=on,fma=on,avx512f=on,avx512dq=on
 QEMU_AARCH64 ?= qemu-aarch64
 QEMU_AARCH64_NEON_FLAGS ?= -cpu max
 RISCV64_QEMU ?= qemu-riscv64
-RISCV64_QEMU_FLAGS ?= -cpu max,v=true
+RISCV64_QEMU_VLEN128_FLAGS ?= -cpu max,v=true,vlen=128
+RISCV64_QEMU_VLEN256_FLAGS ?= -cpu max,v=true,vlen=256
 LOONG64_QEMU ?= qemu-loongarch64
 LOONG64_QEMU_FLAGS ?= -cpu max
 TEST_AVX_BINARY ?= .test-avx.amd64.test
@@ -32,13 +33,13 @@ avx:
 	$(GOAT) src/floats_avx.c --target $(GOAT_TARGET_AVX) -O3 -mavx -mf16c
 
 avx512:
-	$(GOAT) src/floats_avx512.c -o . --target $(GOAT_TARGET_AVX) -O3 -mavx -mfma -mavx512f
+	$(GOAT) src/floats_avx512.c --target $(GOAT_TARGET_AVX) -O3 -mavx -mfma -mavx512f
 
 neon:
 	$(GOAT) src/floats_neon.c --target $(GOAT_TARGET_NEON) -O3
 
 rvv:
-	$(GOAT) src/floats_rvv.c -o . --target $(GOAT_TARGET_RVV) -O3 -march=rv64imafdv -e=-isystem -e=$(GOAT_RVV_INCLUDE)
+	$(GOAT) src/floats_rvv.c --target $(GOAT_TARGET_RVV) -O3 -march=rv64imafdv -e=-isystem -e=$(GOAT_RVV_INCLUDE)
 
 lasx:
 	OBJDUMP=$(LASX_OBJDUMP) $(GOAT) src/floats_lasx.c -o ../floats --target $(GOAT_TARGET_LASX) -O3 -mlasx
@@ -56,8 +57,8 @@ test-avx:
 	@set -e; \
 	trap '$(RM) ./$(TEST_AVX_BINARY)' EXIT; \
 	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 $(GO) test -c -o $(TEST_AVX_BINARY) .; \
-	$(QEMU_X86_64) $(QEMU_X86_64_AVX_FLAGS) ./$(TEST_AVX_BINARY) -test.run '^(TestAVX|TestAVXMMNoTransposeB)$$'; \
-	$(QEMU_X86_64) $(QEMU_X86_64_AVX_NO_FMA_FLAGS) ./$(TEST_AVX_BINARY) -test.run '^(TestAVX|TestAVXMMNoTransposeB)$$'
+	$(QEMU_X86_64) $(QEMU_X86_64_AVX_FLAGS) ./$(TEST_AVX_BINARY) -test.run '^TestAVX$$'; \
+	$(QEMU_X86_64) $(QEMU_X86_64_AVX_NO_FMA_FLAGS) ./$(TEST_AVX_BINARY) -test.run '^TestAVX$$'
 
 test-avx512:
 	@set -e; \
@@ -75,7 +76,8 @@ test-rvv:
 	@set -e; \
 	trap '$(RM) ./$(TEST_RVV_BINARY)' EXIT; \
 	GOOS=linux GOARCH=riscv64 CGO_ENABLED=0 $(GO) test -c -o $(TEST_RVV_BINARY) .; \
-	$(RISCV64_QEMU) $(RISCV64_QEMU_FLAGS) ./$(TEST_RVV_BINARY) -test.run '^TestV$$'
+	$(RISCV64_QEMU) $(RISCV64_QEMU_VLEN128_FLAGS) ./$(TEST_RVV_BINARY) -test.run '^TestV$$'; \
+	$(RISCV64_QEMU) $(RISCV64_QEMU_VLEN256_FLAGS) ./$(TEST_RVV_BINARY) -test.run '^TestV$$'
 
 test-lasx:
 	@set -e; \

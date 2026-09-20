@@ -181,32 +181,68 @@ float veuclidean(float *a, float *b, long n) {
 }
 
 void vmm(_Bool transA, _Bool transB, long m, long n, long k, float *a, long lda, float *b, long ldb, float *c, long ldc) {
-    if (!transA && !transB)
+    if (!transB)
     {
-        for (int i = 0; i < m; i++) {
-            for (int l = 0; l < k; l++) {
-                for (int j = 0; j < n; j++) {
-                    c[i * ldc + j] += a[i * lda + l] * b[l * ldb + j];
+        long i = 0;
+        for (; i + 4 <= m; i += 4) {
+            long j = 0;
+            for (; j + 4 <= n; j += 4) {
+                float32x4_t c0 = vld1q_f32(c + i * ldc + j);
+                float32x4_t c1 = vld1q_f32(c + (i + 1) * ldc + j);
+                float32x4_t c2 = vld1q_f32(c + (i + 2) * ldc + j);
+                float32x4_t c3 = vld1q_f32(c + (i + 3) * ldc + j);
+                for (long l = 0; l < k; l++) {
+                    float32x4_t bv = vld1q_f32(b + l * ldb + j);
+                    long a0 = transA ? l * lda + i : i * lda + l;
+                    long a1 = transA ? l * lda + i + 1 : (i + 1) * lda + l;
+                    long a2 = transA ? l * lda + i + 2 : (i + 2) * lda + l;
+                    long a3 = transA ? l * lda + i + 3 : (i + 3) * lda + l;
+                    c0 = vaddq_f32(c0, vmulq_f32(vdupq_n_f32(a[a0]), bv));
+                    c1 = vaddq_f32(c1, vmulq_f32(vdupq_n_f32(a[a1]), bv));
+                    c2 = vaddq_f32(c2, vmulq_f32(vdupq_n_f32(a[a2]), bv));
+                    c3 = vaddq_f32(c3, vmulq_f32(vdupq_n_f32(a[a3]), bv));
+                }
+                vst1q_f32(c + i * ldc + j, c0);
+                vst1q_f32(c + (i + 1) * ldc + j, c1);
+                vst1q_f32(c + (i + 2) * ldc + j, c2);
+                vst1q_f32(c + (i + 3) * ldc + j, c3);
+            }
+            for (; j < n; j++) {
+                for (long l = 0; l < k; l++) {
+                    float bv = b[l * ldb + j];
+                    c[i * ldc + j] += a[(transA ? l * lda + i : i * lda + l)] * bv;
+                    c[(i + 1) * ldc + j] += a[(transA ? l * lda + i + 1 : (i + 1) * lda + l)] * bv;
+                    c[(i + 2) * ldc + j] += a[(transA ? l * lda + i + 2 : (i + 2) * lda + l)] * bv;
+                    c[(i + 3) * ldc + j] += a[(transA ? l * lda + i + 3 : (i + 3) * lda + l)] * bv;
                 }
             }
         }
-    } else if (!transA && transB)
+        for (; i < m; i++) {
+            long j = 0;
+            for (; j + 4 <= n; j += 4) {
+                float32x4_t cv = vld1q_f32(c + i * ldc + j);
+                for (long l = 0; l < k; l++) {
+                    float32x4_t bv = vld1q_f32(b + l * ldb + j);
+                    long ai = transA ? l * lda + i : i * lda + l;
+                    cv = vaddq_f32(cv, vmulq_f32(vdupq_n_f32(a[ai]), bv));
+                }
+                vst1q_f32(c + i * ldc + j, cv);
+            }
+            for (; j < n; j++) {
+                for (long l = 0; l < k; l++) {
+                    long ai = transA ? l * lda + i : i * lda + l;
+                    c[i * ldc + j] += a[ai] * b[l * ldb + j];
+                }
+            }
+        }
+    } else if (!transA)
     {
         for (int i = 0; i < m; i++) {
             for (int j = 0; j < n; j++) {
                 c[i * ldc + j] = dot(a + i * lda, b + j * ldb, k);
             }
         }
-    } else if (transA && !transB)
-    {
-        for (int i = 0; i < m; i++) {
-            for (int l = 0; l < k; l++) {
-                for (int j = 0; j < n; j++) {
-                    c[i * ldc + j] += a[l * lda + i] * b[l * ldb + j];
-                }
-            }
-        }
-    } else if (transA && transB)
+    } else
     {
         for (int i = 0; i < m; i++) {
             for (int l = 0; l < k; l++) {

@@ -442,32 +442,68 @@ float _mm512_euclidean(float *a, float *b, int64_t n)
 
 void _mm512_mm(_Bool transA, _Bool transB, int64_t m, int64_t n, int64_t k, float *a, int64_t lda, float *b, int64_t ldb, float *c, int64_t ldc)
 {
-    if (!transA && !transB)
+    if (!transB)
     {
-        for (int i = 0; i < m; i++) {
-            for (int l = 0; l < k; l++) {
-                for (int j = 0; j < n; j++) {
-                    c[i * ldc + j] += a[i * lda + l] * b[l * ldb + j];
+        int64_t i = 0;
+        for (; i + 4 <= m; i += 4) {
+            int64_t j = 0;
+            for (; j + 16 <= n; j += 16) {
+                __m512 c0 = _mm512_loadu_ps(c + i * ldc + j);
+                __m512 c1 = _mm512_loadu_ps(c + (i + 1) * ldc + j);
+                __m512 c2 = _mm512_loadu_ps(c + (i + 2) * ldc + j);
+                __m512 c3 = _mm512_loadu_ps(c + (i + 3) * ldc + j);
+                for (int64_t l = 0; l < k; l++) {
+                    __m512 bv = _mm512_loadu_ps(b + l * ldb + j);
+                    int64_t a0 = transA ? l * lda + i : i * lda + l;
+                    int64_t a1 = transA ? l * lda + i + 1 : (i + 1) * lda + l;
+                    int64_t a2 = transA ? l * lda + i + 2 : (i + 2) * lda + l;
+                    int64_t a3 = transA ? l * lda + i + 3 : (i + 3) * lda + l;
+                    c0 = _mm512_add_ps(c0, _mm512_mul_ps(_mm512_set1_ps(a[a0]), bv));
+                    c1 = _mm512_add_ps(c1, _mm512_mul_ps(_mm512_set1_ps(a[a1]), bv));
+                    c2 = _mm512_add_ps(c2, _mm512_mul_ps(_mm512_set1_ps(a[a2]), bv));
+                    c3 = _mm512_add_ps(c3, _mm512_mul_ps(_mm512_set1_ps(a[a3]), bv));
+                }
+                _mm512_storeu_ps(c + i * ldc + j, c0);
+                _mm512_storeu_ps(c + (i + 1) * ldc + j, c1);
+                _mm512_storeu_ps(c + (i + 2) * ldc + j, c2);
+                _mm512_storeu_ps(c + (i + 3) * ldc + j, c3);
+            }
+            for (; j < n; j++) {
+                for (int64_t l = 0; l < k; l++) {
+                    float bv = b[l * ldb + j];
+                    c[i * ldc + j] += a[(transA ? l * lda + i : i * lda + l)] * bv;
+                    c[(i + 1) * ldc + j] += a[(transA ? l * lda + i + 1 : (i + 1) * lda + l)] * bv;
+                    c[(i + 2) * ldc + j] += a[(transA ? l * lda + i + 2 : (i + 2) * lda + l)] * bv;
+                    c[(i + 3) * ldc + j] += a[(transA ? l * lda + i + 3 : (i + 3) * lda + l)] * bv;
                 }
             }
         }
-    } else if (!transA && transB)
+        for (; i < m; i++) {
+            int64_t j = 0;
+            for (; j + 16 <= n; j += 16) {
+                __m512 cv = _mm512_loadu_ps(c + i * ldc + j);
+                for (int64_t l = 0; l < k; l++) {
+                    __m512 bv = _mm512_loadu_ps(b + l * ldb + j);
+                    int64_t ai = transA ? l * lda + i : i * lda + l;
+                    cv = _mm512_add_ps(cv, _mm512_mul_ps(_mm512_set1_ps(a[ai]), bv));
+                }
+                _mm512_storeu_ps(c + i * ldc + j, cv);
+            }
+            for (; j < n; j++) {
+                for (int64_t l = 0; l < k; l++) {
+                    int64_t ai = transA ? l * lda + i : i * lda + l;
+                    c[i * ldc + j] += a[ai] * b[l * ldb + j];
+                }
+            }
+        }
+    } else if (!transA)
     {
         for (int i = 0; i < m; i++) {
             for (int j = 0; j < n; j++) {
                 c[i * ldc + j] = dot(a + i * lda, b + j * ldb, k);
             }
         }
-    } else if (transA && !transB)
-    {
-        for (int i = 0; i < m; i++) {
-            for (int l = 0; l < k; l++) {
-                for (int j = 0; j < n; j++) {
-                    c[i * ldc + j] += a[l * lda + i] * b[l * ldb + j];
-                }
-            }
-        }
-    } else if (transA && transB)
+    } else
     {
         for (int i = 0; i < m; i++) {
             for (int l = 0; l < k; l++) {

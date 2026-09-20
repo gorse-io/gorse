@@ -1163,7 +1163,7 @@ LBB11_14:
 	WORD $0xf8c5; BYTE $0x77 // vzeroupper
 	RET
 
-TEXT ·_mm256_dot(SB), $8-24
+TEXT ·_mm256_dot(SB), $8-28
 	MOVQ a+0(FP), DI
 	MOVQ b+8(FP), SI
 	MOVQ n+16(FP), DX
@@ -1278,7 +1278,7 @@ LBB12_16:
 	MOVSS X0, result+24(FP)
 	RET
 
-TEXT ·_mm256_euclidean(SB), $8-24
+TEXT ·_mm256_euclidean(SB), $8-28
 	MOVQ a+0(FP), DI
 	MOVQ b+8(FP), SI
 	MOVQ n+16(FP), DX
@@ -1407,9 +1407,9 @@ LBB13_16:
 	MOVSS X0, result+24(FP)
 	RET
 
-TEXT ·_mm256_mm(SB), $0-88
-	MOVQ  transA+0(FP), DI
-	MOVQ  transB+1(FP), SI
+TEXT ·_mm256_mm(SB), $0-80
+	MOVB  transA+0(FP), DI
+	MOVB  transB+1(FP), SI
 	MOVQ  m+8(FP), DX
 	MOVQ  n+16(FP), CX
 	MOVQ  k+24(FP), R8
