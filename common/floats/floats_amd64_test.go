@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"github.com/klauspost/cpuid/v2"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 	"golang.org/x/sys/cpu"
 )
@@ -48,6 +49,51 @@ func TestAVX(t *testing.T) {
 
 func TestAVX512(t *testing.T) {
 	suite.Run(t, &SIMDTestSuite{Feature: AVX512})
+}
+
+func TestAVXMMNoTransposeB(t *testing.T) {
+	if !cpu.X86.HasAVX {
+		t.Skip("AVX is not supported")
+	}
+	for _, transA := range []bool{false, true} {
+		for _, shape := range []struct {
+			m, n, k int
+		}{
+			{m: 3, n: 7, k: 5},
+			{m: 4, n: 8, k: 5},
+			{m: 5, n: 13, k: 7},
+		} {
+			t.Run(fmt.Sprintf("transA=%v/%dx%dx%d", transA, shape.m, shape.n, shape.k), func(t *testing.T) {
+				lda := shape.k + 2
+				aRows := shape.m
+				if transA {
+					lda = shape.m + 2
+					aRows = shape.k
+				}
+				ldb := shape.n + 3
+				ldc := shape.n + 4
+				a := initializeFloat32Array(aRows * lda)
+				b := initializeFloat32Array(shape.k * ldb)
+				actual := initializeFloat32Array(shape.m * ldc)
+				expected := append([]float32(nil), actual...)
+				for i := range shape.m {
+					for l := range shape.k {
+						av := a[i*lda+l]
+						if transA {
+							av = a[l*lda+i]
+						}
+						for j := range shape.n {
+							expected[i*ldc+j] += av * b[l*ldb+j]
+						}
+					}
+				}
+				Feature(AVX).mm(transA, false, shape.m, shape.n, shape.k, a, lda, b, ldb, actual, ldc)
+				for i := range expected {
+					assert.InDelta(t, expected[i], actual[i], 1e-6)
+				}
+			})
+		}
+	}
 }
 
 func initializeFloat32Array(n int) []float32 {
