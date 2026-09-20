@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"github.com/klauspost/cpuid/v2"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 	"golang.org/x/sys/cpu"
 )
@@ -48,6 +49,51 @@ func TestAVX(t *testing.T) {
 
 func TestAVX512(t *testing.T) {
 	suite.Run(t, &SIMDTestSuite{Feature: AVX512})
+}
+
+func TestAVXMMTransposedB(t *testing.T) {
+	if !cpu.X86.HasAVX {
+		t.Skip("AVX is not supported")
+	}
+	for _, k := range []int{127, 128, 129, 159} {
+		t.Run(strconv.Itoa(k), func(t *testing.T) {
+			const (
+				m   = 3
+				n   = 5
+				lda = 161
+				ldb = 163
+				ldc = 7
+			)
+			a := make([]float32, m*lda)
+			b := make([]float32, n*ldb)
+			for i := range a {
+				a[i] = float32(i%17-8) / 17
+			}
+			for i := range b {
+				b[i] = float32(i%13-6) / 13
+			}
+			expected := make([]float32, m*ldc)
+			actual := make([]float32, m*ldc)
+			for i := range expected {
+				expected[i] = float32(i + 1)
+				actual[i] = expected[i]
+			}
+
+			for i := range m {
+				for j := range n {
+					expected[i*ldc+j] = 0
+					for l := range k {
+						expected[i*ldc+j] += a[i*lda+l] * b[j*ldb+l]
+					}
+				}
+			}
+			AVX.mm(false, true, m, n, k, a, lda, b, ldb, actual, ldc)
+
+			for i := range expected {
+				assert.InDelta(t, expected[i], actual[i], 1e-4, "index %d", i)
+			}
+		})
+	}
 }
 
 func initializeFloat32Array(n int) []float32 {
@@ -269,7 +315,7 @@ func BenchmarkMM(b *testing.B) {
 		for _, transB := range []bool{false, true} {
 			for _, feat := range supportedFeatures {
 				b.Run(fmt.Sprintf("(%v,%v,%v)", transA, transB, feat.String()), func(b *testing.B) {
-					for n := 16; n <= 128; n *= 2 {
+					for n := 16; n <= 256; n *= 2 {
 						b.Run(strconv.Itoa(n), func(b *testing.B) {
 							matA := initializeFloat32Array(n * n)
 							matB := initializeFloat32Array(n * n)

@@ -214,7 +214,11 @@ func (feature Feature) mm(transA, transB bool, m, n, k int, a []float32, lda int
 	if feature&AVX512 == AVX512 && feature&MKL == 0 && feature&OPENBLAS == 0 {
 		_mm512_mm(transA, transB, int64(m), int64(n), int64(k), unsafe.Pointer(&a[0]), int64(lda), unsafe.Pointer(&b[0]), int64(ldb), unsafe.Pointer(&c[0]), int64(ldc))
 	} else if feature&AVX == AVX && feature&MKL == 0 && feature&OPENBLAS == 0 {
-		_mm256_mm(transA, transB, int64(m), int64(n), int64(k), unsafe.Pointer(&a[0]), int64(lda), unsafe.Pointer(&b[0]), int64(ldb), unsafe.Pointer(&c[0]), int64(ldc))
+		if !transA && transB && k >= 128 {
+			_mm256_mm_nt(int64(m), int64(n), int64(k), unsafe.Pointer(&a[0]), int64(lda), unsafe.Pointer(&b[0]), int64(ldb), unsafe.Pointer(&c[0]), int64(ldc))
+		} else {
+			_mm256_mm(transA, transB, int64(m), int64(n), int64(k), unsafe.Pointer(&a[0]), int64(lda), unsafe.Pointer(&b[0]), int64(ldb), unsafe.Pointer(&c[0]), int64(ldc))
+		}
 	} else {
 		mm(transA, transB, m, n, k, a, lda, b, ldb, c, ldc)
 	}

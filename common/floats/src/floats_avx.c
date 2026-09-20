@@ -440,3 +440,54 @@ void _mm256_mm(_Bool transA, _Bool transB, int64_t m, int64_t n, int64_t k, floa
         }
     }
 }
+
+inline __attribute__((always_inline)) float dot_wide(float *a, float *b, int64_t n)
+{
+    int epoch = n / 32;
+    int remain_epoch = n % 32 / 8;
+    int remain = n % 8;
+    __m256 s0 = _mm256_setzero_ps();
+    __m256 s1 = _mm256_setzero_ps();
+    __m256 s2 = _mm256_setzero_ps();
+    __m256 s3 = _mm256_setzero_ps();
+    for (int i = 0; i < epoch; i++)
+    {
+        s0 = _mm256_add_ps(_mm256_mul_ps(_mm256_loadu_ps(a), _mm256_loadu_ps(b)), s0);
+        s1 = _mm256_add_ps(_mm256_mul_ps(_mm256_loadu_ps(a + 8), _mm256_loadu_ps(b + 8)), s1);
+        s2 = _mm256_add_ps(_mm256_mul_ps(_mm256_loadu_ps(a + 16), _mm256_loadu_ps(b + 16)), s2);
+        s3 = _mm256_add_ps(_mm256_mul_ps(_mm256_loadu_ps(a + 24), _mm256_loadu_ps(b + 24)), s3);
+        a += 32;
+        b += 32;
+    }
+    __m256 s = _mm256_add_ps(_mm256_add_ps(s0, s1), _mm256_add_ps(s2, s3));
+    for (int i = 0; i < remain_epoch; i++)
+    {
+        s = _mm256_add_ps(_mm256_mul_ps(_mm256_loadu_ps(a), _mm256_loadu_ps(b)), s);
+        a += 8;
+        b += 8;
+    }
+    __m128 s7_6_5_4 = _mm256_extractf128_ps(s, 1);
+    __m128 s3_2_1_0 = _mm256_castps256_ps128(s);
+    __m128 s37_26_15_04 = _mm_add_ps(s7_6_5_4, s3_2_1_0);
+    __m128 sxx_15_04 = s37_26_15_04;
+    __m128 sxx_37_26 = _mm_movehl_ps(s37_26_15_04, s37_26_15_04);
+    const __m128 sxx_1357_0246 = _mm_add_ps(sxx_15_04, sxx_37_26);
+    const __m128 sxxx_0246 = sxx_1357_0246;
+    const __m128 sxxx_1357 = _mm_shuffle_ps(sxx_1357_0246, sxx_1357_0246, 0x1);
+    __m128 sxxx_01234567 = _mm_add_ss(sxxx_0246, sxxx_1357);
+    float sum = _mm_cvtss_f32(sxxx_01234567);
+    for (int i = 0; i < remain; i++)
+    {
+        sum += a[i] * b[i];
+    }
+    return sum;
+}
+
+void _mm256_mm_nt(int64_t m, int64_t n, int64_t k, float *a, int64_t lda, float *b, int64_t ldb, float *c, int64_t ldc)
+{
+    for (int i = 0; i < m; i++) {
+        for (int j = 0; j < n; j++) {
+            c[i * ldc + j] = dot_wide(a + i * lda, b + j * ldb, k);
+        }
+    }
+}
