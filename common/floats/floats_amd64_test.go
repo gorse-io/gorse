@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"github.com/klauspost/cpuid/v2"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 	"golang.org/x/sys/cpu"
 )
@@ -51,6 +52,7 @@ func TestAVX512(t *testing.T) {
 }
 
 func TestF16C(t *testing.T) {
+	assert.Equal(t, "AVX+F16C", (AVX | F16C).String())
 	suite.Run(t, &SIMDTestSuite{Feature: AVX | F16C})
 }
 
