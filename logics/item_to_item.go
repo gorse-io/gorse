@@ -22,7 +22,7 @@ import (
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/expr-lang/expr"
 	"github.com/expr-lang/expr/vm"
-	"github.com/gorse-io/gorse/common/bfloats"
+	"github.com/gorse-io/gorse/common/floats"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/dataset"
@@ -157,12 +157,12 @@ func ExtractItemEmbedding(item *data.Item, columnFunc *vm.Program) ([]float32, b
 		log.Logger().Error("failed to evaluate column expression", zap.Any("item", item), zap.Error(err))
 		return nil, false
 	}
-	v, ok := bfloats.FromAny(result)
+	v, ok := floats.FromAny(result)
 	if !ok {
-		log.Logger().Error("failed to convert column to BF16 slice", zap.Any("column", result))
+		log.Logger().Error("failed to convert column to FP16 slice", zap.Any("column", result))
 		return nil, false
 	}
-	return bfloats.ToFloat32(v), true
+	return floats.ToFloat32(v), true
 }
 
 type tagsItemToItem struct {

@@ -25,7 +25,7 @@ import (
 
 	"github.com/chewxy/math32"
 	mapset "github.com/deckarep/golang-set/v2"
-	"github.com/gorse-io/gorse/common/bfloats"
+	"github.com/gorse-io/gorse/common/floats"
 	"github.com/gorse-io/gorse/common/util"
 	"github.com/gorse-io/gorse/model"
 	"github.com/gorse-io/gorse/storage/data"
@@ -371,7 +371,7 @@ func (l *Labels) processLabels(labels any, parent string) any {
 		}
 		return o
 	case []any:
-		if values, ok := bfloats.FromAny(typed); ok {
+		if values, ok := floats.FromAny(typed); ok {
 			return values
 		} else if isSliceOf[string](typed) {
 			return lo.Map(typed, func(e any, _ int) ID {

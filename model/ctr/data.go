@@ -24,7 +24,7 @@ import (
 	"time"
 
 	mapset "github.com/deckarep/golang-set/v2"
-	"github.com/gorse-io/gorse/common/bfloats"
+	"github.com/gorse-io/gorse/common/floats"
 	"github.com/gorse-io/gorse/common/jsonutil"
 	"github.com/gorse-io/gorse/common/util"
 	"github.com/gorse-io/gorse/dataset"
@@ -119,17 +119,17 @@ func convertEmbeddings(result []Embedding, prefix string, o any) []Embedding {
 		}
 		result = append(result, Embedding{
 			Name:  prefix,
-			Value: bfloats.FromFloat32(value),
+			Value: floats.FromFloat32(value),
 		})
 	case []float64:
 		result = append(result, Embedding{
 			Name:  prefix,
-			Value: bfloats.FromFloat32(lo.Map(embeddings, func(f float64, _ int) float32 { return float32(f) })),
+			Value: floats.FromFloat32(lo.Map(embeddings, func(f float64, _ int) float32 { return float32(f) })),
 		})
 	case []float32:
 		result = append(result, Embedding{
 			Name:  prefix,
-			Value: bfloats.FromFloat32(embeddings),
+			Value: floats.FromFloat32(embeddings),
 		})
 	case []uint16:
 		result = append(result, Embedding{
@@ -158,7 +158,7 @@ type Dataset struct {
 	Items                  []int32
 	Target                 []float32
 	Timestamps             []time.Time
-	ItemEmbeddings         [][][]uint16 // Index by row id, embedding id, embedding dimension; stored as BF16 bits
+	ItemEmbeddings         [][][]uint16 // Index by row id, embedding id, embedding dimension; stored as FP16 bits
 	ItemEmbeddingDimension []int
 	ItemEmbeddingIndex     *dataset.Index
 	PositiveCount          int
