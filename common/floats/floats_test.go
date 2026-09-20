@@ -387,6 +387,7 @@ func TestNativeTestSuite(t *testing.T) {
 type SIMDTestSuite struct {
 	suite.Suite
 	Feature
+	MMOverwritesC bool
 }
 
 func (suite *SIMDTestSuite) SetupSuite() {
@@ -594,6 +595,9 @@ func (suite *SIMDTestSuite) TestMMNoTransposeB() {
 				}
 				expected := append([]float32(nil), actual...)
 				for i := range shape.m {
+					if suite.MMOverwritesC {
+						clear(expected[i*ldc : i*ldc+shape.n])
+					}
 					for l := range shape.k {
 						av := a[i*lda+l]
 						if transA {
