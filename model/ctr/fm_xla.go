@@ -27,6 +27,7 @@ import (
 	"github.com/c-bata/goptuna"
 	"github.com/gomlx/compute"
 	"github.com/gomlx/compute/dtypes"
+	"github.com/gomlx/compute/dtypes/float16"
 	"github.com/gomlx/compute/shapes"
 	_ "github.com/gomlx/go-xla/compute/xla/autoinstall"
 	"github.com/gomlx/gomlx/core/graph"
@@ -39,7 +40,6 @@ import (
 	"github.com/gomlx/gomlx/ml/train/loss"
 	"github.com/gomlx/gomlx/ml/train/optimizer"
 	"github.com/gorse-io/gorse/common/encoding"
-	"github.com/gorse-io/gorse/common/floats"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/dataset"
@@ -192,6 +192,7 @@ func (fm *AFM) forwardGraph(scope *mlx_model.Scope, indices, values *graph.Node,
 
 	// Additional embeddings with attention
 	for i, embedding := range additionalEmbeddings {
+		embedding = graph.ConvertDType(embedding, dtypes.Float32)
 		// A: Attention
 		aCtx := scope.In("A_%d", i)
 		attended := fm.attentionForward(aCtx, embedding, fm.embeddingDim[i], fm.nFactors)
@@ -264,9 +265,9 @@ func (fm *AFM) BatchInternalPredict(x []lo.Tuple2[[]int32, []float32], e [][][]u
 
 		indicesData := make([]int32, batchSize*numDimension)
 		valuesData := make([]float32, batchSize*numDimension)
-		additionalData := make([][]float32, len(fm.embeddingDim))
+		additionalData := make([][]float16.Float16, len(fm.embeddingDim))
 		for i := range additionalData {
-			additionalData[i] = make([]float32, batchSize*fm.embeddingDim[i])
+			additionalData[i] = make([]float16.Float16, batchSize*fm.embeddingDim[i])
 		}
 
 		for i := 0; i < batchSize; i++ {
@@ -277,7 +278,7 @@ func (fm *AFM) BatchInternalPredict(x []lo.Tuple2[[]int32, []float32], e [][][]u
 			}
 			for j := range fm.embeddingDim {
 				if len(e[start+i]) > j && len(e[start+i][j]) == fm.embeddingDim[j] {
-					copy(additionalData[j][i*fm.embeddingDim[j]:], floats.ToFloat32(e[start+i][j]))
+					copyFloat16Bits(additionalData[j][i*fm.embeddingDim[j]:], e[start+i][j])
 				}
 			}
 		}
@@ -421,15 +422,21 @@ type ctrDataset struct {
 	scalers      map[int32]*AutoScaler
 }
 
+func copyFloat16Bits(dst []float16.Float16, src []uint16) {
+	for i, bits := range src {
+		dst[i] = float16.FromBits(bits)
+	}
+}
+
 func (d *ctrDataset) Name() string { return "CTRDataset" }
 
 func (d *ctrDataset) batch(offset int) train.Batch {
 	batchSize := min(d.batchSize, d.trainSet.Count()-offset)
 	indicesData := make([]int32, batchSize*d.numDimension)
 	valuesData := make([]float32, batchSize*d.numDimension)
-	additionalData := make([][]float32, len(d.embeddingDim))
+	additionalData := make([][]float16.Float16, len(d.embeddingDim))
 	for i := range additionalData {
-		additionalData[i] = make([]float32, batchSize*d.embeddingDim[i])
+		additionalData[i] = make([]float16.Float16, batchSize*d.embeddingDim[i])
 	}
 	labelsData := make([]float32, batchSize)
 
@@ -449,7 +456,7 @@ func (d *ctrDataset) batch(offset int) train.Batch {
 		}
 		for j := range d.embeddingDim {
 			if len(embeddings) > j && len(embeddings[j]) == d.embeddingDim[j] {
-				copy(additionalData[j][i*d.embeddingDim[j]:], floats.ToFloat32(embeddings[j]))
+				copyFloat16Bits(additionalData[j][i*d.embeddingDim[j]:], embeddings[j])
 			}
 		}
 		// Convert target from {-1, 1} to {0, 1} for GoMLX BinaryCrossentropy
