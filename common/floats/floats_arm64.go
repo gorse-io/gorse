@@ -19,53 +19,33 @@ package floats
 import (
 	"strings"
 	"unsafe"
-
-	"golang.org/x/sys/cpu"
 )
 
-//go:generate go tool goat src/floats_neon.c -O3 -march=armv8.2-a+fp16
+//go:generate go tool goat src/floats_neon.c -O3
 
 type Feature uint64
 
 const (
 	AMX Feature = 1 << iota // Apple matrix extension
 	OPENBLAS
-	FP16
 )
 
 var feature Feature
-
-func init() {
-	if cpu.ARM64.HasASIMDHP {
-		feature |= FP16
-	}
-}
 
 func (feature Feature) String() string {
 	var features = []string{"ARM64"}
 	if feature&AMX > 0 {
 		features = append(features, "AMX")
 	}
-	if feature&FP16 > 0 {
-		features = append(features, "FP16")
-	}
 	return strings.Join(features, "+")
 }
 
-func (feature Feature) fromFloat32(a []float32, dst []uint16) {
-	if feature&FP16 == FP16 {
-		vfrom_float32(unsafe.Pointer(&a[0]), unsafe.Pointer(&dst[0]), int64(len(a)))
-		return
-	}
-	fromFloat32(a, dst)
+func (Feature) fromFloat32(a []float32, dst []uint16) {
+	vfrom_float32(unsafe.Pointer(&a[0]), unsafe.Pointer(&dst[0]), int64(len(a)))
 }
 
-func (feature Feature) toFloat32(a []uint16, dst []float32) {
-	if feature&FP16 == FP16 {
-		vto_float32(unsafe.Pointer(&a[0]), unsafe.Pointer(&dst[0]), int64(len(a)))
-		return
-	}
-	toFloat32(a, dst)
+func (Feature) toFloat32(a []uint16, dst []float32) {
+	vto_float32(unsafe.Pointer(&a[0]), unsafe.Pointer(&dst[0]), int64(len(a)))
 }
 
 func (feature Feature) mulConstAddTo(a []float32, b float32, c, dst []float32) {

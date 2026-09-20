@@ -3,7 +3,7 @@
 // versions:
 // 	clang   21.1.8 (6ubuntu1)
 // 	objdump 2.46
-// flags: -march=armv8.2-a+fp16 -O3
+// flags: -O3
 // source: src/floats_neon.c
 
 TEXT ·vfrom_float32(SB), $0-24

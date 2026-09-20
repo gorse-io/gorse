@@ -30,10 +30,6 @@ func TestASIMD(t *testing.T) {
 	suite.Run(t, &SIMDTestSuite{})
 }
 
-func TestFP16(t *testing.T) {
-	suite.Run(t, &SIMDTestSuite{Feature: FP16})
-}
-
 func TestAMX(t *testing.T) {
 	if runtime.GOOS != "darwin" || runtime.GOARCH != "arm64" {
 		t.Skip("AMX is only supported on macOS ARM64")
