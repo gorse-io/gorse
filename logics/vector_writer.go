@@ -15,9 +15,11 @@
 package logics
 
 import (
+	"container/heap"
 	"context"
 	"fmt"
 	"math"
+	"sort"
 	"sync"
 	"time"
 
@@ -28,7 +30,10 @@ import (
 	"go.uber.org/zap"
 )
 
-const defaultSimilarityVectorBatchSize = 1024
+const (
+	defaultSimilarityVectorBatchSize = 1024
+	maxSparseVectorNNZ               = 1024
+)
 
 // VectorWriter owns collection validation and batched vector writes
 // for item-to-item and user-to-user recommenders.
@@ -189,21 +194,96 @@ func (w *VectorWriter) flushLocked() error {
 	return nil
 }
 
-func newSparseVector[T ~int32](ids []T, idf []float32, offset uint32) vectors.Vector {
-	vector := vectors.Vector{
-		Indices: make([]uint32, 0, len(ids)),
-		Values:  make([]float32, 0, len(ids)),
+type sparseVectorEntry struct {
+	index uint32
+	value float32
+}
+
+type sparseVectorHeap []sparseVectorEntry
+
+func (h sparseVectorHeap) Len() int {
+	return len(h)
+}
+
+func (h sparseVectorHeap) Less(i, j int) bool {
+	if h[i].value == h[j].value {
+		return h[i].index > h[j].index
 	}
-	return appendSparseVector(vector, ids, idf, offset)
+	return h[i].value < h[j].value
+}
+
+func (h sparseVectorHeap) Swap(i, j int) {
+	h[i], h[j] = h[j], h[i]
+}
+
+func (h *sparseVectorHeap) Push(value any) {
+	*h = append(*h, value.(sparseVectorEntry))
+}
+
+func (h *sparseVectorHeap) Pop() any {
+	old := *h
+	n := len(old)
+	value := old[n-1]
+	*h = old[:n-1]
+	return value
+}
+
+type sparseVectorPruner struct {
+	entries sparseVectorHeap
+	maxNNZ  int
+}
+
+func newSparseVectorPruner(maxNNZ int) *sparseVectorPruner {
+	return &sparseVectorPruner{
+		entries: make(sparseVectorHeap, 0, maxNNZ),
+		maxNNZ:  maxNNZ,
+	}
+}
+
+func (p *sparseVectorPruner) Add(index uint32, value float32) {
+	if p.maxNNZ <= 0 {
+		return
+	}
+	entry := sparseVectorEntry{index: index, value: value}
+	if len(p.entries) < p.maxNNZ {
+		heap.Push(&p.entries, entry)
+		return
+	}
+	if entry.value > p.entries[0].value || entry.value == p.entries[0].value && entry.index < p.entries[0].index {
+		p.entries[0] = entry
+		heap.Fix(&p.entries, 0)
+	}
+}
+
+func (p *sparseVectorPruner) Result() ([]uint32, []float32) {
+	entries := append([]sparseVectorEntry(nil), p.entries...)
+	sort.Slice(entries, func(i, j int) bool {
+		return entries[i].index < entries[j].index
+	})
+	indices := make([]uint32, len(entries))
+	values := make([]float32, len(entries))
+	for i, entry := range entries {
+		indices[i] = entry.index
+		values[i] = entry.value
+	}
+	return indices, values
+}
+
+func newSparseVector[T ~int32](ids []T, idf []float32, offset uint32) vectors.Vector {
+	return appendSparseVector(vectors.Vector{}, ids, idf, offset)
 }
 
 func appendSparseVector[T ~int32](vector vectors.Vector, ids []T, idf []float32, offset uint32) vectors.Vector {
+	pruner := newSparseVectorPruner(maxSparseVectorNNZ)
+	for i, index := range vector.Indices {
+		pruner.Add(index, vector.Values[i])
+	}
 	for _, id := range ids {
 		if id < 0 || int(id) >= len(idf) || idf[id] <= 0 {
 			continue
 		}
-		vector.Indices = append(vector.Indices, offset+uint32(id))
-		vector.Values = append(vector.Values, float32(math.Sqrt(float64(idf[id]))))
+		pruner.Add(offset+uint32(id), float32(math.Sqrt(float64(idf[id]))))
 	}
+	vector.Indices, vector.Values = pruner.Result()
 	return vector
 }
