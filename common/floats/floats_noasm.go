@@ -26,6 +26,14 @@ func (Feature) String() string {
 	return "NOASM"
 }
 
+func (Feature) fromFloat32(a []float32, dst []uint16) {
+	fromFloat32(a, dst)
+}
+
+func (Feature) toFloat32(a []uint16, dst []float32) {
+	toFloat32(a, dst)
+}
+
 func (Feature) mulConstAddTo(a []float32, b float32, c, dst []float32) {
 	mulConstAddTo(a, b, c, dst)
 }

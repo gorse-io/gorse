@@ -362,6 +362,42 @@ func (suite *SIMDTestSuite) SetupSuite() {
 	}
 }
 
+func (suite *SIMDTestSuite) TestFromFloat32() {
+	a := []float32{
+		0,
+		float32(math.Copysign(0, -1)),
+		1,
+		-2,
+		float32(math.Ldexp(1, -24)),
+		float32(math.Ldexp(1, -25)),
+		1 + float32(math.Ldexp(1, -11)),
+		1 + float32(math.Ldexp(1, -10)),
+		65504,
+		0.1,
+		-0.2,
+		1.5,
+		2.5,
+		3.5,
+		4.5,
+		5.5,
+		6.5,
+	}
+	expected := make([]uint16, len(a))
+	fromFloat32(a, expected)
+	actual := make([]uint16, len(a))
+	suite.Feature.fromFloat32(a, actual)
+	suite.Equal(expected, actual)
+}
+
+func (suite *SIMDTestSuite) TestToFloat32() {
+	a := []uint16{0x0000, 0x8000, 0x0001, 0x03ff, 0x0400, 0x3c00, 0xc000, 0x2e66, 0xb266, 0x7bff, 0x7c00, 0xfc00, 0x3e00, 0x4100, 0x4300, 0x4480, 0x4580}
+	expected := make([]float32, len(a))
+	toFloat32(a, expected)
+	actual := make([]float32, len(a))
+	suite.Feature.toFloat32(a, actual)
+	suite.Equal(expected, actual)
+}
+
 func (suite *SIMDTestSuite) TestMulConstAddTo() {
 	a := []float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20}
 	b := []float32{10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160, 170, 180, 190, 200}

@@ -11,7 +11,7 @@ CLANG_RESOURCE_DIR ?= $(shell clang -print-resource-dir)
 GOAT_RVV_INCLUDE ?= $(CLANG_RESOURCE_DIR)/include
 LASX_OBJDUMP ?= loongarch64-linux-gnu-objdump
 QEMU_X86_64 ?= qemu-x86_64
-QEMU_X86_64_AVX_FLAGS ?= -cpu max,avx=on,fma=on
+QEMU_X86_64_AVX_FLAGS ?= -cpu max,avx=on,fma=on,f16c=on
 QEMU_X86_64_AVX512_FLAGS ?= -cpu max,avx=on,fma=on,avx512f=on,avx512dq=on
 QEMU_AARCH64 ?= qemu-aarch64
 QEMU_AARCH64_NEON_FLAGS ?= -cpu max
@@ -29,12 +29,14 @@ TEST_LASX_BINARY ?= .test-lasx.loong64.test
 
 avx:
 	$(GOAT) src/floats_avx.c -o . --target $(GOAT_TARGET_AVX) -O3 -mavx -mfma
+	$(GOAT) src/floats_fp16_avx.c --target $(GOAT_TARGET_AVX) -O3 -mavx -mf16c
 
 avx512:
 	$(GOAT) src/floats_avx512.c -o . --target $(GOAT_TARGET_AVX) -O3 -mavx -mfma -mavx512f
 
 neon:
 	$(GOAT) src/floats_neon.c -o . --target $(GOAT_TARGET_NEON) -O3
+	$(GOAT) src/floats_fp16_neon.c --target $(GOAT_TARGET_NEON) -O3 -march=armv8.2-a+fp16
 
 rvv:
 	$(GOAT) src/floats_rvv.c -o . --target $(GOAT_TARGET_RVV) -O3 -march=rv64imafdv -e=-isystem -e=$(GOAT_RVV_INCLUDE)
@@ -55,7 +57,7 @@ test-avx:
 	@set -e; \
 	trap '$(RM) ./$(TEST_AVX_BINARY)' EXIT; \
 	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 $(GO) test -c -o $(TEST_AVX_BINARY) .; \
-	$(QEMU_X86_64) $(QEMU_X86_64_AVX_FLAGS) ./$(TEST_AVX_BINARY) -test.run '^TestAVX$$'
+	$(QEMU_X86_64) $(QEMU_X86_64_AVX_FLAGS) ./$(TEST_AVX_BINARY) -test.run '^Test(AVX|F16C)$$'
 
 test-avx512:
 	@set -e; \
@@ -67,7 +69,7 @@ test-neon:
 	@set -e; \
 	trap '$(RM) ./$(TEST_NEON_BINARY)' EXIT; \
 	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 $(GO) test -c -o $(TEST_NEON_BINARY) .; \
-	$(QEMU_AARCH64) $(QEMU_AARCH64_NEON_FLAGS) ./$(TEST_NEON_BINARY) -test.run '^TestASIMD$$'
+	$(QEMU_AARCH64) $(QEMU_AARCH64_NEON_FLAGS) ./$(TEST_NEON_BINARY) -test.run '^Test(ASIMD|FP16)$$'
 
 test-rvv:
 	@set -e; \

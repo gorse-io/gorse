@@ -20,10 +20,12 @@ import (
 	"strings"
 	"unsafe"
 
+	"github.com/klauspost/cpuid/v2"
 	"golang.org/x/sys/cpu"
 )
 
 //go:generate go tool goat src/floats_avx.c -O3 -mavx
+//go:generate go tool goat src/floats_fp16_avx.c -O3 -mavx -mf16c
 //go:generate go tool goat src/floats_avx512.c -O3 -mavx -mfma -mavx512f
 
 type Feature uint64
@@ -34,6 +36,7 @@ const (
 	AVX512F
 	MKL
 	OPENBLAS
+	F16C
 )
 
 const AVX512 = AVX | FMA | AVX512F
@@ -50,6 +53,9 @@ func init() {
 	if cpu.X86.HasAVX512F {
 		feature = feature | AVX512F
 	}
+	if cpu.X86.HasAVX && cpuid.CPU.Supports(cpuid.F16C) {
+		feature |= F16C
+	}
 }
 
 func (feature Feature) String() string {
@@ -59,10 +65,33 @@ func (feature Feature) String() string {
 	} else if feature&AVX == AVX {
 		features = append(features, "AVX")
 	}
+	if feature&F16C == F16C {
+		features = append(features, "F16C")
+	}
 	if len(features) == 0 {
 		return "AMD64"
 	}
 	return strings.Join(features, "+")
+}
+
+func (feature Feature) fromFloat32(a []float32, dst []uint16) {
+	n := len(a) &^ 7
+	if feature&F16C == F16C && n > 0 {
+		_mm256_from_float32(unsafe.Pointer(&a[0]), unsafe.Pointer(&dst[0]), int64(n))
+	} else {
+		n = 0
+	}
+	fromFloat32(a[n:], dst[n:])
+}
+
+func (feature Feature) toFloat32(a []uint16, dst []float32) {
+	n := len(a) &^ 7
+	if feature&F16C == F16C && n > 0 {
+		_mm256_to_float32(unsafe.Pointer(&a[0]), unsafe.Pointer(&dst[0]), int64(n))
+	} else {
+		n = 0
+	}
+	toFloat32(a[n:], dst[n:])
 }
 
 func (feature Feature) mulConstAddTo(a []float32, b float32, c []float32, dst []float32) {

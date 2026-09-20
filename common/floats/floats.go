@@ -20,21 +20,33 @@ import (
 )
 
 // FromFloat32 converts a slice of FP32 values to IEEE 754 FP16 bits.
-func FromFloat32(a []float32) (ret []uint16) {
-	ret = make([]uint16, len(a))
-	for i := range a {
-		ret[i] = float16.Fromfloat32(a[i]).Bits()
+func FromFloat32(a []float32) []uint16 {
+	ret := make([]uint16, len(a))
+	if len(a) > 0 {
+		feature.fromFloat32(a, ret)
 	}
-	return
+	return ret
 }
 
 // ToFloat32 converts a slice of IEEE 754 FP16 bits to FP32 values.
-func ToFloat32(a []uint16) (ret []float32) {
-	ret = make([]float32, len(a))
-	for i := range a {
-		ret[i] = float16.Frombits(a[i]).Float32()
+func ToFloat32(a []uint16) []float32 {
+	ret := make([]float32, len(a))
+	if len(a) > 0 {
+		feature.toFloat32(a, ret)
 	}
-	return
+	return ret
+}
+
+func fromFloat32(a []float32, dst []uint16) {
+	for i := range a {
+		dst[i] = float16.Fromfloat32(a[i]).Bits()
+	}
+}
+
+func toFloat32(a []uint16, dst []float32) {
+	for i := range a {
+		dst[i] = float16.Frombits(a[i]).Float32()
+	}
 }
 
 func dot(a, b []float32) (ret float32) {
