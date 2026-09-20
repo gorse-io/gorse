@@ -17,20 +17,17 @@
 package floats
 
 import (
-	"os"
-	"strings"
 	"unsafe"
 
 	"golang.org/x/sys/cpu"
 )
 
-//go:generate go tool goat src/floats_rvv.c -O3 -march=rv64imafdv_zvfhmin
+//go:generate go tool goat src/floats_rvv.c -O3 -march=rv64imafdv
 
 type Feature uint64
 
 const (
 	V Feature = 1 << iota
-	ZVFHMIN
 	OPENBLAS
 )
 
@@ -39,65 +36,22 @@ var feature Feature
 func init() {
 	if cpu.RISCV64.HasV {
 		feature = feature | V
-		// x/sys/cpu does not expose Zvfhmin, so use the ISA list reported by Linux.
-		if data, err := os.ReadFile("/proc/cpuinfo"); err == nil && allHartsHaveZvfhmin(string(data)) {
-			feature |= ZVFHMIN
-		}
 	}
-}
-
-func allHartsHaveZvfhmin(cpuinfo string) bool {
-	found := false
-	for line := range strings.Lines(strings.ToLower(cpuinfo)) {
-		key, value, ok := strings.Cut(line, ":")
-		if !ok {
-			continue
-		}
-		key = strings.TrimSpace(key)
-		if key != "isa" && key != "isa extensions" && key != "isa-extensions" {
-			continue
-		}
-		found = true
-		hasZvfhmin := false
-		for extension := range strings.FieldsFuncSeq(value, func(r rune) bool {
-			return r == '_' || r == ' ' || r == ','
-		}) {
-			extension = strings.TrimSpace(extension)
-			if extension == "zvfh" || extension == "zvfhmin" {
-				hasZvfhmin = true
-				break
-			}
-		}
-		if !hasZvfhmin {
-			return false
-		}
-	}
-	return found
 }
 
 func (feature Feature) String() string {
-	if feature&V != V {
+	if feature == V {
+		return "RVV"
+	} else {
 		return "RV"
 	}
-	if feature&ZVFHMIN == ZVFHMIN {
-		return "RVV+ZVFHMIN"
-	}
-	return "RVV"
 }
 
-func (feature Feature) fromFloat32(a []float32, dst []uint16) {
-	if feature&ZVFHMIN == ZVFHMIN {
-		vfrom_float32(unsafe.Pointer(&a[0]), unsafe.Pointer(&dst[0]), int64(len(a)))
-		return
-	}
+func (Feature) fromFloat32(a []float32, dst []uint16) {
 	fromFloat32(a, dst)
 }
 
-func (feature Feature) toFloat32(a []uint16, dst []float32) {
-	if feature&ZVFHMIN == ZVFHMIN {
-		vto_float32(unsafe.Pointer(&a[0]), unsafe.Pointer(&dst[0]), int64(len(a)))
-		return
-	}
+func (Feature) toFloat32(a []uint16, dst []float32) {
 	toFloat32(a, dst)
 }
 

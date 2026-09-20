@@ -38,7 +38,7 @@ neon:
 	$(GOAT) src/floats_neon.c --target $(GOAT_TARGET_NEON) -O3 -march=armv8.2-a+fp16
 
 rvv:
-	$(GOAT) src/floats_rvv.c --target $(GOAT_TARGET_RVV) -O3 -march=rv64imafdv_zvfhmin -e=-isystem -e=$(GOAT_RVV_INCLUDE)
+	$(GOAT) src/floats_rvv.c -o . --target $(GOAT_TARGET_RVV) -O3 -march=rv64imafdv -e=-isystem -e=$(GOAT_RVV_INCLUDE)
 
 lasx:
 	OBJDUMP=$(LASX_OBJDUMP) $(GOAT) src/floats_lasx.c -o ../floats --target $(GOAT_TARGET_LASX) -O3 -mlasx
@@ -75,7 +75,7 @@ test-rvv:
 	@set -e; \
 	trap '$(RM) ./$(TEST_RVV_BINARY)' EXIT; \
 	GOOS=linux GOARCH=riscv64 CGO_ENABLED=0 $(GO) test -c -o $(TEST_RVV_BINARY) .; \
-	$(RISCV64_QEMU) $(RISCV64_QEMU_FLAGS) ./$(TEST_RVV_BINARY) -test.run '^Test(V|AllHartsHaveZvfhmin)$$'
+	$(RISCV64_QEMU) $(RISCV64_QEMU_FLAGS) ./$(TEST_RVV_BINARY) -test.run '^TestV$$'
 
 test-lasx:
 	@set -e; \

@@ -13,25 +13,6 @@
 // limitations under the License.
 
 #include <riscv_vector.h>
-#include <stdint.h>
-
-void vfrom_float32(float *a, uint16_t *dst, long n) {
-    for (size_t vl; n > 0; a += vl, dst += vl, n -= vl) {
-        vl = __riscv_vsetvl_e32m2(n);
-        vfloat32m2_t value = __riscv_vle32_v_f32m2(a, vl);
-        vfloat16m1_t converted = __riscv_vfncvt_f_f_w_f16m1(value, vl);
-        __riscv_vse16_v_f16m1((_Float16 *)dst, converted, vl);
-    }
-}
-
-void vto_float32(uint16_t *a, float *dst, long n) {
-    for (size_t vl; n > 0; a += vl, dst += vl, n -= vl) {
-        vl = __riscv_vsetvl_e16m1(n);
-        vfloat16m1_t value = __riscv_vle16_v_f16m1((const _Float16 *)a, vl);
-        vfloat32m2_t converted = __riscv_vfwcvt_f_f_v_f32m2(value, vl);
-        __riscv_vse32_v_f32m2(dst, converted, vl);
-    }
-}
 
 void vmul_const_add_to(float *a, float *b, float *c, float *dst, long n) {
     for (int i = 0; i < n; i++) {

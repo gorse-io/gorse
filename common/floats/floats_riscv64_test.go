@@ -22,29 +22,11 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 )
 
 func TestV(t *testing.T) {
-	suite.Run(t, &SIMDTestSuite{Feature: V | ZVFHMIN})
-}
-
-func TestAllHartsHaveZvfhmin(t *testing.T) {
-	for name, testCase := range map[string]struct {
-		cpuinfo string
-		expect  bool
-	}{
-		"zvfhmin":       {"isa : rv64imafdcv_zvfhmin\n", true},
-		"zvfh":          {"isa : rv64imafdcv_zvfh\n", true},
-		"heterogeneous": {"isa : rv64imafdcv_zvfhmin\nisa : rv64imafdcv\n", false},
-		"partial token": {"isa : rv64imafdcv_zvfhminx\n", false},
-		"missing":       {"processor : 0\n", false},
-	} {
-		t.Run(name, func(t *testing.T) {
-			assert.Equal(t, testCase.expect, allHartsHaveZvfhmin(testCase.cpuinfo))
-		})
-	}
+	suite.Run(t, &SIMDTestSuite{Feature: V})
 }
 
 func initializeFloat32Array(n int) []float32 {
