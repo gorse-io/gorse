@@ -24,7 +24,7 @@ import (
 	"golang.org/x/sys/cpu"
 )
 
-//go:generate go tool goat src/floats_avx.c -O3 -mavx -mfma -mf16c
+//go:generate go tool goat src/floats_avx.c -O3 -mavx -mf16c
 //go:generate go tool goat src/floats_avx512.c -O3 -mavx -mfma -mavx512f
 
 type Feature uint64
@@ -74,23 +74,19 @@ func (feature Feature) String() string {
 }
 
 func (feature Feature) fromFloat32(a []float32, dst []uint16) {
-	n := len(a) &^ 7
-	if feature&F16C == F16C && n > 0 {
-		_mm256_from_float32(unsafe.Pointer(&a[0]), unsafe.Pointer(&dst[0]), int64(n))
-	} else {
-		n = 0
+	if feature&F16C == F16C {
+		_mm256_from_float32(unsafe.Pointer(&a[0]), unsafe.Pointer(&dst[0]), int64(len(a)))
+		return
 	}
-	fromFloat32(a[n:], dst[n:])
+	fromFloat32(a, dst)
 }
 
 func (feature Feature) toFloat32(a []uint16, dst []float32) {
-	n := len(a) &^ 7
-	if feature&F16C == F16C && n > 0 {
-		_mm256_to_float32(unsafe.Pointer(&a[0]), unsafe.Pointer(&dst[0]), int64(n))
-	} else {
-		n = 0
+	if feature&F16C == F16C {
+		_mm256_to_float32(unsafe.Pointer(&a[0]), unsafe.Pointer(&dst[0]), int64(len(a)))
+		return
 	}
-	toFloat32(a[n:], dst[n:])
+	toFloat32(a, dst)
 }
 
 func (feature Feature) mulConstAddTo(a []float32, b float32, c []float32, dst []float32) {

@@ -48,11 +48,19 @@ func (feature Feature) String() string {
 	return strings.Join(features, "+")
 }
 
-func (Feature) fromFloat32(a []float32, dst []uint16) {
+func (feature Feature) fromFloat32(a []float32, dst []uint16) {
+	if feature&LASX == LASX {
+		lasx_from_float32(unsafe.Pointer(&a[0]), unsafe.Pointer(&dst[0]), int64(len(a)))
+		return
+	}
 	fromFloat32(a, dst)
 }
 
-func (Feature) toFloat32(a []uint16, dst []float32) {
+func (feature Feature) toFloat32(a []uint16, dst []float32) {
+	if feature&LASX == LASX {
+		lasx_to_float32(unsafe.Pointer(&a[0]), unsafe.Pointer(&dst[0]), int64(len(a)))
+		return
+	}
 	toFloat32(a, dst)
 }
 

@@ -53,23 +53,19 @@ func (feature Feature) String() string {
 }
 
 func (feature Feature) fromFloat32(a []float32, dst []uint16) {
-	n := len(a) &^ 7
-	if feature&FP16 == FP16 && n > 0 {
-		vfrom_float32(unsafe.Pointer(&a[0]), unsafe.Pointer(&dst[0]), int64(n))
-	} else {
-		n = 0
+	if feature&FP16 == FP16 {
+		vfrom_float32(unsafe.Pointer(&a[0]), unsafe.Pointer(&dst[0]), int64(len(a)))
+		return
 	}
-	fromFloat32(a[n:], dst[n:])
+	fromFloat32(a, dst)
 }
 
 func (feature Feature) toFloat32(a []uint16, dst []float32) {
-	n := len(a) &^ 7
-	if feature&FP16 == FP16 && n > 0 {
-		vto_float32(unsafe.Pointer(&a[0]), unsafe.Pointer(&dst[0]), int64(n))
-	} else {
-		n = 0
+	if feature&FP16 == FP16 {
+		vto_float32(unsafe.Pointer(&a[0]), unsafe.Pointer(&dst[0]), int64(len(a)))
+		return
 	}
-	toFloat32(a[n:], dst[n:])
+	toFloat32(a, dst)
 }
 
 func (feature Feature) mulConstAddTo(a []float32, b float32, c, dst []float32) {

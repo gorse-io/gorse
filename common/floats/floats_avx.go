@@ -3,7 +3,7 @@
 // versions:
 // 	clang   21.1.8 (6ubuntu1)
 // 	objdump 2.46
-// flags: -mavx -mfma -mf16c -O3
+// flags: -mavx -mf16c -O3
 // source: src/floats_avx.c
 
 package floats
