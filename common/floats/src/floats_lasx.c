@@ -30,10 +30,9 @@ void lasx_from_float32(float *a, unsigned short *dst, long n) {
         }
     }
     for (; i < n; i++) {
-        unsigned short partial[16];
         __m256 value = (__m256)__lasx_xvldrepl_w(a + i, 0);
-        __lasx_xvst(__lasx_xvfcvt_h_s(value, value), partial, 0);
-        dst[i] = partial[0];
+        __m256i converted = __lasx_xvfcvt_h_s(value, value);
+        dst[i] = (unsigned short)__lasx_xvpickve2gr_wu(converted, 0);
     }
 }
 
@@ -53,10 +52,13 @@ void lasx_to_float32(unsigned short *a, float *dst, long n) {
         }
     }
     for (; i < n; i++) {
-        float partial[8];
         __m256i value = __lasx_xvldrepl_h(a + i, 0);
-        __lasx_xvst((__m256i)__lasx_xvfcvtl_s_h(value), partial, 0);
-        dst[i] = partial[0];
+        __m256 converted = __lasx_xvfcvtl_s_h(value);
+        union {
+            unsigned int bits;
+            float value;
+        } scalar = { .bits = __lasx_xvpickve2gr_wu((__m256i)converted, 0) };
+        dst[i] = scalar.value;
     }
 }
 

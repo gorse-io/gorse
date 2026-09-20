@@ -64,14 +64,12 @@ LBB0_4:
 	WORD $0x0011acc6     // sub.d	$a2, $a2, $a7
 	WORD $0x002c1565     // alsl.d	$a1, $a7, $a1, 1
 	WORD $0x002c9164     // alsl.d	$a0, $a7, $a0, 2
-	WORD $0x02c00067     // addi.d	$a3, $sp, 0
 
 LBB0_6:
 	WORD $0x32200080    // xvldrepl.w	$xr0, $a0, 0
 	WORD $0x75460000    // xvfcvt.h.s	$xr0, $xr0, $xr0
-	WORD $0x2cc000e0    // xvst	$xr0, $a3, 0
-	WORD $0x28400068    // ld.h	$a4, $sp, 0
-	WORD $0x294000a8    // st.h	$a4, $a1, 0
+	WORD $0x76f3c007    // xvpickve2gr.wu	$a3, $xr0, 0
+	WORD $0x294000a7    // st.h	$a3, $a1, 0
 	WORD $0x02fffcc6    // addi.d	$a2, $a2, -1
 	WORD $0x02c008a5    // addi.d	$a1, $a1, 2
 	WORD $0x02c01084    // addi.d	$a0, $a0, 4
@@ -124,14 +122,12 @@ LBB1_4:
 	WORD $0x0011b0c6     // sub.d	$a2, $a2, $t0
 	WORD $0x002c9585     // alsl.d	$a1, $t0, $a1, 2
 	WORD $0x002c1184     // alsl.d	$a0, $t0, $a0, 1
-	WORD $0x02c0c067     // addi.d	$a3, $sp, 48
 
 LBB1_6:
 	WORD $0x32400080    // xvldrepl.h	$xr0, $a0, 0
 	WORD $0x769de800    // xvfcvtl.s.h	$xr0, $xr0
-	WORD $0x2cc000e0    // xvst	$xr0, $a3, 0
-	WORD $0x2b00c060    // fld.s	$fa0, $sp, 48
-	WORD $0x2b4000a0    // fst.s	$fa0, $a1, 0
+	WORD $0x76f3c007    // xvpickve2gr.wu	$a3, $xr0, 0
+	WORD $0x298000a7    // st.w	$a3, $a1, 0
 	WORD $0x02fffcc6    // addi.d	$a2, $a2, -1
 	WORD $0x02c010a5    // addi.d	$a1, $a1, 4
 	WORD $0x02c00884    // addi.d	$a0, $a0, 2
