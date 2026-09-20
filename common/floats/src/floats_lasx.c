@@ -307,22 +307,68 @@ void lasx_mm(_Bool transA, _Bool transB, long m, long n, long k, float *a, long 
                 }
             }
         }
-    } else {
+    } else if (!transA && transB) {
         for (long i = 0; i < m; i++) {
             for (long j = 0; j < n; j++) {
                 float sum = 0;
-                if (!transA && transB) {
-                    for (long l = 0; l < k; l++) {
-                        sum += ((volatile float *)a)[i * lda + l] * ((volatile float *)b)[j * ldb + l];
-                    }
-                } else if (transA && !transB) {
-                    for (long l = 0; l < k; l++) {
-                        sum += ((volatile float *)a)[l * lda + i] * ((volatile float *)b)[l * ldb + j];
-                    }
-                } else {
-                    for (long l = 0; l < k; l++) {
-                        sum += ((volatile float *)a)[l * lda + i] * ((volatile float *)b)[j * ldb + l];
-                    }
+                for (long l = 0; l < k; l++) {
+                    sum += ((volatile float *)a)[i * lda + l] * ((volatile float *)b)[j * ldb + l];
+                }
+                ((volatile float *)c)[i * ldc + j] = sum;
+            }
+        }
+    } else if (transA && !transB) {
+        long i = 0;
+        for (; i + 4 <= m; i += 4) {
+            long j = 0;
+            for (; j + 8 <= n; j += 8) {
+                __m256 c0 = (__m256)__lasx_xvld(c + i * ldc + j, 0);
+                __m256 c1 = (__m256)__lasx_xvld(c + (i + 1) * ldc + j, 0);
+                __m256 c2 = (__m256)__lasx_xvld(c + (i + 2) * ldc + j, 0);
+                __m256 c3 = (__m256)__lasx_xvld(c + (i + 3) * ldc + j, 0);
+                for (long l = 0; l < k; l++) {
+                    __m256 bv = (__m256)__lasx_xvld(b + l * ldb + j, 0);
+                    c0 = __lasx_xvfadd_s(c0, __lasx_xvfmul_s((__m256)__lasx_xvldrepl_w(a + l * lda + i, 0), bv));
+                    c1 = __lasx_xvfadd_s(c1, __lasx_xvfmul_s((__m256)__lasx_xvldrepl_w(a + l * lda + i + 1, 0), bv));
+                    c2 = __lasx_xvfadd_s(c2, __lasx_xvfmul_s((__m256)__lasx_xvldrepl_w(a + l * lda + i + 2, 0), bv));
+                    c3 = __lasx_xvfadd_s(c3, __lasx_xvfmul_s((__m256)__lasx_xvldrepl_w(a + l * lda + i + 3, 0), bv));
+                }
+                __lasx_xvst((__m256i)c0, c + i * ldc + j, 0);
+                __lasx_xvst((__m256i)c1, c + (i + 1) * ldc + j, 0);
+                __lasx_xvst((__m256i)c2, c + (i + 2) * ldc + j, 0);
+                __lasx_xvst((__m256i)c3, c + (i + 3) * ldc + j, 0);
+            }
+            for (; j < n; j++) {
+                for (long l = 0; l < k; l++) {
+                    c[i * ldc + j] += a[l * lda + i] * b[l * ldb + j];
+                    c[(i + 1) * ldc + j] += a[l * lda + i + 1] * b[l * ldb + j];
+                    c[(i + 2) * ldc + j] += a[l * lda + i + 2] * b[l * ldb + j];
+                    c[(i + 3) * ldc + j] += a[l * lda + i + 3] * b[l * ldb + j];
+                }
+            }
+        }
+        for (; i < m; i++) {
+            long j = 0;
+            for (; j + 8 <= n; j += 8) {
+                __m256 cv = (__m256)__lasx_xvld(c + i * ldc + j, 0);
+                for (long l = 0; l < k; l++) {
+                    __m256 bv = (__m256)__lasx_xvld(b + l * ldb + j, 0);
+                    cv = __lasx_xvfadd_s(cv, __lasx_xvfmul_s((__m256)__lasx_xvldrepl_w(a + l * lda + i, 0), bv));
+                }
+                __lasx_xvst((__m256i)cv, c + i * ldc + j, 0);
+            }
+            for (; j < n; j++) {
+                for (long l = 0; l < k; l++) {
+                    c[i * ldc + j] += a[l * lda + i] * b[l * ldb + j];
+                }
+            }
+        }
+    } else if (transA && transB) {
+        for (long i = 0; i < m; i++) {
+            for (long j = 0; j < n; j++) {
+                float sum = 0;
+                for (long l = 0; l < k; l++) {
+                    sum += ((volatile float *)a)[l * lda + i] * ((volatile float *)b)[j * ldb + l];
                 }
                 ((volatile float *)c)[i * ldc + j] = sum;
             }

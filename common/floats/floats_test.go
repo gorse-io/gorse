@@ -593,11 +593,6 @@ func (suite *SIMDTestSuite) TestMMNoTransposeB() {
 				for i := range actual {
 					actual[i] = float32(i%7+1) / 32
 				}
-				if transA {
-					for i := range shape.m {
-						clear(actual[i*ldc : i*ldc+shape.n])
-					}
-				}
 				expected := append([]float32(nil), actual...)
 				for i := range shape.m {
 					if suite.MMOverwritesC {
