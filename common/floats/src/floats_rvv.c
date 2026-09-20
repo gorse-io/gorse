@@ -129,7 +129,7 @@ float veuclidean(float *a, float *b, long n) {
 }
 
 void vmm(_Bool transA, _Bool transB, long m, long n, long k, float *a, long lda, float *b, long ldb, float *c, long ldc) {
-    if (!transB)
+    if (!transA && !transB)
     {
         long i = 0;
         for (; i + 4 <= m; i += 4) {
@@ -142,14 +142,10 @@ void vmm(_Bool transA, _Bool transB, long m, long n, long k, float *a, long lda,
                 vfloat32m1_t c3 = __riscv_vle32_v_f32m1(c + (i + 3) * ldc + j, vl);
                 for (long l = 0; l < k; l++) {
                     vfloat32m1_t bv = __riscv_vle32_v_f32m1(b + l * ldb + j, vl);
-                    long a0 = transA ? l * lda + i : i * lda + l;
-                    long a1 = transA ? l * lda + i + 1 : (i + 1) * lda + l;
-                    long a2 = transA ? l * lda + i + 2 : (i + 2) * lda + l;
-                    long a3 = transA ? l * lda + i + 3 : (i + 3) * lda + l;
-                    c0 = __riscv_vfadd_vv_f32m1(c0, __riscv_vfmul_vf_f32m1(bv, a[a0], vl), vl);
-                    c1 = __riscv_vfadd_vv_f32m1(c1, __riscv_vfmul_vf_f32m1(bv, a[a1], vl), vl);
-                    c2 = __riscv_vfadd_vv_f32m1(c2, __riscv_vfmul_vf_f32m1(bv, a[a2], vl), vl);
-                    c3 = __riscv_vfadd_vv_f32m1(c3, __riscv_vfmul_vf_f32m1(bv, a[a3], vl), vl);
+                    c0 = __riscv_vfadd_vv_f32m1(c0, __riscv_vfmul_vf_f32m1(bv, a[i * lda + l], vl), vl);
+                    c1 = __riscv_vfadd_vv_f32m1(c1, __riscv_vfmul_vf_f32m1(bv, a[(i + 1) * lda + l], vl), vl);
+                    c2 = __riscv_vfadd_vv_f32m1(c2, __riscv_vfmul_vf_f32m1(bv, a[(i + 2) * lda + l], vl), vl);
+                    c3 = __riscv_vfadd_vv_f32m1(c3, __riscv_vfmul_vf_f32m1(bv, a[(i + 3) * lda + l], vl), vl);
                 }
                 __riscv_vse32_v_f32m1(c + i * ldc + j, c0, vl);
                 __riscv_vse32_v_f32m1(c + (i + 1) * ldc + j, c1, vl);
@@ -165,18 +161,26 @@ void vmm(_Bool transA, _Bool transB, long m, long n, long k, float *a, long lda,
                 vfloat32m1_t cv = __riscv_vle32_v_f32m1(c + i * ldc + j, vl);
                 for (long l = 0; l < k; l++) {
                     vfloat32m1_t bv = __riscv_vle32_v_f32m1(b + l * ldb + j, vl);
-                    long ai = transA ? l * lda + i : i * lda + l;
-                    cv = __riscv_vfadd_vv_f32m1(cv, __riscv_vfmul_vf_f32m1(bv, a[ai], vl), vl);
+                    cv = __riscv_vfadd_vv_f32m1(cv, __riscv_vfmul_vf_f32m1(bv, a[i * lda + l], vl), vl);
                 }
                 __riscv_vse32_v_f32m1(c + i * ldc + j, cv, vl);
                 j += vl;
             }
         }
-    } else if (!transA)
+    } else if (!transA && transB)
     {
         for (int i = 0; i < m; i++) {
             for (int j = 0; j < n; j++) {
                 c[i * ldc + j] = dot(a + i * lda, b + j * ldb, k);
+            }
+        }
+    } else if (transA && !transB)
+    {
+        for (int i = 0; i < m; i++) {
+            for (int l = 0; l < k; l++) {
+                for (int j = 0; j < n; j++) {
+                    c[i * ldc + j] += a[l * lda + i] * b[l * ldb + j];
+                }
             }
         }
     } else
