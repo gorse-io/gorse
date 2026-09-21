@@ -159,6 +159,7 @@ func (db *Qdrant) AddCollection(ctx context.Context, name string, dimensions int
 			qdrantVectorName: {
 				Size:     uint64(dimensions),
 				Distance: qdrantDistance,
+				Datatype: qdrant.Datatype_Float16.Enum(),
 			},
 		}),
 		QuantizationConfig: quantizationConfig,
