@@ -1,5 +1,3 @@
-//go:build noasm || (!amd64 && !arm64 && !riscv64)
-
 // Copyright 2026 gorse Project Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -14,12 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package bfloats
+package storage
 
-type Feature uint64
+import "github.com/pkg/errors"
 
-var feature Feature
-
-func (Feature) euclidean(a, b []uint16) float32 {
-	return euclidean(a, b)
-}
+var (
+	ErrNotFound        = errors.New("not found")
+	ErrNoDatabase      = errors.New("database not assigned")
+	ErrInvalidArgument = errors.New("invalid argument")
+	ErrNotSupported    = errors.New("not supported")
+	ErrAlreadyExists   = errors.New("already exists")
+)

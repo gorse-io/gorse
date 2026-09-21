@@ -2,7 +2,7 @@
 
 <img width=160 src="assets/gorse.png"/>
 
-![](https://img.shields.io/github/go-mod/go-version/zhenghaoz/gorse)
+![](https://img.shields.io/github/go-mod/go-version/gorse-io/gorse)
 [![test](https://github.com/gorse-io/gorse/actions/workflows/build_test.yml/badge.svg)](https://github.com/gorse-io/gorse/actions/workflows/build_test.yml)
 [![codecov](https://codecov.io/gh/gorse-io/gorse/branch/master/graph/badge.svg)](https://codecov.io/gh/gorse-io/gorse)
 [![Discord](https://img.shields.io/discord/830635934210588743)](https://discord.gg/x6gAtNNkAE)
@@ -78,7 +78,7 @@ In addition, the administrator can perform system monitoring, data import and ex
 ## Contributors
 
 <a href="https://github.com/gorse-io/gorse/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=zhenghaoz/gorse" />
+  <img src="https://contrib.rocks/image?repo=gorse-io/gorse" />
 </a>
 
 Any contribution is appreciated: report a bug, give advice or create a pull request. Read [CONTRIBUTING.md](CONTRIBUTING.md) for more information.

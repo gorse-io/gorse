@@ -1,7 +1,7 @@
 version: "3"
 services:
   redis:
-    image: redis/redis-stack:6.2.6-v9
+    image: redis:8
     ports:
       - 6379:6379
 
@@ -32,9 +32,12 @@ services:
       MONGO_INITDB_ROOT_PASSWORD: password
 
   clickhouse:
-    image: clickhouse/clickhouse-server:23
+    image: clickhouse/clickhouse-server:26.2
     ports:
       - 8123:8123
+    environment:
+      CLICKHOUSE_USER: gorse
+      CLICKHOUSE_PASSWORD: gorse_pass
   
   rustfs:
     image: rustfs/rustfs:alpha

@@ -18,13 +18,15 @@ import (
 	"encoding"
 	"reflect"
 
-	"github.com/juju/errors"
+	"github.com/pkg/errors"
 )
+
+var ErrInvalidArgument = errors.New("invalid argument")
 
 func Copy(dst, src any) error {
 	dstPtr := reflect.ValueOf(dst)
 	if dstPtr.Kind() != reflect.Pointer {
-		return errors.NotValidf("expect dst to be a pointer, but receive %v", dstPtr.Kind())
+		return errors.Wrapf(ErrInvalidArgument, "expect dst to be a pointer, but receive %v", dstPtr.Kind())
 	}
 
 	dstValue := dstPtr.Elem()
@@ -43,7 +45,7 @@ func copyValue(dst, src reflect.Value) error {
 			dst.Set(newValuePointer.Elem())
 			return nil
 		} else {
-			return errors.NotValidf("different type: %v != %v", dst.Kind(), src.Kind())
+			return errors.Wrapf(ErrInvalidArgument, "different type: %v != %v", dst.Kind(), src.Kind())
 		}
 	}
 
@@ -81,7 +83,7 @@ func copyValue(dst, src reflect.Value) error {
 		}
 	case reflect.Struct:
 		if dst.Type().Name() != src.Type().Name() {
-			return errors.NotValidf("different struct: %v != %v", dst.Type().Name(), src.Type().Name())
+			return errors.Wrapf(ErrInvalidArgument, "different struct: %v != %v", dst.Type().Name(), src.Type().Name())
 		}
 
 		dstPointer := reflect.New(dst.Type())
@@ -161,7 +163,7 @@ func copyValue(dst, src reflect.Value) error {
 			dst.Set(newValuePointer.Elem())
 		}
 	default:
-		return errors.NotValidf("unsupported type: %v", dst.Kind())
+		return errors.Wrapf(ErrInvalidArgument, "unsupported type: %v", dst.Kind())
 	}
 	return nil
 }

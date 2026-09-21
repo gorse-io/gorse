@@ -17,7 +17,7 @@ package util
 import (
 	"crypto/tls"
 	"crypto/x509"
-	"github.com/juju/errors"
+	"github.com/pkg/errors"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/security/advancedtls"
 	"os"
@@ -34,7 +34,7 @@ func NewServerCreds(o *TLSConfig) (credentials.TransportCredentials, error) {
 	ca := x509.NewCertPool()
 	pem, err := os.ReadFile(o.SSLCA)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.WithStack(err)
 	}
 	if !ca.AppendCertsFromPEM(pem) {
 		return nil, errors.New("failed to append certificate")
@@ -42,7 +42,7 @@ func NewServerCreds(o *TLSConfig) (credentials.TransportCredentials, error) {
 	// Load certification
 	certificate, err := tls.LoadX509KeyPair(o.SSLCert, o.SSLKey)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.WithStack(err)
 	}
 	// Create server credentials
 	return advancedtls.NewServerCreds(&advancedtls.Options{
@@ -62,7 +62,7 @@ func NewClientCreds(o *TLSConfig) (credentials.TransportCredentials, error) {
 	ca := x509.NewCertPool()
 	pem, err := os.ReadFile(o.SSLCA)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.WithStack(err)
 	}
 	if !ca.AppendCertsFromPEM(pem) {
 		return nil, errors.New("failed to append certificate")
@@ -70,7 +70,7 @@ func NewClientCreds(o *TLSConfig) (credentials.TransportCredentials, error) {
 	// Load certification
 	certificate, err := tls.LoadX509KeyPair(o.SSLCert, o.SSLKey)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.WithStack(err)
 	}
 	// Create client credentials
 	return advancedtls.NewClientCreds(&advancedtls.Options{

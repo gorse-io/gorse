@@ -15,8 +15,97 @@
 package floats
 
 import (
+	"reflect"
+
 	"github.com/chewxy/math32"
+	"github.com/x448/float16"
 )
+
+// FromFloat32 converts a slice of FP32 values to IEEE 754 FP16 bits.
+func FromFloat32(a []float32) []uint16 {
+	ret := make([]uint16, len(a))
+	if len(a) > 0 {
+		feature.fromFloat32(a, ret)
+	}
+	return ret
+}
+
+// ToFloat32 converts a slice of IEEE 754 FP16 bits to FP32 values.
+func ToFloat32(a []uint16) []float32 {
+	ret := make([]float32, len(a))
+	if len(a) > 0 {
+		feature.toFloat32(a, ret)
+	}
+	return ret
+}
+
+// FromAny converts a numeric slice to IEEE 754 FP16 bits.
+func FromAny(v any) ([]uint16, bool) {
+	switch typed := v.(type) {
+	case []uint16:
+		return typed, true
+	case []float32:
+		return FromFloat32(typed), true
+	case nil:
+		return nil, false
+	}
+	rv := reflect.ValueOf(v)
+	if rv.Kind() != reflect.Slice {
+		return nil, false
+	}
+	values := make([]float32, rv.Len())
+	for i := range rv.Len() {
+		converted, ok := anyToFloat32(rv.Index(i).Interface())
+		if !ok {
+			return nil, false
+		}
+		values[i] = converted
+	}
+	return FromFloat32(values), true
+}
+
+func anyToFloat32(v any) (float32, bool) {
+	switch typed := v.(type) {
+	case float32:
+		return typed, true
+	case float64:
+		return float32(typed), true
+	case int:
+		return float32(typed), true
+	case int8:
+		return float32(typed), true
+	case int16:
+		return float32(typed), true
+	case int32:
+		return float32(typed), true
+	case int64:
+		return float32(typed), true
+	case uint:
+		return float32(typed), true
+	case uint8:
+		return float32(typed), true
+	case uint16:
+		return float32(typed), true
+	case uint32:
+		return float32(typed), true
+	case uint64:
+		return float32(typed), true
+	default:
+		return 0, false
+	}
+}
+
+func fromFloat32(a []float32, dst []uint16) {
+	for i := range a {
+		dst[i] = float16.Fromfloat32(a[i]).Bits()
+	}
+}
+
+func toFloat32(a []uint16, dst []float32) {
+	for i := range a {
+		dst[i] = float16.Frombits(a[i]).Float32()
+	}
+}
 
 func dot(a, b []float32) (ret float32) {
 	for i := range a {

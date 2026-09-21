@@ -22,7 +22,7 @@ import (
 	"time"
 
 	"github.com/chewxy/math32"
-	"github.com/gorse-io/gorse/common/bfloats"
+	"github.com/gorse-io/gorse/common/floats"
 	"github.com/gorse-io/gorse/storage/data"
 	"github.com/stretchr/testify/assert"
 )
@@ -72,7 +72,7 @@ func TestDataset_AddItem(t *testing.T) {
 		Timestamp:  time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
 		Labels: map[string]any{
 			"a":        1,
-			"embedded": bfloats.FromFloat32([]float32{1.1, 2.2, 3.3}),
+			"embedded": floats.FromFloat32([]float32{1.1, 2.2, 3.3}),
 			"tags":     []ID{0, 1, 2},
 		},
 		Comment: "comment",
@@ -84,7 +84,7 @@ func TestDataset_AddItem(t *testing.T) {
 		Timestamp:  time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
 		Labels: map[string]any{
 			"a":        1,
-			"embedded": bfloats.FromFloat32([]float32{1.1, 2.2, 3.3}),
+			"embedded": floats.FromFloat32([]float32{1.1, 2.2, 3.3}),
 			"tags":     []ID{1, 2, 0},
 			"topics":   []ID{3, 4, 5},
 		},
@@ -96,7 +96,7 @@ func TestDataset_AddItem(t *testing.T) {
 		Categories: []string{"a"},
 		Timestamp:  time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
 		Labels: map[string]any{
-			"embedded": bfloats.FromFloat32([]float32{1.1, 0, 2}),
+			"embedded": floats.FromFloat32([]float32{1.1, 0, 2}),
 		},
 		Comment: "comment",
 	}, dataSet.GetItems()[2])
@@ -126,8 +126,8 @@ func TestDataset_GetItemColumnValuesIDF(t *testing.T) {
 	})
 	idf := dataSet.GetItemColumnValuesIDF()
 	assert.Len(t, idf, 4)
-	assert.InDelta(t, 1e-3, idf[0], 1e-6)
-	assert.InDelta(t, math32.Log(2), idf[1], 1e-6)
+	assert.InDelta(t, math32.Log(2), idf[0], 1e-6)
+	assert.InDelta(t, math32.Log(3), idf[1], 1e-6)
 }
 
 func TestDataset_AddUser(t *testing.T) {
@@ -163,8 +163,8 @@ func TestDataset_GetUserColumnValuesIDF(t *testing.T) {
 	})
 	idf := dataSet.GetUserColumnValuesIDF()
 	assert.Len(t, idf, 4)
-	assert.InDelta(t, 1e-3, idf[0], 1e-6)
-	assert.InDelta(t, math32.Log(2), idf[1], 1e-6)
+	assert.InDelta(t, math32.Log(2), idf[0], 1e-6)
+	assert.InDelta(t, math32.Log(3), idf[1], 1e-6)
 }
 
 func TestDataset_AddFeedback(t *testing.T) {
@@ -190,8 +190,8 @@ func TestDataset_AddFeedback(t *testing.T) {
 		assert.Len(t, dataSet.GetUserFeedback()[i], 10-i)
 		assert.Len(t, dataSet.GetItemFeedback()[i], i+1)
 		assert.Len(t, dataSet.timestamps[i], 10-i)
-		assert.InDelta(t, math32.Log(float32(10)/float32(10-i)), userIDF[i], 1e-2)
-		assert.InDelta(t, math32.Log(float32(10)/float32(i+1)), itemIDF[i], 1e-2)
+		assert.InDelta(t, math32.Log(1+float32(10)/float32(10-i)), userIDF[i], 1e-2)
+		assert.InDelta(t, math32.Log(1+float32(10)/float32(i+1)), itemIDF[i], 1e-2)
 	}
 }
 

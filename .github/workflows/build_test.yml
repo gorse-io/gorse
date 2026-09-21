@@ -54,9 +54,12 @@ jobs:
           --health-retries 5
 
       clickhouse:
-        image: clickhouse/clickhouse-server:23
+        image: clickhouse/clickhouse-server:26.2
         ports:
           - 8123
+        env:
+          CLICKHOUSE_USER: gorse
+          CLICKHOUSE_PASSWORD: gorse_pass
         options: >-
           --health-cmd="clickhouse-client --query 'SELECT 1'" 
           --health-interval=10s 
@@ -64,7 +67,7 @@ jobs:
           --health-retries=5
 
       redis:
-        image: redis/redis-stack:6.2.6-v9
+        image: redis:8
         ports:
           - 6379
 
@@ -121,7 +124,7 @@ jobs:
       working-directory: ${{ runner.temp }}
 
     - name: Test
-      run: go test -timeout 30m -v ./... -coverprofile=coverage.txt -covermode=atomic -coverpkg=./...
+      run: go test -timeout 30m ./... -coverprofile=coverage.txt -covermode=atomic -coverpkg=./...
       env:
         # MySQL
         MYSQL_URI: mysql://root:password@tcp(localhost:${{ job.services.mysql.ports[3306] }})/
@@ -130,7 +133,7 @@ jobs:
         # MongoDB
         MONGO_URI: mongodb://root:password@localhost:${{ job.services.mongo.ports[27017] }}/
         # ClickHouse
-        CLICKHOUSE_URI: clickhouse://localhost:${{ job.services.clickhouse.ports[8123] }}/
+        CLICKHOUSE_URI: clickhouse://gorse:gorse_pass@localhost:${{ job.services.clickhouse.ports[8123] }}/
         # Redis
         REDIS_URI: redis://localhost:${{ job.services.redis.ports[6379] }}/
         # S3
@@ -143,6 +146,10 @@ jobs:
         QDRANT_URI: qdrant://localhost:${{ job.services.qdrant.ports[6334] }}/
         # Weaviate
         WEAVIATE_URI: weaviate://localhost:${{ job.services.weaviate.ports[8080] }}/
+
+    - name: Test XLA
+      if: runner.arch == 'X64' || runner.arch == 'ARM64'
+      run: go test -tags xla -timeout 20m ./model/ctr
 
     - name: Upload coverage to Codecov
       if: matrix.os == 'ubuntu-latest'
@@ -181,7 +188,11 @@ jobs:
         go-version-file: ./go.mod
 
     - name: Test
-      run: go test -timeout 20m -v ./... -skip "TestPostgres|TestMySQL|TestMongo|TestRedis|TestClickHouse|TestMilvus|TestQdrant|TestWeaviate"
+      run: go test -timeout 20m ./...
+
+    - name: Test XLA
+      if: runner.arch == 'ARM64'
+      run: go test -tags xla -timeout 20m ./model/ctr
 
   unit_test_windows:
     strategy:
@@ -214,8 +225,36 @@ jobs:
       with:
         go-version-file: ./go.mod
 
+    - name: Set up Windows ARM64 C toolchain
+      if: matrix.os == 'windows-11-arm'
+      id: msys2
+      uses: msys2/setup-msys2@v2
+      with:
+        msystem: CLANGARM64
+        update: true
+        install: mingw-w64-clang-aarch64-gcc-compat
+
+    - name: Configure Windows ARM64 C compiler
+      if: matrix.os == 'windows-11-arm'
+      shell: pwsh
+      run: |
+        $cc = Join-Path '${{ steps.msys2.outputs.msys2-location }}' 'clangarm64\bin\gcc.exe'
+        $target = & $cc -dumpmachine
+        if ($LASTEXITCODE -ne 0) {
+          exit $LASTEXITCODE
+        }
+        if ($target -ne 'aarch64-w64-windows-gnu') {
+          Write-Error "Unexpected C compiler target: $target"
+          exit 1
+        }
+        "CC=$cc" >> $env:GITHUB_ENV
+
     - name: Test
-      run: go test -timeout 20m -v ./... -skip "TestPostgres|TestMySQL|TestMongo|TestRedis|TestClickHouse|TestMilvus|TestQdrant|TestWeaviate"
+      run: go test -timeout 20m ./...
+
+    - name: Test XLA
+      if: runner.arch == 'X64'
+      run: go test -tags xla -timeout 20m ./model/ctr
 
   integrate_test:
     name: integrate tests
@@ -272,25 +311,25 @@ jobs:
       - name: Install pre-requisites
         uses: awalsh128/cache-apt-pkgs-action@latest
         with:
-          packages: redis-tools
-
-      - uses: actions/checkout@v5
-        with:
-          repository: gorse-cloud/redis-stack
-          path: redis-stack
+          packages: qemu-user-static
 
       - name: Setup Redis cluster
-        run: |
-          docker compose -f redis-stack/docker-compose.yml --project-directory redis-stack up -d
-          for i in {1..5}; do
-            redis-cli -p 7005 ping | grep PONG && break
-            sleep 10
-          done
+        uses: gorse-io/redis-cluster@v1.0.0
 
       - uses: actions/checkout@v2
       - uses: actions/setup-go@v5
         with:
           go-version-file: ./go.mod
+
+      - name: Test RISC-V floats
+        run: make -C common/floats test-rvv
+        env:
+          RISCV64_QEMU: qemu-riscv64-static
+
+      - name: Test LoongArch LASX floats
+        run: make -C common/floats test-lasx
+        env:
+          LOONG64_QEMU: qemu-loongarch64-static
 
       - name: Test MariaDB
         run: go test ./storage/data ./storage/cache -run TestMySQL

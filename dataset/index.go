@@ -19,7 +19,7 @@ import (
 	"io"
 
 	"github.com/gorse-io/gorse/common/encoding"
-	"github.com/juju/errors"
+	"github.com/pkg/errors"
 )
 
 // MarshalIndex marshal index into byte stream.
@@ -32,7 +32,7 @@ func UnmarshalIndex(r io.Reader) (*Index, error) {
 	index := &Index{}
 	err := index.Unmarshal(r)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.WithStack(err)
 	}
 	return index, nil
 }
@@ -95,13 +95,13 @@ func (idx *Index) Marshal(w io.Writer) error {
 	// write length
 	err := binary.Write(w, binary.LittleEndian, int32(len(idx.Names)))
 	if err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	// write names
 	for _, s := range idx.Names {
 		err = encoding.WriteString(w, s)
 		if err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 	}
 	return nil
@@ -113,7 +113,7 @@ func (idx *Index) Unmarshal(r io.Reader) error {
 	var n int32
 	err := binary.Read(r, binary.LittleEndian, &n)
 	if err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	// write names
 	idx.Names = make([]string, 0, n)
@@ -121,7 +121,7 @@ func (idx *Index) Unmarshal(r io.Reader) error {
 	for i := 0; i < int(n); i++ {
 		name, err := encoding.ReadString(r)
 		if err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		idx.Add(name)
 	}

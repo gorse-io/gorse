@@ -25,12 +25,10 @@ import (
 
 	jsonpatch "github.com/evanphx/json-patch/v5"
 	gorse "github.com/gorse-io/gorse-go"
+	adminclient "github.com/gorse-io/gorse/client"
 	"github.com/gorse-io/gorse/cmd/version"
-	"github.com/gorse-io/gorse/common/log"
-	"github.com/gorse-io/gorse/storage/data"
 	"github.com/samber/lo"
 	"github.com/spf13/cobra"
-	"go.uber.org/zap"
 	"gopkg.in/yaml.v3"
 )
 
@@ -86,14 +84,9 @@ func requireEndpointAndKey(cmd *cobra.Command) (string, string) {
 	return endpoint, apiKey
 }
 
-func newGorseClient(cmd *cobra.Command) *gorse.GorseClient {
+func newClient(cmd *cobra.Command) *adminclient.AdminClient {
 	endpoint, apiKey := requireEndpointAndKey(cmd)
-	return gorse.NewGorseClient(strings.TrimRight(endpoint, "/"), apiKey)
-}
-
-func newAdminClient(cmd *cobra.Command) *AdminClient {
-	endpoint, apiKey := requireEndpointAndKey(cmd)
-	return NewAdminClient(endpoint, apiKey)
+	return adminclient.NewAdminClient(endpoint, apiKey)
 }
 
 // getCmd is the parent command for get operations
@@ -129,9 +122,9 @@ var getClusterCmd = &cobra.Command{
 	Use:   "cluster-info",
 	Short: "List cluster nodes",
 	Run: func(cmd *cobra.Command, args []string) {
-		cluster, err := newAdminClient(cmd).GetCluster()
+		cluster, err := newClient(cmd).GetCluster()
 		if err != nil {
-			log.Logger().Fatal("admin API request failed", zap.Error(err))
+			fatalErr(cmd, "admin API request failed", err)
 		}
 		printArrayTable(cmd, cluster)
 	},
@@ -141,9 +134,9 @@ var psCmd = &cobra.Command{
 	Use:   "ps",
 	Short: "List task progress",
 	Run: func(cmd *cobra.Command, args []string) {
-		tasks, err := newAdminClient(cmd).GetTasks()
+		tasks, err := newClient(cmd).GetTasks()
 		if err != nil {
-			log.Logger().Fatal("admin API request failed", zap.Error(err))
+			fatalErr(cmd, "admin API request failed", err)
 		}
 		rows := make([][]string, len(tasks))
 		for i, task := range tasks {
@@ -165,22 +158,19 @@ var pipelineGetCmd = &cobra.Command{
 	Use:   "get",
 	Short: "Get recommendation pipeline configuration",
 	Run: func(cmd *cobra.Command, args []string) {
-		configValue, err := newAdminClient(cmd).GetConfig()
+		configValue, err := newClient(cmd).GetConfig()
 		if err != nil {
-			log.Logger().Fatal("admin API request failed", zap.Error(err))
+			fatalErr(cmd, "admin API request failed", err)
 		}
-		configMap, err := configToMap(configValue)
-		if err != nil {
-			log.Logger().Fatal("failed to encode config", zap.Error(err))
-		}
-		recommend, ok := configMap["recommend"]
+		configMap := formatConfigMap(configValue)
+		_, recommend, ok := getConfigValue(configMap, "recommend", "Recommend")
 		if !ok {
-			log.Logger().Fatal("recommend config not found")
+			fatal(cmd, "recommend config not found")
 		}
 		encoder := yaml.NewEncoder(cmd.OutOrStdout())
 		defer encoder.Close()
 		if err = encoder.Encode(recommend); err != nil {
-			log.Logger().Fatal("failed to encode config", zap.Error(err))
+			fatalErr(cmd, "failed to encode config", err)
 		}
 	},
 }
@@ -189,14 +179,14 @@ var pipelineSchemaCmd = &cobra.Command{
 	Use:   "schema",
 	Short: "Get recommendation pipeline configuration schema",
 	Run: func(cmd *cobra.Command, args []string) {
-		schema, err := newAdminClient(cmd).GetConfigSchema()
+		schema, err := newClient(cmd).GetConfigSchema()
 		if err != nil {
-			log.Logger().Fatal("admin API request failed", zap.Error(err))
+			fatalErr(cmd, "admin API request failed", err)
 		}
 		encoder := yaml.NewEncoder(cmd.OutOrStdout())
 		defer encoder.Close()
 		if err = encoder.Encode(schema); err != nil {
-			log.Logger().Fatal("failed to encode schema", zap.Error(err))
+			fatalErr(cmd, "failed to encode schema", err)
 		}
 	},
 }
@@ -211,11 +201,11 @@ var dumpCmd = &cobra.Command{
 		outputPath := args[0]
 		file, err := os.Create(outputPath)
 		if err != nil {
-			log.Logger().Fatal("failed to create dump file", zap.String("file", outputPath), zap.Error(err))
+			fatalErr(cmd, fmt.Sprintf("failed to create dump file %q", outputPath), err)
 		}
 		defer file.Close()
-		if err = newAdminClient(cmd).Dump(file); err != nil {
-			log.Logger().Fatal("admin API request failed", zap.Error(err))
+		if err = newClient(cmd).Dump(file); err != nil {
+			fatalErr(cmd, "admin API request failed", err)
 		}
 		fmt.Fprintln(cmd.OutOrStdout(), "Data dumped to "+outputPath)
 	},
@@ -231,7 +221,7 @@ var restoreCmd = &cobra.Command{
 		fmt.Fprintf(cmd.OutOrStdout(), "Restore data from %s? Existing users, items, feedback, and cache will be overwritten. Confirm [y/N]: ", args[0])
 		input, err := bufio.NewReader(cmd.InOrStdin()).ReadString('\n')
 		if err != nil && !errors.Is(err, io.EOF) {
-			log.Logger().Fatal("failed to read confirmation", zap.Error(err))
+			fatalErr(cmd, "failed to read confirmation", err)
 		}
 		if !strings.EqualFold(strings.TrimSpace(input), "y") {
 			fmt.Fprintln(cmd.OutOrStdout(), "Restore canceled")
@@ -239,12 +229,12 @@ var restoreCmd = &cobra.Command{
 		}
 		file, err := os.Open(args[0])
 		if err != nil {
-			log.Logger().Fatal("failed to open restore file", zap.String("file", args[0]), zap.Error(err))
+			fatalErr(cmd, fmt.Sprintf("failed to open restore file %q", args[0]), err)
 		}
 		defer file.Close()
-		stats, err := newAdminClient(cmd).Restore(file)
+		stats, err := newClient(cmd).Restore(file)
 		if err != nil {
-			log.Logger().Fatal("admin API request failed", zap.Error(err))
+			fatalErr(cmd, "admin API request failed", err)
 		}
 		fmt.Fprintf(cmd.OutOrStdout(), "Restored %d users, %d items, %d feedback in %s.\n",
 			stats.Users, stats.Items, stats.Feedback, stats.Duration)
@@ -261,37 +251,37 @@ var pipelinePatchCmd = &cobra.Command{
   gorse-cli pipeline patch '[{"op":"replace","path":"/cache_size","value":1000},{"op":"replace","path":"/data_source/item_ttl","value":72}]'`,
 	Args: cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		client := newAdminClient(cmd)
+		client := newClient(cmd)
 		currentConfigMap, err := client.GetConfigMap()
 		if err != nil {
-			log.Logger().Fatal("admin API request failed", zap.Error(err))
+			fatalErr(cmd, "admin API request failed", err)
 		}
-		recommendConfig, ok := currentConfigMap["recommend"]
+		recommendKey, recommendConfig, ok := getConfigValue(currentConfigMap, "recommend", "Recommend")
 		if !ok {
-			log.Logger().Fatal("recommend config not found")
+			fatal(cmd, "recommend config not found")
 		}
 
 		configBytes, err := json.Marshal(recommendConfig)
 		if err != nil {
-			log.Logger().Fatal("failed to apply JSON patch", zap.Error(fmt.Errorf("failed to encode config: %w", err)))
+			fatalErr(cmd, "failed to apply JSON patch: failed to encode config", err)
 		}
 		patch, err := jsonpatch.DecodePatch([]byte(args[0]))
 		if err != nil {
-			log.Logger().Fatal("failed to apply JSON patch", zap.Error(fmt.Errorf("failed to decode JSON patch: %w", err)))
+			fatalErr(cmd, "failed to apply JSON patch: failed to decode JSON patch", err)
 		}
 		patchedConfigBytes, err := patch.Apply(configBytes)
 		if err != nil {
-			log.Logger().Fatal("failed to apply JSON patch", zap.Error(fmt.Errorf("failed to apply JSON patch: %w", err)))
+			fatalErr(cmd, "failed to apply JSON patch", err)
 		}
 		var configPatch map[string]any
 		if err = json.Unmarshal(patchedConfigBytes, &configPatch); err != nil {
-			log.Logger().Fatal("failed to apply JSON patch", zap.Error(fmt.Errorf("failed to decode patched config: %w", err)))
+			fatalErr(cmd, "failed to apply JSON patch: failed to decode patched config", err)
 		}
-		currentConfigMap["recommend"] = configPatch
+		currentConfigMap[recommendKey] = configPatch
 
 		updatedConfig, err := client.UpdateConfig(currentConfigMap)
 		if err != nil {
-			log.Logger().Fatal("admin API request failed", zap.Error(err))
+			fatalErr(cmd, "admin API request failed", err)
 		}
 
 		printStruct(cmd, updatedConfig)
@@ -305,15 +295,15 @@ var pipelineResetCmd = &cobra.Command{
 		fmt.Fprint(cmd.OutOrStdout(), "Reset recommendation pipeline configuration to file defaults? Current pipeline settings will be overwritten. Confirm [y/N]: ")
 		input, err := bufio.NewReader(cmd.InOrStdin()).ReadString('\n')
 		if err != nil && !errors.Is(err, io.EOF) {
-			log.Logger().Fatal("failed to read confirmation", zap.Error(err))
+			fatalErr(cmd, "failed to read confirmation", err)
 		}
 		if !strings.EqualFold(strings.TrimSpace(input), "y") {
 			fmt.Fprintln(cmd.OutOrStdout(), "Pipeline reset canceled")
 			return
 		}
-		result, err := newAdminClient(cmd).ResetConfig()
+		result, err := newClient(cmd).ResetConfig()
 		if err != nil {
-			log.Logger().Fatal("admin API request failed", zap.Error(err))
+			fatalErr(cmd, "admin API request failed", err)
 		}
 		if len(result) > 0 {
 			printStruct(cmd, result)
@@ -327,9 +317,9 @@ var getCategoriesCmd = &cobra.Command{
 	Use:   "categories",
 	Short: "Get item categories",
 	Run: func(cmd *cobra.Command, args []string) {
-		categories, err := newAdminClient(cmd).GetCategories()
+		categories, err := newClient(cmd).GetCategories()
 		if err != nil {
-			log.Logger().Fatal("admin API request failed", zap.Error(err))
+			fatalErr(cmd, "admin API request failed", err)
 		}
 		printArrayTable(cmd, categories)
 	},
@@ -339,9 +329,9 @@ var getStatsCmd = &cobra.Command{
 	Use:   "stats",
 	Short: "Get global statistics",
 	Run: func(cmd *cobra.Command, args []string) {
-		stats, err := newAdminClient(cmd).GetStats()
+		stats, err := newClient(cmd).GetStats()
 		if err != nil {
-			log.Logger().Fatal("admin API request failed", zap.Error(err))
+			fatalErr(cmd, "admin API request failed", err)
 		}
 		printStruct(cmd, stats)
 	},
@@ -352,9 +342,9 @@ var getUserCmd = &cobra.Command{
 	Short: "Get user details",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		user, err := newGorseClient(cmd).GetUser(cmd.Context(), args[0])
+		user, err := newClient(cmd).GetUser(cmd.Context(), args[0])
 		if err != nil {
-			log.Logger().Fatal("API request failed", zap.Error(err))
+			fatalErr(cmd, "API request failed", err)
 		}
 		printStruct(cmd, user)
 	},
@@ -365,9 +355,9 @@ var getItemCmd = &cobra.Command{
 	Short: "Get item details",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		item, err := newGorseClient(cmd).GetItem(cmd.Context(), args[0])
+		item, err := newClient(cmd).GetItem(cmd.Context(), args[0])
 		if err != nil {
-			log.Logger().Fatal("API request failed", zap.Error(err))
+			fatalErr(cmd, "API request failed", err)
 		}
 		printStruct(cmd, item)
 	},
@@ -381,25 +371,35 @@ var getUsersCmd = &cobra.Command{
 		if n == 0 {
 			n = 10
 		}
-		users, err := newGorseClient(cmd).GetUsers(cmd.Context(), n, "")
+		users, err := newClient(cmd).GetUsers(cmd.Context(), n, "")
 		if err != nil {
-			log.Logger().Fatal("API request failed", zap.Error(err))
+			fatalErr(cmd, "API request failed", err)
 		}
 		printArrayTable(cmd, users.Users)
 	},
 }
 
 var getItemsCmd = &cobra.Command{
-	Use:   "items",
-	Short: "Get items",
+	Use:   "items [query...]",
+	Short: "Get or search items",
+	Args:  cobra.ArbitraryArgs,
 	Run: func(cmd *cobra.Command, args []string) {
 		n := lo.Must(cmd.Flags().GetInt("n"))
 		if n == 0 {
 			n = 10
 		}
-		items, err := newGorseClient(cmd).GetItems(cmd.Context(), n, "")
+		client := newClient(cmd)
+		var (
+			items gorse.ItemIterator
+			err   error
+		)
+		if len(args) > 0 {
+			items, err = client.SearchItems(cmd.Context(), strings.Join(args, " "), n)
+		} else {
+			items, err = client.GetItems(cmd.Context(), n, "")
+		}
 		if err != nil {
-			log.Logger().Fatal("API request failed", zap.Error(err))
+			fatalErr(cmd, "API request failed", err)
 		}
 		printArrayTable(cmd, items.Items)
 	},
@@ -417,16 +417,16 @@ var getFeedbackCmd = &cobra.Command{
 		feedbackType := lo.Must(cmd.Flags().GetString("type"))
 		userID := lo.Must(cmd.Flags().GetString("user"))
 		itemID := lo.Must(cmd.Flags().GetString("item"))
-		client := newAdminClient(cmd)
+		client := newClient(cmd)
 		var (
-			feedback []data.Feedback
+			feedback []adminclient.Feedback
 			err      error
 		)
 		switch {
 		case userID != "" && itemID != "" && feedbackType != "":
 			record, requestErr := client.GetTypedUserItemFeedback(feedbackType, userID, itemID)
 			err = requestErr
-			feedback = []data.Feedback{record}
+			feedback = []adminclient.Feedback{record}
 		case userID != "" && itemID != "":
 			feedback, err = client.GetUserItemFeedback(userID, itemID)
 		case userID != "" && feedbackType != "":
@@ -447,9 +447,9 @@ var getFeedbackCmd = &cobra.Command{
 			feedback = iterator.Feedback
 		}
 		if err != nil {
-			log.Logger().Fatal("admin API request failed", zap.Error(err))
+			fatalErr(cmd, "admin API request failed", err)
 		}
-		data.SortFeedbacks(feedback)
+		sortFeedback(feedback)
 		if n > 0 && n < len(feedback) {
 			feedback = feedback[:n]
 		}
@@ -466,9 +466,9 @@ var getLatestCmd = &cobra.Command{
 		if n == 0 {
 			n = 10
 		}
-		latest, err := newAdminClient(cmd).GetLatest(n, categories)
+		latest, err := newClient(cmd).GetLatest(n, categories)
 		if err != nil {
-			log.Logger().Fatal("admin API request failed", zap.Error(err))
+			fatalErr(cmd, "admin API request failed", err)
 		}
 		printArrayTable(cmd, latest)
 	},
@@ -479,14 +479,14 @@ var getNonPersonalizedCmd = &cobra.Command{
 	Short: "Get non-personalized recommendations",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		recommendations, err := newAdminClient(cmd).GetNonPersonalized(
+		recommendations, err := newClient(cmd).GetNonPersonalized(
 			args[0],
 			lo.Must(cmd.Flags().GetInt("n")),
 			lo.Must(cmd.Flags().GetString("user-id")),
 			lo.Must(cmd.Flags().GetStringArray("category")),
 		)
 		if err != nil {
-			log.Logger().Fatal("admin API request failed", zap.Error(err))
+			fatalErr(cmd, "admin API request failed", err)
 		}
 		printArrayTable(cmd, recommendations)
 	},
@@ -509,9 +509,9 @@ var recommendUserCmd = &cobra.Command{
 		if len(args) > 2 {
 			name = args[2]
 		}
-		recommendations, err := newAdminClient(cmd).GetRecommend(args[0], recommender, name, n, categories)
+		recommendations, err := newClient(cmd).GetRecommend(args[0], recommender, name, n, categories)
 		if err != nil {
-			log.Logger().Fatal("admin API request failed", zap.Error(err))
+			fatalErr(cmd, "admin API request failed", err)
 		}
 		printArrayTable(cmd, recommendations)
 	},
@@ -522,14 +522,14 @@ var getItemToItemCmd = &cobra.Command{
 	Short: "Get item-to-item recommendations",
 	Args:  cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
-		recommendations, err := newAdminClient(cmd).GetItemToItem(
+		recommendations, err := newClient(cmd).GetItemToItem(
 			args[0],
 			args[1],
 			lo.Must(cmd.Flags().GetInt("n")),
 			lo.Must(cmd.Flags().GetStringArray("category")),
 		)
 		if err != nil {
-			log.Logger().Fatal("admin API request failed", zap.Error(err))
+			fatalErr(cmd, "admin API request failed", err)
 		}
 		printArrayTable(cmd, recommendations)
 	},
@@ -540,9 +540,9 @@ var getUserToUserCmd = &cobra.Command{
 	Short: "Get user-to-user recommendations",
 	Args:  cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
-		recommendations, err := newAdminClient(cmd).GetUserToUser(args[0], args[1], lo.Must(cmd.Flags().GetInt("n")))
+		recommendations, err := newClient(cmd).GetUserToUser(args[0], args[1], lo.Must(cmd.Flags().GetInt("n")))
 		if err != nil {
-			log.Logger().Fatal("admin API request failed", zap.Error(err))
+			fatalErr(cmd, "admin API request failed", err)
 		}
 		printArrayTable(cmd, recommendations)
 	},

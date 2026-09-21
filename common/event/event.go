@@ -19,49 +19,55 @@ import (
 	"time"
 )
 
-// APIEvent represents an API call event for billing purposes.
-type APIEvent struct {
+type Request struct {
 	// Request metadata
-	RequestID string // Unique request identifier (X-Request-ID)
-	Method    string // HTTP method (GET, POST, PUT, DELETE, PATCH)
-	Path      string // API path (e.g., /api/recommend/{user-id})
+	RequestID    string // Unique request identifier (X-Request-ID)
+	RequestBytes int64  // Number of request body bytes read by the handler
+	Method       string // HTTP method (GET, POST, PUT, DELETE, PATCH)
+	Route        string // API route template (e.g., /api/recommend/{user-id})
 
 	// Response metadata
-	StatusCode   int       // HTTP response status code
-	ResponseTime int64     // Response time in milliseconds
-	Timestamp    time.Time // Event timestamp
+	StatusCode    int           // HTTP response status code
+	ResponseTime  time.Duration // Response time
+	ResponseBytes int64         // Number of response body bytes written by the handler
 
 	// Additional metadata
-	RemoteAddr string // Client remote address
+	Timestamp  time.Time // Event timestamp
+	RemoteAddr string    // Client remote address
 }
 
-// StorageEvent represents data storage usage for billing purposes.
-type StorageEvent struct {
-	UserCount     int       // Number of users in storage
-	ItemCount     int       // Number of items in storage
-	FeedbackCount int       // Number of feedbacks in storage
-	Timestamp     time.Time // Event timestamp
+type Snapshot struct {
+	UserCount     int64
+	UserBytes     int64
+	ItemCount     int64
+	ItemBytes     int64
+	FeedbackCount int64
+	FeedbackBytes int64
+	Timestamp     time.Time
 }
 
-type Recorder interface {
-	RecordAPI(ctx context.Context, event APIEvent)
-	RecordStorage(ctx context.Context, event StorageEvent)
+type Handler interface {
+	EmitRequest(ctx context.Context, event Request)
+	EmitSnapshot(ctx context.Context, event Snapshot)
 }
 
-type NopRecorder struct{}
+type NopHandler struct{}
 
-func (n *NopRecorder) RecordAPI(ctx context.Context, event APIEvent) {
+func (n *NopHandler) EmitRequest(ctx context.Context, event Request) {}
+
+func (n *NopHandler) EmitSnapshot(ctx context.Context, event Snapshot) {}
+
+var handler Handler = &NopHandler{}
+
+func SetEventHandler(r Handler) {
+	handler = r
 }
 
-func (n *NopRecorder) RecordStorage(ctx context.Context, event StorageEvent) {
-}
-
-var recorder Recorder = &NopRecorder{}
-
-func EventRecorder() Recorder {
-	return recorder
-}
-
-func SetEventRecorder(r Recorder) {
-	recorder = r
+func Emit[T Request | Snapshot](ctx context.Context, event T) {
+	switch e := any(event).(type) {
+	case Request:
+		handler.EmitRequest(ctx, e)
+	case Snapshot:
+		handler.EmitSnapshot(ctx, e)
+	}
 }

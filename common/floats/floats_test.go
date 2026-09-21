@@ -15,11 +15,91 @@
 package floats
 
 import (
+	"math"
 	"testing"
 
+	"github.com/gorse-io/gorse/common/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 )
+
+func TestFloat16Conversion(t *testing.T) {
+	values := []float32{
+		0,
+		float32(math.Copysign(0, -1)),
+		1,
+		-2,
+		float32(math.Ldexp(1, -24)),
+		float32(math.Ldexp(1, -25)),
+		1 + float32(math.Ldexp(1, -11)),
+		1 + float32(math.Ldexp(1, -10)),
+		65504,
+		float32(math.Inf(1)),
+		float32(math.Inf(-1)),
+	}
+	encoded := []uint16{
+		0x0000,
+		0x8000,
+		0x3c00,
+		0xc000,
+		0x0001,
+		0x0000,
+		0x3c00,
+		0x3c01,
+		0x7bff,
+		0x7c00,
+		0xfc00,
+	}
+
+	assert.Equal(t, encoded, FromFloat32(values))
+	assert.Equal(t, []float32{
+		0,
+		float32(math.Copysign(0, -1)),
+		1,
+		-2,
+		float32(math.Ldexp(1, -24)),
+		0,
+		1,
+		1 + float32(math.Ldexp(1, -10)),
+		65504,
+		float32(math.Inf(1)),
+		float32(math.Inf(-1)),
+	}, ToFloat32(encoded))
+	assert.Empty(t, FromFloat32(nil))
+	assert.Empty(t, ToFloat32(nil))
+}
+
+func TestFromAny(t *testing.T) {
+	floatSlice := []float32{0.1, 0.2, 0.3}
+	testCases := []struct {
+		name     string
+		input    any
+		expected []uint16
+		ok       bool
+	}{
+		{name: "float32 slice", input: floatSlice, expected: FromFloat32(floatSlice), ok: true},
+		{name: "fp16 slice", input: FromFloat32(floatSlice), expected: FromFloat32(floatSlice), ok: true},
+		{name: "float64 slice", input: []float64{0.1, 0.2, 0.3}, expected: FromFloat32(floatSlice), ok: true},
+		{name: "int slice", input: []int{-1, 0, 2}, expected: FromFloat32([]float32{-1, 0, 2}), ok: true},
+		{name: "int32 slice", input: []int32{-1, 0, 2}, expected: FromFloat32([]float32{-1, 0, 2}), ok: true},
+		{name: "int64 slice", input: []int64{-1, 0, 2}, expected: FromFloat32([]float32{-1, 0, 2}), ok: true},
+		{name: "mixed any slice", input: []any{float32(0.1), float64(0.2), int(0), int32(1), int64(2)}, expected: FromFloat32([]float32{0.1, 0.2, 0, 1, 2}), ok: true},
+		{name: "empty any slice", input: []any{}, expected: []uint16{}, ok: true},
+		{name: "invalid element", input: []any{float32(0.1), "string"}, ok: false},
+		{name: "nil element", input: []any{float32(0.1), nil}, ok: false},
+		{name: "nil", input: nil, ok: false},
+		{name: "scalar", input: 1.0, ok: false},
+		{name: "non-numeric slice", input: []string{"1"}, ok: false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			actual, ok := FromAny(tc.input)
+			assert.Equal(t, tc.ok, ok)
+			assert.Equal(t, tc.expected, actual)
+		})
+	}
+}
 
 func TestMatZero(t *testing.T) {
 	a := [][]float32{
@@ -38,7 +118,6 @@ func TestZero(t *testing.T) {
 	Zero(a)
 	assert.Equal(t, []float32{0, 0, 0, 0, 0, 0}, a)
 }
-
 
 func TestAdd(t *testing.T) {
 	a := []float32{1, 2, 3, 4}
@@ -182,6 +261,14 @@ type NativeTestSuite struct {
 	suite.Suite
 }
 
+func (suite *NativeTestSuite) SetupTest() {
+	log.SetTestLogger(suite.T())
+}
+
+func (suite *NativeTestSuite) SetupSuite() {
+	log.SetTestLogger(suite.T())
+}
+
 func (suite *NativeTestSuite) TestDot() {
 	a := []float32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
 	b := []float32{0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20}
@@ -305,6 +392,42 @@ func (suite *SIMDTestSuite) SetupSuite() {
 	if feature&suite.Feature != suite.Feature {
 		suite.T().Skipf("%s is not supported", (suite.Feature - (feature & suite.Feature)).String())
 	}
+}
+
+func (suite *SIMDTestSuite) TestFromFloat32() {
+	a := []float32{
+		0,
+		float32(math.Copysign(0, -1)),
+		1,
+		-2,
+		float32(math.Ldexp(1, -24)),
+		float32(math.Ldexp(1, -25)),
+		1 + float32(math.Ldexp(1, -11)),
+		1 + float32(math.Ldexp(1, -10)),
+		65504,
+		0.1,
+		-0.2,
+		1.5,
+		2.5,
+		3.5,
+		4.5,
+		5.5,
+		6.5,
+	}
+	expected := make([]uint16, len(a))
+	fromFloat32(a, expected)
+	actual := make([]uint16, len(a))
+	suite.Feature.fromFloat32(a, actual)
+	suite.Equal(expected, actual)
+}
+
+func (suite *SIMDTestSuite) TestToFloat32() {
+	a := []uint16{0x0000, 0x8000, 0x0001, 0x03ff, 0x0400, 0x3c00, 0xc000, 0x2e66, 0xb266, 0x7bff, 0x7c00, 0xfc00, 0x3e00, 0x4100, 0x4300, 0x4480, 0x4580}
+	expected := make([]float32, len(a))
+	toFloat32(a, expected)
+	actual := make([]float32, len(a))
+	suite.Feature.toFloat32(a, actual)
+	suite.Equal(expected, actual)
 }
 
 func (suite *SIMDTestSuite) TestMulConstAddTo() {

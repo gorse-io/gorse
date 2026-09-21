@@ -18,7 +18,6 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"io"
 	"strconv"
 	"strings"
 	"time"
@@ -26,7 +25,7 @@ import (
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/common/util"
 	"github.com/gorse-io/gorse/storage"
-	"github.com/juju/errors"
+	"github.com/pkg/errors"
 	"github.com/redis/go-redis/extra/redisotel/v9"
 	"github.com/redis/go-redis/v9"
 	"github.com/samber/lo"
@@ -51,7 +50,7 @@ func init() {
 		database.maxSearchResults = option.MaxSearchResults
 		if err = redisotel.InstrumentTracing(database.client, redisotel.WithAttributes(semconv.DBSystemRedis)); err != nil {
 			log.Logger().Error("failed to add tracing for redis", zap.Error(err))
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 		return database, nil
 	})
@@ -77,7 +76,7 @@ func init() {
 		database.maxSearchResults = option.MaxSearchResults
 		if err = redisotel.InstrumentTracing(database.client, redisotel.WithAttributes(semconv.DBSystemRedis)); err != nil {
 			log.Logger().Error("failed to add tracing for redis", zap.Error(err))
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 		return database, nil
 	})
@@ -104,7 +103,7 @@ func (r *Redis) Init() error {
 	// list indices
 	indices, err := r.client.FT_List(context.Background()).Result()
 	if err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	// create index
 	if !lo.Contains(indices, r.DocumentTable()) {
@@ -122,7 +121,7 @@ func (r *Redis) Init() error {
 			&redis.FieldSchema{FieldName: "timestamp", FieldType: redis.SearchFieldTypeNumeric},
 		).Result()
 		if err != nil && !strings.Contains(err.Error(), "Index already exists") {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 	}
 	return nil
@@ -148,11 +147,11 @@ func (r *Redis) scan(ctx context.Context, client redis.UniversalClient, work fun
 	for {
 		result, cursor, err = client.Scan(ctx, cursor, string(r.TablePrefix)+"*", 0).Result()
 		if err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		for _, key := range result {
 			if err = work(key[len(r.TablePrefix):]); err != nil {
-				return errors.Trace(err)
+				return errors.WithStack(err)
 			}
 		}
 		if cursor == 0 {
@@ -181,22 +180,22 @@ func (r *Redis) purge(ctx context.Context, client redis.UniversalClient, isClust
 	for {
 		result, cursor, err = client.Scan(ctx, cursor, string(r.TablePrefix)+"*", 0).Result()
 		if err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		if len(result) > 0 {
 			if isCluster {
 				p := client.Pipeline()
 				for _, key := range result {
 					if err = p.Del(ctx, key).Err(); err != nil {
-						return errors.Trace(err)
+						return errors.WithStack(err)
 					}
 				}
 				if _, err = p.Exec(ctx); err != nil {
-					return errors.Trace(err)
+					return errors.WithStack(err)
 				}
 			} else {
 				if err = client.Del(ctx, result...).Err(); err != nil {
-					return errors.Trace(err)
+					return errors.WithStack(err)
 				}
 			}
 		}
@@ -210,11 +209,11 @@ func (r *Redis) Set(ctx context.Context, values ...Value) error {
 	p := r.client.Pipeline()
 	for _, v := range values {
 		if err := p.Set(ctx, r.Key(v.name), v.value, 0).Err(); err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 	}
 	_, err := p.Exec(ctx)
-	return errors.Trace(err)
+	return errors.WithStack(err)
 }
 
 // Get returns a value from Redis.
@@ -234,26 +233,6 @@ func (r *Redis) Delete(ctx context.Context, key string) error {
 	return r.client.Del(ctx, r.Key(key)).Err()
 }
 
-func (r *Redis) Push(ctx context.Context, name string, message string) error {
-	_, err := r.client.ZAdd(ctx, r.Key(name), redis.Z{Member: message, Score: float64(time.Now().UnixNano())}).Result()
-	return err
-}
-
-func (r *Redis) Pop(ctx context.Context, name string) (string, error) {
-	z, err := r.client.ZPopMin(ctx, r.Key(name), 1).Result()
-	if err != nil {
-		return "", errors.Trace(err)
-	}
-	if len(z) == 0 {
-		return "", io.EOF
-	}
-	return z[0].Member.(string), nil
-}
-
-func (r *Redis) Remain(ctx context.Context, name string) (int64, error) {
-	return r.client.ZCard(ctx, r.Key(name)).Result()
-}
-
 func (r *Redis) documentKey(collection, subset, value string) string {
 	return r.DocumentTable() + ":" + collection + ":" + subset + ":" + value
 }
@@ -271,7 +250,7 @@ func (r *Redis) AddScores(ctx context.Context, collection, subset string, docume
 			"timestamp", document.Timestamp.UnixMicro())
 	}
 	_, err := p.Exec(ctx)
-	return errors.Trace(err)
+	return errors.WithStack(err)
 }
 
 func (r *Redis) SearchScores(ctx context.Context, collection, subset string, query []string, begin, end int) ([]Score, error) {
@@ -294,7 +273,7 @@ func (r *Redis) SearchScores(ctx context.Context, collection, subset string, que
 	}
 	result, err := r.client.FTSearchWithArgs(ctx, r.DocumentTable(), builder.String(), options).Result()
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.WithStack(err)
 	}
 	documents := make([]Score, 0, len(result.Docs))
 	for _, doc := range result.Docs {
@@ -302,22 +281,22 @@ func (r *Redis) SearchScores(ctx context.Context, collection, subset string, que
 		document.Id = doc.Fields["id"]
 		score, err := strconv.ParseFloat(doc.Fields["score"], 64)
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 		document.Score = score
 		isHidden, err := strconv.ParseInt(doc.Fields["is_hidden"], 10, 64)
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 		document.IsHidden = isHidden != 0
 		categories, err := decodeCategories(doc.Fields["categories"])
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 		document.Categories = categories
 		timestamp, err := strconv.ParseInt(doc.Fields["timestamp"], 10, 64)
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 		document.Timestamp = time.UnixMicro(timestamp).In(time.UTC)
 		documents = append(documents, document)
@@ -358,7 +337,7 @@ func (r *Redis) UpdateScores(ctx context.Context, collections []string, subset *
 			Limit:       limit,
 		}).Result()
 		if err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		if len(result.Docs) == 0 {
 			break
@@ -399,7 +378,7 @@ func (r *Redis) UpdateScores(ctx context.Context, collections []string, subset *
 			}
 			return tx.HSet(ctx, key, values...).Err()
 		}, key); err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 	}
 	return nil
@@ -407,7 +386,7 @@ func (r *Redis) UpdateScores(ctx context.Context, collections []string, subset *
 
 func (r *Redis) DeleteScores(ctx context.Context, collections []string, condition ScoreCondition) error {
 	if err := condition.Check(); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	var builder strings.Builder
 	fmt.Fprintf(&builder, "@collection:{ %s }", escape(strings.Join(collections, " | ")))
@@ -428,7 +407,7 @@ func (r *Redis) DeleteScores(ctx context.Context, collections []string, conditio
 			Limit:       10000,
 		}).Result()
 		if err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		// delete documents
 		p := r.client.Pipeline()
@@ -437,7 +416,7 @@ func (r *Redis) DeleteScores(ctx context.Context, collections []string, conditio
 		}
 		_, err = p.Exec(ctx)
 		if err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		// break if no more documents
 		if result.Total == len(result.Docs) {
@@ -466,21 +445,21 @@ func (r *Redis) scanScores(ctx context.Context, client redis.UniversalClient, ca
 	for {
 		result, cursor, err = client.Scan(ctx, cursor, r.DocumentTable()+"*", 0).Result()
 		if err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		for _, key := range result {
 			var row map[string]string
 			row, err = client.HGetAll(ctx, key).Result()
 			if err != nil {
-				return errors.Trace(err)
+				return errors.WithStack(err)
 			}
 			var usec int64
 			usec, err = util.ParseInt[int64](row["timestamp"])
 			if err != nil {
-				return errors.Trace(err)
+				return errors.WithStack(err)
 			}
 			if err = callback(row["collection"], row["id"], row["subset"], time.UnixMicro(usec).In(time.UTC)); err != nil {
-				return errors.Trace(err)
+				return errors.WithStack(err)
 			}
 		}
 		if cursor == 0 {
@@ -494,11 +473,11 @@ func (r *Redis) AddTimeSeriesPoints(ctx context.Context, points []TimeSeriesPoin
 	opt := &redis.TSOptions{DuplicatePolicy: "LAST"}
 	for _, point := range points {
 		if err := p.TSAddWithArgs(ctx, r.PointsTable()+":"+point.Name, point.Timestamp.UnixMilli(), point.Value, opt).Err(); err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 	}
 	_, err := p.Exec(ctx)
-	return errors.Trace(err)
+	return errors.WithStack(err)
 }
 
 func (r *Redis) GetTimeSeriesPoints(ctx context.Context, name string, begin, end time.Time, duration time.Duration) ([]TimeSeriesPoint, error) {
@@ -509,7 +488,7 @@ func (r *Redis) GetTimeSeriesPoints(ctx context.Context, name string, begin, end
 			redis.HasErrorPrefix(err, "key does not exist") {
 			return []TimeSeriesPoint{}, nil
 		}
-		return nil, errors.Trace(err)
+		return nil, errors.WithStack(err)
 	}
 	points := make([]TimeSeriesPoint, 0, len(result))
 	for _, doc := range result {
@@ -529,7 +508,7 @@ func encodeCategory(category string) string {
 func decodeCategory(s string) (string, error) {
 	b, err := base64.RawStdEncoding.DecodeString(s)
 	if err != nil {
-		return "", errors.Trace(err)
+		return "", errors.WithStack(err)
 	}
 	return string(b[1:]), nil
 }
@@ -553,7 +532,7 @@ func decodeCategories(s string) ([]string, error) {
 	for category := range strings.SplitSeq(s, ";") {
 		category, err := decodeCategory(category)
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 		categories = append(categories, category)
 	}

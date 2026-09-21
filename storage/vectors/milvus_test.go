@@ -18,6 +18,8 @@ import (
 	"os"
 	"testing"
 
+	"github.com/gorse-io/gorse/common/log"
+	"github.com/gorse-io/gorse/storage"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -26,14 +28,8 @@ var (
 )
 
 func init() {
-	// get environment variables
-	env := func(key, defaultValue string) string {
-		if value := os.Getenv(key); value != "" {
-			return value
-		}
-		return defaultValue
-	}
-	milvusUri = env("MILVUS_URI", "milvus://127.0.0.1:19530")
+	// os.Setenv("MILVUS_URI", "milvus://127.0.0.1:19530")
+	milvusUri = os.Getenv("MILVUS_URI")
 }
 
 type MilvusTestSuite struct {
@@ -41,11 +37,32 @@ type MilvusTestSuite struct {
 }
 
 func (suite *MilvusTestSuite) SetupSuite() {
+	log.SetTestLogger(suite.T())
 	var err error
 	suite.Database, err = Open(milvusUri, "gorse_")
 	suite.NoError(err)
 }
 
+func (suite *MilvusTestSuite) TestInvalidSparseCollection() {
+	ctx := suite.T().Context()
+	err := suite.Database.AddCollection(ctx, "test_invalid_sparse", 0, Cosine, VectorConfig{})
+	suite.ErrorIs(err, storage.ErrNotSupported)
+	_, err = suite.Database.DescribeCollection(ctx, "test_invalid_sparse")
+	suite.ErrorIs(err, storage.ErrNotFound)
+}
+
+func (suite *MilvusTestSuite) TestQuantization() {
+	suite.testQuantization(QuantizationNone, 0)
+	suite.testQuantization(QuantizationRQ, 0)
+	suite.testQuantization(QuantizationSQ, 0)
+	suite.testQuantization(QuantizationSQ, 8)
+	suite.testQuantization(QuantizationPQ, 0)
+	suite.testQuantization(QuantizationPQ, 8)
+}
+
 func TestMilvus(t *testing.T) {
+	if milvusUri == "" {
+		t.Skip("MILVUS_URI is not set, skipping Milvus test")
+	}
 	suite.Run(t, new(MilvusTestSuite))
 }

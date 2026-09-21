@@ -26,13 +26,13 @@ import (
 	"github.com/c-bata/goptuna"
 	"github.com/chewxy/math32"
 	"github.com/gorse-io/gorse/common/encoding"
-	"github.com/gorse-io/gorse/common/bfloats"
+	"github.com/gorse-io/gorse/common/floats"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/common/nn"
 	"github.com/gorse-io/gorse/dataset"
 	"github.com/gorse-io/gorse/model"
-	"github.com/juju/errors"
+	"github.com/pkg/errors"
 	"github.com/samber/lo"
 	"go.uber.org/zap"
 )
@@ -110,8 +110,9 @@ func (fm *AFM) Invalid() bool {
 
 func (fm *AFM) Forward(indices, values *nn.Tensor, embeddings []*nn.Tensor, jobs int) *nn.Tensor {
 	batchSize := indices.Shape()[0]
+	numDimension := indices.Shape()[1]
 	v := fm.V.Forward(indices)
-	x := nn.Reshape(values, batchSize, fm.numDimension, 1)
+	x := nn.Reshape(values, batchSize, numDimension, 1)
 	vx := nn.BMM(v, x, true, false, jobs)
 	sumSquare := nn.Square(vx)
 	e2 := nn.Square(v)
@@ -207,6 +208,9 @@ func (fm *AFM) BatchPredict(inputs []lo.Tuple4[string, string, []Label, []Label]
 	e := make([][][]uint16, len(inputs))
 	for i := range inputs {
 		e[i] = make([][]uint16, len(fm.embeddingDim))
+		if fm.embeddingIndex == nil {
+			continue
+		}
 		for _, embedding := range embeddings[i] {
 			itemIndex := fm.embeddingIndex.ToNumber(embedding.Name)
 			if itemIndex == dataset.NotId {
@@ -415,44 +419,44 @@ func (fm *AFM) Fit(ctx context.Context, trainSet, testSet dataset.CTRSplit, conf
 func (fm *AFM) Marshal(w io.Writer) error {
 	// write params
 	if err := encoding.WriteGob(w, fm.Params); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	// write index
 	if err := dataset.MarshalUnifiedIndex(w, fm.Index); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	// write dataset stats
 	if err := encoding.WriteGob(w, fm.numFeatures); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	if err := encoding.WriteGob(w, fm.numDimension); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	if err := encoding.WriteGob(w, fm.embeddingDim); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	if len(fm.embeddingDim) > 0 {
 		if err := dataset.MarshalIndex(w, fm.embeddingIndex); err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 	}
 	// write scalers
 	if fm.autoScale {
 		if err := encoding.WriteGob(w, len(fm.Scalers)); err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		for idx, scaler := range fm.Scalers {
 			if err := encoding.WriteGob(w, idx); err != nil {
-				return errors.Trace(err)
+				return errors.WithStack(err)
 			}
 			if err := scaler.Marshal(w); err != nil {
-				return errors.Trace(err)
+				return errors.WithStack(err)
 			}
 		}
 	}
 	// write parameters
 	if err := nn.Save(fm.Parameters(), w); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	return nil
 }
@@ -461,45 +465,45 @@ func (fm *AFM) Unmarshal(r io.Reader) error {
 	// read params
 	err := encoding.ReadGob(r, &fm.Params)
 	if err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	fm.SetParams(fm.Params)
 	// read index
 	fm.Index, err = dataset.UnmarshalUnifiedIndex(r)
 	if err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	// read dataset stats
 	if err = encoding.ReadGob(r, &fm.numFeatures); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	if err = encoding.ReadGob(r, &fm.numDimension); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	if err = encoding.ReadGob(r, &fm.embeddingDim); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	if len(fm.embeddingDim) > 0 {
 		fm.embeddingIndex, err = dataset.UnmarshalIndex(r)
 		if err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 	}
 	// read scalers
 	if fm.autoScale {
 		var numScalers int
 		if err = encoding.ReadGob(r, &numScalers); err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		fm.Scalers = make(map[int32]*AutoScaler, numScalers)
 		for i := 0; i < numScalers; i++ {
 			var idx int32
 			if err = encoding.ReadGob(r, &idx); err != nil {
-				return errors.Trace(err)
+				return errors.WithStack(err)
 			}
 			scaler := NewAutoScaler()
 			if err = scaler.Unmarshal(r); err != nil {
-				return errors.Trace(err)
+				return errors.WithStack(err)
 			}
 			fm.Scalers[idx] = scaler
 		}
@@ -515,7 +519,7 @@ func (fm *AFM) Unmarshal(r io.Reader) error {
 		fm.E[i] = nn.NewLinear(dim, fm.nFactors)
 	}
 	if err = nn.Load(fm.Parameters(), r); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	return nil
 }
@@ -529,8 +533,12 @@ func (fm *AFM) convertToTensors(x []lo.Tuple2[[]int32, []float32], e [][][]uint1
 		panic("length of x and y must be equal")
 	}
 
-	alignedIndices := make([]float32, len(x)*fm.numDimension)
-	alignedValues := make([]float32, len(x)*fm.numDimension)
+	numDimension := fm.numDimension
+	for i := range x {
+		numDimension = max(numDimension, len(x[i].A))
+	}
+	alignedIndices := make([]float32, len(x)*numDimension)
+	alignedValues := make([]float32, len(x)*numDimension)
 	alignedEmbeddings := make([][]float32, len(fm.embeddingDim))
 	for i := range fm.embeddingDim {
 		alignedEmbeddings[i] = make([]float32, 0, len(x)*fm.embeddingDim[i])
@@ -541,12 +549,12 @@ func (fm *AFM) convertToTensors(x []lo.Tuple2[[]int32, []float32], e [][][]uint1
 			panic("length of indices and values must be equal")
 		}
 		for j := range x[i].A {
-			alignedIndices[i*fm.numDimension+j] = float32(x[i].A[j])
-			alignedValues[i*fm.numDimension+j] = x[i].B[j]
+			alignedIndices[i*numDimension+j] = float32(x[i].A[j])
+			alignedValues[i*numDimension+j] = x[i].B[j]
 		}
 		for j := range fm.embeddingDim {
 			if len(e[i]) > j && len(e[i][j]) == fm.embeddingDim[j] {
-				alignedEmbeddings[j] = append(alignedEmbeddings[j], bfloats.ToFloat32(e[i][j])...)
+				alignedEmbeddings[j] = append(alignedEmbeddings[j], floats.ToFloat32(e[i][j])...)
 			} else {
 				alignedEmbeddings[j] = append(alignedEmbeddings[j], make([]float32, fm.embeddingDim[j])...)
 			}
@@ -556,8 +564,8 @@ func (fm *AFM) convertToTensors(x []lo.Tuple2[[]int32, []float32], e [][][]uint1
 		}
 	}
 
-	indicesTensor = nn.NewTensor(alignedIndices, len(x), fm.numDimension)
-	valuesTensor = nn.NewTensor(alignedValues, len(x), fm.numDimension)
+	indicesTensor = nn.NewTensor(alignedIndices, len(x), numDimension)
+	valuesTensor = nn.NewTensor(alignedValues, len(x), numDimension)
 	embeddingTensor = make([]*nn.Tensor, len(fm.embeddingDim))
 	for i := range fm.embeddingDim {
 		embeddingTensor[i] = nn.NewTensor(alignedEmbeddings[i], len(x), fm.embeddingDim[i])

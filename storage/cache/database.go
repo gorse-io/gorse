@@ -16,6 +16,7 @@ package cache
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"strconv"
 	"strings"
@@ -23,7 +24,7 @@ import (
 
 	"github.com/araddon/dateparse"
 	"github.com/gorse-io/gorse/storage"
-	"github.com/juju/errors"
+	"github.com/pkg/errors"
 )
 
 const (
@@ -81,11 +82,6 @@ var ItemCache = []string{
 	Recommend,
 }
 
-var (
-	ErrObjectNotExist = errors.NotFoundf("object")
-	ErrNoDatabase     = errors.NotAssignedf("database")
-)
-
 // Key creates key for cache. Empty field will be ignored.
 func Key(keys ...string) string {
 	if len(keys) == 0 {
@@ -107,6 +103,16 @@ type Value struct {
 	value string
 }
 
+// Name returns the name of the value.
+func (v Value) Name() string {
+	return v.name
+}
+
+// Value returns the raw string representation of the value.
+func (v Value) Value() string {
+	return v.value
+}
+
 func String(name, value string) Value {
 	return Value{name: name, value: value}
 }
@@ -123,6 +129,16 @@ type ReturnValue struct {
 	value  string
 	err    error
 	exists bool
+}
+
+// NewReturnValue creates a return value with the specified existence state.
+func NewReturnValue(value string, exists bool) *ReturnValue {
+	return &ReturnValue{value: value, exists: exists}
+}
+
+// NewReturnError creates a return value containing an error.
+func NewReturnError(err error) *ReturnValue {
+	return &ReturnValue{err: err}
 }
 
 func (r *ReturnValue) String() (string, error) {
@@ -154,7 +170,7 @@ func (r *ReturnValue) Time() (time.Time, error) {
 	}
 	t, err := dateparse.ParseAny(r.value)
 	if err != nil {
-		return time.Time{}, errors.Trace(err)
+		return time.Time{}, errors.WithStack(err)
 	}
 	return t.In(time.UTC), nil
 }
@@ -193,7 +209,7 @@ type ScoreCondition struct {
 
 func (condition *ScoreCondition) Check() error {
 	if condition.Id == nil && condition.Before == nil && condition.Subset == nil {
-		return errors.NotValidf("document condition")
+		return fmt.Errorf("document condition: %w", storage.ErrInvalidArgument)
 	}
 	return nil
 }
@@ -221,10 +237,6 @@ type Database interface {
 	Set(ctx context.Context, values ...Value) error
 	Get(ctx context.Context, name string) *ReturnValue
 	Delete(ctx context.Context, name string) error
-
-	Push(ctx context.Context, name, value string) error
-	Pop(ctx context.Context, name string) (string, error)
-	Remain(ctx context.Context, name string) (int64, error)
 
 	AddScores(ctx context.Context, collection, subset string, documents []Score) error
 	SearchScores(ctx context.Context, collection, subset string, query []string, begin, end int) ([]Score, error)

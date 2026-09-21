@@ -32,16 +32,38 @@ message Vector {
   repeated float values = 2;
   repeated string categories = 3;
   google.protobuf.Timestamp timestamp = 4;
+  bool is_hidden = 5;
+  repeated uint32 indices = 6;
+}
+
+message ScoredVector {
+  Vector vector = 1;
+  float score = 2;
 }
 
 message ListCollectionsRequest {}
 
 message ListCollectionsResponse { repeated string collections = 1; }
 
+message VectorConfig {
+  string quantization_type = 1;
+  int32 quantization_bits = 2;
+}
+
+message DescribeCollectionRequest { string name = 1; }
+
+message DescribeCollectionResponse {
+  string name = 1;
+  int32 dimensions = 2;
+  Distance distance = 3;
+  VectorConfig config = 4;
+}
+
 message AddCollectionRequest {
   string name = 1;
   int32 dimensions = 2;
   Distance distance = 3;
+  VectorConfig config = 4;
 }
 
 message AddCollectionResponse {}
@@ -66,18 +88,34 @@ message DeleteVectorsResponse {}
 
 message QueryVectorsRequest {
   string collection = 1;
-  repeated float query = 2;
+  Vector query = 2;
   repeated string categories = 3;
   int32 top_k = 4;
 }
 
-message QueryVectorsResponse { repeated Vector vectors = 1; }
+message QueryVectorsResponse {
+  repeated ScoredVector vectors = 1;
+}
+
+message CountVectorsRequest { string collection = 1; }
+
+message CountVectorsResponse { int64 count = 1; }
+
+message GetVectorsRequest {
+  string collection = 1;
+  repeated string ids = 2;
+}
+
+message GetVectorsResponse { repeated Vector vectors = 1; }
 
 service VectorStore {
   rpc ListCollections(ListCollectionsRequest) returns (ListCollectionsResponse) {}
+  rpc DescribeCollection(DescribeCollectionRequest) returns (DescribeCollectionResponse) {}
   rpc AddCollection(AddCollectionRequest) returns (AddCollectionResponse) {}
   rpc DeleteCollection(DeleteCollectionRequest) returns (DeleteCollectionResponse) {}
+  rpc CountVectors(CountVectorsRequest) returns (CountVectorsResponse) {}
   rpc AddVectors(AddVectorsRequest) returns (AddVectorsResponse) {}
+  rpc GetVectors(GetVectorsRequest) returns (GetVectorsResponse) {}
   rpc DeleteVectors(DeleteVectorsRequest) returns (DeleteVectorsResponse) {}
   rpc QueryVectors(QueryVectorsRequest) returns (QueryVectorsResponse) {}
 }

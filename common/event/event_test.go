@@ -19,54 +19,48 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
 
-type MockRecorder struct {
+type MockHandler struct {
 	mock.Mock
 }
 
-func (m *MockRecorder) RecordAPI(ctx context.Context, event APIEvent) {
+func (m *MockHandler) EmitRequest(ctx context.Context, event Request) {
 	m.Called(ctx, event)
 }
 
-func (m *MockRecorder) RecordStorage(ctx context.Context, event StorageEvent) {
+func (m *MockHandler) EmitSnapshot(ctx context.Context, event Snapshot) {
 	m.Called(ctx, event)
 }
 
 func TestSetEventRecorder(t *testing.T) {
 	t.Cleanup(func() {
-		SetEventRecorder(&NopRecorder{})
+		SetEventHandler(&NopHandler{})
 	})
 
-	ctx := context.Background()
 	now := time.Now()
-	apiEvent := APIEvent{
+	request := Request{
 		RequestID:    "request-id",
 		Method:       "GET",
-		Path:         "/api/recommend/user-id",
+		Route:        "/api/recommend/{user-id}",
 		StatusCode:   200,
-		ResponseTime: 10,
+		ResponseTime: 10 * time.Millisecond,
 		Timestamp:    now,
 		RemoteAddr:   "127.0.0.1",
 	}
-	storageEvent := StorageEvent{
+	snapshot := Snapshot{
 		UserCount:     1,
 		ItemCount:     2,
 		FeedbackCount: 3,
 		Timestamp:     now,
 	}
 
-	recorder := new(MockRecorder)
-	recorder.On("RecordAPI", ctx, apiEvent).Once()
-	recorder.On("RecordStorage", ctx, storageEvent).Once()
-
-	SetEventRecorder(recorder)
-
-	assert.Same(t, recorder, EventRecorder())
-	EventRecorder().RecordAPI(ctx, apiEvent)
-	EventRecorder().RecordStorage(ctx, storageEvent)
-
-	recorder.AssertExpectations(t)
+	handler := new(MockHandler)
+	handler.On("EmitRequest", t.Context(), request).Once()
+	handler.On("EmitSnapshot", t.Context(), snapshot).Once()
+	SetEventHandler(handler)
+	Emit(t.Context(), request)
+	Emit(t.Context(), snapshot)
+	handler.AssertExpectations(t)
 }

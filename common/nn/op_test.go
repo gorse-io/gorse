@@ -297,8 +297,8 @@ func TestAbs(t *testing.T) {
 	y := Abs(x)
 	assert.Equal(t, []float32{1, 2, 3, 4, 5, 6}, y.data)
 
-	// Test gradient
-	x = Rand(2, 3)
+	// Test gradient away from zero, where Abs is not differentiable.
+	x = NewTensor([]float32{-0.9, -0.5, -0.1, 0.1, 0.5, 0.9}, 2, 3)
 	y = Abs(x)
 	y.Backward()
 	dx := numericalDiff(Abs, x)

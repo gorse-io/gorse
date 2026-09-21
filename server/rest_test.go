@@ -14,18 +14,24 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"testing"
 	"time"
 
 	"github.com/emicklei/go-restful/v3"
+	"github.com/gorse-io/gorse/common/event"
 	"github.com/gorse-io/gorse/common/expression"
+	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/config"
+	"github.com/gorse-io/gorse/storage"
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
+	"github.com/gorse-io/gorse/storage/vectors"
 	"github.com/samber/lo/mutable"
 	"github.com/steinfletcher/apitest"
 	"github.com/stretchr/testify/assert"
@@ -41,6 +47,7 @@ type ServerTestSuite struct {
 }
 
 func (suite *ServerTestSuite) SetupSuite() {
+	log.SetTestLogger(suite.T())
 	// create mock redis server
 	var err error
 	// open database
@@ -49,10 +56,14 @@ func (suite *ServerTestSuite) SetupSuite() {
 	suite.NoError(err)
 	suite.CacheClient, err = cache.Open(fmt.Sprintf("sqlite://%s/cache.db", suite.T().TempDir()), "")
 	suite.NoError(err)
+	suite.VectorClient, err = vectors.Open(fmt.Sprintf("xvec://%s/vectors", suite.T().TempDir()), "")
+	suite.NoError(err)
 	// init database
 	err = suite.DataClient.Init()
 	suite.NoError(err)
 	err = suite.CacheClient.Init()
+	suite.NoError(err)
+	err = suite.VectorClient.Init()
 	suite.NoError(err)
 
 	suite.WebService = new(restful.WebService)
@@ -67,12 +78,17 @@ func (suite *ServerTestSuite) TearDownSuite() {
 	suite.NoError(err)
 	err = suite.CacheClient.Close()
 	suite.NoError(err)
+	err = suite.VectorClient.Close()
+	suite.NoError(err)
 }
 
 func (suite *ServerTestSuite) SetupTest() {
+	log.SetTestLogger(suite.T())
 	err := suite.DataClient.Purge()
 	suite.NoError(err)
 	err = suite.CacheClient.Purge()
+	suite.NoError(err)
+	err = vectors.Purge(suite.T().Context(), suite.VectorClient)
 	suite.NoError(err)
 	// configuration
 	suite.Config = config.GetDefaultConfig()
@@ -86,6 +102,56 @@ func (suite *ServerTestSuite) marshal(v any) string {
 	s, err := json.Marshal(v)
 	suite.NoError(err)
 	return string(s)
+}
+
+type requestsHandler struct {
+	requests chan event.Request
+}
+
+func (h *requestsHandler) EmitRequest(_ context.Context, request event.Request) {
+	h.requests <- request
+}
+
+func (h *requestsHandler) EmitSnapshot(context.Context, event.Snapshot) {}
+
+func (suite *ServerTestSuite) TestEmitRequest() {
+	handler := &requestsHandler{
+		requests: make(chan event.Request, 1),
+	}
+	event.SetEventHandler(handler)
+	suite.T().Cleanup(func() { event.SetEventHandler(&event.NopHandler{}) })
+
+	body := suite.marshal(data.User{UserId: "emit-request"})
+	const responseBody = `{"RowAffected":1}`
+	before := time.Now()
+	result := apitest.New().
+		Handler(suite.handler).
+		Post("/api/user").
+		Header("X-API-Key", apiKey).
+		JSON(body).
+		Expect(suite.T()).
+		Status(http.StatusOK).
+		Body(responseBody).
+		End()
+	after := time.Now()
+	responseBytes, err := io.ReadAll(result.Response.Body)
+	suite.Require().NoError(err)
+
+	select {
+	case req := <-handler.requests:
+		suite.Equal(result.Response.Header.Get("X-Request-ID"), req.RequestID)
+		suite.EqualValues(len(body), req.RequestBytes)
+		suite.Equal(http.MethodPost, req.Method)
+		suite.Equal("/api/user", req.Route)
+		suite.Equal(http.StatusOK, req.StatusCode)
+		suite.Positive(req.ResponseTime)
+		suite.EqualValues(len(responseBytes), req.ResponseBytes)
+		suite.False(req.Timestamp.Before(before))
+		suite.False(req.Timestamp.After(after))
+		suite.Empty(req.RemoteAddr)
+	case <-time.After(time.Second):
+		suite.Fail("request event was not emitted")
+	}
 }
 
 func (suite *ServerTestSuite) TestUsers() {
@@ -570,6 +636,152 @@ func (suite *ServerTestSuite) TestItems() {
 		End()
 }
 
+func (suite *ServerTestSuite) TestQuota() {
+	t := suite.T()
+
+	suite.Config.Quota.MaxUsersCount = 1
+	apitest.New().
+		Handler(suite.handler).
+		Post("/api/user").
+		Header("X-API-Key", apiKey).
+		JSON(data.User{UserId: "limited-user-1"}).
+		Expect(t).
+		Status(http.StatusOK).
+		End()
+	apitest.New().
+		Handler(suite.handler).
+		Post("/api/user").
+		Header("X-API-Key", apiKey).
+		JSON(data.User{UserId: "limited-user-2"}).
+		Expect(t).
+		Status(http.StatusTooManyRequests).
+		End()
+	suite.Config.Quota.MaxUsersCount = 0
+
+	suite.Config.Quota.MaxItemsCount = 1
+	apitest.New().
+		Handler(suite.handler).
+		Post("/api/item").
+		Header("X-API-Key", apiKey).
+		JSON(Item{ItemId: "limited-item-1"}).
+		Expect(t).
+		Status(http.StatusOK).
+		End()
+	apitest.New().
+		Handler(suite.handler).
+		Post("/api/item").
+		Header("X-API-Key", apiKey).
+		JSON(Item{ItemId: "limited-item-2"}).
+		Expect(t).
+		Status(http.StatusTooManyRequests).
+		End()
+	suite.Config.Quota.MaxItemsCount = 0
+
+	suite.Config.Quota.MaxCommentSize = 3
+	apittestUser := data.User{UserId: "oversized-user-comment", Comment: "toolong"}
+	apitest.New().
+		Handler(suite.handler).
+		Post("/api/user").
+		Header("X-API-Key", apiKey).
+		JSON(apittestUser).
+		Expect(t).
+		Status(http.StatusTooManyRequests).
+		End()
+	apitest.New().
+		Handler(suite.handler).
+		Patch("/api/user/oversized-user-comment").
+		Header("X-API-Key", apiKey).
+		JSON(data.UserPatch{Comment: new("toolong")}).
+		Expect(t).
+		Status(http.StatusTooManyRequests).
+		End()
+	suite.Config.Quota.MaxCommentSize = 0
+
+	suite.Config.Quota.MaxLabelsSize = 5
+	apitest.New().
+		Handler(suite.handler).
+		Post("/api/users").
+		Header("X-API-Key", apiKey).
+		JSON([]data.User{{UserId: "oversized-user-labels", Labels: []string{"abcdef"}}}).
+		Expect(t).
+		Status(http.StatusTooManyRequests).
+		End()
+	suite.Config.Quota.MaxLabelsSize = 0
+
+	suite.Config.Quota.MaxCommentSize = 3
+	apitest.New().
+		Handler(suite.handler).
+		Post("/api/item").
+		Header("X-API-Key", apiKey).
+		JSON(Item{ItemId: "oversized-item-comment", Comment: "toolong"}).
+		Expect(t).
+		Status(http.StatusTooManyRequests).
+		End()
+	apitest.New().
+		Handler(suite.handler).
+		Patch("/api/item/oversized-item-comment").
+		Header("X-API-Key", apiKey).
+		JSON(data.ItemPatch{Comment: new("toolong")}).
+		Expect(t).
+		Status(http.StatusTooManyRequests).
+		End()
+	suite.Config.Quota.MaxCommentSize = 0
+
+	suite.Config.Quota.MaxLabelsSize = 5
+	apitest.New().
+		Handler(suite.handler).
+		Post("/api/items").
+		Header("X-API-Key", apiKey).
+		JSON([]Item{{ItemId: "oversized-item-labels", Labels: []string{"abcdef"}}}).
+		Expect(t).
+		Status(http.StatusTooManyRequests).
+		End()
+	suite.Config.Quota.MaxLabelsSize = 0
+
+	suite.Config.Quota.MaxCategoriesCount = 1
+	apitest.New().
+		Handler(suite.handler).
+		Post("/api/item").
+		Header("X-API-Key", apiKey).
+		JSON(Item{ItemId: "too-many-categories", Categories: []string{"a", "b"}}).
+		Expect(t).
+		Status(http.StatusTooManyRequests).
+		End()
+	suite.Config.Quota.MaxCategoriesCount = 0
+
+	suite.Config.Quota.MaxCategoriesSize = 5
+	apitest.New().
+		Handler(suite.handler).
+		Post("/api/item").
+		Header("X-API-Key", apiKey).
+		JSON(Item{ItemId: "oversized-categories", Categories: []string{"abcdef"}}).
+		Expect(t).
+		Status(http.StatusTooManyRequests).
+		End()
+	suite.Config.Quota.MaxCategoriesSize = 0
+
+	suite.Config.Quota.MaxLabelsSize = 5
+	apitest.New().
+		Handler(suite.handler).
+		Post("/api/feedback").
+		Header("X-API-Key", apiKey).
+		JSON([]Feedback{{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "u", ItemId: "i"}, Labels: []string{"abcdef"}}}).
+		Expect(t).
+		Status(http.StatusTooManyRequests).
+		End()
+	suite.Config.Quota.MaxLabelsSize = 0
+
+	suite.Config.Quota.MaxCommentSize = 3
+	apitest.New().
+		Handler(suite.handler).
+		Post("/api/feedback").
+		Header("X-API-Key", apiKey).
+		JSON([]Feedback{{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "u", ItemId: "i"}, Comment: "toolong"}}).
+		Expect(t).
+		Status(http.StatusTooManyRequests).
+		End()
+}
+
 func (suite *ServerTestSuite) TestSearchItems() {
 	t := suite.T()
 
@@ -633,8 +845,8 @@ func (suite *ServerTestSuite) TestFeedback() {
 	// Insert ret
 	feedback := []data.Feedback{
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "0"}, Value: 1.0},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "1", ItemId: "2"}, Value: 1.0},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "2", ItemId: "4"}, Value: 1.0},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "1", ItemId: "2"}, Value: 1.0, Labels: []any{"positive", "mobile"}},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "2", ItemId: "4"}, Value: 1.0, Labels: map[string]any{"source": "rest", "rank": json.Number("2")}},
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "3", ItemId: "6"}, Value: 1.0},
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "4", ItemId: "8"}, Value: 1.0},
 	}
@@ -722,7 +934,7 @@ func (suite *ServerTestSuite) TestFeedback() {
 		Header("X-API-Key", apiKey).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(`[{"FeedbackType":"click", "UserId": "2", "ItemId": "4", "Timestamp":"0001-01-01T00:00:00Z", "Updated":"0001-01-01T00:00:00Z", "Comment":"", "Value":1}]`).
+		Body(suite.marshal([]data.Feedback{feedback[2]})).
 		End()
 	apitest.New().
 		Handler(suite.handler).
@@ -730,7 +942,7 @@ func (suite *ServerTestSuite) TestFeedback() {
 		Header("X-API-Key", apiKey).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(`[{"FeedbackType":"click", "UserId": "2", "ItemId": "4", "Timestamp":"0001-01-01T00:00:00Z", "Updated":"0001-01-01T00:00:00Z", "Comment":"", "Value":1}]`).
+		Body(suite.marshal([]data.Feedback{feedback[2]})).
 		End()
 	// test overwrite
 	apitest.New().
@@ -779,6 +991,45 @@ func (suite *ServerTestSuite) TestFeedback() {
 		End()
 }
 
+func (suite *ServerTestSuite) TestItemToItem() {
+	ctx := suite.T().Context()
+	now := time.Unix(0, 0)
+	suite.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "default", Type: "embedding", Column: "item.Labels.embedding"}}
+	suite.NoError(suite.DataClient.BatchInsertItems(ctx, []data.Item{
+		{ItemId: "source", Labels: map[string]any{"embedding": []float32{0, 0}}, Timestamp: now},
+		{ItemId: "near", Labels: map[string]any{"embedding": []float32{0.1, 0}}, Categories: []string{"movie", "drama"}, Timestamp: now},
+		{ItemId: "far", Labels: map[string]any{"embedding": []float32{10, 0}}, Categories: []string{"movie"}, Timestamp: now},
+		{ItemId: "hidden", Labels: map[string]any{"embedding": []float32{0.05, 0}}, Categories: []string{"movie"}, IsHidden: true, Timestamp: now},
+	}))
+	suite.NoError(suite.VectorClient.AddCollection(ctx, vectors.ItemToItemCollection("default"), 2, vectors.Euclidean, vectors.VectorConfig{}))
+	suite.NoError(suite.VectorClient.AddVectors(ctx, vectors.ItemToItemCollection("default"), []vectors.Vector{
+		{Id: "source", Values: []float32{0, 0}, Timestamp: now},
+		{Id: "near", Values: []float32{0.1, 0}, Categories: []string{"movie", "drama"}, Timestamp: now},
+		{Id: "far", Values: []float32{10, 0}, Categories: []string{"movie"}, Timestamp: now},
+		{Id: "hidden", Values: []float32{0.05, 0}, Categories: []string{"movie"}, IsHidden: true, Timestamp: now},
+	}))
+
+	expected := suite.marshal([]cache.Score{
+		{Id: "near", Score: 0.990103795941627, Categories: []string{"movie", "drama"}},
+		{Id: "far", Score: 0.009900990099009901, Categories: []string{"movie"}},
+	})
+	expectedAllCategories := suite.marshal([]cache.Score{
+		{Id: "near", Score: 0.990103795941627, Categories: []string{"movie", "drama"}},
+	})
+	apitest.New().Handler(suite.handler).Get("/api/item/"+"source"+"/neighbors").
+		Query("category", "movie").Header("X-API-Key", apiKey).
+		Expect(suite.T()).Status(http.StatusOK).Body(expected).End()
+	apitest.New().Handler(suite.handler).Get("/api/item-to-item/default/source").
+		Query("category", "movie").Header("X-API-Key", apiKey).
+		Expect(suite.T()).Status(http.StatusOK).Body(expected).End()
+	apitest.New().Handler(suite.handler).Get("/api/item/"+"source"+"/neighbors").
+		QueryCollection(map[string][]string{"category": {"movie", "drama"}}).Header("X-API-Key", apiKey).
+		Expect(suite.T()).Status(http.StatusOK).Body(expectedAllCategories).End()
+	apitest.New().Handler(suite.handler).Get("/api/item-to-item/default/source").
+		QueryCollection(map[string][]string{"category": {"movie", "drama"}}).Header("X-API-Key", apiKey).
+		Expect(suite.T()).Status(http.StatusOK).Body(expectedAllCategories).End()
+}
+
 func (suite *ServerTestSuite) TestNonPersonalizedRecommend() {
 	ctx := suite.T().Context()
 	suite.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "default"}}
@@ -792,12 +1043,8 @@ func (suite *ServerTestSuite) TestNonPersonalizedRecommend() {
 	operators := []ListOperator{
 		// TODO: Support hide users in the future.
 		//{"User Neighbors", cache.Collection(cache.UserNeighbors, "0"), "/api/user/0/neighbors"},
-		{"Item Neighbors", cache.ItemToItem, cache.Key("default", "0"), "", "/api/item/0/neighbors"},
-		{"Item Neighbors in Category", cache.ItemToItem, cache.Key("default", "0"), "0", "/api/item/0/neighbors/0"},
 		{"NonPersonalized", cache.NonPersonalized, "trending", "", "/api/non-personalized/trending"},
 		{"NonPersonalizedCategory", cache.NonPersonalized, "trending", "0", "/api/non-personalized/trending"},
-		{"ItemToItem", cache.ItemToItem, cache.Key("lookalike", "0"), "", "/api/item-to-item/lookalike/0"},
-		{"ItemToItemCategory", cache.ItemToItem, cache.Key("lookalike", "0"), "0", "/api/item-to-item/lookalike/0"},
 		{"CollaborativeFiltering", cache.Recommend, "0", "", "/api/collaborative-filtering/0"},
 		{"CollaborativeFilteringCategory", cache.Recommend, "0", "0", "/api/collaborative-filtering/0/0"},
 	}
@@ -906,13 +1153,17 @@ func (suite *ServerTestSuite) TestNonPersonalizedRecommend() {
 
 func (suite *ServerTestSuite) TestUserToUser() {
 	ctx := suite.T().Context()
-	suite.Config.Recommend.UserToUser = []config.UserToUserConfig{{Name: "default"}}
-	err := suite.CacheClient.AddScores(ctx, cache.UserToUser, cache.Key("default", "0"), []cache.Score{
-		{Id: "1", Score: 100},
-		{Id: "2", Score: 99},
-		{Id: "3", Score: 98},
-		{Id: "4", Score: 97},
-		{Id: "5", Score: 96},
+	suite.Config.Recommend.UserToUser = []config.UserToUserConfig{{Name: "default", Type: "items"}}
+	collection := vectors.UserToUserCollection("default")
+	err := suite.VectorClient.AddCollection(ctx, collection, 0, vectors.Dot, vectors.VectorConfig{})
+	suite.NoError(err)
+	err = suite.VectorClient.AddVectors(ctx, collection, []vectors.Vector{
+		{Id: "0", Indices: []uint32{0}, Values: []float32{1}},
+		{Id: "1", Indices: []uint32{0}, Values: []float32{5}},
+		{Id: "2", Indices: []uint32{0}, Values: []float32{4}},
+		{Id: "3", Indices: []uint32{0}, Values: []float32{3}},
+		{Id: "4", Indices: []uint32{0}, Values: []float32{2}},
+		{Id: "5", Indices: []uint32{0}, Values: []float32{1}},
 	})
 	suite.NoError(err)
 
@@ -923,11 +1174,11 @@ func (suite *ServerTestSuite) TestUserToUser() {
 		Expect(suite.T()).
 		Status(http.StatusOK).
 		Body(suite.marshal([]cache.Score{
-			{Id: "1", Score: 100},
-			{Id: "2", Score: 99},
-			{Id: "3", Score: 98},
-			{Id: "4", Score: 97},
-			{Id: "5", Score: 96},
+			{Id: "1", Score: 5},
+			{Id: "2", Score: 4},
+			{Id: "3", Score: 3},
+			{Id: "4", Score: 2},
+			{Id: "5", Score: 1},
 		})).
 		End()
 
@@ -938,17 +1189,26 @@ func (suite *ServerTestSuite) TestUserToUser() {
 		Expect(suite.T()).
 		Status(http.StatusOK).
 		Body(suite.marshal([]cache.Score{
-			{Id: "1", Score: 100},
-			{Id: "2", Score: 99},
-			{Id: "3", Score: 98},
-			{Id: "4", Score: 97},
-			{Id: "5", Score: 96},
+			{Id: "1", Score: 5},
+			{Id: "2", Score: 4},
+			{Id: "3", Score: 3},
+			{Id: "4", Score: 2},
+			{Id: "5", Score: 1},
 		})).
 		End()
 }
 
 func (suite *ServerTestSuite) TestDeleteFeedback() {
 	t := suite.T()
+	// Get nonexistent typed feedback.
+	apitest.New().
+		Handler(suite.handler).
+		Get("/api/feedback/missing/missing/missing").
+		Header("X-API-Key", apiKey).
+		Expect(t).
+		Status(http.StatusOK).
+		Body("{}").
+		End()
 	// Insert feedback
 	feedback := []data.Feedback{
 		{FeedbackKey: data.FeedbackKey{FeedbackType: "type1", UserId: "2", ItemId: "3"}},
@@ -1255,39 +1515,21 @@ func (suite *ServerTestSuite) TestGetRecommendsFallbackItemToItem() {
 		Body(`{"RowAffected": 5}`).
 		End()
 
-	// insert similar items
-	err = suite.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key("default", "1"), []cache.Score{
-		{Id: "2", Score: 100000, Categories: []string{""}},
-		{Id: "9", Score: 1, Categories: []string{"", "*"}},
-	})
+	// insert item-to-item vectors
+	suite.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "default", Type: "tags", Column: "item.Labels"}}
+	collection := vectors.ItemToItemCollection("default")
+	err = suite.VectorClient.AddCollection(ctx, collection, 0, vectors.Dot, vectors.VectorConfig{})
 	suite.NoError(err)
-	err = suite.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key("default", "2"), []cache.Score{
-		{Id: "3", Score: 100000, Categories: []string{"", "*"}},
-		{Id: "8", Score: 1, Categories: []string{""}},
-		{Id: "9", Score: 1, Categories: []string{"", "*"}},
-	})
-	suite.NoError(err)
-	err = suite.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key("default", "3"), []cache.Score{
-		{Id: "4", Score: 100000, Categories: []string{""}},
-		{Id: "7", Score: 1, Categories: []string{"", "*"}},
-		{Id: "8", Score: 1, Categories: []string{""}},
-		{Id: "9", Score: 1, Categories: []string{"", "*"}},
-	})
-	suite.NoError(err)
-	err = suite.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key("default", "4"), []cache.Score{
-		{Id: "1", Score: 100000, Categories: []string{"", "*"}},
-		{Id: "6", Score: 1, Categories: []string{""}},
-		{Id: "7", Score: 1, Categories: []string{"", "*"}},
-		{Id: "8", Score: 1, Categories: []string{""}},
-		{Id: "9", Score: 1, Categories: []string{"", "*"}},
-	})
-	suite.NoError(err)
-	err = suite.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key("default", "5"), []cache.Score{
-		{Id: "1", Score: 1, Categories: []string{""}},
-		{Id: "6", Score: 1, Categories: []string{""}},
-		{Id: "7", Score: 100000, Categories: []string{""}},
-		{Id: "8", Score: 100, Categories: []string{""}},
-		{Id: "9", Score: 1, Categories: []string{""}},
+	err = suite.VectorClient.AddVectors(ctx, collection, []vectors.Vector{
+		{Id: "1", Indices: []uint32{0}, Values: []float32{1}},
+		{Id: "2", Indices: []uint32{1}, Values: []float32{1}},
+		{Id: "3", Indices: []uint32{2}, Values: []float32{1}},
+		{Id: "4", Indices: []uint32{3}, Values: []float32{1}},
+		{Id: "5", Indices: []uint32{4}, Values: []float32{1}},
+		{Id: "6", Indices: []uint32{3}, Values: []float32{1}},
+		{Id: "7", Indices: []uint32{2, 3}, Values: []float32{1, 1}, Categories: []string{"*"}},
+		{Id: "8", Indices: []uint32{1, 2, 3}, Values: []float32{1, 1, 1}},
+		{Id: "9", Indices: []uint32{0, 1, 2, 3}, Values: []float32{1, 1, 1, 1}, Categories: []string{"*"}},
 	})
 	suite.NoError(err)
 
@@ -1320,7 +1562,7 @@ func (suite *ServerTestSuite) TestGetRecommendsFallbackItemToItem() {
 
 func (suite *ServerTestSuite) TestGetRecommendsFallbackUserToUser() {
 	ctx := suite.T().Context()
-	suite.Config.Recommend.UserToUser = []config.UserToUserConfig{{Name: "default"}}
+	suite.Config.Recommend.UserToUser = []config.UserToUserConfig{{Name: "default", Type: "items"}}
 	// insert recommendation
 	err := suite.CacheClient.AddScores(ctx, cache.Recommend, "0",
 		[]cache.Score{{Id: "1", Score: 99}, {Id: "2", Score: 98}, {Id: "3", Score: 97}, {Id: "4", Score: 96}})
@@ -1342,10 +1584,14 @@ func (suite *ServerTestSuite) TestGetRecommendsFallbackUserToUser() {
 		Body(`{"RowAffected": 4}`).
 		End()
 	// insert similar users
-	err = suite.CacheClient.AddScores(ctx, cache.UserToUser, cache.Key("default", "0"), []cache.Score{
-		{Id: "1", Score: 2, Categories: []string{""}},
-		{Id: "2", Score: 1.5, Categories: []string{""}},
-		{Id: "3", Score: 1, Categories: []string{""}},
+	collection := vectors.UserToUserCollection("default")
+	err = suite.VectorClient.AddCollection(ctx, collection, 0, vectors.Dot, vectors.VectorConfig{})
+	suite.NoError(err)
+	err = suite.VectorClient.AddVectors(ctx, collection, []vectors.Vector{
+		{Id: "0", Indices: []uint32{0}, Values: []float32{1}},
+		{Id: "1", Indices: []uint32{0}, Values: []float32{2}},
+		{Id: "2", Indices: []uint32{0}, Values: []float32{1.5}},
+		{Id: "3", Indices: []uint32{0}, Values: []float32{1}},
 	})
 	suite.NoError(err)
 	err = suite.DataClient.BatchInsertFeedback(ctx, []data.Feedback{
@@ -1560,44 +1806,31 @@ func (suite *ServerTestSuite) TestSessionRecommend() {
 	suite.Config.Recommend.ContextSize = 4
 	suite.Config.Recommend.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{
 		expression.MustParseFeedbackTypeExpression("a")}
-	suite.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "default"}}
+	suite.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "default", Type: "tags", Column: "item.Labels"}}
 
-	// insert similar items
-	err := suite.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key("default", "1"), []cache.Score{
-		{Id: "2", Score: 100000, Categories: []string{""}},
-		{Id: "9", Score: 1, Categories: []string{"", "*"}},
-		{Id: "100", Score: 100000, Categories: []string{""}},
+	// insert item-to-item vectors
+	collection := vectors.ItemToItemCollection("default")
+	err := suite.VectorClient.AddCollection(ctx, collection, 0, vectors.Dot, vectors.VectorConfig{})
+	suite.NoError(err)
+	err = suite.VectorClient.AddVectors(ctx, collection, []vectors.Vector{
+		{Id: "1", Indices: []uint32{0}, Values: []float32{1}},
+		{Id: "2", Indices: []uint32{1}, Values: []float32{1}},
+		{Id: "3", Indices: []uint32{2}, Values: []float32{1}},
+		{Id: "4", Indices: []uint32{3}, Values: []float32{1}},
+		{Id: "5", Indices: []uint32{4}, Values: []float32{1}},
+		{Id: "6", Indices: []uint32{3}, Values: []float32{1}},
+		{Id: "7", Indices: []uint32{2, 3}, Values: []float32{1, 1}, Categories: []string{"*"}},
+		{Id: "8", Indices: []uint32{1, 2, 3}, Values: []float32{1, 1, 1}},
+		{Id: "9", Indices: []uint32{0, 1, 2, 3}, Values: []float32{1, 1, 1, 1}, Categories: []string{"*"}},
+		{Id: "100", Indices: []uint32{0}, Values: []float32{100}, IsHidden: true},
 	})
 	suite.NoError(err)
-	err = suite.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key("default", "2"), []cache.Score{
-		{Id: "3", Score: 100000, Categories: []string{"", "*"}},
-		{Id: "8", Score: 1, Categories: []string{""}},
-		{Id: "9", Score: 1, Categories: []string{"", "*"}},
-	})
-	suite.NoError(err)
-	err = suite.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key("default", "3"), []cache.Score{
-		{Id: "4", Score: 100000, Categories: []string{""}},
-		{Id: "7", Score: 1, Categories: []string{"", "*"}},
-		{Id: "8", Score: 1, Categories: []string{""}},
-		{Id: "9", Score: 1, Categories: []string{"", "*"}},
-	})
-	suite.NoError(err)
-	err = suite.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key("default", "4"), []cache.Score{
-		{Id: "1", Score: 100000, Categories: []string{"", "*"}},
-		{Id: "6", Score: 1, Categories: []string{""}},
-		{Id: "7", Score: 1, Categories: []string{"", "*"}},
-		{Id: "8", Score: 1, Categories: []string{""}},
-		{Id: "9", Score: 1, Categories: []string{"", "*"}},
-	})
-	suite.NoError(err)
-	err = suite.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key("default", "5"), []cache.Score{
-		{Id: "1", Score: 1, Categories: []string{""}},
-		{Id: "6", Score: 1, Categories: []string{""}},
-		{Id: "7", Score: 100000, Categories: []string{""}},
-		{Id: "8", Score: 100, Categories: []string{""}},
-		{Id: "9", Score: 1, Categories: []string{""}},
-	})
-	suite.NoError(err)
+	suite.NoError(suite.DataClient.BatchInsertItems(ctx, []data.Item{
+		{ItemId: "6"},
+		{ItemId: "7", Categories: []string{"*"}},
+		{ItemId: "8"},
+		{ItemId: "9", Categories: []string{"*"}},
+	}))
 
 	// hide items
 	apitest.New().
@@ -1659,7 +1892,7 @@ func (suite *ServerTestSuite) TestSessionRecommend() {
 
 func (suite *ServerTestSuite) TestVisibility() {
 	ctx := suite.T().Context()
-	suite.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "default"}}
+	suite.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "default", Type: "tags", Column: "item.Labels"}}
 	// insert items: 0, 1, 2, 3, 4
 	var items []Item
 	for i := range 5 {
@@ -1691,7 +1924,17 @@ func (suite *ServerTestSuite) TestVisibility() {
 		})
 	}
 	mutable.Reverse(documents)
-	err := suite.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key("default", "100"), documents)
+	collection := vectors.ItemToItemCollection("default")
+	err := suite.VectorClient.AddCollection(ctx, collection, 0, vectors.Dot, vectors.VectorConfig{})
+	suite.NoError(err)
+	values := []vectors.Vector{{Id: "100", Indices: []uint32{0}, Values: []float32{1}}}
+	neighborDocuments := make([]cache.Score, 0, len(documents)-1)
+	for _, document := range documents[:len(documents)-1] {
+		values = append(values, vectors.Vector{Id: document.Id, Indices: []uint32{0}, Values: []float32{float32(document.Score)}, Categories: document.Categories})
+		document.Score = float64(float32(document.Score))
+		neighborDocuments = append(neighborDocuments, document)
+	}
+	err = suite.VectorClient.AddVectors(ctx, collection, values)
 	suite.NoError(err)
 	err = suite.CacheClient.AddScores(ctx, cache.Recommend, "100", documents)
 	suite.NoError(err)
@@ -1741,7 +1984,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		JSON(items).
 		Expect(suite.T()).
 		Status(http.StatusOK).
-		Body(suite.marshal(documents[:2])).
+		Body(suite.marshal(neighborDocuments[:2])).
 		End()
 	apitest.New().
 		Handler(suite.handler).
@@ -1798,7 +2041,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		JSON(items).
 		Expect(suite.T()).
 		Status(http.StatusOK).
-		Body(suite.marshal(documents[:len(documents)-1])).
+		Body(suite.marshal(neighborDocuments)).
 		End()
 	apitest.New().
 		Handler(suite.handler).
@@ -1855,7 +2098,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		JSON(items).
 		Expect(suite.T()).
 		Status(http.StatusOK).
-		Body(suite.marshal(documents[:2])).
+		Body(suite.marshal(neighborDocuments[:2])).
 		End()
 	apitest.New().
 		Handler(suite.handler).
@@ -1912,7 +2155,7 @@ func (suite *ServerTestSuite) TestVisibility() {
 		JSON(items).
 		Expect(suite.T()).
 		Status(http.StatusOK).
-		Body(suite.marshal(documents[:len(documents)-1])).
+		Body(suite.marshal(neighborDocuments)).
 		End()
 	apitest.New().
 		Handler(suite.handler).
@@ -1965,8 +2208,8 @@ func (suite *ServerTestSuite) TestHealth() {
 		Status(http.StatusOK).
 		Body(suite.marshal(HealthStatus{
 			Ready:               false,
-			DataStoreError:      data.ErrNoDatabase,
-			CacheStoreError:     cache.ErrNoDatabase,
+			DataStoreError:      storage.ErrNoDatabase,
+			CacheStoreError:     storage.ErrNoDatabase,
 			DataStoreConnected:  false,
 			CacheStoreConnected: false,
 		})).
@@ -1978,8 +2221,8 @@ func (suite *ServerTestSuite) TestHealth() {
 		Status(http.StatusServiceUnavailable).
 		Body(suite.marshal(HealthStatus{
 			Ready:               false,
-			DataStoreError:      data.ErrNoDatabase,
-			CacheStoreError:     cache.ErrNoDatabase,
+			DataStoreError:      storage.ErrNoDatabase,
+			CacheStoreError:     storage.ErrNoDatabase,
 			DataStoreConnected:  false,
 			CacheStoreConnected: false,
 		})).

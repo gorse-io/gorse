@@ -21,8 +21,8 @@ import (
 	"time"
 
 	mapset "github.com/deckarep/golang-set/v2"
-	"github.com/gorse-io/gorse/common/bfloats"
 	"github.com/gorse-io/gorse/common/expression"
+	"github.com/gorse-io/gorse/common/floats"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/common/parallel"
@@ -32,14 +32,15 @@ import (
 	"github.com/gorse-io/gorse/model/ctr"
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
-	"github.com/juju/errors"
+	"github.com/gorse-io/gorse/storage/vectors"
+	"github.com/pkg/errors"
 	"github.com/samber/lo"
 	"go.uber.org/atomic"
 	"go.uber.org/zap"
 	"modernc.org/strutil"
 )
 
-// compressLabelsEmbeddings recursively processes Labels and compresses embedding vectors to BF16.
+// compressLabelsEmbeddings recursively processes Labels and compresses embedding vectors to FP16.
 // This saves memory when storing items in ItemCache.
 func compressLabelsEmbeddings(pool *strutil.GoPool, labels any) any {
 	if labels == nil {
@@ -54,7 +55,7 @@ func compressLabelsEmbeddings(pool *strutil.GoPool, labels any) any {
 		return result
 	case []any:
 		// Try to compress as embedding vector
-		if values, ok := bfloats.FromAny(typed); ok {
+		if values, ok := floats.FromAny(typed); ok {
 			return values
 		}
 		// Otherwise recursively process each element
@@ -64,11 +65,11 @@ func compressLabelsEmbeddings(pool *strutil.GoPool, labels any) any {
 		}
 		return result
 	case []float32:
-		return bfloats.FromFloat32(typed)
+		return floats.FromFloat32(typed)
 	case []float64:
-		return bfloats.FromFloat32(lo.Map(typed, func(f float64, _ int) float32 { return float32(f) }))
+		return floats.FromFloat32(lo.Map(typed, func(f float64, _ int) float32 { return float32(f) }))
 	case []uint16:
-		return typed // Already BF16
+		return typed // Already FP16
 	case string:
 		return pool.Align(typed)
 	default:
@@ -80,12 +81,44 @@ type Pipeline struct {
 	Config                   *config.Config
 	CacheClient              cache.Database
 	DataClient               data.Database
+	VectorClient             vectors.Database
 	Tracer                   *monitor.Monitor
 	Jobs                     int
-	MatrixFactorizationItems *logics.MatrixFactorizationItems
+	MatrixFactorizationId    int64
 	MatrixFactorizationUsers *logics.MatrixFactorizationUsers
+	MatrixFactorizationMutex sync.RWMutex
 	ClickThroughRateModel    ctr.FactorizationMachines
 	dontskipColdStartUsers   bool
+}
+
+func (p *Pipeline) UpdateMatrixFactorization(
+	ctx context.Context,
+	id int64,
+	users *logics.MatrixFactorizationUsers,
+) error {
+	if _, err := p.VectorClient.DescribeCollection(ctx, vectors.CollaborativeFilteringCollection(id)); err != nil {
+		return errors.WithStack(err)
+	}
+	p.MatrixFactorizationMutex.Lock()
+	p.MatrixFactorizationUsers = users
+	p.MatrixFactorizationId = id
+	p.MatrixFactorizationMutex.Unlock()
+	return nil
+}
+
+func (p *Pipeline) GetMatrixFactorizationId() int64 {
+	p.MatrixFactorizationMutex.RLock()
+	defer p.MatrixFactorizationMutex.RUnlock()
+	return p.MatrixFactorizationId
+}
+
+func (p *Pipeline) GetMatrixFactorization() (*logics.MatrixFactorizationUsers, int64) {
+	p.MatrixFactorizationMutex.RLock()
+	defer p.MatrixFactorizationMutex.RUnlock()
+	if p.MatrixFactorizationUsers == nil {
+		return nil, 0
+	}
+	return p.MatrixFactorizationUsers, p.MatrixFactorizationId
 }
 
 func (p *Pipeline) Recommend(ctx context.Context, users []data.User, progress func(completed, throughput int)) {
@@ -151,7 +184,7 @@ func (p *Pipeline) Recommend(ctx context.Context, users []data.User, progress fu
 		updateUserCount.Add(1)
 
 		recommendTime := time.Now()
-		recommender, err := logics.NewRecommender(p.Config.Recommend, p.CacheClient, p.DataClient, false, userId, nil, p.Config.OpenAI)
+		recommender, err := logics.NewRecommender(p.Config.Recommend, p.CacheClient, p.DataClient, p.VectorClient, false, userId, nil, p.Config.OpenAI)
 		if err != nil {
 			log.Logger().Error("failed to create recommender", zap.String("user_id", userId), zap.Error(err))
 			return
@@ -162,10 +195,9 @@ func (p *Pipeline) Recommend(ctx context.Context, users []data.User, progress fu
 		}
 
 		// Update collaborative filtering recommendation.
-		if !strings.EqualFold(p.Config.Recommend.Collaborative.Type, "none") && p.MatrixFactorizationUsers != nil && p.MatrixFactorizationItems != nil {
-			if userEmbedding, ok := p.MatrixFactorizationUsers.Get(userId); ok {
-				err = p.updateCollaborativeRecommend(ctx, p.MatrixFactorizationItems, userId, userEmbedding, recommender.ExcludeSet(), itemCache)
-				if err != nil {
+		if matrixFactorizationUsers, matrixFactorizationID := p.GetMatrixFactorization(); !strings.EqualFold(p.Config.Recommend.Collaborative.Type, "none") && matrixFactorizationUsers != nil {
+			if userEmbedding, ok := matrixFactorizationUsers.Get(userId); ok {
+				if err := p.updateCollaborativeRecommend(ctx, matrixFactorizationID, userId, userEmbedding, recommender.ExcludeSet()); err != nil {
 					log.Logger().Error("failed to recommend by collaborative filtering",
 						zap.String("user_id", userId), zap.Error(err))
 					return
@@ -370,50 +402,47 @@ func (p *Pipeline) checkRecommendCacheOutOfDate(ctx context.Context, userId stri
 
 func (p *Pipeline) updateCollaborativeRecommend(
 	ctx context.Context,
-	items *logics.MatrixFactorizationItems,
-	userId string,
+	matrixFactorizationID int64,
+	userID string,
 	userEmbedding []float32,
 	excludeSet mapset.Set[string],
-	itemCache *ItemCache,
 ) error {
 	localStartTime := time.Now()
-	scores := items.Search(userEmbedding, p.Config.Recommend.CacheSize+excludeSet.Cardinality())
-	// update categories
-	itemsMap, err := itemCache.GetMap(ctx, lo.Map(scores, func(score cache.Score, _ int) string {
-		return score.Id
-	}))
+	scoredVectors, err := p.VectorClient.QueryVectors(
+		ctx,
+		vectors.CollaborativeFilteringCollection(matrixFactorizationID),
+		vectors.Vector{Values: userEmbedding},
+		nil,
+		p.Config.Recommend.CacheSize+excludeSet.Cardinality(),
+	)
 	if err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
-	// remove excluded items and non-existing items
-	recommend := make([]cache.Score, 0, len(scores))
-	for i := range scores {
-		if item, exist := itemsMap[scores[i].Id]; exist && !excludeSet.Contains(item.ItemId) {
+	recommend := make([]cache.Score, 0, len(scoredVectors))
+	for _, vector := range scoredVectors {
+		if !excludeSet.Contains(vector.Id) {
 			recommend = append(recommend, cache.Score{
-				Id:         scores[i].Id,
-				Score:      scores[i].Score,
-				Categories: item.Categories,
-				// the scores use the timestamp of the ranking index, which is only refreshed every so often.
-				// if we don't overwrite the timestamp here, the code below will delete all scores that were
-				// just written.
-				Timestamp: localStartTime,
+				Id:         vector.Id,
+				Score:      float64(vector.Score),
+				Categories: vector.Categories,
+				Timestamp:  localStartTime,
 			})
 		}
 	}
-	if err := p.CacheClient.AddScores(ctx, cache.CollaborativeFiltering, userId, recommend); err != nil {
-		log.Logger().Error("failed to cache collaborative filtering recommendation result", zap.String("user_id", userId), zap.Error(err))
-		return errors.Trace(err)
+	if err := p.CacheClient.AddScores(ctx, cache.CollaborativeFiltering, userID, recommend); err != nil {
+		log.Logger().Error("failed to cache collaborative filtering recommendation result", zap.String("user_id", userID), zap.Error(err))
+		return errors.WithStack(err)
 	}
 	if err := p.CacheClient.Set(ctx,
-		cache.Time(cache.Key(cache.CollaborativeFilteringUpdateTime, userId), localStartTime),
-		cache.String(cache.Key(cache.CollaborativeFilteringDigest, userId), p.Config.Recommend.Collaborative.Hash(&p.Config.Recommend)),
+		cache.Time(cache.Key(cache.CollaborativeFilteringUpdateTime, userID), localStartTime),
+		cache.String(cache.Key(cache.CollaborativeFilteringDigest, userID), p.Config.Recommend.Collaborative.Hash(&p.Config.Recommend)),
 	); err != nil {
-		log.Logger().Error("failed to cache collaborative filtering recommendation time", zap.String("user_id", userId), zap.Error(err))
-		return errors.Trace(err)
+		log.Logger().Error("failed to cache collaborative filtering recommendation time", zap.String("user_id", userID), zap.Error(err))
+		return errors.WithStack(err)
 	}
-	if err := p.CacheClient.DeleteScores(ctx, []string{cache.CollaborativeFiltering}, cache.ScoreCondition{Before: &localStartTime, Subset: new(userId)}); err != nil {
-		log.Logger().Error("failed to delete stale collaborative filtering recommendation result", zap.String("user_id", userId), zap.Error(err))
-		return errors.Trace(err)
+	if err := p.CacheClient.DeleteScores(ctx, []string{cache.CollaborativeFiltering}, cache.ScoreCondition{Before: &localStartTime, Subset: new(userID)}); err != nil {
+		log.Logger().Error("failed to delete stale collaborative filtering recommendation result", zap.String("user_id", userID), zap.Error(err))
+		return errors.WithStack(err)
 	}
 	return nil
 }
@@ -432,7 +461,7 @@ func (p *Pipeline) rankByClickTroughRate(
 		return score.Id
 	}))
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.WithStack(err)
 	}
 	// rank by CTR
 	topItems := make([]cache.Score, 0, len(items))
@@ -484,7 +513,7 @@ func (p *Pipeline) rankByLLM(
 		return score.Id
 	}))
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.WithStack(err)
 	}
 	// convert feedback
 	data.SortFeedbacks(feedback)
@@ -501,7 +530,7 @@ func (p *Pipeline) rankByLLM(
 		return fb.ItemId
 	}))
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.WithStack(err)
 	}
 	feedbackItems := make([]*logics.FeedbackItem, 0, len(contextUserFeedback))
 	for _, fb := range contextUserFeedback {
@@ -517,7 +546,7 @@ func (p *Pipeline) rankByLLM(
 	parsed, err := ranker.Rank(ctx, user, feedbackItems, items)
 	pCtx.Attach()
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.WithStack(err)
 	}
 	// construct scores
 	var topItems []cache.Score
@@ -566,7 +595,7 @@ func (p *Pipeline) addReplacementCandidates(
 
 	items, err := itemCache.GetSlice(ctx, distinctItems.ToSlice())
 	if err != nil {
-		return nil, nil, nil, errors.Trace(err)
+		return nil, nil, nil, errors.WithStack(err)
 	}
 	// Only keep items that exist and aren't hidden in the cache.
 	for _, item := range items {
@@ -638,7 +667,7 @@ func (c *ItemCache) GetSlice(ctx context.Context, itemIds []string) ([]*data.Ite
 	}
 	response, err := c.Client.BatchGetItems(ctx, requests, data.GetOptions{})
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.WithStack(err)
 	}
 	for i := range response {
 		response[i].Labels = compressLabelsEmbeddings(c.Pool, response[i].Labels)
@@ -659,7 +688,7 @@ func (c *ItemCache) GetSlice(ctx context.Context, itemIds []string) ([]*data.Ite
 func (c *ItemCache) GetMap(ctx context.Context, itemIds []string) (map[string]*data.Item, error) {
 	items, err := c.GetSlice(ctx, itemIds)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.WithStack(err)
 	}
 	return lo.SliceToMap(items, func(item *data.Item) (string, *data.Item) {
 		return item.ItemId, item

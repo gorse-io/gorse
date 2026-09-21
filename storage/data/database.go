@@ -26,13 +26,7 @@ import (
 	"github.com/gorse-io/gorse/common/jsonutil"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/storage"
-	"github.com/juju/errors"
-)
-
-var (
-	ErrUserNotExist = errors.NotFoundf("user")
-	ErrItemNotExist = errors.NotFoundf("item")
-	ErrNoDatabase   = errors.NotAssignedf("database")
+	"github.com/pkg/errors"
 )
 
 // ValidateLabels checks if labels are valid. Labels are valid if consists of:
@@ -130,6 +124,7 @@ type Feedback struct {
 	Value       float64   `gorm:"column:value" mapstructure:"value"`
 	Timestamp   time.Time `gorm:"column:time_stamp" mapstructure:"timestamp"`
 	Updated     time.Time `gorm:"column:updated" mapstructure:"updated"`
+	Labels      any       `gorm:"serializer:json" mapstructure:"labels"`
 	Comment     string    `gorm:"column:comment" mapstructure:"comment"`
 }
 

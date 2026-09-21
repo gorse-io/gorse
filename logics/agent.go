@@ -26,18 +26,29 @@ import (
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
-	"github.com/juju/errors"
 	"github.com/nikolalohinski/gonja/v2"
 	"github.com/nikolalohinski/gonja/v2/exec"
+	"github.com/pkg/errors"
 	"github.com/samber/lo"
 	"github.com/sashabaranov/go-openai"
 	"github.com/sashabaranov/go-openai/jsonschema"
+	"github.com/tiktoken-go/tokenizer"
 )
 
 const (
 	agentSearchToolName       = "search_items"
 	defaultAgentMaxIterations = 4
 )
+
+var cl100kBaseTokenizer tokenizer.Codec
+
+func init() {
+	var err error
+	cl100kBaseTokenizer, err = tokenizer.Get(tokenizer.Cl100kBase)
+	if err != nil {
+		panic(err)
+	}
+}
 
 type Agent struct {
 	config       config.AgentConfig
@@ -69,7 +80,7 @@ func NewAgent(cfg config.AgentConfig, openAIConfig config.OpenAIConfig, dataClie
 	userFeedback []data.Feedback, categories []string, excludeSet mapset.Set[string], cacheSize int) (*Agent, error) {
 	promptTpl, err := gonja.FromString(cfg.PromptTemplate)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.WithStack(err)
 	}
 	clientConfig := openai.DefaultConfig(openAIConfig.AuthToken)
 	clientConfig.BaseURL = openAIConfig.BaseURL
@@ -99,7 +110,7 @@ func (a *Agent) Recommend(ctx context.Context) ([]cache.Score, error) {
 	}
 	prompt, err := a.renderPrompt(feedback)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.WithStack(err)
 	}
 
 	messages := []openai.ChatCompletionMessage{
@@ -119,7 +130,7 @@ func (a *Agent) Recommend(ctx context.Context) ([]cache.Score, error) {
 	for i := 0; i < a.maxIterations(); i++ {
 		resp, err := a.createChatCompletion(ctx, messages)
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 		if len(resp.Choices) == 0 {
 			return nil, errors.New("empty chat completion response")
@@ -136,14 +147,14 @@ func (a *Agent) Recommend(ctx context.Context) ([]cache.Score, error) {
 			}
 			items, err := a.callSearchItems(ctx, toolCall.Function.Arguments)
 			if err != nil {
-				return nil, errors.Trace(err)
+				return nil, errors.WithStack(err)
 			}
 			for _, item := range items {
 				candidateItems[item.ItemId] = item
 			}
 			content, err := marshalAgentSearchResults(items)
 			if err != nil {
-				return nil, errors.Trace(err)
+				return nil, errors.WithStack(err)
 			}
 			messages = append(messages, openai.ChatCompletionMessage{
 				Role:       openai.ChatMessageRoleTool,
@@ -156,7 +167,7 @@ func (a *Agent) Recommend(ctx context.Context) ([]cache.Score, error) {
 	if finalContent == "" {
 		resp, err := a.createChatCompletion(ctx, messages)
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 		if len(resp.Choices) == 0 {
 			return nil, errors.New("empty chat completion response")
@@ -181,7 +192,7 @@ func (a *Agent) renderPrompt(feedback []data.Feedback) (string, error) {
 		"feedback": feedback,
 	})
 	if err := a.promptTpl.Execute(&buf, promptCtx); err != nil {
-		return "", errors.Trace(err)
+		return "", errors.WithStack(err)
 	}
 	return strings.TrimSpace(buf.String()), nil
 }
@@ -229,17 +240,27 @@ func (a *Agent) createChatCompletion(ctx context.Context, messages []openai.Chat
 	}, backoff.WithBackOff(backoff.NewExponentialBackOff()))
 }
 
+func isThrottled(err error) bool {
+	switch e := err.(type) {
+	case *openai.APIError:
+		return e.HTTPStatusCode == 429
+	case *openai.RequestError:
+		return e.HTTPStatusCode == 504 || e.HTTPStatusCode == 520
+	}
+	return false
+}
+
 func (a *Agent) callSearchItems(ctx context.Context, arguments string) ([]data.Item, error) {
 	var args agentSearchArguments
 	if err := json.Unmarshal([]byte(arguments), &args); err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.WithStack(err)
 	}
 	if args.N <= 0 || args.N > a.cacheSize {
 		args.N = a.cacheSize
 	}
 	scoredItems, err := a.dataClient.SearchItems(ctx, args.Query, args.N+a.excludeSet.Cardinality())
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.WithStack(err)
 	}
 	items := lo.FilterMap(scoredItems, func(scoredItem data.ScoredItem, _ int) (data.Item, bool) {
 		item := scoredItem.Item
@@ -262,7 +283,7 @@ func marshalAgentSearchResults(items []data.Item) (string, error) {
 	})
 	bytes, err := json.Marshal(results)
 	if err != nil {
-		return "", errors.Trace(err)
+		return "", errors.WithStack(err)
 	}
 	return string(bytes), nil
 }
@@ -282,7 +303,7 @@ func (a *Agent) parseRecommendations(ctx context.Context, completion string, can
 	if len(missingIds) > 0 {
 		items, err := a.dataClient.BatchGetItems(ctx, missingIds, data.GetOptions{SkipHidden: true})
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 		for _, item := range items {
 			candidateItems[item.ItemId] = item

@@ -46,6 +46,7 @@ message Feedback {
   google.protobuf.Timestamp timestamp = 6;
   string comment = 7;
   google.protobuf.Timestamp updated = 8;
+  bytes labels = 9;
 }
 
 enum NodeType {

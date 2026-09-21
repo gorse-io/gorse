@@ -35,8 +35,8 @@ import (
 	"github.com/gorse-io/gorse/dataset"
 	"github.com/gorse-io/gorse/model"
 	"github.com/gorse-io/gorse/protocol"
-	"github.com/juju/errors"
 	"github.com/matttproud/golang_protobuf_extensions/pbutil"
+	"github.com/pkg/errors"
 	"github.com/samber/lo"
 	"go.uber.org/zap"
 )
@@ -207,11 +207,11 @@ func (baseModel *BaseMatrixFactorization) Marshal(w io.Writer) error {
 	// write params
 	err := encoding.WriteGob(w, baseModel.Params)
 	if err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	// write predictable user count
 	if err := binary.Write(w, binary.LittleEndian, int64(baseModel.UserPredictable.Count())); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	// write user latent factors
 	for userIndex := int32(0); userIndex < baseModel.UserIndex.Count(); userIndex++ {
@@ -222,13 +222,13 @@ func (baseModel *BaseMatrixFactorization) Marshal(w io.Writer) error {
 				Data: baseModel.UserFactor[userIndex],
 			}
 			if _, err := pbutil.WriteDelimited(w, latentFactor); err != nil {
-				return errors.Trace(err)
+				return errors.WithStack(err)
 			}
 		}
 	}
 	// write predictable item count
 	if err := binary.Write(w, binary.LittleEndian, int64(baseModel.ItemPredictable.Count())); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	// write item latent factors
 	for itemIndex := int32(0); itemIndex < baseModel.ItemIndex.Count(); itemIndex++ {
@@ -239,7 +239,7 @@ func (baseModel *BaseMatrixFactorization) Marshal(w io.Writer) error {
 				Data: baseModel.ItemFactor[itemIndex],
 			}
 			if _, err := pbutil.WriteDelimited(w, latentFactor); err != nil {
-				return errors.Trace(err)
+				return errors.WithStack(err)
 			}
 		}
 	}
@@ -250,12 +250,12 @@ func (baseModel *BaseMatrixFactorization) Marshal(w io.Writer) error {
 func (baseModel *BaseMatrixFactorization) Unmarshal(r io.Reader) error {
 	// read params
 	if err := encoding.ReadGob(r, &baseModel.Params); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	// read predictable user count
 	var userPredictableCount int64
 	if err := binary.Read(r, binary.LittleEndian, &userPredictableCount); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	// read user latent factors
 	baseModel.UserIndex = dataset.NewFreqDict()
@@ -264,7 +264,7 @@ func (baseModel *BaseMatrixFactorization) Unmarshal(r io.Reader) error {
 	for i := 0; i < int(userPredictableCount); i++ {
 		latentFactor := new(protocol.LatentFactor)
 		if _, err := pbutil.ReadDelimited(r, latentFactor); err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		userIndex := baseModel.UserIndex.Add(latentFactor.Id)
 		baseModel.UserPredictable.Set(uint(userIndex))
@@ -273,7 +273,7 @@ func (baseModel *BaseMatrixFactorization) Unmarshal(r io.Reader) error {
 	// read predictable item count
 	var itemPredictableCount int64
 	if err := binary.Read(r, binary.LittleEndian, &itemPredictableCount); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	// read item latent factors
 	baseModel.ItemIndex = dataset.NewFreqDict()
@@ -282,7 +282,7 @@ func (baseModel *BaseMatrixFactorization) Unmarshal(r io.Reader) error {
 	for i := 0; i < int(itemPredictableCount); i++ {
 		latentFactor := new(protocol.LatentFactor)
 		if _, err := pbutil.ReadDelimited(r, latentFactor); err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		itemIndex := baseModel.ItemIndex.Add(latentFactor.Id)
 		baseModel.ItemPredictable.Set(uint(itemIndex))
@@ -319,10 +319,10 @@ func GetModelName(m Model) string {
 
 func MarshalModel(w io.Writer, m Model) error {
 	if err := encoding.WriteString(w, GetModelName(m)); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	if err := m.Marshal(w); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	return nil
 }
@@ -330,19 +330,19 @@ func MarshalModel(w io.Writer, m Model) error {
 func UnmarshalModel(r io.Reader) (MatrixFactorization, error) {
 	name, err := encoding.ReadString(r)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.WithStack(err)
 	}
 	switch name {
 	case "bpr":
 		var bpr BPR
 		if err := bpr.Unmarshal(r); err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 		return &bpr, nil
 	case "als":
 		var als ALS
 		if err := als.Unmarshal(r); err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 		return &als, nil
 	}
@@ -542,7 +542,7 @@ func (bpr *BPR) Init(trainSet dataset.CFSplit) {
 // Marshal model into byte stream.
 func (bpr *BPR) Marshal(w io.Writer) error {
 	if err := bpr.BaseMatrixFactorization.Marshal(w); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	return nil
 }
@@ -550,7 +550,7 @@ func (bpr *BPR) Marshal(w io.Writer) error {
 // Unmarshal model from byte stream.
 func (bpr *BPR) Unmarshal(r io.Reader) error {
 	if err := bpr.BaseMatrixFactorization.Unmarshal(r); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	bpr.SetParams(bpr.Params)
 	return nil
@@ -777,7 +777,7 @@ func (als *ALS) Fit(ctx context.Context, trainSet, valSet dataset.CFSplit, confi
 // Marshal model into byte stream.
 func (als *ALS) Marshal(w io.Writer) error {
 	if err := als.BaseMatrixFactorization.Marshal(w); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	return nil
 }
@@ -785,7 +785,7 @@ func (als *ALS) Marshal(w io.Writer) error {
 // Unmarshal model from byte stream.
 func (als *ALS) Unmarshal(r io.Reader) error {
 	if err := als.BaseMatrixFactorization.Unmarshal(r); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	als.SetParams(als.Params)
 	return nil

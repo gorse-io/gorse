@@ -16,6 +16,7 @@ package logics
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -24,9 +25,11 @@ import (
 	"github.com/gorse-io/gorse/common/heap"
 	"github.com/gorse-io/gorse/common/util"
 	"github.com/gorse-io/gorse/config"
+	"github.com/gorse-io/gorse/storage"
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
-	"github.com/juju/errors"
+	"github.com/gorse-io/gorse/storage/vectors"
+	"github.com/pkg/errors"
 	"github.com/samber/lo"
 )
 
@@ -45,6 +48,7 @@ type Recommender struct {
 	openAIConfig config.OpenAIConfig
 	cacheClient  cache.Database
 	dataClient   data.Database
+	vectorClient vectors.Database
 
 	online       bool
 	coldstart    bool
@@ -56,7 +60,7 @@ type Recommender struct {
 
 type RecommenderFunc func(ctx context.Context) ([]cache.Score, string, error)
 
-func NewRecommender(cfg config.RecommendConfig, cacheClient cache.Database, dataClient data.Database, online bool, userId string, categories []string, openAIConfigs ...config.OpenAIConfig) (*Recommender, error) {
+func NewRecommender(cfg config.RecommendConfig, cacheClient cache.Database, dataClient data.Database, vectorClient vectors.Database, online bool, userId string, categories []string, openAIConfigs ...config.OpenAIConfig) (*Recommender, error) {
 	var openAIConfig config.OpenAIConfig
 	if len(openAIConfigs) > 0 {
 		openAIConfig = openAIConfigs[0]
@@ -64,7 +68,7 @@ func NewRecommender(cfg config.RecommendConfig, cacheClient cache.Database, data
 	// Load user feedback
 	userFeedback, err := dataClient.GetUserFeedback(context.Background(), userId, new(time.Now()))
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.WithStack(err)
 	}
 	excludeSet := mapset.NewSet[string]()
 	coldstart := true
@@ -85,6 +89,7 @@ func NewRecommender(cfg config.RecommendConfig, cacheClient cache.Database, data
 		openAIConfig: openAIConfig,
 		cacheClient:  cacheClient,
 		dataClient:   dataClient,
+		vectorClient: vectorClient,
 		userId:       userId,
 		userFeedback: userFeedback,
 		online:       online,
@@ -110,7 +115,7 @@ func (r *Recommender) Recommend(ctx context.Context, limit int) (result []cache.
 	if !strings.EqualFold(r.config.Ranker.Type, "none") {
 		scores, err := r.cacheClient.SearchScores(ctx, cache.Recommend, r.userId, r.categories, 0, r.config.CacheSize)
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 		result = make([]cache.Score, 0, len(scores))
 		for _, score := range scores {
@@ -122,14 +127,14 @@ func (r *Recommender) Recommend(ctx context.Context, limit int) (result []cache.
 	} else {
 		result, _, err = r.RecommendSequential(ctx, result, r.config.CacheSize, r.config.Ranker.Recommenders...)
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 	}
 	if len(result) >= limit && limit > 0 {
 		return result[:limit], nil
 	}
 	result, _, err = r.RecommendSequential(ctx, result, limit, r.config.Fallback.Recommenders...)
-	return result, errors.Trace(err)
+	return result, errors.WithStack(err)
 }
 
 // RecommendSequential recommend items from multiple recommenders sequentially util reaching the limit.
@@ -139,11 +144,11 @@ func (r *Recommender) RecommendSequential(ctx context.Context, result []cache.Sc
 	for _, name := range names {
 		recommenderFunc, err := r.parse(name)
 		if err != nil {
-			return nil, "", errors.Trace(err)
+			return nil, "", errors.WithStack(err)
 		}
 		scores, digest, err := recommenderFunc(ctx)
 		if err != nil {
-			return nil, "", errors.Trace(err)
+			return nil, "", errors.WithStack(err)
 		}
 		for _, score := range scores {
 			r.excludeSet.Add(score.Id)
@@ -189,7 +194,7 @@ func (r *Recommender) recommendLatest(ctx context.Context) ([]cache.Score, strin
 	}
 	items, err := r.dataClient.GetLatestItems(ctx, r.config.CacheSize, r.categories, after)
 	if err != nil {
-		return nil, "", errors.Trace(err)
+		return nil, "", errors.WithStack(err)
 	}
 	scores := make([]cache.Score, 0, len(items))
 	for _, item := range items {
@@ -215,12 +220,12 @@ func (r *Recommender) recommendNonPersonalized(name string) RecommenderFunc {
 		// fetch items from cache
 		items, err := r.cacheClient.SearchScores(ctx, cache.NonPersonalized, name, categories, 0, r.config.CacheSize)
 		if err != nil {
-			return nil, "", errors.Trace(err)
+			return nil, "", errors.WithStack(err)
 		}
 		// read digest
 		digest, err := r.cacheClient.Get(ctx, cache.Key(cache.NonPersonalizedDigest, name)).String()
 		if err != nil {
-			return nil, "", errors.Trace(err)
+			return nil, "", errors.WithStack(err)
 		}
 		// remove excluded items
 		return lo.Filter(items, func(item cache.Score, index int) bool {
@@ -233,12 +238,12 @@ func (r *Recommender) recommendCollaborative(ctx context.Context) ([]cache.Score
 	// fetch items from cache
 	items, err := r.cacheClient.SearchScores(ctx, cache.CollaborativeFiltering, r.userId, r.categories, 0, r.config.CacheSize)
 	if err != nil {
-		return nil, "", errors.Trace(err)
+		return nil, "", errors.WithStack(err)
 	}
 	// read digest
 	digest, err := r.cacheClient.Get(ctx, cache.Key(cache.CollaborativeFilteringDigest, r.userId)).String()
 	if err != nil {
-		return nil, "", errors.Trace(err)
+		return nil, "", errors.WithStack(err)
 	}
 	// remove excluded items
 	return lo.Filter(items, func(item cache.Score, index int) bool {
@@ -248,7 +253,10 @@ func (r *Recommender) recommendCollaborative(ctx context.Context) ([]cache.Score
 
 func (r *Recommender) recommendItemToItem(name string) RecommenderFunc {
 	return func(ctx context.Context) ([]cache.Score, string, error) {
-		// filter positive feedbacks
+		itemToItemConfig := r.config.GetItemToItemConfig(name)
+		if itemToItemConfig == nil {
+			return nil, "", fmt.Errorf("item-to-item recommender %s %w", name, storage.ErrNotFound)
+		}
 		data.SortFeedbacks(r.userFeedback)
 		userFeedback := make([]data.Feedback, 0, r.config.CacheSize)
 		for _, feedback := range r.userFeedback {
@@ -259,62 +267,49 @@ func (r *Recommender) recommendItemToItem(name string) RecommenderFunc {
 				}
 			}
 		}
-		// collect scores
 		scores := make(map[string]float64)
 		categories := make(map[string][]string)
-		digests := mapset.NewSet[string]()
 		for _, feedback := range userFeedback {
-			similarItems, err := r.cacheClient.SearchScores(ctx, cache.ItemToItem, cache.Key(name, feedback.ItemId), r.categories, 0, r.config.CacheSize)
+			neighbors, err := QueryItemToItem(ctx, r.vectorClient, *itemToItemConfig, feedback.ItemId, r.categories, r.config.CacheSize)
 			if err != nil {
-				return nil, "", errors.Trace(err)
+				return nil, "", errors.WithStack(err)
 			}
-			digest, err := r.cacheClient.Get(ctx, cache.Key(cache.ItemToItemDigest, name, feedback.ItemId)).String()
-			if err != nil {
-				return nil, "", errors.Trace(err)
-			}
-			for _, item := range similarItems {
-				if !r.excludeSet.Contains(item.Id) {
-					scores[item.Id] += item.Score
-					categories[item.Id] = item.Categories
-					digests.Add(digest)
+			for _, neighbor := range neighbors {
+				if !r.excludeSet.Contains(neighbor.Id) {
+					scores[neighbor.Id] += neighbor.Score
+					categories[neighbor.Id] = neighbor.Categories
 				}
 			}
 		}
-		// collect top scores
 		filter := heap.NewTopKFilter[string, float64](r.config.CacheSize)
 		for id, score := range scores {
 			filter.Push(id, score)
 		}
 		elems := filter.PopAll()
 		return lo.Map(elems, func(elem heap.Elem[string, float64], _ int) cache.Score {
-			return cache.Score{
-				Id:         elem.Value,
-				Score:      elem.Weight,
-				Categories: categories[elem.Value],
-			}
-		}), strings.Join(digests.ToSlice(), ""), nil
+			return cache.Score{Id: elem.Value, Score: elem.Weight, Categories: categories[elem.Value]}
+		}), itemToItemConfig.Hash(&r.config), nil
 	}
 }
 
 func (r *Recommender) recommendUserToUser(name string) RecommenderFunc {
 	return func(ctx context.Context) ([]cache.Score, string, error) {
+		userToUserConfig := r.config.GetUserToUserConfig(name)
+		if userToUserConfig == nil {
+			return nil, "", fmt.Errorf("user-to-user recommender %s %w", name, storage.ErrNotFound)
+		}
 		scores := make(map[string]float64)
 		// load similar users
-		similarUsers, err := r.cacheClient.SearchScores(ctx, cache.UserToUser, cache.Key(name, r.userId), nil, 0, r.config.CacheSize)
+		similarUsers, err := QueryUserToUser(ctx, r.vectorClient, *userToUserConfig, r.userId, r.config.CacheSize)
 		if err != nil {
-			return nil, "", errors.Trace(err)
-		}
-		// read digest
-		digest, err := r.cacheClient.Get(ctx, cache.Key(cache.UserToUserDigest, name, r.userId)).String()
-		if err != nil {
-			return nil, "", errors.Trace(err)
+			return nil, "", errors.WithStack(err)
 		}
 		// aggregate scores
 		for _, user := range similarUsers {
 			// load historical feedback
 			feedbacks, err := r.dataClient.GetUserFeedback(ctx, user.Id, new(time.Now()), r.config.DataSource.PositiveFeedbackTypes...)
 			if err != nil {
-				return nil, "", errors.Trace(err)
+				return nil, "", errors.WithStack(err)
 			}
 			// add unseen items
 			for _, feedback := range feedbacks {
@@ -343,7 +338,7 @@ func (r *Recommender) recommendUserToUser(name string) RecommenderFunc {
 			After:      after,
 		})
 		if err != nil {
-			return nil, "", errors.Trace(err)
+			return nil, "", errors.WithStack(err)
 		}
 		itemsMap := make(map[string]data.Item)
 		for _, item := range items {
@@ -358,7 +353,7 @@ func (r *Recommender) recommendUserToUser(name string) RecommenderFunc {
 				})
 			}
 		}
-		return results, digest, nil
+		return results, userToUserConfig.Hash(&r.config), nil
 	}
 }
 
@@ -379,12 +374,12 @@ func (r *Recommender) recommendExternal(name string) RecommenderFunc {
 
 		external, err := NewExternal(externalConfig)
 		if err != nil {
-			return nil, "", errors.Trace(err)
+			return nil, "", errors.WithStack(err)
 		}
 		defer external.Close()
 		items, err := external.Pull(r.userId)
 		if err != nil {
-			return nil, "", errors.Trace(err)
+			return nil, "", errors.WithStack(err)
 		}
 		scores := make([]cache.Score, 0, len(items))
 		for _, itemId := range items {
@@ -410,11 +405,11 @@ func (r *Recommender) recommendAgent(name string) RecommenderFunc {
 		agent, err := NewAgent(agentConfig, r.openAIConfig, r.dataClient, r.userId, r.userFeedback,
 			r.categories, r.excludeSet, r.config.CacheSize)
 		if err != nil {
-			return nil, "", errors.Trace(err)
+			return nil, "", errors.WithStack(err)
 		}
 		scores, err := agent.Recommend(ctx)
 		if err != nil {
-			return nil, "", errors.Trace(err)
+			return nil, "", errors.WithStack(err)
 		}
 		return scores, agentConfig.Hash(), nil
 	}

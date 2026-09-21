@@ -17,19 +17,29 @@ package vectors
 import (
 	"testing"
 
+	"github.com/gorse-io/gorse/common/log"
+	"github.com/gorse-io/gorse/storage"
 	"github.com/stretchr/testify/suite"
 )
 
-type SQLiteTestSuite struct {
+type XvecTestSuite struct {
 	vectorsTestSuite
+	root string
 }
 
-func (suite *SQLiteTestSuite) SetupSuite() {
+func (suite *XvecTestSuite) SetupSuite() {
+	log.SetTestLogger(suite.T())
+	suite.root = suite.T().TempDir()
 	var err error
-	suite.Database, err = Open("sqlite://:memory:", "gorse_")
-	suite.NoError(err)
+	suite.Database, err = Open(storage.XvecPrefix+suite.root, "gorse_")
+	suite.Require().NoError(err)
+	suite.Require().NoError(suite.Database.Init())
 }
 
-func TestSQLite(t *testing.T) {
-	suite.Run(t, new(SQLiteTestSuite))
+func (suite *XvecTestSuite) TearDownSuite() {
+	suite.NoError(suite.Database.Close())
+}
+
+func TestXvec(t *testing.T) {
+	suite.Run(t, new(XvecTestSuite))
 }

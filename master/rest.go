@@ -45,13 +45,14 @@ import (
 	"github.com/gorse-io/gorse/model/ctr"
 	"github.com/gorse-io/gorse/protocol"
 	"github.com/gorse-io/gorse/server"
+	"github.com/gorse-io/gorse/storage"
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
 	"github.com/gorse-io/gorse/storage/meta"
 	"github.com/invopop/jsonschema"
-	"github.com/juju/errors"
 	"github.com/nikolalohinski/gonja/v2"
 	"github.com/nikolalohinski/gonja/v2/exec"
+	"github.com/pkg/errors"
 	"github.com/rakyll/statik/fs"
 	"github.com/samber/lo"
 	"github.com/sashabaranov/go-openai"
@@ -277,7 +278,7 @@ func (m *Master) StartHttpServer() {
 	container.Handle("/api/bulk/feedback", http.HandlerFunc(m.importExportFeedback))
 	container.Handle("/api/dump", http.HandlerFunc(m.dump))
 	container.Handle("/api/restore", http.HandlerFunc(m.restore))
-	container.Handle("/api/chat", http.HandlerFunc(m.chat))
+	container.Handle("/api/chat/completions", http.HandlerFunc(m.chatCompletions))
 	m.RestServer.StartHttpServer(container)
 }
 
@@ -558,7 +559,9 @@ func (m *Master) postConfig(request *restful.Request, response *restful.Response
 		server.BadRequest(response, err)
 		return
 	}
+	m.ConfigMutex.RLock()
 	configForValidation := *m.Config
+	m.ConfigMutex.RUnlock()
 	configForValidation.Recommend = newConfig.Recommend
 	if err = configForValidation.Validate(); err != nil {
 		server.BadRequest(response, err)
@@ -573,7 +576,9 @@ func (m *Master) postConfig(request *restful.Request, response *restful.Response
 		server.InternalServerError(response, err)
 		return
 	}
+	m.ConfigMutex.Lock()
 	m.Config.Recommend = newConfig.Recommend
+	m.ConfigMutex.Unlock()
 
 	m.cancel()
 	select {
@@ -585,12 +590,15 @@ func (m *Master) postConfig(request *restful.Request, response *restful.Response
 
 func (m *Master) getConfig(_ *restful.Request, response *restful.Response) {
 	var configMap map[string]any
+	m.ConfigMutex.RLock()
 	err := mapstructure.Decode(m.Config, &configMap)
+	dashboardRedacted := m.Config.Master.DashboardRedacted
+	m.ConfigMutex.RUnlock()
 	if err != nil {
 		server.InternalServerError(response, err)
 		return
 	}
-	if m.Config.Master.DashboardRedacted {
+	if dashboardRedacted {
 		delete(configMap, "database")
 	}
 	server.Ok(response, formatConfig(configMap))
@@ -606,7 +614,9 @@ func (m *Master) deleteConfig(_request *restful.Request, response *restful.Respo
 		server.InternalServerError(response, err)
 		return
 	}
+	m.ConfigMutex.Lock()
 	m.Config.Recommend = newConfig.Recommend
+	m.ConfigMutex.Unlock()
 
 	m.cancel()
 	select {
@@ -802,7 +812,7 @@ func (m *Master) getUser(request *restful.Request, response *restful.Response) {
 	// get user
 	user, err := m.DataClient.GetUser(ctx, userId)
 	if err != nil {
-		if errors.Is(err, errors.NotFound) {
+		if errors.Is(err, storage.ErrNotFound) {
 			server.PageNotFound(response, err)
 		} else {
 			server.InternalServerError(response, err)
@@ -810,11 +820,11 @@ func (m *Master) getUser(request *restful.Request, response *restful.Response) {
 		return
 	}
 	detail := User{User: user}
-	if detail.LastActiveTime, err = m.CacheClient.Get(ctx, cache.Key(cache.LastModifyUserTime, user.UserId)).Time(); err != nil && !errors.Is(err, errors.NotFound) {
+	if detail.LastActiveTime, err = m.CacheClient.Get(ctx, cache.Key(cache.LastModifyUserTime, user.UserId)).Time(); err != nil && !errors.Is(err, storage.ErrNotFound) {
 		server.InternalServerError(response, err)
 		return
 	}
-	if detail.LastUpdateTime, err = m.CacheClient.Get(ctx, cache.Key(cache.RecommendUpdateTime, user.UserId)).Time(); err != nil && !errors.Is(err, errors.NotFound) {
+	if detail.LastUpdateTime, err = m.CacheClient.Get(ctx, cache.Key(cache.RecommendUpdateTime, user.UserId)).Time(); err != nil && !errors.Is(err, storage.ErrNotFound) {
 		server.InternalServerError(response, err)
 		return
 	}
@@ -842,11 +852,11 @@ func (m *Master) getUsers(request *restful.Request, response *restful.Response) 
 	details := make([]User, len(users))
 	for i, user := range users {
 		details[i].User = user
-		if details[i].LastActiveTime, err = m.CacheClient.Get(ctx, cache.Key(cache.LastModifyUserTime, user.UserId)).Time(); err != nil && !errors.Is(err, errors.NotFound) {
+		if details[i].LastActiveTime, err = m.CacheClient.Get(ctx, cache.Key(cache.LastModifyUserTime, user.UserId)).Time(); err != nil && !errors.Is(err, storage.ErrNotFound) {
 			server.InternalServerError(response, err)
 			return
 		}
-		if details[i].LastUpdateTime, err = m.CacheClient.Get(ctx, cache.Key(cache.RecommendUpdateTime, user.UserId)).Time(); err != nil && !errors.Is(err, errors.NotFound) {
+		if details[i].LastUpdateTime, err = m.CacheClient.Get(ctx, cache.Key(cache.RecommendUpdateTime, user.UserId)).Time(); err != nil && !errors.Is(err, storage.ErrNotFound) {
 			server.InternalServerError(response, err)
 			return
 		}
@@ -870,7 +880,7 @@ func (m *Master) getRecommend(request *restful.Request, response *restful.Respon
 		return
 	}
 
-	recommender, err := logics.NewRecommender(m.Config.Recommend, m.CacheClient, m.DataClient, true, userId, categories, m.Config.OpenAI)
+	recommender, err := logics.NewRecommender(m.Config.Recommend, m.CacheClient, m.DataClient, m.VectorClient, true, userId, categories, m.Config.OpenAI)
 	if err != nil {
 		server.InternalServerError(response, err)
 		return
@@ -1099,16 +1109,94 @@ func (m *Master) getNonPersonalized(request *restful.Request, response *restful.
 func (m *Master) getItemToItem(request *restful.Request, response *restful.Response) {
 	name := request.PathParameter("name")
 	itemId := request.PathParameter("item-id")
+	itemToItemConfig := m.Config.Recommend.GetItemToItemConfig(name)
+	if itemToItemConfig == nil {
+		server.PageNotFound(response, errors.Errorf("item-to-item recommender %s not found", name))
+		return
+	}
+	offset, err := server.ParseInt(request, "offset", 0)
+	if err != nil {
+		server.BadRequest(response, err)
+		return
+	}
+	n, err := server.ParseInt(request, "n", m.Config.Server.DefaultN)
+	if err != nil {
+		server.BadRequest(response, err)
+		return
+	}
+	ctx := request.Request.Context()
 	categories := request.QueryParameters("category")
-	m.SetLastModified(request, response, cache.Key(cache.ItemToItemUpdateTime, name, itemId))
-	m.SearchDocuments(cache.ItemToItem, cache.Key(name, itemId), categories, m.GetItem, request, response)
+	scores, err := logics.QueryItemToItem(ctx, m.VectorClient, *itemToItemConfig, itemId, nil, max(offset+n, m.Config.Recommend.CacheSize))
+	if err != nil {
+		server.InternalServerError(response, err)
+		return
+	}
+	scores, err = server.FilterVisibleItemsByCategories(ctx, m.DataClient, scores, categories)
+	if err != nil {
+		server.InternalServerError(response, err)
+		return
+	}
+	if offset < len(scores) {
+		scores = scores[offset:]
+	} else {
+		scores = nil
+	}
+	if n > 0 && len(scores) > n {
+		scores = scores[:n]
+	}
+	items := make([]any, 0, len(scores))
+	for _, score := range scores {
+		item, err := m.GetItem(score)
+		if err != nil {
+			server.InternalServerError(response, err)
+			return
+		}
+		items = append(items, item)
+	}
+	server.Ok(response, items)
 }
 
 func (m *Master) getUserToUser(request *restful.Request, response *restful.Response) {
 	userId := request.PathParameter("user-id")
 	name := request.PathParameter("name")
-	m.SetLastModified(request, response, cache.Key(cache.UserToUserUpdateTime, name, userId))
-	m.SearchDocuments(cache.UserToUser, cache.Key(name, userId), nil, m.GetUser, request, response)
+	userToUserConfig := m.Config.Recommend.GetUserToUserConfig(name)
+	if userToUserConfig == nil {
+		server.PageNotFound(response, errors.Errorf("user-to-user recommender %s not found", name))
+		return
+	}
+	offset, err := server.ParseInt(request, "offset", 0)
+	if err != nil {
+		server.BadRequest(response, err)
+		return
+	}
+	n, err := server.ParseInt(request, "n", m.Config.Server.DefaultN)
+	if err != nil {
+		server.BadRequest(response, err)
+		return
+	}
+	scores, err := logics.QueryUserToUser(request.Request.Context(), m.VectorClient, *userToUserConfig, userId, offset+n)
+	if err != nil {
+		server.InternalServerError(response, err)
+		return
+	}
+	if offset < len(scores) {
+		scores = scores[offset:]
+	} else {
+		scores = nil
+	}
+	if n > 0 && len(scores) > n {
+		scores = scores[:n]
+	}
+	users := make([]any, 0, len(scores))
+	for _, score := range scores {
+		user, err := m.GetUser(score)
+		if err != nil {
+			server.InternalServerError(response, err)
+			return
+		}
+		users = append(users, user)
+	}
+	server.Ok(response, users)
 }
 
 func (m *Master) getExternal(request *restful.Request, response *restful.Response) {
@@ -1186,7 +1274,7 @@ func (m *Master) getRankerPrompt(request *restful.Request, response *restful.Res
 
 	user, err := m.DataClient.GetUser(ctx, userId)
 	if err != nil {
-		if errors.Is(err, errors.NotFound) {
+		if errors.Is(err, storage.ErrNotFound) {
 			server.PageNotFound(response, err)
 		} else {
 			server.InternalServerError(response, err)
@@ -1298,7 +1386,7 @@ func (m *Master) importExportUsers(response http.ResponseWriter, request *http.R
 			}
 		}
 		if err = <-errChan; err != nil {
-			server.InternalServerError(restful.NewResponse(response), errors.Trace(err))
+			server.InternalServerError(restful.NewResponse(response), errors.WithStack(err))
 			return
 		}
 	case http.MethodPost:
@@ -1396,7 +1484,7 @@ func (m *Master) importExportItems(response http.ResponseWriter, request *http.R
 			}
 		}
 		if err = <-errChan; err != nil {
-			server.InternalServerError(restful.NewResponse(response), errors.Trace(err))
+			server.InternalServerError(restful.NewResponse(response), errors.WithStack(err))
 			return
 		}
 	case http.MethodPost:
@@ -1514,7 +1602,7 @@ func (m *Master) importExportFeedback(response http.ResponseWriter, request *htt
 			}
 		}
 		if err = <-errChan; err != nil {
-			server.InternalServerError(restful.NewResponse(response), errors.Trace(err))
+			server.InternalServerError(restful.NewResponse(response), errors.WithStack(err))
 			return
 		}
 	case http.MethodPost:
@@ -1669,16 +1757,6 @@ func writeError(response http.ResponseWriter, httpStatus int, message string) {
 	}
 }
 
-func (m *Master) checkAdmin(request *http.Request) bool {
-	if m.Config.Master.AdminAPIKey == "" {
-		return true
-	}
-	if request.Header.Get("X-API-Key") == m.Config.Master.AdminAPIKey {
-		return true
-	}
-	return false
-}
-
 const (
 	EOF            = int64(0)
 	UserStream     = int64(-1)
@@ -1723,7 +1801,7 @@ func readDump[T proto.Message](r io.Reader, data T) (int64, error) {
 }
 
 func (m *Master) dump(response http.ResponseWriter, request *http.Request) {
-	if !m.checkAdmin(request) {
+	if !m.checkLogin(request) {
 		writeError(response, http.StatusUnauthorized, "unauthorized")
 		return
 	}
@@ -1801,12 +1879,18 @@ func (m *Master) dump(response http.ResponseWriter, request *http.Request) {
 	feedbackStream, errChan := m.DataClient.GetFeedbackStream(context.Background(), batchSize, data.WithEndTime(*m.Config.Now()))
 	for feedbacks := range feedbackStream {
 		for _, feedback := range feedbacks {
+			labels, err := json.Marshal(feedback.Labels)
+			if err != nil {
+				writeError(response, http.StatusInternalServerError, err.Error())
+				return
+			}
 			if err := writeDump(response, &protocol.Feedback{
 				FeedbackType: feedback.FeedbackType,
 				UserId:       feedback.UserId,
 				ItemId:       feedback.ItemId,
 				Value:        feedback.Value,
 				Timestamp:    timestamppb.New(feedback.Timestamp),
+				Labels:       labels,
 				Comment:      feedback.Comment,
 			}); err != nil {
 				writeError(response, http.StatusInternalServerError, err.Error())
@@ -1921,15 +2005,20 @@ func (m *Master) Restore(r io.ReadCloser, delta *time.Duration) (stats DumpStats
 				if delta != nil {
 					timestamp = timestamp.Add(*delta)
 				}
+				var labels any
+				if len(feedback.Labels) > 0 {
+					if err = json.Unmarshal(feedback.Labels, &labels); err != nil {
+						return
+					}
+				}
 				feedbacks = append(feedbacks, data.Feedback{
-					FeedbackKey: data.FeedbackKey{
-						FeedbackType: feedback.FeedbackType,
-						UserId:       feedback.UserId,
-						ItemId:       feedback.ItemId,
-					},
-					Value:     feedback.Value,
-					Timestamp: timestamp,
-					Comment:   feedback.Comment,
+					FeedbackType: feedback.FeedbackType,
+					UserId:       feedback.UserId,
+					ItemId:       feedback.ItemId,
+					Value:        feedback.Value,
+					Timestamp:    timestamp,
+					Labels:       labels,
+					Comment:      feedback.Comment,
 				})
 				stats.Feedback++
 				if len(feedbacks) == batchSize {
@@ -1953,7 +2042,7 @@ func (m *Master) Restore(r io.ReadCloser, delta *time.Duration) (stats DumpStats
 }
 
 func (m *Master) restore(response http.ResponseWriter, request *http.Request) {
-	if !m.checkAdmin(request) {
+	if !m.checkLogin(request) {
 		writeError(response, http.StatusUnauthorized, "unauthorized")
 		return
 	}
@@ -2027,49 +2116,81 @@ func (m *Master) handleOAuth2Callback(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (m *Master) chat(response http.ResponseWriter, request *http.Request) {
-	if !m.checkAdmin(request) {
+func (m *Master) chatCompletions(response http.ResponseWriter, request *http.Request) {
+	if request.Method != http.MethodPost {
+		writeError(response, http.StatusMethodNotAllowed, "method not allowed")
+		return
+	}
+	if !m.checkLogin(request) {
 		writeError(response, http.StatusUnauthorized, "unauthorized")
 		return
 	}
-	content, err := io.ReadAll(request.Body)
-	if err != nil {
-		writeError(response, http.StatusInternalServerError, err.Error())
+
+	var chatRequest openai.ChatCompletionRequest
+	if err := json.NewDecoder(request.Body).Decode(&chatRequest); err != nil {
+		writeError(response, http.StatusBadRequest, err.Error())
 		return
 	}
+	if chatRequest.Model == "" {
+		chatRequest.Model = m.Config.OpenAI.ChatCompletionModel
+	}
+	if chatRequest.Model == "" {
+		writeError(response, http.StatusBadRequest, "missing chat completion model")
+		return
+	}
+
+	if !chatRequest.Stream {
+		chatResponse, err := m.openAIClient.CreateChatCompletion(request.Context(), chatRequest)
+		if err != nil {
+			writeError(response, http.StatusInternalServerError, err.Error())
+			return
+		}
+		response.Header().Set("Content-Type", restful.MIME_JSON)
+		if err := json.NewEncoder(response).Encode(chatResponse); err != nil {
+			log.Logger().Error("failed to write response", zap.Error(err))
+		}
+		return
+	}
+
 	stream, err := m.openAIClient.CreateChatCompletionStream(
 		request.Context(),
-		openai.ChatCompletionRequest{
-			Model: m.Config.OpenAI.ChatCompletionModel,
-			Messages: []openai.ChatCompletionMessage{
-				{
-					Role:    openai.ChatMessageRoleUser,
-					Content: string(content),
-				},
-			},
-			Stream: true,
-		},
+		chatRequest,
 	)
 	if err != nil {
 		writeError(response, http.StatusInternalServerError, err.Error())
 		return
 	}
+
+	response.Header().Set("Content-Type", "text/event-stream")
+	response.Header().Set("Cache-Control", "no-cache, no-transform")
+	response.Header().Set("Connection", "keep-alive")
+	response.Header().Set("X-Accel-Buffering", "no")
+
 	// read response
 	defer stream.Close()
 	for {
 		var resp openai.ChatCompletionStreamResponse
 		resp, err = stream.Recv()
 		if errors.Is(err, io.EOF) {
+			_, _ = response.Write([]byte("data: [DONE]\n\n"))
+			if f, ok := response.(http.Flusher); ok {
+				f.Flush()
+			}
 			return
 		}
 		if err != nil {
 			writeError(response, http.StatusInternalServerError, err.Error())
 			return
 		}
-		if len(resp.Choices) == 0 {
-			continue
+		if _, err = response.Write([]byte("data: ")); err != nil {
+			log.Logger().Error("failed to write response", zap.Error(err))
+			return
 		}
-		if _, err = response.Write([]byte(resp.Choices[0].Delta.Content)); err != nil {
+		if err = json.NewEncoder(response).Encode(resp); err != nil {
+			log.Logger().Error("failed to write response", zap.Error(err))
+			return
+		}
+		if _, err = response.Write([]byte("\n")); err != nil {
 			log.Logger().Error("failed to write response", zap.Error(err))
 			return
 		}

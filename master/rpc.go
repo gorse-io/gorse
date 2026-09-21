@@ -22,7 +22,7 @@ import (
 	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/protocol"
 	"github.com/gorse-io/gorse/storage/meta"
-	"github.com/juju/errors"
+	"github.com/pkg/errors"
 )
 
 // GetMeta returns latest configuration.
@@ -39,7 +39,9 @@ func (m *Master) GetMeta(ctx context.Context, nodeInfo *protocol.NodeInfo) (*pro
 		return nil, err
 	}
 	// marshall config
+	m.ConfigMutex.RLock()
 	s, err := json.Marshal(m.Config)
+	m.ConfigMutex.RUnlock()
 	if err != nil {
 		return nil, err
 	}

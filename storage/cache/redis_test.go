@@ -33,14 +33,8 @@ var (
 )
 
 func init() {
-	// get environment variables
-	env := func(key, defaultValue string) string {
-		if value := os.Getenv(key); value != "" {
-			return value
-		}
-		return defaultValue
-	}
-	redisDSN = env("REDIS_URI", "redis://127.0.0.1:6379/")
+	// os.Setenv("REDIS_URI", "redis://127.0.0.1:6379/")
+	redisDSN = os.Getenv("REDIS_URI")
 }
 
 type RedisTestSuite struct {
@@ -48,6 +42,7 @@ type RedisTestSuite struct {
 }
 
 func (suite *RedisTestSuite) SetupSuite() {
+	log.SetTestLogger(suite.T())
 	var err error
 	suite.Database, err = Open(redisDSN, "gorse_")
 	suite.NoError(err)
@@ -213,6 +208,9 @@ func (suite *RedisTestSuite) TestUpdateScoresWithPaginationAndTiedScores() {
 }
 
 func TestRedis(t *testing.T) {
+	if redisDSN == "" {
+		t.Skip("REDIS_URI is not set, skipping Redis test")
+	}
 	suite.Run(t, new(RedisTestSuite))
 }
 

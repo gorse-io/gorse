@@ -23,7 +23,7 @@ import (
 	"github.com/gorse-io/gorse/common/encoding"
 	"github.com/gorse-io/gorse/dataset"
 	"github.com/gorse-io/gorse/model"
-	"github.com/juju/errors"
+	"github.com/pkg/errors"
 	"github.com/samber/lo"
 	"go.uber.org/zap"
 )
@@ -141,7 +141,7 @@ func UnmarshalModel(r io.Reader) (FactorizationMachines, error) {
 		var fm AFM
 		fm.autoScale = header == headerAFM2
 		if err := fm.Unmarshal(r); err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 		return &fm, nil
 	}

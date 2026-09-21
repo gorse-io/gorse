@@ -24,7 +24,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/config"
-	"github.com/juju/errors"
+	"github.com/pkg/errors"
 	"go.uber.org/zap"
 )
 
@@ -42,7 +42,7 @@ func NewAzureBlob(cfg config.AzureBlobConfig, container string, prefix string) (
 	if cfg.ConnectionString != "" {
 		client, err = azblob.NewClientFromConnectionString(cfg.ConnectionString, nil)
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 	} else {
 		if cfg.AccountName == "" || cfg.AccountKey == "" {
@@ -54,11 +54,11 @@ func NewAzureBlob(cfg config.AzureBlobConfig, container string, prefix string) (
 		}
 		cred, err := azblob.NewSharedKeyCredential(cfg.AccountName, cfg.AccountKey)
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 		client, err = azblob.NewClientWithSharedKeyCredential(endpoint, cred, nil)
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 	}
 	return &AzureBlob{

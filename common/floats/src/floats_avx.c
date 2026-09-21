@@ -15,6 +15,36 @@
 #include <immintrin.h>
 #include <stdint.h>
 
+void _mm256_from_float32(float *a, uint16_t *dst, int64_t n)
+{
+    int64_t i = 0;
+    for (; i + 8 <= n; i += 8)
+    {
+        __m256 value = _mm256_loadu_ps(a + i);
+        __m128i converted = _mm256_cvtps_ph(value, _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC);
+        _mm_storeu_si128((__m128i *)(dst + i), converted);
+    }
+    for (; i < n; i++)
+    {
+        dst[i] = _cvtss_sh(a[i], _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC);
+    }
+}
+
+void _mm256_to_float32(uint16_t *a, float *dst, int64_t n)
+{
+    int64_t i = 0;
+    for (; i + 8 <= n; i += 8)
+    {
+        __m128i value = _mm_loadu_si128((__m128i *)(a + i));
+        __m256 converted = _mm256_cvtph_ps(value);
+        _mm256_storeu_ps(dst + i, converted);
+    }
+    for (; i < n; i++)
+    {
+        dst[i] = _cvtsh_ss(a[i]);
+    }
+}
+
 void _mm256_mul_const_add_to(float *a, float *b, float *c, float *dst, int64_t n)
 {
     int epoch = n / 8;
@@ -300,9 +330,47 @@ void _mm256_mm(_Bool transA, _Bool transB, int64_t m, int64_t n, int64_t k, floa
 {
     if (!transA && !transB)
     {
-        for (int i = 0; i < m; i++) {
-            for (int l = 0; l < k; l++) {
-                for (int j = 0; j < n; j++) {
+        int64_t i = 0;
+        for (; i + 4 <= m; i += 4) {
+            int64_t j = 0;
+            for (; j + 8 <= n; j += 8) {
+                __m256 c0 = _mm256_loadu_ps(c + i * ldc + j);
+                __m256 c1 = _mm256_loadu_ps(c + (i + 1) * ldc + j);
+                __m256 c2 = _mm256_loadu_ps(c + (i + 2) * ldc + j);
+                __m256 c3 = _mm256_loadu_ps(c + (i + 3) * ldc + j);
+                for (int64_t l = 0; l < k; l++) {
+                    __m256 bv = _mm256_loadu_ps(b + l * ldb + j);
+                    c0 = _mm256_add_ps(c0, _mm256_mul_ps(_mm256_broadcast_ss(a + i * lda + l), bv));
+                    c1 = _mm256_add_ps(c1, _mm256_mul_ps(_mm256_broadcast_ss(a + (i + 1) * lda + l), bv));
+                    c2 = _mm256_add_ps(c2, _mm256_mul_ps(_mm256_broadcast_ss(a + (i + 2) * lda + l), bv));
+                    c3 = _mm256_add_ps(c3, _mm256_mul_ps(_mm256_broadcast_ss(a + (i + 3) * lda + l), bv));
+                }
+                _mm256_storeu_ps(c + i * ldc + j, c0);
+                _mm256_storeu_ps(c + (i + 1) * ldc + j, c1);
+                _mm256_storeu_ps(c + (i + 2) * ldc + j, c2);
+                _mm256_storeu_ps(c + (i + 3) * ldc + j, c3);
+            }
+            for (; j < n; j++) {
+                for (int64_t l = 0; l < k; l++) {
+                    c[i * ldc + j] += a[i * lda + l] * b[l * ldb + j];
+                    c[(i + 1) * ldc + j] += a[(i + 1) * lda + l] * b[l * ldb + j];
+                    c[(i + 2) * ldc + j] += a[(i + 2) * lda + l] * b[l * ldb + j];
+                    c[(i + 3) * ldc + j] += a[(i + 3) * lda + l] * b[l * ldb + j];
+                }
+            }
+        }
+        for (; i < m; i++) {
+            int64_t j = 0;
+            for (; j + 8 <= n; j += 8) {
+                __m256 cv = _mm256_loadu_ps(c + i * ldc + j);
+                for (int64_t l = 0; l < k; l++) {
+                    __m256 bv = _mm256_loadu_ps(b + l * ldb + j);
+                    cv = _mm256_add_ps(cv, _mm256_mul_ps(_mm256_broadcast_ss(a + i * lda + l), bv));
+                }
+                _mm256_storeu_ps(c + i * ldc + j, cv);
+            }
+            for (; j < n; j++) {
+                for (int64_t l = 0; l < k; l++) {
                     c[i * ldc + j] += a[i * lda + l] * b[l * ldb + j];
                 }
             }
@@ -316,9 +384,47 @@ void _mm256_mm(_Bool transA, _Bool transB, int64_t m, int64_t n, int64_t k, floa
         }
     } else if (transA && !transB)
     {
-        for (int i = 0; i < m; i++) {
-            for (int l = 0; l < k; l++) {
-                for (int j = 0; j < n; j++) {
+        int64_t i = 0;
+        for (; i + 4 <= m; i += 4) {
+            int64_t j = 0;
+            for (; j + 8 <= n; j += 8) {
+                __m256 c0 = _mm256_loadu_ps(c + i * ldc + j);
+                __m256 c1 = _mm256_loadu_ps(c + (i + 1) * ldc + j);
+                __m256 c2 = _mm256_loadu_ps(c + (i + 2) * ldc + j);
+                __m256 c3 = _mm256_loadu_ps(c + (i + 3) * ldc + j);
+                for (int64_t l = 0; l < k; l++) {
+                    __m256 bv = _mm256_loadu_ps(b + l * ldb + j);
+                    c0 = _mm256_add_ps(c0, _mm256_mul_ps(_mm256_broadcast_ss(a + l * lda + i), bv));
+                    c1 = _mm256_add_ps(c1, _mm256_mul_ps(_mm256_broadcast_ss(a + l * lda + i + 1), bv));
+                    c2 = _mm256_add_ps(c2, _mm256_mul_ps(_mm256_broadcast_ss(a + l * lda + i + 2), bv));
+                    c3 = _mm256_add_ps(c3, _mm256_mul_ps(_mm256_broadcast_ss(a + l * lda + i + 3), bv));
+                }
+                _mm256_storeu_ps(c + i * ldc + j, c0);
+                _mm256_storeu_ps(c + (i + 1) * ldc + j, c1);
+                _mm256_storeu_ps(c + (i + 2) * ldc + j, c2);
+                _mm256_storeu_ps(c + (i + 3) * ldc + j, c3);
+            }
+            for (; j < n; j++) {
+                for (int64_t l = 0; l < k; l++) {
+                    c[i * ldc + j] += a[l * lda + i] * b[l * ldb + j];
+                    c[(i + 1) * ldc + j] += a[l * lda + i + 1] * b[l * ldb + j];
+                    c[(i + 2) * ldc + j] += a[l * lda + i + 2] * b[l * ldb + j];
+                    c[(i + 3) * ldc + j] += a[l * lda + i + 3] * b[l * ldb + j];
+                }
+            }
+        }
+        for (; i < m; i++) {
+            int64_t j = 0;
+            for (; j + 8 <= n; j += 8) {
+                __m256 cv = _mm256_loadu_ps(c + i * ldc + j);
+                for (int64_t l = 0; l < k; l++) {
+                    __m256 bv = _mm256_loadu_ps(b + l * ldb + j);
+                    cv = _mm256_add_ps(cv, _mm256_mul_ps(_mm256_broadcast_ss(a + l * lda + i), bv));
+                }
+                _mm256_storeu_ps(c + i * ldc + j, cv);
+            }
+            for (; j < n; j++) {
+                for (int64_t l = 0; l < k; l++) {
                     c[i * ldc + j] += a[l * lda + i] * b[l * ldb + j];
                 }
             }

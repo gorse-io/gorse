@@ -15,6 +15,32 @@
 #include <arm_neon.h>
 #include <stdint.h>
 
+void vfrom_float32(float *a, uint16_t *dst, int64_t n) {
+    int64_t i = 0;
+    for (; i + 8 <= n; i += 8) {
+        float16x4_t low = vcvt_f16_f32(vld1q_f32(a + i));
+        float16x4_t high = vcvt_f16_f32(vld1q_f32(a + i + 4));
+        vst1q_u16(dst + i, vreinterpretq_u16_f16(vcombine_f16(low, high)));
+    }
+    for (; i < n; i++) {
+        float16x4_t value = vcvt_f16_f32(vdupq_n_f32(a[i]));
+        dst[i] = vget_lane_u16(vreinterpret_u16_f16(value), 0);
+    }
+}
+
+void vto_float32(uint16_t *a, float *dst, int64_t n) {
+    int64_t i = 0;
+    for (; i + 8 <= n; i += 8) {
+        float16x8_t value = vreinterpretq_f16_u16(vld1q_u16(a + i));
+        vst1q_f32(dst + i, vcvt_f32_f16(vget_low_f16(value)));
+        vst1q_f32(dst + i + 4, vcvt_f32_f16(vget_high_f16(value)));
+    }
+    for (; i < n; i++) {
+        float16x4_t value = vreinterpret_f16_u16(vdup_n_u16(a[i]));
+        dst[i] = vgetq_lane_f32(vcvt_f32_f16(value), 0);
+    }
+}
+
 void vmul_const_add_to(float *a, float *b, float *c, float *dst, long n) {
     for (int i = 0; i < n; i++) {
         dst[i] = a[i] * (*b) + c[i];
@@ -157,9 +183,48 @@ float veuclidean(float *a, float *b, long n) {
 void vmm(_Bool transA, _Bool transB, long m, long n, long k, float *a, long lda, float *b, long ldb, float *c, long ldc) {
     if (!transA && !transB)
     {
-        for (int i = 0; i < m; i++) {
-            for (int l = 0; l < k; l++) {
-                for (int j = 0; j < n; j++) {
+        long i = 0;
+        for (; i + 4 <= m; i += 4) {
+            long j = 0;
+            for (; j + 4 <= n; j += 4) {
+                float32x4_t c0 = vld1q_f32(c + i * ldc + j);
+                float32x4_t c1 = vld1q_f32(c + (i + 1) * ldc + j);
+                float32x4_t c2 = vld1q_f32(c + (i + 2) * ldc + j);
+                float32x4_t c3 = vld1q_f32(c + (i + 3) * ldc + j);
+                for (long l = 0; l < k; l++) {
+                    float32x4_t bv = vld1q_f32(b + l * ldb + j);
+                    c0 = vaddq_f32(c0, vmulq_f32(vdupq_n_f32(a[i * lda + l]), bv));
+                    c1 = vaddq_f32(c1, vmulq_f32(vdupq_n_f32(a[(i + 1) * lda + l]), bv));
+                    c2 = vaddq_f32(c2, vmulq_f32(vdupq_n_f32(a[(i + 2) * lda + l]), bv));
+                    c3 = vaddq_f32(c3, vmulq_f32(vdupq_n_f32(a[(i + 3) * lda + l]), bv));
+                }
+                vst1q_f32(c + i * ldc + j, c0);
+                vst1q_f32(c + (i + 1) * ldc + j, c1);
+                vst1q_f32(c + (i + 2) * ldc + j, c2);
+                vst1q_f32(c + (i + 3) * ldc + j, c3);
+            }
+            for (; j < n; j++) {
+                for (long l = 0; l < k; l++) {
+                    float bv = b[l * ldb + j];
+                    c[i * ldc + j] += a[i * lda + l] * bv;
+                    c[(i + 1) * ldc + j] += a[(i + 1) * lda + l] * bv;
+                    c[(i + 2) * ldc + j] += a[(i + 2) * lda + l] * bv;
+                    c[(i + 3) * ldc + j] += a[(i + 3) * lda + l] * bv;
+                }
+            }
+        }
+        for (; i < m; i++) {
+            long j = 0;
+            for (; j + 4 <= n; j += 4) {
+                float32x4_t cv = vld1q_f32(c + i * ldc + j);
+                for (long l = 0; l < k; l++) {
+                    float32x4_t bv = vld1q_f32(b + l * ldb + j);
+                    cv = vaddq_f32(cv, vmulq_f32(vdupq_n_f32(a[i * lda + l]), bv));
+                }
+                vst1q_f32(c + i * ldc + j, cv);
+            }
+            for (; j < n; j++) {
+                for (long l = 0; l < k; l++) {
                     c[i * ldc + j] += a[i * lda + l] * b[l * ldb + j];
                 }
             }
@@ -173,9 +238,47 @@ void vmm(_Bool transA, _Bool transB, long m, long n, long k, float *a, long lda,
         }
     } else if (transA && !transB)
     {
-        for (int i = 0; i < m; i++) {
-            for (int l = 0; l < k; l++) {
-                for (int j = 0; j < n; j++) {
+        long i = 0;
+        for (; i + 4 <= m; i += 4) {
+            long j = 0;
+            for (; j + 4 <= n; j += 4) {
+                float32x4_t c0 = vld1q_f32(c + i * ldc + j);
+                float32x4_t c1 = vld1q_f32(c + (i + 1) * ldc + j);
+                float32x4_t c2 = vld1q_f32(c + (i + 2) * ldc + j);
+                float32x4_t c3 = vld1q_f32(c + (i + 3) * ldc + j);
+                for (long l = 0; l < k; l++) {
+                    float32x4_t bv = vld1q_f32(b + l * ldb + j);
+                    c0 = vaddq_f32(c0, vmulq_f32(vdupq_n_f32(a[l * lda + i]), bv));
+                    c1 = vaddq_f32(c1, vmulq_f32(vdupq_n_f32(a[l * lda + i + 1]), bv));
+                    c2 = vaddq_f32(c2, vmulq_f32(vdupq_n_f32(a[l * lda + i + 2]), bv));
+                    c3 = vaddq_f32(c3, vmulq_f32(vdupq_n_f32(a[l * lda + i + 3]), bv));
+                }
+                vst1q_f32(c + i * ldc + j, c0);
+                vst1q_f32(c + (i + 1) * ldc + j, c1);
+                vst1q_f32(c + (i + 2) * ldc + j, c2);
+                vst1q_f32(c + (i + 3) * ldc + j, c3);
+            }
+            for (; j < n; j++) {
+                for (long l = 0; l < k; l++) {
+                    c[i * ldc + j] += a[l * lda + i] * b[l * ldb + j];
+                    c[(i + 1) * ldc + j] += a[l * lda + i + 1] * b[l * ldb + j];
+                    c[(i + 2) * ldc + j] += a[l * lda + i + 2] * b[l * ldb + j];
+                    c[(i + 3) * ldc + j] += a[l * lda + i + 3] * b[l * ldb + j];
+                }
+            }
+        }
+        for (; i < m; i++) {
+            long j = 0;
+            for (; j + 4 <= n; j += 4) {
+                float32x4_t cv = vld1q_f32(c + i * ldc + j);
+                for (long l = 0; l < k; l++) {
+                    float32x4_t bv = vld1q_f32(b + l * ldb + j);
+                    cv = vaddq_f32(cv, vmulq_f32(vdupq_n_f32(a[l * lda + i]), bv));
+                }
+                vst1q_f32(c + i * ldc + j, cv);
+            }
+            for (; j < n; j++) {
+                for (long l = 0; l < k; l++) {
                     c[i * ldc + j] += a[l * lda + i] * b[l * ldb + j];
                 }
             }

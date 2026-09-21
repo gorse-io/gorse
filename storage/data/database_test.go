@@ -24,9 +24,10 @@ import (
 	"time"
 
 	"github.com/gorse-io/gorse/common/expression"
+	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/config"
+	"github.com/gorse-io/gorse/storage"
 	"github.com/jaswdr/faker"
-	"github.com/juju/errors"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -158,6 +159,7 @@ func (suite *baseTestSuite) TearDownSuite() {
 }
 
 func (suite *baseTestSuite) SetupTest() {
+	log.SetTestLogger(suite.T())
 	err := suite.Database.Ping()
 	suite.NoError(err)
 	err = suite.Database.Purge()
@@ -215,7 +217,7 @@ func (suite *baseTestSuite) TestUsers() {
 	err = suite.Database.DeleteUser(ctx, "0")
 	suite.NoError(err)
 	_, err = suite.Database.GetUser(ctx, "0")
-	suite.True(errors.Is(err, errors.NotFound), err)
+	suite.ErrorIs(err, storage.ErrNotFound)
 	// test override
 	err = suite.Database.BatchInsertUsers(ctx, []User{{UserId: "1", Comment: "override"}})
 	suite.NoError(err)
@@ -256,7 +258,7 @@ func (suite *baseTestSuite) TestFeedback() {
 	// insert feedbacks
 	timestamp := time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC)
 	feedback := []Feedback{
-		{FeedbackKey: FeedbackKey{positiveFeedbackType1, "0", "8"}, Value: 1, Timestamp: timestamp, Comment: "comment"},
+		{FeedbackKey: FeedbackKey{positiveFeedbackType1, "0", "8"}, Value: 1, Timestamp: timestamp, Labels: []string{"positive"}, Comment: "comment"},
 		{FeedbackKey: FeedbackKey{positiveFeedbackType1, "1", "6"}, Value: 1, Timestamp: timestamp, Comment: "comment"},
 		{FeedbackKey: FeedbackKey{positiveFeedbackType2, "2", "4"}, Value: 1, Timestamp: timestamp, Comment: "comment"},
 		{FeedbackKey: FeedbackKey{positiveFeedbackType2, "3", "2"}, Value: 1, Timestamp: timestamp, Comment: "comment"},
@@ -268,6 +270,7 @@ func (suite *baseTestSuite) TestFeedback() {
 	for i := range feedback {
 		feedback[i].Updated = feedback[i].Timestamp
 	}
+	feedback[0].Labels = []any{"positive"}
 	// other type
 	err = suite.Database.BatchInsertFeedback(ctx, []Feedback{{FeedbackKey: FeedbackKey{negativeFeedbackType, "0", "2"}}}, true, true, true)
 	suite.NoError(err)
@@ -387,6 +390,7 @@ func (suite *baseTestSuite) TestFeedback() {
 		FeedbackKey: FeedbackKey{positiveFeedbackType, "0", "8"},
 		Value:       100,
 		Timestamp:   time.Date(1996, 4, 8, 0, 0, 0, 0, time.UTC),
+		Labels:      []string{"override"},
 		Comment:     "override",
 	}}, true, true, true)
 	suite.NoError(err)
@@ -403,12 +407,14 @@ func (suite *baseTestSuite) TestFeedback() {
 	suite.Equal(1, len(ret))
 	suite.Equal(float64(100), ret[0].Value)
 	suite.Equal(time.Date(1996, 4, 8, 0, 0, 0, 0, time.UTC), ret[0].Timestamp)
+	suite.Equal([]any{"override"}, ret[0].Labels)
 	suite.Equal("override", ret[0].Comment)
 	// test not overwrite
 	err = suite.Database.BatchInsertFeedback(ctx, []Feedback{{
 		FeedbackKey: FeedbackKey{positiveFeedbackType, "0", "8"},
 		Value:       80,
 		Timestamp:   time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
+		Labels:      []string{"not_override"},
 		Comment:     "not_override",
 	}}, true, true, false)
 	suite.NoError(err)
@@ -419,6 +425,7 @@ func (suite *baseTestSuite) TestFeedback() {
 	suite.Equal(1, len(ret))
 	suite.Equal(float64(180), ret[0].Value)
 	suite.Equal(time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC), ret[0].Timestamp)
+	suite.Equal([]any{"not_override"}, ret[0].Labels)
 	suite.Equal("not_override", ret[0].Comment)
 
 	// insert no feedback
@@ -561,7 +568,7 @@ func (suite *baseTestSuite) TestItems() {
 	err = suite.Database.DeleteItem(ctx, "0")
 	suite.NoError(err)
 	_, err = suite.Database.GetItem(ctx, "0")
-	suite.True(errors.Is(err, errors.NotFound), err)
+	suite.ErrorIs(err, storage.ErrNotFound)
 
 	// test override
 	err = suite.Database.BatchInsertItems(ctx, []Item{{ItemId: "4", IsHidden: false, Categories: []string{"b"}, Labels: []string{"o"}, Comment: "override"}})
@@ -955,9 +962,6 @@ func (suite *baseTestSuite) TestCollation() {
 }
 
 func (suite *baseTestSuite) TestSearch() {
-	if suite.isClickHouse() {
-		suite.T().Skip("ClickHouse doesn't support item search")
-	}
 	ctx := suite.T().Context()
 	err := suite.Database.Reconcile(config.SearchConfig{Columns: []string{
 		"item.ItemId",
@@ -1025,6 +1029,7 @@ func (suite *baseTestSuite) TestSearch() {
 	suite.ElementsMatch([]string{"gorse-io:gorse"}, searchItemIDs("gorse-io:gorse", 10))
 	suite.ElementsMatch([]string{"running-shoes", "trail-watch"}, searchItemIDs("running", 10))
 	suite.ElementsMatch([]string{"coffee-grinder"}, searchItemIDs("coffee", 10))
+	suite.ElementsMatch([]string{"running-shoes", "trail-watch", "coffee-grinder"}, searchItemIDs("running coffee", 10))
 	suite.ElementsMatch([]string{"trail-watch"}, searchItemIDs("electronics", 10))
 	suite.ElementsMatch([]string{"running-shoes", "coffee-grinder"}, searchItemIDs("acme", 10))
 	suite.Len(searchItemIDs("running", 1), 1)

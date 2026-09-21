@@ -21,7 +21,7 @@ import (
 	"time"
 
 	"github.com/gorse-io/gorse/protocol"
-	"github.com/juju/errors"
+	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -73,29 +73,6 @@ func (p *ProxyServer) Set(ctx context.Context, request *protocol.SetRequest) (*p
 
 func (p *ProxyServer) Delete(ctx context.Context, request *protocol.DeleteRequest) (*protocol.DeleteResponse, error) {
 	return &protocol.DeleteResponse{}, p.database.Delete(ctx, request.GetName())
-}
-
-func (p *ProxyServer) Push(ctx context.Context, request *protocol.PushRequest) (*protocol.PushResponse, error) {
-	return &protocol.PushResponse{}, p.database.Push(ctx, request.GetName(), request.GetValue())
-}
-
-func (p *ProxyServer) Pop(ctx context.Context, request *protocol.PopRequest) (*protocol.PopResponse, error) {
-	value, err := p.database.Pop(ctx, request.GetName())
-	if err != nil {
-		if errors.Is(err, io.EOF) {
-			return &protocol.PopResponse{}, nil
-		}
-		return nil, err
-	}
-	return &protocol.PopResponse{Value: &value}, nil
-}
-
-func (p *ProxyServer) Remain(ctx context.Context, request *protocol.RemainRequest) (*protocol.RemainResponse, error) {
-	count, err := p.database.Remain(ctx, request.GetName())
-	if err != nil {
-		return nil, err
-	}
-	return &protocol.RemainResponse{Count: count}, nil
 }
 
 func (p *ProxyServer) AddScores(ctx context.Context, request *protocol.AddScoresRequest) (*protocol.AddScoresResponse, error) {
@@ -207,15 +184,15 @@ func (p ProxyClient) Close() error {
 }
 
 func (p ProxyClient) Init() error {
-	return errors.MethodNotAllowedf("init is not allowed in proxy client")
+	return errors.Errorf("init is not allowed in proxy client")
 }
 
 func (p ProxyClient) Scan(_ func(string) error) error {
-	return errors.MethodNotAllowedf("scan is not allowed in proxy client")
+	return errors.Errorf("scan is not allowed in proxy client")
 }
 
 func (p ProxyClient) Purge() error {
-	return errors.MethodNotAllowedf("purge is not allowed in proxy client")
+	return errors.Errorf("purge is not allowed in proxy client")
 }
 
 func (p ProxyClient) Set(ctx context.Context, values ...Value) error {
@@ -250,37 +227,6 @@ func (p ProxyClient) Delete(ctx context.Context, name string) error {
 		Name: name,
 	})
 	return err
-}
-
-func (p ProxyClient) Push(ctx context.Context, name, value string) error {
-	_, err := p.CacheStoreClient.Push(ctx, &protocol.PushRequest{
-		Name:  name,
-		Value: value,
-	})
-	return err
-}
-
-func (p ProxyClient) Pop(ctx context.Context, name string) (string, error) {
-	resp, err := p.CacheStoreClient.Pop(ctx, &protocol.PopRequest{
-		Name: name,
-	})
-	if err != nil {
-		return "", err
-	}
-	if resp.Value == nil {
-		return "", io.EOF
-	}
-	return resp.GetValue(), nil
-}
-
-func (p ProxyClient) Remain(ctx context.Context, name string) (int64, error) {
-	resp, err := p.CacheStoreClient.Remain(ctx, &protocol.RemainRequest{
-		Name: name,
-	})
-	if err != nil {
-		return 0, err
-	}
-	return resp.Count, nil
 }
 
 func (p ProxyClient) AddScores(ctx context.Context, collection, subset string, documents []Score) error {
@@ -328,7 +274,7 @@ func (p ProxyClient) SearchScores(ctx context.Context, collection, subset string
 
 func (p ProxyClient) DeleteScores(ctx context.Context, collection []string, condition ScoreCondition) error {
 	if err := condition.Check(); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	var before *timestamppb.Timestamp
 	if condition.Before != nil {

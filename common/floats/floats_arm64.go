@@ -21,7 +21,7 @@ import (
 	"unsafe"
 )
 
-//go:generate goat src/floats_neon.c -O3
+//go:generate go tool goat src/floats_neon.c -O3
 
 type Feature uint64
 
@@ -38,6 +38,14 @@ func (feature Feature) String() string {
 		features = append(features, "AMX")
 	}
 	return strings.Join(features, "+")
+}
+
+func (Feature) fromFloat32(a []float32, dst []uint16) {
+	vfrom_float32(unsafe.Pointer(&a[0]), unsafe.Pointer(&dst[0]), int64(len(a)))
+}
+
+func (Feature) toFloat32(a []uint16, dst []float32) {
+	vto_float32(unsafe.Pointer(&a[0]), unsafe.Pointer(&dst[0]), int64(len(a)))
 }
 
 func (feature Feature) mulConstAddTo(a []float32, b float32, c, dst []float32) {

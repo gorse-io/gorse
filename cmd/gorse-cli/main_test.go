@@ -15,12 +15,15 @@ import (
 	"time"
 	"unsafe"
 
+	adminclient "github.com/gorse-io/gorse/client"
+	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/master"
 	"github.com/gorse-io/gorse/protocol"
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
+	"github.com/gorse-io/gorse/storage/vectors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/require"
@@ -66,7 +69,12 @@ type CLITestSuite struct {
 	endpoint string
 }
 
+func (s *CLITestSuite) SetupSuite() {
+	log.SetTestLogger(s.T())
+}
+
 func (s *CLITestSuite) SetupTest() {
+	log.SetTestLogger(s.T())
 	s.m, s.endpoint = newTestMaster(s.T())
 
 	ctx := s.T().Context()
@@ -93,6 +101,8 @@ func (s *CLITestSuite) SetupTest() {
 		{ItemId: "recommend-1", Categories: []string{"news"}, Timestamp: time.Date(2026, 1, 4, 0, 0, 0, 0, time.UTC)},
 		{ItemId: "similar-1", Categories: []string{"news"}, Timestamp: time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC)},
 	}))
+	s.Require().NoError(s.m.DataClient.Reconcile(config.SearchConfig{Columns: []string{"item.Comment"}}))
+	s.Require().NoError(s.m.DataClient.Optimize())
 	s.Require().NoError(s.m.DataClient.BatchInsertFeedback(ctx, []data.Feedback{{
 		FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "alice", ItemId: "item-1"},
 		Timestamp:   time.Date(2026, 1, 1, 3, 0, 0, 0, time.UTC),
@@ -106,12 +116,6 @@ func (s *CLITestSuite) SetupTest() {
 		{Id: "recommend-1", Score: 1, Categories: []string{"news"}},
 	}))
 	s.Require().NoError(s.m.CacheClient.Set(ctx, cache.String(cache.Key(cache.NonPersonalizedDigest, "popular"), "digest")))
-	s.Require().NoError(s.m.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key("neighbors", "item-1"), []cache.Score{
-		{Id: "similar-1", Score: 1, Categories: []string{"news"}},
-	}))
-	s.Require().NoError(s.m.CacheClient.AddScores(ctx, cache.UserToUser, cache.Key("neighbors", "alice"), []cache.Score{
-		{Id: "neighbor-1", Score: 1},
-	}))
 	s.Require().NoError(s.m.CacheClient.AddTimeSeriesPoints(ctx, []cache.TimeSeriesPoint{{
 		Name:      "requests",
 		Timestamp: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
@@ -273,6 +277,13 @@ func (s *CLITestSuite) TestRecommendItemToUser() {
 }
 
 func (s *CLITestSuite) TestRecommendItemToItem() {
+	ctx := s.T().Context()
+	collection := vectors.ItemToItemCollection("neighbors")
+	s.Require().NoError(s.m.VectorClient.AddCollection(ctx, collection, 0, vectors.Dot, vectors.VectorConfig{}))
+	s.Require().NoError(s.m.VectorClient.AddVectors(ctx, collection, []vectors.Vector{
+		{Id: "item-1", Indices: []uint32{0}, Values: []float32{1}},
+		{Id: "similar-1", Indices: []uint32{0}, Values: []float32{1}, Categories: []string{"news"}},
+	}))
 	s.requireScoredItemsOutput([]string{"recommend", "item-to-item", "neighbors", "item-1", "-n", "3", "--category", "news"},
 		`^similar-1\s+\["news"\]\s+false\s+2026-01-05T00:00:00Z\s+1$`,
 	)
@@ -284,6 +295,13 @@ func (s *CLITestSuite) requireScoredItemsOutput(args []string, rowRegexps ...str
 }
 
 func (s *CLITestSuite) TestRecommendUserToUser() {
+	ctx := s.T().Context()
+	collection := vectors.UserToUserCollection("neighbors")
+	s.Require().NoError(s.m.VectorClient.AddCollection(ctx, collection, 0, vectors.Dot, vectors.VectorConfig{}))
+	s.Require().NoError(s.m.VectorClient.AddVectors(ctx, collection, []vectors.Vector{
+		{Id: "alice", Indices: []uint32{0}, Values: []float32{1}},
+		{Id: "neighbor-1", Indices: []uint32{0}, Values: []float32{1}},
+	}))
 	s.requireCommandOutputLines([]string{"recommend", "user-to-user", "neighbors", "alice", "-n", "3"},
 		`^USER-ID\s+COMMENT\s+LABELS\s+SCORE$`,
 		`^neighbor-1\s+1$`,
@@ -342,8 +360,8 @@ func (s *CLITestSuite) TestGetFeedback() {
 
 		lines := strings.Split(strings.TrimSpace(out), "\n")
 		s.Require().Len(lines, 2)
-		s.Require().Regexp(`^FEEDBACK-TYPE\s+USER-ID\s+ITEM-ID\s+VALUE\s+TIMESTAMP\s+COMMENT\s+UPDATED$`, lines[0])
-		s.Require().Regexp(`^click\s+alice\s+item-1\s+0\s+2026-01-01T03:00:00Z\s+\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$`, lines[1])
+		s.Require().Regexp(`^FEEDBACK-TYPE\s+USER-ID\s+ITEM-ID\s+VALUE\s+TIMESTAMP\s+COMMENT\s+UPDATED\s+LABELS$`, lines[0])
+		s.Require().Regexp(`^click\s+alice\s+item-1\s+0\s+2026-01-01T03:00:00Z\s+\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z\s*$`, lines[1])
 		s.Require().NotContains(out, "Cursor")
 		s.Require().NotContains(out, "┌")
 		s.Require().NotContains(out, "│")
@@ -370,6 +388,20 @@ func (s *CLITestSuite) TestGetItems() {
 	s.Require().Regexp(`^similar-1\s+\["news"\]\s+false\s+2026-01-05T00:00:00Z\s*$`, lines[6])
 	s.Require().NotContains(out, "LABELS-EMBEDDING")
 	s.Require().NotContains(out, "0.4")
+	s.Require().NotContains(out, "┌")
+	s.Require().NotContains(out, "│")
+	s.Require().NotContains(out, "└")
+}
+
+func (s *CLITestSuite) TestSearchItems() {
+	out, err := s.execute("get", "items", "raw", "item", "-n", "10")
+	s.Require().NoError(err)
+
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	s.Require().Len(lines, 3)
+	s.Require().Regexp(`^ITEM-ID\s+COMMENT\s+CATEGORIES\s+IS-HIDDEN\s+TIMESTAMP\s+LABELS$`, lines[0])
+	s.Require().Regexp(`^item-1\s+raw item\s+\["news"\]\s+false\s+2026-01-01T01:00:00Z\s+\{"embedding":"\[0\.1, 0\.2, 0\.3, \.\.\.\] \(10 values\)"\}$`, lines[1])
+	s.Require().Regexp(`^item-2\s+listed item\s+\["books"\]\s+false\s+2026-01-01T02:00:00Z\s+\{"description":"`+strings.Repeat("x", 120)+`"\}$`, lines[2])
 	s.Require().NotContains(out, "┌")
 	s.Require().NotContains(out, "│")
 	s.Require().NotContains(out, "└")
@@ -472,6 +504,7 @@ func newTestMaster(t *testing.T) (*master.Master, string) {
 	cfg := config.GetDefaultConfig()
 	cfg.Database.DataStore = "sqlite://" + filepath.Join(tempDir, "data.db")
 	cfg.Database.CacheStore = "sqlite://" + filepath.Join(tempDir, "cache.db")
+	cfg.Database.VectorStore = "xvec://" + filepath.Join(tempDir, "vectors")
 	cfg.Blob.URI = filepath.Join(tempDir, "blob")
 	cfg.Master.Host = "127.0.0.1"
 	cfg.Master.Port = freePort(t)
@@ -480,6 +513,9 @@ func newTestMaster(t *testing.T) (*master.Master, string) {
 	cfg.Master.AdminAPIKey = testAPIKey
 	cfg.Master.DashboardUserName = "admin"
 	cfg.Master.DashboardPassword = "pass"
+	cfg.Recommend.Search.Columns = []string{"item.Comment"}
+	cfg.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "neighbors", Type: "tags", Column: "item.Labels"}}
+	cfg.Recommend.UserToUser = []config.UserToUserConfig{{Name: "neighbors", Type: "items"}}
 	cfg.OpenAI.AuthToken = "test"
 
 	m := master.NewMaster(cfg, tempDir, true, "")
@@ -506,6 +542,7 @@ func closeTestMasterStores(t *testing.T, m *master.Master) {
 	t.Helper()
 	require.NoError(t, m.DataClient.Close())
 	require.NoError(t, m.CacheClient.Close())
+	require.NoError(t, m.VectorClient.Close())
 
 	metaStoreValue := reflect.ValueOf(m).Elem().FieldByName("metaStore")
 	if metaStoreValue.IsNil() {
@@ -544,7 +581,7 @@ func waitForMaster(t *testing.T, endpoint string) {
 
 func waitForInitialTask(t *testing.T, endpoint string) {
 	t.Helper()
-	client := NewAdminClient(endpoint, testAPIKey)
+	client := adminclient.NewAdminClient(endpoint, testAPIKey)
 	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
 		tasks, err := client.GetTasks()
@@ -552,9 +589,9 @@ func waitForInitialTask(t *testing.T, endpoint string) {
 			for _, task := range tasks {
 				if task.Name == "Load Dataset" {
 					switch task.Status {
-					case monitor.StatusComplete:
+					case string(monitor.StatusComplete):
 						return
-					case monitor.StatusFailed:
+					case string(monitor.StatusFailed):
 						require.Failf(t, "initial load dataset task failed", task.Error)
 					}
 				}

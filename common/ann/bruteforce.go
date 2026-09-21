@@ -16,7 +16,7 @@ package ann
 
 import (
 	"github.com/gorse-io/gorse/common/heap"
-	"github.com/juju/errors"
+	"github.com/pkg/errors"
 	"github.com/samber/lo"
 )
 

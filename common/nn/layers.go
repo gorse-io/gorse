@@ -21,8 +21,8 @@ import (
 
 	"github.com/chewxy/math32"
 	"github.com/gorse-io/gorse/protocol"
-	"github.com/juju/errors"
 	"github.com/matttproud/golang_protobuf_extensions/pbutil"
+	"github.com/pkg/errors"
 )
 
 type Layer interface {

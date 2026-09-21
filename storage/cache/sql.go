@@ -19,7 +19,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"io"
 	"math"
 	"strings"
 	"time"
@@ -29,8 +28,8 @@ import (
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/go-sql-driver/mysql"
 	"github.com/gorse-io/gorse/storage"
-	"github.com/juju/errors"
 	"github.com/lib/pq"
+	"github.com/pkg/errors"
 	"github.com/samber/lo"
 	semconv "go.opentelemetry.io/otel/semconv/v1.8.0"
 	gormmysql "gorm.io/driver/mysql"
@@ -51,7 +50,7 @@ func init() {
 			otelsql.WithAttributes(semconv.DBSystemPostgreSQL),
 			otelsql.WithSpanOptions(otelsql.SpanOptions{DisableErrSkip: true}),
 		); err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 		storage.ApplySQLPool(database.client, option)
 		database.gormDB, err = gorm.Open(postgres.New(postgres.Config{
@@ -59,7 +58,7 @@ func init() {
 			Conn:       database.client,
 		}), storage.NewGORMConfig(tablePrefix))
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 		return database, nil
 	})
@@ -69,14 +68,14 @@ func init() {
 		// probe isolation variable name
 		isolationVarName, err := storage.ProbeMySQLIsolationVariableName(name)
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 		// append parameters
 		if name, err = storage.AppendMySQLParams(name, map[string]string{
 			isolationVarName: fmt.Sprintf("'%s'", option.IsolationLevel),
 			"parseTime":      "true",
 		}); err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 		// connect to database
 		database := new(SQLDatabase)
@@ -86,12 +85,12 @@ func init() {
 			otelsql.WithAttributes(semconv.DBSystemMySQL),
 			otelsql.WithSpanOptions(otelsql.SpanOptions{DisableErrSkip: true}),
 		); err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 		storage.ApplySQLPool(database.client, option)
 		database.gormDB, err = gorm.Open(gormmysql.New(gormmysql.Config{Conn: database.client}), storage.NewGORMConfig(tablePrefix))
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 		return database, nil
 	})
@@ -103,7 +102,7 @@ func init() {
 			{"_pragma", "busy_timeout(10000)"},
 			{"_pragma", "journal_mode(wal)"},
 		}); err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 		// connect to database
 		database := new(SQLDatabase)
@@ -113,11 +112,11 @@ func init() {
 			otelsql.WithAttributes(semconv.DBSystemSqlite),
 			otelsql.WithSpanOptions(otelsql.SpanOptions{DisableErrSkip: true}),
 		); err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 		database.gormDB, err = gorm.Open(sqlite.Dialector{Conn: database.client}, storage.NewGORMConfig(tablePrefix))
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 		return database, nil
 	})
@@ -134,12 +133,6 @@ const (
 type SQLValue struct {
 	Name  string `gorm:"type:varchar(256);primaryKey"`
 	Value string `gorm:"type:varchar(256);not null"`
-}
-
-type Message struct {
-	Name      string `gorm:"primaryKey;index:timestamp"`
-	Value     string `gorm:"primaryKey"`
-	Timestamp int64  `gorm:"index:timestamp"`
 }
 
 type PostgresDocument struct {
@@ -178,34 +171,34 @@ func (db *SQLDatabase) Ping() error {
 }
 
 func (db *SQLDatabase) Init() error {
-	err := db.gormDB.AutoMigrate(&SQLValue{}, &Message{}, &TimeSeriesPoint{})
+	err := db.gormDB.AutoMigrate(&SQLValue{}, &TimeSeriesPoint{})
 	if err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	switch db.driver {
 	case Postgres:
 		err = db.gormDB.AutoMigrate(&PostgresDocument{})
 		if err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		// create extension btree_gin
 		err = db.gormDB.Exec("CREATE EXTENSION IF NOT EXISTS btree_gin").Error
 		if err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		// create index
 		err = db.gormDB.Exec(fmt.Sprintf("CREATE INDEX IF NOT EXISTS idx_collection_subset_categories ON %s USING GIN (collection, subset, categories)", db.DocumentTable())).Error
 		if err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		err = db.gormDB.Exec(fmt.Sprintf("CREATE INDEX IF NOT EXISTS idx_collection_id ON %s (collection, id)", db.DocumentTable())).Error
 		if err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 	case MySQL:
 		err = db.gormDB.AutoMigrate(&SQLDocument{})
 		if err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		// detect MariaDB
 		var isMariaDB bool
@@ -220,7 +213,7 @@ func (db *SQLDatabase) Init() error {
 				if mysqlErr, ok := err.(*mysql.MySQLError); ok && mysqlErr.Number == 1061 {
 					// ignore duplicate index error
 				} else {
-					return errors.Trace(err)
+					return errors.WithStack(err)
 				}
 			}
 		}
@@ -230,13 +223,13 @@ func (db *SQLDatabase) Init() error {
 				// ignore duplicate index error
 				err = nil
 			} else {
-				return errors.Trace(err)
+				return errors.WithStack(err)
 			}
 		}
 	case SQLite:
 		err = db.gormDB.AutoMigrate(&SQLDocument{})
 	}
-	return errors.Trace(err)
+	return errors.WithStack(err)
 }
 
 func (db *SQLDatabase) Scan(work func(string) error) error {
@@ -248,16 +241,16 @@ func (db *SQLDatabase) Scan(work func(string) error) error {
 	// scan values
 	valuerRows, err = db.gormDB.Table(db.ValuesTable()).Select("name").Rows()
 	if err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	defer valuerRows.Close()
 	for valuerRows.Next() {
 		var key string
 		if err = valuerRows.Scan(&key); err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		if err = work(key); err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 	}
 
@@ -265,11 +258,11 @@ func (db *SQLDatabase) Scan(work func(string) error) error {
 }
 
 func (db *SQLDatabase) Purge() error {
-	tables := []any{SQLValue{}, Message{}, SQLDocument{}}
+	tables := []any{SQLValue{}, SQLDocument{}}
 	for _, table := range tables {
 		err := db.gormDB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&table).Error
 		if err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 	}
 	return nil
@@ -294,20 +287,20 @@ func (db *SQLDatabase) Set(ctx context.Context, values ...Value) error {
 		Columns:   []clause.Column{{Name: "name"}},
 		DoUpdates: clause.AssignmentColumns([]string{"value"}),
 	}).Create(rows).Error
-	return errors.Trace(err)
+	return errors.WithStack(err)
 }
 
 func (db *SQLDatabase) Get(ctx context.Context, name string) *ReturnValue {
 	rs, err := db.gormDB.WithContext(ctx).Table(db.ValuesTable()).Where("name = ?", name).Select("value").Rows()
 	if err != nil {
-		return &ReturnValue{err: errors.Trace(err), exists: false}
+		return &ReturnValue{err: errors.WithStack(err), exists: false}
 	}
 	defer rs.Close()
 	if rs.Next() {
 		var value string
 		err := rs.Scan(&value)
 		if err != nil {
-			return &ReturnValue{err: errors.Trace(err), exists: false}
+			return &ReturnValue{err: errors.WithStack(err), exists: false}
 		}
 		return &ReturnValue{value: value, exists: true}
 	}
@@ -316,40 +309,7 @@ func (db *SQLDatabase) Get(ctx context.Context, name string) *ReturnValue {
 
 func (db *SQLDatabase) Delete(ctx context.Context, name string) error {
 	err := db.gormDB.WithContext(ctx).Delete(&SQLValue{Name: name}).Error
-	return errors.Trace(err)
-}
-
-func (db *SQLDatabase) Push(ctx context.Context, name, value string) error {
-	return db.gormDB.WithContext(ctx).Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "name"}, {Name: "value"}},
-		DoUpdates: clause.AssignmentColumns([]string{"timestamp"}),
-	}).Create(&Message{
-		Name:      name,
-		Value:     value,
-		Timestamp: time.Now().UnixNano(),
-	}).Error
-}
-
-func (db *SQLDatabase) Pop(ctx context.Context, name string) (string, error) {
-	var message Message
-	err := db.gormDB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := db.gormDB.Order("timestamp").First(&message, "name = ?", name).Error; err != nil {
-			return err
-		}
-		if err := db.gormDB.Delete(&message).Error; err != nil {
-			return err
-		}
-		return nil
-	})
-	if err == gorm.ErrRecordNotFound {
-		return "", io.EOF
-	}
-	return message.Value, err
-}
-
-func (db *SQLDatabase) Remain(ctx context.Context, name string) (count int64, err error) {
-	err = db.gormDB.WithContext(ctx).Model(&Message{}).Where("name = ?", name).Count(&count).Error
-	return
+	return errors.WithStack(err)
 }
 
 func (db *SQLDatabase) AddScores(ctx context.Context, collection, subset string, documents []Score) error {
@@ -384,7 +344,7 @@ func (db *SQLDatabase) AddScores(ctx context.Context, collection, subset string,
 		Columns:   []clause.Column{{Name: "collection"}, {Name: "subset"}, {Name: "id"}},
 		DoUpdates: clause.AssignmentColumns([]string{"score", "categories", "timestamp"}),
 	}).Create(rows).Error
-	return errors.Trace(err)
+	return errors.WithStack(err)
 }
 
 func (db *SQLDatabase) SearchScores(ctx context.Context, collection, subset string, query []string, begin, end int) ([]Score, error) {
@@ -399,7 +359,7 @@ func (db *SQLDatabase) SearchScores(ctx context.Context, collection, subset stri
 		case SQLite, MySQL:
 			q, err := json.Marshal(query)
 			if err != nil {
-				return nil, errors.Trace(err)
+				return nil, errors.WithStack(err)
 			}
 			tx.Where("JSON_CONTAINS(categories,?)", string(q))
 		}
@@ -412,7 +372,7 @@ func (db *SQLDatabase) SearchScores(ctx context.Context, collection, subset stri
 	}
 	rows, err := tx.Rows()
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.WithStack(err)
 	}
 	documents := make([]Score, 0, 10)
 	for rows.Next() {
@@ -420,7 +380,7 @@ func (db *SQLDatabase) SearchScores(ctx context.Context, collection, subset stri
 		case Postgres:
 			var document PostgresDocument
 			if err = rows.Scan(&document.Id, &document.Score, &document.Categories, &document.Timestamp); err != nil {
-				return nil, errors.Trace(err)
+				return nil, errors.WithStack(err)
 			}
 			documents = append(documents, Score{
 				Id:         document.Id,
@@ -431,7 +391,7 @@ func (db *SQLDatabase) SearchScores(ctx context.Context, collection, subset stri
 		case SQLite, MySQL:
 			var document Score
 			if err = db.gormDB.ScanRows(rows, &document); err != nil {
-				return nil, errors.Trace(err)
+				return nil, errors.WithStack(err)
 			}
 			document.Timestamp = document.Timestamp.In(time.UTC)
 			documents = append(documents, document)
@@ -466,7 +426,7 @@ func (db *SQLDatabase) UpdateScores(ctx context.Context, collections []string, s
 		case SQLite, MySQL:
 			q, err := json.Marshal(patch.Categories)
 			if err != nil {
-				return errors.Trace(err)
+				return errors.WithStack(err)
 			}
 			tx.Update("categories", string(q))
 		}
@@ -476,7 +436,7 @@ func (db *SQLDatabase) UpdateScores(ctx context.Context, collections []string, s
 
 func (db *SQLDatabase) DeleteScores(ctx context.Context, collections []string, condition ScoreCondition) error {
 	if err := condition.Check(); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	var builder strings.Builder
 	builder.WriteString("collection in (?)")
@@ -505,17 +465,17 @@ func (db *SQLDatabase) DeleteScores(ctx context.Context, collections []string, c
 func (db *SQLDatabase) ScanScores(ctx context.Context, callback func(collection, id, subset string, timestamp time.Time) error) error {
 	rows, err := db.gormDB.WithContext(ctx).Table(db.DocumentTable()).Select("collection, id, subset, timestamp").Rows()
 	if err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var collection, id, subset string
 		var timestamp time.Time
 		if err = rows.Scan(&collection, &id, &subset, &timestamp); err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		if err = callback(collection, id, subset, timestamp); err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 	}
 	return nil
@@ -542,7 +502,7 @@ func (db *SQLDatabase) GetTimeSeriesPoints(ctx context.Context, name string, beg
 				"FROM %s WHERE name = ? and timestamp >= ? and timestamp <= ?) AS t WHERE rn = 1",
 				db.PointsTable()), int(duration.Seconds()), int(duration.Seconds()), int(duration.Seconds()), name, begin, end).
 			Scan(&points).Error; err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 	case MySQL:
 		if err := db.gormDB.WithContext(ctx).
@@ -552,7 +512,7 @@ func (db *SQLDatabase) GetTimeSeriesPoints(ctx context.Context, name string, beg
 				"FROM %s WHERE name = ? and timestamp >= ? and timestamp <= ?) AS t WHERE rn = 1;",
 				db.PointsTable()), int(duration.Seconds()), int(duration.Seconds()), int(duration.Seconds()), name, begin, end).
 			Scan(&points).Error; err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 	case SQLite:
 		rows, err := db.gormDB.WithContext(ctx).
@@ -563,18 +523,18 @@ func (db *SQLDatabase) GetTimeSeriesPoints(ctx context.Context, name string, beg
 				db.PointsTable()), int(duration.Seconds()), int(duration.Seconds()), int(duration.Seconds()), name, begin, end).
 			Rows()
 		if err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 		defer rows.Close()
 		for rows.Next() {
 			var point TimeSeriesPoint
 			var timestamp string
 			if err := rows.Scan(&point.Name, &timestamp, &point.Value); err != nil {
-				return nil, errors.Trace(err)
+				return nil, errors.WithStack(err)
 			}
 			point.Timestamp, err = dateparse.ParseAny(timestamp)
 			if err != nil {
-				return nil, errors.Trace(err)
+				return nil, errors.WithStack(err)
 			}
 			points = append(points, point)
 		}

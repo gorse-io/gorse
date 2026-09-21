@@ -24,6 +24,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/emicklei/go-restful/v3"
@@ -35,6 +36,7 @@ import (
 	"github.com/gorse-io/gorse/storage"
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
+	"github.com/gorse-io/gorse/storage/vectors"
 	"github.com/samber/lo"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
@@ -51,6 +53,8 @@ type Server struct {
 	cachePrefix  string
 	dataPath     string
 	dataPrefix   string
+	vectorPath   string
+	vectorPrefix string
 	conn         *grpc.ClientConn
 	masterClient protocol.MasterClient
 	serverName   string
@@ -59,6 +63,9 @@ type Server struct {
 	tlsConfig    *util.TLSConfig
 	testMode     bool
 	cacheFile    string
+	done         chan struct{}
+	shutdown     sync.Once
+	syncWait     sync.WaitGroup
 }
 
 // NewServer creates a server node.
@@ -75,13 +82,15 @@ func NewServer(
 		masterPort: masterPort,
 		tlsConfig:  tlsConfig,
 		cacheFile:  cacheFile,
+		done:       make(chan struct{}),
 		RestServer: RestServer{
-			Config:      config.GetDefaultConfig(),
-			CacheClient: new(cache.NoDatabase),
-			DataClient:  new(data.NoDatabase),
-			HttpHost:    serverHost,
-			HttpPort:    serverPort,
-			WebService:  new(restful.WebService),
+			Config:       config.GetDefaultConfig(),
+			CacheClient:  new(cache.NoDatabase),
+			DataClient:   new(data.NoDatabase),
+			VectorClient: vectors.NoDatabase{},
+			HttpHost:     serverHost,
+			HttpPort:     serverPort,
+			WebService:   new(restful.WebService),
 		},
 	}
 	return s
@@ -120,7 +129,11 @@ func (s *Server) Serve() {
 	}
 	s.masterClient = protocol.NewMasterClient(s.conn)
 
-	go s.Sync()
+	s.syncWait.Add(1)
+	go func() {
+		defer s.syncWait.Done()
+		s.Sync()
+	}()
 	container := restful.NewContainer()
 	s.StartHttpServer(container)
 }
@@ -139,10 +152,29 @@ func (s *Server) ServerName() (string, error) {
 }
 
 func (s *Server) Shutdown() {
-	err := s.HttpServer.Shutdown(context.TODO())
-	if err != nil {
-		log.Logger().Fatal("failed to shutdown http server", zap.Error(err))
-	}
+	s.shutdown.Do(func() {
+		close(s.done)
+		if s.HttpServer != nil {
+			if err := s.HttpServer.Shutdown(context.TODO()); err != nil {
+				log.Logger().Error("failed to shutdown http server", zap.Error(err))
+			}
+		}
+		if s.conn != nil {
+			if err := s.conn.Close(); err != nil {
+				log.Logger().Error("failed to close master connection", zap.Error(err))
+			}
+		}
+		s.syncWait.Wait()
+		if err := s.DataClient.Close(); err != nil {
+			log.Logger().Error("failed to close data database", zap.Error(err))
+		}
+		if err := s.CacheClient.Close(); err != nil {
+			log.Logger().Error("failed to close cache database", zap.Error(err))
+		}
+		if err := s.VectorClient.Close(); err != nil {
+			log.Logger().Error("failed to close vector database", zap.Error(err))
+		}
+	})
 }
 
 // Sync this server to the master.
@@ -206,6 +238,21 @@ func (s *Server) Sync() {
 			s.cachePrefix = s.Config.Database.CacheTablePrefix
 		}
 
+		// connect to vector store
+		if s.vectorPath != s.Config.Database.VectorStore || s.vectorPrefix != s.Config.Database.VectorTablePrefix {
+			if strings.HasPrefix(s.Config.Database.VectorStore, storage.XvecPrefix) {
+				log.Logger().Info("connect vector store via master")
+				s.VectorClient = vectors.NewProxyClient(s.conn)
+			} else {
+				if s.VectorClient, err = vectors.Open(s.Config.Database.VectorStore, s.Config.Database.VectorTablePrefix); err != nil {
+					log.Logger().Error("failed to connect vector store", zap.Error(err))
+					goto sleep
+				}
+			}
+			s.vectorPath = s.Config.Database.VectorStore
+			s.vectorPrefix = s.Config.Database.VectorTablePrefix
+		}
+
 		// create trace provider
 		if !s.traceConfig.Equal(s.Config.Tracing) {
 			log.Logger().Info("create trace provider", zap.Any("tracing_config", s.Config.Tracing))
@@ -223,6 +270,10 @@ func (s *Server) Sync() {
 		if s.testMode {
 			return
 		}
-		time.Sleep(s.Config.Master.MetaTimeout)
+		select {
+		case <-time.After(s.Config.Master.MetaTimeout):
+		case <-s.done:
+			return
+		}
 	}
 }

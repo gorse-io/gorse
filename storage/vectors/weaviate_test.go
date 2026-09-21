@@ -18,6 +18,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/gorse-io/gorse/common/log"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -26,26 +27,37 @@ var (
 )
 
 func init() {
-	// get environment variables
-	env := func(key, defaultValue string) string {
-		if value := os.Getenv(key); value != "" {
-			return value
-		}
-		return defaultValue
-	}
-	weaviateUri = env("WEAVIATE_URI", "weaviate://127.0.0.1:8080")
+	// os.Setenv("WEAVIATE_URI", "weaviate://127.0.0.1:8080")
+	weaviateUri = os.Getenv("WEAVIATE_URI")
 }
 
 type WeaviateTestSuite struct {
 	vectorsTestSuite
 }
 
+func (suite *WeaviateTestSuite) TestSparse() {
+	suite.T().Skip("sparse vectors are not supported")
+}
+
 func (suite *WeaviateTestSuite) SetupSuite() {
+	log.SetTestLogger(suite.T())
 	var err error
 	suite.Database, err = Open(weaviateUri, "gorse_")
 	suite.NoError(err)
 }
 
+func (suite *WeaviateTestSuite) TestQuantization() {
+	suite.testQuantization(QuantizationNone, 0)
+	suite.testQuantization(QuantizationSQ, 0)
+	suite.testQuantization(QuantizationRQ, 0)
+	suite.testQuantization(QuantizationRQ, 1)
+	suite.testQuantization(QuantizationRQ, 8)
+	suite.testQuantization(QuantizationPQ, 0)
+}
+
 func TestWeaviate(t *testing.T) {
+	if weaviateUri == "" {
+		t.Skip("WEAVIATE_URI is not set, skipping Weaviate test")
+	}
 	suite.Run(t, new(WeaviateTestSuite))
 }

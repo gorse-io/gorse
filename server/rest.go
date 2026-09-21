@@ -18,26 +18,30 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/pprof"
 	"strconv"
 	"strings"
 	"time"
+	"uuid"
 
 	"github.com/araddon/dateparse"
 	mapset "github.com/deckarep/golang-set/v2"
 	restfulspec "github.com/emicklei/go-restful-openapi/v2"
 	"github.com/emicklei/go-restful/v3"
-	"github.com/google/uuid"
 	"github.com/gorse-io/gorse/common/event"
 	"github.com/gorse-io/gorse/common/expression"
 	"github.com/gorse-io/gorse/common/heap"
+	"github.com/gorse-io/gorse/common/jsonutil"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/logics"
+	"github.com/gorse-io/gorse/storage"
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
-	"github.com/juju/errors"
+	"github.com/gorse-io/gorse/storage/vectors"
+	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/samber/lo"
 	"github.com/swaggest/swgui/v5emb"
@@ -58,9 +62,10 @@ const (
 
 // RestServer implements a REST-ful API server.
 type RestServer struct {
-	Config      *config.Config
-	CacheClient cache.Database
-	DataClient  data.Database
+	Config       *config.Config
+	CacheClient  cache.Database
+	DataClient   data.Database
+	VectorClient vectors.Database
 
 	HttpHost string
 	HttpPort int
@@ -68,6 +73,23 @@ type RestServer struct {
 	DisableLog bool
 	WebService *restful.WebService
 	HttpServer *http.Server
+}
+
+type CountingReadCloser struct {
+	io.ReadCloser
+	bytesRead int64
+}
+
+func NewCountingReadCloser(r io.ReadCloser) *CountingReadCloser {
+	return &CountingReadCloser{
+		ReadCloser: r,
+	}
+}
+
+func (r *CountingReadCloser) Read(p []byte) (int, error) {
+	n, err := r.ReadCloser.Read(p)
+	r.bytesRead += int64(n)
+	return n, err
 }
 
 // StartHttpServer starts the REST-ful API server.
@@ -97,6 +119,7 @@ func (s *RestServer) StartHttpServer(container *restful.Container) {
 	container.Handle("/debug/pprof/allocs", pprof.Handler("allocs"))
 	container.Handle("/debug/pprof/block", pprof.Handler("block"))
 	container.Handle("/debug/pprof/goroutine", pprof.Handler("goroutine"))
+	container.Handle("/debug/pprof/goroutineleak", pprof.Handler("goroutineleak"))
 	container.Handle("/debug/pprof/heap", pprof.Handler("heap"))
 	container.Handle("/debug/pprof/mutex", pprof.Handler("mutex"))
 	container.Handle("/debug/pprof/threadcreate", pprof.Handler("threadcreate"))
@@ -126,9 +149,14 @@ func (s *RestServer) StartHttpServer(container *restful.Container) {
 
 func (s *RestServer) LogFilter(req *restful.Request, resp *restful.Response, chain *restful.FilterChain) {
 	// generate request id
-	requestId := uuid.New().String()
+	requestId := uuid.NewV4().String()
 	resp.AddHeader("X-Request-ID", requestId)
 
+	var requestReader *CountingReadCloser
+	if req.Request.Body != nil {
+		requestReader = NewCountingReadCloser(req.Request.Body)
+		req.Request.Body = requestReader
+	}
 	start := time.Now()
 	chain.ProcessFilter(req, resp)
 	responseTime := time.Since(start)
@@ -136,19 +164,26 @@ func (s *RestServer) LogFilter(req *restful.Request, resp *restful.Response, cha
 	// Log access
 	if !s.DisableLog && req.Request.URL.Path != "/api/dashboard/cluster" &&
 		req.Request.URL.Path != "/api/dashboard/tasks" {
+		route := req.SelectedRoute().Path()
+		var requestBytes int64
+		if requestReader != nil {
+			requestBytes = requestReader.bytesRead
+		}
 		log.AccessLogger().Info(fmt.Sprintf("%s %s", req.Request.Method, req.Request.URL.Path),
 			zap.String("request_id", requestId),
 			zap.Int("status_code", resp.StatusCode()),
 			zap.Duration("response_time", responseTime),
 			zap.String("remote_addr", req.Request.RemoteAddr))
-		go event.EventRecorder().RecordAPI(req.Request.Context(), event.APIEvent{
-			RequestID:    requestId,
-			Method:       req.Request.Method,
-			Path:         req.Request.URL.Path,
-			StatusCode:   resp.StatusCode(),
-			ResponseTime: responseTime.Milliseconds(),
-			Timestamp:    start,
-			RemoteAddr:   req.Request.RemoteAddr,
+		go event.Emit(context.WithoutCancel(req.Request.Context()), event.Request{
+			RequestID:     requestId,
+			Method:        req.Request.Method,
+			Route:         route,
+			RequestBytes:  requestBytes,
+			ResponseBytes: int64(resp.ContentLength()),
+			StatusCode:    resp.StatusCode(),
+			ResponseTime:  responseTime,
+			Timestamp:     start,
+			RemoteAddr:    req.Request.RemoteAddr,
 		})
 	}
 }
@@ -767,16 +802,119 @@ func (s *RestServer) getNonPersonalized(request *restful.Request, response *rest
 func (s *RestServer) getItemToItem(request *restful.Request, response *restful.Response) {
 	name := request.PathParameter("name")
 	itemId := request.PathParameter("item-id")
-	categories := request.QueryParameters("category")
-	s.SetLastModified(request, response, cache.Key(cache.ItemToItemUpdateTime, name, itemId))
-	s.SearchDocuments(cache.ItemToItem, cache.Key(name, itemId), categories, nil, request, response)
+	categories := ReadCategories(request, nil)
+	itemToItemConfig := s.Config.Recommend.GetItemToItemConfig(name)
+	if itemToItemConfig == nil {
+		PageNotFound(response, errors.Errorf("item-to-item recommender %s not found", name))
+		return
+	}
+	s.SearchItemToItem(*itemToItemConfig, itemId, categories, request, response)
+}
+
+// FilterVisibleItemsByCategories removes hidden items and items that don't contain all required categories.
+func FilterVisibleItemsByCategories(ctx context.Context, dataClient data.Database, scores []cache.Score, categories []string) ([]cache.Score, error) {
+	items, err := dataClient.BatchGetItems(ctx, cache.ConvertDocumentsToValues(scores), data.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+	visibleItems := mapset.NewSet[string]()
+	for _, item := range items {
+		categoryMatched := len(categories) == 0 || lo.EveryBy(categories, func(category string) bool {
+			return lo.Contains(item.Categories, category)
+		})
+		if !item.IsHidden && categoryMatched {
+			visibleItems.Add(item.ItemId)
+		}
+	}
+	return lo.Filter(scores, func(score cache.Score, _ int) bool {
+		return visibleItems.Contains(score.Id)
+	}), nil
+}
+
+func (s *RestServer) SearchItemToItem(itemToItemConfig config.ItemToItemConfig, itemId string, categories []string, request *restful.Request, response *restful.Response) {
+	ctx := request.Request.Context()
+	offset, err := ParseInt(request, "offset", 0)
+	if err != nil {
+		BadRequest(response, err)
+		return
+	}
+	n, err := ParseInt(request, "n", s.Config.Server.DefaultN)
+	if err != nil {
+		BadRequest(response, err)
+		return
+	}
+	readItems := mapset.NewSet[string]()
+	if userId := request.QueryParameter("user-id"); userId != "" {
+		feedback, err := s.DataClient.GetUserFeedback(ctx, userId, s.Config.Now())
+		if err != nil {
+			InternalServerError(response, err)
+			return
+		}
+		for _, f := range feedback {
+			readItems.Add(f.ItemId)
+		}
+	}
+	queryN := max(offset+n+readItems.Cardinality(), s.Config.Recommend.CacheSize)
+	results, err := logics.QueryItemToItem(ctx, s.VectorClient, itemToItemConfig, itemId, nil, queryN)
+	if err != nil {
+		InternalServerError(response, err)
+		return
+	}
+	results, err = FilterVisibleItemsByCategories(ctx, s.DataClient, results, categories)
+	if err != nil {
+		InternalServerError(response, err)
+		return
+	}
+	results = lo.Filter(results, func(result cache.Score, _ int) bool {
+		return !readItems.Contains(result.Id)
+	})
+	if offset < len(results) {
+		results = results[offset:]
+	} else {
+		results = nil
+	}
+	if n > 0 && len(results) > n {
+		results = results[:n]
+	}
+	Ok(response, results)
 }
 
 func (s *RestServer) getUserToUser(request *restful.Request, response *restful.Response) {
 	name := request.PathParameter("name")
 	userId := request.PathParameter("user-id")
-	s.SetLastModified(request, response, cache.Key(cache.UserToUserUpdateTime, name, userId))
-	s.SearchDocuments(cache.UserToUser, cache.Key(name, userId), nil, nil, request, response)
+	userToUserConfig := s.Config.Recommend.GetUserToUserConfig(name)
+	if userToUserConfig == nil {
+		PageNotFound(response, errors.Errorf("user-to-user recommender %s not found", name))
+		return
+	}
+	s.SearchUserToUser(*userToUserConfig, userId, request, response)
+}
+
+func (s *RestServer) SearchUserToUser(userToUserConfig config.UserToUserConfig, userId string, request *restful.Request, response *restful.Response) {
+	offset, err := ParseInt(request, "offset", 0)
+	if err != nil {
+		BadRequest(response, err)
+		return
+	}
+	n, err := ParseInt(request, "n", s.Config.Server.DefaultN)
+	if err != nil {
+		BadRequest(response, err)
+		return
+	}
+	results, err := logics.QueryUserToUser(request.Request.Context(), s.VectorClient, userToUserConfig, userId, offset+n)
+	if err != nil {
+		InternalServerError(response, err)
+		return
+	}
+	if offset < len(results) {
+		results = results[offset:]
+	} else {
+		results = nil
+	}
+	if n > 0 && len(results) > n {
+		results = results[:n]
+	}
+	Ok(response, results)
 }
 
 func (s *RestServer) SetLastModified(request *restful.Request, response *restful.Response, key string) {
@@ -828,9 +966,8 @@ func (s *RestServer) getItemNeighbors(request *restful.Request, response *restfu
 		PageNotFound(response, errors.New("item-to-item recommendation is not enabled"))
 		return
 	} else {
-		name := s.Config.Recommend.ItemToItem[0].Name
-		s.SetLastModified(request, response, cache.Key(cache.ItemToItemUpdateTime, name, itemId))
-		s.SearchDocuments(cache.ItemToItem, cache.Key(name, itemId), categories, nil, request, response)
+		itemToItemConfig := s.Config.Recommend.ItemToItem[0]
+		s.SearchItemToItem(itemToItemConfig, itemId, categories, request, response)
 	}
 }
 
@@ -842,9 +979,7 @@ func (s *RestServer) getUserNeighbors(request *restful.Request, response *restfu
 		PageNotFound(response, errors.New("user-to-user recommendation is not enabled"))
 		return
 	} else {
-		name := s.Config.Recommend.UserToUser[0].Name
-		s.SetLastModified(request, response, cache.Key(cache.UserToUserUpdateTime, name, userId))
-		s.SearchDocuments(cache.UserToUser, cache.Key(name, userId), nil, nil, request, response)
+		s.SearchUserToUser(s.Config.Recommend.UserToUser[0], userId, request, response)
 	}
 }
 
@@ -887,7 +1022,7 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 		return
 	}
 	// online recommendation
-	recommender, err := logics.NewRecommender(s.Config.Recommend, s.CacheClient, s.DataClient, true, userId, categories, s.Config.OpenAI)
+	recommender, err := logics.NewRecommender(s.Config.Recommend, s.CacheClient, s.DataClient, s.VectorClient, true, userId, categories, s.Config.OpenAI)
 	if err != nil {
 		InternalServerError(response, err)
 		return
@@ -911,12 +1046,10 @@ func (s *RestServer) getRecommend(request *restful.Request, response *restful.Re
 		for _, itemId := range results {
 			// insert to data store
 			feedback := data.Feedback{
-				FeedbackKey: data.FeedbackKey{
-					UserId:       userId,
-					ItemId:       itemId,
-					FeedbackType: writeBackFeedback,
-				},
-				Timestamp: startTime.Add(writeBackDelay),
+				UserId:       userId,
+				ItemId:       itemId,
+				FeedbackType: writeBackFeedback,
+				Timestamp:    startTime.Add(writeBackDelay),
 			}
 			err = s.DataClient.BatchInsertFeedback(ctx, []data.Feedback{feedback}, false, false, false)
 			if err != nil {
@@ -939,7 +1072,7 @@ func (s *RestServer) sessionRecommend(request *restful.Request, response *restfu
 		PageNotFound(response, errors.New("item-to-item recommendation is not enabled"))
 		return
 	}
-	name := s.Config.Recommend.ItemToItem[0].Name
+	itemToItemConfig := s.Config.Recommend.ItemToItem[0]
 
 	if request != nil && request.Request != nil {
 		ctx = request.Request.Context()
@@ -956,6 +1089,10 @@ func (s *RestServer) sessionRecommend(request *restful.Request, response *restfu
 		return
 	}
 	category := request.PathParameter("category")
+	var categories []string
+	if category != "" {
+		categories = []string{category}
+	}
 	offset, err := ParseInt(request, "offset", 0)
 	if err != nil {
 		BadRequest(response, err)
@@ -988,9 +1125,14 @@ func (s *RestServer) sessionRecommend(request *restful.Request, response *restfu
 	usedFeedbackCount := 0
 	for _, feedback := range userFeedback {
 		// load similar items
-		similarItems, err := s.CacheClient.SearchScores(ctx, cache.ItemToItem, cache.Key(name, feedback.ItemId), []string{category}, 0, s.Config.Recommend.CacheSize)
+		similarItems, err := logics.QueryItemToItem(ctx, s.VectorClient, itemToItemConfig, feedback.ItemId, nil, s.Config.Recommend.CacheSize)
 		if err != nil {
 			BadRequest(response, err)
+			return
+		}
+		similarItems, err = FilterVisibleItemsByCategories(ctx, s.DataClient, similarItems, categories)
+		if err != nil {
+			InternalServerError(response, err)
 			return
 		}
 		// add unseen items
@@ -1035,6 +1177,99 @@ type Success struct {
 	RowAffected int
 }
 
+func (s *RestServer) checkLabelsSize(labels any) error {
+	limit := s.Config.Quota.MaxLabelsSize
+	if limit <= 0 || labels == nil {
+		return nil
+	}
+	buf := jsonutil.MustMarshal(labels)
+	if len(buf) > limit {
+		return errors.Errorf("labels size exceeds limit (%d > %d bytes)", len(buf), limit)
+	}
+	return nil
+}
+
+func (s *RestServer) checkCategoriesSize(categories []string) error {
+	countLimit := s.Config.Quota.MaxCategoriesCount
+	if countLimit > 0 && len(categories) > countLimit {
+		return errors.Errorf("item categories count exceeds limit (%d > %d)",
+			len(categories), countLimit)
+	}
+	sizeLimit := s.Config.Quota.MaxCategoriesSize
+	if sizeLimit <= 0 {
+		return nil
+	}
+	for _, category := range categories {
+		if len(category) > sizeLimit {
+			return errors.Errorf("category size exceeds limit (%d > %d bytes)", len(category), sizeLimit)
+		}
+	}
+	return nil
+}
+
+func (s *RestServer) checkCommentSize(comment string) error {
+	limit := s.Config.Quota.MaxCommentSize
+	if limit > 0 && len(comment) > limit {
+		return errors.Errorf("comment size exceeds limit (%d > %d bytes)", len(comment), limit)
+	}
+	return nil
+}
+
+func (s *RestServer) checkItemSize(item data.Item) error {
+	if err := s.checkLabelsSize(item.Labels); err != nil {
+		return err
+	}
+	if err := s.checkCommentSize(item.Comment); err != nil {
+		return err
+	}
+	if err := s.checkCategoriesSize(item.Categories); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *RestServer) checkUserSize(user data.User) error {
+	if err := s.checkLabelsSize(user.Labels); err != nil {
+		return err
+	}
+	if err := s.checkCommentSize(user.Comment); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *RestServer) checkUserCountLimit(ctx context.Context, userIds []string) error {
+	limit := s.Config.Quota.MaxUsersCount
+	if limit <= 0 {
+		return nil
+	}
+	totalUsers, err := s.DataClient.CountUsers(ctx)
+	if err != nil {
+		log.Logger().Warn("failed to check user count limit", zap.Error(err))
+		return nil
+	}
+	if totalUsers+len(userIds) > limit {
+		return errors.Errorf("users count exceeds limit (%d > %d)", totalUsers+len(userIds), limit)
+	}
+	return nil
+}
+
+func (s *RestServer) checkItemCountLimit(ctx context.Context, itemIds []string) error {
+	limit := s.Config.Quota.MaxItemsCount
+	if limit <= 0 {
+		return nil
+	}
+	totalItems, err := s.DataClient.CountItems(ctx)
+	if err != nil {
+		log.Logger().Warn("failed to check item count limit", zap.Error(err))
+		return nil
+	}
+	if totalItems+len(itemIds) > limit {
+		return errors.Errorf("items count exceeds limit (%d > %d)", totalItems+len(itemIds), limit)
+	}
+	return nil
+}
+
 func (s *RestServer) insertUser(request *restful.Request, response *restful.Response) {
 	ctx := context.Background()
 	if request != nil && request.Request != nil {
@@ -1049,6 +1284,14 @@ func (s *RestServer) insertUser(request *restful.Request, response *restful.Resp
 	// validate labels
 	if err := data.ValidateLabels(temp.Labels); err != nil {
 		BadRequest(response, err)
+		return
+	}
+	if err := s.checkUserSize(temp); err != nil {
+		TooManyRequests(response, err)
+		return
+	}
+	if err := s.checkUserCountLimit(ctx, []string{temp.UserId}); err != nil {
+		TooManyRequests(response, err)
 		return
 	}
 	if err := s.DataClient.BatchInsertUsers(ctx, []data.User{temp}); err != nil {
@@ -1081,6 +1324,16 @@ func (s *RestServer) modifyUser(request *restful.Request, response *restful.Resp
 		BadRequest(response, err)
 		return
 	}
+	if err := s.checkLabelsSize(patch.Labels); err != nil {
+		TooManyRequests(response, err)
+		return
+	}
+	if patch.Comment != nil {
+		if err := s.checkCommentSize(*patch.Comment); err != nil {
+			TooManyRequests(response, err)
+			return
+		}
+	}
 	if err := s.DataClient.ModifyUser(ctx, userId, patch); err != nil {
 		InternalServerError(response, err)
 		return
@@ -1102,7 +1355,7 @@ func (s *RestServer) getUser(request *restful.Request, response *restful.Respons
 	// get user
 	user, err := s.DataClient.GetUser(ctx, userId)
 	if err != nil {
-		if errors.Is(err, errors.NotFound) {
+		if errors.Is(err, storage.ErrNotFound) {
 			PageNotFound(response, err)
 		} else {
 			InternalServerError(response, err)
@@ -1129,6 +1382,16 @@ func (s *RestServer) insertUsers(request *restful.Request, response *restful.Res
 			BadRequest(response, err)
 			return
 		}
+		if err := s.checkUserSize(user); err != nil {
+			TooManyRequests(response, err)
+			return
+		}
+	}
+	if err := s.checkUserCountLimit(ctx, lo.Map(temp, func(user data.User, index int) string {
+		return user.UserId
+	})); err != nil {
+		TooManyRequests(response, err)
+		return
 	}
 	// range temp and achieve user
 	if err := s.DataClient.BatchInsertUsers(ctx, temp); err != nil {
@@ -1255,6 +1518,12 @@ func (s *RestServer) batchInsertItems(ctx context.Context, response *restful.Res
 	for _, item := range existedItems {
 		existedItemsSet[item.ItemId] = item
 	}
+	if err = s.checkItemCountLimit(ctx, lo.Map(temp, func(item Item, index int) string {
+		return item.ItemId
+	})); err != nil {
+		TooManyRequests(response, err)
+		return
+	}
 	loadExistedItemsTime = time.Since(start)
 
 	start = time.Now()
@@ -1268,14 +1537,19 @@ func (s *RestServer) batchInsertItems(ctx context.Context, response *restful.Res
 				return
 			}
 		}
-		items = append(items, data.Item{
+		dataItem := data.Item{
 			ItemId:     item.ItemId,
 			IsHidden:   item.IsHidden,
 			Categories: item.Categories,
 			Timestamp:  timestamp,
 			Labels:     item.Labels,
 			Comment:    item.Comment,
-		})
+		}
+		if err = s.checkItemSize(dataItem); err != nil {
+			TooManyRequests(response, err)
+			return
+		}
+		items = append(items, dataItem)
 		// update items cache
 		if err = s.CacheClient.UpdateScores(ctx, cache.ItemCache, nil, item.ItemId, cache.ScorePatch{
 			Categories: withWildCard(item.Categories),
@@ -1372,6 +1646,22 @@ func (s *RestServer) modifyItem(request *restful.Request, response *restful.Resp
 		BadRequest(response, err)
 		return
 	}
+	if err := s.checkLabelsSize(patch.Labels); err != nil {
+		TooManyRequests(response, err)
+		return
+	}
+	if patch.Comment != nil {
+		if err := s.checkCommentSize(*patch.Comment); err != nil {
+			TooManyRequests(response, err)
+			return
+		}
+	}
+	if patch.Categories != nil {
+		if err := s.checkCategoriesSize(patch.Categories); err != nil {
+			TooManyRequests(response, err)
+			return
+		}
+	}
 	// remove hidden item from cache
 	if patch.IsHidden != nil {
 		if err := s.CacheClient.UpdateScores(ctx, cache.ItemCache, nil, itemId, cache.ScorePatch{IsHidden: patch.IsHidden}); err != nil {
@@ -1450,7 +1740,7 @@ func (s *RestServer) getItem(request *restful.Request, response *restful.Respons
 	// Get item
 	item, err := s.DataClient.GetItem(ctx, itemId)
 	if err != nil {
-		if errors.Is(err, errors.NotFound) {
+		if errors.Is(err, storage.ErrNotFound) {
 			PageNotFound(response, err)
 		} else {
 			InternalServerError(response, err)
@@ -1495,6 +1785,10 @@ func (s *RestServer) insertItemCategory(request *restful.Request, response *rest
 	}
 	if !lo.Contains(item.Categories, category) {
 		item.Categories = append(item.Categories, category)
+	}
+	if err = s.checkItemSize(item); err != nil {
+		TooManyRequests(response, err)
+		return
 	}
 	// insert category to database
 	if err = s.DataClient.BatchInsertItems(ctx, []data.Item{item}); err != nil {
@@ -1548,6 +1842,7 @@ type Feedback struct {
 	data.FeedbackKey
 	Value     float64
 	Timestamp string
+	Labels    any
 	Comment   string
 }
 
@@ -1555,6 +1850,7 @@ func (f Feedback) ToDataFeedback() (data.Feedback, error) {
 	var feedback data.Feedback
 	feedback.FeedbackKey = f.FeedbackKey
 	feedback.Value = f.Value
+	feedback.Labels = f.Labels
 	feedback.Comment = f.Comment
 	if f.Timestamp != "" {
 		var err error
@@ -1589,6 +1885,30 @@ func (s *RestServer) insertFeedback(overwrite bool) func(request *restful.Reques
 			feedback[i], err = feedbackLiterTime[i].ToDataFeedback()
 			if err != nil {
 				BadRequest(response, err)
+				return
+			}
+			if err = data.ValidateLabels(feedback[i].Labels); err != nil {
+				BadRequest(response, err)
+				return
+			}
+			if err = s.checkLabelsSize(feedback[i].Labels); err != nil {
+				TooManyRequests(response, err)
+				return
+			}
+			if err = s.checkCommentSize(feedback[i].Comment); err != nil {
+				TooManyRequests(response, err)
+				return
+			}
+		}
+		if s.Config.Server.AutoInsertUser {
+			if err = s.checkUserCountLimit(ctx, users.ToSlice()); err != nil {
+				TooManyRequests(response, err)
+				return
+			}
+		}
+		if s.Config.Server.AutoInsertItem {
+			if err = s.checkItemCountLimit(ctx, items.ToSlice()); err != nil {
+				TooManyRequests(response, err)
 				return
 			}
 		}
@@ -1704,7 +2024,7 @@ func (s *RestServer) getTypedUserItemFeedback(request *restful.Request, response
 	itemId := request.PathParameter("item-id")
 	if feedback, err := s.DataClient.GetUserItemFeedback(ctx, userId, itemId, feedbackType); err != nil {
 		InternalServerError(response, err)
-	} else if feedbackType == "" {
+	} else if len(feedback) == 0 {
 		Text(response, "{}")
 	} else {
 		Ok(response, feedback[0])
@@ -1769,6 +2089,15 @@ func BadRequest(response *restful.Response, err error) {
 	response.Header().Set("Access-Control-Allow-Origin", "*")
 	log.ResponseLogger(response).Error("bad request", zap.Error(err))
 	if err = response.WriteError(http.StatusBadRequest, err); err != nil {
+		log.ResponseLogger(response).Error("failed to write error", zap.Error(err))
+	}
+}
+
+// TooManyRequests returns a too many requests error.
+func TooManyRequests(response *restful.Response, err error) {
+	response.Header().Set("Access-Control-Allow-Origin", "*")
+	log.ResponseLogger(response).Error("too many requests", zap.Error(err))
+	if err = response.WriteError(http.StatusTooManyRequests, err); err != nil {
 		log.ResponseLogger(response).Error("failed to write error", zap.Error(err))
 	}
 }

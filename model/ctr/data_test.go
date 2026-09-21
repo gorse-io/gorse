@@ -19,7 +19,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gorse-io/gorse/common/bfloats"
+	"github.com/gorse-io/gorse/common/floats"
 	"github.com/gorse-io/gorse/dataset"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
@@ -74,19 +74,19 @@ func TestConvertEmbeddings(t *testing.T) {
 	embeddings = ConvertEmbeddings([]float32{1, 2, 3})
 	if assert.Len(t, embeddings, 1) {
 		assert.Equal(t, "", embeddings[0].Name)
-		assert.Equal(t, bfloats.FromFloat32([]float32{1, 2, 3}), embeddings[0].Value)
+		assert.Equal(t, floats.FromFloat32([]float32{1, 2, 3}), embeddings[0].Value)
 	}
 
 	embeddings = ConvertEmbeddings([]float64{1, 2, 3})
 	if assert.Len(t, embeddings, 1) {
 		assert.Equal(t, "", embeddings[0].Name)
-		assert.Equal(t, bfloats.FromFloat32([]float32{1, 2, 3}), embeddings[0].Value)
+		assert.Equal(t, floats.FromFloat32([]float32{1, 2, 3}), embeddings[0].Value)
 	}
 
 	embeddings = ConvertEmbeddings([]any{float64(1), float32(2), float64(3)})
 	if assert.Len(t, embeddings, 1) {
 		assert.Equal(t, "", embeddings[0].Name)
-		assert.Equal(t, bfloats.FromFloat32([]float32{1, 2, 3}), embeddings[0].Value)
+		assert.Equal(t, floats.FromFloat32([]float32{1, 2, 3}), embeddings[0].Value)
 	}
 
 	embeddings = ConvertEmbeddings(map[string]any{
@@ -98,8 +98,8 @@ func TestConvertEmbeddings(t *testing.T) {
 	})
 	if assert.Len(t, embeddings, 2) {
 		assert.ElementsMatch(t, []Embedding{
-			{Name: "embedding1", Value: bfloats.FromFloat32([]float32{1, 2, 3})},
-			{Name: "a.embedding2", Value: bfloats.FromFloat32([]float32{4, 5, 6})},
+			{Name: "embedding1", Value: floats.FromFloat32([]float32{1, 2, 3})},
+			{Name: "a.embedding2", Value: floats.FromFloat32([]float32{4, 5, 6})},
 		}, embeddings)
 	}
 }
@@ -136,7 +136,7 @@ func TestDataset_Split(t *testing.T) {
 			{A: int32(3*i + 2), B: 1},
 		})
 		dataSet.ItemEmbeddings = append(dataSet.ItemEmbeddings, [][]uint16{
-			bfloats.FromFloat32([]float32{float32(i), float32(i) + 0.1, float32(i) + 0.2}),
+			floats.FromFloat32([]float32{float32(i), float32(i) + 0.1, float32(i) + 0.2}),
 		})
 	}
 	for i := range numUsers {
@@ -177,7 +177,7 @@ func TestDataset_Split(t *testing.T) {
 		dataSet.Index.CountUsers() + dataSet.Index.CountItems() + dataSet.Index.CountUserLabels() + 8,
 		0,
 	}, features)
-	assert.InDeltaSlice(t, []float32{2, 2.09375, 2.1875}, bfloats.ToFloat32(embeddings[0]), 0.001)
+	assert.InDeltaSlice(t, []float32{2, 2.1, 2.2}, floats.ToFloat32(embeddings[0]), 0.001)
 	assert.Equal(t, []float32{1, 1, 1, 1, 1, 1, 1, 0.5}, values)
 	assert.Equal(t, float32(-1), target)
 

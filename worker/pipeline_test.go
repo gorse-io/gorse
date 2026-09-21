@@ -18,6 +18,8 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/gorse-io/gorse/common/floats"
+	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/storage/data"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
@@ -29,7 +31,12 @@ type PipelineTestSuite struct {
 	dataClient data.Database
 }
 
+func (suite *PipelineTestSuite) SetupTest() {
+	log.SetTestLogger(suite.T())
+}
+
 func (suite *PipelineTestSuite) SetupSuite() {
+	log.SetTestLogger(suite.T())
 	var err error
 	suite.dataClient, err = data.Open(fmt.Sprintf("sqlite://%s/data.db", suite.T().TempDir()), "")
 	suite.NoError(err)
@@ -99,22 +106,22 @@ func TestCompressLabelsEmbeddings(t *testing.T) {
 	input := []any{1.0, 2.0, 3.0}
 	output := compressLabelsEmbeddings(pool, input)
 	assert.IsType(t, []uint16{}, output)
-	assert.Len(t, output.([]uint16), 3)
+	assert.Equal(t, floats.FromFloat32([]float32{1, 2, 3}), output)
 
 	// Test embedding vector as []float32
 	input32 := []float32{1.0, 2.0, 3.0}
 	output32 := compressLabelsEmbeddings(pool, input32)
 	assert.IsType(t, []uint16{}, output32)
-	assert.Len(t, output32.([]uint16), 3)
+	assert.Equal(t, floats.FromFloat32(input32), output32)
 
 	// Test embedding vector as []float64
 	input64 := []float64{1.0, 2.0, 3.0}
 	output64 := compressLabelsEmbeddings(pool, input64)
 	assert.IsType(t, []uint16{}, output64)
-	assert.Len(t, output64.([]uint16), 3)
+	assert.Equal(t, floats.FromFloat32([]float32{1, 2, 3}), output64)
 
 	// Test already compressed []uint16
-	inputU16 := []uint16{0x3f80, 0x4000, 0x4040}
+	inputU16 := floats.FromFloat32([]float32{1, 2, 3})
 	outputU16 := compressLabelsEmbeddings(pool, inputU16)
 	assert.Equal(t, inputU16, outputU16)
 

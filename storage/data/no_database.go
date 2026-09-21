@@ -20,6 +20,7 @@ import (
 
 	"github.com/gorse-io/gorse/common/expression"
 	"github.com/gorse-io/gorse/config"
+	"github.com/gorse-io/gorse/storage"
 )
 
 // NoDatabase means that no database used.
@@ -27,169 +28,169 @@ type NoDatabase struct{}
 
 // Optimize is used by ClickHouse only.
 func (NoDatabase) Optimize() error {
-	return ErrNoDatabase
+	return storage.ErrNoDatabase
 }
 
-// Init method of NoDatabase returns ErrNoDatabase.
+// Init method of NoDatabase returns storage.ErrNoDatabase.
 func (NoDatabase) Init() error {
-	return ErrNoDatabase
+	return storage.ErrNoDatabase
 }
 
-// Reconcile method of NoDatabase returns ErrNoDatabase.
+// Reconcile method of NoDatabase returns storage.ErrNoDatabase.
 func (NoDatabase) Reconcile(_ config.SearchConfig) error {
-	return ErrNoDatabase
+	return storage.ErrNoDatabase
 }
 
 func (NoDatabase) Ping() error {
-	return ErrNoDatabase
+	return storage.ErrNoDatabase
 }
 
-// Close method of NoDatabase returns ErrNoDatabase.
+// Close method of NoDatabase returns storage.ErrNoDatabase.
 func (NoDatabase) Close() error {
-	return ErrNoDatabase
+	return storage.ErrNoDatabase
 }
 
 func (NoDatabase) Purge() error {
-	return ErrNoDatabase
+	return storage.ErrNoDatabase
 }
 
-// BatchInsertItems method of NoDatabase returns ErrNoDatabase.
+// BatchInsertItems method of NoDatabase returns storage.ErrNoDatabase.
 func (NoDatabase) BatchInsertItems(_ context.Context, _ []Item) error {
-	return ErrNoDatabase
+	return storage.ErrNoDatabase
 }
 
-// BatchGetItems method of NoDatabase returns ErrNoDatabase.
+// BatchGetItems method of NoDatabase returns storage.ErrNoDatabase.
 func (NoDatabase) BatchGetItems(_ context.Context, _ []string, _ GetOptions) ([]Item, error) {
-	return nil, ErrNoDatabase
+	return nil, storage.ErrNoDatabase
 }
 
-// DeleteItem method of NoDatabase returns ErrNoDatabase.
+// DeleteItem method of NoDatabase returns storage.ErrNoDatabase.
 func (NoDatabase) DeleteItem(_ context.Context, _ string) error {
-	return ErrNoDatabase
+	return storage.ErrNoDatabase
 }
 
-// GetItem method of NoDatabase returns ErrNoDatabase.
+// GetItem method of NoDatabase returns storage.ErrNoDatabase.
 func (NoDatabase) GetItem(_ context.Context, _ string) (Item, error) {
-	return Item{}, ErrNoDatabase
+	return Item{}, storage.ErrNoDatabase
 }
 
-// SearchItems method of NoDatabase returns ErrNoDatabase.
+// SearchItems method of NoDatabase returns storage.ErrNoDatabase.
 func (NoDatabase) SearchItems(_ context.Context, _ string, _ int) ([]ScoredItem, error) {
-	return nil, ErrNoDatabase
+	return nil, storage.ErrNoDatabase
 }
 
-// GetItems method of NoDatabase returns ErrNoDatabase.
+// GetItems method of NoDatabase returns storage.ErrNoDatabase.
 func (NoDatabase) GetItems(_ context.Context, _ string, _ int, _ *time.Time) (string, []Item, error) {
-	return "", nil, ErrNoDatabase
+	return "", nil, storage.ErrNoDatabase
 }
 
-// GetLatestItems method of NoDatabase returns ErrNoDatabase.
+// GetLatestItems method of NoDatabase returns storage.ErrNoDatabase.
 func (NoDatabase) GetLatestItems(_ context.Context, _ int, _ []string, _ *time.Time) ([]Item, error) {
-	return nil, ErrNoDatabase
+	return nil, storage.ErrNoDatabase
 }
 
-// GetItemStream method of NoDatabase returns ErrNoDatabase.
+// GetItemStream method of NoDatabase returns storage.ErrNoDatabase.
 func (NoDatabase) GetItemStream(_ context.Context, _ int, _ *time.Time) (chan []Item, chan error) {
 	itemChan := make(chan []Item, bufSize)
 	errChan := make(chan error, 1)
 	go func() {
 		defer close(itemChan)
 		defer close(errChan)
-		errChan <- ErrNoDatabase
+		errChan <- storage.ErrNoDatabase
 	}()
 	return itemChan, errChan
 }
 
-// GetItemFeedback method of NoDatabase returns ErrNoDatabase.
+// GetItemFeedback method of NoDatabase returns storage.ErrNoDatabase.
 func (NoDatabase) GetItemFeedback(_ context.Context, _ string, _ ...string) ([]Feedback, error) {
-	return nil, ErrNoDatabase
+	return nil, storage.ErrNoDatabase
 }
 
-// BatchInsertUsers method of NoDatabase returns ErrNoDatabase.
+// BatchInsertUsers method of NoDatabase returns storage.ErrNoDatabase.
 func (NoDatabase) BatchInsertUsers(_ context.Context, _ []User) error {
-	return ErrNoDatabase
+	return storage.ErrNoDatabase
 }
 
-// DeleteUser method of NoDatabase returns ErrNoDatabase.
+// DeleteUser method of NoDatabase returns storage.ErrNoDatabase.
 func (NoDatabase) DeleteUser(_ context.Context, _ string) error {
-	return ErrNoDatabase
+	return storage.ErrNoDatabase
 }
 
-// GetUser method of NoDatabase returns ErrNoDatabase.
+// GetUser method of NoDatabase returns storage.ErrNoDatabase.
 func (NoDatabase) GetUser(_ context.Context, _ string) (User, error) {
-	return User{}, ErrNoDatabase
+	return User{}, storage.ErrNoDatabase
 }
 
-// GetUsers method of NoDatabase returns ErrNoDatabase.
+// GetUsers method of NoDatabase returns storage.ErrNoDatabase.
 func (NoDatabase) GetUsers(_ context.Context, _ string, _ int) (string, []User, error) {
-	return "", nil, ErrNoDatabase
+	return "", nil, storage.ErrNoDatabase
 }
 
-// GetUserStream method of NoDatabase returns ErrNoDatabase.
+// GetUserStream method of NoDatabase returns storage.ErrNoDatabase.
 func (NoDatabase) GetUserStream(_ context.Context, _ int) (chan []User, chan error) {
 	userChan := make(chan []User, bufSize)
 	errChan := make(chan error, 1)
 	go func() {
 		defer close(userChan)
 		defer close(errChan)
-		errChan <- ErrNoDatabase
+		errChan <- storage.ErrNoDatabase
 	}()
 	return userChan, errChan
 }
 
-// GetUserFeedback method of NoDatabase returns ErrNoDatabase.
+// GetUserFeedback method of NoDatabase returns storage.ErrNoDatabase.
 func (NoDatabase) GetUserFeedback(context.Context, string, *time.Time, ...expression.FeedbackTypeExpression) ([]Feedback, error) {
-	return nil, ErrNoDatabase
+	return nil, storage.ErrNoDatabase
 }
 
-// GetUserItemFeedback method of NoDatabase returns ErrNoDatabase.
+// GetUserItemFeedback method of NoDatabase returns storage.ErrNoDatabase.
 func (NoDatabase) GetUserItemFeedback(_ context.Context, _, _ string, _ ...string) ([]Feedback, error) {
-	return nil, ErrNoDatabase
+	return nil, storage.ErrNoDatabase
 }
 
-// DeleteUserItemFeedback method of NoDatabase returns ErrNoDatabase.
+// DeleteUserItemFeedback method of NoDatabase returns storage.ErrNoDatabase.
 func (NoDatabase) DeleteUserItemFeedback(_ context.Context, _, _ string, _ ...string) (int, error) {
-	return 0, ErrNoDatabase
+	return 0, storage.ErrNoDatabase
 }
 
-// BatchInsertFeedback method of NoDatabase returns ErrNoDatabase.
+// BatchInsertFeedback method of NoDatabase returns storage.ErrNoDatabase.
 func (NoDatabase) BatchInsertFeedback(_ context.Context, _ []Feedback, _, _, _ bool) error {
-	return ErrNoDatabase
+	return storage.ErrNoDatabase
 }
 
-// GetFeedback method of NoDatabase returns ErrNoDatabase.
+// GetFeedback method of NoDatabase returns storage.ErrNoDatabase.
 func (NoDatabase) GetFeedback(_ context.Context, _ string, _ int, _, _ *time.Time, _ ...string) (string, []Feedback, error) {
-	return "", nil, ErrNoDatabase
+	return "", nil, storage.ErrNoDatabase
 }
 
-// GetFeedbackStream method of NoDatabase returns ErrNoDatabase.
+// GetFeedbackStream method of NoDatabase returns storage.ErrNoDatabase.
 func (NoDatabase) GetFeedbackStream(_ context.Context, _ int, _ ...ScanOption) (chan []Feedback, chan error) {
 	feedbackChan := make(chan []Feedback, bufSize)
 	errChan := make(chan error, 1)
 	go func() {
 		defer close(feedbackChan)
 		defer close(errChan)
-		errChan <- ErrNoDatabase
+		errChan <- storage.ErrNoDatabase
 	}()
 	return feedbackChan, errChan
 }
 
 func (d NoDatabase) ModifyItem(_ context.Context, _ string, _ ItemPatch) error {
-	return ErrNoDatabase
+	return storage.ErrNoDatabase
 }
 
 func (d NoDatabase) ModifyUser(_ context.Context, _ string, _ UserPatch) error {
-	return ErrNoDatabase
+	return storage.ErrNoDatabase
 }
 
 func (d NoDatabase) CountUsers(_ context.Context) (int, error) {
-	return 0, ErrNoDatabase
+	return 0, storage.ErrNoDatabase
 }
 
 func (d NoDatabase) CountItems(_ context.Context) (int, error) {
-	return 0, ErrNoDatabase
+	return 0, storage.ErrNoDatabase
 }
 
 func (d NoDatabase) CountFeedback(_ context.Context) (int, error) {
-	return 0, ErrNoDatabase
+	return 0, storage.ErrNoDatabase
 }

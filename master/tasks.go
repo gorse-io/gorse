@@ -20,6 +20,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/c-bata/goptuna"
@@ -40,20 +41,46 @@ import (
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
 	"github.com/gorse-io/gorse/storage/meta"
+	"github.com/gorse-io/gorse/storage/vectors"
 	"github.com/gorse-io/gorse/worker"
-	"github.com/juju/errors"
+	"github.com/pkg/errors"
 	"github.com/samber/lo"
 	"go.uber.org/zap"
 )
 
 const batchSize = 10000
 
+func deepSize[T any](values []T) int64 {
+	var size int64
+	for _, value := range values {
+		size += int64(sizeof.DeepSize(value))
+	}
+	return size
+}
+
+func countFeedback(feedback []data.Feedback, excluded ...[]expression.FeedbackTypeExpression) (count, size int64) {
+	for _, f := range feedback {
+		duplicated := false
+		for _, expressions := range excluded {
+			if expression.MatchFeedbackTypeExpressions(expressions, f.FeedbackType, f.Value) {
+				duplicated = true
+				break
+			}
+		}
+		if !duplicated {
+			count++
+			size += int64(sizeof.DeepSize(f))
+		}
+	}
+	return
+}
+
 func (m *Master) loadDataset(parent context.Context) (datasets Datasets, err error) {
 	ctx, span := m.tracer.Start(parent, "Load Dataset", 1)
 	defer span.End()
 
 	searchConfig := config.SearchConfig{Columns: append([]string(nil), m.Config.Recommend.Search.Columns...)}
-	go func() {
+	m.backgroundWaitGroup.Go(func() {
 		if !m.reconciling.CompareAndSwap(false, true) {
 			log.Logger().Info("skip reconciling data store since previous reconciliation is still running")
 			return
@@ -62,7 +89,7 @@ func (m *Master) loadDataset(parent context.Context) (datasets Datasets, err err
 		if err := m.DataClient.Reconcile(searchConfig); err != nil {
 			log.Logger().Error("failed to reconcile data store", zap.Error(err))
 		}
-	}()
+	})
 
 	// Build non-personalized recommenders
 	initialStartTime := time.Now()
@@ -70,7 +97,7 @@ func (m *Master) loadDataset(parent context.Context) (datasets Datasets, err err
 	for _, cfg := range m.Config.Recommend.NonPersonalized {
 		recommender, err := logics.NewNonPersonalized(cfg, m.Config.Recommend.CacheSize, initialStartTime)
 		if err != nil {
-			return Datasets{}, errors.Trace(err)
+			return Datasets{}, errors.WithStack(err)
 		}
 		nonPersonalizedRecommenders = append(nonPersonalizedRecommenders, recommender)
 	}
@@ -84,7 +111,8 @@ func (m *Master) loadDataset(parent context.Context) (datasets Datasets, err err
 	evaluator := NewOnlineEvaluator(
 		m.Config.Recommend.DataSource.PositiveFeedbackTypes,
 		m.Config.Recommend.DataSource.ReadFeedbackTypes)
-	datasets.clickDataset, datasets.rankingDataset, err = m.LoadDataFromDatabase(ctx, m.DataClient,
+	var snapshot event.Snapshot
+	datasets.clickDataset, datasets.rankingDataset, snapshot, err = m.LoadDataFromDatabase(ctx, m.DataClient,
 		m.Config.Recommend.DataSource.PositiveFeedbackTypes,
 		m.Config.Recommend.DataSource.NegativeFeedbackTypes,
 		m.Config.Recommend.DataSource.ReadFeedbackTypes,
@@ -93,14 +121,9 @@ func (m *Master) loadDataset(parent context.Context) (datasets Datasets, err err
 		evaluator,
 		nonPersonalizedRecommenders)
 	if err != nil {
-		return Datasets{}, errors.Trace(err)
+		return Datasets{}, errors.WithStack(err)
 	}
-	go event.EventRecorder().RecordStorage(ctx, event.StorageEvent{
-		UserCount:     datasets.rankingDataset.CountUsers(),
-		ItemCount:     datasets.rankingDataset.CountItems(),
-		FeedbackCount: len(datasets.clickDataset.Target),
-		Timestamp:     datasets.rankingDataset.GetTimestamp(),
-	})
+	go event.Emit(context.WithoutCancel(ctx), snapshot)
 
 	// save non-personalized recommenders to cache
 	for i, recommender := range nonPersonalizedRecommenders {
@@ -229,7 +252,7 @@ func (m *Master) loadDataset(parent context.Context) (datasets Datasets, err err
 func (m *Master) runLoadDatasetTask(ctx context.Context) error {
 	datasets, err := m.loadDataset(ctx)
 	if err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	useCollaborativeFilteringTasks := !strings.EqualFold(m.Config.Recommend.Collaborative.Type, "none")
 	useClickThroughRateTasks := strings.EqualFold(m.Config.Recommend.Ranker.Type, "fm")
@@ -278,19 +301,19 @@ func (m *Master) LoadDataFromDatabase(
 	itemTTL, positiveFeedbackTTL uint,
 	evaluator *OnlineEvaluator,
 	nonPersonalizedRecommenders []*logics.NonPersonalized,
-) (ctrDataset *ctr.Dataset, dataSet *dataset.Dataset, err error) {
+) (ctrDataset *ctr.Dataset, dataSet *dataset.Dataset, snapshot event.Snapshot, err error) {
 	// Estimate the number of users, items, and feedbacks
-	estimatedNumUsers, err := m.DataClient.CountUsers(ctx)
+	estimatedNumUsers, err := database.CountUsers(ctx)
 	if err != nil {
-		return nil, nil, errors.Trace(err)
+		return nil, nil, event.Snapshot{}, errors.WithStack(err)
 	}
-	estimatedNumItems, err := m.DataClient.CountItems(ctx)
+	estimatedNumItems, err := database.CountItems(ctx)
 	if err != nil {
-		return nil, nil, errors.Trace(err)
+		return nil, nil, event.Snapshot{}, errors.WithStack(err)
 	}
-	estimatedNumFeedbacks, err := m.DataClient.CountFeedback(ctx)
+	estimatedNumFeedbacks, err := database.CountFeedback(ctx)
 	if err != nil {
-		return nil, nil, errors.Trace(err)
+		return nil, nil, event.Snapshot{}, errors.WithStack(err)
 	}
 
 	dataSet = dataset.NewDataset(time.Now(), estimatedNumUsers, estimatedNumItems)
@@ -318,6 +341,8 @@ func (m *Master) LoadDataFromDatabase(
 	start := time.Now()
 	userChan, errChan := database.GetUserStream(newCtx, batchSize)
 	for users := range userChan {
+		snapshot.UserCount += int64(len(users))
+		snapshot.UserBytes += deepSize(users)
 		for _, user := range users {
 			dataSet.AddUser(user)
 			userIndex := dataSet.GetUserDict().Id(user.UserId)
@@ -353,7 +378,7 @@ func (m *Master) LoadDataFromDatabase(
 		span.Add(len(users))
 	}
 	if err = <-errChan; err != nil {
-		return nil, nil, errors.Trace(err)
+		return nil, nil, event.Snapshot{}, errors.WithStack(err)
 	}
 	log.Logger().Debug("pulled users from database",
 		zap.Int("n_users", dataSet.CountUsers()),
@@ -373,6 +398,8 @@ func (m *Master) LoadDataFromDatabase(
 	start = time.Now()
 	itemChan, errChan := database.GetItemStream(newCtx, batchSize, itemTimeLimit)
 	for batchItems := range itemChan {
+		snapshot.ItemCount += int64(len(batchItems))
+		snapshot.ItemBytes += deepSize(batchItems)
 		items = append(items, batchItems...)
 		for _, item := range batchItems {
 			dataSet.AddItem(item)
@@ -428,7 +455,7 @@ func (m *Master) LoadDataFromDatabase(
 		span.Add(len(batchItems))
 	}
 	if err = <-errChan; err != nil {
-		return nil, nil, errors.Trace(err)
+		return nil, nil, event.Snapshot{}, errors.WithStack(err)
 	}
 	log.Logger().Debug("pulled items from database",
 		zap.Int("n_items", dataSet.CountItems()),
@@ -458,6 +485,8 @@ func (m *Master) LoadDataFromDatabase(
 
 	// STEP 3: pull explicit negative feedback (highest priority)
 	var mu sync.Mutex
+	var feedbackCount atomic.Int64
+	var feedbackBytes atomic.Int64
 	start = time.Now()
 	var explicitNegativeFeedbackCount int
 	if len(negFeedbackTypes) > 0 {
@@ -470,6 +499,9 @@ func (m *Master) LoadDataFromDatabase(
 				data.WithFeedbackTypes(negFeedbackTypes...),
 				data.WithOrderByItemId())
 			for feedback := range feedbackChan {
+				count, size := countFeedback(feedback)
+				feedbackCount.Add(count)
+				feedbackBytes.Add(size)
 				for _, f := range feedback {
 					userIndex := dataSet.GetUserDict().Id(f.UserId)
 					if userIndex == dataset.NotId {
@@ -494,12 +526,12 @@ func (m *Master) LoadDataFromDatabase(
 				span.Add(len(feedback))
 			}
 			if err = <-errChan; err != nil {
-				return errors.Trace(err)
+				return errors.WithStack(err)
 			}
 			return nil
 		})
 		if err != nil {
-			return nil, nil, errors.Trace(err)
+			return nil, nil, event.Snapshot{}, errors.WithStack(err)
 		}
 	}
 	log.Logger().Debug("pulled explicit negative feedback from database",
@@ -522,6 +554,9 @@ func (m *Master) LoadDataFromDatabase(
 			data.WithFeedbackTypes(posFeedbackTypes...),
 			data.WithOrderByItemId())
 		for feedback := range feedbackChan {
+			count, size := countFeedback(feedback, negFeedbackTypes)
+			feedbackCount.Add(count)
+			feedbackBytes.Add(size)
 			for _, f := range feedback {
 				// convert user and item id to index
 				userIndex := dataSet.GetUserDict().Id(f.UserId)
@@ -594,12 +629,12 @@ func (m *Master) LoadDataFromDatabase(
 			}
 		}
 		if err = <-errChan; err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		return nil
 	})
 	if err != nil {
-		return nil, nil, errors.Trace(err)
+		return nil, nil, event.Snapshot{}, errors.WithStack(err)
 	}
 	log.Logger().Debug("pulled positive feedback from database",
 		zap.Int("n_positive_feedback", posFeedbackCount),
@@ -624,6 +659,9 @@ func (m *Master) LoadDataFromDatabase(
 			data.WithEndTime(*m.Config.Now()),
 			data.WithFeedbackTypes(readTypes...))
 		for feedback := range feedbackChan {
+			count, size := countFeedback(feedback, negFeedbackTypes, posFeedbackTypes)
+			feedbackCount.Add(count)
+			feedbackBytes.Add(size)
 			for _, f := range feedback {
 				userIndex := dataSet.GetUserDict().Id(f.UserId)
 				if userIndex == dataset.NotId {
@@ -653,12 +691,12 @@ func (m *Master) LoadDataFromDatabase(
 			span.Add(len(feedback))
 		}
 		if err = <-errChan; err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		return nil
 	})
 	if err != nil {
-		return nil, nil, errors.Trace(err)
+		return nil, nil, event.Snapshot{}, errors.WithStack(err)
 	}
 	log.Logger().Debug("pulled read feedback from database",
 		zap.Int("n_read_feedback", readFeedbackCount),
@@ -736,7 +774,10 @@ func (m *Master) LoadDataFromDatabase(
 		zap.Int("n_valid_negative", ctrDataset.NegativeCount),
 		zap.Duration("used_time", time.Since(start)))
 	LoadDatasetStepSecondsVec.WithLabelValues("create_ranking_dataset").Set(time.Since(start).Seconds())
-	return ctrDataset, dataSet, nil
+	snapshot.FeedbackCount = feedbackCount.Load()
+	snapshot.FeedbackBytes = feedbackBytes.Load()
+	snapshot.Timestamp = time.Now()
+	return ctrDataset, dataSet, snapshot, nil
 }
 
 func (m *Master) updateItemToItem(parent context.Context, dataset *dataset.Dataset) error {
@@ -744,116 +785,47 @@ func (m *Master) updateItemToItem(parent context.Context, dataset *dataset.Datas
 		return nil
 	}
 	ctx, span := m.tracer.Start(parent, "Generate item-to-item recommendation",
-		len(dataset.GetItems())*(len(m.Config.Recommend.ItemToItem))*2)
+		len(dataset.GetItems())*len(m.Config.Recommend.ItemToItem))
 	defer span.End()
 
-	// Build item-to-item recommenders
+	vectorConfig := vectors.VectorConfig{
+		Type: vectors.QuantizationType(m.Config.Database.Vector.QuantizationType),
+		Bits: m.Config.Database.Vector.QuantizationBits,
+	}
 	itemToItemRecommenders := make([]logics.ItemToItem, 0, len(m.Config.Recommend.ItemToItem))
 	for _, cfg := range m.Config.Recommend.ItemToItem {
-		recommender, err := logics.NewItemToItem(cfg, m.Config.Recommend.CacheSize, dataset.GetTimestamp(), &logics.ItemToItemOptions{
+		recommender, err := logics.NewItemToItem(cfg, dataset.GetTimestamp(), &logics.ItemToItemOptions{
+			Context:      ctx,
+			VectorClient: m.VectorClient,
+			VectorConfig: vectorConfig,
+			BatchSize:    batchSize,
 			TagsIDF:      dataset.GetItemColumnValuesIDF(),
 			UsersIDF:     dataset.GetUserIDF(),
-			OpenAIConfig: m.Config.OpenAI,
 		})
 		if err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		itemToItemRecommenders = append(itemToItemRecommenders, recommender)
 	}
 
-	// Push items to item-to-item recommenders
+	// Add items to item-to-item recommenders
 	if err := parallel.ForEach(ctx, dataset.GetItems(), m.Config.Master.NumJobs, func(i int, item data.Item) {
 		for _, recommender := range itemToItemRecommenders {
-			recommender.Push(&item, dataset.GetItemFeedback()[i])
+			if err := recommender.Add(&item, dataset.GetItemFeedback()[i]); err != nil {
+				log.Logger().Error("failed to add item to item-to-item recommender",
+					zap.String("item_id", item.ItemId), zap.Error(err))
+			}
 			span.Add(1)
 		}
 	}); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
-
-	// Save item-to-item recommendations to cache
-	for i, recommender := range itemToItemRecommenders {
-		if err := parallel.For(ctx, recommender.Count(), m.Config.Master.NumJobs, func(j int) {
-			item := recommender.Get(j)
-			itemToItemConfig := m.Config.Recommend.ItemToItem[i]
-			if m.needUpdateItemToItem(ctx, item.ItemId, itemToItemConfig) {
-				defer span.Add(1)
-				score := recommender.PopAll(j)
-				if score == nil {
-					return
-				}
-				log.Logger().Debug("update item-to-item recommendation",
-					zap.String("item_id", item.ItemId),
-					zap.String("name", itemToItemConfig.Name),
-					zap.Int("n_recommendations", len(score)))
-				// Save item-to-item recommendation to cache
-				if err := m.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key(itemToItemConfig.Name, item.ItemId), score); err != nil {
-					log.Logger().Error("failed to save item-to-item recommendation to cache",
-						zap.String("item_id", item.ItemId), zap.Error(err))
-					return
-				}
-				// Save item-to-item digest and last update time to cache
-				if err := m.CacheClient.Set(ctx,
-					cache.String(cache.Key(cache.ItemToItemDigest, itemToItemConfig.Name, item.ItemId), itemToItemConfig.Hash(&m.Config.Recommend)),
-					cache.Time(cache.Key(cache.ItemToItemUpdateTime, itemToItemConfig.Name, item.ItemId), time.Now()),
-				); err != nil {
-					log.Logger().Error("failed to save item-to-item digest to cache",
-						zap.String("item_id", item.ItemId), zap.Error(err))
-					return
-				}
-				// Remove stale item-to-item recommendation
-				if err := m.CacheClient.DeleteScores(ctx, []string{cache.ItemToItem}, cache.ScoreCondition{
-					Subset: new(cache.Key(itemToItemConfig.Name, item.ItemId)),
-					Before: new(recommender.Timestamp()),
-				}); err != nil {
-					log.Logger().Error("failed to remove stale item-to-item recommendation",
-						zap.String("item_id", item.ItemId), zap.Error(err))
-					return
-				}
-			} else {
-				span.Add(1)
-			}
-		}); err != nil {
-			return errors.Trace(err)
+	for _, recommender := range itemToItemRecommenders {
+		if err := recommender.Clean(); err != nil {
+			return errors.WithStack(err)
 		}
 	}
 	return nil
-}
-
-// needUpdateItemToItem checks if item-to-item recommendation needs to be updated.
-func (m *Master) needUpdateItemToItem(ctx context.Context, itemId string, itemToItemConfig config.ItemToItemConfig) bool {
-	// check cache
-	items, err := m.CacheClient.SearchScores(ctx, cache.ItemToItem,
-		cache.Key(itemToItemConfig.Name, itemId), nil, 0, -1)
-	if err != nil {
-		log.Logger().Error("failed to fetch item-to-item recommendation",
-			zap.String("item_id", itemId), zap.Error(err))
-		return true
-	} else if len(items) == 0 {
-		return true
-	}
-
-	// check digest
-	digest, err := m.CacheClient.Get(ctx, cache.Key(cache.ItemToItemDigest, itemToItemConfig.Name, itemId)).String()
-	if err != nil {
-		if !errors.Is(err, errors.NotFound) {
-			log.Logger().Error("failed to read item-to-item digest", zap.Error(err))
-		}
-		return true
-	}
-	if digest != itemToItemConfig.Hash(&m.Config.Recommend) {
-		return true
-	}
-
-	// check update time
-	updateTime, err := m.CacheClient.Get(ctx, cache.Key(cache.ItemToItemUpdateTime, itemToItemConfig.Name, itemId)).Time()
-	if err != nil {
-		if !errors.Is(err, errors.NotFound) {
-			log.Logger().Error("failed to read last update item neighbors time", zap.Error(err))
-		}
-		return true
-	}
-	return updateTime.Before(time.Now().Add(-m.Config.Recommend.CacheExpire))
 }
 
 func (m *Master) updateUserToUser(parent context.Context, dataset *dataset.Dataset) error {
@@ -861,103 +833,47 @@ func (m *Master) updateUserToUser(parent context.Context, dataset *dataset.Datas
 		return nil
 	}
 	ctx, span := m.tracer.Start(parent, "Generate user-to-user recommendation",
-		len(dataset.GetUsers())*(len(m.Config.Recommend.UserToUser))*2)
+		len(dataset.GetUsers())*len(m.Config.Recommend.UserToUser))
 	defer span.End()
 
 	userToUserRecommenders := make([]logics.UserToUser, 0, len(m.Config.Recommend.UserToUser))
+	vectorConfig := vectors.VectorConfig{
+		Type: vectors.QuantizationType(m.Config.Database.Vector.QuantizationType),
+		Bits: m.Config.Database.Vector.QuantizationBits,
+	}
 	for _, cfg := range m.Config.Recommend.UserToUser {
-		recommender, err := logics.NewUserToUser(cfg, m.Config.Recommend.CacheSize, dataset.GetTimestamp(), &logics.UserToUserOptions{
-			TagsIDF:  dataset.GetUserColumnValuesIDF(),
-			ItemsIDF: dataset.GetItemIDF(),
+		recommender, err := logics.NewUserToUser(cfg, dataset.GetTimestamp(), &logics.UserToUserOptions{
+			Context:      ctx,
+			VectorClient: m.VectorClient,
+			VectorConfig: vectorConfig,
+			BatchSize:    batchSize,
+			TagsIDF:      dataset.GetUserColumnValuesIDF(),
+			ItemsIDF:     dataset.GetItemIDF(),
 		})
 		if err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		userToUserRecommenders = append(userToUserRecommenders, recommender)
 	}
 
-	// Push users to user-to-user recommender
+	// Add users to user-to-user recommender
 	if err := parallel.ForEach(ctx, dataset.GetUsers(), m.Config.Master.NumJobs, func(i int, user data.User) {
 		for _, recommender := range userToUserRecommenders {
-			recommender.Push(&user, dataset.GetUserFeedback()[i])
+			if err := recommender.Add(&user, dataset.GetUserFeedback()[i]); err != nil {
+				log.Logger().Error("failed to add user to user-to-user recommender",
+					zap.String("user_id", user.UserId), zap.Error(err))
+			}
 			span.Add(1)
 		}
 	}); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
-
-	// Save user-to-user recommendations to cache
-	for i, recommender := range userToUserRecommenders {
-		if err := parallel.ForEach(ctx, recommender.Users(), m.Config.Master.NumJobs, func(j int, user *data.User) {
-			userToUserConfig := m.Config.Recommend.UserToUser[i]
-			if m.needUpdateUserToUser(ctx, user.UserId, userToUserConfig) {
-				score := recommender.PopAll(j)
-				if score == nil {
-					return
-				}
-				log.Logger().Debug("update user neighbors",
-					zap.String("user_id", user.UserId),
-					zap.Int("n_recommendations", len(score)))
-				// Save user-to-user recommendations to cache
-				if err := m.CacheClient.AddScores(ctx, cache.UserToUser, cache.Key(userToUserConfig.Name, user.UserId), score); err != nil {
-					log.Logger().Error("failed to save user neighbors to cache", zap.String("user_id", user.UserId), zap.Error(err))
-					return
-				}
-				// Save user-to-user digest and last update time to cache
-				if err := m.CacheClient.Set(ctx,
-					cache.String(cache.Key(cache.UserToUserDigest, cache.Key(userToUserConfig.Name, user.UserId)), userToUserConfig.Hash(&m.Config.Recommend)),
-					cache.Time(cache.Key(cache.UserToUserUpdateTime, cache.Key(userToUserConfig.Name, user.UserId)), time.Now()),
-				); err != nil {
-					log.Logger().Error("failed to save user neighbors digest to cache", zap.String("user_id", user.UserId), zap.Error(err))
-					return
-				}
-				// Delete stale user-to-user recommendations
-				if err := m.CacheClient.DeleteScores(ctx, []string{cache.UserToUser}, cache.ScoreCondition{
-					Subset: new(cache.Key(userToUserConfig.Name, user.UserId)),
-					Before: new(recommender.Timestamp()),
-				}); err != nil {
-					log.Logger().Error("failed to remove stale user neighbors", zap.String("user_id", user.UserId), zap.Error(err))
-				}
-			}
-			span.Add(1)
-		}); err != nil {
-			return errors.Trace(err)
+	for _, recommender := range userToUserRecommenders {
+		if err := recommender.Clean(); err != nil {
+			return errors.WithStack(err)
 		}
 	}
 	return nil
-}
-
-// needUpdateUserToUser checks if user-to-user recommendation needs to be updated.
-func (m *Master) needUpdateUserToUser(ctx context.Context, userId string, userToUserConfig config.UserToUserConfig) bool {
-	// check cache
-	if items, err := m.CacheClient.SearchScores(ctx, cache.UserToUser, cache.Key(userToUserConfig.Name, userId), nil, 0, -1); err != nil {
-		log.Logger().Error("failed to load user neighbors", zap.String("user_id", userId), zap.Error(err))
-		return true
-	} else if len(items) == 0 {
-		return true
-	}
-
-	// read digest
-	cacheDigest, err := m.CacheClient.Get(ctx, cache.Key(cache.UserToUserDigest, cache.Key(userToUserConfig.Name, userId))).String()
-	if err != nil {
-		if !errors.Is(err, errors.NotFound) {
-			log.Logger().Error("failed to read user neighbors digest", zap.Error(err))
-		}
-		return true
-	}
-	if cacheDigest != userToUserConfig.Hash(&m.Config.Recommend) {
-		return true
-	}
-
-	// check update time
-	updateTime, err := m.CacheClient.Get(ctx, cache.Key(cache.UserToUserUpdateTime, cache.Key(userToUserConfig.Name, userId))).Time()
-	if err != nil {
-		if !errors.Is(err, errors.NotFound) {
-			log.Logger().Error("failed to read last update user neighbors time", zap.Error(err))
-		}
-		return true
-	}
-	return updateTime.Before(time.Now().Add(-m.Config.Recommend.CacheExpire))
 }
 
 func (m *Master) trainCollaborativeFiltering(parent context.Context, trainSet, testSet dataset.CFSplit) error {
@@ -1007,18 +923,45 @@ func (m *Master) trainCollaborativeFiltering(parent context.Context, trainSet, t
 	span.Add(1)
 	fitSpan.End()
 
-	_, indexSpan := monitor.Start(ctx, "Index", trainSet.CountItems())
-	matrixFactorizationItems := logics.NewMatrixFactorizationItems(time.Now())
-	if err := parallel.For(ctx, trainSet.CountItems(), m.Config.Master.NumJobs, func(i int) {
-		defer indexSpan.Add(1)
-		if itemId, ok := trainSet.GetItemDict().String(int32(i)); ok && collaborativeFilteringModel.IsItemPredictable(int32(i)) {
-			matrixFactorizationItems.Add(itemId, collaborativeFilteringModel.GetItemFactor(int32(i)))
-		}
+	collaborativeFilteringModelId := time.Now().UnixMilli()
+	collection := vectors.CollaborativeFilteringCollection(collaborativeFilteringModelId)
+
+	indexCtx, indexSpan := monitor.Start(ctx, "Index", trainSet.CountItems())
+	if err := m.VectorClient.AddCollection(indexCtx, collection, len(collaborativeFilteringModel.GetItemFactor(0)), vectors.Dot, vectors.VectorConfig{
+		Type: vectors.QuantizationType(m.Config.Database.Vector.QuantizationType),
+		Bits: m.Config.Database.Vector.QuantizationBits,
 	}); err != nil {
-		return errors.Trace(err)
+		indexSpan.Fail(err)
+		return errors.WithStack(err)
 	}
-	span.Add(1)
+	items := trainSet.GetItems()
+	for start := 0; start < trainSet.CountItems(); start += batchSize {
+		end := min(start+batchSize, trainSet.CountItems())
+		itemVectors := make([]vectors.Vector, 0, end-start)
+		for i := start; i < end; i++ {
+			if collaborativeFilteringModel.IsItemPredictable(int32(i)) {
+				item := items[i]
+				itemVectors = append(itemVectors, vectors.Vector{
+					Id:         item.ItemId,
+					Values:     collaborativeFilteringModel.GetItemFactor(int32(i)),
+					IsHidden:   item.IsHidden,
+					Categories: item.Categories,
+					Timestamp:  time.UnixMilli(collaborativeFilteringModelId),
+				})
+			}
+		}
+		if len(itemVectors) == 0 {
+			indexSpan.Add(end - start)
+			continue
+		}
+		if err := m.VectorClient.AddVectors(indexCtx, collection, itemVectors); err != nil {
+			indexSpan.Fail(err)
+			return errors.WithStack(err)
+		}
+		indexSpan.Add(end - start)
+	}
 	indexSpan.End()
+	span.Add(1)
 
 	matrixFactorizationUsers := logics.NewMatrixFactorizationUsers()
 	for i := 0; i < trainSet.CountUsers(); i++ {
@@ -1027,11 +970,6 @@ func (m *Master) trainCollaborativeFiltering(parent context.Context, trainSet, t
 		}
 	}
 
-	// update ranking model
-	m.collaborativeFilteringModelMutex.Lock()
-	m.collaborativeFilteringTrainSetSize = trainSet.CountFeedback()
-	m.collaborativeFilteringModelMutex.Unlock()
-	collaborativeFilteringModelId := time.Now().UnixMilli()
 	log.Logger().Info("fit collaborative filtering model completed",
 		zap.Int64("id", collaborativeFilteringModelId))
 	CollaborativeFilteringNDCG10.Set(float64(score.NDCG))
@@ -1048,11 +986,6 @@ func (m *Master) trainCollaborativeFiltering(parent context.Context, trainSet, t
 			zap.Int64("id", collaborativeFilteringModelId), zap.Error(err))
 		return err
 	}
-	if err = matrixFactorizationItems.Marshal(w); err != nil {
-		log.Logger().Error("failed to matrix factorization items",
-			zap.Int64("id", collaborativeFilteringModelId), zap.Error(err))
-		return err
-	}
 	if err = matrixFactorizationUsers.Marshal(w); err != nil {
 		log.Logger().Error("failed to matrix factorization users",
 			zap.Int64("id", collaborativeFilteringModelId), zap.Error(err))
@@ -1066,22 +999,25 @@ func (m *Master) trainCollaborativeFiltering(parent context.Context, trainSet, t
 	<-done
 
 	// update meta
-	m.collaborativeFilteringModelMutex.Lock()
-	m.collaborativeFilteringMeta.ID = collaborativeFilteringModelId
-	m.collaborativeFilteringMeta.Type = collaborativeFilteringType
-	m.collaborativeFilteringMeta.Params = collaborativeFilteringParams
-	m.collaborativeFilteringMeta.Score = score
-	m.collaborativeFilteringModelMutex.Unlock()
-	if err = m.metaStore.Put(meta.COLLABORATIVE_FILTERING_MODEL, m.collaborativeFilteringMeta.ToJSON()); err != nil {
+	collaborativeFilteringMeta := meta.Model[cf.Score]{
+		ID:     collaborativeFilteringModelId,
+		Type:   collaborativeFilteringType,
+		Params: collaborativeFilteringParams,
+		Score:  score,
+	}
+	if err = m.metaStore.Put(meta.COLLABORATIVE_FILTERING_MODEL, collaborativeFilteringMeta.ToJSON()); err != nil {
 		log.Logger().Error("failed to write collaborative filtering model meta", zap.Error(err))
 		return err
-	} else {
-		log.Logger().Info("write collaborative filtering model meta",
-			zap.Int64("id", collaborativeFilteringModelId),
-			zap.Float32("ndcg", score.NDCG),
-			zap.Float32("recall", score.Recall),
-			zap.Float32("precision", score.Precision))
 	}
+	m.collaborativeFilteringModelMutex.Lock()
+	m.collaborativeFilteringMeta = collaborativeFilteringMeta
+	m.collaborativeFilteringTrainSetSize = trainSet.CountFeedback()
+	m.collaborativeFilteringModelMutex.Unlock()
+	log.Logger().Info("write collaborative filtering model meta",
+		zap.Int64("id", collaborativeFilteringModelId),
+		zap.Float32("ndcg", score.NDCG),
+		zap.Float32("recall", score.Recall),
+		zap.Float32("precision", score.Precision))
 
 	// update statistics
 	if err = m.CacheClient.AddTimeSeriesPoints(ctx, []cache.TimeSeriesPoint{
@@ -1093,7 +1029,7 @@ func (m *Master) trainCollaborativeFiltering(parent context.Context, trainSet, t
 		return nil
 	}
 
-	m.removeOutOfDateModels()
+	m.removeOutOfDateModels(ctx)
 	return nil
 }
 
@@ -1214,14 +1150,16 @@ func (m *Master) trainClickThroughRatePrediction(parent context.Context, trainSe
 		return err
 	}
 
-	m.removeOutOfDateModels()
+	m.removeOutOfDateModels(ctx)
 	return nil
 }
 
-func (m *Master) removeOutOfDateModels() {
+func (m *Master) removeOutOfDateModels(ctx context.Context) {
 	m.collaborativeFilteringModelMutex.RLock()
 	m.clickThroughRateModelMutex.RLock()
-	timestamp := min(m.collaborativeFilteringMeta.ID, m.clickThroughRateMeta.ID)
+	collaborativeFilteringModelID := m.collaborativeFilteringMeta.ID
+	clickThroughRateModelID := m.clickThroughRateMeta.ID
+	timestamp := min(collaborativeFilteringModelID, clickThroughRateModelID)
 	m.clickThroughRateModelMutex.RUnlock()
 	m.collaborativeFilteringModelMutex.RUnlock()
 
@@ -1230,13 +1168,68 @@ func (m *Master) removeOutOfDateModels() {
 		log.Logger().Error("failed to list models in blob store", zap.Error(err))
 		return
 	}
+	models := make(map[int64]string)
 	for _, file := range files {
 		id, err := strconv.ParseInt(file, 10, 64)
 		if err != nil {
 			log.Logger().Info("failed to parse model id", zap.String("file", file), zap.Error(err))
 			continue
 		}
-		if id < timestamp {
+		models[id] = file
+	}
+
+	collections, err := m.VectorClient.ListCollections(ctx)
+	if err != nil {
+		log.Logger().Error("failed to list collections in vector store", zap.Error(err))
+		return
+	}
+	const collaborativeFilteringCollectionPrefix = vectors.CollaborativeFiltering + "_"
+	collaborativeFilteringCollections := make(map[int64]string)
+	completeCollaborativeFilteringModels := make([]int64, 0)
+	for _, collection := range collections {
+		if !strings.HasPrefix(collection, collaborativeFilteringCollectionPrefix) {
+			continue
+		}
+		id, err := strconv.ParseInt(strings.TrimPrefix(collection, collaborativeFilteringCollectionPrefix), 10, 64)
+		if err != nil || vectors.CollaborativeFilteringCollection(id) != collection {
+			continue
+		}
+		collaborativeFilteringCollections[id] = collection
+		if _, ok := models[id]; ok {
+			completeCollaborativeFilteringModels = append(completeCollaborativeFilteringModels, id)
+		}
+	}
+	sort.Slice(completeCollaborativeFilteringModels, func(i, j int) bool {
+		return completeCollaborativeFilteringModels[i] > completeCollaborativeFilteringModels[j]
+	})
+	keepCollaborativeFilteringModels := mapset.NewSet[int64](collaborativeFilteringModelID)
+	for _, id := range completeCollaborativeFilteringModels[:min(2, len(completeCollaborativeFilteringModels))] {
+		keepCollaborativeFilteringModels.Add(id)
+	}
+
+	for id, collection := range collaborativeFilteringCollections {
+		if keepCollaborativeFilteringModels.Contains(id) {
+			continue
+		}
+		if file, ok := models[id]; ok && id != clickThroughRateModelID {
+			if err = m.blobStore.Remove(file); err != nil {
+				log.Logger().Error("failed to delete collaborative filtering model from blob store",
+					zap.Int64("id", id), zap.Error(err))
+				continue
+			}
+			delete(models, id)
+			log.Logger().Info("deleted out-of-date collaborative filtering model from blob store", zap.Int64("id", id))
+		}
+		if err = m.VectorClient.DeleteCollection(ctx, collection); err != nil {
+			log.Logger().Error("failed to delete collaborative filtering index from vector store",
+				zap.Int64("id", id), zap.Error(err))
+			continue
+		}
+		log.Logger().Info("deleted out-of-date collaborative filtering index from vector store", zap.Int64("id", id))
+	}
+
+	for id, file := range models {
+		if id < timestamp && !keepCollaborativeFilteringModels.Contains(id) {
 			if err = m.blobStore.Remove(file); err != nil {
 				log.Logger().Error("failed to delete model from blob store", zap.Int64("id", id), zap.Error(err))
 			} else {
@@ -1259,34 +1252,6 @@ func (m *Master) collectGarbage(parent context.Context, dataSet *dataset.Dataset
 					Subset: new(subset),
 				})
 			}
-		case cache.UserToUser:
-			splits := strings.Split(subset, "/")
-			if len(splits) != 2 {
-				log.Logger().Error("invalid subset", zap.String("subset", subset))
-				return nil
-			}
-			if dataSet.GetUserDict().Id(splits[1]) == dataset.NotId || !lo.ContainsBy(m.Config.Recommend.UserToUser, func(cfg config.UserToUserConfig) bool {
-				return cfg.Name == splits[0]
-			}) {
-				return m.CacheClient.DeleteScores(ctx, []string{cache.UserToUser}, cache.ScoreCondition{
-					Subset: new(subset),
-					Before: new(dataSet.GetTimestamp()),
-				})
-			}
-		case cache.ItemToItem:
-			splits := strings.Split(subset, "/")
-			if len(splits) != 2 {
-				log.Logger().Error("invalid subset", zap.String("subset", subset))
-				return nil
-			}
-			if dataSet.GetItemDict().Id(splits[1]) == dataset.NotId || !lo.ContainsBy(m.Config.Recommend.ItemToItem, func(cfg config.ItemToItemConfig) bool {
-				return cfg.Name == splits[0]
-			}) {
-				return m.CacheClient.DeleteScores(ctx, []string{cache.ItemToItem}, cache.ScoreCondition{
-					Subset: new(subset),
-					Before: new(dataSet.GetTimestamp()),
-				})
-			}
 		case cache.CollaborativeFiltering:
 			if dataSet.GetUserDict().Id(subset) == dataset.NotId {
 				return m.CacheClient.DeleteScores(ctx, []string{cache.CollaborativeFiltering}, cache.ScoreCondition{
@@ -1297,7 +1262,7 @@ func (m *Master) collectGarbage(parent context.Context, dataSet *dataset.Dataset
 		}
 		return nil
 	})
-	return errors.Trace(err)
+	return errors.WithStack(err)
 }
 
 func (m *Master) optimizeCollaborativeFiltering(parent context.Context, trainSet, testSet dataset.CFSplit) error {
@@ -1334,11 +1299,11 @@ func (m *Master) optimizeCollaborativeFiltering(parent context.Context, trainSet
 		goptuna.StudyOptionSampler(tpe.NewSampler()),
 		goptuna.StudyOptionLogger(log.NewOptunaLogger(log.Logger())))
 	if err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	study.WithContext(ctx)
 	if err = study.Optimize(search.Objective, m.Config.Recommend.Collaborative.OptimizeTrials); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	m.collaborativeFilteringModelMutex.Lock()
 	m.collaborativeFilteringTarget = search.Result()
@@ -1381,11 +1346,11 @@ func (m *Master) optimizeClickThroughRatePrediction(parent context.Context, trai
 		goptuna.StudyOptionSampler(tpe.NewSampler()),
 		goptuna.StudyOptionLogger(log.NewOptunaLogger(log.Logger())))
 	if err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	study.WithContext(ctx)
 	if err = study.Optimize(search.Objective, m.Config.Recommend.Ranker.OptimizeTrials); err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	m.clickThroughRateModelMutex.Lock()
 	m.clickThroughRateTarget = search.Result()
@@ -1400,13 +1365,12 @@ func (m *Master) optimizeClickThroughRatePrediction(parent context.Context, trai
 // updateRecommend updates recommendations for all user in standalone mode.
 func (m *Master) updateRecommend(ctx context.Context) error {
 	pipeline := &worker.Pipeline{
-		Config:                   m.Config,
-		DataClient:               m.DataClient,
-		CacheClient:              m.CacheClient,
-		Tracer:                   m.tracer,
-		Jobs:                     m.Config.Master.NumJobs,
-		MatrixFactorizationItems: logics.NewMatrixFactorizationItems(time.Time{}),
-		MatrixFactorizationUsers: logics.NewMatrixFactorizationUsers(),
+		Config:       m.Config,
+		DataClient:   m.DataClient,
+		CacheClient:  m.CacheClient,
+		VectorClient: m.VectorClient,
+		Tracer:       m.tracer,
+		Jobs:         m.Config.Master.NumJobs,
 	}
 
 	// load matrix factorization model
@@ -1415,12 +1379,18 @@ func (m *Master) updateRecommend(ctx context.Context) error {
 		if err != nil {
 			log.Logger().Error("failed to load collaborative filtering model from blob store",
 				zap.Int64("id", m.collaborativeFilteringMeta.ID), zap.Error(err))
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
-		if err = pipeline.MatrixFactorizationItems.Unmarshal(r); err != nil {
-			log.Logger().Error("failed to unmarshal matrix factorization items", zap.Error(err))
-		} else if err = pipeline.MatrixFactorizationUsers.Unmarshal(r); err != nil {
+		users := logics.NewMatrixFactorizationUsers()
+		if err = users.Unmarshal(r); err != nil {
 			log.Logger().Error("failed to unmarshal matrix factorization users", zap.Error(err))
+			return errors.WithStack(err)
+		}
+		if err = r.Close(); err != nil {
+			return errors.WithStack(err)
+		}
+		if err = pipeline.UpdateMatrixFactorization(ctx, m.collaborativeFilteringMeta.ID, users); err != nil {
+			return errors.WithStack(err)
 		}
 	}
 
@@ -1429,12 +1399,12 @@ func (m *Master) updateRecommend(ctx context.Context) error {
 		r, err := m.blobStore.Open(strconv.FormatInt(m.clickThroughRateMeta.ID, 10))
 		if err != nil {
 			log.Logger().Error("failed to open click-through rate model", zap.Error(err))
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 		pipeline.ClickThroughRateModel, err = ctr.UnmarshalModel(r)
 		if err != nil {
 			log.Logger().Error("failed to unmarshal click-through rate model", zap.Error(err))
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 	}
 
@@ -1442,7 +1412,7 @@ func (m *Master) updateRecommend(ctx context.Context) error {
 	users, err := m.pullAllUsers(ctx)
 	if err != nil {
 		log.Logger().Error("failed to pull users", zap.Error(err))
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 
 	pipeline.Recommend(ctx, users, func(completed, throughput int) {
@@ -1461,7 +1431,7 @@ func (m *Master) pullAllUsers(ctx context.Context) ([]data.User, error) {
 		users = append(users, batchUsers...)
 	}
 	if err := <-errChan; err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.WithStack(err)
 	}
 	return users, nil
 }

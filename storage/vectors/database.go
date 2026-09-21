@@ -16,11 +16,12 @@ package vectors
 
 import (
 	"context"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/gorse-io/gorse/storage"
-	"github.com/juju/errors"
+	"github.com/pkg/errors"
 )
 
 type Distance int
@@ -31,24 +32,124 @@ const (
 	Dot
 )
 
+// QuantizationType represents a vector quantization type.
+type QuantizationType string
+
+const (
+	QuantizationNone QuantizationType = ""   // No quantization (float32)
+	QuantizationSQ   QuantizationType = "sq" // Scalar quantization
+	QuantizationPQ   QuantizationType = "pq" // Product quantization
+	QuantizationRQ   QuantizationType = "rq" // Rotational quantization/RaBitQ/TurboQuant
+
+	CollaborativeFiltering = "collaborative_filtering"
+	ItemToItemPrefix       = "item_to_item"
+	UserToUserPrefix       = "user_to_user"
+)
+
+func CollaborativeFilteringCollection(id int64) string {
+	return CollaborativeFiltering + "_" + strconv.FormatInt(id, 10)
+}
+
+func ItemToItemCollection(name string) string {
+	return ItemToItemPrefix + "_" + name
+}
+
+func UserToUserCollection(name string) string {
+	return UserToUserPrefix + "_" + name
+}
+
+func (q QuantizationType) String() string {
+	switch q {
+	case QuantizationNone:
+		return ""
+	case QuantizationSQ:
+		return "sq"
+	case QuantizationPQ:
+		return "pq"
+	case QuantizationRQ:
+		return "rq"
+	default:
+		return "unknown"
+	}
+}
+
+// VectorConfig configures vector storage.
+type VectorConfig struct {
+	// Type configures the vector quantization type.
+	Type QuantizationType // "" | sq | pq | rq
+	// Bits is the number of quantization bits. 0 uses the backend default.
+	Bits int
+}
+
+// CollectionInfo describes a vector collection.
+type CollectionInfo struct {
+	Name      string
+	Dimension int
+	Distance  Distance
+	VectorConfig
+}
+
 type Vector struct {
 	Id         string
-	Vector     []float32
+	Values     []float32
+	Indices    []uint32
 	IsHidden   bool      `json:"-"`
 	Categories []string  `json:"-" gorm:"type:text;serializer:json"`
 	Timestamp  time.Time `json:"-"`
 }
 
+// ScoredVector is a vector with a similarity score. Higher scores indicate greater similarity.
+type ScoredVector struct {
+	Vector
+	Score float32
+}
+
 type Database interface {
 	Init() error
-	Optimize() error
+	Optimize(ctx context.Context, name string) error
 	Close() error
 	ListCollections(ctx context.Context) ([]string, error)
-	AddCollection(ctx context.Context, name string, dimensions int, distance Distance) error
+	DescribeCollection(ctx context.Context, name string) (*CollectionInfo, error)
+	AddCollection(ctx context.Context, name string, dimensions int, distance Distance, config VectorConfig) error
 	DeleteCollection(ctx context.Context, name string) error
+	CountVectors(ctx context.Context, collection string) (int64, error)
 	AddVectors(ctx context.Context, collection string, vectors []Vector) error
+	GetVectors(ctx context.Context, collection string, ids []string) ([]Vector, error)
 	DeleteVectors(ctx context.Context, collection string, timestamp time.Time) error
-	QueryVectors(ctx context.Context, collection string, q []float32, categories []string, topK int) ([]Vector, error)
+	QueryVectors(ctx context.Context, collection string, q Vector, categories []string, topK int) ([]ScoredVector, error)
+}
+
+// Purge deletes all collections from a vector database.
+func Purge(ctx context.Context, database Database) error {
+	collections, err := database.ListCollections(ctx)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+	for _, collection := range collections {
+		if err = database.DeleteCollection(ctx, collection); err != nil {
+			return errors.WithStack(err)
+		}
+	}
+	return nil
+}
+
+func orderVectors(ids []string, vectors []Vector) []Vector {
+	byID := make(map[string]Vector, len(vectors))
+	for _, vector := range vectors {
+		byID[vector.Id] = vector
+	}
+	ordered := make([]Vector, 0, len(vectors))
+	seen := make(map[string]struct{}, len(ids))
+	for _, id := range ids {
+		if _, exists := seen[id]; exists {
+			continue
+		}
+		seen[id] = struct{}{}
+		if vector, exists := byID[id]; exists {
+			ordered = append(ordered, vector)
+		}
+	}
+	return ordered
 }
 
 // Creator creates a database instance.

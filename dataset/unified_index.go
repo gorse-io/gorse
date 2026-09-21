@@ -21,7 +21,7 @@ import (
 	"strconv"
 
 	"github.com/gorse-io/gorse/common/log"
-	"github.com/juju/errors"
+	"github.com/pkg/errors"
 )
 
 // UnifiedIndex maps users, items and labels into a unified encoding space.
@@ -70,7 +70,7 @@ func MarshalUnifiedIndex(w io.Writer, index UnifiedIndex) error {
 	}
 	err := binary.Write(w, binary.LittleEndian, indexType)
 	if err != nil {
-		return errors.Trace(err)
+		return errors.WithStack(err)
 	}
 	// write index
 	return index.Marshal(w)
@@ -82,7 +82,7 @@ func UnmarshalUnifiedIndex(r io.Reader) (UnifiedIndex, error) {
 	var indexType uint8
 	err := binary.Read(r, binary.LittleEndian, &indexType)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.WithStack(err)
 	}
 	var index UnifiedIndex
 	switch indexType {
@@ -98,7 +98,7 @@ func UnmarshalUnifiedIndex(r io.Reader) (UnifiedIndex, error) {
 	// read index
 	err = index.Unmarshal(r)
 	if err != nil {
-		return nil, errors.Trace(err)
+		return nil, errors.WithStack(err)
 	}
 	return index, nil
 }
@@ -274,7 +274,7 @@ func (unified *UnifiedMapIndex) Marshal(w io.Writer) error {
 	for _, index := range indices {
 		err := MarshalIndex(w, index)
 		if err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 	}
 	return nil
@@ -287,7 +287,7 @@ func (unified *UnifiedMapIndex) Unmarshal(r io.Reader) error {
 		var err error
 		*indices[i], err = UnmarshalIndex(r)
 		if err != nil {
-			return errors.Trace(err)
+			return errors.WithStack(err)
 		}
 	}
 	return nil

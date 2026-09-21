@@ -16,6 +16,8 @@ package main
 import (
 	"fmt"
 	_ "net/http/pprof"
+	"os"
+	"os/signal"
 	"time"
 
 	"github.com/gorse-io/gorse/cmd/version"
@@ -66,7 +68,14 @@ var workerCommand = &cobra.Command{
 		}
 		interval, _ := cmd.PersistentFlags().GetDuration("interval")
 		w := worker.NewWorker(masterHost, masterPort, httpHost, httpPort, workingJobs, cachePath, tlsConfig, interval)
+		go func() {
+			sigint := make(chan os.Signal, 1)
+			signal.Notify(sigint, os.Interrupt)
+			<-sigint
+			w.Shutdown()
+		}()
 		w.Serve()
+		log.Logger().Info("stop gorse worker successfully")
 	},
 }
 

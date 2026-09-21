@@ -16,6 +16,7 @@ package meta
 
 import (
 	"fmt"
+	"github.com/gorse-io/gorse/common/log"
 	"github.com/stretchr/testify/suite"
 	"testing"
 	"time"
@@ -25,7 +26,12 @@ type SQLiteTestSuite struct {
 	baseTestSuite
 }
 
+func (suite *SQLiteTestSuite) SetupSuite() {
+	log.SetTestLogger(suite.T())
+}
+
 func (suite *SQLiteTestSuite) SetupTest() {
+	log.SetTestLogger(suite.T())
 	var err error
 	// create database
 	path := fmt.Sprintf("sqlite://%s/sqlite.db", suite.T().TempDir())

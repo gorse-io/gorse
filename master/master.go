@@ -21,6 +21,8 @@ import (
 	"math"
 	"math/rand"
 	"net"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -28,6 +30,7 @@ import (
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/emicklei/go-restful/v3"
+	"github.com/fsnotify/fsnotify"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/common/parallel"
@@ -38,12 +41,14 @@ import (
 	"github.com/gorse-io/gorse/model/ctr"
 	"github.com/gorse-io/gorse/protocol"
 	"github.com/gorse-io/gorse/server"
+	"github.com/gorse-io/gorse/storage"
 	"github.com/gorse-io/gorse/storage/blob"
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
 	"github.com/gorse-io/gorse/storage/meta"
+	"github.com/gorse-io/gorse/storage/vectors"
 	"github.com/jellydator/ttlcache/v3"
-	"github.com/juju/errors"
+	"github.com/pkg/errors"
 	"github.com/sashabaranov/go-openai"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/propagation"
@@ -51,6 +56,8 @@ import (
 	"golang.org/x/oauth2"
 	"google.golang.org/grpc"
 )
+
+const configReloadDebounce = time.Second
 
 type Datasets struct {
 	rankingDataset  *dataset.Dataset
@@ -73,6 +80,7 @@ type Master struct {
 	configPath     string
 	standalone     bool
 	openAIClient   *openai.Client
+	ConfigMutex    sync.RWMutex
 
 	// cluster meta cache
 	metaStore  meta.Database
@@ -97,15 +105,19 @@ type Master struct {
 	tokenCache   *ttlcache.Cache[string, UserInfo]
 
 	// events
-	ticker      *time.Ticker
-	scheduled   chan struct{}
-	cancel      context.CancelFunc
-	reconciling atomic.Bool
+	ticker              *time.Ticker
+	scheduled           chan struct{}
+	cancel              context.CancelFunc
+	backgroundContext   context.Context
+	backgroundCancel    context.CancelFunc
+	backgroundWaitGroup sync.WaitGroup
+	reconciling         atomic.Bool
 }
 
 // NewMaster creates a master node.
 func NewMaster(cfg *config.Config, cacheFolder string, standalone bool, configPath string) *Master {
 	rand.Seed(time.Now().UnixNano())
+	backgroundContext, backgroundCancel := context.WithCancel(context.Background())
 
 	// setup trace provider
 	tp, err := cfg.Tracing.NewTracerProvider()
@@ -134,18 +146,131 @@ func NewMaster(cfg *config.Config, cacheFolder string, standalone bool, configPa
 		tracer:       monitor.NewTracer("master"),
 		openAIClient: openai.NewClientWithConfig(clientConfig),
 		RestServer: server.RestServer{
-			Config:      cfg,
-			CacheClient: cache.NoDatabase{},
-			DataClient:  data.NoDatabase{},
-			HttpHost:    cfg.Master.HttpHost,
-			HttpPort:    cfg.Master.HttpPort,
-			WebService:  new(restful.WebService),
+			Config:       cfg,
+			CacheClient:  cache.NoDatabase{},
+			DataClient:   data.NoDatabase{},
+			VectorClient: vectors.NoDatabase{},
+			HttpHost:     cfg.Master.HttpHost,
+			HttpPort:     cfg.Master.HttpPort,
+			WebService:   new(restful.WebService),
 		},
-		ticker:    time.NewTicker(duration),
-		scheduled: make(chan struct{}, 1),
-		cancel:    func() {},
+		ticker:            time.NewTicker(duration),
+		scheduled:         make(chan struct{}, 1),
+		cancel:            func() {},
+		backgroundContext: backgroundContext,
+		backgroundCancel:  backgroundCancel,
 	}
 	return m
+}
+
+func (m *Master) applyRecommendOverride(cfg *config.Config) error {
+	metaStr, err := m.metaStore.Get(meta.RECOMMEND_CONFIG)
+	if err != nil && !errors.Is(err, storage.ErrNotFound) {
+		return errors.WithStack(err)
+	}
+	if metaStr == nil {
+		return nil
+	}
+	if err = json.Unmarshal([]byte(*metaStr), &cfg.Recommend); err != nil {
+		return errors.WithStack(err)
+	}
+	return nil
+}
+
+func (m *Master) reloadConfigFromFile() error {
+	newConfig, err := config.LoadConfig(m.configPath)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+	if err = m.applyRecommendOverride(newConfig); err != nil {
+		return errors.WithStack(err)
+	}
+	if err = newConfig.Validate(); err != nil {
+		return errors.WithStack(err)
+	}
+
+	m.ConfigMutex.Lock()
+	m.Config = newConfig
+	m.RestServer.Config = newConfig
+	m.ConfigMutex.Unlock()
+
+	select {
+	case m.scheduled <- struct{}{}:
+	default:
+	}
+	return nil
+}
+
+func (m *Master) watchConfigFile(ctx context.Context) {
+	if m.configPath == "" {
+		return
+	}
+	absPath, err := filepath.Abs(m.configPath)
+	if err != nil {
+		log.Logger().Error("failed to resolve config path", zap.String("path", m.configPath), zap.Error(err))
+		return
+	}
+	if _, err = os.Stat(absPath); err != nil {
+		log.Logger().Warn("skip watching config file", zap.String("path", absPath), zap.Error(err))
+		return
+	}
+	watcher, err := fsnotify.NewWatcher()
+	if err != nil {
+		log.Logger().Error("failed to create config watcher", zap.Error(err))
+		return
+	}
+	defer watcher.Close()
+	if err = watcher.Add(filepath.Dir(absPath)); err != nil {
+		log.Logger().Error("failed to watch config directory", zap.String("path", absPath), zap.Error(err))
+		return
+	}
+	log.Logger().Info("watch config file", zap.String("path", absPath))
+
+	var timer *time.Timer
+	var timerC <-chan time.Time
+	for {
+		select {
+		case <-ctx.Done():
+			if timer != nil {
+				timer.Stop()
+			}
+			return
+		case event, ok := <-watcher.Events:
+			if !ok {
+				return
+			}
+			eventPath, err := filepath.Abs(event.Name)
+			if err != nil || eventPath != absPath {
+				continue
+			}
+			if event.Op&(fsnotify.Write|fsnotify.Create|fsnotify.Rename|fsnotify.Chmod) != 0 {
+				if timer == nil {
+					timer = time.NewTimer(configReloadDebounce)
+				} else {
+					if !timer.Stop() {
+						select {
+						case <-timer.C:
+						default:
+						}
+					}
+					timer.Reset(configReloadDebounce)
+				}
+				timerC = timer.C
+			}
+		case err, ok := <-watcher.Errors:
+			if !ok {
+				return
+			}
+			log.Logger().Error("failed to watch config file", zap.Error(err))
+		case <-timerC:
+			timerC = nil
+			if err = m.reloadConfigFromFile(); err != nil {
+				log.Logger().Error("failed to reload config file", zap.String("path", absPath), zap.Error(err))
+			} else {
+				log.Logger().Info("reloaded config file", zap.String("path", absPath))
+			}
+		}
+	}
 }
 
 // Serve starts the master node.
@@ -191,20 +316,23 @@ func (m *Master) Serve() {
 		log.Logger().Fatal("failed to init database", zap.Error(err))
 	}
 
-	// load recommend config
-	metaStr, err := m.metaStore.Get(meta.RECOMMEND_CONFIG)
-	if err != nil && !errors.Is(err, errors.NotFound) {
-		log.Logger().Error("failed to load recommend config", zap.Error(err))
-	} else if metaStr != nil {
-		err = json.Unmarshal([]byte(*metaStr), &m.Config.Recommend)
-		if err != nil {
-			log.Logger().Error("failed to unmarshal recommend config", zap.Error(err))
-		}
+	// open vector store
+	log.Logger().Info("opening vector store", zap.String("path", m.Config.Database.VectorStore))
+	m.VectorClient, err = vectors.Open(m.Config.Database.VectorStore, m.Config.Database.VectorTablePrefix)
+	if err != nil {
+		log.Logger().Fatal("failed to connect vector store", zap.Error(err))
+	}
+	if err = m.VectorClient.Init(); err != nil {
+		log.Logger().Fatal("failed to init vector store", zap.Error(err))
+	}
+	// load config overrides
+	if err = m.applyRecommendOverride(m.Config); err != nil {
+		log.Logger().Error("failed to apply config overrides", zap.Error(err))
 	}
 
 	// load collective filtering model meta
-	metaStr, err = m.metaStore.Get(meta.COLLABORATIVE_FILTERING_MODEL)
-	if err != nil && !errors.Is(err, errors.NotFound) {
+	metaStr, err := m.metaStore.Get(meta.COLLABORATIVE_FILTERING_MODEL)
+	if err != nil && !errors.Is(err, storage.ErrNotFound) {
 		log.Logger().Error("failed to load collaborative filtering meta", zap.Error(err))
 	} else if metaStr != nil {
 		if err = m.collaborativeFilteringMeta.FromJSON(*metaStr); err != nil {
@@ -219,7 +347,7 @@ func (m *Master) Serve() {
 
 	// load click-through rate model
 	metaStr, err = m.metaStore.Get(meta.CLICK_THROUGH_RATE_MODEL)
-	if err != nil && !errors.Is(err, errors.NotFound) {
+	if err != nil && !errors.Is(err, storage.ErrNotFound) {
 		log.Logger().Error("failed to load click-through rate meta", zap.Error(err))
 	} else if metaStr != nil {
 		if err = m.clickThroughRateMeta.FromJSON(*metaStr); err != nil {
@@ -232,7 +360,12 @@ func (m *Master) Serve() {
 		}
 	}
 
-	go m.RunTasksLoop()
+	m.backgroundWaitGroup.Go(func() {
+		m.watchConfigFile(m.backgroundContext)
+	})
+	m.backgroundWaitGroup.Go(func() {
+		m.RunTasksLoop()
+	})
 
 	// start rpc server
 	go func() {
@@ -263,6 +396,7 @@ func (m *Master) Serve() {
 		protocol.RegisterMasterServer(m.grpcServer, m)
 		protocol.RegisterCacheStoreServer(m.grpcServer, cache.NewProxyServer(m.CacheClient))
 		protocol.RegisterDataStoreServer(m.grpcServer, data.NewProxyServer(m.DataClient))
+		protocol.RegisterVectorStoreServer(m.grpcServer, vectors.NewProxyServer(m.VectorClient))
 		if m.blobServer != nil {
 			protocol.RegisterBlobStoreServer(m.grpcServer, m.blobServer)
 		}
@@ -301,6 +435,23 @@ func (m *Master) Shutdown() {
 	}
 	// stop grpc server
 	m.grpcServer.GracefulStop()
+	// stop background tasks before closing databases
+	m.backgroundCancel()
+	m.ticker.Stop()
+	m.backgroundWaitGroup.Wait()
+	// close databases
+	if err = m.metaStore.Close(); err != nil {
+		log.Logger().Error("failed to close meta database", zap.Error(err))
+	}
+	if err = m.DataClient.Close(); err != nil {
+		log.Logger().Error("failed to close data database", zap.Error(err))
+	}
+	if err = m.CacheClient.Close(); err != nil {
+		log.Logger().Error("failed to close cache database", zap.Error(err))
+	}
+	if err = m.VectorClient.Close(); err != nil {
+		log.Logger().Error("failed to close vector database", zap.Error(err))
+	}
 }
 
 func (m *Master) RunTasksLoop() {
@@ -311,14 +462,20 @@ func (m *Master) RunTasksLoop() {
 	}
 	for {
 		select {
+		case <-m.backgroundContext.Done():
+			return
 		case <-m.ticker.C:
 		case <-m.scheduled:
 		}
 
 		// download dataset
 		var ctx context.Context
-		ctx, m.cancel = context.WithCancel(context.Background())
+		ctx, m.cancel = context.WithCancel(m.backgroundContext)
 		err := m.runLoadDatasetTask(ctx)
+		m.cancel()
+		if m.backgroundContext.Err() != nil {
+			return
+		}
 		if err != nil {
 			log.Logger().Error("failed to load ranking dataset", zap.Error(err))
 			continue

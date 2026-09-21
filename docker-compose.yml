@@ -36,7 +36,7 @@ services:
   #     - mongo_data:/data/db
 
   # clickhouse:
-  #   image: clickhouse/clickhouse-server:22
+  #   image: clickhouse/clickhouse-server:26.2
   #   ports:
   #     - 8123:8123
   #   environment:
@@ -47,7 +47,7 @@ services:
   #     - clickhouse_data:/var/lib/clickhouse
 
   # redis:
-  #   image: redis/redis-stack
+  #   image: redis:8
   #   restart: unless-stopped
   #   ports:
   #     - 6379:6379

@@ -444,9 +444,48 @@ void _mm512_mm(_Bool transA, _Bool transB, int64_t m, int64_t n, int64_t k, floa
 {
     if (!transA && !transB)
     {
-        for (int i = 0; i < m; i++) {
-            for (int l = 0; l < k; l++) {
-                for (int j = 0; j < n; j++) {
+        int64_t i = 0;
+        for (; i + 4 <= m; i += 4) {
+            int64_t j = 0;
+            for (; j + 16 <= n; j += 16) {
+                __m512 c0 = _mm512_loadu_ps(c + i * ldc + j);
+                __m512 c1 = _mm512_loadu_ps(c + (i + 1) * ldc + j);
+                __m512 c2 = _mm512_loadu_ps(c + (i + 2) * ldc + j);
+                __m512 c3 = _mm512_loadu_ps(c + (i + 3) * ldc + j);
+                for (int64_t l = 0; l < k; l++) {
+                    __m512 bv = _mm512_loadu_ps(b + l * ldb + j);
+                    c0 = _mm512_add_ps(c0, _mm512_mul_ps(_mm512_set1_ps(a[i * lda + l]), bv));
+                    c1 = _mm512_add_ps(c1, _mm512_mul_ps(_mm512_set1_ps(a[(i + 1) * lda + l]), bv));
+                    c2 = _mm512_add_ps(c2, _mm512_mul_ps(_mm512_set1_ps(a[(i + 2) * lda + l]), bv));
+                    c3 = _mm512_add_ps(c3, _mm512_mul_ps(_mm512_set1_ps(a[(i + 3) * lda + l]), bv));
+                }
+                _mm512_storeu_ps(c + i * ldc + j, c0);
+                _mm512_storeu_ps(c + (i + 1) * ldc + j, c1);
+                _mm512_storeu_ps(c + (i + 2) * ldc + j, c2);
+                _mm512_storeu_ps(c + (i + 3) * ldc + j, c3);
+            }
+            for (; j < n; j++) {
+                for (int64_t l = 0; l < k; l++) {
+                    float bv = b[l * ldb + j];
+                    c[i * ldc + j] += a[i * lda + l] * bv;
+                    c[(i + 1) * ldc + j] += a[(i + 1) * lda + l] * bv;
+                    c[(i + 2) * ldc + j] += a[(i + 2) * lda + l] * bv;
+                    c[(i + 3) * ldc + j] += a[(i + 3) * lda + l] * bv;
+                }
+            }
+        }
+        for (; i < m; i++) {
+            int64_t j = 0;
+            for (; j + 16 <= n; j += 16) {
+                __m512 cv = _mm512_loadu_ps(c + i * ldc + j);
+                for (int64_t l = 0; l < k; l++) {
+                    __m512 bv = _mm512_loadu_ps(b + l * ldb + j);
+                    cv = _mm512_add_ps(cv, _mm512_mul_ps(_mm512_set1_ps(a[i * lda + l]), bv));
+                }
+                _mm512_storeu_ps(c + i * ldc + j, cv);
+            }
+            for (; j < n; j++) {
+                for (int64_t l = 0; l < k; l++) {
                     c[i * ldc + j] += a[i * lda + l] * b[l * ldb + j];
                 }
             }
@@ -460,9 +499,47 @@ void _mm512_mm(_Bool transA, _Bool transB, int64_t m, int64_t n, int64_t k, floa
         }
     } else if (transA && !transB)
     {
-        for (int i = 0; i < m; i++) {
-            for (int l = 0; l < k; l++) {
-                for (int j = 0; j < n; j++) {
+        int64_t i = 0;
+        for (; i + 4 <= m; i += 4) {
+            int64_t j = 0;
+            for (; j + 16 <= n; j += 16) {
+                __m512 c0 = _mm512_loadu_ps(c + i * ldc + j);
+                __m512 c1 = _mm512_loadu_ps(c + (i + 1) * ldc + j);
+                __m512 c2 = _mm512_loadu_ps(c + (i + 2) * ldc + j);
+                __m512 c3 = _mm512_loadu_ps(c + (i + 3) * ldc + j);
+                for (int64_t l = 0; l < k; l++) {
+                    __m512 bv = _mm512_loadu_ps(b + l * ldb + j);
+                    c0 = _mm512_add_ps(c0, _mm512_mul_ps(_mm512_set1_ps(a[l * lda + i]), bv));
+                    c1 = _mm512_add_ps(c1, _mm512_mul_ps(_mm512_set1_ps(a[l * lda + i + 1]), bv));
+                    c2 = _mm512_add_ps(c2, _mm512_mul_ps(_mm512_set1_ps(a[l * lda + i + 2]), bv));
+                    c3 = _mm512_add_ps(c3, _mm512_mul_ps(_mm512_set1_ps(a[l * lda + i + 3]), bv));
+                }
+                _mm512_storeu_ps(c + i * ldc + j, c0);
+                _mm512_storeu_ps(c + (i + 1) * ldc + j, c1);
+                _mm512_storeu_ps(c + (i + 2) * ldc + j, c2);
+                _mm512_storeu_ps(c + (i + 3) * ldc + j, c3);
+            }
+            for (; j < n; j++) {
+                for (int64_t l = 0; l < k; l++) {
+                    c[i * ldc + j] += a[l * lda + i] * b[l * ldb + j];
+                    c[(i + 1) * ldc + j] += a[l * lda + i + 1] * b[l * ldb + j];
+                    c[(i + 2) * ldc + j] += a[l * lda + i + 2] * b[l * ldb + j];
+                    c[(i + 3) * ldc + j] += a[l * lda + i + 3] * b[l * ldb + j];
+                }
+            }
+        }
+        for (; i < m; i++) {
+            int64_t j = 0;
+            for (; j + 16 <= n; j += 16) {
+                __m512 cv = _mm512_loadu_ps(c + i * ldc + j);
+                for (int64_t l = 0; l < k; l++) {
+                    __m512 bv = _mm512_loadu_ps(b + l * ldb + j);
+                    cv = _mm512_add_ps(cv, _mm512_mul_ps(_mm512_set1_ps(a[l * lda + i]), bv));
+                }
+                _mm512_storeu_ps(c + i * ldc + j, cv);
+            }
+            for (; j < n; j++) {
+                for (int64_t l = 0; l < k; l++) {
                     c[i * ldc + j] += a[l * lda + i] * b[l * ldb + j];
                 }
             }

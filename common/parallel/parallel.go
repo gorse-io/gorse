@@ -19,7 +19,7 @@ import (
 	"sync"
 
 	"github.com/gorse-io/gorse/common/util"
-	"github.com/juju/errors"
+	"github.com/pkg/errors"
 	"github.com/samber/lo"
 )
 
@@ -34,10 +34,10 @@ func Parallel(ctx context.Context, nJobs, nWorkers int, worker func(workerId, jo
 	if nWorkers <= 1 {
 		for i := range nJobs {
 			if err := ctx.Err(); err != nil {
-				return errors.Trace(err)
+				return errors.WithStack(err)
 			}
 			if err := worker(0, i); err != nil {
-				return errors.Trace(err)
+				return errors.WithStack(err)
 			}
 		}
 	} else {
@@ -86,7 +86,7 @@ func Parallel(ctx context.Context, nJobs, nWorkers int, worker func(workerId, jo
 		// check errors
 		for _, err := range errs {
 			if err != nil {
-				return errors.Trace(err)
+				return errors.WithStack(err)
 			}
 		}
 	}
@@ -97,7 +97,7 @@ func For(ctx context.Context, nJobs, nWorkers int, worker func(int)) error {
 	if nWorkers <= 1 {
 		for i := range nJobs {
 			if err := ctx.Err(); err != nil {
-				return errors.Trace(err)
+				return errors.WithStack(err)
 			}
 			worker(i)
 		}
@@ -144,7 +144,7 @@ func ForEach[T any](ctx context.Context, a []T, nWorkers int, worker func(int, T
 	if nWorkers <= 1 {
 		for i, v := range a {
 			if err := ctx.Err(); err != nil {
-				return errors.Trace(err)
+				return errors.WithStack(err)
 			}
 			worker(i, v)
 		}

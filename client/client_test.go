@@ -20,6 +20,7 @@ import (
 	"time"
 
 	client "github.com/gorse-io/gorse-go"
+	"github.com/gorse-io/gorse/common/log"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -38,7 +39,12 @@ type GorseClientTestSuite struct {
 	client *client.GorseClient
 }
 
+func (suite *GorseClientTestSuite) SetupTest() {
+	log.SetTestLogger(suite.T())
+}
+
 func (suite *GorseClientTestSuite) SetupSuite() {
+	log.SetTestLogger(suite.T())
 	if serverEndpoint == "" || dashboardEndpoint == "" {
 		suite.T().Skip("GORSE_SERVER_ENDPOINT or GORSE_DASHBOARD_ENDPOINT is not set")
 	}
@@ -107,7 +113,7 @@ func (suite *GorseClientTestSuite) TestUsers() {
 	suite.NoError(err)
 	suite.Equal(1, deleteAffect.RowAffected)
 	_, err = suite.client.GetUser(ctx, "1000")
-	suite.Equal("1000: user not found", err.Error())
+	suite.Equal("user 1000 not found", err.Error())
 }
 
 func (suite *GorseClientTestSuite) TestItems() {
@@ -161,7 +167,7 @@ func (suite *GorseClientTestSuite) TestItems() {
 	suite.NoError(err)
 	suite.Equal(1, deleteAffect.RowAffected)
 	_, err = suite.client.GetItem(ctx, "2000")
-	suite.Equal("2000: item not found", err.Error())
+	suite.Equal("item 2000 not found", err.Error())
 }
 
 func (suite *GorseClientTestSuite) TestFeedback() {
@@ -240,9 +246,9 @@ func (suite *GorseClientTestSuite) TestRecommend() {
 	suite.NoError(err)
 	suite.Len(recommendations, 3)
 	if suite.Len(recommendations, 3) {
-		suite.Equal("315", recommendations[0])
-		suite.Equal("1432", recommendations[1])
-		suite.Equal("918", recommendations[2])
+		suite.Equal("315", recommendations[0].Id)
+		suite.Equal("1432", recommendations[1].Id)
+		suite.Equal("918", recommendations[2].Id)
 	}
 }
 

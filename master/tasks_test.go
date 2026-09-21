@@ -15,18 +15,132 @@
 package master
 
 import (
+	"context"
 	"fmt"
 	"runtime"
 	"strconv"
 	"time"
 
+	"github.com/gorse-io/gorse/common/event"
 	"github.com/gorse-io/gorse/common/expression"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/logics"
+	"github.com/gorse-io/gorse/model/cf"
+	"github.com/gorse-io/gorse/model/ctr"
+	"github.com/gorse-io/gorse/storage/blob"
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
+	"github.com/gorse-io/gorse/storage/meta"
+	"github.com/gorse-io/gorse/storage/vectors"
 	"github.com/samber/lo"
 )
+
+type failOnceBlobStore struct {
+	blob.Store
+	name   string
+	failed bool
+}
+
+func (s *failOnceBlobStore) Remove(name string) error {
+	if name == s.name && !s.failed {
+		s.failed = true
+		return fmt.Errorf("failed to remove %s", name)
+	}
+	return s.Store.Remove(name)
+}
+
+type failOnceVectorDatabase struct {
+	vectors.Database
+	name   string
+	failed bool
+}
+
+func (d *failOnceVectorDatabase) DeleteCollection(ctx context.Context, name string) error {
+	if name == d.name && !d.failed {
+		d.failed = true
+		return fmt.Errorf("failed to delete %s", name)
+	}
+	return d.Database.DeleteCollection(ctx, name)
+}
+
+func (s *MasterTestSuite) TestRemoveOutOfDateModels() {
+	ctx := s.T().Context()
+	s.blobStore = &failOnceBlobStore{Store: blob.NewPOSIX(s.T().TempDir()), name: "50"}
+	s.collaborativeFilteringMeta = meta.Model[cf.Score]{ID: 100}
+	s.clickThroughRateMeta = meta.Model[ctr.Score]{ID: 150}
+
+	for _, id := range []int64{50, 100, 150, 200, 300, 400} {
+		w, done, err := s.blobStore.Create(strconv.FormatInt(id, 10))
+		s.Require().NoError(err)
+		_, err = w.Write([]byte("model"))
+		s.Require().NoError(err)
+		s.Require().NoError(w.Close())
+		<-done
+	}
+	w, done, err := s.blobStore.Create("invalid")
+	s.Require().NoError(err)
+	_, err = w.Write([]byte("model"))
+	s.Require().NoError(err)
+	s.Require().NoError(w.Close())
+	<-done
+	for _, id := range []int64{100, 200, 300, 400, 500} {
+		s.Require().NoError(s.VectorClient.AddCollection(ctx,
+			vectors.CollaborativeFilteringCollection(id), 2, vectors.Dot, vectors.VectorConfig{}))
+	}
+	s.Require().NoError(s.VectorClient.AddCollection(ctx, "collaborative_filtering_invalid", 2, vectors.Dot, vectors.VectorConfig{}))
+	s.Require().NoError(s.VectorClient.AddCollection(ctx, "unrelated", 2, vectors.Dot, vectors.VectorConfig{}))
+
+	s.removeOutOfDateModels(ctx)
+	s.removeOutOfDateModels(ctx)
+
+	collections, err := s.VectorClient.ListCollections(ctx)
+	s.Require().NoError(err)
+	s.ElementsMatch([]string{
+		vectors.CollaborativeFilteringCollection(100),
+		vectors.CollaborativeFilteringCollection(300),
+		vectors.CollaborativeFilteringCollection(400),
+		"collaborative_filtering_invalid",
+		"unrelated",
+	}, collections)
+	files, err := s.blobStore.List()
+	s.Require().NoError(err)
+	s.ElementsMatch([]string{"100", "150", "300", "400", "invalid"}, files)
+}
+
+func (s *MasterTestSuite) TestRemoveOutOfDateModelsRetry() {
+	ctx := s.T().Context()
+	s.blobStore = &failOnceBlobStore{Store: blob.NewPOSIX(s.T().TempDir()), name: "200"}
+	s.VectorClient = &failOnceVectorDatabase{
+		Database: s.VectorClient,
+		name:     vectors.CollaborativeFilteringCollection(200),
+	}
+	s.collaborativeFilteringMeta = meta.Model[cf.Score]{ID: 100}
+	s.clickThroughRateMeta = meta.Model[ctr.Score]{ID: 150}
+
+	for _, id := range []int64{100, 150, 200, 300, 400} {
+		w, done, err := s.blobStore.Create(strconv.FormatInt(id, 10))
+		s.Require().NoError(err)
+		_, err = w.Write([]byte("model"))
+		s.Require().NoError(err)
+		s.Require().NoError(w.Close())
+		<-done
+	}
+	for _, id := range []int64{100, 200, 300, 400} {
+		s.Require().NoError(s.VectorClient.AddCollection(ctx,
+			vectors.CollaborativeFilteringCollection(id), 2, vectors.Dot, vectors.VectorConfig{}))
+	}
+
+	s.removeOutOfDateModels(ctx)
+	s.removeOutOfDateModels(ctx)
+	s.removeOutOfDateModels(ctx)
+
+	collections, err := s.VectorClient.ListCollections(ctx)
+	s.Require().NoError(err)
+	s.NotContains(collections, vectors.CollaborativeFilteringCollection(200))
+	files, err := s.blobStore.List()
+	s.Require().NoError(err)
+	s.NotContains(files, "200")
+}
 
 func (s *MasterTestSuite) TestFindItemToItem() {
 	ctx := s.T().Context()
@@ -83,50 +197,46 @@ func (s *MasterTestSuite) TestFindItemToItem() {
 	}
 
 	// load mock dataset
-	_, dataSet, err := s.LoadDataFromDatabase(s.T().Context(), s.DataClient,
+	_, dataSet, _, err := s.LoadDataFromDatabase(s.T().Context(), s.DataClient,
 		[]expression.FeedbackTypeExpression{expression.MustParseFeedbackTypeExpression("FeedbackType")},
 		nil, nil, 0, 0, NewOnlineEvaluator(nil, nil), nil)
 	s.NoError(err)
 
 	// similar items (common users)
-	s.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "default", Type: "users"}}
+	s.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "users", Type: "users"}}
 	s.NoError(s.updateItemToItem(s.T().Context(), dataSet))
-	similar, err := s.CacheClient.SearchScores(ctx, cache.ItemToItem, cache.Key("default", "9"), nil, 0, 100)
+	similar, err := logics.QueryItemToItem(ctx, s.VectorClient, s.Config.Recommend.ItemToItem[0], "9", nil, s.Config.Recommend.CacheSize)
 	s.NoError(err)
 	s.Equal([]string{"7", "5", "3"}, cache.ConvertDocumentsToValues(similar))
 	// similar items in category (common users)
-	similar, err = s.CacheClient.SearchScores(ctx, cache.ItemToItem, cache.Key("default", "9"), []string{"*"}, 0, 100)
+	similar, err = logics.QueryItemToItem(ctx, s.VectorClient, s.Config.Recommend.ItemToItem[0], "9", []string{"*"}, s.Config.Recommend.CacheSize)
 	s.NoError(err)
-	s.Equal([]string{"7", "5"}, cache.ConvertDocumentsToValues(similar))
-	// digest
-	digest, err := s.CacheClient.Get(ctx, cache.Key(cache.ItemToItemDigest, "default", "9")).String()
-	s.NoError(err)
-	s.Equal(s.Config.Recommend.ItemToItem[0].Hash(&s.Config.Recommend), digest)
+	s.Equal([]string{"7", "5", "1"}, cache.ConvertDocumentsToValues(similar))
 
 	// similar items (common labels)
 	err = s.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastModifyItemTime, "8"), time.Now()))
 	s.NoError(err)
-	s.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "default", Type: "tags", Column: "item.Labels"}}
+	s.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "tags", Type: "tags", Column: "item.Labels"}}
 	s.NoError(s.updateItemToItem(s.T().Context(), dataSet))
-	similar, err = s.CacheClient.SearchScores(ctx, cache.ItemToItem, cache.Key("default", "8"), nil, 0, 100)
+	similar, err = logics.QueryItemToItem(ctx, s.VectorClient, s.Config.Recommend.ItemToItem[0], "8", nil, s.Config.Recommend.CacheSize)
 	s.NoError(err)
 	s.Equal([]string{"0", "2", "4"}, cache.ConvertDocumentsToValues(similar))
 	// similar items in category (common labels)
-	similar, err = s.CacheClient.SearchScores(ctx, cache.ItemToItem, cache.Key("default", "8"), []string{"*"}, 0, 100)
+	similar, err = logics.QueryItemToItem(ctx, s.VectorClient, s.Config.Recommend.ItemToItem[0], "8", []string{"*"}, s.Config.Recommend.CacheSize)
 	s.NoError(err)
-	s.Equal([]string{"0", "2"}, cache.ConvertDocumentsToValues(similar))
+	s.Equal([]string{"0", "2", "6"}, cache.ConvertDocumentsToValues(similar))
 
 	// similar items (auto)
 	err = s.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastModifyItemTime, "8"), time.Now()))
 	s.NoError(err)
 	err = s.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastModifyItemTime, "9"), time.Now()))
 	s.NoError(err)
-	s.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "default", Type: "auto"}}
+	s.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "auto", Type: "auto"}}
 	s.NoError(s.updateItemToItem(s.T().Context(), dataSet))
-	similar, err = s.CacheClient.SearchScores(ctx, cache.ItemToItem, cache.Key("default", "8"), nil, 0, 100)
+	similar, err = logics.QueryItemToItem(ctx, s.VectorClient, s.Config.Recommend.ItemToItem[0], "8", nil, s.Config.Recommend.CacheSize)
 	s.NoError(err)
 	s.Equal([]string{"0", "2", "4"}, cache.ConvertDocumentsToValues(similar))
-	similar, err = s.CacheClient.SearchScores(ctx, cache.ItemToItem, cache.Key("default", "9"), nil, 0, 100)
+	similar, err = logics.QueryItemToItem(ctx, s.VectorClient, s.Config.Recommend.ItemToItem[0], "9", nil, s.Config.Recommend.CacheSize)
 	s.NoError(err)
 	s.Equal([]string{"7", "5", "3"}, cache.ConvertDocumentsToValues(similar))
 }
@@ -170,27 +280,30 @@ func (s *MasterTestSuite) TestUserToUser() {
 	s.NoError(err)
 	err = s.DataClient.BatchInsertFeedback(ctx, feedbacks, true, true, true)
 	s.NoError(err)
-	_, dataSet, err := s.LoadDataFromDatabase(s.T().Context(), s.DataClient,
+	_, dataSet, _, err := s.LoadDataFromDatabase(s.T().Context(), s.DataClient,
 		[]expression.FeedbackTypeExpression{expression.MustParseFeedbackTypeExpression("FeedbackType")},
 		nil, nil, 0, 0, NewOnlineEvaluator(nil, nil), nil)
 	s.NoError(err)
 
 	// similar items (common users)
-	s.Config.Recommend.UserToUser = []config.UserToUserConfig{{Name: "default", Type: "items"}}
+	s.Config.Recommend.UserToUser = []config.UserToUserConfig{{Name: "items", Type: "items"}}
+	collection := vectors.UserToUserCollection("items")
+	s.NoError(s.VectorClient.AddCollection(ctx, collection, 0, vectors.Dot, vectors.VectorConfig{}))
+	s.NoError(s.VectorClient.AddVectors(ctx, collection, []vectors.Vector{{Id: "stale", Indices: []uint32{0}, Values: []float32{1}, Timestamp: dataSet.GetTimestamp().Add(-time.Hour)}}))
 	s.NoError(s.updateUserToUser(s.T().Context(), dataSet))
-	similar, err := s.CacheClient.SearchScores(ctx, cache.UserToUser, cache.Key("default", "9"), nil, 0, 100)
+	stale, err := s.VectorClient.GetVectors(ctx, collection, []string{"stale"})
+	s.NoError(err)
+	s.Empty(stale)
+	similar, err := logics.QueryUserToUser(ctx, s.VectorClient, s.Config.Recommend.UserToUser[0], "9", s.Config.Recommend.CacheSize)
 	s.NoError(err)
 	s.Equal([]string{"7", "5", "3"}, cache.ConvertDocumentsToValues(similar))
-	digest, err := s.CacheClient.Get(ctx, cache.Key(cache.UserToUserDigest, "default", "9")).String()
-	s.NoError(err)
-	s.Equal(s.Config.Recommend.UserToUser[0].Hash(&s.Config.Recommend), digest)
 
 	// similar items (common labels)
 	err = s.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastModifyUserTime, "8"), time.Now()))
 	s.NoError(err)
-	s.Config.Recommend.UserToUser = []config.UserToUserConfig{{Name: "default", Type: "tags", Column: "user.Labels"}}
+	s.Config.Recommend.UserToUser = []config.UserToUserConfig{{Name: "tags", Type: "tags", Column: "user.Labels"}}
 	s.NoError(s.updateUserToUser(s.T().Context(), dataSet))
-	similar, err = s.CacheClient.SearchScores(ctx, cache.UserToUser, cache.Key("default", "8"), nil, 0, 100)
+	similar, err = logics.QueryUserToUser(ctx, s.VectorClient, s.Config.Recommend.UserToUser[0], "8", s.Config.Recommend.CacheSize)
 	s.NoError(err)
 	s.Equal([]string{"0", "2", "4"}, cache.ConvertDocumentsToValues(similar))
 
@@ -199,14 +312,67 @@ func (s *MasterTestSuite) TestUserToUser() {
 	s.NoError(err)
 	err = s.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastModifyUserTime, "9"), time.Now()))
 	s.NoError(err)
-	s.Config.Recommend.UserToUser = []config.UserToUserConfig{{Name: "default", Type: "auto"}}
+	s.Config.Recommend.UserToUser = []config.UserToUserConfig{{Name: "auto", Type: "auto"}}
 	s.NoError(s.updateUserToUser(s.T().Context(), dataSet))
-	similar, err = s.CacheClient.SearchScores(ctx, cache.UserToUser, cache.Key("default", "8"), nil, 0, 100)
+	similar, err = logics.QueryUserToUser(ctx, s.VectorClient, s.Config.Recommend.UserToUser[0], "8", s.Config.Recommend.CacheSize)
 	s.NoError(err)
 	s.Equal([]string{"0", "2", "4"}, cache.ConvertDocumentsToValues(similar))
-	similar, err = s.CacheClient.SearchScores(ctx, cache.UserToUser, cache.Key("default", "9"), nil, 0, 100)
+	similar, err = logics.QueryUserToUser(ctx, s.VectorClient, s.Config.Recommend.UserToUser[0], "9", s.Config.Recommend.CacheSize)
 	s.NoError(err)
 	s.Equal([]string{"7", "5", "3"}, cache.ConvertDocumentsToValues(similar))
+}
+
+type snapshotHandler struct {
+	snapshots chan event.Snapshot
+}
+
+func (h *snapshotHandler) EmitRequest(context.Context, event.Request) {}
+
+func (h *snapshotHandler) EmitSnapshot(_ context.Context, snapshot event.Snapshot) {
+	h.snapshots <- snapshot
+}
+
+func (s *MasterTestSuite) TestEmitSnapshot() {
+	ctx := s.T().Context()
+	s.Config = &config.Config{}
+	s.Config.Master.NumJobs = 1
+	s.Config.Recommend.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{
+		expression.MustParseFeedbackTypeExpression("positive"),
+	}
+	s.Config.Recommend.DataSource.NegativeFeedbackTypes = []expression.FeedbackTypeExpression{
+		expression.MustParseFeedbackTypeExpression("negative"),
+	}
+
+	users := []data.User{{UserId: "0"}, {UserId: "1"}}
+	items := []data.Item{{ItemId: "0"}, {ItemId: "1"}}
+	feedbacks := []data.Feedback{
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "positive", UserId: "0", ItemId: "0"}},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "negative", UserId: "0", ItemId: "0"}},
+	}
+	s.NoError(s.DataClient.BatchInsertUsers(ctx, users))
+	s.NoError(s.DataClient.BatchInsertItems(ctx, items))
+	s.NoError(s.DataClient.BatchInsertFeedback(ctx, feedbacks, false, false, false))
+
+	handler := &snapshotHandler{snapshots: make(chan event.Snapshot, 1)}
+	event.SetEventHandler(handler)
+	s.T().Cleanup(func() { event.SetEventHandler(&event.NopHandler{}) })
+
+	datasets, err := s.loadDataset(ctx)
+	s.Require().NoError(err)
+	s.Equal(1, datasets.clickTrainSet.Count()+datasets.clickTestSet.Count())
+
+	select {
+	case snapshot := <-handler.snapshots:
+		s.Equal(int64(len(users)), snapshot.UserCount)
+		s.Equal(deepSize(users), snapshot.UserBytes)
+		s.Equal(int64(len(items)), snapshot.ItemCount)
+		s.Equal(deepSize(items), snapshot.ItemBytes)
+		s.Equal(int64(len(feedbacks)), snapshot.FeedbackCount)
+		s.Equal(deepSize(feedbacks), snapshot.FeedbackBytes)
+		s.False(snapshot.Timestamp.IsZero())
+	case <-time.After(time.Second):
+		s.Fail("snapshot was not emitted")
+	}
 }
 
 func (s *MasterTestSuite) TestLoadDataFromDatabase() {
@@ -398,7 +564,7 @@ func (s *MasterTestSuite) TestNegativeFeedbackPriority() {
 	s.Equal(5, datasets.clickTrainSet.NegativeCount+datasets.clickTestSet.NegativeCount)
 
 	// Verify negative feedback items are excluded from recommendations
-	recommender, err := logics.NewRecommender(s.Config.Recommend, s.CacheClient, s.DataClient, true, "1", nil)
+	recommender, err := logics.NewRecommender(s.Config.Recommend, s.CacheClient, s.DataClient, s.VectorClient, true, "1", nil)
 	s.NoError(err)
 	excludeSet := recommender.ExcludeSet()
 	// User 1 should have item 0 in exclude set (due to dislike)
@@ -482,79 +648,11 @@ func (s *MasterTestSuite) TestNonPersonalizedRecommend() {
 	s.Equal(s.Config.Recommend.NonPersonalized[0].Hash(), digest)
 }
 
-func (s *MasterTestSuite) TestNeedUpdateItemToItem() {
-	s.Config = config.GetDefaultConfig()
-	recommendConfig := config.ItemToItemConfig{Name: "default"}
-	ctx := s.T().Context()
-
-	// empty cache
-	s.True(s.needUpdateItemToItem(ctx, "1", recommendConfig))
-	err := s.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key("default", "1"), []cache.Score{
-		{Id: "2", Score: 1, Categories: []string{""}},
-		{Id: "3", Score: 2, Categories: []string{""}},
-		{Id: "4", Score: 3, Categories: []string{""}},
-	})
-	s.NoError(err)
-
-	// digest mismatch
-	err = s.CacheClient.Set(ctx, cache.String(cache.Key(cache.ItemToItemDigest, "default", "1"), "digest"))
-	s.NoError(err)
-	s.True(s.needUpdateItemToItem(ctx, "1", recommendConfig))
-
-	// staled cache
-	err = s.CacheClient.Set(ctx, cache.String(cache.Key(cache.ItemToItemDigest, "default", "1"), recommendConfig.Hash(&s.Config.Recommend)))
-	s.NoError(err)
-	s.True(s.needUpdateItemToItem(ctx, "1", recommendConfig))
-	err = s.CacheClient.Set(ctx, cache.Time(cache.Key(cache.ItemToItemUpdateTime, "default", "1"), time.Now().Add(-s.Config.Recommend.CacheExpire)))
-	s.NoError(err)
-	s.True(s.needUpdateItemToItem(ctx, "1", recommendConfig))
-
-	// not staled cache
-	err = s.CacheClient.Set(ctx, cache.Time(cache.Key(cache.ItemToItemUpdateTime, "default", "1"), time.Now()))
-	s.NoError(err)
-	s.False(s.needUpdateItemToItem(ctx, "1", recommendConfig))
-}
-
-func (s *MasterTestSuite) TestNeedUpdateUserToUser() {
-	ctx := s.T().Context()
-	s.Config = config.GetDefaultConfig()
-	recommendConfig := config.UserToUserConfig{Name: "default"}
-
-	// empty cache
-	s.True(s.needUpdateUserToUser(ctx, "1", recommendConfig))
-	err := s.CacheClient.AddScores(ctx, cache.UserToUser, cache.Key("default", "1"), []cache.Score{
-		{Id: "1", Score: 1, Categories: []string{""}},
-		{Id: "2", Score: 2, Categories: []string{""}},
-		{Id: "3", Score: 3, Categories: []string{""}},
-	})
-	s.NoError(err)
-
-	// digest mismatch
-	err = s.CacheClient.Set(ctx, cache.String(cache.Key(cache.UserToUserDigest, "default", "1"), "digest"))
-	s.NoError(err)
-	s.True(s.needUpdateUserToUser(ctx, "1", recommendConfig))
-
-	// staled cache
-	err = s.CacheClient.Set(ctx, cache.String(cache.Key(cache.UserToUserDigest, "default", "1"), recommendConfig.Hash(&s.Config.Recommend)))
-	s.NoError(err)
-	s.True(s.needUpdateUserToUser(ctx, "1", recommendConfig))
-	err = s.CacheClient.Set(ctx, cache.Time(cache.Key(cache.UserToUserUpdateTime, "default", "1"), time.Now().Add(-s.Config.Recommend.CacheExpire)))
-	s.NoError(err)
-	s.True(s.needUpdateUserToUser(ctx, "1", recommendConfig))
-
-	// not staled cache
-	err = s.CacheClient.Set(ctx, cache.Time(cache.Key(cache.UserToUserUpdateTime, "default", "1"), time.Now()))
-	s.NoError(err)
-	s.False(s.needUpdateUserToUser(ctx, "1", recommendConfig))
-}
-
 func (s *MasterTestSuite) TestGarbageCollection() {
 	// create config
 	s.Config = &config.Config{}
 	s.Config.Master.NumJobs = 1
 	s.Config.Recommend.NonPersonalized = []config.NonPersonalizedConfig{{Name: "custom", Score: "1"}}
-	s.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "default", Type: "users"}}
-	s.Config.Recommend.UserToUser = []config.UserToUserConfig{{Name: "default", Type: "items"}}
 
 	// insert items
 	ctx := s.T().Context()
@@ -584,40 +682,6 @@ func (s *MasterTestSuite) TestGarbageCollection() {
 	})
 	s.NoError(err)
 
-	// insert item-to-item cache
-	err = s.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key("default", "1"), []cache.Score{
-		{Id: "1", Score: 1, Categories: []string{""}},
-		{Id: "2", Score: 2, Categories: []string{""}},
-	})
-	s.NoError(err)
-	err = s.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key("default", "3"), []cache.Score{
-		{Id: "1", Score: 1, Categories: []string{""}},
-		{Id: "2", Score: 2, Categories: []string{""}},
-	})
-	s.NoError(err)
-	err = s.CacheClient.AddScores(ctx, cache.ItemToItem, cache.Key("unknown", "1"), []cache.Score{
-		{Id: "1", Score: 1, Categories: []string{""}},
-		{Id: "2", Score: 2, Categories: []string{""}},
-	})
-	s.NoError(err)
-
-	// insert user-to-user cache
-	err = s.CacheClient.AddScores(ctx, cache.UserToUser, cache.Key("default", "1"), []cache.Score{
-		{Id: "1", Score: 1, Categories: []string{""}},
-		{Id: "2", Score: 2, Categories: []string{""}},
-	})
-	s.NoError(err)
-	err = s.CacheClient.AddScores(ctx, cache.UserToUser, cache.Key("default", "3"), []cache.Score{
-		{Id: "1", Score: 1, Categories: []string{""}},
-		{Id: "2", Score: 2, Categories: []string{""}},
-	})
-	s.NoError(err)
-	err = s.CacheClient.AddScores(ctx, cache.UserToUser, cache.Key("unknown", "1"), []cache.Score{
-		{Id: "1", Score: 1, Categories: []string{""}},
-		{Id: "2", Score: 2, Categories: []string{""}},
-	})
-	s.NoError(err)
-
 	// insert collaborative filtering cache
 	err = s.CacheClient.AddScores(ctx, cache.CollaborativeFiltering, "1", []cache.Score{
 		{Id: "1", Score: 1, Categories: []string{""}},
@@ -643,28 +707,6 @@ func (s *MasterTestSuite) TestGarbageCollection() {
 	np, err = s.CacheClient.SearchScores(ctx, cache.NonPersonalized, "unknown", nil, 0, 100)
 	s.NoError(err)
 	s.Empty(np)
-
-	// check item-to-item cache
-	similar, err := s.CacheClient.SearchScores(ctx, cache.ItemToItem, cache.Key("default", "1"), nil, 0, 100)
-	s.NoError(err)
-	s.Equal([]string{"2", "1"}, cache.ConvertDocumentsToValues(similar))
-	similar, err = s.CacheClient.SearchScores(ctx, cache.ItemToItem, cache.Key("default", "3"), nil, 0, 100)
-	s.NoError(err)
-	s.Empty(similar)
-	similar, err = s.CacheClient.SearchScores(ctx, cache.ItemToItem, cache.Key("unknown", "1"), nil, 0, 100)
-	s.NoError(err)
-	s.Empty(similar)
-
-	// check user-to-user cache
-	similar, err = s.CacheClient.SearchScores(ctx, cache.UserToUser, cache.Key("default", "1"), nil, 0, 100)
-	s.NoError(err)
-	s.Equal([]string{"2", "1"}, cache.ConvertDocumentsToValues(similar))
-	similar, err = s.CacheClient.SearchScores(ctx, cache.UserToUser, cache.Key("default", "3"), nil, 0, 100)
-	s.NoError(err)
-	s.Empty(similar)
-	similar, err = s.CacheClient.SearchScores(ctx, cache.UserToUser, cache.Key("unknown", "1"), nil, 0, 100)
-	s.NoError(err)
-	s.Empty(similar)
 
 	// check collaborative filtering cache
 	cf, err := s.CacheClient.SearchScores(ctx, cache.CollaborativeFiltering, "1", nil, 0, 100)

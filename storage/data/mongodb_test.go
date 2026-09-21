@@ -17,6 +17,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/gorse-io/gorse/common/log"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
@@ -26,14 +27,8 @@ var (
 )
 
 func init() {
-	// get environment variables
-	env := func(key, defaultValue string) string {
-		if value := os.Getenv(key); value != "" {
-			return value
-		}
-		return defaultValue
-	}
-	mongoUri = env("MONGO_URI", "mongodb://root:password@127.0.0.1:27017/")
+	// os.Setenv("MONGO_URI", "mongodb://root:password@127.0.0.1:27017/")
+	mongoUri = os.Getenv("MONGO_URI")
 }
 
 type MongoTestSuite struct {
@@ -41,6 +36,7 @@ type MongoTestSuite struct {
 }
 
 func (suite *MongoTestSuite) SetupSuite() {
+	log.SetTestLogger(suite.T())
 	ctx := suite.T().Context()
 	var err error
 	// create database
@@ -70,10 +66,16 @@ func (suite *MongoTestSuite) getMongoDB() *MongoDB {
 }
 
 func TestMongo(t *testing.T) {
+	if mongoUri == "" {
+		t.Skip("MONGO_URI is not set, skipping MongoDB test")
+	}
 	suite.Run(t, new(MongoTestSuite))
 }
 
 func BenchmarkMongo_CountItems(b *testing.B) {
+	if mongoUri == "" {
+		b.Skip("MONGO_URI is not set, skipping MongoDB benchmark")
+	}
 	ctx := b.Context()
 	var err error
 

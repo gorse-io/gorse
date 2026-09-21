@@ -22,7 +22,7 @@ import (
 	"golang.org/x/sys/cpu"
 )
 
-//go:generate goat src/floats_rvv.c -O3 -march=rv64imafdv
+//go:generate go tool goat src/floats_rvv.c -O3 -march=rv64imafdv
 
 type Feature uint64
 
@@ -45,6 +45,14 @@ func (feature Feature) String() string {
 	} else {
 		return "RV"
 	}
+}
+
+func (Feature) fromFloat32(a []float32, dst []uint16) {
+	fromFloat32(a, dst)
+}
+
+func (Feature) toFloat32(a []uint16, dst []float32) {
+	toFloat32(a, dst)
 }
 
 func (feature Feature) mulConstAddTo(a []float32, b float32, c []float32, dst []float32) {

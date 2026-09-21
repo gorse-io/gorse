@@ -22,6 +22,7 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/klauspost/cpuid/v2"
 	"github.com/stretchr/testify/suite"
 	"golang.org/x/sys/cpu"
 )
@@ -33,13 +34,16 @@ func init() {
 	if cpu.X86.HasAVX {
 		supportedFeatures = append(supportedFeatures, AVX)
 	}
+	if cpu.X86.HasAVX && cpuid.CPU.Supports(cpuid.F16C) {
+		supportedFeatures = append(supportedFeatures, AVX|F16C)
+	}
 	if cpu.X86.HasAVX && cpu.X86.HasFMA && cpu.X86.HasAVX512F {
 		supportedFeatures = append(supportedFeatures, AVX512)
 	}
 }
 
 func TestAVX(t *testing.T) {
-	suite.Run(t, &SIMDTestSuite{Feature: AVX})
+	suite.Run(t, &SIMDTestSuite{Feature: AVX | F16C})
 }
 
 func TestAVX512(t *testing.T) {

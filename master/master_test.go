@@ -17,10 +17,12 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
+	"github.com/gorse-io/gorse/storage/vectors"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -29,7 +31,12 @@ type MasterTestSuite struct {
 	Master
 }
 
+func (s *MasterTestSuite) SetupSuite() {
+	log.SetTestLogger(s.T())
+}
+
 func (s *MasterTestSuite) SetupTest() {
+	log.SetTestLogger(s.T())
 	// open database
 	var err error
 	s.tracer = monitor.NewTracer("test")
@@ -38,16 +45,21 @@ func (s *MasterTestSuite) SetupTest() {
 	s.NoError(err)
 	s.CacheClient, err = cache.Open(fmt.Sprintf("sqlite://%s/cache.db", s.T().TempDir()), "")
 	s.NoError(err)
+	s.VectorClient, err = vectors.Open(fmt.Sprintf("xvec://%s/vectors", s.T().TempDir()), "")
+	s.NoError(err)
 	// init database
 	err = s.DataClient.Init()
 	s.NoError(err)
 	err = s.CacheClient.Init()
+	s.NoError(err)
+	err = s.VectorClient.Init()
 	s.NoError(err)
 }
 
 func (s *MasterTestSuite) TearDownTest() {
 	s.NoError(s.DataClient.Close())
 	s.NoError(s.CacheClient.Close())
+	s.NoError(s.VectorClient.Close())
 }
 
 func TestMaster(t *testing.T) {

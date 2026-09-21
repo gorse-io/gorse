@@ -18,6 +18,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/gorse-io/gorse/common/log"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -26,7 +27,12 @@ type ClientTestSuite struct {
 	s *MockServer
 }
 
+func (suite *ClientTestSuite) SetupTest() {
+	log.SetTestLogger(suite.T())
+}
+
 func (suite *ClientTestSuite) SetupSuite() {
+	log.SetTestLogger(suite.T())
 	suite.s = NewMockServer()
 	go func() {
 		err := suite.s.Start()

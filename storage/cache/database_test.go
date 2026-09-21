@@ -15,7 +15,6 @@ package cache
 
 import (
 	"context"
-	"io"
 	"math"
 	"math/rand"
 	"os"
@@ -24,7 +23,8 @@ import (
 	"time"
 
 	"github.com/fxtlabs/primes"
-	"github.com/juju/errors"
+	"github.com/gorse-io/gorse/common/log"
+	"github.com/gorse-io/gorse/storage"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
@@ -43,6 +43,7 @@ func (suite *baseTestSuite) TearDownSuite() {
 }
 
 func (suite *baseTestSuite) SetupTest() {
+	log.SetTestLogger(suite.T())
 	err := suite.Database.Ping()
 	suite.NoError(err)
 	err = suite.Database.Purge()
@@ -186,45 +187,6 @@ func (suite *baseTestSuite) TestPurge() {
 	suite.NoError(err)
 }
 
-func (suite *baseTestSuite) TestPushPop() {
-	ctx := suite.T().Context()
-	err := suite.Push(ctx, "a", "1")
-	suite.NoError(err)
-	err = suite.Push(ctx, "a", "2")
-	suite.NoError(err)
-	count, err := suite.Remain(ctx, "a")
-	suite.NoError(err)
-	suite.Equal(int64(2), count)
-
-	err = suite.Push(ctx, "b", "1")
-	suite.NoError(err)
-	err = suite.Push(ctx, "b", "2")
-	suite.NoError(err)
-	err = suite.Push(ctx, "b", "1")
-	suite.NoError(err)
-	count, err = suite.Remain(ctx, "b")
-	suite.NoError(err)
-	suite.Equal(int64(2), count)
-
-	value, err := suite.Pop(ctx, "a")
-	suite.NoError(err)
-	suite.Equal("1", value)
-	value, err = suite.Pop(ctx, "a")
-	suite.NoError(err)
-	suite.Equal("2", value)
-	_, err = suite.Pop(ctx, "a")
-	suite.ErrorIs(err, io.EOF)
-
-	value, err = suite.Pop(ctx, "b")
-	suite.NoError(err)
-	suite.Equal("2", value)
-	value, err = suite.Pop(ctx, "b")
-	suite.NoError(err)
-	suite.Equal("1", value)
-	_, err = suite.Pop(ctx, "b")
-	suite.ErrorIs(err, io.EOF)
-}
-
 func (suite *baseTestSuite) TestDocument() {
 	ts := time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)
 	ctx := suite.T().Context()
@@ -318,7 +280,7 @@ func (suite *baseTestSuite) TestDocument() {
 
 	// delete nothing
 	err = suite.DeleteScores(ctx, []string{"a"}, ScoreCondition{})
-	suite.ErrorIs(err, errors.NotValid)
+	suite.ErrorIs(err, storage.ErrInvalidArgument)
 	// delete by value
 	err = suite.DeleteScores(ctx, []string{"a"}, ScoreCondition{Id: new("5")})
 	suite.NoError(err)

@@ -18,6 +18,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/gorse-io/gorse/common/log"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -26,14 +27,8 @@ var (
 )
 
 func init() {
-	// get environment variables
-	env := func(key, defaultValue string) string {
-		if value := os.Getenv(key); value != "" {
-			return value
-		}
-		return defaultValue
-	}
-	qdrantUri = env("QDRANT_URI", "qdrant://127.0.0.1:6334")
+	// os.Setenv("QDRANT_URI", "qdrant://127.0.0.1:6334")
+	qdrantUri = os.Getenv("QDRANT_URI")
 }
 
 type QdrantTestSuite struct {
@@ -41,11 +36,30 @@ type QdrantTestSuite struct {
 }
 
 func (suite *QdrantTestSuite) SetupSuite() {
+	log.SetTestLogger(suite.T())
 	var err error
 	suite.Database, err = Open(qdrantUri, "gorse_")
 	suite.NoError(err)
 }
 
+func (suite *QdrantTestSuite) TestQuantization() {
+	suite.testQuantization(QuantizationNone, 0)
+	suite.testQuantization(QuantizationRQ, 0)
+	suite.testQuantization(QuantizationRQ, 1)
+	suite.testQuantization(QuantizationRQ, 2)
+	suite.testQuantization(QuantizationRQ, 4)
+	suite.testQuantization(QuantizationSQ, 0)
+	suite.testQuantization(QuantizationSQ, 8)
+	suite.testQuantization(QuantizationPQ, 0)
+	suite.testQuantization(QuantizationPQ, 1)
+	suite.testQuantization(QuantizationPQ, 2)
+	suite.testQuantization(QuantizationPQ, 4)
+	suite.testQuantization(QuantizationPQ, 8)
+}
+
 func TestQdrant(t *testing.T) {
+	if qdrantUri == "" {
+		t.Skip("QDRANT_URI is not set, skipping Qdrant test")
+	}
 	suite.Run(t, new(QdrantTestSuite))
 }

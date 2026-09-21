@@ -5,12 +5,41 @@ on:
     types: [published]
 
 jobs:
-  binaries:
-    name: binaries
-    runs-on: macos-latest
+  binaries_linux_windows:
+    name: binaries (linux/windows)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Pull source
         uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: ./go.mod
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v7
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  binaries_darwin:
+    name: binaries (darwin)
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Pull source
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -19,16 +48,6 @@ jobs:
 
       - name: Install gox
         run: go install github.com/mitchellh/gox@master
-
-      - name: Build release (windows and linux)
-        run: >
-          gox -output="{{.OS}}/{{.Arch}}/{{.Dir}}" \
-            -osarch='windows/arm64 windows/amd64 linux/arm64 linux/amd64 linux/riscv64' -ldflags="
-            -X 'github.com/gorse-io/gorse/cmd/version.Version=$(git describe --tags $(git rev-parse HEAD))'
-            -X 'github.com/gorse-io/gorse/cmd/version.GitCommit=$(git rev-parse HEAD)'
-            -X 'github.com/gorse-io/gorse/cmd/version.BuildTime=$(date)'" ./...
-        env:
-          CGO_ENABLED: 0
 
       - name: Build release (darwin)
         run: >
@@ -42,40 +61,26 @@ jobs:
         run: brew install zip
 
       - name: Zip binaries
-        run: |
-          zip -j gorse_linux_amd64.zip linux/amd64/gorse-*
-          zip -j gorse_linux_arm64.zip linux/arm64/gorse-*
-          zip -j gorse_linux_riscv64.zip linux/riscv64/gorse-*
-          zip -j gorse_windows_amd64.zip windows/amd64/gorse-*
-          zip -j gorse_windows_arm64.zip windows/arm64/gorse-*
-          zip -j gorse_darwin_arm64.zip darwin/arm64/gorse-*
+        run: zip -j gorse_darwin_arm64.zip darwin/arm64/gorse-*
 
-      - name: Prepare standalone CLI binaries
-        run: |
-          cp linux/amd64/gorse-cli gorse-cli_linux_amd64
-          cp linux/arm64/gorse-cli gorse-cli_linux_arm64
-          cp linux/riscv64/gorse-cli gorse-cli_linux_riscv64
-          cp windows/amd64/gorse-cli.exe gorse-cli_windows_amd64.exe
-          cp windows/arm64/gorse-cli.exe gorse-cli_windows_arm64.exe
-          cp darwin/arm64/gorse-cli gorse-cli_darwin_arm64
+      - name: Prepare standalone CLI binary
+        run: cp darwin/arm64/gorse-cli gorse-cli_darwin_arm64
 
       - name: Upload release
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: gorse_*_*.zip
+          file: gorse_darwin_arm64.zip
           tag: ${{ github.ref }}
           overwrite: true
-          file_glob: true
 
-      - name: Upload standalone CLI binaries
+      - name: Upload standalone CLI binary
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: gorse-cli_*
+          file: gorse-cli_darwin_arm64
           tag: ${{ github.ref }}
           overwrite: true
-          file_glob: true
 
   docker_images:
     name: docker images

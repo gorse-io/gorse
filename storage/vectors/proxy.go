@@ -16,12 +16,16 @@ package vectors
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"time"
 
 	"github.com/gorse-io/gorse/protocol"
-	"github.com/juju/errors"
+	"github.com/gorse-io/gorse/storage"
+	"github.com/pkg/errors"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
@@ -53,12 +57,36 @@ func (p *ProxyServer) ListCollections(ctx context.Context, _ *protocol.ListColle
 	return &protocol.ListCollectionsResponse{Collections: collections}, nil
 }
 
+func (p *ProxyServer) DescribeCollection(ctx context.Context, request *protocol.DescribeCollectionRequest) (*protocol.DescribeCollectionResponse, error) {
+	info, err := p.database.DescribeCollection(ctx, request.GetName())
+	if err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			return nil, status.Error(codes.NotFound, err.Error())
+		}
+		return nil, err
+	}
+	distance, err := distanceToProtoDistance(info.Distance)
+	if err != nil {
+		return nil, err
+	}
+	return &protocol.DescribeCollectionResponse{
+		Name:       info.Name,
+		Dimensions: int32(info.Dimension),
+		Distance:   distance,
+		Config: &protocol.VectorConfig{
+			QuantizationType: string(info.Type),
+			QuantizationBits: int32(info.Bits),
+		},
+	}, nil
+}
+
 func (p *ProxyServer) AddCollection(ctx context.Context, request *protocol.AddCollectionRequest) (*protocol.AddCollectionResponse, error) {
 	distance, err := protoDistanceToDistance(request.GetDistance())
 	if err != nil {
 		return nil, err
 	}
-	err = p.database.AddCollection(ctx, request.GetName(), int(request.GetDimensions()), distance)
+	config := protoVectorConfigToVectorConfig(request.GetConfig())
+	err = p.database.AddCollection(ctx, request.GetName(), int(request.GetDimensions()), distance, config)
 	if err != nil {
 		return nil, err
 	}
@@ -73,6 +101,14 @@ func (p *ProxyServer) DeleteCollection(ctx context.Context, request *protocol.De
 	return &protocol.DeleteCollectionResponse{}, nil
 }
 
+func (p *ProxyServer) CountVectors(ctx context.Context, request *protocol.CountVectorsRequest) (*protocol.CountVectorsResponse, error) {
+	count, err := p.database.CountVectors(ctx, request.GetCollection())
+	if err != nil {
+		return nil, err
+	}
+	return &protocol.CountVectorsResponse{Count: count}, nil
+}
+
 func (p *ProxyServer) AddVectors(ctx context.Context, request *protocol.AddVectorsRequest) (*protocol.AddVectorsResponse, error) {
 	vectors := make([]Vector, len(request.Vectors))
 	for i, vector := range request.Vectors {
@@ -82,7 +118,9 @@ func (p *ProxyServer) AddVectors(ctx context.Context, request *protocol.AddVecto
 		}
 		vectors[i] = Vector{
 			Id:         vector.GetId(),
-			Vector:     vector.GetValues(),
+			Values:     vector.GetValues(),
+			Indices:    vector.GetIndices(),
+			IsHidden:   vector.GetIsHidden(),
 			Categories: vector.GetCategories(),
 			Timestamp:  timestamp,
 		}
@@ -92,6 +130,25 @@ func (p *ProxyServer) AddVectors(ctx context.Context, request *protocol.AddVecto
 		return nil, err
 	}
 	return &protocol.AddVectorsResponse{}, nil
+}
+
+func (p *ProxyServer) GetVectors(ctx context.Context, request *protocol.GetVectorsRequest) (*protocol.GetVectorsResponse, error) {
+	vectors, err := p.database.GetVectors(ctx, request.GetCollection(), request.GetIds())
+	if err != nil {
+		return nil, err
+	}
+	pbVectors := make([]*protocol.Vector, len(vectors))
+	for i, vector := range vectors {
+		pbVectors[i] = &protocol.Vector{
+			Id:         vector.Id,
+			Values:     vector.Values,
+			Indices:    vector.Indices,
+			IsHidden:   vector.IsHidden,
+			Categories: vector.Categories,
+			Timestamp:  timestamppb.New(vector.Timestamp),
+		}
+	}
+	return &protocol.GetVectorsResponse{Vectors: pbVectors}, nil
 }
 
 func (p *ProxyServer) DeleteVectors(ctx context.Context, request *protocol.DeleteVectorsRequest) (*protocol.DeleteVectorsResponse, error) {
@@ -107,16 +164,25 @@ func (p *ProxyServer) DeleteVectors(ctx context.Context, request *protocol.Delet
 }
 
 func (p *ProxyServer) QueryVectors(ctx context.Context, request *protocol.QueryVectorsRequest) (*protocol.QueryVectorsResponse, error) {
-	results, err := p.database.QueryVectors(ctx, request.GetCollection(), request.GetQuery(), request.GetCategories(), int(request.GetTopK()))
+	query := request.GetQuery()
+	results, err := p.database.QueryVectors(ctx, request.GetCollection(), Vector{
+		Values:  query.GetValues(),
+		Indices: query.GetIndices(),
+	}, request.GetCategories(), int(request.GetTopK()))
 	if err != nil {
 		return nil, err
 	}
-	pbVectors := make([]*protocol.Vector, len(results))
+	pbVectors := make([]*protocol.ScoredVector, len(results))
 	for i, result := range results {
-		pbVectors[i] = &protocol.Vector{
-			Id:         result.Id,
-			Values:     result.Vector,
-			Categories: result.Categories,
+		pbVectors[i] = &protocol.ScoredVector{
+			Vector: &protocol.Vector{
+				Id:         result.Id,
+				Values:     result.Vector.Values,
+				Indices:    result.Vector.Indices,
+				IsHidden:   result.IsHidden,
+				Categories: result.Categories,
+			},
+			Score: result.Score,
 		}
 	}
 	return &protocol.QueryVectorsResponse{Vectors: pbVectors}, nil
@@ -136,7 +202,7 @@ func (p ProxyClient) Init() error {
 	return nil
 }
 
-func (p ProxyClient) Optimize() error {
+func (p ProxyClient) Optimize(_ context.Context, _ string) error {
 	return nil
 }
 
@@ -152,7 +218,32 @@ func (p ProxyClient) ListCollections(ctx context.Context) ([]string, error) {
 	return resp.Collections, nil
 }
 
-func (p ProxyClient) AddCollection(ctx context.Context, name string, dimensions int, distance Distance) error {
+func (p ProxyClient) DescribeCollection(ctx context.Context, name string) (*CollectionInfo, error) {
+	resp, err := p.VectorStoreClient.DescribeCollection(ctx, &protocol.DescribeCollectionRequest{Name: name})
+	if err != nil {
+		if status.Code(err) == codes.NotFound {
+			return nil, fmt.Errorf("collection %s: %w", name, storage.ErrNotFound)
+		}
+		return nil, err
+	}
+	distance, err := protoDistanceToDistance(resp.GetDistance())
+	if err != nil {
+		return nil, err
+	}
+	config := VectorConfig{}
+	if resp.GetConfig() != nil {
+		config.Type = QuantizationType(resp.GetConfig().GetQuantizationType())
+		config.Bits = int(resp.GetConfig().GetQuantizationBits())
+	}
+	return &CollectionInfo{
+		Name:         resp.GetName(),
+		Dimension:    int(resp.GetDimensions()),
+		Distance:     distance,
+		VectorConfig: config,
+	}, nil
+}
+
+func (p ProxyClient) AddCollection(ctx context.Context, name string, dimensions int, distance Distance, config VectorConfig) error {
 	pbDistance, err := distanceToProtoDistance(distance)
 	if err != nil {
 		return err
@@ -161,6 +252,7 @@ func (p ProxyClient) AddCollection(ctx context.Context, name string, dimensions 
 		Name:       name,
 		Dimensions: int32(dimensions),
 		Distance:   pbDistance,
+		Config:     vectorConfigToProtoVectorConfig(config),
 	})
 	return err
 }
@@ -170,12 +262,22 @@ func (p ProxyClient) DeleteCollection(ctx context.Context, name string) error {
 	return err
 }
 
+func (p ProxyClient) CountVectors(ctx context.Context, collection string) (int64, error) {
+	resp, err := p.VectorStoreClient.CountVectors(ctx, &protocol.CountVectorsRequest{Collection: collection})
+	if err != nil {
+		return 0, err
+	}
+	return resp.GetCount(), nil
+}
+
 func (p ProxyClient) AddVectors(ctx context.Context, collection string, vectors []Vector) error {
 	pbVectors := make([]*protocol.Vector, len(vectors))
 	for i, vector := range vectors {
 		pbVectors[i] = &protocol.Vector{
 			Id:         vector.Id,
-			Values:     vector.Vector,
+			Values:     vector.Values,
+			Indices:    vector.Indices,
+			IsHidden:   vector.IsHidden,
 			Categories: vector.Categories,
 			Timestamp:  timestamppb.New(vector.Timestamp),
 		}
@@ -187,6 +289,32 @@ func (p ProxyClient) AddVectors(ctx context.Context, collection string, vectors 
 	return err
 }
 
+func (p ProxyClient) GetVectors(ctx context.Context, collection string, ids []string) ([]Vector, error) {
+	resp, err := p.VectorStoreClient.GetVectors(ctx, &protocol.GetVectorsRequest{
+		Collection: collection,
+		Ids:        ids,
+	})
+	if err != nil {
+		return nil, err
+	}
+	vectors := make([]Vector, len(resp.GetVectors()))
+	for i, vector := range resp.GetVectors() {
+		timestamp := time.Time{}
+		if vector.GetTimestamp() != nil {
+			timestamp = vector.GetTimestamp().AsTime()
+		}
+		vectors[i] = Vector{
+			Id:         vector.GetId(),
+			Values:     vector.GetValues(),
+			Indices:    vector.GetIndices(),
+			IsHidden:   vector.GetIsHidden(),
+			Categories: vector.GetCategories(),
+			Timestamp:  timestamp,
+		}
+	}
+	return vectors, nil
+}
+
 func (p ProxyClient) DeleteVectors(ctx context.Context, collection string, timestamp time.Time) error {
 	_, err := p.VectorStoreClient.DeleteVectors(ctx, &protocol.DeleteVectorsRequest{
 		Collection: collection,
@@ -195,22 +323,31 @@ func (p ProxyClient) DeleteVectors(ctx context.Context, collection string, times
 	return err
 }
 
-func (p ProxyClient) QueryVectors(ctx context.Context, collection string, q []float32, categories []string, topK int) ([]Vector, error) {
+func (p ProxyClient) QueryVectors(ctx context.Context, collection string, q Vector, categories []string, topK int) ([]ScoredVector, error) {
 	resp, err := p.VectorStoreClient.QueryVectors(ctx, &protocol.QueryVectorsRequest{
 		Collection: collection,
-		Query:      q,
+		Query: &protocol.Vector{
+			Values:  q.Values,
+			Indices: q.Indices,
+		},
 		Categories: categories,
 		TopK:       int32(topK),
 	})
 	if err != nil {
 		return nil, err
 	}
-	results := make([]Vector, len(resp.Vectors))
-	for i, vector := range resp.Vectors {
-		results[i] = Vector{
-			Id:         vector.GetId(),
-			Vector:     vector.GetValues(),
-			Categories: vector.GetCategories(),
+	results := make([]ScoredVector, len(resp.Vectors))
+	for i, scored := range resp.Vectors {
+		vector := scored.GetVector()
+		results[i] = ScoredVector{
+			Vector: Vector{
+				Id:         vector.GetId(),
+				Values:     vector.GetValues(),
+				Indices:    vector.GetIndices(),
+				IsHidden:   vector.GetIsHidden(),
+				Categories: vector.GetCategories(),
+			},
+			Score: scored.GetScore(),
 		}
 	}
 	return results, nil
@@ -225,7 +362,7 @@ func distanceToProtoDistance(distance Distance) (protocol.Distance, error) {
 	case Dot:
 		return protocol.Distance_Dot, nil
 	default:
-		return protocol.Distance_Unknown, errors.NotSupportedf("distance method")
+		return protocol.Distance_Unknown, fmt.Errorf("distance method %w", storage.ErrNotSupported)
 	}
 }
 
@@ -238,6 +375,23 @@ func protoDistanceToDistance(distance protocol.Distance) (Distance, error) {
 	case protocol.Distance_Dot:
 		return Dot, nil
 	default:
-		return Cosine, errors.NotSupportedf("distance method")
+		return Cosine, fmt.Errorf("distance method %w", storage.ErrNotSupported)
 	}
+}
+
+func vectorConfigToProtoVectorConfig(config VectorConfig) *protocol.VectorConfig {
+	return &protocol.VectorConfig{
+		QuantizationType: string(config.Type),
+		QuantizationBits: int32(config.Bits),
+	}
+}
+
+func protoVectorConfigToVectorConfig(config *protocol.VectorConfig) VectorConfig {
+	vectorConfig := VectorConfig{}
+	if config == nil {
+		return vectorConfig
+	}
+	vectorConfig.Type = QuantizationType(config.GetQuantizationType())
+	vectorConfig.Bits = int(config.GetQuantizationBits())
+	return vectorConfig
 }

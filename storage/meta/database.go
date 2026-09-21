@@ -22,7 +22,7 @@ import (
 	"github.com/XSAM/otelsql"
 	"github.com/gorse-io/gorse/model"
 	"github.com/gorse-io/gorse/storage"
-	"github.com/juju/errors"
+	"github.com/pkg/errors"
 	"github.com/samber/lo"
 	semconv "go.opentelemetry.io/otel/semconv/v1.12.0"
 	"golang.org/x/exp/maps"
@@ -82,7 +82,7 @@ func Open(path string, ttl time.Duration) (Database, error) {
 			{"_pragma", "busy_timeout(10000)"},
 			{"_pragma", "journal_mode(wal)"},
 		}); err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 		// connect to database
 		database := new(SQLite)
@@ -91,7 +91,7 @@ func Open(path string, ttl time.Duration) (Database, error) {
 			otelsql.WithAttributes(semconv.DBSystemSqlite),
 			otelsql.WithSpanOptions(otelsql.SpanOptions{DisableErrSkip: true}),
 		); err != nil {
-			return nil, errors.Trace(err)
+			return nil, errors.WithStack(err)
 		}
 		return database, nil
 	}
