@@ -26,7 +26,9 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"unsafe"
 
+	"github.com/gorse-io/gorse/common/floats"
 	"github.com/gorse-io/gorse/storage"
 	"github.com/gorse-io/xvec"
 	"github.com/pkg/errors"
@@ -486,17 +488,11 @@ func xvecDistance(metric xvec.MetricType) (Distance, error) {
 }
 
 func xvecVectorFP16(values []float32) xvec.VectorFP16 {
-	vector := make(xvec.VectorFP16, len(values))
-	for i, value := range values {
-		vector[i] = xvec.Float16FromFloat32(value)
-	}
-	return vector
+	bits := floats.FromFloat32(values)
+	return unsafe.Slice((*xvec.Float16)(unsafe.Pointer(unsafe.SliceData(bits))), len(bits))
 }
 
 func float32Vector(values xvec.VectorFP16) []float32 {
-	vector := make([]float32, len(values))
-	for i, value := range values {
-		vector[i] = value.Float32()
-	}
-	return vector
+	bits := unsafe.Slice((*uint16)(unsafe.Pointer(unsafe.SliceData(values))), len(values))
+	return floats.ToFloat32(bits)
 }
