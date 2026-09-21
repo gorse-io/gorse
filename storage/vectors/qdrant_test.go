@@ -19,6 +19,8 @@ import (
 	"testing"
 
 	"github.com/gorse-io/gorse/common/log"
+	"github.com/qdrant/go-client/qdrant"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -29,6 +31,11 @@ var (
 func init() {
 	// os.Setenv("QDRANT_URI", "qdrant://127.0.0.1:6334")
 	qdrantUri = os.Getenv("QDRANT_URI")
+}
+
+func TestQdrantDenseVectorParamsUseFP16(t *testing.T) {
+	params := qdrantDenseVectorParams(4, qdrant.Distance_Cosine)
+	require.Equal(t, qdrant.Datatype_Float16, params.GetDatatype())
 }
 
 type QdrantTestSuite struct {
