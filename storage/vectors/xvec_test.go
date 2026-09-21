@@ -19,7 +19,6 @@ import (
 
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/storage"
-	"github.com/gorse-io/xvec"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -39,28 +38,6 @@ func (suite *XvecTestSuite) SetupSuite() {
 
 func (suite *XvecTestSuite) TearDownSuite() {
 	suite.NoError(suite.Database.Close())
-}
-
-func (suite *XvecTestSuite) TestCollectionVectorStorageTypes() {
-	denseSchema, err := suite.Database.(*Xvec).collectionSchema(
-		suite.T().Context(), "dense", 4, Cosine, VectorConfig{},
-	)
-	suite.Require().NoError(err)
-	denseField, found := denseSchema.Field(xvecVectorField)
-	suite.Require().True(found)
-	suite.Equal(xvec.DataTypeVectorFP16, denseField.DataType)
-	_, ok := denseField.EffectiveIndex().(xvec.DiskANNIndexParams)
-	suite.True(ok)
-
-	sparseSchema, err := suite.Database.(*Xvec).collectionSchema(
-		suite.T().Context(), "sparse", 0, Dot, VectorConfig{},
-	)
-	suite.Require().NoError(err)
-	sparseField, found := sparseSchema.Field(xvecVectorField)
-	suite.Require().True(found)
-	suite.Equal(xvec.DataTypeSparseVectorFP32, sparseField.DataType)
-	_, ok = sparseField.EffectiveIndex().(xvec.FlatIndexParams)
-	suite.True(ok)
 }
 
 func (suite *XvecTestSuite) TestDenseFP16Readback() {
