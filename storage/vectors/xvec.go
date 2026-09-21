@@ -245,7 +245,7 @@ func (db *Xvec) collectionSchema(ctx context.Context, name string, dimensions in
 		}
 		vectorField = xvec.FieldSchema{Name: xvecVectorField, DataType: xvec.DataTypeSparseVectorFP32, Index: xvec.NewFlatIndexParams(metric)}
 	} else {
-		vectorField = xvec.FieldSchema{Name: xvecVectorField, DataType: xvec.DataTypeVectorFP32, Dimension: uint32(dimensions), Index: xvec.NewDiskANNIndexParams(metric)}
+		vectorField = xvec.FieldSchema{Name: xvecVectorField, DataType: xvec.DataTypeVectorFP16, Dimension: uint32(dimensions), Index: xvec.NewDiskANNIndexParams(metric)}
 	}
 	physicalName := db.tablePrefix + name
 	schema := xvec.NewCollectionSchema(physicalName,
@@ -304,7 +304,7 @@ func (db *Xvec) AddVectors(ctx context.Context, name string, vectors []Vector) e
 	schema := collection.Schema()
 	documents := make([]xvec.Document, len(vectors))
 	for i, vector := range vectors {
-		var value any = xvec.VectorFP32(vector.Values)
+		var value any = xvecVectorFP16(vector.Values)
 		if len(vector.Indices) > 0 {
 			value = xvec.SparseVectorFP32{Indices: vector.Indices, Values: vector.Values}
 		}
@@ -355,8 +355,8 @@ func (db *Xvec) GetVectors(ctx context.Context, name string, ids []string) ([]Ve
 		}
 		if value, found := document.Field(xvecVectorField); found {
 			switch value := value.(type) {
-			case xvec.VectorFP32:
-				vector.Values = []float32(value)
+			case xvec.VectorFP16:
+				vector.Values = float32Vector(value)
 			case xvec.SparseVectorFP32:
 				vector.Indices = value.Indices
 				vector.Values = value.Values
@@ -405,7 +405,7 @@ func (db *Xvec) QueryVectors(ctx context.Context, name string, q Vector, categor
 		query.SparseVector = xvec.SparseVectorFP32{Indices: q.Indices, Values: q.Values}
 		query.Params = xvec.NewFlatQueryParams()
 	} else {
-		query.DenseVector = xvec.VectorFP32(q.Values)
+		query.DenseVector = xvecVectorFP16(q.Values)
 		query.Params = xvec.NewDiskANNQueryParams()
 	}
 	documents, err := collection.Query(ctx, query)
@@ -436,8 +436,8 @@ func (db *Xvec) QueryVectors(ctx context.Context, name string, q Vector, categor
 		}
 		if value, found := document.Field(xvecVectorField); found {
 			switch vector := value.(type) {
-			case xvec.VectorFP32:
-				result.Vector.Values = []float32(vector)
+			case xvec.VectorFP16:
+				result.Vector.Values = float32Vector(vector)
 			case xvec.SparseVectorFP32:
 				result.Vector.Indices = vector.Indices
 				result.Vector.Values = vector.Values
@@ -483,4 +483,20 @@ func xvecDistance(metric xvec.MetricType) (Distance, error) {
 	default:
 		return Cosine, fmt.Errorf("xvec metric %s %w", metric, storage.ErrNotSupported)
 	}
+}
+
+func xvecVectorFP16(values []float32) xvec.VectorFP16 {
+	vector := make(xvec.VectorFP16, len(values))
+	for i, value := range values {
+		vector[i] = xvec.Float16FromFloat32(value)
+	}
+	return vector
+}
+
+func float32Vector(values xvec.VectorFP16) []float32 {
+	vector := make([]float32, len(values))
+	for i, value := range values {
+		vector[i] = value.Float32()
+	}
+	return vector
 }
