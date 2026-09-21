@@ -156,18 +156,14 @@ func (db *Qdrant) AddCollection(ctx context.Context, name string, dimensions int
 	return db.createCollection(ctx, name, &qdrant.CreateCollection{
 		CollectionName: name,
 		VectorsConfig: qdrant.NewVectorsConfigMap(map[string]*qdrant.VectorParams{
-			qdrantVectorName: qdrantDenseVectorParams(dimensions, qdrantDistance),
+			qdrantVectorName: {
+				Size:     uint64(dimensions),
+				Distance: qdrantDistance,
+				Datatype: qdrant.Datatype_Float16.Enum(),
+			},
 		}),
 		QuantizationConfig: quantizationConfig,
 	})
-}
-
-func qdrantDenseVectorParams(dimensions int, distance qdrant.Distance) *qdrant.VectorParams {
-	return &qdrant.VectorParams{
-		Size:     uint64(dimensions),
-		Distance: distance,
-		Datatype: qdrant.Datatype_Float16.Enum(),
-	}
 }
 
 func (db *Qdrant) createCollection(ctx context.Context, name string, request *qdrant.CreateCollection) error {
