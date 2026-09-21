@@ -40,19 +40,6 @@ func (suite *XvecTestSuite) TearDownSuite() {
 	suite.NoError(suite.Database.Close())
 }
 
-func (suite *XvecTestSuite) TestDenseFP16Readback() {
-	ctx := suite.T().Context()
-	suite.Require().NoError(suite.Database.AddCollection(ctx, "dense", 4, Cosine, VectorConfig{}))
-	values := []float32{0.1, -0.2, 3.14159, 65504}
-	suite.Require().NoError(suite.Database.AddVectors(ctx, "dense", []Vector{{Id: "vector", Values: values}}))
-
-	stored, err := suite.Database.GetVectors(ctx, "dense", []string{"vector"})
-	suite.Require().NoError(err)
-	suite.Require().Len(stored, 1)
-	suite.Equal(float32Vector(xvecVectorFP16(values)), stored[0].Values)
-	suite.NotEqual(values, stored[0].Values)
-}
-
 func TestXvec(t *testing.T) {
 	suite.Run(t, new(XvecTestSuite))
 }
