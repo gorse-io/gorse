@@ -15,6 +15,7 @@
 package logics
 
 import (
+	"context"
 	"testing"
 
 	mapset "github.com/deckarep/golang-set/v2"
@@ -56,4 +57,13 @@ func TestAgentMaxIterations(t *testing.T) {
 
 	agent.config.MaxIterations = 2
 	assert.Equal(t, 2, agent.maxIterations())
+}
+
+func TestAgentParseRecommendationsSkipsHiddenItems(t *testing.T) {
+	agent := Agent{excludeSet: mapset.NewSet[string](), cacheSize: 10}
+	scores, err := agent.parseRecommendations(context.Background(), `["hidden"]`, map[string]data.Item{
+		"hidden": {ItemId: "hidden", IsHidden: true},
+	})
+	require.NoError(t, err)
+	assert.Empty(t, scores)
 }

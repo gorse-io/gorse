@@ -264,7 +264,7 @@ func (a *Agent) callSearchItems(ctx context.Context, arguments string) ([]data.I
 	}
 	items := lo.FilterMap(scoredItems, func(scoredItem data.ScoredItem, _ int) (data.Item, bool) {
 		item := scoredItem.Item
-		return item, !a.excludeSet.Contains(item.ItemId) && a.matchCategories(item.Categories)
+		return item, !item.IsHidden && !a.excludeSet.Contains(item.ItemId) && a.matchCategories(item.Categories)
 	})
 	if args.N > 0 && len(items) > args.N {
 		items = items[:args.N]
@@ -315,7 +315,7 @@ func (a *Agent) parseRecommendations(ctx context.Context, completion string, can
 			continue
 		}
 		item, ok := candidateItems[id]
-		if !ok || !a.matchCategories(item.Categories) {
+		if !ok || item.IsHidden || !a.matchCategories(item.Categories) {
 			continue
 		}
 		seen.Add(id)
