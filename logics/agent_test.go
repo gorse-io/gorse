@@ -61,7 +61,7 @@ func TestAgentMaxIterations(t *testing.T) {
 
 func TestAgentParseRecommendationsSkipsHiddenItems(t *testing.T) {
 	agent := Agent{excludeSet: mapset.NewSet[string](), cacheSize: 10}
-	scores, err := agent.parseRecommendations(context.Background(), `["hidden"]`, map[string]data.Item{
+	scores, err := agent.parseRecommendations(context.Background(), "```json\n[\"hidden\"]\n```", map[string]data.Item{
 		"hidden": {ItemId: "hidden", IsHidden: true},
 	})
 	require.NoError(t, err)
