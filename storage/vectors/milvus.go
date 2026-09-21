@@ -162,7 +162,7 @@ func (db *Milvus) AddCollection(ctx context.Context, name string, dimensions int
 	if dimensions == 0 {
 		schema.WithField(entity.NewField().WithName(milvusVectorField).WithDataType(entity.FieldTypeSparseVector))
 	} else {
-		schema.WithField(milvusDenseVectorField(dimensions))
+		schema.WithField(entity.NewField().WithName(milvusVectorField).WithDataType(entity.FieldTypeFloat16Vector).WithDim(int64(dimensions)))
 	}
 
 	err := db.client.CreateCollection(ctx, milvusclient.NewCreateCollectionOption(name, schema).WithShardNum(entity.DefaultShardNumber))
@@ -214,10 +214,6 @@ func (db *Milvus) AddCollection(ctx context.Context, name string, dimensions int
 		return errors.WithStack(err)
 	}
 	return errors.WithStack(loadTask.Await(ctx))
-}
-
-func milvusDenseVectorField(dimensions int) *entity.Field {
-	return entity.NewField().WithName(milvusVectorField).WithDataType(entity.FieldTypeFloat16Vector).WithDim(int64(dimensions))
 }
 
 func milvusVectorDimension(collection *entity.Collection) (int, error) {
@@ -302,7 +298,7 @@ func (db *Milvus) AddVectors(ctx context.Context, collection string, vectors []V
 		}
 		vectorCol = column.NewColumnSparseVectors(milvusVectorField, sparseData)
 	} else {
-		vectorCol = milvusDenseVectorColumn(data)
+		vectorCol = column.NewColumnFloat16VectorFromFp32Vector(milvusVectorField, len(data[0]), data)
 	}
 
 	_, err := db.client.Upsert(ctx, milvusclient.NewColumnBasedInsertOption(collection, idCol, categoriesCol, hiddenCol, timestampCol, vectorCol))
@@ -420,7 +416,7 @@ func (db *Milvus) QueryVectors(ctx context.Context, collection string, q Vector,
 			return nil, errors.WithStack(err)
 		}
 	} else {
-		query = milvusDenseQuery(q.Values)
+		query = entity.FloatVector(q.Values).ToFloat16Vector()
 	}
 	searchOption := milvusclient.NewSearchOption(collection, topK, []entity.Vector{query}).
 		WithANNSField(milvusVectorField).
@@ -499,14 +495,6 @@ func (db *Milvus) QueryVectors(ctx context.Context, collection string, q Vector,
 		}
 	}
 	return vectors, nil
-}
-
-func milvusDenseVectorColumn(data [][]float32) column.Column {
-	return column.NewColumnFloat16VectorFromFp32Vector(milvusVectorField, len(data[0]), data)
-}
-
-func milvusDenseQuery(values []float32) entity.Vector {
-	return entity.FloatVector(values).ToFloat16Vector()
 }
 
 func milvusIndex(metricType entity.MetricType, dimensions int, config VectorConfig) (index.Index, error) {
