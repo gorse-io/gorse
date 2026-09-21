@@ -20,6 +20,9 @@ import (
 
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/storage"
+	"github.com/milvus-io/milvus/client/v2/column"
+	"github.com/milvus-io/milvus/client/v2/entity"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -30,6 +33,15 @@ var (
 func init() {
 	// os.Setenv("MILVUS_URI", "milvus://127.0.0.1:19530")
 	milvusUri = os.Getenv("MILVUS_URI")
+}
+
+func TestMilvusDenseVectorStorageUsesFP16(t *testing.T) {
+	field := milvusDenseVectorField(4)
+	require.Equal(t, entity.FieldTypeFloat16Vector, field.DataType)
+
+	values := [][]float32{{0.1, -0.2, 3.14159, 65504}}
+	require.IsType(t, &column.ColumnFloat16Vector{}, milvusDenseVectorColumn(values))
+	require.IsType(t, entity.Float16Vector{}, milvusDenseQuery(values[0]))
 }
 
 type MilvusTestSuite struct {
