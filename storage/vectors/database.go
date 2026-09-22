@@ -101,18 +101,25 @@ type Vector struct {
 	Timestamp  time.Time `json:"-"`
 }
 
-func (v Vector) float32Values() []float32 {
+// Float32Values returns dense vector values as FP32.
+func (v Vector) Float32Values() []float32 {
 	if len(v.HValues) > 0 {
 		return floats.ToFloat32(v.HValues)
 	}
 	return v.Values
 }
 
-func (v Vector) float16Values() []uint16 {
+// Float16Values returns dense vector values as IEEE 754 FP16 bits.
+func (v Vector) Float16Values() []uint16 {
 	if len(v.HValues) > 0 {
 		return v.HValues
 	}
 	return floats.FromFloat32(v.Values)
+}
+
+// IsSparse reports whether the vector contains sparse values.
+func (v Vector) IsSparse() bool {
+	return len(v.HValues) == 0 && len(v.Indices) > 0
 }
 
 func uint16Bytes(values []uint16) []byte {

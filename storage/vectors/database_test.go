@@ -167,7 +167,7 @@ func (suite *vectorsTestSuite) TestHalfVectors() {
 	suite.Require().NoError(err)
 
 	vectorA := []float32{1, 0, 0, 0}
-	vectorB := []float32{0.9, 0.1, 0, 0}
+	vectorB := []float32{0, 1, 0, 0}
 	err = suite.Database.AddVectors(ctx, "test_half", []Vector{
 		{Id: "a", Values: []float32{0}, HValues: floats.FromFloat32(vectorA), Indices: []uint32{1}},
 		{Id: "b", HValues: floats.FromFloat32(vectorB)},

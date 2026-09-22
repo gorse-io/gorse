@@ -307,7 +307,7 @@ func (db *Xvec) AddVectors(ctx context.Context, name string, vectors []Vector) e
 	documents := make([]xvec.Document, len(vectors))
 	for i, vector := range vectors {
 		var value any = xvecVectorFP16(vector)
-		if len(vector.HValues) == 0 && len(vector.Indices) > 0 {
+		if vector.IsSparse() {
 			value = xvec.SparseVectorFP32{Indices: vector.Indices, Values: vector.Values}
 		}
 		document := xvec.Document{PrimaryKey: vector.Id, Fields: map[string]any{
@@ -403,7 +403,7 @@ func (db *Xvec) QueryVectors(ctx context.Context, name string, q Vector, categor
 			IncludeVectors: true,
 		},
 	}
-	if len(q.HValues) == 0 && len(q.Indices) > 0 {
+	if q.IsSparse() {
 		query.SparseVector = xvec.SparseVectorFP32{Indices: q.Indices, Values: q.Values}
 		query.Params = xvec.NewFlatQueryParams()
 	} else {
@@ -420,7 +420,7 @@ func (db *Xvec) QueryVectors(ctx context.Context, name string, q Vector, categor
 	}
 	results := make([]ScoredVector, 0, len(documents))
 	for _, document := range documents {
-		if len(q.HValues) == 0 && len(q.Indices) > 0 && document.Score == 0 {
+		if q.IsSparse() && document.Score == 0 {
 			continue
 		}
 		result := ScoredVector{Vector: Vector{Id: document.PrimaryKey}, Score: document.Score}
@@ -488,7 +488,7 @@ func xvecDistance(metric xvec.MetricType) (Distance, error) {
 }
 
 func xvecVectorFP16(vector Vector) xvec.VectorFP16 {
-	bits := vector.float16Values()
+	bits := vector.Float16Values()
 	return unsafe.Slice((*xvec.Float16)(unsafe.Pointer(unsafe.SliceData(bits))), len(bits))
 }
 
