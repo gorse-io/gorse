@@ -86,13 +86,17 @@ func LinSpace(start, end float32, shape ...int) *Tensor {
 }
 
 func Rand(shape ...int) *Tensor {
+	return randWith(rand.Float32, shape...)
+}
+
+func randWith(random func() float32, shape ...int) *Tensor {
 	n := 1
 	for _, s := range shape {
 		n *= s
 	}
 	data := make([]float32, n)
 	for i := range data {
-		data[i] = rand.Float32()
+		data[i] = random()
 	}
 	return &Tensor{
 		data:  data,
@@ -769,7 +773,11 @@ func (t *Tensor) fromPB(pb *protocol.Tensor) {
 }
 
 func NormalInit(t *Tensor, mean, std float32) {
+	normalInitWith(rand.NormFloat64, t, mean, std)
+}
+
+func normalInitWith(random func() float64, t *Tensor, mean, std float32) {
 	for i := range t.data {
-		t.data[i] = float32(rand.NormFloat64())*(std) + (mean)
+		t.data[i] = float32(random())*(std) + (mean)
 	}
 }
