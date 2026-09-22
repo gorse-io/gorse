@@ -20,13 +20,27 @@ import (
 	"testing"
 	"time"
 
+	"github.com/expr-lang/expr"
+	"github.com/gorse-io/gorse/common/floats"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/dataset"
 	"github.com/gorse-io/gorse/storage/data"
 	"github.com/gorse-io/gorse/storage/vectors"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 )
+
+func TestExtractItemEmbedding(t *testing.T) {
+	columnFunc, err := expr.Compile("item.Labels.embedding", expr.Env(map[string]any{"item": data.Item{}}))
+	assert.NoError(t, err)
+
+	embedding, ok := ExtractItemEmbedding(&data.Item{Labels: map[string]any{
+		"embedding": []float32{1, 2, 3},
+	}}, columnFunc)
+	assert.True(t, ok)
+	assert.Equal(t, floats.FromFloat32([]float32{1, 2, 3}), embedding)
+}
 
 type ItemToItemTestSuite struct {
 	suite.Suite

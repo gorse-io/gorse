@@ -270,20 +270,21 @@ func (db *Milvus) AddVectors(ctx context.Context, collection string, vectors []V
 	categories := make([][]string, 0, len(vectors))
 	hidden := make([]bool, 0, len(vectors))
 	timestamps := make([]int64, 0, len(vectors))
-	data := make([][]float32, 0, len(vectors))
+	data := make([][]byte, 0, len(vectors))
 	sparseData := make([]entity.SparseEmbedding, 0, len(vectors))
 	for _, v := range vectors {
 		ids = append(ids, v.Id)
 		categories = append(categories, v.Categories)
 		hidden = append(hidden, v.IsHidden)
 		timestamps = append(timestamps, v.Timestamp.UnixMilli())
-		data = append(data, v.Values)
-		if len(v.Indices) > 0 {
+		if len(v.HValues) == 0 && len(v.Indices) > 0 {
 			sparse, err := entity.NewSliceSparseEmbedding(v.Indices, v.Values)
 			if err != nil {
 				return errors.WithStack(err)
 			}
 			sparseData = append(sparseData, sparse)
+		} else {
+			data = append(data, uint16Bytes(v.float16Values()))
 		}
 	}
 
@@ -298,7 +299,7 @@ func (db *Milvus) AddVectors(ctx context.Context, collection string, vectors []V
 		}
 		vectorCol = column.NewColumnSparseVectors(milvusVectorField, sparseData)
 	} else {
-		vectorCol = column.NewColumnFloat16VectorFromFp32Vector(milvusVectorField, len(data[0]), data)
+		vectorCol = column.NewColumnFloat16Vector(milvusVectorField, len(data[0])/2, data)
 	}
 
 	_, err := db.client.Upsert(ctx, milvusclient.NewColumnBasedInsertOption(collection, idCol, categoriesCol, hiddenCol, timestampCol, vectorCol))
@@ -410,13 +411,13 @@ func (db *Milvus) QueryVectors(ctx context.Context, collection string, q Vector,
 		return nil, errors.WithStack(err)
 	}
 	var query entity.Vector
-	if len(q.Indices) > 0 {
+	if len(q.HValues) == 0 && len(q.Indices) > 0 {
 		query, err = entity.NewSliceSparseEmbedding(q.Indices, q.Values)
 		if err != nil {
 			return nil, errors.WithStack(err)
 		}
 	} else {
-		query = entity.FloatVector(q.Values).ToFloat16Vector()
+		query = entity.Float16Vector(uint16Bytes(q.float16Values()))
 	}
 	searchOption := milvusclient.NewSearchOption(collection, topK, []entity.Vector{query}).
 		WithANNSField(milvusVectorField).

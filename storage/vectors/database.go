@@ -16,10 +16,12 @@ package vectors
 
 import (
 	"context"
+	"encoding/binary"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/gorse-io/gorse/common/floats"
 	"github.com/gorse-io/gorse/storage"
 	"github.com/pkg/errors"
 )
@@ -92,10 +94,47 @@ type CollectionInfo struct {
 type Vector struct {
 	Id         string
 	Values     []float32
+	HValues    []uint16 // IEEE 754 FP16 bits; takes precedence over Values when non-empty.
 	Indices    []uint32
 	IsHidden   bool      `json:"-"`
 	Categories []string  `json:"-" gorm:"type:text;serializer:json"`
 	Timestamp  time.Time `json:"-"`
+}
+
+func (v Vector) float32Values() []float32 {
+	if len(v.HValues) > 0 {
+		return floats.ToFloat32(v.HValues)
+	}
+	return v.Values
+}
+
+func (v Vector) float16Values() []uint16 {
+	if len(v.HValues) > 0 {
+		return v.HValues
+	}
+	return floats.FromFloat32(v.Values)
+}
+
+func uint16Bytes(values []uint16) []byte {
+	if len(values) == 0 {
+		return nil
+	}
+	bits := make([]byte, len(values)*2)
+	for i, value := range values {
+		binary.LittleEndian.PutUint16(bits[i*2:], value)
+	}
+	return bits
+}
+
+func bytesUint16(values []byte) []uint16 {
+	if len(values) == 0 {
+		return nil
+	}
+	bits := make([]uint16, len(values)/2)
+	for i := range bits {
+		bits[i] = binary.LittleEndian.Uint16(values[i*2:])
+	}
+	return bits
 }
 
 // ScoredVector is a vector with a similarity score. Higher scores indicate greater similarity.

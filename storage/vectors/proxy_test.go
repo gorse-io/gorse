@@ -15,13 +15,17 @@
 package vectors
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"testing"
 
 	"github.com/gorse-io/gorse/common/log"
+	"github.com/gorse-io/gorse/protocol"
 	"github.com/stretchr/testify/suite"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 type ProxyTestSuite struct {
@@ -54,6 +58,20 @@ func (suite *ProxyTestSuite) TearDownSuite() {
 	suite.server.Stop()
 	suite.NoError(suite.clientConn.Close())
 	suite.NoError(suite.backend.Close())
+}
+
+func (suite *ProxyTestSuite) TestInvalidHalfVectorBytes() {
+	client := protocol.NewVectorStoreClient(suite.clientConn)
+
+	_, err := client.AddVectors(context.Background(), &protocol.AddVectorsRequest{
+		Vectors: []*protocol.Vector{{HValues: []byte{0x00}}},
+	})
+	suite.Equal(codes.InvalidArgument, status.Code(err))
+
+	_, err = client.QueryVectors(context.Background(), &protocol.QueryVectorsRequest{
+		Query: &protocol.Vector{HValues: []byte{0x00}},
+	})
+	suite.Equal(codes.InvalidArgument, status.Code(err))
 }
 
 func TestProxy(t *testing.T) {

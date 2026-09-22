@@ -112,6 +112,9 @@ func (p *ProxyServer) CountVectors(ctx context.Context, request *protocol.CountV
 func (p *ProxyServer) AddVectors(ctx context.Context, request *protocol.AddVectorsRequest) (*protocol.AddVectorsResponse, error) {
 	vectors := make([]Vector, len(request.Vectors))
 	for i, vector := range request.Vectors {
+		if len(vector.GetHValues())%2 != 0 {
+			return nil, status.Error(codes.InvalidArgument, "invalid FP16 vector bytes")
+		}
 		timestamp := time.Time{}
 		if vector.GetTimestamp() != nil {
 			timestamp = vector.GetTimestamp().AsTime()
@@ -119,6 +122,7 @@ func (p *ProxyServer) AddVectors(ctx context.Context, request *protocol.AddVecto
 		vectors[i] = Vector{
 			Id:         vector.GetId(),
 			Values:     vector.GetValues(),
+			HValues:    bytesUint16(vector.GetHValues()),
 			Indices:    vector.GetIndices(),
 			IsHidden:   vector.GetIsHidden(),
 			Categories: vector.GetCategories(),
@@ -142,6 +146,7 @@ func (p *ProxyServer) GetVectors(ctx context.Context, request *protocol.GetVecto
 		pbVectors[i] = &protocol.Vector{
 			Id:         vector.Id,
 			Values:     vector.Values,
+			HValues:    uint16Bytes(vector.HValues),
 			Indices:    vector.Indices,
 			IsHidden:   vector.IsHidden,
 			Categories: vector.Categories,
@@ -165,8 +170,12 @@ func (p *ProxyServer) DeleteVectors(ctx context.Context, request *protocol.Delet
 
 func (p *ProxyServer) QueryVectors(ctx context.Context, request *protocol.QueryVectorsRequest) (*protocol.QueryVectorsResponse, error) {
 	query := request.GetQuery()
+	if len(query.GetHValues())%2 != 0 {
+		return nil, status.Error(codes.InvalidArgument, "invalid FP16 vector bytes")
+	}
 	results, err := p.database.QueryVectors(ctx, request.GetCollection(), Vector{
 		Values:  query.GetValues(),
+		HValues: bytesUint16(query.GetHValues()),
 		Indices: query.GetIndices(),
 	}, request.GetCategories(), int(request.GetTopK()))
 	if err != nil {
@@ -178,6 +187,7 @@ func (p *ProxyServer) QueryVectors(ctx context.Context, request *protocol.QueryV
 			Vector: &protocol.Vector{
 				Id:         result.Id,
 				Values:     result.Vector.Values,
+				HValues:    uint16Bytes(result.Vector.HValues),
 				Indices:    result.Vector.Indices,
 				IsHidden:   result.IsHidden,
 				Categories: result.Categories,
@@ -276,6 +286,7 @@ func (p ProxyClient) AddVectors(ctx context.Context, collection string, vectors 
 		pbVectors[i] = &protocol.Vector{
 			Id:         vector.Id,
 			Values:     vector.Values,
+			HValues:    uint16Bytes(vector.HValues),
 			Indices:    vector.Indices,
 			IsHidden:   vector.IsHidden,
 			Categories: vector.Categories,
@@ -299,6 +310,9 @@ func (p ProxyClient) GetVectors(ctx context.Context, collection string, ids []st
 	}
 	vectors := make([]Vector, len(resp.GetVectors()))
 	for i, vector := range resp.GetVectors() {
+		if len(vector.GetHValues())%2 != 0 {
+			return nil, status.Error(codes.Internal, "invalid FP16 vector bytes")
+		}
 		timestamp := time.Time{}
 		if vector.GetTimestamp() != nil {
 			timestamp = vector.GetTimestamp().AsTime()
@@ -306,6 +320,7 @@ func (p ProxyClient) GetVectors(ctx context.Context, collection string, ids []st
 		vectors[i] = Vector{
 			Id:         vector.GetId(),
 			Values:     vector.GetValues(),
+			HValues:    bytesUint16(vector.GetHValues()),
 			Indices:    vector.GetIndices(),
 			IsHidden:   vector.GetIsHidden(),
 			Categories: vector.GetCategories(),
@@ -328,6 +343,7 @@ func (p ProxyClient) QueryVectors(ctx context.Context, collection string, q Vect
 		Collection: collection,
 		Query: &protocol.Vector{
 			Values:  q.Values,
+			HValues: uint16Bytes(q.HValues),
 			Indices: q.Indices,
 		},
 		Categories: categories,
@@ -339,10 +355,14 @@ func (p ProxyClient) QueryVectors(ctx context.Context, collection string, q Vect
 	results := make([]ScoredVector, len(resp.Vectors))
 	for i, scored := range resp.Vectors {
 		vector := scored.GetVector()
+		if len(vector.GetHValues())%2 != 0 {
+			return nil, status.Error(codes.Internal, "invalid FP16 vector bytes")
+		}
 		results[i] = ScoredVector{
 			Vector: Vector{
 				Id:         vector.GetId(),
 				Values:     vector.GetValues(),
+				HValues:    bytesUint16(vector.GetHValues()),
 				Indices:    vector.GetIndices(),
 				IsHidden:   vector.GetIsHidden(),
 				Categories: vector.GetCategories(),
