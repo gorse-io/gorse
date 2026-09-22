@@ -436,6 +436,10 @@ func (r *Redis) ScanScores(ctx context.Context, callback func(collection string,
 	}
 }
 
+// scanScoresPageSize is the COUNT hint given to SCAN, and therefore the size of each
+// pipelined batch of HGETALL. It replaces a COUNT of 0, i.e. Redis' default of 10.
+const scanScoresPageSize = 1000
+
 func (r *Redis) scanScores(ctx context.Context, client redis.UniversalClient, callback func(collection string, id string, subset string, timestamp time.Time) error) error {
 	var (
 		result []string
@@ -443,23 +447,48 @@ func (r *Redis) scanScores(ctx context.Context, client redis.UniversalClient, ca
 		err    error
 	)
 	for {
-		result, cursor, err = client.Scan(ctx, cursor, r.DocumentTable()+"*", 0).Result()
+		result, cursor, err = client.Scan(ctx, cursor, r.DocumentTable()+"*", scanScoresPageSize).Result()
 		if err != nil {
 			return errors.WithStack(err)
 		}
-		for _, key := range result {
-			var row map[string]string
-			row, err = client.HGetAll(ctx, key).Result()
-			if err != nil {
+		if len(result) > 0 {
+			// Fetch the whole page in one round trip. The callback still runs once per
+			// key, in scan order, so the caller's semantics are unchanged -- only the
+			// number of round trips is.
+			pipe := client.Pipeline()
+			cmds := make([]*redis.MapStringStringCmd, len(result))
+			for i, key := range result {
+				cmds[i] = pipe.HGetAll(ctx, key)
+			}
+			if _, err = pipe.Exec(ctx); err != nil && !errors.Is(err, redis.Nil) {
 				return errors.WithStack(err)
 			}
-			var usec int64
-			usec, err = util.ParseInt[int64](row["timestamp"])
-			if err != nil {
-				return errors.WithStack(err)
-			}
-			if err = callback(row["collection"], row["id"], row["subset"], time.UnixMicro(usec).In(time.UTC)); err != nil {
-				return errors.WithStack(err)
+			for _, cmd := range cmds {
+				// The page was fetched in one shot, so the per-key Redis calls no longer
+				// observe cancellation on the caller's behalf. Check it here: callers rely
+				// on ScanScores returning promptly once their context is done, not only at
+				// page boundaries (see TestScanScores in database_test.go).
+				if err = ctx.Err(); err != nil {
+					return errors.WithStack(err)
+				}
+				var row map[string]string
+				row, err = cmd.Result()
+				if err != nil {
+					if errors.Is(err, redis.Nil) {
+						// The key was deleted between SCAN and HGETALL. Scanning is
+						// inherently racy, so skip it rather than failing the pass.
+						continue
+					}
+					return errors.WithStack(err)
+				}
+				var usec int64
+				usec, err = util.ParseInt[int64](row["timestamp"])
+				if err != nil {
+					return errors.WithStack(err)
+				}
+				if err = callback(row["collection"], row["id"], row["subset"], time.UnixMicro(usec).In(time.UTC)); err != nil {
+					return errors.WithStack(err)
+				}
 			}
 		}
 		if cursor == 0 {
