@@ -20,6 +20,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unsafe"
 
 	"github.com/gorse-io/gorse/common/floats"
 	"github.com/gorse-io/gorse/storage"
@@ -122,9 +123,19 @@ func (v Vector) IsSparse() bool {
 	return len(v.HValues) == 0 && len(v.Indices) > 0
 }
 
-func uint16Bytes(values []uint16) []byte {
+var nativeLittleEndian = func() bool {
+	value := uint16(1)
+	return *(*byte)(unsafe.Pointer(&value)) == 1
+}()
+
+// Float16Bytes reinterprets IEEE 754 FP16 bits as little-endian bytes.
+// The returned slice aliases values on little-endian systems.
+func Float16Bytes(values []uint16) []byte {
 	if len(values) == 0 {
 		return nil
+	}
+	if nativeLittleEndian {
+		return unsafe.Slice((*byte)(unsafe.Pointer(unsafe.SliceData(values))), len(values)*2)
 	}
 	bits := make([]byte, len(values)*2)
 	for i, value := range values {
@@ -133,9 +144,16 @@ func uint16Bytes(values []uint16) []byte {
 	return bits
 }
 
-func bytesUint16(values []byte) []uint16 {
+// Float16Values reinterprets little-endian bytes as IEEE 754 FP16 bits.
+// The returned slice aliases values when the byte slice is suitably aligned
+// on a little-endian system.
+func Float16Values(values []byte) []uint16 {
 	if len(values) == 0 {
 		return nil
+	}
+	pointer := unsafe.Pointer(unsafe.SliceData(values))
+	if nativeLittleEndian && uintptr(pointer)%unsafe.Alignof(uint16(0)) == 0 {
+		return unsafe.Slice((*uint16)(pointer), len(values)/2)
 	}
 	bits := make([]uint16, len(values)/2)
 	for i := range bits {

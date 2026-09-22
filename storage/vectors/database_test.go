@@ -16,6 +16,7 @@ package vectors
 
 import (
 	"encoding/hex"
+	"testing"
 	"time"
 
 	"github.com/gorse-io/gorse/common/floats"
@@ -28,9 +29,30 @@ const defaultVectorSize = 4
 
 func (suite *vectorsTestSuite) TestHalfBytes() {
 	values := []uint16{0x0001, 0x3c00, 0x7e01, 0xffff}
-	encoded := uint16Bytes(values)
+	encoded := Float16Bytes(values)
 	suite.Equal("0100003c017effff", hex.EncodeToString(encoded))
-	suite.Equal(values, bytesUint16(encoded))
+	decoded := Float16Values(encoded)
+	suite.Equal(values, decoded)
+
+	if nativeLittleEndian {
+		suite.Zero(testing.AllocsPerRun(100, func() {
+			_ = Float16Bytes(values)
+		}))
+		suite.Zero(testing.AllocsPerRun(100, func() {
+			_ = Float16Values(encoded)
+		}))
+
+		values[0] = 0x1234
+		suite.Equal([]byte{0x34, 0x12}, encoded[:2])
+		decoded[1] = 0xabcd
+		suite.Equal(uint16(0xabcd), values[1])
+
+		unaligned := append([]byte{0}, encoded...)[1:]
+		unalignedValues := Float16Values(unaligned)
+		before := unalignedValues[0]
+		unaligned[0] ^= 0xff
+		suite.Equal(before, unalignedValues[0])
+	}
 }
 
 type vectorsTestSuite struct {

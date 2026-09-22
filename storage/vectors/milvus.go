@@ -284,7 +284,7 @@ func (db *Milvus) AddVectors(ctx context.Context, collection string, vectors []V
 			}
 			sparseData = append(sparseData, sparse)
 		} else {
-			data = append(data, uint16Bytes(v.Float16Values()))
+			data = append(data, Float16Bytes(v.Float16Values()))
 		}
 	}
 
@@ -417,7 +417,7 @@ func (db *Milvus) QueryVectors(ctx context.Context, collection string, q Vector,
 			return nil, errors.WithStack(err)
 		}
 	} else {
-		query = entity.Float16Vector(uint16Bytes(q.Float16Values()))
+		query = entity.Float16Vector(Float16Bytes(q.Float16Values()))
 	}
 	searchOption := milvusclient.NewSearchOption(collection, topK, []entity.Vector{query}).
 		WithANNSField(milvusVectorField).
