@@ -22,40 +22,29 @@ import (
 	"github.com/gorse-io/gorse/common/floats"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/storage"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 )
 
 const defaultVectorSize = 4
 
-func (suite *vectorsTestSuite) TestHalfBytes() {
+func TestHalfBytes(t *testing.T) {
 	values := []uint16{0x0001, 0x3c00, 0x7e01, 0xffff}
 	encoded := Float16Bytes(values)
-	suite.Equal("0100003c017effff", hex.EncodeToString(encoded))
+	assert.Equal(t, "0100003c017effff", hex.EncodeToString(encoded))
 	decoded := Float16Values(encoded)
-	suite.Equal(values, decoded)
-	suite.Panics(func() {
-		Float16Values([]byte{0})
-	})
+	assert.Equal(t, values, decoded)
+	assert.Zero(t, testing.AllocsPerRun(100, func() {
+		_ = Float16Bytes(values)
+	}))
+	assert.Zero(t, testing.AllocsPerRun(100, func() {
+		_ = Float16Values(encoded)
+	}))
 
-	if nativeLittleEndian {
-		suite.Zero(testing.AllocsPerRun(100, func() {
-			_ = Float16Bytes(values)
-		}))
-		suite.Zero(testing.AllocsPerRun(100, func() {
-			_ = Float16Values(encoded)
-		}))
-
-		values[0] = 0x1234
-		suite.Equal([]byte{0x34, 0x12}, encoded[:2])
-		decoded[1] = 0xabcd
-		suite.Equal(uint16(0xabcd), values[1])
-
-		unaligned := append([]byte{0}, encoded...)[1:]
-		unalignedValues := Float16Values(unaligned)
-		before := unalignedValues[0]
-		unaligned[0] ^= 0xff
-		suite.Equal(before, unalignedValues[0])
-	}
+	values[0] = 0x1234
+	assert.Equal(t, []byte{0x34, 0x12}, encoded[:2])
+	decoded[1] = 0xabcd
+	assert.Equal(t, uint16(0xabcd), values[1])
 }
 
 type vectorsTestSuite struct {

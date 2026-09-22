@@ -16,7 +16,6 @@ package vectors
 
 import (
 	"context"
-	"encoding/binary"
 	"strconv"
 	"strings"
 	"time"
@@ -123,48 +122,14 @@ func (v Vector) IsSparse() bool {
 	return len(v.HValues) == 0 && len(v.Indices) > 0
 }
 
-var nativeLittleEndian = func() bool {
-	value := uint16(1)
-	return *(*byte)(unsafe.Pointer(&value)) == 1
-}()
-
-// Float16Bytes reinterprets IEEE 754 FP16 bits as little-endian bytes.
-// The returned slice aliases values on little-endian systems; callers must not
-// mutate either slice while the other is in use.
+// Float16Bytes reinterprets IEEE 754 FP16 bits as bytes.
 func Float16Bytes(values []uint16) []byte {
-	if len(values) == 0 {
-		return nil
-	}
-	if nativeLittleEndian {
-		return unsafe.Slice((*byte)(unsafe.Pointer(unsafe.SliceData(values))), len(values)*2)
-	}
-	bits := make([]byte, len(values)*2)
-	for i, value := range values {
-		binary.LittleEndian.PutUint16(bits[i*2:], value)
-	}
-	return bits
+	return unsafe.Slice((*byte)(unsafe.Pointer(unsafe.SliceData(values))), len(values)*2)
 }
 
-// Float16Values reinterprets little-endian bytes as IEEE 754 FP16 bits.
-// The returned slice aliases values when the byte slice is suitably aligned
-// on a little-endian system; callers must not mutate either slice while the
-// other is in use. The byte slice length must be even.
+// Float16Values reinterprets bytes as IEEE 754 FP16 bits.
 func Float16Values(values []byte) []uint16 {
-	if len(values) == 0 {
-		return nil
-	}
-	if len(values)%2 != 0 {
-		panic("FP16 byte length must be even")
-	}
-	pointer := unsafe.Pointer(unsafe.SliceData(values))
-	if nativeLittleEndian && uintptr(pointer)%unsafe.Alignof(uint16(0)) == 0 {
-		return unsafe.Slice((*uint16)(pointer), len(values)/2)
-	}
-	bits := make([]uint16, len(values)/2)
-	for i := range bits {
-		bits[i] = binary.LittleEndian.Uint16(values[i*2:])
-	}
-	return bits
+	return unsafe.Slice((*uint16)(unsafe.Pointer(unsafe.SliceData(values))), len(values)/2)
 }
 
 // ScoredVector is a vector with a similarity score. Higher scores indicate greater similarity.
