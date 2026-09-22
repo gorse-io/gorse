@@ -475,6 +475,43 @@ func (suite *baseTestSuite) TestScanScores() {
 	suite.Less(scanScores, 9)
 }
 
+// TestScanScoresMultiplePages covers the case TestScanScores cannot: a corpus larger
+// than one SCAN page. Every document must come back exactly once, whatever the page
+// size or the number of pages, and the ids must be the full set that was written.
+func (suite *baseTestSuite) TestScanScoresMultiplePages() {
+	const numScores = 2500
+	timestamp := time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)
+	written := make([]Score, 0, numScores)
+	for i := range numScores {
+		written = append(written, Score{
+			Id:         strconv.Itoa(i),
+			Score:      float64(i),
+			Categories: []string{"a"},
+			Timestamp:  timestamp,
+		})
+	}
+	ctx := suite.T().Context()
+	suite.NoError(suite.AddScores(ctx, "collection", "subset", written))
+
+	seen := make(map[string]bool, numScores)
+	scanned := 0
+	err := suite.ScanScores(ctx, func(collection, id, subset string, t time.Time) error {
+		scanned++
+		seen[id] = true
+		suite.Equal("collection", collection)
+		suite.Equal("subset", subset)
+		suite.Equal(timestamp, t.UTC())
+		return nil
+	})
+	suite.NoError(err)
+	// No duplicates: a document returned twice would make scanned exceed the set size.
+	suite.Equal(numScores, scanned)
+	suite.Equal(numScores, len(seen))
+	for i := range numScores {
+		suite.True(seen[strconv.Itoa(i)], "missing document %d", i)
+	}
+}
+
 func (suite *baseTestSuite) TestTimeSeries() {
 	ts := time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)
 	ctx := suite.T().Context()
