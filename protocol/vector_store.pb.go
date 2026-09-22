@@ -89,13 +89,15 @@ func (Distance) EnumDescriptor() ([]byte, []int) {
 }
 
 type Vector struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Values        []float32              `protobuf:"fixed32,2,rep,packed,name=values,proto3" json:"values,omitempty"`
-	Categories    []string               `protobuf:"bytes,3,rep,name=categories,proto3" json:"categories,omitempty"`
-	Timestamp     *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
-	IsHidden      bool                   `protobuf:"varint,5,opt,name=is_hidden,json=isHidden,proto3" json:"is_hidden,omitempty"`
-	Indices       []uint32               `protobuf:"varint,6,rep,packed,name=indices,proto3" json:"indices,omitempty"`
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	Id         string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Values     []float32              `protobuf:"fixed32,2,rep,packed,name=values,proto3" json:"values,omitempty"`
+	Categories []string               `protobuf:"bytes,3,rep,name=categories,proto3" json:"categories,omitempty"`
+	Timestamp  *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
+	IsHidden   bool                   `protobuf:"varint,5,opt,name=is_hidden,json=isHidden,proto3" json:"is_hidden,omitempty"`
+	Indices    []uint32               `protobuf:"varint,6,rep,packed,name=indices,proto3" json:"indices,omitempty"`
+	// IEEE 754 FP16 bits encoded in little-endian byte order.
+	HValues       []byte `protobuf:"bytes,7,opt,name=h_values,json=hValues,proto3" json:"h_values,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -168,6 +170,13 @@ func (x *Vector) GetIsHidden() bool {
 func (x *Vector) GetIndices() []uint32 {
 	if x != nil {
 		return x.Indices
+	}
+	return nil
+}
+
+func (x *Vector) GetHValues() []byte {
+	if x != nil {
+		return x.HValues
 	}
 	return nil
 }
@@ -1128,7 +1137,7 @@ var File_vector_store_proto protoreflect.FileDescriptor
 
 const file_vector_store_proto_rawDesc = "" +
 	"\n" +
-	"\x12vector_store.proto\x12\bprotocol\x1a\x1fgoogle/protobuf/timestamp.proto\"\xc1\x01\n" +
+	"\x12vector_store.proto\x12\bprotocol\x1a\x1fgoogle/protobuf/timestamp.proto\"\xdc\x01\n" +
 	"\x06Vector\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x16\n" +
 	"\x06values\x18\x02 \x03(\x02R\x06values\x12\x1e\n" +
@@ -1137,7 +1146,8 @@ const file_vector_store_proto_rawDesc = "" +
 	"categories\x128\n" +
 	"\ttimestamp\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\ttimestamp\x12\x1b\n" +
 	"\tis_hidden\x18\x05 \x01(\bR\bisHidden\x12\x18\n" +
-	"\aindices\x18\x06 \x03(\rR\aindices\"N\n" +
+	"\aindices\x18\x06 \x03(\rR\aindices\x12\x19\n" +
+	"\bh_values\x18\a \x01(\fR\ahValues\"N\n" +
 	"\fScoredVector\x12(\n" +
 	"\x06vector\x18\x01 \x01(\v2\x10.protocol.VectorR\x06vector\x12\x14\n" +
 	"\x05score\x18\x02 \x01(\x02R\x05score\"\x18\n" +

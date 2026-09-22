@@ -15,14 +15,37 @@
 package vectors
 
 import (
+	"encoding/hex"
+	"testing"
 	"time"
 
+	"github.com/gorse-io/gorse/common/floats"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/storage"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 )
 
 const defaultVectorSize = 4
+
+func TestHalfBytes(t *testing.T) {
+	values := []uint16{0x0001, 0x3c00, 0x7e01, 0xffff}
+	encoded := Float16Bytes(values)
+	assert.Equal(t, "0100003c017effff", hex.EncodeToString(encoded))
+	decoded := Float16Values(encoded)
+	assert.Equal(t, values, decoded)
+	assert.Zero(t, testing.AllocsPerRun(100, func() {
+		_ = Float16Bytes(values)
+	}))
+	assert.Zero(t, testing.AllocsPerRun(100, func() {
+		_ = Float16Values(encoded)
+	}))
+
+	values[0] = 0x1234
+	assert.Equal(t, []byte{0x34, 0x12}, encoded[:2])
+	decoded[1] = 0xabcd
+	assert.Equal(t, uint16(0xabcd), values[1])
+}
 
 type vectorsTestSuite struct {
 	suite.Suite
@@ -147,6 +170,36 @@ func (suite *vectorsTestSuite) TestVectors() {
 	suite.Require().Len(queryVectors, 1)
 	results, err = suite.Database.QueryVectors(ctx, "test", queryVectors[0], nil, 10)
 	suite.NoError(err)
+	suite.Require().Len(results, 2)
+	suite.Equal("a", results[0].Id)
+	suite.Equal("b", results[1].Id)
+}
+
+func (suite *vectorsTestSuite) TestHalfVectors() {
+	ctx := suite.T().Context()
+	err := suite.Database.AddCollection(ctx, "test_half", defaultVectorSize, Cosine, VectorConfig{})
+	suite.Require().NoError(err)
+
+	vectorA := []float32{1, 0, 0, 0}
+	vectorB := []float32{0, 1, 0, 0}
+	err = suite.Database.AddVectors(ctx, "test_half", []Vector{
+		{Id: "a", Values: []float32{0}, HValues: floats.FromFloat32(vectorA), Indices: []uint32{1}},
+		{Id: "b", HValues: floats.FromFloat32(vectorB)},
+	})
+	suite.Require().NoError(err)
+
+	vectors, err := suite.Database.GetVectors(ctx, "test_half", []string{"a", "b"})
+	suite.Require().NoError(err)
+	suite.Require().Len(vectors, 2)
+	suite.InDeltaSlice(vectorA, vectors[0].Values, 0.001)
+	suite.InDeltaSlice(vectorB, vectors[1].Values, 0.001)
+
+	results, err := suite.Database.QueryVectors(ctx, "test_half", Vector{
+		Values:  []float32{0},
+		HValues: floats.FromFloat32(vectorA),
+		Indices: []uint32{1},
+	}, nil, 2)
+	suite.Require().NoError(err)
 	suite.Require().Len(results, 2)
 	suite.Equal("a", results[0].Id)
 	suite.Equal("b", results[1].Id)

@@ -34,6 +34,8 @@ message Vector {
   google.protobuf.Timestamp timestamp = 4;
   bool is_hidden = 5;
   repeated uint32 indices = 6;
+  // IEEE 754 FP16 bits encoded in little-endian byte order.
+  bytes h_values = 7;
 }
 
 message ScoredVector {
