@@ -122,6 +122,14 @@ func (v Vector) IsSparse() bool {
 	return len(v.HValues) == 0 && len(v.Indices) > 0
 }
 
+// Len returns the number of vector dimensions.
+func (v Vector) Len() int {
+	if len(v.HValues) > 0 {
+		return len(v.HValues)
+	}
+	return len(v.Values)
+}
+
 // Float16Bytes reinterprets IEEE 754 FP16 bits as bytes.
 func Float16Bytes(values []uint16) []byte {
 	return unsafe.Slice((*byte)(unsafe.Pointer(unsafe.SliceData(values))), len(values)*2)

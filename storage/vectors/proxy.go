@@ -112,9 +112,6 @@ func (p *ProxyServer) CountVectors(ctx context.Context, request *protocol.CountV
 func (p *ProxyServer) AddVectors(ctx context.Context, request *protocol.AddVectorsRequest) (*protocol.AddVectorsResponse, error) {
 	vectors := make([]Vector, len(request.Vectors))
 	for i, vector := range request.Vectors {
-		if len(vector.GetHValues())%2 != 0 {
-			return nil, status.Error(codes.InvalidArgument, "invalid FP16 vector bytes")
-		}
 		timestamp := time.Time{}
 		if vector.GetTimestamp() != nil {
 			timestamp = vector.GetTimestamp().AsTime()
@@ -170,9 +167,6 @@ func (p *ProxyServer) DeleteVectors(ctx context.Context, request *protocol.Delet
 
 func (p *ProxyServer) QueryVectors(ctx context.Context, request *protocol.QueryVectorsRequest) (*protocol.QueryVectorsResponse, error) {
 	query := request.GetQuery()
-	if len(query.GetHValues())%2 != 0 {
-		return nil, status.Error(codes.InvalidArgument, "invalid FP16 vector bytes")
-	}
 	results, err := p.database.QueryVectors(ctx, request.GetCollection(), Vector{
 		Values:  query.GetValues(),
 		HValues: Float16Values(query.GetHValues()),
@@ -310,9 +304,6 @@ func (p ProxyClient) GetVectors(ctx context.Context, collection string, ids []st
 	}
 	vectors := make([]Vector, len(resp.GetVectors()))
 	for i, vector := range resp.GetVectors() {
-		if len(vector.GetHValues())%2 != 0 {
-			return nil, status.Error(codes.Internal, "invalid FP16 vector bytes")
-		}
 		timestamp := time.Time{}
 		if vector.GetTimestamp() != nil {
 			timestamp = vector.GetTimestamp().AsTime()
@@ -355,9 +346,6 @@ func (p ProxyClient) QueryVectors(ctx context.Context, collection string, q Vect
 	results := make([]ScoredVector, len(resp.Vectors))
 	for i, scored := range resp.Vectors {
 		vector := scored.GetVector()
-		if len(vector.GetHValues())%2 != 0 {
-			return nil, status.Error(codes.Internal, "invalid FP16 vector bytes")
-		}
 		results[i] = ScoredVector{
 			Vector: Vector{
 				Id:         vector.GetId(),
