@@ -33,6 +33,9 @@ func (suite *vectorsTestSuite) TestHalfBytes() {
 	suite.Equal("0100003c017effff", hex.EncodeToString(encoded))
 	decoded := Float16Values(encoded)
 	suite.Equal(values, decoded)
+	suite.Panics(func() {
+		Float16Values([]byte{0})
+	})
 
 	if nativeLittleEndian {
 		suite.Zero(testing.AllocsPerRun(100, func() {
