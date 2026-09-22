@@ -10,6 +10,9 @@ on:
       - master
       - 'release-**'
 
+permissions:
+  contents: read
+
 jobs:
   unit_test:
     strategy:
@@ -150,6 +153,8 @@ jobs:
     - name: Test XLA
       if: runner.arch == 'X64' || runner.arch == 'ARM64'
       run: go test -tags xla -timeout 20m ./model/ctr
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Upload coverage to Codecov
       if: matrix.os == 'ubuntu-latest'
@@ -193,6 +198,8 @@ jobs:
     - name: Test XLA
       if: runner.arch == 'ARM64'
       run: go test -tags xla -timeout 20m ./model/ctr
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   unit_test_windows:
     strategy:
@@ -255,6 +262,8 @@ jobs:
     - name: Test XLA
       if: runner.arch == 'X64'
       run: go test -tags xla -timeout 20m ./model/ctr
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   integrate_test:
     name: integrate tests
