@@ -65,16 +65,34 @@ func TestLinearRegression(t *testing.T) {
 }
 
 func TestNeuralNetwork(t *testing.T) {
-	x := Rand(100, 1)
-	y := Add(Rand(100, 1), Sin(Mul(x, NewScalar(2*math32.Pi))))
+	rng := rand.New(rand.NewSource(0))
+	randTensor := func(shape ...int) *Tensor {
+		n := 1
+		for _, size := range shape {
+			n *= size
+		}
+		data := make([]float32, n)
+		for i := range data {
+			data[i] = rng.Float32()
+		}
+		return NewTensor(data, shape...)
+	}
+	normalInit := func(tensor *Tensor, mean, std float32) {
+		for i := range tensor.data {
+			tensor.data[i] = float32(rng.NormFloat64())*std + mean
+		}
+	}
+
+	x := randTensor(100, 1)
+	y := Add(randTensor(100, 1), Sin(Mul(x, NewScalar(2*math32.Pi))))
 
 	model := NewSequential(
 		NewLinear(1, 10),
 		NewSigmoid(),
 		NewLinear(10, 1),
 	)
-	NormalInit(model.(*Sequential).Layers[0].(*LinearLayer).W, 0, 0.01)
-	NormalInit(model.(*Sequential).Layers[2].(*LinearLayer).W, 0, 0.01)
+	normalInit(model.(*Sequential).Layers[0].(*LinearLayer).W, 0, 0.01)
+	normalInit(model.(*Sequential).Layers[2].(*LinearLayer).W, 0, 0.01)
 	optimizer := NewSGD(model.Parameters(), 0.2)
 
 	var l float32
