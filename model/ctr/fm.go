@@ -156,22 +156,19 @@ func (fm *AFM) InternalPredict(_ []int32, _ []float32) float32 {
 func (fm *AFM) BatchInternalPredict(x []lo.Tuple2[[]int32, []float32], e [][][]uint16, jobs int) []float32 {
 	fm.mu.RLock()
 	defer fm.mu.RUnlock()
-	// Apply scalers to numerical features if enabled
-	var scaledX []lo.Tuple2[[]int32, []float32]
-	if fm.autoScale {
-		scaledX = fm.applyScalers(x)
-	} else {
-		scaledX = x
-	}
-	indicesTensor, valuesTensor, embeddingTensor, _ := fm.convertToTensors(scaledX, e, nil)
 	predictions := make([]float32, 0, len(x))
 	for i := 0; i < len(x); i += fm.batchSize {
 		j := min(i+fm.batchSize, len(x))
-		embeddingTensorSlice := make([]*nn.Tensor, len(fm.embeddingDim))
-		for k := range fm.embeddingDim {
-			embeddingTensorSlice[k] = embeddingTensor[k].Slice(i, j)
+		batchX := x[i:j]
+		if fm.autoScale {
+			batchX = fm.applyScalers(batchX)
 		}
-		output := fm.Forward(indicesTensor.Slice(i, j), valuesTensor.Slice(i, j), embeddingTensorSlice, jobs)
+		var batchE [][][]uint16
+		if len(fm.embeddingDim) > 0 {
+			batchE = e[i:j]
+		}
+		indices, values, embeddings, _ := fm.convertToTensors(batchX, batchE, nil)
+		output := fm.Forward(indices, values, embeddings, jobs)
 		predictions = append(predictions, output.Data()...)
 	}
 	return predictions[:len(x)]
@@ -325,25 +322,6 @@ func (fm *AFM) Fit(ctx context.Context, trainSet, testSet dataset.CTRSplit, conf
 	fields := append([]zap.Field{zap.String("eval_time", evalTime.String())}, score.ZapFields()...)
 	log.Logger().Info(fmt.Sprintf("fit AFM %v/%v", 0, fm.nEpochs), fields...)
 
-	var x []lo.Tuple2[[]int32, []float32]
-	var e [][][]uint16
-	var y []float32
-	for i := 0; i < trainSet.Count(); i++ {
-		indices, values, embeddings, target := trainSet.Get(i)
-		// Apply scalers to numerical features
-		scaledValues := make([]float32, len(values))
-		copy(scaledValues, values)
-		for j, idx := range indices {
-			if scaler, ok := fm.Scalers[idx]; ok {
-				scaledValues[j] = scaler.Transform(values[j])
-			}
-		}
-		x = append(x, lo.Tuple2[[]int32, []float32]{A: indices, B: scaledValues})
-		e = append(e, embeddings)
-		y = append(y, target)
-	}
-	indices, values, embeddings, target := fm.convertToTensors(x, e, y)
-
 	var optimizer nn.Optimizer
 	switch fm.optimizer {
 	case model.SGD:
@@ -366,13 +344,18 @@ func (fm *AFM) Fit(ctx context.Context, trainSet, testSet dataset.CTRSplit, conf
 				return Score{}
 			}
 			j := min(i+fm.batchSize, trainSet.Count())
-			batchIndices := indices.Slice(i, j)
-			batchValues := values.Slice(i, j)
-			batchEmbedding := make([]*nn.Tensor, len(fm.embeddingDim))
-			for k := range fm.embeddingDim {
-				batchEmbedding[k] = embeddings[k].Slice(i, j)
+			// Materialize only this batch; repeated item embeddings must not be
+			// expanded into FP32 tensors for the entire training set.
+			x := make([]lo.Tuple2[[]int32, []float32], j-i)
+			e := make([][][]uint16, j-i)
+			y := make([]float32, j-i)
+			for k := i; k < j; k++ {
+				x[k-i].A, x[k-i].B, e[k-i], y[k-i] = trainSet.Get(k)
 			}
-			batchTarget := target.Slice(i, j)
+			if len(fm.Scalers) > 0 {
+				x = fm.applyScalers(x)
+			}
+			batchIndices, batchValues, batchEmbedding, batchTarget := fm.convertToTensors(x, e, y)
 			batchOutput := fm.Forward(batchIndices, batchValues, batchEmbedding, config.Jobs)
 			batchLoss := nn.BCEWithLogits(batchTarget, batchOutput, nil)
 			cost += batchLoss.Data()[0]
