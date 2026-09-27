@@ -1010,11 +1010,11 @@ func (suite *ServerTestSuite) TestItemToItem() {
 	}))
 
 	expected := suite.marshal([]cache.Score{
-		{Id: "near", Score: 0.9900990092071315, Categories: []string{"movie", "drama"}},
+		{Id: "near", Score: 0.990103795941627, Categories: []string{"movie", "drama"}},
 		{Id: "far", Score: 0.009900990099009901, Categories: []string{"movie"}},
 	})
 	expectedAllCategories := suite.marshal([]cache.Score{
-		{Id: "near", Score: 0.9900990092071315, Categories: []string{"movie", "drama"}},
+		{Id: "near", Score: 0.990103795941627, Categories: []string{"movie", "drama"}},
 	})
 	apitest.New().Handler(suite.handler).Get("/api/item/"+"source"+"/neighbors").
 		Query("category", "movie").Header("X-API-Key", apiKey).
