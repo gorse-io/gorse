@@ -409,7 +409,10 @@ func (db *Xvec) QueryVectors(ctx context.Context, name string, q Vector, categor
 		query.Params = xvec.NewFlatQueryParams()
 	} else {
 		query.DenseVector = xvecVectorFP16(q)
-		query.Params = xvec.NewHNSWQueryParams()
+		params := xvec.NewHNSWQueryParams()
+		// Native FP16 HNSW indexes do not have contiguous FP32 storage to prefetch.
+		params.PrefetchOffset = 0
+		query.Params = params
 	}
 	documents, err := collection.Query(ctx, query)
 	if err != nil {
