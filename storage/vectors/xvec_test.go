@@ -15,10 +15,14 @@
 package vectors
 
 import (
+	"context"
 	"testing"
 
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/storage"
+	"github.com/gorse-io/xvec"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -38,6 +42,21 @@ func (suite *XvecTestSuite) SetupSuite() {
 
 func (suite *XvecTestSuite) TearDownSuite() {
 	suite.NoError(suite.Database.Close())
+}
+
+func TestXvecDenseCollectionSchemaUsesHNSWInt8(t *testing.T) {
+	database := new(Xvec)
+	schema, err := database.collectionSchema(context.Background(), "test", 3, Cosine, VectorConfig{})
+	require.NoError(t, err)
+
+	field, found := schema.Field(xvecVectorField)
+	require.True(t, found)
+	params, ok := field.EffectiveIndex().(xvec.HNSWIndexParams)
+	require.True(t, ok)
+	assert.Equal(t, xvec.DataTypeVectorFP32, field.DataType)
+	assert.Equal(t, xvec.MetricTypeCosine, params.Metric)
+	assert.Equal(t, xvec.QuantizeTypeInt8, params.Quantize)
+	assert.True(t, params.Quantizer.EnableRotate)
 }
 
 func TestXvec(t *testing.T) {
