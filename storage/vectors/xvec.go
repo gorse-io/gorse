@@ -179,7 +179,7 @@ func (db *Xvec) DescribeCollection(ctx context.Context, name string) (*Collectio
 	}
 	var metric xvec.MetricType
 	switch params := field.EffectiveIndex().(type) {
-	case xvec.DiskANNIndexParams:
+	case xvec.HNSWIndexParams:
 		metric = params.Metric
 	case xvec.FlatIndexParams:
 		metric = params.Metric
@@ -247,7 +247,8 @@ func (db *Xvec) collectionSchema(ctx context.Context, name string, dimensions in
 		}
 		vectorField = xvec.FieldSchema{Name: xvecVectorField, DataType: xvec.DataTypeSparseVectorFP32, Index: xvec.NewFlatIndexParams(metric)}
 	} else {
-		vectorField = xvec.FieldSchema{Name: xvecVectorField, DataType: xvec.DataTypeVectorFP16, Dimension: uint32(dimensions), Index: xvec.NewDiskANNIndexParams(metric)}
+		index := xvec.NewHNSWIndexParams(metric)
+		vectorField = xvec.FieldSchema{Name: xvecVectorField, DataType: xvec.DataTypeVectorFP16, Dimension: uint32(dimensions), Index: index}
 	}
 	physicalName := db.tablePrefix + name
 	schema := xvec.NewCollectionSchema(physicalName,
@@ -408,7 +409,7 @@ func (db *Xvec) QueryVectors(ctx context.Context, name string, q Vector, categor
 		query.Params = xvec.NewFlatQueryParams()
 	} else {
 		query.DenseVector = xvecVectorFP16(q)
-		query.Params = xvec.NewDiskANNQueryParams()
+		query.Params = xvec.NewHNSWQueryParams()
 	}
 	documents, err := collection.Query(ctx, query)
 	if err != nil {
