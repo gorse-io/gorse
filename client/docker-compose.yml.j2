@@ -1,7 +1,7 @@
 version: "3"
 services:
 
-  {% if database == 'mysql' %}
+  {% if database == 'mysql+qdrant' %}
 
   mysql:
     image: mysql/mysql-server
@@ -19,7 +19,14 @@ services:
       timeout: 5s
       retries: 5
 
-  {% elif database == 'postgres' %}
+  qdrant:
+    image: qdrant/qdrant:latest
+    restart: unless-stopped
+    ports:
+      - 6333:6333
+      - 6334:6334
+
+  {% elif database == 'postgres+weaviate' %}
 
   postgres:
     image: postgres:10.0
@@ -35,7 +42,13 @@ services:
       timeout: 5s
       retries: 5
 
-  {% elif database == 'mongo' %}
+  weaviate:
+    image: cr.weaviate.io/semitechnologies/weaviate:1.35.7
+    restart: unless-stopped
+    ports:
+      - 8080:8080
+
+  {% elif database == 'mongo+milvus' %}
 
   mongo:
     image: mongo:4.0
@@ -50,6 +63,52 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.25
+    environment:
+      - ETCD_AUTO_COMPACTION_MODE=revision
+      - ETCD_AUTO_COMPACTION_RETENTION=1000
+      - ETCD_QUOTA_BACKEND_BYTES=4294967296
+      - ETCD_SNAPSHOT_COUNT=50000
+    command: etcd -advertise-client-urls=http://etcd:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  rustfs:
+    image: rustfs/rustfs:alpha
+    environment:
+      RUSTFS_ACCESS_KEY: rustfsadmin
+      RUSTFS_SECRET_KEY: rustfsadmin
+    ports:
+      - 9000:9000
+
+  milvus:
+    image: milvusdb/milvus:v2.6.9
+    command: ["milvus", "run", "standalone"]
+    security_opt:
+      - seccomp:unconfined
+    environment:
+      ETCD_ENDPOINTS: etcd:2379
+      MINIO_ADDRESS: rustfs:9000
+      MINIO_ACCESS_KEY_ID: rustfsadmin
+      MINIO_SECRET_ACCESS_KEY: rustfsadmin
+      MQ_TYPE: woodpecker
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
+      interval: 30s
+      start_period: 90s
+      timeout: 20s
+      retries: 3
+    ports:
+      - 19530:19530
+      - 9091:9091
+    depends_on:
+      - etcd
+      - rustfs
 
   {% elif database == 'clickhouse+redis' %}
 
@@ -131,21 +190,25 @@ services:
       - 8086:8086
       - 8088:8088
     environment:
-      {% if database == 'mysql' %}
+      {% if database == 'mysql+qdrant' %}
       GORSE_DATA_STORE: mysql://gorse:gorse_pass@tcp(mysql:3306)/gorse
       GORSE_CACHE_STORE: mysql://gorse:gorse_pass@tcp(mysql:3306)/gorse
-      {% elif database == 'postgres' %}
+      GORSE_VECTOR_STORE: qdrant://qdrant:6334
+      {% elif database == 'postgres+weaviate' %}
       GORSE_DATA_STORE: postgres://gorse:gorse_pass@postgres/gorse?sslmode=disable
       GORSE_CACHE_STORE: postgres://gorse:gorse_pass@postgres/gorse?sslmode=disable
-      {% elif database == 'mongo' %}
+      GORSE_VECTOR_STORE: weaviate://weaviate:8080
+      {% elif database == 'mongo+milvus' %}
       GORSE_DATA_STORE: mongodb://root:password@mongo:27017/gorse?authSource=admin&connect=direct
       GORSE_CACHE_STORE: mongodb://root:password@mongo:27017/gorse?authSource=admin&connect=direct
+      GORSE_VECTOR_STORE: milvus://milvus:19530
       {% elif database == 'clickhouse+redis' %}
       GORSE_DATA_STORE: clickhouse://gorse:gorse_pass@clickhouse:8123/gorse?mutations_sync=2
       GORSE_CACHE_STORE: redis://redis:6379
-      {% elif database == 'sqlite' %}
+      {% elif database == 'sqlite+xvec' %}
       GORSE_DATA_STORE: sqlite:///var/lib/gorse/data.sqlite3
       GORSE_CACHE_STORE: sqlite:///var/lib/gorse/cache.sqlite3
+      GORSE_VECTOR_STORE: xvec:///var/lib/gorse/vectors
       {% endif %}
     command: >
       -c /etc/gorse/config.toml 
@@ -153,16 +216,22 @@ services:
       --cache-path /var/lib/gorse
     volumes:
       - ./client/config.toml:/etc/gorse/config.toml
-    {% if database != 'sqlite' %}
+    {% if database != 'sqlite+xvec' %}
     depends_on:
-      {% if database == 'mysql' %}
+      {% if database == 'mysql+qdrant' %}
       mysql:
         condition: service_healthy
-      {% elif database == 'postgres' %}
+      qdrant:
+        condition: service_started
+      {% elif database == 'postgres+weaviate' %}
       postgres:
         condition: service_healthy
-      {% elif database == 'mongo' %}
+      weaviate:
+        condition: service_started
+      {% elif database == 'mongo+milvus' %}
       mongo:
+        condition: service_healthy
+      milvus:
         condition: service_healthy
       {% elif database == 'clickhouse+redis' %}
       clickhouse:

@@ -270,7 +270,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        database: [mysql, postgres, mongo, sqlite]
+        database: [mysql+qdrant, postgres+weaviate, mongo+milvus, sqlite+xvec]
     steps:
     - uses: actions/checkout@v5
       with:
