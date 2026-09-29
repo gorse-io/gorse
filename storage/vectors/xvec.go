@@ -179,7 +179,7 @@ func (db *Xvec) DescribeCollection(ctx context.Context, name string) (*Collectio
 	}
 	var metric xvec.MetricType
 	switch params := field.EffectiveIndex().(type) {
-	case xvec.DiskANNIndexParams:
+	case xvec.HNSWIndexParams:
 		metric = params.Metric
 	case xvec.FlatIndexParams:
 		metric = params.Metric
@@ -247,7 +247,8 @@ func (db *Xvec) collectionSchema(ctx context.Context, name string, dimensions in
 		}
 		vectorField = xvec.FieldSchema{Name: xvecVectorField, DataType: xvec.DataTypeSparseVectorFP32, Index: xvec.NewFlatIndexParams(metric)}
 	} else {
-		vectorField = xvec.FieldSchema{Name: xvecVectorField, DataType: xvec.DataTypeVectorFP16, Dimension: uint32(dimensions), Index: xvec.NewDiskANNIndexParams(metric)}
+		index := xvec.NewHNSWIndexParams(metric)
+		vectorField = xvec.FieldSchema{Name: xvecVectorField, DataType: xvec.DataTypeVectorFP16, Dimension: uint32(dimensions), Index: index}
 	}
 	physicalName := db.tablePrefix + name
 	schema := xvec.NewCollectionSchema(physicalName,
@@ -306,8 +307,8 @@ func (db *Xvec) AddVectors(ctx context.Context, name string, vectors []Vector) e
 	schema := collection.Schema()
 	documents := make([]xvec.Document, len(vectors))
 	for i, vector := range vectors {
-		var value any = xvecVectorFP16(vector.Values)
-		if len(vector.Indices) > 0 {
+		var value any = xvecVectorFP16(vector)
+		if vector.IsSparse() {
 			value = xvec.SparseVectorFP32{Indices: vector.Indices, Values: vector.Values}
 		}
 		document := xvec.Document{PrimaryKey: vector.Id, Fields: map[string]any{
@@ -403,12 +404,12 @@ func (db *Xvec) QueryVectors(ctx context.Context, name string, q Vector, categor
 			IncludeVectors: true,
 		},
 	}
-	if len(q.Indices) > 0 {
+	if q.IsSparse() {
 		query.SparseVector = xvec.SparseVectorFP32{Indices: q.Indices, Values: q.Values}
 		query.Params = xvec.NewFlatQueryParams()
 	} else {
-		query.DenseVector = xvecVectorFP16(q.Values)
-		query.Params = xvec.NewDiskANNQueryParams()
+		query.DenseVector = xvecVectorFP16(q)
+		query.Params = xvec.NewHNSWQueryParams()
 	}
 	documents, err := collection.Query(ctx, query)
 	if err != nil {
@@ -420,7 +421,7 @@ func (db *Xvec) QueryVectors(ctx context.Context, name string, q Vector, categor
 	}
 	results := make([]ScoredVector, 0, len(documents))
 	for _, document := range documents {
-		if len(q.Indices) > 0 && document.Score == 0 {
+		if q.IsSparse() && document.Score == 0 {
 			continue
 		}
 		result := ScoredVector{Vector: Vector{Id: document.PrimaryKey}, Score: document.Score}
@@ -487,8 +488,8 @@ func xvecDistance(metric xvec.MetricType) (Distance, error) {
 	}
 }
 
-func xvecVectorFP16(values []float32) xvec.VectorFP16 {
-	bits := floats.FromFloat32(values)
+func xvecVectorFP16(vector Vector) xvec.VectorFP16 {
+	bits := vector.Float16Values()
 	return unsafe.Slice((*xvec.Float16)(unsafe.Pointer(unsafe.SliceData(bits))), len(bits))
 }
 

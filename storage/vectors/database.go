@@ -19,7 +19,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unsafe"
 
+	"github.com/gorse-io/gorse/common/floats"
 	"github.com/gorse-io/gorse/storage"
 	"github.com/pkg/errors"
 )
@@ -92,10 +94,50 @@ type CollectionInfo struct {
 type Vector struct {
 	Id         string
 	Values     []float32
+	HValues    []uint16 // IEEE 754 FP16 bits; takes precedence over Values when non-empty.
 	Indices    []uint32
 	IsHidden   bool      `json:"-"`
 	Categories []string  `json:"-" gorm:"type:text;serializer:json"`
 	Timestamp  time.Time `json:"-"`
+}
+
+// Float32Values returns dense vector values as FP32.
+func (v Vector) Float32Values() []float32 {
+	if len(v.HValues) > 0 {
+		return floats.ToFloat32(v.HValues)
+	}
+	return v.Values
+}
+
+// Float16Values returns dense vector values as IEEE 754 FP16 bits.
+func (v Vector) Float16Values() []uint16 {
+	if len(v.HValues) > 0 {
+		return v.HValues
+	}
+	return floats.FromFloat32(v.Values)
+}
+
+// IsSparse reports whether the vector contains sparse values.
+func (v Vector) IsSparse() bool {
+	return len(v.HValues) == 0 && len(v.Indices) > 0
+}
+
+// Len returns the number of vector dimensions.
+func (v Vector) Len() int {
+	if len(v.HValues) > 0 {
+		return len(v.HValues)
+	}
+	return len(v.Values)
+}
+
+// Float16Bytes reinterprets IEEE 754 FP16 bits as bytes.
+func Float16Bytes(values []uint16) []byte {
+	return unsafe.Slice((*byte)(unsafe.Pointer(unsafe.SliceData(values))), len(values)*2)
+}
+
+// Float16Values reinterprets bytes as IEEE 754 FP16 bits.
+func Float16Values(values []byte) []uint16 {
+	return unsafe.Slice((*uint16)(unsafe.Pointer(unsafe.SliceData(values))), len(values)/2)
 }
 
 // ScoredVector is a vector with a similarity score. Higher scores indicate greater similarity.

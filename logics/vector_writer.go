@@ -89,12 +89,16 @@ func newSimilarityVectorWriter(
 func (w *VectorWriter) Add(vector vectors.Vector) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	if w.sparse {
+	if len(vector.HValues) > 0 {
+		if w.sparse {
+			return nil
+		}
+	} else if w.sparse {
 		if len(vector.Indices) == 0 || len(vector.Indices) != len(vector.Values) {
 			return nil
 		}
 	} else {
-		if len(vector.Indices) != 0 || len(vector.Values) == 0 {
+		if len(vector.Indices) != 0 || vector.Len() == 0 {
 			return nil
 		}
 	}
@@ -158,11 +162,11 @@ func (w *VectorWriter) flushLocked() error {
 		if w.dimension == nil {
 			counts := make(map[int]int)
 			for _, vector := range w.buffer {
-				counts[len(vector.Values)]++
+				counts[vector.Len()]++
 			}
-			dimension := len(w.buffer[0].Values)
+			dimension := w.buffer[0].Len()
 			for _, vector := range w.buffer {
-				candidate := len(vector.Values)
+				candidate := vector.Len()
 				if counts[candidate] > counts[dimension] {
 					dimension = candidate
 				}
@@ -172,11 +176,11 @@ func (w *VectorWriter) flushLocked() error {
 		dimension := *w.dimension
 		vectorsWithExpectedDimension := w.buffer[:0]
 		for _, vector := range w.buffer {
-			if len(vector.Values) != dimension {
+			if vector.Len() != dimension {
 				log.Logger().Error("invalid similarity vector dimension",
 					zap.String("collection", w.collection),
 					zap.String("id", vector.Id),
-					zap.Int("dimension", len(vector.Values)),
+					zap.Int("dimension", vector.Len()),
 					zap.Int("expected_dimension", dimension))
 				continue
 			}

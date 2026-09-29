@@ -149,7 +149,7 @@ func (e *embeddingUserToUser) Add(user *data.User, _ []int32) error {
 		log.Logger().Error("invalid embedding column type", zap.Any("column", result))
 		return nil
 	}
-	return e.VectorWriter.Add(vectors.Vector{Id: user.UserId, Values: floats.ToFloat32(value), Timestamp: e.timestamp})
+	return e.VectorWriter.Add(vectors.Vector{Id: user.UserId, HValues: value, Timestamp: e.timestamp})
 }
 
 type tagsUserToUser struct {

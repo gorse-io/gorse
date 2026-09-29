@@ -119,6 +119,7 @@ func (p *ProxyServer) AddVectors(ctx context.Context, request *protocol.AddVecto
 		vectors[i] = Vector{
 			Id:         vector.GetId(),
 			Values:     vector.GetValues(),
+			HValues:    Float16Values(vector.GetHValues()),
 			Indices:    vector.GetIndices(),
 			IsHidden:   vector.GetIsHidden(),
 			Categories: vector.GetCategories(),
@@ -142,6 +143,7 @@ func (p *ProxyServer) GetVectors(ctx context.Context, request *protocol.GetVecto
 		pbVectors[i] = &protocol.Vector{
 			Id:         vector.Id,
 			Values:     vector.Values,
+			HValues:    Float16Bytes(vector.HValues),
 			Indices:    vector.Indices,
 			IsHidden:   vector.IsHidden,
 			Categories: vector.Categories,
@@ -167,6 +169,7 @@ func (p *ProxyServer) QueryVectors(ctx context.Context, request *protocol.QueryV
 	query := request.GetQuery()
 	results, err := p.database.QueryVectors(ctx, request.GetCollection(), Vector{
 		Values:  query.GetValues(),
+		HValues: Float16Values(query.GetHValues()),
 		Indices: query.GetIndices(),
 	}, request.GetCategories(), int(request.GetTopK()))
 	if err != nil {
@@ -178,6 +181,7 @@ func (p *ProxyServer) QueryVectors(ctx context.Context, request *protocol.QueryV
 			Vector: &protocol.Vector{
 				Id:         result.Id,
 				Values:     result.Vector.Values,
+				HValues:    Float16Bytes(result.Vector.HValues),
 				Indices:    result.Vector.Indices,
 				IsHidden:   result.IsHidden,
 				Categories: result.Categories,
@@ -276,6 +280,7 @@ func (p ProxyClient) AddVectors(ctx context.Context, collection string, vectors 
 		pbVectors[i] = &protocol.Vector{
 			Id:         vector.Id,
 			Values:     vector.Values,
+			HValues:    Float16Bytes(vector.HValues),
 			Indices:    vector.Indices,
 			IsHidden:   vector.IsHidden,
 			Categories: vector.Categories,
@@ -306,6 +311,7 @@ func (p ProxyClient) GetVectors(ctx context.Context, collection string, ids []st
 		vectors[i] = Vector{
 			Id:         vector.GetId(),
 			Values:     vector.GetValues(),
+			HValues:    Float16Values(vector.GetHValues()),
 			Indices:    vector.GetIndices(),
 			IsHidden:   vector.GetIsHidden(),
 			Categories: vector.GetCategories(),
@@ -328,6 +334,7 @@ func (p ProxyClient) QueryVectors(ctx context.Context, collection string, q Vect
 		Collection: collection,
 		Query: &protocol.Vector{
 			Values:  q.Values,
+			HValues: Float16Bytes(q.HValues),
 			Indices: q.Indices,
 		},
 		Categories: categories,
@@ -343,6 +350,7 @@ func (p ProxyClient) QueryVectors(ctx context.Context, collection string, q Vect
 			Vector: Vector{
 				Id:         vector.GetId(),
 				Values:     vector.GetValues(),
+				HValues:    Float16Values(vector.GetHValues()),
 				Indices:    vector.GetIndices(),
 				IsHidden:   vector.GetIsHidden(),
 				Categories: vector.GetCategories(),

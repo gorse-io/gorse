@@ -314,10 +314,10 @@ func (db *Qdrant) AddVectors(ctx context.Context, collection string, vectors []V
 	points := make([]*qdrant.PointStruct, 0, len(vectors))
 	for _, vector := range vectors {
 		var value *qdrant.Vector
-		if len(vector.Indices) > 0 {
+		if vector.IsSparse() {
 			value = qdrant.NewVectorSparse(vector.Indices, vector.Values)
 		} else {
-			value = qdrant.NewVectorDense(vector.Values)
+			value = qdrant.NewVectorDense(vector.Float32Values())
 		}
 		values := qdrant.NewVectorsMap(map[string]*qdrant.Vector{qdrantVectorName: value})
 		points = append(points, &qdrant.PointStruct{
@@ -398,10 +398,10 @@ func (db *Qdrant) QueryVectors(ctx context.Context, collection string, q Vector,
 			qdrant.NewMatchBool(qdrantPayloadHiddenKey, false),
 		}},
 	}
-	if len(q.Indices) > 0 {
+	if q.IsSparse() {
 		request.Query = qdrant.NewQuerySparse(q.Indices, q.Values)
 	} else {
-		request.Query = qdrant.NewQueryDense(q.Values)
+		request.Query = qdrant.NewQueryDense(q.Float32Values())
 	}
 	request.Using = new(qdrantVectorName)
 	request.WithVectors = qdrant.NewWithVectorsInclude(qdrantVectorName)
