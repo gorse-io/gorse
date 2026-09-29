@@ -35,10 +35,7 @@ import (
 	"github.com/tiktoken-go/tokenizer"
 )
 
-const (
-	agentSearchToolName       = "search_items"
-	defaultAgentMaxIterations = 4
-)
+const agentSearchToolName = "search_items"
 
 var cl100kBaseTokenizer tokenizer.Codec
 
@@ -126,63 +123,48 @@ func (a *Agent) Recommend(ctx context.Context) ([]cache.Score, error) {
 	}
 
 	candidateItems := make(map[string]data.Item)
-	var finalContent string
-	for i := 0; i < a.maxIterations(); i++ {
-		resp, err := a.createChatCompletion(ctx, messages)
+	resp, err := a.createChatCompletion(ctx, messages, true)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	if len(resp.Choices) == 0 {
+		return nil, errors.New("empty chat completion response")
+	}
+	message := resp.Choices[0].Message
+	if len(message.ToolCalls) == 0 {
+		return a.parseRecommendations(ctx, message.Content, candidateItems)
+	}
+	messages = append(messages, message)
+	for _, toolCall := range message.ToolCalls {
+		if toolCall.Function.Name != agentSearchToolName {
+			continue
+		}
+		items, err := a.callSearchItems(ctx, toolCall.Function.Arguments)
 		if err != nil {
 			return nil, errors.WithStack(err)
 		}
-		if len(resp.Choices) == 0 {
-			return nil, errors.New("empty chat completion response")
+		for _, item := range items {
+			candidateItems[item.ItemId] = item
 		}
-		message := resp.Choices[0].Message
-		if len(message.ToolCalls) == 0 {
-			finalContent = message.Content
-			break
-		}
-		messages = append(messages, message)
-		for _, toolCall := range message.ToolCalls {
-			if toolCall.Function.Name != agentSearchToolName {
-				continue
-			}
-			items, err := a.callSearchItems(ctx, toolCall.Function.Arguments)
-			if err != nil {
-				return nil, errors.WithStack(err)
-			}
-			for _, item := range items {
-				candidateItems[item.ItemId] = item
-			}
-			content, err := marshalAgentSearchResults(items)
-			if err != nil {
-				return nil, errors.WithStack(err)
-			}
-			messages = append(messages, openai.ChatCompletionMessage{
-				Role:       openai.ChatMessageRoleTool,
-				ToolCallID: toolCall.ID,
-				Name:       agentSearchToolName,
-				Content:    content,
-			})
-		}
-	}
-	if finalContent == "" {
-		resp, err := a.createChatCompletion(ctx, messages)
+		content, err := marshalAgentSearchResults(items)
 		if err != nil {
 			return nil, errors.WithStack(err)
 		}
-		if len(resp.Choices) == 0 {
-			return nil, errors.New("empty chat completion response")
-		}
-		finalContent = resp.Choices[0].Message.Content
+		messages = append(messages, openai.ChatCompletionMessage{
+			Role:       openai.ChatMessageRoleTool,
+			ToolCallID: toolCall.ID,
+			Name:       agentSearchToolName,
+			Content:    content,
+		})
 	}
-
-	return a.parseRecommendations(ctx, finalContent, candidateItems)
-}
-
-func (a *Agent) maxIterations() int {
-	if a.config.MaxIterations <= 0 {
-		return defaultAgentMaxIterations
+	resp, err = a.createChatCompletion(ctx, messages, false)
+	if err != nil {
+		return nil, errors.WithStack(err)
 	}
-	return a.config.MaxIterations
+	if len(resp.Choices) == 0 {
+		return nil, errors.New("empty chat completion response")
+	}
+	return a.parseRecommendations(ctx, resp.Choices[0].Message.Content, candidateItems)
 }
 
 func (a *Agent) renderPrompt(feedback []data.Feedback) (string, error) {
@@ -197,7 +179,7 @@ func (a *Agent) renderPrompt(feedback []data.Feedback) (string, error) {
 	return strings.TrimSpace(buf.String()), nil
 }
 
-func (a *Agent) createChatCompletion(ctx context.Context, messages []openai.ChatCompletionMessage) (openai.ChatCompletionResponse, error) {
+func (a *Agent) createChatCompletion(ctx context.Context, messages []openai.ChatCompletionMessage, enableTools bool) (openai.ChatCompletionResponse, error) {
 	prompt := lo.SumBy(messages, func(message openai.ChatCompletionMessage) int {
 		ids, _, _ := cl100kBaseTokenizer.Encode(message.Content)
 		return len(ids)
@@ -205,10 +187,12 @@ func (a *Agent) createChatCompletion(ctx context.Context, messages []openai.Chat
 	return backoff.Retry(ctx, func() (openai.ChatCompletionResponse, error) {
 		time.Sleep(parallel.ChatCompletionRequestsLimiter.Take(1))
 		time.Sleep(parallel.ChatCompletionTokensLimiter.Take(int64(prompt)))
-		resp, err := a.client.CreateChatCompletion(ctx, openai.ChatCompletionRequest{
+		request := openai.ChatCompletionRequest{
 			Model:    a.openAIConfig.ChatCompletionModel,
 			Messages: messages,
-			Tools: []openai.Tool{{
+		}
+		if enableTools {
+			request.Tools = []openai.Tool{{
 				Type: openai.ToolTypeFunction,
 				Function: &openai.FunctionDefinition{
 					Name:        agentSearchToolName,
@@ -228,8 +212,9 @@ func (a *Agent) createChatCompletion(ctx context.Context, messages []openai.Chat
 						Required: []string{"query"},
 					},
 				},
-			}},
-		})
+			}}
+		}
+		resp, err := a.client.CreateChatCompletion(ctx, request)
 		if err == nil {
 			return resp, nil
 		}

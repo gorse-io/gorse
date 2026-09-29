@@ -51,14 +51,6 @@ func TestNewAgentInvalidPromptTemplate(t *testing.T) {
 	assert.Error(t, err)
 }
 
-func TestAgentMaxIterations(t *testing.T) {
-	agent := Agent{}
-	assert.Equal(t, defaultAgentMaxIterations, agent.maxIterations())
-
-	agent.config.MaxIterations = 2
-	assert.Equal(t, 2, agent.maxIterations())
-}
-
 func TestAgentParseRecommendationsSkipsHiddenItems(t *testing.T) {
 	agent := Agent{excludeSet: mapset.NewSet[string](), cacheSize: 10}
 	scores, err := agent.parseRecommendations(context.Background(), "```json\n[\"hidden\"]\n```", map[string]data.Item{
