@@ -115,10 +115,13 @@ func (w *VectorWriter) Clean() error {
 	if err := w.flushLocked(); err != nil {
 		return err
 	}
-	if err := w.client.DeleteVectors(w.ctx, w.collection, w.timestamp); err != nil && !errors.Is(err, storage.ErrNotFound) {
+	if err := w.client.DeleteVectors(w.ctx, w.collection, w.timestamp); errors.Is(err, storage.ErrNotFound) {
+		return nil
+	} else if err != nil {
 		return errors.WithStack(err)
 	}
-	return nil
+	// Compact old versions and prepare indexes before the generation task ends.
+	return errors.WithStack(w.client.Optimize(w.ctx, w.collection))
 }
 
 func (w *VectorWriter) ensureCollectionLocked() error {
@@ -279,14 +282,21 @@ func newSparseVector[T ~int32](ids []T, idf []float32, offset uint32) vectors.Ve
 
 func appendSparseVector[T ~int32](vector vectors.Vector, ids []T, idf []float32, offset uint32) vectors.Vector {
 	pruner := newSparseVectorPruner(maxSparseVectorNNZ)
+	seen := make(map[uint32]struct{}, len(vector.Indices))
 	for i, index := range vector.Indices {
 		pruner.Add(index, vector.Values[i])
+		seen[index] = struct{}{}
 	}
 	for _, id := range ids {
 		if id < 0 || int(id) >= len(idf) || idf[id] <= 0 {
 			continue
 		}
-		pruner.Add(offset+uint32(id), float32(math.Sqrt(float64(idf[id]))))
+		index := offset + uint32(id)
+		if _, exists := seen[index]; exists {
+			continue
+		}
+		seen[index] = struct{}{}
+		pruner.Add(index, float32(math.Sqrt(float64(idf[id]))))
 	}
 	vector.Indices, vector.Values = pruner.Result()
 	return vector
