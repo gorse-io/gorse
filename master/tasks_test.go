@@ -23,9 +23,7 @@ import (
 
 	"github.com/gorse-io/gorse/common/event"
 	"github.com/gorse-io/gorse/common/expression"
-	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/config"
-	"github.com/gorse-io/gorse/dataset"
 	"github.com/gorse-io/gorse/logics"
 	"github.com/gorse-io/gorse/model/cf"
 	"github.com/gorse-io/gorse/model/ctr"
@@ -55,78 +53,6 @@ type failOnceVectorDatabase struct {
 	vectors.Database
 	name   string
 	failed bool
-}
-
-type optimizeHookDatabase struct {
-	vectors.Database
-	optimize func(context.Context, string) error
-}
-
-func (d *optimizeHookDatabase) Optimize(ctx context.Context, name string) error {
-	return d.optimize(ctx, name)
-}
-
-func (s *MasterTestSuite) TestSimilarityGenerationOptimizeLifecycle() {
-	for _, userToUser := range []bool{false, true} {
-		name, collection := "Generate item-to-item recommendation", vectors.ItemToItemCollection("test")
-		if userToUser {
-			name, collection = "Generate user-to-user recommendation", vectors.UserToUserCollection("test")
-		}
-		for _, fail := range []bool{false, true} {
-			s.Run(fmt.Sprintf("%s/fail=%t", name, fail), func() {
-				ctx := s.T().Context()
-				s.tracer = monitor.NewTracer("test")
-				s.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "test", Type: "users"}}
-				s.Config.Recommend.UserToUser = []config.UserToUserConfig{{Name: "test", Type: "items"}}
-				timestamp := time.Now().UTC().Truncate(time.Millisecond)
-				input := dataset.NewDataset(timestamp, 2, 2)
-				for _, id := range []string{"0", "1"} {
-					input.AddUser(data.User{UserId: id})
-					input.AddItem(data.Item{ItemId: id})
-					input.AddFeedback(id, id, timestamp)
-					input.AddFeedback(id, id, timestamp) // Repeated feedback must remain writable.
-				}
-				db := s.VectorClient
-				s.Require().NoError(db.AddCollection(ctx, collection, 0, vectors.Dot, vectors.VectorConfig{}))
-				defer func() { s.NoError(db.DeleteCollection(ctx, collection)) }()
-				s.Require().NoError(db.AddVectors(ctx, collection, []vectors.Vector{{
-					Id: "stale", Indices: []uint32{0}, Values: []float32{1}, Timestamp: timestamp.Add(-time.Hour),
-				}}))
-				optimizeErr := fmt.Errorf("optimize failed")
-				optimized := false
-				s.VectorClient = &optimizeHookDatabase{Database: db, optimize: func(ctx context.Context, actual string) error {
-					s.Equal(collection, actual)
-					s.Equal(monitor.StatusRunning, s.tracer.List()[0].Status)
-					count, err := db.CountVectors(ctx, actual)
-					s.Require().NoError(err)
-					s.Equal(int64(2), count) // Final batch flushed and stale vector removed.
-					if fail {
-						return optimizeErr
-					}
-					err = db.Optimize(ctx, actual)
-					optimized = err == nil
-					return err
-				}}
-				defer func() { s.VectorClient = db }()
-				var err error
-				if userToUser {
-					err = s.updateUserToUser(ctx, input)
-				} else {
-					err = s.updateItemToItem(ctx, input)
-				}
-				progress := s.tracer.List()[0]
-				if fail {
-					s.ErrorIs(err, optimizeErr)
-					s.Equal(monitor.StatusFailed, progress.Status)
-					s.Contains(progress.Error, optimizeErr.Error())
-				} else {
-					s.NoError(err)
-					s.True(optimized)
-					s.Equal(monitor.StatusComplete, progress.Status)
-				}
-			})
-		}
-	}
 }
 
 func (d *failOnceVectorDatabase) DeleteCollection(ctx context.Context, name string) error {

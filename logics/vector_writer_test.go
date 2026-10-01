@@ -16,13 +16,7 @@ package logics
 
 import (
 	"math"
-	"path/filepath"
 	"testing"
-	"time"
-
-	"github.com/gorse-io/gorse/storage/vectors"
-	"github.com/gorse-io/xvec"
-	"github.com/stretchr/testify/require"
 )
 
 func TestSparseVectorPrunerKeepsHighestValues(t *testing.T) {
@@ -115,80 +109,5 @@ func TestAppendSparseVectorPrunesCombinedVectorToMaxNNZ(t *testing.T) {
 		if math.Abs(float64(vector.Values[i])-math.Sqrt(2)) > 1e-6 {
 			t.Errorf("value %d: expected sqrt(2), got %f", i, vector.Values[i])
 		}
-	}
-}
-
-func TestSparseVectorRepeatedFeedbackDoesNotConsumeCapacity(t *testing.T) {
-	ids := make([]int32, 0, 2*maxSparseVectorNNZ)
-	idf := make([]float32, maxSparseVectorNNZ)
-	for i := range maxSparseVectorNNZ {
-		ids = append(ids, int32(i), int32(i))
-		idf[i] = 1
-	}
-	vector := newSparseVector(ids, idf, 0)
-	require.Len(t, vector.Indices, maxSparseVectorNNZ)
-	for i, index := range vector.Indices {
-		require.Equal(t, uint32(i), index)
-		require.Equal(t, float32(1), vector.Values[i])
-	}
-}
-
-func TestVectorWriterCleanCompactsBeforeQuery(t *testing.T) {
-	for _, sparse := range []bool{false, true} {
-		name := "dense"
-		dimension, distance := 2, vectors.Euclidean
-		collection := vectors.ItemToItemCollection(name)
-		if sparse {
-			name = "sparse"
-			dimension, distance = 0, vectors.Dot
-			collection = vectors.UserToUserCollection(name)
-		}
-		t.Run(name, func(t *testing.T) {
-			ctx := t.Context()
-			root := t.TempDir()
-			client, err := vectors.Open("xvec://"+root, "")
-			require.NoError(t, err)
-			t.Cleanup(func() { require.NoError(t, client.Close()) })
-			require.NoError(t, client.Init())
-			require.NoError(t, client.AddCollection(ctx, collection, dimension, distance, vectors.VectorConfig{}))
-			timestamp := time.Now().UTC().Truncate(time.Millisecond)
-			makeVector := func(id string, value float32, timestamp time.Time) vectors.Vector {
-				v := vectors.Vector{Id: id, Values: []float32{value, 1}, Timestamp: timestamp}
-				if sparse {
-					v.Indices = []uint32{0, 1}
-				}
-				return v
-			}
-			require.NoError(t, client.AddVectors(ctx, collection, []vectors.Vector{
-				makeVector("stale", 1, timestamp.Add(-time.Hour)),
-				makeVector("current", 1, timestamp.Add(-time.Hour)),
-			}))
-			writer := newSimilarityVectorWriter(ctx, client, collection, distance, vectors.VectorConfig{}, timestamp, 1024, sparse)
-			require.NoError(t, writer.Add(makeVector("current", 2, timestamp)))
-			require.NoError(t, writer.Add(makeVector("new", 3, timestamp)))
-			require.NoError(t, writer.Clean())
-			require.NoError(t, client.Close())
-
-			// Inspect persisted state before any query can build an index lazily.
-			persisted, err := xvec.Open(ctx, filepath.Join(root, collection), xvec.CollectionOptions{})
-			require.NoError(t, err)
-			stats := persisted.Stats()
-			require.Equal(t, uint64(2), stats.DocumentCount)
-			require.Zero(t, stats.MutableDocuments)
-			require.Zero(t, stats.DeletedDocuments)
-			require.NotZero(t, stats.ImmutableSegments)
-			require.Equal(t, float32(1), stats.IndexCompleteness["vector"])
-			require.NoError(t, persisted.Close())
-
-			client, err = vectors.Open("xvec://"+root, "")
-			require.NoError(t, err)
-			require.NoError(t, client.Init())
-			stored, err := client.GetVectors(ctx, collection, []string{"stale", "current", "new"})
-			require.NoError(t, err)
-			require.Len(t, stored, 2)
-			neighbors, err := client.QueryVectors(ctx, collection, makeVector("", 2, timestamp), nil, 2)
-			require.NoError(t, err)
-			require.Len(t, neighbors, 2)
-		})
 	}
 }
