@@ -120,7 +120,6 @@ func (w *VectorWriter) Clean() error {
 	} else if err != nil {
 		return errors.WithStack(err)
 	}
-	// Compact old versions and prepare indexes before the generation task ends.
 	return errors.WithStack(w.client.Optimize(w.ctx, w.collection))
 }
 
