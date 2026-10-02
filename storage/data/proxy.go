@@ -129,7 +129,6 @@ func (p *ProxyServer) BatchInsertItems(ctx context.Context, in *protocol.BatchIn
 			Timestamp:  item.Timestamp.AsTime(),
 			Labels:     labels,
 			Comment:    item.Comment,
-			UpdateAt:   timeFromPB(item.UpdateAt),
 		}
 	}
 	err := p.database.BatchInsertItems(ctx, items)
@@ -302,10 +301,9 @@ func (p *ProxyServer) BatchInsertUsers(ctx context.Context, in *protocol.BatchIn
 			return nil, err
 		}
 		users[i] = User{
-			UserId:   user.UserId,
-			Labels:   labels,
-			Comment:  user.Comment,
-			UpdateAt: timeFromPB(user.UpdateAt),
+			UserId:  user.UserId,
+			Labels:  labels,
+			Comment: user.Comment,
 		}
 	}
 	err := p.database.BatchInsertUsers(ctx, users)
@@ -641,7 +639,6 @@ func (p ProxyClient) BatchInsertItems(ctx context.Context, items []Item) error {
 			Timestamp:  timestamppb.New(item.Timestamp),
 			Labels:     labels,
 			Comment:    item.Comment,
-			UpdateAt:   timestamppb.New(item.UpdateAt),
 		}
 	}
 	_, err := p.DataStoreClient.BatchInsertItems(ctx, &protocol.BatchInsertItemsRequest{Items: pbItems})
@@ -850,10 +847,9 @@ func (p ProxyClient) BatchInsertUsers(ctx context.Context, users []User) error {
 			return err
 		}
 		pbUsers[i] = &protocol.User{
-			UserId:   user.UserId,
-			Labels:   labels,
-			Comment:  user.Comment,
-			UpdateAt: timestamppb.New(user.UpdateAt),
+			UserId:  user.UserId,
+			Labels:  labels,
+			Comment: user.Comment,
 		}
 	}
 	_, err := p.DataStoreClient.BatchInsertUsers(ctx, &protocol.BatchInsertUsersRequest{Users: pbUsers})
