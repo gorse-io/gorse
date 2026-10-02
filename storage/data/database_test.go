@@ -194,12 +194,17 @@ func (suite *baseTestSuite) TestUsers() {
 	// Get users
 	users := suite.getUsers(ctx, 3)
 	suite.Equal(10, len(users))
-	for i, user := range users {
-		insertedUsers[9-i].UpdateAt = user.UpdateAt
-		suite.Equal(insertedUsers[9-i], user)
+	for i := range users {
+		suite.False(users[i].UpdateAt.IsZero())
+		users[i].UpdateAt = time.Time{}
+		suite.Equal(insertedUsers[9-i], users[i])
 	}
 	// Get user stream
 	usersFromStream := suite.getUsersStream(ctx, 3)
+	for i := range usersFromStream {
+		suite.False(usersFromStream[i].UpdateAt.IsZero())
+		usersFromStream[i].UpdateAt = time.Time{}
+	}
 	suite.ElementsMatch(insertedUsers, usersFromStream)
 	// Get this user
 	user, err := suite.Database.GetUser(ctx, "0")
@@ -344,11 +349,15 @@ func (suite *baseTestSuite) TestFeedback() {
 	// check users that already exists
 	user, err := suite.Database.GetUser(ctx, "0")
 	suite.NoError(err)
-	suite.Equal(User{UserId: "0", Labels: []any{"a"}, Comment: "comment", UpdateAt: user.UpdateAt}, user)
+	suite.False(user.UpdateAt.IsZero())
+	user.UpdateAt = time.Time{}
+	suite.Equal(User{UserId: "0", Labels: []any{"a"}, Comment: "comment"}, user)
 	// check items that already exists
 	item, err := suite.Database.GetItem(ctx, "0")
 	suite.NoError(err)
-	suite.Equal(Item{ItemId: "0", Labels: []any{"b"}, Timestamp: time.Date(1996, 4, 8, 10, 0, 0, 0, time.UTC), UpdateAt: item.UpdateAt}, item)
+	suite.False(item.UpdateAt.IsZero())
+	item.UpdateAt = time.Time{}
+	suite.Equal(Item{ItemId: "0", Labels: []any{"b"}, Timestamp: time.Date(1996, 4, 8, 10, 0, 0, 0, time.UTC)}, item)
 	// Get typed feedback by user
 	ret, err = suite.Database.GetUserFeedback(ctx, "2", new(time.Now()),
 		expression.MustParseFeedbackTypeExpression(positiveFeedbackType1),
@@ -521,34 +530,57 @@ func (suite *baseTestSuite) TestItems() {
 	suite.Equal(5, count)
 	// Get items
 	totalItems := suite.getItems(ctx, 3)
-	for i := range items {
-		items[i].UpdateAt = totalItems[i].UpdateAt
+	for i := range totalItems {
+		suite.False(totalItems[i].UpdateAt.IsZero())
+		totalItems[i].UpdateAt = time.Time{}
 	}
 	suite.Equal(items, totalItems)
 	// Get item stream
 	itemsFromStream := suite.getItemStream(ctx, 3)
+	for i := range itemsFromStream {
+		suite.False(itemsFromStream[i].UpdateAt.IsZero())
+		itemsFromStream[i].UpdateAt = time.Time{}
+	}
 	suite.ElementsMatch(items, itemsFromStream)
 	// Get item
 	for _, item := range items {
 		ret, err := suite.Database.GetItem(ctx, item.ItemId)
 		suite.NoError(err)
+		suite.False(ret.UpdateAt.IsZero())
+		ret.UpdateAt = time.Time{}
 		suite.Equal(item, ret)
 	}
 	// batch get items
 	batchItem, err := suite.Database.BatchGetItems(ctx, []string{"2", "6"}, GetOptions{})
 	suite.NoError(err)
+	for i := range batchItem {
+		suite.False(batchItem[i].UpdateAt.IsZero())
+		batchItem[i].UpdateAt = time.Time{}
+	}
 	suite.Equal([]Item{items[1], items[3]}, batchItem)
 	// Test GetLatestItems
 	latestItems, err := suite.Database.GetLatestItems(ctx, 3, nil, nil)
 	suite.NoError(err)
+	for i := range latestItems {
+		suite.False(latestItems[i].UpdateAt.IsZero())
+		latestItems[i].UpdateAt = time.Time{}
+	}
 	suite.Equal([]Item{items[3], items[1]}, latestItems)
 	latestItemsWithCategory, err := suite.Database.GetLatestItems(ctx, 3, []string{"b"}, nil)
 	suite.NoError(err)
+	for i := range latestItemsWithCategory {
+		suite.False(latestItemsWithCategory[i].UpdateAt.IsZero())
+		latestItemsWithCategory[i].UpdateAt = time.Time{}
+	}
 	suite.Equal([]Item{items[3], items[1]}, latestItemsWithCategory)
 	// Test GetLatestItems with after time filter
 	afterTime := time.Date(1998, 1, 1, 0, 0, 0, 0, time.UTC)
 	latestItemsAfter, err := suite.Database.GetLatestItems(ctx, 3, nil, &afterTime)
 	suite.NoError(err)
+	for i := range latestItemsAfter {
+		suite.False(latestItemsAfter[i].UpdateAt.IsZero())
+		latestItemsAfter[i].UpdateAt = time.Time{}
+	}
 	suite.Equal([]Item{items[3]}, latestItemsAfter) // only the newest item has timestamp > afterTime
 	// Delete item
 	err = suite.Database.DeleteItem(ctx, "0")
@@ -810,7 +842,8 @@ func (suite *baseTestSuite) TestTimeLimit() {
 	_, ret, err := suite.Database.GetItems(ctx, "", 100, &timeLimit)
 	suite.NoError(err)
 	for i := range ret {
-		items[i+2].UpdateAt = ret[i].UpdateAt
+		suite.False(ret[i].UpdateAt.IsZero())
+		ret[i].UpdateAt = time.Time{}
 	}
 	suite.Equal([]Item{items[2], items[3], items[4]}, ret)
 

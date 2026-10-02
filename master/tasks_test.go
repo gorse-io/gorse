@@ -482,13 +482,12 @@ func (s *MasterTestSuite) TestLoadDataFromDatabase() {
 	s.Equal(55, datasets.clickTrainSet.NegativeCount+datasets.clickTestSet.NegativeCount)
 
 	// check latest items
-	for i := range items {
-		stored, err := s.DataClient.GetItem(ctx, items[i].ItemId)
-		s.Require().NoError(err)
-		items[i].UpdateAt = stored.UpdateAt
-	}
 	latest, err := s.DataClient.GetLatestItems(ctx, 3, nil, nil)
 	s.NoError(err)
+	for i := range latest {
+		s.False(latest[i].UpdateAt.IsZero())
+		latest[i].UpdateAt = time.Time{}
+	}
 	s.Equal([]data.Item{
 		items[8],
 		items[7],
@@ -496,6 +495,10 @@ func (s *MasterTestSuite) TestLoadDataFromDatabase() {
 	}, latest)
 	latest, err = s.DataClient.GetLatestItems(ctx, 3, []string{"2"}, nil)
 	s.NoError(err)
+	for i := range latest {
+		s.False(latest[i].UpdateAt.IsZero())
+		latest[i].UpdateAt = time.Time{}
+	}
 	s.Equal([]data.Item{
 		items[8],
 		items[5],

@@ -19,6 +19,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -174,12 +175,20 @@ func (suite *MasterAPITestSuite) TestExportUsers() {
 	suite.Equal(http.StatusOK, w.Result().StatusCode)
 	suite.Equal("application/jsonl", w.Header().Get("Content-Type"))
 	suite.Equal("attachment;filename=users.jsonl", w.Header().Get("Content-Disposition"))
-	for i := range users {
-		stored, err := suite.DataClient.GetUser(ctx, users[i].UserId)
+	var exported []data.User
+	decoder := json.NewDecoder(w.Body)
+	for {
+		var user data.User
+		err := decoder.Decode(&user)
+		if err == io.EOF {
+			break
+		}
 		suite.Require().NoError(err)
-		users[i].UpdateAt = stored.UpdateAt
+		suite.False(user.UpdateAt.IsZero())
+		user.UpdateAt = time.Time{}
+		exported = append(exported, user)
 	}
-	suite.Equal(marshalJSONLines(suite.T(), users), w.Body.String())
+	suite.Equal(marshalJSONLines(suite.T(), users), marshalJSONLines(suite.T(), exported))
 }
 
 func (suite *MasterAPITestSuite) TestExportItems() {
@@ -221,12 +230,20 @@ func (suite *MasterAPITestSuite) TestExportItems() {
 	suite.Equal(http.StatusOK, w.Result().StatusCode)
 	suite.Equal("application/jsonl", w.Header().Get("Content-Type"))
 	suite.Equal("attachment;filename=items.jsonl", w.Header().Get("Content-Disposition"))
-	for i := range items {
-		stored, err := suite.DataClient.GetItem(ctx, items[i].ItemId)
+	var exported []data.Item
+	decoder := json.NewDecoder(w.Body)
+	for {
+		var item data.Item
+		err := decoder.Decode(&item)
+		if err == io.EOF {
+			break
+		}
 		suite.Require().NoError(err)
-		items[i].UpdateAt = stored.UpdateAt
+		suite.False(item.UpdateAt.IsZero())
+		item.UpdateAt = time.Time{}
+		exported = append(exported, item)
 	}
-	suite.Equal(marshalJSONLines(suite.T(), items), w.Body.String())
+	suite.Equal(marshalJSONLines(suite.T(), items), marshalJSONLines(suite.T(), exported))
 }
 
 func (suite *MasterAPITestSuite) TestExportFeedback() {
@@ -468,26 +485,36 @@ func (suite *MasterAPITestSuite) TestGetUsers() {
 		suite.NoError(err)
 	}
 	// get users
-	apitest.New().
+	usersResponse := apitest.New().
 		Handler(suite.handler).
 		Get("/api/dashboard/users").
 		Header("Cookie", suite.cookie).
 		Expect(suite.T()).
 		Status(http.StatusOK).
-		Body(marshal(suite.T(), UserIterator{
-			Cursor: "",
-			Users:  users,
-		})).
 		End()
+	var returnedUsers UserIterator
+	suite.Require().NoError(json.NewDecoder(usersResponse.Response.Body).Decode(&returnedUsers))
+	for i := range returnedUsers.Users {
+		suite.False(returnedUsers.Users[i].UpdateAt.IsZero())
+		returnedUsers.Users[i].UpdateAt = time.Time{}
+	}
+	suite.JSONEq(marshal(suite.T(), UserIterator{
+		Cursor: "",
+		Users:  users,
+	}), marshal(suite.T(), returnedUsers))
 	// get a user
-	apitest.New().
+	userResponse := apitest.New().
 		Handler(suite.handler).
 		Get("/api/dashboard/user/1").
 		Header("Cookie", suite.cookie).
 		Expect(suite.T()).
 		Status(http.StatusOK).
-		Body(marshal(suite.T(), users[1])).
 		End()
+	var returnedUser User
+	suite.Require().NoError(json.NewDecoder(userResponse.Response.Body).Decode(&returnedUser))
+	suite.False(returnedUser.UpdateAt.IsZero())
+	returnedUser.UpdateAt = time.Time{}
+	suite.JSONEq(marshal(suite.T(), users[1]), marshal(suite.T(), returnedUser))
 }
 
 func (suite *MasterAPITestSuite) TestGetLatestItems() {
@@ -504,14 +531,20 @@ func (suite *MasterAPITestSuite) TestGetLatestItems() {
 	scores := lo.Map(items, func(item data.Item, _ int) ScoredItem {
 		return ScoredItem{Item: item, Score: float64(item.Timestamp.Unix())}
 	})
-	apitest.New().
+	response := apitest.New().
 		Handler(suite.handler).
 		Get("/api/dashboard/latest").
 		Header("Cookie", suite.cookie).
 		Expect(suite.T()).
 		Status(http.StatusOK).
-		Body(marshal(suite.T(), scores)).
 		End()
+	var returnedItems []ScoredItem
+	suite.Require().NoError(json.NewDecoder(response.Response.Body).Decode(&returnedItems))
+	for i := range returnedItems {
+		suite.False(returnedItems[i].UpdateAt.IsZero())
+		returnedItems[i].UpdateAt = time.Time{}
+	}
+	suite.JSONEq(marshal(suite.T(), scores), marshal(suite.T(), returnedItems))
 }
 
 func (suite *MasterAPITestSuite) TestSearchDocumentsOfItems() {
@@ -559,7 +592,7 @@ func (suite *MasterAPITestSuite) TestSearchDocumentsOfItems() {
 				Expect(t).
 				Status(http.StatusOK).
 				End()
-			apitest.New().
+			response := apitest.New().
 				Handler(suite.handler).
 				Get(operator.Get).
 				Header("Cookie", suite.cookie).
@@ -567,8 +600,14 @@ func (suite *MasterAPITestSuite) TestSearchDocumentsOfItems() {
 				Expect(t).
 				Status(http.StatusOK).
 				HeaderPresent("Last-Modified").
-				Body(marshal(t, []ScoredItem{items[0], items[1], items[2], items[4]})).
 				End()
+			var returnedItems []ScoredItem
+			suite.Require().NoError(json.NewDecoder(response.Response.Body).Decode(&returnedItems))
+			for i := range returnedItems {
+				suite.False(returnedItems[i].UpdateAt.IsZero())
+				returnedItems[i].UpdateAt = time.Time{}
+			}
+			suite.JSONEq(marshal(suite.T(), []ScoredItem{items[0], items[1], items[2], items[4]}), marshal(suite.T(), returnedItems))
 		})
 	}
 }
@@ -590,23 +629,35 @@ func (suite *MasterAPITestSuite) TestItemToItem() {
 	for _, item := range items {
 		suite.NoError(suite.DataClient.BatchInsertItems(ctx, []data.Item{item.Item}))
 	}
-	apitest.New().
+	itemsResponse := apitest.New().
 		Handler(suite.handler).
 		Get("/api/dashboard/item-to-item/neighbors/0").
 		Header("Cookie", suite.cookie).
 		Expect(suite.T()).
 		Status(http.StatusOK).
-		Body(marshal(suite.T(), items)).
 		End()
-	apitest.New().
+	var returnedItems []ScoredItem
+	suite.Require().NoError(json.NewDecoder(itemsResponse.Response.Body).Decode(&returnedItems))
+	for i := range returnedItems {
+		suite.False(returnedItems[i].UpdateAt.IsZero())
+		returnedItems[i].UpdateAt = time.Time{}
+	}
+	suite.JSONEq(marshal(suite.T(), items), marshal(suite.T(), returnedItems))
+	categoryResponse := apitest.New().
 		Handler(suite.handler).
 		Get("/api/dashboard/item-to-item/neighbors/0").
 		Header("Cookie", suite.cookie).
 		QueryCollection(map[string][]string{"category": {"movie", "drama"}}).
 		Expect(suite.T()).
 		Status(http.StatusOK).
-		Body(marshal(suite.T(), items[:1])).
 		End()
+	var categoryItems []ScoredItem
+	suite.Require().NoError(json.NewDecoder(categoryResponse.Response.Body).Decode(&categoryItems))
+	for i := range categoryItems {
+		suite.False(categoryItems[i].UpdateAt.IsZero())
+		categoryItems[i].UpdateAt = time.Time{}
+	}
+	suite.JSONEq(marshal(suite.T(), items[:1]), marshal(suite.T(), categoryItems))
 }
 
 func (suite *MasterAPITestSuite) TestUserToUser() {
@@ -630,14 +681,20 @@ func (suite *MasterAPITestSuite) TestUserToUser() {
 	for _, user := range users {
 		suite.NoError(suite.DataClient.BatchInsertUsers(ctx, []data.User{user.User}))
 	}
-	apitest.New().
+	response := apitest.New().
 		Handler(suite.handler).
 		Get("/api/dashboard/user-to-user/neighbors/0/").
 		Header("Cookie", suite.cookie).
 		Expect(suite.T()).
 		Status(http.StatusOK).
-		Body(marshal(suite.T(), users)).
 		End()
+	var returnedUsers []ScoreUser
+	suite.Require().NoError(json.NewDecoder(response.Response.Body).Decode(&returnedUsers))
+	for i := range returnedUsers {
+		suite.False(returnedUsers[i].UpdateAt.IsZero())
+		returnedUsers[i].UpdateAt = time.Time{}
+	}
+	suite.JSONEq(marshal(suite.T(), users), marshal(suite.T(), returnedUsers))
 }
 
 func (suite *MasterAPITestSuite) TestFeedback() {
@@ -657,14 +714,20 @@ func (suite *MasterAPITestSuite) TestFeedback() {
 		suite.NoError(err)
 	}
 	// get feedback
-	apitest.New().
+	response := apitest.New().
 		Handler(suite.handler).
 		Get("/api/dashboard/user/0/feedback/click").
 		Header("Cookie", suite.cookie).
 		Expect(suite.T()).
 		Status(http.StatusOK).
-		Body(marshal(suite.T(), feedback)).
 		End()
+	var returnedFeedback []DetailedFeedback
+	suite.Require().NoError(json.NewDecoder(response.Response.Body).Decode(&returnedFeedback))
+	for i := range returnedFeedback {
+		suite.False(returnedFeedback[i].Item.UpdateAt.IsZero())
+		returnedFeedback[i].Item.UpdateAt = time.Time{}
+	}
+	suite.JSONEq(marshal(suite.T(), feedback), marshal(suite.T(), returnedFeedback))
 }
 
 func (suite *MasterAPITestSuite) TestGetRecommends() {
@@ -694,21 +757,27 @@ func (suite *MasterAPITestSuite) TestGetRecommends() {
 		err = suite.DataClient.BatchInsertItems(ctx, []data.Item{{ItemId: item.Id}})
 		suite.NoError(err)
 	}
-	apitest.New().
+	response := apitest.New().
 		Handler(suite.handler).
 		Get("/api/dashboard/recommend/0").
 		Header("Cookie", suite.cookie).
 		Expect(suite.T()).
 		Status(http.StatusOK).
-		Body(marshal(suite.T(), []ScoredItem{
-			{data.Item{ItemId: "1"}, 99},
-			{data.Item{ItemId: "3"}, 97},
-			{data.Item{ItemId: "5"}, 95},
-			{data.Item{ItemId: "6"}, 94},
-			{data.Item{ItemId: "7"}, 93},
-			{data.Item{ItemId: "8"}, 92},
-		})).
 		End()
+	var returnedItems []ScoredItem
+	suite.Require().NoError(json.NewDecoder(response.Response.Body).Decode(&returnedItems))
+	for i := range returnedItems {
+		suite.False(returnedItems[i].UpdateAt.IsZero())
+		returnedItems[i].UpdateAt = time.Time{}
+	}
+	suite.JSONEq(marshal(suite.T(), []ScoredItem{
+		{data.Item{ItemId: "1"}, 99},
+		{data.Item{ItemId: "3"}, 97},
+		{data.Item{ItemId: "5"}, 95},
+		{data.Item{ItemId: "6"}, 94},
+		{data.Item{ItemId: "7"}, 93},
+		{data.Item{ItemId: "8"}, 92},
+	}), marshal(suite.T(), returnedItems))
 }
 
 func (suite *MasterAPITestSuite) TestGetNonPersonalizedRecommends() {
@@ -737,18 +806,24 @@ func (suite *MasterAPITestSuite) TestGetNonPersonalizedRecommends() {
 		{ItemId: "30", Timestamp: time.Date(2022, 1, 1, 1, 1, 1, 1, time.UTC)},
 	})
 	suite.NoError(err)
-	apitest.New().
+	response := apitest.New().
 		Handler(suite.handler).
 		Get("/api/dashboard/recommend/0/non-personalized/popular").
 		Header("Cookie", suite.cookie).
 		Expect(suite.T()).
 		Status(http.StatusOK).
-		Body(marshal(suite.T(), []ScoredItem{
-			{data.Item{ItemId: "10", Timestamp: time.Date(2020, 1, 1, 1, 1, 1, 1, time.UTC)}, 100},
-			{data.Item{ItemId: "20", Timestamp: time.Date(2021, 1, 1, 1, 1, 1, 1, time.UTC)}, 99},
-			{data.Item{ItemId: "30", Timestamp: time.Date(2022, 1, 1, 1, 1, 1, 1, time.UTC)}, 98},
-		})).
 		End()
+	var returnedItems []ScoredItem
+	suite.Require().NoError(json.NewDecoder(response.Response.Body).Decode(&returnedItems))
+	for i := range returnedItems {
+		suite.False(returnedItems[i].UpdateAt.IsZero())
+		returnedItems[i].UpdateAt = time.Time{}
+	}
+	suite.JSONEq(marshal(suite.T(), []ScoredItem{
+		{data.Item{ItemId: "10", Timestamp: time.Date(2020, 1, 1, 1, 1, 1, 1, time.UTC)}, 100},
+		{data.Item{ItemId: "20", Timestamp: time.Date(2021, 1, 1, 1, 1, 1, 1, time.UTC)}, 99},
+		{data.Item{ItemId: "30", Timestamp: time.Date(2022, 1, 1, 1, 1, 1, 1, time.UTC)}, 98},
+	}), marshal(suite.T(), returnedItems))
 }
 
 func (suite *MasterAPITestSuite) TestGetExternal() {
@@ -1092,7 +1167,7 @@ func (suite *MasterAPITestSuite) TestDumpAndRestore() {
 	if suite.Equal(len(users), len(returnUsers)) {
 		for i := range users {
 			suite.False(returnUsers[i].UpdateAt.IsZero())
-			users[i].UpdateAt = returnUsers[i].UpdateAt
+			returnUsers[i].UpdateAt = time.Time{}
 		}
 		suite.Equal(users, returnUsers)
 	}
@@ -1101,7 +1176,7 @@ func (suite *MasterAPITestSuite) TestDumpAndRestore() {
 	if suite.Equal(len(items), len(returnItems)) {
 		for i := range items {
 			suite.False(returnItems[i].UpdateAt.IsZero())
-			items[i].UpdateAt = returnItems[i].UpdateAt
+			returnItems[i].UpdateAt = time.Time{}
 		}
 		suite.Equal(items, returnItems)
 	}
@@ -1226,7 +1301,7 @@ func (suite *MasterAPITestSuite) TestExportAndImport() {
 	if suite.Equal(len(users), len(returnUsers)) {
 		for i := range users {
 			suite.False(returnUsers[i].UpdateAt.IsZero())
-			users[i].UpdateAt = returnUsers[i].UpdateAt
+			returnUsers[i].UpdateAt = time.Time{}
 		}
 		suite.Equal(users, returnUsers)
 	}
@@ -1235,7 +1310,7 @@ func (suite *MasterAPITestSuite) TestExportAndImport() {
 	if suite.Equal(len(items), len(returnItems)) {
 		for i := range items {
 			suite.False(returnItems[i].UpdateAt.IsZero())
-			items[i].UpdateAt = returnItems[i].UpdateAt
+			returnItems[i].UpdateAt = time.Time{}
 		}
 		suite.Equal(items, returnItems)
 	}

@@ -99,36 +99,6 @@ func (suite *ServerTestSuite) SetupTest() {
 }
 
 func (suite *ServerTestSuite) marshal(v any) string {
-	itemMetadata := func(item data.Item) data.Item {
-		stored, err := suite.DataClient.GetItem(suite.T().Context(), item.ItemId)
-		suite.Require().NoError(err)
-		suite.False(stored.UpdateAt.IsZero())
-		item.UpdateAt = stored.UpdateAt
-		return item
-	}
-	userMetadata := func(user data.User) data.User {
-		stored, err := suite.DataClient.GetUser(suite.T().Context(), user.UserId)
-		suite.Require().NoError(err)
-		suite.False(stored.UpdateAt.IsZero())
-		user.UpdateAt = stored.UpdateAt
-		return user
-	}
-	switch value := v.(type) {
-	case data.Item:
-		v = itemMetadata(value)
-	case data.User:
-		v = userMetadata(value)
-	case ItemIterator:
-		for i := range value.Items {
-			value.Items[i] = itemMetadata(value.Items[i])
-		}
-		v = value
-	case UserIterator:
-		for i := range value.Users {
-			value.Users[i] = userMetadata(value.Users[i])
-		}
-		v = value
-	}
 	s, err := json.Marshal(v)
 	suite.NoError(err)
 	return string(s)
@@ -202,14 +172,18 @@ func (suite *ServerTestSuite) TestUsers() {
 		Status(http.StatusOK).
 		Body(`{"RowAffected":1}`).
 		End()
-	apitest.New().
+	userResponse := apitest.New().
 		Handler(suite.handler).
 		Get("/api/user/0").
 		Header("X-API-Key", apiKey).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(suite.marshal(users[0])).
 		End()
+	var returnedUser data.User
+	suite.Require().NoError(json.NewDecoder(userResponse.Response.Body).Decode(&returnedUser))
+	suite.False(returnedUser.UpdateAt.IsZero())
+	returnedUser.UpdateAt = time.Time{}
+	suite.JSONEq(suite.marshal(users[0]), suite.marshal(returnedUser))
 	apitest.New().
 		Handler(suite.handler).
 		Post("/api/users").
@@ -219,7 +193,7 @@ func (suite *ServerTestSuite) TestUsers() {
 		Status(http.StatusOK).
 		Body(`{"RowAffected":4}`).
 		End()
-	apitest.New().
+	usersResponse := apitest.New().
 		Handler(suite.handler).
 		Get("/api/users").
 		Header("X-API-Key", apiKey).
@@ -229,11 +203,17 @@ func (suite *ServerTestSuite) TestUsers() {
 		}).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(suite.marshal(UserIterator{
-			Cursor: "",
-			Users:  users,
-		})).
 		End()
+	var returnedUsers UserIterator
+	suite.Require().NoError(json.NewDecoder(usersResponse.Response.Body).Decode(&returnedUsers))
+	for i := range returnedUsers.Users {
+		suite.False(returnedUsers.Users[i].UpdateAt.IsZero())
+		returnedUsers.Users[i].UpdateAt = time.Time{}
+	}
+	suite.JSONEq(suite.marshal(UserIterator{
+		Cursor: "",
+		Users:  users,
+	}), suite.marshal(returnedUsers))
 	apitest.New().
 		Handler(suite.handler).
 		Delete("/api/user/0").
@@ -259,18 +239,22 @@ func (suite *ServerTestSuite) TestUsers() {
 		Status(http.StatusOK).
 		Body(`{"RowAffected": 1}`).
 		End()
-	apitest.New().
+	modifiedUserResponse := apitest.New().
 		Handler(suite.handler).
 		Get("/api/user/1").
 		Header("X-API-Key", apiKey).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(suite.marshal(data.User{
-			UserId:  "1",
-			Comment: "modified",
-			Labels:  []string{"a", "b", "c"},
-		})).
 		End()
+	var modifiedUser data.User
+	suite.Require().NoError(json.NewDecoder(modifiedUserResponse.Response.Body).Decode(&modifiedUser))
+	suite.False(modifiedUser.UpdateAt.IsZero())
+	modifiedUser.UpdateAt = time.Time{}
+	suite.JSONEq(suite.marshal(data.User{
+		UserId:  "1",
+		Comment: "modified",
+		Labels:  []string{"a", "b", "c"},
+	}), suite.marshal(modifiedUser))
 
 	// malicious labels
 	apitest.New().
@@ -360,7 +344,7 @@ func (suite *ServerTestSuite) TestItems() {
 		Body(`{"RowAffected": 4}`).
 		End()
 	// get items
-	apitest.New().
+	itemsResponse := apitest.New().
 		Handler(suite.handler).
 		Get("/api/items").
 		Header("X-API-Key", apiKey).
@@ -370,11 +354,17 @@ func (suite *ServerTestSuite) TestItems() {
 		}).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(suite.marshal(ItemIterator{
-			Cursor: "",
-			Items:  items,
-		})).
 		End()
+	var returnedItems ItemIterator
+	suite.Require().NoError(json.NewDecoder(itemsResponse.Response.Body).Decode(&returnedItems))
+	for i := range returnedItems.Items {
+		suite.False(returnedItems.Items[i].UpdateAt.IsZero())
+		returnedItems.Items[i].UpdateAt = time.Time{}
+	}
+	suite.JSONEq(suite.marshal(ItemIterator{
+		Cursor: "",
+		Items:  items,
+	}), suite.marshal(returnedItems))
 	// get latest items
 	apitest.New().
 		Handler(suite.handler).
@@ -500,21 +490,25 @@ func (suite *ServerTestSuite) TestItems() {
 		Status(http.StatusOK).
 		Body(`{"RowAffected": 1}`).
 		End()
-	apitest.New().
+	modifiedItemResponse := apitest.New().
 		Handler(suite.handler).
 		Get("/api/item/2").
 		Header("X-API-Key", apiKey).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(suite.marshal(data.Item{
-			ItemId:     "2",
-			IsHidden:   true,
-			Categories: []string{"-"},
-			Comment:    "modified",
-			Labels:     []string{"a", "b", "c"},
-			Timestamp:  timestamp,
-		})).
 		End()
+	var modifiedItem data.Item
+	suite.Require().NoError(json.NewDecoder(modifiedItemResponse.Response.Body).Decode(&modifiedItem))
+	suite.False(modifiedItem.UpdateAt.IsZero())
+	modifiedItem.UpdateAt = time.Time{}
+	suite.JSONEq(suite.marshal(data.Item{
+		ItemId:     "2",
+		IsHidden:   true,
+		Categories: []string{"-"},
+		Comment:    "modified",
+		Labels:     []string{"a", "b", "c"},
+		Timestamp:  timestamp,
+	}), suite.marshal(modifiedItem))
 	apitest.New().
 		Handler(suite.handler).
 		Patch("/api/item/2").
@@ -561,21 +555,25 @@ func (suite *ServerTestSuite) TestItems() {
 		Status(http.StatusOK).
 		Body(suite.marshal(Success{RowAffected: 1})).
 		End()
-	apitest.New().
+	addedCategoryResponse := apitest.New().
 		Handler(suite.handler).
 		Get("/api/item/2").
 		Header("X-API-Key", apiKey).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(suite.marshal(data.Item{
-			ItemId:     "2",
-			IsHidden:   false,
-			Categories: []string{"-", "@"},
-			Comment:    "modified",
-			Labels:     []string{"a", "b", "c"},
-			Timestamp:  timestamp,
-		})).
 		End()
+	var addedCategoryItem data.Item
+	suite.Require().NoError(json.NewDecoder(addedCategoryResponse.Response.Body).Decode(&addedCategoryItem))
+	suite.False(addedCategoryItem.UpdateAt.IsZero())
+	addedCategoryItem.UpdateAt = time.Time{}
+	suite.JSONEq(suite.marshal(data.Item{
+		ItemId:     "2",
+		IsHidden:   false,
+		Categories: []string{"-", "@"},
+		Comment:    "modified",
+		Labels:     []string{"a", "b", "c"},
+		Timestamp:  timestamp,
+	}), suite.marshal(addedCategoryItem))
 	// get latest items
 	apitest.New().
 		Handler(suite.handler).
@@ -600,21 +598,25 @@ func (suite *ServerTestSuite) TestItems() {
 		Status(http.StatusOK).
 		Body(suite.marshal(Success{RowAffected: 1})).
 		End()
-	apitest.New().
+	deletedCategoryResponse := apitest.New().
 		Handler(suite.handler).
 		Get("/api/item/2").
 		Header("X-API-Key", apiKey).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(suite.marshal(data.Item{
-			ItemId:     "2",
-			IsHidden:   false,
-			Categories: []string{"-"},
-			Comment:    "modified",
-			Labels:     []string{"a", "b", "c"},
-			Timestamp:  timestamp,
-		})).
 		End()
+	var deletedCategoryItem data.Item
+	suite.Require().NoError(json.NewDecoder(deletedCategoryResponse.Response.Body).Decode(&deletedCategoryItem))
+	suite.False(deletedCategoryItem.UpdateAt.IsZero())
+	deletedCategoryItem.UpdateAt = time.Time{}
+	suite.JSONEq(suite.marshal(data.Item{
+		ItemId:     "2",
+		IsHidden:   false,
+		Categories: []string{"-"},
+		Comment:    "modified",
+		Labels:     []string{"a", "b", "c"},
+		Timestamp:  timestamp,
+	}), suite.marshal(deletedCategoryItem))
 	// get latest items
 	apitest.New().
 		Handler(suite.handler).
@@ -855,7 +857,7 @@ func (suite *ServerTestSuite) TestSearchItems() {
 	err = suite.DataClient.Optimize()
 	suite.NoError(err)
 
-	apitest.New().
+	response := apitest.New().
 		Handler(suite.handler).
 		Get("/api/items").
 		Header("X-API-Key", apiKey).
@@ -865,8 +867,14 @@ func (suite *ServerTestSuite) TestSearchItems() {
 		}).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(suite.marshal(ItemIterator{Items: []data.Item{items[1]}})).
 		End()
+	var returnedItems ItemIterator
+	suite.Require().NoError(json.NewDecoder(response.Response.Body).Decode(&returnedItems))
+	for i := range returnedItems.Items {
+		suite.False(returnedItems.Items[i].UpdateAt.IsZero())
+		returnedItems.Items[i].UpdateAt = time.Time{}
+	}
+	suite.JSONEq(suite.marshal(ItemIterator{Items: []data.Item{items[1]}}), suite.marshal(returnedItems))
 }
 
 func (suite *ServerTestSuite) TestFeedback() {
@@ -925,39 +933,51 @@ func (suite *ServerTestSuite) TestFeedback() {
 		Status(http.StatusOK).
 		End()
 	//Get Items
-	apitest.New().
+	itemsResponse := apitest.New().
 		Handler(suite.handler).
 		Get("/api/items").
 		Header("X-API-Key", apiKey).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(suite.marshal(ItemIterator{
-			Cursor: "",
-			Items: []data.Item{
-				{ItemId: "0"},
-				{ItemId: "2"},
-				{ItemId: "4"},
-				{ItemId: "6"},
-				{ItemId: "8"},
-			},
-		})).
 		End()
-	apitest.New().
+	var returnedItems ItemIterator
+	suite.Require().NoError(json.NewDecoder(itemsResponse.Response.Body).Decode(&returnedItems))
+	for i := range returnedItems.Items {
+		suite.False(returnedItems.Items[i].UpdateAt.IsZero())
+		returnedItems.Items[i].UpdateAt = time.Time{}
+	}
+	suite.JSONEq(suite.marshal(ItemIterator{
+		Cursor: "",
+		Items: []data.Item{
+			{ItemId: "0"},
+			{ItemId: "2"},
+			{ItemId: "4"},
+			{ItemId: "6"},
+			{ItemId: "8"},
+		},
+	}), suite.marshal(returnedItems))
+	usersResponse := apitest.New().
 		Handler(suite.handler).
 		Get("/api/users").
 		Header("X-API-Key", apiKey).
 		Expect(t).
 		Status(http.StatusOK).
-		Body(suite.marshal(UserIterator{
-			Cursor: "",
-			Users: []data.User{
-				{UserId: "0"},
-				{UserId: "1"},
-				{UserId: "2"},
-				{UserId: "3"},
-				{UserId: "4"}},
-		})).
 		End()
+	var returnedUsers UserIterator
+	suite.Require().NoError(json.NewDecoder(usersResponse.Response.Body).Decode(&returnedUsers))
+	for i := range returnedUsers.Users {
+		suite.False(returnedUsers.Users[i].UpdateAt.IsZero())
+		returnedUsers.Users[i].UpdateAt = time.Time{}
+	}
+	suite.JSONEq(suite.marshal(UserIterator{
+		Cursor: "",
+		Users: []data.User{
+			{UserId: "0"},
+			{UserId: "1"},
+			{UserId: "2"},
+			{UserId: "3"},
+			{UserId: "4"}},
+	}), suite.marshal(returnedUsers))
 	apitest.New().
 		Handler(suite.handler).
 		Get("/api/user/2/feedback/click").
