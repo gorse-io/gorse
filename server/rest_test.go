@@ -99,6 +99,36 @@ func (suite *ServerTestSuite) SetupTest() {
 }
 
 func (suite *ServerTestSuite) marshal(v any) string {
+	itemMetadata := func(item data.Item) data.Item {
+		stored, err := suite.DataClient.GetItem(suite.T().Context(), item.ItemId)
+		suite.Require().NoError(err)
+		suite.False(stored.UpdateAt.IsZero())
+		item.UpdateAt = stored.UpdateAt
+		return item
+	}
+	userMetadata := func(user data.User) data.User {
+		stored, err := suite.DataClient.GetUser(suite.T().Context(), user.UserId)
+		suite.Require().NoError(err)
+		suite.False(stored.UpdateAt.IsZero())
+		user.UpdateAt = stored.UpdateAt
+		return user
+	}
+	switch value := v.(type) {
+	case data.Item:
+		v = itemMetadata(value)
+	case data.User:
+		v = userMetadata(value)
+	case ItemIterator:
+		for i := range value.Items {
+			value.Items[i] = itemMetadata(value.Items[i])
+		}
+		v = value
+	case UserIterator:
+		for i := range value.Users {
+			value.Users[i] = userMetadata(value.Users[i])
+		}
+		v = value
+	}
 	s, err := json.Marshal(v)
 	suite.NoError(err)
 	return string(s)

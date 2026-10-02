@@ -195,6 +195,7 @@ func (suite *baseTestSuite) TestUsers() {
 	users := suite.getUsers(ctx, 3)
 	suite.Equal(10, len(users))
 	for i, user := range users {
+		insertedUsers[9-i].UpdateAt = user.UpdateAt
 		suite.Equal(insertedUsers[9-i], user)
 	}
 	// Get user stream
@@ -241,7 +242,7 @@ func (suite *baseTestSuite) TestUsers() {
 func (suite *baseTestSuite) TestFeedback() {
 	ctx := suite.T().Context()
 	// users that already exists
-	err := suite.Database.BatchInsertUsers(ctx, []User{{"0", []string{"a"}, "comment"}})
+	err := suite.Database.BatchInsertUsers(ctx, []User{{UserId: "0", Labels: []string{"a"}, Comment: "comment"}})
 	suite.NoError(err)
 	// items that already exists
 	err = suite.Database.BatchInsertItems(ctx, []Item{{ItemId: "0", Labels: []string{"b"}, Timestamp: time.Date(1996, 4, 8, 10, 0, 0, 0, time.UTC)}})
@@ -343,11 +344,11 @@ func (suite *baseTestSuite) TestFeedback() {
 	// check users that already exists
 	user, err := suite.Database.GetUser(ctx, "0")
 	suite.NoError(err)
-	suite.Equal(User{"0", []any{"a"}, "comment"}, user)
+	suite.Equal(User{UserId: "0", Labels: []any{"a"}, Comment: "comment", UpdateAt: user.UpdateAt}, user)
 	// check items that already exists
 	item, err := suite.Database.GetItem(ctx, "0")
 	suite.NoError(err)
-	suite.Equal(Item{ItemId: "0", Labels: []any{"b"}, Timestamp: time.Date(1996, 4, 8, 10, 0, 0, 0, time.UTC)}, item)
+	suite.Equal(Item{ItemId: "0", Labels: []any{"b"}, Timestamp: time.Date(1996, 4, 8, 10, 0, 0, 0, time.UTC), UpdateAt: item.UpdateAt}, item)
 	// Get typed feedback by user
 	ret, err = suite.Database.GetUserFeedback(ctx, "2", new(time.Now()),
 		expression.MustParseFeedbackTypeExpression(positiveFeedbackType1),
@@ -520,6 +521,9 @@ func (suite *baseTestSuite) TestItems() {
 	suite.Equal(5, count)
 	// Get items
 	totalItems := suite.getItems(ctx, 3)
+	for i := range items {
+		items[i].UpdateAt = totalItems[i].UpdateAt
+	}
 	suite.Equal(items, totalItems)
 	// Get item stream
 	itemsFromStream := suite.getItemStream(ctx, 3)
@@ -805,6 +809,9 @@ func (suite *baseTestSuite) TestTimeLimit() {
 	timeLimit := time.Date(1998, 1, 1, 0, 0, 0, 0, time.UTC)
 	_, ret, err := suite.Database.GetItems(ctx, "", 100, &timeLimit)
 	suite.NoError(err)
+	for i := range ret {
+		items[i+2].UpdateAt = ret[i].UpdateAt
+	}
 	suite.Equal([]Item{items[2], items[3], items[4]}, ret)
 
 	// insert feedback

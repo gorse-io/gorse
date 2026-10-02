@@ -130,6 +130,10 @@ func (suite *WorkerTestSuite) TestPullUsers() {
 
 	users, err := suite.pullUsers(nodes, "b")
 	suite.NoError(err)
+	for i := range users {
+		suite.False(users[i].UpdateAt.IsZero())
+		users[i].UpdateAt = time.Time{}
+	}
 	suite.Equal([]data.User{{UserId: "1"}, {UserId: "3"}, {UserId: "6"}}, users)
 
 	_, err = suite.pullUsers(nodes, "d")

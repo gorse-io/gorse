@@ -327,6 +327,7 @@ func (db *MongoDB) BatchInsertItems(ctx context.Context, items []Item) error {
 	c := db.client.Database(db.dbName).Collection(db.ItemsTable())
 	var models []mongo.WriteModel
 	for _, item := range items {
+		item.UpdateAt = time.Now().UTC()
 		models = append(models, mongo.NewUpdateOneModel().
 			SetUpsert(true).
 			SetFilter(bson.M{"itemid": bson.M{"$eq": item.ItemId}}).
@@ -395,6 +396,10 @@ func (db *MongoDB) ModifyItem(ctx context.Context, itemId string, patch ItemPatc
 	if patch.Timestamp != nil {
 		update["timestamp"] = patch.Timestamp
 	}
+	if len(update) == 0 {
+		return nil
+	}
+	update["updateat"] = time.Now().UTC()
 	// execute
 	c := db.client.Database(db.dbName).Collection(db.ItemsTable())
 	_, err := c.UpdateOne(ctx, bson.M{"itemid": bson.M{"$eq": itemId}}, bson.M{"$set": update})
@@ -608,6 +613,7 @@ func (db *MongoDB) BatchInsertUsers(ctx context.Context, users []User) error {
 	c := db.client.Database(db.dbName).Collection(db.UsersTable())
 	var models []mongo.WriteModel
 	for _, user := range users {
+		user.UpdateAt = time.Now().UTC()
 		models = append(models, mongo.NewUpdateOneModel().
 			SetUpsert(true).
 			SetFilter(bson.M{"userid": bson.M{"$eq": user.UserId}}).
@@ -627,6 +633,10 @@ func (db *MongoDB) ModifyUser(ctx context.Context, userId string, patch UserPatc
 	if patch.Comment != nil {
 		update["comment"] = patch.Comment
 	}
+	if len(update) == 0 {
+		return nil
+	}
+	update["updateat"] = time.Now().UTC()
 	// execute
 	c := db.client.Database(db.dbName).Collection(db.UsersTable())
 	_, err := c.UpdateOne(ctx, bson.M{"userid": bson.M{"$eq": userId}}, bson.M{"$set": update})
@@ -788,7 +798,7 @@ func (db *MongoDB) BatchInsertFeedback(ctx context.Context, feedback []Feedback,
 			models = append(models, mongo.NewUpdateOneModel().
 				SetUpsert(true).
 				SetFilter(bson.M{"userid": bson.M{"$eq": userId}}).
-				SetUpdate(bson.M{"$setOnInsert": User{UserId: userId}}))
+				SetUpdate(bson.M{"$setOnInsert": User{UserId: userId, UpdateAt: time.Now().UTC()}}))
 		}
 		c := db.client.Database(db.dbName).Collection(db.UsersTable())
 		_, err := c.BulkWrite(ctx, models)
@@ -815,7 +825,7 @@ func (db *MongoDB) BatchInsertFeedback(ctx context.Context, feedback []Feedback,
 			models = append(models, mongo.NewUpdateOneModel().
 				SetUpsert(true).
 				SetFilter(bson.M{"itemid": bson.M{"$eq": itemId}}).
-				SetUpdate(bson.M{"$setOnInsert": Item{ItemId: itemId}}))
+				SetUpdate(bson.M{"$setOnInsert": Item{ItemId: itemId, UpdateAt: time.Now().UTC()}}))
 		}
 		c := db.client.Database(db.dbName).Collection(db.ItemsTable())
 		_, err := c.BulkWrite(ctx, models)

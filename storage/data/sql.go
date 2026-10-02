@@ -142,6 +142,7 @@ type SQLItem struct {
 	IsHidden   bool      `gorm:"column:is_hidden"`
 	Categories string    `gorm:"column:categories"`
 	Timestamp  time.Time `gorm:"column:time_stamp"`
+	UpdateAt   time.Time `gorm:"column:update_at"`
 	Labels     string    `gorm:"column:labels"`
 	Comment    string    `gorm:"column:comment"`
 }
@@ -153,6 +154,7 @@ func NewSQLItem(item Item) (sqlItem SQLItem) {
 	buf, _ = jsonutil.Marshal(item.Categories)
 	sqlItem.Categories = string(buf)
 	sqlItem.Timestamp = item.Timestamp
+	sqlItem.UpdateAt = item.UpdateAt
 	buf, _ = jsonutil.Marshal(item.Labels)
 	sqlItem.Labels = string(buf)
 	sqlItem.Comment = item.Comment
@@ -160,14 +162,16 @@ func NewSQLItem(item Item) (sqlItem SQLItem) {
 }
 
 type SQLUser struct {
-	UserId  string `gorm:"column:user_id;primaryKey"`
-	Labels  string `gorm:"column:labels"`
-	Comment string `gorm:"column:comment"`
+	UpdateAt time.Time `gorm:"column:update_at"`
+	UserId   string    `gorm:"column:user_id;primaryKey"`
+	Labels   string    `gorm:"column:labels"`
+	Comment  string    `gorm:"column:comment"`
 }
 
 func NewSQLUser(user User) (sqlUser SQLUser) {
 	var buf []byte
 	sqlUser.UserId = user.UserId
+	sqlUser.UpdateAt = user.UpdateAt
 	buf, _ = jsonutil.Marshal(user.Labels)
 	sqlUser.Labels = string(buf)
 	sqlUser.Comment = user.Comment
@@ -217,6 +221,7 @@ func (d *SQLDatabase) Init() error {
 	case MySQL:
 		// create tables
 		type Items struct {
+			UpdateAt   time.Time `gorm:"column:update_at;type:datetime(6);not null;default:'1970-01-01 00:00:00'"`
 			ItemId     string    `gorm:"column:item_id;type:varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin not null;primaryKey"`
 			IsHidden   bool      `gorm:"column:is_hidden;type:bool;not null"`
 			Categories []string  `gorm:"column:categories;type:json;not null"`
@@ -225,9 +230,10 @@ func (d *SQLDatabase) Init() error {
 			Comment    string    `gorm:"column:comment;type:text;not null"`
 		}
 		type Users struct {
-			UserId  string   `gorm:"column:user_id;type:varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin not null;primaryKey"`
-			Labels  []string `gorm:"column:labels;type:json;not null"`
-			Comment string   `gorm:"column:comment;type:text;not null"`
+			UpdateAt time.Time `gorm:"column:update_at;type:datetime(6);not null;default:'1970-01-01 00:00:00'"`
+			UserId   string    `gorm:"column:user_id;type:varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin not null;primaryKey"`
+			Labels   []string  `gorm:"column:labels;type:json;not null"`
+			Comment  string    `gorm:"column:comment;type:text;not null"`
 		}
 		type Feedback struct {
 			FeedbackType string    `gorm:"column:feedback_type;type:varchar(256) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin not null;primaryKey"`
@@ -246,6 +252,7 @@ func (d *SQLDatabase) Init() error {
 	case Postgres:
 		// create tables
 		type Items struct {
+			UpdateAt   time.Time `gorm:"column:update_at;type:timestamptz;not null;default:'1970-01-01 00:00:00+00'"`
 			ItemId     string    `gorm:"column:item_id;type:varchar(256) COLLATE \"C\";not null;primaryKey"`
 			IsHidden   bool      `gorm:"column:is_hidden;type:bool;not null;default:false"`
 			Categories string    `gorm:"column:categories;type:json;not null;default:'[]'"`
@@ -254,9 +261,10 @@ func (d *SQLDatabase) Init() error {
 			Comment    string    `gorm:"column:comment;type:text;not null;default:''"`
 		}
 		type Users struct {
-			UserId  string `gorm:"column:user_id;type:varchar(256) COLLATE \"C\" not null;primaryKey"`
-			Labels  string `gorm:"column:labels;type:json;not null;default:'[]'"`
-			Comment string `gorm:"column:comment;type:text;not null;default:''"`
+			UpdateAt time.Time `gorm:"column:update_at;type:timestamptz;not null;default:'1970-01-01 00:00:00+00'"`
+			UserId   string    `gorm:"column:user_id;type:varchar(256) COLLATE \"C\" not null;primaryKey"`
+			Labels   string    `gorm:"column:labels;type:json;not null;default:'[]'"`
+			Comment  string    `gorm:"column:comment;type:text;not null;default:''"`
 		}
 		type Feedback struct {
 			FeedbackType string    `gorm:"column:feedback_type;type:varchar(256) COLLATE \"C\";not null;primaryKey"`
@@ -275,17 +283,19 @@ func (d *SQLDatabase) Init() error {
 	case SQLite:
 		// create tables
 		type Items struct {
-			ItemId     string `gorm:"column:item_id;type:varchar(256);not null;primaryKey"`
-			IsHidden   bool   `gorm:"column:is_hidden;type:bool;not null;default:false"`
-			Categories string `gorm:"column:categories;type:json;not null;default:'[]'"`
-			Timestamp  string `gorm:"column:time_stamp;type:datetime;not null;default:'0001-01-01';index:time_stamp_index"`
-			Labels     string `gorm:"column:labels;type:json;not null;default:'[]'"`
-			Comment    string `gorm:"column:comment;type:text;not null;default:''"`
+			UpdateAt   time.Time `gorm:"column:update_at;type:datetime;not null;default:'1970-01-01 00:00:00'"`
+			ItemId     string    `gorm:"column:item_id;type:varchar(256);not null;primaryKey"`
+			IsHidden   bool      `gorm:"column:is_hidden;type:bool;not null;default:false"`
+			Categories string    `gorm:"column:categories;type:json;not null;default:'[]'"`
+			Timestamp  string    `gorm:"column:time_stamp;type:datetime;not null;default:'0001-01-01';index:time_stamp_index"`
+			Labels     string    `gorm:"column:labels;type:json;not null;default:'[]'"`
+			Comment    string    `gorm:"column:comment;type:text;not null;default:''"`
 		}
 		type Users struct {
-			UserId  string `gorm:"column:user_id;type:varchar(256) not null;primaryKey"`
-			Labels  string `gorm:"column:labels;type:json;not null;default:'null'"`
-			Comment string `gorm:"column:comment;type:text;not null;default:''"`
+			UpdateAt time.Time `gorm:"column:update_at;type:datetime;not null;default:'1970-01-01 00:00:00'"`
+			UserId   string    `gorm:"column:user_id;type:varchar(256) not null;primaryKey"`
+			Labels   string    `gorm:"column:labels;type:json;not null;default:'null'"`
+			Comment  string    `gorm:"column:comment;type:text;not null;default:''"`
 		}
 		type Feedback struct {
 			FeedbackType string  `gorm:"column:feedback_type;type:varchar(256);not null;primaryKey"`
@@ -661,6 +671,7 @@ func (d *SQLDatabase) BatchInsertItems(ctx context.Context, items []Item) error 
 	rows := make([]SQLItem, 0, len(items))
 	memo := mapset.NewSet[string]()
 	for _, item := range items {
+		item.UpdateAt = time.Now().UTC().Truncate(time.Microsecond)
 		if !memo.Contains(item.ItemId) {
 			memo.Add(item.ItemId)
 			row := NewSQLItem(item)
@@ -670,7 +681,7 @@ func (d *SQLDatabase) BatchInsertItems(ctx context.Context, items []Item) error 
 	}
 	err := d.gormDB.WithContext(ctx).Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "item_id"}},
-		DoUpdates: clause.AssignmentColumns([]string{"is_hidden", "categories", "time_stamp", "labels", "comment"}),
+		DoUpdates: clause.AssignmentColumns([]string{"is_hidden", "categories", "time_stamp", "labels", "comment", "update_at"}),
 	}).Create(rows).Error
 	return errors.WithStack(err)
 }
@@ -683,7 +694,7 @@ func (d *SQLDatabase) BatchGetItems(ctx context.Context, itemIds []string, opts 
 	if opts.ReturnId {
 		selectFields = "item_id"
 	} else {
-		selectFields = "item_id, is_hidden, categories, time_stamp, labels, comment"
+		selectFields = "item_id, is_hidden, categories, time_stamp, labels, comment, update_at"
 	}
 	query := d.gormDB.WithContext(ctx).
 		Table(d.ItemsTable()).
@@ -745,7 +756,7 @@ func (d *SQLDatabase) GetItem(ctx context.Context, itemId string) (Item, error) 
 	var err error
 	result, err = d.gormDB.WithContext(ctx).
 		Table(d.ItemsTable()).
-		Select("item_id, is_hidden, categories, time_stamp, labels, comment").
+		Select("item_id, is_hidden, categories, time_stamp, labels, comment, update_at").
 		Where("item_id = ?", itemId).Rows()
 	if err != nil {
 		return Item{}, errors.WithStack(err)
@@ -779,14 +790,14 @@ func (d *SQLDatabase) SearchItems(ctx context.Context, query string, n int) ([]S
 		searchQuery := strings.Join(queries, " || ")
 		tx = d.gormDB.WithContext(ctx).
 			Table(d.ItemsTable()).
-			Select(fmt.Sprintf("item_id, is_hidden, categories, time_stamp, labels, comment, ts_rank(%s, %s) AS score", d.searchVector, searchQuery), args...).
+			Select(fmt.Sprintf("item_id, is_hidden, categories, time_stamp, labels, comment, update_at, ts_rank(%s, %s) AS score", d.searchVector, searchQuery), args...).
 			Where(fmt.Sprintf("%s @@ (%s)", d.searchVector, searchQuery), args...).
 			Order(clause.Expr{SQL: fmt.Sprintf("ts_rank(%s, %s) DESC", d.searchVector, searchQuery), Vars: args}).
 			Limit(n)
 	case MySQL:
 		tx = d.gormDB.WithContext(ctx).
 			Table(d.ItemsTable()).
-			Select(fmt.Sprintf("item_id, is_hidden, categories, time_stamp, labels, comment, MATCH(%s) AGAINST (? IN NATURAL LANGUAGE MODE) AS score", mysqlSearchDocumentColumn), query).
+			Select(fmt.Sprintf("item_id, is_hidden, categories, time_stamp, labels, comment, update_at, MATCH(%s) AGAINST (? IN NATURAL LANGUAGE MODE) AS score", mysqlSearchDocumentColumn), query).
 			Where(fmt.Sprintf("MATCH(%s) AGAINST (? IN NATURAL LANGUAGE MODE)", mysqlSearchDocumentColumn), query).
 			Order(clause.Expr{SQL: fmt.Sprintf("MATCH(%s) AGAINST (? IN NATURAL LANGUAGE MODE) DESC", mysqlSearchDocumentColumn), Vars: []any{query}}).
 			Limit(n)
@@ -794,7 +805,7 @@ func (d *SQLDatabase) SearchItems(ctx context.Context, query string, n int) ([]S
 		query = sqliteAnyTokenSearchQuery(query)
 		tx = d.gormDB.WithContext(ctx).
 			Table(fmt.Sprintf("%s AS items", d.ItemsTable())).
-			Select(fmt.Sprintf("items.item_id, items.is_hidden, items.categories, items.time_stamp, items.labels, items.comment, -bm25(%s) AS score", searchIndexName)).
+			Select(fmt.Sprintf("items.item_id, items.is_hidden, items.categories, items.time_stamp, items.labels, items.comment, items.update_at, -bm25(%s) AS score", searchIndexName)).
 			Joins(fmt.Sprintf("JOIN %s ON items.item_id = %s.item_id", searchIndexName, searchIndexName)).
 			Where(fmt.Sprintf("%s MATCH ?", searchIndexName), query).
 			Order(fmt.Sprintf("bm25(%s)", searchIndexName)).
@@ -827,7 +838,7 @@ func (d *SQLDatabase) ModifyItem(ctx context.Context, itemId string, patch ItemP
 		log.Logger().Debug("empty item patch")
 		return nil
 	}
-	attributes := make(map[string]any)
+	attributes := map[string]any{"update_at": time.Now().UTC().Truncate(time.Microsecond)}
 	if patch.IsHidden != nil {
 		if *patch.IsHidden {
 			attributes["is_hidden"] = 1
@@ -862,7 +873,7 @@ func (d *SQLDatabase) GetItems(ctx context.Context, cursor string, n int, timeLi
 	cursorItem := string(buf)
 	tx := d.gormDB.WithContext(ctx).
 		Table(d.ItemsTable()).
-		Select("item_id, is_hidden, categories, time_stamp, labels, comment")
+		Select("item_id, is_hidden, categories, time_stamp, labels, comment, update_at")
 	if cursorItem != "" {
 		tx.Where("item_id >= ?", cursorItem)
 	}
@@ -893,7 +904,7 @@ func (d *SQLDatabase) GetLatestItems(ctx context.Context, n int, categories []st
 	tableName := d.ItemsTable()
 	tx := d.gormDB.WithContext(ctx).
 		Table(tableName).
-		Select("item_id, is_hidden, categories, time_stamp, labels, comment").
+		Select("item_id, is_hidden, categories, time_stamp, labels, comment, update_at").
 		Where("is_hidden = ?", false)
 	if len(categories) > 0 {
 		q, err := jsonutil.Marshal(categories)
@@ -936,7 +947,7 @@ func (d *SQLDatabase) GetItemStream(ctx context.Context, batchSize int, timeLimi
 		// send query
 		tx := d.gormDB.WithContext(ctx).
 			Table(d.ItemsTable()).
-			Select("item_id, is_hidden, categories, time_stamp, labels, comment")
+			Select("item_id, is_hidden, categories, time_stamp, labels, comment, update_at")
 		if timeLimit != nil {
 			tx.Where("time_stamp >= ?", *timeLimit)
 		}
@@ -1011,6 +1022,7 @@ func (d *SQLDatabase) BatchInsertUsers(ctx context.Context, users []User) error 
 	rows := make([]SQLUser, 0, len(users))
 	memo := mapset.NewSet[string]()
 	for _, user := range users {
+		user.UpdateAt = time.Now().UTC().Truncate(time.Microsecond)
 		if !memo.Contains(user.UserId) {
 			memo.Add(user.UserId)
 			rows = append(rows, NewSQLUser(user))
@@ -1018,7 +1030,7 @@ func (d *SQLDatabase) BatchInsertUsers(ctx context.Context, users []User) error 
 	}
 	err := d.gormDB.WithContext(ctx).Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "user_id"}},
-		DoUpdates: clause.AssignmentColumns([]string{"labels", "comment"}),
+		DoUpdates: clause.AssignmentColumns([]string{"labels", "comment", "update_at"}),
 	}).Create(rows).Error
 	return errors.WithStack(err)
 }
@@ -1039,7 +1051,7 @@ func (d *SQLDatabase) GetUser(ctx context.Context, userId string) (User, error) 
 	var result *sql.Rows
 	var err error
 	result, err = d.gormDB.WithContext(ctx).Table(d.UsersTable()).
-		Select("user_id, labels, comment").
+		Select("user_id, labels, comment, update_at").
 		Where("user_id = ?", userId).Rows()
 	if err != nil {
 		return User{}, errors.WithStack(err)
@@ -1062,7 +1074,7 @@ func (d *SQLDatabase) ModifyUser(ctx context.Context, userId string, patch UserP
 		log.Logger().Debug("empty user patch")
 		return nil
 	}
-	attributes := make(map[string]any)
+	attributes := map[string]any{"update_at": time.Now().UTC().Truncate(time.Microsecond)}
 	if patch.Comment != nil {
 		attributes["comment"] = *patch.Comment
 	}
@@ -1083,7 +1095,7 @@ func (d *SQLDatabase) GetUsers(ctx context.Context, cursor string, n int) (strin
 	cursorUser := string(buf)
 	tx := d.gormDB.WithContext(ctx).
 		Table(d.UsersTable()).
-		Select("user_id, labels, comment")
+		Select("user_id, labels, comment, update_at")
 	if cursorUser != "" {
 		tx.Where("user_id >= ?", cursorUser)
 	}
@@ -1114,7 +1126,7 @@ func (d *SQLDatabase) GetUserStream(ctx context.Context, batchSize int) (chan []
 		defer close(userChan)
 		defer close(errChan)
 		// send query
-		result, err := d.gormDB.WithContext(ctx).Table(d.UsersTable()).Select("user_id, labels, comment").Rows()
+		result, err := d.gormDB.WithContext(ctx).Table(d.UsersTable()).Select("user_id, labels, comment, update_at").Rows()
 		if err != nil {
 			errChan <- errors.WithStack(err)
 			return
@@ -1199,6 +1211,7 @@ func (d *SQLDatabase) BatchInsertFeedback(ctx context.Context, feedback []Feedba
 		}).Create(lo.Map(userList, func(userId string, _ int) SQLUser {
 			return SQLUser{
 				UserId: userId,
+				UpdateAt: time.Now().UTC().Truncate(time.Microsecond),
 				Labels: "null",
 			}
 		})).Error
@@ -1227,6 +1240,7 @@ func (d *SQLDatabase) BatchInsertFeedback(ctx context.Context, feedback []Feedba
 		}).Create(lo.Map(itemList, func(itemId string, _ int) SQLItem {
 			return SQLItem{
 				ItemId:     itemId,
+				UpdateAt: time.Now().UTC().Truncate(time.Microsecond),
 				Labels:     "null",
 				Categories: "null",
 			}
