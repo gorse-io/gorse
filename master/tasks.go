@@ -387,6 +387,9 @@ func (m *Master) LoadDataFromDatabase(
 	LoadDatasetStepSecondsVec.WithLabelValues("load_users").Set(time.Since(start).Seconds())
 
 	// STEP 2: pull items
+	keepItemLabels := lo.ContainsBy(nonPersonalizedRecommenders, func(recommender *logics.NonPersonalized) bool {
+		return recommender.NeedsItemLabels()
+	})
 	items := make([]data.Item, 0, estimatedNumItems)
 	itemLabelCount := make(map[string]int)
 	itemLabelFirst := make(map[string]int32)
@@ -400,7 +403,6 @@ func (m *Master) LoadDataFromDatabase(
 	for batchItems := range itemChan {
 		snapshot.ItemCount += int64(len(batchItems))
 		snapshot.ItemBytes += deepSize(batchItems)
-		items = append(items, batchItems...)
 		for _, item := range batchItems {
 			dataSet.AddItem(item)
 			itemIndex := dataSet.GetItemDict().Id(item.ItemId)
@@ -437,7 +439,7 @@ func (m *Master) LoadDataFromDatabase(
 				}
 			}
 			// load embeddings
-			embeddings := ctr.ConvertEmbeddings(item.Labels)
+			embeddings := ctr.ConvertEmbeddingsWithReuse(item.Labels, dataSet.GetItems()[itemIndex].Labels)
 			itemEmbeddings[itemIndex] = make([][]uint16, 0, len(embeddings))
 			for _, embedding := range embeddings {
 				itemEmbeddingIndexer.Add(embedding.Name)
@@ -451,6 +453,12 @@ func (m *Master) LoadDataFromDatabase(
 				}
 				itemEmbeddingDimension[itemEmbeddingIndex][len(itemEmbeddings[itemIndex][itemEmbeddingIndex])]++
 			}
+			// The collaborative dataset and ranker already own their converted
+			// labels. Retain raw JSON labels only if a later expression uses them.
+			if !keepItemLabels {
+				item.Labels = nil
+			}
+			items = append(items, item)
 		}
 		span.Add(len(batchItems))
 	}
@@ -602,7 +610,8 @@ func (m *Master) LoadDataFromDatabase(
 					itemFeedback = append(itemFeedback, f)
 				}
 				// find item group index
-				for itemGroupIndex = 0; itemGroupIndex < len(itemGroups[i]); itemGroupIndex++ {
+				// Feedback is ordered by item ID, so the cursor only moves forward.
+				for ; itemGroupIndex < len(itemGroups[i]); itemGroupIndex++ {
 					if itemGroups[i][itemGroupIndex].ItemId == f.ItemId {
 						break
 					}

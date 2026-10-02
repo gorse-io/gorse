@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/expr-lang/expr"
+	"github.com/expr-lang/expr/ast"
 	"github.com/expr-lang/expr/vm"
 	"github.com/gorse-io/gorse/common/heap"
 	"github.com/gorse-io/gorse/common/log"
@@ -138,6 +139,47 @@ func (l *NonPersonalized) Push(item data.Item, feedback []data.Feedback) {
 			l.heaps[group] = heap.NewTopKFilter[string, float64](l.heapSize)
 		}
 		l.heaps[group].Push(item.ItemId, score)
+	}
+}
+
+// NeedsItemLabels reports whether scoring or filtering may read the item's
+// labels. Whole-item and dynamic accesses conservatively retain all labels.
+func (l *NonPersonalized) NeedsItemLabels() bool {
+	v := itemLabelsVisitor{safe: make(map[*ast.IdentifierNode]bool)}
+	node := l.scoreFunc.Node()
+	ast.Walk(&node, &v)
+	if l.filterFunc != nil {
+		node = l.filterFunc.Node()
+		ast.Walk(&node, &v)
+	}
+	for _, identifier := range v.identifiers {
+		if !v.safe[identifier] {
+			return true
+		}
+	}
+	return false
+}
+
+type itemLabelsVisitor struct {
+	identifiers []*ast.IdentifierNode
+	safe        map[*ast.IdentifierNode]bool
+}
+
+func (v *itemLabelsVisitor) Visit(node *ast.Node) {
+	switch n := (*node).(type) {
+	case *ast.IdentifierNode:
+		if n.Value == "item" || n.Value == "$env" {
+			v.identifiers = append(v.identifiers, n)
+		}
+	case *ast.MemberNode:
+		identifier, ok := n.Node.(*ast.IdentifierNode)
+		if !ok || identifier.Value != "item" {
+			return
+		}
+		property, ok := n.Property.(*ast.StringNode)
+		if ok && property.Value != "Labels" {
+			v.safe[identifier] = true
+		}
 	}
 }
 

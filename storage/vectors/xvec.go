@@ -49,10 +49,13 @@ func init() {
 		}
 		opt := storage.NewOptions(opts...)
 		return &Xvec{
-			root:              root,
-			tablePrefix:       tablePrefix,
-			numJobs:           opt.NumJobs,
-			collectionOptions: xvec.CollectionOptions{SkipUnindexedSegments: opt.SkipUnindexedSegments},
+			root:        root,
+			tablePrefix: tablePrefix,
+			numJobs:     opt.NumJobs,
+			collectionOptions: xvec.CollectionOptions{
+				EnableMmap:            true,
+				SkipUnindexedSegments: opt.SkipUnindexedSegments,
+			},
 		}, nil
 	})
 }

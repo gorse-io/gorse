@@ -91,12 +91,48 @@ type Embedding struct {
 
 func ConvertEmbeddings(o any) []Embedding {
 	embeddings := make([]Embedding, 0)
-	return convertEmbeddings(embeddings, "", o)
+	return convertEmbeddings(embeddings, "", o, nil)
 }
 
-func convertEmbeddings(result []Embedding, prefix string, o any) []Embedding {
+// ConvertEmbeddingsWithReuse borrows the FP16 values already converted from o.
+// The caller must keep these values immutable while either dataset uses them.
+func ConvertEmbeddingsWithReuse(o, converted any) []Embedding {
+	return convertEmbeddings(make([]Embedding, 0), "", o, converted)
+}
+
+func reusableEmbedding(o, converted any) ([]uint16, bool) {
+	bits, ok := converted.([]uint16)
+	if !ok {
+		return nil, false
+	}
+	switch values := o.(type) {
+	case []float32:
+		return bits, len(values) == len(bits)
+	case []float64:
+		return bits, len(values) == len(bits)
+	case []any:
+		if len(values) == 0 || len(values) != len(bits) {
+			return nil, false
+		}
+		for _, value := range values {
+			switch value.(type) {
+			case float32, float64, int:
+			default:
+				return nil, false
+			}
+		}
+		return bits, true
+	default:
+		return nil, false
+	}
+}
+
+func convertEmbeddings(result []Embedding, prefix string, o, converted any) []Embedding {
 	if o == nil {
 		return nil
+	}
+	if value, ok := reusableEmbedding(o, converted); ok {
+		return append(result, Embedding{Name: prefix, Value: value})
 	}
 	switch embeddings := o.(type) {
 	case []any:
@@ -138,10 +174,14 @@ func convertEmbeddings(result []Embedding, prefix string, o any) []Embedding {
 		})
 	case map[string]any:
 		for key, val := range embeddings {
+			var cached any
+			if values, ok := converted.(map[string]any); ok {
+				cached = values[key]
+			}
 			if prefix == "" {
-				result = convertEmbeddings(result, key, val)
+				result = convertEmbeddings(result, key, val, cached)
 			} else {
-				result = convertEmbeddings(result, prefix+"."+key, val)
+				result = convertEmbeddings(result, prefix+"."+key, val, cached)
 			}
 		}
 	}

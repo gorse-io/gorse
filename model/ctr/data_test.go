@@ -23,7 +23,31 @@ import (
 	"github.com/gorse-io/gorse/dataset"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
+
+func TestConvertEmbeddingsWithReuse(t *testing.T) {
+	bits := floats.FromFloat32([]float32{1.25, -2.5, 0.125})
+	for _, raw := range []any{
+		[]float32{1.25, -2.5, 0.125},
+		[]float64{1.25, -2.5, 0.125},
+		[]any{float64(1.25), float32(-2.5), float64(0.125)},
+	} {
+		input := map[string]any{"nested": map[string]any{"vector": raw}, "tag": "category"}
+		converted := map[string]any{"nested": map[string]any{"vector": bits}, "tag": dataset.ID(1)}
+		got := ConvertEmbeddingsWithReuse(input, converted)
+		require.Len(t, got, 1)
+		assert.Equal(t, ConvertEmbeddings(input), got)
+		assert.Same(t, &bits[0], &got[0].Value[0])
+	}
+	// Invalid/empty vectors and missing conversions retain existing behavior.
+	for _, raw := range []any{
+		[]any{}, []any{"tag"}, []any{1, "tag"}, []any{json.Number("1")}, nil,
+	} {
+		assert.Equal(t, ConvertEmbeddings(raw), ConvertEmbeddingsWithReuse(raw, bits))
+	}
+	assert.Equal(t, ConvertEmbeddings([]float32{1.25}), ConvertEmbeddingsWithReuse([]float32{1.25}, bits))
+}
 
 func TestConvertLabels(t *testing.T) {
 	features := ConvertLabels(nil)

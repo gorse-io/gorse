@@ -23,6 +23,7 @@ import (
 
 	"github.com/gorse-io/gorse/common/event"
 	"github.com/gorse-io/gorse/common/expression"
+	"github.com/gorse-io/gorse/common/floats"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/logics"
 	"github.com/gorse-io/gorse/model/cf"
@@ -39,6 +40,52 @@ type failOnceBlobStore struct {
 	blob.Store
 	name   string
 	failed bool
+}
+
+func (s *MasterTestSuite) TestLoadDataFromDatabaseItemLabels() {
+	ctx := s.T().Context()
+	s.Config = config.GetDefaultConfig()
+	s.Config.Master.NumJobs = 2
+	labels := map[string]any{
+		"weight":    float64(1.23456789),
+		"embedding": []any{float64(1.25), float64(-2.5), float64(0.125)},
+		"tag":       "category",
+	}
+	s.Require().NoError(s.DataClient.BatchInsertItems(ctx, []data.Item{
+		{ItemId: "a", Labels: labels},
+		{ItemId: "b", Labels: labels},
+	}))
+	for _, score := range []string{"1", "float(item.Labels.weight)"} {
+		recommender, err := logics.NewNonPersonalized(config.NonPersonalizedConfig{
+			Name: "custom", Score: score,
+		}, 10, time.Now())
+		s.Require().NoError(err)
+		click, ranking, _, err := s.LoadDataFromDatabase(ctx, s.DataClient,
+			nil, nil, nil, 0, 0, NewOnlineEvaluator(nil, nil),
+			[]*logics.NonPersonalized{recommender})
+		s.Require().NoError(err)
+		s.Equal(2, ranking.CountItems())
+		s.Len(click.ItemEmbeddings, 2)
+		for _, item := range ranking.GetItems() {
+			processed := item.Labels.(map[string]any)
+			s.Equal(floats.FromFloat32([]float32{1.25, -2.5, 0.125}), processed["embedding"])
+			s.Equal(float64(1.23456789), processed["weight"])
+		}
+		for _, embeddings := range click.ItemEmbeddings {
+			s.Equal([][]uint16{floats.FromFloat32([]float32{1.25, -2.5, 0.125})}, embeddings)
+		}
+		for index, item := range ranking.GetItems() {
+			bits := item.Labels.(map[string]any)["embedding"].([]uint16)
+			s.Same(&bits[0], &click.ItemEmbeddings[index][0][0])
+		}
+		scores := recommender.PopAll()
+		s.Require().Len(scores, 2)
+		if score == "1" {
+			s.Equal(float64(1), scores[0].Score)
+		} else {
+			s.Equal(float64(1.23456789), scores[0].Score)
+		}
+	}
 }
 
 func (s *failOnceBlobStore) Remove(name string) error {
