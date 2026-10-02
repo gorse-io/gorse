@@ -20,19 +20,25 @@ type FreqDict struct {
 	si  map[string]int32
 	is  []string
 	cnt []int32
-	mu  []sync.Mutex
+	mu  []*sync.Mutex
+	rw  sync.RWMutex
 }
 
 func NewFreqDict() (d *FreqDict) {
-	d = &FreqDict{map[string]int32{}, []string{}, []int32{}, []sync.Mutex{}}
+	d = &FreqDict{si: map[string]int32{}}
 	return
 }
 
 func (d *FreqDict) Count() int32 {
+	d.rw.RLock()
+	defer d.rw.RUnlock()
 	return int32(len(d.is))
 }
 
 func (d *FreqDict) Add(s string) (y int32) {
+	d.rw.Lock()
+	defer d.rw.Unlock()
+
 	if y, ok := d.si[s]; ok {
 		d.cnt[y]++
 		return y
@@ -42,11 +48,14 @@ func (d *FreqDict) Add(s string) (y int32) {
 	d.si[s] = y
 	d.is = append(d.is, s)
 	d.cnt = append(d.cnt, 1)
-	d.mu = append(d.mu, sync.Mutex{})
+	d.mu = append(d.mu, &sync.Mutex{})
 	return
 }
 
 func (d *FreqDict) AddNoCount(s string) (y int32) {
+	d.rw.Lock()
+	defer d.rw.Unlock()
+
 	if y, ok := d.si[s]; ok {
 		return y
 	}
@@ -55,11 +64,14 @@ func (d *FreqDict) AddNoCount(s string) (y int32) {
 	d.si[s] = y
 	d.is = append(d.is, s)
 	d.cnt = append(d.cnt, 0)
-	d.mu = append(d.mu, sync.Mutex{})
+	d.mu = append(d.mu, &sync.Mutex{})
 	return
 }
 
 func (d *FreqDict) Id(s string) int32 {
+	d.rw.RLock()
+	defer d.rw.RUnlock()
+
 	if y, ok := d.si[s]; ok {
 		return y
 	}
@@ -67,6 +79,9 @@ func (d *FreqDict) Id(s string) int32 {
 }
 
 func (d *FreqDict) String(id int32) (s string, ok bool) {
+	d.rw.RLock()
+	defer d.rw.RUnlock()
+
 	if id >= int32(len(d.is)) {
 		return "", false
 	}
@@ -74,6 +89,9 @@ func (d *FreqDict) String(id int32) (s string, ok bool) {
 }
 
 func (d *FreqDict) Freq(id int32) int32 {
+	d.rw.RLock()
+	defer d.rw.RUnlock()
+
 	if id >= int32(len(d.cnt)) {
 		return 0
 	}
@@ -81,11 +99,17 @@ func (d *FreqDict) Freq(id int32) int32 {
 }
 
 func (d *FreqDict) Lock(index int32) {
-	d.mu[index].Lock()
+	d.rw.RLock()
+	mu := d.mu[index]
+	d.rw.RUnlock()
+	mu.Lock()
 }
 
 func (d *FreqDict) Unlock(index int32) {
-	d.mu[index].Unlock()
+	d.rw.RLock()
+	mu := d.mu[index]
+	d.rw.RUnlock()
+	mu.Unlock()
 }
 
 func (d *FreqDict) ToIndex() *Index {
