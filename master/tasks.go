@@ -962,6 +962,10 @@ func (m *Master) trainCollaborativeFiltering(parent context.Context, trainSet, t
 		}
 		indexSpan.Add(end - start)
 	}
+	if err := m.VectorClient.Optimize(indexCtx, collection); err != nil {
+		indexSpan.Fail(err)
+		return errors.WithStack(err)
+	}
 	indexSpan.End()
 	span.Add(1)
 

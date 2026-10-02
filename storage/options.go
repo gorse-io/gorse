@@ -6,15 +6,29 @@ import (
 )
 
 type Options struct {
-	IsolationLevel   string
-	MaxOpenConns     int
-	MaxIdleConns     int
-	ConnMaxLifetime  time.Duration
-	MaxSearchResults int
-	RedisClientName  string
+	IsolationLevel        string
+	MaxOpenConns          int
+	MaxIdleConns          int
+	ConnMaxLifetime       time.Duration
+	MaxSearchResults      int
+	RedisClientName       string
+	NumJobs               int
+	SkipUnindexedSegments bool
 }
 
 type Option func(*Options)
+
+func WithNumJobs(numJobs int) Option {
+	return func(o *Options) {
+		o.NumJobs = numJobs
+	}
+}
+
+func WithSkipUnindexedSegments(skip bool) Option {
+	return func(o *Options) {
+		o.SkipUnindexedSegments = skip
+	}
+}
 
 func WithIsolationLevel(isolationLevel string) Option {
 	return func(o *Options) {

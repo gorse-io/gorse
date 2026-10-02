@@ -34,7 +34,7 @@ require (
 	github.com/gorilla/securecookie v1.1.2
 	github.com/gorse-io/dashboard v0.5.20260714
 	github.com/gorse-io/gorse-go v0.5.0-alpha.3.0.20260613082921-062d740c10a2
-	github.com/gorse-io/xvec v0.0.0-20261002005933-eafea64e2268
+	github.com/gorse-io/xvec v0.0.0-20261002012245-26883593ba28
 	github.com/invopop/jsonschema v0.13.0
 	github.com/jaswdr/faker v1.19.1
 	github.com/jellydator/ttlcache/v3 v3.4.0
