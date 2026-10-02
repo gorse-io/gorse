@@ -40,7 +40,6 @@ var (
 	positiveFeedbackType2 = "positiveFeedbackType2"
 	negativeFeedbackType  = "negativeFeedbackType"
 	duplicateFeedbackType = "duplicateFeedbackType"
-	dateTime64Zero        = time.Date(1900, 1, 1, 0, 0, 0, 0, time.UTC)
 )
 
 type baseTestSuite struct {
@@ -130,14 +129,6 @@ func (suite *baseTestSuite) getFeedbackStream(ctx context.Context, batchSize int
 	}
 	suite.NoError(<-errChan)
 	return feedbacks
-}
-
-func (suite *baseTestSuite) isClickHouse() bool {
-	if sqlDB, isSQL := suite.Database.(*SQLDatabase); !isSQL {
-		return false
-	} else {
-		return sqlDB.driver == ClickHouse
-	}
 }
 
 func (suite *baseTestSuite) analyzeTables() {
@@ -334,12 +325,7 @@ func (suite *baseTestSuite) TestFeedback() {
 	for i, item := range items {
 		suite.Equal(strconv.Itoa(i*2), item.ItemId)
 		if item.ItemId != "0" {
-			if suite.isClickHouse() {
-				// ClickHouse returns 1900-01-01 00:00:00 +0000 UTC as zero date.
-				suite.Equal(dateTime64Zero, item.Timestamp)
-			} else {
-				suite.Zero(item.Timestamp)
-			}
+			suite.Zero(item.Timestamp)
 			suite.Empty(item.Labels)
 			suite.Empty(item.Comment)
 		}
@@ -478,11 +464,7 @@ func (suite *baseTestSuite) TestFeedback() {
 	// check duplicate feedback again
 	ret, err = suite.Database.GetUserItemFeedback(ctx, "0", "0", "a")
 	suite.NoError(err)
-	if suite.isClickHouse() {
-		suite.Equal([]Feedback{{FeedbackKey: FeedbackKey{"a", "0", "0"}, Value: 3, Timestamp: timestamp, Updated: timestamp, Comment: ""}}, ret)
-	} else {
-		suite.Equal([]Feedback{{FeedbackKey: FeedbackKey{"a", "0", "0"}, Value: 1, Timestamp: timestamp, Updated: timestamp, Comment: ""}}, ret)
-	}
+	suite.Equal([]Feedback{{FeedbackKey: FeedbackKey{"a", "0", "0"}, Value: 1, Timestamp: timestamp, Updated: timestamp, Comment: ""}}, ret)
 }
 
 func (suite *baseTestSuite) TestItems() {
@@ -768,10 +750,7 @@ func (suite *baseTestSuite) TestDeleteFeedback() {
 	// delete user-item feedback
 	deleteCount, err := suite.Database.DeleteUserItemFeedback(ctx, "2", "3")
 	suite.NoError(err)
-	if !suite.isClickHouse() {
-		// RowAffected isn't supported by ClickHouse,
-		suite.Equal(3, deleteCount)
-	}
+	suite.Equal(3, deleteCount)
 	err = suite.Database.Optimize()
 	suite.NoError(err)
 	ret, err = suite.Database.GetUserItemFeedback(ctx, "2", "3")
@@ -780,10 +759,7 @@ func (suite *baseTestSuite) TestDeleteFeedback() {
 	feedbackType1 := "type1"
 	deleteCount, err = suite.Database.DeleteUserItemFeedback(ctx, "1", "3", feedbackType1)
 	suite.NoError(err)
-	if !suite.isClickHouse() {
-		// RowAffected isn't supported by ClickHouse,
-		suite.Equal(1, deleteCount)
-	}
+	suite.Equal(1, deleteCount)
 	ret, err = suite.Database.GetUserItemFeedback(ctx, "1", "3", feedbackType2)
 	suite.NoError(err)
 	suite.Empty(ret)
@@ -919,13 +895,6 @@ func (suite *baseTestSuite) TestTimezone() {
 			item, err = suite.Database.GetItem(ctx, "200")
 			suite.NoError(err)
 			suite.Equal(now.Round(time.Microsecond).In(time.UTC), item.Timestamp)
-		case ClickHouse:
-			item, err := suite.Database.GetItem(ctx, "100")
-			suite.NoError(err)
-			suite.Equal(now.Truncate(time.Second).In(time.UTC), item.Timestamp)
-			item, err = suite.Database.GetItem(ctx, "200")
-			suite.NoError(err)
-			suite.Equal(now.Truncate(time.Second).In(time.UTC), item.Timestamp)
 		case SQLite:
 			item, err := suite.Database.GetItem(ctx, "100")
 			suite.NoError(err)

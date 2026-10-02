@@ -128,10 +128,6 @@ type Feedback struct {
 	Comment     string    `gorm:"column:comment" mapstructure:"comment"`
 }
 
-type UserFeedback Feedback
-
-type ItemFeedback Feedback
-
 // SortFeedbacks sorts feedback from latest to oldest.
 func SortFeedbacks(feedback []Feedback) {
 	sort.Sort(feedbackSorter(feedback))

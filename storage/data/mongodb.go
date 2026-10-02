@@ -108,7 +108,7 @@ type MongoDB struct {
 	dbName string
 }
 
-// Optimize is used by ClickHouse only.
+// Optimize is a no-op.
 func (db *MongoDB) Optimize() error {
 	return nil
 }

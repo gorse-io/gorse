@@ -29,18 +29,15 @@ import (
 )
 
 var (
-	mySqlDSN      string
-	postgresDSN   string
-	clickhouseDSN string
+	mySqlDSN    string
+	postgresDSN string
 )
 
 func init() {
 	// os.Setenv("MYSQL_URI", "mysql://root:password@tcp(127.0.0.1:3306)/")
 	// os.Setenv("POSTGRES_URI", "postgres://gorse:gorse_pass@127.0.0.1/")
-	// os.Setenv("CLICKHOUSE_URI", "clickhouse://127.0.0.1:8123/")
 	mySqlDSN = os.Getenv("MYSQL_URI")
 	postgresDSN = os.Getenv("POSTGRES_URI")
-	clickhouseDSN = os.Getenv("CLICKHOUSE_URI")
 }
 
 type MySQLTestSuite struct {
@@ -114,38 +111,6 @@ func TestPostgres(t *testing.T) {
 	suite.Run(t, new(PostgresTestSuite))
 }
 
-type ClickHouseTestSuite struct {
-	baseTestSuite
-}
-
-func (suite *ClickHouseTestSuite) SetupSuite() {
-	log.SetTestLogger(suite.T())
-	var err error
-	// create database
-	databaseComm, err := sql.Open("chhttp", "http://"+clickhouseDSN[len(storage.ClickhousePrefix):])
-	suite.NoError(err)
-	const dbName = "gorse_data_test"
-	_, err = databaseComm.Exec("DROP DATABASE IF EXISTS " + dbName)
-	suite.NoError(err)
-	_, err = databaseComm.Exec("CREATE DATABASE " + dbName)
-	suite.NoError(err)
-	err = databaseComm.Close()
-	suite.NoError(err)
-	// connect database
-	suite.Database, err = Open(clickhouseDSN+dbName+"?mutations_sync=2", "gorse_")
-	suite.NoError(err)
-	// create schema
-	err = suite.Database.Init()
-	suite.NoError(err)
-}
-
-func TestClickHouse(t *testing.T) {
-	if clickhouseDSN == "" {
-		t.Skip("CLICKHOUSE_URI is not set, skipping ClickHouse test")
-	}
-	suite.Run(t, new(ClickHouseTestSuite))
-}
-
 type SQLiteTestSuite struct {
 	baseTestSuite
 }
@@ -210,31 +175,6 @@ func BenchmarkPostgres_CountItems(b *testing.B) {
 	}
 	// create database
 	database, err := Open(postgresDSN+"gorse_data_test?sslmode=disable", "gorse_")
-	require.NoError(b, err)
-	err = database.Init()
-	require.NoError(b, err)
-	// benchmark
-	benchmarkCountItems(b, database)
-	// close database
-	err = database.Close()
-	require.NoError(b, err)
-}
-
-func BenchmarkClickHouse_CountItems(b *testing.B) {
-	if clickhouseDSN == "" {
-		b.Skip("CLICKHOUSE_URI is not set, skipping ClickHouse benchmark")
-	}
-	// create database
-	databaseComm, err := sql.Open("chhttp", "http://"+clickhouseDSN[len(storage.ClickhousePrefix):])
-	require.NoError(b, err)
-	const dbName = "gorse_data_test"
-	_, err = databaseComm.Exec("DROP DATABASE IF EXISTS " + dbName)
-	require.NoError(b, err)
-	_, err = databaseComm.Exec("CREATE DATABASE " + dbName)
-	require.NoError(b, err)
-	err = databaseComm.Close()
-	require.NoError(b, err)
-	database, err := Open(clickhouseDSN+"gorse_data_test?mutations_sync=2", "gorse_")
 	require.NoError(b, err)
 	err = database.Init()
 	require.NoError(b, err)
