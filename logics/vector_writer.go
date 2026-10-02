@@ -23,6 +23,7 @@ import (
 	"sync"
 	"time"
 
+	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/storage"
 	"github.com/gorse-io/gorse/storage/vectors"
@@ -115,10 +116,12 @@ func (w *VectorWriter) Clean() error {
 	if err := w.flushLocked(); err != nil {
 		return err
 	}
-	if err := w.client.DeleteVectors(w.ctx, w.collection, w.timestamp); err != nil && !errors.Is(err, storage.ErrNotFound) {
+	if err := w.client.DeleteVectors(w.ctx, w.collection, w.timestamp); errors.Is(err, storage.ErrNotFound) {
+		return nil
+	} else if err != nil {
 		return errors.WithStack(err)
 	}
-	return nil
+	return errors.WithStack(w.client.Optimize(w.ctx, w.collection))
 }
 
 func (w *VectorWriter) ensureCollectionLocked() error {
@@ -279,6 +282,7 @@ func newSparseVector[T ~int32](ids []T, idf []float32, offset uint32) vectors.Ve
 
 func appendSparseVector[T ~int32](vector vectors.Vector, ids []T, idf []float32, offset uint32) vectors.Vector {
 	pruner := newSparseVectorPruner(maxSparseVectorNNZ)
+	seen := mapset.NewThreadUnsafeSet[uint32](vector.Indices...)
 	for i, index := range vector.Indices {
 		pruner.Add(index, vector.Values[i])
 	}
@@ -286,7 +290,11 @@ func appendSparseVector[T ~int32](vector vectors.Vector, ids []T, idf []float32,
 		if id < 0 || int(id) >= len(idf) || idf[id] <= 0 {
 			continue
 		}
-		pruner.Add(offset+uint32(id), float32(math.Sqrt(float64(idf[id]))))
+		index := offset + uint32(id)
+		if !seen.Add(index) {
+			continue
+		}
+		pruner.Add(index, float32(math.Sqrt(float64(idf[id]))))
 	}
 	vector.Indices, vector.Values = pruner.Result()
 	return vector

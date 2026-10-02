@@ -42,21 +42,29 @@ const (
 )
 
 func init() {
-	Register([]string{storage.XvecPrefix}, func(path, tablePrefix string, _ ...storage.Option) (Database, error) {
+	Register([]string{storage.XvecPrefix}, func(path, tablePrefix string, opts ...storage.Option) (Database, error) {
 		root := strings.TrimPrefix(path, storage.XvecPrefix)
 		if root == "" {
 			return nil, errors.New("xvec path is empty")
 		}
-		return &Xvec{root: root, tablePrefix: tablePrefix}, nil
+		opt := storage.NewOptions(opts...)
+		return &Xvec{
+			root:              root,
+			tablePrefix:       tablePrefix,
+			numJobs:           opt.NumJobs,
+			collectionOptions: xvec.CollectionOptions{SkipUnindexedSegments: opt.SkipUnindexedSegments},
+		}, nil
 	})
 }
 
 // Xvec stores each Gorse vector collection in a xvec collection directory.
 type Xvec struct {
-	root        string
-	tablePrefix string
-	collections sync.Map // map[string]*xvec.Collection
-	closed      atomic.Bool
+	root              string
+	tablePrefix       string
+	collections       sync.Map // map[string]*xvec.Collection
+	closed            atomic.Bool
+	numJobs           int
+	collectionOptions xvec.CollectionOptions
 }
 
 func (db *Xvec) Init() error {
@@ -78,6 +86,14 @@ func (db *Xvec) Init() error {
 	})
 	if hasCollections {
 		return nil
+	}
+	if db.numJobs > 0 {
+		cfg := xvec.NewRuntimeConfig()
+		cfg.QueryConcurrency = db.numJobs
+		cfg.OptimizeConcurrency = db.numJobs
+		if err := xvec.ConfigureRuntime(cfg); err != nil {
+			return errors.WithStack(err)
+		}
 	}
 	type openedCollection struct {
 		name       string
@@ -106,7 +122,7 @@ func (db *Xvec) Init() error {
 		if name == "" {
 			continue
 		}
-		collection, err := xvec.Open(context.Background(), filepath.Join(db.root, entry.Name()), xvec.CollectionOptions{})
+		collection, err := xvec.Open(context.Background(), filepath.Join(db.root, entry.Name()), db.collectionOptions)
 		if err != nil {
 			cleanup()
 			return errors.WithStack(err)
@@ -209,7 +225,7 @@ func (db *Xvec) AddCollection(ctx context.Context, name string, dimensions int, 
 	if _, found := db.collections.Load(name); found {
 		return fmt.Errorf("collection %s %w", name, storage.ErrAlreadyExists)
 	}
-	collection, err := xvec.CreateAndOpen(ctx, filepath.Join(db.root, physicalName), schema, xvec.CollectionOptions{})
+	collection, err := xvec.CreateAndOpen(ctx, filepath.Join(db.root, physicalName), schema, db.collectionOptions)
 	if err != nil {
 		return errors.WithStack(err)
 	}

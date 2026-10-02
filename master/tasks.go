@@ -822,6 +822,7 @@ func (m *Master) updateItemToItem(parent context.Context, dataset *dataset.Datas
 	}
 	for _, recommender := range itemToItemRecommenders {
 		if err := recommender.Clean(); err != nil {
+			span.Fail(err)
 			return errors.WithStack(err)
 		}
 	}
@@ -870,6 +871,7 @@ func (m *Master) updateUserToUser(parent context.Context, dataset *dataset.Datas
 	}
 	for _, recommender := range userToUserRecommenders {
 		if err := recommender.Clean(); err != nil {
+			span.Fail(err)
 			return errors.WithStack(err)
 		}
 	}
@@ -959,6 +961,10 @@ func (m *Master) trainCollaborativeFiltering(parent context.Context, trainSet, t
 			return errors.WithStack(err)
 		}
 		indexSpan.Add(end - start)
+	}
+	if err := m.VectorClient.Optimize(indexCtx, collection); err != nil {
+		indexSpan.Fail(err)
+		return errors.WithStack(err)
 	}
 	indexSpan.End()
 	span.Add(1)

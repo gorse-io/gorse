@@ -318,7 +318,8 @@ func (m *Master) Serve() {
 
 	// open vector store
 	log.Logger().Info("opening vector store", zap.String("path", m.Config.Database.VectorStore))
-	m.VectorClient, err = vectors.Open(m.Config.Database.VectorStore, m.Config.Database.VectorTablePrefix)
+	m.VectorClient, err = vectors.Open(m.Config.Database.VectorStore, m.Config.Database.VectorTablePrefix,
+		storage.WithNumJobs(m.Config.Master.NumJobs), storage.WithSkipUnindexedSegments(true))
 	if err != nil {
 		log.Logger().Fatal("failed to connect vector store", zap.Error(err))
 	}
