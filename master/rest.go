@@ -1826,10 +1826,9 @@ func (m *Master) dump(response http.ResponseWriter, request *http.Request) {
 				return
 			}
 			if err := writeDump(response, &protocol.User{
-				UserId:   user.UserId,
-				Labels:   labels,
-				Comment:  user.Comment,
-				UpdateAt: timestamppb.New(user.UpdateAt),
+				UserId:  user.UserId,
+				Labels:  labels,
+				Comment: user.Comment,
 			}); err != nil {
 				writeError(response, http.StatusInternalServerError, err.Error())
 				return
@@ -1861,7 +1860,6 @@ func (m *Master) dump(response http.ResponseWriter, request *http.Request) {
 				Timestamp:  timestamppb.New(item.Timestamp),
 				Labels:     labels,
 				Comment:    item.Comment,
-				UpdateAt:   timestamppb.New(item.UpdateAt),
 			}); err != nil {
 				writeError(response, http.StatusInternalServerError, err.Error())
 				return
@@ -1919,8 +1917,6 @@ func (m *Master) dump(response http.ResponseWriter, request *http.Request) {
 	server.Ok(restful.NewResponse(response), stats)
 }
 
-// Restore preserves business timestamps, but assigns fresh storage UpdateAt times:
-// importing a dump is a new database write, not a continuation of the old store.
 func (m *Master) Restore(r io.ReadCloser, delta *time.Duration) (stats DumpStats, err error) {
 	flag := EOF
 	if err = binary.Read(r, binary.LittleEndian, &flag); err != nil {

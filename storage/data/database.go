@@ -80,7 +80,7 @@ type Item struct {
 	Categories []string  `gorm:"serializer:json" mapstructure:"categories"`
 	Timestamp  time.Time `gorm:"column:time_stamp" mapstructure:"timestamp"`
 	// UpdateAt is the latest database write time, assigned by storage, not callers.
-	UpdateAt time.Time `gorm:"column:update_at" mapstructure:"update_at"`
+	UpdateAt time.Time `gorm:"column:update_at" mapstructure:"-" json:"-"`
 	Labels   any       `gorm:"serializer:json" mapstructure:"labels"`
 	Comment  string    `mapstructure:"comment"`
 }
@@ -106,7 +106,7 @@ type User struct {
 	Labels  any    `gorm:"serializer:json" mapstructure:"labels"`
 	Comment string `mapstructure:"comment"`
 	// UpdateAt is the latest database write time, assigned by storage, not callers.
-	UpdateAt time.Time `gorm:"column:update_at" mapstructure:"update_at"`
+	UpdateAt time.Time `gorm:"column:update_at" mapstructure:"-" json:"-"`
 }
 
 // UserPatch is the modification on a user.
