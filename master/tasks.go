@@ -490,6 +490,14 @@ func (m *Master) LoadDataFromDatabase(
 		return items[i].ItemId < items[j].ItemId
 	})
 	itemGroups := parallel.Split(items, m.Config.Master.NumJobs)
+	// SQL collation can differ from Go's item ID ordering. Locate feedback
+	// items directly instead of scanning the group or assuming matching order.
+	itemPositions := make([]int, dataSet.CountItems())
+	for _, group := range itemGroups {
+		for index, item := range group {
+			itemPositions[dataSet.GetItemDict().Id(item.ItemId)] = index
+		}
+	}
 
 	// STEP 3: pull explicit negative feedback (highest priority)
 	var mu sync.Mutex
@@ -609,13 +617,7 @@ func (m *Master) LoadDataFromDatabase(
 					itemFeedback = itemFeedback[:0]
 					itemFeedback = append(itemFeedback, f)
 				}
-				// find item group index
-				// Feedback is ordered by item ID, so the cursor only moves forward.
-				for ; itemGroupIndex < len(itemGroups[i]); itemGroupIndex++ {
-					if itemGroups[i][itemGroupIndex].ItemId == f.ItemId {
-						break
-					}
-				}
+				itemGroupIndex = itemPositions[itemIndex]
 				dataSet.AddFeedback(f.UserId, f.ItemId, f.Timestamp)
 			}
 			span.Add(len(feedback))

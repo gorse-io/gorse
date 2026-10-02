@@ -18,6 +18,7 @@ import (
 	"context"
 	"fmt"
 	"runtime"
+	"slices"
 	"strconv"
 	"time"
 
@@ -40,6 +41,65 @@ type failOnceBlobStore struct {
 	blob.Store
 	name   string
 	failed bool
+}
+
+type reverseFeedbackDatabase struct{ data.Database }
+
+func (db reverseFeedbackDatabase) GetFeedbackStream(ctx context.Context, batchSize int, options ...data.ScanOption) (chan []data.Feedback, chan error) {
+	input, inputErr := db.Database.GetFeedbackStream(ctx, batchSize, options...)
+	output := make(chan []data.Feedback, 1)
+	outputErr := make(chan error, 1)
+	go func() {
+		defer close(output)
+		defer close(outputErr)
+		var feedback []data.Feedback
+		for batch := range input {
+			feedback = append(feedback, batch...)
+		}
+		err := <-inputErr
+		if err == nil {
+			// Keep each item's feedback contiguous, with item groups ordered
+			// differently from the in-memory Go string sort.
+			slices.Reverse(feedback)
+			output <- feedback
+		}
+		outputErr <- err
+	}()
+	return output, outputErr
+}
+
+func (s *MasterTestSuite) TestLoadDataFromDatabaseDifferentItemOrder() {
+	ctx := s.T().Context()
+	s.Config.Master.NumJobs = 2
+	s.Require().NoError(s.DataClient.BatchInsertUsers(ctx, []data.User{{UserId: "u"}}))
+	s.Require().NoError(s.DataClient.BatchInsertItems(ctx, []data.Item{
+		{ItemId: "A", Labels: map[string]any{"weight": 10}},
+		{ItemId: "b", Labels: map[string]any{"weight": 20}},
+		{ItemId: "c", Labels: map[string]any{"weight": 30}},
+		{ItemId: "d", Labels: map[string]any{"weight": 40}},
+	}))
+	feedback := make([]data.Feedback, 0, 4)
+	for _, item := range []string{"A", "b", "c", "d"} {
+		feedback = append(feedback, data.Feedback{
+			FeedbackKey: data.FeedbackKey{FeedbackType: "positive", UserId: "u", ItemId: item},
+			Timestamp:   time.Now(),
+		})
+	}
+	s.Require().NoError(s.DataClient.BatchInsertFeedback(ctx, feedback, false, false, true))
+	recommender, err := logics.NewNonPersonalized(config.NonPersonalizedConfig{
+		Score: "float(item.Labels.weight) + len(feedback)",
+	}, 10, time.Now())
+	s.Require().NoError(err)
+	click, ranking, _, err := s.LoadDataFromDatabase(ctx, reverseFeedbackDatabase{s.DataClient},
+		[]expression.FeedbackTypeExpression{expression.MustParseFeedbackTypeExpression("positive")},
+		nil, nil, 0, 0, NewOnlineEvaluator(nil, nil), []*logics.NonPersonalized{recommender})
+	s.Require().NoError(err)
+	s.Equal(4, ranking.CountFeedback())
+	s.Equal(4, click.PositiveCount)
+	s.Equal(4, click.Count())
+	for _, score := range recommender.PopAll() {
+		s.Equal(map[string]float64{"A": 11, "b": 21, "c": 31, "d": 41}[score.Id], score.Score)
+	}
 }
 
 func (s *MasterTestSuite) TestLoadDataFromDatabaseItemLabels() {
