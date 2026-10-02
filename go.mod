@@ -43,7 +43,6 @@ require (
 	github.com/lafikl/consistent v0.0.0-20220512074542-bdd3606bfc3e
 	github.com/lib/pq v1.12.3
 	github.com/madflojo/testcerts v1.5.0
-	github.com/mailru/go-clickhouse/v2 v2.5.1
 	github.com/matttproud/golang_protobuf_extensions v1.0.4
 	github.com/milvus-io/milvus/client/v2 v2.6.5
 	github.com/milvus-io/milvus/pkg/v2 v2.6.7-0.20251201120310-af64f2acba38
@@ -93,7 +92,6 @@ require (
 	google.golang.org/protobuf v1.36.11
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 	gopkg.in/yaml.v3 v3.0.1
-	gorm.io/driver/clickhouse v0.7.0
 	gorm.io/driver/mysql v1.6.0
 	gorm.io/driver/postgres v1.6.0
 	gorm.io/driver/sqlite v1.6.0
@@ -115,8 +113,6 @@ require (
 	cloud.google.com/go/pubsub/v2 v2.4.0 // indirect
 	filippo.io/edwards25519 v1.1.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/internal v1.11.2 // indirect
-	github.com/ClickHouse/ch-go v0.71.0 // indirect
-	github.com/ClickHouse/clickhouse-go/v2 v2.44.0 // indirect
 	github.com/DataDog/zstd v1.5.7 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.31.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/metric v0.55.0 // indirect
@@ -337,7 +333,6 @@ require (
 )
 
 replace (
-	gorm.io/driver/clickhouse v0.7.0 => github.com/gorse-io/clickhouse v0.3.3-0.20260331225025-ab309f55941d
 	gorm.io/driver/sqlite v1.6.0 => github.com/gorse-io/sqlite v1.3.3-0.20260620140844-3b4da3e2b9f2
 )
 

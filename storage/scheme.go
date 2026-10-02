@@ -75,9 +75,6 @@ const (
 	MongoSrvPrefix      = "mongodb+srv://"
 	PostgresPrefix      = "postgres://"
 	PostgreSQLPrefix    = "postgresql://"
-	ClickhousePrefix    = "clickhouse://"
-	CHHTTPPrefix        = "chhttp://"
-	CHHTTPSPrefix       = "chhttps://"
 	SQLitePrefix        = "sqlite://"
 	XvecPrefix          = "xvec://"
 	RedisPrefix         = "redis://"
@@ -165,28 +162,8 @@ func (tp TablePrefix) ItemsTable() string {
 	return string(tp) + "items"
 }
 
-// LatestItemsTable returns the materialized view for latest items.
-func (tp TablePrefix) LatestItemsTable() string {
-	return string(tp) + "latest_items"
-}
-
 func (tp TablePrefix) FeedbackTable() string {
 	return string(tp) + "feedback"
-}
-
-// AggregatingFeedbackTable returns the aggregating feedback table.
-func (tp TablePrefix) AggregatingFeedbackTable() string {
-	return string(tp) + "aggregating_feedback"
-}
-
-// UserFeedbackTable returns the materialized view of user feedback.
-func (tp TablePrefix) UserFeedbackTable() string {
-	return string(tp) + "user_feedback"
-}
-
-// ItemFeedbackTable returns the materialized view of item feedback.
-func (tp TablePrefix) ItemFeedbackTable() string {
-	return string(tp) + "item_feedback"
 }
 
 func (tp TablePrefix) Key(key string) string {
@@ -210,9 +187,6 @@ func NewGORMConfig(tablePrefix string) *gorm.Config {
 				"SQLDocument", "Documents",
 				"PostgresDocument", "Documents",
 				"TimeSeriesPoint", "time_series_points",
-				"ClickhouseUser", "Users",
-				"ClickHouseItem", "Items",
-				"ClickHouseFeedback", "Feedback",
 			),
 		},
 	}
