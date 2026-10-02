@@ -671,7 +671,7 @@ func (d *SQLDatabase) BatchInsertItems(ctx context.Context, items []Item) error 
 	rows := make([]SQLItem, 0, len(items))
 	memo := mapset.NewSet[string]()
 	for _, item := range items {
-		item.UpdateAt = time.Now().UTC().Truncate(time.Microsecond)
+		item.UpdateAt = time.Now().UTC()
 		if !memo.Contains(item.ItemId) {
 			memo.Add(item.ItemId)
 			row := NewSQLItem(item)
@@ -838,7 +838,7 @@ func (d *SQLDatabase) ModifyItem(ctx context.Context, itemId string, patch ItemP
 		log.Logger().Debug("empty item patch")
 		return nil
 	}
-	attributes := map[string]any{"update_at": time.Now().UTC().Truncate(time.Microsecond)}
+	attributes := map[string]any{"update_at": time.Now().UTC()}
 	if patch.IsHidden != nil {
 		if *patch.IsHidden {
 			attributes["is_hidden"] = 1
@@ -1022,7 +1022,7 @@ func (d *SQLDatabase) BatchInsertUsers(ctx context.Context, users []User) error 
 	rows := make([]SQLUser, 0, len(users))
 	memo := mapset.NewSet[string]()
 	for _, user := range users {
-		user.UpdateAt = time.Now().UTC().Truncate(time.Microsecond)
+		user.UpdateAt = time.Now().UTC()
 		if !memo.Contains(user.UserId) {
 			memo.Add(user.UserId)
 			rows = append(rows, NewSQLUser(user))
@@ -1074,7 +1074,7 @@ func (d *SQLDatabase) ModifyUser(ctx context.Context, userId string, patch UserP
 		log.Logger().Debug("empty user patch")
 		return nil
 	}
-	attributes := map[string]any{"update_at": time.Now().UTC().Truncate(time.Microsecond)}
+	attributes := map[string]any{"update_at": time.Now().UTC()}
 	if patch.Comment != nil {
 		attributes["comment"] = *patch.Comment
 	}
@@ -1210,9 +1210,9 @@ func (d *SQLDatabase) BatchInsertFeedback(ctx context.Context, feedback []Feedba
 			DoNothing: true,
 		}).Create(lo.Map(userList, func(userId string, _ int) SQLUser {
 			return SQLUser{
-				UserId: userId,
-				UpdateAt: time.Now().UTC().Truncate(time.Microsecond),
-				Labels: "null",
+				UserId:   userId,
+				UpdateAt: time.Now().UTC(),
+				Labels:   "null",
 			}
 		})).Error
 		if err != nil {
@@ -1240,7 +1240,7 @@ func (d *SQLDatabase) BatchInsertFeedback(ctx context.Context, feedback []Feedba
 		}).Create(lo.Map(itemList, func(itemId string, _ int) SQLItem {
 			return SQLItem{
 				ItemId:     itemId,
-				UpdateAt: time.Now().UTC().Truncate(time.Microsecond),
+				UpdateAt:   time.Now().UTC(),
 				Labels:     "null",
 				Categories: "null",
 			}
