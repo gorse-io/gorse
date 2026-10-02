@@ -79,8 +79,10 @@ type Item struct {
 	IsHidden   bool      `mapstructure:"is_hidden"`
 	Categories []string  `gorm:"serializer:json" mapstructure:"categories"`
 	Timestamp  time.Time `gorm:"column:time_stamp" mapstructure:"timestamp"`
-	Labels     any       `gorm:"serializer:json" mapstructure:"labels"`
-	Comment    string    `mapstructure:"comment"`
+	// UpdateAt is the latest database write time, assigned by storage, not callers.
+	UpdateAt time.Time `gorm:"column:update_at" mapstructure:"-" json:"-"`
+	Labels   any       `gorm:"serializer:json" mapstructure:"labels"`
+	Comment  string    `mapstructure:"comment"`
 }
 
 // ScoredItem stores item metadata with its search relevance score.
@@ -103,6 +105,8 @@ type User struct {
 	UserId  string `gorm:"primaryKey" mapstructure:"user_id"`
 	Labels  any    `gorm:"serializer:json" mapstructure:"labels"`
 	Comment string `mapstructure:"comment"`
+	// UpdateAt is the latest database write time, assigned by storage, not callers.
+	UpdateAt time.Time `gorm:"column:update_at" mapstructure:"-" json:"-"`
 }
 
 // UserPatch is the modification on a user.

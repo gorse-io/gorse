@@ -263,6 +263,10 @@ func (suite *MasterAPITestSuite) TestImportUsers() {
 	suite.JSONEq(marshal(suite.T(), server.Success{RowAffected: 3}), w.Body.String())
 	_, items, err := suite.DataClient.GetUsers(ctx, "", 100)
 	suite.NoError(err)
+	for i := range items {
+		suite.False(items[i].UpdateAt.IsZero())
+		items[i].UpdateAt = time.Time{}
+	}
 	suite.Equal([]data.User{
 		{UserId: "1", Labels: map[string]any{"性别": "男", "职业": "工程师"}},
 		{UserId: "2", Labels: map[string]any{"性别": "男", "职业": "律师"}},
@@ -294,6 +298,10 @@ func (suite *MasterAPITestSuite) TestImportItems() {
 	suite.JSONEq(marshal(suite.T(), server.Success{RowAffected: 3}), w.Body.String())
 	_, items, err := suite.DataClient.GetItems(ctx, "", 100, nil)
 	suite.NoError(err)
+	for i := range items {
+		suite.False(items[i].UpdateAt.IsZero())
+		items[i].UpdateAt = time.Time{}
+	}
 	suite.Equal([]data.Item{
 		{
 			ItemId:     "1",
@@ -1072,11 +1080,19 @@ func (suite *MasterAPITestSuite) TestDumpAndRestore() {
 	_, returnUsers, err := suite.DataClient.GetUsers(ctx, "", len(users))
 	suite.NoError(err)
 	if suite.Equal(len(users), len(returnUsers)) {
+		for i := range users {
+			suite.False(returnUsers[i].UpdateAt.IsZero())
+			returnUsers[i].UpdateAt = time.Time{}
+		}
 		suite.Equal(users, returnUsers)
 	}
 	_, returnItems, err := suite.DataClient.GetItems(ctx, "", len(items), nil)
 	suite.NoError(err)
 	if suite.Equal(len(items), len(returnItems)) {
+		for i := range items {
+			suite.False(returnItems[i].UpdateAt.IsZero())
+			returnItems[i].UpdateAt = time.Time{}
+		}
 		suite.Equal(items, returnItems)
 	}
 	_, returnFeedback, err := suite.DataClient.GetFeedback(ctx, "", len(feedback), nil, new(time.Now()))
@@ -1198,11 +1214,19 @@ func (suite *MasterAPITestSuite) TestExportAndImport() {
 	_, returnUsers, err := suite.DataClient.GetUsers(ctx, "", len(users))
 	suite.NoError(err)
 	if suite.Equal(len(users), len(returnUsers)) {
+		for i := range users {
+			suite.False(returnUsers[i].UpdateAt.IsZero())
+			returnUsers[i].UpdateAt = time.Time{}
+		}
 		suite.Equal(users, returnUsers)
 	}
 	_, returnItems, err := suite.DataClient.GetItems(ctx, "", len(items), nil)
 	suite.NoError(err)
 	if suite.Equal(len(items), len(returnItems)) {
+		for i := range items {
+			suite.False(returnItems[i].UpdateAt.IsZero())
+			returnItems[i].UpdateAt = time.Time{}
+		}
 		suite.Equal(items, returnItems)
 	}
 	_, returnFeedback, err := suite.DataClient.GetFeedback(ctx, "", len(feedback), nil, new(time.Now()))

@@ -55,6 +55,14 @@ func (p *ProxyServer) Ping(_ context.Context, _ *protocol.PingRequest) (*protoco
 	return &protocol.PingResponse{}, p.database.Ping()
 }
 
+// timeFromPB keeps metadata absent from older peers/dumps at its unknown zero value.
+func timeFromPB(timestamp *timestamppb.Timestamp) time.Time {
+	if timestamp == nil {
+		return time.Time{}
+	}
+	return timestamp.AsTime()
+}
+
 func feedbackToPB(feedback []Feedback) ([]*protocol.Feedback, error) {
 	pbFeedback := make([]*protocol.Feedback, len(feedback))
 	for i, f := range feedback {
@@ -155,6 +163,7 @@ func (p *ProxyServer) BatchGetItems(ctx context.Context, in *protocol.BatchGetIt
 			Timestamp:  timestamppb.New(item.Timestamp),
 			Labels:     labels,
 			Comment:    item.Comment,
+			UpdateAt:   timestamppb.New(item.UpdateAt),
 		}
 	}
 	return &protocol.BatchGetItemsResponse{Items: pbItems}, nil
@@ -185,6 +194,7 @@ func (p *ProxyServer) GetItem(ctx context.Context, in *protocol.GetItemRequest) 
 			Timestamp:  timestamppb.New(item.Timestamp),
 			Labels:     labels,
 			Comment:    item.Comment,
+			UpdateAt:   timestamppb.New(item.UpdateAt),
 		},
 	}, nil
 }
@@ -208,6 +218,7 @@ func (p *ProxyServer) SearchItems(ctx context.Context, in *protocol.SearchItemsR
 				Timestamp:  timestamppb.New(item.Timestamp),
 				Labels:     labels,
 				Comment:    item.Comment,
+				UpdateAt:   timestamppb.New(item.UpdateAt),
 			},
 			Score: item.Score,
 		}
@@ -259,6 +270,7 @@ func (p *ProxyServer) GetItems(ctx context.Context, in *protocol.GetItemsRequest
 			Timestamp:  timestamppb.New(item.Timestamp),
 			Labels:     labels,
 			Comment:    item.Comment,
+			UpdateAt:   timestamppb.New(item.UpdateAt),
 		}
 	}
 	return &protocol.GetItemsResponse{Cursor: cursor, Items: pbItems}, nil
@@ -317,9 +329,10 @@ func (p *ProxyServer) GetUser(ctx context.Context, in *protocol.GetUserRequest) 
 	}
 	return &protocol.GetUserResponse{
 		User: &protocol.User{
-			UserId:  user.UserId,
-			Labels:  labels,
-			Comment: user.Comment,
+			UserId:   user.UserId,
+			Labels:   labels,
+			Comment:  user.Comment,
+			UpdateAt: timestamppb.New(user.UpdateAt),
 		},
 	}, nil
 }
@@ -351,9 +364,10 @@ func (p *ProxyServer) GetUsers(ctx context.Context, in *protocol.GetUsersRequest
 			return nil, err
 		}
 		pbUsers[i] = &protocol.User{
-			UserId:  user.UserId,
-			Labels:  labels,
-			Comment: user.Comment,
+			UserId:   user.UserId,
+			Labels:   labels,
+			Comment:  user.Comment,
+			UpdateAt: timestamppb.New(user.UpdateAt),
 		}
 	}
 	return &protocol.GetUsersResponse{Cursor: cursor, Users: pbUsers}, nil
@@ -442,9 +456,10 @@ func (p *ProxyServer) GetUserStream(in *protocol.GetUserStreamRequest, stream gr
 				return err
 			}
 			pbUsers[i] = &protocol.User{
-				UserId:  user.UserId,
-				Labels:  labels,
-				Comment: user.Comment,
+				UserId:   user.UserId,
+				Labels:   labels,
+				Comment:  user.Comment,
+				UpdateAt: timestamppb.New(user.UpdateAt),
 			}
 		}
 		err := stream.Send(&protocol.GetUserStreamResponse{Users: pbUsers})
@@ -475,6 +490,7 @@ func (p *ProxyServer) GetItemStream(in *protocol.GetItemStreamRequest, stream gr
 				Timestamp:  timestamppb.New(item.Timestamp),
 				Labels:     labels,
 				Comment:    item.Comment,
+				UpdateAt:   timestamppb.New(item.UpdateAt),
 			}
 		}
 		err := stream.Send(&protocol.GetItemStreamResponse{Items: pbItems})
@@ -567,6 +583,7 @@ func (p *ProxyServer) GetLatestItems(ctx context.Context, in *protocol.GetLatest
 			Timestamp:  timestamppb.New(item.Timestamp),
 			Labels:     labels,
 			Comment:    item.Comment,
+			UpdateAt:   timestamppb.New(item.UpdateAt),
 		}
 	}
 	return &protocol.GetLatestItemsResponse{Items: pbItems}, nil
@@ -659,6 +676,7 @@ func (p ProxyClient) BatchGetItems(ctx context.Context, itemIds []string, opts G
 			Timestamp:  item.Timestamp.AsTime(),
 			Labels:     labels,
 			Comment:    item.Comment,
+			UpdateAt:   timeFromPB(item.UpdateAt),
 		}
 	}
 	return items, nil
@@ -688,6 +706,7 @@ func (p ProxyClient) GetItem(ctx context.Context, itemId string) (Item, error) {
 		Timestamp:  resp.Item.Timestamp.AsTime(),
 		Labels:     labels,
 		Comment:    resp.Item.Comment,
+		UpdateAt:   timeFromPB(resp.Item.UpdateAt),
 	}, nil
 }
 
@@ -710,6 +729,7 @@ func (p ProxyClient) SearchItems(ctx context.Context, query string, n int) ([]Sc
 				Timestamp:  item.Item.Timestamp.AsTime(),
 				Labels:     labels,
 				Comment:    item.Item.Comment,
+				UpdateAt:   timeFromPB(item.Item.UpdateAt),
 			},
 			Score: item.Score,
 		}
@@ -739,6 +759,7 @@ func (p ProxyClient) GetLatestItems(ctx context.Context, n int, categories []str
 			Timestamp:  item.Timestamp.AsTime(),
 			Labels:     labels,
 			Comment:    item.Comment,
+			UpdateAt:   timeFromPB(item.UpdateAt),
 		}
 	}
 	return items, nil
@@ -793,6 +814,7 @@ func (p ProxyClient) GetItems(ctx context.Context, cursor string, n int, beginTi
 			Timestamp:  item.Timestamp.AsTime(),
 			Labels:     labels,
 			Comment:    item.Comment,
+			UpdateAt:   timeFromPB(item.UpdateAt),
 		}
 	}
 	return resp.Cursor, items, nil
@@ -852,9 +874,10 @@ func (p ProxyClient) GetUser(ctx context.Context, userId string) (User, error) {
 		return User{}, err
 	}
 	return User{
-		UserId:  resp.User.UserId,
-		Labels:  labels,
-		Comment: resp.User.Comment,
+		UserId:   resp.User.UserId,
+		Labels:   labels,
+		Comment:  resp.User.Comment,
+		UpdateAt: timeFromPB(resp.User.UpdateAt),
 	}, nil
 }
 
@@ -890,9 +913,10 @@ func (p ProxyClient) GetUsers(ctx context.Context, cursor string, n int) (string
 			return "", nil, err
 		}
 		users[i] = User{
-			UserId:  user.UserId,
-			Labels:  labels,
-			Comment: user.Comment,
+			UserId:   user.UserId,
+			Labels:   labels,
+			Comment:  user.Comment,
+			UpdateAt: timeFromPB(user.UpdateAt),
 		}
 	}
 	return resp.Cursor, users, nil
@@ -1024,9 +1048,10 @@ func (p ProxyClient) GetUserStream(ctx context.Context, batchSize int) (chan []U
 					return
 				}
 				users[i] = User{
-					UserId:  user.UserId,
-					Labels:  labels,
-					Comment: user.Comment,
+					UserId:   user.UserId,
+					Labels:   labels,
+					Comment:  user.Comment,
+					UpdateAt: timeFromPB(user.UpdateAt),
 				}
 			}
 			usersChan <- users
@@ -1069,6 +1094,7 @@ func (p ProxyClient) GetItemStream(ctx context.Context, batchSize int, timeLimit
 					Timestamp:  item.Timestamp.AsTime(),
 					Labels:     labels,
 					Comment:    item.Comment,
+					UpdateAt:   timeFromPB(item.UpdateAt),
 				}
 			}
 			itemsChan <- items

@@ -352,6 +352,16 @@ func (s *MasterTestSuite) TestEmitSnapshot() {
 	s.NoError(s.DataClient.BatchInsertUsers(ctx, users))
 	s.NoError(s.DataClient.BatchInsertItems(ctx, items))
 	s.NoError(s.DataClient.BatchInsertFeedback(ctx, feedbacks, false, false, false))
+	for i := range users {
+		stored, err := s.DataClient.GetUser(ctx, users[i].UserId)
+		s.Require().NoError(err)
+		users[i] = stored
+	}
+	for i := range items {
+		stored, err := s.DataClient.GetItem(ctx, items[i].ItemId)
+		s.Require().NoError(err)
+		items[i] = stored
+	}
 
 	handler := &snapshotHandler{snapshots: make(chan event.Snapshot, 1)}
 	event.SetEventHandler(handler)
@@ -474,6 +484,10 @@ func (s *MasterTestSuite) TestLoadDataFromDatabase() {
 	// check latest items
 	latest, err := s.DataClient.GetLatestItems(ctx, 3, nil, nil)
 	s.NoError(err)
+	for i := range latest {
+		s.False(latest[i].UpdateAt.IsZero())
+		latest[i].UpdateAt = time.Time{}
+	}
 	s.Equal([]data.Item{
 		items[8],
 		items[7],
@@ -481,6 +495,10 @@ func (s *MasterTestSuite) TestLoadDataFromDatabase() {
 	}, latest)
 	latest, err = s.DataClient.GetLatestItems(ctx, 3, []string{"2"}, nil)
 	s.NoError(err)
+	for i := range latest {
+		s.False(latest[i].UpdateAt.IsZero())
+		latest[i].UpdateAt = time.Time{}
+	}
 	s.Equal([]data.Item{
 		items[8],
 		items[5],

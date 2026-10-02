@@ -25,6 +25,7 @@ message User {
   bytes labels = 2;
   string comment = 3;
   repeated string subscribe = 4;
+  google.protobuf.Timestamp update_at = 5;
 }
 
 message Item {
@@ -35,6 +36,7 @@ message Item {
   google.protobuf.Timestamp timestamp = 5;
   bytes labels = 6;
   string comment = 7;
+  google.protobuf.Timestamp update_at = 8;
 }
 
 message Feedback {
