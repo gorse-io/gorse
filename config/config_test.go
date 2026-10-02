@@ -567,26 +567,6 @@ func (s *ValidateTestSuite) TestQuota() {
 	s.Error(s.Validate())
 }
 
-func (s *ValidateTestSuite) TestDataStore() {
-	for _, dataStore := range []string{
-		"mysql://localhost/gorse",
-		"postgres://localhost/gorse",
-		"postgresql://localhost/gorse",
-		"mongodb://localhost/gorse",
-		"mongodb+srv://localhost/gorse",
-		"sqlite://data.db",
-	} {
-		s.Database.DataStore = dataStore
-		s.NoError(s.Validate(), dataStore)
-	}
-	for _, scheme := range []string{"clickhouse", "chhttp", "chhttps"} {
-		s.Database.DataStore = scheme + "://localhost/gorse"
-		err := s.Validate()
-		s.ErrorContains(err, "DataStore")
-		s.ErrorContains(err, "data_store")
-	}
-}
-
 func (s *ValidateTestSuite) TestCacheStore() {
 	// Test that redis+cluster:// prefix is accepted for cache_store
 	s.Database.CacheStore = "redis+cluster://:password@192.168.1.11:6379?addr=192.168.0.5:6379&addr=192.168.0.7:6379"

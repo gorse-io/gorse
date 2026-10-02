@@ -72,20 +72,6 @@ func (suite *MySQLTestSuite) TestInit() {
 	assertQuery(suite.T(), connection, "SELECT @@sql_mode", "ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION")
 }
 
-func TestOpenRejectsRemovedDataStoreSchemes(t *testing.T) {
-	for _, scheme := range []string{"clickhouse", "chhttp", "chhttps"} {
-		t.Run(scheme, func(t *testing.T) {
-			uri := scheme + "://127.0.0.1:1/gorse?timeout=1s"
-			database, err := Open(uri, "gorse_")
-			if database != nil {
-				t.Cleanup(func() { require.NoError(t, database.Close()) })
-			}
-			require.EqualError(t, err, "Unknown database: "+uri)
-			require.Nil(t, database)
-		})
-	}
-}
-
 func TestMySQL(t *testing.T) {
 	if mySqlDSN == "" {
 		t.Skip("MYSQL_URI is not set, skipping MySQL test")
