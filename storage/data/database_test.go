@@ -216,14 +216,22 @@ func (suite *baseTestSuite) TestUsers() {
 	_, err = suite.Database.GetUser(ctx, "0")
 	suite.ErrorIs(err, storage.ErrNotFound)
 	// test override
+	user, err = suite.Database.GetUser(ctx, "1")
+	suite.NoError(err)
+	previousUpdateAt := user.UpdateAt
+	// MongoDB stores timestamps with millisecond precision.
+	time.Sleep(time.Millisecond)
 	err = suite.Database.BatchInsertUsers(ctx, []User{{UserId: "1", Comment: "override"}})
 	suite.NoError(err)
 	err = suite.Database.Optimize()
 	suite.NoError(err)
 	user, err = suite.Database.GetUser(ctx, "1")
 	suite.NoError(err)
+	suite.Greater(user.UpdateAt, previousUpdateAt, "UpdateAt should increase after overwriting a user")
 	suite.Equal("override", user.Comment)
 	// test modify
+	previousUpdateAt = user.UpdateAt
+	time.Sleep(time.Millisecond)
 	err = suite.Database.ModifyUser(ctx, "1", UserPatch{Comment: new("modify")})
 	suite.NoError(err)
 	err = suite.Database.ModifyUser(ctx, "1", UserPatch{Labels: []string{"a", "b", "c"}})
@@ -232,6 +240,7 @@ func (suite *baseTestSuite) TestUsers() {
 	suite.NoError(err)
 	user, err = suite.Database.GetUser(ctx, "1")
 	suite.NoError(err)
+	suite.Greater(user.UpdateAt, previousUpdateAt, "UpdateAt should increase after modifying a user")
 	suite.Equal("modify", user.Comment)
 	suite.Equal([]any{"a", "b", "c"}, user.Labels)
 
@@ -589,18 +598,28 @@ func (suite *baseTestSuite) TestItems() {
 	suite.ErrorIs(err, storage.ErrNotFound)
 
 	// test override
+	item, err := suite.Database.GetItem(ctx, "4")
+	suite.NoError(err)
+	previousUpdateAt := item.UpdateAt
+	// MongoDB stores timestamps with millisecond precision.
+	time.Sleep(time.Millisecond)
 	err = suite.Database.BatchInsertItems(ctx, []Item{{ItemId: "4", IsHidden: false, Categories: []string{"b"}, Labels: []string{"o"}, Comment: "override"}})
 	suite.NoError(err)
 	err = suite.Database.Optimize()
 	suite.NoError(err)
-	item, err := suite.Database.GetItem(ctx, "4")
+	item, err = suite.Database.GetItem(ctx, "4")
 	suite.NoError(err)
+	suite.Greater(item.UpdateAt, previousUpdateAt, "UpdateAt should increase after overwriting an item")
 	suite.False(item.IsHidden)
 	suite.Equal([]string{"b"}, item.Categories)
 	suite.Equal([]any{"o"}, item.Labels)
 	suite.Equal("override", item.Comment)
 
 	// test modify
+	item, err = suite.Database.GetItem(ctx, "2")
+	suite.NoError(err)
+	previousUpdateAt = item.UpdateAt
+	time.Sleep(time.Millisecond)
 	timestamp := time.Date(2000, 1, 1, 1, 1, 1, 0, time.UTC)
 	err = suite.Database.ModifyItem(ctx, "2", ItemPatch{IsHidden: new(true)})
 	suite.NoError(err)
@@ -616,6 +635,7 @@ func (suite *baseTestSuite) TestItems() {
 	suite.NoError(err)
 	item, err = suite.Database.GetItem(ctx, "2")
 	suite.NoError(err)
+	suite.Greater(item.UpdateAt, previousUpdateAt, "UpdateAt should increase after modifying an item")
 	suite.True(item.IsHidden)
 	suite.Equal([]string{"a"}, item.Categories)
 	suite.Equal("modify", item.Comment)
