@@ -178,6 +178,7 @@ type RecommendConfig struct {
 	UserToUser      []UserToUserConfig      `mapstructure:"user-to-user" validate:"dive"`
 	Collaborative   CollaborativeConfig     `mapstructure:"collaborative"`
 	External        []ExternalConfig        `mapstructure:"external" validate:"dive"`
+	Agent           []AgentConfig           `mapstructure:"agent" validate:"dive"`
 	Replacement     ReplacementConfig       `mapstructure:"replacement"`
 	Ranker          RankerConfig            `mapstructure:"ranker"`
 	Fallback        FallbackConfig          `mapstructure:"fallback"`
@@ -195,6 +196,9 @@ func (r *RecommendConfig) ListRecommenders() []string {
 		recommenders = append(recommenders, rec.FullName())
 	}
 	for _, rec := range r.External {
+		recommenders = append(recommenders, rec.FullName())
+	}
+	for _, rec := range r.Agent {
 		recommenders = append(recommenders, rec.FullName())
 	}
 	recommenders = append(recommenders, r.Collaborative.FullName())
@@ -242,6 +246,11 @@ func (r *RecommendConfig) Hash() string {
 		}
 	}
 	for _, rec := range r.External {
+		if recommenders.Contains(rec.FullName()) {
+			digests = append(digests, rec.Hash())
+		}
+	}
+	for _, rec := range r.Agent {
 		if recommenders.Contains(rec.FullName()) {
 			digests = append(digests, rec.Hash())
 		}
@@ -395,6 +404,22 @@ func (config *ExternalConfig) Hash() string {
 	hash := md5.New()
 	hash.Write([]byte(config.Name))
 	hash.Write([]byte(config.Script))
+	return hex.EncodeToString(hash.Sum(nil))
+}
+
+type AgentConfig struct {
+	Name           string `mapstructure:"name" json:"name"`
+	PromptTemplate string `mapstructure:"prompt_template" json:"prompt_template"`
+}
+
+func (config *AgentConfig) FullName() string {
+	return "agent/" + config.Name
+}
+
+func (config *AgentConfig) Hash() string {
+	hash := md5.New()
+	hash.Write([]byte(config.Name))
+	hash.Write([]byte(config.PromptTemplate))
 	return hex.EncodeToString(hash.Sum(nil))
 }
 
@@ -871,6 +896,9 @@ func (config *Config) Validate() error {
 		availableRecommenders.Add(rec.FullName())
 	}
 	for _, rec := range config.Recommend.External {
+		availableRecommenders.Add(rec.FullName())
+	}
+	for _, rec := range config.Recommend.Agent {
 		availableRecommenders.Add(rec.FullName())
 	}
 	availableRecommenders.Add("latest")
