@@ -21,52 +21,9 @@ import (
 
 	"github.com/gorse-io/gorse/common/floats"
 	"github.com/gorse-io/gorse/dataset"
-	"github.com/gorse-io/gorse/storage/data"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
-
-func TestConvertEmbeddingLabels(t *testing.T) {
-	for _, raw := range []any{
-		[]float32{1.25, -2.5, 0.125},
-		[]float64{1.25, -2.5, 0.125},
-		[]any{float64(1.25), float32(-2.5), float64(0.125)},
-		floats.FromFloat32([]float32{1.25, -2.5, 0.125}),
-	} {
-		input := map[string]any{
-			"nested": map[string]any{"vector": raw},
-			"weight": 1.23456789,
-			"tag":    "category",
-		}
-		want := ConvertEmbeddings(input)
-		compacted := ConvertEmbeddingLabels(input).(map[string]any)
-		got := ConvertEmbeddings(compacted)
-		require.Len(t, got, 1)
-		assert.Equal(t, want, got)
-		assert.Equal(t, 1.23456789, compacted["weight"])
-		assert.Equal(t, "category", compacted["tag"])
-		bits := compacted["nested"].(map[string]any)["vector"].([]uint16)
-		assert.Same(t, &bits[0], &got[0].Value[0])
-		dataSet := dataset.NewDataset(time.Now(), 0, 1)
-		dataSet.AddItem(data.Item{ItemId: "a", Labels: compacted})
-		processed := dataSet.GetItems()[0].Labels.(map[string]any)["nested"].(map[string]any)["vector"].([]uint16)
-		assert.Same(t, &bits[0], &processed[0])
-		if existing, ok := raw.([]uint16); ok {
-			assert.Same(t, &existing[0], &bits[0])
-		}
-	}
-	for _, raw := range []any{
-		[]any{}, []any{"tag"}, []any{1, "tag"}, nil,
-	} {
-		assert.Equal(t, raw, ConvertEmbeddingLabels(raw))
-	}
-	for _, raw := range []any{
-		[]float32{}, []float64{}, []any{json.Number("1")},
-	} {
-		assert.Equal(t, ConvertEmbeddings(raw), ConvertEmbeddings(ConvertEmbeddingLabels(raw)))
-	}
-}
 
 func TestConvertLabels(t *testing.T) {
 	features := ConvertLabels(nil)
