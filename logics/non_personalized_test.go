@@ -23,34 +23,7 @@ import (
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/storage/data"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
-
-func TestNonPersonalizedNeedsItemLabels(t *testing.T) {
-	for _, test := range []struct {
-		score  string
-		filter string
-		needs  bool
-	}{
-		{score: "len(feedback)"},
-		{score: "item.Timestamp.Unix()", filter: "!item.IsHidden"},
-		{score: "len(item.Categories)"},
-		{score: "float(item.Labels.weight)", needs: true},
-		{score: "len(feedback)", filter: "item.Labels.visible == true", needs: true},
-		{score: "float(item['Labels']['weight'])", needs: true},
-		{score: "float(item.Labels[feedback[0].FeedbackType])", needs: true},
-		{score: "let other = item; float(other.Labels.weight)", needs: true},
-		{score: "float($env['item'].Labels.weight)", needs: true},
-	} {
-		t.Run(test.score+"/"+test.filter, func(t *testing.T) {
-			recommender, err := NewNonPersonalized(config.NonPersonalizedConfig{
-				Score: test.score, Filter: test.filter,
-			}, 10, time.Now())
-			require.NoError(t, err)
-			assert.Equal(t, test.needs, recommender.NeedsItemLabels())
-		})
-	}
-}
 
 func TestLatest(t *testing.T) {
 	timestamp := time.Now()

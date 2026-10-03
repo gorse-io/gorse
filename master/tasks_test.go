@@ -55,9 +55,16 @@ func (s *MasterTestSuite) TestLoadDataFromDatabaseItemLabels() {
 		{ItemId: "a", Labels: labels},
 		{ItemId: "b", Labels: labels},
 	}))
-	for _, score := range []string{"1", "float(item.Labels.weight)"} {
+	for _, test := range []struct {
+		score string
+		want  float64
+	}{
+		{score: "1", want: 1},
+		{score: "float(item.Labels.weight)", want: 1.23456789},
+		{score: "float(item.Labels.embedding[0])", want: float64(floats.FromFloat32([]float32{1.25})[0])},
+	} {
 		recommender, err := logics.NewNonPersonalized(config.NonPersonalizedConfig{
-			Name: "custom", Score: score,
+			Name: "custom", Score: test.score, Filter: "item.Labels.tag == 'category'",
 		}, 10, time.Now())
 		s.Require().NoError(err)
 		click, ranking, _, err := s.LoadDataFromDatabase(ctx, s.DataClient,
@@ -80,11 +87,7 @@ func (s *MasterTestSuite) TestLoadDataFromDatabaseItemLabels() {
 		}
 		scores := recommender.PopAll()
 		s.Require().Len(scores, 2)
-		if score == "1" {
-			s.Equal(float64(1), scores[0].Score)
-		} else {
-			s.Equal(float64(1.23456789), scores[0].Score)
-		}
+		s.Equal(test.want, scores[0].Score)
 	}
 }
 

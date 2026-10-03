@@ -387,9 +387,6 @@ func (m *Master) LoadDataFromDatabase(
 	LoadDatasetStepSecondsVec.WithLabelValues("load_users").Set(time.Since(start).Seconds())
 
 	// STEP 2: pull items
-	keepItemLabels := lo.ContainsBy(nonPersonalizedRecommenders, func(recommender *logics.NonPersonalized) bool {
-		return recommender.NeedsItemLabels()
-	})
 	items := make([]data.Item, 0, estimatedNumItems)
 	itemLabelCount := make(map[string]int)
 	itemLabelFirst := make(map[string]int32)
@@ -404,6 +401,8 @@ func (m *Master) LoadDataFromDatabase(
 		snapshot.ItemCount += int64(len(batchItems))
 		snapshot.ItemBytes += deepSize(batchItems)
 		for _, item := range batchItems {
+			labels := ctr.ConvertLabels(item.Labels)
+			item.Labels = ctr.ConvertEmbeddingLabels(item.Labels)
 			dataSet.AddItem(item)
 			itemIndex := dataSet.GetItemDict().Id(item.ItemId)
 			if len(itemLabels) == int(itemIndex) {
@@ -413,7 +412,6 @@ func (m *Master) LoadDataFromDatabase(
 				itemEmbeddings = append(itemEmbeddings, nil)
 			}
 			// load labels
-			labels := ctr.ConvertLabels(item.Labels)
 			itemLabels[itemIndex] = make([]lo.Tuple2[int32, float32], 0, len(labels))
 			for _, feature := range labels {
 				itemLabelCount[feature.Name]++
@@ -439,7 +437,7 @@ func (m *Master) LoadDataFromDatabase(
 				}
 			}
 			// load embeddings
-			embeddings := ctr.ConvertEmbeddingsWithReuse(item.Labels, dataSet.GetItems()[itemIndex].Labels)
+			embeddings := ctr.ConvertEmbeddings(item.Labels)
 			itemEmbeddings[itemIndex] = make([][]uint16, 0, len(embeddings))
 			for _, embedding := range embeddings {
 				itemEmbeddingIndexer.Add(embedding.Name)
@@ -452,11 +450,6 @@ func (m *Master) LoadDataFromDatabase(
 					itemEmbeddingDimension = append(itemEmbeddingDimension, make(map[int]int))
 				}
 				itemEmbeddingDimension[itemEmbeddingIndex][len(itemEmbeddings[itemIndex][itemEmbeddingIndex])]++
-			}
-			// The collaborative dataset and ranker already own their converted
-			// labels. Retain raw JSON labels only if a later expression uses them.
-			if !keepItemLabels {
-				item.Labels = nil
 			}
 			items = append(items, item)
 		}
