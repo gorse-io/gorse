@@ -22,22 +22,21 @@ import (
 
 	"github.com/gorse-io/gorse/protocol"
 	"github.com/stretchr/testify/require"
-	"github.com/x448/float16"
 	"google.golang.org/protobuf/proto"
 )
 
 func TestFloat16Serialization(t *testing.T) {
-	for _, values := range [][]float16.Float16{{0, 0x8000, 1, 0x3c00, 0x7c00, 0xfc00, 0x7c01, 0x7e55, 0xfe01}, {0x3c00}, nil} {
+	for _, values := range [][]uint16{{0, 0x8000, 1, 0x3c00, 0x7c00, 0xfc00, 0x7c01, 0x7e55, 0xfe01}, {0x3c00}, nil} {
 		shape := []int{len(values)}
 		if len(values) == 1 {
 			shape = []int{}
 		}
-		x := NewTensor16(values, shape...)
+		x := NewTensor(values, shape...)
 		pb := x.toPB()
 		require.Equal(t, protocol.TensorDType_FLOAT16, pb.Dtype)
 		require.Len(t, pb.Data, len(values)*2)
 		for i, v := range values {
-			require.Equal(t, uint16(v), binary.LittleEndian.Uint16(pb.Data[2*i:]))
+			require.Equal(t, v, binary.LittleEndian.Uint16(pb.Data[2*i:]))
 		}
 		encoded, err := proto.Marshal(pb)
 		require.NoError(t, err)
