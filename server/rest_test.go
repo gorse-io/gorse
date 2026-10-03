@@ -105,17 +105,22 @@ func (suite *ServerTestSuite) marshal(v any) string {
 }
 
 type requestsHandler struct {
+	ctx      context.Context
 	requests chan event.Request
 }
 
 func (h *requestsHandler) EmitRequest(_ context.Context, request event.Request) {
-	h.requests <- request
+	select {
+	case h.requests <- request:
+	case <-h.ctx.Done():
+	}
 }
 
 func (h *requestsHandler) EmitSnapshot(context.Context, event.Snapshot) {}
 
 func (suite *ServerTestSuite) TestEmitRequest() {
 	handler := &requestsHandler{
+		ctx:      suite.T().Context(),
 		requests: make(chan event.Request, 1),
 	}
 	event.SetEventHandler(handler)
@@ -137,20 +142,31 @@ func (suite *ServerTestSuite) TestEmitRequest() {
 	responseBytes, err := io.ReadAll(result.Response.Body)
 	suite.Require().NoError(err)
 
-	select {
-	case req := <-handler.requests:
-		suite.Equal(result.Response.Header.Get("X-Request-ID"), req.RequestID)
-		suite.EqualValues(len(body), req.RequestBytes)
-		suite.Equal(http.MethodPost, req.Method)
-		suite.Equal("/api/user", req.Route)
-		suite.Equal(http.StatusOK, req.StatusCode)
-		suite.Positive(req.ResponseTime)
-		suite.EqualValues(len(responseBytes), req.ResponseBytes)
-		suite.False(req.Timestamp.Before(before))
-		suite.False(req.Timestamp.After(after))
-		suite.Empty(req.RemoteAddr)
-	case <-time.After(time.Second):
-		suite.Fail("request event was not emitted")
+	requestID := result.Response.Header.Get("X-Request-ID")
+	suite.Require().NotEmpty(requestID)
+	timer := time.NewTimer(time.Second)
+	defer timer.Stop()
+	for {
+		select {
+		case req := <-handler.requests:
+			if req.RequestID != requestID {
+				continue
+			}
+			suite.Equal(requestID, req.RequestID)
+			suite.EqualValues(len(body), req.RequestBytes)
+			suite.Equal(http.MethodPost, req.Method)
+			suite.Equal("/api/user", req.Route)
+			suite.Equal(http.StatusOK, req.StatusCode)
+			suite.Positive(req.ResponseTime)
+			suite.EqualValues(len(responseBytes), req.ResponseBytes)
+			suite.False(req.Timestamp.Before(before))
+			suite.False(req.Timestamp.After(after))
+			suite.Empty(req.RemoteAddr)
+			return
+		case <-timer.C:
+			suite.Fail("request event was not emitted")
+			return
+		}
 	}
 }
 
