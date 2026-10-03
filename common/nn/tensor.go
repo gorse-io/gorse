@@ -907,53 +907,55 @@ func (t *Tensor) toPB() *protocol.Tensor {
 	}
 	if t.dtype == Float16 {
 		pb.Dtype = protocol.TensorDType_FLOAT16
-		pb.Data16 = make([]byte, 2*len(t.data16))
+		pb.Data = make([]byte, 2*len(t.data16))
 		for i, value := range t.data16 {
-			binary.LittleEndian.PutUint16(pb.Data16[2*i:], uint16(value))
+			binary.LittleEndian.PutUint16(pb.Data[2*i:], uint16(value))
 		}
 	} else {
-		pb.Data = t.data
+		pb.Data = make([]byte, 4*len(t.data))
+		for i, value := range t.data {
+			binary.LittleEndian.PutUint32(pb.Data[4*i:], math.Float32bits(value))
+		}
 	}
 	return pb
 }
 
-func (t *Tensor) fromPB(pb *protocol.Tensor) error {
+func (t *Tensor) fromPB(pb *protocol.Tensor) {
 	if pb.Dtype != protocol.TensorDType_FLOAT32 && pb.Dtype != protocol.TensorDType_FLOAT16 {
-		return fmt.Errorf("unknown tensor dtype %d", pb.Dtype)
-	}
-	if (pb.Dtype == protocol.TensorDType_FLOAT32 && len(pb.Data16) != 0) ||
-		(pb.Dtype == protocol.TensorDType_FLOAT16 && len(pb.Data) != 0) {
-		return fmt.Errorf("tensor payload does not match dtype %v", pb.Dtype)
+		panic(fmt.Sprintf("unknown tensor dtype %d", pb.Dtype))
 	}
 	shape := make([]int, len(pb.Shape))
 	size := 1
 	for i, dim := range pb.Shape {
 		if dim < 0 || (dim != 0 && size > int(^uint(0)>>1)/int(dim)) {
-			return fmt.Errorf("invalid tensor shape %v", pb.Shape)
+			panic(fmt.Sprintf("invalid tensor shape %v", pb.Shape))
 		}
 		shape[i] = int(dim)
 		size *= int(dim)
 	}
+	width := 4
+	if pb.Dtype == protocol.TensorDType_FLOAT16 {
+		width = 2
+	}
+	if len(pb.Data)%width != 0 || len(pb.Data)/width != size {
+		panic(fmt.Sprintf("shape %v does not match %v payload size %d", shape, pb.Dtype, len(pb.Data)))
+	}
 	decoded := Tensor{shape: shape}
 	if pb.Dtype == protocol.TensorDType_FLOAT16 {
-		if len(pb.Data16)%2 != 0 || len(pb.Data16)/2 != size {
-			return fmt.Errorf("shape %v does not match Float16 payload size %d", shape, len(pb.Data16))
-		}
 		decoded.dtype = Float16
 		if size > 0 {
 			decoded.data16 = make([]float16.Float16, size)
 			for i := range decoded.data16 {
-				decoded.data16[i] = float16.Frombits(binary.LittleEndian.Uint16(pb.Data16[2*i:]))
+				decoded.data16[i] = float16.Frombits(binary.LittleEndian.Uint16(pb.Data[2*i:]))
 			}
 		}
 	} else {
-		if len(pb.Data) != size {
-			return fmt.Errorf("shape %v does not match data size %d", shape, len(pb.Data))
+		decoded.data = make([]float32, size)
+		for i := range decoded.data {
+			decoded.data[i] = math.Float32frombits(binary.LittleEndian.Uint32(pb.Data[4*i:]))
 		}
-		decoded.data = pb.Data
 	}
 	*t = decoded
-	return nil
 }
 
 // NormalInit fills a Float32 tensor with normally distributed values.

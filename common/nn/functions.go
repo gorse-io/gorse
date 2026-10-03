@@ -24,8 +24,6 @@ func Neg(x *Tensor) *Tensor {
 
 // Add returns the element-wise sum of two tensors. The shape of the second tensor must be a suffix sequence of the shape of the first tensor.
 func Add(x0 *Tensor, x ...*Tensor) *Tensor {
-	requireFloat32(x0)
-	requireFloat32(x...)
 	output := x0
 	for _, x1 := range x {
 		if len(x0.shape) < len(x1.shape) {

@@ -85,10 +85,9 @@ type Tensor struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Key   []string               `protobuf:"bytes,1,rep,name=key,proto3" json:"key,omitempty"`
 	Shape []int32                `protobuf:"varint,2,rep,packed,name=shape,proto3" json:"shape,omitempty"`
-	Data  []float32              `protobuf:"fixed32,3,rep,packed,name=data,proto3" json:"data,omitempty"`
-	Dtype TensorDType            `protobuf:"varint,4,opt,name=dtype,proto3,enum=protocol.TensorDType" json:"dtype,omitempty"`
-	// IEEE 754 half-precision raw bits in little-endian order; Float16 only.
-	Data16        []byte `protobuf:"bytes,5,opt,name=data16,proto3" json:"data16,omitempty"`
+	// IEEE 754 raw bits in little-endian order; element width is determined by dtype.
+	Data          []byte      `protobuf:"bytes,3,opt,name=data,proto3" json:"data,omitempty"`
+	Dtype         TensorDType `protobuf:"varint,4,opt,name=dtype,proto3,enum=protocol.TensorDType" json:"dtype,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -137,7 +136,7 @@ func (x *Tensor) GetShape() []int32 {
 	return nil
 }
 
-func (x *Tensor) GetData() []float32 {
+func (x *Tensor) GetData() []byte {
 	if x != nil {
 		return x.Data
 	}
@@ -149,13 +148,6 @@ func (x *Tensor) GetDtype() TensorDType {
 		return x.Dtype
 	}
 	return TensorDType_FLOAT32
-}
-
-func (x *Tensor) GetData16() []byte {
-	if x != nil {
-		return x.Data16
-	}
-	return nil
 }
 
 type LatentFactor struct {
@@ -214,13 +206,12 @@ var File_encoding_proto protoreflect.FileDescriptor
 
 const file_encoding_proto_rawDesc = "" +
 	"\n" +
-	"\x0eencoding.proto\x12\bprotocol\"\x89\x01\n" +
+	"\x0eencoding.proto\x12\bprotocol\"q\n" +
 	"\x06Tensor\x12\x10\n" +
 	"\x03key\x18\x01 \x03(\tR\x03key\x12\x14\n" +
 	"\x05shape\x18\x02 \x03(\x05R\x05shape\x12\x12\n" +
-	"\x04data\x18\x03 \x03(\x02R\x04data\x12+\n" +
-	"\x05dtype\x18\x04 \x01(\x0e2\x15.protocol.TensorDTypeR\x05dtype\x12\x16\n" +
-	"\x06data16\x18\x05 \x01(\fR\x06data16\"2\n" +
+	"\x04data\x18\x03 \x01(\fR\x04data\x12+\n" +
+	"\x05dtype\x18\x04 \x01(\x0e2\x15.protocol.TensorDTypeR\x05dtype\"2\n" +
 	"\fLatentFactor\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04data\x18\x02 \x03(\x02R\x04data*'\n" +

@@ -20,11 +20,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestFloat16AddIdentity(t *testing.T) {
+	x := Ones(1).ToFloat16()
+	require.Same(t, x, Add(x))
+}
+
 func TestFloat16RejectCompute(t *testing.T) {
 	h := Ones(2, 2).ToFloat16()
 	f := Ones(2, 2)
 	unary := map[string]func(*Tensor){
-		"Neg": func(x *Tensor) { Neg(x) }, "AddIdentity": func(x *Tensor) { Add(x) },
+		"Neg":    func(x *Tensor) { Neg(x) },
 		"Square": func(x *Tensor) { Square(x) }, "Exp": func(x *Tensor) { Exp(x) }, "Log": func(x *Tensor) { Log(x) },
 		"Sin": func(x *Tensor) { Sin(x) }, "Cos": func(x *Tensor) { Cos(x) }, "Abs": func(x *Tensor) { Abs(x) },
 		"Sum": func(x *Tensor) { Sum(x) }, "PartialSum": func(x *Tensor) { Sum(x, 1) }, "Mean": func(x *Tensor) { Mean(x) },

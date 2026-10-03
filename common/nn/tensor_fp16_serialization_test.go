@@ -17,6 +17,7 @@ package nn
 import (
 	"bytes"
 	"encoding/binary"
+	"math"
 	"testing"
 
 	"github.com/gorse-io/gorse/protocol"
@@ -35,10 +36,9 @@ func TestFloat16Serialization(t *testing.T) {
 		x := NewTensor16(values, shape...)
 		pb := x.toPB()
 		require.Equal(t, protocol.TensorDType_FLOAT16, pb.Dtype)
-		require.Empty(t, pb.Data)
-		require.Len(t, pb.Data16, len(values)*2)
+		require.Len(t, pb.Data, len(values)*2)
 		for i, v := range values {
-			require.Equal(t, uint16(v), binary.LittleEndian.Uint16(pb.Data16[2*i:]))
+			require.Equal(t, uint16(v), binary.LittleEndian.Uint16(pb.Data[2*i:]))
 		}
 		encoded, err := proto.Marshal(pb)
 		require.NoError(t, err)
@@ -47,7 +47,7 @@ func TestFloat16Serialization(t *testing.T) {
 		y := Ones(2)
 		y.grad = Ones(2)
 		y.op = &neg{}
-		require.NoError(t, y.fromPB(decoded))
+		y.fromPB(decoded)
 		require.Equal(t, Float16, y.DType())
 		require.Equal(t, values, y.Data16())
 		require.Equal(t, x.Shape(), y.Shape())
@@ -71,13 +71,44 @@ func TestFloat16Serialization(t *testing.T) {
 	}
 }
 
+func TestFloat32SerializationRawBits(t *testing.T) {
+	for _, bits := range [][]uint32{{0, 0x80000000, 1, 0x3f800000, 0x7f800000, 0xff800000, 0x7f800001, 0x7fc00055}, {0x3f800000}, nil} {
+		values := make([]float32, len(bits))
+		for i, b := range bits {
+			values[i] = math.Float32frombits(b)
+		}
+		shape := []int{len(values)}
+		if len(values) == 1 {
+			shape = []int{}
+		}
+		x := NewTensor(values, shape...)
+		pb := x.toPB()
+		require.Equal(t, protocol.TensorDType_FLOAT32, pb.Dtype)
+		require.Len(t, pb.Data, len(bits)*4)
+		for i, b := range bits {
+			require.Equal(t, b, binary.LittleEndian.Uint32(pb.Data[4*i:]))
+		}
+		var buf bytes.Buffer
+		require.NoError(t, Save(x, &buf))
+		y := Ones(1).ToFloat16()
+		require.NoError(t, Load(y, &buf))
+		require.Equal(t, Float32, y.DType())
+		require.Equal(t, shape, y.Shape())
+		require.Nil(t, y.data16)
+		require.Len(t, y.Data(), len(bits))
+		for i, b := range bits {
+			require.Equal(t, b, math.Float32bits(y.Data()[i]))
+		}
+	}
+}
+
 func TestTensorLegacySerialization(t *testing.T) {
 	// Original protobuf fields only: shape=[2], data=[1,2], no dtype.
 	wire := []byte{0x12, 1, 2, 0x1a, 8, 0, 0, 0x80, 0x3f, 0, 0, 0, 0x40}
 	pb := new(protocol.Tensor)
 	require.NoError(t, proto.Unmarshal(wire, pb))
 	x := Ones(2).ToFloat16()
-	require.NoError(t, x.fromPB(pb))
+	x.fromPB(pb)
 	require.Equal(t, Float32, x.DType())
 	require.Equal(t, []float32{1, 2}, x.Data())
 	require.Nil(t, x.data16)
@@ -87,12 +118,12 @@ func TestTensorLegacySerialization(t *testing.T) {
 func TestTensorInvalidSerializationIsAtomic(t *testing.T) {
 	cases := []*protocol.Tensor{
 		{Dtype: protocol.TensorDType(2), Shape: []int32{0}},
-		{Shape: []int32{1}, Data: []float32{1}, Data16: []byte{0, 0}},
-		{Dtype: protocol.TensorDType_FLOAT16, Shape: []int32{1}, Data: []float32{1}, Data16: []byte{0, 0}},
-		{Dtype: protocol.TensorDType_FLOAT16, Shape: []int32{1}, Data16: []byte{0}},
-		{Dtype: protocol.TensorDType_FLOAT16, Shape: []int32{2}, Data16: []byte{0, 0}},
+		{Shape: []int32{1}, Data: []byte{0, 0}},
+		{Shape: []int32{1}, Data: []byte{0, 0, 0, 0, 0}},
+		{Dtype: protocol.TensorDType_FLOAT16, Shape: []int32{1}, Data: []byte{0}},
+		{Dtype: protocol.TensorDType_FLOAT16, Shape: []int32{2}, Data: []byte{0, 0}},
 		{Shape: []int32{-1, 0}}, {Shape: []int32{2147483647, 2147483647, 2147483647}},
-		{Shape: []int32{2}, Data: []float32{1}}, {Data: nil},
+		{Shape: []int32{2}, Data: []byte{0, 0, 0, 0}}, {Data: nil},
 	}
 	for _, pb := range cases {
 		t.Run("invalid", func(t *testing.T) {
@@ -100,12 +131,12 @@ func TestTensorInvalidSerializationIsAtomic(t *testing.T) {
 			x.grad = Ones(1)
 			x.op = &neg{}
 			old := *x
-			require.Error(t, x.fromPB(pb))
+			require.Panics(t, func() { x.fromPB(pb) })
 			require.Equal(t, old, *x)
 			var buf bytes.Buffer
 			_, err := pbutil.WriteDelimited(&buf, pb)
 			require.NoError(t, err)
-			require.Error(t, Load(x, &buf))
+			require.Panics(t, func() { _ = Load(x, &buf) })
 			require.Equal(t, old, *x)
 		})
 	}

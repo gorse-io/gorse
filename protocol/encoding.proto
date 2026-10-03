@@ -26,10 +26,9 @@ enum TensorDType {
 message Tensor {
   repeated string key = 1;
   repeated int32 shape = 2;
-  repeated float data = 3;
+  // IEEE 754 raw bits in little-endian order; element width is determined by dtype.
+  bytes data = 3;
   TensorDType dtype = 4;
-  // IEEE 754 half-precision raw bits in little-endian order; Float16 only.
-  bytes data16 = 5;
 }
 
 message LatentFactor {
