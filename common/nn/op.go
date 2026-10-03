@@ -59,6 +59,7 @@ func (b *base) setGeneration(gen int) {
 }
 
 func apply[T op](f T, inputs ...*Tensor) *Tensor {
+	requireFloat32(inputs...)
 	y := f.forward(inputs...)
 	f.setInputs(inputs...)
 	f.setOutput(y)

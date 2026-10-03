@@ -239,7 +239,7 @@ func Load(o any, r io.Reader) error {
 	place = func(o any, key []string, pb *protocol.Tensor) error {
 		switch typed := o.(type) {
 		case *Tensor:
-			typed.fromPB(pb)
+			return typed.fromPB(pb)
 		default:
 			tp := reflect.TypeOf(o)
 			if tp.Kind() == reflect.Pointer {

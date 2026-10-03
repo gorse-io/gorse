@@ -17,6 +17,7 @@ package nn
 import (
 	"container/heap"
 	"context"
+	"encoding/binary"
 	"fmt"
 	"math"
 	"math/rand"
@@ -30,6 +31,7 @@ import (
 	"github.com/gorse-io/gorse/common/parallel"
 	"github.com/gorse-io/gorse/protocol"
 	"github.com/samber/lo"
+	"github.com/x448/float16"
 	"golang.org/x/exp/slices"
 )
 
@@ -41,11 +43,75 @@ func SetInferenceMode(enabled bool) {
 	inferenceMode.Store(enabled)
 }
 
+// DType identifies a tensor's storage format.
+type DType uint8
+
+const (
+	// Float32 stores IEEE 754 single-precision values and supports computation.
+	Float32 DType = iota
+	// Float16 stores IEEE 754 half-precision values; convert to Float32 for computation.
+	Float16
+)
+
+// Tensor stores dense values and, for Float32 tensors, an optional computation graph.
 type Tensor struct {
-	data  []float32
-	shape []int
-	grad  *Tensor
-	op    op
+	data   []float32
+	data16 []float16.Float16
+	dtype  DType
+	shape  []int
+	grad   *Tensor
+	op     op
+}
+
+// NewTensor16 creates a storage-only tensor sharing data and shape with its inputs.
+func NewTensor16(data []float16.Float16, shape ...int) *Tensor {
+	size := 1
+	for _, dim := range shape {
+		if dim < 0 || (dim != 0 && size > int(^uint(0)>>1)/dim) {
+			panic("invalid tensor shape")
+		}
+		size *= dim
+	}
+	if size != len(data) {
+		panic(fmt.Sprintf("shape %v does not match data size %v", shape, len(data)))
+	}
+	return &Tensor{data16: data, dtype: Float16, shape: shape}
+}
+
+// DType returns the tensor's storage format.
+func (t *Tensor) DType() DType { return t.dtype }
+
+// Data16 returns the shared half-precision storage, panicking for Float32 tensors.
+func (t *Tensor) Data16() []float16.Float16 {
+	if t.dtype != Float16 {
+		panic("Data16 requires a Float16 tensor")
+	}
+	return t.data16
+}
+
+// ToFloat16 returns an independent, graph-free copy in half precision.
+// Float32 values are rounded to nearest, with ties to even.
+func (t *Tensor) ToFloat16() *Tensor {
+	if t.dtype == Float16 {
+		return t.clone()
+	}
+	data := make([]float16.Float16, len(t.data))
+	for i, value := range t.data {
+		data[i] = float16.Fromfloat32(value)
+	}
+	return NewTensor16(data, slices.Clone(t.shape)...)
+}
+
+// ToFloat32 returns an independent, graph-free copy in single precision.
+func (t *Tensor) ToFloat32() *Tensor {
+	if t.dtype == Float32 {
+		return t.clone()
+	}
+	data := make([]float32, len(t.data16))
+	for i, value := range t.data16 {
+		data[i] = value.Float32()
+	}
+	return NewTensor(data, slices.Clone(t.shape)...)
 }
 
 func NewTensor(data []float32, shape ...int) *Tensor {
@@ -198,6 +264,9 @@ func (t *Tensor) Slice(start, end int) *Tensor {
 	for i := 1; i < len(t.shape); i++ {
 		subSize *= t.shape[i]
 	}
+	if t.dtype == Float16 {
+		return NewTensor16(t.data16[start*subSize:end*subSize], append([]int{end - start}, t.shape[1:]...)...)
+	}
 	return &Tensor{
 		data:  t.data[start*subSize : end*subSize],
 		shape: append([]int{end - start}, t.shape[1:]...),
@@ -210,6 +279,13 @@ func (t *Tensor) SliceIndices(indices ...int) *Tensor {
 	for i := range t.shape[1:] {
 		shape = append(shape, t.shape[i+1])
 		subSize *= t.shape[i+1]
+	}
+	if t.dtype == Float16 {
+		data := make([]float16.Float16, len(indices)*subSize)
+		for i, index := range indices {
+			copy(data[i*subSize:(i+1)*subSize], t.data16[index*subSize:(index+1)*subSize])
+		}
+		return NewTensor16(data, shape...)
 	}
 	data := make([]float32, len(indices)*subSize)
 	for i, index := range indices {
@@ -233,33 +309,42 @@ func (t *Tensor) Get(indices ...int) float32 {
 		}
 		index = index*t.shape[i] + indices[i]
 	}
+	if t.dtype == Float16 {
+		return t.data16[index].Float32()
+	}
 	return t.data[index]
 }
 
 func (t *Tensor) String() string {
+	size := len(t.data)
+	value := func(i int) float32 { return t.data[i] }
+	if t.dtype == Float16 {
+		size = len(t.data16)
+		value = func(i int) float32 { return t.data16[i].Float32() }
+	}
 	// Print scalar value
 	if len(t.shape) == 0 {
-		return fmt.Sprint(t.data[0])
+		return fmt.Sprint(value(0))
 	}
 
 	builder := strings.Builder{}
 	builder.WriteString("[")
-	if len(t.data) <= 10 {
-		for i := 0; i < len(t.data); i++ {
-			fmt.Fprint(&builder, t.data[i])
-			if i != len(t.data)-1 {
+	if size <= 10 {
+		for i := 0; i < size; i++ {
+			fmt.Fprint(&builder, value(i))
+			if i != size-1 {
 				builder.WriteString(", ")
 			}
 		}
 	} else {
 		for i := range 5 {
-			fmt.Fprint(&builder, t.data[i])
+			fmt.Fprint(&builder, value(i))
 			builder.WriteString(", ")
 		}
 		builder.WriteString("..., ")
-		for i := len(t.data) - 5; i < len(t.data); i++ {
-			fmt.Fprint(&builder, t.data[i])
-			if i != len(t.data)-1 {
+		for i := size - 5; i < size; i++ {
+			fmt.Fprint(&builder, value(i))
+			if i != size-1 {
 				builder.WriteString(", ")
 			}
 		}
@@ -268,7 +353,37 @@ func (t *Tensor) String() string {
 	return builder.String()
 }
 
+func requireFloat32(tensors ...*Tensor) {
+	for _, t := range tensors {
+		if t.dtype != Float32 {
+			panic("computation requires Float32 tensors; convert Float16 storage with ToFloat32")
+		}
+	}
+}
+
+// Backward computes gradients for a Float32 graph, panicking if any tensor
+// or existing gradient uses Float16 storage. Dtype checks precede state changes.
 func (t *Tensor) Backward() {
+	// Validate the entire graph before changing any gradient state. Storage can
+	// have been replaced by Load since the graph was constructed.
+	pending := []*Tensor{t}
+	visited := make(map[*Tensor]bool)
+	for len(pending) > 0 {
+		x := pending[len(pending)-1]
+		pending = pending[:len(pending)-1]
+		if visited[x] {
+			continue
+		}
+		visited[x] = true
+		requireFloat32(x)
+		if x.grad != nil {
+			requireFloat32(x.grad)
+		}
+		if x.op != nil {
+			inputs, _ := x.op.inputsAndOutput()
+			pending = append(pending, inputs...)
+		}
+	}
 	t.grad = Ones(t.shape...)
 	ops := &opHeap{t.op}
 	seen := mapset.NewSet[op](t.op)
@@ -298,20 +413,28 @@ func (t *Tensor) Grad() *Tensor {
 	return t.grad
 }
 
+// Data returns the shared single-precision storage, panicking for Float16 tensors.
 func (t *Tensor) Data() []float32 {
+	if t.dtype != Float32 {
+		panic("Data requires a Float32 tensor")
+	}
 	return t.data
 }
 
 func (t *Tensor) clone() *Tensor {
+	if t.dtype == Float16 {
+		return NewTensor16(append([]float16.Float16(nil), t.data16...), slices.Clone(t.shape)...)
+	}
 	newData := make([]float32, len(t.data))
 	copy(newData, t.data)
 	return &Tensor{
 		data:  newData,
-		shape: t.shape,
+		shape: slices.Clone(t.shape),
 	}
 }
 
 func (t *Tensor) add(other *Tensor) *Tensor {
+	requireFloat32(t, other)
 	wSize := 1
 	for i := range other.shape {
 		wSize *= other.shape[i]
@@ -330,6 +453,7 @@ func (t *Tensor) add(other *Tensor) *Tensor {
 // of the second tensor must be a suffix sequence of the shape of
 // the first tensor: (...,m,n) - (m,n) = (...,m,n).
 func (t *Tensor) sub(other *Tensor) *Tensor {
+	requireFloat32(t, other)
 	wSize := 1
 	for i := range other.shape {
 		wSize *= other.shape[i]
@@ -344,6 +468,7 @@ func (t *Tensor) sub(other *Tensor) *Tensor {
 // of the second tensor must be a prefix sequence of the shape of
 // the first tensor: (m,n,...) - (m,n) = (m,n,...).
 func (t *Tensor) bSub(other *Tensor) *Tensor {
+	requireFloat32(t, other)
 	bSize := 1
 	for i := range t.shape {
 		bSize *= t.shape[i]
@@ -358,6 +483,7 @@ func (t *Tensor) bSub(other *Tensor) *Tensor {
 }
 
 func (t *Tensor) mul(other *Tensor) *Tensor {
+	requireFloat32(t, other)
 	wSize := 1
 	for i := range other.shape {
 		wSize *= other.shape[i]
@@ -372,6 +498,7 @@ func (t *Tensor) mul(other *Tensor) *Tensor {
 // of the second tensor must be a suffix sequence of the shape of
 // the first tensor: (...,m,n) / (m,n) = (...,m,n).
 func (t *Tensor) div(other *Tensor) *Tensor {
+	requireFloat32(t, other)
 	wSize := 1
 	for i := range other.shape {
 		wSize *= other.shape[i]
@@ -386,6 +513,7 @@ func (t *Tensor) div(other *Tensor) *Tensor {
 // of the second tensor must be a prefix sequence of the shape of
 // the first tensor: (m,n,...) / (m,n) = (m,n,...).
 func (t *Tensor) bDiv(other *Tensor) *Tensor {
+	requireFloat32(t, other)
 	bSize := 1
 	for i := range t.shape {
 		bSize *= t.shape[i]
@@ -400,11 +528,13 @@ func (t *Tensor) bDiv(other *Tensor) *Tensor {
 }
 
 func (t *Tensor) square() *Tensor {
+	requireFloat32(t)
 	floats.MulTo(t.data, t.data, t.data)
 	return t
 }
 
 func (t *Tensor) pow(other *Tensor) *Tensor {
+	requireFloat32(t, other)
 	wSize := 1
 	for i := range other.shape {
 		wSize *= other.shape[i]
@@ -416,6 +546,7 @@ func (t *Tensor) pow(other *Tensor) *Tensor {
 }
 
 func (t *Tensor) exp() *Tensor {
+	requireFloat32(t)
 	for i := range t.data {
 		t.data[i] = float32(math.Exp(float64(t.data[i])))
 	}
@@ -423,6 +554,7 @@ func (t *Tensor) exp() *Tensor {
 }
 
 func (t *Tensor) log() *Tensor {
+	requireFloat32(t)
 	for i := range t.data {
 		t.data[i] = math32.Log(t.data[i])
 	}
@@ -430,6 +562,7 @@ func (t *Tensor) log() *Tensor {
 }
 
 func (t *Tensor) sin() *Tensor {
+	requireFloat32(t)
 	for i := range t.data {
 		t.data[i] = math32.Sin(t.data[i])
 	}
@@ -437,6 +570,7 @@ func (t *Tensor) sin() *Tensor {
 }
 
 func (t *Tensor) cos() *Tensor {
+	requireFloat32(t)
 	for i := range t.data {
 		t.data[i] = math32.Cos(t.data[i])
 	}
@@ -444,6 +578,7 @@ func (t *Tensor) cos() *Tensor {
 }
 
 func (t *Tensor) tanh() *Tensor {
+	requireFloat32(t)
 	for i := range t.data {
 		t.data[i] = math32.Tanh(t.data[i])
 	}
@@ -451,6 +586,7 @@ func (t *Tensor) tanh() *Tensor {
 }
 
 func (t *Tensor) neg() *Tensor {
+	requireFloat32(t)
 	for i := range t.data {
 		t.data[i] = -t.data[i]
 	}
@@ -493,6 +629,7 @@ func partition(n, p int) []lo.Tuple2[int, int] {
 }
 
 func (t *Tensor) matMul(other *Tensor, transpose1, transpose2 bool, jobs int) *Tensor {
+	requireFloat32(t, other)
 	if len(t.shape) != 2 || len(other.shape) != 2 {
 		panic("matMul requires 2-D tensors")
 	}
@@ -552,6 +689,7 @@ func (t *Tensor) matMul(other *Tensor, transpose1, transpose2 bool, jobs int) *T
 }
 
 func (t *Tensor) batchMatMul(other *Tensor, transpose1, transpose2 bool, jobs int) *Tensor {
+	requireFloat32(t, other)
 	if len(t.shape) != 3 || len(other.shape) != 3 {
 		panic("BatchMatMul requires 3-D tensors")
 	}
@@ -601,6 +739,7 @@ func (t *Tensor) batchMatMul(other *Tensor, transpose1, transpose2 bool, jobs in
 }
 
 func (t *Tensor) maximum(other *Tensor) {
+	requireFloat32(t, other)
 	if other.IsScalar() {
 		for i := range t.data {
 			t.data[i] = max(t.data[i], other.data[0])
@@ -613,6 +752,7 @@ func (t *Tensor) maximum(other *Tensor) {
 }
 
 func (t *Tensor) gt(other *Tensor) *Tensor {
+	requireFloat32(t, other)
 	if other.IsScalar() {
 		for i := range t.data {
 			if t.data[i] > other.data[0] {
@@ -634,6 +774,7 @@ func (t *Tensor) gt(other *Tensor) *Tensor {
 }
 
 func (t *Tensor) transpose() *Tensor {
+	requireFloat32(t)
 	if len(t.shape) < 2 {
 		panic("transpose requires at least 2-D tensor")
 	}
@@ -660,6 +801,7 @@ func (t *Tensor) transpose() *Tensor {
 }
 
 func (t *Tensor) max(axis int, keepDim bool) *Tensor {
+	requireFloat32(t)
 	if axis < 0 || axis >= len(t.shape) {
 		panic("axis out of range")
 	}
@@ -699,6 +841,7 @@ func (t *Tensor) max(axis int, keepDim bool) *Tensor {
 }
 
 func (t *Tensor) sum(axis int, keepDim bool) *Tensor {
+	requireFloat32(t)
 	if axis < 0 || axis >= len(t.shape) {
 		panic("axis out of range")
 	}
@@ -738,6 +881,7 @@ func (t *Tensor) sum(axis int, keepDim bool) *Tensor {
 }
 
 func (t *Tensor) argmax() []int {
+	requireFloat32(t)
 	if len(t.data) == 0 {
 		return nil
 	}
@@ -758,21 +902,64 @@ func (t *Tensor) argmax() []int {
 }
 
 func (t *Tensor) toPB() *protocol.Tensor {
-	return &protocol.Tensor{
+	pb := &protocol.Tensor{
 		Shape: lo.Map(t.shape, func(i, _ int) int32 { return int32(i) }),
-		Data:  t.data,
 	}
+	if t.dtype == Float16 {
+		pb.Dtype = protocol.TensorDType_FLOAT16
+		pb.Data16 = make([]byte, 2*len(t.data16))
+		for i, value := range t.data16 {
+			binary.LittleEndian.PutUint16(pb.Data16[2*i:], uint16(value))
+		}
+	} else {
+		pb.Data = t.data
+	}
+	return pb
 }
 
-func (t *Tensor) fromPB(pb *protocol.Tensor) {
-	t.shape = make([]int, len(pb.Shape))
-	for i := range t.shape {
-		t.shape[i] = int(pb.Shape[i])
+func (t *Tensor) fromPB(pb *protocol.Tensor) error {
+	if pb.Dtype != protocol.TensorDType_FLOAT32 && pb.Dtype != protocol.TensorDType_FLOAT16 {
+		return fmt.Errorf("unknown tensor dtype %d", pb.Dtype)
 	}
-	t.data = pb.Data
+	if (pb.Dtype == protocol.TensorDType_FLOAT32 && len(pb.Data16) != 0) ||
+		(pb.Dtype == protocol.TensorDType_FLOAT16 && len(pb.Data) != 0) {
+		return fmt.Errorf("tensor payload does not match dtype %v", pb.Dtype)
+	}
+	shape := make([]int, len(pb.Shape))
+	size := 1
+	for i, dim := range pb.Shape {
+		if dim < 0 || (dim != 0 && size > int(^uint(0)>>1)/int(dim)) {
+			return fmt.Errorf("invalid tensor shape %v", pb.Shape)
+		}
+		shape[i] = int(dim)
+		size *= int(dim)
+	}
+	decoded := Tensor{shape: shape}
+	if pb.Dtype == protocol.TensorDType_FLOAT16 {
+		if len(pb.Data16)%2 != 0 || len(pb.Data16)/2 != size {
+			return fmt.Errorf("shape %v does not match Float16 payload size %d", shape, len(pb.Data16))
+		}
+		decoded.dtype = Float16
+		if size > 0 {
+			decoded.data16 = make([]float16.Float16, size)
+			for i := range decoded.data16 {
+				decoded.data16[i] = float16.Frombits(binary.LittleEndian.Uint16(pb.Data16[2*i:]))
+			}
+		}
+	} else {
+		if len(pb.Data) != size {
+			return fmt.Errorf("shape %v does not match data size %d", shape, len(pb.Data))
+		}
+		decoded.data = pb.Data
+	}
+	*t = decoded
+	return nil
 }
 
+// NormalInit fills a Float32 tensor with normally distributed values.
+// It panics for Float16 storage without modifying the tensor.
 func NormalInit(rng *rand.Rand, t *Tensor, mean, std float32) {
+	requireFloat32(t)
 	random := rand.NormFloat64
 	if rng != nil {
 		random = rng.NormFloat64
