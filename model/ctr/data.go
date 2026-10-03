@@ -89,6 +89,23 @@ type Embedding struct {
 	Value []uint16
 }
 
+// ConvertEmbeddingLabels replaces embedding vectors with FP16 slices in place,
+// preserving all other labels. Existing FP16 slices are reused. The returned
+// labels and embeddings extracted from them share values and must stay immutable.
+func ConvertEmbeddingLabels(o any) any {
+	switch labels := o.(type) {
+	case map[string]any:
+		for key, value := range labels {
+			labels[key] = ConvertEmbeddingLabels(value)
+		}
+	case []any, []float32, []float64:
+		if embeddings := ConvertEmbeddings(o); len(embeddings) == 1 {
+			return embeddings[0].Value
+		}
+	}
+	return o
+}
+
 func ConvertEmbeddings(o any) []Embedding {
 	embeddings := make([]Embedding, 0)
 	return convertEmbeddings(embeddings, "", o)
