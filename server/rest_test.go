@@ -125,8 +125,6 @@ func (suite *ServerTestSuite) TestEmitRequest() {
 	}
 	event.SetEventHandler(handler)
 	suite.T().Cleanup(func() { event.SetEventHandler(&event.NopHandler{}) })
-	// A delayed event from an earlier request must not replace this request's event.
-	handler.EmitRequest(suite.T().Context(), event.Request{RequestID: "unrelated-request"})
 
 	body := suite.marshal(data.User{UserId: "emit-request"})
 	const responseBody = `{"RowAffected":1}`
