@@ -144,10 +144,12 @@ func NewWorker(
 // Sync this worker to the master.
 func (w *Worker) Sync() {
 	var nextBlobConfig config.BlobConfig
-	log.Logger().Info("start meta sync", zap.Duration("meta_timeout", w.Config.Master.MetaTimeout))
+	currentConfig := w.getConfig()
+	log.Logger().Info("start meta sync", zap.Duration("meta_timeout", currentConfig.Master.MetaTimeout))
 	for {
 		var meta *protocol.Meta
 		var err error
+		nextConfig := new(config.Config)
 		if meta, err = w.masterClient.GetMeta(context.Background(),
 			&protocol.NodeInfo{
 				NodeType:      protocol.NodeType_Worker,
@@ -160,52 +162,54 @@ func (w *Worker) Sync() {
 		}
 
 		// load master config
-		err = json.Unmarshal([]byte(meta.Config), &w.Config)
+		err = json.Unmarshal([]byte(meta.Config), nextConfig)
 		if err != nil {
 			log.Logger().Error("failed to parse master config", zap.Error(err))
 			goto sleep
 		}
+		w.setConfig(nextConfig)
+		currentConfig = nextConfig
 
 		// connect to data store
-		if w.dataPath != w.Config.Database.DataStore || w.dataPrefix != w.Config.Database.DataTablePrefix {
-			if strings.HasPrefix(w.Config.Database.DataStore, storage.SQLitePrefix) {
+		if w.dataPath != nextConfig.Database.DataStore || w.dataPrefix != nextConfig.Database.DataTablePrefix {
+			if strings.HasPrefix(nextConfig.Database.DataStore, storage.SQLitePrefix) {
 				log.Logger().Info("connect data store via master")
 				w.DataClient = data.NewProxyClient(w.conn)
 			} else {
 				log.Logger().Info("connect data store",
-					zap.String("database", log.RedactDBURL(w.Config.Database.DataStore)))
-				dataOpts := w.Config.Database.StorageOptions(w.Config.Database.DataStore)
-				if w.DataClient, err = data.Open(w.Config.Database.DataStore, w.Config.Database.DataTablePrefix, dataOpts...); err != nil {
+					zap.String("database", log.RedactDBURL(nextConfig.Database.DataStore)))
+				dataOpts := nextConfig.Database.StorageOptions(nextConfig.Database.DataStore)
+				if w.DataClient, err = data.Open(nextConfig.Database.DataStore, nextConfig.Database.DataTablePrefix, dataOpts...); err != nil {
 					log.Logger().Error("failed to connect data store", zap.Error(err))
 					goto sleep
 				}
 			}
-			w.dataPath = w.Config.Database.DataStore
-			w.dataPrefix = w.Config.Database.DataTablePrefix
+			w.dataPath = nextConfig.Database.DataStore
+			w.dataPrefix = nextConfig.Database.DataTablePrefix
 		}
 
 		// connect to cache store
-		if w.cachePath != w.Config.Database.CacheStore || w.cachePrefix != w.Config.Database.CacheTablePrefix {
-			if strings.HasPrefix(w.Config.Database.CacheStore, storage.SQLitePrefix) {
+		if w.cachePath != nextConfig.Database.CacheStore || w.cachePrefix != nextConfig.Database.CacheTablePrefix {
+			if strings.HasPrefix(nextConfig.Database.CacheStore, storage.SQLitePrefix) {
 				log.Logger().Info("connect cache store via master")
 				w.CacheClient = cache.NewProxyClient(w.conn)
 			} else {
 				log.Logger().Info("connect cache store",
-					zap.String("database", log.RedactDBURL(w.Config.Database.CacheStore)))
-				cacheOpts := w.Config.Database.StorageOptions(w.Config.Database.CacheStore)
-				if w.CacheClient, err = cache.Open(w.Config.Database.CacheStore, w.Config.Database.CacheTablePrefix, cacheOpts...); err != nil {
+					zap.String("database", log.RedactDBURL(nextConfig.Database.CacheStore)))
+				cacheOpts := nextConfig.Database.StorageOptions(nextConfig.Database.CacheStore)
+				if w.CacheClient, err = cache.Open(nextConfig.Database.CacheStore, nextConfig.Database.CacheTablePrefix, cacheOpts...); err != nil {
 					log.Logger().Error("failed to connect cache store", zap.Error(err))
 					goto sleep
 				}
 			}
-			w.cachePath = w.Config.Database.CacheStore
-			w.cachePrefix = w.Config.Database.CacheTablePrefix
+			w.cachePath = nextConfig.Database.CacheStore
+			w.cachePrefix = nextConfig.Database.CacheTablePrefix
 		}
 
 		// connect to blob store
-		nextBlobConfig = w.Config.Blob
+		nextBlobConfig = nextConfig.Blob
 		if w.blobConfig != nextBlobConfig.URI {
-			w.blobStore, err = blob.NewStore(w.Config.Blob, w.conn)
+			w.blobStore, err = blob.NewStore(nextConfig.Blob, w.conn)
 			if err != nil {
 				log.Logger().Error("failed to connect blob store", zap.Error(err))
 				goto sleep
@@ -214,18 +218,18 @@ func (w *Worker) Sync() {
 		}
 
 		// connect to vector store
-		if w.vectorPath != w.Config.Database.VectorStore || w.vectorPrefix != w.Config.Database.VectorTablePrefix {
-			if strings.HasPrefix(w.Config.Database.VectorStore, storage.XvecPrefix) {
+		if w.vectorPath != nextConfig.Database.VectorStore || w.vectorPrefix != nextConfig.Database.VectorTablePrefix {
+			if strings.HasPrefix(nextConfig.Database.VectorStore, storage.XvecPrefix) {
 				log.Logger().Info("connect vector store via master")
 				w.vectorStore = vectors.NewProxyClient(w.conn)
 			} else {
-				if w.vectorStore, err = vectors.Open(w.Config.Database.VectorStore, w.Config.Database.VectorTablePrefix); err != nil {
+				if w.vectorStore, err = vectors.Open(nextConfig.Database.VectorStore, nextConfig.Database.VectorTablePrefix); err != nil {
 					log.Logger().Error("failed to connect vector store", zap.Error(err))
 					goto sleep
 				}
 			}
-			w.vectorPath = w.Config.Database.VectorStore
-			w.vectorPrefix = w.Config.Database.VectorTablePrefix
+			w.vectorPath = nextConfig.Database.VectorStore
+			w.vectorPrefix = nextConfig.Database.VectorTablePrefix
 			w.VectorClient = w.vectorStore
 		}
 
@@ -262,7 +266,7 @@ func (w *Worker) Sync() {
 			return
 		}
 		select {
-		case <-time.After(w.Config.Master.MetaTimeout):
+		case <-time.After(currentConfig.Master.MetaTimeout):
 		case <-w.done:
 			return
 		}
