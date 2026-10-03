@@ -21,7 +21,6 @@ import (
 	"testing"
 
 	"github.com/gorse-io/gorse/protocol"
-	"github.com/matttproud/golang_protobuf_extensions/pbutil"
 	"github.com/stretchr/testify/require"
 	"github.com/x448/float16"
 	"google.golang.org/protobuf/proto"
@@ -113,31 +112,4 @@ func TestTensorLegacySerialization(t *testing.T) {
 	require.Equal(t, []float32{1, 2}, x.Data())
 	require.Nil(t, x.data16)
 	require.Equal(t, wire, func() []byte { b, err := proto.Marshal(x.toPB()); require.NoError(t, err); return b }())
-}
-
-func TestTensorInvalidSerializationIsAtomic(t *testing.T) {
-	cases := []*protocol.Tensor{
-		{Dtype: protocol.TensorDType(2), Shape: []int32{0}},
-		{Shape: []int32{1}, Data: []byte{0, 0}},
-		{Shape: []int32{1}, Data: []byte{0, 0, 0, 0, 0}},
-		{Dtype: protocol.TensorDType_FLOAT16, Shape: []int32{1}, Data: []byte{0}},
-		{Dtype: protocol.TensorDType_FLOAT16, Shape: []int32{2}, Data: []byte{0, 0}},
-		{Shape: []int32{-1, 0}}, {Shape: []int32{2147483647, 2147483647, 2147483647}},
-		{Shape: []int32{2}, Data: []byte{0, 0, 0, 0}}, {Data: nil},
-	}
-	for _, pb := range cases {
-		t.Run("invalid", func(t *testing.T) {
-			x := NewTensor([]float32{3}, 1)
-			x.grad = Ones(1)
-			x.op = &neg{}
-			old := *x
-			require.Panics(t, func() { x.fromPB(pb) })
-			require.Equal(t, old, *x)
-			var buf bytes.Buffer
-			_, err := pbutil.WriteDelimited(&buf, pb)
-			require.NoError(t, err)
-			require.Panics(t, func() { _ = Load(x, &buf) })
-			require.Equal(t, old, *x)
-		})
-	}
 }

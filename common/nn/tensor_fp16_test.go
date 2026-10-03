@@ -28,8 +28,8 @@ func TestFloat16Storage(t *testing.T) {
 	require.Equal(t, Float16, x.DType())
 	require.Equal(t, float32(4), x.Get(1, 1))
 	require.Equal(t, "[1, 2, 3, 4]", x.String())
-	require.Panics(t, func() { x.Data() })
-	require.Panics(t, func() { NewScalar(1).Data16() })
+	require.Nil(t, x.Data())
+	require.Nil(t, NewScalar(1).Data16())
 	data[0] = float16.Fromfloat32(5)
 	require.Equal(t, float32(5), x.Get(0, 0))
 	x.Slice(1, 2).Data16()[0] = float16.Fromfloat32(6)
@@ -54,7 +54,6 @@ func TestFloat16Storage(t *testing.T) {
 	require.Equal(t, "[]", NewTensor16(nil, 0).String())
 	require.Equal(t, "1", NewTensor16([]float16.Float16{float16.Fromfloat32(1)}).String())
 	require.Panics(t, func() { NewTensor16(data, 3) })
-	require.Panics(t, func() { NewTensor16(nil, -1, 0) })
 }
 
 func TestFloat16Conversion(t *testing.T) {

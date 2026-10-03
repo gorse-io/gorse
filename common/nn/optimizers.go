@@ -29,15 +29,6 @@ type Optimizer interface {
 	Step()
 }
 
-func validateOptimizerParams(params []*Tensor) {
-	requireFloat32(params...)
-	for _, p := range params {
-		if p.grad != nil {
-			requireFloat32(p.grad)
-		}
-	}
-}
-
 type baseOptimizer struct {
 	params []*Tensor
 	wd     float32
@@ -45,7 +36,6 @@ type baseOptimizer struct {
 }
 
 func (o *baseOptimizer) ZeroGrad() {
-	validateOptimizerParams(o.params)
 	for _, p := range o.params {
 		p.grad = nil
 	}
@@ -65,9 +55,7 @@ type SGD struct {
 	b  []float32
 }
 
-// NewSGD creates an SGD optimizer. Parameters and gradients must use Float32.
 func NewSGD(params []*Tensor, lr float32) Optimizer {
-	validateOptimizerParams(params)
 	bufSize := 0
 	for _, p := range params {
 		bufSize = max(bufSize, len(p.data))
@@ -80,7 +68,6 @@ func NewSGD(params []*Tensor, lr float32) Optimizer {
 }
 
 func (s *SGD) Step() {
-	validateOptimizerParams(s.params)
 	for _, p := range s.params {
 		b := s.b[:len(p.data)]
 		parts := partitionAligned(len(p.data), s.jobs, 32)
@@ -110,9 +97,7 @@ type Adam struct {
 	b2 []float32
 }
 
-// NewAdam creates an Adam optimizer. Parameters and gradients must use Float32.
 func NewAdam(params []*Tensor, alpha float32) Optimizer {
-	validateOptimizerParams(params)
 	bufSize := 0
 	for _, p := range params {
 		bufSize = max(bufSize, len(p.data))
@@ -131,7 +116,6 @@ func NewAdam(params []*Tensor, alpha float32) Optimizer {
 }
 
 func (a *Adam) Step() {
-	validateOptimizerParams(a.params)
 	a.t++
 
 	fix1 := 1 - math32.Pow(a.beta1, a.t)
