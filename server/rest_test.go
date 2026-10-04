@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"strconv"
 	"testing"
 	"time"
@@ -27,6 +28,7 @@ import (
 	"github.com/gorse-io/gorse/common/event"
 	"github.com/gorse-io/gorse/common/expression"
 	"github.com/gorse-io/gorse/common/log"
+	"github.com/gorse-io/gorse/common/mock"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/storage"
 	"github.com/gorse-io/gorse/storage/cache"
@@ -853,6 +855,184 @@ func (suite *ServerTestSuite) TestSearchItems() {
 		Status(http.StatusOK).
 		Body(suite.marshal(ItemIterator{Items: []data.Item{items[1]}})).
 		End()
+	apitest.New().Handler(suite.handler).
+		Get("/api/items").Header("X-API-Key", apiKey).
+		QueryParams(map[string]string{"q": "espresso", "index": "", "n": "10"}).
+		Expect(t).Status(http.StatusOK).
+		Body(suite.marshal(ItemIterator{Items: []data.Item{items[1]}})).End()
+}
+
+func (suite *ServerTestSuite) TestSearchItemsEmptyQuery() {
+	t := suite.T()
+	items := []data.Item{{ItemId: "a"}, {ItemId: "b"}}
+	suite.Require().NoError(suite.DataClient.BatchInsertItems(t.Context(), items))
+	// An empty query keeps the paginated listing path even if index is present.
+	result := apitest.New().Handler(suite.handler).
+		Get("/api/items").Header("X-API-Key", apiKey).
+		QueryParams(map[string]string{"q": "", "index": "unused", "n": "1"}).
+		Expect(t).Status(http.StatusOK).End()
+	var page ItemIterator
+	suite.Require().NoError(json.NewDecoder(result.Response.Body).Decode(&page))
+	suite.Require().NotEmpty(page.Cursor)
+	suite.Equal(items[:1], page.Items)
+	apitest.New().Handler(suite.handler).
+		Get("/api/items").Header("X-API-Key", apiKey).
+		QueryParams(map[string]string{"q": "", "index": "unused", "cursor": page.Cursor, "n": "1"}).
+		Expect(t).Status(http.StatusOK).
+		Body(suite.marshal(ItemIterator{Items: items[1:]})).End()
+}
+
+func (suite *ServerTestSuite) TestSearchItemsEmbedding() {
+	t := suite.T()
+	const query = "semantic query 推荐系统"
+	embedding := mock.Hash(query)
+	endpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		suite.Equal(http.MethodPost, r.Method)
+		suite.Equal("/v1/embeddings", r.URL.Path)
+		suite.Equal("Bearer embedding-token", r.Header.Get("Authorization"))
+		var request struct {
+			Input      string `json:"input"`
+			Model      string `json:"model"`
+			Dimensions int    `json:"dimensions"`
+		}
+		suite.NoError(json.NewDecoder(r.Body).Decode(&request))
+		suite.Equal(query, request.Input)
+		suite.Equal("test-embedding-model", request.Model)
+		suite.Equal(len(embedding), request.Dimensions)
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"data": []map[string]any{{"embedding": embedding}},
+		})
+	}))
+	defer endpoint.Close()
+	suite.Config.OpenAI.BaseURL = endpoint.URL + "/v1"
+	suite.Config.OpenAI.AuthToken = "embedding-token"
+	suite.Config.OpenAI.EmbeddingModel = "test-embedding-model"
+	suite.Config.OpenAI.EmbeddingDimensions = len(embedding)
+	suite.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "semantic", Type: "embedding"}}
+	suite.Empty(suite.Config.Recommend.Search.Columns)
+
+	items := []data.Item{
+		{ItemId: "a-far", Categories: []string{"far"}, Comment: "First alphabetically", Labels: map[string]any{"rank": "far"}},
+		{ItemId: "z-near", Categories: []string{"near"}, Comment: "Most similar", Labels: map[string]any{"rank": "near"}},
+		{ItemId: "hidden", IsHidden: true},
+	}
+	suite.Require().NoError(suite.DataClient.BatchInsertItems(t.Context(), items))
+	far := append([]float32(nil), embedding...)
+	near := append([]float32(nil), embedding...)
+	far[0] += 100
+	near[0] += 10
+	collection := vectors.ItemToItemCollection("semantic")
+	suite.Require().NoError(suite.VectorClient.AddCollection(t.Context(), collection, len(embedding), vectors.Euclidean, vectors.VectorConfig{}))
+	suite.Require().NoError(suite.VectorClient.AddVectors(t.Context(), collection, []vectors.Vector{
+		{Id: items[0].ItemId, Values: far},
+		{Id: items[1].ItemId, Values: near},
+		{Id: items[2].ItemId, Values: embedding, IsHidden: true},
+	}))
+	for _, n := range []string{"1", "2", ""} {
+		expected := []data.Item{items[1], items[0]}
+		if n == "1" {
+			expected = expected[:1]
+		}
+		apitest.New().Handler(suite.handler).
+			Get("/api/items").Header("X-API-Key", apiKey).
+			QueryParams(map[string]string{"q": query, "index": "semantic", "n": n}).
+			Expect(t).Status(http.StatusOK).
+			Body(suite.marshal(ItemIterator{Items: expected})).End()
+	}
+	// The vector index may lag behind item updates and deletions.
+	suite.Require().NoError(suite.DataClient.BatchInsertItems(t.Context(), []data.Item{{ItemId: "newly-hidden", IsHidden: true}}))
+	suite.Require().NoError(suite.VectorClient.AddVectors(t.Context(), collection, []vectors.Vector{
+		{Id: "newly-hidden", Values: embedding},
+		{Id: "deleted", Values: embedding},
+	}))
+	apitest.New().Handler(suite.handler).
+		Get("/api/items").Header("X-API-Key", apiKey).
+		QueryParams(map[string]string{"q": query, "index": "semantic", "n": "10"}).
+		Expect(t).Status(http.StatusOK).
+		Body(suite.marshal(ItemIterator{Items: []data.Item{items[1], items[0]}})).End()
+}
+
+func (suite *ServerTestSuite) TestSearchItemsEmbeddingIndexValidation() {
+	t := suite.T()
+	endpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		suite.Fail("invalid indexes must be rejected before requesting embeddings")
+		http.Error(w, "unexpected embedding request", http.StatusServiceUnavailable)
+	}))
+	defer endpoint.Close()
+	suite.Config.OpenAI.BaseURL = endpoint.URL + "/v1"
+	suite.Config.Recommend.ItemToItem = []config.ItemToItemConfig{
+		{Name: "tags", Type: "tags"},
+		{Name: "users", Type: "users"},
+		{Name: "chat", Type: "chat"},
+		{Name: "auto", Type: "auto"},
+	}
+	suite.Config.Recommend.UserToUser = []config.UserToUserConfig{{Name: "user-only", Type: "embedding"}}
+	for _, index := range []string{"missing", "user-only", "tags", "users", "chat", "auto"} {
+		message := fmt.Sprintf("item search index %s must be an embedding item-to-item recommender", index)
+		if index == "missing" || index == "user-only" {
+			message = fmt.Sprintf("item search index %s not found", index)
+		}
+		apitest.New().Handler(suite.handler).
+			Get("/api/items").Header("X-API-Key", apiKey).
+			QueryParams(map[string]string{"q": "query", "index": index}).
+			Expect(t).Status(http.StatusBadRequest).Body(message).End()
+	}
+}
+
+func (suite *ServerTestSuite) TestSearchItemsEmbeddingLimits() {
+	t := suite.T()
+	endpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		suite.Fail("nonpositive or invalid limits must not request embeddings")
+		http.Error(w, "unexpected embedding request", http.StatusServiceUnavailable)
+	}))
+	defer endpoint.Close()
+	suite.Config.OpenAI.BaseURL = endpoint.URL + "/v1"
+	suite.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "semantic", Type: "embedding"}}
+	for _, n := range []string{"0", "-1"} {
+		apitest.New().Handler(suite.handler).
+			Get("/api/items").Header("X-API-Key", apiKey).
+			QueryParams(map[string]string{"q": "query", "index": "semantic", "n": n}).
+			Expect(t).Status(http.StatusOK).
+			Body(suite.marshal(ItemIterator{Items: []data.Item{}})).End()
+	}
+	apitest.New().Handler(suite.handler).
+		Get("/api/items").Header("X-API-Key", apiKey).
+		QueryParams(map[string]string{"q": "query", "index": "semantic", "n": "invalid"}).
+		Expect(t).Status(http.StatusBadRequest).End()
+}
+
+func (suite *ServerTestSuite) TestSearchItemsEmbeddingErrors() {
+	t := suite.T()
+	suite.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "semantic", Type: "embedding"}}
+	for _, test := range []struct {
+		name   string
+		status int
+		body   string
+		error  string
+	}{
+		{name: "provider failure", status: http.StatusServiceUnavailable, body: `{"error":{"message":"embedding unavailable","type":"server_error"}}`},
+		{name: "invalid JSON", status: http.StatusOK, body: `not JSON`},
+		{name: "missing embedding", status: http.StatusOK, body: `{"data":[]}`, error: "embedding response contains no embedding"},
+		{name: "empty embedding", status: http.StatusOK, body: `{"data":[{"embedding":[]}]}`, error: "embedding response contains no embedding"},
+		{name: "missing collection", status: http.StatusOK, body: `{"data":[{"embedding":[1,2]}]}`},
+	} {
+		endpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(test.status)
+			_, _ = io.WriteString(w, test.body)
+		}))
+		suite.Config.OpenAI.BaseURL = endpoint.URL + "/v1"
+		response := apitest.New().Handler(suite.handler).
+			Get("/api/items").Header("X-API-Key", apiKey).
+			QueryParams(map[string]string{"q": test.name, "index": "semantic"}).
+			Expect(t).Status(http.StatusInternalServerError)
+		if test.error != "" {
+			response.Body(test.error)
+		}
+		response.End()
+		endpoint.Close()
+	}
 }
 
 func (suite *ServerTestSuite) TestFeedback() {
