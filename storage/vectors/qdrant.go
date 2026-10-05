@@ -417,14 +417,12 @@ func (db *Qdrant) QueryVectors(ctx context.Context, collection string, q Vector,
 	for _, scored := range response {
 		vector := qdrantVector(scored.GetVectors())
 		results = append(results, ScoredVector{
-			Vector: Vector{
-				Id:         qdrantId(scored.GetPayload()),
-				Values:     vector.Values,
-				Indices:    vector.Indices,
-				IsHidden:   qdrantHidden(scored.GetPayload()),
-				Categories: qdrantCategories(scored.GetPayload()),
-			},
-			Score: scored.GetScore(),
+			Id:         qdrantId(scored.GetPayload()),
+			Values:     vector.Values,
+			Indices:    vector.Indices,
+			IsHidden:   qdrantHidden(scored.GetPayload()),
+			Categories: qdrantCategories(scored.GetPayload()),
+			Score:      scored.GetScore(),
 		})
 	}
 	return results, nil

@@ -81,11 +81,9 @@ func TestServer_Sync(t *testing.T) {
 	serv := &Server{
 		testMode:     true,
 		masterClient: protocol.NewMasterClient(conn),
-		RestServer: RestServer{
-			Config:      config.GetDefaultConfig(),
-			CacheClient: new(cache.NoDatabase),
-			DataClient:  new(data.NoDatabase),
-		},
+		Config:       config.GetDefaultConfig(),
+		CacheClient:  new(cache.NoDatabase),
+		DataClient:   new(data.NoDatabase),
 	}
 	serv.Sync()
 	assert.Equal(t, master.dataTempFile, serv.dataPath)

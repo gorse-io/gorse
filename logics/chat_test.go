@@ -49,9 +49,9 @@ func TestChatReranker(t *testing.T) {
 		UserId:  "Tom",
 		Comment: "horror movie enthusiast",
 	}, []*FeedbackItem{
-		{Item: data.Item{ItemId: "tt0387564", Comment: "Saw"}},
-		{Item: data.Item{ItemId: "tt0432348", Comment: "Saw II"}},
-		{Item: data.Item{ItemId: "tt0435761", Comment: "Saw III"}},
+		{ItemId: "tt0387564", Comment: "Saw"},
+		{ItemId: "tt0432348", Comment: "Saw II"},
+		{ItemId: "tt0435761", Comment: "Saw III"},
 	}, []*data.Item{
 		{ItemId: "tt1233227", Comment: "Harry Potter and the Half-Blood Prince"},
 		{ItemId: "tt0926084", Comment: "Harry Potter and the Deathly Hallows: Part 1"},

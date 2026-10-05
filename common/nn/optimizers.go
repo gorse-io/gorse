@@ -61,9 +61,9 @@ func NewSGD(params []*Tensor, lr float32) Optimizer {
 		bufSize = max(bufSize, len(p.data))
 	}
 	return &SGD{
-		baseOptimizer: baseOptimizer{params: params},
-		lr:            lr,
-		b:             make([]float32, bufSize),
+		params: params,
+		lr:     lr,
+		b:      make([]float32, bufSize),
 	}
 }
 
@@ -103,15 +103,15 @@ func NewAdam(params []*Tensor, alpha float32) Optimizer {
 		bufSize = max(bufSize, len(p.data))
 	}
 	return &Adam{
-		baseOptimizer: baseOptimizer{params: params},
-		alpha:         alpha,
-		beta1:         0.9,
-		beta2:         0.999,
-		eps:           1e-8,
-		ms:            make(map[*Tensor]*Tensor),
-		vs:            make(map[*Tensor]*Tensor),
-		b1:            make([]float32, bufSize),
-		b2:            make([]float32, bufSize),
+		params: params,
+		alpha:  alpha,
+		beta1:  0.9,
+		beta2:  0.999,
+		eps:    1e-8,
+		ms:     make(map[*Tensor]*Tensor),
+		vs:     make(map[*Tensor]*Tensor),
+		b1:     make([]float32, bufSize),
+		b2:     make([]float32, bufSize),
 	}
 }
 

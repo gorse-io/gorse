@@ -486,12 +486,10 @@ func (db *Milvus) QueryVectors(ctx context.Context, collection string, q Vector,
 				score = -score
 			}
 			vectors = append(vectors, ScoredVector{
-				Vector: Vector{
-					Id:         id,
-					IsHidden:   hidden,
-					Categories: cats,
-				},
-				Score: score,
+				Id:         id,
+				IsHidden:   hidden,
+				Categories: cats,
+				Score:      score,
 			})
 		}
 	}

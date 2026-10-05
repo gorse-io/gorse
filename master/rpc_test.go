@@ -31,7 +31,6 @@ import (
 	"github.com/gorse-io/gorse/model/cf"
 	"github.com/gorse-io/gorse/model/ctr"
 	"github.com/gorse-io/gorse/protocol"
-	"github.com/gorse-io/gorse/server"
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
 	"github.com/gorse-io/gorse/storage/meta"
@@ -73,17 +72,13 @@ func newMockMasterRPC(t *testing.T) *mockMasterRPC {
 	bpr := cf.NewBPR(model.Params{model.NEpochs: 0})
 	bpr.Fit(t.Context(), trainSet, testSet, cf.NewFitConfig())
 	return &mockMasterRPC{
-		Master: Master{
-			RestServer: server.RestServer{
-				Config:      config.GetDefaultConfig(),
-				CacheClient: cache.NoDatabase{},
-				DataClient:  data.NoDatabase{},
-			},
-			metaStore:                  metaStore,
-			collaborativeFilteringMeta: meta.Model[cf.Score]{ID: 123},
-			clickThroughRateMeta:       meta.Model[ctr.Score]{ID: 456},
-		},
-		addr: make(chan string),
+		Config:                     config.GetDefaultConfig(),
+		CacheClient:                cache.NoDatabase{},
+		DataClient:                 data.NoDatabase{},
+		metaStore:                  metaStore,
+		collaborativeFilteringMeta: meta.Model[cf.Score]{ID: 123},
+		clickThroughRateMeta:       meta.Model[ctr.Score]{ID: 456},
+		addr:                       make(chan string),
 	}
 }
 

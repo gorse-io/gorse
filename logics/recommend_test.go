@@ -89,7 +89,7 @@ func (suite *RecommenderTestSuite) TestItemToItem() {
 	})
 	suite.NoError(err)
 	err = suite.dataClient.BatchInsertFeedback(ctx, []data.Feedback{{
-		FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "embedding_user", ItemId: "source"},
+		FeedbackType: "click", UserId: "embedding_user", ItemId: "source",
 	}}, true, true, false)
 	suite.NoError(err)
 
@@ -115,7 +115,7 @@ func (suite *RecommenderTestSuite) TestItemToItem() {
 		{Id: "unrelated", Indices: []uint32{1}, Values: []float32{1}},
 	}))
 	suite.NoError(suite.dataClient.BatchInsertFeedback(ctx, []data.Feedback{{
-		FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "tags-vector-user", ItemId: "source"},
+		FeedbackType: "click", UserId: "tags-vector-user", ItemId: "source",
 	}}, true, true, false))
 
 	cfg = config.RecommendConfig{
@@ -152,11 +152,9 @@ func (suite *RecommenderTestSuite) TestLatest() {
 	feedback := make([]data.Feedback, 10)
 	for i := range 10 {
 		feedback[i] = data.Feedback{
-			FeedbackKey: data.FeedbackKey{
-				FeedbackType: "click",
-				UserId:       "user_1",
-				ItemId:       fmt.Sprintf("item_%d", i),
-			},
+			FeedbackType: "click",
+			UserId:       "user_1",
+			ItemId:       fmt.Sprintf("item_%d", i),
 		}
 	}
 	err = suite.dataClient.BatchInsertFeedback(suite.T().Context(), feedback, true, true, false)
@@ -206,11 +204,9 @@ func (suite *RecommenderTestSuite) TestCollaborative() {
 	feedback := make([]data.Feedback, 10)
 	for i := range 10 {
 		feedback[i] = data.Feedback{
-			FeedbackKey: data.FeedbackKey{
-				FeedbackType: "click",
-				UserId:       "user_1",
-				ItemId:       fmt.Sprintf("item_%d", i),
-			},
+			FeedbackType: "click",
+			UserId:       "user_1",
+			ItemId:       fmt.Sprintf("item_%d", i),
 		}
 	}
 	err = suite.dataClient.BatchInsertFeedback(suite.T().Context(), feedback, true, true, false)
@@ -262,11 +258,9 @@ func (suite *RecommenderTestSuite) TestNonPersonalized() {
 	feedback := make([]data.Feedback, 10)
 	for i := range 10 {
 		feedback[i] = data.Feedback{
-			FeedbackKey: data.FeedbackKey{
-				FeedbackType: "click",
-				UserId:       "user_1",
-				ItemId:       fmt.Sprintf("item_%d", i),
-			},
+			FeedbackType: "click",
+			UserId:       "user_1",
+			ItemId:       fmt.Sprintf("item_%d", i),
 		}
 	}
 	err = suite.dataClient.BatchInsertFeedback(suite.T().Context(), feedback, true, true, false)
@@ -313,11 +307,9 @@ func (suite *RecommenderTestSuite) TestExternal() {
 	feedback := make([]data.Feedback, 10)
 	for i := range 10 {
 		feedback[i] = data.Feedback{
-			FeedbackKey: data.FeedbackKey{
-				FeedbackType: "click",
-				UserId:       "user_1",
-				ItemId:       fmt.Sprintf("item_%d", i),
-			},
+			FeedbackType: "click",
+			UserId:       "user_1",
+			ItemId:       fmt.Sprintf("item_%d", i),
 		}
 	}
 	err := suite.dataClient.BatchInsertFeedback(suite.T().Context(), feedback, true, true, false)
@@ -356,11 +348,9 @@ func (suite *RecommenderTestSuite) TestUserToUser() {
 	feedback := make([]data.Feedback, len(items))
 	for i, item := range items {
 		feedback[i] = data.Feedback{
-			FeedbackKey: data.FeedbackKey{
-				FeedbackType: "click",
-				UserId:       "user_2",
-				ItemId:       item.ItemId,
-			},
+			FeedbackType: "click",
+			UserId:       "user_2",
+			ItemId:       item.ItemId,
 		}
 	}
 	err = suite.dataClient.BatchInsertFeedback(suite.T().Context(), feedback, true, true, false)

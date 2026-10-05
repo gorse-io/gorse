@@ -78,20 +78,18 @@ func NewServer(
 	tlsConfig *util.TLSConfig,
 ) *Server {
 	s := &Server{
-		masterHost: masterHost,
-		masterPort: masterPort,
-		tlsConfig:  tlsConfig,
-		cacheFile:  cacheFile,
-		done:       make(chan struct{}),
-		RestServer: RestServer{
-			Config:       config.GetDefaultConfig(),
-			CacheClient:  new(cache.NoDatabase),
-			DataClient:   new(data.NoDatabase),
-			VectorClient: vectors.NoDatabase{},
-			HttpHost:     serverHost,
-			HttpPort:     serverPort,
-			WebService:   new(restful.WebService),
-		},
+		masterHost:   masterHost,
+		masterPort:   masterPort,
+		tlsConfig:    tlsConfig,
+		cacheFile:    cacheFile,
+		done:         make(chan struct{}),
+		Config:       config.GetDefaultConfig(),
+		CacheClient:  new(cache.NoDatabase),
+		DataClient:   new(data.NoDatabase),
+		VectorClient: vectors.NoDatabase{},
+		HttpHost:     serverHost,
+		HttpPort:     serverPort,
+		WebService:   new(restful.WebService),
 	}
 	return s
 }

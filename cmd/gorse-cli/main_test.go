@@ -104,8 +104,8 @@ func (s *CLITestSuite) SetupTest() {
 	s.Require().NoError(s.m.DataClient.Reconcile(config.SearchConfig{Columns: []string{"item.Comment"}}))
 	s.Require().NoError(s.m.DataClient.Optimize())
 	s.Require().NoError(s.m.DataClient.BatchInsertFeedback(ctx, []data.Feedback{{
-		FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "alice", ItemId: "item-1"},
-		Timestamp:   time.Date(2026, 1, 1, 3, 0, 0, 0, time.UTC),
+		FeedbackType: "click", UserId: "alice", ItemId: "item-1",
+		Timestamp: time.Date(2026, 1, 1, 3, 0, 0, 0, time.UTC),
 	}}, true, true, true))
 	s.Require().NoError(s.m.CacheClient.AddScores(ctx, cache.ItemCategories, "", []cache.Score{
 		{Id: "books", Score: 2},

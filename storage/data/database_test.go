@@ -1073,11 +1073,10 @@ func (suite *baseTestSuite) TestPurge() {
 	ctx := suite.T().Context()
 	// insert data
 	err := suite.Database.BatchInsertFeedback(ctx, lo.Map(lo.Range(100), func(t int, i int) Feedback {
-		return Feedback{FeedbackKey: FeedbackKey{
+		return Feedback{
 			FeedbackType: "click",
 			UserId:       strconv.Itoa(t),
-			ItemId:       strconv.Itoa(t),
-		}}
+			ItemId:       strconv.Itoa(t)}
 	}), true, true, true)
 	suite.NoError(err)
 	_, users, err := suite.Database.GetUsers(ctx, "", 100)

@@ -223,9 +223,9 @@ func (suite *MasterAPITestSuite) TestExportFeedback() {
 	ctx := suite.T().Context()
 	// insert feedback
 	feedbacks := []data.Feedback{
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "2"}},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "read", UserId: "2", ItemId: "6"}},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "share", UserId: "1", ItemId: "4"}},
+		{FeedbackType: "click", UserId: "0", ItemId: "2"},
+		{FeedbackType: "read", UserId: "2", ItemId: "6"},
+		{FeedbackType: "share", UserId: "1", ItemId: "4"},
 	}
 	err := suite.DataClient.BatchInsertFeedback(ctx, feedbacks, true, true, true)
 	suite.NoError(err)
@@ -354,9 +354,9 @@ func (suite *MasterAPITestSuite) TestImportFeedback() {
 	_, feedback, err := suite.DataClient.GetFeedback(ctx, "", 100, nil, new(time.Now()))
 	suite.NoError(err)
 	suite.Equal([]data.Feedback{
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "2"}},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "read", UserId: "2", ItemId: "6"}},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "share", UserId: "1", ItemId: "4"}},
+		{FeedbackType: "click", UserId: "0", ItemId: "2"},
+		{FeedbackType: "read", UserId: "2", ItemId: "6"},
+		{FeedbackType: "share", UserId: "1", ItemId: "4"},
 	}, feedback)
 	suite.NotEmpty(suite.scheduled)
 }
@@ -536,7 +536,7 @@ func (suite *MasterAPITestSuite) TestSearchDocumentsOfItems() {
 			assert.NoError(t, err)
 			items := make([]ScoredItem, 0)
 			for _, score := range scores {
-				items = append(items, ScoredItem{Item: data.Item{ItemId: score.Id}, Score: score.Score})
+				items = append(items, ScoredItem{ItemId: score.Id, Score: score.Score})
 				err = suite.DataClient.BatchInsertItems(ctx, []data.Item{{ItemId: score.Id}})
 				suite.NoError(err)
 			}
@@ -574,8 +574,8 @@ func (suite *MasterAPITestSuite) TestItemToItem() {
 		{Id: "2", Indices: []uint32{0}, Values: []float32{3}},
 	}))
 	items := []ScoredItem{
-		{Item: data.Item{ItemId: "1", Categories: []string{"movie", "drama"}}, Score: 4},
-		{Item: data.Item{ItemId: "2", Categories: []string{"movie"}}, Score: 3},
+		{ItemId: "1", Categories: []string{"movie", "drama"}, Score: 4},
+		{ItemId: "2", Categories: []string{"movie"}, Score: 3},
 	}
 	for _, item := range items {
 		suite.NoError(suite.DataClient.BatchInsertItems(ctx, []data.Item{item.Item}))
@@ -612,10 +612,10 @@ func (suite *MasterAPITestSuite) TestUserToUser() {
 		{Id: "4", Indices: []uint32{0}, Values: []float32{1}},
 	}))
 	users := []ScoreUser{
-		{User: data.User{UserId: "1"}, Score: 4},
-		{User: data.User{UserId: "2"}, Score: 3},
-		{User: data.User{UserId: "3"}, Score: 2},
-		{User: data.User{UserId: "4"}, Score: 1},
+		{UserId: "1", Score: 4},
+		{UserId: "2", Score: 3},
+		{UserId: "3", Score: 2},
+		{UserId: "4", Score: 1},
 	}
 	for _, user := range users {
 		suite.NoError(suite.DataClient.BatchInsertUsers(ctx, []data.User{user.User}))
@@ -642,7 +642,7 @@ func (suite *MasterAPITestSuite) TestFeedback() {
 	}
 	for _, v := range feedback {
 		err := suite.DataClient.BatchInsertFeedback(ctx, []data.Feedback{{
-			FeedbackKey: data.FeedbackKey{FeedbackType: v.FeedbackType, UserId: v.UserId, ItemId: v.Item.ItemId},
+			FeedbackType: v.FeedbackType, UserId: v.UserId, ItemId: v.Item.ItemId,
 		}}, true, true, true)
 		suite.NoError(err)
 	}
@@ -674,8 +674,8 @@ func (suite *MasterAPITestSuite) TestGetRecommends() {
 	suite.NoError(err)
 	// insert feedback
 	feedback := []data.Feedback{
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "2"}},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "4"}},
+		{FeedbackType: "a", UserId: "0", ItemId: "2"},
+		{FeedbackType: "a", UserId: "0", ItemId: "4"},
 	}
 	err = suite.DataClient.BatchInsertFeedback(ctx, feedback, true, true, true)
 	suite.NoError(err)
@@ -788,11 +788,10 @@ func (suite *MasterAPITestSuite) TestPurge() {
 		{Id: "c", Score: 3, Categories: []string{""}}}, z)
 
 	err = suite.DataClient.BatchInsertFeedback(ctx, lo.Map(lo.Range(100), func(t int, i int) data.Feedback {
-		return data.Feedback{FeedbackKey: data.FeedbackKey{
+		return data.Feedback{
 			FeedbackType: "click",
 			UserId:       strconv.Itoa(t),
-			ItemId:       strconv.Itoa(t),
-		}}
+			ItemId:       strconv.Itoa(t)}
 	}), true, true, true)
 	suite.NoError(err)
 	_, users, err := suite.DataClient.GetUsers(ctx, "", 100)
@@ -966,12 +965,10 @@ func (suite *MasterAPITestSuite) TestGetRankerPrompt() {
 			Timestamp: time.Date(2020, 1, 1, 0, 0, i, 0, time.UTC),
 		}
 		feedbacks[i] = data.Feedback{
-			FeedbackKey: data.FeedbackKey{
-				FeedbackType: "click",
-				UserId:       user.UserId,
-				ItemId:       itemId,
-			},
-			Timestamp: time.Date(2021, 1, 1, 0, 0, i, 0, time.UTC),
+			FeedbackType: "click",
+			UserId:       user.UserId,
+			ItemId:       itemId,
+			Timestamp:    time.Date(2021, 1, 1, 0, 0, i, 0, time.UTC),
 		}
 	}
 	err = suite.DataClient.BatchInsertItems(ctx, feedbackItems)
@@ -1049,11 +1046,9 @@ func (suite *MasterAPITestSuite) TestDumpAndRestore() {
 	feedback := make([]data.Feedback, batchSize+1)
 	for i := range feedback {
 		feedback[i] = data.Feedback{
-			FeedbackKey: data.FeedbackKey{
-				FeedbackType: "click",
-				UserId:       fmt.Sprintf("%05d", i),
-				ItemId:       fmt.Sprintf("%05d", i),
-			},
+			FeedbackType: "click",
+			UserId:       fmt.Sprintf("%05d", i),
+			ItemId:       fmt.Sprintf("%05d", i),
 		}
 	}
 	err = suite.DataClient.BatchInsertFeedback(ctx, feedback, true, true, true)
@@ -1129,12 +1124,10 @@ func (suite *MasterAPITestSuite) TestExportAndImport() {
 	feedback := make([]data.Feedback, batchSize+1)
 	for i := range feedback {
 		feedback[i] = data.Feedback{
-			FeedbackKey: data.FeedbackKey{
-				FeedbackType: "click",
-				UserId:       fmt.Sprintf("%05d", i),
-				ItemId:       fmt.Sprintf("%05d", i),
-			},
-			Value: 1.0,
+			FeedbackType: "click",
+			UserId:       fmt.Sprintf("%05d", i),
+			ItemId:       fmt.Sprintf("%05d", i),
+			Value:        1.0,
 		}
 	}
 	err = suite.DataClient.BatchInsertFeedback(ctx, feedback, true, true, true)

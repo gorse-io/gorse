@@ -44,6 +44,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/samber/lo"
+	"github.com/sashabaranov/go-openai"
 	"github.com/swaggest/swgui/v5emb"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/emicklei/go-restful/otelrestful"
 	"go.uber.org/zap"
@@ -316,12 +317,13 @@ func (s *RestServer) CreateWebService() {
 		Writes(Success{}))
 	// Get items
 	ws.Route(ws.GET("/items").To(s.getItems).
-		Doc("List items.").
+		Doc("List or search items.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{ItemsAPITag}).
 		Param(ws.HeaderParameter("X-API-Key", "API key").DataType("string")).
 		Param(ws.QueryParameter("n", "Number of returned items").DataType("integer")).
 		Param(ws.QueryParameter("cursor", "Cursor for the next page").DataType("string")).
-		Param(ws.QueryParameter("q", "Search query. Requires [recommend.search].columns to be configured.").DataType("string")).
+		Param(ws.QueryParameter("q", "Search query. Without index, requires [recommend.search].columns to be configured.").DataType("string")).
+		Param(ws.QueryParameter("index", "Optional embedding item-to-item recommender name for vector search using the configured OpenAI embedding model. Only used with a non-empty q.").DataType("string")).
 		Returns(http.StatusOK, "OK", ItemIterator{}).
 		Writes(ItemIterator{}))
 	// Get item
@@ -1706,19 +1708,11 @@ func (s *RestServer) getItems(request *restful.Request, response *restful.Respon
 	}
 	query := request.QueryParameter("q")
 	if query != "" {
-		if len(s.Config.Recommend.Search.Columns) == 0 {
-			BadRequest(response, errors.New("item search is not supported because [recommend.search].columns is empty"))
-			return
+		if index := request.QueryParameter("index"); index != "" {
+			s.searchEmbedding(ctx, response, query, index, n)
+		} else {
+			s.searchFullText(ctx, response, query, n)
 		}
-		scoredItems, err := s.DataClient.SearchItems(ctx, query, n)
-		if err != nil {
-			InternalServerError(response, err)
-			return
-		}
-		items := lo.Map(scoredItems, func(item data.ScoredItem, _ int) data.Item {
-			return item.Item
-		})
-		Ok(response, ItemIterator{Items: items})
 		return
 	}
 	cursor := request.QueryParameter("cursor")
@@ -1728,6 +1722,76 @@ func (s *RestServer) getItems(request *restful.Request, response *restful.Respon
 		return
 	}
 	Ok(response, ItemIterator{Cursor: cursor, Items: items})
+}
+
+func (s *RestServer) searchEmbedding(ctx context.Context, response *restful.Response, query, index string, n int) {
+	indexConfig := s.Config.Recommend.GetItemToItemConfig(index)
+	if indexConfig == nil {
+		BadRequest(response, errors.Errorf("item search index %s not found", index))
+		return
+	}
+	if indexConfig.Type != "embedding" {
+		BadRequest(response, errors.Errorf("item search index %s must be an embedding item-to-item recommender", index))
+		return
+	}
+	if n <= 0 {
+		Ok(response, ItemIterator{Items: []data.Item{}})
+		return
+	}
+	clientConfig := openai.DefaultConfig(s.Config.OpenAI.AuthToken)
+	clientConfig.BaseURL = s.Config.OpenAI.BaseURL
+	client := openai.NewClientWithConfig(clientConfig)
+	embedding, err := client.CreateEmbeddings(ctx, openai.EmbeddingRequest{
+		Input:      query,
+		Model:      openai.EmbeddingModel(s.Config.OpenAI.EmbeddingModel),
+		Dimensions: s.Config.OpenAI.EmbeddingDimensions,
+	})
+	if err != nil {
+		InternalServerError(response, err)
+		return
+	}
+	if len(embedding.Data) == 0 || len(embedding.Data[0].Embedding) == 0 {
+		InternalServerError(response, errors.New("embedding response contains no embedding"))
+		return
+	}
+	results, err := s.VectorClient.QueryVectors(ctx, vectors.ItemToItemCollection(index), vectors.Vector{
+		Values: embedding.Data[0].Embedding,
+	}, nil, n)
+	if err != nil {
+		InternalServerError(response, err)
+		return
+	}
+	items, err := s.DataClient.BatchGetItems(ctx, lo.Map(results, func(result vectors.ScoredVector, _ int) string {
+		return result.Id
+	}), data.GetOptions{})
+	if err != nil {
+		InternalServerError(response, err)
+		return
+	}
+	byID := lo.KeyBy(items, func(item data.Item) string { return item.ItemId })
+	ordered := make([]data.Item, 0, len(results))
+	for _, result := range results {
+		if item, exists := byID[result.Id]; exists && !item.IsHidden {
+			ordered = append(ordered, item)
+		}
+	}
+	Ok(response, ItemIterator{Items: ordered})
+}
+
+func (s *RestServer) searchFullText(ctx context.Context, response *restful.Response, query string, n int) {
+	if len(s.Config.Recommend.Search.Columns) == 0 {
+		BadRequest(response, errors.New("item search is not supported because [recommend.search].columns is empty"))
+		return
+	}
+	scoredItems, err := s.DataClient.SearchItems(ctx, query, n)
+	if err != nil {
+		InternalServerError(response, err)
+		return
+	}
+	items := lo.Map(scoredItems, func(item data.ScoredItem, _ int) data.Item {
+		return item.Item
+	})
+	Ok(response, ItemIterator{Items: items})
 }
 
 func (s *RestServer) getItem(request *restful.Request, response *restful.Response) {

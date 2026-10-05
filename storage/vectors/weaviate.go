@@ -443,12 +443,10 @@ func (db *Weaviate) QueryVectors(ctx context.Context, collection string, q Vecto
 		additional := m["_additional"].(map[string]any)
 		distance := additional["distance"].(float64)
 		results = append(results, ScoredVector{
-			Vector: Vector{
-				Id:         id,
-				IsHidden:   m[weaviatePayloadHiddenKey].(bool),
-				Categories: cats,
-			},
-			Score: -float32(distance),
+			Id:         id,
+			IsHidden:   m[weaviatePayloadHiddenKey].(bool),
+			Categories: cats,
+			Score:      -float32(distance),
 		})
 	}
 	return results, nil
