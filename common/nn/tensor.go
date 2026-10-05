@@ -49,11 +49,13 @@ type DType uint8
 const (
 	// Float32 stores IEEE 754 single-precision values and supports computation.
 	Float32 DType = iota
-	// Float16 stores IEEE 754 half-precision values; convert to Float32 for computation.
+	// Float16 stores IEEE 754 half-precision values and computes through FP32 kernels.
 	Float16
 )
 
-// Tensor stores dense values and, for Float32 tensors, an optional computation graph.
+// Tensor stores dense values and an optional computation graph.
+// Arithmetic uses FP32 kernels and rounds outputs to the first kernel input's
+// dtype. Gradients remain FP32 even when tensor values are stored in FP16.
 type Tensor struct {
 	data   []float32
 	data16 []uint16
@@ -97,8 +99,8 @@ func (t *Tensor) ToFloat32() *Tensor {
 }
 
 // NewTensor creates a tensor sharing data and shape with its inputs.
-// Float32 values support computation; uint16 values are storage-only IEEE 754
-// half-precision bit patterns, not integer-valued tensor elements.
+// Both formats support computation; uint16 values are IEEE 754 half-precision
+// bit patterns, not integer-valued tensor elements.
 func NewTensor[T float32 | uint16](data []T, shape ...int) *Tensor {
 	size := 1
 	for i := range shape {
@@ -882,6 +884,12 @@ func NormalInit(rng *rand.Rand, t *Tensor, mean, std float32) {
 	random := rand.NormFloat64
 	if rng != nil {
 		random = rng.NormFloat64
+	}
+	if t.dtype == Float16 {
+		for i := range t.data16 {
+			t.data16[i] = uint16(float16.Fromfloat32(float32(random())*std + mean))
+		}
+		return
 	}
 	for i := range t.data {
 		t.data[i] = float32(random())*(std) + (mean)
