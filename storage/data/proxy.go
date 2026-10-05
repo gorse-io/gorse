@@ -94,16 +94,14 @@ func feedbackFromPB(pbFeedback []*protocol.Feedback) ([]Feedback, error) {
 			}
 		}
 		feedback[i] = Feedback{
-			FeedbackKey: FeedbackKey{
-				FeedbackType: f.FeedbackType,
-				UserId:       f.UserId,
-				ItemId:       f.ItemId,
-			},
-			Value:     f.Value,
-			Timestamp: f.Timestamp.AsTime(),
-			Updated:   f.Updated.AsTime(),
-			Labels:    labels,
-			Comment:   f.Comment,
+			FeedbackType: f.FeedbackType,
+			UserId:       f.UserId,
+			ItemId:       f.ItemId,
+			Value:        f.Value,
+			Timestamp:    f.Timestamp.AsTime(),
+			Updated:      f.Updated.AsTime(),
+			Labels:       labels,
+			Comment:      f.Comment,
 		}
 	}
 	return feedback, nil
@@ -722,16 +720,14 @@ func (p ProxyClient) SearchItems(ctx context.Context, query string, n int) ([]Sc
 			return nil, err
 		}
 		items[i] = ScoredItem{
-			Item: Item{
-				ItemId:     item.Item.ItemId,
-				IsHidden:   item.Item.IsHidden,
-				Categories: item.Item.Categories,
-				Timestamp:  item.Item.Timestamp.AsTime(),
-				Labels:     labels,
-				Comment:    item.Item.Comment,
-				UpdateAt:   timeFromPB(item.Item.UpdateAt),
-			},
-			Score: item.Score,
+			ItemId:     item.Item.ItemId,
+			IsHidden:   item.Item.IsHidden,
+			Categories: item.Item.Categories,
+			Timestamp:  item.Item.Timestamp.AsTime(),
+			Labels:     labels,
+			Comment:    item.Item.Comment,
+			UpdateAt:   timeFromPB(item.Item.UpdateAt),
+			Score:      item.Score,
 		}
 	}
 	return items, nil

@@ -173,16 +173,16 @@ func (suite *WorkerTestSuite) TestRecommendCollaborative() {
 	// insert feedbacks
 	now := time.Now()
 	err := suite.DataClient.BatchInsertFeedback(ctx, []data.Feedback{
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "9"}, Timestamp: now.Add(-time.Hour)},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "8"}, Timestamp: now.Add(-time.Hour)},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "7"}, Timestamp: now.Add(-time.Hour)},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "6"}, Timestamp: now.Add(-time.Hour)},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "5"}, Timestamp: now.Add(-time.Hour)},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "4"}, Timestamp: now.Add(-time.Hour)},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "3"}, Timestamp: now.Add(time.Hour)},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "2"}, Timestamp: now.Add(time.Hour)},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "1"}, Timestamp: now.Add(time.Hour)},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "0"}, Timestamp: now.Add(time.Hour)},
+		{FeedbackType: "click", UserId: "0", ItemId: "9", Timestamp: now.Add(-time.Hour)},
+		{FeedbackType: "click", UserId: "0", ItemId: "8", Timestamp: now.Add(-time.Hour)},
+		{FeedbackType: "click", UserId: "0", ItemId: "7", Timestamp: now.Add(-time.Hour)},
+		{FeedbackType: "click", UserId: "0", ItemId: "6", Timestamp: now.Add(-time.Hour)},
+		{FeedbackType: "click", UserId: "0", ItemId: "5", Timestamp: now.Add(-time.Hour)},
+		{FeedbackType: "click", UserId: "0", ItemId: "4", Timestamp: now.Add(-time.Hour)},
+		{FeedbackType: "click", UserId: "0", ItemId: "3", Timestamp: now.Add(time.Hour)},
+		{FeedbackType: "click", UserId: "0", ItemId: "2", Timestamp: now.Add(time.Hour)},
+		{FeedbackType: "click", UserId: "0", ItemId: "1", Timestamp: now.Add(time.Hour)},
+		{FeedbackType: "click", UserId: "0", ItemId: "0", Timestamp: now.Add(time.Hour)},
 	}, true, true, true)
 	suite.NoError(err)
 
@@ -237,7 +237,7 @@ func (suite *WorkerTestSuite) TestRecommendColdStart() {
 	})
 	suite.Require().NoError(err)
 	err = suite.DataClient.BatchInsertFeedback(ctx, []data.Feedback{{
-		FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "0"},
+		FeedbackType: "click", UserId: "0", ItemId: "0",
 	}}, true, true, true)
 	suite.Require().NoError(err)
 
@@ -255,10 +255,10 @@ func (suite *WorkerTestSuite) TestRecommendItemToItem() {
 	suite.Config.Recommend.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{expression.MustParseFeedbackTypeExpression("a")}
 	// insert feedback
 	err := suite.DataClient.BatchInsertFeedback(ctx, []data.Feedback{
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "21"}},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "22"}},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "23"}},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "24"}},
+		{FeedbackType: "a", UserId: "0", ItemId: "21"},
+		{FeedbackType: "a", UserId: "0", ItemId: "22"},
+		{FeedbackType: "a", UserId: "0", ItemId: "23"},
+		{FeedbackType: "a", UserId: "0", ItemId: "24"},
 	}, true, true, true)
 	suite.NoError(err)
 
@@ -328,20 +328,20 @@ func (suite *WorkerTestSuite) TestRecommendUserToUser() {
 	suite.NoError(err)
 	// insert feedback
 	err = suite.DataClient.BatchInsertFeedback(ctx, []data.Feedback{
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "1", ItemId: "10"}},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "1", ItemId: "11"}},
+		{FeedbackType: "a", UserId: "1", ItemId: "10"},
+		{FeedbackType: "a", UserId: "1", ItemId: "11"},
 	}, true, true, true)
 	suite.NoError(err)
 	err = suite.DataClient.BatchInsertFeedback(ctx, []data.Feedback{
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "2", ItemId: "10"}},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "2", ItemId: "12"}},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "2", ItemId: "48"}},
+		{FeedbackType: "a", UserId: "2", ItemId: "10"},
+		{FeedbackType: "a", UserId: "2", ItemId: "12"},
+		{FeedbackType: "a", UserId: "2", ItemId: "48"},
 	}, true, true, true)
 	suite.NoError(err)
 	err = suite.DataClient.BatchInsertFeedback(ctx, []data.Feedback{
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "3", ItemId: "10"}},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "3", ItemId: "13"}},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "3", ItemId: "48"}},
+		{FeedbackType: "a", UserId: "3", ItemId: "10"},
+		{FeedbackType: "a", UserId: "3", ItemId: "13"},
+		{FeedbackType: "a", UserId: "3", ItemId: "48"},
 	}, true, true, true)
 	suite.NoError(err)
 	// insert hidden items
@@ -494,8 +494,8 @@ func (suite *WorkerTestSuite) TestRecommend() {
 
 	// insert feedback
 	err = suite.DataClient.BatchInsertFeedback(ctx, []data.Feedback{
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "0"}},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "1", ItemId: "1"}},
+		{FeedbackType: "a", UserId: "0", ItemId: "0"},
+		{FeedbackType: "a", UserId: "1", ItemId: "1"},
 	}, true, true, true)
 	suite.NoError(err)
 
@@ -570,8 +570,8 @@ func (suite *WorkerTestSuite) TestRecommendRankerNone() {
 
 	// insert feedback
 	err = suite.DataClient.BatchInsertFeedback(ctx, []data.Feedback{
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "0"}},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "1", ItemId: "1"}},
+		{FeedbackType: "a", UserId: "0", ItemId: "0"},
+		{FeedbackType: "a", UserId: "1", ItemId: "1"},
 	}, true, true, true)
 	suite.NoError(err)
 
@@ -711,11 +711,9 @@ func TestWorker_Sync(t *testing.T) {
 	conn, err := grpc.Dial(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	assert.NoError(t, err)
 	serv := &Worker{
-		Pipeline: Pipeline{
-			Config:      config.GetDefaultConfig(),
-			CacheClient: new(cache.NoDatabase),
-			DataClient:  new(data.NoDatabase),
-		},
+		Config:       config.GetDefaultConfig(),
+		CacheClient:  new(cache.NoDatabase),
+		DataClient:   new(data.NoDatabase),
 		testMode:     true,
 		masterClient: protocol.NewMasterClient(conn),
 		syncedChan:   make(chan struct{}, 1),
@@ -829,8 +827,8 @@ func (suite *WorkerTestSuite) TestRankByLLM() {
 	itemCache := NewItemCache(suite.DataClient)
 	recommendTime := time.Now()
 	result, err := suite.rankByLLM(ctx, nil, ranker, &data.User{UserId: "u1"}, []data.Feedback{
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "like", UserId: "u1", ItemId: "4"}},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "like", UserId: "u1", ItemId: "5"}},
+		{FeedbackType: "like", UserId: "u1", ItemId: "4"},
+		{FeedbackType: "like", UserId: "u1", ItemId: "5"},
 	}, []cache.Score{{Id: "1"}, {Id: "2"}, {Id: "3"}}, itemCache, recommendTime)
 	suite.NoError(err)
 	suite.Equal([]string{"1", "2", "3"}, lo.Map(result, func(d cache.Score, _ int) string {
@@ -865,9 +863,9 @@ func (suite *WorkerTestSuite) TestReplacement() {
 	suite.NoError(err)
 	// insert feedback
 	err = suite.DataClient.BatchInsertFeedback(ctx, []data.Feedback{
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "p", UserId: "0", ItemId: "10"}},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "n", UserId: "0", ItemId: "9"}},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "i", UserId: "0", ItemId: "8"}},
+		{FeedbackType: "p", UserId: "0", ItemId: "10"},
+		{FeedbackType: "n", UserId: "0", ItemId: "9"},
+		{FeedbackType: "i", UserId: "0", ItemId: "8"},
 	}, true, false, true)
 	suite.NoError(err)
 	suite.Recommend(ctx, []data.User{{UserId: "0"}}, nil)

@@ -156,20 +156,16 @@ func TestMostStarredWeekly(t *testing.T) {
 		var feedback []data.Feedback
 		for j := 0; j < i; j++ {
 			feedback = append(feedback, data.Feedback{
-				FeedbackKey: data.FeedbackKey{
-					FeedbackType: "star",
-					UserId:       strconv.Itoa(j),
-					ItemId:       strconv.Itoa(i),
-				},
-				Timestamp: timestamp,
+				FeedbackType: "star",
+				UserId:       strconv.Itoa(j),
+				ItemId:       strconv.Itoa(i),
+				Timestamp:    timestamp,
 			})
 			feedback = append(feedback, data.Feedback{
-				FeedbackKey: data.FeedbackKey{
-					FeedbackType: "like",
-					UserId:       strconv.Itoa(j),
-					ItemId:       strconv.Itoa(i),
-				},
-				Timestamp: timestamp,
+				FeedbackType: "like",
+				UserId:       strconv.Itoa(j),
+				ItemId:       strconv.Itoa(i),
+				Timestamp:    timestamp,
 			})
 		}
 		mostStarredWeekly.Push(item, feedback)
@@ -181,12 +177,10 @@ func TestMostStarredWeekly(t *testing.T) {
 		var feedback []data.Feedback
 		for j := 0; j < i; j++ {
 			feedback = append(feedback, data.Feedback{
-				FeedbackKey: data.FeedbackKey{
-					FeedbackType: "star",
-					UserId:       strconv.Itoa(j),
-					ItemId:       strconv.Itoa(i),
-				},
-				Timestamp: timestamp.Add(-time.Hour * 169),
+				FeedbackType: "star",
+				UserId:       strconv.Itoa(j),
+				ItemId:       strconv.Itoa(i),
+				Timestamp:    timestamp.Add(-time.Hour * 169),
 			})
 		}
 		mostStarredWeekly.Push(item, feedback)

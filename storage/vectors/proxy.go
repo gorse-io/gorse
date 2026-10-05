@@ -347,15 +347,13 @@ func (p ProxyClient) QueryVectors(ctx context.Context, collection string, q Vect
 	for i, scored := range resp.Vectors {
 		vector := scored.GetVector()
 		results[i] = ScoredVector{
-			Vector: Vector{
-				Id:         vector.GetId(),
-				Values:     vector.GetValues(),
-				HValues:    Float16Values(vector.GetHValues()),
-				Indices:    vector.GetIndices(),
-				IsHidden:   vector.GetIsHidden(),
-				Categories: vector.GetCategories(),
-			},
-			Score: scored.GetScore(),
+			Id:         vector.GetId(),
+			Values:     vector.GetValues(),
+			HValues:    Float16Values(vector.GetHValues()),
+			Indices:    vector.GetIndices(),
+			IsHidden:   vector.GetIsHidden(),
+			Categories: vector.GetCategories(),
+			Score:      scored.GetScore(),
 		}
 	}
 	return results, nil

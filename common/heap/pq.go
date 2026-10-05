@@ -72,7 +72,7 @@ type PriorityQueue struct {
 // NewPriorityQueue initializes an empty priority queue.
 func NewPriorityQueue(desc bool) *PriorityQueue {
 	return &PriorityQueue{
-		_heap:  _heap[int32, float32]{desc: desc},
+		desc:   desc,
 		lookup: mapset.NewSet[int32](),
 	}
 }

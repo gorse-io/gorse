@@ -407,8 +407,8 @@ func (suite *ServerTestSuite) TestItems() {
 		})).
 		End()
 	err := suite.DataClient.BatchInsertFeedback(suite.T().Context(), []data.Feedback{{
-		FeedbackKey: data.FeedbackKey{FeedbackType: "read", UserId: "0", ItemId: "6"},
-		Timestamp:   time.Now().Truncate(time.Hour),
+		FeedbackType: "read", UserId: "0", ItemId: "6",
+		Timestamp: time.Now().Truncate(time.Hour),
 	}}, true, true, true)
 	suite.NoError(err)
 	apitest.New().
@@ -783,7 +783,7 @@ func (suite *ServerTestSuite) TestQuota() {
 		Handler(suite.handler).
 		Post("/api/feedback").
 		Header("X-API-Key", apiKey).
-		JSON([]Feedback{{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "u", ItemId: "i"}, Labels: []string{"abcdef"}}}).
+		JSON([]Feedback{{FeedbackType: "click", UserId: "u", ItemId: "i", Labels: []string{"abcdef"}}}).
 		Expect(t).
 		Status(http.StatusTooManyRequests).
 		End()
@@ -794,7 +794,7 @@ func (suite *ServerTestSuite) TestQuota() {
 		Handler(suite.handler).
 		Post("/api/feedback").
 		Header("X-API-Key", apiKey).
-		JSON([]Feedback{{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "u", ItemId: "i"}, Comment: "toolong"}}).
+		JSON([]Feedback{{FeedbackType: "click", UserId: "u", ItemId: "i", Comment: "toolong"}}).
 		Expect(t).
 		Status(http.StatusTooManyRequests).
 		End()
@@ -855,34 +855,9 @@ func (suite *ServerTestSuite) TestSearchItems() {
 		Status(http.StatusOK).
 		Body(suite.marshal(ItemIterator{Items: []data.Item{items[1]}})).
 		End()
-	apitest.New().Handler(suite.handler).
-		Get("/api/items").Header("X-API-Key", apiKey).
-		QueryParams(map[string]string{"q": "espresso", "index": "", "n": "10"}).
-		Expect(t).Status(http.StatusOK).
-		Body(suite.marshal(ItemIterator{Items: []data.Item{items[1]}})).End()
 }
 
-func (suite *ServerTestSuite) TestSearchItemsEmptyQuery() {
-	t := suite.T()
-	items := []data.Item{{ItemId: "a"}, {ItemId: "b"}}
-	suite.Require().NoError(suite.DataClient.BatchInsertItems(t.Context(), items))
-	// An empty query keeps the paginated listing path even if index is present.
-	result := apitest.New().Handler(suite.handler).
-		Get("/api/items").Header("X-API-Key", apiKey).
-		QueryParams(map[string]string{"q": "", "index": "unused", "n": "1"}).
-		Expect(t).Status(http.StatusOK).End()
-	var page ItemIterator
-	suite.Require().NoError(json.NewDecoder(result.Response.Body).Decode(&page))
-	suite.Require().NotEmpty(page.Cursor)
-	suite.Equal(items[:1], page.Items)
-	apitest.New().Handler(suite.handler).
-		Get("/api/items").Header("X-API-Key", apiKey).
-		QueryParams(map[string]string{"q": "", "index": "unused", "cursor": page.Cursor, "n": "1"}).
-		Expect(t).Status(http.StatusOK).
-		Body(suite.marshal(ItemIterator{Items: items[1:]})).End()
-}
-
-func (suite *ServerTestSuite) TestSearchItemsEmbedding() {
+func (suite *ServerTestSuite) TestSearchEmbedding() {
 	t := suite.T()
 	const query = "semantic query 推荐系统"
 	embedding := mock.Hash(query)
@@ -929,110 +904,18 @@ func (suite *ServerTestSuite) TestSearchItemsEmbedding() {
 		{Id: items[1].ItemId, Values: near},
 		{Id: items[2].ItemId, Values: embedding, IsHidden: true},
 	}))
-	for _, n := range []string{"1", "2", ""} {
-		expected := []data.Item{items[1], items[0]}
-		if n == "1" {
-			expected = expected[:1]
-		}
-		apitest.New().Handler(suite.handler).
-			Get("/api/items").Header("X-API-Key", apiKey).
-			QueryParams(map[string]string{"q": query, "index": "semantic", "n": n}).
-			Expect(t).Status(http.StatusOK).
-			Body(suite.marshal(ItemIterator{Items: expected})).End()
-	}
-	// The vector index may lag behind item updates and deletions.
-	suite.Require().NoError(suite.DataClient.BatchInsertItems(t.Context(), []data.Item{{ItemId: "newly-hidden", IsHidden: true}}))
-	suite.Require().NoError(suite.VectorClient.AddVectors(t.Context(), collection, []vectors.Vector{
-		{Id: "newly-hidden", Values: embedding},
-		{Id: "deleted", Values: embedding},
-	}))
-	apitest.New().Handler(suite.handler).
-		Get("/api/items").Header("X-API-Key", apiKey).
-		QueryParams(map[string]string{"q": query, "index": "semantic", "n": "10"}).
-		Expect(t).Status(http.StatusOK).
+	apitest.New().
+		Handler(suite.handler).
+		Get("/api/items").
+		Header("X-API-Key", apiKey).
+		QueryParams(map[string]string{
+			"q":     query,
+			"index": "semantic",
+			"n":     "2",
+		}).
+		Expect(t).
+		Status(http.StatusOK).
 		Body(suite.marshal(ItemIterator{Items: []data.Item{items[1], items[0]}})).End()
-}
-
-func (suite *ServerTestSuite) TestSearchItemsEmbeddingIndexValidation() {
-	t := suite.T()
-	endpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		suite.Fail("invalid indexes must be rejected before requesting embeddings")
-		http.Error(w, "unexpected embedding request", http.StatusServiceUnavailable)
-	}))
-	defer endpoint.Close()
-	suite.Config.OpenAI.BaseURL = endpoint.URL + "/v1"
-	suite.Config.Recommend.ItemToItem = []config.ItemToItemConfig{
-		{Name: "tags", Type: "tags"},
-		{Name: "users", Type: "users"},
-		{Name: "chat", Type: "chat"},
-		{Name: "auto", Type: "auto"},
-	}
-	suite.Config.Recommend.UserToUser = []config.UserToUserConfig{{Name: "user-only", Type: "embedding"}}
-	for _, index := range []string{"missing", "user-only", "tags", "users", "chat", "auto"} {
-		message := fmt.Sprintf("item search index %s must be an embedding item-to-item recommender", index)
-		if index == "missing" || index == "user-only" {
-			message = fmt.Sprintf("item search index %s not found", index)
-		}
-		apitest.New().Handler(suite.handler).
-			Get("/api/items").Header("X-API-Key", apiKey).
-			QueryParams(map[string]string{"q": "query", "index": index}).
-			Expect(t).Status(http.StatusBadRequest).Body(message).End()
-	}
-}
-
-func (suite *ServerTestSuite) TestSearchItemsEmbeddingLimits() {
-	t := suite.T()
-	endpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		suite.Fail("nonpositive or invalid limits must not request embeddings")
-		http.Error(w, "unexpected embedding request", http.StatusServiceUnavailable)
-	}))
-	defer endpoint.Close()
-	suite.Config.OpenAI.BaseURL = endpoint.URL + "/v1"
-	suite.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "semantic", Type: "embedding"}}
-	for _, n := range []string{"0", "-1"} {
-		apitest.New().Handler(suite.handler).
-			Get("/api/items").Header("X-API-Key", apiKey).
-			QueryParams(map[string]string{"q": "query", "index": "semantic", "n": n}).
-			Expect(t).Status(http.StatusOK).
-			Body(suite.marshal(ItemIterator{Items: []data.Item{}})).End()
-	}
-	apitest.New().Handler(suite.handler).
-		Get("/api/items").Header("X-API-Key", apiKey).
-		QueryParams(map[string]string{"q": "query", "index": "semantic", "n": "invalid"}).
-		Expect(t).Status(http.StatusBadRequest).End()
-}
-
-func (suite *ServerTestSuite) TestSearchItemsEmbeddingErrors() {
-	t := suite.T()
-	suite.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "semantic", Type: "embedding"}}
-	for _, test := range []struct {
-		name   string
-		status int
-		body   string
-		error  string
-	}{
-		{name: "provider failure", status: http.StatusServiceUnavailable, body: `{"error":{"message":"embedding unavailable","type":"server_error"}}`},
-		{name: "invalid JSON", status: http.StatusOK, body: `not JSON`},
-		{name: "missing embedding", status: http.StatusOK, body: `{"data":[]}`, error: "embedding response contains no embedding"},
-		{name: "empty embedding", status: http.StatusOK, body: `{"data":[{"embedding":[]}]}`, error: "embedding response contains no embedding"},
-		{name: "missing collection", status: http.StatusOK, body: `{"data":[{"embedding":[1,2]}]}`},
-	} {
-		endpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(test.status)
-			_, _ = io.WriteString(w, test.body)
-		}))
-		suite.Config.OpenAI.BaseURL = endpoint.URL + "/v1"
-		response := apitest.New().Handler(suite.handler).
-			Get("/api/items").Header("X-API-Key", apiKey).
-			QueryParams(map[string]string{"q": test.name, "index": "semantic"}).
-			Expect(t).Status(http.StatusInternalServerError)
-		if test.error != "" {
-			response.Body(test.error)
-		}
-		response.End()
-		endpoint.Close()
-	}
 }
 
 func (suite *ServerTestSuite) TestFeedback() {
@@ -1040,11 +923,11 @@ func (suite *ServerTestSuite) TestFeedback() {
 	t := suite.T()
 	// Insert ret
 	feedback := []data.Feedback{
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "0"}, Value: 1.0},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "1", ItemId: "2"}, Value: 1.0, Labels: []any{"positive", "mobile"}},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "2", ItemId: "4"}, Value: 1.0, Labels: map[string]any{"source": "rest", "rank": json.Number("2")}},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "3", ItemId: "6"}, Value: 1.0},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "4", ItemId: "8"}, Value: 1.0},
+		{FeedbackType: "click", UserId: "0", ItemId: "0", Value: 1.0},
+		{FeedbackType: "click", UserId: "1", ItemId: "2", Value: 1.0, Labels: []any{"positive", "mobile"}},
+		{FeedbackType: "click", UserId: "2", ItemId: "4", Value: 1.0, Labels: map[string]any{"source": "rest", "rank": json.Number("2")}},
+		{FeedbackType: "click", UserId: "3", ItemId: "6", Value: 1.0},
+		{FeedbackType: "click", UserId: "4", ItemId: "8", Value: 1.0},
 	}
 	//BatchInsertFeedback
 	apitest.New().
@@ -1146,8 +1029,8 @@ func (suite *ServerTestSuite) TestFeedback() {
 		Put("/api/feedback").
 		Header("X-API-Key", apiKey).
 		JSON([]data.Feedback{{
-			FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "0"},
-			Comment:     "override",
+			FeedbackType: "click", UserId: "0", ItemId: "0",
+			Comment: "override",
 		}}).
 		Expect(t).
 		Status(http.StatusOK).
@@ -1163,8 +1046,8 @@ func (suite *ServerTestSuite) TestFeedback() {
 		Post("/api/feedback").
 		Header("X-API-Key", apiKey).
 		JSON([]data.Feedback{{
-			FeedbackKey: data.FeedbackKey{FeedbackType: "click", UserId: "0", ItemId: "0"},
-			Comment:     "not_override",
+			FeedbackType: "click", UserId: "0", ItemId: "0",
+			Comment: "not_override",
 		}}).
 		Expect(t).
 		Status(http.StatusOK).
@@ -1180,7 +1063,7 @@ func (suite *ServerTestSuite) TestFeedback() {
 		Handler(suite.handler).
 		Post("/api/feedback").
 		Header("X-API-Key", apiKey).
-		JSON([]Feedback{{FeedbackKey: data.FeedbackKey{UserId: "100", ItemId: "100", FeedbackType: "Type"}}}).
+		JSON([]Feedback{{UserId: "100", ItemId: "100", FeedbackType: "Type"}}).
 		Expect(t).
 		Status(http.StatusOK).
 		Body(`{"RowAffected": 1}`).
@@ -1271,12 +1154,10 @@ func (suite *ServerTestSuite) TestNonPersonalizedRecommend() {
 				End()
 			// insert read feedback
 			err = suite.DataClient.BatchInsertFeedback(ctx, []data.Feedback{{
-				FeedbackKey: data.FeedbackKey{
-					FeedbackType: "read",
-					UserId:       "0",
-					ItemId:       strconv.Itoa(i) + "1",
-				},
-				Timestamp: time.Now().Add(-time.Hour),
+				FeedbackType: "read",
+				UserId:       "0",
+				ItemId:       strconv.Itoa(i) + "1",
+				Timestamp:    time.Now().Add(-time.Hour),
 			}}, true, true, true)
 			assert.NoError(t, err)
 
@@ -1407,11 +1288,11 @@ func (suite *ServerTestSuite) TestDeleteFeedback() {
 		End()
 	// Insert feedback
 	feedback := []data.Feedback{
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "type1", UserId: "2", ItemId: "3"}},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "type2", UserId: "2", ItemId: "3"}},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "type3", UserId: "2", ItemId: "3"}},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "type1", UserId: "1", ItemId: "6"}},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "type1", UserId: "4", ItemId: "8"}},
+		{FeedbackType: "type1", UserId: "2", ItemId: "3"},
+		{FeedbackType: "type2", UserId: "2", ItemId: "3"},
+		{FeedbackType: "type3", UserId: "2", ItemId: "3"},
+		{FeedbackType: "type1", UserId: "1", ItemId: "6"},
+		{FeedbackType: "type1", UserId: "4", ItemId: "8"},
 	}
 	apitest.New().
 		Handler(suite.handler).
@@ -1500,9 +1381,9 @@ func (suite *ServerTestSuite) TestGetRecommends() {
 	suite.NoError(err)
 	// insert feedback
 	feedback := []data.Feedback{
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "2"}},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "4"}},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "1"}, Timestamp: time.Now().Add(time.Hour)},
+		{FeedbackType: "a", UserId: "0", ItemId: "2"},
+		{FeedbackType: "a", UserId: "0", ItemId: "4"},
+		{FeedbackType: "a", UserId: "0", ItemId: "1", Timestamp: time.Now().Add(time.Hour)},
 	}
 	apitest.New().
 		Handler(suite.handler).
@@ -1654,9 +1535,9 @@ func (suite *ServerTestSuite) TestGetRecommendsReplacement() {
 		End()
 	// insert feedback
 	feedback := []data.Feedback{
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "2"}},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "4"}},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "1"}, Timestamp: time.Now().Add(time.Hour)},
+		{FeedbackType: "a", UserId: "0", ItemId: "2"},
+		{FeedbackType: "a", UserId: "0", ItemId: "4"},
+		{FeedbackType: "a", UserId: "0", ItemId: "1", Timestamp: time.Now().Add(time.Hour)},
 	}
 	apitest.New().
 		Handler(suite.handler).
@@ -1695,11 +1576,11 @@ func (suite *ServerTestSuite) TestGetRecommendsFallbackItemToItem() {
 	suite.NoError(err)
 	// insert feedback
 	feedback := []data.Feedback{
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "1"}, Timestamp: time.Date(2010, 1, 1, 1, 1, 1, 1, time.UTC)},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "2"}, Timestamp: time.Date(2009, 1, 1, 1, 1, 1, 1, time.UTC)},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "3"}, Timestamp: time.Date(2008, 1, 1, 1, 1, 1, 1, time.UTC)},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "4"}, Timestamp: time.Date(2007, 1, 1, 1, 1, 1, 1, time.UTC)},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "5"}, Timestamp: time.Date(2006, 1, 1, 1, 1, 1, 1, time.UTC)},
+		{FeedbackType: "a", UserId: "0", ItemId: "1", Timestamp: time.Date(2010, 1, 1, 1, 1, 1, 1, time.UTC)},
+		{FeedbackType: "a", UserId: "0", ItemId: "2", Timestamp: time.Date(2009, 1, 1, 1, 1, 1, 1, time.UTC)},
+		{FeedbackType: "a", UserId: "0", ItemId: "3", Timestamp: time.Date(2008, 1, 1, 1, 1, 1, 1, time.UTC)},
+		{FeedbackType: "a", UserId: "0", ItemId: "4", Timestamp: time.Date(2007, 1, 1, 1, 1, 1, 1, time.UTC)},
+		{FeedbackType: "a", UserId: "0", ItemId: "5", Timestamp: time.Date(2006, 1, 1, 1, 1, 1, 1, time.UTC)},
 	}
 	apitest.New().
 		Handler(suite.handler).
@@ -1765,10 +1646,10 @@ func (suite *ServerTestSuite) TestGetRecommendsFallbackUserToUser() {
 	suite.NoError(err)
 	// insert feedback
 	feedback := []data.Feedback{
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "1"}},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "2"}},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "3"}},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "4"}},
+		{FeedbackType: "a", UserId: "0", ItemId: "1"},
+		{FeedbackType: "a", UserId: "0", ItemId: "2"},
+		{FeedbackType: "a", UserId: "0", ItemId: "3"},
+		{FeedbackType: "a", UserId: "0", ItemId: "4"},
 	}
 	apitest.New().
 		Handler(suite.handler).
@@ -1791,17 +1672,17 @@ func (suite *ServerTestSuite) TestGetRecommendsFallbackUserToUser() {
 	})
 	suite.NoError(err)
 	err = suite.DataClient.BatchInsertFeedback(ctx, []data.Feedback{
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "1", ItemId: "11"}},
+		{FeedbackType: "a", UserId: "1", ItemId: "11"},
 	}, true, true, true)
 	suite.NoError(err)
 	err = suite.DataClient.BatchInsertFeedback(ctx, []data.Feedback{
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "2", ItemId: "12"}},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "2", ItemId: "48"}},
+		{FeedbackType: "a", UserId: "2", ItemId: "12"},
+		{FeedbackType: "a", UserId: "2", ItemId: "48"},
 	}, true, true, true)
 	suite.NoError(err)
 	err = suite.DataClient.BatchInsertFeedback(ctx, []data.Feedback{
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "3", ItemId: "13"}},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "3", ItemId: "48"}},
+		{FeedbackType: "a", UserId: "3", ItemId: "13"},
+		{FeedbackType: "a", UserId: "3", ItemId: "48"},
 	}, true, true, true)
 	suite.NoError(err)
 	// insert categorized items
@@ -2041,11 +1922,11 @@ func (suite *ServerTestSuite) TestSessionRecommend() {
 
 	// test fallback
 	feedback := []data.Feedback{
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "1"}, Timestamp: time.Date(2010, 1, 1, 1, 1, 1, 1, time.UTC)},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "2"}, Timestamp: time.Date(2009, 1, 1, 1, 1, 1, 1, time.UTC)},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "3"}, Timestamp: time.Date(2008, 1, 1, 1, 1, 1, 1, time.UTC)},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "4"}, Timestamp: time.Date(2007, 1, 1, 1, 1, 1, 1, time.UTC)},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "a", UserId: "0", ItemId: "5"}, Timestamp: time.Date(2006, 1, 1, 1, 1, 1, 1, time.UTC)},
+		{FeedbackType: "a", UserId: "0", ItemId: "1", Timestamp: time.Date(2010, 1, 1, 1, 1, 1, 1, time.UTC)},
+		{FeedbackType: "a", UserId: "0", ItemId: "2", Timestamp: time.Date(2009, 1, 1, 1, 1, 1, 1, time.UTC)},
+		{FeedbackType: "a", UserId: "0", ItemId: "3", Timestamp: time.Date(2008, 1, 1, 1, 1, 1, 1, time.UTC)},
+		{FeedbackType: "a", UserId: "0", ItemId: "4", Timestamp: time.Date(2007, 1, 1, 1, 1, 1, 1, time.UTC)},
+		{FeedbackType: "a", UserId: "0", ItemId: "5", Timestamp: time.Date(2006, 1, 1, 1, 1, 1, 1, time.UTC)},
 	}
 	apitest.New().
 		Handler(suite.handler).

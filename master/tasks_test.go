@@ -166,12 +166,10 @@ func (s *MasterTestSuite) TestFindItemToItem() {
 		for j := 0; j <= i; j++ {
 			if i%2 == 1 {
 				feedbacks = append(feedbacks, data.Feedback{
-					FeedbackKey: data.FeedbackKey{
-						ItemId:       strconv.Itoa(i),
-						UserId:       strconv.Itoa(j),
-						FeedbackType: "FeedbackType",
-					},
-					Timestamp: time.Now(),
+					ItemId:       strconv.Itoa(i),
+					UserId:       strconv.Itoa(j),
+					FeedbackType: "FeedbackType",
+					Timestamp:    time.Now(),
 				})
 			}
 		}
@@ -191,7 +189,7 @@ func (s *MasterTestSuite) TestFindItemToItem() {
 	s.NoError(err)
 	for i := 0; i <= 10; i++ {
 		err = s.DataClient.BatchInsertFeedback(ctx, []data.Feedback{{
-			FeedbackKey: data.FeedbackKey{UserId: strconv.Itoa(i), ItemId: "10", FeedbackType: "FeedbackType"},
+			UserId: strconv.Itoa(i), ItemId: "10", FeedbackType: "FeedbackType",
 		}}, true, true, true)
 		s.NoError(err)
 	}
@@ -265,12 +263,10 @@ func (s *MasterTestSuite) TestUserToUser() {
 		for j := 0; j <= i; j++ {
 			if i%2 == 1 {
 				feedbacks = append(feedbacks, data.Feedback{
-					FeedbackKey: data.FeedbackKey{
-						ItemId:       strconv.Itoa(j),
-						UserId:       strconv.Itoa(i),
-						FeedbackType: "FeedbackType",
-					},
-					Timestamp: time.Now(),
+					ItemId:       strconv.Itoa(j),
+					UserId:       strconv.Itoa(i),
+					FeedbackType: "FeedbackType",
+					Timestamp:    time.Now(),
 				})
 			}
 		}
@@ -346,8 +342,8 @@ func (s *MasterTestSuite) TestEmitSnapshot() {
 	users := []data.User{{UserId: "0"}, {UserId: "1"}}
 	items := []data.Item{{ItemId: "0"}, {ItemId: "1"}}
 	feedbacks := []data.Feedback{
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "positive", UserId: "0", ItemId: "0"}},
-		{FeedbackKey: data.FeedbackKey{FeedbackType: "negative", UserId: "0", ItemId: "0"}},
+		{FeedbackType: "positive", UserId: "0", ItemId: "0"},
+		{FeedbackType: "negative", UserId: "0", ItemId: "0"},
 	}
 	s.NoError(s.DataClient.BatchInsertUsers(ctx, users))
 	s.NoError(s.DataClient.BatchInsertItems(ctx, items))
@@ -435,12 +431,10 @@ func (s *MasterTestSuite) TestLoadDataFromDatabase() {
 		// item 9: user 0 ... user 9
 		for j := 0; j <= i; j++ {
 			feedbacks = append(feedbacks, data.Feedback{
-				FeedbackKey: data.FeedbackKey{
-					ItemId:       strconv.Itoa(i),
-					UserId:       strconv.Itoa(j),
-					FeedbackType: "positive",
-				},
-				Timestamp: time.Now(),
+				ItemId:       strconv.Itoa(i),
+				UserId:       strconv.Itoa(j),
+				FeedbackType: "positive",
+				Timestamp:    time.Now(),
 			})
 		}
 		// negative feedback
@@ -449,12 +443,10 @@ func (s *MasterTestSuite) TestLoadDataFromDatabase() {
 		// item 9: user 10
 		for j := i + 1; j < 11; j++ {
 			feedbacks = append(feedbacks, data.Feedback{
-				FeedbackKey: data.FeedbackKey{
-					ItemId:       strconv.Itoa(i),
-					UserId:       strconv.Itoa(j),
-					FeedbackType: "negative",
-				},
-				Timestamp: time.Now(),
+				ItemId:       strconv.Itoa(i),
+				UserId:       strconv.Itoa(j),
+				FeedbackType: "negative",
+				Timestamp:    time.Now(),
 			})
 		}
 	}
@@ -552,19 +544,19 @@ func (s *MasterTestSuite) TestNegativeFeedbackPriority() {
 	// insert feedback
 	feedbacks := []data.Feedback{
 		// User 0: positive on item 0, 1; negative on item 2; read on item 3, 4
-		{FeedbackKey: data.FeedbackKey{UserId: "0", ItemId: "0", FeedbackType: "positive"}, Timestamp: time.Now()},
-		{FeedbackKey: data.FeedbackKey{UserId: "0", ItemId: "1", FeedbackType: "positive"}, Timestamp: time.Now()},
-		{FeedbackKey: data.FeedbackKey{UserId: "0", ItemId: "2", FeedbackType: "dislike"}, Timestamp: time.Now()},
-		{FeedbackKey: data.FeedbackKey{UserId: "0", ItemId: "3", FeedbackType: "read"}, Timestamp: time.Now()},
-		{FeedbackKey: data.FeedbackKey{UserId: "0", ItemId: "4", FeedbackType: "read"}, Timestamp: time.Now()},
+		{UserId: "0", ItemId: "0", FeedbackType: "positive", Timestamp: time.Now()},
+		{UserId: "0", ItemId: "1", FeedbackType: "positive", Timestamp: time.Now()},
+		{UserId: "0", ItemId: "2", FeedbackType: "dislike", Timestamp: time.Now()},
+		{UserId: "0", ItemId: "3", FeedbackType: "read", Timestamp: time.Now()},
+		{UserId: "0", ItemId: "4", FeedbackType: "read", Timestamp: time.Now()},
 		// User 1: positive AND negative on item 0 (should be negative due to priority)
-		{FeedbackKey: data.FeedbackKey{UserId: "1", ItemId: "0", FeedbackType: "positive"}, Timestamp: time.Now()},
-		{FeedbackKey: data.FeedbackKey{UserId: "1", ItemId: "0", FeedbackType: "dislike"}, Timestamp: time.Now()},
-		{FeedbackKey: data.FeedbackKey{UserId: "1", ItemId: "1", FeedbackType: "positive"}, Timestamp: time.Now()},
+		{UserId: "1", ItemId: "0", FeedbackType: "positive", Timestamp: time.Now()},
+		{UserId: "1", ItemId: "0", FeedbackType: "dislike", Timestamp: time.Now()},
+		{UserId: "1", ItemId: "1", FeedbackType: "positive", Timestamp: time.Now()},
 		// User 2: positive, then negative on item 2 (should be negative due to priority)
-		{FeedbackKey: data.FeedbackKey{UserId: "2", ItemId: "2", FeedbackType: "positive"}, Timestamp: time.Now().Add(-time.Hour)},
-		{FeedbackKey: data.FeedbackKey{UserId: "2", ItemId: "2", FeedbackType: "dislike"}, Timestamp: time.Now()},
-		{FeedbackKey: data.FeedbackKey{UserId: "2", ItemId: "3", FeedbackType: "positive"}, Timestamp: time.Now()},
+		{UserId: "2", ItemId: "2", FeedbackType: "positive", Timestamp: time.Now().Add(-time.Hour)},
+		{UserId: "2", ItemId: "2", FeedbackType: "dislike", Timestamp: time.Now()},
+		{UserId: "2", ItemId: "3", FeedbackType: "positive", Timestamp: time.Now()},
 	}
 	err = s.DataClient.BatchInsertFeedback(ctx, feedbacks, false, false, true)
 	s.NoError(err)
@@ -632,12 +624,10 @@ func (s *MasterTestSuite) TestNonPersonalizedRecommend() {
 		if i%2 == 0 {
 			for j := 0; j <= i; j++ {
 				feedbacks = append(feedbacks, data.Feedback{
-					FeedbackKey: data.FeedbackKey{
-						ItemId:       strconv.Itoa(i),
-						UserId:       strconv.Itoa(j),
-						FeedbackType: "positive",
-					},
-					Timestamp: time.Now(),
+					ItemId:       strconv.Itoa(i),
+					UserId:       strconv.Itoa(j),
+					FeedbackType: "positive",
+					Timestamp:    time.Now(),
 				})
 			}
 		}
@@ -755,12 +745,10 @@ func (s *MasterTestSuite) TestLoadDataFromDatabaseInParallel() {
 			Timestamp: time.Unix(int64(i), 0),
 		})
 		feedbacks = append(feedbacks, data.Feedback{
-			FeedbackKey: data.FeedbackKey{
-				FeedbackType: "positive",
-				UserId:       "hot-user",
-				ItemId:       itemID,
-			},
-			Timestamp: time.Unix(int64(i), 0),
+			FeedbackType: "positive",
+			UserId:       "hot-user",
+			ItemId:       itemID,
+			Timestamp:    time.Unix(int64(i), 0),
 		})
 	}
 

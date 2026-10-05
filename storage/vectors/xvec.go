@@ -211,7 +211,7 @@ func (db *Xvec) DescribeCollection(ctx context.Context, name string) (*Collectio
 	}
 	return &CollectionInfo{
 		Name: name, Dimension: int(field.Dimension), Distance: distance,
-		VectorConfig: VectorConfig{Type: QuantizationNone},
+		Type: QuantizationNone,
 	}, nil
 }
 
@@ -443,7 +443,7 @@ func (db *Xvec) QueryVectors(ctx context.Context, name string, q Vector, categor
 		if q.IsSparse() && document.Score == 0 {
 			continue
 		}
-		result := ScoredVector{Vector: Vector{Id: document.PrimaryKey}, Score: document.Score}
+		result := ScoredVector{Id: document.PrimaryKey, Score: document.Score}
 		if info.Distance != Dot {
 			result.Score = -result.Score
 		}
