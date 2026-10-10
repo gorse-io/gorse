@@ -20,7 +20,25 @@ import (
 	"github.com/chewxy/math32"
 	"github.com/gorse-io/gorse/common/floats"
 	"github.com/samber/lo"
+	"github.com/x448/float16"
 )
+
+// parameterData expands FP16 parameters only for the duration of a step.
+// FP32 parameters keep their original backing storage and update path.
+func parameterData(p *Tensor) []float32 {
+	if p.dtype == Float16 {
+		return p.ToFloat32().data
+	}
+	return p.data
+}
+
+func writeParameterData(p *Tensor, data []float32) {
+	if p.dtype == Float16 {
+		for i, value := range data {
+			p.data16[i] = uint16(float16.Fromfloat32(value))
+		}
+	}
+}
 
 type Optimizer interface {
 	SetWeightDecay(rate float32)
@@ -58,7 +76,7 @@ type SGD struct {
 func NewSGD(params []*Tensor, lr float32) Optimizer {
 	bufSize := 0
 	for _, p := range params {
-		bufSize = max(bufSize, len(p.data))
+		bufSize = max(bufSize, len(p.data), len(p.data16))
 	}
 	return &SGD{
 		params: params,
@@ -69,17 +87,19 @@ func NewSGD(params []*Tensor, lr float32) Optimizer {
 
 func (s *SGD) Step() {
 	for _, p := range s.params {
-		b := s.b[:len(p.data)]
-		parts := partitionAligned(len(p.data), s.jobs, 32)
+		data := parameterData(p)
+		b := s.b[:len(data)]
+		parts := partitionAligned(len(data), s.jobs, 32)
 		var wg sync.WaitGroup
 		for _, part := range parts {
 			i, j := part.A, part.B
 			wg.Go(func() {
-				floats.MulConstAddTo(p.data[i:j], s.wd, p.grad.data[i:j], b[i:j])
-				floats.MulConstAdd(b[i:j], -s.lr, p.data[i:j])
+				floats.MulConstAddTo(data[i:j], s.wd, p.grad.data[i:j], b[i:j])
+				floats.MulConstAdd(b[i:j], -s.lr, data[i:j])
 			})
 		}
 		wg.Wait()
+		writeParameterData(p, data)
 	}
 }
 
@@ -100,7 +120,7 @@ type Adam struct {
 func NewAdam(params []*Tensor, alpha float32) Optimizer {
 	bufSize := 0
 	for _, p := range params {
-		bufSize = max(bufSize, len(p.data))
+		bufSize = max(bufSize, len(p.data), len(p.data16))
 	}
 	return &Adam{
 		params: params,
@@ -127,16 +147,17 @@ func (a *Adam) Step() {
 			a.ms[p] = Zeros(p.shape...)
 			a.vs[p] = Zeros(p.shape...)
 		}
+		data := parameterData(p)
 		m, v := a.ms[p], a.vs[p]
-		b1, b2 := a.b1[:len(p.data)], a.b2[:len(p.data)]
+		b1, b2 := a.b1[:len(data)], a.b2[:len(data)]
 
-		parts := partitionAligned(len(p.data), a.jobs, 32)
+		parts := partitionAligned(len(data), a.jobs, 32)
 		var wg sync.WaitGroup
 		for _, part := range parts {
 			i, j := part.A, part.B
 			wg.Go(func() {
 				// grad = grad + wd * param.data
-				floats.MulConstAddTo(p.data[i:j], a.wd, p.grad.data[i:j], b1[i:j])
+				floats.MulConstAddTo(data[i:j], a.wd, p.grad.data[i:j], b1[i:j])
 				// m += (1 - beta1) * (grad - m)
 				floats.SubTo(b1[i:j], m.data[i:j], b2[i:j])
 				floats.MulConstAdd(b2[i:j], 1-a.beta1, m.data[i:j])
@@ -148,10 +169,11 @@ func (a *Adam) Step() {
 				floats.SqrtTo(v.data[i:j], b2[i:j])
 				floats.AddConst(b2[i:j], a.eps)
 				floats.DivTo(m.data[i:j], b2[i:j], b1[i:j])
-				floats.MulConstAdd(b1[i:j], -lr, p.data[i:j])
+				floats.MulConstAdd(b1[i:j], -lr, data[i:j])
 			})
 		}
 		wg.Wait()
+		writeParameterData(p, data)
 	}
 }
 
