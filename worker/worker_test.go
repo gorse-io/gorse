@@ -849,7 +849,7 @@ func (suite *WorkerTestSuite) TestRecommendDecision() {
 	suite.Config.OpenAI.ChatCompletionModel = ""
 	suite.Config.Recommend.Ranker.Type = "decision"
 	suite.Config.Recommend.Ranker.Recommenders = []string{"non-personalized/popular"}
-	suite.Config.Recommend.Ranker.RerankerAPI = config.RerankerAPIConfig{URL: server.URL}
+	suite.Config.Recommend.Ranker.DecisionAPI = config.DecisionAPIConfig{URL: server.URL}
 	suite.Config.Recommend.Ranker.QueryTemplate = "{{user.UserId}}"
 	suite.Config.Recommend.Ranker.DocumentTemplate = "{{item.ItemId}}"
 	suite.Require().NoError(suite.DataClient.BatchInsertUsers(ctx, []data.User{{UserId: "u1"}}))
@@ -886,7 +886,7 @@ func (suite *WorkerTestSuite) TestRankByDecision() {
 		{ItemId: "1", Categories: []string{"a"}}, {ItemId: "2", Categories: []string{"b"}},
 		{ItemId: "3", IsHidden: true}, {ItemId: "4"}, {ItemId: "5"},
 	}))
-	ranker, err := logics.NewDecisionReranker(config.RerankerAPIConfig{URL: server.URL},
+	ranker, err := logics.NewDecisionReranker(config.DecisionAPIConfig{URL: server.URL},
 		"{{user.UserId}}: {% for f in feedback %}{{f.ItemId}}{% endfor %}", "{{item.ItemId}}")
 	suite.Require().NoError(err)
 	now := time.Now()

@@ -416,6 +416,7 @@ type RankerConfig struct {
 	DocumentTemplate string              `mapstructure:"document_template"`
 	EarlyStopping    EarlyStoppingConfig `mapstructure:"early_stopping"`
 	RerankerAPI      RerankerAPIConfig   `mapstructure:"reranker_api"`
+	DecisionAPI      DecisionAPIConfig   `mapstructure:"decision_api"`
 }
 
 type FallbackConfig struct {
@@ -436,6 +437,12 @@ type OIDCConfig struct {
 	ClientID     string `mapstructure:"client_id"`
 	ClientSecret string `mapstructure:"client_secret"`
 	RedirectURL  string `mapstructure:"redirect_url" validate:"omitempty,endswith=/callback/oauth2"`
+}
+
+type DecisionAPIConfig struct {
+	AuthToken string `mapstructure:"auth_token"`
+	Model     string `mapstructure:"model"`
+	URL       string `mapstructure:"url"`
 }
 
 type RerankerAPIConfig struct {
@@ -776,6 +783,9 @@ var bindings = []configBinding{
 	{"recommend.ranker.reranker_api.url", "RERANKER_URL"},
 	{"recommend.ranker.reranker_api.model", "RERANKER_MODEL"},
 	{"recommend.ranker.reranker_api.auth_token", "RERANKER_AUTH_TOKEN"},
+	{"recommend.ranker.decision_api.url", "DECISION_URL"},
+	{"recommend.ranker.decision_api.model", "DECISION_MODEL"},
+	{"recommend.ranker.decision_api.auth_token", "DECISION_AUTH_TOKEN"},
 	{"quota.max_users_count", "GORSE_QUOTA_MAX_USERS_COUNT"},
 	{"quota.max_items_count", "GORSE_QUOTA_MAX_ITEMS_COUNT"},
 	{"quota.max_labels_size", "GORSE_QUOTA_MAX_LABELS_SIZE"},

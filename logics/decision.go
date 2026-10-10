@@ -35,7 +35,7 @@ type DecisionReranker struct {
 	client        *decision.Client
 }
 
-func NewDecisionReranker(cfg config.RerankerAPIConfig, queryTemplate, docTemplate string) (*DecisionReranker, error) {
+func NewDecisionReranker(cfg config.DecisionAPIConfig, queryTemplate, docTemplate string) (*DecisionReranker, error) {
 	qTpl, err := gonja.FromString(queryTemplate)
 	if err != nil {
 		return nil, err
