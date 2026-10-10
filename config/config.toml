@@ -279,6 +279,7 @@ read_replacement_decay = 0.6
 #   none: no ranking (default).
 #   fm: factorization machines.
 #   llm: LLM-based reranker.
+#   decision: Decision API score-based reranker (uses decision_api).
 type = "fm"
 
 # The time period to refresh recommendation for inactive users. The default values is 120h.
@@ -326,6 +327,17 @@ model = "qwen3-rerank"
 
 # URL for the reranker API, supports Jina style.
 url = "https://dashscope.aliyuncs.com/compatible-api/v1/reranks"
+
+[recommend.ranker.decision_api]
+
+# Auth token for the Decision API.
+auth_token = ""
+
+# The Decision API model.
+model = "jev-latest"
+
+# Full URL for the Decision API endpoint.
+url = "https://tokenra.io/v1/decisions"
 
 [recommend.fallback]
 

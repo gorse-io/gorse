@@ -173,6 +173,30 @@ func TestUnmarshal(t *testing.T) {
 	}
 }
 
+func TestDecisionAPIConfig(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "decision.toml")
+	assert.NoError(t, os.WriteFile(path, []byte(`
+[recommend.ranker]
+type = "decision"
+[recommend.ranker.decision_api]
+url = "https://decision.example.com/v1/decisions"
+model = "decision-model"
+auth_token = "decision-token"
+[recommend.ranker.reranker_api]
+url = "https://reranker.example.com/v1/rerank"
+model = "reranker-model"
+auth_token = "reranker-token"
+`), 0600))
+	cfg, err := LoadConfig(path)
+	if !assert.NoError(t, err) {
+		return
+	}
+	assert.Equal(t, "https://decision.example.com/v1/decisions", cfg.Recommend.Ranker.DecisionAPI.URL)
+	assert.Equal(t, "decision-model", cfg.Recommend.Ranker.DecisionAPI.Model)
+	assert.Equal(t, "decision-token", cfg.Recommend.Ranker.DecisionAPI.AuthToken)
+	assert.Equal(t, "https://reranker.example.com/v1/rerank", cfg.Recommend.Ranker.RerankerAPI.URL)
+}
+
 func TestReloadConfig(t *testing.T) {
 	tempDir := t.TempDir()
 	firstConfig := filepath.Join(tempDir, "first.toml")
@@ -255,6 +279,9 @@ func TestBindEnv(t *testing.T) {
 		{"RERANKER_AUTH_TOKEN", "<reranker_auth_token>"},
 		{"RERANKER_URL", "<reranker_url>"},
 		{"RERANKER_MODEL", "<reranker_model>"},
+		{"DECISION_AUTH_TOKEN", "<decision_auth_token>"},
+		{"DECISION_URL", "<decision_url>"},
+		{"DECISION_MODEL", "<decision_model>"},
 		{"GORSE_QUOTA_MAX_USERS_COUNT", "9"},
 		{"GORSE_QUOTA_MAX_ITEMS_COUNT", "10"},
 		{"GORSE_QUOTA_MAX_LABELS_SIZE", "11"},
@@ -312,6 +339,9 @@ func TestBindEnv(t *testing.T) {
 	assert.Equal(t, "<reranker_auth_token>", config.Recommend.Ranker.RerankerAPI.AuthToken)
 	assert.Equal(t, "<reranker_url>", config.Recommend.Ranker.RerankerAPI.URL)
 	assert.Equal(t, "<reranker_model>", config.Recommend.Ranker.RerankerAPI.Model)
+	assert.Equal(t, "<decision_auth_token>", config.Recommend.Ranker.DecisionAPI.AuthToken)
+	assert.Equal(t, "<decision_url>", config.Recommend.Ranker.DecisionAPI.URL)
+	assert.Equal(t, "<decision_model>", config.Recommend.Ranker.DecisionAPI.Model)
 	assert.Equal(t, 9, config.Quota.MaxUsersCount)
 	assert.Equal(t, 10, config.Quota.MaxItemsCount)
 	assert.Equal(t, 11, config.Quota.MaxLabelsSize)
@@ -516,6 +546,11 @@ func (s *ValidateTestSuite) SetupTest() {
 	s.Config = GetDefaultConfig()
 	s.Database.CacheStore = "redis://localhost:6379/0"
 	s.Database.DataStore = "mysql://gorse:gorse_pass@tcp(localhost:3306)/gorse"
+}
+
+func (s *ValidateTestSuite) TestDecisionRanker() {
+	s.Recommend.Ranker.Type = "decision"
+	s.NoError(s.Validate())
 }
 
 func (s *ValidateTestSuite) TestDuplicateNonPersonalized() {
