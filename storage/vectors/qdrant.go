@@ -187,6 +187,15 @@ func (db *Qdrant) createCollection(ctx context.Context, name string, request *qd
 		FieldName:      qdrantPayloadHiddenKey,
 		FieldType:      qdrant.FieldType_FieldTypeBool.Enum(),
 	})
+	if err != nil {
+		return errors.WithStack(err)
+	}
+	_, err = db.client.CreateFieldIndex(ctx, &qdrant.CreateFieldIndexCollection{
+		CollectionName: name,
+		Wait:           new(true),
+		FieldName:      qdrantPayloadCategoriesKey,
+		FieldType:      qdrant.FieldType_FieldTypeKeyword.Enum(),
+	})
 	return errors.WithStack(err)
 }
 
