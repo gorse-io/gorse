@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package jev provides a client for the Jev decisions API.
-package jev
+// Package decision provides a client for the Jev decisions API.
+package decision
 
 import (
 	"bytes"
