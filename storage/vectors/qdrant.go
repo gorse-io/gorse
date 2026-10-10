@@ -389,6 +389,14 @@ func (db *Qdrant) QueryVectors(ctx context.Context, collection string, q Vector,
 	if topK <= 0 {
 		return []ScoredVector{}, nil
 	}
+	distance := Dot
+	if !q.IsSparse() {
+		info, err := db.DescribeCollection(ctx, collection)
+		if err != nil {
+			return nil, errors.WithStack(err)
+		}
+		distance = info.Distance
+	}
 	request := &qdrant.QueryPoints{
 		CollectionName: collection,
 		Limit:          new(uint64(topK)),
@@ -416,13 +424,17 @@ func (db *Qdrant) QueryVectors(ctx context.Context, collection string, q Vector,
 	results := make([]ScoredVector, 0, len(response))
 	for _, scored := range response {
 		vector := qdrantVector(scored.GetVectors())
+		score := scored.GetScore()
+		if distance == Euclidean {
+			score = -score
+		}
 		results = append(results, ScoredVector{
 			Id:         qdrantId(scored.GetPayload()),
 			Values:     vector.Values,
 			Indices:    vector.Indices,
 			IsHidden:   qdrantHidden(scored.GetPayload()),
 			Categories: qdrantCategories(scored.GetPayload()),
-			Score:      scored.GetScore(),
+			Score:      score,
 		})
 	}
 	return results, nil
