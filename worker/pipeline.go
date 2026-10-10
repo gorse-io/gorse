@@ -282,7 +282,7 @@ func (p *Pipeline) Recommend(ctx context.Context, users []data.User, progress fu
 			}
 		} else if p.Config.Recommend.Ranker.Type == "decision" {
 			ranker, err := logics.NewDecisionReranker(
-				p.Config.Recommend.Ranker.RerankerAPI,
+				p.Config.Recommend.Ranker.DecisionAPI,
 				p.Config.Recommend.Ranker.QueryTemplate,
 				p.Config.Recommend.Ranker.DocumentTemplate)
 			if err != nil {
