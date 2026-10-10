@@ -282,6 +282,7 @@ read_replacement_decay = 0.6
 #   none: no ranking (default).
 #   fm: factorization machines.
 #   llm: LLM-based reranker.
+#   decision: Decision API score-based reranker (uses reranker_api).
 type = "fm"
 
 # The time period to refresh recommendation for inactive users. The default values is 120h.

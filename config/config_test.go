@@ -518,6 +518,11 @@ func (s *ValidateTestSuite) SetupTest() {
 	s.Database.DataStore = "mysql://gorse:gorse_pass@tcp(localhost:3306)/gorse"
 }
 
+func (s *ValidateTestSuite) TestDecisionRanker() {
+	s.Recommend.Ranker.Type = "decision"
+	s.NoError(s.Validate())
+}
+
 func (s *ValidateTestSuite) TestDuplicateNonPersonalized() {
 	s.Recommend.NonPersonalized = []NonPersonalizedConfig{{
 		Name:  "most_starred_weekly",

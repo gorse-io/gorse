@@ -405,7 +405,7 @@ type ReplacementConfig struct {
 }
 
 type RankerConfig struct {
-	Type             string              `mapstructure:"type" validate:"oneof=none fm llm"`
+	Type             string              `mapstructure:"type" validate:"oneof=none fm llm decision"`
 	Recommenders     []string            `mapstructure:"recommenders"`
 	CacheExpire      time.Duration       `mapstructure:"cache_expire" validate:"gt=0"`
 	FitPeriod        time.Duration       `mapstructure:"fit_period" validate:"gt=0"`

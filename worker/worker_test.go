@@ -840,6 +840,68 @@ func (suite *WorkerTestSuite) TestRankByLLM() {
 	}
 }
 
+func (suite *WorkerTestSuite) TestRecommendDecision() {
+	ctx := suite.T().Context()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"answers":{"1":{"type":"score","score":1.5,"probabilities":{},"legend":{},"confidence":1},"2":{"type":"score","score":3.5,"probabilities":{},"legend":{},"confidence":1}}}`))
+	}))
+	defer server.Close()
+	suite.Config.OpenAI.ChatCompletionModel = ""
+	suite.Config.Recommend.Ranker.Type = "decision"
+	suite.Config.Recommend.Ranker.Recommenders = []string{"non-personalized/popular"}
+	suite.Config.Recommend.Ranker.RerankerAPI = config.RerankerAPIConfig{URL: server.URL}
+	suite.Config.Recommend.Ranker.QueryTemplate = "{{user.UserId}}"
+	suite.Config.Recommend.Ranker.DocumentTemplate = "{{item.ItemId}}"
+	suite.Require().NoError(suite.DataClient.BatchInsertUsers(ctx, []data.User{{UserId: "u1"}}))
+	suite.Require().NoError(suite.DataClient.BatchInsertItems(ctx, []data.Item{{ItemId: "1", Categories: []string{"a"}}, {ItemId: "2", Categories: []string{"b"}}}))
+	suite.Require().NoError(suite.CacheClient.AddScores(ctx, cache.NonPersonalized, "popular", []cache.Score{{Id: "1", Score: 10, Categories: []string{""}}, {Id: "2", Score: 5, Categories: []string{""}}}))
+	suite.Recommend(ctx, []data.User{{UserId: "u1"}}, nil)
+	result, err := suite.CacheClient.SearchScores(ctx, cache.Recommend, "u1", nil, 0, 10)
+	suite.Require().NoError(err)
+	suite.Require().Len(result, 2)
+	suite.Equal("2", result[0].Id)
+	suite.Equal(3.5, result[0].Score)
+	suite.Equal([]string{"b"}, result[0].Categories)
+	suite.False(result[0].Timestamp.IsZero())
+	suite.Equal("1", result[1].Id)
+	suite.Equal(1.5, result[1].Score)
+}
+
+func (suite *WorkerTestSuite) TestRankByDecision() {
+	ctx := suite.T().Context()
+	suite.Config.Recommend.ContextSize = 1
+	suite.Config.Recommend.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{expression.MustParseFeedbackTypeExpression("like")}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var request struct {
+			State     string                     `json:"state"`
+			Questions map[string]json.RawMessage `json:"questions"`
+		}
+		suite.Require().NoError(json.NewDecoder(r.Body).Decode(&request))
+		suite.Equal("u1: 5", request.State)
+		suite.Len(request.Questions, 2)
+		_, _ = w.Write([]byte(`{"answers":{"1":{"type":"score","score":1.5,"probabilities":{},"legend":{},"confidence":1},"2":{"type":"score","score":3.5,"probabilities":{},"legend":{},"confidence":1}}}`))
+	}))
+	defer server.Close()
+	suite.Require().NoError(suite.DataClient.BatchInsertItems(ctx, []data.Item{
+		{ItemId: "1", Categories: []string{"a"}}, {ItemId: "2", Categories: []string{"b"}},
+		{ItemId: "3", IsHidden: true}, {ItemId: "4"}, {ItemId: "5"},
+	}))
+	ranker, err := logics.NewDecisionReranker(config.RerankerAPIConfig{URL: server.URL},
+		"{{user.UserId}}: {% for f in feedback %}{{f.ItemId}}{% endfor %}", "{{item.ItemId}}")
+	suite.Require().NoError(err)
+	now := time.Now()
+	result, err := suite.rankByDecision(ctx, nil, ranker, &data.User{UserId: "u1"}, []data.Feedback{
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "like", ItemId: "4"}, Timestamp: now.Add(-time.Hour)},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "like", ItemId: "5"}, Timestamp: now},
+		{FeedbackKey: data.FeedbackKey{FeedbackType: "read", ItemId: "1"}, Timestamp: now.Add(time.Hour)},
+	}, []cache.Score{{Id: "1"}, {Id: "2"}, {Id: "3"}, {Id: "missing"}}, NewItemCache(suite.DataClient), now)
+	suite.Require().NoError(err)
+	suite.Equal([]cache.Score{
+		{Id: "2", Score: 3.5, Categories: []string{"b"}, Timestamp: now},
+		{Id: "1", Score: 1.5, Categories: []string{"a"}, Timestamp: now},
+	}, result)
+}
+
 func (suite *WorkerTestSuite) TestReplacement() {
 	ctx := suite.T().Context()
 	suite.Config.Recommend.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{
