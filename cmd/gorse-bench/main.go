@@ -207,13 +207,13 @@ func EvaluateAFM(cfg *config.Config, train, test *ctr.Dataset, exportUserAUC boo
 }
 
 func EvaluateReranker(cfg *config.Config, train, test *ctr.Dataset, items []data.Item, exportUserAUC bool, scores *sync.Map) {
-	chat, err := logics.NewChatReranker(
+	ranker, err := logics.NewReranker(
 		cfg.Recommend.Ranker.RerankerAPI,
 		cfg.Recommend.Ranker.QueryTemplate,
 		cfg.Recommend.Ranker.DocumentTemplate,
 	)
 	if err != nil {
-		log.Logger().Fatal("failed to create chat ranker", zap.Error(err))
+		log.Logger().Fatal("failed to create reranker", zap.Error(err))
 	}
 
 	feedbacks := make(map[int32][]*logics.FeedbackItem)
@@ -284,7 +284,7 @@ func EvaluateReranker(cfg *config.Config, train, test *ctr.Dataset, items []data
 		if len(feedback) == 0 || len(feedback) > cfg.Recommend.ContextSize {
 			return
 		}
-		result, err := chat.Rank(context.Background(), &data.User{}, feedback, candidates)
+		result, err := ranker.Rank(context.Background(), &data.User{}, feedback, candidates)
 		if err != nil {
 			log.Logger().Error("failed to rank items for user", zap.Int32("user_index", userIndex), zap.Error(err))
 			return

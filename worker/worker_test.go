@@ -799,7 +799,7 @@ func (suite *WorkerTestSuite) TestRankByClickTroughRate() {
 	}))
 }
 
-func (suite *WorkerTestSuite) TestRankByLLM() {
+func (suite *WorkerTestSuite) TestRankByReranker() {
 	ctx := suite.T().Context()
 	mockAI := reranker.NewMockServer()
 	go func() {
@@ -820,13 +820,13 @@ func (suite *WorkerTestSuite) TestRankByLLM() {
 		AuthToken: mockAI.AuthToken(),
 		Model:     "v1",
 	}
-	ranker, err := logics.NewChatReranker(suite.Config.Recommend.Ranker.RerankerAPI,
+	ranker, err := logics.NewReranker(suite.Config.Recommend.Ranker.RerankerAPI,
 		"{{user.UserId}}", "{{item.ItemId}}")
 	suite.NoError(err)
 
 	itemCache := NewItemCache(suite.DataClient)
 	recommendTime := time.Now()
-	result, err := suite.rankByLLM(ctx, nil, ranker, &data.User{UserId: "u1"}, []data.Feedback{
+	result, err := suite.rankByReranker(ctx, nil, ranker, &data.User{UserId: "u1"}, []data.Feedback{
 		{FeedbackType: "like", UserId: "u1", ItemId: "4"},
 		{FeedbackType: "like", UserId: "u1", ItemId: "5"},
 	}, []cache.Score{{Id: "1"}, {Id: "2"}, {Id: "3"}}, itemCache, recommendTime)
@@ -840,6 +840,33 @@ func (suite *WorkerTestSuite) TestRankByLLM() {
 	for _, scored := range result {
 		suite.Equal(recommendTime, scored.Timestamp)
 	}
+}
+
+func (suite *WorkerTestSuite) TestRecommendReranker() {
+	ctx := suite.T().Context()
+	mockAI := reranker.NewMockServer()
+	go func() { _ = mockAI.Start() }()
+	mockAI.Ready()
+	defer mockAI.Close()
+	suite.Config.OpenAI.ChatCompletionModel = ""
+	suite.Config.Recommend.Ranker.Type = "reranker"
+	suite.Config.Recommend.Ranker.Recommenders = []string{"non-personalized/popular"}
+	suite.Config.Recommend.Ranker.RerankerAPI = config.RerankerAPIConfig{
+		URL: mockAI.URL(), AuthToken: mockAI.AuthToken(), Model: "v1",
+	}
+	suite.Config.Recommend.Ranker.QueryTemplate = "{{user.UserId}}"
+	suite.Config.Recommend.Ranker.DocumentTemplate = "{{item.ItemId}}"
+	suite.Require().NoError(suite.DataClient.BatchInsertUsers(ctx, []data.User{{UserId: "u1"}}))
+	suite.Require().NoError(suite.DataClient.BatchInsertItems(ctx, []data.Item{{ItemId: "1"}, {ItemId: "2"}}))
+	suite.Require().NoError(suite.CacheClient.AddScores(ctx, cache.NonPersonalized, "popular", []cache.Score{{Id: "1", Score: 10, Categories: []string{""}}, {Id: "2", Score: 5, Categories: []string{""}}}))
+	suite.Recommend(ctx, []data.User{{UserId: "u1"}}, nil)
+	result, err := suite.CacheClient.SearchScores(ctx, cache.Recommend, "u1", nil, 0, 10)
+	suite.Require().NoError(err)
+	suite.Require().Len(result, 2)
+	suite.Equal("1", result[0].Id)
+	suite.Equal(1.0, result[0].Score)
+	suite.Equal("2", result[1].Id)
+	suite.Equal(0.5, result[1].Score)
 }
 
 func (suite *WorkerTestSuite) TestRecommendDecision() {

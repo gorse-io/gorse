@@ -25,7 +25,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestChatReranker(t *testing.T) {
+func TestReranker(t *testing.T) {
 	s := reranker.NewMockServer()
 	go func() {
 		err := s.Start()
@@ -36,7 +36,7 @@ func TestChatReranker(t *testing.T) {
 	s.Ready()
 	defer s.Close()
 
-	reranker, err := NewChatReranker(config.RerankerAPIConfig{
+	reranker, err := NewReranker(config.RerankerAPIConfig{
 		AuthToken: s.AuthToken(),
 		URL:       s.URL(),
 		Model:     "gte-rerank",
@@ -67,30 +67,4 @@ func TestChatReranker(t *testing.T) {
 		{Id: "tt1132626", Score: 0.25},
 		{Id: "tt0435761", Score: 0.2},
 	}, items)
-}
-
-func TestParseArrayFromCompletion(t *testing.T) {
-	// parse JSON object
-	completion := "```json\n{\"a\": 1, \"b\": 2}\n```"
-	parsed := parseArrayFromCompletion(completion)
-	assert.Equal(t, []string{"{\"a\": 1, \"b\": 2}\n"}, parsed)
-
-	// parse JSON array
-	completion = "```json\n[1, 2]\n```"
-	parsed = parseArrayFromCompletion(completion)
-	assert.Equal(t, []string{"1", "2"}, parsed)
-
-	// parse CSV
-	completion = "```csv\n1\n2\n3\n```"
-	parsed = parseArrayFromCompletion(completion)
-	assert.Equal(t, []string{"1", "2", "3"}, parsed)
-
-	// parse text
-	completion = "Hello, world!\nThis is a test."
-	parsed = parseArrayFromCompletion(completion)
-	assert.Equal(t, []string{"Hello, world!", "This is a test."}, parsed)
-
-	// strip think
-	completion = "<think>hello</think>World!"
-	assert.Equal(t, "World!", stripThinkInCompletion(completion))
 }
