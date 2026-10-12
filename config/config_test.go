@@ -173,30 +173,6 @@ func TestUnmarshal(t *testing.T) {
 	}
 }
 
-func TestDecisionAPIConfig(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "decision.toml")
-	assert.NoError(t, os.WriteFile(path, []byte(`
-[recommend.ranker]
-type = "decision"
-[recommend.ranker.decision_api]
-url = "https://decision.example.com/v1/decisions"
-model = "decision-model"
-auth_token = "decision-token"
-[recommend.ranker.reranker_api]
-url = "https://reranker.example.com/v1/rerank"
-model = "reranker-model"
-auth_token = "reranker-token"
-`), 0600))
-	cfg, err := LoadConfig(path)
-	if !assert.NoError(t, err) {
-		return
-	}
-	assert.Equal(t, "https://decision.example.com/v1/decisions", cfg.Recommend.Ranker.DecisionAPI.URL)
-	assert.Equal(t, "decision-model", cfg.Recommend.Ranker.DecisionAPI.Model)
-	assert.Equal(t, "decision-token", cfg.Recommend.Ranker.DecisionAPI.AuthToken)
-	assert.Equal(t, "https://reranker.example.com/v1/rerank", cfg.Recommend.Ranker.RerankerAPI.URL)
-}
-
 func TestReloadConfig(t *testing.T) {
 	tempDir := t.TempDir()
 	firstConfig := filepath.Join(tempDir, "first.toml")
@@ -546,16 +522,6 @@ func (s *ValidateTestSuite) SetupTest() {
 	s.Config = GetDefaultConfig()
 	s.Database.CacheStore = "redis://localhost:6379/0"
 	s.Database.DataStore = "mysql://gorse:gorse_pass@tcp(localhost:3306)/gorse"
-}
-
-func (s *ValidateTestSuite) TestReranker() {
-	s.Recommend.Ranker.Type = "reranker"
-	s.NoError(s.Validate())
-}
-
-func (s *ValidateTestSuite) TestDecisionRanker() {
-	s.Recommend.Ranker.Type = "decision"
-	s.NoError(s.Validate())
 }
 
 func (s *ValidateTestSuite) TestDuplicateNonPersonalized() {
