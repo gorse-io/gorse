@@ -68,8 +68,8 @@ type Tensor struct {
 // DType returns the tensor's storage format.
 func (t *Tensor) DType() DType { return t.dtype }
 
-// Data16 returns the shared IEEE 754 half-precision bit patterns.
-func (t *Tensor) Data16() []uint16 {
+// Uint16s returns the shared IEEE 754 half-precision bit patterns.
+func (t *Tensor) Uint16s() []uint16 {
 	return t.data16
 }
 
@@ -375,8 +375,8 @@ func (t *Tensor) Grad() *Tensor {
 	return t.grad
 }
 
-// Data returns the shared single-precision storage.
-func (t *Tensor) Data() []float32 {
+// Floats returns the shared single-precision storage.
+func (t *Tensor) Floats() []float32 {
 	return t.data
 }
 

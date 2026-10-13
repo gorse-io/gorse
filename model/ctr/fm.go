@@ -169,7 +169,7 @@ func (fm *AFM) BatchInternalPredict(x []lo.Tuple2[[]int32, []float32], e [][][]u
 		}
 		indices, values, embeddings, _ := fm.convertToTensors(batchX, batchE, nil)
 		output := fm.Forward(indices, values, embeddings, jobs)
-		predictions = append(predictions, output.Data()...)
+		predictions = append(predictions, output.Floats()...)
 	}
 	return predictions[:len(x)]
 }
@@ -358,7 +358,7 @@ func (fm *AFM) Fit(ctx context.Context, trainSet, testSet dataset.CTRSplit, conf
 			batchIndices, batchValues, batchEmbedding, batchTarget := fm.convertToTensors(x, e, y)
 			batchOutput := fm.Forward(batchIndices, batchValues, batchEmbedding, config.Jobs)
 			batchLoss := nn.BCEWithLogits(batchTarget, batchOutput, nil)
-			cost += batchLoss.Data()[0]
+			cost += batchLoss.Floats()[0]
 			optimizer.ZeroGrad()
 			batchLoss.Backward()
 			optimizer.Step()

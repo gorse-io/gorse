@@ -59,13 +59,13 @@ func TestFloat16PrimitiveComputation(t *testing.T) {
 			y := tt.run(x)
 			require.Equal(t, Float16, y.DType())
 			require.Equal(t, reference.Shape(), y.Shape())
-			require.Equal(t, reference.ToFloat16().Data16(), y.Data16())
+			require.Equal(t, reference.ToFloat16().Uint16s(), y.Uint16s())
 			runtime.GC() // The FP32 output used by backward must outlive forward.
 			reference.Backward()
 			y.Backward()
 			require.NotNil(t, x.Grad())
 			require.Equal(t, Float32, x.Grad().DType())
-			require.InDeltaSlice(t, x32.Grad().Data(), x.Grad().Data(), 1e-6)
+			require.InDeltaSlice(t, x32.Grad().Floats(), x.Grad().Floats(), 1e-6)
 		})
 	}
 }
@@ -75,10 +75,10 @@ func TestFloat16MixedOperands(t *testing.T) {
 	full := NewTensor([]float32{3, 4}, 2)
 	y := Mul(full, half)
 	require.Equal(t, Float32, y.DType())
-	require.Equal(t, []float32{3, 8}, y.Data())
+	require.Equal(t, []float32{3, 8}, y.Floats())
 	y.Backward()
-	require.Equal(t, []float32{3, 4}, half.Grad().Data())
-	require.Equal(t, []float32{1, 2}, full.Grad().Data())
+	require.Equal(t, []float32{3, 4}, half.Grad().Floats())
+	require.Equal(t, []float32{1, 2}, full.Grad().Floats())
 	require.Equal(t, Float16, Mul(half, full).DType())
 	require.Same(t, half, Add(half))
 }
@@ -98,9 +98,9 @@ func TestFloat16SharedGraph(t *testing.T) {
 	upstream := Add(Mul(sr.ToFloat16().ToFloat32(), NewScalar(2)), NewScalar(1))
 	sg := sr.op.backward(upstream)[0]
 	expected := pr.op.backward(sg)
-	require.InDeltaSlice(t, expected[0].Data(), x.Grad().Data(), 1e-6)
+	require.InDeltaSlice(t, expected[0].Floats(), x.Grad().Floats(), 1e-6)
 	require.Equal(t, Float32, x.Grad().DType())
-	require.InDeltaSlice(t, expected[1].Data(), exponent.Grad().Data(), 1e-6)
+	require.InDeltaSlice(t, expected[1].Floats(), exponent.Grad().Floats(), 1e-6)
 }
 
 func TestFloat16InferenceAndConversions(t *testing.T) {
@@ -108,7 +108,7 @@ func TestFloat16InferenceAndConversions(t *testing.T) {
 	defer SetInferenceMode(false)
 	x := NewTensor([]float32{-1, 2}, 2).ToFloat16()
 	y := Square(x)
-	require.Equal(t, []float32{1, 4}, y.ToFloat32().Data())
+	require.Equal(t, []float32{1, 4}, y.ToFloat32().Floats())
 	require.Nil(t, y.op)
 	require.Nil(t, x.Grad())
 	SetInferenceMode(false)
@@ -121,11 +121,11 @@ func TestFloat16InferenceAndConversions(t *testing.T) {
 func TestFloat16NormalInit(t *testing.T) {
 	full := Zeros(8)
 	half := full.ToFloat16()
-	backing := half.Data16()
+	backing := half.Uint16s()
 	NormalInit(rand.New(rand.NewSource(123)), full, 0.2, 0.5)
 	NormalInit(rand.New(rand.NewSource(123)), half, 0.2, 0.5)
-	require.Equal(t, full.ToFloat16().Data16(), half.Data16())
-	require.Equal(t, backing, half.Data16())
+	require.Equal(t, full.ToFloat16().Uint16s(), half.Uint16s())
+	require.Equal(t, backing, half.Uint16s())
 }
 
 func TestFloat16Optimizers(t *testing.T) {
@@ -154,9 +154,9 @@ func TestFloat16Optimizers(t *testing.T) {
 					fullReference.grad = full.grad.clone()
 					opt.Step()
 					ref.Step()
-					require.Equal(t, reference.ToFloat16().Data16(), half.Data16())
-					require.Equal(t, half.Data16(), alias.Data16())
-					require.Equal(t, fullReference.Data(), full.Data())
+					require.Equal(t, reference.ToFloat16().Uint16s(), half.Uint16s())
+					require.Equal(t, half.Uint16s(), alias.Uint16s())
+					require.Equal(t, fullReference.Floats(), full.Floats())
 					// There is deliberately no persistent FP32 master parameter.
 					copy(reference.data, reference.ToFloat16().ToFloat32().data)
 				}

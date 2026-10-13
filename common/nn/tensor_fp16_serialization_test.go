@@ -47,7 +47,7 @@ func TestFloat16Serialization(t *testing.T) {
 		y.op = &neg{}
 		y.fromPB(decoded)
 		require.Equal(t, Float16, y.DType())
-		require.Equal(t, values, y.Data16())
+		require.Equal(t, values, y.Uint16s())
 		require.Equal(t, x.Shape(), y.Shape())
 		require.Nil(t, y.grad)
 		require.Nil(t, y.op)
@@ -63,7 +63,7 @@ func TestFloat16Serialization(t *testing.T) {
 			B *Tensor
 		}{new(Tensor), new(Tensor)}
 		require.NoError(t, Load(result, &buf))
-		require.Equal(t, values, result.W.Data16())
+		require.Equal(t, values, result.W.Uint16s())
 		require.Equal(t, Float32, result.B.DType())
 		require.Equal(t, float32(2), result.B.Get())
 	}
@@ -93,9 +93,9 @@ func TestFloat32SerializationRawBits(t *testing.T) {
 		require.Equal(t, Float32, y.DType())
 		require.Equal(t, shape, y.Shape())
 		require.Nil(t, y.data16)
-		require.Len(t, y.Data(), len(bits))
+		require.Len(t, y.Floats(), len(bits))
 		for i, b := range bits {
-			require.Equal(t, b, math.Float32bits(y.Data()[i]))
+			require.Equal(t, b, math.Float32bits(y.Floats()[i]))
 		}
 	}
 }
@@ -108,7 +108,7 @@ func TestTensorLegacySerialization(t *testing.T) {
 	x := Ones(2).ToFloat16()
 	x.fromPB(pb)
 	require.Equal(t, Float32, x.DType())
-	require.Equal(t, []float32{1, 2}, x.Data())
+	require.Equal(t, []float32{1, 2}, x.Floats())
 	require.Nil(t, x.data16)
 	require.Equal(t, wire, func() []byte { b, err := proto.Marshal(x.toPB()); require.NoError(t, err); return b }())
 }
