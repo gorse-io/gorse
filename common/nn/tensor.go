@@ -77,11 +77,7 @@ func (t *Tensor) ToFloat16() *Tensor {
 	if t.dtype == Float16 {
 		return t.clone()
 	}
-	data := make([]uint16, len(t.data))
-	for i, value := range t.data {
-		data[i] = uint16(float16.Fromfloat32(value))
-	}
-	return NewTensor(data, slices.Clone(t.shape)...)
+	return NewTensor(floats.FromFloat32(t.data), slices.Clone(t.shape)...)
 }
 
 // ToFloat32 returns an independent, graph-free copy in single precision.
