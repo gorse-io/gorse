@@ -34,13 +34,8 @@ const (
 	maxResponseBodySize = 16 << 20
 )
 
-// Question is a Noul, Choice, or Score question.
-type Question interface {
-	question()
-}
-
-// Questions maps caller-defined question IDs to questions.
-type Questions map[string]Question
+// Questions maps caller-defined question IDs to Noul questions.
+type Questions map[string]NoulQuestion
 
 // NoulCriteria describes the yes and no outcomes of a Noul question.
 type NoulCriteria struct {
@@ -54,8 +49,6 @@ type NoulQuestion struct {
 	Criteria     *NoulCriteria `json:"criteria,omitempty"`
 }
 
-func (NoulQuestion) question() {}
-
 func (q NoulQuestion) MarshalJSON() ([]byte, error) {
 	return json.Marshal(struct {
 		Type         string        `json:"type"`
@@ -68,106 +61,10 @@ func (q NoulQuestion) MarshalJSON() ([]byte, error) {
 	})
 }
 
-// ChoiceQuestion asks the model to choose one key from Criteria.
-type ChoiceQuestion struct {
-	Instructions any            `json:"instructions"`
-	Criteria     map[string]any `json:"criteria"`
-}
-
-func (ChoiceQuestion) question() {}
-
-func (q ChoiceQuestion) MarshalJSON() ([]byte, error) {
-	return json.Marshal(struct {
-		Type         string         `json:"type"`
-		Instructions any            `json:"instructions"`
-		Criteria     map[string]any `json:"criteria"`
-	}{
-		Type:         "choice",
-		Instructions: q.Instructions,
-		Criteria:     q.Criteria,
-	})
-}
-
-// ScoreQuestion rates state against an ordered rubric.
-type ScoreQuestion struct {
-	Instructions any   `json:"instructions"`
-	Criteria     []any `json:"criteria"`
-}
-
-func (ScoreQuestion) question() {}
-
-func (q ScoreQuestion) MarshalJSON() ([]byte, error) {
-	return json.Marshal(struct {
-		Type         string `json:"type"`
-		Instructions any    `json:"instructions"`
-		Criteria     []any  `json:"criteria"`
-	}{
-		Type:         "score",
-		Instructions: q.Instructions,
-		Criteria:     q.Criteria,
-	})
-}
-
-// Answer contains the fields returned by any Jev answer type.
+// Answer contains the probability returned by a Noul question.
 type Answer struct {
-	Type          string             `json:"type"`
-	Noul          *float64           `json:"noul,omitempty"`
-	Choice        string             `json:"choice,omitempty"`
-	Score         *float64           `json:"score,omitempty"`
-	Probabilities map[string]float64 `json:"probabilities,omitempty"`
-	Legend        map[string]any     `json:"legend,omitempty"`
-	Confidence    *float64           `json:"confidence,omitempty"`
-}
-
-func (a *Answer) UnmarshalJSON(data []byte) error {
-	var wire struct {
-		Type          string             `json:"type"`
-		Noul          *float64           `json:"noul"`
-		Choice        *string            `json:"choice"`
-		Score         *float64           `json:"score"`
-		Probabilities map[string]float64 `json:"probabilities"`
-		Legend        map[string]any     `json:"legend"`
-		Confidence    *float64           `json:"confidence"`
-	}
-	if err := json.Unmarshal(data, &wire); err != nil {
-		return err
-	}
-
-	*a = Answer{Type: wire.Type}
-	switch wire.Type {
-	case "noul":
-		if wire.Noul == nil {
-			return fmt.Errorf("jev noul answer is missing noul")
-		}
-		if wire.Choice != nil || wire.Score != nil || wire.Probabilities != nil || wire.Legend != nil || wire.Confidence != nil {
-			return fmt.Errorf("jev noul answer contains fields from another answer type")
-		}
-		a.Noul = wire.Noul
-	case "choice":
-		if wire.Choice == nil || wire.Probabilities == nil || wire.Confidence == nil {
-			return fmt.Errorf("jev choice answer is missing required fields")
-		}
-		if wire.Noul != nil || wire.Score != nil || wire.Legend != nil {
-			return fmt.Errorf("jev choice answer contains fields from another answer type")
-		}
-		a.Choice = *wire.Choice
-		a.Probabilities = wire.Probabilities
-		a.Confidence = wire.Confidence
-	case "score":
-		if wire.Score == nil || wire.Probabilities == nil || wire.Legend == nil || wire.Confidence == nil {
-			return fmt.Errorf("jev score answer is missing required fields")
-		}
-		if wire.Noul != nil || wire.Choice != nil {
-			return fmt.Errorf("jev score answer contains fields from another answer type")
-		}
-		a.Score = wire.Score
-		a.Probabilities = wire.Probabilities
-		a.Legend = wire.Legend
-		a.Confidence = wire.Confidence
-	default:
-		return fmt.Errorf("unknown jev answer type %q", wire.Type)
-	}
-	return nil
+	Type string   `json:"type"`
+	Noul *float64 `json:"noul"`
 }
 
 // Usage contains token usage and, when supplied by the provider, cost.
@@ -248,10 +145,6 @@ func NewClient(apiKey string, options ...Option) *Client {
 
 // Evaluate evaluates all questions against the same state in one request.
 func (c *Client) Evaluate(ctx context.Context, state any, questions Questions) (*Response, error) {
-	if err := validateQuestions(questions); err != nil {
-		return nil, err
-	}
-
 	body, err := json.Marshal(struct {
 		Model     string    `json:"model"`
 		State     any       `json:"state"`
@@ -294,57 +187,4 @@ func (c *Client) Evaluate(ctx context.Context, state any, questions Questions) (
 		return nil, err
 	}
 	return &result, nil
-}
-
-func validateQuestions(questions Questions) error {
-	for id, question := range questions {
-		switch typed := question.(type) {
-		case NoulQuestion:
-		case *NoulQuestion:
-			if typed == nil {
-				return fmt.Errorf("jev question %q is nil", id)
-			}
-		case ChoiceQuestion:
-			if err := validateChoiceQuestion(id, len(typed.Criteria)); err != nil {
-				return err
-			}
-		case *ChoiceQuestion:
-			if typed == nil {
-				return fmt.Errorf("jev question %q is nil", id)
-			}
-			if err := validateChoiceQuestion(id, len(typed.Criteria)); err != nil {
-				return err
-			}
-		case ScoreQuestion:
-			if err := validateScoreQuestion(id, len(typed.Criteria)); err != nil {
-				return err
-			}
-		case *ScoreQuestion:
-			if typed == nil {
-				return fmt.Errorf("jev question %q is nil", id)
-			}
-			if err := validateScoreQuestion(id, len(typed.Criteria)); err != nil {
-				return err
-			}
-		case nil:
-			return fmt.Errorf("jev question %q is nil", id)
-		default:
-			return fmt.Errorf("jev question %q has unsupported type %T", id, question)
-		}
-	}
-	return nil
-}
-
-func validateChoiceQuestion(id string, options int) error {
-	if options < 1 || options > 255 {
-		return fmt.Errorf("jev choice question %q must have between 1 and 255 options", id)
-	}
-	return nil
-}
-
-func validateScoreQuestion(id string, levels int) error {
-	if levels < 2 || levels > 10 {
-		return fmt.Errorf("jev score question %q must have between 2 and 10 levels", id)
-	}
-	return nil
 }

@@ -18,7 +18,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -46,23 +45,11 @@ func TestClientEvaluate(t *testing.T) {
 			"instructions":"Does this message convey urgency?",
 			"criteria":{"true":"Explicitly time-sensitive","false":"No urgency expressed"}
 		}`, string(request.Questions["is_urgent"]))
-		require.JSONEq(t, `{
-			"type":"choice",
-			"instructions":"Which team should handle this?",
-			"criteria":{"billing":"Payments","technical":"Bugs"}
-		}`, string(request.Questions["department"]))
-		require.JSONEq(t, `{
-			"type":"score",
-			"instructions":"How frustrated is the customer?",
-			"criteria":["Calm","Frustrated","Very angry"]
-		}`, string(request.Questions["frustration"]))
 
 		w.Header().Set("Content-Type", "application/json")
 		_, err := w.Write([]byte(`{
 			"model":"typesafe/jev-1.13-20260917",
 			"answers":{
-				"department":{"type":"choice","choice":"billing","probabilities":{"billing":0.89,"technical":0.11},"confidence":0.83},
-				"frustration":{"type":"score","score":1.05,"legend":{"0":"Calm","1":"Frustrated","2":"Very angry"},"probabilities":{"0":0,"1":0.95,"2":0.05},"confidence":0.92},
 				"is_urgent":{"type":"noul","noul":0.96}
 			},
 			"usage":{"input_tokens":427,"output_tokens":73,"cost":0.000017934},
@@ -84,25 +71,9 @@ func TestClientEvaluate(t *testing.T) {
 				False: "No urgency expressed",
 			},
 		},
-		"department": ChoiceQuestion{
-			Instructions: "Which team should handle this?",
-			Criteria: map[string]any{
-				"billing":   "Payments",
-				"technical": "Bugs",
-			},
-		},
-		"frustration": ScoreQuestion{
-			Instructions: "How frustrated is the customer?",
-			Criteria:     []any{"Calm", "Frustrated", "Very angry"},
-		},
 	})
 	require.NoError(t, err)
 	require.Equal(t, "typesafe/jev-1.13-20260917", response.Model)
-	require.Equal(t, "billing", response.Answers["department"].Choice)
-	require.Equal(t, 0.89, response.Answers["department"].Probabilities["billing"])
-	require.Equal(t, 0.83, *response.Answers["department"].Confidence)
-	require.Equal(t, 1.05, *response.Answers["frustration"].Score)
-	require.Equal(t, "Very angry", response.Answers["frustration"].Legend["2"])
 	require.Equal(t, 0.96, *response.Answers["is_urgent"].Noul)
 	require.Equal(t, 427, response.Usage.InputTokens)
 	require.Equal(t, 0.000017934, response.Usage.Cost)
@@ -125,40 +96,6 @@ func TestClientEvaluateWithModel(t *testing.T) {
 	client := NewClient("test-key", WithEndpoint(server.URL), WithModel("jev-1.13.0"))
 	_, err := client.Evaluate(context.Background(), "state", Questions{})
 	require.NoError(t, err)
-}
-
-func TestClientEvaluateStructuredScoreLegend(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_, err := w.Write([]byte(`{
-			"model":"jev-latest",
-			"answers":{
-				"severity":{
-					"type":"score",
-					"score":0.25,
-					"legend":{"0":{"label":"low"},"1":["high","critical"]},
-					"probabilities":{"0":0.75,"1":0.25},
-					"confidence":0.5
-				}
-			},
-			"usage":{}
-		}`))
-		require.NoError(t, err)
-	}))
-	defer server.Close()
-
-	client := NewClient("test-key", WithEndpoint(server.URL))
-	response, err := client.Evaluate(context.Background(), "state", Questions{
-		"severity": ScoreQuestion{
-			Instructions: "How severe is this?",
-			Criteria: []any{
-				map[string]any{"label": "low"},
-				[]any{"high", "critical"},
-			},
-		},
-	})
-	require.NoError(t, err)
-	require.Equal(t, map[string]any{"label": "low"}, response.Answers["severity"].Legend["0"])
-	require.Equal(t, []any{"high", "critical"}, response.Answers["severity"].Legend["1"])
 }
 
 func TestClientEvaluateError(t *testing.T) {
@@ -194,90 +131,6 @@ func TestClientEvaluateInvalidJSON(t *testing.T) {
 	require.True(t, errors.As(err, &syntaxErr))
 }
 
-func TestClientEvaluateInvalidAnswer(t *testing.T) {
-	tests := []struct {
-		name   string
-		answer string
-	}{
-		{name: "unknown type", answer: `{"type":"unknown"}`},
-		{name: "noul missing value", answer: `{"type":"noul"}`},
-		{name: "noul with choice field", answer: `{"type":"noul","noul":0.5,"choice":"yes"}`},
-		{name: "choice missing confidence", answer: `{"type":"choice","choice":"yes","probabilities":{"yes":1}}`},
-		{name: "choice with score field", answer: `{"type":"choice","choice":"yes","probabilities":{"yes":1},"confidence":1,"score":1}`},
-		{name: "score missing legend", answer: `{"type":"score","score":1,"probabilities":{"1":1},"confidence":1}`},
-		{name: "score with noul field", answer: `{"type":"score","score":1,"legend":{"1":"high"},"probabilities":{"1":1},"confidence":1,"noul":1}`},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				_, err := fmt.Fprintf(w, `{"model":"jev-latest","answers":{"result":%s},"usage":{}}`, test.answer)
-				require.NoError(t, err)
-			}))
-			defer server.Close()
-
-			client := NewClient("test-key", WithEndpoint(server.URL))
-			_, err := client.Evaluate(context.Background(), "state", Questions{})
-			require.Error(t, err)
-		})
-	}
-}
-
-func TestClientEvaluateValidatesQuestions(t *testing.T) {
-	tests := []struct {
-		name      string
-		questions Questions
-	}{
-		{
-			name:      "nil question",
-			questions: Questions{"question": nil},
-		},
-		{
-			name:      "nil question pointer",
-			questions: Questions{"question": (*NoulQuestion)(nil)},
-		},
-		{
-			name: "choice has no options",
-			questions: Questions{
-				"question": ChoiceQuestion{Criteria: map[string]any{}},
-			},
-		},
-		{
-			name: "choice too many options",
-			questions: Questions{
-				"question": ChoiceQuestion{Criteria: makeCriteria(256)},
-			},
-		},
-		{
-			name: "score too few levels",
-			questions: Questions{
-				"question": ScoreQuestion{Criteria: []any{"one"}},
-			},
-		},
-		{
-			name: "score too many levels",
-			questions: Questions{
-				"question": ScoreQuestion{Criteria: make([]any, 11)},
-			},
-		},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			requests := 0
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				requests++
-				_, err := w.Write([]byte(`{"model":"jev-latest","answers":{},"usage":{}}`))
-				require.NoError(t, err)
-			}))
-			defer server.Close()
-
-			client := NewClient("test-key", WithEndpoint(server.URL))
-			_, err := client.Evaluate(context.Background(), "state", test.questions)
-			require.Error(t, err)
-			require.Zero(t, requests)
-		})
-	}
-}
-
 func TestClientEvaluateRejectsOversizedResponse(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, err := w.Write([]byte(strings.Repeat("x", maxResponseBodySize+1)))
@@ -300,12 +153,4 @@ func TestClientWithNilHTTPClient(t *testing.T) {
 	client := NewClient("test-key", nil, WithEndpoint(server.URL), WithHTTPClient(nil))
 	_, err := client.Evaluate(context.Background(), "state", Questions{})
 	require.NoError(t, err)
-}
-
-func makeCriteria(count int) map[string]any {
-	criteria := make(map[string]any, count)
-	for i := range count {
-		criteria[fmt.Sprintf("option-%d", i)] = nil
-	}
-	return criteria
 }
