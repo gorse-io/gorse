@@ -830,22 +830,21 @@ func (t *Tensor) argmax() []int {
 	return indices
 }
 
-// Tensor payloads use native memory layout; supported platforms are little-endian.
+// Tensor payloads share backing storage and use native little-endian memory layout.
 func (t *Tensor) toPB() *protocol.Tensor {
 	pb := &protocol.Tensor{
 		Shape: lo.Map(t.shape, func(i, _ int) int32 { return int32(i) }),
 	}
 	if t.dtype == Float16 {
 		pb.Dtype = protocol.TensorDType_FLOAT16
-		pb.Data = make([]byte, 2*len(t.data16))
-		copy(pb.Data, unsafe.Slice((*byte)(unsafe.Pointer(unsafe.SliceData(t.data16))), len(pb.Data)))
+		pb.Data = unsafe.Slice((*byte)(unsafe.Pointer(unsafe.SliceData(t.data16))), 2*len(t.data16))
 	} else {
-		pb.Data = make([]byte, 4*len(t.data))
-		copy(pb.Data, unsafe.Slice((*byte)(unsafe.Pointer(unsafe.SliceData(t.data))), len(pb.Data)))
+		pb.Data = unsafe.Slice((*byte)(unsafe.Pointer(unsafe.SliceData(t.data))), 4*len(t.data))
 	}
 	return pb
 }
 
+// fromPB shares pb.Data without copying; the platform must support unaligned numeric access.
 func (t *Tensor) fromPB(pb *protocol.Tensor) {
 	shape := make([]int, len(pb.Shape))
 	for i, dim := range pb.Shape {
@@ -855,12 +854,10 @@ func (t *Tensor) fromPB(pb *protocol.Tensor) {
 	if pb.Dtype == protocol.TensorDType_FLOAT16 {
 		decoded.dtype = Float16
 		if len(pb.Data) > 0 {
-			decoded.data16 = make([]uint16, len(pb.Data)/2)
-			copy(unsafe.Slice((*byte)(unsafe.Pointer(unsafe.SliceData(decoded.data16))), 2*len(decoded.data16)), pb.Data)
+			decoded.data16 = unsafe.Slice((*uint16)(unsafe.Pointer(unsafe.SliceData(pb.Data))), len(pb.Data)/2)
 		}
 	} else {
-		decoded.data = make([]float32, len(pb.Data)/4)
-		copy(unsafe.Slice((*byte)(unsafe.Pointer(unsafe.SliceData(decoded.data))), 4*len(decoded.data)), pb.Data)
+		decoded.data = unsafe.Slice((*float32)(unsafe.Pointer(unsafe.SliceData(pb.Data))), len(pb.Data)/4)
 	}
 	*t = decoded
 }
