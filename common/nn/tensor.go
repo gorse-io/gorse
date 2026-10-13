@@ -17,13 +17,13 @@ package nn
 import (
 	"container/heap"
 	"context"
-	"encoding/binary"
 	"fmt"
 	"math"
 	"math/rand"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"unsafe"
 
 	"github.com/chewxy/math32"
 	mapset "github.com/deckarep/golang-set/v2"
@@ -828,6 +828,7 @@ func (t *Tensor) argmax() []int {
 	return indices
 }
 
+// Tensor payloads use native memory layout; supported platforms are little-endian.
 func (t *Tensor) toPB() *protocol.Tensor {
 	pb := &protocol.Tensor{
 		Shape: lo.Map(t.shape, func(i, _ int) int32 { return int32(i) }),
@@ -835,14 +836,10 @@ func (t *Tensor) toPB() *protocol.Tensor {
 	if t.dtype == Float16 {
 		pb.Dtype = protocol.TensorDType_FLOAT16
 		pb.Data = make([]byte, 2*len(t.data16))
-		for i, value := range t.data16 {
-			binary.LittleEndian.PutUint16(pb.Data[2*i:], value)
-		}
+		copy(pb.Data, unsafe.Slice((*byte)(unsafe.Pointer(unsafe.SliceData(t.data16))), len(pb.Data)))
 	} else {
 		pb.Data = make([]byte, 4*len(t.data))
-		for i, value := range t.data {
-			binary.LittleEndian.PutUint32(pb.Data[4*i:], math.Float32bits(value))
-		}
+		copy(pb.Data, unsafe.Slice((*byte)(unsafe.Pointer(unsafe.SliceData(t.data))), len(pb.Data)))
 	}
 	return pb
 }
@@ -857,15 +854,11 @@ func (t *Tensor) fromPB(pb *protocol.Tensor) {
 		decoded.dtype = Float16
 		if len(pb.Data) > 0 {
 			decoded.data16 = make([]uint16, len(pb.Data)/2)
-			for i := range decoded.data16 {
-				decoded.data16[i] = binary.LittleEndian.Uint16(pb.Data[2*i:])
-			}
+			copy(unsafe.Slice((*byte)(unsafe.Pointer(unsafe.SliceData(decoded.data16))), 2*len(decoded.data16)), pb.Data)
 		}
 	} else {
 		decoded.data = make([]float32, len(pb.Data)/4)
-		for i := range decoded.data {
-			decoded.data[i] = math.Float32frombits(binary.LittleEndian.Uint32(pb.Data[4*i:]))
-		}
+		copy(unsafe.Slice((*byte)(unsafe.Pointer(unsafe.SliceData(decoded.data))), 4*len(decoded.data)), pb.Data)
 	}
 	*t = decoded
 }
