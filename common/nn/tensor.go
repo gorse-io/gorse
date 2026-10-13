@@ -87,11 +87,7 @@ func (t *Tensor) ToFloat32() *Tensor {
 	if t.dtype == Float32 {
 		return t.clone()
 	}
-	data := make([]float32, len(t.data16))
-	for i, value := range t.data16 {
-		data[i] = float16.Frombits(value).Float32()
-	}
-	return NewTensor(data, slices.Clone(t.shape)...)
+	return NewTensor(floats.ToFloat32(t.data16), slices.Clone(t.shape)...)
 }
 
 // NewTensor creates a tensor sharing data and shape with its inputs.
