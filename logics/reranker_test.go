@@ -40,12 +40,12 @@ func TestReranker(t *testing.T) {
 	defer s.Close()
 
 	reranker, err := NewReranker(config.RerankerAPIConfig{
-		AuthToken: s.AuthToken(),
-		URL:       s.URL(),
-		Model:     "gte-rerank",
-	},
-		"{{ user.UserId }} is a {{ user.Comment }} watched the following movies recently: {% for item in feedback %}{{ item.Comment }}, {% endfor %}",
-		"{{ item.Comment }}")
+		AuthToken:        s.AuthToken(),
+		URL:              s.URL(),
+		Model:            "gte-rerank",
+		QueryTemplate:    "{{ user.UserId }} is a {{ user.Comment }} watched the following movies recently: {% for item in feedback %}{{ item.Comment }}, {% endfor %}",
+		DocumentTemplate: "{{ item.Comment }}",
+	})
 	assert.NoError(t, err)
 
 	items, err := reranker.Rank(t.Context(), &data.User{
@@ -88,28 +88,28 @@ func TestDecision(t *testing.T) {
 		require.Equal(t, "test-model", request.Model)
 		require.Equal(t, "u1: history", request.State)
 		require.Len(t, request.Questions, 2)
-		require.Equal(t, "score", request.Questions["a"].Type)
-		require.Contains(t, request.Questions["a"].Instructions, "first")
-		require.Len(t, request.Questions["a"].Criteria, 5)
-		_, _ = w.Write([]byte(`{"answers":{"a":{"type":"score","score":1.5,"probabilities":{},"legend":{},"confidence":0.9},"b":{"type":"score","score":3.5,"probabilities":{},"legend":{},"confidence":0.9}}}`))
+		require.Equal(t, "noul", request.Questions["a"].Type)
+		require.Equal(t, "{{not a template}} first", request.Questions["a"].Instructions)
+		require.Empty(t, request.Questions["a"].Criteria)
+		_, _ = w.Write([]byte(`{"answers":{"a":{"type":"noul","noul":0.15},"b":{"type":"noul","noul":0.85}}}`))
 	}))
 	defer server.Close()
-	ranker, err := NewDecision(config.DecisionAPIConfig{AuthToken: "test-key", URL: server.URL, Model: "test-model"}, "{{user.UserId}}: {% for f in feedback %}{{f.ItemId}}{% endfor %}", "{{item.Comment}}")
+	ranker, err := NewDecision(config.DecisionAPIConfig{AuthToken: "test-key", URL: server.URL, Model: "test-model", StateTemplate: "{{user.UserId}}: {% for f in feedback %}{{f.ItemId}}{% endfor %}", InstructionsTemplate: "{% raw %}{{not a template}}{% endraw %} {{item.Comment}}"})
 	require.NoError(t, err)
 	scores, err := ranker.Rank(t.Context(), &data.User{UserId: "u1"}, []*FeedbackItem{{Item: data.Item{ItemId: "history"}}}, []*data.Item{{ItemId: "a", Comment: "first"}, {ItemId: "b", Comment: "second"}})
 	require.NoError(t, err)
-	require.Equal(t, []cache.Score{{Id: "b", Score: 3.5}, {Id: "a", Score: 1.5}}, scores)
+	require.Equal(t, []cache.Score{{Id: "b", Score: 0.85}, {Id: "a", Score: 0.15}}, scores)
 	scores, err = ranker.Rank(t.Context(), nil, nil, nil)
 	require.NoError(t, err)
 	require.Empty(t, scores)
 }
 
 func TestDecisionInvalidAnswers(t *testing.T) {
-	for _, body := range []string{`{"answers":{}}`, `{"answers":{"a":{"type":"noul","noul":0.5}}}`, `{"answers":{"a":{"type":"score","score":5,"probabilities":{},"legend":{},"confidence":1}}}`} {
+	for _, body := range []string{`{"answers":{}}`, `{"answers":{"a":{"type":"score","score":1,"probabilities":{},"legend":{},"confidence":1}}}`, `{"answers":{"a":{"type":"noul","noul":1.1}}}`, `{"answers":{"a":{"type":"noul","noul":-0.1}}}`, `{"answers":{"a":{"type":"noul"}}}`} {
 		t.Run(body, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte(body)) }))
 			defer server.Close()
-			ranker, err := NewDecision(config.DecisionAPIConfig{URL: server.URL}, "", "{{item.ItemId}}")
+			ranker, err := NewDecision(config.DecisionAPIConfig{URL: server.URL, InstructionsTemplate: "{{item.ItemId}}"})
 			require.NoError(t, err)
 			_, err = ranker.Rank(t.Context(), &data.User{}, nil, []*data.Item{{ItemId: "a"}})
 			require.Error(t, err)

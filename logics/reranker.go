@@ -76,8 +76,8 @@ type Reranker struct {
 	model  string
 }
 
-func NewReranker(cfg config.RerankerAPIConfig, queryTemplate, docTemplate string) (*Reranker, error) {
-	templates, err := newRankerTemplates(queryTemplate, docTemplate)
+func NewReranker(cfg config.RerankerAPIConfig) (*Reranker, error) {
+	templates, err := newRankerTemplates(cfg.QueryTemplate, cfg.DocumentTemplate)
 	if err != nil {
 		return nil, err
 	}
@@ -117,8 +117,8 @@ type Decision struct {
 	client *decision.Client
 }
 
-func NewDecision(cfg config.DecisionAPIConfig, queryTemplate, docTemplate string) (*Decision, error) {
-	templates, err := newRankerTemplates(queryTemplate, docTemplate)
+func NewDecision(cfg config.DecisionAPIConfig) (*Decision, error) {
+	templates, err := newRankerTemplates(cfg.StateTemplate, cfg.InstructionsTemplate)
 	if err != nil {
 		return nil, err
 	}
@@ -140,12 +140,10 @@ func (r *Decision) Rank(ctx context.Context, user *data.User, feedback []*Feedba
 	if err != nil {
 		return nil, err
 	}
-	criteria := []any{"Not relevant", "Slightly relevant", "Moderately relevant", "Highly relevant", "Extremely relevant"}
 	questions := make(decision.Questions, len(items))
 	for i, item := range items {
-		questions[item.ItemId] = decision.ScoreQuestion{
-			Instructions: "Rate the relevance of the following candidate to the user query and preferences in the state:\n" + documents[i],
-			Criteria:     criteria,
+		questions[item.ItemId] = decision.NoulQuestion{
+			Instructions: documents[i],
 		}
 	}
 	response, err := r.client.Evaluate(ctx, query, questions)
@@ -155,12 +153,12 @@ func (r *Decision) Rank(ctx context.Context, user *data.User, feedback []*Feedba
 	scores := make([]cache.Score, 0, len(items))
 	for _, item := range items {
 		answer, exists := response.Answers[item.ItemId]
-		if !exists || answer.Type != "score" || answer.Score == nil {
-			return nil, fmt.Errorf("decision response is missing a score for item %q", item.ItemId)
+		if !exists || answer.Type != "noul" || answer.Noul == nil {
+			return nil, fmt.Errorf("decision response is missing a noul probability for item %q", item.ItemId)
 		}
-		score := *answer.Score
-		if math.IsNaN(score) || math.IsInf(score, 0) || score < 0 || score > float64(len(criteria)-1) {
-			return nil, fmt.Errorf("decision response has an invalid score for item %q: %g", item.ItemId, score)
+		score := *answer.Noul
+		if math.IsNaN(score) || math.IsInf(score, 0) || score < 0 || score > 1 {
+			return nil, fmt.Errorf("decision response has an invalid noul probability for item %q: %g", item.ItemId, score)
 		}
 		scores = append(scores, cache.Score{Id: item.ItemId, Score: score})
 	}

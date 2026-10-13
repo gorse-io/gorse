@@ -405,18 +405,16 @@ type ReplacementConfig struct {
 }
 
 type RankerConfig struct {
-	Type             string              `mapstructure:"type" validate:"oneof=none fm reranker decision"`
-	Recommenders     []string            `mapstructure:"recommenders"`
-	CacheExpire      time.Duration       `mapstructure:"cache_expire" validate:"gt=0"`
-	FitPeriod        time.Duration       `mapstructure:"fit_period" validate:"gt=0"`
-	FitEpoch         int                 `mapstructure:"fit_epoch" validate:"gt=0"`
-	OptimizePeriod   time.Duration       `mapstructure:"optimize_period" validate:"gte=0"`
-	OptimizeTrials   int                 `mapstructure:"optimize_trials" validate:"gt=0"`
-	QueryTemplate    string              `mapstructure:"query_template"`
-	DocumentTemplate string              `mapstructure:"document_template"`
-	EarlyStopping    EarlyStoppingConfig `mapstructure:"early_stopping"`
-	RerankerAPI      RerankerAPIConfig   `mapstructure:"reranker_api"`
-	DecisionAPI      DecisionAPIConfig   `mapstructure:"decision_api"`
+	Type           string              `mapstructure:"type" validate:"oneof=none fm reranker decision"`
+	Recommenders   []string            `mapstructure:"recommenders"`
+	CacheExpire    time.Duration       `mapstructure:"cache_expire" validate:"gt=0"`
+	FitPeriod      time.Duration       `mapstructure:"fit_period" validate:"gt=0"`
+	FitEpoch       int                 `mapstructure:"fit_epoch" validate:"gt=0"`
+	OptimizePeriod time.Duration       `mapstructure:"optimize_period" validate:"gte=0"`
+	OptimizeTrials int                 `mapstructure:"optimize_trials" validate:"gt=0"`
+	EarlyStopping  EarlyStoppingConfig `mapstructure:"early_stopping"`
+	RerankerAPI    RerankerAPIConfig   `mapstructure:"reranker_api"`
+	DecisionAPI    DecisionAPIConfig   `mapstructure:"decision_api"`
 }
 
 type FallbackConfig struct {
@@ -440,15 +438,19 @@ type OIDCConfig struct {
 }
 
 type DecisionAPIConfig struct {
-	AuthToken string `mapstructure:"auth_token"`
-	Model     string `mapstructure:"model"`
-	URL       string `mapstructure:"url"`
+	StateTemplate        string `mapstructure:"state_template"`
+	InstructionsTemplate string `mapstructure:"instructions_template"`
+	AuthToken            string `mapstructure:"auth_token"`
+	Model                string `mapstructure:"model"`
+	URL                  string `mapstructure:"url"`
 }
 
 type RerankerAPIConfig struct {
-	AuthToken string `mapstructure:"auth_token"`
-	Model     string `mapstructure:"model"`
-	URL       string `mapstructure:"url"`
+	QueryTemplate    string `mapstructure:"query_template"`
+	DocumentTemplate string `mapstructure:"document_template"`
+	AuthToken        string `mapstructure:"auth_token"`
+	Model            string `mapstructure:"model"`
+	URL              string `mapstructure:"url"`
 }
 
 type OpenAIConfig struct {

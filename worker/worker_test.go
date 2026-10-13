@@ -816,12 +816,13 @@ func (suite *WorkerTestSuite) TestRankByReranker() {
 	suite.NoError(err)
 
 	suite.Config.Recommend.Ranker.RerankerAPI = config.RerankerAPIConfig{
-		URL:       mockAI.URL(),
-		AuthToken: mockAI.AuthToken(),
-		Model:     "v1",
+		URL:              mockAI.URL(),
+		AuthToken:        mockAI.AuthToken(),
+		Model:            "v1",
+		QueryTemplate:    "{{user.UserId}}",
+		DocumentTemplate: "{{item.ItemId}}",
 	}
-	ranker, err := logics.NewReranker(suite.Config.Recommend.Ranker.RerankerAPI,
-		"{{user.UserId}}", "{{item.ItemId}}")
+	ranker, err := logics.NewReranker(suite.Config.Recommend.Ranker.RerankerAPI)
 	suite.NoError(err)
 
 	itemCache := NewItemCache(suite.DataClient)
@@ -854,8 +855,8 @@ func (suite *WorkerTestSuite) TestRecommendReranker() {
 	suite.Config.Recommend.Ranker.RerankerAPI = config.RerankerAPIConfig{
 		URL: mockAI.URL(), AuthToken: mockAI.AuthToken(), Model: "v1",
 	}
-	suite.Config.Recommend.Ranker.QueryTemplate = "{{user.UserId}}"
-	suite.Config.Recommend.Ranker.DocumentTemplate = "{{item.ItemId}}"
+	suite.Config.Recommend.Ranker.RerankerAPI.QueryTemplate = "{{user.UserId}}"
+	suite.Config.Recommend.Ranker.RerankerAPI.DocumentTemplate = "{{item.ItemId}}"
 	suite.Require().NoError(suite.DataClient.BatchInsertUsers(ctx, []data.User{{UserId: "u1"}}))
 	suite.Require().NoError(suite.DataClient.BatchInsertItems(ctx, []data.Item{{ItemId: "1"}, {ItemId: "2"}}))
 	suite.Require().NoError(suite.CacheClient.AddScores(ctx, cache.NonPersonalized, "popular", []cache.Score{{Id: "1", Score: 10, Categories: []string{""}}, {Id: "2", Score: 5, Categories: []string{""}}}))
@@ -872,15 +873,15 @@ func (suite *WorkerTestSuite) TestRecommendReranker() {
 func (suite *WorkerTestSuite) TestRecommendDecision() {
 	ctx := suite.T().Context()
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte(`{"answers":{"1":{"type":"score","score":1.5,"probabilities":{},"legend":{},"confidence":1},"2":{"type":"score","score":3.5,"probabilities":{},"legend":{},"confidence":1}}}`))
+		_, _ = w.Write([]byte(`{"answers":{"1":{"type":"noul","noul":0.15},"2":{"type":"noul","noul":0.85}}}`))
 	}))
 	defer server.Close()
 	suite.Config.OpenAI.ChatCompletionModel = ""
 	suite.Config.Recommend.Ranker.Type = "decision"
 	suite.Config.Recommend.Ranker.Recommenders = []string{"non-personalized/popular"}
 	suite.Config.Recommend.Ranker.DecisionAPI = config.DecisionAPIConfig{URL: server.URL}
-	suite.Config.Recommend.Ranker.QueryTemplate = "{{user.UserId}}"
-	suite.Config.Recommend.Ranker.DocumentTemplate = "{{item.ItemId}}"
+	suite.Config.Recommend.Ranker.DecisionAPI.StateTemplate = "{{user.UserId}}"
+	suite.Config.Recommend.Ranker.DecisionAPI.InstructionsTemplate = "{{item.ItemId}}"
 	suite.Require().NoError(suite.DataClient.BatchInsertUsers(ctx, []data.User{{UserId: "u1"}}))
 	suite.Require().NoError(suite.DataClient.BatchInsertItems(ctx, []data.Item{{ItemId: "1", Categories: []string{"a"}}, {ItemId: "2", Categories: []string{"b"}}}))
 	suite.Require().NoError(suite.CacheClient.AddScores(ctx, cache.NonPersonalized, "popular", []cache.Score{{Id: "1", Score: 10, Categories: []string{""}}, {Id: "2", Score: 5, Categories: []string{""}}}))
@@ -889,11 +890,11 @@ func (suite *WorkerTestSuite) TestRecommendDecision() {
 	suite.Require().NoError(err)
 	suite.Require().Len(result, 2)
 	suite.Equal("2", result[0].Id)
-	suite.Equal(3.5, result[0].Score)
+	suite.Equal(0.85, result[0].Score)
 	suite.Equal([]string{"b"}, result[0].Categories)
 	suite.False(result[0].Timestamp.IsZero())
 	suite.Equal("1", result[1].Id)
-	suite.Equal(1.5, result[1].Score)
+	suite.Equal(0.15, result[1].Score)
 }
 
 func (suite *WorkerTestSuite) TestRankByDecision() {
@@ -908,15 +909,15 @@ func (suite *WorkerTestSuite) TestRankByDecision() {
 		suite.Require().NoError(json.NewDecoder(r.Body).Decode(&request))
 		suite.Equal("u1: 5", request.State)
 		suite.Len(request.Questions, 2)
-		_, _ = w.Write([]byte(`{"answers":{"1":{"type":"score","score":1.5,"probabilities":{},"legend":{},"confidence":1},"2":{"type":"score","score":3.5,"probabilities":{},"legend":{},"confidence":1}}}`))
+		_, _ = w.Write([]byte(`{"answers":{"1":{"type":"noul","noul":0.15},"2":{"type":"noul","noul":0.85}}}`))
 	}))
 	defer server.Close()
 	suite.Require().NoError(suite.DataClient.BatchInsertItems(ctx, []data.Item{
 		{ItemId: "1", Categories: []string{"a"}}, {ItemId: "2", Categories: []string{"b"}},
 		{ItemId: "3", IsHidden: true}, {ItemId: "4"}, {ItemId: "5"},
 	}))
-	ranker, err := logics.NewDecision(config.DecisionAPIConfig{URL: server.URL},
-		"{{user.UserId}}: {% for f in feedback %}{{f.ItemId}}{% endfor %}", "{{item.ItemId}}")
+	ranker, err := logics.NewDecision(config.DecisionAPIConfig{URL: server.URL,
+		StateTemplate: "{{user.UserId}}: {% for f in feedback %}{{f.ItemId}}{% endfor %}", InstructionsTemplate: "{{item.ItemId}}"})
 	suite.Require().NoError(err)
 	now := time.Now()
 	result, err := suite.rankByDecision(ctx, nil, ranker, &data.User{UserId: "u1"}, []data.Feedback{
@@ -926,8 +927,8 @@ func (suite *WorkerTestSuite) TestRankByDecision() {
 	}, []cache.Score{{Id: "1"}, {Id: "2"}, {Id: "3"}, {Id: "missing"}}, NewItemCache(suite.DataClient), now)
 	suite.Require().NoError(err)
 	suite.Equal([]cache.Score{
-		{Id: "2", Score: 3.5, Categories: []string{"b"}, Timestamp: now},
-		{Id: "1", Score: 1.5, Categories: []string{"a"}, Timestamp: now},
+		{Id: "2", Score: 0.85, Categories: []string{"b"}, Timestamp: now},
+		{Id: "1", Score: 0.15, Categories: []string{"a"}, Timestamp: now},
 	}, result)
 }
 

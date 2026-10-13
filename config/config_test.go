@@ -146,6 +146,10 @@ func TestUnmarshal(t *testing.T) {
 			assert.Equal(t, "<reranker_auth_token>", config.Recommend.Ranker.RerankerAPI.AuthToken)
 			assert.Equal(t, "qwen3-rerank", config.Recommend.Ranker.RerankerAPI.Model)
 			assert.Equal(t, "<reranker_url>", config.Recommend.Ranker.RerankerAPI.URL)
+			assert.Contains(t, config.Recommend.Ranker.RerankerAPI.QueryTemplate, "{{ repo.Comment }}")
+			assert.Contains(t, config.Recommend.Ranker.RerankerAPI.DocumentTemplate, "{{ item.Comment")
+			assert.Contains(t, config.Recommend.Ranker.DecisionAPI.StateTemplate, "{{ repo.Comment }}")
+			assert.Contains(t, config.Recommend.Ranker.DecisionAPI.InstructionsTemplate, "Would the user be interested")
 			// [recommend.fallback]
 			assert.Equal(t, []string{"item-to-item/neighbors", "latest"}, config.Recommend.Fallback.Recommenders)
 			// [tracing]

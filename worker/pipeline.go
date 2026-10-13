@@ -264,10 +264,7 @@ func (p *Pipeline) Recommend(ctx context.Context, users []data.User, progress fu
 				return
 			}
 		} else if p.Config.Recommend.Ranker.Type == "reranker" {
-			ranker, err := logics.NewReranker(
-				p.Config.Recommend.Ranker.RerankerAPI,
-				p.Config.Recommend.Ranker.QueryTemplate,
-				p.Config.Recommend.Ranker.DocumentTemplate)
+			ranker, err := logics.NewReranker(p.Config.Recommend.Ranker.RerankerAPI)
 			if err != nil {
 				log.Logger().Error("failed to create reranker", zap.Error(err))
 				return
@@ -278,10 +275,7 @@ func (p *Pipeline) Recommend(ctx context.Context, users []data.User, progress fu
 				return
 			}
 		} else if p.Config.Recommend.Ranker.Type == "decision" {
-			ranker, err := logics.NewDecision(
-				p.Config.Recommend.Ranker.DecisionAPI,
-				p.Config.Recommend.Ranker.QueryTemplate,
-				p.Config.Recommend.Ranker.DocumentTemplate)
+			ranker, err := logics.NewDecision(p.Config.Recommend.Ranker.DecisionAPI)
 			if err != nil {
 				log.Logger().Error("failed to create decision ranker", zap.Error(err))
 				return

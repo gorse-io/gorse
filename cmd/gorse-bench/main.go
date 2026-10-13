@@ -207,11 +207,7 @@ func EvaluateAFM(cfg *config.Config, train, test *ctr.Dataset, exportUserAUC boo
 }
 
 func EvaluateReranker(cfg *config.Config, train, test *ctr.Dataset, items []data.Item, exportUserAUC bool, scores *sync.Map) {
-	ranker, err := logics.NewReranker(
-		cfg.Recommend.Ranker.RerankerAPI,
-		cfg.Recommend.Ranker.QueryTemplate,
-		cfg.Recommend.Ranker.DocumentTemplate,
-	)
+	ranker, err := logics.NewReranker(cfg.Recommend.Ranker.RerankerAPI)
 	if err != nil {
 		log.Logger().Fatal("failed to create reranker", zap.Error(err))
 	}
