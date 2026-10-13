@@ -278,7 +278,7 @@ func (p *Pipeline) Recommend(ctx context.Context, users []data.User, progress fu
 				return
 			}
 		} else if p.Config.Recommend.Ranker.Type == "decision" {
-			ranker, err := logics.NewDecisionReranker(
+			ranker, err := logics.NewDecision(
 				p.Config.Recommend.Ranker.DecisionAPI,
 				p.Config.Recommend.Ranker.QueryTemplate,
 				p.Config.Recommend.Ranker.DocumentTemplate)
@@ -529,7 +529,7 @@ func (p *Pipeline) rankByReranker(
 func (p *Pipeline) rankByDecision(
 	ctx context.Context,
 	pCtx *parallel.Context,
-	ranker *logics.DecisionReranker,
+	ranker *logics.Decision,
 	user *data.User,
 	feedback []data.Feedback,
 	candidates []cache.Score,

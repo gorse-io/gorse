@@ -72,7 +72,7 @@ func TestReranker(t *testing.T) {
 	}, items)
 }
 
-func TestDecisionReranker(t *testing.T) {
+func TestDecision(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		require.Equal(t, "Bearer test-key", r.Header.Get("Authorization"))
 		var request struct {
@@ -94,7 +94,7 @@ func TestDecisionReranker(t *testing.T) {
 		_, _ = w.Write([]byte(`{"answers":{"a":{"type":"score","score":1.5,"probabilities":{},"legend":{},"confidence":0.9},"b":{"type":"score","score":3.5,"probabilities":{},"legend":{},"confidence":0.9}}}`))
 	}))
 	defer server.Close()
-	ranker, err := NewDecisionReranker(config.DecisionAPIConfig{AuthToken: "test-key", URL: server.URL, Model: "test-model"}, "{{user.UserId}}: {% for f in feedback %}{{f.ItemId}}{% endfor %}", "{{item.Comment}}")
+	ranker, err := NewDecision(config.DecisionAPIConfig{AuthToken: "test-key", URL: server.URL, Model: "test-model"}, "{{user.UserId}}: {% for f in feedback %}{{f.ItemId}}{% endfor %}", "{{item.Comment}}")
 	require.NoError(t, err)
 	scores, err := ranker.Rank(t.Context(), &data.User{UserId: "u1"}, []*FeedbackItem{{Item: data.Item{ItemId: "history"}}}, []*data.Item{{ItemId: "a", Comment: "first"}, {ItemId: "b", Comment: "second"}})
 	require.NoError(t, err)
@@ -104,12 +104,12 @@ func TestDecisionReranker(t *testing.T) {
 	require.Empty(t, scores)
 }
 
-func TestDecisionRerankerInvalidAnswers(t *testing.T) {
+func TestDecisionInvalidAnswers(t *testing.T) {
 	for _, body := range []string{`{"answers":{}}`, `{"answers":{"a":{"type":"noul","noul":0.5}}}`, `{"answers":{"a":{"type":"score","score":5,"probabilities":{},"legend":{},"confidence":1}}}`} {
 		t.Run(body, func(t *testing.T) {
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte(body)) }))
 			defer server.Close()
-			ranker, err := NewDecisionReranker(config.DecisionAPIConfig{URL: server.URL}, "", "{{item.ItemId}}")
+			ranker, err := NewDecision(config.DecisionAPIConfig{URL: server.URL}, "", "{{item.ItemId}}")
 			require.NoError(t, err)
 			_, err = ranker.Rank(t.Context(), &data.User{}, nil, []*data.Item{{ItemId: "a"}})
 			require.Error(t, err)

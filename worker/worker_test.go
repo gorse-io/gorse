@@ -915,7 +915,7 @@ func (suite *WorkerTestSuite) TestRankByDecision() {
 		{ItemId: "1", Categories: []string{"a"}}, {ItemId: "2", Categories: []string{"b"}},
 		{ItemId: "3", IsHidden: true}, {ItemId: "4"}, {ItemId: "5"},
 	}))
-	ranker, err := logics.NewDecisionReranker(config.DecisionAPIConfig{URL: server.URL},
+	ranker, err := logics.NewDecision(config.DecisionAPIConfig{URL: server.URL},
 		"{{user.UserId}}: {% for f in feedback %}{{f.ItemId}}{% endfor %}", "{{item.ItemId}}")
 	suite.Require().NoError(err)
 	now := time.Now()

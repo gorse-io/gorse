@@ -34,59 +34,69 @@ type FeedbackItem struct {
 	data.Item
 }
 
-type Reranker struct {
+type rankerTemplates struct {
 	queryTemplate *exec.Template
 	docTemplate   *exec.Template
-	client        *reranker.Client
-	model         string
+}
+
+func newRankerTemplates(queryTemplate, docTemplate string) (rankerTemplates, error) {
+	qTpl, err := gonja.FromString(queryTemplate)
+	if err != nil {
+		return rankerTemplates{}, err
+	}
+	dTpl, err := gonja.FromString(docTemplate)
+	if err != nil {
+		return rankerTemplates{}, err
+	}
+	return rankerTemplates{queryTemplate: qTpl, docTemplate: dTpl}, nil
+}
+
+func (r *rankerTemplates) render(user *data.User, feedback []*FeedbackItem, items []*data.Item) (string, []string, error) {
+	var query strings.Builder
+	if err := r.queryTemplate.Execute(&query, exec.NewContext(map[string]any{
+		"user":     user,
+		"feedback": feedback,
+	})); err != nil {
+		return "", nil, err
+	}
+	documents := make([]string, len(items))
+	for i, item := range items {
+		var document strings.Builder
+		if err := r.docTemplate.Execute(&document, exec.NewContext(map[string]any{"item": item})); err != nil {
+			return "", nil, err
+		}
+		documents[i] = document.String()
+	}
+	return query.String(), documents, nil
+}
+
+type Reranker struct {
+	rankerTemplates
+	client *reranker.Client
+	model  string
 }
 
 func NewReranker(cfg config.RerankerAPIConfig, queryTemplate, docTemplate string) (*Reranker, error) {
-	// create reranker client
-	client := reranker.NewClient(cfg.AuthToken, cfg.URL)
-	// create templates
-	qTpl, err := gonja.FromString(queryTemplate)
-	if err != nil {
-		return nil, err
-	}
-	dTpl, err := gonja.FromString(docTemplate)
+	templates, err := newRankerTemplates(queryTemplate, docTemplate)
 	if err != nil {
 		return nil, err
 	}
 	return &Reranker{
-		queryTemplate: qTpl,
-		docTemplate:   dTpl,
-		client:        client,
-		model:         cfg.Model,
+		rankerTemplates: templates,
+		client:          reranker.NewClient(cfg.AuthToken, cfg.URL),
+		model:           cfg.Model,
 	}, nil
 }
 
 func (r *Reranker) Rank(ctx context.Context, user *data.User, feedback []*FeedbackItem, items []*data.Item) ([]cache.Score, error) {
-	// render query
-	var queryBuf strings.Builder
-	queryCtx := exec.NewContext(map[string]any{
-		"user":     user,
-		"feedback": feedback,
-	})
-	if err := r.queryTemplate.Execute(&queryBuf, queryCtx); err != nil {
+	query, documents, err := r.render(user, feedback, items)
+	if err != nil {
 		return nil, err
-	}
-	// render documents
-	documents := make([]string, len(items))
-	for i, item := range items {
-		var docBuf strings.Builder
-		docCtx := exec.NewContext(map[string]any{
-			"item": item,
-		})
-		if err := r.docTemplate.Execute(&docBuf, docCtx); err != nil {
-			return nil, err
-		}
-		documents[i] = docBuf.String()
 	}
 	// rerank
 	resp, err := r.client.Rerank(ctx, reranker.RerankRequest{
 		Model:     r.model,
-		Query:     queryBuf.String(),
+		Query:     query,
 		Documents: documents,
 	})
 	if err != nil {
@@ -101,19 +111,14 @@ func (r *Reranker) Rank(ctx context.Context, user *data.User, feedback []*Feedba
 	return result, nil
 }
 
-// DecisionReranker scores candidates against a user query using the decisions API.
-type DecisionReranker struct {
-	queryTemplate *exec.Template
-	docTemplate   *exec.Template
-	client        *decision.Client
+// Decision scores candidates against a user query using the decisions API.
+type Decision struct {
+	rankerTemplates
+	client *decision.Client
 }
 
-func NewDecisionReranker(cfg config.DecisionAPIConfig, queryTemplate, docTemplate string) (*DecisionReranker, error) {
-	qTpl, err := gonja.FromString(queryTemplate)
-	if err != nil {
-		return nil, err
-	}
-	dTpl, err := gonja.FromString(docTemplate)
+func NewDecision(cfg config.DecisionAPIConfig, queryTemplate, docTemplate string) (*Decision, error) {
+	templates, err := newRankerTemplates(queryTemplate, docTemplate)
 	if err != nil {
 		return nil, err
 	}
@@ -124,30 +129,26 @@ func NewDecisionReranker(cfg config.DecisionAPIConfig, queryTemplate, docTemplat
 	if cfg.Model != "" {
 		options = append(options, decision.WithModel(cfg.Model))
 	}
-	return &DecisionReranker{queryTemplate: qTpl, docTemplate: dTpl, client: decision.NewClient(cfg.AuthToken, options...)}, nil
+	return &Decision{rankerTemplates: templates, client: decision.NewClient(cfg.AuthToken, options...)}, nil
 }
 
-func (r *DecisionReranker) Rank(ctx context.Context, user *data.User, feedback []*FeedbackItem, items []*data.Item) ([]cache.Score, error) {
+func (r *Decision) Rank(ctx context.Context, user *data.User, feedback []*FeedbackItem, items []*data.Item) ([]cache.Score, error) {
 	if len(items) == 0 {
 		return nil, nil
 	}
-	var query strings.Builder
-	if err := r.queryTemplate.Execute(&query, exec.NewContext(map[string]any{"user": user, "feedback": feedback})); err != nil {
+	query, documents, err := r.render(user, feedback, items)
+	if err != nil {
 		return nil, err
 	}
 	criteria := []any{"Not relevant", "Slightly relevant", "Moderately relevant", "Highly relevant", "Extremely relevant"}
 	questions := make(decision.Questions, len(items))
-	for _, item := range items {
-		var document strings.Builder
-		if err := r.docTemplate.Execute(&document, exec.NewContext(map[string]any{"item": item})); err != nil {
-			return nil, err
-		}
+	for i, item := range items {
 		questions[item.ItemId] = decision.ScoreQuestion{
-			Instructions: "Rate the relevance of the following candidate to the user query and preferences in the state:\n" + document.String(),
+			Instructions: "Rate the relevance of the following candidate to the user query and preferences in the state:\n" + documents[i],
 			Criteria:     criteria,
 		}
 	}
-	response, err := r.client.Evaluate(ctx, query.String(), questions)
+	response, err := r.client.Evaluate(ctx, query, questions)
 	if err != nil {
 		return nil, err
 	}
