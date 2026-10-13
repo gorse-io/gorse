@@ -100,33 +100,37 @@ func TestFloat32SerializationRawBits(t *testing.T) {
 	}
 }
 
-func TestTensorSerializationOwnsStorage(t *testing.T) {
+func TestTensorSerializationSharesStorage(t *testing.T) {
 	for _, x := range []*Tensor{
 		NewTensor([]uint16{0x3c00, 0x7e55}, 2),
 		NewTensor([]float32{1, math.Float32frombits(0x7fc00055)}, 2),
 	} {
 		pb := x.toPB()
-		original := bytes.Clone(pb.Data)
 		if x.DType() == Float16 {
 			x.Uint16s()[0] = 0
+			require.Zero(t, binary.LittleEndian.Uint16(pb.Data))
+			binary.LittleEndian.PutUint16(pb.Data, 0x4000)
 		} else {
 			x.Floats()[0] = 0
+			require.Zero(t, binary.LittleEndian.Uint32(pb.Data))
+			binary.LittleEndian.PutUint32(pb.Data, math.Float32bits(2))
 		}
-		require.Equal(t, original, pb.Data)
+		require.Equal(t, float32(2), x.Get(0))
 
 		// Decode from an intentionally unaligned byte slice.
 		pb.Data = append([]byte{0}, pb.Data...)[1:]
 		y := new(Tensor)
 		y.fromPB(pb)
-		require.Equal(t, original, y.toPB().Data)
+		require.Equal(t, float32(2), y.Get(0))
 		clear(pb.Data)
-		require.Equal(t, original, y.toPB().Data)
+		require.Equal(t, float32(0), y.Get(0))
 		if y.DType() == Float16 {
-			y.Uint16s()[0] = 0xffff
+			y.Uint16s()[0] = 0x3c00
+			require.Equal(t, uint16(0x3c00), binary.LittleEndian.Uint16(pb.Data))
 		} else {
-			y.Floats()[0] = 2
+			y.Floats()[0] = 1
+			require.Equal(t, math.Float32bits(1), binary.LittleEndian.Uint32(pb.Data))
 		}
-		require.Equal(t, make([]byte, len(original)), pb.Data)
 	}
 }
 
