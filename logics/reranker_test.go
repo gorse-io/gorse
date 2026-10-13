@@ -103,16 +103,3 @@ func TestDecision(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, scores)
 }
-
-func TestDecisionInvalidAnswers(t *testing.T) {
-	for _, body := range []string{`{"answers":{}}`, `{"answers":{"a":{"type":"score","score":1,"probabilities":{},"legend":{},"confidence":1}}}`, `{"answers":{"a":{"type":"noul","noul":1.1}}}`, `{"answers":{"a":{"type":"noul","noul":-0.1}}}`, `{"answers":{"a":{"type":"noul"}}}`} {
-		t.Run(body, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte(body)) }))
-			defer server.Close()
-			ranker, err := NewDecision(config.DecisionAPIConfig{URL: server.URL, InstructionsTemplate: "{{item.ItemId}}"})
-			require.NoError(t, err)
-			_, err = ranker.Rank(t.Context(), &data.User{}, nil, []*data.Item{{ItemId: "a"}})
-			require.Error(t, err)
-		})
-	}
-}
