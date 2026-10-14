@@ -3,6 +3,9 @@ name: release
 on:
   release:
     types: [published]
+permissions:
+  contents: read
+
 
 jobs:
   binaries_linux_windows:

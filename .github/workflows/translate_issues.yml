@@ -4,6 +4,9 @@ on:
     types: [created]
   issues: 
     types: [opened]
+permissions:
+  issues: write
+
 
 jobs:
   translate-isssues:

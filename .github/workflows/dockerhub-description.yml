@@ -6,6 +6,9 @@ on:
       - master
     paths:
       - 'README.md'
+permissions:
+  contents: read
+
 
 jobs:
   dockerhub_description:
