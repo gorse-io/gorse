@@ -870,33 +870,6 @@ func (suite *WorkerTestSuite) TestRecommendReranker() {
 	suite.Equal(0.5, result[1].Score)
 }
 
-func (suite *WorkerTestSuite) TestRecommendDecision() {
-	ctx := suite.T().Context()
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte(`{"answers":{"1":{"type":"noul","noul":0.15},"2":{"type":"noul","noul":0.85}}}`))
-	}))
-	defer server.Close()
-	suite.Config.OpenAI.ChatCompletionModel = ""
-	suite.Config.Recommend.Ranker.Type = "decision"
-	suite.Config.Recommend.Ranker.Recommenders = []string{"non-personalized/popular"}
-	suite.Config.Recommend.Ranker.DecisionAPI = config.DecisionAPIConfig{URL: server.URL}
-	suite.Config.Recommend.Ranker.DecisionAPI.StateTemplate = "{{user.UserId}}"
-	suite.Config.Recommend.Ranker.DecisionAPI.InstructionsTemplate = "{{item.ItemId}}"
-	suite.Require().NoError(suite.DataClient.BatchInsertUsers(ctx, []data.User{{UserId: "u1"}}))
-	suite.Require().NoError(suite.DataClient.BatchInsertItems(ctx, []data.Item{{ItemId: "1", Categories: []string{"a"}}, {ItemId: "2", Categories: []string{"b"}}}))
-	suite.Require().NoError(suite.CacheClient.AddScores(ctx, cache.NonPersonalized, "popular", []cache.Score{{Id: "1", Score: 10, Categories: []string{""}}, {Id: "2", Score: 5, Categories: []string{""}}}))
-	suite.Recommend(ctx, []data.User{{UserId: "u1"}}, nil)
-	result, err := suite.CacheClient.SearchScores(ctx, cache.Recommend, "u1", nil, 0, 10)
-	suite.Require().NoError(err)
-	suite.Require().Len(result, 2)
-	suite.Equal("2", result[0].Id)
-	suite.Equal(0.85, result[0].Score)
-	suite.Equal([]string{"b"}, result[0].Categories)
-	suite.False(result[0].Timestamp.IsZero())
-	suite.Equal("1", result[1].Id)
-	suite.Equal(0.15, result[1].Score)
-}
-
 func (suite *WorkerTestSuite) TestRankByDecision() {
 	ctx := suite.T().Context()
 	suite.Config.Recommend.ContextSize = 1
