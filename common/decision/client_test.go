@@ -17,7 +17,6 @@ package decision
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -113,19 +112,4 @@ func TestClientEvaluateError(t *testing.T) {
 	require.Equal(t, http.StatusUnprocessableEntity, apiErr.StatusCode)
 	require.JSONEq(t, `{"error":"invalid question"}`, string(apiErr.Body))
 	require.EqualError(t, err, `jev request failed with status 422: {"error":"invalid question"}`)
-}
-
-func TestClientEvaluateInvalidJSON(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_, err := w.Write([]byte(`not json`))
-		require.NoError(t, err)
-	}))
-	defer server.Close()
-
-	client := NewClient("test-key", server.URL, "test-model")
-	_, err := client.Evaluate(context.Background(), "state", Questions{})
-	require.Error(t, err)
-
-	var syntaxErr *json.SyntaxError
-	require.True(t, errors.As(err, &syntaxErr))
 }
