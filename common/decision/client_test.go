@@ -38,7 +38,7 @@ func TestClientEvaluate(t *testing.T) {
 			Questions map[string]json.RawMessage `json:"questions"`
 		}
 		require.NoError(t, json.NewDecoder(r.Body).Decode(&request))
-		require.Equal(t, DefaultModel, request.Model)
+		require.Equal(t, "test-model", request.Model)
 		require.Equal(t, "Help! My payouts have been failing for 3 days.", request.State["message"])
 		require.JSONEq(t, `{
 			"type":"noul",
@@ -60,7 +60,7 @@ func TestClientEvaluate(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("test-key", WithEndpoint(server.URL), WithHTTPClient(server.Client()))
+	client := NewClient("test-key", WithEndpoint(server.URL), WithModel("test-model"), WithHTTPClient(server.Client()))
 	response, err := client.Evaluate(context.Background(), map[string]any{
 		"message": "Help! My payouts have been failing for 3 days.",
 	}, Questions{

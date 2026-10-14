@@ -25,14 +25,7 @@ import (
 	"strings"
 )
 
-const (
-	// DefaultEndpoint is the TokenRa Jev decisions endpoint.
-	DefaultEndpoint = "https://tokenra.io/v1/decisions"
-	// DefaultModel is the rolling Jev model alias.
-	DefaultModel = "jev-latest"
-
-	maxResponseBodySize = 16 << 20
-)
+const maxResponseBodySize = 16 << 20
 
 // Questions maps caller-defined question IDs to Noul questions.
 type Questions map[string]NoulQuestion
@@ -127,12 +120,10 @@ func WithHTTPClient(httpClient *http.Client) Option {
 	}
 }
 
-// NewClient creates a Jev client using TokenRa and jev-latest by default.
+// NewClient creates a Jev client. Set the endpoint and model with options.
 func NewClient(apiKey string, options ...Option) *Client {
 	client := &Client{
 		apiKey:     apiKey,
-		endpoint:   DefaultEndpoint,
-		model:      DefaultModel,
 		httpClient: http.DefaultClient,
 	}
 	for _, option := range options {
