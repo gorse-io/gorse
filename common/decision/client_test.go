@@ -20,7 +20,6 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -60,7 +59,7 @@ func TestClientEvaluate(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("test-key", WithEndpoint(server.URL), WithModel("test-model"), WithHTTPClient(server.Client()))
+	client := NewClient("test-key", server.URL, "test-model")
 	response, err := client.Evaluate(context.Background(), map[string]any{
 		"message": "Help! My payouts have been failing for 3 days.",
 	}, Questions{
@@ -93,7 +92,7 @@ func TestClientEvaluateWithModel(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("test-key", WithEndpoint(server.URL), WithModel("jev-1.13.0"))
+	client := NewClient("test-key", server.URL, "jev-1.13.0")
 	_, err := client.Evaluate(context.Background(), "state", Questions{})
 	require.NoError(t, err)
 }
@@ -106,7 +105,7 @@ func TestClientEvaluateError(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("test-key", WithEndpoint(server.URL))
+	client := NewClient("test-key", server.URL, "test-model")
 	_, err := client.Evaluate(context.Background(), "state", Questions{})
 
 	var apiErr *APIError
@@ -123,34 +122,10 @@ func TestClientEvaluateInvalidJSON(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := NewClient("test-key", WithEndpoint(server.URL))
+	client := NewClient("test-key", server.URL, "test-model")
 	_, err := client.Evaluate(context.Background(), "state", Questions{})
 	require.Error(t, err)
 
 	var syntaxErr *json.SyntaxError
 	require.True(t, errors.As(err, &syntaxErr))
-}
-
-func TestClientEvaluateRejectsOversizedResponse(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_, err := w.Write([]byte(strings.Repeat("x", maxResponseBodySize+1)))
-		require.NoError(t, err)
-	}))
-	defer server.Close()
-
-	client := NewClient("test-key", WithEndpoint(server.URL))
-	_, err := client.Evaluate(context.Background(), "state", Questions{})
-	require.EqualError(t, err, "jev response exceeds maximum size")
-}
-
-func TestClientWithNilHTTPClient(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_, err := w.Write([]byte(`{"model":"jev-latest","answers":{},"usage":{}}`))
-		require.NoError(t, err)
-	}))
-	defer server.Close()
-
-	client := NewClient("test-key", nil, WithEndpoint(server.URL), WithHTTPClient(nil))
-	_, err := client.Evaluate(context.Background(), "state", Questions{})
-	require.NoError(t, err)
 }

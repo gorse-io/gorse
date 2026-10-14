@@ -25,8 +25,6 @@ import (
 	"strings"
 )
 
-const maxResponseBodySize = 16 << 20
-
 // Questions maps caller-defined question IDs to Noul questions.
 type Questions map[string]NoulQuestion
 
@@ -88,50 +86,18 @@ func (e *APIError) Error() string {
 
 // Client calls a Jev decisions endpoint.
 type Client struct {
-	apiKey     string
-	endpoint   string
-	model      string
-	httpClient *http.Client
+	apiKey   string
+	endpoint string
+	model    string
 }
 
-// Option configures a Client.
-type Option func(*Client)
-
-// WithEndpoint sets the full decisions endpoint URL.
-func WithEndpoint(endpoint string) Option {
-	return func(client *Client) {
-		client.endpoint = endpoint
+// NewClient creates a Jev client with an explicit endpoint and model.
+func NewClient(apiKey, endpoint, model string) *Client {
+	return &Client{
+		apiKey:   apiKey,
+		endpoint: endpoint,
+		model:    model,
 	}
-}
-
-// WithModel sets the model sent with every request.
-func WithModel(model string) Option {
-	return func(client *Client) {
-		client.model = model
-	}
-}
-
-// WithHTTPClient sets the HTTP client used to send requests.
-func WithHTTPClient(httpClient *http.Client) Option {
-	return func(client *Client) {
-		if httpClient != nil {
-			client.httpClient = httpClient
-		}
-	}
-}
-
-// NewClient creates a Jev client. Set the endpoint and model with options.
-func NewClient(apiKey string, options ...Option) *Client {
-	client := &Client{
-		apiKey:     apiKey,
-		httpClient: http.DefaultClient,
-	}
-	for _, option := range options {
-		if option != nil {
-			option(client)
-		}
-	}
-	return client
 }
 
 // Evaluate evaluates all questions against the same state in one request.
@@ -156,18 +122,15 @@ func (c *Client) Evaluate(ctx context.Context, state any, questions Questions) (
 	request.Header.Set("Authorization", "Bearer "+c.apiKey)
 	request.Header.Set("Content-Type", "application/json")
 
-	response, err := c.httpClient.Do(request)
+	response, err := http.DefaultClient.Do(request)
 	if err != nil {
 		return nil, err
 	}
 	defer response.Body.Close()
 
-	responseBody, err := io.ReadAll(io.LimitReader(response.Body, maxResponseBodySize+1))
+	responseBody, err := io.ReadAll(response.Body)
 	if err != nil {
 		return nil, err
-	}
-	if len(responseBody) > maxResponseBodySize {
-		return nil, fmt.Errorf("jev response exceeds maximum size")
 	}
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
 		return nil, &APIError{StatusCode: response.StatusCode, Body: responseBody}

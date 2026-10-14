@@ -122,14 +122,7 @@ func NewDecision(cfg config.DecisionAPIConfig) (*Decision, error) {
 	if err != nil {
 		return nil, err
 	}
-	options := []decision.Option{}
-	if cfg.URL != "" {
-		options = append(options, decision.WithEndpoint(cfg.URL))
-	}
-	if cfg.Model != "" {
-		options = append(options, decision.WithModel(cfg.Model))
-	}
-	return &Decision{rankerTemplates: templates, client: decision.NewClient(cfg.AuthToken, options...)}, nil
+	return &Decision{rankerTemplates: templates, client: decision.NewClient(cfg.AuthToken, cfg.URL, cfg.Model)}, nil
 }
 
 func (r *Decision) Rank(ctx context.Context, user *data.User, feedback []*FeedbackItem, items []*data.Item) ([]cache.Score, error) {

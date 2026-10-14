@@ -567,6 +567,16 @@ func (s *ValidateTestSuite) TestSearchColumns() {
 	s.Error(s.Validate())
 }
 
+func TestDecisionAPIRequiredConfig(t *testing.T) {
+	config := GetDefaultConfig()
+	config.Recommend.Ranker.Type = "decision"
+	assert.EqualError(t, config.Validate(), "recommend.ranker.decision_api.url must not be empty")
+	config.Recommend.Ranker.DecisionAPI.URL = "http://localhost/decisions"
+	assert.EqualError(t, config.Validate(), "recommend.ranker.decision_api.model must not be empty")
+	config.Recommend.Ranker.DecisionAPI.Model = "test-model"
+	assert.NoError(t, config.Validate())
+}
+
 func TestValidate(t *testing.T) {
 	suite.Run(t, new(ValidateTestSuite))
 }

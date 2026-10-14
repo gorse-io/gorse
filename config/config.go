@@ -853,6 +853,14 @@ func LoadConfig(path string) (*Config, error) {
 }
 
 func (config *Config) Validate() error {
+	if config.Recommend.Ranker.Type == "decision" {
+		if strings.TrimSpace(config.Recommend.Ranker.DecisionAPI.URL) == "" {
+			return errors.New("recommend.ranker.decision_api.url must not be empty")
+		}
+		if strings.TrimSpace(config.Recommend.Ranker.DecisionAPI.Model) == "" {
+			return errors.New("recommend.ranker.decision_api.model must not be empty")
+		}
+	}
 	// Check non-personalized recommenders
 	nonPersonalizedNames := mapset.NewSet[string]()
 	for _, nonPersonalized := range config.Recommend.NonPersonalized {
