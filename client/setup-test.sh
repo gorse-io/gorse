@@ -1,14 +1,9 @@
 #!/bin/bash
 set -e
 
-# Use the checked-out config when available.
+# Download config
 if [ ! -f ./config.toml ]; then
-    config_path="$(dirname "${BASH_SOURCE[0]}")/config.toml"
-    if [ -f "$config_path" ]; then
-        cp "$config_path" ./config.toml
-    else
-        wget --tries=3 --waitretry=2 --retry-on-http-error=500,502,503,504 https://raw.githubusercontent.com/gorse-io/gorse/master/client/config.toml
-    fi
+    wget https://github.com/gorse-io/gorse/raw/refs/heads/master/client/config.toml
 fi
 
 # Create docker-compose.yml
