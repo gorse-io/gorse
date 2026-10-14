@@ -100,6 +100,8 @@ jobs:
         unzip ~/.gorse/download/mnist.zip -d ~/.gorse/dataset
 
     - uses: actions/checkout@v2
+      with:
+        persist-credentials: false
     - uses: actions/setup-go@v5
       with:
         go-version-file: ./go.mod
@@ -173,6 +175,8 @@ jobs:
         unzip ~/.gorse/download/mnist.zip -d ~/.gorse/dataset
 
     - uses: actions/checkout@v2
+      with:
+        persist-credentials: false
     - uses: actions/setup-go@v5
       with:
         go-version-file: ./go.mod
@@ -213,6 +217,8 @@ jobs:
         Expand-Archive ~/.gorse/download/mnist.zip -DestinationPath ~/.gorse/dataset
 
     - uses: actions/checkout@v2
+      with:
+        persist-credentials: false
     - uses: actions/setup-go@v5
       with:
         go-version-file: ./go.mod
@@ -259,6 +265,7 @@ jobs:
     steps:
     - uses: actions/checkout@v5
       with:
+        persist-credentials: false
         fetch-depth: 0
 
     - uses: actions/setup-go@v5
@@ -311,6 +318,8 @@ jobs:
         uses: gorse-io/redis-cluster@v1.0.0
 
       - uses: actions/checkout@v2
+        with:
+          persist-credentials: false
       - uses: actions/setup-go@v5
         with:
           go-version-file: ./go.mod
@@ -350,6 +359,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
+        with:
+          persist-credentials: false
       - name: Build Docker image
         run: docker build -t zhenghaoz/gorse-in-one -f ./cmd/gorse-in-one/Dockerfile .
       - name: Run playground
@@ -367,6 +378,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
+        with:
+          persist-credentials: false
       - uses: actions/setup-go@v5
         with:
           go-version-file: ./go.mod
