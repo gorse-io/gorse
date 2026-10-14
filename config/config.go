@@ -405,17 +405,16 @@ type ReplacementConfig struct {
 }
 
 type RankerConfig struct {
-	Type             string              `mapstructure:"type" validate:"oneof=none fm llm"`
-	Recommenders     []string            `mapstructure:"recommenders"`
-	CacheExpire      time.Duration       `mapstructure:"cache_expire" validate:"gt=0"`
-	FitPeriod        time.Duration       `mapstructure:"fit_period" validate:"gt=0"`
-	FitEpoch         int                 `mapstructure:"fit_epoch" validate:"gt=0"`
-	OptimizePeriod   time.Duration       `mapstructure:"optimize_period" validate:"gte=0"`
-	OptimizeTrials   int                 `mapstructure:"optimize_trials" validate:"gt=0"`
-	QueryTemplate    string              `mapstructure:"query_template"`
-	DocumentTemplate string              `mapstructure:"document_template"`
-	EarlyStopping    EarlyStoppingConfig `mapstructure:"early_stopping"`
-	RerankerAPI      RerankerAPIConfig   `mapstructure:"reranker_api"`
+	Type           string              `mapstructure:"type" validate:"oneof=none fm reranker decision"`
+	Recommenders   []string            `mapstructure:"recommenders"`
+	CacheExpire    time.Duration       `mapstructure:"cache_expire" validate:"gt=0"`
+	FitPeriod      time.Duration       `mapstructure:"fit_period" validate:"gt=0"`
+	FitEpoch       int                 `mapstructure:"fit_epoch" validate:"gt=0"`
+	OptimizePeriod time.Duration       `mapstructure:"optimize_period" validate:"gte=0"`
+	OptimizeTrials int                 `mapstructure:"optimize_trials" validate:"gt=0"`
+	EarlyStopping  EarlyStoppingConfig `mapstructure:"early_stopping"`
+	RerankerAPI    RerankerAPIConfig   `mapstructure:"reranker_api"`
+	DecisionAPI    DecisionAPIConfig   `mapstructure:"decision_api"`
 }
 
 type FallbackConfig struct {
@@ -438,10 +437,20 @@ type OIDCConfig struct {
 	RedirectURL  string `mapstructure:"redirect_url" validate:"omitempty,endswith=/callback/oauth2"`
 }
 
+type DecisionAPIConfig struct {
+	StateTemplate        string `mapstructure:"state_template"`
+	InstructionsTemplate string `mapstructure:"instructions_template"`
+	AuthToken            string `mapstructure:"auth_token"`
+	Model                string `mapstructure:"model"`
+	URL                  string `mapstructure:"url"`
+}
+
 type RerankerAPIConfig struct {
-	AuthToken string `mapstructure:"auth_token"`
-	Model     string `mapstructure:"model"`
-	URL       string `mapstructure:"url"`
+	QueryTemplate    string `mapstructure:"query_template"`
+	DocumentTemplate string `mapstructure:"document_template"`
+	AuthToken        string `mapstructure:"auth_token"`
+	Model            string `mapstructure:"model"`
+	URL              string `mapstructure:"url"`
 }
 
 type OpenAIConfig struct {
@@ -776,6 +785,9 @@ var bindings = []configBinding{
 	{"recommend.ranker.reranker_api.url", "RERANKER_URL"},
 	{"recommend.ranker.reranker_api.model", "RERANKER_MODEL"},
 	{"recommend.ranker.reranker_api.auth_token", "RERANKER_AUTH_TOKEN"},
+	{"recommend.ranker.decision_api.url", "DECISION_URL"},
+	{"recommend.ranker.decision_api.model", "DECISION_MODEL"},
+	{"recommend.ranker.decision_api.auth_token", "DECISION_AUTH_TOKEN"},
 	{"quota.max_users_count", "GORSE_QUOTA_MAX_USERS_COUNT"},
 	{"quota.max_items_count", "GORSE_QUOTA_MAX_ITEMS_COUNT"},
 	{"quota.max_labels_size", "GORSE_QUOTA_MAX_LABELS_SIZE"},
@@ -841,6 +853,14 @@ func LoadConfig(path string) (*Config, error) {
 }
 
 func (config *Config) Validate() error {
+	if config.Recommend.Ranker.Type == "decision" {
+		if strings.TrimSpace(config.Recommend.Ranker.DecisionAPI.URL) == "" {
+			return errors.New("recommend.ranker.decision_api.url must not be empty")
+		}
+		if strings.TrimSpace(config.Recommend.Ranker.DecisionAPI.Model) == "" {
+			return errors.New("recommend.ranker.decision_api.model must not be empty")
+		}
+	}
 	// Check non-personalized recommenders
 	nonPersonalizedNames := mapset.NewSet[string]()
 	for _, nonPersonalized := range config.Recommend.NonPersonalized {

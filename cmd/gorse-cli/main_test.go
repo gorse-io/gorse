@@ -433,12 +433,12 @@ func (s *CLITestSuite) TestPipelineSchemaCmd() {
 }
 
 func (s *CLITestSuite) TestPipelinePatchCmd() {
-	patch := `[{"op":"replace","path":"/cache_size","value":100},{"op":"replace","path":"/ranker/type","value":"llm"}]`
+	patch := `[{"op":"replace","path":"/cache_size","value":100},{"op":"replace","path":"/ranker/type","value":"reranker"}]`
 	out, err := s.execute("pipeline", "patch", patch)
 	s.Require().NoError(err)
 	s.Require().Contains(out, "CacheSize")
 	s.Require().Contains(out, "100")
-	s.Require().Contains(out, "llm")
+	s.Require().Contains(out, "reranker")
 
 	setOut, err := executeRawCommand(rootCmd, "", "pipeline", "set", "recommend.cache_size=100")
 	s.Require().Error(err)

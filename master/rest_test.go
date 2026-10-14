@@ -859,7 +859,7 @@ func (suite *MasterAPITestSuite) TestConfig() {
 
 	suite.Config.Master.DashboardRedacted = false
 	newConfig := *suite.Config
-	newConfig.Recommend.Ranker.Type = "llm"
+	newConfig.Recommend.Ranker.Type = "reranker"
 	apitest.New().
 		Handler(suite.handler).
 		Post("/api/dashboard/config").
@@ -869,7 +869,7 @@ func (suite *MasterAPITestSuite) TestConfig() {
 		Expect(suite.T()).
 		Status(http.StatusOK).
 		End()
-	suite.Equal("llm", suite.Config.Recommend.Ranker.Type)
+	suite.Equal("reranker", suite.Config.Recommend.Ranker.Type)
 	suite.NotEmpty(suite.scheduled)
 
 	newConfig.Recommend.Ranker.Type = "xxx"
@@ -881,7 +881,7 @@ func (suite *MasterAPITestSuite) TestConfig() {
 		Expect(suite.T()).
 		Status(http.StatusBadRequest).
 		End()
-	suite.Equal("llm", suite.Config.Recommend.Ranker.Type)
+	suite.Equal("reranker", suite.Config.Recommend.Ranker.Type)
 
 	configBytes, err := json.Marshal(suite.Config.Recommend)
 	suite.NoError(err)

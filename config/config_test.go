@@ -146,6 +146,10 @@ func TestUnmarshal(t *testing.T) {
 			assert.Equal(t, "<reranker_auth_token>", config.Recommend.Ranker.RerankerAPI.AuthToken)
 			assert.Equal(t, "qwen3-rerank", config.Recommend.Ranker.RerankerAPI.Model)
 			assert.Equal(t, "<reranker_url>", config.Recommend.Ranker.RerankerAPI.URL)
+			assert.Contains(t, config.Recommend.Ranker.RerankerAPI.QueryTemplate, "{{ repo.Comment }}")
+			assert.Contains(t, config.Recommend.Ranker.RerankerAPI.DocumentTemplate, "{{ item.Comment")
+			assert.Contains(t, config.Recommend.Ranker.DecisionAPI.StateTemplate, "{{ repo.Comment }}")
+			assert.Contains(t, config.Recommend.Ranker.DecisionAPI.InstructionsTemplate, "Would the user be interested")
 			// [recommend.fallback]
 			assert.Equal(t, []string{"item-to-item/neighbors", "latest"}, config.Recommend.Fallback.Recommenders)
 			// [tracing]
@@ -255,6 +259,9 @@ func TestBindEnv(t *testing.T) {
 		{"RERANKER_AUTH_TOKEN", "<reranker_auth_token>"},
 		{"RERANKER_URL", "<reranker_url>"},
 		{"RERANKER_MODEL", "<reranker_model>"},
+		{"DECISION_AUTH_TOKEN", "<decision_auth_token>"},
+		{"DECISION_URL", "<decision_url>"},
+		{"DECISION_MODEL", "<decision_model>"},
 		{"GORSE_QUOTA_MAX_USERS_COUNT", "9"},
 		{"GORSE_QUOTA_MAX_ITEMS_COUNT", "10"},
 		{"GORSE_QUOTA_MAX_LABELS_SIZE", "11"},
@@ -312,6 +319,9 @@ func TestBindEnv(t *testing.T) {
 	assert.Equal(t, "<reranker_auth_token>", config.Recommend.Ranker.RerankerAPI.AuthToken)
 	assert.Equal(t, "<reranker_url>", config.Recommend.Ranker.RerankerAPI.URL)
 	assert.Equal(t, "<reranker_model>", config.Recommend.Ranker.RerankerAPI.Model)
+	assert.Equal(t, "<decision_auth_token>", config.Recommend.Ranker.DecisionAPI.AuthToken)
+	assert.Equal(t, "<decision_url>", config.Recommend.Ranker.DecisionAPI.URL)
+	assert.Equal(t, "<decision_model>", config.Recommend.Ranker.DecisionAPI.Model)
 	assert.Equal(t, 9, config.Quota.MaxUsersCount)
 	assert.Equal(t, 10, config.Quota.MaxItemsCount)
 	assert.Equal(t, 11, config.Quota.MaxLabelsSize)
@@ -555,6 +565,16 @@ func (s *ValidateTestSuite) TestSearchColumns() {
 
 	s.Recommend.Search.Columns = []string{"item.Labels."}
 	s.Error(s.Validate())
+}
+
+func TestDecisionAPIRequiredConfig(t *testing.T) {
+	config := GetDefaultConfig()
+	config.Recommend.Ranker.Type = "decision"
+	assert.EqualError(t, config.Validate(), "recommend.ranker.decision_api.url must not be empty")
+	config.Recommend.Ranker.DecisionAPI.URL = "http://localhost/decisions"
+	assert.EqualError(t, config.Validate(), "recommend.ranker.decision_api.model must not be empty")
+	config.Recommend.Ranker.DecisionAPI.Model = "test-model"
+	assert.NoError(t, config.Validate())
 }
 
 func TestValidate(t *testing.T) {

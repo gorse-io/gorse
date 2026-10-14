@@ -275,10 +275,11 @@ read_replacement_decay = 0.6
 
 [recommend.ranker]
 
-# The type of the ranker. There are two types:
+# The type of the ranker:
 #   none: no ranking (default).
 #   fm: factorization machines.
-#   llm: LLM-based reranker.
+#   reranker: reranker API (uses reranker_api).
+#   decision: Decision API noul-based ranking (uses decision_api).
 type = "fm"
 
 # The time period to refresh recommendation for inactive users. The default values is 120h.
@@ -299,18 +300,6 @@ optimize_period = "360m"
 # The number of trials for hyperparameter optimization. The default value is 10.
 optimize_trials = 10
 
-# The prompt template for query.
-query_template = """
-You are a GitHub repository recommender system. Given a user is interested in the following repositories:
-{% for repo in feedback -%}
-- {{ repo.Comment }}
-{% endfor -%}
-Please sort repositories by the user's interests.
-"""
-
-# The prompt template for documents.
-document_template = '{{ item.Comment | replace(",", " ") | replace("\n", " ") }}'
-
 [recommend.ranker.early_stopping]
 
 # Number of epochs to wait if no improvement and then stop the training. The default value is 10.
@@ -326,6 +315,40 @@ model = "qwen3-rerank"
 
 # URL for the reranker API, supports Jina style.
 url = "https://dashscope.aliyuncs.com/compatible-api/v1/reranks"
+
+# The prompt template for query.
+query_template = """
+You are a GitHub repository recommender system. Given a user is interested in the following repositories:
+{% for repo in feedback -%}
+- {{ repo.Comment }}
+{% endfor -%}
+Please sort repositories by the user's interests.
+"""
+
+# The prompt template for documents.
+document_template = '{{ item.Comment | replace(",", " ") | replace("\n", " ") }}'
+
+[recommend.ranker.decision_api]
+
+# Auth token for the Decision API.
+auth_token = ""
+
+# The Decision API model.
+model = "jev-latest"
+
+# Full URL for the Decision API endpoint.
+url = "https://tokenra.io/v1/decisions"
+
+# The state template, with access to user and feedback.
+state_template = """
+The user is interested in the following repositories:
+{% for repo in feedback -%}
+- {{ repo.Comment }}
+{% endfor -%}
+"""
+
+# The instructions template, rendered separately for each candidate item.
+instructions_template = 'Would the user be interested in this repository? {{ item.Comment | replace(",", " ") | replace("\n", " ") }}'
 
 [recommend.fallback]
 

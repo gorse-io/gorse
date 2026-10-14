@@ -15,7 +15,7 @@ Gorse is an AI powered open-source recommender system written in Go. Gorse aims 
 
 - **Multi-source:** Recommend items from latest, user-to-user, item-to-item, collaborative filtering and etc.
 - **Multimodal:** Support multimodal content (text, image, videos, etc.) via embedding.
-- **AI-powered:** Support both classical recommenders and LLM-based recommenders.
+- **AI-powered:** Support classical recommenders, reranker APIs, and Decision APIs.
 - **GUI Dashboard:** Provide GUI dashboard for recommendation pipeline editing, system monitoring, and data management.
 - **RESTful APIs:** Expose RESTful APIs for data CRUD and recommendation requests.
 
