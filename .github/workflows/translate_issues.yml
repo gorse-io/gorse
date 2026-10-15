@@ -14,4 +14,4 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Issues Translator
-        uses: tomsun28/issues-translate-action@v2.5
+        uses: dromara/issues-translate-action@v2.5
