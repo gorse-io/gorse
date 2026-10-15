@@ -4,9 +4,6 @@ on:
     types: [created]
   issues: 
     types: [opened]
-permissions:
-  issues: write
-
 
 jobs:
   translate-isssues:
@@ -14,4 +11,4 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Issues Translator
-        uses: dromara/issues-translate-action@v2.5
+        uses: tomsun28/issues-translate-action@v2.5

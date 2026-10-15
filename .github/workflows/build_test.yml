@@ -99,10 +99,8 @@ jobs:
         unzip ~/.gorse/download/criteo.zip -d ~/.gorse/dataset
         unzip ~/.gorse/download/mnist.zip -d ~/.gorse/dataset
 
-    - uses: actions/checkout@v2.8.0
-      with:
-        persist-credentials: false
-    - uses: actions/setup-go@v5.6.0
+    - uses: actions/checkout@v2
+    - uses: actions/setup-go@v5
       with:
         go-version-file: ./go.mod
 
@@ -145,7 +143,7 @@ jobs:
 
     - name: Upload coverage to Codecov
       if: matrix.os == 'ubuntu-latest'
-      uses: codecov/codecov-action@v5.5.5
+      uses: codecov/codecov-action@v5
       with:
         files: ./coverage.txt
         fail_ci_if_error: false
@@ -174,10 +172,8 @@ jobs:
         unzip ~/.gorse/download/criteo.zip -d ~/.gorse/dataset
         unzip ~/.gorse/download/mnist.zip -d ~/.gorse/dataset
 
-    - uses: actions/checkout@v2.8.0
-      with:
-        persist-credentials: false
-    - uses: actions/setup-go@v5.6.0
+    - uses: actions/checkout@v2
+    - uses: actions/setup-go@v5
       with:
         go-version-file: ./go.mod
 
@@ -216,17 +212,15 @@ jobs:
         Expand-Archive ~/.gorse/download/criteo.zip -DestinationPath ~/.gorse/dataset
         Expand-Archive ~/.gorse/download/mnist.zip -DestinationPath ~/.gorse/dataset
 
-    - uses: actions/checkout@v2.8.0
-      with:
-        persist-credentials: false
-    - uses: actions/setup-go@v5.6.0
+    - uses: actions/checkout@v2
+    - uses: actions/setup-go@v5
       with:
         go-version-file: ./go.mod
 
     - name: Set up Windows ARM64 C toolchain
       if: matrix.os == 'windows-11-arm'
       id: msys2
-      uses: msys2/setup-msys2@v2.33.0
+      uses: msys2/setup-msys2@v2
       with:
         msystem: CLANGARM64
         update: true
@@ -263,12 +257,11 @@ jobs:
       matrix:
         database: [mysql+qdrant, postgres+weaviate, mongo+milvus, sqlite+xvec]
     steps:
-    - uses: actions/checkout@v5.1.0
+    - uses: actions/checkout@v5
       with:
-        persist-credentials: false
         fetch-depth: 0
 
-    - uses: actions/setup-go@v5.6.0
+    - uses: actions/setup-go@v5
       with:
         go-version-file: ./go.mod
 
@@ -317,10 +310,8 @@ jobs:
       - name: Setup Redis cluster
         uses: gorse-io/redis-cluster@v1.0.0
 
-      - uses: actions/checkout@v2.8.0
-        with:
-          persist-credentials: false
-      - uses: actions/setup-go@v5.6.0
+      - uses: actions/checkout@v2
+      - uses: actions/setup-go@v5
         with:
           go-version-file: ./go.mod
 
@@ -358,9 +349,7 @@ jobs:
     name: playground
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2.8.0
-        with:
-          persist-credentials: false
+      - uses: actions/checkout@v2
       - name: Build Docker image
         run: docker build -t zhenghaoz/gorse-in-one -f ./cmd/gorse-in-one/Dockerfile .
       - name: Run playground
@@ -377,13 +366,11 @@ jobs:
     name: lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2.8.0
-        with:
-          persist-credentials: false
-      - uses: actions/setup-go@v5.6.0
+      - uses: actions/checkout@v2
+      - uses: actions/setup-go@v5
         with:
           go-version-file: ./go.mod
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v9.3.0
+        uses: golangci/golangci-lint-action@v9
         with:
           args: --timeout 20m
