@@ -163,11 +163,14 @@ func (config *Config) Redacted() (*Config, error) {
 	return masked.(*Config), nil
 }
 
-// RestoreRedactedSecrets restores the reranker token when a masked dashboard
-// configuration is posted back without changing the token.
+// RestoreRedactedSecrets restores reranker and decision API tokens when a masked
+// dashboard configuration is posted back without changing the tokens.
 func (config *Config) RestoreRedactedSecrets(original *Config) {
 	if config.Recommend.Ranker.RerankerAPI.AuthToken == redactSecret(original.Recommend.Ranker.RerankerAPI.AuthToken) {
 		config.Recommend.Ranker.RerankerAPI.AuthToken = original.Recommend.Ranker.RerankerAPI.AuthToken
+	}
+	if config.Recommend.Ranker.DecisionAPI.AuthToken == redactSecret(original.Recommend.Ranker.DecisionAPI.AuthToken) {
+		config.Recommend.Ranker.DecisionAPI.AuthToken = original.Recommend.Ranker.DecisionAPI.AuthToken
 	}
 }
 

@@ -855,6 +855,7 @@ func (suite *MasterAPITestSuite) TestConfig() {
 	suite.Config.OIDC.ClientSecret = "oidc-client-secret"
 	suite.Config.OpenAI.AuthToken = "openai-auth-token-secret"
 	suite.Config.Recommend.Ranker.RerankerAPI.AuthToken = "reranker-auth-token-secret"
+	suite.Config.Recommend.Ranker.DecisionAPI.AuthToken = "decision-auth-token-secret"
 	suite.Config.Blob.S3.AccessKeyID = "s3-access-key-secret"
 	suite.Config.Blob.S3.SecretAccessKey = "s3-secret-access-key-secret"
 	suite.Config.Blob.Azure.AccountKey = "azure-account-key-secret"
@@ -934,10 +935,13 @@ func (suite *MasterAPITestSuite) TestConfig() {
 	suite.handler.ServeHTTP(recorder, req)
 	suite.Equal(http.StatusOK, recorder.Code)
 	suite.Equal("reranker-auth-token-secret", suite.Config.Recommend.Ranker.RerankerAPI.AuthToken)
+	suite.Equal("decision-auth-token-secret", suite.Config.Recommend.Ranker.DecisionAPI.AuthToken)
 	var postResponse map[string]any
 	suite.NoError(json.Unmarshal(recorder.Body.Bytes(), &postResponse))
 	postReranker := postResponse["recommend"].(map[string]any)["ranker"].(map[string]any)["reranker_api"].(map[string]any)
 	suite.Equal("rer******cret", postReranker["auth_token"])
+	postDecision := postResponse["recommend"].(map[string]any)["ranker"].(map[string]any)["decision_api"].(map[string]any)
+	suite.Equal("dec******cret", postDecision["auth_token"])
 	suite.NotEqual(suite.Config.Recommend.Ranker.RerankerAPI.AuthToken, postReranker["auth_token"])
 
 	suite.Config.Master.DashboardRedacted = false

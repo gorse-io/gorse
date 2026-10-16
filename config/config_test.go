@@ -104,13 +104,17 @@ func TestRestoreRedactedSecrets(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			original := &Config{Recommend: RecommendConfig{Ranker: RankerConfig{
 				RerankerAPI: RerankerAPIConfig{AuthToken: test.original},
+				DecisionAPI: DecisionAPIConfig{AuthToken: test.original},
 			}}}
 			posted := &Config{Recommend: RecommendConfig{Ranker: RankerConfig{
 				RerankerAPI: RerankerAPIConfig{AuthToken: test.posted},
+				DecisionAPI: DecisionAPIConfig{AuthToken: test.posted},
 			}}}
 			posted.RestoreRedactedSecrets(original)
 			assert.Equal(t, test.expected, posted.Recommend.Ranker.RerankerAPI.AuthToken)
 			assert.Equal(t, test.original, original.Recommend.Ranker.RerankerAPI.AuthToken)
+			assert.Equal(t, test.expected, posted.Recommend.Ranker.DecisionAPI.AuthToken)
+			assert.Equal(t, test.original, original.Recommend.Ranker.DecisionAPI.AuthToken)
 		})
 	}
 }
