@@ -45,7 +45,7 @@ func TestRedacted(t *testing.T) {
 	if !assert.NoError(t, err) {
 		return
 	}
-	assert.Equal(t, RedactedValue, masked.Recommend.Ranker.DecisionAPI.AuthToken)
+	assert.Equal(t, "dec******cret", masked.Recommend.Ranker.DecisionAPI.AuthToken)
 	assert.Equal(t, "decision-secret", conf.Recommend.Ranker.DecisionAPI.AuthToken)
 	assert.Empty(t, masked.OpenAI.AuthToken)
 	assert.Empty(t, masked.Database.DataStore)
@@ -53,6 +53,51 @@ func TestRedacted(t *testing.T) {
 	assert.Equal(t, conf.Recommend.Fallback, masked.Recommend.Fallback)
 	masked.Recommend.Fallback.Recommenders[0] = "modified"
 	assert.Equal(t, []string{"latest"}, conf.Recommend.Fallback.Recommenders)
+}
+
+func TestRedactedSecret(t *testing.T) {
+	for _, test := range []struct {
+		name, secret, expected string
+	}{
+		{"empty", "", ""},
+		{"short", "pass", "******"},
+		{"seven characters", "abcdefg", "******"},
+		{"eight characters", "abcdefgh", "abc******efgh"},
+		{"long", "abcdefghijk", "abc******hijk"},
+		{"unicode", "甲乙丙丁戊己庚辛", "甲乙丙******戊己庚辛"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			conf := &Config{OpenAI: OpenAIConfig{AuthToken: test.secret}}
+			masked, err := conf.Redacted()
+			if assert.NoError(t, err) {
+				assert.Equal(t, test.expected, masked.OpenAI.AuthToken)
+				assert.Equal(t, test.secret, conf.OpenAI.AuthToken)
+			}
+		})
+	}
+}
+
+func TestRestoreRedactedSecrets(t *testing.T) {
+	for _, test := range []struct {
+		name, original, posted, expected string
+	}{
+		{"masked", "abcdefghijk", "abc******hijk", "abcdefghijk"},
+		{"short masked", "pass", "******", "pass"},
+		{"changed", "abcdefghijk", "replacement-token", "replacement-token"},
+		{"cleared", "abcdefghijk", "", ""},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			original := &Config{Recommend: RecommendConfig{Ranker: RankerConfig{
+				RerankerAPI: RerankerAPIConfig{AuthToken: test.original},
+			}}}
+			posted := &Config{Recommend: RecommendConfig{Ranker: RankerConfig{
+				RerankerAPI: RerankerAPIConfig{AuthToken: test.posted},
+			}}}
+			posted.RestoreRedactedSecrets(original)
+			assert.Equal(t, test.expected, posted.Recommend.Ranker.RerankerAPI.AuthToken)
+			assert.Equal(t, test.original, original.Recommend.Ranker.RerankerAPI.AuthToken)
+		})
+	}
 }
 
 func TestUnmarshal(t *testing.T) {

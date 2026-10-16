@@ -74,22 +74,30 @@ type Config struct {
 	Quota     QuotaConfig     `mapstructure:"quota"`
 }
 
-// RedactedValue is the placeholder used for non-empty configuration secrets.
+// RedactedValue is the placeholder used for database credentials.
 const RedactedValue = "********"
 
 var configMasker = func() *mask.Masker {
 	masker := mask.NewMasker()
 	masker.RegisterMaskStringFunc("secret", func(_ string, value string) (string, error) {
-		if value == "" {
-			return "", nil
-		}
-		return masker.MaskFixedString("", value)
+		return redactSecret(value), nil
 	})
 	masker.RegisterMaskStringFunc("database", func(_ string, value string) (string, error) {
 		return redactDatabaseURL(value), nil
 	})
 	return masker
 }()
+
+func redactSecret(value string) string {
+	if value == "" {
+		return ""
+	}
+	characters := []rune(value)
+	if len(characters) <= 7 {
+		return "******"
+	}
+	return string(characters[:3]) + "******" + string(characters[len(characters)-4:])
+}
 
 func isCredentialQueryKey(key string) bool {
 	normalized := strings.NewReplacer("-", "", "_", "", ".", "").Replace(strings.ToLower(key))
@@ -158,7 +166,7 @@ func (config *Config) Redacted() (*Config, error) {
 // RestoreRedactedSecrets restores the reranker token when a masked dashboard
 // configuration is posted back without changing the token.
 func (config *Config) RestoreRedactedSecrets(original *Config) {
-	if config.Recommend.Ranker.RerankerAPI.AuthToken == RedactedValue {
+	if config.Recommend.Ranker.RerankerAPI.AuthToken == redactSecret(original.Recommend.Ranker.RerankerAPI.AuthToken) {
 		config.Recommend.Ranker.RerankerAPI.AuthToken = original.Recommend.Ranker.RerankerAPI.AuthToken
 	}
 }

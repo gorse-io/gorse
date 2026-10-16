@@ -900,7 +900,11 @@ func (suite *MasterAPITestSuite) TestConfig() {
 
 	assertRedacted := func(section map[string]any, key, secret string) {
 		suite.NotEqual(secret, section[key])
-		suite.Equal(config.RedactedValue, section[key])
+		expected := "******"
+		if len(secret) > 7 {
+			expected = secret[:3] + "******" + secret[len(secret)-4:]
+		}
+		suite.Equal(expected, section[key])
 	}
 	masterConfig := redactedConfig["master"].(map[string]any)
 	assertRedacted(masterConfig, "dashboard_password", suite.Config.Master.DashboardPassword)
@@ -933,7 +937,7 @@ func (suite *MasterAPITestSuite) TestConfig() {
 	var postResponse map[string]any
 	suite.NoError(json.Unmarshal(recorder.Body.Bytes(), &postResponse))
 	postReranker := postResponse["recommend"].(map[string]any)["ranker"].(map[string]any)["reranker_api"].(map[string]any)
-	suite.Equal(config.RedactedValue, postReranker["auth_token"])
+	suite.Equal("rer******cret", postReranker["auth_token"])
 	suite.NotEqual(suite.Config.Recommend.Ranker.RerankerAPI.AuthToken, postReranker["auth_token"])
 
 	suite.Config.Master.DashboardRedacted = false
