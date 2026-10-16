@@ -57,6 +57,7 @@ import (
 	"github.com/rakyll/statik/fs"
 	"github.com/samber/lo"
 	"github.com/sashabaranov/go-openai"
+	"github.com/showa-93/go-mask"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -540,17 +541,19 @@ func formatConfig(configMap map[string]any) map[string]any {
 
 const redactedConfigValue = "********"
 
-var redactedConfigKeys = map[string]struct{}{
-	"access_key_id":      {},
-	"account_key":        {},
-	"admin_api_key":      {},
-	"api_key":            {},
-	"auth_token":         {},
-	"client_secret":      {},
-	"connection_string":  {},
-	"dashboard_password": {},
-	"secret_access_key":  {},
-}
+var configMasker = func() *mask.Masker {
+	masker := mask.NewMasker()
+	masker.RegisterMaskStringFunc("secret", func(_ string, value string) (string, error) {
+		if value == "" {
+			return "", nil
+		}
+		return masker.MaskFixedString("", value)
+	})
+	masker.RegisterMaskStringFunc("database", func(_ string, value string) (string, error) {
+		return redactDatabaseURL(value), nil
+	})
+	return masker
+}()
 
 func isCredentialQueryKey(key string) bool {
 	normalized := strings.NewReplacer("-", "", "_", "", ".", "").Replace(strings.ToLower(key))
@@ -607,36 +610,13 @@ func redactDatabaseURL(rawURL string) string {
 	return redactedURL
 }
 
-// redactConfig masks secrets in the dashboard config while preserving the full
-// configuration structure, including the database settings required by the UI.
-// Empty values are kept as-is; non-empty secrets are replaced with
-// redactedConfigValue, and data/cache/vector store URLs have credentials masked
-// in both userinfo and query parameters.
-func redactConfig(configMap map[string]any) {
-	for key, value := range configMap {
-		if _, ok := redactedConfigKeys[key]; ok {
-			if secret, ok := value.(string); ok && secret != "" {
-				configMap[key] = redactedConfigValue
-			}
-			continue
-		}
-		if key == "data_store" || key == "cache_store" || key == "vector_store" {
-			if rawURL, ok := value.(string); ok && rawURL != "" {
-				configMap[key] = redactDatabaseURL(rawURL)
-			}
-			continue
-		}
-		switch nested := value.(type) {
-		case map[string]any:
-			redactConfig(nested)
-		case []any:
-			for _, item := range nested {
-				if itemMap, ok := item.(map[string]any); ok {
-					redactConfig(itemMap)
-				}
-			}
-		}
+// redactConfig returns a masked copy, leaving the live configuration unchanged.
+func redactConfig(conf *config.Config) (*config.Config, error) {
+	masked, err := configMasker.Mask(conf)
+	if err != nil {
+		return nil, err
 	}
+	return masked.(*config.Config), nil
 }
 
 func (m *Master) postConfig(request *restful.Request, response *restful.Response) {
@@ -696,12 +676,16 @@ func (m *Master) postConfig(request *restful.Request, response *restful.Response
 	default:
 	}
 	if dashboardRedacted {
-		var configMap map[string]any
-		if err = mapstructure.Decode(newConfig, &configMap); err != nil {
+		maskedConfig, err := redactConfig(&newConfig)
+		if err != nil {
 			server.InternalServerError(response, err)
 			return
 		}
-		redactConfig(configMap)
+		var configMap map[string]any
+		if err = mapstructure.Decode(maskedConfig, &configMap); err != nil {
+			server.InternalServerError(response, err)
+			return
+		}
 		server.Ok(response, formatConfig(configMap))
 		return
 	}
@@ -711,15 +695,18 @@ func (m *Master) postConfig(request *restful.Request, response *restful.Response
 func (m *Master) getConfig(_ *restful.Request, response *restful.Response) {
 	var configMap map[string]any
 	m.ConfigMutex.RLock()
-	err := mapstructure.Decode(m.Config, &configMap)
-	dashboardRedacted := m.Config.Master.DashboardRedacted
+	conf := m.Config
+	var err error
+	if conf.Master.DashboardRedacted {
+		conf, err = redactConfig(conf)
+	}
+	if err == nil {
+		err = mapstructure.Decode(conf, &configMap)
+	}
 	m.ConfigMutex.RUnlock()
 	if err != nil {
 		server.InternalServerError(response, err)
 		return
-	}
-	if dashboardRedacted {
-		redactConfig(configMap)
 	}
 	server.Ok(response, formatConfig(configMap))
 }

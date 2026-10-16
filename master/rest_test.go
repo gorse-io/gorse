@@ -831,6 +831,30 @@ func (suite *MasterAPITestSuite) TestPurge() {
 	suite.Empty(feedbacks)
 }
 
+func TestRedactConfig(t *testing.T) {
+	conf := &config.Config{
+		OpenAI: config.OpenAIConfig{BaseURL: "https://example.com"},
+		Recommend: config.RecommendConfig{
+			Ranker: config.RankerConfig{
+				DecisionAPI: config.DecisionAPIConfig{AuthToken: "decision-secret"},
+			},
+			Fallback: config.FallbackConfig{Recommenders: []string{"latest"}},
+		},
+	}
+	masked, err := redactConfig(conf)
+	if !assert.NoError(t, err) {
+		return
+	}
+	assert.Equal(t, redactedConfigValue, masked.Recommend.Ranker.DecisionAPI.AuthToken)
+	assert.Equal(t, "decision-secret", conf.Recommend.Ranker.DecisionAPI.AuthToken)
+	assert.Empty(t, masked.OpenAI.AuthToken)
+	assert.Empty(t, masked.Database.DataStore)
+	assert.Equal(t, conf.OpenAI.BaseURL, masked.OpenAI.BaseURL)
+	assert.Equal(t, conf.Recommend.Fallback, masked.Recommend.Fallback)
+	masked.Recommend.Fallback.Recommenders[0] = "modified"
+	assert.Equal(t, []string{"latest"}, conf.Recommend.Fallback.Recommenders)
+}
+
 func (suite *MasterAPITestSuite) TestConfig() {
 	suite.Config.Recommend.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{
 		expression.MustParseFeedbackTypeExpression("a")}
@@ -918,6 +942,10 @@ func (suite *MasterAPITestSuite) TestConfig() {
 		"account_key", suite.Config.Blob.Azure.AccountKey)
 	assertRedacted(redactedConfig["blob"].(map[string]any)["azure"].(map[string]any),
 		"connection_string", suite.Config.Blob.Azure.ConnectionString)
+	suite.Equal("admin-api-key-secret", suite.Config.Master.AdminAPIKey)
+	suite.Equal("s3-secret-access-key-secret", suite.Config.Blob.S3.SecretAccessKey)
+	suite.Equal("openai-auth-token-secret", suite.Config.OpenAI.AuthToken)
+	suite.Equal(suite.Config.Master.DashboardUserName, masterConfig["dashboard_user_name"])
 	postBody := marshal(suite.T(), redactedConfig)
 	req = httptest.NewRequest(http.MethodPost, "/api/dashboard/config", bytes.NewReader([]byte(postBody)))
 	req.Header.Set("Cookie", suite.cookie)
