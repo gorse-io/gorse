@@ -31,6 +31,30 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
+func TestRedacted(t *testing.T) {
+	conf := &Config{
+		OpenAI: OpenAIConfig{BaseURL: "https://example.com"},
+		Recommend: RecommendConfig{
+			Ranker: RankerConfig{
+				DecisionAPI: DecisionAPIConfig{AuthToken: "decision-secret"},
+			},
+			Fallback: FallbackConfig{Recommenders: []string{"latest"}},
+		},
+	}
+	masked, err := conf.Redacted()
+	if !assert.NoError(t, err) {
+		return
+	}
+	assert.Equal(t, RedactedValue, masked.Recommend.Ranker.DecisionAPI.AuthToken)
+	assert.Equal(t, "decision-secret", conf.Recommend.Ranker.DecisionAPI.AuthToken)
+	assert.Empty(t, masked.OpenAI.AuthToken)
+	assert.Empty(t, masked.Database.DataStore)
+	assert.Equal(t, conf.OpenAI.BaseURL, masked.OpenAI.BaseURL)
+	assert.Equal(t, conf.Recommend.Fallback, masked.Recommend.Fallback)
+	masked.Recommend.Fallback.Recommenders[0] = "modified"
+	assert.Equal(t, []string{"latest"}, conf.Recommend.Fallback.Recommenders)
+}
+
 func TestUnmarshal(t *testing.T) {
 	text := ConfigTOML
 	text = strings.Replace(text, "ssl_mode = false", "ssl_mode = true", -1)

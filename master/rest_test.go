@@ -831,30 +831,6 @@ func (suite *MasterAPITestSuite) TestPurge() {
 	suite.Empty(feedbacks)
 }
 
-func TestRedactConfig(t *testing.T) {
-	conf := &config.Config{
-		OpenAI: config.OpenAIConfig{BaseURL: "https://example.com"},
-		Recommend: config.RecommendConfig{
-			Ranker: config.RankerConfig{
-				DecisionAPI: config.DecisionAPIConfig{AuthToken: "decision-secret"},
-			},
-			Fallback: config.FallbackConfig{Recommenders: []string{"latest"}},
-		},
-	}
-	masked, err := redactConfig(conf)
-	if !assert.NoError(t, err) {
-		return
-	}
-	assert.Equal(t, redactedConfigValue, masked.Recommend.Ranker.DecisionAPI.AuthToken)
-	assert.Equal(t, "decision-secret", conf.Recommend.Ranker.DecisionAPI.AuthToken)
-	assert.Empty(t, masked.OpenAI.AuthToken)
-	assert.Empty(t, masked.Database.DataStore)
-	assert.Equal(t, conf.OpenAI.BaseURL, masked.OpenAI.BaseURL)
-	assert.Equal(t, conf.Recommend.Fallback, masked.Recommend.Fallback)
-	masked.Recommend.Fallback.Recommenders[0] = "modified"
-	assert.Equal(t, []string{"latest"}, conf.Recommend.Fallback.Recommenders)
-}
-
 func (suite *MasterAPITestSuite) TestConfig() {
 	suite.Config.Recommend.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{
 		expression.MustParseFeedbackTypeExpression("a")}
@@ -900,7 +876,7 @@ func (suite *MasterAPITestSuite) TestConfig() {
 		parsed, err := url.Parse(redactedURL)
 		suite.NoError(err)
 		for key, secret := range redactedKeys {
-			suite.Equal(redactedConfigValue, parsed.Query().Get(key))
+			suite.Equal(config.RedactedValue, parsed.Query().Get(key))
 			suite.NotContains(redactedURL, secret)
 		}
 		for key, expected := range preserved {
@@ -924,7 +900,7 @@ func (suite *MasterAPITestSuite) TestConfig() {
 
 	assertRedacted := func(section map[string]any, key, secret string) {
 		suite.NotEqual(secret, section[key])
-		suite.Equal(redactedConfigValue, section[key])
+		suite.Equal(config.RedactedValue, section[key])
 	}
 	masterConfig := redactedConfig["master"].(map[string]any)
 	assertRedacted(masterConfig, "dashboard_password", suite.Config.Master.DashboardPassword)
@@ -957,7 +933,7 @@ func (suite *MasterAPITestSuite) TestConfig() {
 	var postResponse map[string]any
 	suite.NoError(json.Unmarshal(recorder.Body.Bytes(), &postResponse))
 	postReranker := postResponse["recommend"].(map[string]any)["ranker"].(map[string]any)["reranker_api"].(map[string]any)
-	suite.Equal(redactedConfigValue, postReranker["auth_token"])
+	suite.Equal(config.RedactedValue, postReranker["auth_token"])
 	suite.NotEqual(suite.Config.Recommend.Ranker.RerankerAPI.AuthToken, postReranker["auth_token"])
 
 	suite.Config.Master.DashboardRedacted = false

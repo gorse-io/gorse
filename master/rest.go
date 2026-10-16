@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"os"
 	"sort"
 	"strings"
@@ -57,7 +56,6 @@ import (
 	"github.com/rakyll/statik/fs"
 	"github.com/samber/lo"
 	"github.com/sashabaranov/go-openai"
-	"github.com/showa-93/go-mask"
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -539,86 +537,6 @@ func formatConfig(configMap map[string]any) map[string]any {
 	})
 }
 
-const redactedConfigValue = "********"
-
-var configMasker = func() *mask.Masker {
-	masker := mask.NewMasker()
-	masker.RegisterMaskStringFunc("secret", func(_ string, value string) (string, error) {
-		if value == "" {
-			return "", nil
-		}
-		return masker.MaskFixedString("", value)
-	})
-	masker.RegisterMaskStringFunc("database", func(_ string, value string) (string, error) {
-		return redactDatabaseURL(value), nil
-	})
-	return masker
-}()
-
-func isCredentialQueryKey(key string) bool {
-	normalized := strings.NewReplacer("-", "", "_", "", ".", "").Replace(strings.ToLower(key))
-	switch normalized {
-	case "user", "username", "passwd", "pwd", "apikey", "accesskey", "accesskeyid", "credential", "credentials":
-		return true
-	default:
-		return strings.Contains(normalized, "password") ||
-			strings.Contains(normalized, "secret") ||
-			strings.HasSuffix(normalized, "token")
-	}
-}
-
-func redactDatabaseURL(rawURL string) string {
-	parsed, err := url.Parse(rawURL)
-	if err != nil {
-		return redactedConfigValue
-	}
-
-	redactedURL := rawURL
-	if parsed.User != nil {
-		username := parsed.User.Username()
-		password, hasPassword := parsed.User.Password()
-		redactedURL = log.RedactDBURL(rawURL)
-		if redactedURL == rawURL && (username != "" || hasPassword && password != "") {
-			return redactedConfigValue
-		}
-		parsed, err = url.Parse(redactedURL)
-		if err != nil {
-			return redactedConfigValue
-		}
-	}
-
-	query, err := url.ParseQuery(parsed.RawQuery)
-	if err != nil {
-		return redactedConfigValue
-	}
-	changed := false
-	for key, values := range query {
-		if !isCredentialQueryKey(key) {
-			continue
-		}
-		for i, value := range values {
-			if value != "" {
-				values[i] = redactedConfigValue
-				changed = true
-			}
-		}
-	}
-	if changed {
-		parsed.RawQuery = query.Encode()
-		redactedURL = parsed.String()
-	}
-	return redactedURL
-}
-
-// redactConfig returns a masked copy, leaving the live configuration unchanged.
-func redactConfig(conf *config.Config) (*config.Config, error) {
-	masked, err := configMasker.Mask(conf)
-	if err != nil {
-		return nil, err
-	}
-	return masked.(*config.Config), nil
-}
-
 func (m *Master) postConfig(request *restful.Request, response *restful.Response) {
 	var newConfigMap map[string]any
 	if err := request.ReadEntity(&newConfigMap); err != nil {
@@ -643,12 +561,8 @@ func (m *Master) postConfig(request *restful.Request, response *restful.Response
 	}
 	m.ConfigMutex.RLock()
 	dashboardRedacted := m.Config.Master.DashboardRedacted
-	// A config posted back from a redacted dashboard carries the
-	// redactedConfigValue placeholder for the reranker auth token. Restore the
-	// real token so posting a redacted configuration never overwrites the
-	// stored token (covered by TestConfig in rest_test.go).
-	if dashboardRedacted && newConfig.Recommend.Ranker.RerankerAPI.AuthToken == redactedConfigValue {
-		newConfig.Recommend.Ranker.RerankerAPI.AuthToken = m.Config.Recommend.Ranker.RerankerAPI.AuthToken
+	if dashboardRedacted {
+		newConfig.RestoreRedactedSecrets(m.Config)
 	}
 	configForValidation := *m.Config
 	m.ConfigMutex.RUnlock()
@@ -676,7 +590,7 @@ func (m *Master) postConfig(request *restful.Request, response *restful.Response
 	default:
 	}
 	if dashboardRedacted {
-		maskedConfig, err := redactConfig(&newConfig)
+		maskedConfig, err := newConfig.Redacted()
 		if err != nil {
 			server.InternalServerError(response, err)
 			return
@@ -698,7 +612,7 @@ func (m *Master) getConfig(_ *restful.Request, response *restful.Response) {
 	conf := m.Config
 	var err error
 	if conf.Master.DashboardRedacted {
-		conf, err = redactConfig(conf)
+		conf, err = conf.Redacted()
 	}
 	if err == nil {
 		err = mapstructure.Decode(conf, &configMap)

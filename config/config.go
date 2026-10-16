@@ -19,6 +19,7 @@ import (
 	"crypto/md5"
 	_ "embed"
 	"encoding/hex"
+	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -38,6 +39,7 @@ import (
 	"github.com/gorse-io/gorse/storage"
 	"github.com/pkg/errors"
 	"github.com/samber/lo"
+	"github.com/showa-93/go-mask"
 	"github.com/spf13/viper"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
@@ -70,6 +72,95 @@ type Config struct {
 	OpenAI    OpenAIConfig    `mapstructure:"openai"`
 	Blob      BlobConfig      `mapstructure:"blob"`
 	Quota     QuotaConfig     `mapstructure:"quota"`
+}
+
+// RedactedValue is the placeholder used for non-empty configuration secrets.
+const RedactedValue = "********"
+
+var configMasker = func() *mask.Masker {
+	masker := mask.NewMasker()
+	masker.RegisterMaskStringFunc("secret", func(_ string, value string) (string, error) {
+		if value == "" {
+			return "", nil
+		}
+		return masker.MaskFixedString("", value)
+	})
+	masker.RegisterMaskStringFunc("database", func(_ string, value string) (string, error) {
+		return redactDatabaseURL(value), nil
+	})
+	return masker
+}()
+
+func isCredentialQueryKey(key string) bool {
+	normalized := strings.NewReplacer("-", "", "_", "", ".", "").Replace(strings.ToLower(key))
+	switch normalized {
+	case "user", "username", "passwd", "pwd", "apikey", "accesskey", "accesskeyid", "credential", "credentials":
+		return true
+	default:
+		return strings.Contains(normalized, "password") ||
+			strings.Contains(normalized, "secret") ||
+			strings.HasSuffix(normalized, "token")
+	}
+}
+
+func redactDatabaseURL(rawURL string) string {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return RedactedValue
+	}
+
+	redactedURL := rawURL
+	if parsed.User != nil {
+		username := parsed.User.Username()
+		password, hasPassword := parsed.User.Password()
+		redactedURL = log.RedactDBURL(rawURL)
+		if redactedURL == rawURL && (username != "" || hasPassword && password != "") {
+			return RedactedValue
+		}
+		parsed, err = url.Parse(redactedURL)
+		if err != nil {
+			return RedactedValue
+		}
+	}
+
+	query, err := url.ParseQuery(parsed.RawQuery)
+	if err != nil {
+		return RedactedValue
+	}
+	changed := false
+	for key, values := range query {
+		if !isCredentialQueryKey(key) {
+			continue
+		}
+		for i, value := range values {
+			if value != "" {
+				values[i] = RedactedValue
+				changed = true
+			}
+		}
+	}
+	if changed {
+		parsed.RawQuery = query.Encode()
+		redactedURL = parsed.String()
+	}
+	return redactedURL
+}
+
+// Redacted returns a masked copy, leaving the original configuration unchanged.
+func (config *Config) Redacted() (*Config, error) {
+	masked, err := configMasker.Mask(config)
+	if err != nil {
+		return nil, err
+	}
+	return masked.(*Config), nil
+}
+
+// RestoreRedactedSecrets restores the reranker token when a masked dashboard
+// configuration is posted back without changing the token.
+func (config *Config) RestoreRedactedSecrets(original *Config) {
+	if config.Recommend.Ranker.RerankerAPI.AuthToken == RedactedValue {
+		config.Recommend.Ranker.RerankerAPI.AuthToken = original.Recommend.Ranker.RerankerAPI.AuthToken
+	}
 }
 
 // DatabaseConfig is the configuration for the database.
