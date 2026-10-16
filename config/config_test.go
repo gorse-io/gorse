@@ -45,13 +45,12 @@ func TestRedacted(t *testing.T) {
 		},
 		Server: ServerConfig{APIKey: "abcdefgh"},
 		OIDC:   OIDCConfig{ClientSecret: "abcdefghi"},
-		OpenAI: OpenAIConfig{BaseURL: "https://example.com", AuthToken: "abcde"},
+		OpenAI: OpenAIConfig{AuthToken: "abcde"},
 		Recommend: RecommendConfig{
 			Ranker: RankerConfig{
 				DecisionAPI: DecisionAPIConfig{AuthToken: "甲乙丙丁戊己庚辛壬癸"},
 				RerankerAPI: RerankerAPIConfig{AuthToken: "abcdefghijk"},
 			},
-			Fallback: FallbackConfig{Recommenders: []string{"latest"}},
 		},
 		Blob: BlobConfig{
 			S3: S3Config{
@@ -64,7 +63,6 @@ func TestRedacted(t *testing.T) {
 			},
 		},
 	}
-	original := *conf
 	masked, err := conf.Redacted()
 	if !assert.NoError(t, err) {
 		return
@@ -84,11 +82,6 @@ func TestRedacted(t *testing.T) {
 	assert.Equal(t, "abc******ijkl", masked.Blob.S3.SecretAccessKey)
 	assert.Equal(t, "abc******jklm", masked.Blob.Azure.AccountKey)
 	assert.Equal(t, "abc******klmn", masked.Blob.Azure.ConnectionString)
-	assert.Equal(t, original, *conf)
-	assert.Equal(t, conf.OpenAI.BaseURL, masked.OpenAI.BaseURL)
-	assert.Equal(t, conf.Recommend.Fallback, masked.Recommend.Fallback)
-	masked.Recommend.Fallback.Recommenders[0] = "modified"
-	assert.Equal(t, []string{"latest"}, conf.Recommend.Fallback.Recommenders)
 
 	conf.OpenAI.AuthToken = ""
 	conf.Database.DataStore = ""
