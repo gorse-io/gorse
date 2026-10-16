@@ -17,6 +17,7 @@ package config
 import (
 	"bytes"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -33,47 +34,68 @@ import (
 
 func TestRedacted(t *testing.T) {
 	conf := &Config{
-		OpenAI: OpenAIConfig{BaseURL: "https://example.com"},
+		Database: DatabaseConfig{
+			DataStore:   "postgres://localhost/gorse?user=data-user&password=data-password&sslmode=require",
+			CacheStore:  "redis://cache:password@localhost:6379?protocol=3",
+			VectorStore: "qdrant://localhost:6334?api_key=vector-api-key&timeout=5",
+		},
+		Master: MasterConfig{
+			DashboardPassword: "p",
+			AdminAPIKey:       "abcdefg",
+		},
+		Server: ServerConfig{APIKey: "abcdefgh"},
+		OIDC:   OIDCConfig{ClientSecret: "abcdefghi"},
+		OpenAI: OpenAIConfig{BaseURL: "https://example.com", AuthToken: "abcde"},
 		Recommend: RecommendConfig{
 			Ranker: RankerConfig{
-				DecisionAPI: DecisionAPIConfig{AuthToken: "decision-secret"},
+				DecisionAPI: DecisionAPIConfig{AuthToken: "甲乙丙丁戊己庚辛壬癸"},
+				RerankerAPI: RerankerAPIConfig{AuthToken: "abcdefghijk"},
 			},
 			Fallback: FallbackConfig{Recommenders: []string{"latest"}},
 		},
+		Blob: BlobConfig{
+			S3: S3Config{
+				AccessKeyID:     "abcd",
+				SecretAccessKey: "abcdefghijkl",
+			},
+			Azure: AzureBlobConfig{
+				AccountKey:       "abcdefghijklm",
+				ConnectionString: "abcdefghijklmn",
+			},
+		},
 	}
+	original := *conf
 	masked, err := conf.Redacted()
 	if !assert.NoError(t, err) {
 		return
 	}
-	assert.Equal(t, "dec******cret", masked.Recommend.Ranker.DecisionAPI.AuthToken)
-	assert.Equal(t, "decision-secret", conf.Recommend.Ranker.DecisionAPI.AuthToken)
-	assert.Empty(t, masked.OpenAI.AuthToken)
-	assert.Empty(t, masked.Database.DataStore)
+	assert.Equal(t, "postgres://localhost/gorse?password="+url.QueryEscape(RedactedValue)+
+		"&sslmode=require&user="+url.QueryEscape(RedactedValue), masked.Database.DataStore)
+	assert.Equal(t, "redis://xxxxx:xxxxxxxx@localhost:6379?protocol=3", masked.Database.CacheStore)
+	assert.Equal(t, "qdrant://localhost:6334?api_key="+url.QueryEscape(RedactedValue)+"&timeout=5", masked.Database.VectorStore)
+	assert.Equal(t, "******", masked.Master.DashboardPassword)
+	assert.Equal(t, "******", masked.Master.AdminAPIKey)
+	assert.Equal(t, "abc******efgh", masked.Server.APIKey)
+	assert.Equal(t, "abc******fghi", masked.OIDC.ClientSecret)
+	assert.Equal(t, "******", masked.OpenAI.AuthToken)
+	assert.Equal(t, "甲乙丙******庚辛壬癸", masked.Recommend.Ranker.DecisionAPI.AuthToken)
+	assert.Equal(t, "abc******hijk", masked.Recommend.Ranker.RerankerAPI.AuthToken)
+	assert.Equal(t, "******", masked.Blob.S3.AccessKeyID)
+	assert.Equal(t, "abc******ijkl", masked.Blob.S3.SecretAccessKey)
+	assert.Equal(t, "abc******jklm", masked.Blob.Azure.AccountKey)
+	assert.Equal(t, "abc******klmn", masked.Blob.Azure.ConnectionString)
+	assert.Equal(t, original, *conf)
 	assert.Equal(t, conf.OpenAI.BaseURL, masked.OpenAI.BaseURL)
 	assert.Equal(t, conf.Recommend.Fallback, masked.Recommend.Fallback)
 	masked.Recommend.Fallback.Recommenders[0] = "modified"
 	assert.Equal(t, []string{"latest"}, conf.Recommend.Fallback.Recommenders)
-}
 
-func TestRedactedSecret(t *testing.T) {
-	for _, test := range []struct {
-		name, secret, expected string
-	}{
-		{"empty", "", ""},
-		{"short", "pass", "******"},
-		{"seven characters", "abcdefg", "******"},
-		{"eight characters", "abcdefgh", "abc******efgh"},
-		{"long", "abcdefghijk", "abc******hijk"},
-		{"unicode", "甲乙丙丁戊己庚辛", "甲乙丙******戊己庚辛"},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			conf := &Config{OpenAI: OpenAIConfig{AuthToken: test.secret}}
-			masked, err := conf.Redacted()
-			if assert.NoError(t, err) {
-				assert.Equal(t, test.expected, masked.OpenAI.AuthToken)
-				assert.Equal(t, test.secret, conf.OpenAI.AuthToken)
-			}
-		})
+	conf.OpenAI.AuthToken = ""
+	conf.Database.DataStore = ""
+	masked, err = conf.Redacted()
+	if assert.NoError(t, err) {
+		assert.Empty(t, masked.OpenAI.AuthToken)
+		assert.Empty(t, masked.Database.DataStore)
 	}
 }
 
