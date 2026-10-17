@@ -172,27 +172,138 @@ func SetLogger(flagSet *pflag.FlagSet, debug bool) {
 
 const mysqlPrefix = "mysql://"
 
+// RedactSecret preserves the first three and last four characters of long secrets.
+// Secrets of seven characters or fewer are masked entirely; empty values stay empty.
+func RedactSecret(value string) string {
+	if value == "" {
+		return ""
+	}
+	characters := []rune(value)
+	if len(characters) <= 7 {
+		return "******"
+	}
+	return string(characters[:3]) + "******" + string(characters[len(characters)-4:])
+}
+
+// RedactDBURL masks credentials while preserving database addresses and options.
+// Invalid connection strings return an empty string to avoid leaking credentials.
 func RedactDBURL(rawURL string) string {
-	if strings.HasPrefix(rawURL, "sqlite://") {
+	if rawURL == "" {
 		return rawURL
-	} else if strings.HasPrefix(rawURL, mysqlPrefix) {
+	}
+	if strings.HasPrefix(rawURL, mysqlPrefix) {
 		parsed, err := mysql.ParseDSN(rawURL[len(mysqlPrefix):])
 		if err != nil {
-			return rawURL
+			return ""
 		}
-		parsed.User = strings.Repeat("x", len(parsed.User))
-		parsed.Passwd = strings.Repeat("x", len(parsed.Passwd))
-		return mysqlPrefix + parsed.FormatDSN()
-	} else {
-		parsed, err := url.Parse(rawURL)
-		if err != nil {
-			return rawURL
+		parsed.User = RedactSecret(parsed.User)
+		parsed.Passwd = RedactSecret(parsed.Passwd)
+		for key, value := range parsed.Params {
+			decodedKey, err := url.QueryUnescape(key)
+			if err != nil {
+				return ""
+			}
+			if isDBCredentialKey(decodedKey) {
+				parsed.Params[key] = RedactSecret(value)
+			}
 		}
-		username := parsed.User.Username()
-		password, _ := parsed.User.Password()
-		parsed.User = url.UserPassword(strings.Repeat("x", len(username)), strings.Repeat("x", len(password)))
-		return parsed.String()
+		return strings.ReplaceAll(mysqlPrefix+parsed.FormatDSN(), "%2A", "*")
 	}
+	// SQLite and Xvec use filesystem paths; preserve them verbatim.
+	if strings.HasPrefix(rawURL, "sqlite://") || strings.HasPrefix(rawURL, "xvec://") {
+		return rawURL
+	}
+	// net/url does not support MongoDB authorities containing multiple IPv6 hosts.
+	// Parse each host separately, then restore the list after parsing the URL.
+	var mongoHosts []string
+	if strings.HasPrefix(rawURL, "mongodb://") || strings.HasPrefix(rawURL, "mongodb+srv://") {
+		prefix, rest, _ := strings.Cut(rawURL, "://")
+		end := strings.IndexAny(rest, "/?#")
+		if end < 0 {
+			end = len(rest)
+		}
+		authority := rest[:end]
+		hostStart := strings.LastIndex(authority, "@") + 1
+		if strings.Contains(authority[hostStart:], ",") {
+			mongoHosts = strings.Split(authority[hostStart:], ",")
+			for i, host := range mongoHosts {
+				parsed, err := url.Parse(prefix + "://" + host)
+				if err != nil || parsed.Host == "" || parsed.User != nil {
+					return ""
+				}
+				mongoHosts[i] = parsed.Host
+			}
+			rawURL = prefix + "://" + authority[:hostStart] + "localhost" + rest[end:]
+		}
+	}
+	parsed, err := url.Parse(rawURL)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" || parsed.Opaque != "" {
+		return ""
+	}
+	if len(mongoHosts) > 0 {
+		parsed.Host = strings.Join(mongoHosts, ",")
+	}
+	if parsed.User != nil {
+		username := parsed.User.Username()
+		password, hasPassword := parsed.User.Password()
+		if hasPassword {
+			parsed.User = url.UserPassword(RedactSecret(username), RedactSecret(password))
+		} else {
+			parsed.User = url.User(RedactSecret(username))
+		}
+	}
+	// Database connection strings do not use fragments for connection options.
+	if parsed.Fragment != "" {
+		parsed.Fragment = "********"
+		parsed.RawFragment = ""
+	}
+	query, err := url.ParseQuery(parsed.RawQuery)
+	if err != nil {
+		return ""
+	}
+	changed := parsed.Fragment != ""
+	for key, values := range query {
+		if !isDBCredentialKey(key) {
+			continue
+		}
+		for i, value := range values {
+			if value != "" {
+				values[i] = RedactSecret(value)
+				changed = true
+			}
+		}
+	}
+	if changed {
+		parsed.RawQuery = query.Encode()
+	}
+	return strings.ReplaceAll(parsed.String(), "%2A", "*")
+}
+
+// isDBCredentialKey matches documented connection credentials and SDK auth fields.
+// The vector database SDK fields below are sensitive when present, although
+// Gorse's current vector adapters do not read authentication from URL queries.
+func isDBCredentialKey(key string) bool {
+	key = strings.NewReplacer("-", "", "_", "", ".", "").Replace(strings.ToLower(key))
+	switch key {
+	case "user", // PostgreSQL: database username (lib/pq Config.User).
+		"password",                        // PostgreSQL: database password (lib/pq Config.Password).
+		"passfile",                        // PostgreSQL: password file (lib/pq Config.Passfile).
+		"sslkey",                          // PostgreSQL: client private key path or inline PEM (lib/pq Config.SSLKey).
+		"sslpassword",                     // PostgreSQL/libpq: client private key password.
+		"tlscertificatekeyfile",           // MongoDB: client certificate/private key file.
+		"sslclientcertificatekeyfile",     // MongoDB: alias for tlsCertificateKeyFile.
+		"tlsprivatekeyfile",               // MongoDB: separate client private key file.
+		"tlscertificatekeyfilepassword",   // MongoDB: client private key password.
+		"sslclientcertificatekeypassword", // MongoDB: alias for tlsCertificateKeyFilePassword.
+		"authmechanismproperties",         // MongoDB: authentication properties, including AWS_SESSION_TOKEN.
+		"username",                        // Weaviate/Milvus SDKs: database username.
+		"apikey",                          // Qdrant/Weaviate/Milvus SDKs: API key.
+		"clientsecret",                    // Weaviate SDK: OAuth client secret.
+		"accesstoken",                     // Weaviate SDK: OAuth access token.
+		"refreshtoken":                    // Weaviate SDK: OAuth refresh token.
+		return true
+	}
+	return false
 }
 
 func GetErrorHandler() otel.ErrorHandler {

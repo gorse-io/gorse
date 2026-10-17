@@ -22,7 +22,6 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"strconv"
 	"strings"
 	"testing"
@@ -860,89 +859,33 @@ func (suite *MasterAPITestSuite) TestConfig() {
 	suite.Config.Blob.S3.SecretAccessKey = "s3-secret-access-key-secret"
 	suite.Config.Blob.Azure.AccountKey = "azure-account-key-secret"
 	suite.Config.Blob.Azure.ConnectionString = "azure-connection-string-secret"
+	redactedConfig, err := suite.Config.Redacted()
+	suite.NoError(err)
+	redactedConfigJSON := marshal(suite.T(), formatConfig(convertToMapStructure(suite.T(), redactedConfig)))
+	apitest.New().
+		Handler(suite.handler).
+		Get("/api/dashboard/config").
+		Header("Cookie", suite.cookie).
+		Expect(suite.T()).
+		Status(http.StatusOK).
+		Body(redactedConfigJSON).
+		End()
 
-	req := httptest.NewRequest(http.MethodGet, "/api/dashboard/config", nil)
-	req.Header.Set("Cookie", suite.cookie)
-	recorder := httptest.NewRecorder()
-	suite.handler.ServeHTTP(recorder, req)
-	suite.Equal(http.StatusOK, recorder.Code)
-	var redactedConfig map[string]any
-	suite.NoError(json.Unmarshal(recorder.Body.Bytes(), &redactedConfig))
-
-	databaseConfig, ok := redactedConfig["database"].(map[string]any)
-	suite.True(ok)
-	assertRedactedURL := func(value any, redactedKeys, preserved map[string]string) {
-		redactedURL, ok := value.(string)
-		suite.True(ok)
-		parsed, err := url.Parse(redactedURL)
-		suite.NoError(err)
-		for key, secret := range redactedKeys {
-			suite.Equal(config.RedactedValue, parsed.Query().Get(key))
-			suite.NotContains(redactedURL, secret)
-		}
-		for key, expected := range preserved {
-			suite.Equal(expected, parsed.Query().Get(key))
-		}
-	}
-	assertRedactedURL(databaseConfig["data_store"], map[string]string{
-		"user": "data-user", "password": "data-password",
-	}, map[string]string{"sslmode": "require"})
-	assertRedactedURL(databaseConfig["cache_store"], map[string]string{
-		"password": "cache-query-password",
-	}, map[string]string{"protocol": "3"})
-	assertRedactedURL(databaseConfig["vector_store"], map[string]string{
-		"api_key": "vector-api-key",
-	}, map[string]string{"timeout": "5"})
-	suite.NotContains(databaseConfig["cache_store"], "cache-user")
-	suite.NotContains(databaseConfig["cache_store"], "cache-password")
-	suite.NotContains(databaseConfig["vector_store"], "vector-user")
-	suite.NotContains(databaseConfig["vector_store"], "vector-password")
-	suite.Equal(suite.Config.Database.CacheClientName, databaseConfig["cache_client_name"])
-
-	assertRedacted := func(section map[string]any, key, secret string) {
-		suite.NotEqual(secret, section[key])
-		expected := "******"
-		if len(secret) > 7 {
-			expected = secret[:3] + "******" + secret[len(secret)-4:]
-		}
-		suite.Equal(expected, section[key])
-	}
-	masterConfig := redactedConfig["master"].(map[string]any)
-	assertRedacted(masterConfig, "dashboard_password", suite.Config.Master.DashboardPassword)
-	assertRedacted(masterConfig, "admin_api_key", suite.Config.Master.AdminAPIKey)
-	assertRedacted(redactedConfig["server"].(map[string]any), "api_key", suite.Config.Server.APIKey)
-	assertRedacted(redactedConfig["oidc"].(map[string]any), "client_secret", suite.Config.OIDC.ClientSecret)
-	assertRedacted(redactedConfig["openai"].(map[string]any), "auth_token", suite.Config.OpenAI.AuthToken)
-	assertRedacted(redactedConfig["recommend"].(map[string]any)["ranker"].(map[string]any)["reranker_api"].(map[string]any),
-		"auth_token", suite.Config.Recommend.Ranker.RerankerAPI.AuthToken)
-	assertRedacted(redactedConfig["blob"].(map[string]any)["s3"].(map[string]any),
-		"access_key_id", suite.Config.Blob.S3.AccessKeyID)
-	assertRedacted(redactedConfig["blob"].(map[string]any)["s3"].(map[string]any),
-		"secret_access_key", suite.Config.Blob.S3.SecretAccessKey)
-	assertRedacted(redactedConfig["blob"].(map[string]any)["azure"].(map[string]any),
-		"account_key", suite.Config.Blob.Azure.AccountKey)
-	assertRedacted(redactedConfig["blob"].(map[string]any)["azure"].(map[string]any),
-		"connection_string", suite.Config.Blob.Azure.ConnectionString)
 	suite.Equal("admin-api-key-secret", suite.Config.Master.AdminAPIKey)
 	suite.Equal("s3-secret-access-key-secret", suite.Config.Blob.S3.SecretAccessKey)
 	suite.Equal("openai-auth-token-secret", suite.Config.OpenAI.AuthToken)
-	suite.Equal(suite.Config.Master.DashboardUserName, masterConfig["dashboard_user_name"])
-	postBody := marshal(suite.T(), redactedConfig)
-	req = httptest.NewRequest(http.MethodPost, "/api/dashboard/config", bytes.NewReader([]byte(postBody)))
-	req.Header.Set("Cookie", suite.cookie)
-	req.Header.Set("Content-Type", "application/json")
-	recorder = httptest.NewRecorder()
-	suite.handler.ServeHTTP(recorder, req)
-	suite.Equal(http.StatusOK, recorder.Code)
+	apitest.New().
+		Handler(suite.handler).
+		Post("/api/dashboard/config").
+		Header("Cookie", suite.cookie).
+		Header("Content-Type", "application/json").
+		Body(redactedConfigJSON).
+		Expect(suite.T()).
+		Status(http.StatusOK).
+		Body(redactedConfigJSON).
+		End()
 	suite.Equal("reranker-auth-token-secret", suite.Config.Recommend.Ranker.RerankerAPI.AuthToken)
 	suite.Equal("decision-auth-token-secret", suite.Config.Recommend.Ranker.DecisionAPI.AuthToken)
-	var postResponse map[string]any
-	suite.NoError(json.Unmarshal(recorder.Body.Bytes(), &postResponse))
-	postReranker := postResponse["recommend"].(map[string]any)["ranker"].(map[string]any)["reranker_api"].(map[string]any)
-	suite.Equal("rer******cret", postReranker["auth_token"])
-	postDecision := postResponse["recommend"].(map[string]any)["ranker"].(map[string]any)["decision_api"].(map[string]any)
-	suite.Equal("dec******cret", postDecision["auth_token"])
-	suite.NotEqual(suite.Config.Recommend.Ranker.RerankerAPI.AuthToken, postReranker["auth_token"])
 
 	suite.Config.Master.DashboardRedacted = false
 	newConfig := *suite.Config

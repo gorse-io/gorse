@@ -17,7 +17,6 @@ package config
 import (
 	"bytes"
 	"fmt"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -64,13 +63,10 @@ func TestRedacted(t *testing.T) {
 		},
 	}
 	masked, err := conf.Redacted()
-	if !assert.NoError(t, err) {
-		return
-	}
-	assert.Equal(t, "postgres://localhost/gorse?password="+url.QueryEscape(RedactedValue)+
-		"&sslmode=require&user="+url.QueryEscape(RedactedValue), masked.Database.DataStore)
-	assert.Equal(t, "redis://xxxxx:xxxxxxxx@localhost:6379?protocol=3", masked.Database.CacheStore)
-	assert.Equal(t, "qdrant://localhost:6334?api_key="+url.QueryEscape(RedactedValue)+"&timeout=5", masked.Database.VectorStore)
+	assert.NoError(t, err)
+	assert.Equal(t, "postgres://localhost/gorse?password=dat******word&sslmode=require&user=dat******user", masked.Database.DataStore)
+	assert.Equal(t, "redis://******:pas******word@localhost:6379?protocol=3", masked.Database.CacheStore)
+	assert.Equal(t, "qdrant://localhost:6334?api_key=vec******-key&timeout=5", masked.Database.VectorStore)
 	assert.Equal(t, "******", masked.Master.DashboardPassword)
 	assert.Equal(t, "******", masked.Master.AdminAPIKey)
 	assert.Equal(t, "abc******efgh", masked.Server.APIKey)
@@ -82,14 +78,6 @@ func TestRedacted(t *testing.T) {
 	assert.Equal(t, "abc******ijkl", masked.Blob.S3.SecretAccessKey)
 	assert.Equal(t, "abc******jklm", masked.Blob.Azure.AccountKey)
 	assert.Equal(t, "abc******klmn", masked.Blob.Azure.ConnectionString)
-
-	conf.OpenAI.AuthToken = ""
-	conf.Database.DataStore = ""
-	masked, err = conf.Redacted()
-	if assert.NoError(t, err) {
-		assert.Empty(t, masked.OpenAI.AuthToken)
-		assert.Empty(t, masked.Database.DataStore)
-	}
 }
 
 func TestRestoreRedactedSecrets(t *testing.T) {

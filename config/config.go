@@ -19,7 +19,6 @@ import (
 	"crypto/md5"
 	_ "embed"
 	"encoding/hex"
-	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -74,85 +73,16 @@ type Config struct {
 	Quota     QuotaConfig     `mapstructure:"quota"`
 }
 
-// RedactedValue is the placeholder used for database credentials.
-const RedactedValue = "********"
-
 var configMasker = func() *mask.Masker {
 	masker := mask.NewMasker()
 	masker.RegisterMaskStringFunc("secret", func(_ string, value string) (string, error) {
-		return redactSecret(value), nil
+		return log.RedactSecret(value), nil
 	})
 	masker.RegisterMaskStringFunc("database", func(_ string, value string) (string, error) {
-		return redactDatabaseURL(value), nil
+		return log.RedactDBURL(value), nil
 	})
 	return masker
 }()
-
-func redactSecret(value string) string {
-	if value == "" {
-		return ""
-	}
-	characters := []rune(value)
-	if len(characters) <= 7 {
-		return "******"
-	}
-	return string(characters[:3]) + "******" + string(characters[len(characters)-4:])
-}
-
-func isCredentialQueryKey(key string) bool {
-	normalized := strings.NewReplacer("-", "", "_", "", ".", "").Replace(strings.ToLower(key))
-	switch normalized {
-	case "user", "username", "passwd", "pwd", "apikey", "accesskey", "accesskeyid", "credential", "credentials":
-		return true
-	default:
-		return strings.Contains(normalized, "password") ||
-			strings.Contains(normalized, "secret") ||
-			strings.HasSuffix(normalized, "token")
-	}
-}
-
-func redactDatabaseURL(rawURL string) string {
-	parsed, err := url.Parse(rawURL)
-	if err != nil {
-		return RedactedValue
-	}
-
-	redactedURL := rawURL
-	if parsed.User != nil {
-		username := parsed.User.Username()
-		password, hasPassword := parsed.User.Password()
-		redactedURL = log.RedactDBURL(rawURL)
-		if redactedURL == rawURL && (username != "" || hasPassword && password != "") {
-			return RedactedValue
-		}
-		parsed, err = url.Parse(redactedURL)
-		if err != nil {
-			return RedactedValue
-		}
-	}
-
-	query, err := url.ParseQuery(parsed.RawQuery)
-	if err != nil {
-		return RedactedValue
-	}
-	changed := false
-	for key, values := range query {
-		if !isCredentialQueryKey(key) {
-			continue
-		}
-		for i, value := range values {
-			if value != "" {
-				values[i] = RedactedValue
-				changed = true
-			}
-		}
-	}
-	if changed {
-		parsed.RawQuery = query.Encode()
-		redactedURL = parsed.String()
-	}
-	return redactedURL
-}
 
 // Redacted returns a masked copy, leaving the original configuration unchanged.
 func (config *Config) Redacted() (*Config, error) {
@@ -166,10 +96,10 @@ func (config *Config) Redacted() (*Config, error) {
 // RestoreRedactedSecrets restores reranker and decision API tokens when a masked
 // dashboard configuration is posted back without changing the tokens.
 func (config *Config) RestoreRedactedSecrets(original *Config) {
-	if config.Recommend.Ranker.RerankerAPI.AuthToken == redactSecret(original.Recommend.Ranker.RerankerAPI.AuthToken) {
+	if config.Recommend.Ranker.RerankerAPI.AuthToken == log.RedactSecret(original.Recommend.Ranker.RerankerAPI.AuthToken) {
 		config.Recommend.Ranker.RerankerAPI.AuthToken = original.Recommend.Ranker.RerankerAPI.AuthToken
 	}
-	if config.Recommend.Ranker.DecisionAPI.AuthToken == redactSecret(original.Recommend.Ranker.DecisionAPI.AuthToken) {
+	if config.Recommend.Ranker.DecisionAPI.AuthToken == log.RedactSecret(original.Recommend.Ranker.DecisionAPI.AuthToken) {
 		config.Recommend.Ranker.DecisionAPI.AuthToken = original.Recommend.Ranker.DecisionAPI.AuthToken
 	}
 }
