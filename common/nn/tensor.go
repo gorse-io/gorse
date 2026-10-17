@@ -23,6 +23,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"unsafe"
 
 	"github.com/chewxy/math32"
 	mapset "github.com/deckarep/golang-set/v2"
@@ -30,6 +31,7 @@ import (
 	"github.com/gorse-io/gorse/common/parallel"
 	"github.com/gorse-io/gorse/protocol"
 	"github.com/samber/lo"
+	"github.com/x448/float16"
 	"golang.org/x/exp/slices"
 )
 
@@ -41,14 +43,57 @@ func SetInferenceMode(enabled bool) {
 	inferenceMode.Store(enabled)
 }
 
+// DType identifies a tensor's storage format.
+type DType uint8
+
+const (
+	// Float32 stores IEEE 754 single-precision values and supports computation.
+	Float32 DType = iota
+	// Float16 stores IEEE 754 half-precision values and computes through FP32 kernels.
+	Float16
+)
+
+// Tensor stores dense values and an optional computation graph.
+// Arithmetic uses FP32 kernels and rounds outputs to the first kernel input's
+// dtype. Gradients remain FP32 even when tensor values are stored in FP16.
 type Tensor struct {
-	data  []float32
-	shape []int
-	grad  *Tensor
-	op    op
+	data   []float32
+	data16 []uint16
+	dtype  DType
+	shape  []int
+	grad   *Tensor
+	op     op
 }
 
-func NewTensor(data []float32, shape ...int) *Tensor {
+// DType returns the tensor's storage format.
+func (t *Tensor) DType() DType { return t.dtype }
+
+// Uint16s returns the shared IEEE 754 half-precision bit patterns.
+func (t *Tensor) Uint16s() []uint16 {
+	return t.data16
+}
+
+// ToFloat16 returns an independent, graph-free copy in half precision.
+// Float32 values are rounded to nearest, with ties to even.
+func (t *Tensor) ToFloat16() *Tensor {
+	if t.dtype == Float16 {
+		return t.clone()
+	}
+	return NewTensor(floats.FromFloat32(t.data), slices.Clone(t.shape)...)
+}
+
+// ToFloat32 returns an independent, graph-free copy in single precision.
+func (t *Tensor) ToFloat32() *Tensor {
+	if t.dtype == Float32 {
+		return t.clone()
+	}
+	return NewTensor(floats.ToFloat32(t.data16), slices.Clone(t.shape)...)
+}
+
+// NewTensor creates a tensor sharing data and shape with its inputs.
+// Both formats support computation; uint16 values are IEEE 754 half-precision
+// bit patterns, not integer-valued tensor elements.
+func NewTensor[T float32 | uint16](data []T, shape ...int) *Tensor {
 	size := 1
 	for i := range shape {
 		size *= shape[i]
@@ -56,10 +101,15 @@ func NewTensor(data []float32, shape ...int) *Tensor {
 	if len(data) != size {
 		panic(fmt.Sprintf("shape %v does not match data size %v", shape, len(data)))
 	}
-	return &Tensor{
-		data:  data,
-		shape: shape,
+	t := &Tensor{shape: shape}
+	switch values := any(data).(type) {
+	case []float32:
+		t.data = values
+	case []uint16:
+		t.data16 = values
+		t.dtype = Float16
 	}
+	return t
 }
 
 func NewScalar(data float32) *Tensor {
@@ -198,6 +248,9 @@ func (t *Tensor) Slice(start, end int) *Tensor {
 	for i := 1; i < len(t.shape); i++ {
 		subSize *= t.shape[i]
 	}
+	if t.dtype == Float16 {
+		return NewTensor(t.data16[start*subSize:end*subSize], append([]int{end - start}, t.shape[1:]...)...)
+	}
 	return &Tensor{
 		data:  t.data[start*subSize : end*subSize],
 		shape: append([]int{end - start}, t.shape[1:]...),
@@ -210,6 +263,13 @@ func (t *Tensor) SliceIndices(indices ...int) *Tensor {
 	for i := range t.shape[1:] {
 		shape = append(shape, t.shape[i+1])
 		subSize *= t.shape[i+1]
+	}
+	if t.dtype == Float16 {
+		data := make([]uint16, len(indices)*subSize)
+		for i, index := range indices {
+			copy(data[i*subSize:(i+1)*subSize], t.data16[index*subSize:(index+1)*subSize])
+		}
+		return NewTensor(data, shape...)
 	}
 	data := make([]float32, len(indices)*subSize)
 	for i, index := range indices {
@@ -233,33 +293,42 @@ func (t *Tensor) Get(indices ...int) float32 {
 		}
 		index = index*t.shape[i] + indices[i]
 	}
+	if t.dtype == Float16 {
+		return float16.Frombits(t.data16[index]).Float32()
+	}
 	return t.data[index]
 }
 
 func (t *Tensor) String() string {
+	size := len(t.data)
+	value := func(i int) float32 { return t.data[i] }
+	if t.dtype == Float16 {
+		size = len(t.data16)
+		value = func(i int) float32 { return float16.Frombits(t.data16[i]).Float32() }
+	}
 	// Print scalar value
 	if len(t.shape) == 0 {
-		return fmt.Sprint(t.data[0])
+		return fmt.Sprint(value(0))
 	}
 
 	builder := strings.Builder{}
 	builder.WriteString("[")
-	if len(t.data) <= 10 {
-		for i := 0; i < len(t.data); i++ {
-			fmt.Fprint(&builder, t.data[i])
-			if i != len(t.data)-1 {
+	if size <= 10 {
+		for i := 0; i < size; i++ {
+			fmt.Fprint(&builder, value(i))
+			if i != size-1 {
 				builder.WriteString(", ")
 			}
 		}
 	} else {
 		for i := range 5 {
-			fmt.Fprint(&builder, t.data[i])
+			fmt.Fprint(&builder, value(i))
 			builder.WriteString(", ")
 		}
 		builder.WriteString("..., ")
-		for i := len(t.data) - 5; i < len(t.data); i++ {
-			fmt.Fprint(&builder, t.data[i])
-			if i != len(t.data)-1 {
+		for i := size - 5; i < size; i++ {
+			fmt.Fprint(&builder, value(i))
+			if i != size-1 {
 				builder.WriteString(", ")
 			}
 		}
@@ -298,16 +367,20 @@ func (t *Tensor) Grad() *Tensor {
 	return t.grad
 }
 
-func (t *Tensor) Data() []float32 {
+// Floats returns the shared single-precision storage.
+func (t *Tensor) Floats() []float32 {
 	return t.data
 }
 
 func (t *Tensor) clone() *Tensor {
+	if t.dtype == Float16 {
+		return NewTensor(append([]uint16(nil), t.data16...), slices.Clone(t.shape)...)
+	}
 	newData := make([]float32, len(t.data))
 	copy(newData, t.data)
 	return &Tensor{
 		data:  newData,
-		shape: t.shape,
+		shape: slices.Clone(t.shape),
 	}
 }
 
@@ -757,25 +830,48 @@ func (t *Tensor) argmax() []int {
 	return indices
 }
 
+// Tensor payloads share backing storage and use native little-endian memory layout.
 func (t *Tensor) toPB() *protocol.Tensor {
-	return &protocol.Tensor{
+	pb := &protocol.Tensor{
 		Shape: lo.Map(t.shape, func(i, _ int) int32 { return int32(i) }),
-		Data:  t.data,
 	}
+	if t.dtype == Float16 {
+		pb.Dtype = protocol.TensorDType_FLOAT16
+		pb.Data = unsafe.Slice((*byte)(unsafe.Pointer(unsafe.SliceData(t.data16))), 2*len(t.data16))
+	} else {
+		pb.Data = unsafe.Slice((*byte)(unsafe.Pointer(unsafe.SliceData(t.data))), 4*len(t.data))
+	}
+	return pb
 }
 
+// fromPB shares pb.Data without copying; the platform must support unaligned numeric access.
 func (t *Tensor) fromPB(pb *protocol.Tensor) {
-	t.shape = make([]int, len(pb.Shape))
-	for i := range t.shape {
-		t.shape[i] = int(pb.Shape[i])
+	shape := make([]int, len(pb.Shape))
+	for i, dim := range pb.Shape {
+		shape[i] = int(dim)
 	}
-	t.data = pb.Data
+	decoded := Tensor{shape: shape}
+	if pb.Dtype == protocol.TensorDType_FLOAT16 {
+		decoded.dtype = Float16
+		if len(pb.Data) > 0 {
+			decoded.data16 = unsafe.Slice((*uint16)(unsafe.Pointer(unsafe.SliceData(pb.Data))), len(pb.Data)/2)
+		}
+	} else {
+		decoded.data = unsafe.Slice((*float32)(unsafe.Pointer(unsafe.SliceData(pb.Data))), len(pb.Data)/4)
+	}
+	*t = decoded
 }
 
 func NormalInit(rng *rand.Rand, t *Tensor, mean, std float32) {
 	random := rand.NormFloat64
 	if rng != nil {
 		random = rng.NormFloat64
+	}
+	if t.dtype == Float16 {
+		for i := range t.data16 {
+			t.data16[i] = uint16(float16.Fromfloat32(float32(random())*std + mean))
+		}
+		return
 	}
 	for i := range t.data {
 		t.data[i] = float32(random())*(std) + (mean)

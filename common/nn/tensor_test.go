@@ -37,7 +37,7 @@ func TestTensor_SliceIndices(t *testing.T) {
 	x := NewTensor([]float32{1, 2, 3, 4, 5, 6}, 3, 2)
 	y := x.SliceIndices(2, 0)
 	assert.Equal(t, []int{2, 2}, y.Shape())
-	assert.Equal(t, []float32{5, 6, 1, 2}, y.Data())
+	assert.Equal(t, []float32{5, 6, 1, 2}, y.Floats())
 }
 
 func TestTensor_Max(t *testing.T) {
@@ -80,7 +80,7 @@ func TestTensor_Transpose(t *testing.T) {
 	x := NewTensor([]float32{1, 2, 3, 4, 5, 6}, 3, 2)
 	y := x.transpose()
 	assert.Equal(t, []int{2, 3}, y.Shape())
-	assert.Equal(t, []float32{1, 3, 5, 2, 4, 6}, y.Data())
+	assert.Equal(t, []float32{1, 3, 5, 2, 4, 6}, y.Floats())
 }
 
 func (t *Tensor) matMulLegacy(other *Tensor, transpose1, transpose2 bool) *Tensor {
