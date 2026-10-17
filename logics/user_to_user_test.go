@@ -25,8 +25,20 @@ import (
 	"github.com/gorse-io/gorse/dataset"
 	"github.com/gorse-io/gorse/storage/data"
 	"github.com/gorse-io/gorse/storage/vectors"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
+
+func TestQueryUserToUserEmbeddingScores(t *testing.T) {
+	cfg := config.UserToUserConfig{Name: "embedding", Type: "embedding"}
+	scores, err := QueryUserToUser(t.Context(), embeddingScoreDatabase{}, cfg, "query", 3)
+	require.NoError(t, err)
+	require.Len(t, scores, 3)
+	for i, id := range []string{"near", "unit", "far"} {
+		require.Equal(t, id, scores[i].Id)
+		require.InDelta(t, []float64{2.0 / 3, 0.5, 1.0 / 3}[i], scores[i].Score, 1e-6)
+	}
+}
 
 type UserToUserTestSuite struct {
 	suite.Suite

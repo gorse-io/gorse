@@ -339,6 +339,26 @@ func (suite *vectorsTestSuite) TestDot() {
 	suite.Greater(results[0].Score, results[1].Score)
 }
 
+func (suite *vectorsTestSuite) TestEuclidean() {
+	ctx := suite.T().Context()
+	suite.Require().NoError(suite.Database.AddCollection(ctx, "test_euclidean", defaultVectorSize, Euclidean, VectorConfig{}))
+	suite.Require().NoError(suite.Database.AddVectors(ctx, "test_euclidean", []Vector{
+		{Id: "near", Values: []float32{0.5, 0, 0, 0}},
+		{Id: "unit", Values: []float32{1, 0, 0, 0}},
+		{Id: "far", Values: []float32{2, 0, 0, 0}},
+	}))
+	results, err := suite.Database.QueryVectors(ctx, "test_euclidean", Vector{Values: []float32{0, 0, 0, 0}}, nil, 3)
+	suite.Require().NoError(err)
+	suite.Require().Len(results, 3)
+	for i, id := range []string{"near", "unit", "far"} {
+		suite.Equal(id, results[i].Id)
+		suite.Less(results[i].Score, float32(0))
+		if i > 0 {
+			suite.Greater(results[i-1].Score, results[i].Score)
+		}
+	}
+}
+
 func (suite *vectorsTestSuite) TestDeleteVectors() {
 	ctx := suite.T().Context()
 	err := suite.Database.AddCollection(ctx, "test", defaultVectorSize, Cosine, VectorConfig{})
