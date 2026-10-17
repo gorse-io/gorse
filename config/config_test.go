@@ -31,6 +31,82 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
+func TestRedacted(t *testing.T) {
+	conf := &Config{
+		Database: DatabaseConfig{
+			DataStore:   "postgres://localhost/gorse?user=data-user&password=data-password&sslmode=require",
+			CacheStore:  "redis://cache:password@localhost:6379?protocol=3",
+			VectorStore: "qdrant://localhost:6334?api_key=vector-api-key&timeout=5",
+		},
+		Master: MasterConfig{
+			DashboardPassword: "p",
+			AdminAPIKey:       "abcdefg",
+		},
+		Server: ServerConfig{APIKey: "abcdefgh"},
+		OIDC:   OIDCConfig{ClientSecret: "abcdefghi"},
+		OpenAI: OpenAIConfig{AuthToken: "abcde"},
+		Recommend: RecommendConfig{
+			Ranker: RankerConfig{
+				DecisionAPI: DecisionAPIConfig{AuthToken: "甲乙丙丁戊己庚辛壬癸"},
+				RerankerAPI: RerankerAPIConfig{AuthToken: "abcdefghijk"},
+			},
+		},
+		Blob: BlobConfig{
+			S3: S3Config{
+				AccessKeyID:     "abcd",
+				SecretAccessKey: "abcdefghijkl",
+			},
+			Azure: AzureBlobConfig{
+				AccountKey:       "abcdefghijklm",
+				ConnectionString: "abcdefghijklmn",
+			},
+		},
+	}
+	masked, err := conf.Redacted()
+	assert.NoError(t, err)
+	assert.Equal(t, "postgres://localhost/gorse?password=dat******word&sslmode=require&user=dat******user", masked.Database.DataStore)
+	assert.Equal(t, "redis://******:pas******word@localhost:6379?protocol=3", masked.Database.CacheStore)
+	assert.Equal(t, "qdrant://localhost:6334?api_key=vec******-key&timeout=5", masked.Database.VectorStore)
+	assert.Equal(t, "******", masked.Master.DashboardPassword)
+	assert.Equal(t, "******", masked.Master.AdminAPIKey)
+	assert.Equal(t, "abc******efgh", masked.Server.APIKey)
+	assert.Equal(t, "abc******fghi", masked.OIDC.ClientSecret)
+	assert.Equal(t, "******", masked.OpenAI.AuthToken)
+	assert.Equal(t, "甲乙丙******庚辛壬癸", masked.Recommend.Ranker.DecisionAPI.AuthToken)
+	assert.Equal(t, "abc******hijk", masked.Recommend.Ranker.RerankerAPI.AuthToken)
+	assert.Equal(t, "******", masked.Blob.S3.AccessKeyID)
+	assert.Equal(t, "abc******ijkl", masked.Blob.S3.SecretAccessKey)
+	assert.Equal(t, "abc******jklm", masked.Blob.Azure.AccountKey)
+	assert.Equal(t, "abc******klmn", masked.Blob.Azure.ConnectionString)
+}
+
+func TestRestoreRedactedSecrets(t *testing.T) {
+	for _, test := range []struct {
+		name, original, posted, expected string
+	}{
+		{"masked", "abcdefghijk", "abc******hijk", "abcdefghijk"},
+		{"short masked", "pass", "******", "pass"},
+		{"changed", "abcdefghijk", "replacement-token", "replacement-token"},
+		{"cleared", "abcdefghijk", "", ""},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			original := &Config{Recommend: RecommendConfig{Ranker: RankerConfig{
+				RerankerAPI: RerankerAPIConfig{AuthToken: test.original},
+				DecisionAPI: DecisionAPIConfig{AuthToken: test.original},
+			}}}
+			posted := &Config{Recommend: RecommendConfig{Ranker: RankerConfig{
+				RerankerAPI: RerankerAPIConfig{AuthToken: test.posted},
+				DecisionAPI: DecisionAPIConfig{AuthToken: test.posted},
+			}}}
+			posted.RestoreRedactedSecrets(original)
+			assert.Equal(t, test.expected, posted.Recommend.Ranker.RerankerAPI.AuthToken)
+			assert.Equal(t, test.original, original.Recommend.Ranker.RerankerAPI.AuthToken)
+			assert.Equal(t, test.expected, posted.Recommend.Ranker.DecisionAPI.AuthToken)
+			assert.Equal(t, test.original, original.Recommend.Ranker.DecisionAPI.AuthToken)
+		})
+	}
+}
+
 func TestUnmarshal(t *testing.T) {
 	text := ConfigTOML
 	text = strings.Replace(text, "ssl_mode = false", "ssl_mode = true", -1)

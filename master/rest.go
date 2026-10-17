@@ -560,6 +560,10 @@ func (m *Master) postConfig(request *restful.Request, response *restful.Response
 		return
 	}
 	m.ConfigMutex.RLock()
+	dashboardRedacted := m.Config.Master.DashboardRedacted
+	if dashboardRedacted {
+		newConfig.RestoreRedactedSecrets(m.Config)
+	}
 	configForValidation := *m.Config
 	m.ConfigMutex.RUnlock()
 	configForValidation.Recommend = newConfig.Recommend
@@ -585,21 +589,38 @@ func (m *Master) postConfig(request *restful.Request, response *restful.Response
 	case m.scheduled <- struct{}{}:
 	default:
 	}
+	if dashboardRedacted {
+		maskedConfig, err := newConfig.Redacted()
+		if err != nil {
+			server.InternalServerError(response, err)
+			return
+		}
+		var configMap map[string]any
+		if err = mapstructure.Decode(maskedConfig, &configMap); err != nil {
+			server.InternalServerError(response, err)
+			return
+		}
+		server.Ok(response, formatConfig(configMap))
+		return
+	}
 	server.Ok(response, newConfig)
 }
 
 func (m *Master) getConfig(_ *restful.Request, response *restful.Response) {
 	var configMap map[string]any
 	m.ConfigMutex.RLock()
-	err := mapstructure.Decode(m.Config, &configMap)
-	dashboardRedacted := m.Config.Master.DashboardRedacted
+	conf := m.Config
+	var err error
+	if conf.Master.DashboardRedacted {
+		conf, err = conf.Redacted()
+	}
+	if err == nil {
+		err = mapstructure.Decode(conf, &configMap)
+	}
 	m.ConfigMutex.RUnlock()
 	if err != nil {
 		server.InternalServerError(response, err)
 		return
-	}
-	if dashboardRedacted {
-		delete(configMap, "database")
 	}
 	server.Ok(response, formatConfig(configMap))
 }

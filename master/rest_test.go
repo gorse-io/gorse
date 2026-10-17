@@ -846,16 +846,46 @@ func (suite *MasterAPITestSuite) TestConfig() {
 		End()
 
 	suite.Config.Master.DashboardRedacted = true
-	redactedConfig := formatConfig(convertToMapStructure(suite.T(), suite.Config))
-	delete(redactedConfig, "database")
+	suite.Config.Database.DataStore = "postgres://localhost/gorse?user=data-user&password=data-password&sslmode=require"
+	suite.Config.Database.CacheStore = "redis://cache-user:cache-password@localhost:6379?password=cache-query-password&protocol=3"
+	suite.Config.Database.VectorStore = "qdrant://vector-user:vector-password@localhost:6334?api_key=vector-api-key&timeout=5"
+	suite.Config.Master.AdminAPIKey = "admin-api-key-secret"
+	suite.Config.Server.APIKey = "server-api-key-secret"
+	suite.Config.OIDC.ClientSecret = "oidc-client-secret"
+	suite.Config.OpenAI.AuthToken = "openai-auth-token-secret"
+	suite.Config.Recommend.Ranker.RerankerAPI.AuthToken = "reranker-auth-token-secret"
+	suite.Config.Recommend.Ranker.DecisionAPI.AuthToken = "decision-auth-token-secret"
+	suite.Config.Blob.S3.AccessKeyID = "s3-access-key-secret"
+	suite.Config.Blob.S3.SecretAccessKey = "s3-secret-access-key-secret"
+	suite.Config.Blob.Azure.AccountKey = "azure-account-key-secret"
+	suite.Config.Blob.Azure.ConnectionString = "azure-connection-string-secret"
+	redactedConfig, err := suite.Config.Redacted()
+	suite.NoError(err)
+	redactedConfigJSON := marshal(suite.T(), formatConfig(convertToMapStructure(suite.T(), redactedConfig)))
 	apitest.New().
 		Handler(suite.handler).
 		Get("/api/dashboard/config").
 		Header("Cookie", suite.cookie).
 		Expect(suite.T()).
 		Status(http.StatusOK).
-		Body(marshal(suite.T(), redactedConfig)).
+		Body(redactedConfigJSON).
 		End()
+
+	suite.Equal("admin-api-key-secret", suite.Config.Master.AdminAPIKey)
+	suite.Equal("s3-secret-access-key-secret", suite.Config.Blob.S3.SecretAccessKey)
+	suite.Equal("openai-auth-token-secret", suite.Config.OpenAI.AuthToken)
+	apitest.New().
+		Handler(suite.handler).
+		Post("/api/dashboard/config").
+		Header("Cookie", suite.cookie).
+		Header("Content-Type", "application/json").
+		Body(redactedConfigJSON).
+		Expect(suite.T()).
+		Status(http.StatusOK).
+		Body(redactedConfigJSON).
+		End()
+	suite.Equal("reranker-auth-token-secret", suite.Config.Recommend.Ranker.RerankerAPI.AuthToken)
+	suite.Equal("decision-auth-token-secret", suite.Config.Recommend.Ranker.DecisionAPI.AuthToken)
 
 	suite.Config.Master.DashboardRedacted = false
 	newConfig := *suite.Config

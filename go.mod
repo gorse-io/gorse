@@ -59,6 +59,7 @@ require (
 	github.com/sashabaranov/go-openai v1.41.2
 	github.com/schollz/progressbar/v3 v3.19.0
 	github.com/sclevine/yj v0.0.0-20210612025309-737bdf40a5d1
+	github.com/showa-93/go-mask v0.6.2
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.10
 	github.com/spf13/viper v1.21.0
