@@ -71,6 +71,12 @@ var benchDecisionCmd = &cobra.Command{
 	Run:   runRankingBenchmark,
 }
 
+var benchFMCmd = &cobra.Command{
+	Use:   "fm",
+	Short: "Benchmark factorization machine models for ranking",
+	Run:   runRankingBenchmark,
+}
+
 func runRankingBenchmark(cmd *cobra.Command, args []string) {
 	// Load configuration
 	configPath, _ := cmd.Flags().GetString("config")
@@ -115,14 +121,14 @@ func runRankingBenchmark(cmd *cobra.Command, args []string) {
 	lo.Must0(table.Render())
 
 	exportUserAUC, _ := cmd.Flags().GetBool("user-auc")
-	var wg sync.WaitGroup
-	wg.Go(func() { EvaluateAFM(cfg, train, test, exportUserAUC, &scores) })
-	if cmd.Name() == "decision" {
+	switch cmd.Name() {
+	case "fm":
+		EvaluateAFM(cfg, train, test, exportUserAUC, &scores)
+	case "decision":
 		EvaluateDecision(cfg, train, test, cfDataset.GetItems(), exportUserAUC, &scores)
-	} else {
+	case "reranker":
 		EvaluateReranker(cfg, train, test, cfDataset.GetItems(), exportUserAUC, &scores)
 	}
-	wg.Wait()
 	data := [][]string{{"Ranker", "GAUC"}}
 	scores.Range(func(key, value any) bool {
 		data = append(data, []string{
@@ -582,9 +588,11 @@ func init() {
 	rootCmd.PersistentFlags().IntP("jobs", "j", runtime.NumCPU(), "Number of jobs to run in parallel")
 	rootCmd.AddCommand(benchRerankerCmd)
 	rootCmd.AddCommand(benchDecisionCmd)
+	rootCmd.AddCommand(benchFMCmd)
 	rootCmd.AddCommand(benchEmbeddingCmd)
 	benchRerankerCmd.PersistentFlags().Bool("user-auc", false, "Export user-level AUC scores to CSV file")
 	benchDecisionCmd.PersistentFlags().Bool("user-auc", false, "Export user-level AUC scores to CSV file")
+	benchFMCmd.PersistentFlags().Bool("user-auc", false, "Export user-level AUC scores to CSV file")
 	benchEmbeddingCmd.PersistentFlags().IntP("top", "k", 10, "Number of top items to evaluate for each user")
 	benchEmbeddingCmd.PersistentFlags().IntP("shots", "s", math.MaxInt, "Number of shots for each user")
 	benchEmbeddingCmd.PersistentFlags().Int("embedding-dimensions", 0, "Embedding dimensions")
