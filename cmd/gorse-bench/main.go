@@ -121,13 +121,14 @@ func runRankingBenchmark(cmd *cobra.Command, args []string) {
 	lo.Must0(table.Render())
 
 	exportUserAUC, _ := cmd.Flags().GetBool("user-auc")
+	jobs, _ := cmd.Flags().GetInt("jobs")
 	switch cmd.Name() {
 	case "fm":
-		EvaluateAFM(cfg, train, test, exportUserAUC, &scores)
+		EvaluateAFM(cfg, train, test, exportUserAUC, jobs, &scores)
 	case "decision":
-		EvaluateDecision(cfg, train, test, cfDataset.GetItems(), exportUserAUC, &scores)
+		EvaluateDecision(cfg, train, test, cfDataset.GetItems(), exportUserAUC, jobs, &scores)
 	case "reranker":
-		EvaluateReranker(cfg, train, test, cfDataset.GetItems(), exportUserAUC, &scores)
+		EvaluateReranker(cfg, train, test, cfDataset.GetItems(), exportUserAUC, jobs, &scores)
 	}
 	data := [][]string{{"Ranker", "GAUC"}}
 	scores.Range(func(key, value any) bool {
@@ -143,12 +144,12 @@ func runRankingBenchmark(cmd *cobra.Command, args []string) {
 	lo.Must0(table.Render())
 }
 
-func EvaluateAFM(cfg *config.Config, train, test *ctr.Dataset, exportUserAUC bool, scores *sync.Map) {
+func EvaluateAFM(cfg *config.Config, train, test *ctr.Dataset, exportUserAUC bool, jobs int, scores *sync.Map) {
 	ml := ctr.NewAFM(nil)
 	ml.Fit(context.Background(), train, test,
 		ctr.NewFitConfig().
 			SetVerbose(10).
-			SetJobs(runtime.NumCPU()).
+			SetJobs(jobs).
 			SetPatience(10))
 
 	feedbackCount := make(map[int32]int)
@@ -175,7 +176,7 @@ func EvaluateAFM(cfg *config.Config, train, test *ctr.Dataset, exportUserAUC boo
 			negatives[userIndex] = append(negatives[userIndex], i)
 		}
 	}
-	predictions := ml.BatchInternalPredict(features, embeddings, runtime.NumCPU())
+	predictions := ml.BatchInternalPredict(features, embeddings, jobs)
 
 	var csvFile *os.File
 	var csvWriter *csv.Writer
@@ -190,6 +191,7 @@ func EvaluateAFM(cfg *config.Config, train, test *ctr.Dataset, exportUserAUC boo
 			csvWriter = csv.NewWriter(csvFile)
 			defer csvWriter.Flush()
 			_ = csvWriter.Write([]string{"Feedback", "Candidates", "AUC"})
+			csvWriter.Flush()
 		}
 	}
 
@@ -214,6 +216,7 @@ func EvaluateAFM(cfg *config.Config, train, test *ctr.Dataset, exportUserAUC boo
 				strconv.Itoa(len(posIndices) + len(negIndices)),
 				fmt.Sprintf("%.4f", userAUC),
 			})
+			csvWriter.Flush()
 		}
 		userCount := float32(len(posIndices) + len(negIndices))
 		sum += userAUC * userCount
@@ -227,24 +230,24 @@ func EvaluateAFM(cfg *config.Config, train, test *ctr.Dataset, exportUserAUC boo
 	scores.Store("AFM", score)
 }
 
-func EvaluateReranker(cfg *config.Config, train, test *ctr.Dataset, items []data.Item, exportUserAUC bool, scores *sync.Map) {
+func EvaluateReranker(cfg *config.Config, train, test *ctr.Dataset, items []data.Item, exportUserAUC bool, jobs int, scores *sync.Map) {
 	ranker, err := logics.NewReranker(cfg.Recommend.Ranker.RerankerAPI)
 	if err != nil {
 		log.Logger().Fatal("failed to create reranker", zap.Error(err))
 	}
 
-	evaluateRanker(cfg, train, test, items, exportUserAUC, scores, cfg.Recommend.Ranker.RerankerAPI.Model, ranker)
+	evaluateRanker(cfg, train, test, items, exportUserAUC, jobs, scores, cfg.Recommend.Ranker.RerankerAPI.Model, ranker)
 }
 
-func EvaluateDecision(cfg *config.Config, train, test *ctr.Dataset, items []data.Item, exportUserAUC bool, scores *sync.Map) {
+func EvaluateDecision(cfg *config.Config, train, test *ctr.Dataset, items []data.Item, exportUserAUC bool, jobs int, scores *sync.Map) {
 	ranker, err := logics.NewDecision(cfg.Recommend.Ranker.DecisionAPI)
 	if err != nil {
 		log.Logger().Fatal("failed to create decision ranker", zap.Error(err))
 	}
-	evaluateRanker(cfg, train, test, items, exportUserAUC, scores, cfg.Recommend.Ranker.DecisionAPI.Model, ranker)
+	evaluateRanker(cfg, train, test, items, exportUserAUC, jobs, scores, cfg.Recommend.Ranker.DecisionAPI.Model, ranker)
 }
 
-func evaluateRanker(cfg *config.Config, train, test *ctr.Dataset, items []data.Item, exportUserAUC bool, scores *sync.Map, model string, ranker interface {
+func evaluateRanker(cfg *config.Config, train, test *ctr.Dataset, items []data.Item, exportUserAUC bool, jobs int, scores *sync.Map, model string, ranker interface {
 	Rank(context.Context, *data.User, []*logics.FeedbackItem, []*data.Item) ([]cache.Score, error)
 }) {
 	feedbacks := make(map[int32][]*logics.FeedbackItem)
@@ -287,12 +290,13 @@ func evaluateRanker(cfg *config.Config, train, test *ctr.Dataset, items []data.I
 			csvWriter = csv.NewWriter(csvFile)
 			defer csvWriter.Flush()
 			_ = csvWriter.Write([]string{"Feedback", "Candidates", "AUC"})
+			csvWriter.Flush()
 		}
 	}
 
 	var sum atomic.Float32
 	var count atomic.Float32
-	lo.Must0(parallel.ForEach(context.Background(), slices.Collect(maps.Keys(positives)), runtime.NumCPU(), func(_ int, userIndex int32) {
+	lo.Must0(parallel.ForEach(context.Background(), slices.Collect(maps.Keys(positives)), jobs, func(_ int, userIndex int32) {
 		posIndices := positives[userIndex]
 		negIndices := negatives[userIndex]
 		if len(posIndices) == 0 || len(negIndices) == 0 {
@@ -336,6 +340,7 @@ func evaluateRanker(cfg *config.Config, train, test *ctr.Dataset, items []data.I
 				strconv.Itoa(len(posIndices) + len(negIndices)),
 				fmt.Sprintf("%.4f", userAUC),
 			})
+			csvWriter.Flush()
 			csvMu.Unlock()
 		}
 		userCount := float32(len(posIndices) + len(negIndices))
