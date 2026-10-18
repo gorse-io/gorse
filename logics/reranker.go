@@ -16,17 +16,25 @@ package logics
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"math"
+	"net"
+	"net/http"
 	"strings"
+	"syscall"
+	"time"
 
 	"github.com/gorse-io/gorse/common/decision"
+	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/common/reranker"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
 	"github.com/nikolalohinski/gonja/v2"
 	"github.com/nikolalohinski/gonja/v2/exec"
+	"go.uber.org/zap"
 )
 
 type FeedbackItem struct {
@@ -94,10 +102,12 @@ func (r *Reranker) Rank(ctx context.Context, user *data.User, feedback []*Feedba
 		return nil, err
 	}
 	// rerank
-	resp, err := r.client.Rerank(ctx, reranker.RerankRequest{
-		Model:     r.model,
-		Query:     query,
-		Documents: documents,
+	resp, err := rankWithRetry(ctx, func() (*reranker.RerankResponse, error) {
+		return r.client.Rerank(ctx, reranker.RerankRequest{
+			Model:     r.model,
+			Query:     query,
+			Documents: documents,
+		})
 	})
 	if err != nil {
 		return nil, err
@@ -139,7 +149,9 @@ func (r *Decision) Rank(ctx context.Context, user *data.User, feedback []*Feedba
 			Instructions: documents[i],
 		}
 	}
-	response, err := r.client.Evaluate(ctx, query, questions)
+	response, err := rankWithRetry(ctx, func() (*decision.Response, error) {
+		return r.client.Evaluate(ctx, query, questions)
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -157,4 +169,64 @@ func (r *Decision) Rank(ctx context.Context, user *data.User, feedback []*Feedba
 	}
 	cache.SortDocuments(scores)
 	return scores, nil
+}
+
+func rankWithRetry[T any](ctx context.Context, rank func() (T, error)) (T, error) {
+	const maxAttempts = 3
+	var zero T
+	for attempt := 1; ; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return zero, err
+		}
+		result, err := rank()
+		if !isRetryableRankError(err) || attempt == maxAttempts {
+			return result, err
+		}
+		delay := time.Second << (attempt - 1)
+		log.Logger().Warn("ranker request failed, retrying",
+			zap.Int("attempt", attempt),
+			zap.Int("max_attempts", maxAttempts),
+			zap.Duration("retry_delay", delay),
+			zap.Error(err))
+		timer := time.NewTimer(delay)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return zero, ctx.Err()
+		case <-timer.C:
+		}
+	}
+}
+
+func isRetryableRankError(err error) bool {
+	if err == nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return false
+	}
+	var rerankErr *reranker.APIError
+	var decisionErr *decision.APIError
+	var statusCode int
+	if errors.As(err, &rerankErr) {
+		statusCode = rerankErr.StatusCode
+	} else if errors.As(err, &decisionErr) {
+		statusCode = decisionErr.StatusCode
+	}
+	if statusCode != 0 {
+		switch statusCode {
+		case http.StatusRequestTimeout, http.StatusTooManyRequests,
+			http.StatusInternalServerError, http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout,
+			520, 521, 522, 523, 524:
+			return true
+		default:
+			return false
+		}
+	}
+	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+		return true
+	}
+	var netErr net.Error
+	if errors.As(err, &netErr) && (netErr.Timeout() || netErr.Temporary()) {
+		return true
+	}
+	return errors.Is(err, syscall.ECONNRESET) || errors.Is(err, syscall.ECONNABORTED) ||
+		errors.Is(err, syscall.ECONNREFUSED) || errors.Is(err, syscall.EPIPE) || errors.Is(err, syscall.ETIMEDOUT)
 }
