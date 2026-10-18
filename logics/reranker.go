@@ -42,24 +42,24 @@ type FeedbackItem struct {
 	data.Item
 }
 
-type rankerTemplates struct {
+type rankerBase struct {
 	queryTemplate *exec.Template
 	docTemplate   *exec.Template
 }
 
-func newRankerTemplates(queryTemplate, docTemplate string) (rankerTemplates, error) {
+func newRankerBase(queryTemplate, docTemplate string) (rankerBase, error) {
 	qTpl, err := gonja.FromString(queryTemplate)
 	if err != nil {
-		return rankerTemplates{}, err
+		return rankerBase{}, err
 	}
 	dTpl, err := gonja.FromString(docTemplate)
 	if err != nil {
-		return rankerTemplates{}, err
+		return rankerBase{}, err
 	}
-	return rankerTemplates{queryTemplate: qTpl, docTemplate: dTpl}, nil
+	return rankerBase{queryTemplate: qTpl, docTemplate: dTpl}, nil
 }
 
-func (r *rankerTemplates) render(user *data.User, feedback []*FeedbackItem, items []*data.Item) (string, []string, error) {
+func (r *rankerBase) render(user *data.User, feedback []*FeedbackItem, items []*data.Item) (string, []string, error) {
 	var query strings.Builder
 	if err := r.queryTemplate.Execute(&query, exec.NewContext(map[string]any{
 		"user":     user,
@@ -79,20 +79,20 @@ func (r *rankerTemplates) render(user *data.User, feedback []*FeedbackItem, item
 }
 
 type Reranker struct {
-	rankerTemplates
+	rankerBase
 	client *reranker.Client
 	model  string
 }
 
 func NewReranker(cfg config.RerankerAPIConfig) (*Reranker, error) {
-	templates, err := newRankerTemplates(cfg.QueryTemplate, cfg.DocumentTemplate)
+	base, err := newRankerBase(cfg.QueryTemplate, cfg.DocumentTemplate)
 	if err != nil {
 		return nil, err
 	}
 	return &Reranker{
-		rankerTemplates: templates,
-		client:          reranker.NewClient(cfg.AuthToken, cfg.URL),
-		model:           cfg.Model,
+		rankerBase: base,
+		client:     reranker.NewClient(cfg.AuthToken, cfg.URL),
+		model:      cfg.Model,
 	}, nil
 }
 
@@ -102,12 +102,15 @@ func (r *Reranker) Rank(ctx context.Context, user *data.User, feedback []*Feedba
 		return nil, err
 	}
 	// rerank
-	resp, err := rankWithRetry(ctx, func() (*reranker.RerankResponse, error) {
-		return r.client.Rerank(ctx, reranker.RerankRequest{
+	var resp *reranker.RerankResponse
+	err = r.retry(ctx, func() error {
+		var err error
+		resp, err = r.client.Rerank(ctx, reranker.RerankRequest{
 			Model:     r.model,
 			Query:     query,
 			Documents: documents,
 		})
+		return err
 	})
 	if err != nil {
 		return nil, err
@@ -123,16 +126,16 @@ func (r *Reranker) Rank(ctx context.Context, user *data.User, feedback []*Feedba
 
 // Decision scores candidates against a user query using the decisions API.
 type Decision struct {
-	rankerTemplates
+	rankerBase
 	client *decision.Client
 }
 
 func NewDecision(cfg config.DecisionAPIConfig) (*Decision, error) {
-	templates, err := newRankerTemplates(cfg.StateTemplate, cfg.InstructionsTemplate)
+	base, err := newRankerBase(cfg.StateTemplate, cfg.InstructionsTemplate)
 	if err != nil {
 		return nil, err
 	}
-	return &Decision{rankerTemplates: templates, client: decision.NewClient(cfg.AuthToken, cfg.URL, cfg.Model)}, nil
+	return &Decision{rankerBase: base, client: decision.NewClient(cfg.AuthToken, cfg.URL, cfg.Model)}, nil
 }
 
 func (r *Decision) Rank(ctx context.Context, user *data.User, feedback []*FeedbackItem, items []*data.Item) ([]cache.Score, error) {
@@ -149,8 +152,11 @@ func (r *Decision) Rank(ctx context.Context, user *data.User, feedback []*Feedba
 			Instructions: documents[i],
 		}
 	}
-	response, err := rankWithRetry(ctx, func() (*decision.Response, error) {
-		return r.client.Evaluate(ctx, query, questions)
+	var response *decision.Response
+	err = r.retry(ctx, func() error {
+		var err error
+		response, err = r.client.Evaluate(ctx, query, questions)
+		return err
 	})
 	if err != nil {
 		return nil, err
@@ -171,16 +177,15 @@ func (r *Decision) Rank(ctx context.Context, user *data.User, feedback []*Feedba
 	return scores, nil
 }
 
-func rankWithRetry[T any](ctx context.Context, rank func() (T, error)) (T, error) {
+func (r *rankerBase) retry(ctx context.Context, rank func() error) error {
 	const maxAttempts = 3
-	var zero T
 	for attempt := 1; ; attempt++ {
 		if err := ctx.Err(); err != nil {
-			return zero, err
+			return err
 		}
-		result, err := rank()
-		if !isRetryableRankError(err) || attempt == maxAttempts {
-			return result, err
+		err := rank()
+		if !r.retryable(err) || attempt == maxAttempts {
+			return err
 		}
 		delay := time.Second << (attempt - 1)
 		log.Logger().Warn("ranker request failed, retrying",
@@ -192,13 +197,13 @@ func rankWithRetry[T any](ctx context.Context, rank func() (T, error)) (T, error
 		select {
 		case <-ctx.Done():
 			timer.Stop()
-			return zero, ctx.Err()
+			return ctx.Err()
 		case <-timer.C:
 		}
 	}
 }
 
-func isRetryableRankError(err error) bool {
+func (r *rankerBase) retryable(err error) bool {
 	if err == nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		return false
 	}
