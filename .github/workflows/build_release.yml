@@ -63,22 +63,11 @@ jobs:
       - name: Zip binaries
         run: zip -j gorse_darwin_arm64.zip darwin/arm64/gorse-*
 
-      - name: Prepare standalone CLI binary
-        run: cp darwin/arm64/gorse-cli gorse-cli_darwin_arm64
-
       - name: Upload release
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: gorse_darwin_arm64.zip
-          tag: ${{ github.ref }}
-          overwrite: true
-
-      - name: Upload standalone CLI binary
-        uses: svenstaro/upload-release-action@v2
-        with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: gorse-cli_darwin_arm64
           tag: ${{ github.ref }}
           overwrite: true
 
