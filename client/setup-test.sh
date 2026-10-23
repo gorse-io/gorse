@@ -24,8 +24,8 @@ services:
 EOF
 fi
 
-# Start Gorse
-docker compose up -d
+# Start Gorse (CI passes --no-build after loading the cached images).
+docker compose up -d "$@"
 
 # Download MovieLens 100k dataset
 if [ ! -f ./ml-100k.bin ]; then

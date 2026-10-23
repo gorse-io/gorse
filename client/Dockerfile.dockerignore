@@ -1,0 +1,7 @@
+# Match the root context exclusions and omit checkout metadata for stable CI layers.
+.github
+.git
+assets
+LICENSE
+*.yml
+*.md

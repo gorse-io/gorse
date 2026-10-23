@@ -1,0 +1,38 @@
+# CI builds all targets together with Bake, then Compose only starts loaded images.
+services:
+  master:
+    image: gorse-integration-master:ci
+    build:
+      dockerfile: client/Dockerfile
+      target: master
+      args:
+        VERSION: ${GORSE_VERSION}
+        GIT_COMMIT: ${GORSE_COMMIT}
+      cache_from:
+        - type=gha,scope=gorse-integration-master
+      cache_to:
+        - type=gha,scope=gorse-integration-master,mode=max
+  server:
+    image: gorse-integration-server:ci
+    build:
+      dockerfile: client/Dockerfile
+      target: server
+      args:
+        VERSION: ${GORSE_VERSION}
+        GIT_COMMIT: ${GORSE_COMMIT}
+      cache_from:
+        - type=gha,scope=gorse-integration-server
+      cache_to:
+        - type=gha,scope=gorse-integration-server,mode=max
+  worker:
+    image: gorse-integration-worker:ci
+    build:
+      dockerfile: client/Dockerfile
+      target: worker
+      args:
+        VERSION: ${GORSE_VERSION}
+        GIT_COMMIT: ${GORSE_COMMIT}
+      cache_from:
+        - type=gha,scope=gorse-integration-worker
+      cache_to:
+        - type=gha,scope=gorse-integration-worker,mode=max

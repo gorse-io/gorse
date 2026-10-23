@@ -256,6 +256,8 @@ jobs:
     strategy:
       matrix:
         database: [mysql+qdrant, postgres+weaviate, mongo+milvus, sqlite+xvec]
+    env:
+      COMPOSE_FILE: docker-compose.yml:client/docker-compose.ci.yml
     steps:
     - uses: actions/checkout@v5
       with:
@@ -273,10 +275,25 @@ jobs:
         variables: |
           database=${{ matrix.database }}
 
+    - name: Set image version
+      run: |
+        echo "GORSE_VERSION=$(git describe --tags HEAD)" >> "$GITHUB_ENV"
+        echo "GORSE_COMMIT=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+
+    - uses: docker/setup-buildx-action@v3
+
+    - name: Build integration images
+      uses: docker/bake-action@v6
+      with:
+        source: .
+        files: |
+          docker-compose.yml
+          client/docker-compose.ci.yml
+        targets: master,server,worker
+        load: true
+
     - name: Setup test
-      run: ./client/setup-test.sh
-      env:
-        DOCKER_BUILDKIT: 1
+      run: ./client/setup-test.sh --no-build
 
     - name: Test
       run: go test ./client/
