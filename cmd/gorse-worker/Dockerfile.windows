@@ -5,21 +5,29 @@ FROM golang:1.27
 
 WORKDIR /src
 
+COPY go.* ./
+
+RUN go mod download
+
 COPY . ./
 
 ENV CGO_ENABLED=0
 
-RUN go build -o / -ldflags="\" \
-        -X 'github.com/gorse-io/gorse/cmd/version.Version=$(git describe --tags $(git rev-parse HEAD))' \
-        -X 'github.com/gorse-io/gorse/cmd/version.GitCommit=$(git rev-parse HEAD)' \
-        -X 'github.com/gorse-io/gorse/cmd/version.BuildTime=$(date)'\"" ./cmd/...
+ARG VERSION
+ARG GIT_COMMIT
+ARG BUILD_TIME
+
+RUN go build -o ./ -ldflags=" \
+    -X 'github.com/gorse-io/gorse/cmd/version.Version=%VERSION%' \
+    -X 'github.com/gorse-io/gorse/cmd/version.GitCommit=%GIT_COMMIT%' \
+    -X 'github.com/gorse-io/gorse/cmd/version.BuildTime=%BUILD_TIME%'" ./cmd/...
 
 ############################
 # STEP 2 build a small image
 ############################
 FROM mcr.microsoft.com/windows/servercore:ltsc2022
 
-COPY --from=0 /gorse-worker.exe /gorse-worker.exe
+COPY --from=0 /src/gorse-worker.exe /gorse-worker.exe
 
 RUN /gorse-worker.exe --version
 

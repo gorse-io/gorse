@@ -260,6 +260,7 @@ jobs:
     - uses: actions/checkout@v5
       with:
         fetch-depth: 0
+        persist-credentials: false
 
     - uses: actions/setup-go@v5
       with:
@@ -272,6 +273,18 @@ jobs:
         strict: true
         variables: |
           database=${{ matrix.database }}
+
+    - name: Setup environment variables
+      run: |
+        echo "GORSE_VERSION=$(git describe --tags "$(git rev-parse HEAD)")" >> "$GITHUB_ENV"
+        echo "GORSE_GIT_COMMIT=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+        echo "GORSE_BUILD_TIME=$(git show -s --format=%cI HEAD)" >> "$GITHUB_ENV"
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Expose GitHub runtime
+      uses: crazy-max/ghaction-github-runtime@v4
 
     - name: Setup test
       run: ./client/setup-test.sh
@@ -350,8 +363,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - name: Setup environment variables
+        run: |
+          echo "GORSE_VERSION=$(git describe --tags "$(git rev-parse HEAD)")" >> "$GITHUB_ENV"
+          echo "GORSE_GIT_COMMIT=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+          echo "GORSE_BUILD_TIME=$(git show -s --format=%cI HEAD)" >> "$GITHUB_ENV"
+
       - name: Build Docker image
-        run: docker build -t zhenghaoz/gorse-in-one -f ./cmd/gorse-in-one/Dockerfile .
+        run: docker build --build-arg VERSION="$GORSE_VERSION" --build-arg GIT_COMMIT="$GORSE_GIT_COMMIT" --build-arg BUILD_TIME="$GORSE_BUILD_TIME" -t zhenghaoz/gorse-in-one -f ./cmd/gorse-in-one/Dockerfile .
       - name: Run playground
         run: docker run -d -p 8088:8088 --name playground zhenghaoz/gorse-in-one --playground
       - name: Check dashboard URL

@@ -1,3 +1,15 @@
+variable "GORSE_VERSION" {
+  default = ""
+}
+
+variable "GORSE_GIT_COMMIT" {
+  default = ""
+}
+
+variable "GORSE_BUILD_TIME" {
+  default = ""
+}
+
 variable "VERSIONS" {
   default = "nightly"
 }
@@ -15,6 +27,11 @@ group "default" {
 }
 
 target "openblas" {
+  args = {
+    VERSION    = GORSE_VERSION
+    GIT_COMMIT = GORSE_GIT_COMMIT
+    BUILD_TIME = GORSE_BUILD_TIME
+  }
   matrix = {
     component = components
   }
@@ -28,6 +45,11 @@ target "openblas" {
 }
 
 target "cuda" {
+  args = {
+    VERSION    = GORSE_VERSION
+    GIT_COMMIT = GORSE_GIT_COMMIT
+    BUILD_TIME = GORSE_BUILD_TIME
+  }
   matrix = {
     component = components
   }
@@ -41,6 +63,11 @@ target "cuda" {
 }
 
 target "mkl" {
+  args = {
+    VERSION    = GORSE_VERSION
+    GIT_COMMIT = GORSE_GIT_COMMIT
+    BUILD_TIME = GORSE_BUILD_TIME
+  }
   matrix = {
     component = components
   }

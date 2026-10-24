@@ -17,14 +17,17 @@ ARG TARGETOS
 
 ARG TARGETARCH
 
+ARG VERSION
+ARG GIT_COMMIT
+ARG BUILD_TIME
+
 RUN --mount=type=cache,target=/root/.cache/go-build \
-    cd cmd/gorse-in-one && \
-    GOOS=${TARGETOS} GOARCH=${TARGETARCH} CGO_ENABLED=0 go build -ldflags=" \
-    -X 'github.com/gorse-io/gorse/cmd/version.Version=$(git describe --tags $(git rev-parse HEAD))' \
-    -X 'github.com/gorse-io/gorse/cmd/version.GitCommit=$(git rev-parse HEAD)' \
-    -X 'github.com/gorse-io/gorse/cmd/version.BuildTime=$(date)' \
-    -X 'github.com/gorse-io/gorse/config.RootDir=/var/lib/gorse'" . && \
-    mv gorse-in-one /usr/bin
+    GOOS=${TARGETOS} GOARCH=${TARGETARCH} CGO_ENABLED=0 go build -o ./ -ldflags=" \
+    -X 'github.com/gorse-io/gorse/cmd/version.Version=${VERSION}' \
+    -X 'github.com/gorse-io/gorse/cmd/version.GitCommit=${GIT_COMMIT}' \
+    -X 'github.com/gorse-io/gorse/cmd/version.BuildTime=${BUILD_TIME}' \
+    -X 'github.com/gorse-io/gorse/config.RootDir=/var/lib/gorse'" \
+    ./cmd/...
 
 ############################
 # STEP 2 build a small image
@@ -33,7 +36,7 @@ FROM scratch
 
 COPY --from=0 /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
-COPY --from=0 /usr/bin/gorse-in-one /usr/bin/gorse-in-one
+COPY --from=0 /src/gorse-in-one /usr/bin/gorse-in-one
 
 ENV USER=root
 
