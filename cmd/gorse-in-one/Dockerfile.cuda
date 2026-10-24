@@ -19,16 +19,17 @@ RUN go mod download
 
 COPY . ./
 
+RUN go build -tags xla ./...
+
 ARG VERSION
 ARG GIT_COMMIT
 ARG BUILD_TIME
 
-RUN --mount=type=cache,target=/root/.cache/go-build \
-    go build -o ./ -tags xla -ldflags=" \
+RUN go build -o ./gorse-in-one -tags xla -ldflags=" \
        -X 'github.com/gorse-io/gorse/cmd/version.Version=${VERSION}' \
        -X 'github.com/gorse-io/gorse/cmd/version.GitCommit=${GIT_COMMIT}' \
        -X 'github.com/gorse-io/gorse/cmd/version.BuildTime=${BUILD_TIME}' \
-       -X 'github.com/gorse-io/gorse/config.RootDir=/var/lib/gorse'" ./cmd/...
+       -X 'github.com/gorse-io/gorse/config.RootDir=/var/lib/gorse'" ./cmd/gorse-in-one
 
 ############################
 # STEP 2 build runtime image

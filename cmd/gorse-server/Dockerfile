@@ -17,17 +17,18 @@ ARG TARGETOS
 
 ARG TARGETARCH
 
+RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} CGO_ENABLED=0 go build ./...
+
 ARG VERSION
 ARG GIT_COMMIT
 ARG BUILD_TIME
 
-RUN --mount=type=cache,target=/root/.cache/go-build \
-    GOOS=${TARGETOS} GOARCH=${TARGETARCH} CGO_ENABLED=0 go build -o ./ -ldflags=" \
+RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} CGO_ENABLED=0 go build -o ./gorse-server -ldflags=" \
     -X 'github.com/gorse-io/gorse/cmd/version.Version=${VERSION}' \
     -X 'github.com/gorse-io/gorse/cmd/version.GitCommit=${GIT_COMMIT}' \
     -X 'github.com/gorse-io/gorse/cmd/version.BuildTime=${BUILD_TIME}' \
     -X 'github.com/gorse-io/gorse/config.RootDir=/var/lib/gorse'" \
-    ./cmd/...
+    ./cmd/gorse-server
 
 ############################
 # STEP 2 build a small image
