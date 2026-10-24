@@ -121,7 +121,9 @@ services:
         GIT_COMMIT: ${GORSE_GIT_COMMIT}
         BUILD_TIME: ${GORSE_BUILD_TIME}
       cache_from:
-        - type=gha
+        - type=gha,scope=worker
+      cache_to:
+        - type=gha,scope=worker,mode=max
     restart: unless-stopped
     ports:
       - 8089:8089
@@ -142,7 +144,9 @@ services:
         GIT_COMMIT: ${GORSE_GIT_COMMIT}
         BUILD_TIME: ${GORSE_BUILD_TIME}
       cache_from:
-        - type=gha
+        - type=gha,scope=server
+      cache_to:
+        - type=gha,scope=server,mode=max
     restart: unless-stopped
     ports:
       - 8087:8087
@@ -163,9 +167,9 @@ services:
         GIT_COMMIT: ${GORSE_GIT_COMMIT}
         BUILD_TIME: ${GORSE_BUILD_TIME}
       cache_from:
-        - type=gha
+        - type=gha,scope=master
       cache_to:
-        - type=gha,mode=max
+        - type=gha,scope=master,mode=max
     restart: unless-stopped
     ports:
       - 8086:8086
