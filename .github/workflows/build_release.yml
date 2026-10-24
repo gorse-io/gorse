@@ -87,7 +87,7 @@ jobs:
         run: |
           echo "GORSE_VERSION=$(git describe --tags "$(git rev-parse HEAD)")" >> "$GITHUB_ENV"
           echo "GORSE_GIT_COMMIT=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
-          echo "GORSE_BUILD_TIME=$(git show -s --format=%cI HEAD)" >> "$GITHUB_ENV"
+          echo "GORSE_BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -145,7 +145,7 @@ jobs:
         run: |
           "GORSE_VERSION=$(git describe --tags (git rev-parse HEAD))" >> $env:GITHUB_ENV
           "GORSE_GIT_COMMIT=$(git rev-parse HEAD)" >> $env:GITHUB_ENV
-          "GORSE_BUILD_TIME=$(git show -s --format=%cI HEAD)" >> $env:GITHUB_ENV
+          "GORSE_BUILD_TIME=$(Get-Date -Format o)" >> $env:GITHUB_ENV
 
       - id: get_version
         uses: battila7/get-version-action@v2

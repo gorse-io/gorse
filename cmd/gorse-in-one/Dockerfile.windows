@@ -19,14 +19,14 @@ ARG VERSION
 ARG GIT_COMMIT
 ARG BUILD_TIME
 
-RUN go build -o ./gorse-in-one.exe -ldflags ('-X github.com/gorse-io/gorse/cmd/version.Version={0} -X github.com/gorse-io/gorse/cmd/version.GitCommit={1} -X github.com/gorse-io/gorse/cmd/version.BuildTime={2}' -f $env:VERSION, $env:GIT_COMMIT, $env:BUILD_TIME) ./cmd/gorse-in-one
+RUN cd cmd/gorse-in-one; go build -ldflags ('-X github.com/gorse-io/gorse/cmd/version.Version={0} -X github.com/gorse-io/gorse/cmd/version.GitCommit={1} -X github.com/gorse-io/gorse/cmd/version.BuildTime={2}' -f $env:VERSION, $env:GIT_COMMIT, $env:BUILD_TIME) .
 
 ############################
 # STEP 2 build a small image
 ############################
 FROM mcr.microsoft.com/windows/servercore:ltsc2022
 
-COPY --from=0 /src/gorse-in-one.exe /gorse-in-one.exe
+COPY --from=0 /src/cmd/gorse-in-one/gorse-in-one.exe /gorse-in-one.exe
 
 RUN /gorse-in-one.exe --version
 

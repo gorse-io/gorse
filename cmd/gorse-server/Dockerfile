@@ -17,18 +17,21 @@ ARG TARGETOS
 
 ARG TARGETARCH
 
-RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} CGO_ENABLED=0 go build ./...
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    GOOS=${TARGETOS} GOARCH=${TARGETARCH} CGO_ENABLED=0 go build ./...
 
 ARG VERSION
 ARG GIT_COMMIT
 ARG BUILD_TIME
 
-RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} CGO_ENABLED=0 go build -o ./gorse-server -ldflags=" \
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    cd cmd/gorse-server && \
+    GOOS=${TARGETOS} GOARCH=${TARGETARCH} CGO_ENABLED=0 go build -ldflags=" \
     -X 'github.com/gorse-io/gorse/cmd/version.Version=${VERSION}' \
     -X 'github.com/gorse-io/gorse/cmd/version.GitCommit=${GIT_COMMIT}' \
     -X 'github.com/gorse-io/gorse/cmd/version.BuildTime=${BUILD_TIME}' \
     -X 'github.com/gorse-io/gorse/config.RootDir=/var/lib/gorse'" \
-    ./cmd/gorse-server
+    .
 
 ############################
 # STEP 2 build a small image
@@ -37,7 +40,7 @@ FROM scratch
 
 COPY --from=0 /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
-COPY --from=0 /src/gorse-server /usr/bin/gorse-server
+COPY --from=0 /src/cmd/gorse-server/gorse-server /usr/bin/gorse-server
 
 ENV USER=root
 

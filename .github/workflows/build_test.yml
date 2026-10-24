@@ -281,7 +281,7 @@ jobs:
       run: |
         echo "GORSE_VERSION=$(git describe --tags "$(git rev-parse HEAD)")" >> "$GITHUB_ENV"
         echo "GORSE_GIT_COMMIT=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
-        echo "GORSE_BUILD_TIME=$(git show -s --format=%cI HEAD)" >> "$GITHUB_ENV"
+        echo "GORSE_BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
 
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
@@ -377,7 +377,7 @@ jobs:
         run: |
           echo "GORSE_VERSION=$(git describe --tags "$(git rev-parse HEAD)")" >> "$GITHUB_ENV"
           echo "GORSE_GIT_COMMIT=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
-          echo "GORSE_BUILD_TIME=$(git show -s --format=%cI HEAD)" >> "$GITHUB_ENV"
+          echo "GORSE_BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
 
       - name: Build Docker image
         run: docker build --build-arg VERSION="$GORSE_VERSION" --build-arg GIT_COMMIT="$GORSE_GIT_COMMIT" --build-arg BUILD_TIME="$GORSE_BUILD_TIME" -t zhenghaoz/gorse-in-one -f ./cmd/gorse-in-one/Dockerfile .

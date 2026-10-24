@@ -19,14 +19,14 @@ ARG VERSION
 ARG GIT_COMMIT
 ARG BUILD_TIME
 
-RUN go build -o ./gorse-worker.exe -ldflags ('-X github.com/gorse-io/gorse/cmd/version.Version={0} -X github.com/gorse-io/gorse/cmd/version.GitCommit={1} -X github.com/gorse-io/gorse/cmd/version.BuildTime={2}' -f $env:VERSION, $env:GIT_COMMIT, $env:BUILD_TIME) ./cmd/gorse-worker
+RUN cd cmd/gorse-worker; go build -ldflags ('-X github.com/gorse-io/gorse/cmd/version.Version={0} -X github.com/gorse-io/gorse/cmd/version.GitCommit={1} -X github.com/gorse-io/gorse/cmd/version.BuildTime={2}' -f $env:VERSION, $env:GIT_COMMIT, $env:BUILD_TIME) .
 
 ############################
 # STEP 2 build a small image
 ############################
 FROM mcr.microsoft.com/windows/servercore:ltsc2022
 
-COPY --from=0 /src/gorse-worker.exe /gorse-worker.exe
+COPY --from=0 /src/cmd/gorse-worker/gorse-worker.exe /gorse-worker.exe
 
 RUN /gorse-worker.exe --version
 
