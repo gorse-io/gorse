@@ -287,7 +287,9 @@ jobs:
       uses: crazy-max/ghaction-github-runtime@v4
 
     - name: Setup test
-      run: ./client/setup-test.sh
+      run: |
+        cp client/config.toml config.toml
+        ./client/setup-test.sh
       env:
         DOCKER_BUILDKIT: 1
 
