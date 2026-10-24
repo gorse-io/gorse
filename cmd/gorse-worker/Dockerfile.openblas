@@ -39,8 +39,7 @@ COPY . ./
 
 ARG TARGETOS
 
-RUN --mount=type=cache,target=/root/.cache/go-build \
-    if [ "${TARGETARCH}" = "amd64" ]; then \
+RUN if [ "${TARGETARCH}" = "amd64" ]; then \
         export CC=x86_64-linux-gnu-gcc; \
     elif [ "${TARGETARCH}" = "arm64" ]; then \
         export CC=aarch64-linux-gnu-gcc; \
@@ -61,8 +60,7 @@ ARG VERSION
 ARG GIT_COMMIT
 ARG BUILD_TIME
 
-RUN --mount=type=cache,target=/root/.cache/go-build \
-    if [ "${TARGETARCH}" = "amd64" ]; then \
+RUN if [ "${TARGETARCH}" = "amd64" ]; then \
         export CC=x86_64-linux-gnu-gcc; \
     elif [ "${TARGETARCH}" = "arm64" ]; then \
         export CC=aarch64-linux-gnu-gcc; \

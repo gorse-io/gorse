@@ -19,15 +19,13 @@ RUN go mod download
 
 COPY . ./
 
-RUN --mount=type=cache,target=/root/.cache/go-build \
-    go build -tags xla ./...
+RUN go build -tags xla ./...
 
 ARG VERSION
 ARG GIT_COMMIT
 ARG BUILD_TIME
 
-RUN --mount=type=cache,target=/root/.cache/go-build \
-    cd cmd/gorse-in-one && \
+RUN cd cmd/gorse-in-one && \
     go build -tags xla -ldflags=" \
        -X 'github.com/gorse-io/gorse/cmd/version.Version=${VERSION}' \
        -X 'github.com/gorse-io/gorse/cmd/version.GitCommit=${GIT_COMMIT}' \
