@@ -113,13 +113,14 @@ services:
   {% endif %}
 
   worker:
+    image: gorse-integration-worker:local
     build:
       context: .
       dockerfile: cmd/gorse-worker/Dockerfile
       cache_from:
-        - type=gha
+        - type=s3,endpoint_url=${SCCACHE_ENDPOINT},bucket=${SCCACHE_BUCKET},region=${SCCACHE_REGION},prefix=docker/,name=gorse-worker
       cache_to:
-        - type=gha,mode=max
+        - type=s3,endpoint_url=${SCCACHE_ENDPOINT},bucket=${SCCACHE_BUCKET},region=${SCCACHE_REGION},prefix=docker/,name=gorse-worker,mode=max
     restart: unless-stopped
     ports:
       - 8089:8089
@@ -132,13 +133,14 @@ services:
       - master
 
   server:
+    image: gorse-integration-server:local
     build:
       context: .
       dockerfile: cmd/gorse-server/Dockerfile
       cache_from:
-        - type=gha
+        - type=s3,endpoint_url=${SCCACHE_ENDPOINT},bucket=${SCCACHE_BUCKET},region=${SCCACHE_REGION},prefix=docker/,name=gorse-server
       cache_to:
-        - type=gha,mode=max
+        - type=s3,endpoint_url=${SCCACHE_ENDPOINT},bucket=${SCCACHE_BUCKET},region=${SCCACHE_REGION},prefix=docker/,name=gorse-server,mode=max
     restart: unless-stopped
     ports:
       - 8087:8087
@@ -151,13 +153,14 @@ services:
       - master
 
   master:
+    image: gorse-integration-master:local
     build:
       context: .
       dockerfile: cmd/gorse-master/Dockerfile
       cache_from:
-        - type=gha
+        - type=s3,endpoint_url=${SCCACHE_ENDPOINT},bucket=${SCCACHE_BUCKET},region=${SCCACHE_REGION},prefix=docker/,name=gorse-master
       cache_to:
-        - type=gha,mode=max
+        - type=s3,endpoint_url=${SCCACHE_ENDPOINT},bucket=${SCCACHE_BUCKET},region=${SCCACHE_REGION},prefix=docker/,name=gorse-master,mode=max
     restart: unless-stopped
     ports:
       - 8086:8086

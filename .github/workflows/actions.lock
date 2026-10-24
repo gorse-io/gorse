@@ -24,6 +24,8 @@ workflows:
         - 'awalsh128/cache-apt-pkgs-action@latest'
         - 'codecov/codecov-action@v5'
         - 'cuchi/jinja2-action@v1.2.0'
+        - 'docker/bake-action@v6'
+        - 'docker/setup-buildx-action@v3'
         - 'golangci/golangci-lint-action@v9'
         - 'gorse-io/redis-cluster@v1.0.0'
         - 'msys2/setup-msys2@v2'
@@ -104,11 +106,6 @@ dependencies:
         commit: 'sha1-8d2750c68a42422c14e847fe6c8ac0403b4cbd6f'
         owner_id: 5429470
         repo_id: 288485773
-    'tomsun28/issues-translate-action@v2.5':
-        ref: 'v2.5'
-        commit: 'sha1-b4a675cc16d1826524553771d6b8b1c6c5c51be0'
-        owner_id: 41095225
-        repo_id: 311689115
     'golangci/golangci-lint-action@v9':
         ref: 'v9'
         commit: 'sha1-ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a'
@@ -144,3 +141,8 @@ dependencies:
         commit: 'sha1-29e53e917877a24fad85510ded594ab3c9ca12de'
         owner_id: 1664
         repo_id: 203697873
+    'tomsun28/issues-translate-action@v2.5':
+        ref: 'v2.5'
+        commit: 'sha1-b4a675cc16d1826524553771d6b8b1c6c5c51be0'
+        owner_id: 41095225
+        repo_id: 311689115

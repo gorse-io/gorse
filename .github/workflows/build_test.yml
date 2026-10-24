@@ -253,6 +253,10 @@ jobs:
   integrate_test:
     name: integrate tests
     runs-on: ubuntu-latest
+    env:
+      SCCACHE_BUCKET: ${{ vars.SCCACHE_BUCKET }}
+      SCCACHE_ENDPOINT: ${{ vars.SCCACHE_ENDPOINT }}
+      SCCACHE_REGION: ${{ vars.SCCACHE_REGION }}
     strategy:
       matrix:
         database: [mysql+qdrant, postgres+weaviate, mongo+milvus, sqlite+xvec]
@@ -272,6 +276,20 @@ jobs:
         strict: true
         variables: |
           database=${{ matrix.database }}
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Build integration images
+      uses: docker/bake-action@v6
+      with:
+        source: .
+        files: docker-compose.yml
+        targets: master,server,worker
+        load: true
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
     - name: Setup test
       run: ./client/setup-test.sh
