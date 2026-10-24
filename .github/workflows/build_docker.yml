@@ -4,12 +4,6 @@ on:
   push:
     branches:    
       - master
-  pull_request:
-    branches:
-      - master
-    paths:
-      - "cmd/**/Dockerfile.windows"
-      - ".github/workflows/build_docker.yml"
 
 jobs:
   windows_images:
@@ -28,7 +22,6 @@ jobs:
           "GORSE_BUILD_TIME=$(git show -s --format=%cI HEAD)" >> $env:GITHUB_ENV
 
       - name: Login to DockerHub
-        if: github.event_name == 'push'
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -42,15 +35,10 @@ jobs:
               --build-arg "GIT_COMMIT=$env:GORSE_GIT_COMMIT" `
               --build-arg "BUILD_TIME=$env:GORSE_BUILD_TIME" `
               -t zhenghaoz/${image}:nightly-windowsservercore .
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-            if ("${{ github.event_name }}" -eq "push") {
-              docker image push --all-tags zhenghaoz/$image
-              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-            }
+            docker image push --all-tags zhenghaoz/$image
           }
 
   docker_images:
-    if: github.event_name == 'push'
     name: docker images
     runs-on: ubuntu-latest
     strategy:
