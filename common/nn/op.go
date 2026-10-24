@@ -58,7 +58,46 @@ func (b *base) setGeneration(gen int) {
 	b.gen = gen
 }
 
-func apply[T op](f T, inputs ...*Tensor) *Tensor {
+// float16Op connects the original graph to the existing FP32 kernels.
+// The kernel's output pointer is weak, so keep its FP32 result alive here.
+// Gradients stay in FP32, including when accumulating shared graph branches.
+type float16Op struct {
+	base
+	kernel   op
+	output32 *Tensor
+}
+
+func (f *float16Op) String() string { return f.kernel.String() }
+
+func (f *float16Op) forward(inputs ...*Tensor) *Tensor {
+	converted := make([]*Tensor, len(inputs))
+	for i, x := range inputs {
+		if x.dtype == Float16 {
+			converted[i] = x.ToFloat32()
+		} else {
+			converted[i] = x
+		}
+	}
+	f.output32 = f.kernel.forward(converted...)
+	f.kernel.setInputs(converted...)
+	f.kernel.setOutput(f.output32)
+	if inputs[0].dtype == Float16 {
+		return f.output32.ToFloat16()
+	}
+	return f.output32
+}
+
+func (f *float16Op) backward(dy *Tensor) []*Tensor {
+	return f.kernel.backward(dy)
+}
+
+func apply(f op, inputs ...*Tensor) *Tensor {
+	for _, x := range inputs {
+		if x.dtype == Float16 {
+			f = &float16Op{kernel: f}
+			break
+		}
+	}
 	y := f.forward(inputs...)
 	f.setInputs(inputs...)
 	f.setOutput(y)

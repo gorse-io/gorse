@@ -35,11 +35,59 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type TensorDType int32
+
+const (
+	TensorDType_FLOAT32 TensorDType = 0
+	TensorDType_FLOAT16 TensorDType = 1
+)
+
+// Enum value maps for TensorDType.
+var (
+	TensorDType_name = map[int32]string{
+		0: "FLOAT32",
+		1: "FLOAT16",
+	}
+	TensorDType_value = map[string]int32{
+		"FLOAT32": 0,
+		"FLOAT16": 1,
+	}
+)
+
+func (x TensorDType) Enum() *TensorDType {
+	p := new(TensorDType)
+	*p = x
+	return p
+}
+
+func (x TensorDType) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (TensorDType) Descriptor() protoreflect.EnumDescriptor {
+	return file_encoding_proto_enumTypes[0].Descriptor()
+}
+
+func (TensorDType) Type() protoreflect.EnumType {
+	return &file_encoding_proto_enumTypes[0]
+}
+
+func (x TensorDType) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use TensorDType.Descriptor instead.
+func (TensorDType) EnumDescriptor() ([]byte, []int) {
+	return file_encoding_proto_rawDescGZIP(), []int{0}
+}
+
 type Tensor struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Key           []string               `protobuf:"bytes,1,rep,name=key,proto3" json:"key,omitempty"`
-	Shape         []int32                `protobuf:"varint,2,rep,packed,name=shape,proto3" json:"shape,omitempty"`
-	Data          []float32              `protobuf:"fixed32,3,rep,packed,name=data,proto3" json:"data,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Key   []string               `protobuf:"bytes,1,rep,name=key,proto3" json:"key,omitempty"`
+	Shape []int32                `protobuf:"varint,2,rep,packed,name=shape,proto3" json:"shape,omitempty"`
+	// IEEE 754 raw bits in little-endian order; element width is determined by dtype.
+	Data          []byte      `protobuf:"bytes,3,opt,name=data,proto3" json:"data,omitempty"`
+	Dtype         TensorDType `protobuf:"varint,4,opt,name=dtype,proto3,enum=protocol.TensorDType" json:"dtype,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -88,11 +136,18 @@ func (x *Tensor) GetShape() []int32 {
 	return nil
 }
 
-func (x *Tensor) GetData() []float32 {
+func (x *Tensor) GetData() []byte {
 	if x != nil {
 		return x.Data
 	}
 	return nil
+}
+
+func (x *Tensor) GetDtype() TensorDType {
+	if x != nil {
+		return x.Dtype
+	}
+	return TensorDType_FLOAT32
 }
 
 type LatentFactor struct {
@@ -151,14 +206,18 @@ var File_encoding_proto protoreflect.FileDescriptor
 
 const file_encoding_proto_rawDesc = "" +
 	"\n" +
-	"\x0eencoding.proto\x12\bprotocol\"D\n" +
+	"\x0eencoding.proto\x12\bprotocol\"q\n" +
 	"\x06Tensor\x12\x10\n" +
 	"\x03key\x18\x01 \x03(\tR\x03key\x12\x14\n" +
 	"\x05shape\x18\x02 \x03(\x05R\x05shape\x12\x12\n" +
-	"\x04data\x18\x03 \x03(\x02R\x04data\"2\n" +
+	"\x04data\x18\x03 \x01(\fR\x04data\x12+\n" +
+	"\x05dtype\x18\x04 \x01(\x0e2\x15.protocol.TensorDTypeR\x05dtype\"2\n" +
 	"\fLatentFactor\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
-	"\x04data\x18\x02 \x03(\x02R\x04dataB$Z\"github.com/gorse-io/gorse/protocolb\x06proto3"
+	"\x04data\x18\x02 \x03(\x02R\x04data*'\n" +
+	"\vTensorDType\x12\v\n" +
+	"\aFLOAT32\x10\x00\x12\v\n" +
+	"\aFLOAT16\x10\x01B$Z\"github.com/gorse-io/gorse/protocolb\x06proto3"
 
 var (
 	file_encoding_proto_rawDescOnce sync.Once
@@ -172,17 +231,20 @@ func file_encoding_proto_rawDescGZIP() []byte {
 	return file_encoding_proto_rawDescData
 }
 
+var file_encoding_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
 var file_encoding_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
 var file_encoding_proto_goTypes = []any{
-	(*Tensor)(nil),       // 0: protocol.Tensor
-	(*LatentFactor)(nil), // 1: protocol.LatentFactor
+	(TensorDType)(0),     // 0: protocol.TensorDType
+	(*Tensor)(nil),       // 1: protocol.Tensor
+	(*LatentFactor)(nil), // 2: protocol.LatentFactor
 }
 var file_encoding_proto_depIdxs = []int32{
-	0, // [0:0] is the sub-list for method output_type
-	0, // [0:0] is the sub-list for method input_type
-	0, // [0:0] is the sub-list for extension type_name
-	0, // [0:0] is the sub-list for extension extendee
-	0, // [0:0] is the sub-list for field type_name
+	0, // 0: protocol.Tensor.dtype:type_name -> protocol.TensorDType
+	1, // [1:1] is the sub-list for method output_type
+	1, // [1:1] is the sub-list for method input_type
+	1, // [1:1] is the sub-list for extension type_name
+	1, // [1:1] is the sub-list for extension extendee
+	0, // [0:1] is the sub-list for field type_name
 }
 
 func init() { file_encoding_proto_init() }
@@ -195,13 +257,14 @@ func file_encoding_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_encoding_proto_rawDesc), len(file_encoding_proto_rawDesc)),
-			NumEnums:      0,
+			NumEnums:      1,
 			NumMessages:   2,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
 		GoTypes:           file_encoding_proto_goTypes,
 		DependencyIndexes: file_encoding_proto_depIdxs,
+		EnumInfos:         file_encoding_proto_enumTypes,
 		MessageInfos:      file_encoding_proto_msgTypes,
 	}.Build()
 	File_encoding_proto = out.File
