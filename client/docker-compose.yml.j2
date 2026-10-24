@@ -117,6 +117,10 @@ services:
     build:
       context: .
       dockerfile: cmd/gorse-worker/Dockerfile
+      args:
+        VERSION: ${GORSE_VERSION:-}
+        GIT_COMMIT: ${GORSE_GIT_COMMIT:-}
+        BUILD_TIME: ${GORSE_BUILD_TIME:-}
       cache_from:
         - type=s3,endpoint_url=${SCCACHE_ENDPOINT},bucket=${SCCACHE_BUCKET},region=${SCCACHE_REGION},prefix=docker/,name=gorse-worker
       cache_to:
@@ -137,6 +141,10 @@ services:
     build:
       context: .
       dockerfile: cmd/gorse-server/Dockerfile
+      args:
+        VERSION: ${GORSE_VERSION:-}
+        GIT_COMMIT: ${GORSE_GIT_COMMIT:-}
+        BUILD_TIME: ${GORSE_BUILD_TIME:-}
       cache_from:
         - type=s3,endpoint_url=${SCCACHE_ENDPOINT},bucket=${SCCACHE_BUCKET},region=${SCCACHE_REGION},prefix=docker/,name=gorse-server
       cache_to:
@@ -157,6 +165,10 @@ services:
     build:
       context: .
       dockerfile: cmd/gorse-master/Dockerfile
+      args:
+        VERSION: ${GORSE_VERSION:-}
+        GIT_COMMIT: ${GORSE_GIT_COMMIT:-}
+        BUILD_TIME: ${GORSE_BUILD_TIME:-}
       cache_from:
         - type=s3,endpoint_url=${SCCACHE_ENDPOINT},bucket=${SCCACHE_BUCKET},region=${SCCACHE_REGION},prefix=docker/,name=gorse-master
       cache_to:

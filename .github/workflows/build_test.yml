@@ -264,6 +264,7 @@ jobs:
     - uses: actions/checkout@v5
       with:
         fetch-depth: 0
+        persist-credentials: false
 
     - uses: actions/setup-go@v5
       with:
@@ -276,6 +277,13 @@ jobs:
         strict: true
         variables: |
           database=${{ matrix.database }}
+
+    - name: Prepare integration build
+      run: |
+        echo "GORSE_VERSION=$(git describe --tags "$(git rev-parse HEAD)")" >> "$GITHUB_ENV"
+        echo "GORSE_GIT_COMMIT=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+        echo "GORSE_BUILD_TIME=$(git show -s --format=%cI HEAD)" >> "$GITHUB_ENV"
+        printf '\n.git\n' >> .dockerignore
 
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
