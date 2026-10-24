@@ -280,6 +280,17 @@ jobs:
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
 
+    - name: Configure integration cache
+      id: integration-cache
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      run: |
+        if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ] ||
+           [ -z "$SCCACHE_BUCKET" ] || [ -z "$SCCACHE_ENDPOINT" ] || [ -z "$SCCACHE_REGION" ]; then
+          printf 'overrides<<EOF\n*.cache-from=\n*.cache-to=\nEOF\n' >> "$GITHUB_OUTPUT"
+        fi
+
     - name: Build integration images
       uses: docker/bake-action@v6
       with:
@@ -287,6 +298,7 @@ jobs:
         files: docker-compose.yml
         targets: master,server,worker
         load: true
+        set: ${{ steps.integration-cache.outputs.overrides }}
       env:
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
