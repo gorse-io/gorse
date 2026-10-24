@@ -19,16 +19,20 @@ RUN go mod download
 
 COPY . ./
 
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    go build -tags xla ./...
+
 ARG VERSION
 ARG GIT_COMMIT
 ARG BUILD_TIME
 
 RUN --mount=type=cache,target=/root/.cache/go-build \
-    go build -o ./ -tags xla -ldflags=" \
+    cd cmd/gorse-in-one && \
+    go build -tags xla -ldflags=" \
        -X 'github.com/gorse-io/gorse/cmd/version.Version=${VERSION}' \
        -X 'github.com/gorse-io/gorse/cmd/version.GitCommit=${GIT_COMMIT}' \
        -X 'github.com/gorse-io/gorse/cmd/version.BuildTime=${BUILD_TIME}' \
-       -X 'github.com/gorse-io/gorse/config.RootDir=/var/lib/gorse'" ./cmd/...
+       -X 'github.com/gorse-io/gorse/config.RootDir=/var/lib/gorse'" .
 
 ############################
 # STEP 2 build runtime image
@@ -37,7 +41,7 @@ FROM nvidia/cuda:12.8.1-runtime-ubuntu24.04
 
 COPY --from=0 /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
-COPY --from=0 /src/gorse-in-one /usr/bin/gorse-in-one
+COPY --from=0 /src/cmd/gorse-in-one/gorse-in-one /usr/bin/gorse-in-one
 
 RUN /usr/bin/gorse-in-one --version
 
