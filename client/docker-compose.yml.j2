@@ -116,14 +116,13 @@ services:
     image: gorse-integration-worker:local
     build:
       context: .
-      dockerfile: client/Dockerfile
-      target: worker
+      dockerfile: cmd/gorse-worker/Dockerfile
       args:
         VERSION: ${GORSE_VERSION:-}
         GIT_COMMIT: ${GORSE_GIT_COMMIT:-}
         BUILD_TIME: ${GORSE_BUILD_TIME:-}
       cache_from:
-        - type=s3,endpoint_url=${SCCACHE_ENDPOINT},bucket=${SCCACHE_BUCKET},region=${SCCACHE_REGION},prefix=docker/,name=gorse
+        - type=gha,scope=gorse
     restart: unless-stopped
     ports:
       - 8089:8089
@@ -139,14 +138,13 @@ services:
     image: gorse-integration-server:local
     build:
       context: .
-      dockerfile: client/Dockerfile
-      target: server
+      dockerfile: cmd/gorse-server/Dockerfile
       args:
         VERSION: ${GORSE_VERSION:-}
         GIT_COMMIT: ${GORSE_GIT_COMMIT:-}
         BUILD_TIME: ${GORSE_BUILD_TIME:-}
       cache_from:
-        - type=s3,endpoint_url=${SCCACHE_ENDPOINT},bucket=${SCCACHE_BUCKET},region=${SCCACHE_REGION},prefix=docker/,name=gorse
+        - type=gha,scope=gorse
     restart: unless-stopped
     ports:
       - 8087:8087
@@ -162,16 +160,15 @@ services:
     image: gorse-integration-master:local
     build:
       context: .
-      dockerfile: client/Dockerfile
-      target: master
+      dockerfile: cmd/gorse-master/Dockerfile
       args:
         VERSION: ${GORSE_VERSION:-}
         GIT_COMMIT: ${GORSE_GIT_COMMIT:-}
         BUILD_TIME: ${GORSE_BUILD_TIME:-}
       cache_from:
-        - type=s3,endpoint_url=${SCCACHE_ENDPOINT},bucket=${SCCACHE_BUCKET},region=${SCCACHE_REGION},prefix=docker/,name=gorse
+        - type=gha,scope=gorse
       cache_to:
-        - type=s3,endpoint_url=${SCCACHE_ENDPOINT},bucket=${SCCACHE_BUCKET},region=${SCCACHE_REGION},prefix=docker/,name=gorse,mode=max
+        - type=gha,scope=gorse,mode=max
     restart: unless-stopped
     ports:
       - 8086:8086
