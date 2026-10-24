@@ -80,6 +80,12 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Setup environment variables
+        run: |
+          echo "GORSE_VERSION=$(git describe --tags "$(git rev-parse HEAD)")" >> "$GITHUB_ENV"
+          echo "GORSE_GIT_COMMIT=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+          echo "GORSE_BUILD_TIME=$(git show -s --format=%cI HEAD)" >> "$GITHUB_ENV"
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
         with:
@@ -125,6 +131,12 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Setup environment variables
+        run: |
+          "GORSE_VERSION=$(git describe --tags (git rev-parse HEAD))" >> $env:GITHUB_ENV
+          "GORSE_GIT_COMMIT=$(git rev-parse HEAD)" >> $env:GITHUB_ENV
+          "GORSE_BUILD_TIME=$(git show -s --format=%cI HEAD)" >> $env:GITHUB_ENV
+
       - id: get_version
         uses: battila7/get-version-action@v2
 
@@ -139,6 +151,9 @@ jobs:
         run: |
           foreach ($image in "gorse-master", "gorse-server", "gorse-worker", "gorse-in-one") {
             docker build -f cmd/${image}/Dockerfile.windows `
+              --build-arg "VERSION=$env:GORSE_VERSION" `
+              --build-arg "GIT_COMMIT=$env:GORSE_GIT_COMMIT" `
+              --build-arg "BUILD_TIME=$env:GORSE_BUILD_TIME" `
               -t zhenghaoz/${image}:windowsservercore `
               -t zhenghaoz/${image}:${{ steps.get_version.outputs.major }}.${{ steps.get_version.outputs.minor }}-windowsservercore `
               -t zhenghaoz/${image}:${{ steps.get_version.outputs.version-without-v }}-windowsservercore .
@@ -150,6 +165,9 @@ jobs:
         run: |
           foreach ($image in "gorse-master", "gorse-server", "gorse-worker", "gorse-in-one") {
             docker build -f cmd/${image}/Dockerfile.windows `
+              --build-arg "VERSION=$env:GORSE_VERSION" `
+              --build-arg "GIT_COMMIT=$env:GORSE_GIT_COMMIT" `
+              --build-arg "BUILD_TIME=$env:GORSE_BUILD_TIME" `
               -t zhenghaoz/${image}:${{ steps.get_version.outputs.version-without-v }}-windowsservercore .
             docker image push --all-tags zhenghaoz/$image
           }

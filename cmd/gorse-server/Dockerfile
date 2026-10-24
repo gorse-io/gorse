@@ -27,7 +27,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     -X 'github.com/gorse-io/gorse/cmd/version.GitCommit=${GIT_COMMIT}' \
     -X 'github.com/gorse-io/gorse/cmd/version.BuildTime=${BUILD_TIME}' \
     -X 'github.com/gorse-io/gorse/config.RootDir=/var/lib/gorse'" \
-    ./cmd/gorse-master ./cmd/gorse-server ./cmd/gorse-worker
+    ./cmd/...
 
 ############################
 # STEP 2 build a small image
