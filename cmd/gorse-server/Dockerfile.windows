@@ -3,6 +3,8 @@
 ############################
 FROM golang:1.27
 
+SHELL ["cmd", "/S", "/C"]
+
 WORKDIR /src
 
 COPY go.* ./
