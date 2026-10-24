@@ -17,15 +17,13 @@ ARG TARGETOS
 
 ARG TARGETARCH
 
-RUN --mount=type=cache,target=/root/.cache/go-build \
-    GOOS=${TARGETOS} GOARCH=${TARGETARCH} CGO_ENABLED=0 go build ./...
+RUN GOOS=${TARGETOS} GOARCH=${TARGETARCH} CGO_ENABLED=0 go build ./...
 
 ARG VERSION
 ARG GIT_COMMIT
 ARG BUILD_TIME
 
-RUN --mount=type=cache,target=/root/.cache/go-build \
-    cd cmd/gorse-master && \
+RUN cd cmd/gorse-master && \
     GOOS=${TARGETOS} GOARCH=${TARGETARCH} CGO_ENABLED=0 go build -ldflags=" \
     -X 'github.com/gorse-io/gorse/cmd/version.Version=${VERSION}' \
     -X 'github.com/gorse-io/gorse/cmd/version.GitCommit=${GIT_COMMIT}' \
