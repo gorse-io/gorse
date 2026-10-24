@@ -121,11 +121,9 @@ services:
         GIT_COMMIT: ${GORSE_GIT_COMMIT}
         BUILD_TIME: ${GORSE_BUILD_TIME}
       cache_from:
-        - type=registry,ref=ghcr.io/gorse-io/gorse-buildcache:integration-worker-{{ database | replace('+', '-') }}
-      {% if cache_write | default('false') == 'true' %}
+        - type=registry,ref=ghcr.io/gorse-io/gorse-buildcache:integration-worker
       cache_to:
-        - type=registry,ref=ghcr.io/gorse-io/gorse-buildcache:integration-worker-{{ database | replace('+', '-') }},mode=max
-      {% endif %}
+        - type=registry,ref=ghcr.io/gorse-io/gorse-buildcache:integration-worker,mode=max
     restart: unless-stopped
     ports:
       - 8089:8089
@@ -146,11 +144,9 @@ services:
         GIT_COMMIT: ${GORSE_GIT_COMMIT}
         BUILD_TIME: ${GORSE_BUILD_TIME}
       cache_from:
-        - type=registry,ref=ghcr.io/gorse-io/gorse-buildcache:integration-server-{{ database | replace('+', '-') }}
-      {% if cache_write | default('false') == 'true' %}
+        - type=registry,ref=ghcr.io/gorse-io/gorse-buildcache:integration-server
       cache_to:
-        - type=registry,ref=ghcr.io/gorse-io/gorse-buildcache:integration-server-{{ database | replace('+', '-') }},mode=max
-      {% endif %}
+        - type=registry,ref=ghcr.io/gorse-io/gorse-buildcache:integration-server,mode=max
     restart: unless-stopped
     ports:
       - 8087:8087
@@ -171,11 +167,9 @@ services:
         GIT_COMMIT: ${GORSE_GIT_COMMIT}
         BUILD_TIME: ${GORSE_BUILD_TIME}
       cache_from:
-        - type=registry,ref=ghcr.io/gorse-io/gorse-buildcache:integration-master-{{ database | replace('+', '-') }}
-      {% if cache_write | default('false') == 'true' %}
+        - type=registry,ref=ghcr.io/gorse-io/gorse-buildcache:integration-master
       cache_to:
-        - type=registry,ref=ghcr.io/gorse-io/gorse-buildcache:integration-master-{{ database | replace('+', '-') }},mode=max
-      {% endif %}
+        - type=registry,ref=ghcr.io/gorse-io/gorse-buildcache:integration-master,mode=max
     restart: unless-stopped
     ports:
       - 8086:8086
