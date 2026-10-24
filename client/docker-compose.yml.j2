@@ -121,9 +121,9 @@ services:
         GIT_COMMIT: ${GORSE_GIT_COMMIT}
         BUILD_TIME: ${GORSE_BUILD_TIME}
       cache_from:
-        - type=registry,ref=ghcr.io/gorse-io/gorse-buildcache:integration-worker
+        - type=registry,ref=ghcr.io/gorse-io/gorse-buildcache:worker
       cache_to:
-        - type=registry,ref=ghcr.io/gorse-io/gorse-buildcache:integration-worker,mode=max
+        - type=registry,ref=ghcr.io/gorse-io/gorse-buildcache:worker,mode=max
     restart: unless-stopped
     ports:
       - 8089:8089
@@ -144,9 +144,9 @@ services:
         GIT_COMMIT: ${GORSE_GIT_COMMIT}
         BUILD_TIME: ${GORSE_BUILD_TIME}
       cache_from:
-        - type=registry,ref=ghcr.io/gorse-io/gorse-buildcache:integration-server
+        - type=registry,ref=ghcr.io/gorse-io/gorse-buildcache:server
       cache_to:
-        - type=registry,ref=ghcr.io/gorse-io/gorse-buildcache:integration-server,mode=max
+        - type=registry,ref=ghcr.io/gorse-io/gorse-buildcache:server,mode=max
     restart: unless-stopped
     ports:
       - 8087:8087
@@ -167,9 +167,9 @@ services:
         GIT_COMMIT: ${GORSE_GIT_COMMIT}
         BUILD_TIME: ${GORSE_BUILD_TIME}
       cache_from:
-        - type=registry,ref=ghcr.io/gorse-io/gorse-buildcache:integration-master
+        - type=registry,ref=ghcr.io/gorse-io/gorse-buildcache:master
       cache_to:
-        - type=registry,ref=ghcr.io/gorse-io/gorse-buildcache:integration-master,mode=max
+        - type=registry,ref=ghcr.io/gorse-io/gorse-buildcache:master,mode=max
     restart: unless-stopped
     ports:
       - 8086:8086
