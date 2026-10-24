@@ -17,10 +17,7 @@ ARG VERSION
 ARG GIT_COMMIT
 ARG BUILD_TIME
 
-RUN go build -o ./ -ldflags=" \
-    -X 'github.com/gorse-io/gorse/cmd/version.Version=%VERSION%' \
-    -X 'github.com/gorse-io/gorse/cmd/version.GitCommit=%GIT_COMMIT%' \
-    -X 'github.com/gorse-io/gorse/cmd/version.BuildTime=%BUILD_TIME%'" ./cmd/...
+RUN go build -o ./ -ldflags ('-X github.com/gorse-io/gorse/cmd/version.Version={0} -X github.com/gorse-io/gorse/cmd/version.GitCommit={1} -X github.com/gorse-io/gorse/cmd/version.BuildTime={2}' -f $env:VERSION, $env:GIT_COMMIT, $env:BUILD_TIME) ./cmd/...
 
 ############################
 # STEP 2 build a small image
