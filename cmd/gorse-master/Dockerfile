@@ -5,7 +5,8 @@
 ############################
 FROM --platform=$BUILDPLATFORM golang:1.27
 
-WORKDIR /src
+# Keep imported component cache chains independent.
+WORKDIR /src/gorse-master
 
 COPY go.* ./
 
@@ -36,7 +37,7 @@ FROM scratch
 
 COPY --from=0 /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
-COPY --from=0 /src/cmd/gorse-master/gorse-master /usr/bin/gorse-master
+COPY --from=0 /src/gorse-master/cmd/gorse-master/gorse-master /usr/bin/gorse-master
 
 ENV USER=root
 
