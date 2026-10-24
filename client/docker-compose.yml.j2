@@ -113,14 +113,13 @@ services:
   {% endif %}
 
   worker:
-    image: gorse-integration-worker:local
     build:
       context: .
       dockerfile: cmd/gorse-worker/Dockerfile
       args:
-        VERSION: ${GORSE_VERSION:-}
-        GIT_COMMIT: ${GORSE_GIT_COMMIT:-}
-        BUILD_TIME: ${GORSE_BUILD_TIME:-}
+        VERSION: ${GORSE_VERSION}
+        GIT_COMMIT: ${GORSE_GIT_COMMIT}
+        BUILD_TIME: ${GORSE_BUILD_TIME}
       cache_from:
         - type=gha
     restart: unless-stopped
@@ -135,14 +134,13 @@ services:
       - master
 
   server:
-    image: gorse-integration-server:local
     build:
       context: .
       dockerfile: cmd/gorse-server/Dockerfile
       args:
-        VERSION: ${GORSE_VERSION:-}
-        GIT_COMMIT: ${GORSE_GIT_COMMIT:-}
-        BUILD_TIME: ${GORSE_BUILD_TIME:-}
+        VERSION: ${GORSE_VERSION}
+        GIT_COMMIT: ${GORSE_GIT_COMMIT}
+        BUILD_TIME: ${GORSE_BUILD_TIME}
       cache_from:
         - type=gha
     restart: unless-stopped
@@ -157,14 +155,13 @@ services:
       - master
 
   master:
-    image: gorse-integration-master:local
     build:
       context: .
       dockerfile: cmd/gorse-master/Dockerfile
       args:
-        VERSION: ${GORSE_VERSION:-}
-        GIT_COMMIT: ${GORSE_GIT_COMMIT:-}
-        BUILD_TIME: ${GORSE_BUILD_TIME:-}
+        VERSION: ${GORSE_VERSION}
+        GIT_COMMIT: ${GORSE_GIT_COMMIT}
+        BUILD_TIME: ${GORSE_BUILD_TIME}
       cache_from:
         - type=gha
       cache_to:

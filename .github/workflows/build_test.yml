@@ -274,7 +274,7 @@ jobs:
         variables: |
           database=${{ matrix.database }}
 
-    - name: Prepare integration build
+    - name: Setup environment variables
       run: |
         echo "GORSE_VERSION=$(git describe --tags "$(git rev-parse HEAD)")" >> "$GITHUB_ENV"
         echo "GORSE_GIT_COMMIT=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
@@ -283,13 +283,8 @@ jobs:
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
 
-    - name: Build integration images
-      uses: docker/bake-action@v6
-      with:
-        source: .
-        files: docker-compose.yml
-        targets: master,server,worker
-        load: true
+    - name: Expose GitHub runtime
+      uses: crazy-max/ghaction-github-runtime@v4
 
     - name: Setup test
       run: ./client/setup-test.sh
