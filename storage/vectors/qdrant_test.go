@@ -19,6 +19,7 @@ import (
 	"testing"
 
 	"github.com/gorse-io/gorse/common/log"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -62,4 +63,31 @@ func TestQdrant(t *testing.T) {
 		t.Skip("QDRANT_URI is not set, skipping Qdrant test")
 	}
 	suite.Run(t, new(QdrantTestSuite))
+}
+
+func TestQdrantConfig(t *testing.T) {
+	config, err := qdrantConfig("qdrant://localhost:6333")
+	assert.NoError(t, err)
+	assert.Equal(t, "localhost", config.Host)
+	assert.Equal(t, 6333, config.Port)
+	assert.Empty(t, config.APIKey)
+	assert.False(t, config.UseTLS)
+
+	// default port
+	config, err = qdrantConfig("qdrant://localhost")
+	assert.NoError(t, err)
+	assert.Equal(t, "localhost", config.Host)
+	assert.Equal(t, 6334, config.Port)
+
+	// TLS and API key
+	config, err = qdrantConfig("qdrants://xyz.cloud.qdrant.io:6334?api_key=secret")
+	assert.NoError(t, err)
+	assert.Equal(t, "xyz.cloud.qdrant.io", config.Host)
+	assert.Equal(t, 6334, config.Port)
+	assert.Equal(t, "secret", config.APIKey)
+	assert.True(t, config.UseTLS)
+
+	// invalid port
+	_, err = qdrantConfig("qdrant://localhost:abc")
+	assert.Error(t, err)
 }

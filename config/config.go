@@ -986,6 +986,7 @@ func (config *Config) Validate() error {
 		prefixes := []string{
 			storage.XvecPrefix,
 			storage.QdrantPrefix,
+			storage.QdrantsPrefix,
 			storage.WeaviatePrefix,
 			storage.WeaviatesPrefix,
 			storage.MilvusPrefix,

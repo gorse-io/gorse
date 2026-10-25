@@ -680,6 +680,7 @@ func (s *ValidateTestSuite) TestVectorStore() {
 	for _, vectorStore := range []string{
 		"xvec://vectors",
 		"qdrant://localhost:6334",
+		"qdrants://localhost:6334?api_key=secret",
 		"weaviate://localhost:8080",
 		"weaviates://localhost:8080",
 		"milvus://localhost:19530",

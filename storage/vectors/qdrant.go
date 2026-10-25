@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -30,6 +31,7 @@ import (
 )
 
 const (
+	qdrantDefaultPort          = 6334
 	qdrantPayloadCategoriesKey = "categories"
 	qdrantPayloadHiddenKey     = "hidden"
 	qdrantPayloadIdKey         = "id"
@@ -38,27 +40,40 @@ const (
 )
 
 func init() {
-	Register([]string{storage.QdrantPrefix}, func(path, tablePrefix string, opts ...storage.Option) (Database, error) {
+	Register([]string{storage.QdrantPrefix, storage.QdrantsPrefix}, func(path, tablePrefix string, opts ...storage.Option) (Database, error) {
 		database := new(Qdrant)
-		u, err := url.Parse(path)
+		config, err := qdrantConfig(path)
 		if err != nil {
-			return nil, errors.WithStack(err)
+			return nil, err
 		}
-		host := u.Hostname()
-		port := u.Port()
-		portInt, err := strconv.Atoi(port)
-		if err != nil {
-			return nil, errors.WithStack(err)
-		}
-		database.client, err = qdrant.NewClient(&qdrant.Config{
-			Host: host,
-			Port: portInt,
-		})
+		database.client, err = qdrant.NewClient(config)
 		if err != nil {
 			return nil, errors.WithStack(err)
 		}
 		return database, nil
 	})
+}
+
+// qdrantConfig parses qdrant://<host>[:<port>][?api_key=<key>] or qdrants://... (TLS).
+// The port defaults to the gRPC port of Qdrant if omitted.
+func qdrantConfig(path string) (*qdrant.Config, error) {
+	u, err := url.Parse(path)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	config := &qdrant.Config{
+		Host:   u.Hostname(),
+		Port:   qdrantDefaultPort,
+		APIKey: u.Query().Get("api_key"),
+		UseTLS: strings.HasPrefix(path, storage.QdrantsPrefix),
+	}
+	if port := u.Port(); port != "" {
+		config.Port, err = strconv.Atoi(port)
+		if err != nil {
+			return nil, errors.WithStack(err)
+		}
+	}
+	return config, nil
 }
 
 type Qdrant struct {

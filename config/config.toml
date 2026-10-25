@@ -24,7 +24,8 @@ data_store = "mysql://gorse:gorse_pass@tcp(localhost:3306)/gorse"
 
 # The database for vector indices, support xvec, Qdrant, Weaviate and Milvus:
 #   xvec://<path>
-#   qdrant://<host>:<port>
+#   qdrant://<host>[:<port>][?api_key=<key>]
+#   qdrants://<host>[:<port>][?api_key=<key>]
 #   weaviate://<host>:<port>
 #   weaviates://<host>:<port>
 #   milvus://<host>:<port>
