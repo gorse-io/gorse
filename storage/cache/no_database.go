@@ -80,6 +80,26 @@ func (NoDatabase) ScanScores(context.Context, func(collection, id, subset string
 	return storage.ErrNoDatabase
 }
 
+func (NoDatabase) AddGeoIndex(context.Context, string) error {
+	return storage.ErrNoDatabase
+}
+
+func (NoDatabase) AddGeoPoints(context.Context, string, []GeoPoint) error {
+	return storage.ErrNoDatabase
+}
+
+func (NoDatabase) SearchGeoPoints(context.Context, string, GeoQuery) ([]GeoResult, error) {
+	return nil, storage.ErrNoDatabase
+}
+
+func (NoDatabase) DeleteGeoPoints(context.Context, string, ...string) error {
+	return storage.ErrNoDatabase
+}
+
+func (NoDatabase) DeleteGeoIndex(context.Context, string) error {
+	return storage.ErrNoDatabase
+}
+
 func (NoDatabase) AddTimeSeriesPoints(_ context.Context, _ []TimeSeriesPoint) error {
 	return storage.ErrNoDatabase
 }

@@ -244,6 +244,13 @@ type Database interface {
 	UpdateScores(ctx context.Context, collections []string, subset *string, id string, patch ScorePatch) error
 	ScanScores(ctx context.Context, callback func(collection, id, subset string, timestamp time.Time) error) error
 
+	// AddGeoIndex creates an empty, independently stored geographic index.
+	AddGeoIndex(ctx context.Context, name string) error
+	AddGeoPoints(ctx context.Context, name string, points []GeoPoint) error
+	SearchGeoPoints(ctx context.Context, name string, query GeoQuery) ([]GeoResult, error)
+	DeleteGeoPoints(ctx context.Context, name string, ids ...string) error
+	DeleteGeoIndex(ctx context.Context, name string) error
+
 	AddTimeSeriesPoints(ctx context.Context, points []TimeSeriesPoint) error
 	GetTimeSeriesPoints(ctx context.Context, name string, begin, end time.Time, duration time.Duration) ([]TimeSeriesPoint, error)
 }

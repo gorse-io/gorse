@@ -229,7 +229,10 @@ func (db *SQLDatabase) Init() error {
 	case SQLite:
 		err = db.gormDB.AutoMigrate(&SQLDocument{})
 	}
-	return errors.WithStack(err)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+	return errors.WithStack(db.initGeoIndexes())
 }
 
 func (db *SQLDatabase) Scan(work func(string) error) error {
@@ -258,6 +261,9 @@ func (db *SQLDatabase) Scan(work func(string) error) error {
 }
 
 func (db *SQLDatabase) Purge() error {
+	if err := db.purgeGeoIndexes(); err != nil {
+		return errors.WithStack(err)
+	}
 	tables := []any{SQLValue{}, SQLDocument{}}
 	for _, table := range tables {
 		err := db.gormDB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&table).Error

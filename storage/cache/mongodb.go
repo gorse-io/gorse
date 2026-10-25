@@ -57,6 +57,9 @@ type MongoDB struct {
 
 func (m MongoDB) Init() error {
 	ctx := context.Background()
+	if err := m.initGeoIndexes(ctx); err != nil {
+		return err
+	}
 	d := m.client.Database(m.dbName)
 	// list collections
 	var hasValues bool
@@ -144,6 +147,9 @@ func (m MongoDB) Scan(work func(string) error) error {
 }
 
 func (m MongoDB) Purge() error {
+	if err := m.purgeGeoIndexes(context.Background()); err != nil {
+		return err
+	}
 	tables := []string{m.ValuesTable(), m.DocumentTable()}
 	for _, tableName := range tables {
 		c := m.client.Database(m.dbName).Collection(tableName)

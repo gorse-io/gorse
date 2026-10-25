@@ -172,6 +172,9 @@ func (r *Redis) Purge() error {
 }
 
 func (r *Redis) purge(ctx context.Context, client redis.UniversalClient, isCluster bool) error {
+	if err := r.purgeGeoIndexes(ctx, client); err != nil {
+		return errors.WithStack(err)
+	}
 	var (
 		result []string
 		cursor uint64
