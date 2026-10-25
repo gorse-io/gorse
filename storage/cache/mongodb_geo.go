@@ -63,7 +63,7 @@ func (m MongoDB) createGeoCatalog(ctx context.Context) error {
 	err := db.CreateCollection(ctx, geoCatalogName(string(m.TablePrefix)),
 		options.CreateCollection().SetCollation(mongoGeoSimpleCollation()))
 	var commandError mongo.CommandError
-	if err != nil && !(errors.As(err, &commandError) && commandError.HasErrorCode(48)) {
+	if err != nil && (!errors.As(err, &commandError) || !commandError.HasErrorCode(48)) {
 		return errors.WithStack(err)
 	}
 	_, err = m.geoCatalog().Indexes().CreateMany(ctx, []mongo.IndexModel{
@@ -92,7 +92,7 @@ func (m MongoDB) finishGeoIndexCreation(ctx context.Context, index mongoGeoIndex
 	err := db.CreateCollection(ctx, index.PhysicalName,
 		options.CreateCollection().SetCollation(mongoGeoSimpleCollation()))
 	var commandError mongo.CommandError
-	if err != nil && !(errors.As(err, &commandError) && commandError.HasErrorCode(48)) {
+	if err != nil && (!errors.As(err, &commandError) || !commandError.HasErrorCode(48)) {
 		return errors.WithStack(err)
 	}
 	_, err = db.Collection(index.PhysicalName).Indexes().CreateMany(ctx, []mongo.IndexModel{
