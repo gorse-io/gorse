@@ -24,12 +24,7 @@ data_store = "mysql://gorse:gorse_pass@tcp(localhost:3306)/gorse"
 
 # The database for vector indices, support xvec, Qdrant, Weaviate and Milvus:
 #   xvec://<path>
-#   qdrant://<host>[:<port>][?apiKey=<key>&useTLS=true]
-#     Default gRPC port: 6334. API keys should be used with useTLS=true.
-#     Options: skipCompatibilityCheck (bool, default false), poolSize (uint, default 3, maximum 1024),
-#     keepAliveTime (seconds, default 10; -1 disables), keepAliveTimeout (seconds, default 2),
-#     versionCheckTimeout (Go duration, e.g. 5s; default 1m).
-#     Zero values for poolSize, keepAliveTime, keepAliveTimeout and versionCheckTimeout use client defaults.
+#   qdrant://<host>[:<port>][?apiKey=<key>&useTLS=true&skipCompatibilityCheck=false&poolSize=3&keepAliveTime=10&keepAliveTimeout=2&versionCheckTimeout=1m]
 #   weaviate://<host>:<port>
 #   weaviates://<host>:<port>
 #   milvus://<host>:<port>
