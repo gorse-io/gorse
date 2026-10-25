@@ -17,9 +17,9 @@ package vectors
 import (
 	"context"
 	"fmt"
+	"math"
 	"net/url"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -31,7 +31,6 @@ import (
 )
 
 const (
-	qdrantDefaultPort          = 6334
 	qdrantPayloadCategoriesKey = "categories"
 	qdrantPayloadHiddenKey     = "hidden"
 	qdrantPayloadIdKey         = "id"
@@ -40,7 +39,7 @@ const (
 )
 
 func init() {
-	Register([]string{storage.QdrantPrefix, storage.QdrantsPrefix}, func(path, tablePrefix string, opts ...storage.Option) (Database, error) {
+	Register([]string{storage.QdrantPrefix}, func(path, tablePrefix string, opts ...storage.Option) (Database, error) {
 		database := new(Qdrant)
 		config, err := qdrantConfig(path)
 		if err != nil {
@@ -54,24 +53,73 @@ func init() {
 	})
 }
 
-// qdrantConfig parses qdrant://<host>[:<port>][?api_key=<key>] or qdrants://... (TLS).
+// qdrantConfig parses a qdrant:// URI with optional client settings.
 // The port defaults to the gRPC port of Qdrant if omitted.
 func qdrantConfig(path string) (*qdrant.Config, error) {
 	u, err := url.Parse(path)
 	if err != nil {
 		return nil, errors.WithStack(err)
 	}
+	if u.Scheme != "qdrant" {
+		return nil, errors.New("unsupported Qdrant scheme")
+	}
+	query, err := url.ParseQuery(u.RawQuery)
+	if err != nil {
+		// Do not include query values: they may contain an API key.
+		return nil, errors.New("invalid Qdrant query parameters")
+	}
 	config := &qdrant.Config{
 		Host:   u.Hostname(),
-		Port:   qdrantDefaultPort,
-		APIKey: u.Query().Get("api_key"),
-		UseTLS: strings.HasPrefix(path, storage.QdrantsPrefix),
+		APIKey: query.Get("apiKey"),
 	}
 	if port := u.Port(); port != "" {
 		config.Port, err = strconv.Atoi(port)
-		if err != nil {
-			return nil, errors.WithStack(err)
+		if err != nil || config.Port < 1 || config.Port > 65535 {
+			return nil, errors.New("invalid Qdrant port")
 		}
+	}
+	for name, target := range map[string]*bool{
+		"useTLS":                 &config.UseTLS,
+		"skipCompatibilityCheck": &config.SkipCompatibilityCheck,
+	} {
+		if query.Has(name) {
+			*target, err = strconv.ParseBool(query.Get(name))
+			if err != nil {
+				return nil, errors.Errorf("invalid Qdrant option %s", name)
+			}
+		}
+	}
+	for name, target := range map[string]*uint{
+		"poolSize":         &config.PoolSize,
+		"keepAliveTimeout": &config.KeepAliveTimeout,
+	} {
+		if query.Has(name) {
+			value, parseErr := strconv.ParseUint(query.Get(name), 10, strconv.IntSize)
+			if parseErr != nil {
+				return nil, errors.Errorf("invalid Qdrant option %s", name)
+			}
+			*target = uint(value)
+		}
+	}
+	if query.Has("keepAliveTime") {
+		config.KeepAliveTime, err = strconv.Atoi(query.Get("keepAliveTime"))
+		if err != nil || config.KeepAliveTime < -1 {
+			return nil, errors.New("invalid Qdrant option keepAliveTime")
+		}
+	}
+	if query.Has("versionCheckTimeout") {
+		config.VersionCheckTimeout, err = time.ParseDuration(query.Get("versionCheckTimeout"))
+		if err != nil || config.VersionCheckTimeout < 0 {
+			return nil, errors.New("invalid Qdrant option versionCheckTimeout")
+		}
+	}
+	// Bound allocation and seconds-to-duration conversions in the client.
+	if config.PoolSize > 1024 {
+		return nil, errors.New("Qdrant poolSize must not exceed 1024")
+	}
+	if int64(config.KeepAliveTime) > math.MaxInt64/int64(time.Second) ||
+		uint64(config.KeepAliveTimeout) > math.MaxInt64/uint64(time.Second) {
+		return nil, errors.New("Qdrant keepalive duration overflows time.Duration")
 	}
 	return config, nil
 }

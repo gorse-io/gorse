@@ -82,7 +82,6 @@ const (
 	RedisClusterPrefix  = "redis+cluster://"
 	RedissClusterPrefix = "rediss+cluster://"
 	QdrantPrefix        = "qdrant://"
-	QdrantsPrefix       = "qdrants://"
 	WeaviatePrefix      = "weaviate://"
 	WeaviatesPrefix     = "weaviates://"
 	MilvusPrefix        = "milvus://"

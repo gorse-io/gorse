@@ -17,9 +17,12 @@ package vectors
 import (
 	"os"
 	"testing"
+	"time"
 
 	"github.com/gorse-io/gorse/common/log"
+	"github.com/qdrant/go-client/qdrant"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -77,17 +80,42 @@ func TestQdrantConfig(t *testing.T) {
 	config, err = qdrantConfig("qdrant://localhost")
 	assert.NoError(t, err)
 	assert.Equal(t, "localhost", config.Host)
-	assert.Equal(t, 6334, config.Port)
+	assert.Zero(t, config.Port)
 
-	// TLS and API key
-	config, err = qdrantConfig("qdrants://xyz.cloud.qdrant.io:6334?api_key=secret")
-	assert.NoError(t, err)
-	assert.Equal(t, "xyz.cloud.qdrant.io", config.Host)
-	assert.Equal(t, 6334, config.Port)
-	assert.Equal(t, "secret", config.APIKey)
-	assert.True(t, config.UseTLS)
+	// Query options use the Qdrant client's camelCase field names.
+	config, err = qdrantConfig("qdrant://xyz.cloud.qdrant.io:6334?apiKey=a%2Bb%26c&useTLS=true&skipCompatibilityCheck=true&poolSize=5&keepAliveTime=30&keepAliveTimeout=4&versionCheckTimeout=5s")
+	require.NoError(t, err)
+	assert.Equal(t, &qdrant.Config{
+		Host: "xyz.cloud.qdrant.io", Port: 6334, APIKey: "a+b&c", UseTLS: true,
+		SkipCompatibilityCheck: true, PoolSize: 5, KeepAliveTime: 30,
+		KeepAliveTimeout: 4, VersionCheckTimeout: 5 * time.Second,
+	}, config)
 
-	// invalid port
-	_, err = qdrantConfig("qdrant://localhost:abc")
-	assert.Error(t, err)
+	config, err = qdrantConfig("qdrant://localhost?useTLS=false&skipCompatibilityCheck=false&poolSize=0&keepAliveTime=-1&keepAliveTimeout=0&versionCheckTimeout=0s")
+	require.NoError(t, err)
+	assert.False(t, config.UseTLS)
+	assert.False(t, config.SkipCompatibilityCheck)
+	assert.Zero(t, config.PoolSize)
+	assert.Equal(t, -1, config.KeepAliveTime)
+	assert.Zero(t, config.KeepAliveTimeout)
+	assert.Zero(t, config.VersionCheckTimeout)
+}
+
+func TestQdrantConfigInvalid(t *testing.T) {
+	for _, uri := range []string{
+		"qdrants://localhost", "qdrant://localhost:abc", "qdrant://localhost:65536",
+		"qdrant://localhost?useTLS=invalid", "qdrant://localhost?useTLS=",
+		"qdrant://localhost?skipCompatibilityCheck=invalid", "qdrant://localhost?poolSize=-1",
+		"qdrant://localhost?poolSize=invalid", "qdrant://localhost?keepAliveTime=-2",
+		"qdrant://localhost?keepAliveTime=invalid", "qdrant://localhost?keepAliveTimeout=-1",
+		"qdrant://localhost?keepAliveTimeout=invalid", "qdrant://localhost?versionCheckTimeout=invalid",
+		"qdrant://localhost?versionCheckTimeout=-1s", "qdrant://localhost?apiKey=%zz",
+		"qdrant://localhost?poolSize=1025", "qdrant://localhost?poolSize=18446744073709551615",
+		"qdrant://localhost?keepAliveTime=9223372037", "qdrant://localhost?keepAliveTimeout=9223372037",
+	} {
+		t.Run(uri, func(t *testing.T) {
+			_, err := qdrantConfig(uri)
+			require.Error(t, err)
+		})
+	}
 }
