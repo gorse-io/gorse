@@ -276,6 +276,7 @@ jobs:
         strict: true
         variables: |
           database=${{ matrix.database }}
+          ready_only=${{ github.event_name != 'push' && github.event.pull_request.head.repo.full_name != github.repository }}
 
     - name: Setup environment variables
       run: |

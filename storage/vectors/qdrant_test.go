@@ -17,8 +17,10 @@ package vectors
 import (
 	"os"
 	"testing"
+	"time"
 
 	"github.com/gorse-io/gorse/common/log"
+	"github.com/qdrant/go-client/qdrant"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -55,6 +57,24 @@ func (suite *QdrantTestSuite) TestQuantization() {
 	suite.testQuantization(QuantizationPQ, 2)
 	suite.testQuantization(QuantizationPQ, 4)
 	suite.testQuantization(QuantizationPQ, 8)
+}
+
+func (suite *QdrantTestSuite) TestURL() {
+	config, err := qdrantConfig("qdrant://localhost:6333")
+	suite.NoError(err)
+	suite.Equal("localhost", config.Host)
+	suite.Equal(6333, config.Port)
+	suite.Empty(config.APIKey)
+	suite.False(config.UseTLS)
+
+	// Query options use the Qdrant client's camelCase field names.
+	config, err = qdrantConfig("qdrant://xyz.cloud.qdrant.io:6334?apiKey=a%2Bb%26c&useTLS=true&skipCompatibilityCheck=true&poolSize=5&keepAliveTime=30&keepAliveTimeout=4&versionCheckTimeout=5s")
+	suite.Require().NoError(err)
+	suite.Equal(&qdrant.Config{
+		Host: "xyz.cloud.qdrant.io", Port: 6334, APIKey: "a+b&c", UseTLS: true,
+		SkipCompatibilityCheck: true, PoolSize: 5, KeepAliveTime: 30,
+		KeepAliveTimeout: 4, VersionCheckTimeout: 5 * time.Second,
+	}, config)
 }
 
 func TestQdrant(t *testing.T) {

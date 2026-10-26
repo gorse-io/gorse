@@ -40,25 +40,76 @@ const (
 func init() {
 	Register([]string{storage.QdrantPrefix}, func(path, tablePrefix string, opts ...storage.Option) (Database, error) {
 		database := new(Qdrant)
-		u, err := url.Parse(path)
+		config, err := qdrantConfig(path)
 		if err != nil {
-			return nil, errors.WithStack(err)
+			return nil, err
 		}
-		host := u.Hostname()
-		port := u.Port()
-		portInt, err := strconv.Atoi(port)
-		if err != nil {
-			return nil, errors.WithStack(err)
-		}
-		database.client, err = qdrant.NewClient(&qdrant.Config{
-			Host: host,
-			Port: portInt,
-		})
+		database.client, err = qdrant.NewClient(config)
 		if err != nil {
 			return nil, errors.WithStack(err)
 		}
 		return database, nil
 	})
+}
+
+func qdrantConfig(path string) (*qdrant.Config, error) {
+	u, err := url.Parse(path)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	query, err := url.ParseQuery(u.RawQuery)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	config := &qdrant.Config{
+		Host:   u.Hostname(),
+		APIKey: query.Get("apiKey"),
+	}
+	if port := u.Port(); port != "" {
+		config.Port, err = strconv.Atoi(port)
+		if err != nil {
+			return nil, errors.WithStack(err)
+		}
+	}
+	if query.Has("useTLS") {
+		config.UseTLS, err = strconv.ParseBool(query.Get("useTLS"))
+		if err != nil {
+			return nil, errors.WithStack(err)
+		}
+	}
+	if query.Has("skipCompatibilityCheck") {
+		config.SkipCompatibilityCheck, err = strconv.ParseBool(query.Get("skipCompatibilityCheck"))
+		if err != nil {
+			return nil, errors.WithStack(err)
+		}
+	}
+	if query.Has("poolSize") {
+		value, err := strconv.ParseUint(query.Get("poolSize"), 10, strconv.IntSize)
+		if err != nil {
+			return nil, errors.WithStack(err)
+		}
+		config.PoolSize = uint(value)
+	}
+	if query.Has("keepAliveTimeout") {
+		value, err := strconv.ParseUint(query.Get("keepAliveTimeout"), 10, strconv.IntSize)
+		if err != nil {
+			return nil, errors.WithStack(err)
+		}
+		config.KeepAliveTimeout = uint(value)
+	}
+	if query.Has("keepAliveTime") {
+		config.KeepAliveTime, err = strconv.Atoi(query.Get("keepAliveTime"))
+		if err != nil {
+			return nil, errors.WithStack(err)
+		}
+	}
+	if query.Has("versionCheckTimeout") {
+		config.VersionCheckTimeout, err = time.ParseDuration(query.Get("versionCheckTimeout"))
+		if err != nil {
+			return nil, errors.WithStack(err)
+		}
+	}
+	return config, nil
 }
 
 type Qdrant struct {
