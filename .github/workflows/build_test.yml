@@ -135,6 +135,9 @@ jobs:
         # Weaviate
         WEAVIATE_URI: weaviate://localhost:${{ job.services.weaviate.ports[8080] }}/
 
+    - name: Test worker config synchronization with the race detector
+      run: go test -race ./worker -run '^TestWorker_SyncRecommend$' -count=3
+
     - name: Test XLA
       if: runner.arch == 'X64' || runner.arch == 'ARM64'
       run: go test -tags xla -timeout 20m ./model/ctr
