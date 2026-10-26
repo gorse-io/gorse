@@ -122,7 +122,7 @@ services:
         BUILD_TIME: ${GORSE_BUILD_TIME}
       cache_from:
         - type=registry,ref=ghcr.io/gorse-io/gorse-buildcache:worker
-      {% if cache_write | default('false') == 'true' %}
+      {% if ready_only | default('true') == 'false' %}
       cache_to:
         - type=registry,ref=ghcr.io/gorse-io/gorse-buildcache:worker,mode=max
       {% endif %}
@@ -147,7 +147,7 @@ services:
         BUILD_TIME: ${GORSE_BUILD_TIME}
       cache_from:
         - type=registry,ref=ghcr.io/gorse-io/gorse-buildcache:server
-      {% if cache_write | default('false') == 'true' %}
+      {% if ready_only | default('true') == 'false' %}
       cache_to:
         - type=registry,ref=ghcr.io/gorse-io/gorse-buildcache:server,mode=max
       {% endif %}
@@ -172,7 +172,7 @@ services:
         BUILD_TIME: ${GORSE_BUILD_TIME}
       cache_from:
         - type=registry,ref=ghcr.io/gorse-io/gorse-buildcache:master
-      {% if cache_write | default('false') == 'true' %}
+      {% if ready_only | default('true') == 'false' %}
       cache_to:
         - type=registry,ref=ghcr.io/gorse-io/gorse-buildcache:master,mode=max
       {% endif %}
