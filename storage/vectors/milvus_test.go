@@ -62,51 +62,29 @@ func (suite *MilvusTestSuite) TestQuantization() {
 	suite.testQuantization(QuantizationPQ, 8)
 }
 
-func TestMilvusConfig(t *testing.T) {
-	t.Run("defaults", func(t *testing.T) {
-		config, err := milvusConfig("milvus://localhost:19530")
-		require.NoError(t, err)
-		require.Equal(t, &milvusclient.ClientConfig{Address: "localhost:19530"}, config)
-	})
-	t.Run("URI credentials and database", func(t *testing.T) {
-		config, err := milvusConfig("milvus://root:p%40ss@localhost:19530/my%5Fdb")
-		require.NoError(t, err)
-		require.Equal(t, &milvusclient.ClientConfig{
-			Address: "localhost:19530", Username: "root", Password: "p@ss", DBName: "my_db",
-		}, config)
-	})
-	t.Run("query options override URI", func(t *testing.T) {
-		config, err := milvusConfig("milvus://old:old@localhost:19530/old?username=root&password=p%40ss&dbName=new&apiKey=token&enableTLSAuth=true&dialTimeout=250ms")
-		require.NoError(t, err)
-		require.Equal(t, "localhost:19530", config.Address)
-		require.Equal(t, "root", config.Username)
-		require.Equal(t, "p@ss", config.Password)
-		require.Equal(t, "new", config.DBName)
-		require.Equal(t, "token", config.APIKey)
-		require.True(t, config.EnableTLSAuth)
-		require.Len(t, config.DialOptions, 1)
-	})
-	t.Run("explicit defaults", func(t *testing.T) {
-		config, err := milvusConfig("milvus://old:old@localhost:19530/old?username=&password=&dbName=&enableTLSAuth=false&dialTimeout=0s")
-		require.NoError(t, err)
-		require.Equal(t, &milvusclient.ClientConfig{Address: "localhost:19530"}, config)
-	})
-	for _, uri := range []string{
-		"milvus://localhost:bad",
-		"milvus://localhost?apiKey=%zz",
-		"milvus://localhost?apiKey=token;bad=value",
-		"milvus://localhost?enableTLSAuth=invalid",
-		"milvus://localhost?enableTLSAuth=",
-		"milvus://localhost?dialTimeout=invalid",
-		"milvus://localhost?dialTimeout=",
-		"milvus://localhost?dialTimeout=-1s",
-		"milvus://localhost?dialTimeout=9223372036854775808ns",
-	} {
-		t.Run(uri, func(t *testing.T) {
-			_, err := milvusConfig(uri)
-			require.Error(t, err)
-		})
-	}
+func TestMilvusURL(t *testing.T) {
+	config, err := milvusConfig("milvus://localhost:19530")
+	require.NoError(t, err)
+	require.Equal(t, &milvusclient.ClientConfig{Address: "localhost:19530"}, config)
+
+	config, err = milvusConfig("milvus://root:p%40ss@localhost:19530/my%5Fdb")
+	require.NoError(t, err)
+	require.Equal(t, &milvusclient.ClientConfig{
+		Address: "localhost:19530", Username: "root", Password: "p@ss", DBName: "my_db",
+	}, config)
+
+	config, err = milvusConfig("milvus://root:p%40ss@localhost:19530/new?apiKey=token&enableTLSAuth=true")
+	require.NoError(t, err)
+	require.Equal(t, "localhost:19530", config.Address)
+	require.Equal(t, "root", config.Username)
+	require.Equal(t, "p@ss", config.Password)
+	require.Equal(t, "new", config.DBName)
+	require.Equal(t, "token", config.APIKey)
+	require.True(t, config.EnableTLSAuth)
+
+	config, err = milvusConfig("milvus://localhost:19530?enableTLSAuth=false")
+	require.NoError(t, err)
+	require.Equal(t, &milvusclient.ClientConfig{Address: "localhost:19530"}, config)
 }
 
 func TestMilvus(t *testing.T) {

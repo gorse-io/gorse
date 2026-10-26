@@ -30,7 +30,6 @@ import (
 	"github.com/milvus-io/milvus/client/v2/milvusclient"
 	"github.com/milvus-io/milvus/pkg/v2/util/merr"
 	"github.com/pkg/errors"
-	"google.golang.org/grpc"
 )
 
 const (
@@ -81,31 +80,10 @@ func milvusConfig(path string) (*milvusclient.ClientConfig, error) {
 		config.Username = u.User.Username()
 		config.Password, _ = u.User.Password()
 	}
-	for key, target := range map[string]*string{
-		"username": &config.Username,
-		"password": &config.Password,
-		"dbName":   &config.DBName,
-	} {
-		if query.Has(key) {
-			*target = query.Get(key)
-		}
-	}
 	if query.Has("enableTLSAuth") {
 		config.EnableTLSAuth, err = strconv.ParseBool(query.Get("enableTLSAuth"))
 		if err != nil {
 			return nil, errors.Wrap(err, "invalid enableTLSAuth")
-		}
-	}
-	if query.Has("dialTimeout") {
-		timeout, err := time.ParseDuration(query.Get("dialTimeout"))
-		if err != nil {
-			return nil, errors.Wrap(err, "invalid dialTimeout")
-		}
-		if timeout < 0 {
-			return nil, errors.New("dialTimeout must not be negative")
-		}
-		if timeout > 0 {
-			config.DialOptions = append(config.DialOptions, grpc.WithTimeout(timeout))
 		}
 	}
 	return config, nil

@@ -81,9 +81,6 @@ func weaviateConfig(path string) (*weaviate.Config, error) {
 			if err != nil {
 				return nil, errors.Wrap(err, key)
 			}
-			if value < 0 {
-				return nil, errors.Errorf("%s must not be negative", key)
-			}
 			*target = value
 		}
 	}

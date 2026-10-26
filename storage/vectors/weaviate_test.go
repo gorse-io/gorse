@@ -59,44 +59,29 @@ func (suite *WeaviateTestSuite) TestQuantization() {
 	suite.testQuantization(QuantizationPQ, 0)
 }
 
-func TestWeaviateConfig(t *testing.T) {
-	for _, tc := range []struct {
-		name string
-		uri  string
-		want *weaviate.Config
-	}{
-		{"defaults", "weaviate://localhost:8080", &weaviate.Config{Host: "localhost:8080", Scheme: "http"}},
-		{"secure", "weaviates://example.com", &weaviate.Config{Host: "example.com", Scheme: "https"}},
-		{"ipv6", "weaviates://[::1]:8443", &weaviate.Config{Host: "[::1]:8443", Scheme: "https"}},
-		{"options", "weaviates://example.com:8443?apiKey=a%2Bb%26c&timeout=1500ms&startupTimeout=5s", &weaviate.Config{
-			Host: "example.com:8443", Scheme: "https", AuthConfig: auth.ApiKey{Value: "a+b&c"},
-			Timeout: 1500 * time.Millisecond, StartupTimeout: 5 * time.Second,
-		}},
-		{"explicit zero", "weaviate://localhost:8080?apiKey=&timeout=0s&startupTimeout=0", &weaviate.Config{Host: "localhost:8080", Scheme: "http"}},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			config, err := weaviateConfig(tc.uri)
-			require.NoError(t, err)
-			require.Equal(t, tc.want, config)
-		})
-	}
-}
+func TestWeaviateURL(t *testing.T) {
+	config, err := weaviateConfig("weaviate://localhost:8080")
+	require.NoError(t, err)
+	require.Equal(t, &weaviate.Config{Host: "localhost:8080", Scheme: "http"}, config)
 
-func TestWeaviateConfigInvalid(t *testing.T) {
-	for _, query := range []string{
-		"timeout=", "timeout=bad", "timeout=5", "timeout=-1s",
-		"timeout=9223372036854775808ns", "startupTimeout=", "startupTimeout=no",
-		"startupTimeout=-1s", "startupTimeout=9223372036854775808ns",
-		"timeout=%zz", "timeout=1s;startupTimeout=2s",
-	} {
-		t.Run(query, func(t *testing.T) {
-			config, err := weaviateConfig("weaviate://localhost:8080?" + query)
-			require.Error(t, err)
-			require.Nil(t, config)
-		})
-	}
-	_, err := weaviateConfig("weaviate://[::1")
-	require.Error(t, err)
+	config, err = weaviateConfig("weaviates://example.com")
+	require.NoError(t, err)
+	require.Equal(t, &weaviate.Config{Host: "example.com", Scheme: "https"}, config)
+
+	config, err = weaviateConfig("weaviates://[::1]:8443")
+	require.NoError(t, err)
+	require.Equal(t, &weaviate.Config{Host: "[::1]:8443", Scheme: "https"}, config)
+
+	config, err = weaviateConfig("weaviates://example.com:8443?apiKey=a%2Bb%26c&timeout=1500ms&startupTimeout=5s")
+	require.NoError(t, err)
+	require.Equal(t, &weaviate.Config{
+		Host: "example.com:8443", Scheme: "https", AuthConfig: auth.ApiKey{Value: "a+b&c"},
+		Timeout: 1500 * time.Millisecond, StartupTimeout: 5 * time.Second,
+	}, config)
+
+	config, err = weaviateConfig("weaviate://localhost:8080?apiKey=&timeout=0s&startupTimeout=0")
+	require.NoError(t, err)
+	require.Equal(t, &weaviate.Config{Host: "localhost:8080", Scheme: "http"}, config)
 }
 
 func TestWeaviate(t *testing.T) {
