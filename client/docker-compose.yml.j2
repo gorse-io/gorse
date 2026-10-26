@@ -122,8 +122,10 @@ services:
         BUILD_TIME: ${GORSE_BUILD_TIME}
       cache_from:
         - type=registry,ref=ghcr.io/gorse-io/gorse-buildcache:worker
+      {% if (write_build_cache | default('true')) == 'true' %}
       cache_to:
         - type=registry,ref=ghcr.io/gorse-io/gorse-buildcache:worker,mode=max
+      {% endif %}
     restart: unless-stopped
     ports:
       - 8089:8089
@@ -145,8 +147,10 @@ services:
         BUILD_TIME: ${GORSE_BUILD_TIME}
       cache_from:
         - type=registry,ref=ghcr.io/gorse-io/gorse-buildcache:server
+      {% if (write_build_cache | default('true')) == 'true' %}
       cache_to:
         - type=registry,ref=ghcr.io/gorse-io/gorse-buildcache:server,mode=max
+      {% endif %}
     restart: unless-stopped
     ports:
       - 8087:8087
@@ -168,8 +172,10 @@ services:
         BUILD_TIME: ${GORSE_BUILD_TIME}
       cache_from:
         - type=registry,ref=ghcr.io/gorse-io/gorse-buildcache:master
+      {% if (write_build_cache | default('true')) == 'true' %}
       cache_to:
         - type=registry,ref=ghcr.io/gorse-io/gorse-buildcache:master,mode=max
+      {% endif %}
     restart: unless-stopped
     ports:
       - 8086:8086

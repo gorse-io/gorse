@@ -79,6 +79,7 @@ func compressLabelsEmbeddings(pool *strutil.GoPool, labels any) any {
 
 type Pipeline struct {
 	Config                   *config.Config
+	configMutex              sync.RWMutex
 	CacheClient              cache.Database
 	DataClient               data.Database
 	VectorClient             vectors.Database
@@ -89,6 +90,18 @@ type Pipeline struct {
 	MatrixFactorizationMutex sync.RWMutex
 	ClickThroughRateModel    ctr.FactorizationMachines
 	dontskipColdStartUsers   bool
+}
+
+func (p *Pipeline) getConfig() *config.Config {
+	p.configMutex.RLock()
+	defer p.configMutex.RUnlock()
+	return p.Config
+}
+
+func (p *Pipeline) setConfig(cfg *config.Config) {
+	p.configMutex.Lock()
+	p.Config = cfg
+	p.configMutex.Unlock()
 }
 
 func (p *Pipeline) UpdateMatrixFactorization(
@@ -122,12 +135,13 @@ func (p *Pipeline) GetMatrixFactorization() (*logics.MatrixFactorizationUsers, i
 }
 
 func (p *Pipeline) Recommend(ctx context.Context, users []data.User, progress func(completed, throughput int)) {
+	cfg := p.getConfig()
 	startRecommendTime := time.Now()
 	itemCache := NewItemCache(p.DataClient)
 	log.Logger().Info("ranking recommendation",
 		zap.Int("n_working_users", len(users)),
 		zap.Int("n_jobs", p.Jobs),
-		zap.Int("cache_size", p.Config.Recommend.CacheSize))
+		zap.Int("cache_size", cfg.Recommend.CacheSize))
 
 	// progress tracker
 	completed := make(chan struct{}, 1000)
@@ -179,13 +193,13 @@ func (p *Pipeline) Recommend(ctx context.Context, users []data.User, progress fu
 		user := users[jobId]
 		userId := user.UserId
 		// skip inactive users before max recommend period
-		if !p.checkUserActiveTime(ctx, userId) || !p.checkRecommendCacheOutOfDate(ctx, userId) {
+		if !p.checkUserActiveTimeWithConfig(ctx, cfg, userId) || !p.checkRecommendCacheOutOfDateWithConfig(ctx, cfg, userId) {
 			return
 		}
 		updateUserCount.Add(1)
 
 		recommendTime := time.Now()
-		recommender, err := logics.NewRecommender(p.Config.Recommend, p.CacheClient, p.DataClient, p.VectorClient, false, userId, nil)
+		recommender, err := logics.NewRecommender(cfg.Recommend, p.CacheClient, p.DataClient, p.VectorClient, false, userId, nil)
 		if err != nil {
 			log.Logger().Error("failed to create recommender", zap.String("user_id", userId), zap.Error(err))
 			return
@@ -196,9 +210,9 @@ func (p *Pipeline) Recommend(ctx context.Context, users []data.User, progress fu
 		}
 
 		// Update collaborative filtering recommendation.
-		if matrixFactorizationUsers, matrixFactorizationID := p.GetMatrixFactorization(); !strings.EqualFold(p.Config.Recommend.Collaborative.Type, "none") && matrixFactorizationUsers != nil {
+		if matrixFactorizationUsers, matrixFactorizationID := p.GetMatrixFactorization(); !strings.EqualFold(cfg.Recommend.Collaborative.Type, "none") && matrixFactorizationUsers != nil {
 			if userEmbedding, ok := matrixFactorizationUsers.Get(userId); ok {
-				if err := p.updateCollaborativeRecommend(ctx, matrixFactorizationID, userId, userEmbedding, recommender.ExcludeSet()); err != nil {
+				if err := p.updateCollaborativeRecommend(ctx, cfg, matrixFactorizationID, userId, userEmbedding, recommender.ExcludeSet()); err != nil {
 					log.Logger().Error("failed to recommend by collaborative filtering",
 						zap.String("user_id", userId), zap.Error(err))
 					return
@@ -215,10 +229,10 @@ func (p *Pipeline) Recommend(ctx context.Context, users []data.User, progress fu
 			digest           string
 			recommenderNames []string
 		)
-		if len(p.Config.Recommend.Ranker.Recommenders) > 0 {
-			recommenderNames = p.Config.Recommend.Ranker.Recommenders
+		if len(cfg.Recommend.Ranker.Recommenders) > 0 {
+			recommenderNames = cfg.Recommend.Ranker.Recommenders
 		} else {
-			recommenderNames = p.Config.Recommend.ListRecommenders()
+			recommenderNames = cfg.Recommend.ListRecommenders()
 		}
 		scores, digest, err = recommender.RecommendSequential(ctx, scores, 0, recommenderNames...)
 		if err != nil {
@@ -245,9 +259,9 @@ func (p *Pipeline) Recommend(ctx context.Context, users []data.User, progress fu
 
 		// Insert replacement items into the candidate set before ranking so all rankers can order them.
 		var replacementPositiveItems, replacementNegativeItems mapset.Set[string]
-		if p.Config.Recommend.Replacement.EnableReplacement && p.Config.Recommend.Ranker.Type != "none" {
+		if cfg.Recommend.Replacement.EnableReplacement && cfg.Recommend.Ranker.Type != "none" {
 			candidates, replacementPositiveItems, replacementNegativeItems, err = p.addReplacementCandidates(
-				ctx, candidates, candidateSet, recommender.UserFeedback(), itemCache, recommendTime,
+				ctx, cfg, candidates, candidateSet, recommender.UserFeedback(), itemCache, recommendTime,
 			)
 			if err != nil {
 				log.Logger().Error("failed to prepare replacement candidates", zap.Error(err))
@@ -257,30 +271,30 @@ func (p *Pipeline) Recommend(ctx context.Context, users []data.User, progress fu
 
 		// rank by click-through-rate
 		var results []cache.Score
-		if p.Config.Recommend.Ranker.Type == "fm" && p.ClickThroughRateModel != nil && !p.ClickThroughRateModel.Invalid() {
+		if cfg.Recommend.Ranker.Type == "fm" && p.ClickThroughRateModel != nil && !p.ClickThroughRateModel.Invalid() {
 			results, err = p.rankByClickTroughRate(ctx, p.ClickThroughRateModel, &user, candidates, itemCache, recommendTime)
 			if err != nil {
 				log.Logger().Error("failed to rank items", zap.Error(err))
 				return
 			}
-		} else if p.Config.Recommend.Ranker.Type == "reranker" {
-			ranker, err := logics.NewReranker(p.Config.Recommend.Ranker.RerankerAPI)
+		} else if cfg.Recommend.Ranker.Type == "reranker" {
+			ranker, err := logics.NewReranker(cfg.Recommend.Ranker.RerankerAPI)
 			if err != nil {
 				log.Logger().Error("failed to create reranker", zap.Error(err))
 				return
 			}
-			results, err = p.rankByReranker(ctx, pCtx, ranker, &user, recommender.UserFeedback(), candidates, itemCache, recommendTime)
+			results, err = p.rankByAPIWithConfig(ctx, pCtx, cfg, ranker, &user, recommender.UserFeedback(), candidates, itemCache, recommendTime)
 			if err != nil {
 				log.Logger().Error("failed to rank items by reranker", zap.Error(err))
 				return
 			}
-		} else if p.Config.Recommend.Ranker.Type == "decision" {
-			ranker, err := logics.NewDecision(p.Config.Recommend.Ranker.DecisionAPI)
+		} else if cfg.Recommend.Ranker.Type == "decision" {
+			ranker, err := logics.NewDecision(cfg.Recommend.Ranker.DecisionAPI)
 			if err != nil {
 				log.Logger().Error("failed to create decision ranker", zap.Error(err))
 				return
 			}
-			results, err = p.rankByDecision(ctx, pCtx, ranker, &user, recommender.UserFeedback(), candidates, itemCache, recommendTime)
+			results, err = p.rankByAPIWithConfig(ctx, pCtx, cfg, ranker, &user, recommender.UserFeedback(), candidates, itemCache, recommendTime)
 			if err != nil {
 				log.Logger().Error("failed to rank items by decision", zap.Error(err))
 				return
@@ -290,8 +304,8 @@ func (p *Pipeline) Recommend(ctx context.Context, users []data.User, progress fu
 		}
 
 		// Apply replacement decay after ranking so weights don't bypass the ranker ordering.
-		if p.Config.Recommend.Replacement.EnableReplacement && p.Config.Recommend.Ranker.Type != "none" {
-			results = p.applyReplacementDecay(results, replacementPositiveItems, replacementNegativeItems)
+		if cfg.Recommend.Replacement.EnableReplacement && cfg.Recommend.Ranker.Type != "none" {
+			results = p.applyReplacementDecay(cfg, results, replacementPositiveItems, replacementNegativeItems)
 		}
 
 		// cache recommendation
@@ -329,7 +343,11 @@ func (p *Pipeline) Recommend(ctx context.Context, users []data.User, progress fu
 
 // checkUserActiveTime checks if a user is active based on their last modification time.
 func (p *Pipeline) checkUserActiveTime(ctx context.Context, userId string) bool {
-	if p.Config.Recommend.ActiveUserTTL == 0 {
+	return p.checkUserActiveTimeWithConfig(ctx, p.getConfig(), userId)
+}
+
+func (p *Pipeline) checkUserActiveTimeWithConfig(ctx context.Context, cfg *config.Config, userId string) bool {
+	if cfg.Recommend.ActiveUserTTL == 0 {
 		return true
 	}
 	// read active time
@@ -342,7 +360,7 @@ func (p *Pipeline) checkUserActiveTime(ctx context.Context, userId string) bool 
 		return true
 	}
 	// check active time
-	if time.Since(activeTime) < time.Duration(p.Config.Recommend.ActiveUserTTL*24)*time.Hour {
+	if time.Since(activeTime) < time.Duration(cfg.Recommend.ActiveUserTTL*24)*time.Hour {
 		return true
 	}
 	// remove recommend cache for inactive users
@@ -355,6 +373,10 @@ func (p *Pipeline) checkUserActiveTime(ctx context.Context, userId string) bool 
 
 // checkRecommendCacheOutOfDate checks if recommend cache stale.
 func (p *Pipeline) checkRecommendCacheOutOfDate(ctx context.Context, userId string) bool {
+	return p.checkRecommendCacheOutOfDateWithConfig(ctx, p.getConfig(), userId)
+}
+
+func (p *Pipeline) checkRecommendCacheOutOfDateWithConfig(ctx context.Context, cfg *config.Config, userId string) bool {
 	var (
 		activeTime    time.Time
 		recommendTime time.Time
@@ -379,7 +401,7 @@ func (p *Pipeline) checkRecommendCacheOutOfDate(ctx context.Context, userId stri
 	if digest == "" {
 		return true
 	}
-	if digest != p.Config.Recommend.Hash() {
+	if digest != cfg.Recommend.Hash() {
 		return true
 	}
 
@@ -397,13 +419,13 @@ func (p *Pipeline) checkRecommendCacheOutOfDate(ctx context.Context, userId stri
 	}
 
 	// 4. If update time + cache expire > current time, not stale.
-	if recommendTime.Before(time.Now().Add(-p.Config.Recommend.CacheExpire)) {
+	if recommendTime.Before(time.Now().Add(-cfg.Recommend.CacheExpire)) {
 		return true
 	}
 
 	// 5. If active time > recommend time, not stale.
 	if activeTime.Before(recommendTime) {
-		timeoutTime := recommendTime.Add(p.Config.Recommend.Ranker.CacheExpire)
+		timeoutTime := recommendTime.Add(cfg.Recommend.Ranker.CacheExpire)
 		return timeoutTime.Before(time.Now())
 	}
 	return true
@@ -411,6 +433,7 @@ func (p *Pipeline) checkRecommendCacheOutOfDate(ctx context.Context, userId stri
 
 func (p *Pipeline) updateCollaborativeRecommend(
 	ctx context.Context,
+	cfg *config.Config,
 	matrixFactorizationID int64,
 	userID string,
 	userEmbedding []float32,
@@ -422,7 +445,7 @@ func (p *Pipeline) updateCollaborativeRecommend(
 		vectors.CollaborativeFilteringCollection(matrixFactorizationID),
 		vectors.Vector{Values: userEmbedding},
 		nil,
-		p.Config.Recommend.CacheSize+excludeSet.Cardinality(),
+		cfg.Recommend.CacheSize+excludeSet.Cardinality(),
 	)
 	if err != nil {
 		return errors.WithStack(err)
@@ -444,7 +467,7 @@ func (p *Pipeline) updateCollaborativeRecommend(
 	}
 	if err := p.CacheClient.Set(ctx,
 		cache.Time(cache.Key(cache.CollaborativeFilteringUpdateTime, userID), localStartTime),
-		cache.String(cache.Key(cache.CollaborativeFilteringDigest, userID), p.Config.Recommend.Collaborative.Hash(&p.Config.Recommend)),
+		cache.String(cache.Key(cache.CollaborativeFilteringDigest, userID), cfg.Recommend.Collaborative.Hash(&cfg.Recommend)),
 	); err != nil {
 		log.Logger().Error("failed to cache collaborative filtering recommendation time", zap.String("user_id", userID), zap.Error(err))
 		return errors.WithStack(err)
@@ -545,6 +568,22 @@ func (p *Pipeline) rankByAPI(
 	itemCache *ItemCache,
 	recommendTime time.Time,
 ) ([]cache.Score, error) {
+	return p.rankByAPIWithConfig(ctx, pCtx, p.getConfig(), ranker, user, feedback, candidates, itemCache, recommendTime)
+}
+
+func (p *Pipeline) rankByAPIWithConfig(
+	ctx context.Context,
+	pCtx *parallel.Context,
+	cfg *config.Config,
+	ranker interface {
+		Rank(context.Context, *data.User, []*logics.FeedbackItem, []*data.Item) ([]cache.Score, error)
+	},
+	user *data.User,
+	feedback []data.Feedback,
+	candidates []cache.Score,
+	itemCache *ItemCache,
+	recommendTime time.Time,
+) ([]cache.Score, error) {
 	// download items
 	items, err := itemCache.GetSlice(ctx, lo.Map(candidates, func(score cache.Score, _ int) string {
 		return score.Id
@@ -554,12 +593,12 @@ func (p *Pipeline) rankByAPI(
 	}
 	// convert feedback
 	data.SortFeedbacks(feedback)
-	contextUserFeedback := make([]data.Feedback, 0, p.Config.Recommend.ContextSize)
+	contextUserFeedback := make([]data.Feedback, 0, cfg.Recommend.ContextSize)
 	for _, f := range feedback {
-		if p.Config.Recommend.ContextSize <= len(contextUserFeedback) {
+		if cfg.Recommend.ContextSize <= len(contextUserFeedback) {
 			break
 		}
-		if expression.MatchFeedbackTypeExpressions(p.Config.Recommend.DataSource.PositiveFeedbackTypes, f.FeedbackType, f.Value) {
+		if expression.MatchFeedbackTypeExpressions(cfg.Recommend.DataSource.PositiveFeedbackTypes, f.FeedbackType, f.Value) {
 			contextUserFeedback = append(contextUserFeedback, f)
 		}
 	}
@@ -609,6 +648,7 @@ func (p *Pipeline) rankByAPI(
 // It now adds the replacement items before ranking, then applies decay after ranking.
 func (p *Pipeline) addReplacementCandidates(
 	ctx context.Context,
+	cfg *config.Config,
 	candidates []cache.Score,
 	candidateSet mapset.Set[string],
 	feedbacks []data.Feedback,
@@ -618,10 +658,10 @@ func (p *Pipeline) addReplacementCandidates(
 	positiveItems := mapset.NewSet[string]()
 	distinctItems := mapset.NewSet[string]()
 	for _, feedback := range feedbacks {
-		if expression.MatchFeedbackTypeExpressions(p.Config.Recommend.DataSource.PositiveFeedbackTypes, feedback.FeedbackType, feedback.Value) {
+		if expression.MatchFeedbackTypeExpressions(cfg.Recommend.DataSource.PositiveFeedbackTypes, feedback.FeedbackType, feedback.Value) {
 			positiveItems.Add(feedback.ItemId)
 			distinctItems.Add(feedback.ItemId)
-		} else if expression.MatchFeedbackTypeExpressions(p.Config.Recommend.DataSource.ReadFeedbackTypes, feedback.FeedbackType, feedback.Value) {
+		} else if expression.MatchFeedbackTypeExpressions(cfg.Recommend.DataSource.ReadFeedbackTypes, feedback.FeedbackType, feedback.Value) {
 			distinctItems.Add(feedback.ItemId)
 		}
 	}
@@ -652,6 +692,7 @@ func (p *Pipeline) addReplacementCandidates(
 }
 
 func (p *Pipeline) applyReplacementDecay(
+	cfg *config.Config,
 	results []cache.Score,
 	positiveItems mapset.Set[string],
 	negativeItems mapset.Set[string],
@@ -666,10 +707,10 @@ func (p *Pipeline) applyReplacementDecay(
 	for i := range updated {
 		switch {
 		case positiveItems != nil && positiveItems.Contains(updated[i].Id):
-			updated[i].Score *= p.Config.Recommend.Replacement.PositiveReplacementDecay
+			updated[i].Score *= cfg.Recommend.Replacement.PositiveReplacementDecay
 			changed = true
 		case negativeItems != nil && negativeItems.Contains(updated[i].Id):
-			updated[i].Score *= p.Config.Recommend.Replacement.ReadReplacementDecay
+			updated[i].Score *= cfg.Recommend.Replacement.ReadReplacementDecay
 			changed = true
 		}
 	}
