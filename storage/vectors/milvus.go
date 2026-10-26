@@ -30,6 +30,7 @@ import (
 	"github.com/milvus-io/milvus/client/v2/milvusclient"
 	"github.com/milvus-io/milvus/pkg/v2/util/merr"
 	"github.com/pkg/errors"
+	"google.golang.org/grpc"
 )
 
 const (
@@ -50,18 +51,64 @@ const (
 func init() {
 	Register([]string{storage.MilvusPrefix}, func(path, tablePrefix string, opts ...storage.Option) (Database, error) {
 		database := &Milvus{}
-		u, err := url.Parse(path)
+		config, err := milvusConfig(path)
 		if err != nil {
-			return nil, errors.WithStack(err)
+			return nil, err
 		}
-		database.client, err = milvusclient.New(context.Background(), &milvusclient.ClientConfig{
-			Address: u.Host,
-		})
+		database.client, err = milvusclient.New(context.Background(), config)
 		if err != nil {
 			return nil, errors.WithStack(err)
 		}
 		return database, nil
 	})
+}
+
+func milvusConfig(path string) (*milvusclient.ClientConfig, error) {
+	u, err := url.Parse(path)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	query, err := url.ParseQuery(u.RawQuery)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	config := &milvusclient.ClientConfig{
+		Address: u.Host,
+		DBName:  strings.TrimLeft(u.Path, "/"),
+		APIKey:  query.Get("apiKey"),
+	}
+	if u.User != nil {
+		config.Username = u.User.Username()
+		config.Password, _ = u.User.Password()
+	}
+	for key, target := range map[string]*string{
+		"username": &config.Username,
+		"password": &config.Password,
+		"dbName":   &config.DBName,
+	} {
+		if query.Has(key) {
+			*target = query.Get(key)
+		}
+	}
+	if query.Has("enableTLSAuth") {
+		config.EnableTLSAuth, err = strconv.ParseBool(query.Get("enableTLSAuth"))
+		if err != nil {
+			return nil, errors.Wrap(err, "invalid enableTLSAuth")
+		}
+	}
+	if query.Has("dialTimeout") {
+		timeout, err := time.ParseDuration(query.Get("dialTimeout"))
+		if err != nil {
+			return nil, errors.Wrap(err, "invalid dialTimeout")
+		}
+		if timeout < 0 {
+			return nil, errors.New("dialTimeout must not be negative")
+		}
+		if timeout > 0 {
+			config.DialOptions = append(config.DialOptions, grpc.WithTimeout(timeout))
+		}
+	}
+	return config, nil
 }
 
 type Milvus struct {
