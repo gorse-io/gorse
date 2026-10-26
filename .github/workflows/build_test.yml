@@ -279,6 +279,7 @@ jobs:
         strict: true
         variables: |
           database=${{ matrix.database }}
+          write_build_cache=${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
 
     - name: Setup environment variables
       run: |
