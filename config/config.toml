@@ -25,9 +25,9 @@ data_store = "mysql://gorse:gorse_pass@tcp(localhost:3306)/gorse"
 # The database for vector indices, support xvec, Qdrant, Weaviate and Milvus:
 #   xvec://<path>
 #   qdrant://<host>[:<port>][?apiKey=<key>&useTLS=true&skipCompatibilityCheck=false&poolSize=3&keepAliveTime=10&keepAliveTimeout=2&versionCheckTimeout=1m]
-#   weaviate://<host>:<port>
-#   weaviates://<host>:<port>
-#   milvus://<host>:<port>
+#   weaviate://<host>:<port>[?apiKey=<key>&timeout=30s&startupTimeout=5s]
+#   weaviates://<host>:<port>[?apiKey=<key>&timeout=30s&startupTimeout=5s]
+#   milvus://[<username>:<password>@]<host>:<port>[/<dbName>][?apiKey=<key>&enableTLSAuth=true]
 vector_store = "xvec://vectors"
 
 # The naming prefix for tables (collections, keys) in databases. The default value is empty.

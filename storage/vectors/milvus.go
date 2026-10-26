@@ -50,18 +50,43 @@ const (
 func init() {
 	Register([]string{storage.MilvusPrefix}, func(path, tablePrefix string, opts ...storage.Option) (Database, error) {
 		database := &Milvus{}
-		u, err := url.Parse(path)
+		config, err := milvusConfig(path)
 		if err != nil {
-			return nil, errors.WithStack(err)
+			return nil, err
 		}
-		database.client, err = milvusclient.New(context.Background(), &milvusclient.ClientConfig{
-			Address: u.Host,
-		})
+		database.client, err = milvusclient.New(context.Background(), config)
 		if err != nil {
 			return nil, errors.WithStack(err)
 		}
 		return database, nil
 	})
+}
+
+func milvusConfig(path string) (*milvusclient.ClientConfig, error) {
+	u, err := url.Parse(path)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	query, err := url.ParseQuery(u.RawQuery)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	config := &milvusclient.ClientConfig{
+		Address: u.Host,
+		DBName:  strings.TrimLeft(u.Path, "/"),
+		APIKey:  query.Get("apiKey"),
+	}
+	if u.User != nil {
+		config.Username = u.User.Username()
+		config.Password, _ = u.User.Password()
+	}
+	if query.Has("enableTLSAuth") {
+		config.EnableTLSAuth, err = strconv.ParseBool(query.Get("enableTLSAuth"))
+		if err != nil {
+			return nil, errors.Wrap(err, "invalid enableTLSAuth")
+		}
+	}
+	return config, nil
 }
 
 type Milvus struct {
