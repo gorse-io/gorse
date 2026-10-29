@@ -21,6 +21,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 func TestEvent(t *testing.T) {
@@ -36,9 +37,10 @@ func TestEvent(t *testing.T) {
 		zap.String("custom", "value"),
 		zap.Int64("bytes", 123),
 		zap.Duration("duration", time.Millisecond),
-		zap.Time("timestamp", now),
+		zap.Time("custom_time", now),
 	}
 	Event("custom_event", fields...)
+	after := time.Now()
 	fields[0] = zap.String("custom", "changed")
 	select {
 	case event := <-name:
@@ -46,12 +48,20 @@ func TestEvent(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("event was not emitted")
 	}
+	got := <-values
+	require.Len(t, got, len(fields)+1)
 	require.Equal(t, []zap.Field{
 		zap.String("custom", "value"),
 		zap.Int64("bytes", 123),
 		zap.Duration("duration", time.Millisecond),
-		zap.Time("timestamp", now),
-	}, <-values)
+		zap.Time("custom_time", now),
+	}, got[:len(fields)])
+	encoder := zapcore.NewMapObjectEncoder()
+	got[len(fields)].AddTo(encoder)
+	require.IsType(t, time.Time{}, encoder.Fields["timestamp"])
+	timestamp := encoder.Fields["timestamp"].(time.Time)
+	require.False(t, timestamp.Before(now))
+	require.False(t, timestamp.After(after))
 	SetEventHandler(nil)
 	require.NotPanics(t, func() { Event("ignored") })
 }

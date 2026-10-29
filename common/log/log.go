@@ -21,6 +21,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/c-bata/goptuna"
 	"github.com/emicklei/go-restful/v3"
@@ -84,6 +85,7 @@ func SetEventHandler(handler EventHandler) {
 }
 
 // Event asynchronously records an event without writing to the application log.
+// A timestamp field is added automatically at submission time.
 // The field slice is copied, but referenced objects must remain immutable until
 // the handler finishes.
 func Event(name string, fields ...zap.Field) {
@@ -91,8 +93,10 @@ func Event(name string, fields ...zap.Field) {
 	handler := eventHandler
 	eventHandlerMu.RUnlock()
 	if handler != nil {
-		fields = append([]zap.Field(nil), fields...)
-		go handler(name, fields...)
+		eventFields := make([]zap.Field, len(fields)+1)
+		copy(eventFields, fields)
+		eventFields[len(fields)] = zap.Time("timestamp", time.Now())
+		go handler(name, eventFields...)
 	}
 }
 

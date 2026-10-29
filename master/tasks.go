@@ -785,7 +785,6 @@ func (m *Master) LoadDataFromDatabase(
 		zap.Int64("item_bytes", itemBytes),
 		zap.Int64("feedback_count", feedbackCount.Load()),
 		zap.Int64("feedback_bytes", feedbackBytes.Load()),
-		zap.Time("timestamp", time.Now()),
 	}
 	return ctrDataset, dataSet, snapshot, nil
 }
