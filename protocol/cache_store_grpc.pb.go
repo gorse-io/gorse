@@ -45,6 +45,7 @@ const (
 	CacheStore_AddTimeSeriesPoints_FullMethodName = "/protocol.CacheStore/AddTimeSeriesPoints"
 	CacheStore_GetTimeSeriesPoints_FullMethodName = "/protocol.CacheStore/GetTimeSeriesPoints"
 	CacheStore_AddGeoIndex_FullMethodName         = "/protocol.CacheStore/AddGeoIndex"
+	CacheStore_ListGeoIndex_FullMethodName        = "/protocol.CacheStore/ListGeoIndex"
 	CacheStore_AddGeoPoints_FullMethodName        = "/protocol.CacheStore/AddGeoPoints"
 	CacheStore_SearchGeoPoints_FullMethodName     = "/protocol.CacheStore/SearchGeoPoints"
 	CacheStore_DeleteGeoPoints_FullMethodName     = "/protocol.CacheStore/DeleteGeoPoints"
@@ -67,6 +68,7 @@ type CacheStoreClient interface {
 	AddTimeSeriesPoints(ctx context.Context, in *AddTimeSeriesPointsRequest, opts ...grpc.CallOption) (*AddTimeSeriesPointsResponse, error)
 	GetTimeSeriesPoints(ctx context.Context, in *GetTimeSeriesPointsRequest, opts ...grpc.CallOption) (*GetTimeSeriesPointsResponse, error)
 	AddGeoIndex(ctx context.Context, in *AddGeoIndexRequest, opts ...grpc.CallOption) (*AddGeoIndexResponse, error)
+	ListGeoIndex(ctx context.Context, in *ListGeoIndexRequest, opts ...grpc.CallOption) (*ListGeoIndexResponse, error)
 	AddGeoPoints(ctx context.Context, in *AddGeoPointsRequest, opts ...grpc.CallOption) (*AddGeoPointsResponse, error)
 	SearchGeoPoints(ctx context.Context, in *SearchGeoPointsRequest, opts ...grpc.CallOption) (*SearchGeoPointsResponse, error)
 	DeleteGeoPoints(ctx context.Context, in *DeleteGeoPointsRequest, opts ...grpc.CallOption) (*DeleteGeoPointsResponse, error)
@@ -210,6 +212,16 @@ func (c *cacheStoreClient) AddGeoIndex(ctx context.Context, in *AddGeoIndexReque
 	return out, nil
 }
 
+func (c *cacheStoreClient) ListGeoIndex(ctx context.Context, in *ListGeoIndexRequest, opts ...grpc.CallOption) (*ListGeoIndexResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListGeoIndexResponse)
+	err := c.cc.Invoke(ctx, CacheStore_ListGeoIndex_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *cacheStoreClient) AddGeoPoints(ctx context.Context, in *AddGeoPointsRequest, opts ...grpc.CallOption) (*AddGeoPointsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(AddGeoPointsResponse)
@@ -266,6 +278,7 @@ type CacheStoreServer interface {
 	AddTimeSeriesPoints(context.Context, *AddTimeSeriesPointsRequest) (*AddTimeSeriesPointsResponse, error)
 	GetTimeSeriesPoints(context.Context, *GetTimeSeriesPointsRequest) (*GetTimeSeriesPointsResponse, error)
 	AddGeoIndex(context.Context, *AddGeoIndexRequest) (*AddGeoIndexResponse, error)
+	ListGeoIndex(context.Context, *ListGeoIndexRequest) (*ListGeoIndexResponse, error)
 	AddGeoPoints(context.Context, *AddGeoPointsRequest) (*AddGeoPointsResponse, error)
 	SearchGeoPoints(context.Context, *SearchGeoPointsRequest) (*SearchGeoPointsResponse, error)
 	DeleteGeoPoints(context.Context, *DeleteGeoPointsRequest) (*DeleteGeoPointsResponse, error)
@@ -315,6 +328,9 @@ func (UnimplementedCacheStoreServer) GetTimeSeriesPoints(context.Context, *GetTi
 }
 func (UnimplementedCacheStoreServer) AddGeoIndex(context.Context, *AddGeoIndexRequest) (*AddGeoIndexResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AddGeoIndex not implemented")
+}
+func (UnimplementedCacheStoreServer) ListGeoIndex(context.Context, *ListGeoIndexRequest) (*ListGeoIndexResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListGeoIndex not implemented")
 }
 func (UnimplementedCacheStoreServer) AddGeoPoints(context.Context, *AddGeoPointsRequest) (*AddGeoPointsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AddGeoPoints not implemented")
@@ -558,6 +574,24 @@ func _CacheStore_AddGeoIndex_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _CacheStore_ListGeoIndex_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListGeoIndexRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CacheStoreServer).ListGeoIndex(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CacheStore_ListGeoIndex_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CacheStoreServer).ListGeoIndex(ctx, req.(*ListGeoIndexRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _CacheStore_AddGeoPoints_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(AddGeoPointsRequest)
 	if err := dec(in); err != nil {
@@ -680,6 +714,10 @@ var CacheStore_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "AddGeoIndex",
 			Handler:    _CacheStore_AddGeoIndex_Handler,
+		},
+		{
+			MethodName: "ListGeoIndex",
+			Handler:    _CacheStore_ListGeoIndex_Handler,
 		},
 		{
 			MethodName: "AddGeoPoints",

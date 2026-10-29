@@ -137,6 +137,7 @@ service CacheStore {
   rpc GetTimeSeriesPoints(GetTimeSeriesPointsRequest)
       returns (GetTimeSeriesPointsResponse) {}
   rpc AddGeoIndex(AddGeoIndexRequest) returns (AddGeoIndexResponse) {}
+  rpc ListGeoIndex(ListGeoIndexRequest) returns (ListGeoIndexResponse) {}
   rpc AddGeoPoints(AddGeoPointsRequest) returns (AddGeoPointsResponse) {}
   rpc SearchGeoPoints(SearchGeoPointsRequest) returns (SearchGeoPointsResponse) {}
   rpc DeleteGeoPoints(DeleteGeoPointsRequest) returns (DeleteGeoPointsResponse) {}
@@ -184,3 +185,6 @@ message DeleteGeoPointsResponse {}
 
 message DeleteGeoIndexRequest { string name = 1; }
 message DeleteGeoIndexResponse {}
+
+message ListGeoIndexRequest {}
+message ListGeoIndexResponse { repeated string names = 1; }

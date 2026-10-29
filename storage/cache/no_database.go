@@ -84,6 +84,10 @@ func (NoDatabase) AddGeoIndex(context.Context, string) error {
 	return storage.ErrNoDatabase
 }
 
+func (NoDatabase) ListGeoIndex(context.Context) ([]string, error) {
+	return nil, storage.ErrNoDatabase
+}
+
 func (NoDatabase) AddGeoPoints(context.Context, string, []GeoPoint) error {
 	return storage.ErrNoDatabase
 }

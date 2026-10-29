@@ -17,6 +17,7 @@ package cache
 import (
 	"context"
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
@@ -514,6 +515,33 @@ func (m MongoDB) initGeoIndexes(ctx context.Context) error {
 		}
 	}
 	return errors.WithStack(cursor.Err())
+}
+
+func (m MongoDB) ListGeoIndex(ctx context.Context) ([]string, error) {
+	mongoGeoMu.RLock()
+	defer mongoGeoMu.RUnlock()
+	cursor, err := m.geoCatalog().Find(ctx, bson.M{"state": "ready"},
+		options.Find().SetBatchSize(512).SetCollation(mongoGeoSimpleCollation()))
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	defer cursor.Close(ctx)
+	names := make([]string, 0)
+	for cursor.Next(ctx) {
+		var index mongoGeoIndex
+		if err = cursor.Decode(&index); err != nil {
+			return nil, errors.WithStack(err)
+		}
+		if err = m.validateGeoIndex(index); err != nil {
+			return nil, err
+		}
+		names = append(names, index.Name)
+	}
+	if err = cursor.Err(); err != nil {
+		return nil, errors.WithStack(err)
+	}
+	sort.Strings(names)
+	return names, nil
 }
 
 func (m MongoDB) AddGeoIndex(ctx context.Context, name string) error {

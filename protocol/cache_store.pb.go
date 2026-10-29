@@ -1908,6 +1908,86 @@ func (*DeleteGeoIndexResponse) Descriptor() ([]byte, []int) {
 	return file_cache_store_proto_rawDescGZIP(), []int{37}
 }
 
+type ListGeoIndexRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListGeoIndexRequest) Reset() {
+	*x = ListGeoIndexRequest{}
+	mi := &file_cache_store_proto_msgTypes[38]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListGeoIndexRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListGeoIndexRequest) ProtoMessage() {}
+
+func (x *ListGeoIndexRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_cache_store_proto_msgTypes[38]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListGeoIndexRequest.ProtoReflect.Descriptor instead.
+func (*ListGeoIndexRequest) Descriptor() ([]byte, []int) {
+	return file_cache_store_proto_rawDescGZIP(), []int{38}
+}
+
+type ListGeoIndexResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Names         []string               `protobuf:"bytes,1,rep,name=names,proto3" json:"names,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListGeoIndexResponse) Reset() {
+	*x = ListGeoIndexResponse{}
+	mi := &file_cache_store_proto_msgTypes[39]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListGeoIndexResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListGeoIndexResponse) ProtoMessage() {}
+
+func (x *ListGeoIndexResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_cache_store_proto_msgTypes[39]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListGeoIndexResponse.ProtoReflect.Descriptor instead.
+func (*ListGeoIndexResponse) Descriptor() ([]byte, []int) {
+	return file_cache_store_proto_rawDescGZIP(), []int{39}
+}
+
+func (x *ListGeoIndexResponse) GetNames() []string {
+	if x != nil {
+		return x.Names
+	}
+	return nil
+}
+
 var File_cache_store_proto protoreflect.FileDescriptor
 
 const file_cache_store_proto_rawDesc = "" +
@@ -2038,7 +2118,11 @@ const file_cache_store_proto_rawDesc = "" +
 	"\x17DeleteGeoPointsResponse\"+\n" +
 	"\x15DeleteGeoIndexRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\"\x18\n" +
-	"\x16DeleteGeoIndexResponse2\xee\t\n" +
+	"\x16DeleteGeoIndexResponse\"\x15\n" +
+	"\x13ListGeoIndexRequest\",\n" +
+	"\x14ListGeoIndexResponse\x12\x14\n" +
+	"\x05names\x18\x01 \x03(\tR\x05names2\xbf\n" +
+	"\n" +
 	"\n" +
 	"CacheStore\x127\n" +
 	"\x04Ping\x12\x15.protocol.PingRequest\x1a\x16.protocol.PingResponse\"\x00\x124\n" +
@@ -2054,6 +2138,7 @@ const file_cache_store_proto_rawDesc = "" +
 	"\x13AddTimeSeriesPoints\x12$.protocol.AddTimeSeriesPointsRequest\x1a%.protocol.AddTimeSeriesPointsResponse\"\x00\x12d\n" +
 	"\x13GetTimeSeriesPoints\x12$.protocol.GetTimeSeriesPointsRequest\x1a%.protocol.GetTimeSeriesPointsResponse\"\x00\x12L\n" +
 	"\vAddGeoIndex\x12\x1c.protocol.AddGeoIndexRequest\x1a\x1d.protocol.AddGeoIndexResponse\"\x00\x12O\n" +
+	"\fListGeoIndex\x12\x1d.protocol.ListGeoIndexRequest\x1a\x1e.protocol.ListGeoIndexResponse\"\x00\x12O\n" +
 	"\fAddGeoPoints\x12\x1d.protocol.AddGeoPointsRequest\x1a\x1e.protocol.AddGeoPointsResponse\"\x00\x12X\n" +
 	"\x0fSearchGeoPoints\x12 .protocol.SearchGeoPointsRequest\x1a!.protocol.SearchGeoPointsResponse\"\x00\x12X\n" +
 	"\x0fDeleteGeoPoints\x12 .protocol.DeleteGeoPointsRequest\x1a!.protocol.DeleteGeoPointsResponse\"\x00\x12U\n" +
@@ -2071,7 +2156,7 @@ func file_cache_store_proto_rawDescGZIP() []byte {
 	return file_cache_store_proto_rawDescData
 }
 
-var file_cache_store_proto_msgTypes = make([]protoimpl.MessageInfo, 38)
+var file_cache_store_proto_msgTypes = make([]protoimpl.MessageInfo, 40)
 var file_cache_store_proto_goTypes = []any{
 	(*Value)(nil),                       // 0: protocol.Value
 	(*Score)(nil),                       // 1: protocol.Score
@@ -2111,29 +2196,31 @@ var file_cache_store_proto_goTypes = []any{
 	(*DeleteGeoPointsResponse)(nil),     // 35: protocol.DeleteGeoPointsResponse
 	(*DeleteGeoIndexRequest)(nil),       // 36: protocol.DeleteGeoIndexRequest
 	(*DeleteGeoIndexResponse)(nil),      // 37: protocol.DeleteGeoIndexResponse
-	(*timestamppb.Timestamp)(nil),       // 38: google.protobuf.Timestamp
-	(*PingRequest)(nil),                 // 39: protocol.PingRequest
-	(*PingResponse)(nil),                // 40: protocol.PingResponse
+	(*ListGeoIndexRequest)(nil),         // 38: protocol.ListGeoIndexRequest
+	(*ListGeoIndexResponse)(nil),        // 39: protocol.ListGeoIndexResponse
+	(*timestamppb.Timestamp)(nil),       // 40: google.protobuf.Timestamp
+	(*PingRequest)(nil),                 // 41: protocol.PingRequest
+	(*PingResponse)(nil),                // 42: protocol.PingResponse
 }
 var file_cache_store_proto_depIdxs = []int32{
-	38, // 0: protocol.Score.timestamp:type_name -> google.protobuf.Timestamp
-	38, // 1: protocol.ScoreCondition.before:type_name -> google.protobuf.Timestamp
-	38, // 2: protocol.TimeSeriesPoint.timestamp:type_name -> google.protobuf.Timestamp
+	40, // 0: protocol.Score.timestamp:type_name -> google.protobuf.Timestamp
+	40, // 1: protocol.ScoreCondition.before:type_name -> google.protobuf.Timestamp
+	40, // 2: protocol.TimeSeriesPoint.timestamp:type_name -> google.protobuf.Timestamp
 	0,  // 3: protocol.SetRequest.values:type_name -> protocol.Value
 	1,  // 4: protocol.AddScoresRequest.documents:type_name -> protocol.Score
 	1,  // 5: protocol.SearchScoresResponse.documents:type_name -> protocol.Score
 	2,  // 6: protocol.DeleteScoresRequest.condition:type_name -> protocol.ScoreCondition
 	3,  // 7: protocol.UpdateScoresRequest.patch:type_name -> protocol.ScorePatch
-	38, // 8: protocol.ScanScoresResponse.timestamp:type_name -> google.protobuf.Timestamp
+	40, // 8: protocol.ScanScoresResponse.timestamp:type_name -> google.protobuf.Timestamp
 	4,  // 9: protocol.AddTimeSeriesPointsRequest.points:type_name -> protocol.TimeSeriesPoint
-	38, // 10: protocol.GetTimeSeriesPointsRequest.begin:type_name -> google.protobuf.Timestamp
-	38, // 11: protocol.GetTimeSeriesPointsRequest.end:type_name -> google.protobuf.Timestamp
+	40, // 10: protocol.GetTimeSeriesPointsRequest.begin:type_name -> google.protobuf.Timestamp
+	40, // 11: protocol.GetTimeSeriesPointsRequest.end:type_name -> google.protobuf.Timestamp
 	4,  // 12: protocol.GetTimeSeriesPointsResponse.points:type_name -> protocol.TimeSeriesPoint
 	25, // 13: protocol.GeoResult.point:type_name -> protocol.GeoPoint
 	25, // 14: protocol.AddGeoPointsRequest.points:type_name -> protocol.GeoPoint
 	26, // 15: protocol.SearchGeoPointsRequest.query:type_name -> protocol.GeoQuery
 	27, // 16: protocol.SearchGeoPointsResponse.points:type_name -> protocol.GeoResult
-	39, // 17: protocol.CacheStore.Ping:input_type -> protocol.PingRequest
+	41, // 17: protocol.CacheStore.Ping:input_type -> protocol.PingRequest
 	5,  // 18: protocol.CacheStore.Get:input_type -> protocol.GetRequest
 	7,  // 19: protocol.CacheStore.Set:input_type -> protocol.SetRequest
 	9,  // 20: protocol.CacheStore.Delete:input_type -> protocol.DeleteRequest
@@ -2145,28 +2232,30 @@ var file_cache_store_proto_depIdxs = []int32{
 	21, // 26: protocol.CacheStore.AddTimeSeriesPoints:input_type -> protocol.AddTimeSeriesPointsRequest
 	23, // 27: protocol.CacheStore.GetTimeSeriesPoints:input_type -> protocol.GetTimeSeriesPointsRequest
 	28, // 28: protocol.CacheStore.AddGeoIndex:input_type -> protocol.AddGeoIndexRequest
-	30, // 29: protocol.CacheStore.AddGeoPoints:input_type -> protocol.AddGeoPointsRequest
-	32, // 30: protocol.CacheStore.SearchGeoPoints:input_type -> protocol.SearchGeoPointsRequest
-	34, // 31: protocol.CacheStore.DeleteGeoPoints:input_type -> protocol.DeleteGeoPointsRequest
-	36, // 32: protocol.CacheStore.DeleteGeoIndex:input_type -> protocol.DeleteGeoIndexRequest
-	40, // 33: protocol.CacheStore.Ping:output_type -> protocol.PingResponse
-	6,  // 34: protocol.CacheStore.Get:output_type -> protocol.GetResponse
-	8,  // 35: protocol.CacheStore.Set:output_type -> protocol.SetResponse
-	10, // 36: protocol.CacheStore.Delete:output_type -> protocol.DeleteResponse
-	12, // 37: protocol.CacheStore.AddScores:output_type -> protocol.AddScoresResponse
-	14, // 38: protocol.CacheStore.SearchScores:output_type -> protocol.SearchScoresResponse
-	16, // 39: protocol.CacheStore.DeleteScores:output_type -> protocol.DeleteScoresResponse
-	18, // 40: protocol.CacheStore.UpdateScores:output_type -> protocol.UpdateScoresResponse
-	20, // 41: protocol.CacheStore.ScanScores:output_type -> protocol.ScanScoresResponse
-	22, // 42: protocol.CacheStore.AddTimeSeriesPoints:output_type -> protocol.AddTimeSeriesPointsResponse
-	24, // 43: protocol.CacheStore.GetTimeSeriesPoints:output_type -> protocol.GetTimeSeriesPointsResponse
-	29, // 44: protocol.CacheStore.AddGeoIndex:output_type -> protocol.AddGeoIndexResponse
-	31, // 45: protocol.CacheStore.AddGeoPoints:output_type -> protocol.AddGeoPointsResponse
-	33, // 46: protocol.CacheStore.SearchGeoPoints:output_type -> protocol.SearchGeoPointsResponse
-	35, // 47: protocol.CacheStore.DeleteGeoPoints:output_type -> protocol.DeleteGeoPointsResponse
-	37, // 48: protocol.CacheStore.DeleteGeoIndex:output_type -> protocol.DeleteGeoIndexResponse
-	33, // [33:49] is the sub-list for method output_type
-	17, // [17:33] is the sub-list for method input_type
+	38, // 29: protocol.CacheStore.ListGeoIndex:input_type -> protocol.ListGeoIndexRequest
+	30, // 30: protocol.CacheStore.AddGeoPoints:input_type -> protocol.AddGeoPointsRequest
+	32, // 31: protocol.CacheStore.SearchGeoPoints:input_type -> protocol.SearchGeoPointsRequest
+	34, // 32: protocol.CacheStore.DeleteGeoPoints:input_type -> protocol.DeleteGeoPointsRequest
+	36, // 33: protocol.CacheStore.DeleteGeoIndex:input_type -> protocol.DeleteGeoIndexRequest
+	42, // 34: protocol.CacheStore.Ping:output_type -> protocol.PingResponse
+	6,  // 35: protocol.CacheStore.Get:output_type -> protocol.GetResponse
+	8,  // 36: protocol.CacheStore.Set:output_type -> protocol.SetResponse
+	10, // 37: protocol.CacheStore.Delete:output_type -> protocol.DeleteResponse
+	12, // 38: protocol.CacheStore.AddScores:output_type -> protocol.AddScoresResponse
+	14, // 39: protocol.CacheStore.SearchScores:output_type -> protocol.SearchScoresResponse
+	16, // 40: protocol.CacheStore.DeleteScores:output_type -> protocol.DeleteScoresResponse
+	18, // 41: protocol.CacheStore.UpdateScores:output_type -> protocol.UpdateScoresResponse
+	20, // 42: protocol.CacheStore.ScanScores:output_type -> protocol.ScanScoresResponse
+	22, // 43: protocol.CacheStore.AddTimeSeriesPoints:output_type -> protocol.AddTimeSeriesPointsResponse
+	24, // 44: protocol.CacheStore.GetTimeSeriesPoints:output_type -> protocol.GetTimeSeriesPointsResponse
+	29, // 45: protocol.CacheStore.AddGeoIndex:output_type -> protocol.AddGeoIndexResponse
+	39, // 46: protocol.CacheStore.ListGeoIndex:output_type -> protocol.ListGeoIndexResponse
+	31, // 47: protocol.CacheStore.AddGeoPoints:output_type -> protocol.AddGeoPointsResponse
+	33, // 48: protocol.CacheStore.SearchGeoPoints:output_type -> protocol.SearchGeoPointsResponse
+	35, // 49: protocol.CacheStore.DeleteGeoPoints:output_type -> protocol.DeleteGeoPointsResponse
+	37, // 50: protocol.CacheStore.DeleteGeoIndex:output_type -> protocol.DeleteGeoIndexResponse
+	34, // [34:51] is the sub-list for method output_type
+	17, // [17:34] is the sub-list for method input_type
 	17, // [17:17] is the sub-list for extension type_name
 	17, // [17:17] is the sub-list for extension extendee
 	0,  // [0:17] is the sub-list for field type_name
@@ -2188,7 +2277,7 @@ func file_cache_store_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_cache_store_proto_rawDesc), len(file_cache_store_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   38,
+			NumMessages:   40,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -252,6 +252,8 @@ type Database interface {
 
 	// AddGeoIndex creates an empty, independently stored geographic index.
 	AddGeoIndex(ctx context.Context, name string) error
+	// ListGeoIndex returns ready index names in byte order, including empty indexes.
+	ListGeoIndex(ctx context.Context) ([]string, error)
 	AddGeoPoints(ctx context.Context, name string, points []GeoPoint) error
 	SearchGeoPoints(ctx context.Context, name string, query GeoQuery) ([]GeoResult, error)
 	DeleteGeoPoints(ctx context.Context, name string, ids ...string) error

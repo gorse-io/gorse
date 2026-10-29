@@ -445,6 +445,24 @@ func geoPointFromProto(point *protocol.GeoPoint) GeoPoint {
 	return GeoPoint{Id: point.GetId(), Longitude: point.GetLongitude(), Latitude: point.GetLatitude()}
 }
 
+func (p *ProxyServer) ListGeoIndex(ctx context.Context, _ *protocol.ListGeoIndexRequest) (*protocol.ListGeoIndexResponse, error) {
+	names, err := p.database.ListGeoIndex(ctx)
+	if err != nil {
+		return nil, geoServerError(err)
+	}
+	return &protocol.ListGeoIndexResponse{Names: names}, nil
+}
+
+func (p ProxyClient) ListGeoIndex(ctx context.Context) ([]string, error) {
+	response, err := p.CacheStoreClient.ListGeoIndex(ctx, &protocol.ListGeoIndexRequest{})
+	if err != nil {
+		return nil, geoClientError(err)
+	}
+	names := make([]string, len(response.GetNames()))
+	copy(names, response.GetNames())
+	return names, nil
+}
+
 func (p *ProxyServer) AddGeoIndex(ctx context.Context, request *protocol.AddGeoIndexRequest) (*protocol.AddGeoIndexResponse, error) {
 	return &protocol.AddGeoIndexResponse{}, geoServerError(p.database.AddGeoIndex(ctx, request.GetName()))
 }

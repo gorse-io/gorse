@@ -21,8 +21,10 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gorse-io/gorse/common/log"
@@ -782,6 +784,71 @@ func (r *Redis) AddGeoIndex(ctx context.Context, name string) error {
 	}
 	keys, identity := r.geoKeys(name)
 	return redisGeoError(name, redisGeoCreate.Run(ctx, r.client, keys, identity).Err())
+}
+
+// ListGeoIndex lists existing geographic indexes in this namespace.
+func (r *Redis) ListGeoIndex(ctx context.Context) ([]string, error) {
+	prefix := r.geoKeyPrefix()
+	names := make(map[string]struct{})
+	var mutex sync.Mutex
+	scan := func(ctx context.Context, client redis.UniversalClient) error {
+		var cursor uint64
+		for {
+			metadata, next, err := client.Scan(ctx, cursor, prefix+"*:meta", redisGeoBatchSize).Result()
+			if err != nil {
+				return errors.WithStack(err)
+			}
+			for _, key := range metadata {
+				_, encoded, ok := strings.Cut(strings.TrimSuffix(strings.TrimPrefix(key, prefix), ":meta"), ":")
+				if !ok {
+					return fmt.Errorf("corrupt geo metadata key %q", key)
+				}
+				decoded, err := base64.RawURLEncoding.DecodeString(encoded)
+				if err != nil {
+					return fmt.Errorf("decode geo metadata key %q %w", key, err)
+				}
+				name := string(decoded)
+				if err = validateGeoName(name); err != nil {
+					return fmt.Errorf("corrupt geo metadata key %q %w", key, err)
+				}
+				keys, identity := r.geoKeys(name)
+				if keys[0] != key {
+					return fmt.Errorf("corrupt geo metadata key %q", key)
+				}
+				// Route validation through the universal client so Cluster can
+				// follow redirects if the scanned slot moves to another master.
+				if err = redisGeoError(name, redisGeoCheck.Run(ctx, r.client, keys, identity).Err()); err != nil {
+					if errors.Is(err, storage.ErrNotFound) {
+						// An index may be dropped between SCAN and validation.
+						continue
+					}
+					return err
+				}
+				mutex.Lock()
+				names[name] = struct{}{}
+				mutex.Unlock()
+			}
+			cursor = next
+			if cursor == 0 {
+				return nil
+			}
+		}
+	}
+	if clusterClient, isCluster := r.client.(*redis.ClusterClient); isCluster {
+		if err := clusterClient.ForEachMaster(ctx, func(ctx context.Context, client *redis.Client) error {
+			return scan(ctx, client)
+		}); err != nil {
+			return nil, err
+		}
+	} else if err := scan(ctx, r.client); err != nil {
+		return nil, err
+	}
+	result := make([]string, 0, len(names))
+	for name := range names {
+		result = append(result, name)
+	}
+	sort.Strings(result)
+	return result, nil
 }
 
 // AddGeoPoints upserts validated, last-write-wins points in bounded blocks.

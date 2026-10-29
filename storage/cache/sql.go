@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -702,6 +703,23 @@ func (db *SQLDatabase) purgeGeoIndexes() error {
 		}
 	}
 	return nil
+}
+
+func (db *SQLDatabase) ListGeoIndex(ctx context.Context) ([]string, error) {
+	sqlGeoMu.RLock()
+	defer sqlGeoMu.RUnlock()
+	indexes, err := db.listGeoIndexes(ctx)
+	if err != nil {
+		return nil, err
+	}
+	names := make([]string, 0, len(indexes))
+	for _, index := range indexes {
+		if index.State == "ready" {
+			names = append(names, index.Name)
+		}
+	}
+	sort.Strings(names)
+	return names, nil
 }
 
 func (db *SQLDatabase) AddGeoIndex(ctx context.Context, name string) error {
