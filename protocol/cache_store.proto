@@ -136,4 +136,55 @@ service CacheStore {
       returns (AddTimeSeriesPointsResponse) {}
   rpc GetTimeSeriesPoints(GetTimeSeriesPointsRequest)
       returns (GetTimeSeriesPointsResponse) {}
+  rpc AddGeoIndex(AddGeoIndexRequest) returns (AddGeoIndexResponse) {}
+  rpc ListGeoIndex(ListGeoIndexRequest) returns (ListGeoIndexResponse) {}
+  rpc AddGeoPoints(AddGeoPointsRequest) returns (AddGeoPointsResponse) {}
+  rpc SearchGeoPoints(SearchGeoPointsRequest) returns (SearchGeoPointsResponse) {}
+  rpc DeleteGeoPoints(DeleteGeoPointsRequest) returns (DeleteGeoPointsResponse) {}
+  rpc DeleteGeoIndex(DeleteGeoIndexRequest) returns (DeleteGeoIndexResponse) {}
 }
+
+message GeoPoint {
+  string id = 1;
+  double longitude = 2;
+  double latitude = 3;
+}
+
+message GeoQuery {
+  double longitude = 1;
+  double latitude = 2;
+  int64 n = 3;
+  double max_distance = 4;
+}
+
+message GeoResult {
+  GeoPoint point = 1;
+  double distance = 2;
+}
+
+message AddGeoIndexRequest { string name = 1; }
+message AddGeoIndexResponse {}
+
+message AddGeoPointsRequest {
+  string name = 1;
+  repeated GeoPoint points = 2;
+}
+message AddGeoPointsResponse {}
+
+message SearchGeoPointsRequest {
+  string name = 1;
+  GeoQuery query = 2;
+}
+message SearchGeoPointsResponse { repeated GeoResult points = 1; }
+
+message DeleteGeoPointsRequest {
+  string name = 1;
+  repeated string ids = 2;
+}
+message DeleteGeoPointsResponse {}
+
+message DeleteGeoIndexRequest { string name = 1; }
+message DeleteGeoIndexResponse {}
+
+message ListGeoIndexRequest {}
+message ListGeoIndexResponse { repeated string names = 1; }
