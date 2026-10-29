@@ -21,8 +21,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/gorse-io/gorse/common/event"
 	"github.com/gorse-io/gorse/common/expression"
+	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/logics"
 	"github.com/gorse-io/gorse/model/cf"
@@ -33,6 +33,8 @@ import (
 	"github.com/gorse-io/gorse/storage/meta"
 	"github.com/gorse-io/gorse/storage/vectors"
 	"github.com/samber/lo"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 type failOnceBlobStore struct {
@@ -318,16 +320,6 @@ func (s *MasterTestSuite) TestUserToUser() {
 	s.Equal([]string{"7", "5", "3"}, cache.ConvertDocumentsToValues(similar))
 }
 
-type snapshotHandler struct {
-	snapshots chan event.Snapshot
-}
-
-func (h *snapshotHandler) EmitRequest(context.Context, event.Request) {}
-
-func (h *snapshotHandler) EmitSnapshot(_ context.Context, snapshot event.Snapshot) {
-	h.snapshots <- snapshot
-}
-
 func (s *MasterTestSuite) TestEmitSnapshot() {
 	ctx := s.T().Context()
 	s.Config = &config.Config{}
@@ -359,23 +351,36 @@ func (s *MasterTestSuite) TestEmitSnapshot() {
 		items[i] = stored
 	}
 
-	handler := &snapshotHandler{snapshots: make(chan event.Snapshot, 1)}
-	event.SetEventHandler(handler)
-	s.T().Cleanup(func() { event.SetEventHandler(&event.NopHandler{}) })
+	snapshots := make(chan map[string]any, 1)
+	log.SetEventHandler(func(name string, fields ...zap.Field) {
+		if name != "snapshot" {
+			return
+		}
+		encoder := zapcore.NewMapObjectEncoder()
+		for _, field := range fields {
+			field.AddTo(encoder)
+		}
+		select {
+		case snapshots <- encoder.Fields:
+		case <-ctx.Done():
+		}
+	})
+	s.T().Cleanup(func() { log.SetEventHandler(nil) })
 
 	datasets, err := s.loadDataset(ctx)
 	s.Require().NoError(err)
 	s.Equal(1, datasets.clickTrainSet.Count()+datasets.clickTestSet.Count())
 
 	select {
-	case snapshot := <-handler.snapshots:
-		s.Equal(int64(len(users)), snapshot.UserCount)
-		s.Equal(deepSize(users), snapshot.UserBytes)
-		s.Equal(int64(len(items)), snapshot.ItemCount)
-		s.Equal(deepSize(items), snapshot.ItemBytes)
-		s.Equal(int64(len(feedbacks)), snapshot.FeedbackCount)
-		s.Equal(deepSize(feedbacks), snapshot.FeedbackBytes)
-		s.False(snapshot.Timestamp.IsZero())
+	case snapshot := <-snapshots:
+		s.Equal(int64(len(users)), snapshot["user_count"])
+		s.Equal(deepSize(users), snapshot["user_bytes"])
+		s.Equal(int64(len(items)), snapshot["item_count"])
+		s.Equal(deepSize(items), snapshot["item_bytes"])
+		s.Equal(int64(len(feedbacks)), snapshot["feedback_count"])
+		s.Equal(deepSize(feedbacks), snapshot["feedback_bytes"])
+		s.Require().IsType(time.Time{}, snapshot["timestamp"])
+		s.False(snapshot["timestamp"].(time.Time).IsZero())
 	case <-time.After(time.Second):
 		s.Fail("snapshot was not emitted")
 	}

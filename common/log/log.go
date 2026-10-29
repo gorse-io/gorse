@@ -19,6 +19,7 @@ import (
 	"os"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/c-bata/goptuna"
@@ -62,6 +63,36 @@ func init() {
 		}); err != nil {
 			logger.Fatal("failed to register Windows file sink", zap.Error(err))
 		}
+	}
+}
+
+// EventHandler records named events with dynamic fields.
+// Callbacks may run concurrently and must not modify field values.
+type EventHandler func(name string, fields ...zap.Field)
+
+var (
+	eventHandlerMu sync.RWMutex
+	eventHandler   EventHandler
+)
+
+// SetEventHandler replaces the event handler. A nil handler disables events.
+// Events already submitted continue to use their original handler.
+func SetEventHandler(handler EventHandler) {
+	eventHandlerMu.Lock()
+	defer eventHandlerMu.Unlock()
+	eventHandler = handler
+}
+
+// Event asynchronously records an event without writing to the application log.
+// The field slice is copied, but referenced objects must remain immutable until
+// the handler finishes.
+func Event(name string, fields ...zap.Field) {
+	eventHandlerMu.RLock()
+	handler := eventHandler
+	eventHandlerMu.RUnlock()
+	if handler != nil {
+		fields = append([]zap.Field(nil), fields...)
+		go handler(name, fields...)
 	}
 }
 
