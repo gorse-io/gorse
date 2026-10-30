@@ -95,7 +95,7 @@ func runRankingBenchmark(cmd *cobra.Command, args []string) {
 	evaluator := master.NewOnlineEvaluator(
 		m.Config.Recommend.DataSource.PositiveFeedbackTypes,
 		m.Config.Recommend.DataSource.ReadFeedbackTypes)
-	dataset, cfDataset, _, err := m.LoadDataFromDatabase(context.Background(), m.DataClient,
+	dataset, cfDataset, err := m.LoadDataFromDatabase(context.Background(), m.DataClient,
 		m.Config.Recommend.DataSource.PositiveFeedbackTypes,
 		m.Config.Recommend.DataSource.NegativeFeedbackTypes,
 		m.Config.Recommend.DataSource.ReadFeedbackTypes,
@@ -529,7 +529,7 @@ var benchEmbeddingCmd = &cobra.Command{
 		evaluator := master.NewOnlineEvaluator(
 			m.Config.Recommend.DataSource.PositiveFeedbackTypes,
 			m.Config.Recommend.DataSource.ReadFeedbackTypes)
-		_, dataset, _, err := m.LoadDataFromDatabase(context.Background(), m.DataClient,
+		_, dataset, err := m.LoadDataFromDatabase(context.Background(), m.DataClient,
 			m.Config.Recommend.DataSource.PositiveFeedbackTypes,
 			m.Config.Recommend.DataSource.NegativeFeedbackTypes,
 			m.Config.Recommend.DataSource.ReadFeedbackTypes,

@@ -14,7 +14,6 @@
 package server
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -25,7 +24,6 @@ import (
 	"time"
 
 	"github.com/emicklei/go-restful/v3"
-	"github.com/gorse-io/gorse/common/event"
 	"github.com/gorse-io/gorse/common/expression"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/common/mock"
@@ -106,27 +104,23 @@ func (suite *ServerTestSuite) marshal(v any) string {
 	return string(s)
 }
 
-type requestsHandler struct {
-	ctx      context.Context
-	requests chan event.Request
-}
-
-func (h *requestsHandler) EmitRequest(_ context.Context, request event.Request) {
-	select {
-	case h.requests <- request:
-	case <-h.ctx.Done():
+func (suite *ServerTestSuite) TestRequestEvent() {
+	type requestEvent struct {
+		timestamp time.Time
+		fields    map[string]any
 	}
-}
-
-func (h *requestsHandler) EmitSnapshot(context.Context, event.Snapshot) {}
-
-func (suite *ServerTestSuite) TestEmitRequest() {
-	handler := &requestsHandler{
-		ctx:      suite.T().Context(),
-		requests: make(chan event.Request, 1),
-	}
-	event.SetEventHandler(handler)
-	suite.T().Cleanup(func() { event.SetEventHandler(&event.NopHandler{}) })
+	requests := make(chan requestEvent, 1)
+	ctx := suite.T().Context()
+	log.SetEventHandler(func(name string, timestamp time.Time, fields map[string]any) {
+		if name != "request" {
+			return
+		}
+		select {
+		case requests <- requestEvent{timestamp: timestamp, fields: fields}:
+		case <-ctx.Done():
+		}
+	})
+	suite.T().Cleanup(func() { log.SetEventHandler(nil) })
 
 	body := suite.marshal(data.User{UserId: "emit-request"})
 	const responseBody = `{"RowAffected":1}`
@@ -150,20 +144,22 @@ func (suite *ServerTestSuite) TestEmitRequest() {
 	defer timer.Stop()
 	for {
 		select {
-		case req := <-handler.requests:
-			if req.RequestID != requestID {
+		case event := <-requests:
+			req := event.fields
+			if req["request_id"] != requestID {
 				continue
 			}
-			suite.Equal(requestID, req.RequestID)
-			suite.EqualValues(len(body), req.RequestBytes)
-			suite.Equal(http.MethodPost, req.Method)
-			suite.Equal("/api/user", req.Route)
-			suite.Equal(http.StatusOK, req.StatusCode)
-			suite.Positive(req.ResponseTime)
-			suite.EqualValues(len(responseBytes), req.ResponseBytes)
-			suite.False(req.Timestamp.Before(before))
-			suite.False(req.Timestamp.After(after))
-			suite.Empty(req.RemoteAddr)
+			suite.Equal(requestID, req["request_id"])
+			suite.EqualValues(len(body), req["request_bytes"])
+			suite.Equal(http.MethodPost, req["method"])
+			suite.Equal("/api/user", req["route"])
+			suite.EqualValues(http.StatusOK, req["status_code"])
+			suite.Positive(req["response_time"])
+			suite.EqualValues(len(responseBytes), req["response_bytes"])
+			suite.NotContains(req, "timestamp")
+			suite.False(event.timestamp.Before(before))
+			suite.False(event.timestamp.After(after))
+			suite.Empty(req["remote_addr"])
 			return
 		case <-timer.C:
 			suite.Fail("request event was not emitted")

@@ -16,10 +16,14 @@ package log
 
 import (
 	"os"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 )
 
 func TestSetDevelopmentLogger(t *testing.T) {
@@ -228,4 +232,98 @@ func TestRedactDBURL(t *testing.T) {
 		RedactDBURL("postgres://localhost/gorse?password=******#********"))
 	assert.Equal(t, "postgres://localhost/gorse#********",
 		RedactDBURL("postgres://localhost/gorse#********"))
+}
+
+func TestEvent(t *testing.T) {
+	t.Cleanup(func() { SetEventHandler(nil) })
+	type event struct {
+		name      string
+		timestamp time.Time
+		fields    map[string]any
+	}
+	events := make(chan event, 1)
+	SetEventHandler(func(name string, timestamp time.Time, fields map[string]any) {
+		events <- event{name: name, timestamp: timestamp, fields: fields}
+	})
+	now := time.Now()
+	fields := []zap.Field{
+		zap.String("custom", "value"),
+		zap.Int64("bytes", 123),
+		zap.Duration("duration", time.Millisecond),
+		zap.Time("custom_time", now),
+		zap.String("timestamp", "custom timestamp"),
+	}
+	Event("custom_event", fields...)
+	after := time.Now()
+	fields[0] = zap.String("custom", "changed")
+	select {
+	case got := <-events:
+		require.Equal(t, "custom_event", got.name)
+		require.Equal(t, map[string]any{
+			"custom":      "value",
+			"bytes":       int64(123),
+			"duration":    time.Millisecond,
+			"custom_time": now.Round(0),
+			"timestamp":   "custom timestamp",
+		}, got.fields)
+		require.False(t, got.timestamp.Before(now))
+		require.False(t, got.timestamp.After(after))
+	case <-time.After(time.Second):
+		t.Fatal("event was not emitted")
+	}
+	SetEventHandler(nil)
+	require.NotPanics(t, func() { Event("ignored") })
+}
+
+func TestEventConcurrentDispatch(t *testing.T) {
+	t.Cleanup(func() { SetEventHandler(nil) })
+	const workers, count = 4, 100
+	var delivered, producers sync.WaitGroup
+	delivered.Add(workers * count)
+	SetEventHandler(func(string, time.Time, map[string]any) { delivered.Done() })
+	for range workers {
+		producers.Go(func() {
+			for range count {
+				Event("concurrent")
+			}
+		})
+	}
+	producers.Wait()
+	done := make(chan struct{})
+	go func() {
+		delivered.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("events were not emitted")
+	}
+}
+
+func TestEventBindsHandlerBeforeDispatch(t *testing.T) {
+	t.Cleanup(func() { SetEventHandler(nil) })
+	const count = 100
+	var delivered sync.WaitGroup
+	delivered.Add(count)
+	wrongHandler := make(chan struct{}, count)
+	for range count {
+		SetEventHandler(func(string, time.Time, map[string]any) { delivered.Done() })
+		Event("queued")
+		SetEventHandler(func(string, time.Time, map[string]any) {
+			wrongHandler <- struct{}{}
+			delivered.Done()
+		})
+	}
+	done := make(chan struct{})
+	go func() {
+		delivered.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("events were not emitted")
+	}
+	require.Empty(t, wrongHandler)
 }

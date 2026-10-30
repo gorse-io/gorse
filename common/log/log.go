@@ -20,6 +20,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/c-bata/goptuna"
 	"github.com/emicklei/go-restful/v3"
@@ -62,6 +63,25 @@ func init() {
 		}); err != nil {
 			logger.Fatal("failed to register Windows file sink", zap.Error(err))
 		}
+	}
+}
+
+type EventHandler func(name string, timestamp time.Time, fields map[string]any)
+
+var eventHandler EventHandler
+
+func SetEventHandler(handler EventHandler) {
+	eventHandler = handler
+}
+
+func Event(name string, fields ...zap.Field) {
+	handler := eventHandler
+	if handler != nil {
+		encoder := zapcore.NewMapObjectEncoder()
+		for _, field := range fields {
+			field.AddTo(encoder)
+		}
+		go handler(name, time.Now(), encoder.Fields)
 	}
 }
 
