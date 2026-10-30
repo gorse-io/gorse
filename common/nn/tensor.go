@@ -49,7 +49,7 @@ type DType uint8
 const (
 	// Float32 stores IEEE 754 single-precision values and supports computation.
 	Float32 DType = iota
-	// Float16 stores IEEE 754 half-precision values; convert to Float32 for computation.
+	// Float16 stores IEEE 754 half-precision values and supports inference through FP32 kernels.
 	Float16
 )
 
@@ -97,8 +97,8 @@ func (t *Tensor) ToFloat32() *Tensor {
 }
 
 // NewTensor creates a tensor sharing data and shape with its inputs.
-// Float32 values support computation; uint16 values are storage-only IEEE 754
-// half-precision bit patterns, not integer-valued tensor elements.
+// Float32 values support training and inference; uint16 values support inference
+// only and store IEEE 754 half-precision bit patterns, not integer-valued elements.
 func NewTensor[T float32 | uint16](data []T, shape ...int) *Tensor {
 	size := 1
 	for i := range shape {
