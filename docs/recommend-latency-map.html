@@ -1,0 +1,1602 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Why /api/recommend takes over 3 s</title>
+<style>
+:root {
+  --ground: #f4f5f1;
+  --surface: #fcfcfa;
+  --surface-2: #eceee7;
+  --ink: #17201a;
+  --ink-2: #46514a;
+  --ink-3: #737e76;
+  --rule: #d8dbd3;
+  --rule-strong: #a9b0a8;
+  --accent: #8f5600;
+  --accent-line: #c27a00;
+  --accent-fill: #ffd25e;
+  --accent-wash: #fff1c7;
+  --ok: #2b7547;
+  --ok-wash: #ddf0e3;
+  --focus: #2463d6;
+  --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ground: #0f1311;
+    --surface: #161b18;
+    --surface-2: #1f2521;
+    --ink: #e2e7e2;
+    --ink-2: #a9b3ab;
+    --ink-3: #78837b;
+    --rule: #2a312c;
+    --rule-strong: #47514a;
+    --accent: #f2c04f;
+    --accent-line: #e3a92e;
+    --accent-fill: #e9b93f;
+    --accent-wash: #2d2511;
+    --ok: #71c48f;
+    --ok-wash: #15281c;
+    --focus: #79a8ff;
+  }
+}
+
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font: 16px/1.55 var(--sans);
+  padding-inline: 20px;
+}
+.page { max-width: 1440px; margin: 0 auto; padding-block: 40px 72px; }
+code, .mono { font-family: var(--mono); font-size: .88em; }
+p code, li code, dd code, td code { background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
+a { color: inherit; text-decoration-color: var(--accent-line); text-underline-offset: 3px; }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+/* masthead */
+.kicker { font: 600 12px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+h1 {
+  font-size: clamp(30px, 3.6vw, 46px); line-height: 1.08; letter-spacing: -0.02em;
+  margin: 12px 0 16px; max-width: 20ch; text-wrap: balance;
+}
+h1 code { font-size: .84em; letter-spacing: -0.03em; background: none; padding: 0; }
+.lede { max-width: 70ch; color: var(--ink-2); font-size: 17px; margin: 0; }
+.meta { margin-top: 10px; font: 12.5px var(--mono); color: var(--ink-3); }
+.short {
+  list-style: none; margin: 30px 0 0; padding: 22px 0 0; border-top: 1px solid var(--rule);
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px;
+  counter-reset: s;
+}
+.short li { counter-increment: s; font-size: 15px; color: var(--ink-2); }
+.short li::before {
+  content: "0" counter(s); display: block; font: 600 12px var(--mono); color: var(--accent); margin-bottom: 6px;
+}
+.short strong { color: var(--ink); display: block; font-size: 16px; margin-bottom: 2px; }
+nav.toc { margin-top: 28px; display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 14px; }
+nav.toc a { text-decoration: none; color: var(--ink-2); }
+nav.toc a:hover { color: var(--ink); text-decoration: underline; }
+nav.toc span { font-family: var(--mono); color: var(--accent); margin-right: 4px; }
+
+/* layout */
+.layout { display: grid; gap: 40px; margin-top: 40px; }
+main { min-width: 0; display: grid; gap: 72px; }
+@media (min-width: 1180px) {
+  .layout { grid-template-columns: minmax(0, 1fr) 300px; }
+  .config { position: sticky; top: 16px; max-height: calc(100vh - 32px); overflow: auto; }
+}
+@media (max-width: 1179px) { .config { order: -1; } }
+
+section > h2 {
+  font-size: 25px; letter-spacing: -0.01em; line-height: 1.2; margin: 0 0 8px;
+  display: flex; gap: 12px; align-items: baseline; text-wrap: balance;
+}
+.sec-no { font: 600 14px var(--mono); color: var(--accent); }
+.sec-intro { max-width: 72ch; color: var(--ink-2); margin: 0 0 22px; }
+section h3 { font-size: 17px; margin: 0; }
+
+/* panels */
+.fig { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; overflow: hidden; }
+figure { margin: 0; }
+.dg-wrap { overflow-x: auto; padding: 14px; }
+.dg { display: block; width: 100%; min-width: 760px; height: auto; }
+figcaption { font-size: 14px; color: var(--ink-2); padding: 12px 18px; border-top: 1px solid var(--rule); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 22px; align-items: center; }
+.legend span { display: inline-flex; gap: 8px; align-items: center; }
+.legend svg { width: 34px; height: 10px; overflow: visible; }
+.detail { padding: 16px 18px 18px; border-top: 1px solid var(--rule); display: grid; gap: 8px; min-height: 132px; align-content: start; }
+.detail h3 { font-size: 16px; }
+.detail p { margin: 0; max-width: 78ch; }
+.detail .hint { color: var(--ink-3); }
+.refs { display: flex; flex-wrap: wrap; gap: 6px; }
+.refs code { font-size: 12px; color: var(--ink-2); }
+.bl { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 13px; color: var(--ink-3); }
+
+/* controls */
+button { font: inherit; color: inherit; }
+.btn {
+  font: 500 13px/1.2 var(--sans); padding: 7px 12px; border-radius: 7px;
+  border: 1px solid var(--rule-strong); background: var(--surface); color: var(--ink); cursor: pointer;
+}
+.btn:hover { border-color: var(--ink-2); }
+.btn[aria-pressed="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+.chip { font: 600 11.5px/1 var(--mono); padding: 5px 8px; border-radius: 999px; }
+input[type="range"] { width: 100%; accent-color: var(--accent-line); margin: 0; }
+input[type="checkbox"], input[type="radio"] { accent-color: var(--accent-line); }
+.seg { display: inline-flex; border: 1px solid var(--rule-strong); border-radius: 7px; overflow: hidden; }
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.seg label { padding: 5px 10px; cursor: pointer; font: 500 12.5px var(--mono); color: var(--ink-2); border-left: 1px solid var(--rule-strong); }
+.seg label:first-of-type { border-left: 0; }
+.seg input:checked + label { background: var(--ink); color: var(--surface); }
+.seg input:focus-visible + label { outline: 2px solid var(--focus); outline-offset: -2px; }
+
+/* config aside */
+.config { background: var(--surface); border: 1px solid var(--rule); border-radius: 10px; font-size: 14px; align-self: start; }
+.cfg-head { display: flex; justify-content: space-between; align-items: baseline; padding: 12px 16px; border-bottom: 1px solid var(--rule); font: 600 13px var(--mono); }
+.cfg-head .cfg-hint { font-weight: 500; color: var(--accent); }
+.cfg-intro { margin: 0; padding: 10px 16px 0; color: var(--ink-3); font-size: 13px; }
+.toml { padding: 4px 16px 12px; display: grid; gap: 2px; font: 12.5px/1.45 var(--mono); }
+.toml .sect { color: var(--ink-3); margin-top: 10px; }
+.kv { display: grid; gap: 7px; padding: 7px 8px; margin-inline: -8px; border-radius: 6px; }
+.kv.changed { background: var(--accent-wash); }
+.kv .k { color: var(--ink); }
+.kv output { color: var(--accent); font-weight: 700; }
+.kv .def { color: var(--ink-3); font-size: 11px; margin-left: 4px; }
+.kv.changed .def::before { content: "● "; color: var(--accent-line); }
+.radios { display: grid; gap: 4px; }
+.radios label { display: flex; gap: 8px; align-items: baseline; cursor: pointer; color: var(--ink-2); overflow-wrap: anywhere; }
+.radios input { flex: none; transform: translateY(2px); }
+.lens { padding: 12px 16px; border-top: 1px solid var(--rule); display: grid; gap: 8px; }
+.lens-title { font: 600 12px var(--mono); color: var(--ink-3); }
+.lens-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.lens-say { margin: 0; font-size: 13px; color: var(--ink-2); min-height: 3em; }
+.cfg-foot { padding: 12px 16px 14px; border-top: 1px solid var(--rule); }
+
+/* §1 toolbar */
+.toolbar { display: flex; flex-wrap: wrap; gap: 10px 20px; align-items: center; padding: 12px 18px; border-bottom: 1px solid var(--rule); font-size: 13px; color: var(--ink-2); }
+.toolbar .tb-lab { font: 600 12px var(--mono); color: var(--ink-3); margin-right: 6px; }
+
+/* §2 request */
+.req-controls { display: grid; gap: 18px; padding: 16px 18px; }
+.presets { display: flex; flex-wrap: wrap; gap: 8px; }
+.rc-title { font: 600 12px var(--mono); color: var(--ink-3); margin-bottom: 8px; letter-spacing: .02em; }
+.rc-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+fieldset { border: 0; padding: 0; margin: 0; min-width: 0; display: grid; gap: 10px; }
+legend { padding: 0; font: 600 12px var(--mono); color: var(--ink-3); margin-bottom: 8px; }
+.check { display: flex; gap: 10px; align-items: baseline; font-size: 14px; cursor: pointer; }
+.check input { flex: none; transform: translateY(2px); }
+.check.disabled { color: var(--ink-3); cursor: default; }
+.slider { display: grid; gap: 4px; font-size: 14px; }
+.slider output { font: 700 13px var(--mono); color: var(--accent); }
+.small { font-size: 13px; color: var(--ink-3); margin: 0; }
+.verdict-row { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: baseline; margin: 22px 0 12px; }
+.verdict { font: 700 12px/1 var(--mono); letter-spacing: .06em; text-transform: uppercase; padding: 6px 10px; border-radius: 999px; }
+.verdict.fast { color: var(--ok); background: var(--ok-wash); }
+.verdict.slow { color: var(--accent); background: var(--accent-wash); }
+.verdict-why { color: var(--ink-2); font-size: 15px; }
+.tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: var(--rule); border: 1px solid var(--rule); border-radius: 10px; overflow: hidden; margin-bottom: 16px; }
+.tile { background: var(--surface); padding: 14px 16px; display: grid; gap: 2px; align-content: start; }
+.tile .num { font: 650 30px/1.1 var(--sans); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.tile.hot .num { color: var(--accent); }
+.tile .lab { font-size: 13.5px; color: var(--ink); }
+.tile .sub { font-size: 12px; color: var(--ink-3); }
+.stepbar { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; justify-content: space-between; }
+.stepbar .step-no { font: 600 12px var(--mono); color: var(--ink-3); }
+.stepbar .nav { display: flex; gap: 6px; }
+
+/* §3 sim */
+.sim-controls { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px 24px; padding: 16px 18px; border-bottom: 1px solid var(--rule); align-items: start; }
+.sim-buttons { display: flex; gap: 6px; flex-wrap: wrap; }
+.sim-out { padding: 16px 18px 18px; border-top: 1px solid var(--rule); display: grid; gap: 10px; }
+.bar-row { display: grid; grid-template-columns: 190px minmax(0, 1fr) 96px; gap: 12px; align-items: center; font-size: 14px; }
+.bar { height: 12px; background: var(--surface-2); border-radius: 6px; overflow: hidden; }
+.bar span { display: block; height: 100%; border-radius: 6px; background: var(--ink-3); transition: width .3s; }
+.bar.hot span { background: var(--accent-line); }
+.bar-val { font: 600 13px var(--mono); font-variant-numeric: tabular-nums; text-align: right; }
+.sim-say { margin: 4px 0 0; max-width: 78ch; color: var(--ink-2); }
+
+/* §5 bottlenecks + fixes */
+.bn-list { display: grid; border-top: 1px solid var(--rule); }
+.bn { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 4px 18px; padding: 20px 0; border-bottom: 1px solid var(--rule); }
+.bn-id { font: 700 22px/1.1 var(--mono); color: var(--accent); }
+.bn-head { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: baseline; }
+.sev { font: 600 11px/1 var(--mono); letter-spacing: .05em; text-transform: uppercase; color: var(--ink-2); border: 1px solid var(--rule-strong); padding: 4px 7px; border-radius: 999px; }
+.sev.top { color: var(--accent); border-color: var(--accent-line); background: var(--accent-wash); }
+.bn p { margin: 8px 0 0; max-width: 78ch; color: var(--ink-2); }
+.bn dl { display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 6px 14px; margin: 12px 0 0; font-size: 14px; }
+.bn dt { color: var(--ink-3); font: 600 12px/1.9 var(--mono); }
+.bn dd { margin: 0; }
+.bn ul { margin: 8px 0 0; padding-left: 20px; color: var(--ink-2); max-width: 78ch; }
+.bn .actions { margin-top: 12px; }
+.fix-wrap { overflow-x: auto; margin-top: 36px; }
+table.fixes { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 720px; }
+.fixes caption { text-align: left; font-weight: 650; font-size: 17px; padding-bottom: 10px; }
+.fixes th { text-align: left; font: 600 12px var(--mono); color: var(--ink-3); padding: 8px 10px; border-bottom: 1px solid var(--rule-strong); }
+.fixes td { padding: 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+.fixes td:first-child { font: 700 13px var(--mono); color: var(--accent); white-space: nowrap; }
+.fixes .what { font-weight: 600; }
+.fixes .why { color: var(--ink-2); font-size: 13.5px; margin-top: 2px; }
+.fixes .where code { display: inline-block; margin: 0 4px 4px 0; font-size: 12px; }
+.fixes tr.group td { font: 600 12px var(--mono); color: var(--ink-3); padding-top: 18px; background: none; }
+.fixes .btn { white-space: nowrap; }
+
+/* §6 confirm */
+ol.confirm { margin: 0; padding: 0; list-style: none; display: grid; gap: 0; border-top: 1px solid var(--rule); counter-reset: c; }
+ol.confirm li { counter-increment: c; display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 18px; padding: 16px 0; border-bottom: 1px solid var(--rule); }
+ol.confirm li::before { content: counter(c); font: 700 22px/1.1 var(--mono); color: var(--ink-3); }
+ol.confirm p { margin: 0; max-width: 78ch; }
+ol.confirm .then { margin-top: 6px; color: var(--ink-2); font-size: 14.5px; }
+footer { margin-top: 64px; padding-top: 18px; border-top: 1px solid var(--rule); font: 12.5px var(--mono); color: var(--ink-3); }
+
+@media (max-width: 860px) {
+  .short { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+  .rc-grid, .sim-controls { grid-template-columns: minmax(0, 1fr); }
+  .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .bar-row { grid-template-columns: minmax(0, 1fr) 80px; }
+  .bar-row .bar { grid-column: 1 / -1; grid-row: 2; }
+  .bn, ol.confirm li { grid-template-columns: minmax(0, 1fr); }
+  .bn dl { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* ---------- SVG ---------- */
+.dg text { fill: var(--ink); font-family: var(--sans); font-size: 12px; }
+.dg .t-b { font-weight: 650; }
+.dg .t-h { font-size: 14px; }
+.dg .t-m { fill: var(--ink-2); font-size: 11px; }
+.dg .t-s { fill: var(--ink-2); font-size: 10px; }
+.dg .t-code { font-family: var(--mono); font-size: 10.5px; fill: var(--ink-3); }
+.dg .t-cap { font-family: var(--mono); font-size: 10px; font-weight: 600; letter-spacing: .06em; fill: var(--ink-3); }
+.dg .t-tag { font-family: var(--mono); font-size: 9.5px; font-weight: 700; letter-spacing: .05em; fill: var(--accent); }
+.dg .t-id { font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--accent); }
+.dg .lbl, .dg .m-lbl {
+  font-size: 11px; fill: var(--ink-2);
+  paint-order: stroke; stroke: var(--surface); stroke-width: 4px; stroke-linejoin: round;
+}
+.dg .m-lbl { font-size: 11.5px; fill: var(--ink); }
+.box { fill: var(--surface); stroke: var(--rule-strong); stroke-width: 1.2; }
+.box-2 { fill: var(--surface-2); stroke: var(--rule); stroke-width: 1; }
+.box.hotbox { stroke: var(--accent-line); stroke-width: 1.8; }
+.hothead { fill: var(--accent-wash); stroke: none; }
+.grp { fill: none; stroke: var(--rule-strong); stroke-width: 1; stroke-dasharray: 4 4; }
+.cyl { fill: var(--surface); stroke: var(--rule-strong); stroke-width: 1.2; }
+.cyl-top { fill: var(--surface-2); stroke: var(--rule-strong); stroke-width: 1.2; }
+.pill { fill: var(--surface); stroke: var(--accent-line); stroke-width: 1.2; }
+.pill-t { font-family: var(--mono); font-size: 10.5px; font-weight: 600; fill: var(--accent); }
+.edge { fill: none; stroke: var(--ink-3); stroke-width: 1.4; }
+.edge.hot { stroke: var(--accent-line); stroke-width: 2.2; stroke-dasharray: 7 4; }
+.edge.blob { stroke-dasharray: 2 3; }
+.ah { fill: var(--ink-3); }
+.ah-2 { fill: var(--ink-2); }
+.ah-hot { fill: var(--accent-line); }
+.ah-ok { fill: var(--ok); }
+.slot { fill: var(--accent-fill); stroke: var(--accent-line); stroke-width: 1; }
+.node { cursor: pointer; }
+.node:focus { outline: none; }
+.node:hover .sh { stroke: var(--ink-2); }
+.node.selected .sh { stroke: var(--ink); stroke-width: 2.4; }
+.node:focus-visible .sh { stroke: var(--focus); stroke-width: 2.6; }
+@media (prefers-reduced-motion: no-preference) {
+  .edge.hot { animation: flow 1.1s linear infinite; }
+  @keyframes flow { to { stroke-dashoffset: -22; } }
+}
+
+/* modes */
+.only-inone, .only-external { display: none; }
+body[data-deploy="inone"] .only-inone { display: revert; }
+body[data-deploy="inone"] .only-cluster { display: none; }
+body[data-vector="external"] .only-external { display: revert; }
+body[data-vector="external"] .only-xvec { display: none; }
+body[data-deploy="inone"] .proc-cluster > * { opacity: .35; }
+body[data-deploy="inone"] .proc-cluster .sh { stroke-dasharray: 5 4; }
+body[data-deploy="cluster"] .proc-inone .sh { stroke-dasharray: 4 3; fill: none; stroke: var(--rule-strong); }
+body[data-deploy="cluster"] .proc-inone text:not(.t-tag):not(.t-id) { fill: var(--ink-3); }
+body[data-vector="xvec"] .vec-ext > * { opacity: .55; }
+body[data-vector="xvec"] .vec-ext .sh { stroke-dasharray: 4 3; }
+body[data-vector="external"] .xvec-int > * { opacity: .38; }
+body[data-vector="external"] .xvec-int .sh { stroke-dasharray: 5 4; stroke: var(--rule-strong); }
+
+/* lens */
+[data-b] { transition: opacity .2s; }
+body:not([data-lens=""]) [data-b]:not(.lit) { opacity: .12; }
+
+/* sequence */
+.seq-head { fill: var(--surface-2); stroke: var(--rule-strong); stroke-width: 1; }
+.life { stroke: var(--rule-strong); stroke-width: 1; stroke-dasharray: 3 4; }
+.frame { fill: none; stroke: var(--rule-strong); stroke-width: 1; }
+.frame.hot { stroke: var(--accent-line); }
+.frame-tab { fill: var(--surface-2); stroke: var(--rule-strong); stroke-width: 1; }
+.frame.hot + .frame-tab { fill: var(--accent-wash); stroke: var(--accent-line); }
+.frame-lbl { font-family: var(--mono); font-size: 10.5px; font-weight: 600; fill: var(--ink-2); }
+.m-line { stroke: var(--ink-2); stroke-width: 1.4; fill: none; }
+.row.ret .m-line { stroke-dasharray: 5 4; }
+.row.hot .m-line { stroke: var(--accent-line); stroke-width: 2; }
+.row.ok .m-line { stroke: var(--ok); stroke-width: 2; }
+.row.opt .m-line { stroke-dasharray: 2 4; stroke: var(--ink-3); }
+.row.opt .m-lbl { fill: var(--ink-3); }
+.note-box { fill: var(--surface-2); stroke: var(--rule); stroke-width: 1; }
+.no { fill: var(--surface); stroke: var(--rule-strong); stroke-width: 1; }
+.dg .no-t { font-family: var(--mono); font-size: 10px; font-weight: 700; fill: var(--ink-2); }
+.hit { fill: transparent; cursor: pointer; }
+.hit:hover { fill: var(--surface-2); }
+.hit.current { fill: var(--accent-wash); }
+.row { cursor: pointer; }
+.row:focus { outline: none; }
+.row:focus-visible .no { stroke: var(--focus); stroke-width: 2.5; }
+.row.current .no { fill: var(--ink); stroke: var(--ink); }
+.dg .row.current .no-t { fill: var(--surface); }
+.dg .row.current .m-lbl { font-weight: 700; }
+
+/* sim */
+.sq { stroke-width: 1; }
+.sq-you { fill: var(--accent-line); stroke: var(--accent-line); }
+.sq-other { fill: var(--accent-wash); stroke: var(--accent-line); }
+.sq-worker { fill: var(--ink-3); stroke: var(--ink-3); }
+.sq-idle { fill: none; stroke: var(--rule-strong); stroke-dasharray: 2 2; }
+.track { fill: var(--surface-2); }
+.prog { fill: var(--accent-line); }
+</style>
+</head>
+<body data-lens="" data-vector="xvec" data-deploy="cluster">
+<div class="page">
+
+<header>
+  <div class="kicker">Gorse backend · latency map</div>
+  <h1>Why <code>/api/recommend</code> takes over 3&nbsp;s</h1>
+  <p class="lede">A deployment with about 50k users and 200k videos sees <code>GET /api/recommend/{user}</code> take longer than 3 seconds. This page turns the code reading in <a href="performance-analysis.md">performance-analysis.md</a> into diagrams you can click through. Nothing here was measured. The counts follow the code paths, and the queue in §3 is a simplified model.</p>
+  <div class="meta">source: docs/performance-analysis.md · code read at master@44791ec</div>
+  <ol class="short">
+    <li><strong>A warm user costs two store reads.</strong> A user without a usable cached list falls back to item-to-item. It handles one positive item at a time, up to <code>context_size</code> = 100, and each item costs two gRPC hops into the master.</li>
+    <li><strong>Every vector query waits for one slot.</strong> With the default <code>xvec://</code> store, a limiter sized by <code>master.n_jobs</code> = 1 gates every query. Every server, every worker and the master itself share that slot.</li>
+    <li><strong>The worker that fills the cache can't keep up.</strong> It runs with <code>--jobs 1</code>, scans the whole user table every minute, and skips users who have no CF embedding. Those users stay on the slow path.</li>
+  </ol>
+  <nav class="toc" aria-label="Sections">
+    <a href="#s1"><span>§1</span>System map</a>
+    <a href="#s2"><span>§2</span>One request</a>
+    <a href="#s3"><span>§3</span>The single slot</a>
+    <a href="#s4"><span>§4</span>Offline pipeline</a>
+    <a href="#s5"><span>§5</span>Bottlenecks &amp; fixes</a>
+    <a href="#s6"><span>§6</span>Confirm it</a>
+  </nav>
+</header>
+
+<div class="layout">
+<main>
+
+<!-- ============ §1 MAP ============ -->
+<section id="s1" aria-labelledby="s1-h">
+  <h2 id="s1-h"><span class="sec-no">§1</span>System map</h2>
+  <p class="sec-intro">Three process types and five stores. Click any box to see what it does and where it lives in the code. To see which arrows move, change <code>vector_store</code> or the deployment in the config panel.</p>
+  <figure class="fig">
+    <div class="dg-wrap">
+<svg id="map" class="dg" viewBox="0 0 1010 620" role="group" aria-labelledby="map-title">
+<title id="map-title">Gorse component map: clients, server, worker, master and stores</title>
+<defs>
+  <marker id="map-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah" d="M0,1 L10,5 L0,9 z"/></marker>
+  <marker id="map-ah-hot" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="ah-hot" d="M0,1 L10,5 L0,9 z"/></marker>
+</defs>
+
+<!-- edges -->
+<g data-b="B1 B3 B5" class="only-cluster"><path class="edge" d="M150,86 H178" marker-end="url(#map-ah)"/></g>
+<g data-b="B4" class="only-inone">
+  <path class="edge" d="M85,58 V20 H700 V38" marker-end="url(#map-ah)"/>
+  <text class="lbl" x="392" y="14" text-anchor="middle">REST /api/* is served by the master itself</text>
+</g>
+<g data-b="" class="only-cluster">
+  <path class="edge" d="M430,62 H568" marker-end="url(#map-ah)"/>
+  <text class="lbl" x="500" y="55" text-anchor="middle">GetMeta · 10 s</text>
+</g>
+<g data-b="B1" class="only-cluster only-xvec">
+  <path class="edge hot" d="M430,112 H500 V214 H568" marker-end="url(#map-ah-hot)"/>
+  <rect class="pill" x="458" y="153" width="84" height="20" rx="10"/>
+  <text class="pill-t" x="500" y="167" text-anchor="middle">vector RPC</text>
+</g>
+<g data-b="B1 B3 B5" class="only-cluster">
+  <path class="edge" d="M305,132 V226" marker-end="url(#map-ah)"/>
+  <text class="lbl only-xvec" x="313" y="184">direct</text>
+  <text class="lbl only-external" x="313" y="184">direct, incl. vectors</text>
+</g>
+<g data-b="B2" class="only-cluster">
+  <path class="edge" d="M305,470 V390" marker-end="url(#map-ah)"/>
+  <text class="lbl only-xvec" x="313" y="434">direct</text>
+  <text class="lbl only-external" x="313" y="434">direct, incl. vectors</text>
+</g>
+<g data-b="B1" class="only-cluster only-xvec">
+  <path class="edge hot" d="M430,484 H520 V228 H568" marker-end="url(#map-ah-hot)"/>
+  <rect class="pill" x="478" y="370" width="84" height="20" rx="10"/>
+  <text class="pill-t" x="520" y="384" text-anchor="middle">vector RPC</text>
+</g>
+<g data-b="B2" class="only-cluster">
+  <path class="edge" d="M430,506 H568" marker-end="url(#map-ah)"/>
+  <text class="lbl" x="500" y="524" text-anchor="middle">GetMeta · blob pull</text>
+</g>
+<g data-b="B4 B6">
+  <path class="edge" d="M640,540 V600 H160 V320 H178" marker-end="url(#map-ah)"/>
+  <text class="lbl" x="400" y="594" text-anchor="middle">master's own connections: full dataset loads, list writes</text>
+</g>
+<g data-b="B1 B4 B6" class="only-xvec">
+  <path class="edge" d="M700,180 V202" marker-end="url(#map-ah)"/>
+  <text class="t-s" x="708" y="196">writes + Optimize</text>
+</g>
+<g data-b="B2"><path class="edge" d="M830,130 H868" marker-end="url(#map-ah)"/></g>
+<g data-b=""><path class="edge" d="M830,230 H868" marker-end="url(#map-ah)"/></g>
+<g data-b=""><path class="edge" d="M870,470 H832" marker-end="url(#map-ah)"/></g>
+
+<!-- clients -->
+<g class="node" data-node="clients" data-b="B1 B3 B5" tabindex="0" role="button" aria-label="API clients: details">
+  <rect class="box sh" x="20" y="58" width="130" height="56" rx="6"/>
+  <text class="t-b" x="85" y="81" text-anchor="middle">API clients</text>
+  <text class="t-code" x="85" y="99" text-anchor="middle">GET /api/recommend</text>
+</g>
+
+<!-- server -->
+<g class="node proc-cluster" data-node="server" data-b="B1 B3 B5" tabindex="0" role="button" aria-label="Server: details">
+  <rect class="box sh" x="180" y="40" width="250" height="92" rx="8"/>
+  <text class="t-b t-h" x="196" y="64">Server(s)</text>
+  <text class="t-m" x="196" y="83">gorse-server · REST API</text>
+  <text class="t-m" x="196" y="100">online recommendation</text>
+  <text class="t-code" x="196" y="120">server/rest.go</text>
+</g>
+<text class="t-tag only-inone" x="418" y="64" text-anchor="end">INSIDE MASTER</text>
+
+<!-- shared stores -->
+<g data-b="B2 B3 B5 B6">
+  <rect class="grp" x="180" y="228" width="250" height="160" rx="10"/>
+  <text class="t-cap" x="194" y="248">SHARED STORES</text>
+</g>
+<g class="node" data-node="data" data-b="B3 B5 B6" tabindex="0" role="button" aria-label="Data store: details">
+  <path class="cyl sh" d="M190,270 V354 A36,8 0 0 0 262,354 V270 Z"/>
+  <ellipse class="cyl-top sh" cx="226" cy="270" rx="36" ry="8"/>
+  <text class="t-b" x="226" y="304" text-anchor="middle">Data</text>
+  <text class="t-s" x="226" y="321" text-anchor="middle">users, items</text>
+  <text class="t-s" x="226" y="335" text-anchor="middle">feedback</text>
+</g>
+<g class="node" data-node="cache" data-b="B2 B6" tabindex="0" role="button" aria-label="Cache store: details">
+  <path class="cyl sh" d="M269,270 V354 A36,8 0 0 0 341,354 V270 Z"/>
+  <ellipse class="cyl-top sh" cx="305" cy="270" rx="36" ry="8"/>
+  <text class="t-b" x="305" y="304" text-anchor="middle">Cache</text>
+  <text class="t-s" x="305" y="321" text-anchor="middle">score lists</text>
+  <text class="t-s" x="305" y="335" text-anchor="middle">key/values</text>
+</g>
+<g class="node vec-ext" data-node="vector" data-b="B1" tabindex="0" role="button" aria-label="External vector store: details">
+  <path class="cyl sh" d="M348,270 V354 A36,8 0 0 0 420,354 V270 Z"/>
+  <ellipse class="cyl-top sh" cx="384" cy="270" rx="36" ry="8"/>
+  <text class="t-b" x="384" y="304" text-anchor="middle">Vector</text>
+  <text class="t-s only-xvec" x="384" y="321" text-anchor="middle">empty slot:</text>
+  <text class="t-s only-xvec" x="384" y="335" text-anchor="middle">xvec in master</text>
+  <text class="t-s only-external" x="384" y="321" text-anchor="middle">external</text>
+  <text class="t-s only-external" x="384" y="335" text-anchor="middle">Qdrant etc.</text>
+</g>
+
+<!-- worker -->
+<g class="node proc-cluster" data-node="worker" data-b="B1 B2" tabindex="0" role="button" aria-label="Worker: details">
+  <rect class="box sh" x="180" y="470" width="250" height="92" rx="8"/>
+  <text class="t-b t-h" x="196" y="494">Worker(s)</text>
+  <text class="t-m" x="196" y="513">gorse-worker · offline pass</text>
+  <text class="t-m" x="196" y="530" id="map-wjobs">--jobs 1 · --interval 1m</text>
+  <text class="t-code" x="196" y="550">worker/pipeline.go</text>
+</g>
+<text class="t-tag only-inone" x="418" y="494" text-anchor="end">INSIDE MASTER</text>
+
+<!-- master -->
+<g class="node" data-node="master" data-b="B1 B2 B4 B6" tabindex="0" role="button" aria-label="Master: details">
+  <rect class="box sh" x="570" y="40" width="260" height="500" rx="10"/>
+  <text class="t-b t-h" x="586" y="65">Master</text>
+  <text class="t-code" x="586" y="83">gorse-master · master/master.go</text>
+</g>
+<g class="node" data-node="taskloop" data-b="B2 B4 B6" tabindex="0" role="button" aria-label="Master task loop: details">
+  <rect class="box-2 sh" x="586" y="96" width="228" height="84" rx="6"/>
+  <text class="t-b" x="598" y="116">Task loop · every 60 min</text>
+  <text class="t-m" x="598" y="134">load ALL users, items, feedback</text>
+  <text class="t-m" x="598" y="150">rebuild item + user vectors</text>
+  <text class="t-m" x="598" y="166">train MF (100 epochs) + FM</text>
+</g>
+<g class="node xvec-int" data-node="xvec" data-b="B1 B4 B6" tabindex="0" role="button" aria-label="xvec embedded vector store and gRPC proxy: details">
+  <rect class="box hotbox sh" x="586" y="204" width="228" height="172" rx="6"/>
+  <path class="hothead" d="M587,232 V210 Q587,205 592,205 H808 Q813,205 813,210 V232 Z"/>
+  <text class="t-b" x="598" y="223">gRPC vector proxy</text>
+  <text class="t-s only-xvec" x="802" y="223" text-anchor="end">← servers, workers</text>
+  <text class="t-s only-external" x="802" y="223" text-anchor="end">idle</text>
+  <text class="t-b" x="598" y="253">xvec · embedded vector store</text>
+  <text class="t-m" x="598" y="271">HNSW dense · brute-force sparse</text>
+  <text class="t-m" x="598" y="288">every query returns full vectors</text>
+  <g class="only-xvec">
+    <text class="t-cap" x="598" y="314">RUNTIME LIMITER</text>
+    <text class="t-code" x="598" y="332" id="map-limit">QueryConcurrency = n_jobs = 1</text>
+    <g id="map-slots"></g>
+  </g>
+  <g class="only-external">
+    <text class="t-m" x="598" y="320">not used: vector_store points</text>
+    <text class="t-m" x="598" y="337">at an external database</text>
+  </g>
+</g>
+<g class="node proc-inone" data-node="rest" data-b="B4" tabindex="0" role="button" aria-label="REST API inside master: details">
+  <rect class="box-2 sh" x="586" y="390" width="228" height="34" rx="6"/>
+  <text class="t-m" x="598" y="411">REST API (embedded)</text>
+  <text class="t-tag" x="802" y="411" text-anchor="end">IN-ONE</text>
+</g>
+<g class="node proc-inone" data-node="inline" data-b="B2 B4" tabindex="0" role="button" aria-label="Inline worker pass: details">
+  <rect class="box-2 sh" x="586" y="432" width="228" height="34" rx="6"/>
+  <text class="t-m" x="598" y="453">inline worker pass</text>
+  <text class="t-tag" x="802" y="453" text-anchor="end">IN-ONE</text>
+</g>
+<g class="node" data-node="grpc" data-b="B2" tabindex="0" role="button" aria-label="Master gRPC endpoint: details">
+  <rect class="box-2 sh" x="586" y="488" width="228" height="34" rx="6"/>
+  <text class="t-m" x="598" y="509">gRPC: GetMeta · blob serving</text>
+</g>
+
+<!-- right column -->
+<g class="node" data-node="blob" data-b="B2" tabindex="0" role="button" aria-label="Blob store: details">
+  <rect class="box sh" x="870" y="96" width="130" height="68" rx="6"/>
+  <text class="t-b" x="882" y="118">Blob store</text>
+  <text class="t-s" x="882" y="135">CF user embeddings</text>
+  <text class="t-s" x="882" y="150">FM (CTR) model</text>
+</g>
+<g class="node" data-node="meta" data-b="" tabindex="0" role="button" aria-label="meta.sqlite3: details">
+  <rect class="box sh" x="870" y="200" width="130" height="60" rx="6"/>
+  <text class="t-b" x="882" y="222">meta.sqlite3</text>
+  <text class="t-s" x="882" y="240">nodes · model ids</text>
+</g>
+<g class="node" data-node="dashboard" data-b="" tabindex="0" role="button" aria-label="Dashboard: details">
+  <rect class="box sh" x="870" y="442" width="130" height="56" rx="6"/>
+  <text class="t-b" x="882" y="465">Dashboard</text>
+  <text class="t-s" x="882" y="482">admin UI over REST</text>
+</g>
+</svg>
+    </div>
+    <figcaption>
+      <div class="legend">
+        <span><svg viewBox="0 0 34 10" aria-hidden="true"><line x1="0" y1="5" x2="34" y2="5" class="edge"/></svg>direct connection</span>
+        <span><svg viewBox="0 0 34 10" aria-hidden="true"><line x1="0" y1="5" x2="34" y2="5" class="edge hot"/></svg>vector call proxied through the master (xvec only)</span>
+        <span><svg viewBox="0 0 34 10" aria-hidden="true"><rect x="1" y="1" width="32" height="8" rx="2" class="box sh" style="stroke-dasharray:4 3"/></svg>inactive in this configuration</span>
+      </div>
+    </figcaption>
+    <div class="detail" id="map-detail" aria-live="polite"></div>
+  </figure>
+</section>
+
+<!-- ============ §2 REQUEST ============ -->
+<section id="s2" aria-labelledby="s2-h">
+  <h2 id="s2-h"><span class="sec-no">§2</span>One request, step by step</h2>
+  <p class="sec-intro"><code>GET /api/recommend/{user}</code> has a fast path of two calls and a fallback that can make hundreds. Choose who is asking, and the sequence and counts update with your choices and the config panel. The counts follow the code paths; they were not measured.</p>
+
+  <div class="fig req-controls">
+    <div>
+      <div class="rc-title">WHO IS ASKING?</div>
+      <div class="presets">
+        <button class="btn" data-preset="warm" aria-pressed="false">Warm user</button>
+        <button class="btn" data-preset="heavy" aria-pressed="false">Heavy user, no cached list</button>
+        <button class="btn" data-preset="newbie" aria-pressed="false">New user, 12 plays</button>
+        <button class="btn" data-preset="category" aria-pressed="false">Warm user + narrow category</button>
+      </div>
+    </div>
+    <div class="rc-grid">
+      <fieldset>
+        <legend>WHAT THE CACHE HOLDS</legend>
+        <label class="check" id="lab-entry"><input type="checkbox" id="rq-entry"> User has a <code>cache.Recommend</code> list</label>
+        <label class="check" id="lab-enough"><input type="checkbox" id="rq-enough"> At least n + offset cached items remain after removing already-seen items</label>
+        <label class="check" id="lab-cat"><input type="checkbox" id="rq-cat"> The category filter leaves at least n items</label>
+        <p class="small">If <code>recommend.ranker.type = "none"</code>, step 4 is replaced: <code>ranker.recommenders</code> runs online on every request (<code>logics/recommend.go:121</code>).</p>
+      </fieldset>
+      <fieldset>
+        <legend>THE REQUEST</legend>
+        <label class="slider" for="rq-pos">Positive feedback items in history: <output id="out-pos">400</output>
+          <input type="range" id="rq-pos" min="0" max="500" step="1"></label>
+        <label class="slider" for="rq-n">Items requested, n = <output id="out-n">10</output>
+          <input type="range" id="rq-n" min="1" max="50" step="1"></label>
+        <label class="check"><input type="checkbox" id="rq-wb"> <code>write-back-type</code> is set</label>
+      </fieldset>
+    </div>
+  </div>
+
+  <div class="verdict-row" aria-live="polite">
+    <span class="verdict" id="verdict"></span>
+    <span class="verdict-why" id="verdict-why"></span>
+  </div>
+  <div class="tiles" id="tiles"></div>
+
+  <figure class="fig">
+    <div class="dg-wrap">
+      <svg id="seq" class="dg" viewBox="0 0 1000 600" role="group" aria-label="Sequence diagram of GET /api/recommend"></svg>
+    </div>
+    <div class="detail" id="step-detail" aria-live="polite"></div>
+  </figure>
+</section>
+
+<!-- ============ §3 SLOT ============ -->
+<section id="s3" aria-labelledby="s3-h">
+  <h2 id="s3-h"><span class="sec-no">§3</span>One slot for the whole cluster</h2>
+  <p class="sec-intro">Every <code>QueryVectors</code> that reaches xvec has to take a runtime slot first. There are <code>master.n_jobs</code> slots, 1 by default. Your request, other users' fallbacks and the worker's pass all wait in line for them. This is a simplified model: each query holds a slot for one tick, and the queue is first in, first out. It shows the shape of the contention, not milliseconds. It uses <code>context_size</code> from the panel and the positive-item count from §2.</p>
+  <div class="fig">
+    <div class="sim-controls">
+      <div style="display:grid; gap:10px">
+        <label class="check"><input type="checkbox" id="sim-worker"> A worker pass is running</label>
+        <label class="check"><input type="checkbox" id="sim-par"> Parallelize online item-to-item: 8 queries in flight (fix K2)</label>
+      </div>
+      <label class="slider" for="sim-others">Other users in fallback at the same time: <output id="out-others">3</output>
+        <input type="range" id="sim-others" min="0" max="20" step="1"></label>
+      <div class="sim-buttons">
+        <button class="btn" id="sim-play">Play</button>
+        <button class="btn" id="sim-step">Step</button>
+        <button class="btn" id="sim-reset">Reset</button>
+      </div>
+    </div>
+    <div class="dg-wrap">
+<svg id="sim" class="dg" viewBox="0 0 1000 250" role="img" aria-label="Queue model: request sources feed a FIFO queue in front of the xvec limiter slots">
+<defs>
+  <marker id="sim-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah" d="M0,1 L10,5 L0,9 z"/></marker>
+</defs>
+<path class="edge" d="M240,52 C256,52 254,112 268,112" marker-end="url(#sim-ah)"/>
+<path class="edge" d="M240,112 H268" marker-end="url(#sim-ah)"/>
+<path class="edge" d="M240,172 C256,172 254,112 268,112" marker-end="url(#sim-ah)"/>
+<path class="edge" d="M710,112 H738" marker-end="url(#sim-ah)"/>
+<path class="edge" d="M860,112 H888" marker-end="url(#sim-ah)"/>
+
+<rect class="box" x="20" y="30" width="220" height="44" rx="6"/>
+<rect class="sq sq-you" x="32" y="45" width="14" height="14" rx="3"/>
+<text class="t-b" x="56" y="49">Your request</text>
+<text class="t-s" x="56" y="65" id="sim-you-sub"></text>
+
+<rect class="box" x="20" y="90" width="220" height="44" rx="6"/>
+<rect class="sq sq-other" x="32" y="105" width="14" height="14" rx="3"/>
+<text class="t-b" x="56" y="109" id="sim-oth-title"></text>
+<text class="t-s" x="56" y="125">one query in flight each</text>
+
+<rect class="box" x="20" y="150" width="220" height="44" rx="6"/>
+<rect class="sq sq-worker" x="32" y="165" width="14" height="14" rx="3"/>
+<text class="t-b" x="56" y="169" id="sim-wk-title"></text>
+<text class="t-s" x="56" y="185" id="sim-wk-sub"></text>
+
+<text class="t-cap" x="270" y="84" id="sim-q-label">FIFO QUEUE</text>
+<rect class="grp" x="270" y="92" width="440" height="40" rx="6"/>
+<g id="sim-queue"></g>
+
+<rect class="box hotbox" x="740" y="30" width="120" height="172" rx="6"/>
+<text class="t-cap" x="800" y="22" text-anchor="middle" id="sim-lim-cap">LIMITER</text>
+<g id="sim-slots"></g>
+<text class="t-code" x="800" y="194" text-anchor="middle" id="sim-slot-label"></text>
+
+<rect class="box" x="890" y="82" width="96" height="60" rx="6"/>
+<text class="t-b" x="938" y="108" text-anchor="middle">xvec</text>
+<text class="t-s" x="938" y="126" text-anchor="middle" id="sim-x-sub">in master</text>
+
+<rect class="track" x="20" y="226" width="960" height="10" rx="5"/>
+<rect class="prog" x="20" y="226" width="0" height="10" rx="5" id="sim-prog"/>
+<text class="t-s" x="20" y="218" id="sim-tick"></text>
+</svg>
+    </div>
+    <div class="sim-out" aria-live="polite">
+      <div class="bar-row"><span>With these settings</span><div class="bar hot"><span id="bar-t"></span></div><span class="bar-val" id="val-t"></span></div>
+      <div class="bar-row"><span>Same request, empty queue</span><div class="bar"><span id="bar-i"></span></div><span class="bar-val" id="val-i"></span></div>
+      <p class="sim-say" id="sim-say"></p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ §4 PIPELINE ============ -->
+<section id="s4" aria-labelledby="s4-h">
+  <h2 id="s4-h"><span class="sec-no">§4</span>Offline pipeline</h2>
+  <p class="sec-intro">The master retrains every 60 minutes and publishes vectors and model blobs. Workers turn those into a <code>cache.Recommend</code> list for each user. Users the worker skips, or hasn't reached yet, have no list, so their requests take the fallback in §2. Click a stage for details.</p>
+  <figure class="fig">
+    <div class="dg-wrap">
+<svg id="pipe" class="dg" viewBox="0 0 1010 740" role="group" aria-labelledby="pipe-title">
+<title id="pipe-title">Master task loop and worker per-user pass, linked through vector collections and the blob store</title>
+<defs>
+  <marker id="pipe-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah" d="M0,1 L10,5 L0,9 z"/></marker>
+  <marker id="pipe-ah-hot" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="ah-hot" d="M0,1 L10,5 L0,9 z"/></marker>
+</defs>
+
+<text class="t-b t-h" x="20" y="26">Master · RunTasksLoop</text>
+<text class="t-m" x="20" y="44">every min(cf.fit_period, ranker.fit_period) = 60 min</text>
+<g class="only-cluster">
+  <text class="t-b t-h" x="620" y="26">Worker · per-user pass</text>
+  <text class="t-m" x="620" y="44">every --interval (1 min), or after a model pull</text>
+</g>
+<g class="only-inone">
+  <text class="t-b t-h" x="620" y="26">Inline pass inside L6 (gorse-in-one)</text>
+  <text class="t-m" x="620" y="44">same stages, Jobs = master.n_jobs, same process as the API</text>
+</g>
+
+<!-- chain arrows -->
+<g class="chain">
+  <path class="edge" d="M200,116 V124" marker-end="url(#pipe-ah)"/>
+  <path class="edge" d="M200,178 V186" marker-end="url(#pipe-ah)"/>
+  <path class="edge" d="M200,240 V248" marker-end="url(#pipe-ah)"/>
+  <path class="edge" d="M200,302 V310" marker-end="url(#pipe-ah)"/>
+  <path class="edge" d="M200,364 V372" marker-end="url(#pipe-ah)"/>
+  <path class="edge" d="M200,426 V434" marker-end="url(#pipe-ah)"/>
+  <path class="edge" d="M200,488 V496" marker-end="url(#pipe-ah)"/>
+  <path class="edge" d="M20,524 H8 V90 H18" marker-end="url(#pipe-ah)"/>
+  <path class="edge" d="M800,116 V124" marker-end="url(#pipe-ah)"/>
+  <path class="edge" d="M800,178 V186" marker-end="url(#pipe-ah)"/>
+  <path class="edge" d="M800,240 V248" marker-end="url(#pipe-ah)"/>
+  <path class="edge" d="M800,302 V310" marker-end="url(#pipe-ah)"/>
+  <path class="edge" d="M800,364 V372" marker-end="url(#pipe-ah)"/>
+  <path class="edge" d="M800,426 V434" marker-end="url(#pipe-ah)"/>
+  <path class="edge" d="M800,488 V496" marker-end="url(#pipe-ah)"/>
+  <path class="edge" d="M800,550 V558" marker-end="url(#pipe-ah)"/>
+</g>
+
+<!-- producer / consumer connectors -->
+<g data-b="B6"><path class="edge" d="M380,152 C405,152 405,172 428,172" marker-end="url(#pipe-ah)"/></g>
+<g data-b="B6"><path class="edge" d="M380,214 C405,214 405,196 428,196" marker-end="url(#pipe-ah)"/></g>
+<g data-b="B2"><path class="edge" d="M380,270 C405,270 405,228 428,228" marker-end="url(#pipe-ah)"/></g>
+<g data-b="B2"><path class="edge blob" d="M380,282 C405,282 405,378 428,378" marker-end="url(#pipe-ah)"/></g>
+<g data-b=""><path class="edge blob" d="M380,338 C405,338 405,404 428,404" marker-end="url(#pipe-ah)"/></g>
+<g data-b=""><path class="edge" d="M572,190 C596,190 596,338 618,338" marker-end="url(#pipe-ah)"/></g>
+<g data-b="B1"><path class="edge" d="M572,214 C596,214 596,400 618,400" marker-end="url(#pipe-ah)"/></g>
+<g data-b="B2"><path class="edge blob" d="M572,380 C596,380 596,276 618,276" marker-end="url(#pipe-ah)"/></g>
+<g data-b=""><path class="edge blob" d="M572,420 C596,420 596,524 618,524" marker-end="url(#pipe-ah)"/></g>
+
+<!-- skip route + output -->
+<g data-b="B1 B2">
+  <path class="edge hot" d="M980,214 H996 V690 H982" marker-end="url(#pipe-ah-hot)"/>
+  <path class="edge hot" d="M980,276 H996"/>
+</g>
+<g data-b=""><path class="edge" d="M705,612 V648" marker-end="url(#pipe-ah)"/></g>
+
+<!-- gutter stores -->
+<g class="node" data-node="vecbox" data-b="B1 B6" tabindex="0" role="button" aria-label="Vector collections: details">
+  <rect class="box sh" x="430" y="150" width="140" height="100" rx="6"/>
+  <text class="t-b" x="500" y="174" text-anchor="middle">Vector collections</text>
+  <text class="t-s" x="500" y="192" text-anchor="middle">item · user · CF items</text>
+  <text class="t-s only-xvec" x="500" y="212" text-anchor="middle">xvec, inside master</text>
+  <text class="t-s only-xvec" x="500" y="228" text-anchor="middle">workers via gRPC proxy</text>
+  <text class="t-s only-external" x="500" y="212" text-anchor="middle">external store</text>
+  <text class="t-s only-external" x="500" y="228" text-anchor="middle">workers connect directly</text>
+</g>
+<g class="node" data-node="blobbox" data-b="B2" tabindex="0" role="button" aria-label="Blob store: details">
+  <rect class="box sh" x="430" y="356" width="140" height="96" rx="6"/>
+  <text class="t-b" x="500" y="380" text-anchor="middle">Blob store</text>
+  <text class="t-s" x="500" y="398" text-anchor="middle">CF user embeddings</text>
+  <text class="t-s" x="500" y="414" text-anchor="middle">FM (CTR) model</text>
+  <text class="t-s" x="500" y="434" text-anchor="middle">served via master gRPC</text>
+</g>
+
+<!-- master stages -->
+<g class="node" data-node="L1" data-b="B4 B6" tabindex="0" role="button" aria-label="L1 loadDataset">
+  <rect class="box sh" x="20" y="64" width="360" height="52" rx="6"/>
+  <text class="t-id" x="32" y="85">L1</text><text class="t-b" x="60" y="85">loadDataset</text>
+  <text class="t-m" x="60" y="103">ALL users, ALL items, 3 feedback scans → RAM</text>
+  <text class="t-tag" x="368" y="85" text-anchor="end">FULL SCAN</text>
+</g>
+<g class="node" data-node="L2" data-b="B6" tabindex="0" role="button" aria-label="L2 updateUserToUser">
+  <rect class="box sh" x="20" y="126" width="360" height="52" rx="6"/>
+  <text class="t-id" x="32" y="147">L2</text><text class="t-b" x="60" y="147">updateUserToUser</text>
+  <text class="t-m" x="60" y="165">user vectors for ALL users, write + Optimize</text>
+  <text class="t-tag" x="368" y="147" text-anchor="end">REWRITE</text>
+</g>
+<g class="node" data-node="L3" data-b="B6" tabindex="0" role="button" aria-label="L3 updateItemToItem">
+  <rect class="box sh" x="20" y="188" width="360" height="52" rx="6"/>
+  <text class="t-id" x="32" y="209">L3</text><text class="t-b" x="60" y="209">updateItemToItem</text>
+  <text class="t-m" x="60" y="227">item vectors for ALL items, write + Optimize</text>
+  <text class="t-tag" x="368" y="209" text-anchor="end">REWRITE</text>
+</g>
+<g class="node" data-node="L4" data-b="B2" tabindex="0" role="button" aria-label="L4 trainCollaborativeFiltering">
+  <rect class="box sh" x="20" y="250" width="360" height="52" rx="6"/>
+  <text class="t-id" x="32" y="271">L4</text><text class="t-b" x="60" y="271">trainCollaborativeFiltering</text>
+  <text class="t-m" x="60" y="289">MF, 100 epochs → item vectors + user blob</text>
+</g>
+<g class="node" data-node="L5" data-b="" tabindex="0" role="button" aria-label="L5 trainClickThroughRatePrediction">
+  <rect class="box sh" x="20" y="312" width="360" height="52" rx="6"/>
+  <text class="t-id" x="32" y="333">L5</text><text class="t-b" x="60" y="333">trainClickThroughRatePrediction</text>
+  <text class="t-m" x="60" y="351">FM ranker → model blob</text>
+</g>
+<g class="node proc-inone" data-node="L6" data-b="B2 B4" tabindex="0" role="button" aria-label="L6 updateRecommend, gorse-in-one only">
+  <rect class="box sh" x="20" y="374" width="360" height="52" rx="6"/>
+  <text class="t-id" x="32" y="395">L6</text><text class="t-b" x="60" y="395">updateRecommend</text>
+  <text class="t-m" x="60" y="413">ALL users inline, Jobs = master.n_jobs</text>
+  <text class="t-tag" x="368" y="395" text-anchor="end">IN-ONE ONLY</text>
+</g>
+<g class="node" data-node="L7" data-b="B6" tabindex="0" role="button" aria-label="L7 collectGarbage">
+  <rect class="box sh" x="20" y="436" width="360" height="52" rx="6"/>
+  <text class="t-id" x="32" y="457">L7</text><text class="t-b" x="60" y="457">collectGarbage</text>
+  <text class="t-m" x="60" y="475">ScanScores over the entire cache store</text>
+  <text class="t-tag" x="368" y="457" text-anchor="end">FULL SCAN</text>
+</g>
+<g class="node" data-node="L8" data-b="" tabindex="0" role="button" aria-label="L8 optimize">
+  <rect class="box sh" x="20" y="498" width="360" height="52" rx="6"/>
+  <text class="t-id" x="32" y="519">L8</text><text class="t-b" x="60" y="519">optimize</text>
+  <text class="t-m" x="60" y="537">CF / CTR hyperparameter search</text>
+</g>
+
+<!-- worker stages -->
+<g class="node" data-node="W0" data-b="B2" tabindex="0" role="button" aria-label="W0 pullUsers">
+  <rect class="box sh" x="620" y="64" width="360" height="52" rx="6"/>
+  <text class="t-id" x="632" y="85">W0</text><text class="t-b" x="660" y="85">pullUsers</text>
+  <text class="t-m" x="660" y="103">stream the ENTIRE user table, keep owned users</text>
+  <text class="t-tag" x="968" y="85" text-anchor="end">FULL SCAN / MIN</text>
+</g>
+<g class="node" data-node="W1" data-b="B2" tabindex="0" role="button" aria-label="W1 parallel.Detachable">
+  <rect class="box sh" x="620" y="126" width="360" height="52" rx="6"/>
+  <text class="t-id" x="632" y="147">W1</text><text class="t-b" x="660" y="147">parallel.Detachable</text>
+  <text class="t-m" x="660" y="165" id="pipe-w1">one user per job · --jobs 1</text>
+</g>
+<g class="node" data-node="W2" data-b="B2" tabindex="0" role="button" aria-label="W2 freshness checks">
+  <rect class="box sh" x="620" y="188" width="360" height="52" rx="6"/>
+  <text class="t-id" x="632" y="209">W2</text><text class="t-b" x="660" y="209">freshness checks</text>
+  <text class="t-m" x="660" y="227">4–5 cache reads, incl. SearchScores(…, 0, -1)</text>
+  <text class="t-tag" x="968" y="209" text-anchor="end">MAY SKIP</text>
+</g>
+<g class="node" data-node="W3" data-b="B2 B3" tabindex="0" role="button" aria-label="W3 NewRecommender">
+  <rect class="box sh" x="620" y="250" width="360" height="52" rx="6"/>
+  <text class="t-id" x="632" y="271">W3</text><text class="t-b" x="660" y="271">NewRecommender</text>
+  <text class="t-m" x="660" y="289">ALL feedback; skip cold-start, no CF embedding</text>
+  <text class="t-tag" x="968" y="271" text-anchor="end">SKIPS USERS</text>
+</g>
+<g class="node" data-node="W4" data-b="" tabindex="0" role="button" aria-label="W4 collaborative filtering">
+  <rect class="box sh" x="620" y="312" width="360" height="52" rx="6"/>
+  <text class="t-id" x="632" y="333">W4</text><text class="t-b" x="660" y="333">collaborative filtering</text>
+  <text class="t-m" x="660" y="351">QueryVectors(topK = cache_size + |exclude|)</text>
+</g>
+<g class="node" data-node="W5" data-b="B1 B2" tabindex="0" role="button" aria-label="W5 RecommendSequential">
+  <rect class="box sh" x="620" y="374" width="360" height="52" rx="6"/>
+  <text class="t-id" x="632" y="395">W5</text><text class="t-b" x="660" y="395">RecommendSequential</text>
+  <text class="t-m" x="660" y="413">i2i: 2 vector RPC per item, uncapped; u2u ×100</text>
+  <text class="t-tag" x="968" y="395" text-anchor="end">UNCAPPED</text>
+</g>
+<g class="node" data-node="W6" data-b="" tabindex="0" role="button" aria-label="W6 BatchGetItems">
+  <rect class="box sh" x="620" y="436" width="360" height="52" rx="6"/>
+  <text class="t-id" x="632" y="457">W6</text><text class="t-b" x="660" y="457">BatchGetItems</text>
+  <text class="t-m" x="660" y="475">load item rows for every candidate</text>
+</g>
+<g class="node" data-node="W7" data-b="" tabindex="0" role="button" aria-label="W7 rank">
+  <rect class="box sh" x="620" y="498" width="360" height="52" rx="6"/>
+  <text class="t-id" x="632" y="519">W7</text><text class="t-b" x="660" y="519">rank</text>
+  <text class="t-m" x="660" y="537">fm BatchPredict / reranker / decision / none</text>
+</g>
+<g class="node" data-node="W8" data-b="" tabindex="0" role="button" aria-label="W8 write cache.Recommend">
+  <rect class="box sh" x="620" y="560" width="360" height="52" rx="6"/>
+  <text class="t-id" x="632" y="581">W8</text><text class="t-b" x="660" y="581">write cache.Recommend</text>
+  <text class="t-m" x="660" y="599">AddScores, DeleteScores, update time + digest</text>
+</g>
+
+<!-- sinks -->
+<g class="node" data-node="sinkA" data-b="" tabindex="0" role="button" aria-label="cache.Recommend output: details">
+  <rect class="box sh" x="620" y="650" width="170" height="70" rx="6" style="stroke:var(--ok);stroke-width:1.6"/>
+  <text class="t-b" x="634" y="675">cache.Recommend</text>
+  <text class="t-s" x="634" y="693">the server's fast path</text>
+  <text class="t-s" x="634" y="708">reads this list</text>
+</g>
+<g class="node" data-node="sinkB" data-b="B1 B2" tabindex="0" role="button" aria-label="Skipped users: details">
+  <rect class="box hotbox sh" x="810" y="650" width="172" height="70" rx="6"/>
+  <text class="t-b" x="824" y="675">No list for this user</text>
+  <text class="t-s" x="824" y="693">every request takes the</text>
+  <text class="t-s" x="824" y="708">online fallback (B1)</text>
+</g>
+</svg>
+    </div>
+    <figcaption>
+      <div class="legend">
+        <span><svg viewBox="0 0 34 10" aria-hidden="true"><line x1="0" y1="5" x2="34" y2="5" class="edge"/></svg>vector collection written / queried</span>
+        <span><svg viewBox="0 0 34 10" aria-hidden="true"><line x1="0" y1="5" x2="34" y2="5" class="edge blob"/></svg>model blob written / pulled</span>
+        <span><svg viewBox="0 0 34 10" aria-hidden="true"><line x1="0" y1="5" x2="34" y2="5" class="edge hot"/></svg>user skipped: no cached list</span>
+      </div>
+    </figcaption>
+    <div class="detail" id="pipe-detail" aria-live="polite"></div>
+  </figure>
+</section>
+
+<!-- ============ §5 BOTTLENECKS ============ -->
+<section id="s5" aria-labelledby="s5-h">
+  <h2 id="s5-h"><span class="sec-no">§5</span>Bottlenecks and fixes</h2>
+  <p class="sec-intro">Ranked by how likely each one is to explain the 3&nbsp;s. Highlight dims every diagram except the parts involved. Try it applies a config fix in the panel, and every diagram updates.</p>
+
+  <div class="bn-list">
+    <article class="bn" id="b1">
+      <div class="bn-id">B1</div>
+      <div>
+        <div class="bn-head"><h3>Online fallback: up to 200 sequential gRPC round trips through a single-slot vector store</h3><span class="sev top">most likely cause</span></div>
+        <p>A request that falls back runs item-to-item once per positive feedback item, one after another, up to <code>context_size</code> = 100 items. Each iteration makes two gRPC hops to the master. There, every <code>QueryVectors</code> waits for the xvec limiter. The limiter is sized to <code>master.n_jobs</code> = 1 and shared by every server, every worker and the master's own tasks, so while a worker is mid-pass, online requests wait behind it. Each response also carries 101 full neighbor vectors that the server throws away, roughly 100 × 200–400 KB per request.</p>
+        <dl>
+          <dt>Who hits it</dt><dd>Users with no <code>cache.Recommend</code> entry, plus any request whose cached list drops below n + offset after removing seen items or filtering by category. <code>POST /api/session/recommend</code> does the same.</dd>
+          <dt>Evidence</dt><dd><code>server/rest.go:1027-1032</code> → <code>logics/recommend.go:129</code> → <code>logics/recommend.go:250-273</code> → <code>logics/item_to_item.go</code> → <code>vectors.ProxyClient</code> → master gRPC → xvec</dd>
+          <dt>Fixes</dt><dd><a href="#fix-c1">C1</a> · <a href="#fix-c3">C3</a> · <a href="#fix-c4">C4</a> · <a href="#fix-c5">C5</a> · <a href="#fix-k1">K1</a> · <a href="#fix-k2">K2</a></dd>
+        </dl>
+        <div class="actions"><button class="btn" data-lens-set="B1" aria-pressed="false">Highlight on diagrams</button></div>
+      </div>
+    </article>
+    <article class="bn" id="b2">
+      <div class="bn-id">B2</div>
+      <div>
+        <div class="bn-head"><h3>Many users never get an offline recommendation, so they always fall back</h3><span class="sev top">feeds B1</span></div>
+        <p>The worker skips cold-start users and users without a CF embedding. A user who first interacts after the last CF fit has no embedding until the next fit (60 min) <em>and</em> the next worker pass. Users inactive longer than <code>active_user_ttl</code> have their cache deleted. Throughput is low by default. The worker runs <code>--jobs 1</code> and makes 4–5 cache round trips per user per tick just to decide whether to skip. It scans the full user table every minute. For each user it also runs uncapped item-to-item and up to 100 <code>GetUserFeedback</code> calls for user-to-user. At 50k users, one pass can take hours.</p>
+        <dl>
+          <dt>Who hits it</dt><dd>New users, users active since the last fit, returning inactive users, and anyone the worker hasn't reached yet.</dd>
+          <dt>Evidence</dt><dd><code>worker/pipeline.go:193, 206-208</code> · <code>pipeline.go:331-410</code> · <code>worker/worker.go:485</code> · <code>logics/recommend.go:185, 298-310</code></dd>
+          <dt>Fixes</dt><dd><a href="#fix-c2">C2</a> · <a href="#fix-k4">K4</a> · <a href="#fix-k5">K5</a></dd>
+        </dl>
+        <div class="actions"><button class="btn" data-lens-set="B2" aria-pressed="false">Highlight on diagrams</button></div>
+      </div>
+    </article>
+    <article class="bn" id="b3">
+      <div class="bn-id">B3</div>
+      <div>
+        <div class="bn-head"><h3>Every request loads the user's full feedback history</h3><span class="sev">every request</span></div>
+        <p><code>GetUserFeedback(userId, now)</code> runs with no type filter, no time window and no limit, and it selects <code>comment</code> and <code>labels</code> for every row. On a video service where every play is a <code>read</code> feedback, heavy users return thousands of rows. GORM deserializes each one, and <code>SortFeedbacks</code> then sorts them. <code>positive_feedback_ttl</code> is not applied on this path. Every request pays this cost, warm cache or not.</p>
+        <dl>
+          <dt>Evidence</dt><dd><code>logics/recommend.go:63, 252</code> · <code>storage/data/sql.go:1158</code></dd>
+          <dt>Fixes</dt><dd><a href="#fix-k3">K3</a></dd>
+        </dl>
+        <div class="actions"><button class="btn" data-lens-set="B3" aria-pressed="false">Highlight on diagrams</button></div>
+      </div>
+    </article>
+    <article class="bn" id="b4">
+      <div class="bn-id">B4</div>
+      <div>
+        <div class="bn-head"><h3><code>gorse-in-one</code> serves the API and trains in the same process, with <code>n_jobs</code> = 1</h3><span class="sev">standalone only</span></div>
+        <p>Each cycle, the master reloads the whole dataset into RAM, rebuilds all item and user vectors, and retrains MF for 100 epochs if feedback changed. It then runs the per-user pass inline with one job. REST requests are served from the same process and share the single xvec slot, so GC and CPU pressure from training land directly on request latency. Highlighting this switches the map to gorse-in-one.</p>
+        <dl>
+          <dt>Evidence</dt><dd><code>master/tasks.go:297-785</code> · <code>master/tasks.go:1383</code> · <code>master/master.go:74</code></dd>
+          <dt>Fixes</dt><dd><a href="#fix-c1">C1</a> · <a href="#fix-k1">K1</a></dd>
+        </dl>
+        <div class="actions"><button class="btn" data-lens-set="B4" aria-pressed="false">Highlight on diagrams</button></div>
+      </div>
+    </article>
+    <article class="bn" id="b5">
+      <div class="bn-id">B5</div>
+      <div>
+        <div class="bn-head"><h3>Write-back inserts one row per returned item</h3><span class="sev">write-back only</span></div>
+        <p>With <code>write-back-type</code> set, the handler calls <code>BatchInsertFeedback</code> once per item. A 10-item response therefore adds 10 sequential DB round trips, and each one also bumps <code>LastModifyUserTime</code>.</p>
+        <dl>
+          <dt>Evidence</dt><dd><code>server/rest.go:1045-1056</code></dd>
+          <dt>Fixes</dt><dd><a href="#fix-k6">K6</a></dd>
+        </dl>
+        <div class="actions"><button class="btn" data-lens-set="B5" aria-pressed="false">Highlight on diagrams</button></div>
+      </div>
+    </article>
+    <article class="bn" id="b6">
+      <div class="bn-id">B6</div>
+      <div>
+        <div class="bn-head"><h3>Scale limits that will bite next</h3><span class="sev">not the 3 s yet</span></div>
+        <ul>
+          <li>The cache store holds about 10M score rows or hashes at 50k users. Redis memory and the <code>collectGarbage</code> full scans grow linearly with it.</li>
+          <li>xvec searches sparse vector types (<code>tags</code>, <code>items</code>, <code>users</code>, <code>auto</code>) by brute force. A user-to-user query of type <code>items</code> scans 50k vectors; an item-to-item query of type <code>tags</code> scans 200k.</li>
+          <li>The item and user vector collections are fully rewritten and re-optimized every cycle.</li>
+          <li>MariaDB as the cache store has no categories index, and <code>GetLatestItems</code> with categories can't use an index because of <code>JSON_CONTAINS</code> / <code>@&gt;</code>.</li>
+        </ul>
+        <dl>
+          <dt>Evidence</dt><dd><code>master/tasks.go:1255-1274, 787-883</code> · <code>storage/cache/sql.go:201-215</code> · <code>storage/data/sql.go:903-934</code></dd>
+          <dt>Fixes</dt><dd><a href="#fix-c6">C6</a> · <a href="#fix-k7">K7</a></dd>
+        </dl>
+        <div class="actions"><button class="btn" data-lens-set="B6" aria-pressed="false">Highlight on diagrams</button></div>
+      </div>
+    </article>
+  </div>
+
+  <div class="fix-wrap">
+    <table class="fixes">
+      <caption>Suggested changes</caption>
+      <thead><tr><th>ID</th><th>Change</th><th>Where</th><th>Targets</th><th></th></tr></thead>
+      <tbody>
+        <tr class="group"><td colspan="5">CONFIG ONLY: CAN BE APPLIED TODAY</td></tr>
+        <tr id="fix-c1"><td>C1</td><td><div class="what">Raise <code>master.n_jobs</code> to the master's core count</div><div class="why">Raises the xvec limit from 1 to N, and parallelizes dataset loading and the standalone pass. Likely the biggest single gain under load.</div></td><td class="where"><code>[master] n_jobs</code></td><td>B1 B4</td><td><button class="btn" data-try="c1" aria-pressed="false">Try it</button></td></tr>
+        <tr id="fix-c2"><td>C2</td><td><div class="what">Run workers with <code>--jobs</code> ≥ 8</div><div class="why">The offline pass then finishes well inside <code>cache_expire</code>, so fewer users fall back.</div></td><td class="where"><code>gorse-worker --jobs</code></td><td>B2</td><td><button class="btn" data-try="c2" aria-pressed="false">Try it</button></td></tr>
+        <tr id="fix-c3"><td>C3</td><td><div class="what">Lower <code>recommend.context_size</code> to 10–20</div><div class="why">Caps the online item-to-item loop: a cold fallback goes from up to 200 vector RPCs to 20–40.</div></td><td class="where"><code>[recommend] context_size</code></td><td>B1</td><td><button class="btn" data-try="c3" aria-pressed="false">Try it</button></td></tr>
+        <tr id="fix-c4"><td>C4</td><td><div class="what">Make the fallback cheap: <code>["non-personalized/&lt;x&gt;", "latest"]</code></div><div class="why">The fallback becomes one cache read and one DB read; item-to-item stays offline only.</div></td><td class="where"><code>[recommend.fallback]</code></td><td>B1</td><td><button class="btn" data-try="c4" aria-pressed="false">Try it</button></td></tr>
+        <tr id="fix-c5"><td>C5</td><td><div class="what">Use an external vector store (Qdrant / Milvus / Weaviate)</div><div class="why">Servers and workers query it directly. The master's gRPC proxy and its <code>n_jobs</code> limit drop out of the request path.</div></td><td class="where"><code>[database] vector_store</code></td><td>B1</td><td><button class="btn" data-try="c5" aria-pressed="false">Try it</button></td></tr>
+        <tr id="fix-c6"><td>C6</td><td><div class="what">Set <code>positive_feedback_ttl</code> and <code>read_feedback_types</code> deliberately</div><div class="why">The offline dataset and feedback history stop growing without bound.</div></td><td class="where"><code>[recommend.data_source]</code></td><td>B6</td><td></td></tr>
+        <tr class="group"><td colspan="5">CODE CHANGES, IN PRIORITY ORDER</td></tr>
+        <tr id="fix-k1"><td>K1</td><td><div class="what">Decouple xvec <code>QueryConcurrency</code> from <code>master.n_jobs</code></div><div class="why">Default it to <code>GOMAXPROCS</code> and keep <code>n_jobs</code> for training only. A one-line change that affects the whole cluster.</div></td><td class="where"><code>storage/vectors/xvec.go:93-99</code></td><td>B1 B4</td><td></td></tr>
+        <tr id="fix-k2"><td>K2</td><td><div class="what">Batch and parallelize online item-to-item</div><div class="why">One <code>GetVectors(ids…)</code>, then <code>QueryVectors</code> through an <code>errgroup</code> bounded to about 8, or a batch-query RPC. Stop requesting <code>IncludeVectors</code>, cache <code>DescribeCollection</code>, and apply the same to <code>sessionRecommend</code>.</div></td><td class="where"><code>logics/recommend.go:250-273</code><code>logics/item_to_item.go</code><code>xvec.go:423, 437</code></td><td>B1</td><td><button class="btn" data-try="k2" aria-pressed="false">Try it in §3</button></td></tr>
+        <tr id="fix-k3"><td>K3</td><td><div class="what">Trim the per-request feedback load</div><div class="why">Select only <code>feedback_type, item_id, value, time_stamp</code>, honor <code>positive_feedback_ttl</code>, and cap rows newest first. Better still, precompute the exclude set offline.</div></td><td class="where"><code>logics/recommend.go:63</code><code>storage/data/sql.go:1158</code></td><td>B3</td><td></td></tr>
+        <tr id="fix-k4"><td>K4</td><td><div class="what">Produce offline recommendations for every user</div><div class="why">Cover cold-start and no-embedding users too, for example from non-personalized and latest lists, so a known user never needs the online fallback.</div></td><td class="where"><code>worker/pipeline.go:193, 206-208</code></td><td>B2</td><td></td></tr>
+        <tr id="fix-k5"><td>K5</td><td><div class="what">Refresh the worker incrementally</div><div class="why">Query users by <code>update_at &gt; lastPass</code>. Replace the full-list staleness probe. Compute <code>latest</code> once per pass. Add <code>BatchGetUserFeedback</code>, and cap offline item-to-item.</div></td><td class="where"><code>worker/worker.go:472-501</code><code>pipeline.go:365</code><code>recommend.go:185, 298-310</code></td><td>B2</td><td></td></tr>
+        <tr id="fix-k6"><td>K6</td><td><div class="what">Batch the write-back into a single <code>BatchInsertFeedback</code></div><div class="why">Turns n sequential inserts into one.</div></td><td class="where"><code>server/rest.go:1045-1056</code></td><td>B5</td><td></td></tr>
+        <tr id="fix-k7"><td>K7</td><td><div class="what">Add a short in-process TTL cache on the server</div><div class="why">For non-personalized lists, <code>latest</code> and the <code>*Digest</code> keys, so repeated requests skip the cache store.</div></td><td class="where">server</td><td>load</td><td></td></tr>
+        <tr id="fix-k8"><td>K8</td><td><div class="what">Stop skipping unindexed segments silently</div><div class="why">With <code>SkipUnindexedSegments(true)</code>, online item-to-item can't see items added since the last <code>Optimize</code>.</div></td><td class="where"><code>master/master.go:320</code></td><td>correctness</td><td></td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ============ §6 CONFIRM ============ -->
+<section id="s6" aria-labelledby="s6-h">
+  <h2 id="s6-h"><span class="sec-no">§6</span>Confirm it before changing code</h2>
+  <p class="sec-intro">Four checks that turn the top hypothesis into evidence.</p>
+  <ol class="confirm">
+    <li><div><p>Turn on tracing: <code>[tracing] enable_tracing = true</code>, <code>exporter = "otlp"</code>, sent to a local Jaeger or Tempo. REST (<code>otelrestful</code>), GORM (<code>otelsql</code>), Redis (<code>redisotel</code>) and Mongo (<code>otelmongo</code>) are already instrumented.</p><p class="then">A single slow trace then shows how the time splits between <code>GetUserFeedback</code>, <code>SearchScores</code> and the fallback RPCs.</p></div></li>
+    <li><div><p>Compare a user who has a <code>cache.Recommend</code> entry with one who doesn't, for example a user created after the last CF fit.</p><p class="then">If only the second is slow, B1 and B2 are confirmed.</p></div></li>
+    <li><div><p>Put the <code>rest_api_request_seconds</code> histogram (<code>server/metrics.go:23</code>) next to the worker's <code>"complete recommendation"</code> log lines and their <code>update_user_count</code>.</p><p class="then">That shows how far behind the offline pass is.</p></div></li>
+    <li><div><p>Count the <code>GetUserFeedback</code> rows for the slowest users.</p><p class="then">If they run into the thousands, B3 matters.</p></div></li>
+  </ol>
+</section>
+
+</main>
+
+<!-- ============ CONFIG ASIDE ============ -->
+<aside class="config" aria-labelledby="cfg-title">
+  <div class="cfg-head"><span id="cfg-title">config.toml</span><span class="cfg-hint">what-if</span></div>
+  <p class="cfg-intro">Change a value and every diagram redraws. Highlighted rows differ from the sample config.</p>
+  <div class="toml">
+    <div class="sect">[database]</div>
+    <div class="kv" data-key="vector">
+      <div class="k">vector_store = <span class="def">default xvec</span></div>
+      <div class="radios">
+        <label><input type="radio" name="cfg-vector" value="xvec"> "xvec://vectors"</label>
+        <label><input type="radio" name="cfg-vector" value="external"> "qdrant://…" <span class="def">or milvus / weaviate</span></label>
+      </div>
+    </div>
+    <div class="sect">[master]</div>
+    <div class="kv" data-key="nJobs">
+      <label class="k" for="cfg-njobs">n_jobs = <output id="out-njobs">1</output><span class="def">default 1</span></label>
+      <input type="range" id="cfg-njobs" min="1" max="32" step="1">
+    </div>
+    <div class="sect">[recommend]</div>
+    <div class="kv" data-key="contextSize">
+      <label class="k" for="cfg-context">context_size = <output id="out-context">100</output><span class="def">default 100</span></label>
+      <input type="range" id="cfg-context" min="1" max="100" step="1">
+    </div>
+    <div class="sect">[recommend.fallback]</div>
+    <div class="kv" data-key="fallback">
+      <div class="k">recommenders = <span class="def">sample config</span></div>
+      <div class="radios">
+        <label><input type="radio" name="cfg-fallback" value="i2i"> ["item-to-item/neighbors", "latest"]</label>
+        <label><input type="radio" name="cfg-fallback" value="np"> ["non-personalized/…", "latest"]</label>
+      </div>
+    </div>
+    <div class="sect"># processes</div>
+    <div class="kv" data-key="deploy">
+      <div class="k">deployment <span class="def">default cluster</span></div>
+      <div class="seg">
+        <input type="radio" name="cfg-deploy" id="dep-cluster" value="cluster"><label for="dep-cluster">cluster</label>
+        <input type="radio" name="cfg-deploy" id="dep-inone" value="inone"><label for="dep-inone">gorse-in-one</label>
+      </div>
+    </div>
+    <div class="kv" data-key="workerJobs">
+      <label class="k" for="cfg-wjobs">gorse-worker --jobs <output id="out-wjobs">1</output><span class="def">default 1</span></label>
+      <input type="range" id="cfg-wjobs" min="1" max="32" step="1">
+    </div>
+  </div>
+  <div class="lens">
+    <div class="lens-title">HIGHLIGHT A BOTTLENECK</div>
+    <div class="lens-chips">
+      <button class="btn chip" data-lens-set="B1" aria-pressed="false">B1 fallback</button>
+      <button class="btn chip" data-lens-set="B2" aria-pressed="false">B2 no cache</button>
+      <button class="btn chip" data-lens-set="B3" aria-pressed="false">B3 history</button>
+      <button class="btn chip" data-lens-set="B4" aria-pressed="false">B4 in-one</button>
+      <button class="btn chip" data-lens-set="B5" aria-pressed="false">B5 write-back</button>
+      <button class="btn chip" data-lens-set="B6" aria-pressed="false">B6 scale</button>
+    </div>
+    <p class="lens-say" id="lens-say"></p>
+  </div>
+  <div class="cfg-foot"><button class="btn" id="cfg-reset">Reset to defaults</button></div>
+</aside>
+</div>
+
+<footer>Built from docs/performance-analysis.md. File and line references point at master@44791ec. Counts are derived from code paths, not measured.</footer>
+</div>
+
+<script>
+(() => {
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+const fmt = n => n.toLocaleString('en-US');
+
+const DEFAULTS = { vector: 'xvec', deploy: 'cluster', nJobs: 1, contextSize: 100, fallback: 'i2i', workerJobs: 1 };
+const PRESETS = {
+  warm: { hasEntry: true, enough: true, catOK: true, positives: 150 },
+  heavy: { hasEntry: false, enough: true, catOK: true, positives: 400 },
+  newbie: { hasEntry: false, enough: true, catOK: true, positives: 12 },
+  category: { hasEntry: true, enough: true, catOK: false, positives: 150 },
+};
+const state = {
+  ...DEFAULTS,
+  lens: '',
+  mapSel: '',
+  pipeSel: '',
+  req: { ...PRESETS.heavy, n: 10, writeBack: false, step: 0 },
+  sim: { workerActive: true, others: 3, parallel: false },
+};
+
+const LENS = {
+  B1: 'Online fallback: up to 2 × context_size calls, one after another, each QueryVectors waiting for an xvec slot.',
+  B2: 'Workers skip cold-start and no-embedding users, and one job works through 50k users slowly. Those users have no cache.Recommend list.',
+  B3: "Every request loads the user's whole feedback history, comment and labels included.",
+  B4: 'gorse-in-one: API, training and the per-user pass share one process and the single xvec slot. The map is switched to gorse-in-one.',
+  B5: 'write-back-type: one INSERT round trip per returned item.',
+  B6: 'Next limits: about 10M cache rows, brute-force sparse vectors, full rewrites every cycle, missing indexes.',
+};
+
+const refs = list => list && list.length ? `<p class="refs">${list.map(r => `<code>${esc(r)}</code>`).join('')}</p>` : '';
+const bchips = list => list && list.length
+  ? `<p class="bl">Involved in ${list.map(b => `<button class="btn chip" data-lens-set="${b}" aria-pressed="false">${b}</button>`).join(' ')}</p>` : '';
+const detailHTML = d => `<h3>${d.t}</h3><p>${d.p}</p>${refs(d.refs)}${bchips(d.b)}`;
+
+const MAP = {
+  clients: { t: 'API clients', p: 'Your application calling the server. The slow call is <code>GET /api/recommend/{user-id}?n=10[&amp;offset=…][&amp;category=…]</code>. <code>POST /api/session/recommend</code> follows the same pattern.', refs: ['server/rest.go:1027-1032', 'server/rest.go:1128-1150'], b: ['B1', 'B3', 'B5'] },
+  server: { t: 'Server(s) · gorse-server', p: 'A stateless REST API that answers recommendation requests online. It opens the data and cache stores itself, and calls the master with gRPC <code>GetMeta</code> every <code>meta_timeout</code> (10 s) for config and membership. With <code>vector_store = "xvec://…"</code> it cannot open the embedded store, so every <code>GetVectors</code> and <code>QueryVectors</code> becomes a gRPC call to the master. The same applies to SQLite data and cache stores.', refs: ['server/server.go:239-241'], b: ['B1', 'B3', 'B5'] },
+  worker: { t: 'Worker(s) · gorse-worker', p: 'Works offline, one user at a time: it builds candidates, ranks them and writes <code>cache.Recommend</code>. It pulls the CF user embeddings and the CTR model from the master as blobs. Defaults are <code>--jobs 1</code> and <code>--interval 1m</code>. Like the server, it sends every vector call through the master when the store is xvec, so its uncapped item-to-item pass competes for the same limiter slot.', refs: ['worker/worker.go:216-218', 'cmd/gorse-worker/main.go:90', 'worker/pipeline.go:174'], b: ['B1', 'B2'] },
+  master: { t: 'Master · gorse-master', p: 'Trains the models, builds item-to-item and user-to-user vectors, computes non-personalized lists, and owns cluster config and membership. It opens every store directly. It also registers gRPC proxy servers for the cache, data and vector stores, so other nodes can reach stores they cannot open themselves, such as xvec or SQLite.', refs: ['master/master.go:296-323', 'master/master.go:396-398'], b: ['B1', 'B2', 'B4', 'B6'] },
+  taskloop: { t: 'Task loop · RunTasksLoop', p: 'Runs every min(<code>cf.fit_period</code>, <code>ranker.fit_period</code>) = 60 min. Each run reloads the whole dataset into RAM, rebuilds every item and user vector, retrains MF for 100 epochs and the FM ranker, then garbage-collects the cache. §4 walks through it stage by stage.', refs: ['master/tasks.go:252-294'], b: ['B2', 'B4', 'B6'] },
+  xvec: { t: 'xvec · embedded vector store, behind the gRPC proxy', p: 'The default <code>vector_store</code>, which runs inside the master process. Dense collections use HNSW; sparse ones (<code>tags</code>, <code>items</code>, <code>users</code>, <code>auto</code>) use a Flat index, i.e. brute force. A single process-wide limiter caps concurrent queries at <code>QueryConcurrency = master.n_jobs</code>, which defaults to 1. Every query also returns the full neighbor vectors and makes an extra <code>DescribeCollection</code> call.', refs: ['storage/vectors/xvec.go:93-99', 'xvec.go:263-269', 'xvec.go:423', 'xvec.go:437', 'master/master.go:319-320', 'config/config.go:567'], b: ['B1', 'B4', 'B6'] },
+  rest: { t: 'REST API inside the master (gorse-in-one)', p: 'In standalone mode the master embeds <code>server.RestServer</code> and answers API calls itself. Requests then share CPU, GC pressure and the xvec slot with training and the inline worker pass.', refs: ['master/master.go:74'], b: ['B4'] },
+  inline: { t: 'Inline worker pass (gorse-in-one)', p: 'Standalone mode has no separate workers. It runs <code>updateRecommend</code> for ALL users inside the task loop with <code>Jobs = master.n_jobs</code>, which is 1 by default.', refs: ['master/tasks.go:1376-1434'], b: ['B2', 'B4'] },
+  grpc: { t: 'gRPC endpoint: GetMeta and blobs', p: 'Servers and workers call <code>GetMeta</code> every 10 s for config and membership. After each training run, workers also pull the CF user embeddings and the CTR model blobs from here.', refs: ['worker/worker.go:445-456'], b: ['B2'] },
+  data: { t: 'Data store · MySQL / Postgres / Mongo', p: 'Holds users, items and feedback. <code>feedback</code> is indexed on <code>user_id</code> and <code>item_id</code>. <code>GetUserFeedback</code> has no row limit and selects <code>comment</code> and <code>labels</code> for every row. <code>GetLatestItems</code> with categories uses <code>JSON_CONTAINS</code>, which cannot use an index, so it walks <code>time_stamp_index</code> until it finds n matches.', refs: ['storage/data/sql.go:240-241', 'sql.go:1158-1162', 'sql.go:903-934'], b: ['B3', 'B5', 'B6'] },
+  cache: { t: 'Cache store · Redis / MySQL / Postgres / Mongo', p: 'Stores every per-user list (<code>recommend</code>, <code>collaborative-filtering</code>) and every non-personalized list as rows of (collection, subset, id, score, categories, is_hidden, timestamp). On Redis this is one RediSearch index read with <code>FT.SEARCH … SORTBY score</code>. At 50k users × 100 items × 2 collections that comes to about 10M hashes. MariaDB gets no categories index at all.', refs: ['storage/cache/redis.go:110-122', 'redis.go:256-274', 'storage/cache/sql.go:201-215'], b: ['B2', 'B6'] },
+  vector: { t: 'Vector store · external (Qdrant / Milvus / Weaviate)', p: "With a non-xvec <code>vector_store</code>, servers and workers open the vector store themselves, so the master's gRPC proxy and its <code>n_jobs</code> limit drop out of the request path. This is fix C5. With the default xvec this slot stays empty, because the vectors live inside the master.", refs: ['server/server.go:239-241', 'worker/worker.go:216-218'], b: ['B1'] },
+  meta: { t: 'meta.sqlite3', p: 'A master-local SQLite file holding cluster nodes and model ids. It is not on the request path.', b: [] },
+  blob: { t: 'Blob store · local dir / S3 / GCS / Azure', p: "Holds the CF user embeddings and the FM (CTR) model that the master trains. Workers fetch them through the master's gRPC endpoint, and skip any user who has no embedding yet.", b: ['B2'] },
+  dashboard: { t: 'Dashboard', p: 'The admin UI and its REST API, served by the master. It is not on the request path.', b: [] },
+};
+
+const PIPE = {
+  L1: { t: 'L1 · loadDataset', p: 'Streams every user and item and scans feedback three times to build an in-RAM dataset, taking a global mutex per feedback row. It runs every cycle, so its cost grows with total history, not with what changed.', refs: ['master/tasks.go:297-785'], b: ['B4', 'B6'] },
+  L2: { t: 'L2 · updateUserToUser', p: 'Rebuilds user vectors for all 50k users, rewrites the collection and calls Optimize. A user-to-user of type <code>items</code> is sparse, so xvec searches it with a Flat index (brute force).', refs: ['master/tasks.go:836-883', 'storage/vectors/xvec.go:263-269'], b: ['B6'] },
+  L3: { t: 'L3 · updateItemToItem', p: 'Rebuilds vectors for all ~200k items and re-optimizes. The master sets <code>SkipUnindexedSegments(true)</code>, so online queries cannot see items added after the last Optimize.', refs: ['master/tasks.go:787-834', 'master/master.go:320'], b: ['B6'] },
+  L4: { t: 'L4 · trainCollaborativeFiltering', p: 'When the feedback count has changed, trains MF for 100 epochs and publishes a new item-factor collection and a user-embedding blob. A user who first interacts after this point has no embedding until the next fit (60 min) and the next worker pass.', refs: ['master/tasks.go:898-1018'], b: ['B2'] },
+  L5: { t: 'L5 · trainClickThroughRatePrediction', p: 'Trains the factorization-machine ranker and writes it to the blob store. Workers pull it to rank candidates in W7.', refs: ['master/tasks.go:1070-1132'], b: [] },
+  L6: { t: 'L6 · updateRecommend (gorse-in-one only)', p: 'In standalone mode, runs the worker stages W0–W8 for ALL users inline, with <code>Jobs = master.n_jobs</code> (default 1). The REST API in the same process shares CPU, GC pressure and the xvec slot.', refs: ['master/tasks.go:1376-1434', 'master/master.go:74'], b: ['B2', 'B4'] },
+  L7: { t: 'L7 · collectGarbage', p: 'Runs <code>ScanScores</code> over the entire cache to drop stale lists. That is about 10M rows at 50k users, and it grows linearly.', refs: ['master/tasks.go:1255-1274'], b: ['B6'] },
+  L8: { t: 'L8 · optimize', p: 'Hyperparameter search for the CF and CTR models, when <code>optimize_period</code> is set.', refs: ['master/tasks.go:283-292'], b: [] },
+  W0: { t: 'W0 · pullUsers', p: 'Streams the entire user table every minute and keeps the users this worker owns on the consistent-hash ring. An incremental query (<code>update_at &gt; lastPass</code>) would avoid this (K5).', refs: ['worker/worker.go:472-501', 'worker/worker.go:485'], b: ['B2'] },
+  W1: { t: 'W1 · parallel.Detachable', p: 'Fans users out to workers, bounded by <code>--jobs</code>. The default is 1, so 50k users are processed one at a time.', refs: ['worker/pipeline.go:174', 'cmd/gorse-worker/main.go:90'], b: ['B2'] },
+  W2: { t: 'W2 · checkUserActiveTime + checkRecommendCacheOutOfDate', p: 'Makes 4–5 cache round trips per user per tick just to decide whether to skip. One of them is <code>SearchScores(recommend, u, 0, -1)</code>, which fetches the whole list only to test whether it is empty. Users inactive longer than <code>active_user_ttl</code> have their cache deleted here.', refs: ['worker/pipeline.go:331-410', 'pipeline.go:365'], b: ['B2'] },
+  W3: { t: 'W3 · NewRecommender', p: "Loads ALL of the user's feedback, then skips cold-start users and users with no CF embedding. Skipped users get no <code>cache.Recommend</code> list, so every request they make takes the online fallback.", refs: ['worker/pipeline.go:193', 'pipeline.go:206-208'], b: ['B2', 'B3'] },
+  W4: { t: 'W4 · collaborative filtering', p: 'Runs <code>QueryVectors</code> with <code>topK = cache_size + |exclude|</code> against the CF item collection and writes <code>cache.CollaborativeFiltering</code>.', refs: ['worker/pipeline.go:412-457'], b: [] },
+  W5: { t: 'W5 · RecommendSequential(limit = 0)', p: 'Runs every entry in <code>ranker.recommenders</code>. <b>latest</b> is a DB query per user that returns the same result for everyone. <b>collaborative</b> and <b>non-personalized</b> read the cache. <b>item-to-item</b> makes 2 vector RPCs per positive item, with no <code>context_size</code> cap offline. <b>user-to-user</b> makes 1 vector RPC plus a <code>GetUserFeedback</code> for each of up to 100 similar users.', refs: ['logics/recommend.go:185', 'recommend.go:250-273', 'recommend.go:298-310'], b: ['B1', 'B2'] },
+  W6: { t: 'W6 · BatchGetItems', p: 'Uses <code>itemCache.GetMap</code> → <code>BatchGetItems</code> to load the item rows for every candidate id.', refs: ['worker/pipeline.go'], b: [] },
+  W7: { t: 'W7 · rank', p: 'Ranks candidates according to <code>ranker.type</code>: <code>fm</code> BatchPredict (sample config), a reranker API, a decision API, or none.', refs: ['worker/pipeline.go'], b: [] },
+  W8: { t: 'W8 · write cache.Recommend', p: 'Calls <code>AddScores(cache.Recommend, u)</code> and <code>DeleteScores(before)</code>, then sets <code>RecommendUpdateTime</code> and <code>RecommendDigest</code>. This is the list the server reads on the fast path.', refs: ['worker/pipeline.go'], b: [] },
+  vecbox: { t: 'Vector collections', p: 'The item-to-item, user-to-user and CF item-factor collections. The master writes them each cycle; workers and servers query them. With <code>xvec://</code> they live inside the master, so every worker query is a gRPC hop through the proxy, behind the <code>n_jobs</code> limit.', refs: ['master/tasks.go:787-883', 'server/server.go:239-241'], b: ['B1', 'B6'] },
+  blobbox: { t: 'Blob store', p: "Holds the CF user embeddings and the FM model, served to workers over the master's gRPC endpoint. A user missing from the embedding blob is skipped in W3.", b: ['B2'] },
+  sinkA: { t: 'cache.Recommend', p: 'One scored list per user, about 100 items. When it holds at least n + offset usable items after the exclude set and any category filter, the request takes the two-call fast path in §2.', b: [] },
+  sinkB: { t: 'No list for this user', p: "Users skipped in W2 or W3, deleted by <code>active_user_ttl</code>, or simply not reached yet by a slow pass have no list. Every request they make takes the online fallback (B1). Use the 'Heavy user, no cached list' preset in §2 to see it.", b: ['B1', 'B2'] },
+};
+
+/* ---------- lens + modes ---------- */
+function setLens(l) {
+  state.lens = state.lens === l ? '' : l;
+  if (state.lens === 'B4') state.deploy = 'inone';
+  renderAll();
+}
+function applyLens() {
+  document.body.dataset.lens = state.lens;
+  $$('[data-b]').forEach(el => el.classList.toggle('lit', !!state.lens && el.dataset.b.split(' ').includes(state.lens)));
+  $$('[data-lens-set]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.lensSet === state.lens)));
+  $('#lens-say').textContent = state.lens ? LENS[state.lens] : 'Choose one to dim everything not involved in it, across all diagrams.';
+}
+
+/* ---------- config panel ---------- */
+function renderConfig() {
+  $$('input[name="cfg-vector"]').forEach(i => i.checked = i.value === state.vector);
+  $$('input[name="cfg-fallback"]').forEach(i => i.checked = i.value === state.fallback);
+  $$('input[name="cfg-deploy"]').forEach(i => i.checked = i.value === state.deploy);
+  $('#cfg-njobs').value = state.nJobs; $('#out-njobs').textContent = state.nJobs;
+  $('#cfg-context').value = state.contextSize; $('#out-context').textContent = state.contextSize;
+  $('#cfg-wjobs').value = state.workerJobs; $('#out-wjobs').textContent = state.workerJobs;
+  $$('.kv[data-key]').forEach(r => r.classList.toggle('changed', state[r.dataset.key] !== DEFAULTS[r.dataset.key]));
+  const kvW = $('.kv[data-key="workerJobs"]');
+  kvW.style.opacity = state.deploy === 'inone' ? .45 : 1;
+  document.body.dataset.vector = state.vector;
+  document.body.dataset.deploy = state.deploy;
+}
+function bindConfig() {
+  const on = (sel, ev, fn) => $$(sel).forEach(el => el.addEventListener(ev, () => { fn(el); renderAll(); }));
+  on('input[name="cfg-vector"]', 'change', el => state.vector = el.value);
+  on('input[name="cfg-fallback"]', 'change', el => state.fallback = el.value);
+  on('input[name="cfg-deploy"]', 'change', el => state.deploy = el.value);
+  on('#cfg-njobs', 'input', el => state.nJobs = +el.value);
+  on('#cfg-context', 'input', el => state.contextSize = +el.value);
+  on('#cfg-wjobs', 'input', el => state.workerJobs = +el.value);
+  $('#cfg-reset').addEventListener('click', () => {
+    Object.assign(state, DEFAULTS); state.lens = ''; state.sim.parallel = false; renderAll();
+  });
+}
+
+/* ---------- §1 map ---------- */
+function renderMap() {
+  $('#map-limit').textContent = `QueryConcurrency = n_jobs = ${state.nJobs}`;
+  const max = 11, n = state.nJobs, shown = n > max ? max - 1 : n;
+  let h = '';
+  for (let i = 0; i < shown; i++) h += `<rect class="slot" x="${598 + i * 18}" y="342" width="14" height="14" rx="2"/>`;
+  if (n > max) h += `<text class="t-code" x="${600 + shown * 18}" y="354">+${n - shown}</text>`;
+  $('#map-slots').innerHTML = h;
+  $('#map-wjobs').textContent = `--jobs ${state.workerJobs} · --interval 1m`;
+  $$('#map .node').forEach(n => n.classList.toggle('selected', n.dataset.node === state.mapSel));
+  $('#map-detail').innerHTML = state.mapSel ? detailHTML(MAP[state.mapSel])
+    : '<p class="hint">Select a component in the map to see what it does, where it lives in the code, and which bottlenecks it takes part in.</p>';
+}
+
+/* ---------- §2 request ---------- */
+function buildRequest() {
+  const r = state.req, ext = state.vector === 'external', inone = state.deploy === 'inone';
+  const fast = r.hasEntry && r.enough && r.catOK;
+  const i2i = state.fallback === 'i2i';
+  const loops = !fast && i2i ? Math.min(r.positives, state.contextSize) : 0;
+  const parts = [
+    ['C', 'Client', 'your app'],
+    ['S', inone ? 'Master · REST' : 'Server', inone ? 'gorse-in-one' : 'server/rest.go'],
+    ['D', 'Data store', 'MySQL / PG / Mongo'],
+    ['K', 'Cache store', 'Redis / SQL / Mongo'],
+  ];
+  if (ext) parts.push(['V', 'Vector store', 'Qdrant / Milvus / …']);
+  else {
+    if (!inone) parts.push(['M', 'Master gRPC proxy', 'vectors.ProxyClient']);
+    parts.push(['X', 'xvec · limiter', `${state.nJobs} slot${state.nJobs > 1 ? 's' : ''} (n_jobs)`]);
+  }
+  const rows = [];
+  const msg = (from, to, label, o = {}) => rows.push({ kind: 'msg', from, to, label, ...o });
+  const note = (at, label, o = {}) => rows.push({ kind: 'note', at, label, ...o });
+  const open = (label, o = {}) => rows.push({ kind: 'open', label, ...o });
+  const close = () => rows.push({ kind: 'close' });
+
+  msg('C', 'S', `GET /api/recommend/u?n=${r.n}`, { detail: '<code>n</code> defaults to 10; <code>offset</code> and <code>category</code> are optional.', refs: ['server/rest.go:1027-1032'] });
+  msg('S', 'D', 'GetUserFeedback(u) · every row', { b: 'B3', detail: "Loads the user's entire history: all feedback types, no time window, no row limit, with <code>comment</code> and <code>labels</code>. A heavy video user returns thousands of rows, and GORM deserializes each one. Every request pays this, warm cache or not.", refs: ['logics/recommend.go:63', 'storage/data/sql.go:1158'] });
+  note('S', 'build excludeSet · cold-start check', { b: 'B3', detail: 'Every returned row goes into the exclude set, so already-seen items are not recommended again.', refs: ['logics/recommend.go:61-93'] });
+  msg('S', 'K', 'SearchScores(recommend, u, cats, 0, 100)', { detail: 'Reads the list the worker precomputed. Categories are filtered at read time, so a narrow category can leave fewer than n items.', refs: ['logics/recommend.go:108'] });
+  note('S', 'drop already-seen ids', { detail: `Keeps only cached items that are not in the exclude set. ${fast ? 'Enough remain, so the server answers right away.' : 'Too few remain (or there is no list), so the fallback chain runs.'}`, refs: ['logics/recommend.go:108-119', 'logics/recommend.go:129'] });
+
+  if (fast) {
+    msg('S', 'C', `200 OK · ${r.n} ids`, { ret: true, ok: true, detail: 'Fast path: two store reads, then the response.' });
+  } else {
+    open(`fallback · ${i2i ? 'item-to-item/neighbors, then latest' : 'non-personalized/…, then latest'}`, { hot: i2i && !ext, b: 'B1' });
+    if (i2i && loops > 0) {
+      open(`loop × ${loops} · one positive item at a time`, { hot: !ext, b: 'B1' });
+      const hot = !ext;
+      if (ext) {
+        msg('S', 'V', 'GetVectors(item)', { b: 'B1', detail: 'With an external store the server connects directly. No master hop and no <code>n_jobs</code> limit, but the loop is still sequential.', refs: ['logics/item_to_item.go'] });
+        msg('S', 'V', 'QueryVectors(vec, cats, 101)', { b: 'B1', detail: 'Nearest-neighbor search for this one item, filtered by category.', refs: ['logics/item_to_item.go'] });
+        msg('V', 'S', '101 neighbors', { ret: true, b: 'B1', detail: 'The server keeps ids and scores and adds them to the running totals.', refs: ['logics/recommend.go:262-273'] });
+      } else if (inone) {
+        msg('S', 'X', 'GetVectors(item) · in-process', { hot, b: 'B1', detail: 'In gorse-in-one the API lives in the master, so there is no gRPC hop. It still shares the limiter with training and the inline pass.', refs: ['master/master.go:74'] });
+        msg('S', 'X', 'QueryVectors(vec, cats, 101) · waits for a slot', { hot, b: 'B1', detail: `Takes one of the <code>master.n_jobs</code> = ${state.nJobs} runtime slots, the same slots the inline worker pass and the vector rebuilds use.`, refs: ['storage/vectors/xvec.go:93-99'] });
+        msg('X', 'S', '101 neighbors + full vectors', { ret: true, hot, b: 'B1', detail: '<code>IncludeVectors: true</code> copies every neighbor vector, which the server then drops.', refs: ['storage/vectors/xvec.go:423'] });
+      } else {
+        msg('S', 'M', 'GetVectors(item)', { hot, b: 'B1', detail: "Fetches the stored vector for one positive item. With xvec this is a gRPC call to the master's proxy.", refs: ['logics/item_to_item.go', 'server/server.go:239-241'] });
+        msg('M', 'X', 'Fetch', { hot, b: 'B1', detail: 'The proxy reads the vector from xvec inside the master process.', refs: ['master/master.go:396-398'] });
+        msg('S', 'M', 'QueryVectors(vec, cats, 101)', { hot, b: 'B1', detail: 'A second gRPC call asking for the 101 nearest neighbors, filtered by category, with <code>IncludeVectors = true</code>.', refs: ['storage/vectors/xvec.go:423'] });
+        msg('M', 'X', 'HNSW query · waits for a slot', { hot, b: 'B1', detail: `Before searching, the query must take one of the <code>master.n_jobs</code> = ${state.nJobs} runtime slots. Every server, every worker and the master's own tasks share them. Each query also makes a <code>DescribeCollection</code> call. §3 shows the waiting.`, refs: ['storage/vectors/xvec.go:93-99', 'xvec.go:437'] });
+        msg('M', 'S', '101 neighbors + full vectors', { ret: true, hot, b: 'B1', detail: "The response carries every neighbor's full vector. The server keeps the ids and scores and throws the vectors away: about 200–400 KB per call.", refs: ['storage/vectors/xvec.go:423'] });
+      }
+      close();
+      msg('S', 'D', 'GetLatestItems(100, cats) · only if still short', { opt: true, detail: "Runs only if item-to-item didn't produce enough. With categories it uses <code>JSON_CONTAINS</code>, which cannot use an index.", refs: ['logics/recommend.go:185', 'storage/data/sql.go:903-934'] });
+    } else if (i2i) {
+      note('S', 'no positive items → item-to-item is empty', { detail: 'With no positive feedback there is nothing to look up neighbors for, so the loop runs zero times.', refs: ['logics/recommend.go:250-260'] });
+      msg('S', 'D', 'GetLatestItems(100, cats)', { detail: 'The next fallback recommender. With categories it uses <code>JSON_CONTAINS</code>, which cannot use an index.', refs: ['logics/recommend.go:185', 'storage/data/sql.go:903-934'] });
+    } else {
+      msg('S', 'K', 'SearchScores(non-personalized/…)', { detail: 'Fix C4: one cache read of a precomputed popular or trending list, with no vector calls.', refs: ['[recommend.fallback] recommenders'] });
+      msg('S', 'D', 'GetLatestItems(100, cats) · only if still short', { opt: true, detail: 'Runs only if the non-personalized list is not enough.', refs: ['logics/recommend.go:185'] });
+    }
+    close();
+    msg('S', 'C', `200 OK · ${r.n} ids`, { ret: true, detail: 'Fallback path. The tiles above count the calls made, one after another, before this response.' });
+  }
+  if (r.writeBack) {
+    open(`loop × ${r.n} · write-back`, { b: 'B5' });
+    msg('S', 'D', 'BatchInsertFeedback([1 row])', { b: 'B5', detail: 'One insert per returned item, and each also bumps <code>LastModifyUserTime</code>. Fix K6 batches them.', refs: ['server/rest.go:1045-1056'] });
+    close();
+  }
+
+  let trips = 2, viaMaster = 0, limiter = 0, vectors = 0;
+  if (!fast) {
+    if (i2i) {
+      trips += 2 * loops + (loops === 0 ? 1 : 0);
+      if (!ext) { limiter = loops; vectors = 101 * loops; if (!inone) viaMaster = 2 * loops; }
+    } else trips += 1;
+  }
+  if (r.writeBack) trips += r.n;
+  return { parts, rows, fast, loops, ext, inone, i2i, trips, viaMaster, limiter, vectors };
+}
+
+function renderRequest() {
+  const r = state.req;
+  $('#rq-entry').checked = r.hasEntry;
+  $('#rq-enough').checked = r.enough; $('#rq-enough').disabled = !r.hasEntry;
+  $('#rq-cat').checked = r.catOK; $('#rq-cat').disabled = !r.hasEntry;
+  $('#lab-enough').classList.toggle('disabled', !r.hasEntry);
+  $('#lab-cat').classList.toggle('disabled', !r.hasEntry);
+  $('#rq-pos').value = r.positives; $('#out-pos').textContent = r.positives;
+  $('#rq-n').value = r.n; $('#out-n').textContent = r.n;
+  $('#rq-wb').checked = r.writeBack;
+  $$('[data-preset]').forEach(b => {
+    const p = PRESETS[b.dataset.preset];
+    b.setAttribute('aria-pressed', String(Object.keys(p).every(k => r[k] === p[k])));
+  });
+
+  const m = buildRequest();
+  const v = $('#verdict');
+  v.className = 'verdict ' + (m.fast ? 'fast' : 'slow');
+  v.textContent = m.fast ? 'Fast path' : 'Fallback path';
+  let why;
+  if (m.fast) why = 'The cached list still has at least n + offset items after the exclude set and category filter.';
+  else if (!r.hasEntry) why = 'This user has no cache.Recommend list, so the request falls back (recommend.go:129).';
+  else if (!r.enough) why = 'Too few cached items remain after removing already-seen items, so the request falls back.';
+  else why = 'The category filter leaves fewer than n cached items, so the request falls back.';
+  if (!m.fast && m.i2i && m.loops > 0) why += ` Item-to-item runs ${m.loops}× (min of ${r.positives} positive items and context_size ${state.contextSize}).`;
+  $('#verdict-why').textContent = why;
+
+  const mb = x => x >= 10 ? Math.round(x) : x.toFixed(1);
+  const tiles = [
+    { num: fmt(m.trips), lab: 'Sequential calls', sub: m.fast && !r.writeBack ? 'two store reads' : 'data, cache and vector calls, one after another', hot: m.trips > 12 },
+    { num: fmt(m.viaMaster), lab: 'gRPC hops into the master', sub: m.ext ? 'external store: no proxy hop' : m.inone ? 'in-process in gorse-in-one' : m.viaMaster ? '2 per positive item' : 'none on this path', hot: m.viaMaster > 0 },
+    { num: fmt(m.limiter), lab: 'Queries waiting on the xvec limiter', sub: m.ext ? 'external store: no master limiter' : `${state.nJobs} slot${state.nJobs > 1 ? 's' : ''}, shared cluster-wide`, hot: m.limiter > 0 },
+    { num: fmt(m.vectors), lab: 'Neighbor vectors fetched, then dropped', sub: m.vectors ? `≈ ${mb(m.loops * 0.2)}–${mb(m.loops * 0.4)} MB, report's estimate` : m.ext && !m.fast && m.i2i ? 'depends on the external client' : 'none on this path', hot: m.vectors > 0 },
+  ];
+  $('#tiles').innerHTML = tiles.map(t => `<div class="tile${t.hot ? ' hot' : ''}"><div class="num">${t.num}</div><div class="lab">${t.lab}</div><div class="sub">${t.sub}</div></div>`).join('');
+
+  drawSeq(m);
+}
+
+let seqSteps = [];
+function drawSeq(m) {
+  const W = 1000, n = m.parts.length, X = {};
+  m.parts.forEach(([id], i) => X[id] = 110 + i * ((W - 200) / (n - 1)));
+  let y = 64;
+  const stack = [], frames = [], items = [];
+  for (const row of m.rows) {
+    if (row.kind === 'open') { stack.push({ ...row, y, depth: stack.length }); y += 30; continue; }
+    if (row.kind === 'close') { const f = stack.pop(); frames.push({ ...f, y2: y + 10 }); y += 20; continue; }
+    y += row.kind === 'note' ? 34 : 38;
+    items.push({ ...row, y });
+  }
+  const H = y + 30;
+  seqSteps = items;
+  if (state.req.step >= items.length) state.req.step = 0;
+
+  let s = `<defs>
+    <marker id="seq-ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="ah-2" d="M0,1 L10,5 L0,9 z"/></marker>
+    <marker id="seq-ah-hot" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="ah-hot" d="M0,1 L10,5 L0,9 z"/></marker>
+    <marker id="seq-ah-ok" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="ah-ok" d="M0,1 L10,5 L0,9 z"/></marker>
+  </defs>`;
+  items.forEach((it, i) => { s += `<rect class="hit" data-i="${i}" x="0" y="${it.y - (it.kind === 'note' ? 24 : 26)}" width="${W}" height="32"/>`; });
+  m.parts.forEach(([id, name, sub]) => {
+    const x = X[id];
+    s += `<line class="life" x1="${x}" y1="52" x2="${x}" y2="${H - 8}"/>`;
+    s += `<rect class="seq-head" x="${x - 72}" y="6" width="144" height="44" rx="6"/>`;
+    s += `<text class="t-b" x="${x}" y="25" text-anchor="middle">${esc(name)}</text>`;
+    s += `<text class="t-code" x="${x}" y="41" text-anchor="middle">${esc(sub)}</text>`;
+  });
+  frames.forEach(f => {
+    const x1 = X.S - 125 + f.depth * 12, x2 = W - 14 - f.depth * 12, y1 = f.y + 6;
+    const tw = f.label.length * 6.4 + 18;
+    s += `<g data-b="${f.b || ''}"><rect class="frame${f.hot ? ' hot' : ''}" x="${x1}" y="${y1}" width="${x2 - x1}" height="${f.y2 - y1}" rx="4"/>`;
+    s += `<rect class="frame-tab" x="${x1}" y="${y1}" width="${tw}" height="20" rx="4"/>`;
+    s += `<text class="frame-lbl" x="${x1 + 9}" y="${y1 + 14}">${esc(f.label)}</text></g>`;
+  });
+  items.forEach((it, i) => {
+    const cls = ['row', it.ret && 'ret', it.hot && 'hot', it.ok && 'ok', it.opt && 'opt'].filter(Boolean).join(' ');
+    s += `<g class="${cls}" data-i="${i}" data-b="${it.b || ''}" tabindex="0" role="button" aria-label="Step ${i + 1}: ${esc(it.label)}">`;
+    s += `<circle class="no" cx="28" cy="${it.y - 4}" r="11"/><text class="no-t" x="28" y="${it.y}" text-anchor="middle">${i + 1}</text>`;
+    if (it.kind === 'note') {
+      const x = X[it.at];
+      s += `<rect class="note-box" x="${x - 120}" y="${it.y - 19}" width="240" height="24" rx="4"/>`;
+      s += `<text class="t-m" x="${x}" y="${it.y - 3}" text-anchor="middle">${esc(it.label)}</text>`;
+    } else {
+      const x1 = X[it.from], x2 = X[it.to], dir = x2 > x1 ? 1 : -1;
+      const mk = it.hot ? 'seq-ah-hot' : it.ok ? 'seq-ah-ok' : 'seq-ah';
+      s += `<path class="m-line" d="M${x1 + dir * 2},${it.y} H${x2 - dir * 2}" marker-end="url(#${mk})"/>`;
+      s += `<text class="m-lbl" x="${(x1 + x2) / 2}" y="${it.y - 8}" text-anchor="middle">${esc(it.label)}</text>`;
+    }
+    s += `</g>`;
+  });
+  const svg = $('#seq');
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svg.innerHTML = s;
+  renderStep();
+}
+function renderStep() {
+  const i = state.req.step, it = seqSteps[i];
+  $$('#seq [data-i]').forEach(el => el.classList.toggle('current', +el.dataset.i === i));
+  if (!it) { $('#step-detail').innerHTML = ''; return; }
+  $('#step-detail').innerHTML = `
+    <div class="stepbar"><span class="step-no">STEP ${i + 1} / ${seqSteps.length}</span>
+      <span class="nav"><button class="btn" id="step-prev" ${i === 0 ? 'disabled' : ''}>← Prev</button><button class="btn" id="step-next" ${i === seqSteps.length - 1 ? 'disabled' : ''}>Next →</button></span></div>
+    <h3><code>${esc(it.label)}</code></h3><p>${it.detail || ''}</p>${refs(it.refs)}`;
+  $('#step-prev').onclick = () => { state.req.step = Math.max(0, i - 1); renderStep(); };
+  $('#step-next').onclick = () => { state.req.step = Math.min(seqSteps.length - 1, i + 1); renderStep(); };
+}
+function bindRequest() {
+  const upd = fn => () => { fn(); renderAll(); };
+  $('#rq-entry').addEventListener('change', upd(() => state.req.hasEntry = $('#rq-entry').checked));
+  $('#rq-enough').addEventListener('change', upd(() => state.req.enough = $('#rq-enough').checked));
+  $('#rq-cat').addEventListener('change', upd(() => state.req.catOK = $('#rq-cat').checked));
+  $('#rq-pos').addEventListener('input', upd(() => state.req.positives = +$('#rq-pos').value));
+  $('#rq-n').addEventListener('input', upd(() => state.req.n = +$('#rq-n').value));
+  $('#rq-wb').addEventListener('change', upd(() => state.req.writeBack = $('#rq-wb').checked));
+  const seq = $('#seq');
+  seq.addEventListener('click', e => { const t = e.target.closest('[data-i]'); if (t) { state.req.step = +t.dataset.i; renderStep(); } });
+  seq.addEventListener('keydown', e => {
+    const t = e.target.closest('.row');
+    if (t && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); state.req.step = +t.dataset.i; renderStep(); }
+  });
+}
+
+/* ---------- §3 queue model ---------- */
+function simParams() {
+  const ext = state.vector === 'external', inone = state.deploy === 'inone';
+  const L = state.fallback === 'i2i' ? Math.min(state.req.positives, state.contextSize) : 0;
+  return {
+    slots: ext ? Infinity : state.nJobs,
+    L,
+    k: state.sim.parallel ? 8 : 1,
+    others: state.sim.others,
+    W: state.sim.workerActive ? (inone ? state.nJobs : state.workerJobs) : 0,
+    ext, inone,
+  };
+}
+function newSim(p) {
+  const clients = [{ type: 'you', k: p.k, left: p.L, out: 0, done: 0 }];
+  for (let i = 0; i < p.others; i++) clients.push({ type: 'other', k: 1, left: Infinity, out: 0, done: 0 });
+  for (let i = 0; i < p.W; i++) clients.push({ type: 'worker', k: 1, left: Infinity, out: 0, done: 0 });
+  return { p, clients, queue: [], serving: [], tick: 0, finishedAt: p.L === 0 ? 0 : null };
+}
+function stepSim(s) {
+  for (const ci of s.serving) { const c = s.clients[ci]; c.out--; c.done++; c.left--; }
+  s.serving = [];
+  if (s.finishedAt == null && s.clients[0].done >= s.p.L) s.finishedAt = s.tick;
+  const n = s.clients.length;
+  for (let j = 0; j < n; j++) {
+    const ci = (s.tick + j) % n, c = s.clients[ci];
+    while (c.out < c.k && c.left - c.out > 0) { s.queue.push(ci); c.out++; }
+  }
+  s.serving = s.queue.splice(0, Math.min(s.queue.length, s.p.slots));
+  s.tick++;
+}
+function simulate(p) {
+  const s = newSim(p);
+  while (s.finishedAt == null && s.tick < 400000) stepSim(s);
+  return s.finishedAt;
+}
+
+let vis = null, timer = null, simKey = '';
+function resetSim(force) {
+  const p = simParams();
+  const key = JSON.stringify(p, (k, v) => v === Infinity ? 'inf' : v);
+  if (!force && key === simKey) return;
+  simKey = key;
+  stopSim();
+  vis = newSim(p);
+  if (p.L > 0) stepSim(vis);
+  drawSim();
+  renderSimResult(p);
+}
+function stopSim() { if (timer) { clearInterval(timer); timer = null; } $('#sim-play').textContent = 'Play'; }
+function playSim() {
+  if (timer) { stopSim(); return; }
+  if (!vis || vis.finishedAt != null) { simKey = ''; resetSim(true); }
+  if (vis.p.L === 0) return;
+  $('#sim-play').textContent = 'Pause';
+  timer = setInterval(() => { stepSim(vis); drawSim(); if (vis.finishedAt != null) stopSim(); }, 140);
+}
+function drawSim() {
+  const s = vis, p = s.p, type = ci => s.clients[ci].type, you = s.clients[0];
+  $('#sim-you-sub').textContent = p.L === 0 ? 'no vector queries on this path'
+    : `${you.out} in flight · ${Math.min(you.done, p.L)} / ${p.L} QueryVectors done`;
+  $('#sim-oth-title').textContent = `Other fallbacks × ${p.others}`;
+  $('#sim-wk-title').textContent = p.inone ? `Inline worker pass × ${p.W}` : `Worker jobs × ${p.W}`;
+  $('#sim-wk-sub').textContent = state.sim.workerActive ? 'mid-pass, one query in flight each' : 'idle between passes';
+  $('#sim-q-label').textContent = p.ext ? 'NO QUEUE AT THE MASTER' : `FIFO QUEUE · ${s.queue.length} WAITING`;
+
+  const cap = 21, q = s.queue, shown = q.length > cap ? cap - 1 : q.length;
+  let h = '';
+  for (let k = 0; k < shown; k++) h += `<rect class="sq sq-${type(q[k])}" x="${684 - k * 20}" y="104" width="16" height="16" rx="3"/>`;
+  if (q.length > cap) h += `<text class="t-code" x="${680 - shown * 20 + 16}" y="117" text-anchor="end">+${q.length - shown}</text>`;
+  $('#sim-queue').innerHTML = h;
+
+  let g = '';
+  if (p.slots === Infinity) {
+    g = `<text class="t-m" x="800" y="104" text-anchor="middle">external store:</text><text class="t-m" x="800" y="120" text-anchor="middle">no master limiter</text><text class="t-code" x="800" y="140" text-anchor="middle">serving ${s.serving.length}</text>`;
+    $('#sim-slot-label').textContent = '';
+    $('#sim-lim-cap').textContent = 'NO LIMITER';
+  } else {
+    for (let i = 0; i < p.slots; i++) {
+      const x = 752 + (i % 5) * 20, y = 40 + Math.floor(i / 5) * 20;
+      g += `<rect class="sq ${i < s.serving.length ? 'sq-' + type(s.serving[i]) : 'sq-idle'}" x="${x}" y="${y}" width="16" height="16" rx="3"/>`;
+    }
+    $('#sim-slot-label').textContent = `n_jobs = ${p.slots}`;
+    $('#sim-lim-cap').textContent = 'LIMITER';
+  }
+  $('#sim-slots').innerHTML = g;
+  $('#sim-x-sub').textContent = p.ext ? 'external store' : 'in master';
+  const frac = p.L ? Math.min(you.done, p.L) / p.L : 0;
+  $('#sim-prog').setAttribute('width', String(960 * frac));
+  $('#sim-tick').textContent = p.L === 0 ? '' : `tick ${s.tick}` + (s.finishedAt != null ? ` · your request finished at tick ${s.finishedAt}` : '');
+}
+function renderSimResult(p) {
+  const out = $('#sim-say');
+  if (p.L === 0) {
+    $('#bar-t').style.width = '0'; $('#bar-i').style.width = '0';
+    $('#val-t').textContent = '—'; $('#val-i').textContent = '—';
+    out.textContent = state.fallback === 'np'
+      ? 'With the non-personalized fallback (C4), this request makes no vector queries, so it never waits here.'
+      : 'This user has no positive items, so item-to-item makes no vector queries.';
+    return;
+  }
+  const T = simulate(p), I = Math.ceil(p.L / p.k), max = Math.max(T, I);
+  $('#bar-t').style.width = (100 * T / max) + '%';
+  $('#bar-i').style.width = (100 * I / max) + '%';
+  $('#val-t').textContent = `${fmt(T)} ticks`;
+  $('#val-i').textContent = `${fmt(I)} ticks`;
+  const wait = T > I ? Math.round(100 * (1 - I / T)) : 0;
+  let say = `Your request needs ${p.L} QueryVectors, ${p.k === 1 ? 'one at a time' : 'up to 8 at a time'}. It finishes at tick ${fmt(T)}; with nobody else in line it would take ${fmt(I)}. `;
+  say += wait ? `It spends ${wait}% of that time waiting for a slot. ` : 'It never waits for a slot. ';
+  if (p.ext) say += 'The model assumes the external store has room for every in-flight query.';
+  else if (p.inone) say += 'In gorse-in-one, raising n_jobs adds slots and inline worker jobs together.';
+  else if (wait && state.nJobs === 1) say += 'Raise n_jobs (C1), lower context_size (C3) or switch to an external store (C5) to see the bar shrink.';
+  out.textContent = say;
+}
+function bindSim() {
+  $('#sim-worker').checked = state.sim.workerActive;
+  $('#sim-others').value = state.sim.others;
+  $('#sim-worker').addEventListener('change', () => { state.sim.workerActive = $('#sim-worker').checked; renderAll(); });
+  $('#sim-par').addEventListener('change', () => { state.sim.parallel = $('#sim-par').checked; renderAll(); });
+  $('#sim-others').addEventListener('input', () => { state.sim.others = +$('#sim-others').value; renderAll(); });
+  $('#sim-play').addEventListener('click', playSim);
+  $('#sim-step').addEventListener('click', () => { stopSim(); if (vis.finishedAt == null) { stepSim(vis); drawSim(); } });
+  $('#sim-reset').addEventListener('click', () => { simKey = ''; resetSim(true); });
+}
+function renderSim() {
+  $('#sim-par').checked = state.sim.parallel;
+  $('#out-others').textContent = state.sim.others;
+  resetSim(false);
+}
+
+/* ---------- §4 pipeline ---------- */
+function renderPipe() {
+  $('#pipe-w1').textContent = state.deploy === 'inone'
+    ? `one user per job · Jobs = n_jobs = ${state.nJobs}`
+    : `one user per job · --jobs ${state.workerJobs}`;
+  $$('#pipe .node').forEach(n => n.classList.toggle('selected', n.dataset.node === state.pipeSel));
+  $('#pipe-detail').innerHTML = state.pipeSel ? detailHTML(PIPE[state.pipeSel])
+    : '<p class="hint">Select a stage. Amber tags mark full scans, full rewrites and the gates where users get skipped.</p>';
+}
+
+/* ---------- §5 fixes ---------- */
+const TRIES = { c1: ['nJobs', 8], c2: ['workerJobs', 8], c3: ['contextSize', 20], c4: ['fallback', 'np'], c5: ['vector', 'external'] };
+function tryFix(id) {
+  if (id === 'k2') state.sim.parallel = !state.sim.parallel;
+  else { const [k, v] = TRIES[id]; state[k] = state[k] === v ? DEFAULTS[k] : v; }
+  renderAll();
+}
+function renderFixes() {
+  $$('[data-try]').forEach(b => {
+    const id = b.dataset.try;
+    const on = id === 'k2' ? state.sim.parallel : state[TRIES[id][0]] === TRIES[id][1];
+    b.setAttribute('aria-pressed', String(on));
+    b.textContent = on ? 'Applied · undo' : (id === 'k2' ? 'Try it in §3' : 'Try it');
+  });
+}
+
+/* ---------- wiring ---------- */
+function renderAll() {
+  renderConfig();
+  renderMap();
+  renderRequest();
+  renderSim();
+  renderPipe();
+  renderFixes();
+  applyLens();
+}
+function bindNodes(svgSel, key) {
+  const svg = $(svgSel);
+  const pick = n => { state[key] = state[key] === n.dataset.node ? '' : n.dataset.node; key === 'mapSel' ? renderMap() : renderPipe(); applyLens(); };
+  svg.addEventListener('click', e => { const n = e.target.closest('.node'); if (n) pick(n); });
+  svg.addEventListener('keydown', e => {
+    const n = e.target.closest('.node');
+    if (n && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); pick(n); }
+  });
+}
+document.addEventListener('click', e => {
+  const l = e.target.closest('[data-lens-set]'); if (l) { setLens(l.dataset.lensSet); return; }
+  const t = e.target.closest('[data-try]'); if (t) { tryFix(t.dataset.try); return; }
+  const p = e.target.closest('[data-preset]');
+  if (p) { Object.assign(state.req, PRESETS[p.dataset.preset]); state.req.step = 0; renderAll(); }
+});
+
+bindConfig();
+bindRequest();
+bindSim();
+bindNodes('#map', 'mapSel');
+bindNodes('#pipe', 'pipeSel');
+renderAll();
+})();
+</script>
+</body>
+</html>
