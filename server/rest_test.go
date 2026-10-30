@@ -36,8 +36,6 @@ import (
 	"github.com/steinfletcher/apitest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 )
 
 const apiKey = "test_api_key"
@@ -106,19 +104,19 @@ func (suite *ServerTestSuite) marshal(v any) string {
 	return string(s)
 }
 
-func (suite *ServerTestSuite) TestEmitRequest() {
-	requests := make(chan map[string]any, 1)
+func (suite *ServerTestSuite) TestRequestEvent() {
+	type requestEvent struct {
+		timestamp time.Time
+		fields    map[string]any
+	}
+	requests := make(chan requestEvent, 1)
 	ctx := suite.T().Context()
-	log.SetEventHandler(func(name string, fields ...zap.Field) {
+	log.SetEventHandler(func(name string, timestamp time.Time, fields map[string]any) {
 		if name != "request" {
 			return
 		}
-		encoder := zapcore.NewMapObjectEncoder()
-		for _, field := range fields {
-			field.AddTo(encoder)
-		}
 		select {
-		case requests <- encoder.Fields:
+		case requests <- requestEvent{timestamp: timestamp, fields: fields}:
 		case <-ctx.Done():
 		}
 	})
@@ -146,7 +144,8 @@ func (suite *ServerTestSuite) TestEmitRequest() {
 	defer timer.Stop()
 	for {
 		select {
-		case req := <-requests:
+		case event := <-requests:
+			req := event.fields
 			if req["request_id"] != requestID {
 				continue
 			}
@@ -157,9 +156,9 @@ func (suite *ServerTestSuite) TestEmitRequest() {
 			suite.EqualValues(http.StatusOK, req["status_code"])
 			suite.Positive(req["response_time"])
 			suite.EqualValues(len(responseBytes), req["response_bytes"])
-			suite.Require().IsType(time.Time{}, req["timestamp"])
-			suite.False(req["timestamp"].(time.Time).Before(before))
-			suite.False(req["timestamp"].(time.Time).After(after))
+			suite.NotContains(req, "timestamp")
+			suite.False(event.timestamp.Before(before))
+			suite.False(event.timestamp.After(after))
 			suite.Empty(req["remote_addr"])
 			return
 		case <-timer.C:

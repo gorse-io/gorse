@@ -19,7 +19,6 @@ import (
 	"os"
 	"runtime"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -67,36 +66,22 @@ func init() {
 	}
 }
 
-// EventHandler records named events with dynamic fields.
-// Callbacks may run concurrently and must not modify field values.
-type EventHandler func(name string, fields ...zap.Field)
+type EventHandler func(name string, timestamp time.Time, fields map[string]any)
 
-var (
-	eventHandlerMu sync.RWMutex
-	eventHandler   EventHandler
-)
+var eventHandler EventHandler
 
-// SetEventHandler replaces the event handler. A nil handler disables events.
-// Events already submitted continue to use their original handler.
 func SetEventHandler(handler EventHandler) {
-	eventHandlerMu.Lock()
-	defer eventHandlerMu.Unlock()
 	eventHandler = handler
 }
 
-// Event asynchronously records an event without writing to the application log.
-// A timestamp field is added automatically at submission time.
-// The field slice is copied, but referenced objects must remain immutable until
-// the handler finishes.
 func Event(name string, fields ...zap.Field) {
-	eventHandlerMu.RLock()
 	handler := eventHandler
-	eventHandlerMu.RUnlock()
 	if handler != nil {
-		eventFields := make([]zap.Field, len(fields)+1)
-		copy(eventFields, fields)
-		eventFields[len(fields)] = zap.Time("timestamp", time.Now())
-		go handler(name, eventFields...)
+		encoder := zapcore.NewMapObjectEncoder()
+		for _, field := range fields {
+			field.AddTo(encoder)
+		}
+		go handler(name, time.Now(), encoder.Fields)
 	}
 }
 
