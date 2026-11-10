@@ -148,6 +148,8 @@ message GeoPoint {
   string id = 1;
   double longitude = 2;
   double latitude = 3;
+  repeated string categories = 4;
+  google.protobuf.Timestamp timestamp = 5;
 }
 
 message GeoQuery {

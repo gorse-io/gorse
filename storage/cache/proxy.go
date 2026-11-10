@@ -438,11 +438,17 @@ func geoClientError(err error) error {
 }
 
 func geoPointToProto(point GeoPoint) *protocol.GeoPoint {
-	return &protocol.GeoPoint{Id: point.Id, Longitude: point.Longitude, Latitude: point.Latitude}
+	return &protocol.GeoPoint{Id: point.Id, Longitude: point.Longitude, Latitude: point.Latitude,
+		Categories: point.Categories, Timestamp: timestamppb.New(point.Timestamp)}
 }
 
 func geoPointFromProto(point *protocol.GeoPoint) GeoPoint {
-	return GeoPoint{Id: point.GetId(), Longitude: point.GetLongitude(), Latitude: point.GetLatitude()}
+	result := GeoPoint{Id: point.GetId(), Longitude: point.GetLongitude(), Latitude: point.GetLatitude(),
+		Categories: point.GetCategories()}
+	if point.GetTimestamp() != nil {
+		result.Timestamp = point.GetTimestamp().AsTime()
+	}
+	return result
 }
 
 func (p *ProxyServer) ListGeoIndex(ctx context.Context, _ *protocol.ListGeoIndexRequest) (*protocol.ListGeoIndexResponse, error) {

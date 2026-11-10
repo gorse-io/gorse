@@ -23,7 +23,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/gorse-io/gorse/common/log"
@@ -91,7 +90,6 @@ type Redis struct {
 	storage.TablePrefix
 	client           redis.UniversalClient
 	maxSearchResults int
-	geoMutex         sync.RWMutex
 }
 
 // Close redis connection.
@@ -166,8 +164,6 @@ func (r *Redis) scan(ctx context.Context, client redis.UniversalClient, work fun
 }
 
 func (r *Redis) Purge() error {
-	r.geoMutex.Lock()
-	defer r.geoMutex.Unlock()
 	ctx := context.Background()
 	if clusterClient, isCluster := r.client.(*redis.ClusterClient); isCluster {
 		return clusterClient.ForEachMaster(ctx, func(ctx context.Context, client *redis.Client) error {
@@ -627,20 +623,20 @@ func redisGeoError(name string, err error) error {
 }
 
 // AddGeoIndex creates an empty Search index, whose existence does not depend on
-// point count. Lifecycle changes are coordinated within this client; callers
-// must coordinate drop/recreate against writes from other clients/processes.
+// point count. Callers must coordinate drop/recreate/purge against point operations,
+// including operations through the same client.
 func (r *Redis) AddGeoIndex(ctx context.Context, name string) error {
 	if err := validateGeoName(name); err != nil {
 		return err
 	}
-	r.geoMutex.Lock()
-	defer r.geoMutex.Unlock()
 	index := r.geoIndex(name)
 	return redisGeoError(name, r.client.FTCreate(ctx, index,
 		&redis.FTCreateOptions{OnHash: true, Prefix: []any{index + ":"}},
 		&redis.FieldSchema{FieldName: "location", FieldType: redis.SearchFieldTypeGeo},
 		&redis.FieldSchema{FieldName: "latitude", FieldType: redis.SearchFieldTypeNumeric},
 		&redis.FieldSchema{FieldName: "cell", FieldType: redis.SearchFieldTypeNumeric},
+		&redis.FieldSchema{FieldName: "categories", FieldType: redis.SearchFieldTypeTag, Separator: ";"},
+		&redis.FieldSchema{FieldName: "timestamp", FieldType: redis.SearchFieldTypeNumeric},
 	).Err())
 }
 
@@ -681,8 +677,6 @@ func (r *Redis) AddGeoPoints(ctx context.Context, name string, points []GeoPoint
 	if err != nil {
 		return err
 	}
-	r.geoMutex.RLock()
-	defer r.geoMutex.RUnlock()
 	if err = r.checkGeoIndex(ctx, name); err != nil {
 		return err
 	}
@@ -694,7 +688,8 @@ func (r *Redis) AddGeoPoints(ctx context.Context, name string, points []GeoPoint
 				return errors.WithStack(err)
 			}
 			key := r.geoPointKey(name, record.Id)
-			fields := []any{"payload", string(payload), "cell", record.Cell, "latitude", record.Latitude}
+			fields := []any{"payload", string(payload), "cell", record.Cell, "latitude", record.Latitude,
+				"categories", encodeCategories(record.Categories), "timestamp", record.Timestamp.UnixMicro()}
 			if math.Abs(record.Latitude) <= redisGeoLatitudeLimit {
 				fields = append(fields, "location", fmt.Sprintf("%.17g,%.17g", record.Longitude, record.Latitude))
 			} else {
@@ -720,8 +715,6 @@ func (r *Redis) SearchGeoPoints(ctx context.Context, name string, query GeoQuery
 	if err != nil {
 		return nil, err
 	}
-	r.geoMutex.RLock()
-	defer r.geoMutex.RUnlock()
 	if err = r.checkGeoIndex(ctx, name); err != nil {
 		return nil, err
 	}
@@ -801,8 +794,6 @@ func (r *Redis) DeleteGeoPoints(ctx context.Context, name string, ids ...string)
 	if err != nil {
 		return err
 	}
-	r.geoMutex.RLock()
-	defer r.geoMutex.RUnlock()
 	if err = r.checkGeoIndex(ctx, name); err != nil {
 		return err
 	}
@@ -823,8 +814,6 @@ func (r *Redis) DeleteGeoIndex(ctx context.Context, name string) error {
 	if err := validateGeoName(name); err != nil {
 		return err
 	}
-	r.geoMutex.Lock()
-	defer r.geoMutex.Unlock()
 	err := redisGeoError(name, r.client.FTDropIndexWithArgs(ctx, r.geoIndex(name), &redis.FTDropIndexOptions{DeleteDocs: true}).Err())
 	if errors.Is(err, storage.ErrNotFound) {
 		return nil

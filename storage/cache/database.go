@@ -294,9 +294,12 @@ const (
 
 // GeoPoint is a named location in degrees on the full sphere.
 // IDs are nonempty UTF-8 strings of at most 256 bytes.
+// Timestamps are stored in UTC with millisecond precision across backends.
 type GeoPoint struct {
 	Id                  string
 	Longitude, Latitude float64
+	Categories          []string
+	Timestamp           time.Time
 }
 
 // GeoQuery requests the nearest N points. Distances are in meters;
@@ -384,6 +387,7 @@ func prepareGeoPoints(name string, points []GeoPoint) ([]geoRecord, error) {
 			return nil, fmt.Errorf("geography point %q (%w)", point.Id, err)
 		}
 		point.Longitude, point.Latitude = longitude, latitude
+		point.Timestamp = point.Timestamp.UTC().Truncate(time.Millisecond)
 		records[i] = geoRecord{GeoPoint: point, Cell: geoMorton(longitude, latitude)}
 		last[point.Id] = i
 	}

@@ -588,7 +588,8 @@ func (db *SQLDatabase) geoStringType() string {
 // PostgreSQL TEXT cannot represent embedded NULs; bind logical keys as BYTEA.
 func (db *SQLDatabase) geoStringArg(value string) any {
 	if db.driver == Postgres {
-		return []byte(value)
+		// Keep GORM from expanding BYTEA into a list after VALUES ( or IN (.
+		return gorm.Expr("?", []byte(value))
 	}
 	return value
 }
@@ -766,7 +767,7 @@ func (db *SQLDatabase) finishGeoIndexCreation(ctx context.Context, index sqlGeoI
 		return fmt.Errorf("geo index %q creation no longer authorized %w", index.Name, storage.ErrNotFound)
 	}
 	table := db.quoteGeoIdentifier(index.PhysicalName)
-	ddl := "CREATE TABLE IF NOT EXISTS " + table + " (id " + db.geoStringType() + " NOT NULL PRIMARY KEY, longitude DOUBLE PRECISION NOT NULL, latitude DOUBLE PRECISION NOT NULL, cell BIGINT NOT NULL)"
+	ddl := "CREATE TABLE IF NOT EXISTS " + table + " (id " + db.geoStringType() + " NOT NULL PRIMARY KEY, longitude DOUBLE PRECISION NOT NULL, latitude DOUBLE PRECISION NOT NULL, cell BIGINT NOT NULL, categories TEXT NOT NULL, timestamp BIGINT NOT NULL)"
 	if err = db.gormDB.WithContext(ctx).Exec(ddl).Error; err != nil {
 		return err
 	}
@@ -813,14 +814,18 @@ func (db *SQLDatabase) AddGeoPoints(ctx context.Context, name string, points []G
 		return err
 	}
 	table := db.quoteGeoIdentifier(index.PhysicalName)
-	statement := "INSERT INTO " + table + " (id, longitude, latitude, cell) VALUES (?, ?, ?, ?)"
+	statement := "INSERT INTO " + table + " (id, longitude, latitude, cell, categories, timestamp) VALUES (?, ?, ?, ?, ?, ?)"
 	if db.driver == MySQL {
-		statement += " ON DUPLICATE KEY UPDATE longitude = VALUES(longitude), latitude = VALUES(latitude), cell = VALUES(cell)"
+		statement += " ON DUPLICATE KEY UPDATE longitude = VALUES(longitude), latitude = VALUES(latitude), cell = VALUES(cell), categories = VALUES(categories), timestamp = VALUES(timestamp)"
 	} else {
-		statement += " ON CONFLICT (id) DO UPDATE SET longitude = excluded.longitude, latitude = excluded.latitude, cell = excluded.cell"
+		statement += " ON CONFLICT (id) DO UPDATE SET longitude = excluded.longitude, latitude = excluded.latitude, cell = excluded.cell, categories = excluded.categories, timestamp = excluded.timestamp"
 	}
 	for _, record := range records {
-		if err = db.gormDB.WithContext(ctx).Exec(statement, db.geoStringArg(record.Id), record.Longitude, record.Latitude, record.Cell).Error; err != nil {
+		categories, err := json.Marshal(record.Categories)
+		if err != nil {
+			return err
+		}
+		if err = db.gormDB.WithContext(ctx).Exec(statement, db.geoStringArg(record.Id), record.Longitude, record.Latitude, record.Cell, string(categories), record.Timestamp.UnixMicro()).Error; err != nil {
 			return err
 		}
 	}
@@ -851,7 +856,7 @@ func (db *SQLDatabase) scanGeoPoints(ctx context.Context, physical string, range
 		var last geoRecord
 		first := true
 		for {
-			statement := "SELECT id, longitude, latitude, cell FROM " + table + " WHERE cell >= ? AND cell <= ?"
+			statement := "SELECT id, longitude, latitude, cell, categories, timestamp FROM " + table + " WHERE cell >= ? AND cell <= ?"
 			args := []any{cellRange.Min, cellRange.Max}
 			if !first {
 				statement += " AND (cell > ? OR (cell = ? AND id > ?))"
@@ -865,10 +870,17 @@ func (db *SQLDatabase) scanGeoPoints(ctx context.Context, physical string, range
 			page := make([]geoRecord, 0, 512)
 			for rows.Next() {
 				var record geoRecord
-				if err = rows.Scan(&record.Id, &record.Longitude, &record.Latitude, &record.Cell); err != nil {
+				var categories string
+				var timestamp int64
+				if err = rows.Scan(&record.Id, &record.Longitude, &record.Latitude, &record.Cell, &categories, &timestamp); err != nil {
 					rows.Close()
 					return err
 				}
+				if err = json.Unmarshal([]byte(categories), &record.Categories); err != nil {
+					rows.Close()
+					return err
+				}
+				record.Timestamp = time.UnixMicro(timestamp).UTC()
 				page = append(page, record)
 			}
 			rowsErr := rows.Err()
