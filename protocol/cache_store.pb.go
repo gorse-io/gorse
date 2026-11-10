@@ -1303,6 +1303,7 @@ type GeoPoint struct {
 	Latitude      float64                `protobuf:"fixed64,3,opt,name=latitude,proto3" json:"latitude,omitempty"`
 	Categories    []string               `protobuf:"bytes,4,rep,name=categories,proto3" json:"categories,omitempty"`
 	Timestamp     *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
+	IsHidden      bool                   `protobuf:"varint,6,opt,name=is_hidden,json=isHidden,proto3" json:"is_hidden,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1372,124 +1373,11 @@ func (x *GeoPoint) GetTimestamp() *timestamppb.Timestamp {
 	return nil
 }
 
-type GeoQuery struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Longitude     float64                `protobuf:"fixed64,1,opt,name=longitude,proto3" json:"longitude,omitempty"`
-	Latitude      float64                `protobuf:"fixed64,2,opt,name=latitude,proto3" json:"latitude,omitempty"`
-	N             int64                  `protobuf:"varint,3,opt,name=n,proto3" json:"n,omitempty"`
-	MaxDistance   float64                `protobuf:"fixed64,4,opt,name=max_distance,json=maxDistance,proto3" json:"max_distance,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *GeoQuery) Reset() {
-	*x = GeoQuery{}
-	mi := &file_cache_store_proto_msgTypes[26]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *GeoQuery) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*GeoQuery) ProtoMessage() {}
-
-func (x *GeoQuery) ProtoReflect() protoreflect.Message {
-	mi := &file_cache_store_proto_msgTypes[26]
+func (x *GeoPoint) GetIsHidden() bool {
 	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
+		return x.IsHidden
 	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use GeoQuery.ProtoReflect.Descriptor instead.
-func (*GeoQuery) Descriptor() ([]byte, []int) {
-	return file_cache_store_proto_rawDescGZIP(), []int{26}
-}
-
-func (x *GeoQuery) GetLongitude() float64 {
-	if x != nil {
-		return x.Longitude
-	}
-	return 0
-}
-
-func (x *GeoQuery) GetLatitude() float64 {
-	if x != nil {
-		return x.Latitude
-	}
-	return 0
-}
-
-func (x *GeoQuery) GetN() int64 {
-	if x != nil {
-		return x.N
-	}
-	return 0
-}
-
-func (x *GeoQuery) GetMaxDistance() float64 {
-	if x != nil {
-		return x.MaxDistance
-	}
-	return 0
-}
-
-type GeoResult struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Point         *GeoPoint              `protobuf:"bytes,1,opt,name=point,proto3" json:"point,omitempty"`
-	Distance      float64                `protobuf:"fixed64,2,opt,name=distance,proto3" json:"distance,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *GeoResult) Reset() {
-	*x = GeoResult{}
-	mi := &file_cache_store_proto_msgTypes[27]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *GeoResult) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*GeoResult) ProtoMessage() {}
-
-func (x *GeoResult) ProtoReflect() protoreflect.Message {
-	mi := &file_cache_store_proto_msgTypes[27]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use GeoResult.ProtoReflect.Descriptor instead.
-func (*GeoResult) Descriptor() ([]byte, []int) {
-	return file_cache_store_proto_rawDescGZIP(), []int{27}
-}
-
-func (x *GeoResult) GetPoint() *GeoPoint {
-	if x != nil {
-		return x.Point
-	}
-	return nil
-}
-
-func (x *GeoResult) GetDistance() float64 {
-	if x != nil {
-		return x.Distance
-	}
-	return 0
+	return false
 }
 
 type AddGeoIndexRequest struct {
@@ -1501,7 +1389,7 @@ type AddGeoIndexRequest struct {
 
 func (x *AddGeoIndexRequest) Reset() {
 	*x = AddGeoIndexRequest{}
-	mi := &file_cache_store_proto_msgTypes[28]
+	mi := &file_cache_store_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1513,7 +1401,7 @@ func (x *AddGeoIndexRequest) String() string {
 func (*AddGeoIndexRequest) ProtoMessage() {}
 
 func (x *AddGeoIndexRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_cache_store_proto_msgTypes[28]
+	mi := &file_cache_store_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1526,7 +1414,7 @@ func (x *AddGeoIndexRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddGeoIndexRequest.ProtoReflect.Descriptor instead.
 func (*AddGeoIndexRequest) Descriptor() ([]byte, []int) {
-	return file_cache_store_proto_rawDescGZIP(), []int{28}
+	return file_cache_store_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *AddGeoIndexRequest) GetName() string {
@@ -1544,7 +1432,7 @@ type AddGeoIndexResponse struct {
 
 func (x *AddGeoIndexResponse) Reset() {
 	*x = AddGeoIndexResponse{}
-	mi := &file_cache_store_proto_msgTypes[29]
+	mi := &file_cache_store_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1556,7 +1444,7 @@ func (x *AddGeoIndexResponse) String() string {
 func (*AddGeoIndexResponse) ProtoMessage() {}
 
 func (x *AddGeoIndexResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_cache_store_proto_msgTypes[29]
+	mi := &file_cache_store_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1569,7 +1457,7 @@ func (x *AddGeoIndexResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddGeoIndexResponse.ProtoReflect.Descriptor instead.
 func (*AddGeoIndexResponse) Descriptor() ([]byte, []int) {
-	return file_cache_store_proto_rawDescGZIP(), []int{29}
+	return file_cache_store_proto_rawDescGZIP(), []int{27}
 }
 
 type AddGeoPointsRequest struct {
@@ -1582,7 +1470,7 @@ type AddGeoPointsRequest struct {
 
 func (x *AddGeoPointsRequest) Reset() {
 	*x = AddGeoPointsRequest{}
-	mi := &file_cache_store_proto_msgTypes[30]
+	mi := &file_cache_store_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1594,7 +1482,7 @@ func (x *AddGeoPointsRequest) String() string {
 func (*AddGeoPointsRequest) ProtoMessage() {}
 
 func (x *AddGeoPointsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_cache_store_proto_msgTypes[30]
+	mi := &file_cache_store_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1607,7 +1495,7 @@ func (x *AddGeoPointsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddGeoPointsRequest.ProtoReflect.Descriptor instead.
 func (*AddGeoPointsRequest) Descriptor() ([]byte, []int) {
-	return file_cache_store_proto_rawDescGZIP(), []int{30}
+	return file_cache_store_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *AddGeoPointsRequest) GetName() string {
@@ -1632,7 +1520,7 @@ type AddGeoPointsResponse struct {
 
 func (x *AddGeoPointsResponse) Reset() {
 	*x = AddGeoPointsResponse{}
-	mi := &file_cache_store_proto_msgTypes[31]
+	mi := &file_cache_store_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1644,7 +1532,7 @@ func (x *AddGeoPointsResponse) String() string {
 func (*AddGeoPointsResponse) ProtoMessage() {}
 
 func (x *AddGeoPointsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_cache_store_proto_msgTypes[31]
+	mi := &file_cache_store_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1657,20 +1545,23 @@ func (x *AddGeoPointsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddGeoPointsResponse.ProtoReflect.Descriptor instead.
 func (*AddGeoPointsResponse) Descriptor() ([]byte, []int) {
-	return file_cache_store_proto_rawDescGZIP(), []int{31}
+	return file_cache_store_proto_rawDescGZIP(), []int{29}
 }
 
 type SearchGeoPointsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	Query         *GeoQuery              `protobuf:"bytes,2,opt,name=query,proto3" json:"query,omitempty"`
+	Longitude     float64                `protobuf:"fixed64,2,opt,name=longitude,proto3" json:"longitude,omitempty"`
+	Latitude      float64                `protobuf:"fixed64,3,opt,name=latitude,proto3" json:"latitude,omitempty"`
+	N             int64                  `protobuf:"varint,4,opt,name=n,proto3" json:"n,omitempty"`
+	MaxDistance   float64                `protobuf:"fixed64,5,opt,name=max_distance,json=maxDistance,proto3" json:"max_distance,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *SearchGeoPointsRequest) Reset() {
 	*x = SearchGeoPointsRequest{}
-	mi := &file_cache_store_proto_msgTypes[32]
+	mi := &file_cache_store_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1682,7 +1573,7 @@ func (x *SearchGeoPointsRequest) String() string {
 func (*SearchGeoPointsRequest) ProtoMessage() {}
 
 func (x *SearchGeoPointsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_cache_store_proto_msgTypes[32]
+	mi := &file_cache_store_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1695,7 +1586,7 @@ func (x *SearchGeoPointsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SearchGeoPointsRequest.ProtoReflect.Descriptor instead.
 func (*SearchGeoPointsRequest) Descriptor() ([]byte, []int) {
-	return file_cache_store_proto_rawDescGZIP(), []int{32}
+	return file_cache_store_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *SearchGeoPointsRequest) GetName() string {
@@ -1705,23 +1596,45 @@ func (x *SearchGeoPointsRequest) GetName() string {
 	return ""
 }
 
-func (x *SearchGeoPointsRequest) GetQuery() *GeoQuery {
+func (x *SearchGeoPointsRequest) GetLongitude() float64 {
 	if x != nil {
-		return x.Query
+		return x.Longitude
 	}
-	return nil
+	return 0
 }
 
+func (x *SearchGeoPointsRequest) GetLatitude() float64 {
+	if x != nil {
+		return x.Latitude
+	}
+	return 0
+}
+
+func (x *SearchGeoPointsRequest) GetN() int64 {
+	if x != nil {
+		return x.N
+	}
+	return 0
+}
+
+func (x *SearchGeoPointsRequest) GetMaxDistance() float64 {
+	if x != nil {
+		return x.MaxDistance
+	}
+	return 0
+}
+
+// Score.score is the nonnegative distance in meters, ordered nearest first.
 type SearchGeoPointsResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Points        []*GeoResult           `protobuf:"bytes,1,rep,name=points,proto3" json:"points,omitempty"`
+	Points        []*Score               `protobuf:"bytes,1,rep,name=points,proto3" json:"points,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *SearchGeoPointsResponse) Reset() {
 	*x = SearchGeoPointsResponse{}
-	mi := &file_cache_store_proto_msgTypes[33]
+	mi := &file_cache_store_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1733,7 +1646,7 @@ func (x *SearchGeoPointsResponse) String() string {
 func (*SearchGeoPointsResponse) ProtoMessage() {}
 
 func (x *SearchGeoPointsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_cache_store_proto_msgTypes[33]
+	mi := &file_cache_store_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1746,10 +1659,10 @@ func (x *SearchGeoPointsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SearchGeoPointsResponse.ProtoReflect.Descriptor instead.
 func (*SearchGeoPointsResponse) Descriptor() ([]byte, []int) {
-	return file_cache_store_proto_rawDescGZIP(), []int{33}
+	return file_cache_store_proto_rawDescGZIP(), []int{31}
 }
 
-func (x *SearchGeoPointsResponse) GetPoints() []*GeoResult {
+func (x *SearchGeoPointsResponse) GetPoints() []*Score {
 	if x != nil {
 		return x.Points
 	}
@@ -1766,7 +1679,7 @@ type DeleteGeoPointsRequest struct {
 
 func (x *DeleteGeoPointsRequest) Reset() {
 	*x = DeleteGeoPointsRequest{}
-	mi := &file_cache_store_proto_msgTypes[34]
+	mi := &file_cache_store_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1778,7 +1691,7 @@ func (x *DeleteGeoPointsRequest) String() string {
 func (*DeleteGeoPointsRequest) ProtoMessage() {}
 
 func (x *DeleteGeoPointsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_cache_store_proto_msgTypes[34]
+	mi := &file_cache_store_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1791,7 +1704,7 @@ func (x *DeleteGeoPointsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteGeoPointsRequest.ProtoReflect.Descriptor instead.
 func (*DeleteGeoPointsRequest) Descriptor() ([]byte, []int) {
-	return file_cache_store_proto_rawDescGZIP(), []int{34}
+	return file_cache_store_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *DeleteGeoPointsRequest) GetName() string {
@@ -1816,7 +1729,7 @@ type DeleteGeoPointsResponse struct {
 
 func (x *DeleteGeoPointsResponse) Reset() {
 	*x = DeleteGeoPointsResponse{}
-	mi := &file_cache_store_proto_msgTypes[35]
+	mi := &file_cache_store_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1828,7 +1741,7 @@ func (x *DeleteGeoPointsResponse) String() string {
 func (*DeleteGeoPointsResponse) ProtoMessage() {}
 
 func (x *DeleteGeoPointsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_cache_store_proto_msgTypes[35]
+	mi := &file_cache_store_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1841,7 +1754,7 @@ func (x *DeleteGeoPointsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteGeoPointsResponse.ProtoReflect.Descriptor instead.
 func (*DeleteGeoPointsResponse) Descriptor() ([]byte, []int) {
-	return file_cache_store_proto_rawDescGZIP(), []int{35}
+	return file_cache_store_proto_rawDescGZIP(), []int{33}
 }
 
 type DeleteGeoIndexRequest struct {
@@ -1853,7 +1766,7 @@ type DeleteGeoIndexRequest struct {
 
 func (x *DeleteGeoIndexRequest) Reset() {
 	*x = DeleteGeoIndexRequest{}
-	mi := &file_cache_store_proto_msgTypes[36]
+	mi := &file_cache_store_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1865,7 +1778,7 @@ func (x *DeleteGeoIndexRequest) String() string {
 func (*DeleteGeoIndexRequest) ProtoMessage() {}
 
 func (x *DeleteGeoIndexRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_cache_store_proto_msgTypes[36]
+	mi := &file_cache_store_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1878,7 +1791,7 @@ func (x *DeleteGeoIndexRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteGeoIndexRequest.ProtoReflect.Descriptor instead.
 func (*DeleteGeoIndexRequest) Descriptor() ([]byte, []int) {
-	return file_cache_store_proto_rawDescGZIP(), []int{36}
+	return file_cache_store_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *DeleteGeoIndexRequest) GetName() string {
@@ -1896,7 +1809,7 @@ type DeleteGeoIndexResponse struct {
 
 func (x *DeleteGeoIndexResponse) Reset() {
 	*x = DeleteGeoIndexResponse{}
-	mi := &file_cache_store_proto_msgTypes[37]
+	mi := &file_cache_store_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1908,7 +1821,7 @@ func (x *DeleteGeoIndexResponse) String() string {
 func (*DeleteGeoIndexResponse) ProtoMessage() {}
 
 func (x *DeleteGeoIndexResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_cache_store_proto_msgTypes[37]
+	mi := &file_cache_store_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1921,7 +1834,7 @@ func (x *DeleteGeoIndexResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteGeoIndexResponse.ProtoReflect.Descriptor instead.
 func (*DeleteGeoIndexResponse) Descriptor() ([]byte, []int) {
-	return file_cache_store_proto_rawDescGZIP(), []int{37}
+	return file_cache_store_proto_rawDescGZIP(), []int{35}
 }
 
 type ListGeoIndexRequest struct {
@@ -1932,7 +1845,7 @@ type ListGeoIndexRequest struct {
 
 func (x *ListGeoIndexRequest) Reset() {
 	*x = ListGeoIndexRequest{}
-	mi := &file_cache_store_proto_msgTypes[38]
+	mi := &file_cache_store_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1944,7 +1857,7 @@ func (x *ListGeoIndexRequest) String() string {
 func (*ListGeoIndexRequest) ProtoMessage() {}
 
 func (x *ListGeoIndexRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_cache_store_proto_msgTypes[38]
+	mi := &file_cache_store_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1957,7 +1870,7 @@ func (x *ListGeoIndexRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListGeoIndexRequest.ProtoReflect.Descriptor instead.
 func (*ListGeoIndexRequest) Descriptor() ([]byte, []int) {
-	return file_cache_store_proto_rawDescGZIP(), []int{38}
+	return file_cache_store_proto_rawDescGZIP(), []int{36}
 }
 
 type ListGeoIndexResponse struct {
@@ -1969,7 +1882,7 @@ type ListGeoIndexResponse struct {
 
 func (x *ListGeoIndexResponse) Reset() {
 	*x = ListGeoIndexResponse{}
-	mi := &file_cache_store_proto_msgTypes[39]
+	mi := &file_cache_store_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1981,7 +1894,7 @@ func (x *ListGeoIndexResponse) String() string {
 func (*ListGeoIndexResponse) ProtoMessage() {}
 
 func (x *ListGeoIndexResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_cache_store_proto_msgTypes[39]
+	mi := &file_cache_store_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1994,7 +1907,7 @@ func (x *ListGeoIndexResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListGeoIndexResponse.ProtoReflect.Descriptor instead.
 func (*ListGeoIndexResponse) Descriptor() ([]byte, []int) {
-	return file_cache_store_proto_rawDescGZIP(), []int{39}
+	return file_cache_store_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *ListGeoIndexResponse) GetNames() []string {
@@ -2103,7 +2016,7 @@ const file_cache_store_proto_rawDesc = "" +
 	"\x03end\x18\x03 \x01(\v2\x1a.google.protobuf.TimestampR\x03end\x12\x1a\n" +
 	"\bduration\x18\x04 \x01(\x03R\bduration\"P\n" +
 	"\x1bGetTimeSeriesPointsResponse\x121\n" +
-	"\x06points\x18\x01 \x03(\v2\x19.protocol.TimeSeriesPointR\x06points\"\xae\x01\n" +
+	"\x06points\x18\x01 \x03(\v2\x19.protocol.TimeSeriesPointR\x06points\"\xcb\x01\n" +
 	"\bGeoPoint\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1c\n" +
 	"\tlongitude\x18\x02 \x01(\x01R\tlongitude\x12\x1a\n" +
@@ -2111,27 +2024,23 @@ const file_cache_store_proto_rawDesc = "" +
 	"\n" +
 	"categories\x18\x04 \x03(\tR\n" +
 	"categories\x128\n" +
-	"\ttimestamp\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\ttimestamp\"u\n" +
-	"\bGeoQuery\x12\x1c\n" +
-	"\tlongitude\x18\x01 \x01(\x01R\tlongitude\x12\x1a\n" +
-	"\blatitude\x18\x02 \x01(\x01R\blatitude\x12\f\n" +
-	"\x01n\x18\x03 \x01(\x03R\x01n\x12!\n" +
-	"\fmax_distance\x18\x04 \x01(\x01R\vmaxDistance\"Q\n" +
-	"\tGeoResult\x12(\n" +
-	"\x05point\x18\x01 \x01(\v2\x12.protocol.GeoPointR\x05point\x12\x1a\n" +
-	"\bdistance\x18\x02 \x01(\x01R\bdistance\"(\n" +
+	"\ttimestamp\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\ttimestamp\x12\x1b\n" +
+	"\tis_hidden\x18\x06 \x01(\bR\bisHidden\"(\n" +
 	"\x12AddGeoIndexRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\"\x15\n" +
 	"\x13AddGeoIndexResponse\"U\n" +
 	"\x13AddGeoPointsRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12*\n" +
 	"\x06points\x18\x02 \x03(\v2\x12.protocol.GeoPointR\x06points\"\x16\n" +
-	"\x14AddGeoPointsResponse\"V\n" +
+	"\x14AddGeoPointsResponse\"\x97\x01\n" +
 	"\x16SearchGeoPointsRequest\x12\x12\n" +
-	"\x04name\x18\x01 \x01(\tR\x04name\x12(\n" +
-	"\x05query\x18\x02 \x01(\v2\x12.protocol.GeoQueryR\x05query\"F\n" +
-	"\x17SearchGeoPointsResponse\x12+\n" +
-	"\x06points\x18\x01 \x03(\v2\x13.protocol.GeoResultR\x06points\">\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1c\n" +
+	"\tlongitude\x18\x02 \x01(\x01R\tlongitude\x12\x1a\n" +
+	"\blatitude\x18\x03 \x01(\x01R\blatitude\x12\f\n" +
+	"\x01n\x18\x04 \x01(\x03R\x01n\x12!\n" +
+	"\fmax_distance\x18\x05 \x01(\x01R\vmaxDistance\"B\n" +
+	"\x17SearchGeoPointsResponse\x12'\n" +
+	"\x06points\x18\x01 \x03(\v2\x0f.protocol.ScoreR\x06points\">\n" +
 	"\x16DeleteGeoPointsRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x10\n" +
 	"\x03ids\x18\x02 \x03(\tR\x03ids\"\x19\n" +
@@ -2176,7 +2085,7 @@ func file_cache_store_proto_rawDescGZIP() []byte {
 	return file_cache_store_proto_rawDescData
 }
 
-var file_cache_store_proto_msgTypes = make([]protoimpl.MessageInfo, 40)
+var file_cache_store_proto_msgTypes = make([]protoimpl.MessageInfo, 38)
 var file_cache_store_proto_goTypes = []any{
 	(*Value)(nil),                       // 0: protocol.Value
 	(*Score)(nil),                       // 1: protocol.Score
@@ -2204,82 +2113,78 @@ var file_cache_store_proto_goTypes = []any{
 	(*GetTimeSeriesPointsRequest)(nil),  // 23: protocol.GetTimeSeriesPointsRequest
 	(*GetTimeSeriesPointsResponse)(nil), // 24: protocol.GetTimeSeriesPointsResponse
 	(*GeoPoint)(nil),                    // 25: protocol.GeoPoint
-	(*GeoQuery)(nil),                    // 26: protocol.GeoQuery
-	(*GeoResult)(nil),                   // 27: protocol.GeoResult
-	(*AddGeoIndexRequest)(nil),          // 28: protocol.AddGeoIndexRequest
-	(*AddGeoIndexResponse)(nil),         // 29: protocol.AddGeoIndexResponse
-	(*AddGeoPointsRequest)(nil),         // 30: protocol.AddGeoPointsRequest
-	(*AddGeoPointsResponse)(nil),        // 31: protocol.AddGeoPointsResponse
-	(*SearchGeoPointsRequest)(nil),      // 32: protocol.SearchGeoPointsRequest
-	(*SearchGeoPointsResponse)(nil),     // 33: protocol.SearchGeoPointsResponse
-	(*DeleteGeoPointsRequest)(nil),      // 34: protocol.DeleteGeoPointsRequest
-	(*DeleteGeoPointsResponse)(nil),     // 35: protocol.DeleteGeoPointsResponse
-	(*DeleteGeoIndexRequest)(nil),       // 36: protocol.DeleteGeoIndexRequest
-	(*DeleteGeoIndexResponse)(nil),      // 37: protocol.DeleteGeoIndexResponse
-	(*ListGeoIndexRequest)(nil),         // 38: protocol.ListGeoIndexRequest
-	(*ListGeoIndexResponse)(nil),        // 39: protocol.ListGeoIndexResponse
-	(*timestamppb.Timestamp)(nil),       // 40: google.protobuf.Timestamp
-	(*PingRequest)(nil),                 // 41: protocol.PingRequest
-	(*PingResponse)(nil),                // 42: protocol.PingResponse
+	(*AddGeoIndexRequest)(nil),          // 26: protocol.AddGeoIndexRequest
+	(*AddGeoIndexResponse)(nil),         // 27: protocol.AddGeoIndexResponse
+	(*AddGeoPointsRequest)(nil),         // 28: protocol.AddGeoPointsRequest
+	(*AddGeoPointsResponse)(nil),        // 29: protocol.AddGeoPointsResponse
+	(*SearchGeoPointsRequest)(nil),      // 30: protocol.SearchGeoPointsRequest
+	(*SearchGeoPointsResponse)(nil),     // 31: protocol.SearchGeoPointsResponse
+	(*DeleteGeoPointsRequest)(nil),      // 32: protocol.DeleteGeoPointsRequest
+	(*DeleteGeoPointsResponse)(nil),     // 33: protocol.DeleteGeoPointsResponse
+	(*DeleteGeoIndexRequest)(nil),       // 34: protocol.DeleteGeoIndexRequest
+	(*DeleteGeoIndexResponse)(nil),      // 35: protocol.DeleteGeoIndexResponse
+	(*ListGeoIndexRequest)(nil),         // 36: protocol.ListGeoIndexRequest
+	(*ListGeoIndexResponse)(nil),        // 37: protocol.ListGeoIndexResponse
+	(*timestamppb.Timestamp)(nil),       // 38: google.protobuf.Timestamp
+	(*PingRequest)(nil),                 // 39: protocol.PingRequest
+	(*PingResponse)(nil),                // 40: protocol.PingResponse
 }
 var file_cache_store_proto_depIdxs = []int32{
-	40, // 0: protocol.Score.timestamp:type_name -> google.protobuf.Timestamp
-	40, // 1: protocol.ScoreCondition.before:type_name -> google.protobuf.Timestamp
-	40, // 2: protocol.TimeSeriesPoint.timestamp:type_name -> google.protobuf.Timestamp
+	38, // 0: protocol.Score.timestamp:type_name -> google.protobuf.Timestamp
+	38, // 1: protocol.ScoreCondition.before:type_name -> google.protobuf.Timestamp
+	38, // 2: protocol.TimeSeriesPoint.timestamp:type_name -> google.protobuf.Timestamp
 	0,  // 3: protocol.SetRequest.values:type_name -> protocol.Value
 	1,  // 4: protocol.AddScoresRequest.documents:type_name -> protocol.Score
 	1,  // 5: protocol.SearchScoresResponse.documents:type_name -> protocol.Score
 	2,  // 6: protocol.DeleteScoresRequest.condition:type_name -> protocol.ScoreCondition
 	3,  // 7: protocol.UpdateScoresRequest.patch:type_name -> protocol.ScorePatch
-	40, // 8: protocol.ScanScoresResponse.timestamp:type_name -> google.protobuf.Timestamp
+	38, // 8: protocol.ScanScoresResponse.timestamp:type_name -> google.protobuf.Timestamp
 	4,  // 9: protocol.AddTimeSeriesPointsRequest.points:type_name -> protocol.TimeSeriesPoint
-	40, // 10: protocol.GetTimeSeriesPointsRequest.begin:type_name -> google.protobuf.Timestamp
-	40, // 11: protocol.GetTimeSeriesPointsRequest.end:type_name -> google.protobuf.Timestamp
+	38, // 10: protocol.GetTimeSeriesPointsRequest.begin:type_name -> google.protobuf.Timestamp
+	38, // 11: protocol.GetTimeSeriesPointsRequest.end:type_name -> google.protobuf.Timestamp
 	4,  // 12: protocol.GetTimeSeriesPointsResponse.points:type_name -> protocol.TimeSeriesPoint
-	40, // 13: protocol.GeoPoint.timestamp:type_name -> google.protobuf.Timestamp
-	25, // 14: protocol.GeoResult.point:type_name -> protocol.GeoPoint
-	25, // 15: protocol.AddGeoPointsRequest.points:type_name -> protocol.GeoPoint
-	26, // 16: protocol.SearchGeoPointsRequest.query:type_name -> protocol.GeoQuery
-	27, // 17: protocol.SearchGeoPointsResponse.points:type_name -> protocol.GeoResult
-	41, // 18: protocol.CacheStore.Ping:input_type -> protocol.PingRequest
-	5,  // 19: protocol.CacheStore.Get:input_type -> protocol.GetRequest
-	7,  // 20: protocol.CacheStore.Set:input_type -> protocol.SetRequest
-	9,  // 21: protocol.CacheStore.Delete:input_type -> protocol.DeleteRequest
-	11, // 22: protocol.CacheStore.AddScores:input_type -> protocol.AddScoresRequest
-	13, // 23: protocol.CacheStore.SearchScores:input_type -> protocol.SearchScoresRequest
-	15, // 24: protocol.CacheStore.DeleteScores:input_type -> protocol.DeleteScoresRequest
-	17, // 25: protocol.CacheStore.UpdateScores:input_type -> protocol.UpdateScoresRequest
-	19, // 26: protocol.CacheStore.ScanScores:input_type -> protocol.ScanScoresRequest
-	21, // 27: protocol.CacheStore.AddTimeSeriesPoints:input_type -> protocol.AddTimeSeriesPointsRequest
-	23, // 28: protocol.CacheStore.GetTimeSeriesPoints:input_type -> protocol.GetTimeSeriesPointsRequest
-	28, // 29: protocol.CacheStore.AddGeoIndex:input_type -> protocol.AddGeoIndexRequest
-	38, // 30: protocol.CacheStore.ListGeoIndex:input_type -> protocol.ListGeoIndexRequest
-	30, // 31: protocol.CacheStore.AddGeoPoints:input_type -> protocol.AddGeoPointsRequest
-	32, // 32: protocol.CacheStore.SearchGeoPoints:input_type -> protocol.SearchGeoPointsRequest
-	34, // 33: protocol.CacheStore.DeleteGeoPoints:input_type -> protocol.DeleteGeoPointsRequest
-	36, // 34: protocol.CacheStore.DeleteGeoIndex:input_type -> protocol.DeleteGeoIndexRequest
-	42, // 35: protocol.CacheStore.Ping:output_type -> protocol.PingResponse
-	6,  // 36: protocol.CacheStore.Get:output_type -> protocol.GetResponse
-	8,  // 37: protocol.CacheStore.Set:output_type -> protocol.SetResponse
-	10, // 38: protocol.CacheStore.Delete:output_type -> protocol.DeleteResponse
-	12, // 39: protocol.CacheStore.AddScores:output_type -> protocol.AddScoresResponse
-	14, // 40: protocol.CacheStore.SearchScores:output_type -> protocol.SearchScoresResponse
-	16, // 41: protocol.CacheStore.DeleteScores:output_type -> protocol.DeleteScoresResponse
-	18, // 42: protocol.CacheStore.UpdateScores:output_type -> protocol.UpdateScoresResponse
-	20, // 43: protocol.CacheStore.ScanScores:output_type -> protocol.ScanScoresResponse
-	22, // 44: protocol.CacheStore.AddTimeSeriesPoints:output_type -> protocol.AddTimeSeriesPointsResponse
-	24, // 45: protocol.CacheStore.GetTimeSeriesPoints:output_type -> protocol.GetTimeSeriesPointsResponse
-	29, // 46: protocol.CacheStore.AddGeoIndex:output_type -> protocol.AddGeoIndexResponse
-	39, // 47: protocol.CacheStore.ListGeoIndex:output_type -> protocol.ListGeoIndexResponse
-	31, // 48: protocol.CacheStore.AddGeoPoints:output_type -> protocol.AddGeoPointsResponse
-	33, // 49: protocol.CacheStore.SearchGeoPoints:output_type -> protocol.SearchGeoPointsResponse
-	35, // 50: protocol.CacheStore.DeleteGeoPoints:output_type -> protocol.DeleteGeoPointsResponse
-	37, // 51: protocol.CacheStore.DeleteGeoIndex:output_type -> protocol.DeleteGeoIndexResponse
-	35, // [35:52] is the sub-list for method output_type
-	18, // [18:35] is the sub-list for method input_type
-	18, // [18:18] is the sub-list for extension type_name
-	18, // [18:18] is the sub-list for extension extendee
-	0,  // [0:18] is the sub-list for field type_name
+	38, // 13: protocol.GeoPoint.timestamp:type_name -> google.protobuf.Timestamp
+	25, // 14: protocol.AddGeoPointsRequest.points:type_name -> protocol.GeoPoint
+	1,  // 15: protocol.SearchGeoPointsResponse.points:type_name -> protocol.Score
+	39, // 16: protocol.CacheStore.Ping:input_type -> protocol.PingRequest
+	5,  // 17: protocol.CacheStore.Get:input_type -> protocol.GetRequest
+	7,  // 18: protocol.CacheStore.Set:input_type -> protocol.SetRequest
+	9,  // 19: protocol.CacheStore.Delete:input_type -> protocol.DeleteRequest
+	11, // 20: protocol.CacheStore.AddScores:input_type -> protocol.AddScoresRequest
+	13, // 21: protocol.CacheStore.SearchScores:input_type -> protocol.SearchScoresRequest
+	15, // 22: protocol.CacheStore.DeleteScores:input_type -> protocol.DeleteScoresRequest
+	17, // 23: protocol.CacheStore.UpdateScores:input_type -> protocol.UpdateScoresRequest
+	19, // 24: protocol.CacheStore.ScanScores:input_type -> protocol.ScanScoresRequest
+	21, // 25: protocol.CacheStore.AddTimeSeriesPoints:input_type -> protocol.AddTimeSeriesPointsRequest
+	23, // 26: protocol.CacheStore.GetTimeSeriesPoints:input_type -> protocol.GetTimeSeriesPointsRequest
+	26, // 27: protocol.CacheStore.AddGeoIndex:input_type -> protocol.AddGeoIndexRequest
+	36, // 28: protocol.CacheStore.ListGeoIndex:input_type -> protocol.ListGeoIndexRequest
+	28, // 29: protocol.CacheStore.AddGeoPoints:input_type -> protocol.AddGeoPointsRequest
+	30, // 30: protocol.CacheStore.SearchGeoPoints:input_type -> protocol.SearchGeoPointsRequest
+	32, // 31: protocol.CacheStore.DeleteGeoPoints:input_type -> protocol.DeleteGeoPointsRequest
+	34, // 32: protocol.CacheStore.DeleteGeoIndex:input_type -> protocol.DeleteGeoIndexRequest
+	40, // 33: protocol.CacheStore.Ping:output_type -> protocol.PingResponse
+	6,  // 34: protocol.CacheStore.Get:output_type -> protocol.GetResponse
+	8,  // 35: protocol.CacheStore.Set:output_type -> protocol.SetResponse
+	10, // 36: protocol.CacheStore.Delete:output_type -> protocol.DeleteResponse
+	12, // 37: protocol.CacheStore.AddScores:output_type -> protocol.AddScoresResponse
+	14, // 38: protocol.CacheStore.SearchScores:output_type -> protocol.SearchScoresResponse
+	16, // 39: protocol.CacheStore.DeleteScores:output_type -> protocol.DeleteScoresResponse
+	18, // 40: protocol.CacheStore.UpdateScores:output_type -> protocol.UpdateScoresResponse
+	20, // 41: protocol.CacheStore.ScanScores:output_type -> protocol.ScanScoresResponse
+	22, // 42: protocol.CacheStore.AddTimeSeriesPoints:output_type -> protocol.AddTimeSeriesPointsResponse
+	24, // 43: protocol.CacheStore.GetTimeSeriesPoints:output_type -> protocol.GetTimeSeriesPointsResponse
+	27, // 44: protocol.CacheStore.AddGeoIndex:output_type -> protocol.AddGeoIndexResponse
+	37, // 45: protocol.CacheStore.ListGeoIndex:output_type -> protocol.ListGeoIndexResponse
+	29, // 46: protocol.CacheStore.AddGeoPoints:output_type -> protocol.AddGeoPointsResponse
+	31, // 47: protocol.CacheStore.SearchGeoPoints:output_type -> protocol.SearchGeoPointsResponse
+	33, // 48: protocol.CacheStore.DeleteGeoPoints:output_type -> protocol.DeleteGeoPointsResponse
+	35, // 49: protocol.CacheStore.DeleteGeoIndex:output_type -> protocol.DeleteGeoIndexResponse
+	33, // [33:50] is the sub-list for method output_type
+	16, // [16:33] is the sub-list for method input_type
+	16, // [16:16] is the sub-list for extension type_name
+	16, // [16:16] is the sub-list for extension extendee
+	0,  // [0:16] is the sub-list for field type_name
 }
 
 func init() { file_cache_store_proto_init() }
@@ -2298,7 +2203,7 @@ func file_cache_store_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_cache_store_proto_rawDesc), len(file_cache_store_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   40,
+			NumMessages:   38,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

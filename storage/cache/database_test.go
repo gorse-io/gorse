@@ -513,8 +513,8 @@ func (suite *baseTestSuite) TestGeoPointMetadata() {
 	const name = "metadata"
 	suite.Require().NoError(suite.AddGeoIndex(ctx, name))
 	point := GeoPoint{Id: "point", Longitude: 12, Latitude: 34,
-		Categories: []string{"", "a;b", "推荐", "a;b"},
-		Timestamp:  time.Date(2026, 1, 2, 3, 4, 5, 123456789, time.FixedZone("offset", 3600))}
+		IsHidden: true, Categories: []string{"", "a;b", "推荐", "a;b"},
+		Timestamp: time.Date(2026, 1, 2, 3, 4, 5, 123456789, time.FixedZone("offset", 3600))}
 	expectedTimestamp := point.Timestamp.UTC().Truncate(time.Millisecond)
 	query := GeoQuery{Longitude: 12, Latitude: 34, N: 1, MaxDistance: 1}
 	for _, latitude := range []float64{34, 90} {
@@ -527,19 +527,39 @@ func (suite *baseTestSuite) TestGeoPointMetadata() {
 		results, err := suite.SearchGeoPoints(ctx, name, query)
 		suite.Require().NoError(err)
 		suite.Require().Len(results, 1)
-		expected := point
-		expected.Timestamp = expectedTimestamp
-		suite.Equal(expected, results[0].GeoPoint)
+		suite.Equal(Score{Id: point.Id, Score: 0, IsHidden: true,
+			Categories: point.Categories, Timestamp: expectedTimestamp}, results[0])
 	}
 	point.Categories = nil
+	point.IsHidden = false
 	point.Timestamp = time.Time{}
 	suite.Require().NoError(suite.AddGeoPoints(ctx, name, []GeoPoint{point}))
 	results, err := suite.SearchGeoPoints(ctx, name, query)
 	suite.Require().NoError(err)
 	suite.Require().Len(results, 1)
 	suite.Empty(results[0].Categories)
+	suite.False(results[0].IsHidden)
 	suite.True(results[0].Timestamp.IsZero())
 	suite.Equal(point.Id, results[0].Id)
+}
+
+func (suite *baseTestSuite) TestGeoSearchScores() {
+	ctx := suite.T().Context()
+	const name = "scores"
+	suite.Require().NoError(suite.AddGeoIndex(ctx, name))
+	suite.Require().NoError(suite.AddGeoPoints(ctx, name, []GeoPoint{
+		{Id: "far", Longitude: 2},
+		{Id: "near-b", Longitude: 1},
+		{Id: "near-a", Longitude: 1, IsHidden: true},
+	}))
+	results, err := suite.SearchGeoPoints(ctx, name, GeoQuery{N: 3})
+	suite.Require().NoError(err)
+	suite.Require().Len(results, 3)
+	suite.Equal([]string{"near-a", "near-b", "far"}, []string{results[0].Id, results[1].Id, results[2].Id})
+	suite.True(results[0].IsHidden)
+	suite.InDelta(111195.08, results[0].Score, 0.01)
+	suite.Equal(results[0].Score, results[1].Score)
+	suite.InDelta(222390.16, results[2].Score, 0.01)
 }
 
 func (suite *baseTestSuite) TestTimestampPrecision() {

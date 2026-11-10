@@ -710,7 +710,7 @@ func (r *Redis) AddGeoPoints(ctx context.Context, name string, points []GeoPoint
 // the OR branch retains polar points. The generous outward radius guard covers
 // Redis's different Earth radius and sub-meter GEO quantization. Only the shared
 // exact distance/ID ordering decides inclusion and top N, never native distance.
-func (r *Redis) SearchGeoPoints(ctx context.Context, name string, query GeoQuery) ([]GeoResult, error) {
+func (r *Redis) SearchGeoPoints(ctx context.Context, name string, query GeoQuery) ([]Score, error) {
 	query, err := normalizeGeoQuery(name, query)
 	if err != nil {
 		return nil, err

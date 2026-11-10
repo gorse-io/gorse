@@ -767,7 +767,7 @@ func (db *SQLDatabase) finishGeoIndexCreation(ctx context.Context, index sqlGeoI
 		return fmt.Errorf("geo index %q creation no longer authorized %w", index.Name, storage.ErrNotFound)
 	}
 	table := db.quoteGeoIdentifier(index.PhysicalName)
-	ddl := "CREATE TABLE IF NOT EXISTS " + table + " (id " + db.geoStringType() + " NOT NULL PRIMARY KEY, longitude DOUBLE PRECISION NOT NULL, latitude DOUBLE PRECISION NOT NULL, cell BIGINT NOT NULL, categories TEXT NOT NULL, timestamp BIGINT NOT NULL)"
+	ddl := "CREATE TABLE IF NOT EXISTS " + table + " (id " + db.geoStringType() + " NOT NULL PRIMARY KEY, longitude DOUBLE PRECISION NOT NULL, latitude DOUBLE PRECISION NOT NULL, cell BIGINT NOT NULL, categories TEXT NOT NULL, timestamp BIGINT NOT NULL, is_hidden BOOLEAN NOT NULL)"
 	if err = db.gormDB.WithContext(ctx).Exec(ddl).Error; err != nil {
 		return err
 	}
@@ -814,25 +814,25 @@ func (db *SQLDatabase) AddGeoPoints(ctx context.Context, name string, points []G
 		return err
 	}
 	table := db.quoteGeoIdentifier(index.PhysicalName)
-	statement := "INSERT INTO " + table + " (id, longitude, latitude, cell, categories, timestamp) VALUES (?, ?, ?, ?, ?, ?)"
+	statement := "INSERT INTO " + table + " (id, longitude, latitude, cell, categories, timestamp, is_hidden) VALUES (?, ?, ?, ?, ?, ?, ?)"
 	if db.driver == MySQL {
-		statement += " ON DUPLICATE KEY UPDATE longitude = VALUES(longitude), latitude = VALUES(latitude), cell = VALUES(cell), categories = VALUES(categories), timestamp = VALUES(timestamp)"
+		statement += " ON DUPLICATE KEY UPDATE longitude = VALUES(longitude), latitude = VALUES(latitude), cell = VALUES(cell), categories = VALUES(categories), timestamp = VALUES(timestamp), is_hidden = VALUES(is_hidden)"
 	} else {
-		statement += " ON CONFLICT (id) DO UPDATE SET longitude = excluded.longitude, latitude = excluded.latitude, cell = excluded.cell, categories = excluded.categories, timestamp = excluded.timestamp"
+		statement += " ON CONFLICT (id) DO UPDATE SET longitude = excluded.longitude, latitude = excluded.latitude, cell = excluded.cell, categories = excluded.categories, timestamp = excluded.timestamp, is_hidden = excluded.is_hidden"
 	}
 	for _, record := range records {
 		categories, err := json.Marshal(record.Categories)
 		if err != nil {
 			return err
 		}
-		if err = db.gormDB.WithContext(ctx).Exec(statement, db.geoStringArg(record.Id), record.Longitude, record.Latitude, record.Cell, string(categories), record.Timestamp.UnixMicro()).Error; err != nil {
+		if err = db.gormDB.WithContext(ctx).Exec(statement, db.geoStringArg(record.Id), record.Longitude, record.Latitude, record.Cell, string(categories), record.Timestamp.UnixMicro(), record.IsHidden).Error; err != nil {
 			return err
 		}
 	}
 	return ctx.Err()
 }
 
-func (db *SQLDatabase) SearchGeoPoints(ctx context.Context, name string, query GeoQuery) ([]GeoResult, error) {
+func (db *SQLDatabase) SearchGeoPoints(ctx context.Context, name string, query GeoQuery) ([]Score, error) {
 	query, err := normalizeGeoQuery(name, query)
 	if err != nil {
 		return nil, err
@@ -856,7 +856,7 @@ func (db *SQLDatabase) scanGeoPoints(ctx context.Context, physical string, range
 		var last geoRecord
 		first := true
 		for {
-			statement := "SELECT id, longitude, latitude, cell, categories, timestamp FROM " + table + " WHERE cell >= ? AND cell <= ?"
+			statement := "SELECT id, longitude, latitude, cell, categories, timestamp, is_hidden FROM " + table + " WHERE cell >= ? AND cell <= ?"
 			args := []any{cellRange.Min, cellRange.Max}
 			if !first {
 				statement += " AND (cell > ? OR (cell = ? AND id > ?))"
@@ -872,7 +872,7 @@ func (db *SQLDatabase) scanGeoPoints(ctx context.Context, physical string, range
 				var record geoRecord
 				var categories string
 				var timestamp int64
-				if err = rows.Scan(&record.Id, &record.Longitude, &record.Latitude, &record.Cell, &categories, &timestamp); err != nil {
+				if err = rows.Scan(&record.Id, &record.Longitude, &record.Latitude, &record.Cell, &categories, &timestamp, &record.IsHidden); err != nil {
 					rows.Close()
 					return err
 				}

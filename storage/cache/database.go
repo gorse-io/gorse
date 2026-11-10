@@ -255,7 +255,9 @@ type Database interface {
 	// ListGeoIndex returns ready index names in byte order, including empty indexes.
 	ListGeoIndex(ctx context.Context) ([]string, error)
 	AddGeoPoints(ctx context.Context, name string, points []GeoPoint) error
-	SearchGeoPoints(ctx context.Context, name string, query GeoQuery) ([]GeoResult, error)
+	// SearchGeoPoints returns nonnegative meter distances in Score, nearest first,
+	// breaking ties by ID. Hidden metadata is retained, not filtered.
+	SearchGeoPoints(ctx context.Context, name string, query GeoQuery) ([]Score, error)
 	DeleteGeoPoints(ctx context.Context, name string, ids ...string) error
 	DeleteGeoIndex(ctx context.Context, name string) error
 
@@ -300,6 +302,7 @@ type GeoPoint struct {
 	Longitude, Latitude float64
 	Categories          []string
 	Timestamp           time.Time
+	IsHidden            bool
 }
 
 // GeoQuery requests the nearest N points. Distances are in meters;
@@ -308,12 +311,6 @@ type GeoQuery struct {
 	Longitude, Latitude float64
 	N                   int
 	MaxDistance         float64
-}
-
-// GeoResult retains the stored coordinates, with an exact spherical distance.
-type GeoResult struct {
-	GeoPoint
-	Distance float64
 }
 
 type geoRecord struct {
@@ -543,9 +540,9 @@ func geoDistance(q GeoQuery, p GeoPoint) float64 {
 	return math.Min(math.Pi*geoEarthRadius, 2*geoEarthRadius*math.Atan2(math.Sqrt(a), math.Sqrt(1-a)))
 }
 
-func geoResultLess(a, b GeoResult) bool {
-	if a.Distance != b.Distance {
-		return a.Distance < b.Distance
+func geoResultLess(a, b Score) bool {
+	if a.Score != b.Score {
+		return a.Score < b.Score
 	}
 	return a.Id < b.Id
 }
@@ -554,7 +551,7 @@ func geoResultLess(a, b GeoResult) bool {
 // Duplicate observations from concurrently moving records cannot duplicate IDs
 // in the result. There is deliberately no snapshot guarantee during writes.
 type geoResultHeap struct {
-	results   []GeoResult
+	results   []Score
 	positions map[string]int
 }
 
@@ -565,14 +562,14 @@ func (h geoResultHeap) Swap(i, j int) {
 	h.positions[h.results[i].Id], h.positions[h.results[j].Id] = i, j
 }
 func (h *geoResultHeap) Push(value any) {
-	result := value.(GeoResult)
+	result := value.(Score)
 	h.positions[result.Id] = len(h.results)
 	h.results = append(h.results, result)
 }
 func (h *geoResultHeap) Pop() any {
 	i := len(h.results) - 1
 	result := h.results[i]
-	h.results[i] = GeoResult{}
+	h.results[i] = Score{}
 	h.results = h.results[:i]
 	delete(h.positions, result.Id)
 	return result
@@ -584,12 +581,12 @@ func (h *geoResultHeap) Pop() any {
 // Each round resets the top-N heap and scans the entire conservative cover;
 // coarse-cell false positives never count toward the radius stopping condition.
 // Static data yields exact nearest neighbors, ordered by distance then bytewise ID.
-func searchGeoPoints(ctx context.Context, q GeoQuery, scan func(context.Context, []geoRange, func(geoRecord) error) error) ([]GeoResult, error) {
+func searchGeoPoints(ctx context.Context, q GeoQuery, scan func(context.Context, []geoRange, func(geoRecord) error) error) ([]Score, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	if q.N == 0 {
-		return []GeoResult{}, nil
+		return []Score{}, nil
 	}
 	limit := math.Pi * geoEarthRadius
 	if q.MaxDistance > 0 {
@@ -609,7 +606,8 @@ func searchGeoPoints(ctx context.Context, q GeoQuery, scan func(context.Context,
 			if distance > radius {
 				return nil
 			}
-			result := GeoResult{GeoPoint: record.GeoPoint, Distance: distance}
+			result := Score{Id: record.Id, Score: distance, IsHidden: record.IsHidden,
+				Categories: record.Categories, Timestamp: record.Timestamp}
 			if i, ok := h.positions[result.Id]; ok {
 				if geoResultLess(result, h.results[i]) {
 					h.results[i] = result
@@ -634,7 +632,7 @@ func searchGeoPoints(ctx context.Context, q GeoQuery, scan func(context.Context,
 		if h.Len() >= q.N || radius >= limit {
 			sort.Slice(h.results, func(i, j int) bool { return geoResultLess(h.results[i], h.results[j]) })
 			if h.results == nil {
-				return []GeoResult{}, nil
+				return []Score{}, nil
 			}
 			return h.results, nil
 		}

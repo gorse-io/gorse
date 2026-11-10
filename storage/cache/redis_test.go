@@ -287,8 +287,8 @@ func (suite *RedisTestSuite) TestGeoSearchIndex() {
 		suite.Require().Len(results, 1)
 		canonical, err := prepareGeoPoints(name, []GeoPoint{p})
 		suite.Require().NoError(err)
-		suite.Equal(canonical[0].GeoPoint, results[0].GeoPoint)
-		suite.Zero(results[0].Distance)
+		suite.Equal(Score{Id: canonical[0].Id, Timestamp: canonical[0].Timestamp}, results[0])
+		suite.Zero(results[0].Score)
 	}
 	// Moving from GEO to polar and back must not leave a stale GEO value.
 	p := points[0]
@@ -332,8 +332,8 @@ func (suite *RedisTestSuite) TestGeoSearchPagesAndBoundaries() {
 	suite.Require().NoError(err)
 	suite.Require().Len(results, len(points))
 	for i, result := range results {
-		suite.Equal(points[i], result.GeoPoint)
-		suite.Equal(q.MaxDistance, result.Distance)
+		suite.Equal(points[i].Id, result.Id)
+		suite.Equal(q.MaxDistance, result.Score)
 	}
 	q.MaxDistance = math.Nextafter(q.MaxDistance, 0)
 	results, err = r.SearchGeoPoints(ctx, name, q)
@@ -410,11 +410,12 @@ func (suite *RedisTestSuite) TestGeoSearchAgainstFullScan() {
 		queries = append(queries, q)
 	}
 	for _, q := range queries {
-		want := make([]GeoResult, 0)
+		want := make([]Score, 0)
 		for _, record := range records {
 			distance := geoDistance(q, record.GeoPoint)
 			if q.MaxDistance == 0 || distance <= q.MaxDistance {
-				want = append(want, GeoResult{GeoPoint: record.GeoPoint, Distance: distance})
+				want = append(want, Score{Id: record.Id, Score: distance, IsHidden: record.IsHidden,
+					Categories: record.Categories, Timestamp: record.Timestamp})
 			}
 		}
 		sort.Slice(want, func(i, j int) bool { return geoResultLess(want[i], want[j]) })

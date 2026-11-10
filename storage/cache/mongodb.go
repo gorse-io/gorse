@@ -407,6 +407,7 @@ type mongoGeoPoint struct {
 	Cell       int64     `bson:"cell"`
 	Categories []string  `bson:"categories"`
 	Timestamp  time.Time `bson:"timestamp"`
+	IsHidden   bool      `bson:"is_hidden"`
 }
 
 func (m MongoDB) geoCatalog() *mongo.Collection {
@@ -622,7 +623,7 @@ func (m MongoDB) AddGeoPoints(ctx context.Context, name string, points []GeoPoin
 		}
 		filter := bson.M{"id": record.Id}
 		update := bson.M{"$set": bson.M{"longitude": record.Longitude, "latitude": record.Latitude, "cell": record.Cell,
-			"categories": record.Categories, "timestamp": record.Timestamp}}
+			"categories": record.Categories, "timestamp": record.Timestamp, "is_hidden": record.IsHidden}}
 		// A concurrent first upsert can cause a duplicate key error, and a
 		// point delete may remove its winner before we retry. Keep upsert
 		// enabled and bound retries rather than accepting a zero-match update.
@@ -643,7 +644,7 @@ func (m MongoDB) AddGeoPoints(ctx context.Context, name string, points []GeoPoin
 	return nil
 }
 
-func (m MongoDB) SearchGeoPoints(ctx context.Context, name string, query GeoQuery) ([]GeoResult, error) {
+func (m MongoDB) SearchGeoPoints(ctx context.Context, name string, query GeoQuery) ([]Score, error) {
 	query, err := normalizeGeoQuery(name, query)
 	if err != nil {
 		return nil, err
@@ -676,7 +677,7 @@ func (m MongoDB) SearchGeoPoints(ctx context.Context, name string, query GeoQuer
 						return errors.WithStack(err)
 					}
 					if err := visit(geoRecord{GeoPoint: GeoPoint{Id: point.ID, Longitude: point.Longitude, Latitude: point.Latitude,
-						Categories: point.Categories, Timestamp: point.Timestamp.UTC()}, Cell: point.Cell}); err != nil {
+						Categories: point.Categories, Timestamp: point.Timestamp.UTC(), IsHidden: point.IsHidden}, Cell: point.Cell}); err != nil {
 						return err
 					}
 				}

@@ -92,7 +92,7 @@ func (NoDatabase) AddGeoPoints(context.Context, string, []GeoPoint) error {
 	return storage.ErrNoDatabase
 }
 
-func (NoDatabase) SearchGeoPoints(context.Context, string, GeoQuery) ([]GeoResult, error) {
+func (NoDatabase) SearchGeoPoints(context.Context, string, GeoQuery) ([]Score, error) {
 	return nil, storage.ErrNoDatabase
 }
 

@@ -150,18 +150,7 @@ message GeoPoint {
   double latitude = 3;
   repeated string categories = 4;
   google.protobuf.Timestamp timestamp = 5;
-}
-
-message GeoQuery {
-  double longitude = 1;
-  double latitude = 2;
-  int64 n = 3;
-  double max_distance = 4;
-}
-
-message GeoResult {
-  GeoPoint point = 1;
-  double distance = 2;
+  bool is_hidden = 6;
 }
 
 message AddGeoIndexRequest { string name = 1; }
@@ -175,9 +164,13 @@ message AddGeoPointsResponse {}
 
 message SearchGeoPointsRequest {
   string name = 1;
-  GeoQuery query = 2;
+  double longitude = 2;
+  double latitude = 3;
+  int64 n = 4;
+  double max_distance = 5;
 }
-message SearchGeoPointsResponse { repeated GeoResult points = 1; }
+// Score.score is the nonnegative distance in meters, ordered nearest first.
+message SearchGeoPointsResponse { repeated Score points = 1; }
 
 message DeleteGeoPointsRequest {
   string name = 1;

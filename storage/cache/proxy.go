@@ -439,12 +439,12 @@ func geoClientError(err error) error {
 
 func geoPointToProto(point GeoPoint) *protocol.GeoPoint {
 	return &protocol.GeoPoint{Id: point.Id, Longitude: point.Longitude, Latitude: point.Latitude,
-		Categories: point.Categories, Timestamp: timestamppb.New(point.Timestamp)}
+		Categories: point.Categories, Timestamp: timestamppb.New(point.Timestamp), IsHidden: point.IsHidden}
 }
 
 func geoPointFromProto(point *protocol.GeoPoint) GeoPoint {
 	result := GeoPoint{Id: point.GetId(), Longitude: point.GetLongitude(), Latitude: point.GetLatitude(),
-		Categories: point.GetCategories()}
+		Categories: point.GetCategories(), IsHidden: point.GetIsHidden()}
 	if point.GetTimestamp() != nil {
 		result.Timestamp = point.GetTimestamp().AsTime()
 	}
@@ -482,19 +482,19 @@ func (p *ProxyServer) AddGeoPoints(ctx context.Context, request *protocol.AddGeo
 }
 
 func (p *ProxyServer) SearchGeoPoints(ctx context.Context, request *protocol.SearchGeoPointsRequest) (*protocol.SearchGeoPointsResponse, error) {
-	q := request.GetQuery()
-	if q == nil || q.GetN() < 0 || int64(int(q.GetN())) != q.GetN() {
+	if request.GetN() < 0 || int64(int(request.GetN())) != request.GetN() {
 		return nil, geoServerError(fmt.Errorf("invalid geographic query %w", storage.ErrInvalidArgument))
 	}
 	points, err := p.database.SearchGeoPoints(ctx, request.GetName(), GeoQuery{
-		Longitude: q.GetLongitude(), Latitude: q.GetLatitude(), N: int(q.GetN()), MaxDistance: q.GetMaxDistance(),
+		Longitude: request.GetLongitude(), Latitude: request.GetLatitude(), N: int(request.GetN()), MaxDistance: request.GetMaxDistance(),
 	})
 	if err != nil {
 		return nil, geoServerError(err)
 	}
-	response := &protocol.SearchGeoPointsResponse{Points: make([]*protocol.GeoResult, len(points))}
+	response := &protocol.SearchGeoPointsResponse{Points: make([]*protocol.Score, len(points))}
 	for i, point := range points {
-		response.Points[i] = &protocol.GeoResult{Point: geoPointToProto(point.GeoPoint), Distance: point.Distance}
+		response.Points[i] = &protocol.Score{Id: point.Id, Score: point.Score, IsHidden: point.IsHidden,
+			Categories: point.Categories, Timestamp: timestamppb.New(point.Timestamp)}
 	}
 	return response, nil
 }
@@ -528,23 +528,27 @@ func (p ProxyClient) AddGeoPoints(ctx context.Context, name string, points []Geo
 	return geoClientError(err)
 }
 
-func (p ProxyClient) SearchGeoPoints(ctx context.Context, name string, query GeoQuery) ([]GeoResult, error) {
+func (p ProxyClient) SearchGeoPoints(ctx context.Context, name string, query GeoQuery) ([]Score, error) {
 	query, err := normalizeGeoQuery(name, query)
 	if err != nil {
 		return nil, err
 	}
 	response, err := p.CacheStoreClient.SearchGeoPoints(ctx, &protocol.SearchGeoPointsRequest{
-		Name: name, Query: &protocol.GeoQuery{Longitude: query.Longitude, Latitude: query.Latitude, N: int64(query.N), MaxDistance: query.MaxDistance},
+		Name: name, Longitude: query.Longitude, Latitude: query.Latitude, N: int64(query.N), MaxDistance: query.MaxDistance,
 	})
 	if err != nil {
 		return nil, geoClientError(err)
 	}
-	points := make([]GeoResult, len(response.GetPoints()))
+	points := make([]Score, len(response.GetPoints()))
 	for i, point := range response.GetPoints() {
-		if point == nil || point.GetPoint() == nil {
+		if point == nil {
 			return nil, errors.New("invalid geographic point in proxy response")
 		}
-		points[i] = GeoResult{GeoPoint: geoPointFromProto(point.GetPoint()), Distance: point.GetDistance()}
+		points[i] = Score{Id: point.GetId(), Score: point.GetScore(), IsHidden: point.GetIsHidden(),
+			Categories: point.GetCategories()}
+		if point.GetTimestamp() != nil {
+			points[i].Timestamp = point.GetTimestamp().AsTime()
+		}
 	}
 	return points, nil
 }
