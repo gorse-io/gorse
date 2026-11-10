@@ -767,7 +767,11 @@ func (db *SQLDatabase) finishGeoIndexCreation(ctx context.Context, index sqlGeoI
 		return fmt.Errorf("geo index %q creation no longer authorized %w", index.Name, storage.ErrNotFound)
 	}
 	table := db.quoteGeoIdentifier(index.PhysicalName)
-	ddl := "CREATE TABLE IF NOT EXISTS " + table + " (id " + db.geoStringType() + " NOT NULL PRIMARY KEY, longitude DOUBLE PRECISION NOT NULL, latitude DOUBLE PRECISION NOT NULL, cell BIGINT NOT NULL, categories TEXT NOT NULL, timestamp BIGINT NOT NULL, is_hidden BOOLEAN NOT NULL)"
+	categoriesType := "TEXT"
+	if db.driver == MySQL {
+		categoriesType += " CHARACTER SET utf8mb4"
+	}
+	ddl := "CREATE TABLE IF NOT EXISTS " + table + " (id " + db.geoStringType() + " NOT NULL PRIMARY KEY, longitude DOUBLE PRECISION NOT NULL, latitude DOUBLE PRECISION NOT NULL, cell BIGINT NOT NULL, categories " + categoriesType + " NOT NULL, timestamp BIGINT NOT NULL, is_hidden BOOLEAN NOT NULL)"
 	if err = db.gormDB.WithContext(ctx).Exec(ddl).Error; err != nil {
 		return err
 	}
