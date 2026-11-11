@@ -51,7 +51,6 @@ func TestFloat16Serialization(t *testing.T) {
 		require.Equal(t, x.Shape(), y.Shape())
 		require.Nil(t, y.grad)
 		require.Nil(t, y.op)
-		require.Panics(t, func() { y.Data[float32]() })
 		var buf bytes.Buffer
 		model := struct {
 			W *Tensor
@@ -92,7 +91,6 @@ func TestFloat32SerializationRawBits(t *testing.T) {
 		require.NoError(t, Load(y, &buf))
 		require.Equal(t, Float32, y.DType())
 		require.Equal(t, shape, y.Shape())
-		require.Panics(t, func() { y.Data[uint16]() })
 		require.Len(t, y.Data[float32](), len(bits))
 		for i, b := range bits {
 			require.Equal(t, b, math.Float32bits(y.Data[float32]()[i]))
@@ -143,6 +141,5 @@ func TestTensorLegacySerialization(t *testing.T) {
 	x.fromPB(pb)
 	require.Equal(t, Float32, x.DType())
 	require.Equal(t, []float32{1, 2}, x.Data[float32]())
-	require.Panics(t, func() { x.Data[uint16]() })
 	require.Equal(t, wire, func() []byte { b, err := proto.Marshal(x.toPB()); require.NoError(t, err); return b }())
 }

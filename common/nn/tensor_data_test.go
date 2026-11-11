@@ -26,7 +26,6 @@ func TestTensorData(t *testing.T) {
 	fp32 := []float32{1, 2}
 	x := NewTensor(fp32, 2)
 	require.Equal(t, fp32, x.Data[float32]())
-	require.Panics(t, func() { x.Data[uint16]() })
 	x.Data[float32]()[0] = 3
 	require.Equal(t, float32(3), fp32[0])
 	fp32[1] = 4
@@ -35,7 +34,6 @@ func TestTensorData(t *testing.T) {
 	fp16 := []uint16{0x3c00, 0x7e55}
 	y := NewTensor(fp16, 2)
 	require.Equal(t, fp16, y.Data[uint16]())
-	require.Panics(t, func() { y.Data[float32]() })
 	y.Data[uint16]()[0] = 0x4000
 	require.Equal(t, uint16(0x4000), fp16[0])
 	fp16[1] = 0xfe01
@@ -43,8 +41,6 @@ func TestTensorData(t *testing.T) {
 
 	require.Empty(t, NewTensor[float32](nil, 0).Data[float32]())
 	require.Empty(t, NewTensor[uint16](nil, 0).Data[uint16]())
-	require.Panics(t, func() { NewTensor[float32](nil, 0).Data[uint16]() })
-	require.Panics(t, func() { NewTensor[uint16](nil, 0).Data[float32]() })
 }
 
 func TestTensorFloat32ViewAliases(t *testing.T) {

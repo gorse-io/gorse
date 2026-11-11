@@ -101,7 +101,7 @@ func (t *Tensor) matMulLegacy(other *Tensor, transpose1, transpose2 bool) *Tenso
 			}
 		}
 		return &Tensor{
-			data:  tensorBytes(result),
+			data:  toBytes(result),
 			shape: []int{m, p},
 		}
 	} else if transpose1 && !transpose2 {
@@ -121,7 +121,7 @@ func (t *Tensor) matMulLegacy(other *Tensor, transpose1, transpose2 bool) *Tenso
 			}
 		}
 		return &Tensor{
-			data:  tensorBytes(result),
+			data:  toBytes(result),
 			shape: []int{m, p},
 		}
 	} else if !transpose1 && transpose2 {
@@ -141,7 +141,7 @@ func (t *Tensor) matMulLegacy(other *Tensor, transpose1, transpose2 bool) *Tenso
 			}
 		}
 		return &Tensor{
-			data:  tensorBytes(result),
+			data:  toBytes(result),
 			shape: []int{m, p},
 		}
 	} else {
@@ -161,7 +161,7 @@ func (t *Tensor) matMulLegacy(other *Tensor, transpose1, transpose2 bool) *Tenso
 			}
 		}
 		return &Tensor{
-			data:  tensorBytes(result),
+			data:  toBytes(result),
 			shape: []int{m, p},
 		}
 	}
@@ -187,7 +187,7 @@ func (t *Tensor) batchMatMulLegacy(other *Tensor, transpose1, transpose2 bool) *
 			}
 		}
 		return &Tensor{
-			data:  tensorBytes(result),
+			data:  toBytes(result),
 			shape: []int{m, n, p},
 		}
 	} else if transpose1 && !transpose2 {
@@ -209,7 +209,7 @@ func (t *Tensor) batchMatMulLegacy(other *Tensor, transpose1, transpose2 bool) *
 			}
 		}
 		return &Tensor{
-			data:  tensorBytes(result),
+			data:  toBytes(result),
 			shape: []int{m, n, p},
 		}
 	} else if !transpose1 && transpose2 {
@@ -231,7 +231,7 @@ func (t *Tensor) batchMatMulLegacy(other *Tensor, transpose1, transpose2 bool) *
 			}
 		}
 		return &Tensor{
-			data:  tensorBytes(result),
+			data:  toBytes(result),
 			shape: []int{m, n, p},
 		}
 	} else {
@@ -253,7 +253,7 @@ func (t *Tensor) batchMatMulLegacy(other *Tensor, transpose1, transpose2 bool) *
 			}
 		}
 		return &Tensor{
-			data:  tensorBytes(result),
+			data:  toBytes(result),
 			shape: []int{m, n, p},
 		}
 	}

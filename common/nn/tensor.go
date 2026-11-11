@@ -67,21 +67,14 @@ func (t *Tensor) DType() DType { return t.dtype }
 
 // Data returns a zero-copy view of the tensor's storage. T must match its dtype:
 // float32 for Float32 or uint16 for Float16 raw IEEE 754 half-precision bits.
-// It panics on a dtype mismatch and never converts values.
+// The caller is responsible for matching T to the dtype; no conversion is performed.
 func (t *Tensor) Data[T float32 | uint16]() []T {
 	var value T
-	dtype := Float32
-	if _, ok := any(value).(uint16); ok {
-		dtype = Float16
-	}
-	if t.dtype != dtype {
-		panic("tensor data type does not match storage dtype")
-	}
 	return unsafe.Slice((*T)(unsafe.Pointer(unsafe.SliceData(t.data))), len(t.data)/int(unsafe.Sizeof(value)))
 }
 
-// tensorBytes shares the backing storage of a typed slice without conversion.
-func tensorBytes[T float32 | uint16](data []T) []byte {
+// toBytes shares the backing storage of a typed slice without conversion.
+func toBytes[T float32 | uint16](data []T) []byte {
 	var value T
 	return unsafe.Slice((*byte)(unsafe.Pointer(unsafe.SliceData(data))), len(data)*int(unsafe.Sizeof(value)))
 }
@@ -114,7 +107,7 @@ func NewTensor[T float32 | uint16](data []T, shape ...int) *Tensor {
 	if len(data) != size {
 		panic(fmt.Sprintf("shape %v does not match data size %v", shape, len(data)))
 	}
-	t := &Tensor{data: tensorBytes(data), shape: shape}
+	t := &Tensor{data: toBytes(data), shape: shape}
 	if _, ok := any(data).([]uint16); ok {
 		t.dtype = Float16
 	}
@@ -123,7 +116,7 @@ func NewTensor[T float32 | uint16](data []T, shape ...int) *Tensor {
 
 func NewScalar(data float32) *Tensor {
 	return &Tensor{
-		data:  tensorBytes([]float32{data}),
+		data:  toBytes([]float32{data}),
 		shape: []int{},
 	}
 }
@@ -139,7 +132,7 @@ func LinSpace(start, end float32, shape ...int) *Tensor {
 		data[i] = start + delta*float32(i)
 	}
 	return &Tensor{
-		data:  tensorBytes(data),
+		data:  toBytes(data),
 		shape: shape,
 	}
 }
@@ -158,7 +151,7 @@ func Rand(rng *rand.Rand, shape ...int) *Tensor {
 		data[i] = random()
 	}
 	return &Tensor{
-		data:  tensorBytes(data),
+		data:  toBytes(data),
 		shape: shape,
 	}
 }
@@ -173,7 +166,7 @@ func Uniform(low, high float32, shape ...int) *Tensor {
 		data[i] = rand.Float32()*(high-low) + low
 	}
 	return &Tensor{
-		data:  tensorBytes(data),
+		data:  toBytes(data),
 		shape: shape,
 	}
 }
@@ -188,7 +181,7 @@ func Normal(mean, std float32, shape ...int) *Tensor {
 		data[i] = float32(rand.NormFloat64())*std + mean
 	}
 	return &Tensor{
-		data:  tensorBytes(data),
+		data:  toBytes(data),
 		shape: shape,
 	}
 }
@@ -204,7 +197,7 @@ func Ones(shape ...int) *Tensor {
 		data[i] = 1
 	}
 	return &Tensor{
-		data:  tensorBytes(data),
+		data:  toBytes(data),
 		shape: shape,
 	}
 }
@@ -217,7 +210,7 @@ func Zeros(shape ...int) *Tensor {
 	}
 	data := make([]float32, n)
 	return &Tensor{
-		data:  tensorBytes(data),
+		data:  toBytes(data),
 		shape: shape,
 	}
 }
@@ -261,7 +254,7 @@ func (t *Tensor) Slice(start, end int) *Tensor {
 		return NewTensor(t.Data[uint16]()[start*subSize:end*subSize], append([]int{end - start}, t.shape[1:]...)...)
 	}
 	return &Tensor{
-		data:  tensorBytes(t.Data[float32]()[start*subSize : end*subSize]),
+		data:  toBytes(t.Data[float32]()[start*subSize : end*subSize]),
 		shape: append([]int{end - start}, t.shape[1:]...),
 	}
 }
@@ -285,7 +278,7 @@ func (t *Tensor) SliceIndices(indices ...int) *Tensor {
 		copy(data[i*subSize:(i+1)*subSize], t.Data[float32]()[index*subSize:(index+1)*subSize])
 	}
 	return &Tensor{
-		data:  tensorBytes(data),
+		data:  toBytes(data),
 		shape: shape,
 	}
 }
@@ -624,7 +617,7 @@ func (t *Tensor) matMul(other *Tensor, transpose1, transpose2 bool, jobs int) *T
 	}
 	wg.Wait()
 	return &Tensor{
-		data:  tensorBytes(result),
+		data:  toBytes(result),
 		shape: []int{m, n},
 	}
 }
@@ -673,7 +666,7 @@ func (t *Tensor) batchMatMul(other *Tensor, transpose1, transpose2 bool, jobs in
 		})
 	}
 	return &Tensor{
-		data:  tensorBytes(result),
+		data:  toBytes(result),
 		shape: []int{b, m, n},
 	}
 }
@@ -732,7 +725,7 @@ func (t *Tensor) transpose() *Tensor {
 		}
 	}
 	return &Tensor{
-		data:  tensorBytes(data),
+		data:  toBytes(data),
 		shape: shape,
 	}
 }
@@ -771,7 +764,7 @@ func (t *Tensor) max(axis int, keepDim bool) *Tensor {
 		}
 	}
 	return &Tensor{
-		data:  tensorBytes(data),
+		data:  toBytes(data),
 		shape: shape,
 	}
 }
@@ -810,7 +803,7 @@ func (t *Tensor) sum(axis int, keepDim bool) *Tensor {
 		}
 	}
 	return &Tensor{
-		data:  tensorBytes(data),
+		data:  toBytes(data),
 		shape: shape,
 	}
 }

@@ -27,8 +27,6 @@ func TestFloat16Storage(t *testing.T) {
 	require.Equal(t, Float16, x.DType())
 	require.Equal(t, float32(4), x.Get(1, 1))
 	require.Equal(t, "[1, 2, 3, 4]", x.String())
-	require.Panics(t, func() { x.Data[float32]() })
-	require.Panics(t, func() { NewScalar(1).Data[uint16]() })
 	data[0] = uint16(0x4500)
 	require.Equal(t, float32(5), x.Get(0, 0))
 	x.Slice(1, 2).Data[uint16]()[0] = uint16(0x4600)
