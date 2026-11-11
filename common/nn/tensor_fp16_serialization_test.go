@@ -47,11 +47,11 @@ func TestFloat16Serialization(t *testing.T) {
 		y.op = &neg{}
 		y.fromPB(decoded)
 		require.Equal(t, Float16, y.DType())
-		require.Equal(t, values, y.Uint16s())
+		require.Equal(t, values, y.Data[uint16]())
 		require.Equal(t, x.Shape(), y.Shape())
 		require.Nil(t, y.grad)
 		require.Nil(t, y.op)
-		require.Nil(t, y.data)
+		require.Panics(t, func() { y.Data[float32]() })
 		var buf bytes.Buffer
 		model := struct {
 			W *Tensor
@@ -63,7 +63,7 @@ func TestFloat16Serialization(t *testing.T) {
 			B *Tensor
 		}{new(Tensor), new(Tensor)}
 		require.NoError(t, Load(result, &buf))
-		require.Equal(t, values, result.W.Uint16s())
+		require.Equal(t, values, result.W.Data[uint16]())
 		require.Equal(t, Float32, result.B.DType())
 		require.Equal(t, float32(2), result.B.Get())
 	}
@@ -92,10 +92,10 @@ func TestFloat32SerializationRawBits(t *testing.T) {
 		require.NoError(t, Load(y, &buf))
 		require.Equal(t, Float32, y.DType())
 		require.Equal(t, shape, y.Shape())
-		require.Nil(t, y.data16)
-		require.Len(t, y.Floats(), len(bits))
+		require.Panics(t, func() { y.Data[uint16]() })
+		require.Len(t, y.Data[float32](), len(bits))
 		for i, b := range bits {
-			require.Equal(t, b, math.Float32bits(y.Floats()[i]))
+			require.Equal(t, b, math.Float32bits(y.Data[float32]()[i]))
 		}
 	}
 }
@@ -107,11 +107,11 @@ func TestTensorSerializationSharesStorage(t *testing.T) {
 	} {
 		pb := x.toPB()
 		if x.DType() == Float16 {
-			x.Uint16s()[0] = 0
+			x.Data[uint16]()[0] = 0
 			require.Zero(t, binary.LittleEndian.Uint16(pb.Data))
 			binary.LittleEndian.PutUint16(pb.Data, 0x4000)
 		} else {
-			x.Floats()[0] = 0
+			x.Data[float32]()[0] = 0
 			require.Zero(t, binary.LittleEndian.Uint32(pb.Data))
 			binary.LittleEndian.PutUint32(pb.Data, math.Float32bits(2))
 		}
@@ -125,10 +125,10 @@ func TestTensorSerializationSharesStorage(t *testing.T) {
 		clear(pb.Data)
 		require.Equal(t, float32(0), y.Get(0))
 		if y.DType() == Float16 {
-			y.Uint16s()[0] = 0x3c00
+			y.Data[uint16]()[0] = 0x3c00
 			require.Equal(t, uint16(0x3c00), binary.LittleEndian.Uint16(pb.Data))
 		} else {
-			y.Floats()[0] = 1
+			y.Data[float32]()[0] = 1
 			require.Equal(t, math.Float32bits(1), binary.LittleEndian.Uint32(pb.Data))
 		}
 	}
@@ -142,7 +142,7 @@ func TestTensorLegacySerialization(t *testing.T) {
 	x := Ones(2).ToFloat16()
 	x.fromPB(pb)
 	require.Equal(t, Float32, x.DType())
-	require.Equal(t, []float32{1, 2}, x.Floats())
-	require.Nil(t, x.data16)
+	require.Equal(t, []float32{1, 2}, x.Data[float32]())
+	require.Panics(t, func() { x.Data[uint16]() })
 	require.Equal(t, wire, func() []byte { b, err := proto.Marshal(x.toPB()); require.NoError(t, err); return b }())
 }
