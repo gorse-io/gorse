@@ -58,7 +58,19 @@ func (b *base) setGeneration(gen int) {
 	b.gen = gen
 }
 
-func apply[T op](f T, inputs ...*Tensor) *Tensor {
+func apply(f op, inputs ...*Tensor) *Tensor {
+	for _, x := range inputs {
+		if x.dtype != inputs[0].dtype {
+			panic("input tensor dtypes must match")
+		}
+	}
+	if inputs[0].dtype == Float16 {
+		converted := make([]*Tensor, len(inputs))
+		for i, input := range inputs {
+			converted[i] = input.ToFloat32()
+		}
+		return f.forward(converted...).ToFloat16()
+	}
 	y := f.forward(inputs...)
 	f.setInputs(inputs...)
 	f.setOutput(y)
