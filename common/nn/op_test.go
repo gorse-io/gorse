@@ -56,6 +56,21 @@ func allClose(t *testing.T, a, b *Tensor) {
 	}
 }
 
+func TestApply(t *testing.T) {
+	full := Ones(2)
+	half := full.ToFloat16()
+	for _, inputs := range [][]*Tensor{
+		{full, half},
+		{half, full},
+		{full, full, half},
+		{half, half, full},
+	} {
+		assert.PanicsWithValue(t, "input tensor dtypes must match", func() {
+			apply(&add{}, inputs...)
+		})
+	}
+}
+
 func TestAdd(t *testing.T) {
 	// (2,3) + (2,3) -> (2,3)
 	x := NewTensor([]float32{1, 2, 3, 4, 5, 6}, 2, 3)

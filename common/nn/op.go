@@ -60,22 +60,16 @@ func (b *base) setGeneration(gen int) {
 
 func apply(f op, inputs ...*Tensor) *Tensor {
 	for _, x := range inputs {
-		if x.dtype == Float16 {
-			converted := make([]*Tensor, len(inputs))
-			for i, input := range inputs {
-				if input.dtype == Float16 {
-					converted[i] = input.ToFloat32()
-				} else {
-					converted[i] = input
-				}
-			}
-			y := f.forward(converted...)
-			if inputs[0].dtype == Float16 {
-				return y.ToFloat16()
-			}
-			y.op = nil
-			return y
+		if x.dtype != inputs[0].dtype {
+			panic("input tensor dtypes must match")
 		}
+	}
+	if inputs[0].dtype == Float16 {
+		converted := make([]*Tensor, len(inputs))
+		for i, input := range inputs {
+			converted[i] = input.ToFloat32()
+		}
+		return f.forward(converted...).ToFloat16()
 	}
 	y := f.forward(inputs...)
 	f.setInputs(inputs...)
