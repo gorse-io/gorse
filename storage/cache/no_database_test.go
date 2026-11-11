@@ -46,6 +46,13 @@ func TestNoDatabase(t *testing.T) {
 	err = database.Delete(ctx, Key("", ""))
 	assert.ErrorIs(t, err, storage.ErrNoDatabase)
 
+	err = database.SetBlob(ctx, Blob{})
+	assert.ErrorIs(t, err, storage.ErrNoDatabase)
+	_, err = database.GetBlob(ctx, "")
+	assert.ErrorIs(t, err, storage.ErrNoDatabase)
+	err = database.DeleteBlob(ctx, "")
+	assert.ErrorIs(t, err, storage.ErrNoDatabase)
+
 	err = database.AddScores(ctx, "", "", nil)
 	assert.ErrorIs(t, err, storage.ErrNoDatabase)
 	_, err = database.SearchScores(ctx, "", "", nil, 0, 0)

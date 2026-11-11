@@ -98,6 +98,12 @@ func Key(keys ...string) string {
 	return builder.String()
 }
 
+// Blob stores binary data independently of string cache values.
+type Blob struct {
+	Name string `gorm:"type:varchar(256);primaryKey" bson:"_id"`
+	Data []byte `gorm:"size:10485760;not null" bson:"data"`
+}
+
 type Value struct {
 	name  string
 	value string
@@ -237,6 +243,11 @@ type Database interface {
 	Set(ctx context.Context, values ...Value) error
 	Get(ctx context.Context, name string) *ReturnValue
 	Delete(ctx context.Context, name string) error
+
+	SetBlob(ctx context.Context, blob Blob) error
+	// GetBlob returns storage.ErrNotFound when the blob does not exist.
+	GetBlob(ctx context.Context, name string) (*Blob, error)
+	DeleteBlob(ctx context.Context, name string) error
 
 	AddScores(ctx context.Context, collection, subset string, documents []Score) error
 	SearchScores(ctx context.Context, collection, subset string, query []string, begin, end int) ([]Score, error)

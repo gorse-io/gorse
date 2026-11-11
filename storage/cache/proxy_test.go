@@ -15,8 +15,6 @@
 package cache
 
 import (
-	"bytes"
-	"context"
 	"fmt"
 	"net"
 	"testing"
@@ -86,45 +84,6 @@ func (suite *ProxyTestSuite) TestPurge() {
 
 func (suite *ProxyTestSuite) TestScan() {
 	suite.T().Skip()
-}
-
-func (suite *ProxyTestSuite) TestBinaryValues() {
-	ctx := context.Background()
-	for _, size := range []int{0, 256, 10 * 1024 * 1024} {
-		suite.Run(fmt.Sprintf("%d_bytes", size), func() {
-			value := make([]byte, size)
-			for i := range value {
-				value[i] = byte(i)
-			}
-			name := fmt.Sprintf("binary_%d", size)
-			suite.Require().NoError(suite.Database.Set(ctx, String(name, string(value))))
-			result := suite.Database.Get(ctx, name)
-			suite.Require().True(result.Exists())
-			actual, err := result.String()
-			suite.Require().NoError(err)
-			suite.Equal(value, []byte(actual))
-			suite.Require().NoError(suite.Database.Delete(ctx, name))
-			suite.False(suite.Database.Get(ctx, name).Exists())
-		})
-	}
-}
-
-func (suite *ProxyTestSuite) TestLargeValueWrite() {
-	ctx := context.Background()
-	value := string(bytes.Repeat([]byte("x"), 10*1024*1024))
-	suite.Require().NoError(suite.Database.Set(ctx, String("large_write", value)))
-	actual, err := suite.sqlite.Get(ctx, "large_write").String()
-	suite.Require().NoError(err)
-	suite.Equal(value, actual)
-}
-
-func (suite *ProxyTestSuite) TestLargeValueRead() {
-	ctx := context.Background()
-	value := string(bytes.Repeat([]byte("x"), 10*1024*1024))
-	suite.Require().NoError(suite.sqlite.Set(ctx, String("large_read", value)))
-	actual, err := suite.Database.Get(ctx, "large_read").String()
-	suite.Require().NoError(err)
-	suite.Equal(value, actual)
 }
 
 func TestProxy(t *testing.T) {

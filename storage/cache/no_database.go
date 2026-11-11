@@ -60,6 +60,18 @@ func (NoDatabase) Delete(_ context.Context, _ string) error {
 	return storage.ErrNoDatabase
 }
 
+func (NoDatabase) SetBlob(context.Context, Blob) error {
+	return storage.ErrNoDatabase
+}
+
+func (NoDatabase) GetBlob(context.Context, string) (*Blob, error) {
+	return nil, storage.ErrNoDatabase
+}
+
+func (NoDatabase) DeleteBlob(context.Context, string) error {
+	return storage.ErrNoDatabase
+}
+
 func (NoDatabase) AddScores(_ context.Context, _, _ string, _ []Score) error {
 	return storage.ErrNoDatabase
 }

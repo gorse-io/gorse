@@ -150,6 +150,9 @@ func (r *Redis) scan(ctx context.Context, client redis.UniversalClient, work fun
 			return errors.WithStack(err)
 		}
 		for _, key := range result {
+			if key == r.BlobsTable() {
+				continue
+			}
 			if err = work(key[len(r.TablePrefix):]); err != nil {
 				return errors.WithStack(err)
 			}
@@ -231,6 +234,30 @@ func (r *Redis) Get(ctx context.Context, key string) *ReturnValue {
 // Delete object from Redis.
 func (r *Redis) Delete(ctx context.Context, key string) error {
 	return r.client.Del(ctx, r.Key(key)).Err()
+}
+
+func (r *Redis) SetBlob(ctx context.Context, blob Blob) error {
+	if blob.Data == nil {
+		blob.Data = []byte{}
+	}
+	return errors.WithStack(r.client.HSet(ctx, r.BlobsTable(), blob.Name, blob.Data).Err())
+}
+
+func (r *Redis) GetBlob(ctx context.Context, name string) (*Blob, error) {
+	data, err := r.client.HGet(ctx, r.BlobsTable(), name).Bytes()
+	if err == redis.Nil {
+		return nil, storage.ErrNotFound
+	} else if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	if data == nil {
+		data = []byte{}
+	}
+	return &Blob{Name: name, Data: data}, nil
+}
+
+func (r *Redis) DeleteBlob(ctx context.Context, name string) error {
+	return errors.WithStack(r.client.HDel(ctx, r.BlobsTable(), name).Err())
 }
 
 func (r *Redis) documentKey(collection, subset, value string) string {

@@ -59,7 +59,7 @@ func (m MongoDB) Init() error {
 	ctx := context.Background()
 	d := m.client.Database(m.dbName)
 	// list collections
-	var hasValues bool
+	var hasValues, hasBlobs bool
 	collections, err := d.ListCollectionNames(ctx, bson.M{})
 	if err != nil {
 		return errors.WithStack(err)
@@ -68,11 +68,18 @@ func (m MongoDB) Init() error {
 		switch collectionName {
 		case m.ValuesTable():
 			hasValues = true
+		case m.BlobsTable():
+			hasBlobs = true
 		}
 	}
 	// create collections
 	if !hasValues {
 		if err = d.CreateCollection(ctx, m.ValuesTable()); err != nil {
+			return errors.WithStack(err)
+		}
+	}
+	if !hasBlobs {
+		if err = d.CreateCollection(ctx, m.BlobsTable()); err != nil {
 			return errors.WithStack(err)
 		}
 	}
@@ -144,7 +151,7 @@ func (m MongoDB) Scan(work func(string) error) error {
 }
 
 func (m MongoDB) Purge() error {
-	tables := []string{m.ValuesTable(), m.DocumentTable()}
+	tables := []string{m.ValuesTable(), m.BlobsTable(), m.DocumentTable()}
 	for _, tableName := range tables {
 		c := m.client.Database(m.dbName).Collection(tableName)
 		_, err := c.DeleteMany(context.Background(), bson.D{})
@@ -165,7 +172,7 @@ func (m MongoDB) Set(ctx context.Context, values ...Value) error {
 		models = append(models, mongo.NewUpdateOneModel().
 			SetUpsert(true).
 			SetFilter(bson.M{"_id": value.name}).
-			SetUpdate(bson.M{"$set": bson.M{"_id": value.name, "value": []byte(value.value)}}))
+			SetUpdate(bson.M{"$set": bson.M{"_id": value.name, "value": value.value}}))
 	}
 	_, err := c.BulkWrite(ctx, models)
 	return errors.WithStack(err)
@@ -182,19 +189,42 @@ func (m MongoDB) Get(ctx context.Context, name string) *ReturnValue {
 	if raw, err := r.DecodeBytes(); err != nil {
 		return &ReturnValue{err: errors.WithStack(err), exists: false}
 	} else {
-		value := raw.Lookup("value")
-		// Existing cache keys may still contain BSON strings.
-		if text, ok := value.StringValueOK(); ok {
-			return &ReturnValue{value: text, exists: true}
-		}
-		_, data := value.Binary()
-		return &ReturnValue{value: string(data), exists: true}
+		return &ReturnValue{value: raw.Lookup("value").StringValue(), exists: true}
 	}
 }
 
 func (m MongoDB) Delete(ctx context.Context, name string) error {
 	c := m.client.Database(m.dbName).Collection(m.ValuesTable())
 	_, err := c.DeleteOne(ctx, bson.M{"_id": bson.M{"$eq": name}})
+	return errors.WithStack(err)
+}
+
+func (m MongoDB) SetBlob(ctx context.Context, blob Blob) error {
+	if blob.Data == nil {
+		blob.Data = []byte{}
+	}
+	c := m.client.Database(m.dbName).Collection(m.BlobsTable())
+	_, err := c.ReplaceOne(ctx, bson.M{"_id": blob.Name}, blob, options.Replace().SetUpsert(true))
+	return errors.WithStack(err)
+}
+
+func (m MongoDB) GetBlob(ctx context.Context, name string) (*Blob, error) {
+	c := m.client.Database(m.dbName).Collection(m.BlobsTable())
+	var blob Blob
+	if err := c.FindOne(ctx, bson.M{"_id": name}).Decode(&blob); err == mongo.ErrNoDocuments {
+		return nil, storage.ErrNotFound
+	} else if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	if blob.Data == nil {
+		blob.Data = []byte{}
+	}
+	return &blob, nil
+}
+
+func (m MongoDB) DeleteBlob(ctx context.Context, name string) error {
+	c := m.client.Database(m.dbName).Collection(m.BlobsTable())
+	_, err := c.DeleteOne(ctx, bson.M{"_id": name})
 	return errors.WithStack(err)
 }
 

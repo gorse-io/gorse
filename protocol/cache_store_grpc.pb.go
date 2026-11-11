@@ -33,6 +33,9 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
+	CacheStore_SetBlob_FullMethodName             = "/protocol.CacheStore/SetBlob"
+	CacheStore_GetBlob_FullMethodName             = "/protocol.CacheStore/GetBlob"
+	CacheStore_DeleteBlob_FullMethodName          = "/protocol.CacheStore/DeleteBlob"
 	CacheStore_Ping_FullMethodName                = "/protocol.CacheStore/Ping"
 	CacheStore_Get_FullMethodName                 = "/protocol.CacheStore/Get"
 	CacheStore_Set_FullMethodName                 = "/protocol.CacheStore/Set"
@@ -50,6 +53,9 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type CacheStoreClient interface {
+	SetBlob(ctx context.Context, in *SetCacheBlobRequest, opts ...grpc.CallOption) (*SetCacheBlobResponse, error)
+	GetBlob(ctx context.Context, in *GetCacheBlobRequest, opts ...grpc.CallOption) (*GetCacheBlobResponse, error)
+	DeleteBlob(ctx context.Context, in *DeleteCacheBlobRequest, opts ...grpc.CallOption) (*DeleteCacheBlobResponse, error)
 	Ping(ctx context.Context, in *PingRequest, opts ...grpc.CallOption) (*PingResponse, error)
 	Get(ctx context.Context, in *GetRequest, opts ...grpc.CallOption) (*GetResponse, error)
 	Set(ctx context.Context, in *SetRequest, opts ...grpc.CallOption) (*SetResponse, error)
@@ -69,6 +75,36 @@ type cacheStoreClient struct {
 
 func NewCacheStoreClient(cc grpc.ClientConnInterface) CacheStoreClient {
 	return &cacheStoreClient{cc}
+}
+
+func (c *cacheStoreClient) SetBlob(ctx context.Context, in *SetCacheBlobRequest, opts ...grpc.CallOption) (*SetCacheBlobResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetCacheBlobResponse)
+	err := c.cc.Invoke(ctx, CacheStore_SetBlob_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *cacheStoreClient) GetBlob(ctx context.Context, in *GetCacheBlobRequest, opts ...grpc.CallOption) (*GetCacheBlobResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetCacheBlobResponse)
+	err := c.cc.Invoke(ctx, CacheStore_GetBlob_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *cacheStoreClient) DeleteBlob(ctx context.Context, in *DeleteCacheBlobRequest, opts ...grpc.CallOption) (*DeleteCacheBlobResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteCacheBlobResponse)
+	err := c.cc.Invoke(ctx, CacheStore_DeleteBlob_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (c *cacheStoreClient) Ping(ctx context.Context, in *PingRequest, opts ...grpc.CallOption) (*PingResponse, error) {
@@ -194,6 +230,9 @@ func (c *cacheStoreClient) GetTimeSeriesPoints(ctx context.Context, in *GetTimeS
 // All implementations must embed UnimplementedCacheStoreServer
 // for forward compatibility.
 type CacheStoreServer interface {
+	SetBlob(context.Context, *SetCacheBlobRequest) (*SetCacheBlobResponse, error)
+	GetBlob(context.Context, *GetCacheBlobRequest) (*GetCacheBlobResponse, error)
+	DeleteBlob(context.Context, *DeleteCacheBlobRequest) (*DeleteCacheBlobResponse, error)
 	Ping(context.Context, *PingRequest) (*PingResponse, error)
 	Get(context.Context, *GetRequest) (*GetResponse, error)
 	Set(context.Context, *SetRequest) (*SetResponse, error)
@@ -215,6 +254,15 @@ type CacheStoreServer interface {
 // pointer dereference when methods are called.
 type UnimplementedCacheStoreServer struct{}
 
+func (UnimplementedCacheStoreServer) SetBlob(context.Context, *SetCacheBlobRequest) (*SetCacheBlobResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetBlob not implemented")
+}
+func (UnimplementedCacheStoreServer) GetBlob(context.Context, *GetCacheBlobRequest) (*GetCacheBlobResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetBlob not implemented")
+}
+func (UnimplementedCacheStoreServer) DeleteBlob(context.Context, *DeleteCacheBlobRequest) (*DeleteCacheBlobResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteBlob not implemented")
+}
 func (UnimplementedCacheStoreServer) Ping(context.Context, *PingRequest) (*PingResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Ping not implemented")
 }
@@ -267,6 +315,60 @@ func RegisterCacheStoreServer(s grpc.ServiceRegistrar, srv CacheStoreServer) {
 		t.testEmbeddedByValue()
 	}
 	s.RegisterService(&CacheStore_ServiceDesc, srv)
+}
+
+func _CacheStore_SetBlob_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetCacheBlobRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CacheStoreServer).SetBlob(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CacheStore_SetBlob_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CacheStoreServer).SetBlob(ctx, req.(*SetCacheBlobRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CacheStore_GetBlob_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetCacheBlobRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CacheStoreServer).GetBlob(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CacheStore_GetBlob_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CacheStoreServer).GetBlob(ctx, req.(*GetCacheBlobRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CacheStore_DeleteBlob_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteCacheBlobRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CacheStoreServer).DeleteBlob(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CacheStore_DeleteBlob_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CacheStoreServer).DeleteBlob(ctx, req.(*DeleteCacheBlobRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 func _CacheStore_Ping_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -467,6 +569,18 @@ var CacheStore_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "protocol.CacheStore",
 	HandlerType: (*CacheStoreServer)(nil),
 	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "SetBlob",
+			Handler:    _CacheStore_SetBlob_Handler,
+		},
+		{
+			MethodName: "GetBlob",
+			Handler:    _CacheStore_GetBlob_Handler,
+		},
+		{
+			MethodName: "DeleteBlob",
+			Handler:    _CacheStore_DeleteBlob_Handler,
+		},
 		{
 			MethodName: "Ping",
 			Handler:    _CacheStore_Ping_Handler,

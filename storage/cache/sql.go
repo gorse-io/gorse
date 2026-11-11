@@ -132,7 +132,7 @@ const (
 
 type SQLValue struct {
 	Name  string `gorm:"type:varchar(256);primaryKey"`
-	Value []byte `gorm:"size:10485760;not null"`
+	Value string `gorm:"type:varchar(256);not null"`
 }
 
 type PostgresDocument struct {
@@ -171,24 +171,7 @@ func (db *SQLDatabase) Ping() error {
 }
 
 func (db *SQLDatabase) Init() error {
-	// PostgreSQL's text::bytea cast interprets backslash escapes. Convert the
-	// original text to UTF-8 bytes explicitly before AutoMigrate changes its type.
-	if db.driver == Postgres && db.gormDB.Migrator().HasTable(&SQLValue{}) {
-		columns, err := db.gormDB.Migrator().ColumnTypes(&SQLValue{})
-		if err != nil {
-			return errors.WithStack(err)
-		}
-		for _, column := range columns {
-			if column.Name() == "value" && column.DatabaseTypeName() != "bytea" {
-				if err := db.gormDB.Exec("ALTER TABLE ? ALTER COLUMN ? TYPE bytea USING convert_to(?, 'UTF8')",
-					clause.Table{Name: db.ValuesTable()}, clause.Column{Name: "value"}, clause.Column{Name: "value"}).Error; err != nil {
-					return errors.WithStack(err)
-				}
-				break
-			}
-		}
-	}
-	err := db.gormDB.AutoMigrate(&SQLValue{}, &TimeSeriesPoint{})
+	err := db.gormDB.AutoMigrate(&SQLValue{}, &Blob{}, &TimeSeriesPoint{})
 	if err != nil {
 		return errors.WithStack(err)
 	}
@@ -275,7 +258,7 @@ func (db *SQLDatabase) Scan(work func(string) error) error {
 }
 
 func (db *SQLDatabase) Purge() error {
-	tables := []any{SQLValue{}, SQLDocument{}}
+	tables := []any{SQLValue{}, Blob{}, SQLDocument{}}
 	for _, table := range tables {
 		err := db.gormDB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&table).Error
 		if err != nil {
@@ -295,7 +278,7 @@ func (db *SQLDatabase) Set(ctx context.Context, values ...Value) error {
 		if !valueSet.Contains(value.name) {
 			rows = append(rows, SQLValue{
 				Name:  value.name,
-				Value: []byte(value.value),
+				Value: value.value,
 			})
 			valueSet.Add(value.name)
 		}
@@ -327,6 +310,32 @@ func (db *SQLDatabase) Get(ctx context.Context, name string) *ReturnValue {
 func (db *SQLDatabase) Delete(ctx context.Context, name string) error {
 	err := db.gormDB.WithContext(ctx).Delete(&SQLValue{Name: name}).Error
 	return errors.WithStack(err)
+}
+
+func (db *SQLDatabase) SetBlob(ctx context.Context, blob Blob) error {
+	if blob.Data == nil {
+		blob.Data = []byte{}
+	}
+	return errors.WithStack(db.gormDB.WithContext(ctx).Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "name"}},
+		DoUpdates: clause.AssignmentColumns([]string{"data"}),
+	}).Create(&blob).Error)
+}
+
+func (db *SQLDatabase) GetBlob(ctx context.Context, name string) (*Blob, error) {
+	var blob Blob
+	err := db.gormDB.WithContext(ctx).Where("name = ?", name).Take(&blob).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, storage.ErrNotFound
+	}
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	return &blob, nil
+}
+
+func (db *SQLDatabase) DeleteBlob(ctx context.Context, name string) error {
+	return errors.WithStack(db.gormDB.WithContext(ctx).Delete(&Blob{Name: name}).Error)
 }
 
 func (db *SQLDatabase) AddScores(ctx context.Context, collection, subset string, documents []Score) error {

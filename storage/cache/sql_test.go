@@ -136,51 +136,6 @@ func TestSQLite(t *testing.T) {
 	suite.Run(t, new(SQLiteTestSuite))
 }
 
-func (suite *PostgresTestSuite) TestValueMigration() {
-	testSQLValueMigration(suite.T(), suite.Database.(*SQLDatabase))
-}
-
-func (suite *MySQLTestSuite) TestValueMigration() {
-	testSQLValueMigration(suite.T(), suite.Database.(*SQLDatabase))
-}
-
-func (suite *SQLiteTestSuite) TestValueMigration() {
-	testSQLValueMigration(suite.T(), suite.Database.(*SQLDatabase))
-}
-
-func testSQLValueMigration(t *testing.T, db *SQLDatabase) {
-	t.Helper()
-	// Recreate the original schema to exercise upgrades with existing text values.
-	legacy := struct {
-		Name  string `gorm:"type:varchar(256);primaryKey"`
-		Value string `gorm:"type:varchar(256);not null"`
-	}{}
-	assert.NoError(t, db.gormDB.Migrator().DropTable(&SQLValue{}))
-	assert.NoError(t, db.gormDB.Table(db.ValuesTable()).Migrator().CreateTable(&legacy))
-	value := "推荐系统 \\x4142 \\123 \\ binary"
-	assert.NoError(t, db.gormDB.Table(db.ValuesTable()).Create(map[string]any{"name": "legacy", "value": value}).Error)
-	if !assert.NoError(t, db.Init()) {
-		return
-	}
-	actual, err := db.Get(t.Context(), "legacy").String()
-	assert.NoError(t, err)
-	assert.Equal(t, value, actual)
-
-	columns, err := db.gormDB.Migrator().ColumnTypes(&SQLValue{})
-	assert.NoError(t, err)
-	for _, column := range columns {
-		if column.Name() == "value" {
-			expected := map[SQLDriver]string{MySQL: "mediumblob", Postgres: "bytea", SQLite: "blob"}
-			assert.Equal(t, expected[db.driver], strings.ToLower(column.DatabaseTypeName()))
-		}
-	}
-	assert.NoError(t, db.Set(t.Context(), String("binary", "\x00\xff\x80")))
-	assert.NoError(t, db.Init())
-	actual, err = db.Get(t.Context(), "binary").String()
-	assert.NoError(t, err)
-	assert.Equal(t, "\x00\xff\x80", actual)
-}
-
 func assertQuery(t *testing.T, connection *sql.DB, sql string, expected string) {
 	rows, err := connection.Query(sql)
 	assert.NoError(t, err)

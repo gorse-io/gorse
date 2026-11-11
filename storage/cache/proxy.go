@@ -17,19 +17,18 @@ package cache
 import (
 	"context"
 	"io"
+	"math"
 	"net"
 	"time"
 
 	"github.com/gorse-io/gorse/protocol"
+	"github.com/gorse-io/gorse/storage"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
-
-// MaxProxyMessageSize allows a 10 MiB cache value plus protobuf envelope overhead.
-const MaxProxyMessageSize = 16 * 1024 * 1024
 
 type ProxyServer struct {
 	protocol.UnimplementedCacheStoreServer
@@ -42,7 +41,7 @@ func NewProxyServer(database Database) *ProxyServer {
 }
 
 func (p *ProxyServer) Serve(lis net.Listener) error {
-	p.server = grpc.NewServer(grpc.MaxRecvMsgSize(MaxProxyMessageSize), grpc.MaxSendMsgSize(MaxProxyMessageSize))
+	p.server = grpc.NewServer(grpc.MaxRecvMsgSize(math.MaxInt), grpc.MaxSendMsgSize(math.MaxInt))
 	protocol.RegisterCacheStoreServer(p.server, p)
 	return p.server.Serve(lis)
 }
@@ -60,7 +59,7 @@ func (p *ProxyServer) Get(ctx context.Context, request *protocol.GetRequest) (*p
 	if !value.Exists() {
 		return &protocol.GetResponse{}, nil
 	}
-	return &protocol.GetResponse{Value: []byte(value.value)}, value.err
+	return &protocol.GetResponse{Value: new(value.value)}, value.err
 }
 
 func (p *ProxyServer) Set(ctx context.Context, request *protocol.SetRequest) (*protocol.SetResponse, error) {
@@ -68,7 +67,7 @@ func (p *ProxyServer) Set(ctx context.Context, request *protocol.SetRequest) (*p
 	for i, value := range request.Values {
 		values[i] = Value{
 			name:  value.GetName(),
-			value: string(value.GetValue()),
+			value: value.GetValue(),
 		}
 	}
 	return &protocol.SetResponse{}, p.database.Set(ctx, values...)
@@ -76,6 +75,33 @@ func (p *ProxyServer) Set(ctx context.Context, request *protocol.SetRequest) (*p
 
 func (p *ProxyServer) Delete(ctx context.Context, request *protocol.DeleteRequest) (*protocol.DeleteResponse, error) {
 	return &protocol.DeleteResponse{}, p.database.Delete(ctx, request.GetName())
+}
+
+func (p *ProxyServer) SetBlob(ctx context.Context, request *protocol.SetCacheBlobRequest) (*protocol.SetCacheBlobResponse, error) {
+	err := p.database.SetBlob(ctx, Blob{Name: request.GetName(), Data: request.GetData()})
+	if errors.Is(err, storage.ErrNotFound) {
+		return nil, status.Error(codes.NotFound, err.Error())
+	}
+	return &protocol.SetCacheBlobResponse{}, err
+}
+
+func (p *ProxyServer) GetBlob(ctx context.Context, request *protocol.GetCacheBlobRequest) (*protocol.GetCacheBlobResponse, error) {
+	blob, err := p.database.GetBlob(ctx, request.GetName())
+	if errors.Is(err, storage.ErrNotFound) {
+		return nil, status.Error(codes.NotFound, err.Error())
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &protocol.GetCacheBlobResponse{Name: blob.Name, Data: blob.Data}, nil
+}
+
+func (p *ProxyServer) DeleteBlob(ctx context.Context, request *protocol.DeleteCacheBlobRequest) (*protocol.DeleteCacheBlobResponse, error) {
+	err := p.database.DeleteBlob(ctx, request.GetName())
+	if errors.Is(err, storage.ErrNotFound) {
+		return nil, status.Error(codes.NotFound, err.Error())
+	}
+	return &protocol.DeleteCacheBlobResponse{}, err
 }
 
 func (p *ProxyServer) AddScores(ctx context.Context, request *protocol.AddScoresRequest) (*protocol.AddScoresResponse, error) {
@@ -203,32 +229,66 @@ func (p ProxyClient) Set(ctx context.Context, values ...Value) error {
 	for i, value := range values {
 		pbValues[i] = &protocol.Value{
 			Name:  value.name,
-			Value: []byte(value.value),
+			Value: value.value,
 		}
 	}
 	_, err := p.CacheStoreClient.Set(ctx, &protocol.SetRequest{
 		Values: pbValues,
-	}, grpc.MaxCallSendMsgSize(MaxProxyMessageSize))
+	})
 	return err
 }
 
 func (p ProxyClient) Get(ctx context.Context, name string) *ReturnValue {
 	resp, err := p.CacheStoreClient.Get(ctx, &protocol.GetRequest{
 		Name: name,
-	}, grpc.MaxCallRecvMsgSize(MaxProxyMessageSize))
+	})
 	if err != nil {
 		return &ReturnValue{err: err, exists: false}
 	}
 	if resp.Value == nil {
 		return &ReturnValue{value: "", exists: false}
 	}
-	return &ReturnValue{value: string(resp.GetValue()), err: err, exists: true}
+	return &ReturnValue{value: resp.GetValue(), err: err, exists: true}
 }
 
 func (p ProxyClient) Delete(ctx context.Context, name string) error {
 	_, err := p.CacheStoreClient.Delete(ctx, &protocol.DeleteRequest{
 		Name: name,
 	})
+	return err
+}
+
+func (p ProxyClient) SetBlob(ctx context.Context, blob Blob) error {
+	_, err := p.CacheStoreClient.SetBlob(ctx, &protocol.SetCacheBlobRequest{
+		Name: blob.Name,
+		Data: blob.Data,
+	}, grpc.MaxCallSendMsgSize(math.MaxInt), grpc.MaxCallRecvMsgSize(math.MaxInt))
+	if status.Code(err) == codes.NotFound {
+		return storage.ErrNotFound
+	}
+	return err
+}
+
+func (p ProxyClient) GetBlob(ctx context.Context, name string) (*Blob, error) {
+	resp, err := p.CacheStoreClient.GetBlob(ctx, &protocol.GetCacheBlobRequest{
+		Name: name,
+	}, grpc.MaxCallSendMsgSize(math.MaxInt), grpc.MaxCallRecvMsgSize(math.MaxInt))
+	if status.Code(err) == codes.NotFound {
+		return nil, storage.ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &Blob{Name: resp.GetName(), Data: resp.GetData()}, nil
+}
+
+func (p ProxyClient) DeleteBlob(ctx context.Context, name string) error {
+	_, err := p.CacheStoreClient.DeleteBlob(ctx, &protocol.DeleteCacheBlobRequest{
+		Name: name,
+	}, grpc.MaxCallSendMsgSize(math.MaxInt), grpc.MaxCallRecvMsgSize(math.MaxInt))
+	if status.Code(err) == codes.NotFound {
+		return storage.ErrNotFound
+	}
 	return err
 }
 

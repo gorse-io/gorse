@@ -106,29 +106,72 @@ func (suite *baseTestSuite) TestMeta() {
 	suite.NoError(err)
 }
 
-func (suite *baseTestSuite) TestBinaryValue() {
+func (suite *baseTestSuite) TestBlob() {
 	ctx := suite.T().Context()
+	name := "blob"
+	_, err := suite.Database.GetBlob(ctx, name)
+	suite.ErrorIs(err, storage.ErrNotFound)
+	suite.Require().NoError(suite.Database.DeleteBlob(ctx, name))
+
+	// Blob names and Value names belong to independent tables.
+	suite.Require().NoError(suite.Database.Set(ctx, String(name, "metadata")))
 	payload := make([]byte, 10*1024*1024)
 	for i := range payload {
 		payload[i] = byte(i)
 	}
-	name := Key("binary", "value")
-	suite.Require().NoError(suite.Database.Set(ctx, String(name, string(payload))))
-	ret := suite.Database.Get(ctx, name)
-	value, err := ret.String()
+	suite.Require().NoError(suite.Database.SetBlob(ctx, Blob{Name: name, Data: payload}))
+	blob, err := suite.Database.GetBlob(ctx, name)
 	suite.Require().NoError(err)
-	suite.True(ret.Exists())
-	suite.True(string(payload) == value, "10 MiB binary value must round-trip byte-for-byte")
+	suite.Require().NotNil(blob)
+	suite.Equal(name, blob.Name)
+	suite.True(string(payload) == string(blob.Data), "10 MiB blob must round-trip byte-for-byte")
+	value, err := suite.Database.Get(ctx, name).String()
+	suite.Require().NoError(err)
+	suite.Equal("metadata", value)
 
-	// Replacing a large binary value with an empty value must preserve existence.
-	suite.Require().NoError(suite.Database.Set(ctx, String(name, "")))
-	ret = suite.Database.Get(ctx, name)
-	value, err = ret.String()
-	suite.Require().NoError(err)
-	suite.True(ret.Exists())
-	suite.Empty(value)
+	// Empty and nil data overwrite the existing blob without deleting it.
+	for _, data := range [][]byte{{}, nil} {
+		suite.Require().NoError(suite.Database.SetBlob(ctx, Blob{Name: name, Data: data}))
+		blob, err = suite.Database.GetBlob(ctx, name)
+		suite.Require().NoError(err)
+		suite.Require().NotNil(blob)
+		suite.Empty(blob.Data)
+	}
 	suite.Require().NoError(suite.Database.Delete(ctx, name))
-	suite.False(suite.Database.Get(ctx, name).Exists())
+	_, err = suite.Database.GetBlob(ctx, name)
+	suite.Require().NoError(err)
+	suite.Require().NoError(suite.Database.Set(ctx, String(name, "metadata")))
+	suite.Require().NoError(suite.Database.DeleteBlob(ctx, name))
+	_, err = suite.Database.GetBlob(ctx, name)
+	suite.ErrorIs(err, storage.ErrNotFound)
+	suite.True(suite.Database.Get(ctx, name).Exists())
+}
+
+func (suite *baseTestSuite) TestBlobScan() {
+	if _, ok := suite.Database.(*ProxyClient); ok {
+		suite.T().Skip("scan is not allowed in proxy client")
+	}
+	ctx := suite.T().Context()
+	suite.Require().NoError(suite.Database.Set(ctx, String("metadata", "value")))
+	suite.Require().NoError(suite.Database.SetBlob(ctx, Blob{Name: "binary", Data: []byte{0, 255}}))
+	var names []string
+	suite.Require().NoError(suite.Database.Scan(func(name string) error {
+		names = append(names, name)
+		return nil
+	}))
+	suite.Equal([]string{"metadata"}, names)
+}
+
+func (suite *baseTestSuite) TestBlobPurge() {
+	// Purge is intentionally unavailable through ProxyClient.
+	if _, ok := suite.Database.(*ProxyClient); ok {
+		suite.T().Skip("purge is not allowed in proxy client")
+	}
+	ctx := suite.T().Context()
+	suite.Require().NoError(suite.Database.SetBlob(ctx, Blob{Name: "purge", Data: []byte{0, 255}}))
+	suite.Require().NoError(suite.Database.Purge())
+	_, err := suite.Database.GetBlob(ctx, "purge")
+	suite.ErrorIs(err, storage.ErrNotFound)
 }
 
 func (suite *baseTestSuite) TestExists() {
