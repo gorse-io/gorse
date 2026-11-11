@@ -18,10 +18,17 @@ option go_package = "github.com/gorse-io/gorse/protocol";
 
 package protocol;
 
+enum TensorDType {
+  FLOAT32 = 0;
+  FLOAT16 = 1;
+}
+
 message Tensor {
   repeated string key = 1;
   repeated int32 shape = 2;
-  repeated float data = 3;
+  // IEEE 754 raw bits in little-endian order; element width is determined by dtype.
+  bytes data = 3;
+  TensorDType dtype = 4;
 }
 
 message LatentFactor {

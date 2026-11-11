@@ -37,14 +37,14 @@ func TestTensor_SliceIndices(t *testing.T) {
 	x := NewTensor([]float32{1, 2, 3, 4, 5, 6}, 3, 2)
 	y := x.SliceIndices(2, 0)
 	assert.Equal(t, []int{2, 2}, y.Shape())
-	assert.Equal(t, []float32{5, 6, 1, 2}, y.Data())
+	assert.Equal(t, []float32{5, 6, 1, 2}, y.Data[float32]())
 }
 
 func TestTensor_Max(t *testing.T) {
 	x := NewTensor([]float32{3, 2, 5, 6, 0, 0}, 6)
 	y := x.max(0, false)
 	assert.Len(t, y.shape, 0)
-	assert.Equal(t, []float32{6}, y.data)
+	assert.Equal(t, []float32{6}, y.Data[float32]())
 
 	assert.Panics(t, func() { x.max(-1, false) })
 	assert.Panics(t, func() { x.max(2, false) })
@@ -52,17 +52,17 @@ func TestTensor_Max(t *testing.T) {
 	x = NewTensor([]float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}, 3, 2, 2)
 	y = x.max(1, false)
 	assert.Equal(t, []int{3, 2}, y.shape)
-	assert.Equal(t, []float32{3, 4, 7, 8, 11, 12}, y.data)
+	assert.Equal(t, []float32{3, 4, 7, 8, 11, 12}, y.Data[float32]())
 	y = x.max(1, true)
 	assert.Equal(t, []int{3, 1, 2}, y.shape)
-	assert.Equal(t, []float32{3, 4, 7, 8, 11, 12}, y.data)
+	assert.Equal(t, []float32{3, 4, 7, 8, 11, 12}, y.Data[float32]())
 }
 
 func TestTensor_Sum(t *testing.T) {
 	x := NewTensor([]float32{1, 2, 3, 4, 5, 6}, 6)
 	y := x.sum(0, false)
 	assert.Len(t, y.shape, 0)
-	assert.Equal(t, []float32{21}, y.data)
+	assert.Equal(t, []float32{21}, y.Data[float32]())
 
 	assert.Panics(t, func() { x.sum(-1, false) })
 	assert.Panics(t, func() { x.sum(2, false) })
@@ -70,17 +70,17 @@ func TestTensor_Sum(t *testing.T) {
 	x = NewTensor([]float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}, 3, 2, 2)
 	y = x.sum(1, false)
 	assert.Equal(t, []int{3, 2}, y.shape)
-	assert.Equal(t, []float32{4, 6, 12, 14, 20, 22}, y.data)
+	assert.Equal(t, []float32{4, 6, 12, 14, 20, 22}, y.Data[float32]())
 	y = x.sum(1, true)
 	assert.Equal(t, []int{3, 1, 2}, y.shape)
-	assert.Equal(t, []float32{4, 6, 12, 14, 20, 22}, y.data)
+	assert.Equal(t, []float32{4, 6, 12, 14, 20, 22}, y.Data[float32]())
 }
 
 func TestTensor_Transpose(t *testing.T) {
 	x := NewTensor([]float32{1, 2, 3, 4, 5, 6}, 3, 2)
 	y := x.transpose()
 	assert.Equal(t, []int{2, 3}, y.Shape())
-	assert.Equal(t, []float32{1, 3, 5, 2, 4, 6}, y.Data())
+	assert.Equal(t, []float32{1, 3, 5, 2, 4, 6}, y.Data[float32]())
 }
 
 func (t *Tensor) matMulLegacy(other *Tensor, transpose1, transpose2 bool) *Tensor {
@@ -96,12 +96,12 @@ func (t *Tensor) matMulLegacy(other *Tensor, transpose1, transpose2 bool) *Tenso
 		for i := range m {
 			for j := range p {
 				for k := range n {
-					result[i*p+j] += t.data[i*n+k] * other.data[k*p+j]
+					result[i*p+j] += t.Data[float32]()[i*n+k] * other.Data[float32]()[k*p+j]
 				}
 			}
 		}
 		return &Tensor{
-			data:  result,
+			data:  toBytes(result),
 			shape: []int{m, p},
 		}
 	} else if transpose1 && !transpose2 {
@@ -116,12 +116,12 @@ func (t *Tensor) matMulLegacy(other *Tensor, transpose1, transpose2 bool) *Tenso
 		for i := range m {
 			for j := range p {
 				for k := range n {
-					result[i*p+j] += t.data[k*m+i] * other.data[k*p+j]
+					result[i*p+j] += t.Data[float32]()[k*m+i] * other.Data[float32]()[k*p+j]
 				}
 			}
 		}
 		return &Tensor{
-			data:  result,
+			data:  toBytes(result),
 			shape: []int{m, p},
 		}
 	} else if !transpose1 && transpose2 {
@@ -136,12 +136,12 @@ func (t *Tensor) matMulLegacy(other *Tensor, transpose1, transpose2 bool) *Tenso
 		for i := range m {
 			for j := range p {
 				for k := range n {
-					result[i*p+j] += t.data[i*n+k] * other.data[j*n+k]
+					result[i*p+j] += t.Data[float32]()[i*n+k] * other.Data[float32]()[j*n+k]
 				}
 			}
 		}
 		return &Tensor{
-			data:  result,
+			data:  toBytes(result),
 			shape: []int{m, p},
 		}
 	} else {
@@ -156,12 +156,12 @@ func (t *Tensor) matMulLegacy(other *Tensor, transpose1, transpose2 bool) *Tenso
 		for i := range m {
 			for j := range p {
 				for k := range n {
-					result[i*p+j] += t.data[k*m+i] * other.data[j*n+k]
+					result[i*p+j] += t.Data[float32]()[k*m+i] * other.Data[float32]()[j*n+k]
 				}
 			}
 		}
 		return &Tensor{
-			data:  result,
+			data:  toBytes(result),
 			shape: []int{m, p},
 		}
 	}
@@ -181,13 +181,13 @@ func (t *Tensor) batchMatMulLegacy(other *Tensor, transpose1, transpose2 bool) *
 			for j := range n {
 				for k := range p {
 					for l := 0; l < t.shape[2]; l++ {
-						result[i*n*p+j*p+k] += t.data[i*n*t.shape[2]+j*t.shape[2]+l] * other.data[i*other.shape[1]*other.shape[2]+l*other.shape[2]+k]
+						result[i*n*p+j*p+k] += t.Data[float32]()[i*n*t.shape[2]+j*t.shape[2]+l] * other.Data[float32]()[i*other.shape[1]*other.shape[2]+l*other.shape[2]+k]
 					}
 				}
 			}
 		}
 		return &Tensor{
-			data:  result,
+			data:  toBytes(result),
 			shape: []int{m, n, p},
 		}
 	} else if transpose1 && !transpose2 {
@@ -203,13 +203,13 @@ func (t *Tensor) batchMatMulLegacy(other *Tensor, transpose1, transpose2 bool) *
 			for j := range n {
 				for k := range p {
 					for l := 0; l < t.shape[1]; l++ {
-						result[i*n*p+j*p+k] += t.data[i*t.shape[1]*t.shape[2]+l*t.shape[2]+j] * other.data[i*other.shape[1]*other.shape[2]+l*other.shape[2]+k]
+						result[i*n*p+j*p+k] += t.Data[float32]()[i*t.shape[1]*t.shape[2]+l*t.shape[2]+j] * other.Data[float32]()[i*other.shape[1]*other.shape[2]+l*other.shape[2]+k]
 					}
 				}
 			}
 		}
 		return &Tensor{
-			data:  result,
+			data:  toBytes(result),
 			shape: []int{m, n, p},
 		}
 	} else if !transpose1 && transpose2 {
@@ -225,13 +225,13 @@ func (t *Tensor) batchMatMulLegacy(other *Tensor, transpose1, transpose2 bool) *
 			for j := range n {
 				for k := range p {
 					for l := 0; l < t.shape[2]; l++ {
-						result[i*n*p+j*p+k] += t.data[i*n*t.shape[2]+j*t.shape[2]+l] * other.data[i*other.shape[1]*other.shape[2]+k*other.shape[2]+l]
+						result[i*n*p+j*p+k] += t.Data[float32]()[i*n*t.shape[2]+j*t.shape[2]+l] * other.Data[float32]()[i*other.shape[1]*other.shape[2]+k*other.shape[2]+l]
 					}
 				}
 			}
 		}
 		return &Tensor{
-			data:  result,
+			data:  toBytes(result),
 			shape: []int{m, n, p},
 		}
 	} else {
@@ -247,13 +247,13 @@ func (t *Tensor) batchMatMulLegacy(other *Tensor, transpose1, transpose2 bool) *
 			for j := range n {
 				for k := range p {
 					for l := 0; l < t.shape[0]; l++ {
-						result[i*n*p+j*p+k] += t.data[l*t.shape[1]*t.shape[2]+i*t.shape[2]+j] * other.data[l*other.shape[1]*other.shape[2]+j*other.shape[2]+k]
+						result[i*n*p+j*p+k] += t.Data[float32]()[l*t.shape[1]*t.shape[2]+i*t.shape[2]+j] * other.Data[float32]()[l*other.shape[1]*other.shape[2]+j*other.shape[2]+k]
 					}
 				}
 			}
 		}
 		return &Tensor{
-			data:  result,
+			data:  toBytes(result),
 			shape: []int{m, n, p},
 		}
 	}

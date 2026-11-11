@@ -59,9 +59,9 @@ func TestLinearRegression(t *testing.T) {
 	}
 
 	assert.Equal(t, []int{1, 1}, w.shape)
-	assert.InDelta(t, float64(2), w.data[0], 0.6)
+	assert.InDelta(t, float64(2), w.Data[float32]()[0], 0.6)
 	assert.Equal(t, []int{1}, b.shape)
-	assert.InDelta(t, float64(5), b.data[0], 0.6)
+	assert.InDelta(t, float64(5), b.Data[float32]()[0], 0.6)
 }
 
 func TestNeuralNetwork(t *testing.T) {
@@ -87,7 +87,7 @@ func TestNeuralNetwork(t *testing.T) {
 		loss.Backward()
 
 		optimizer.Step()
-		l = loss.data[0]
+		l = loss.Data[float32]()[0]
 	}
 	assert.InDelta(t, float64(0), l, 0.2)
 }
@@ -148,7 +148,7 @@ func TestIris(t *testing.T) {
 		loss.Backward()
 
 		optimizer.Step()
-		l = loss.data[0]
+		l = loss.Data[float32]()[0]
 	}
 	assert.InDelta(t, float32(0), l, 0.1)
 }
@@ -215,12 +215,12 @@ func openMNISTFile(path string) (*Tensor, *Tensor, error) {
 
 func accuracy(prediction, target *Tensor) float32 {
 	var precision float32
-	for i, gt := range target.data {
+	for i, gt := range target.Data[float32]() {
 		if prediction.Slice(i, i+1).argmax()[1] == int(gt) {
 			precision += 1
 		}
 	}
-	precision /= float32(len(target.data))
+	precision /= float32(len(target.Data[float32]()))
 	return precision
 }
 
@@ -262,7 +262,7 @@ func TestMNIST(t *testing.T) {
 			loss.Backward()
 
 			optimizer.Step()
-			sumLoss += loss.data[0]
+			sumLoss += loss.Data[float32]()[0]
 			sumAcc += accuracy(yPred, yBatch)
 			assert.NoError(t, bar.Add(batchSize))
 		}
@@ -291,9 +291,9 @@ func spiral() (*Tensor, *Tensor, error) {
 			radius := 1.0 * rate
 			theta := float32(j)*4.0 + 4.0*rate + float32(rand.NormFloat64())*0.2
 			ix := numData*j + i
-			x.data[ix*inputDim] = radius * math32.Sin(theta)
-			x.data[ix*inputDim+1] = radius * math32.Cos(theta)
-			t.data[ix] = float32(j)
+			x.Data[float32]()[ix*inputDim] = radius * math32.Sin(theta)
+			x.Data[float32]()[ix*inputDim+1] = radius * math32.Cos(theta)
+			t.Data[float32]()[ix] = float32(j)
 		}
 	}
 
@@ -323,7 +323,7 @@ func TestSaveAndLoad(t *testing.T) {
 		loss.Backward()
 
 		optimizer.Step()
-		expected = loss.data[0]
+		expected = loss.Data[float32]()[0]
 	}
 
 	buffer := bytes.NewBuffer(nil)
@@ -338,5 +338,5 @@ func TestSaveAndLoad(t *testing.T) {
 	assert.NoError(t, err)
 	yPred := modelLoaded.Forward(x)
 	loss := SoftmaxCrossEntropy(yPred, y)
-	assert.InDelta(t, float64(expected), float64(loss.data[0]), 0.01)
+	assert.InDelta(t, float64(expected), float64(loss.Data[float32]()[0]), 0.01)
 }
