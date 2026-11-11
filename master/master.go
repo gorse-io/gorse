@@ -375,7 +375,7 @@ func (m *Master) Serve() {
 			zap.String("ssl_ca", m.Config.Master.SSLCA),
 			zap.String("ssl_cert", m.Config.Master.SSLCert),
 			zap.String("ssl_key", m.Config.Master.SSLKey))
-		opts := []grpc.ServerOption{grpc.MaxSendMsgSize(math.MaxInt)}
+		opts := []grpc.ServerOption{grpc.MaxSendMsgSize(math.MaxInt), grpc.MaxRecvMsgSize(cache.MaxProxyMessageSize)}
 		if m.Config.Master.SSLMode {
 			c, err := util.NewServerCreds(&util.TLSConfig{
 				SSLCA:   m.Config.Master.SSLCA,

@@ -28,6 +28,9 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+// MaxProxyMessageSize allows a 10 MiB cache value plus protobuf envelope overhead.
+const MaxProxyMessageSize = 16 * 1024 * 1024
+
 type ProxyServer struct {
 	protocol.UnimplementedCacheStoreServer
 	database Database
@@ -39,7 +42,7 @@ func NewProxyServer(database Database) *ProxyServer {
 }
 
 func (p *ProxyServer) Serve(lis net.Listener) error {
-	p.server = grpc.NewServer()
+	p.server = grpc.NewServer(grpc.MaxRecvMsgSize(MaxProxyMessageSize), grpc.MaxSendMsgSize(MaxProxyMessageSize))
 	protocol.RegisterCacheStoreServer(p.server, p)
 	return p.server.Serve(lis)
 }
@@ -57,7 +60,7 @@ func (p *ProxyServer) Get(ctx context.Context, request *protocol.GetRequest) (*p
 	if !value.Exists() {
 		return &protocol.GetResponse{}, nil
 	}
-	return &protocol.GetResponse{Value: new(value.value)}, value.err
+	return &protocol.GetResponse{Value: []byte(value.value)}, value.err
 }
 
 func (p *ProxyServer) Set(ctx context.Context, request *protocol.SetRequest) (*protocol.SetResponse, error) {
@@ -65,7 +68,7 @@ func (p *ProxyServer) Set(ctx context.Context, request *protocol.SetRequest) (*p
 	for i, value := range request.Values {
 		values[i] = Value{
 			name:  value.GetName(),
-			value: value.GetValue(),
+			value: string(value.GetValue()),
 		}
 	}
 	return &protocol.SetResponse{}, p.database.Set(ctx, values...)
@@ -200,26 +203,26 @@ func (p ProxyClient) Set(ctx context.Context, values ...Value) error {
 	for i, value := range values {
 		pbValues[i] = &protocol.Value{
 			Name:  value.name,
-			Value: value.value,
+			Value: []byte(value.value),
 		}
 	}
 	_, err := p.CacheStoreClient.Set(ctx, &protocol.SetRequest{
 		Values: pbValues,
-	})
+	}, grpc.MaxCallSendMsgSize(MaxProxyMessageSize))
 	return err
 }
 
 func (p ProxyClient) Get(ctx context.Context, name string) *ReturnValue {
 	resp, err := p.CacheStoreClient.Get(ctx, &protocol.GetRequest{
 		Name: name,
-	})
+	}, grpc.MaxCallRecvMsgSize(MaxProxyMessageSize))
 	if err != nil {
 		return &ReturnValue{err: err, exists: false}
 	}
 	if resp.Value == nil {
 		return &ReturnValue{value: "", exists: false}
 	}
-	return &ReturnValue{value: resp.GetValue(), err: err, exists: true}
+	return &ReturnValue{value: string(resp.GetValue()), err: err, exists: true}
 }
 
 func (p ProxyClient) Delete(ctx context.Context, name string) error {

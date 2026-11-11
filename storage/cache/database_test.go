@@ -106,6 +106,31 @@ func (suite *baseTestSuite) TestMeta() {
 	suite.NoError(err)
 }
 
+func (suite *baseTestSuite) TestBinaryValue() {
+	ctx := suite.T().Context()
+	payload := make([]byte, 10*1024*1024)
+	for i := range payload {
+		payload[i] = byte(i)
+	}
+	name := Key("binary", "value")
+	suite.Require().NoError(suite.Database.Set(ctx, String(name, string(payload))))
+	ret := suite.Database.Get(ctx, name)
+	value, err := ret.String()
+	suite.Require().NoError(err)
+	suite.True(ret.Exists())
+	suite.True(string(payload) == value, "10 MiB binary value must round-trip byte-for-byte")
+
+	// Replacing a large binary value with an empty value must preserve existence.
+	suite.Require().NoError(suite.Database.Set(ctx, String(name, "")))
+	ret = suite.Database.Get(ctx, name)
+	value, err = ret.String()
+	suite.Require().NoError(err)
+	suite.True(ret.Exists())
+	suite.Empty(value)
+	suite.Require().NoError(suite.Database.Delete(ctx, name))
+	suite.False(suite.Database.Get(ctx, name).Exists())
+}
+
 func (suite *baseTestSuite) TestExists() {
 	ctx := suite.T().Context()
 

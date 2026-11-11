@@ -39,7 +39,7 @@ const (
 type Value struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	Value         string                 `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
+	Value         []byte                 `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -81,11 +81,11 @@ func (x *Value) GetName() string {
 	return ""
 }
 
-func (x *Value) GetValue() string {
+func (x *Value) GetValue() []byte {
 	if x != nil {
 		return x.Value
 	}
-	return ""
+	return nil
 }
 
 type Score struct {
@@ -390,7 +390,7 @@ func (x *GetRequest) GetName() string {
 
 type GetResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Value         *string                `protobuf:"bytes,1,opt,name=value,proto3,oneof" json:"value,omitempty"`
+	Value         []byte                 `protobuf:"bytes,1,opt,name=value,proto3,oneof" json:"value,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -425,11 +425,11 @@ func (*GetResponse) Descriptor() ([]byte, []int) {
 	return file_cache_store_proto_rawDescGZIP(), []int{6}
 }
 
-func (x *GetResponse) GetValue() string {
-	if x != nil && x.Value != nil {
-		return *x.Value
+func (x *GetResponse) GetValue() []byte {
+	if x != nil {
+		return x.Value
 	}
-	return ""
+	return nil
 }
 
 type SetRequest struct {
@@ -1303,7 +1303,7 @@ const file_cache_store_proto_rawDesc = "" +
 	"\x11cache_store.proto\x12\bprotocol\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x0eprotocol.proto\"1\n" +
 	"\x05Value\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value\"\xa4\x01\n" +
+	"\x05value\x18\x02 \x01(\fR\x05value\"\xa4\x01\n" +
 	"\x05Score\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
 	"\x05score\x18\x02 \x01(\x01R\x05score\x12\x1b\n" +
@@ -1337,7 +1337,7 @@ const file_cache_store_proto_rawDesc = "" +
 	"GetRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\"2\n" +
 	"\vGetResponse\x12\x19\n" +
-	"\x05value\x18\x01 \x01(\tH\x00R\x05value\x88\x01\x01B\b\n" +
+	"\x05value\x18\x01 \x01(\fH\x00R\x05value\x88\x01\x01B\b\n" +
 	"\x06_value\"5\n" +
 	"\n" +
 	"SetRequest\x12'\n" +

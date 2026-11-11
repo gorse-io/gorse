@@ -21,6 +21,7 @@ import (
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
+	"go.mongodb.org/mongo-driver/bson"
 )
 
 var (
@@ -65,6 +66,53 @@ func (suite *MongoTestSuite) getMongoDB() *MongoDB {
 	mongoDatabase, ok = suite.Database.(*MongoDB)
 	suite.True(ok)
 	return mongoDatabase
+}
+
+func (suite *MongoTestSuite) TestBinaryStorage() {
+	ctx := suite.T().Context()
+	collection := suite.getMongoDB().client.Database(suite.getMongoDB().dbName).Collection(suite.getMongoDB().ValuesTable())
+	payload := make([]byte, 256)
+	for i := range payload {
+		payload[i] = byte(i)
+	}
+	for _, value := range []string{"", "text value", string(payload)} {
+		suite.Require().NoError(suite.Database.Set(ctx, String("binary", value)))
+		raw, err := collection.FindOne(ctx, bson.M{"_id": "binary"}).DecodeBytes()
+		suite.Require().NoError(err)
+		subtype, data, ok := raw.Lookup("value").BinaryOK()
+		suite.Require().True(ok, "cache values must be stored as BSON binary")
+		suite.Equal(byte(0), subtype)
+		suite.Equal([]byte(value), data)
+		result := suite.Database.Get(ctx, "binary")
+		suite.True(result.Exists())
+		got, err := result.String()
+		suite.Require().NoError(err)
+		suite.Equal(value, got)
+	}
+}
+
+func (suite *MongoTestSuite) TestLegacyValue() {
+	ctx := suite.T().Context()
+	database := suite.getMongoDB()
+	collection := database.client.Database(database.dbName).Collection(database.ValuesTable())
+	_, err := collection.InsertOne(ctx, bson.M{"_id": "legacy", "value": "old text"})
+	suite.Require().NoError(err)
+	result := suite.Database.Get(ctx, "legacy")
+	suite.True(result.Exists())
+	value, err := result.String()
+	suite.Require().NoError(err)
+	suite.Equal("old text", value)
+
+	// Replacing a legacy text value stores the new value as BSON binary.
+	suite.Require().NoError(suite.Database.Set(ctx, String("legacy", "new text")))
+	raw, err := collection.FindOne(ctx, bson.M{"_id": "legacy"}).DecodeBytes()
+	suite.Require().NoError(err)
+	_, data, ok := raw.Lookup("value").BinaryOK()
+	suite.Require().True(ok)
+	suite.Equal([]byte("new text"), data)
+	value, err = suite.Database.Get(ctx, "legacy").String()
+	suite.Require().NoError(err)
+	suite.Equal("new text", value)
 }
 
 func TestMongo(t *testing.T) {

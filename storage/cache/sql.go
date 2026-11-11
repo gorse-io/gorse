@@ -132,7 +132,7 @@ const (
 
 type SQLValue struct {
 	Name  string `gorm:"type:varchar(256);primaryKey"`
-	Value string `gorm:"type:varchar(256);not null"`
+	Value []byte `gorm:"size:10485760;not null"`
 }
 
 type PostgresDocument struct {
@@ -171,6 +171,23 @@ func (db *SQLDatabase) Ping() error {
 }
 
 func (db *SQLDatabase) Init() error {
+	// PostgreSQL's text::bytea cast interprets backslash escapes. Convert the
+	// original text to UTF-8 bytes explicitly before AutoMigrate changes its type.
+	if db.driver == Postgres && db.gormDB.Migrator().HasTable(&SQLValue{}) {
+		columns, err := db.gormDB.Migrator().ColumnTypes(&SQLValue{})
+		if err != nil {
+			return errors.WithStack(err)
+		}
+		for _, column := range columns {
+			if column.Name() == "value" && column.DatabaseTypeName() != "bytea" {
+				if err := db.gormDB.Exec("ALTER TABLE ? ALTER COLUMN ? TYPE bytea USING convert_to(?, 'UTF8')",
+					clause.Table{Name: db.ValuesTable()}, clause.Column{Name: "value"}, clause.Column{Name: "value"}).Error; err != nil {
+					return errors.WithStack(err)
+				}
+				break
+			}
+		}
+	}
 	err := db.gormDB.AutoMigrate(&SQLValue{}, &TimeSeriesPoint{})
 	if err != nil {
 		return errors.WithStack(err)
@@ -278,7 +295,7 @@ func (db *SQLDatabase) Set(ctx context.Context, values ...Value) error {
 		if !valueSet.Contains(value.name) {
 			rows = append(rows, SQLValue{
 				Name:  value.name,
-				Value: value.value,
+				Value: []byte(value.value),
 			})
 			valueSet.Add(value.name)
 		}

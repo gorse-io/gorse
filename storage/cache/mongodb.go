@@ -165,7 +165,7 @@ func (m MongoDB) Set(ctx context.Context, values ...Value) error {
 		models = append(models, mongo.NewUpdateOneModel().
 			SetUpsert(true).
 			SetFilter(bson.M{"_id": value.name}).
-			SetUpdate(bson.M{"$set": bson.M{"_id": value.name, "value": value.value}}))
+			SetUpdate(bson.M{"$set": bson.M{"_id": value.name, "value": []byte(value.value)}}))
 	}
 	_, err := c.BulkWrite(ctx, models)
 	return errors.WithStack(err)
@@ -182,7 +182,13 @@ func (m MongoDB) Get(ctx context.Context, name string) *ReturnValue {
 	if raw, err := r.DecodeBytes(); err != nil {
 		return &ReturnValue{err: errors.WithStack(err), exists: false}
 	} else {
-		return &ReturnValue{value: raw.Lookup("value").StringValue(), exists: true}
+		value := raw.Lookup("value")
+		// Existing cache keys may still contain BSON strings.
+		if text, ok := value.StringValueOK(); ok {
+			return &ReturnValue{value: text, exists: true}
+		}
+		_, data := value.Binary()
+		return &ReturnValue{value: string(data), exists: true}
 	}
 }
 
