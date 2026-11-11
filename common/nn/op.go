@@ -61,9 +61,6 @@ func (b *base) setGeneration(gen int) {
 func apply(f op, inputs ...*Tensor) *Tensor {
 	for _, x := range inputs {
 		if x.dtype == Float16 {
-			if !inferenceMode.Load() {
-				panic("FP16 computation requires inference mode")
-			}
 			converted := make([]*Tensor, len(inputs))
 			for i, input := range inputs {
 				if input.dtype == Float16 {

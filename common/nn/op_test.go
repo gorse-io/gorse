@@ -96,8 +96,6 @@ func TestAdd(t *testing.T) {
 	assert.Equal(t, []float32{2, 2, 2}, y.grad.Data[float32]())
 
 	// Test FP16
-	SetInferenceMode(true)
-	defer SetInferenceMode(false)
 	// (2,3) + (2,3) -> (2,3)
 	x = NewTensor([]float32{1, 2, 3, 4, 5, 6}, 2, 3).ToFloat16()
 	y = NewTensor([]float32{2, 3, 4, 5, 6, 7}, 2, 3).ToFloat16()
@@ -147,8 +145,6 @@ func TestSub(t *testing.T) {
 	assert.Equal(t, []float32{-2, -2, -2}, y.grad.Data[float32]())
 
 	// Test FP16
-	SetInferenceMode(true)
-	defer SetInferenceMode(false)
 	// (2,3) - (2,3) -> (2,3)
 	x = NewTensor([]float32{1, 2, 3, 4, 5, 6}, 2, 3).ToFloat16()
 	y = NewTensor([]float32{2, 3, 4, 5, 6, 7}, 2, 3).ToFloat16()
@@ -198,8 +194,6 @@ func TestMul(t *testing.T) {
 	assert.Equal(t, []float32{5, 7, 9}, y.grad.Data[float32]())
 
 	// Test FP16
-	SetInferenceMode(true)
-	defer SetInferenceMode(false)
 	// (2,3) * (2,3) -> (2,3)
 	x = NewTensor([]float32{1, 2, 3, 4, 5, 6}, 2, 3).ToFloat16()
 	y = NewTensor([]float32{2, 3, 4, 5, 6, 7}, 2, 3).ToFloat16()
@@ -246,8 +240,6 @@ func TestDiv(t *testing.T) {
 	assert.InDeltaSlice(t, []float32{-5.0 / 4.0, -7.0 / 9.0, -9.0 / 16.0}, y.grad.Data[float32](), 1e-6)
 
 	// Test FP16
-	SetInferenceMode(true)
-	defer SetInferenceMode(false)
 	// (2,3) / (2,3) -> (2,3)
 	x = NewTensor([]float32{1, 2, 3, 4, 5, 6}, 2, 3).ToFloat16()
 	y = NewTensor([]float32{2, 3, 4, 5, 6, 7}, 2, 3).ToFloat16()
@@ -271,8 +263,6 @@ func TestSquare(t *testing.T) {
 	allClose(t, x.grad, dx)
 
 	// Test FP16
-	SetInferenceMode(true)
-	defer SetInferenceMode(false)
 	// (2,3) -> (2,3)
 	x = NewTensor([]float32{1, 2, 3, 4, 5, 6}, 2, 3).ToFloat16()
 	y = Square(x)
@@ -317,8 +307,6 @@ func TestPow(t *testing.T) {
 	}, y.grad.Data[float32](), 1e-6)
 
 	// Test FP16
-	SetInferenceMode(true)
-	defer SetInferenceMode(false)
 	// (2,3) ** (2,3) -> (2,3)
 	x = NewTensor([]float32{1, 2, 3, 4, 5, 6}, 2, 3).ToFloat16()
 	y = NewTensor([]float32{2, 2, 2, 2, 2, 2}, 2, 3).ToFloat16()
@@ -342,8 +330,6 @@ func TestExp(t *testing.T) {
 	allClose(t, x.grad, dx)
 
 	// Test FP16
-	SetInferenceMode(true)
-	defer SetInferenceMode(false)
 	// (2,3) -> (2,3)
 	x = NewTensor([]float32{0, 1, 2, 3, 4, 5}, 2, 3).ToFloat16()
 	y = Exp(x)
@@ -366,8 +352,6 @@ func TestLog(t *testing.T) {
 	allClose(t, x.grad, dx)
 
 	// Test FP16
-	SetInferenceMode(true)
-	defer SetInferenceMode(false)
 	// (2,3) -> (2,3)
 	x = NewTensor([]float32{1, 2, 3, 4, 5, 6}, 2, 3).ToFloat16()
 	y = Log(x)
@@ -390,8 +374,6 @@ func TestAbs(t *testing.T) {
 	allClose(t, x.grad, dx)
 
 	// Test FP16
-	SetInferenceMode(true)
-	defer SetInferenceMode(false)
 	// (2,3) -> (2,3)
 	x = NewTensor([]float32{1, -2, 3, -4, 5, -6}, 2, 3).ToFloat16()
 	y = Abs(x)
@@ -426,8 +408,6 @@ func TestSum(t *testing.T) {
 	assert.Equal(t, []float32{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1}, x.grad.Data[float32]())
 
 	// Test FP16
-	SetInferenceMode(true)
-	defer SetInferenceMode(false)
 	// (2,3) -> ()
 	x = NewTensor([]float32{1, 2, 3, 4, 5, 6}, 2, 3).ToFloat16()
 	y = Sum(x)
@@ -449,8 +429,6 @@ func TestMean(t *testing.T) {
 	assert.Equal(t, []float32{1.0 / 6, 1.0 / 6, 1.0 / 6, 1.0 / 6, 1.0 / 6, 1.0 / 6}, x.grad.Data[float32]())
 
 	// Test FP16
-	SetInferenceMode(true)
-	defer SetInferenceMode(false)
 	// (2,3) -> ()
 	x = NewTensor([]float32{1, 2, 3, 4, 5, 6}, 2, 3).ToFloat16()
 	y = Mean(x)
@@ -473,8 +451,6 @@ func TestCos(t *testing.T) {
 	allClose(t, x.grad, dx)
 
 	// Test FP16
-	SetInferenceMode(true)
-	defer SetInferenceMode(false)
 	// (2,3) -> (2,3)
 	x = NewTensor([]float32{0, 0.1, 0.2, 0.3, 0.4, 0.5}, 2, 3).ToFloat16()
 	y = Cos(x)
@@ -497,8 +473,6 @@ func TestSin(t *testing.T) {
 	allClose(t, x.grad, dx)
 
 	// Test FP16
-	SetInferenceMode(true)
-	defer SetInferenceMode(false)
 	// (2,3) -> (2,3)
 	x = NewTensor([]float32{0, 1, 2, 3, 4, 5}, 2, 3).ToFloat16()
 	y = Sin(x)
@@ -549,8 +523,6 @@ func TestMatMul(t *testing.T) {
 	assert.Equal(t, []int{3, 2}, x.grad.shape)
 
 	// Test FP16
-	SetInferenceMode(true)
-	defer SetInferenceMode(false)
 	// (2,3) * (3,4) -> (2,4)
 	x = NewTensor([]float32{1, 2, 3, 4, 5, 6}, 2, 3).ToFloat16()
 	y = NewTensor([]float32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12}, 3, 4).ToFloat16()
@@ -613,8 +585,6 @@ func TestBMM(t *testing.T) {
 	assert.Equal(t, []int{2, 3, 2}, x.grad.shape)
 
 	// Test FP16
-	SetInferenceMode(true)
-	defer SetInferenceMode(false)
 	// (2,2,3) * (2,3,4) -> (2,2,4)
 	x = NewTensor([]float32{1, 2, 3, 4, 5, 6, 1, 2, 3, 4, 5, 6}, 2, 2, 3).ToFloat16()
 	y = NewTensor([]float32{
@@ -642,8 +612,6 @@ func TestBroadcast(t *testing.T) {
 	assert.Equal(t, []float32{3, 3}, x.grad.Data[float32]())
 
 	// Test FP16
-	SetInferenceMode(true)
-	defer SetInferenceMode(false)
 	// (2) -> (2,3)
 	x = NewTensor([]float32{1, 2}, 2).ToFloat16()
 	y = Broadcast(x, 3)
@@ -678,8 +646,6 @@ func TestEmbedding(t *testing.T) {
 	assert.Equal(t, []float32{3, 3, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1}, w.grad.Data[float32]())
 
 	// Test FP16
-	SetInferenceMode(true)
-	defer SetInferenceMode(false)
 	// (2,3) -> (2,3,2)
 	x = NewTensor([]float32{0, 1, 0, 3, 0, 5}, 2, 3).ToFloat16()
 	w = NewTensor([]float32{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11}, 6, 2).ToFloat16()
@@ -704,8 +670,6 @@ func TestSigmoid(t *testing.T) {
 	allClose(t, x.grad, dx)
 
 	// Test FP16
-	SetInferenceMode(true)
-	defer SetInferenceMode(false)
 	// (2,3) -> (2,3)
 	x = NewTensor([]float32{0, 1, 2, 3, 4, 5}, 2, 3).ToFloat16()
 	y = Sigmoid(x)
@@ -728,8 +692,6 @@ func TestReLu(t *testing.T) {
 	allClose(t, x.grad, dx)
 
 	// Test FP16
-	SetInferenceMode(true)
-	defer SetInferenceMode(false)
 	// (2,3) -> (2,3)
 	x = NewTensor([]float32{-1, 0, 1, 2, 3, 4}, 2, 3).ToFloat16()
 	y = ReLu(x)
@@ -751,8 +713,6 @@ func TestSoftmax(t *testing.T) {
 	allClose(t, x.grad, dx)
 
 	// Test FP16
-	SetInferenceMode(true)
-	defer SetInferenceMode(false)
 	// (1,3) -> (1,3)
 	x = NewTensor([]float32{3.0, 1.0, 0.2}, 1, 3).ToFloat16()
 	y = Softmax(x, 1)
@@ -773,8 +733,6 @@ func TestFlatten(t *testing.T) {
 	assert.Equal(t, []float32{1, 1, 1, 1, 1, 1}, x.grad.Data[float32]())
 
 	// Test FP16
-	SetInferenceMode(true)
-	defer SetInferenceMode(false)
 	// (2,3) -> (6)
 	x = NewTensor([]float32{1, 2, 3, 4, 5, 6}, 2, 3).ToFloat16()
 	y = Flatten(x)
@@ -794,8 +752,6 @@ func TestReshape(t *testing.T) {
 	assert.Equal(t, []float32{1, 1, 1, 1, 1, 1}, x.grad.Data[float32]())
 
 	// Test FP16
-	SetInferenceMode(true)
-	defer SetInferenceMode(false)
 	// (2,3) -> (3,2)
 	x = NewTensor([]float32{1, 2, 3, 4, 5, 6}, 2, 3).ToFloat16()
 	y = Reshape(x, 3, 2)
@@ -818,8 +774,6 @@ func TestSoftmaxCrossEntropy(t *testing.T) {
 	allClose(t, x.grad, dx)
 
 	// Test FP16
-	SetInferenceMode(true)
-	defer SetInferenceMode(false)
 	// (2,3) -> (2,3)
 	x = NewTensor([]float32{0.3, 2.9, 4.0, 0.2, 1.0, 3.0}, 3, 2).ToFloat16()
 	y = NewTensor([]float32{1, 0, 1}, 3).ToFloat16()
@@ -842,8 +796,6 @@ func TestReuseLeaf(t *testing.T) {
 	allClose(t, x.grad, dx)
 
 	// Test FP16
-	SetInferenceMode(true)
-	defer SetInferenceMode(false)
 	// x + x
 	x = NewTensor([]float32{1, 2, 3, 4, 5, 6}, 2, 3).ToFloat16()
 	y = Add(x, x)
@@ -868,8 +820,6 @@ func TestReuseNode(t *testing.T) {
 	allClose(t, x.grad, dx)
 
 	// Test FP16
-	SetInferenceMode(true)
-	defer SetInferenceMode(false)
 	// x^2 + x^2
 	x = NewTensor([]float32{1, 2, 3, 4, 5, 6}, 2, 3).ToFloat16()
 	temp = Pow(x, NewTensor([]float32{2}).ToFloat16())
@@ -895,8 +845,6 @@ func TestDependency(t *testing.T) {
 	allClose(t, x.grad, dx)
 
 	// Test FP16
-	SetInferenceMode(true)
-	defer SetInferenceMode(false)
 	// x^2 + 2x^2
 	x = NewTensor([]float32{1, 2, 3, 4, 5, 6}, 2, 3).ToFloat16()
 	temp = Pow(x, NewTensor([]float32{2}).ToFloat16())
@@ -921,8 +869,6 @@ func TestSphere(t *testing.T) {
 	allClose(t, y.grad, dy)
 
 	// Test FP16
-	SetInferenceMode(true)
-	defer SetInferenceMode(false)
 	// x^2 + y^2
 	x = NewScalar(1).ToFloat16()
 	y = NewScalar(1).ToFloat16()
@@ -951,8 +897,6 @@ func TestMatyas(t *testing.T) {
 	allClose(t, y.grad, dy)
 
 	// Test FP16
-	SetInferenceMode(true)
-	defer SetInferenceMode(false)
 	// 0.26 * (x^2 + y^2) - 0.48 * x * y
 	x = NewScalar(1).ToFloat16()
 	y = NewScalar(1).ToFloat16()
@@ -1035,8 +979,6 @@ func TestGoldsteinPrice(t *testing.T) {
 	allClose(t, y.grad, dy)
 
 	// Test FP16
-	SetInferenceMode(true)
-	defer SetInferenceMode(false)
 	// (1 + (x + y + 1)^2 * (19 - 14x + 3x^2 - 14y + 6xy + 3y^2)) * (30 + (2x - 3y)^2 * (18 - 32x + 12x^2 + 48y - 36xy + 27y^2))
 	x = NewScalar(1).ToFloat16()
 	y = NewScalar(1).ToFloat16()
