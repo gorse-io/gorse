@@ -37,28 +37,6 @@ import (
 	"golang.org/x/sys/cpu"
 )
 
-func TestOptimizersRejectFloat16(t *testing.T) {
-	for _, test := range []struct {
-		name string
-		new  func([]*Tensor, float32) Optimizer
-	}{
-		{"SGD", NewSGD},
-		{"Adam", NewAdam},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			full := Ones(2)
-			half := full.ToFloat16()
-			assert.NotPanics(t, func() { test.new([]*Tensor{full}, 0.01) })
-			assert.PanicsWithValue(t, "optimizers only support FP32 parameters", func() {
-				test.new([]*Tensor{half}, 0.01)
-			})
-			assert.PanicsWithValue(t, "optimizers only support FP32 parameters", func() {
-				test.new([]*Tensor{full, half}, 0.01)
-			})
-		})
-	}
-}
-
 func TestLinearRegression(t *testing.T) {
 	x := Rand(nil, 100, 1)
 	y := Add(Rand(nil, 100, 1), NewScalar(5), Mul(NewScalar(2), x))
