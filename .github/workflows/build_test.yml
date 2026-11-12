@@ -324,9 +324,9 @@ jobs:
 
     steps:
       - name: Install pre-requisites
-        uses: awalsh128/cache-apt-pkgs-action@latest
-        with:
-          packages: qemu-user-static
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-user-static
 
       - name: Setup Redis cluster
         uses: gorse-io/redis-cluster@v1.0.0

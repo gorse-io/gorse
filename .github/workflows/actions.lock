@@ -21,7 +21,6 @@ workflows:
         - 'actions/checkout@v2'
         - 'actions/checkout@v5'
         - 'actions/setup-go@v5'
-        - 'awalsh128/cache-apt-pkgs-action@latest'
         - 'codecov/codecov-action@v5'
         - 'cuchi/jinja2-action@v1.2.0'
         - 'docker/login-action@v3'
@@ -36,11 +35,6 @@ workflows:
     '.github/workflows/translate_issues.yml':
         - 'tomsun28/issues-translate-action@v2.5'
 dependencies:
-    'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9':
-        ref: 'v6.1.0'
-        commit: 'sha1-55cc8345863c7cc4c66a329aec7e433d2d1c52a9'
-        owner_id: 44036562
-        repo_id: 215566462
     'actions/checkout@v2':
         ref: 'v2'
         commit: 'sha1-0717577d45739eb3c851188b29f50ed6c0b2194e'
@@ -61,19 +55,6 @@ dependencies:
         commit: 'sha1-40f1582b2485089dde7abd97c1529aa768e1baff'
         owner_id: 44036562
         repo_id: 192624594
-    'actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f':
-        ref: 'v7.0.0'
-        commit: 'sha1-bbbca2ddaa5d8feaa63e36b76fdaad77386f024f'
-        owner_id: 44036562
-        repo_id: 192625955
-    'awalsh128/cache-apt-pkgs-action@latest':
-        ref: 'latest'
-        commit: 'sha1-553a35bb8ebd9fcabcb1c9451aa4c98e1b4ca8a9'
-        owner_id: 2087466
-        repo_id: 408212054
-        uses:
-            - 'actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9'
-            - 'actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f'
     'battila7/get-version-action@v2':
         ref: 'v2'
         commit: 'sha1-d97fbc34ceb64d1f5d95f4dfd6dce33521ccccf5'
