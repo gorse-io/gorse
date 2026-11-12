@@ -327,6 +327,7 @@ jobs:
         uses: awalsh128/cache-apt-pkgs-action@v1
         with:
           packages: qemu-user-static
+          version: 1
 
       - name: Setup Redis cluster
         uses: gorse-io/redis-cluster@v1.0.0
