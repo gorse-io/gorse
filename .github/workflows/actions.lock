@@ -21,7 +21,7 @@ workflows:
         - 'actions/checkout@v2'
         - 'actions/checkout@v5'
         - 'actions/setup-go@v5'
-        - 'awalsh128/cache-apt-pkgs-action@latest'
+        - 'awalsh128/cache-apt-pkgs-action@v1'
         - 'codecov/codecov-action@v5'
         - 'cuchi/jinja2-action@v1.2.0'
         - 'docker/login-action@v3'
@@ -66,8 +66,8 @@ dependencies:
         commit: 'sha1-bbbca2ddaa5d8feaa63e36b76fdaad77386f024f'
         owner_id: 44036562
         repo_id: 192625955
-    'awalsh128/cache-apt-pkgs-action@latest':
-        ref: 'latest'
+    'awalsh128/cache-apt-pkgs-action@v1':
+        ref: 'v1'
         commit: 'sha1-553a35bb8ebd9fcabcb1c9451aa4c98e1b4ca8a9'
         owner_id: 2087466
         repo_id: 408212054
