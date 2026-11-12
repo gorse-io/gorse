@@ -136,4 +136,50 @@ service CacheStore {
       returns (AddTimeSeriesPointsResponse) {}
   rpc GetTimeSeriesPoints(GetTimeSeriesPointsRequest)
       returns (GetTimeSeriesPointsResponse) {}
+  rpc AddGeoIndex(AddGeoIndexRequest) returns (AddGeoIndexResponse) {}
+  rpc ListGeoIndex(ListGeoIndexRequest) returns (ListGeoIndexResponse) {}
+  rpc AddGeoPoints(AddGeoPointsRequest) returns (AddGeoPointsResponse) {}
+  rpc SearchGeoPoints(SearchGeoPointsRequest) returns (SearchGeoPointsResponse) {}
+  rpc DeleteGeoPoints(DeleteGeoPointsRequest) returns (DeleteGeoPointsResponse) {}
+  rpc DeleteGeoIndex(DeleteGeoIndexRequest) returns (DeleteGeoIndexResponse) {}
 }
+
+message GeoPoint {
+  string id = 1;
+  double longitude = 2;
+  double latitude = 3;
+  repeated string categories = 4;
+  google.protobuf.Timestamp timestamp = 5;
+  bool is_hidden = 6;
+}
+
+message AddGeoIndexRequest { string name = 1; }
+message AddGeoIndexResponse {}
+
+message AddGeoPointsRequest {
+  string name = 1;
+  repeated GeoPoint points = 2;
+}
+message AddGeoPointsResponse {}
+
+message SearchGeoPointsRequest {
+  string name = 1;
+  double longitude = 2;
+  double latitude = 3;
+  int64 n = 4;
+  double max_distance = 5;
+}
+// Score.score is the nonnegative distance in meters, ordered nearest first.
+message SearchGeoPointsResponse { repeated Score points = 1; }
+
+message DeleteGeoPointsRequest {
+  string name = 1;
+  repeated string ids = 2;
+}
+message DeleteGeoPointsResponse {}
+
+message DeleteGeoIndexRequest { string name = 1; }
+message DeleteGeoIndexResponse {}
+
+message ListGeoIndexRequest {}
+message ListGeoIndexResponse { repeated string names = 1; }
