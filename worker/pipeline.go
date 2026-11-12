@@ -131,10 +131,11 @@ func (p *Pipeline) Recommend(ctx context.Context, users []data.User, progress fu
 
 	// progress tracker
 	completed := make(chan struct{}, 1000)
+	progressDone := make(chan struct{})
 	_, span := p.Tracer.Start(ctx, "Generate recommendation", len(users))
-	defer span.End()
 
 	go func() {
+		defer close(progressDone)
 		defer util.CheckPanic()
 		completedCount, previousCount := 0, 0
 		ticker := time.NewTicker(10 * time.Second)
@@ -143,6 +144,11 @@ func (p *Pipeline) Recommend(ctx context.Context, users []data.User, progress fu
 			select {
 			case _, ok := <-completed:
 				if !ok {
+					// Report the terminal state, including work since the last tick.
+					span.End()
+					if progress != nil {
+						progress(completedCount, completedCount-previousCount)
+					}
 					return
 				}
 				completedCount++
@@ -153,8 +159,6 @@ func (p *Pipeline) Recommend(ctx context.Context, users []data.User, progress fu
 					progress(completedCount, completedCount-previousCount)
 				}
 				previousCount = completedCount
-			case <-ctx.Done():
-				return
 			}
 		}
 	}()
@@ -316,6 +320,9 @@ func (p *Pipeline) Recommend(ctx context.Context, users []data.User, progress fu
 		log.Logger().Error("recommendation was cancelled", zap.Error(err))
 	}
 	close(completed)
+	// Drain every completion and finish the final report before returning.
+	// The tracker also drains in-flight jobs when the context is canceled.
+	<-progressDone
 	log.Logger().Info("complete ranking recommendation",
 		zap.String("used_time", time.Since(startTime).String()))
 	UpdateUserRecommendTotal.Set(updateUserCount.Load())
