@@ -1681,6 +1681,7 @@ func (m *Master) importExportFeedback(response http.ResponseWriter, request *htt
 				FeedbackKey: feedback.FeedbackKey,
 				Value:       feedback.Value,
 				Timestamp:   timestamp,
+				Labels:      feedback.Labels,
 				Comment:     feedback.Comment,
 			})
 			// batch insert

@@ -324,9 +324,9 @@ jobs:
 
     steps:
       - name: Install pre-requisites
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y qemu-user-static
+        uses: awalsh128/cache-apt-pkgs-action@v1
+        with:
+          packages: qemu-user
 
       - name: Setup Redis cluster
         uses: gorse-io/redis-cluster@v1.0.0
@@ -339,12 +339,12 @@ jobs:
       - name: Test RISC-V floats
         run: make -C common/floats test-rvv
         env:
-          RISCV64_QEMU: qemu-riscv64-static
+          RISCV64_QEMU: qemu-riscv64
 
       - name: Test LoongArch LASX floats
         run: make -C common/floats test-lasx
         env:
-          LOONG64_QEMU: qemu-loongarch64-static
+          LOONG64_QEMU: qemu-loongarch64
 
       - name: Test MariaDB
         run: go test ./storage/data ./storage/cache -run TestMySQL
