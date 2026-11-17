@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -368,6 +369,8 @@ func (t *Tensor) Backward() {
 		}
 		output.grad = nil
 	}
+	// Operations hold weak output references, so retain the graph until backward completes.
+	runtime.KeepAlive(t)
 }
 
 func (t *Tensor) Grad() *Tensor {
