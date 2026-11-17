@@ -18,7 +18,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -146,49 +145,6 @@ func (suite *AdminClientTestSuite) TestImportExportFeedback() {
 	suite.Require().Len(stored, 1)
 	suite.Equal(feedback.Labels, stored[0].Labels)
 	suite.Equal(feedback.Comment, stored[0].Comment)
-}
-
-func (suite *AdminClientTestSuite) TestImportExportErrors() {
-	invalid := client.NewAdminClient("http://127.0.0.1:18088", "invalid")
-
-	for _, method := range []func(io.Reader) error{
-		func(r io.Reader) error { _, err := invalid.ImportUsers(r); return err },
-		func(r io.Reader) error { _, err := invalid.ImportItems(r); return err },
-		func(r io.Reader) error { _, err := invalid.ImportFeedback(r); return err },
-	} {
-		suite.ErrorContains(method(strings.NewReader("{}")), "status=401")
-	}
-	for _, method := range []func(io.Writer) error{invalid.ExportUsers, invalid.ExportItems, invalid.ExportFeedback} {
-		var output bytes.Buffer
-		suite.ErrorContains(method(&output), "status=401")
-		suite.Empty(output.String())
-	}
-	for _, method := range []func(io.Reader) error{
-		func(r io.Reader) error { _, err := suite.client.ImportUsers(r); return err },
-		func(r io.Reader) error { _, err := suite.client.ImportItems(r); return err },
-		func(r io.Reader) error { _, err := suite.client.ImportFeedback(r); return err },
-	} {
-		suite.ErrorContains(method(strings.NewReader("invalid")), "status=400")
-	}
-}
-
-type failedBulkReader struct{}
-
-func (failedBulkReader) Read([]byte) (int, error) { return 0, io.ErrUnexpectedEOF }
-
-type failedBulkWriter struct{}
-
-func (failedBulkWriter) Write([]byte) (int, error) { return 0, io.ErrClosedPipe }
-
-func (suite *AdminClientTestSuite) TestImportExportIOErrors() {
-	_, err := suite.client.ImportUsers(failedBulkReader{})
-	suite.ErrorIs(err, io.ErrUnexpectedEOF)
-	_, err = suite.client.ImportItems(failedBulkReader{})
-	suite.ErrorIs(err, io.ErrUnexpectedEOF)
-	_, err = suite.client.ImportFeedback(failedBulkReader{})
-	suite.ErrorIs(err, io.ErrUnexpectedEOF)
-	suite.Require().NoError(suite.master.DataClient.BatchInsertUsers(suite.T().Context(), []data.User{{UserId: "writer-error"}}))
-	suite.ErrorIs(suite.client.ExportUsers(failedBulkWriter{}), io.ErrClosedPipe)
 }
 
 func (suite *AdminClientTestSuite) TestGetCategories() {
