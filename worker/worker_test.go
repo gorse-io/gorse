@@ -799,7 +799,7 @@ func (suite *WorkerTestSuite) TestRankByClickTroughRate() {
 	}))
 }
 
-func (suite *WorkerTestSuite) TestRankByLLM() {
+func (suite *WorkerTestSuite) TestRankByReranker() {
 	ctx := suite.T().Context()
 	mockAI := reranker.NewMockServer()
 	go func() {
@@ -816,17 +816,18 @@ func (suite *WorkerTestSuite) TestRankByLLM() {
 	suite.NoError(err)
 
 	suite.Config.Recommend.Ranker.RerankerAPI = config.RerankerAPIConfig{
-		URL:       mockAI.URL(),
-		AuthToken: mockAI.AuthToken(),
-		Model:     "v1",
+		URL:              mockAI.URL(),
+		AuthToken:        mockAI.AuthToken(),
+		Model:            "v1",
+		QueryTemplate:    "{{user.UserId}}",
+		DocumentTemplate: "{{item.ItemId}}",
 	}
-	ranker, err := logics.NewChatReranker(suite.Config.Recommend.Ranker.RerankerAPI,
-		"{{user.UserId}}", "{{item.ItemId}}")
+	ranker, err := logics.NewReranker(suite.Config.Recommend.Ranker.RerankerAPI)
 	suite.NoError(err)
 
 	itemCache := NewItemCache(suite.DataClient)
 	recommendTime := time.Now()
-	result, err := suite.rankByLLM(ctx, nil, ranker, &data.User{UserId: "u1"}, []data.Feedback{
+	result, err := suite.rankByReranker(ctx, nil, ranker, &data.User{UserId: "u1"}, []data.Feedback{
 		{FeedbackType: "like", UserId: "u1", ItemId: "4"},
 		{FeedbackType: "like", UserId: "u1", ItemId: "5"},
 	}, []cache.Score{{Id: "1"}, {Id: "2"}, {Id: "3"}}, itemCache, recommendTime)
@@ -840,6 +841,41 @@ func (suite *WorkerTestSuite) TestRankByLLM() {
 	for _, scored := range result {
 		suite.Equal(recommendTime, scored.Timestamp)
 	}
+}
+
+func (suite *WorkerTestSuite) TestRankByDecision() {
+	ctx := suite.T().Context()
+	suite.Config.Recommend.ContextSize = 1
+	suite.Config.Recommend.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{expression.MustParseFeedbackTypeExpression("like")}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var request struct {
+			State     string                     `json:"state"`
+			Questions map[string]json.RawMessage `json:"questions"`
+		}
+		suite.Require().NoError(json.NewDecoder(r.Body).Decode(&request))
+		suite.Equal("u1: 5", request.State)
+		suite.Len(request.Questions, 2)
+		_, _ = w.Write([]byte(`{"answers":{"1":{"type":"noul","noul":0.15},"2":{"type":"noul","noul":0.85}}}`))
+	}))
+	defer server.Close()
+	suite.Require().NoError(suite.DataClient.BatchInsertItems(ctx, []data.Item{
+		{ItemId: "1", Categories: []string{"a"}}, {ItemId: "2", Categories: []string{"b"}},
+		{ItemId: "3", IsHidden: true}, {ItemId: "4"}, {ItemId: "5"},
+	}))
+	ranker, err := logics.NewDecision(config.DecisionAPIConfig{URL: server.URL,
+		StateTemplate: "{{user.UserId}}: {% for f in feedback %}{{f.ItemId}}{% endfor %}", InstructionsTemplate: "{{item.ItemId}}"})
+	suite.Require().NoError(err)
+	now := time.Now()
+	result, err := suite.rankByDecision(ctx, nil, ranker, &data.User{UserId: "u1"}, []data.Feedback{
+		{FeedbackType: "like", ItemId: "4", Timestamp: now.Add(-time.Hour)},
+		{FeedbackType: "like", ItemId: "5", Timestamp: now},
+		{FeedbackType: "read", ItemId: "1", Timestamp: now.Add(time.Hour)},
+	}, []cache.Score{{Id: "1"}, {Id: "2"}, {Id: "3"}, {Id: "missing"}}, NewItemCache(suite.DataClient), now)
+	suite.Require().NoError(err)
+	suite.Equal([]cache.Score{
+		{Id: "2", Score: 0.85, Categories: []string{"b"}, Timestamp: now},
+		{Id: "1", Score: 0.15, Categories: []string{"a"}, Timestamp: now},
+	}, result)
 }
 
 func (suite *WorkerTestSuite) TestReplacement() {

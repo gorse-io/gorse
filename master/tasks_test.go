@@ -21,8 +21,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/gorse-io/gorse/common/event"
 	"github.com/gorse-io/gorse/common/expression"
+	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/logics"
 	"github.com/gorse-io/gorse/model/cf"
@@ -195,7 +195,7 @@ func (s *MasterTestSuite) TestFindItemToItem() {
 	}
 
 	// load mock dataset
-	_, dataSet, _, err := s.LoadDataFromDatabase(s.T().Context(), s.DataClient,
+	_, dataSet, err := s.LoadDataFromDatabase(s.T().Context(), s.DataClient,
 		[]expression.FeedbackTypeExpression{expression.MustParseFeedbackTypeExpression("FeedbackType")},
 		nil, nil, 0, 0, NewOnlineEvaluator(nil, nil), nil)
 	s.NoError(err)
@@ -276,7 +276,7 @@ func (s *MasterTestSuite) TestUserToUser() {
 	s.NoError(err)
 	err = s.DataClient.BatchInsertFeedback(ctx, feedbacks, true, true, true)
 	s.NoError(err)
-	_, dataSet, _, err := s.LoadDataFromDatabase(s.T().Context(), s.DataClient,
+	_, dataSet, err := s.LoadDataFromDatabase(s.T().Context(), s.DataClient,
 		[]expression.FeedbackTypeExpression{expression.MustParseFeedbackTypeExpression("FeedbackType")},
 		nil, nil, 0, 0, NewOnlineEvaluator(nil, nil), nil)
 	s.NoError(err)
@@ -318,17 +318,7 @@ func (s *MasterTestSuite) TestUserToUser() {
 	s.Equal([]string{"7", "5", "3"}, cache.ConvertDocumentsToValues(similar))
 }
 
-type snapshotHandler struct {
-	snapshots chan event.Snapshot
-}
-
-func (h *snapshotHandler) EmitRequest(context.Context, event.Request) {}
-
-func (h *snapshotHandler) EmitSnapshot(_ context.Context, snapshot event.Snapshot) {
-	h.snapshots <- snapshot
-}
-
-func (s *MasterTestSuite) TestEmitSnapshot() {
+func (s *MasterTestSuite) TestLoadEvent() {
 	ctx := s.T().Context()
 	s.Config = &config.Config{}
 	s.Config.Master.NumJobs = 1
@@ -359,25 +349,43 @@ func (s *MasterTestSuite) TestEmitSnapshot() {
 		items[i] = stored
 	}
 
-	handler := &snapshotHandler{snapshots: make(chan event.Snapshot, 1)}
-	event.SetEventHandler(handler)
-	s.T().Cleanup(func() { event.SetEventHandler(&event.NopHandler{}) })
+	type loadEvent struct {
+		timestamp time.Time
+		fields    map[string]any
+	}
+	loads := make(chan loadEvent, 1)
+	log.SetEventHandler(func(name string, timestamp time.Time, fields map[string]any) {
+		if name != "load" {
+			return
+		}
+		select {
+		case loads <- loadEvent{timestamp: timestamp, fields: fields}:
+		case <-ctx.Done():
+		}
+	})
+	s.T().Cleanup(func() { log.SetEventHandler(nil) })
 
-	datasets, err := s.loadDataset(ctx)
+	dataSource := s.Config.Recommend.DataSource
+	clickDataset, _, err := s.LoadDataFromDatabase(ctx, s.DataClient,
+		dataSource.PositiveFeedbackTypes, dataSource.NegativeFeedbackTypes, dataSource.ReadFeedbackTypes,
+		dataSource.ItemTTL, dataSource.PositiveFeedbackTTL,
+		NewOnlineEvaluator(dataSource.PositiveFeedbackTypes, dataSource.ReadFeedbackTypes), nil)
 	s.Require().NoError(err)
-	s.Equal(1, datasets.clickTrainSet.Count()+datasets.clickTestSet.Count())
+	s.Equal(1, clickDataset.Count())
 
 	select {
-	case snapshot := <-handler.snapshots:
-		s.Equal(int64(len(users)), snapshot.UserCount)
-		s.Equal(deepSize(users), snapshot.UserBytes)
-		s.Equal(int64(len(items)), snapshot.ItemCount)
-		s.Equal(deepSize(items), snapshot.ItemBytes)
-		s.Equal(int64(len(feedbacks)), snapshot.FeedbackCount)
-		s.Equal(deepSize(feedbacks), snapshot.FeedbackBytes)
-		s.False(snapshot.Timestamp.IsZero())
+	case event := <-loads:
+		fields := event.fields
+		s.Equal(int64(len(users)), fields["user_count"])
+		s.Equal(deepSize(users), fields["user_bytes"])
+		s.Equal(int64(len(items)), fields["item_count"])
+		s.Equal(deepSize(items), fields["item_bytes"])
+		s.Equal(int64(len(feedbacks)), fields["feedback_count"])
+		s.Equal(deepSize(feedbacks), fields["feedback_bytes"])
+		s.NotContains(fields, "timestamp")
+		s.False(event.timestamp.IsZero())
 	case <-time.After(time.Second):
-		s.Fail("snapshot was not emitted")
+		s.Fail("load event was not emitted")
 	}
 }
 

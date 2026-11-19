@@ -40,6 +40,7 @@ import (
 	"github.com/gorse-io/gorse/model/cf"
 	"github.com/gorse-io/gorse/model/ctr"
 	"github.com/gorse-io/gorse/storage"
+	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
 	"github.com/olekukonko/tablewriter"
 	"github.com/samber/lo"
@@ -61,73 +62,94 @@ var rootCmd = &cobra.Command{
 var benchRerankerCmd = &cobra.Command{
 	Use:   "reranker",
 	Short: "Benchmark reranker models for ranking",
-	Run: func(cmd *cobra.Command, args []string) {
-		// Load configuration
-		configPath, _ := cmd.Flags().GetString("config")
-		cfg, err := config.LoadConfig(configPath)
-		if err != nil {
-			log.Logger().Fatal("failed to load config", zap.Error(err))
-		}
-
-		// Load dataset
-		m := master.NewMaster(cfg, os.TempDir(), false, configPath)
-		m.DataClient, err = data.Open(m.Config.Database.DataStore, m.Config.Database.DataTablePrefix,
-			storage.WithIsolationLevel(m.Config.Database.MySQL.IsolationLevel))
-		if err != nil {
-			log.Logger().Fatal("failed to open data client", zap.Error(err))
-		}
-		evaluator := master.NewOnlineEvaluator(
-			m.Config.Recommend.DataSource.PositiveFeedbackTypes,
-			m.Config.Recommend.DataSource.ReadFeedbackTypes)
-		dataset, cfDataset, _, err := m.LoadDataFromDatabase(context.Background(), m.DataClient,
-			m.Config.Recommend.DataSource.PositiveFeedbackTypes,
-			m.Config.Recommend.DataSource.NegativeFeedbackTypes,
-			m.Config.Recommend.DataSource.ReadFeedbackTypes,
-			m.Config.Recommend.DataSource.ItemTTL,
-			m.Config.Recommend.DataSource.PositiveFeedbackTTL,
-			evaluator,
-			nil)
-		if err != nil {
-			log.Logger().Fatal("failed to load dataset", zap.Error(err))
-		}
-
-		// Split dataset
-		var scores sync.Map
-		train, test := dataset.SplitByUserTime(0.2)
-
-		table := tablewriter.NewWriter(os.Stdout)
-		table.Header([]string{"", "#interactions", "#positive", "#negative"})
-		lo.Must0(table.Bulk([][]string{
-			{"total", strconv.Itoa(dataset.Count()), strconv.Itoa(dataset.PositiveCount), strconv.Itoa(dataset.NegativeCount)},
-			{"train", strconv.Itoa(train.Count()), strconv.Itoa(train.PositiveCount), strconv.Itoa(train.NegativeCount)},
-			{"test", strconv.Itoa(test.Count()), strconv.Itoa(test.PositiveCount), strconv.Itoa(test.NegativeCount)},
-		}))
-		lo.Must0(table.Render())
-
-		exportUserAUC, _ := cmd.Flags().GetBool("user-auc")
-		go EvaluateAFM(cfg, train, test, exportUserAUC, &scores)
-		EvaluateReranker(cfg, train, test, cfDataset.GetItems(), exportUserAUC, &scores)
-		data := [][]string{{"Ranker", "GAUC"}}
-		scores.Range(func(key, value any) bool {
-			data = append(data, []string{
-				key.(string),
-				strconv.FormatFloat(value.(float64), 'f', 4, 32),
-			})
-			return true
-		})
-		table = tablewriter.NewWriter(os.Stdout)
-		table.Header(data[0])
-		lo.Must0(table.Bulk(data[1:]))
-		lo.Must0(table.Render())
-	},
+	Run:   runRankingBenchmark,
 }
 
-func EvaluateAFM(cfg *config.Config, train, test *ctr.Dataset, exportUserAUC bool, scores *sync.Map) {
+var benchDecisionCmd = &cobra.Command{
+	Use:   "decision",
+	Short: "Benchmark decision models for ranking",
+	Run:   runRankingBenchmark,
+}
+
+var benchFMCmd = &cobra.Command{
+	Use:   "fm",
+	Short: "Benchmark factorization machine models for ranking",
+	Run:   runRankingBenchmark,
+}
+
+func runRankingBenchmark(cmd *cobra.Command, args []string) {
+	// Load configuration
+	configPath, _ := cmd.Flags().GetString("config")
+	cfg, err := config.LoadConfig(configPath)
+	if err != nil {
+		log.Logger().Fatal("failed to load config", zap.Error(err))
+	}
+
+	// Load dataset
+	m := master.NewMaster(cfg, os.TempDir(), false, configPath)
+	m.DataClient, err = data.Open(m.Config.Database.DataStore, m.Config.Database.DataTablePrefix,
+		storage.WithIsolationLevel(m.Config.Database.MySQL.IsolationLevel))
+	if err != nil {
+		log.Logger().Fatal("failed to open data client", zap.Error(err))
+	}
+	evaluator := master.NewOnlineEvaluator(
+		m.Config.Recommend.DataSource.PositiveFeedbackTypes,
+		m.Config.Recommend.DataSource.ReadFeedbackTypes)
+	dataset, cfDataset, err := m.LoadDataFromDatabase(context.Background(), m.DataClient,
+		m.Config.Recommend.DataSource.PositiveFeedbackTypes,
+		m.Config.Recommend.DataSource.NegativeFeedbackTypes,
+		m.Config.Recommend.DataSource.ReadFeedbackTypes,
+		m.Config.Recommend.DataSource.ItemTTL,
+		m.Config.Recommend.DataSource.PositiveFeedbackTTL,
+		evaluator,
+		nil)
+	if err != nil {
+		log.Logger().Fatal("failed to load dataset", zap.Error(err))
+	}
+
+	// Split dataset
+	var scores sync.Map
+	train, test := dataset.SplitByUserTime(0.2)
+
+	table := tablewriter.NewWriter(os.Stdout)
+	table.Header([]string{"", "#interactions", "#positive", "#negative"})
+	lo.Must0(table.Bulk([][]string{
+		{"total", strconv.Itoa(dataset.Count()), strconv.Itoa(dataset.PositiveCount), strconv.Itoa(dataset.NegativeCount)},
+		{"train", strconv.Itoa(train.Count()), strconv.Itoa(train.PositiveCount), strconv.Itoa(train.NegativeCount)},
+		{"test", strconv.Itoa(test.Count()), strconv.Itoa(test.PositiveCount), strconv.Itoa(test.NegativeCount)},
+	}))
+	lo.Must0(table.Render())
+
+	exportUserAUC, _ := cmd.Flags().GetBool("user-auc")
+	jobs, _ := cmd.Flags().GetInt("jobs")
+	switch cmd.Name() {
+	case "fm":
+		EvaluateAFM(cfg, train, test, exportUserAUC, jobs, &scores)
+	case "decision":
+		EvaluateDecision(cfg, train, test, cfDataset.GetItems(), exportUserAUC, jobs, &scores)
+	case "reranker":
+		EvaluateReranker(cfg, train, test, cfDataset.GetItems(), exportUserAUC, jobs, &scores)
+	}
+	data := [][]string{{"Ranker", "GAUC"}}
+	scores.Range(func(key, value any) bool {
+		data = append(data, []string{
+			key.(string),
+			strconv.FormatFloat(value.(float64), 'f', 4, 32),
+		})
+		return true
+	})
+	table = tablewriter.NewWriter(os.Stdout)
+	table.Header(data[0])
+	lo.Must0(table.Bulk(data[1:]))
+	lo.Must0(table.Render())
+}
+
+func EvaluateAFM(cfg *config.Config, train, test *ctr.Dataset, exportUserAUC bool, jobs int, scores *sync.Map) {
 	ml := ctr.NewAFM(nil)
 	ml.Fit(context.Background(), train, test,
 		ctr.NewFitConfig().
 			SetVerbose(10).
-			SetJobs(runtime.NumCPU()).
+			SetJobs(jobs).
 			SetPatience(10))
 
 	feedbackCount := make(map[int32]int)
@@ -154,7 +176,7 @@ func EvaluateAFM(cfg *config.Config, train, test *ctr.Dataset, exportUserAUC boo
 			negatives[userIndex] = append(negatives[userIndex], i)
 		}
 	}
-	predictions := ml.BatchInternalPredict(features, embeddings, runtime.NumCPU())
+	predictions := ml.BatchInternalPredict(features, embeddings, jobs)
 
 	var csvFile *os.File
 	var csvWriter *csv.Writer
@@ -169,6 +191,7 @@ func EvaluateAFM(cfg *config.Config, train, test *ctr.Dataset, exportUserAUC boo
 			csvWriter = csv.NewWriter(csvFile)
 			defer csvWriter.Flush()
 			_ = csvWriter.Write([]string{"Feedback", "Candidates", "AUC"})
+			csvWriter.Flush()
 		}
 	}
 
@@ -193,6 +216,7 @@ func EvaluateAFM(cfg *config.Config, train, test *ctr.Dataset, exportUserAUC boo
 				strconv.Itoa(len(posIndices) + len(negIndices)),
 				fmt.Sprintf("%.4f", userAUC),
 			})
+			csvWriter.Flush()
 		}
 		userCount := float32(len(posIndices) + len(negIndices))
 		sum += userAUC * userCount
@@ -206,16 +230,26 @@ func EvaluateAFM(cfg *config.Config, train, test *ctr.Dataset, exportUserAUC boo
 	scores.Store("AFM", score)
 }
 
-func EvaluateReranker(cfg *config.Config, train, test *ctr.Dataset, items []data.Item, exportUserAUC bool, scores *sync.Map) {
-	chat, err := logics.NewChatReranker(
-		cfg.Recommend.Ranker.RerankerAPI,
-		cfg.Recommend.Ranker.QueryTemplate,
-		cfg.Recommend.Ranker.DocumentTemplate,
-	)
+func EvaluateReranker(cfg *config.Config, train, test *ctr.Dataset, items []data.Item, exportUserAUC bool, jobs int, scores *sync.Map) {
+	ranker, err := logics.NewReranker(cfg.Recommend.Ranker.RerankerAPI)
 	if err != nil {
-		log.Logger().Fatal("failed to create chat ranker", zap.Error(err))
+		log.Logger().Fatal("failed to create reranker", zap.Error(err))
 	}
 
+	evaluateRanker(cfg, train, test, items, exportUserAUC, jobs, scores, cfg.Recommend.Ranker.RerankerAPI.Model, ranker)
+}
+
+func EvaluateDecision(cfg *config.Config, train, test *ctr.Dataset, items []data.Item, exportUserAUC bool, jobs int, scores *sync.Map) {
+	ranker, err := logics.NewDecision(cfg.Recommend.Ranker.DecisionAPI)
+	if err != nil {
+		log.Logger().Fatal("failed to create decision ranker", zap.Error(err))
+	}
+	evaluateRanker(cfg, train, test, items, exportUserAUC, jobs, scores, cfg.Recommend.Ranker.DecisionAPI.Model, ranker)
+}
+
+func evaluateRanker(cfg *config.Config, train, test *ctr.Dataset, items []data.Item, exportUserAUC bool, jobs int, scores *sync.Map, model string, ranker interface {
+	Rank(context.Context, *data.User, []*logics.FeedbackItem, []*data.Item) ([]cache.Score, error)
+}) {
 	feedbacks := make(map[int32][]*logics.FeedbackItem)
 	for i := 0; i < train.Count(); i++ {
 		indices, _, _, target := train.Get(i)
@@ -247,21 +281,22 @@ func EvaluateReranker(cfg *config.Config, train, test *ctr.Dataset, items []data
 	var csvMu sync.Mutex
 	if exportUserAUC {
 		var err error
-		csvFile, err = os.Create(fmt.Sprintf("%s.csv", cfg.Recommend.Ranker.RerankerAPI.Model))
+		csvFile, err = os.Create(fmt.Sprintf("%s.csv", model))
 		if err != nil {
-			log.Logger().Error("failed to create reranker csv", zap.Error(err))
+			log.Logger().Error("failed to create ranker csv", zap.Error(err))
 			exportUserAUC = false
 		} else {
 			defer csvFile.Close()
 			csvWriter = csv.NewWriter(csvFile)
 			defer csvWriter.Flush()
 			_ = csvWriter.Write([]string{"Feedback", "Candidates", "AUC"})
+			csvWriter.Flush()
 		}
 	}
 
 	var sum atomic.Float32
 	var count atomic.Float32
-	lo.Must0(parallel.ForEach(context.Background(), slices.Collect(maps.Keys(positives)), runtime.NumCPU(), func(_ int, userIndex int32) {
+	lo.Must0(parallel.ForEach(context.Background(), slices.Collect(maps.Keys(positives)), jobs, func(_ int, userIndex int32) {
 		posIndices := positives[userIndex]
 		negIndices := negatives[userIndex]
 		if len(posIndices) == 0 || len(negIndices) == 0 {
@@ -284,7 +319,7 @@ func EvaluateReranker(cfg *config.Config, train, test *ctr.Dataset, items []data
 		if len(feedback) == 0 || len(feedback) > cfg.Recommend.ContextSize {
 			return
 		}
-		result, err := chat.Rank(context.Background(), &data.User{}, feedback, candidates)
+		result, err := ranker.Rank(context.Background(), &data.User{}, feedback, candidates)
 		if err != nil {
 			log.Logger().Error("failed to rank items for user", zap.Int32("user_index", userIndex), zap.Error(err))
 			return
@@ -305,6 +340,7 @@ func EvaluateReranker(cfg *config.Config, train, test *ctr.Dataset, items []data
 				strconv.Itoa(len(posIndices) + len(negIndices)),
 				fmt.Sprintf("%.4f", userAUC),
 			})
+			csvWriter.Flush()
 			csvMu.Unlock()
 		}
 		userCount := float32(len(posIndices) + len(negIndices))
@@ -316,7 +352,7 @@ func EvaluateReranker(cfg *config.Config, train, test *ctr.Dataset, items []data
 	if count.Load() > 0 {
 		score = float64(sum.Load() / count.Load())
 	}
-	scores.Store(cfg.Recommend.Ranker.RerankerAPI.Model, score)
+	scores.Store(model, score)
 }
 
 func EvaluateEmbedding(cfg *config.Config, train, test dataset.CFSplit, embeddingExpr, textExpr string, topK, jobs int, scores *sync.Map) {
@@ -493,7 +529,7 @@ var benchEmbeddingCmd = &cobra.Command{
 		evaluator := master.NewOnlineEvaluator(
 			m.Config.Recommend.DataSource.PositiveFeedbackTypes,
 			m.Config.Recommend.DataSource.ReadFeedbackTypes)
-		_, dataset, _, err := m.LoadDataFromDatabase(context.Background(), m.DataClient,
+		_, dataset, err := m.LoadDataFromDatabase(context.Background(), m.DataClient,
 			m.Config.Recommend.DataSource.PositiveFeedbackTypes,
 			m.Config.Recommend.DataSource.NegativeFeedbackTypes,
 			m.Config.Recommend.DataSource.ReadFeedbackTypes,
@@ -556,8 +592,12 @@ func init() {
 	rootCmd.PersistentFlags().StringP("config", "c", "", "Path to configuration file")
 	rootCmd.PersistentFlags().IntP("jobs", "j", runtime.NumCPU(), "Number of jobs to run in parallel")
 	rootCmd.AddCommand(benchRerankerCmd)
+	rootCmd.AddCommand(benchDecisionCmd)
+	rootCmd.AddCommand(benchFMCmd)
 	rootCmd.AddCommand(benchEmbeddingCmd)
 	benchRerankerCmd.PersistentFlags().Bool("user-auc", false, "Export user-level AUC scores to CSV file")
+	benchDecisionCmd.PersistentFlags().Bool("user-auc", false, "Export user-level AUC scores to CSV file")
+	benchFMCmd.PersistentFlags().Bool("user-auc", false, "Export user-level AUC scores to CSV file")
 	benchEmbeddingCmd.PersistentFlags().IntP("top", "k", 10, "Number of top items to evaluate for each user")
 	benchEmbeddingCmd.PersistentFlags().IntP("shots", "s", math.MaxInt, "Number of shots for each user")
 	benchEmbeddingCmd.PersistentFlags().Int("embedding-dimensions", 0, "Embedding dimensions")

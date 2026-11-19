@@ -39,8 +39,28 @@ COPY . ./
 
 ARG TARGETOS
 
-RUN --mount=type=cache,target=/root/.cache/go-build \
-    if [ "${TARGETARCH}" = "amd64" ]; then \
+RUN if [ "${TARGETARCH}" = "amd64" ]; then \
+        export CC=x86_64-linux-gnu-gcc; \
+    elif [ "${TARGETARCH}" = "arm64" ]; then \
+        export CC=aarch64-linux-gnu-gcc; \
+    elif [ "${TARGETARCH}" = "riscv64" ]; then \
+        export CC=riscv64-linux-gnu-gcc; \
+    elif [ "${TARGETARCH}" = "ppc64le" ]; then \
+        export CC=powerpc64le-linux-gnu-gcc; \
+    elif [ "${TARGETARCH}" = "s390x" ]; then \
+        export CC=s390x-linux-gnu-gcc; \
+    elif [ "${TARGETARCH}" = "loong64" ]; then \
+        export CC=loongarch64-linux-gnu-gcc; \
+    else \
+        echo "Unsupported TARGETARCH ${TARGETARCH}"; exit 1; \
+    fi && \
+    GOOS=${TARGETOS} GOARCH=${TARGETARCH} CGO_ENABLED=1 go build -tags openblas ./...
+
+ARG VERSION
+ARG GIT_COMMIT
+ARG BUILD_TIME
+
+RUN if [ "${TARGETARCH}" = "amd64" ]; then \
         export CC=x86_64-linux-gnu-gcc; \
     elif [ "${TARGETARCH}" = "arm64" ]; then \
         export CC=aarch64-linux-gnu-gcc; \
@@ -57,9 +77,9 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     fi && \
     cd cmd/gorse-in-one && \
     GOOS=${TARGETOS} GOARCH=${TARGETARCH} CGO_ENABLED=1 go build -tags openblas -ldflags=" \
-       -X 'github.com/gorse-io/gorse/cmd/version.Version=$(git describe --tags $(git rev-parse HEAD))' \
-       -X 'github.com/gorse-io/gorse/cmd/version.GitCommit=$(git rev-parse HEAD)' \
-       -X 'github.com/gorse-io/gorse/cmd/version.BuildTime=$(date)' \
+       -X 'github.com/gorse-io/gorse/cmd/version.Version=${VERSION}' \
+       -X 'github.com/gorse-io/gorse/cmd/version.GitCommit=${GIT_COMMIT}' \
+       -X 'github.com/gorse-io/gorse/cmd/version.BuildTime=${BUILD_TIME}' \
        -X 'github.com/gorse-io/gorse/config.RootDir=/var/lib/gorse'" .
 
 ############################

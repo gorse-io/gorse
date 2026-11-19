@@ -38,6 +38,7 @@ import (
 	"github.com/gorse-io/gorse/storage"
 	"github.com/pkg/errors"
 	"github.com/samber/lo"
+	"github.com/showa-93/go-mask"
 	"github.com/spf13/viper"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
@@ -72,11 +73,42 @@ type Config struct {
 	Quota     QuotaConfig     `mapstructure:"quota"`
 }
 
+var configMasker = func() *mask.Masker {
+	masker := mask.NewMasker()
+	masker.RegisterMaskStringFunc("secret", func(_ string, value string) (string, error) {
+		return log.RedactSecret(value), nil
+	})
+	masker.RegisterMaskStringFunc("database", func(_ string, value string) (string, error) {
+		return log.RedactDBURL(value), nil
+	})
+	return masker
+}()
+
+// Redacted returns a masked copy, leaving the original configuration unchanged.
+func (config *Config) Redacted() (*Config, error) {
+	masked, err := configMasker.Mask(config)
+	if err != nil {
+		return nil, err
+	}
+	return masked.(*Config), nil
+}
+
+// RestoreRedactedSecrets restores reranker and decision API tokens when a masked
+// dashboard configuration is posted back without changing the tokens.
+func (config *Config) RestoreRedactedSecrets(original *Config) {
+	if config.Recommend.Ranker.RerankerAPI.AuthToken == log.RedactSecret(original.Recommend.Ranker.RerankerAPI.AuthToken) {
+		config.Recommend.Ranker.RerankerAPI.AuthToken = original.Recommend.Ranker.RerankerAPI.AuthToken
+	}
+	if config.Recommend.Ranker.DecisionAPI.AuthToken == log.RedactSecret(original.Recommend.Ranker.DecisionAPI.AuthToken) {
+		config.Recommend.Ranker.DecisionAPI.AuthToken = original.Recommend.Ranker.DecisionAPI.AuthToken
+	}
+}
+
 // DatabaseConfig is the configuration for the database.
 type DatabaseConfig struct {
-	DataStore         string       `mapstructure:"data_store" validate:"required,data_store"`     // database for data store
-	CacheStore        string       `mapstructure:"cache_store" validate:"required,cache_store"`   // database for cache store
-	VectorStore       string       `mapstructure:"vector_store" validate:"required,vector_store"` // database for vector indices
+	DataStore         string       `mapstructure:"data_store" mask:"database" validate:"required,data_store"`     // database for data store
+	CacheStore        string       `mapstructure:"cache_store" mask:"database" validate:"required,cache_store"`   // database for cache store
+	VectorStore       string       `mapstructure:"vector_store" mask:"database" validate:"required,vector_store"` // database for vector indices
 	TablePrefix       string       `mapstructure:"table_prefix"`
 	DataTablePrefix   string       `mapstructure:"data_table_prefix"`
 	CacheTablePrefix  string       `mapstructure:"cache_table_prefix"`
@@ -137,27 +169,27 @@ func (db *DatabaseConfig) StorageOptions(path string) []storage.Option {
 
 // MasterConfig is the configuration for the master.
 type MasterConfig struct {
-	Port              int           `mapstructure:"port" validate:"gte=0"`        // master port
-	Host              string        `mapstructure:"host"`                         // master host
-	SSLMode           bool          `mapstructure:"ssl_mode"`                     // enable SSL mode
-	SSLCA             string        `mapstructure:"ssl_ca"`                       // SSL CA file
-	SSLCert           string        `mapstructure:"ssl_cert"`                     // SSL certificate file
-	SSLKey            string        `mapstructure:"ssl_key"`                      // SSL key file
-	HttpPort          int           `mapstructure:"http_port" validate:"gte=0"`   // HTTP port
-	HttpHost          string        `mapstructure:"http_host"`                    // HTTP host
-	HttpCorsDomains   []string      `mapstructure:"http_cors_domains"`            // add allowed cors domains
-	HttpCorsMethods   []string      `mapstructure:"http_cors_methods"`            // add allowed cors methods
-	NumJobs           int           `mapstructure:"n_jobs" validate:"gt=0"`       // number of working jobs
-	MetaTimeout       time.Duration `mapstructure:"meta_timeout" validate:"gt=0"` // cluster meta timeout (second)
-	DashboardUserName string        `mapstructure:"dashboard_user_name"`          // dashboard user name
-	DashboardPassword string        `mapstructure:"dashboard_password"`           // dashboard password
+	Port              int           `mapstructure:"port" validate:"gte=0"`            // master port
+	Host              string        `mapstructure:"host"`                             // master host
+	SSLMode           bool          `mapstructure:"ssl_mode"`                         // enable SSL mode
+	SSLCA             string        `mapstructure:"ssl_ca"`                           // SSL CA file
+	SSLCert           string        `mapstructure:"ssl_cert"`                         // SSL certificate file
+	SSLKey            string        `mapstructure:"ssl_key"`                          // SSL key file
+	HttpPort          int           `mapstructure:"http_port" validate:"gte=0"`       // HTTP port
+	HttpHost          string        `mapstructure:"http_host"`                        // HTTP host
+	HttpCorsDomains   []string      `mapstructure:"http_cors_domains"`                // add allowed cors domains
+	HttpCorsMethods   []string      `mapstructure:"http_cors_methods"`                // add allowed cors methods
+	NumJobs           int           `mapstructure:"n_jobs" validate:"gt=0"`           // number of working jobs
+	MetaTimeout       time.Duration `mapstructure:"meta_timeout" validate:"gt=0"`     // cluster meta timeout (second)
+	DashboardUserName string        `mapstructure:"dashboard_user_name"`              // dashboard user name
+	DashboardPassword string        `mapstructure:"dashboard_password" mask:"secret"` // dashboard password
 	DashboardRedacted bool          `mapstructure:"dashboard_redacted"`
-	AdminAPIKey       string        `mapstructure:"admin_api_key"`
+	AdminAPIKey       string        `mapstructure:"admin_api_key" mask:"secret"`
 }
 
 // ServerConfig is the configuration for the server.
 type ServerConfig struct {
-	APIKey         string        `mapstructure:"api_key"`                      // default number of returned items
+	APIKey         string        `mapstructure:"api_key" mask:"secret"`        // default number of returned items
 	DefaultN       int           `mapstructure:"default_n" validate:"gt=0"`    // secret key for RESTful APIs (SSL required)
 	ClockError     time.Duration `mapstructure:"clock_error" validate:"gte=0"` // clock error in the cluster in seconds
 	AutoInsertUser bool          `mapstructure:"auto_insert_user"`             // insert new users while inserting feedback
@@ -405,17 +437,16 @@ type ReplacementConfig struct {
 }
 
 type RankerConfig struct {
-	Type             string              `mapstructure:"type" validate:"oneof=none fm llm"`
-	Recommenders     []string            `mapstructure:"recommenders"`
-	CacheExpire      time.Duration       `mapstructure:"cache_expire" validate:"gt=0"`
-	FitPeriod        time.Duration       `mapstructure:"fit_period" validate:"gt=0"`
-	FitEpoch         int                 `mapstructure:"fit_epoch" validate:"gt=0"`
-	OptimizePeriod   time.Duration       `mapstructure:"optimize_period" validate:"gte=0"`
-	OptimizeTrials   int                 `mapstructure:"optimize_trials" validate:"gt=0"`
-	QueryTemplate    string              `mapstructure:"query_template"`
-	DocumentTemplate string              `mapstructure:"document_template"`
-	EarlyStopping    EarlyStoppingConfig `mapstructure:"early_stopping"`
-	RerankerAPI      RerankerAPIConfig   `mapstructure:"reranker_api"`
+	Type           string              `mapstructure:"type" validate:"oneof=none fm reranker decision"`
+	Recommenders   []string            `mapstructure:"recommenders"`
+	CacheExpire    time.Duration       `mapstructure:"cache_expire" validate:"gt=0"`
+	FitPeriod      time.Duration       `mapstructure:"fit_period" validate:"gt=0"`
+	FitEpoch       int                 `mapstructure:"fit_epoch" validate:"gt=0"`
+	OptimizePeriod time.Duration       `mapstructure:"optimize_period" validate:"gte=0"`
+	OptimizeTrials int                 `mapstructure:"optimize_trials" validate:"gt=0"`
+	EarlyStopping  EarlyStoppingConfig `mapstructure:"early_stopping"`
+	RerankerAPI    RerankerAPIConfig   `mapstructure:"reranker_api"`
+	DecisionAPI    DecisionAPIConfig   `mapstructure:"decision_api"`
 }
 
 type FallbackConfig struct {
@@ -434,19 +465,29 @@ type OIDCConfig struct {
 	Enable       bool   `mapstructure:"enable"`
 	Issuer       string `mapstructure:"issuer"`
 	ClientID     string `mapstructure:"client_id"`
-	ClientSecret string `mapstructure:"client_secret"`
+	ClientSecret string `mapstructure:"client_secret" mask:"secret"`
 	RedirectURL  string `mapstructure:"redirect_url" validate:"omitempty,endswith=/callback/oauth2"`
 }
 
+type DecisionAPIConfig struct {
+	StateTemplate        string `mapstructure:"state_template"`
+	InstructionsTemplate string `mapstructure:"instructions_template"`
+	AuthToken            string `mapstructure:"auth_token" mask:"secret"`
+	Model                string `mapstructure:"model"`
+	URL                  string `mapstructure:"url"`
+}
+
 type RerankerAPIConfig struct {
-	AuthToken string `mapstructure:"auth_token"`
-	Model     string `mapstructure:"model"`
-	URL       string `mapstructure:"url"`
+	QueryTemplate    string `mapstructure:"query_template"`
+	DocumentTemplate string `mapstructure:"document_template"`
+	AuthToken        string `mapstructure:"auth_token" mask:"secret"`
+	Model            string `mapstructure:"model"`
+	URL              string `mapstructure:"url"`
 }
 
 type OpenAIConfig struct {
 	BaseURL             string `mapstructure:"base_url"`
-	AuthToken           string `mapstructure:"auth_token"`
+	AuthToken           string `mapstructure:"auth_token" mask:"secret"`
 	ChatCompletionModel string `mapstructure:"chat_completion_model"`
 	ChatCompletionRPM   int    `mapstructure:"chat_completion_rpm"`
 	ChatCompletionTPM   int    `mapstructure:"chat_completion_tpm"`
@@ -466,8 +507,8 @@ type BlobConfig struct {
 
 type S3Config struct {
 	Endpoint        string `mapstructure:"endpoint"`
-	AccessKeyID     string `mapstructure:"access_key_id"`
-	SecretAccessKey string `mapstructure:"secret_access_key"`
+	AccessKeyID     string `mapstructure:"access_key_id" mask:"secret"`
+	SecretAccessKey string `mapstructure:"secret_access_key" mask:"secret"`
 }
 
 type GCSConfig struct {
@@ -477,8 +518,8 @@ type GCSConfig struct {
 type AzureBlobConfig struct {
 	Endpoint         string `mapstructure:"endpoint"`
 	AccountName      string `mapstructure:"account_name"`
-	AccountKey       string `mapstructure:"account_key"`
-	ConnectionString string `mapstructure:"connection_string"`
+	AccountKey       string `mapstructure:"account_key" mask:"secret"`
+	ConnectionString string `mapstructure:"connection_string" mask:"secret"`
 }
 
 // QuotaConfig is the configuration for resource quotas.
@@ -776,6 +817,9 @@ var bindings = []configBinding{
 	{"recommend.ranker.reranker_api.url", "RERANKER_URL"},
 	{"recommend.ranker.reranker_api.model", "RERANKER_MODEL"},
 	{"recommend.ranker.reranker_api.auth_token", "RERANKER_AUTH_TOKEN"},
+	{"recommend.ranker.decision_api.url", "DECISION_URL"},
+	{"recommend.ranker.decision_api.model", "DECISION_MODEL"},
+	{"recommend.ranker.decision_api.auth_token", "DECISION_AUTH_TOKEN"},
 	{"quota.max_users_count", "GORSE_QUOTA_MAX_USERS_COUNT"},
 	{"quota.max_items_count", "GORSE_QUOTA_MAX_ITEMS_COUNT"},
 	{"quota.max_labels_size", "GORSE_QUOTA_MAX_LABELS_SIZE"},
@@ -841,6 +885,14 @@ func LoadConfig(path string) (*Config, error) {
 }
 
 func (config *Config) Validate() error {
+	if config.Recommend.Ranker.Type == "decision" {
+		if strings.TrimSpace(config.Recommend.Ranker.DecisionAPI.URL) == "" {
+			return errors.New("recommend.ranker.decision_api.url must not be empty")
+		}
+		if strings.TrimSpace(config.Recommend.Ranker.DecisionAPI.Model) == "" {
+			return errors.New("recommend.ranker.decision_api.model must not be empty")
+		}
+	}
 	// Check non-personalized recommenders
 	nonPersonalizedNames := mapset.NewSet[string]()
 	for _, nonPersonalized := range config.Recommend.NonPersonalized {

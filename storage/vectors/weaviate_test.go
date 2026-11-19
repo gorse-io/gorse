@@ -17,9 +17,13 @@ package vectors
 import (
 	"os"
 	"testing"
+	"time"
 
 	"github.com/gorse-io/gorse/common/log"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
+	"github.com/weaviate/weaviate-go-client/v4/weaviate"
+	"github.com/weaviate/weaviate-go-client/v4/weaviate/auth"
 )
 
 var (
@@ -53,6 +57,31 @@ func (suite *WeaviateTestSuite) TestQuantization() {
 	suite.testQuantization(QuantizationRQ, 1)
 	suite.testQuantization(QuantizationRQ, 8)
 	suite.testQuantization(QuantizationPQ, 0)
+}
+
+func TestWeaviateURL(t *testing.T) {
+	config, err := weaviateConfig("weaviate://localhost:8080")
+	require.NoError(t, err)
+	require.Equal(t, &weaviate.Config{Host: "localhost:8080", Scheme: "http"}, config)
+
+	config, err = weaviateConfig("weaviates://example.com")
+	require.NoError(t, err)
+	require.Equal(t, &weaviate.Config{Host: "example.com", Scheme: "https"}, config)
+
+	config, err = weaviateConfig("weaviates://[::1]:8443")
+	require.NoError(t, err)
+	require.Equal(t, &weaviate.Config{Host: "[::1]:8443", Scheme: "https"}, config)
+
+	config, err = weaviateConfig("weaviates://example.com:8443?apiKey=a%2Bb%26c&timeout=1500ms&startupTimeout=5s")
+	require.NoError(t, err)
+	require.Equal(t, &weaviate.Config{
+		Host: "example.com:8443", Scheme: "https", AuthConfig: auth.ApiKey{Value: "a+b&c"},
+		Timeout: 1500 * time.Millisecond, StartupTimeout: 5 * time.Second,
+	}, config)
+
+	config, err = weaviateConfig("weaviate://localhost:8080?apiKey=&timeout=0s&startupTimeout=0")
+	require.NoError(t, err)
+	require.Equal(t, &weaviate.Config{Host: "localhost:8080", Scheme: "http"}, config)
 }
 
 func TestWeaviate(t *testing.T) {

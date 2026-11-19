@@ -253,6 +253,9 @@ jobs:
   integrate_test:
     name: integrate tests
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     strategy:
       matrix:
         database: [mysql+qdrant, postgres+weaviate, mongo+milvus, sqlite+xvec]
@@ -260,6 +263,7 @@ jobs:
     - uses: actions/checkout@v5
       with:
         fetch-depth: 0
+        persist-credentials: false
 
     - uses: actions/setup-go@v5
       with:
@@ -272,6 +276,23 @@ jobs:
         strict: true
         variables: |
           database=${{ matrix.database }}
+          ready_only=${{ github.event_name != 'push' && github.event.pull_request.head.repo.full_name != github.repository }}
+
+    - name: Setup environment variables
+      run: |
+        echo "GORSE_VERSION=$(git describe --tags "$(git rev-parse HEAD)")" >> "$GITHUB_ENV"
+        echo "GORSE_GIT_COMMIT=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+        echo "GORSE_BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Login to GHCR
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Setup test
       run: ./client/setup-test.sh
@@ -303,9 +324,9 @@ jobs:
 
     steps:
       - name: Install pre-requisites
-        uses: awalsh128/cache-apt-pkgs-action@latest
+        uses: awalsh128/cache-apt-pkgs-action@v1
         with:
-          packages: qemu-user-static
+          packages: qemu-user
 
       - name: Setup Redis cluster
         uses: gorse-io/redis-cluster@v1.0.0
@@ -318,12 +339,12 @@ jobs:
       - name: Test RISC-V floats
         run: make -C common/floats test-rvv
         env:
-          RISCV64_QEMU: qemu-riscv64-static
+          RISCV64_QEMU: qemu-riscv64
 
       - name: Test LoongArch LASX floats
         run: make -C common/floats test-lasx
         env:
-          LOONG64_QEMU: qemu-loongarch64-static
+          LOONG64_QEMU: qemu-loongarch64
 
       - name: Test MariaDB
         run: go test ./storage/data ./storage/cache -run TestMySQL
@@ -350,8 +371,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - name: Setup environment variables
+        run: |
+          echo "GORSE_VERSION=$(git describe --tags "$(git rev-parse HEAD)")" >> "$GITHUB_ENV"
+          echo "GORSE_GIT_COMMIT=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+          echo "GORSE_BUILD_TIME=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_ENV"
+
       - name: Build Docker image
-        run: docker build -t zhenghaoz/gorse-in-one -f ./cmd/gorse-in-one/Dockerfile .
+        run: docker build --build-arg VERSION="$GORSE_VERSION" --build-arg GIT_COMMIT="$GORSE_GIT_COMMIT" --build-arg BUILD_TIME="$GORSE_BUILD_TIME" -t zhenghaoz/gorse-in-one -f ./cmd/gorse-in-one/Dockerfile .
       - name: Run playground
         run: docker run -d -p 8088:8088 --name playground zhenghaoz/gorse-in-one --playground
       - name: Check dashboard URL

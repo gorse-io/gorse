@@ -171,7 +171,8 @@ func (p *Pipeline) Recommend(ctx context.Context, users []data.User, progress fu
 	)
 
 	defer MemoryInuseBytesVec.WithLabelValues("user_feedback_cache").Set(0)
-	if err := parallel.Detachable(ctx, len(users), p.Jobs, p.Config.OpenAI.ChatCompletionRPM, func(pCtx *parallel.Context, jobId int) {
+	maxDetached := p.Jobs
+	if err := parallel.Detachable(ctx, len(users), p.Jobs, maxDetached, func(pCtx *parallel.Context, jobId int) {
 		defer func() {
 			completed <- struct{}{}
 		}()
@@ -242,7 +243,7 @@ func (p *Pipeline) Recommend(ctx context.Context, users []data.User, progress fu
 			}
 		}
 
-		// Insert replacement items into the candidate set before ranking so all rankers (including LLM) can order them.
+		// Insert replacement items into the candidate set before ranking so all rankers can order them.
 		var replacementPositiveItems, replacementNegativeItems mapset.Set[string]
 		if p.Config.Recommend.Replacement.EnableReplacement && p.Config.Recommend.Ranker.Type != "none" {
 			candidates, replacementPositiveItems, replacementNegativeItems, err = p.addReplacementCandidates(
@@ -262,18 +263,26 @@ func (p *Pipeline) Recommend(ctx context.Context, users []data.User, progress fu
 				log.Logger().Error("failed to rank items", zap.Error(err))
 				return
 			}
-		} else if p.Config.Recommend.Ranker.Type == "llm" && p.Config.OpenAI.ChatCompletionModel != "" {
-			ranker, err := logics.NewChatReranker(
-				p.Config.Recommend.Ranker.RerankerAPI,
-				p.Config.Recommend.Ranker.QueryTemplate,
-				p.Config.Recommend.Ranker.DocumentTemplate)
+		} else if p.Config.Recommend.Ranker.Type == "reranker" {
+			ranker, err := logics.NewReranker(p.Config.Recommend.Ranker.RerankerAPI)
 			if err != nil {
-				log.Logger().Error("failed to create LLM ranker", zap.Error(err))
+				log.Logger().Error("failed to create reranker", zap.Error(err))
 				return
 			}
-			results, err = p.rankByLLM(ctx, pCtx, ranker, &user, recommender.UserFeedback(), candidates, itemCache, recommendTime)
+			results, err = p.rankByReranker(ctx, pCtx, ranker, &user, recommender.UserFeedback(), candidates, itemCache, recommendTime)
 			if err != nil {
-				log.Logger().Error("failed to rank items by LLM", zap.Error(err))
+				log.Logger().Error("failed to rank items by reranker", zap.Error(err))
+				return
+			}
+		} else if p.Config.Recommend.Ranker.Type == "decision" {
+			ranker, err := logics.NewDecision(p.Config.Recommend.Ranker.DecisionAPI)
+			if err != nil {
+				log.Logger().Error("failed to create decision ranker", zap.Error(err))
+				return
+			}
+			results, err = p.rankByDecision(ctx, pCtx, ranker, &user, recommender.UserFeedback(), candidates, itemCache, recommendTime)
+			if err != nil {
+				log.Logger().Error("failed to rank items by decision", zap.Error(err))
 				return
 			}
 		} else {
@@ -498,10 +507,38 @@ func (p *Pipeline) rankByClickTroughRate(
 	return topItems, nil
 }
 
-func (p *Pipeline) rankByLLM(
+func (p *Pipeline) rankByReranker(
 	ctx context.Context,
 	pCtx *parallel.Context,
-	ranker *logics.ChatReranker,
+	ranker *logics.Reranker,
+	user *data.User,
+	feedback []data.Feedback,
+	candidates []cache.Score,
+	itemCache *ItemCache,
+	recommendTime time.Time,
+) ([]cache.Score, error) {
+	return p.rankByAPI(ctx, pCtx, ranker, user, feedback, candidates, itemCache, recommendTime)
+}
+
+func (p *Pipeline) rankByDecision(
+	ctx context.Context,
+	pCtx *parallel.Context,
+	ranker *logics.Decision,
+	user *data.User,
+	feedback []data.Feedback,
+	candidates []cache.Score,
+	itemCache *ItemCache,
+	recommendTime time.Time,
+) ([]cache.Score, error) {
+	return p.rankByAPI(ctx, pCtx, ranker, user, feedback, candidates, itemCache, recommendTime)
+}
+
+func (p *Pipeline) rankByAPI(
+	ctx context.Context,
+	pCtx *parallel.Context,
+	ranker interface {
+		Rank(context.Context, *data.User, []*logics.FeedbackItem, []*data.Item) ([]cache.Score, error)
+	},
 	user *data.User,
 	feedback []data.Feedback,
 	candidates []cache.Score,
@@ -541,7 +578,7 @@ func (p *Pipeline) rankByLLM(
 			})
 		}
 	}
-	// rank by LLM
+	// rank by API
 	pCtx.Detach()
 	parsed, err := ranker.Rank(ctx, user, feedbackItems, items)
 	pCtx.Attach()

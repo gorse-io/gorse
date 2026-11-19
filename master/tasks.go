@@ -26,7 +26,6 @@ import (
 	"github.com/c-bata/goptuna"
 	"github.com/c-bata/goptuna/tpe"
 	mapset "github.com/deckarep/golang-set/v2"
-	"github.com/gorse-io/gorse/common/event"
 	"github.com/gorse-io/gorse/common/expression"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/common/monitor"
@@ -111,8 +110,7 @@ func (m *Master) loadDataset(parent context.Context) (datasets Datasets, err err
 	evaluator := NewOnlineEvaluator(
 		m.Config.Recommend.DataSource.PositiveFeedbackTypes,
 		m.Config.Recommend.DataSource.ReadFeedbackTypes)
-	var snapshot event.Snapshot
-	datasets.clickDataset, datasets.rankingDataset, snapshot, err = m.LoadDataFromDatabase(ctx, m.DataClient,
+	datasets.clickDataset, datasets.rankingDataset, err = m.LoadDataFromDatabase(ctx, m.DataClient,
 		m.Config.Recommend.DataSource.PositiveFeedbackTypes,
 		m.Config.Recommend.DataSource.NegativeFeedbackTypes,
 		m.Config.Recommend.DataSource.ReadFeedbackTypes,
@@ -123,7 +121,6 @@ func (m *Master) loadDataset(parent context.Context) (datasets Datasets, err err
 	if err != nil {
 		return Datasets{}, errors.WithStack(err)
 	}
-	go event.Emit(context.WithoutCancel(ctx), snapshot)
 
 	// save non-personalized recommenders to cache
 	for i, recommender := range nonPersonalizedRecommenders {
@@ -301,19 +298,19 @@ func (m *Master) LoadDataFromDatabase(
 	itemTTL, positiveFeedbackTTL uint,
 	evaluator *OnlineEvaluator,
 	nonPersonalizedRecommenders []*logics.NonPersonalized,
-) (ctrDataset *ctr.Dataset, dataSet *dataset.Dataset, snapshot event.Snapshot, err error) {
+) (ctrDataset *ctr.Dataset, dataSet *dataset.Dataset, err error) {
 	// Estimate the number of users, items, and feedbacks
 	estimatedNumUsers, err := database.CountUsers(ctx)
 	if err != nil {
-		return nil, nil, event.Snapshot{}, errors.WithStack(err)
+		return nil, nil, errors.WithStack(err)
 	}
 	estimatedNumItems, err := database.CountItems(ctx)
 	if err != nil {
-		return nil, nil, event.Snapshot{}, errors.WithStack(err)
+		return nil, nil, errors.WithStack(err)
 	}
 	estimatedNumFeedbacks, err := database.CountFeedback(ctx)
 	if err != nil {
-		return nil, nil, event.Snapshot{}, errors.WithStack(err)
+		return nil, nil, errors.WithStack(err)
 	}
 
 	dataSet = dataset.NewDataset(time.Now(), estimatedNumUsers, estimatedNumItems)
@@ -334,6 +331,7 @@ func (m *Master) LoadDataFromDatabase(
 	}
 
 	// STEP 1: pull users
+	var userCount, userBytes, itemCount, itemBytes int64
 	userLabelCount := make(map[string]int)
 	userLabelFirst := make(map[string]int32)
 	userLabelIndex := dataset.NewMapIndex()
@@ -341,8 +339,8 @@ func (m *Master) LoadDataFromDatabase(
 	start := time.Now()
 	userChan, errChan := database.GetUserStream(newCtx, batchSize)
 	for users := range userChan {
-		snapshot.UserCount += int64(len(users))
-		snapshot.UserBytes += deepSize(users)
+		userCount += int64(len(users))
+		userBytes += deepSize(users)
 		for _, user := range users {
 			dataSet.AddUser(user)
 			userIndex := dataSet.GetUserDict().Id(user.UserId)
@@ -378,7 +376,7 @@ func (m *Master) LoadDataFromDatabase(
 		span.Add(len(users))
 	}
 	if err = <-errChan; err != nil {
-		return nil, nil, event.Snapshot{}, errors.WithStack(err)
+		return nil, nil, errors.WithStack(err)
 	}
 	log.Logger().Debug("pulled users from database",
 		zap.Int("n_users", dataSet.CountUsers()),
@@ -398,8 +396,8 @@ func (m *Master) LoadDataFromDatabase(
 	start = time.Now()
 	itemChan, errChan := database.GetItemStream(newCtx, batchSize, itemTimeLimit)
 	for batchItems := range itemChan {
-		snapshot.ItemCount += int64(len(batchItems))
-		snapshot.ItemBytes += deepSize(batchItems)
+		itemCount += int64(len(batchItems))
+		itemBytes += deepSize(batchItems)
 		for _, item := range batchItems {
 			labels := ctr.ConvertLabels(item.Labels)
 			item.Labels = ctr.ConvertEmbeddingLabels(item.Labels)
@@ -456,7 +454,7 @@ func (m *Master) LoadDataFromDatabase(
 		span.Add(len(batchItems))
 	}
 	if err = <-errChan; err != nil {
-		return nil, nil, event.Snapshot{}, errors.WithStack(err)
+		return nil, nil, errors.WithStack(err)
 	}
 	log.Logger().Debug("pulled items from database",
 		zap.Int("n_items", dataSet.CountItems()),
@@ -540,7 +538,7 @@ func (m *Master) LoadDataFromDatabase(
 			return nil
 		})
 		if err != nil {
-			return nil, nil, event.Snapshot{}, errors.WithStack(err)
+			return nil, nil, errors.WithStack(err)
 		}
 	}
 	log.Logger().Debug("pulled explicit negative feedback from database",
@@ -638,7 +636,7 @@ func (m *Master) LoadDataFromDatabase(
 		return nil
 	})
 	if err != nil {
-		return nil, nil, event.Snapshot{}, errors.WithStack(err)
+		return nil, nil, errors.WithStack(err)
 	}
 	log.Logger().Debug("pulled positive feedback from database",
 		zap.Int("n_positive_feedback", posFeedbackCount),
@@ -700,7 +698,7 @@ func (m *Master) LoadDataFromDatabase(
 		return nil
 	})
 	if err != nil {
-		return nil, nil, event.Snapshot{}, errors.WithStack(err)
+		return nil, nil, errors.WithStack(err)
 	}
 	log.Logger().Debug("pulled read feedback from database",
 		zap.Int("n_read_feedback", readFeedbackCount),
@@ -778,10 +776,15 @@ func (m *Master) LoadDataFromDatabase(
 		zap.Int("n_valid_negative", ctrDataset.NegativeCount),
 		zap.Duration("used_time", time.Since(start)))
 	LoadDatasetStepSecondsVec.WithLabelValues("create_ranking_dataset").Set(time.Since(start).Seconds())
-	snapshot.FeedbackCount = feedbackCount.Load()
-	snapshot.FeedbackBytes = feedbackBytes.Load()
-	snapshot.Timestamp = time.Now()
-	return ctrDataset, dataSet, snapshot, nil
+	log.Event("load",
+		zap.Int64("user_count", userCount),
+		zap.Int64("user_bytes", userBytes),
+		zap.Int64("item_count", itemCount),
+		zap.Int64("item_bytes", itemBytes),
+		zap.Int64("feedback_count", feedbackCount.Load()),
+		zap.Int64("feedback_bytes", feedbackBytes.Load()),
+	)
+	return ctrDataset, dataSet, nil
 }
 
 func (m *Master) updateItemToItem(parent context.Context, dataset *dataset.Dataset) error {

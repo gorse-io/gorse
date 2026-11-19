@@ -313,6 +313,69 @@ func (c *AdminClient) GetUserToUser(name, userID string, n int) ([]ScoreUser, er
 	return c.get[[]ScoreUser]("/dashboard/user-to-user/"+url.PathEscape(name)+"/"+url.PathEscape(userID), params)
 }
 
+// ImportUsers imports users from JSONL, replacing records with the same ID.
+func (c *AdminClient) ImportUsers(input io.Reader) (client.RowAffected, error) {
+	return c.importData("users", input)
+}
+
+// ExportUsers writes users as JSONL to output.
+func (c *AdminClient) ExportUsers(output io.Writer) error {
+	return c.exportData("users", output)
+}
+
+// ImportItems imports items from JSONL, replacing records with the same ID.
+func (c *AdminClient) ImportItems(input io.Reader) (client.RowAffected, error) {
+	return c.importData("items", input)
+}
+
+// ExportItems writes items as JSONL to output.
+func (c *AdminClient) ExportItems(output io.Writer) error {
+	return c.exportData("items", output)
+}
+
+// ImportFeedback imports JSONL feedback, overwriting records with the same key.
+func (c *AdminClient) ImportFeedback(input io.Reader) (client.RowAffected, error) {
+	return c.importData("feedback", input)
+}
+
+// ExportFeedback writes feedback as JSONL to output.
+func (c *AdminClient) ExportFeedback(output io.Writer) error {
+	return c.exportData("feedback", output)
+}
+
+func (c *AdminClient) importData(resource string, input io.Reader) (client.RowAffected, error) {
+	var result client.RowAffected
+	resp, err := c.client.R().
+		SetFileReader("file", resource+".jsonl", input).
+		SetResult(&result).
+		Post("/bulk/" + resource)
+	if err != nil {
+		return result, fmt.Errorf("failed to send request: %w", err)
+	}
+	if resp.IsError() {
+		return result, newAdminAPIError(resp)
+	}
+	return result, nil
+}
+
+func (c *AdminClient) exportData(resource string, output io.Writer) error {
+	resp, err := c.client.R().
+		SetDoNotParseResponse(true).
+		Get("/bulk/" + resource)
+	if err != nil {
+		return fmt.Errorf("failed to send request: %w", err)
+	}
+	defer resp.RawBody().Close()
+	if resp.IsError() {
+		body, _ := io.ReadAll(io.LimitReader(resp.RawBody(), 4096))
+		return fmt.Errorf("API request failed: status=%d body=%s", resp.StatusCode(), string(body))
+	}
+	if _, err = io.Copy(output, resp.RawBody()); err != nil {
+		return fmt.Errorf("failed to write response: %w", err)
+	}
+	return nil
+}
+
 func (c *AdminClient) Restore(reader io.Reader) (*DumpStats, error) {
 	result := new(DumpStats)
 	resp, err := c.client.R().

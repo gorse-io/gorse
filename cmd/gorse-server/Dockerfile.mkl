@@ -26,13 +26,19 @@ RUN go mod download
 
 COPY . ./
 
-RUN --mount=type=cache,target=/root/.cache/go-build \
-    . /opt/intel/oneapi/setvars.sh && \
+RUN . /opt/intel/oneapi/setvars.sh && \
+    go build -tags mkl ./...
+
+ARG VERSION
+ARG GIT_COMMIT
+ARG BUILD_TIME
+
+RUN . /opt/intel/oneapi/setvars.sh && \
     cd cmd/gorse-server && \
     go build -tags mkl -ldflags=" \
-       -X 'github.com/gorse-io/gorse/cmd/version.Version=$(git describe --tags $(git rev-parse HEAD))' \
-       -X 'github.com/gorse-io/gorse/cmd/version.GitCommit=$(git rev-parse HEAD)' \
-       -X 'github.com/gorse-io/gorse/cmd/version.BuildTime=$(date)' \
+       -X 'github.com/gorse-io/gorse/cmd/version.Version=${VERSION}' \
+       -X 'github.com/gorse-io/gorse/cmd/version.GitCommit=${GIT_COMMIT}' \
+       -X 'github.com/gorse-io/gorse/cmd/version.BuildTime=${BUILD_TIME}' \
        -X 'github.com/gorse-io/gorse/config.RootDir=/var/lib/gorse'" .
 
 ############################

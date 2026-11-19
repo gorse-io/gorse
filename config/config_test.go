@@ -31,6 +31,82 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
+func TestRedacted(t *testing.T) {
+	conf := &Config{
+		Database: DatabaseConfig{
+			DataStore:   "postgres://localhost/gorse?user=data-user&password=data-password&sslmode=require",
+			CacheStore:  "redis://cache:password@localhost:6379?protocol=3",
+			VectorStore: "qdrant://localhost:6334?api_key=vector-api-key&timeout=5",
+		},
+		Master: MasterConfig{
+			DashboardPassword: "p",
+			AdminAPIKey:       "abcdefg",
+		},
+		Server: ServerConfig{APIKey: "abcdefgh"},
+		OIDC:   OIDCConfig{ClientSecret: "abcdefghi"},
+		OpenAI: OpenAIConfig{AuthToken: "abcde"},
+		Recommend: RecommendConfig{
+			Ranker: RankerConfig{
+				DecisionAPI: DecisionAPIConfig{AuthToken: "甲乙丙丁戊己庚辛壬癸"},
+				RerankerAPI: RerankerAPIConfig{AuthToken: "abcdefghijk"},
+			},
+		},
+		Blob: BlobConfig{
+			S3: S3Config{
+				AccessKeyID:     "abcd",
+				SecretAccessKey: "abcdefghijkl",
+			},
+			Azure: AzureBlobConfig{
+				AccountKey:       "abcdefghijklm",
+				ConnectionString: "abcdefghijklmn",
+			},
+		},
+	}
+	masked, err := conf.Redacted()
+	assert.NoError(t, err)
+	assert.Equal(t, "postgres://localhost/gorse?password=dat******word&sslmode=require&user=dat******user", masked.Database.DataStore)
+	assert.Equal(t, "redis://******:pas******word@localhost:6379?protocol=3", masked.Database.CacheStore)
+	assert.Equal(t, "qdrant://localhost:6334?api_key=vec******-key&timeout=5", masked.Database.VectorStore)
+	assert.Equal(t, "******", masked.Master.DashboardPassword)
+	assert.Equal(t, "******", masked.Master.AdminAPIKey)
+	assert.Equal(t, "abc******efgh", masked.Server.APIKey)
+	assert.Equal(t, "abc******fghi", masked.OIDC.ClientSecret)
+	assert.Equal(t, "******", masked.OpenAI.AuthToken)
+	assert.Equal(t, "甲乙丙******庚辛壬癸", masked.Recommend.Ranker.DecisionAPI.AuthToken)
+	assert.Equal(t, "abc******hijk", masked.Recommend.Ranker.RerankerAPI.AuthToken)
+	assert.Equal(t, "******", masked.Blob.S3.AccessKeyID)
+	assert.Equal(t, "abc******ijkl", masked.Blob.S3.SecretAccessKey)
+	assert.Equal(t, "abc******jklm", masked.Blob.Azure.AccountKey)
+	assert.Equal(t, "abc******klmn", masked.Blob.Azure.ConnectionString)
+}
+
+func TestRestoreRedactedSecrets(t *testing.T) {
+	for _, test := range []struct {
+		name, original, posted, expected string
+	}{
+		{"masked", "abcdefghijk", "abc******hijk", "abcdefghijk"},
+		{"short masked", "pass", "******", "pass"},
+		{"changed", "abcdefghijk", "replacement-token", "replacement-token"},
+		{"cleared", "abcdefghijk", "", ""},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			original := &Config{Recommend: RecommendConfig{Ranker: RankerConfig{
+				RerankerAPI: RerankerAPIConfig{AuthToken: test.original},
+				DecisionAPI: DecisionAPIConfig{AuthToken: test.original},
+			}}}
+			posted := &Config{Recommend: RecommendConfig{Ranker: RankerConfig{
+				RerankerAPI: RerankerAPIConfig{AuthToken: test.posted},
+				DecisionAPI: DecisionAPIConfig{AuthToken: test.posted},
+			}}}
+			posted.RestoreRedactedSecrets(original)
+			assert.Equal(t, test.expected, posted.Recommend.Ranker.RerankerAPI.AuthToken)
+			assert.Equal(t, test.original, original.Recommend.Ranker.RerankerAPI.AuthToken)
+			assert.Equal(t, test.expected, posted.Recommend.Ranker.DecisionAPI.AuthToken)
+			assert.Equal(t, test.original, original.Recommend.Ranker.DecisionAPI.AuthToken)
+		})
+	}
+}
+
 func TestUnmarshal(t *testing.T) {
 	text := ConfigTOML
 	text = strings.Replace(text, "ssl_mode = false", "ssl_mode = true", -1)
@@ -146,6 +222,10 @@ func TestUnmarshal(t *testing.T) {
 			assert.Equal(t, "<reranker_auth_token>", config.Recommend.Ranker.RerankerAPI.AuthToken)
 			assert.Equal(t, "qwen3-rerank", config.Recommend.Ranker.RerankerAPI.Model)
 			assert.Equal(t, "<reranker_url>", config.Recommend.Ranker.RerankerAPI.URL)
+			assert.Contains(t, config.Recommend.Ranker.RerankerAPI.QueryTemplate, "{{ repo.Comment }}")
+			assert.Contains(t, config.Recommend.Ranker.RerankerAPI.DocumentTemplate, "{{ item.Comment")
+			assert.Contains(t, config.Recommend.Ranker.DecisionAPI.StateTemplate, "{{ repo.Comment }}")
+			assert.Contains(t, config.Recommend.Ranker.DecisionAPI.InstructionsTemplate, "Would the user be interested")
 			// [recommend.fallback]
 			assert.Equal(t, []string{"item-to-item/neighbors", "latest"}, config.Recommend.Fallback.Recommenders)
 			// [tracing]
@@ -255,6 +335,9 @@ func TestBindEnv(t *testing.T) {
 		{"RERANKER_AUTH_TOKEN", "<reranker_auth_token>"},
 		{"RERANKER_URL", "<reranker_url>"},
 		{"RERANKER_MODEL", "<reranker_model>"},
+		{"DECISION_AUTH_TOKEN", "<decision_auth_token>"},
+		{"DECISION_URL", "<decision_url>"},
+		{"DECISION_MODEL", "<decision_model>"},
 		{"GORSE_QUOTA_MAX_USERS_COUNT", "9"},
 		{"GORSE_QUOTA_MAX_ITEMS_COUNT", "10"},
 		{"GORSE_QUOTA_MAX_LABELS_SIZE", "11"},
@@ -312,6 +395,9 @@ func TestBindEnv(t *testing.T) {
 	assert.Equal(t, "<reranker_auth_token>", config.Recommend.Ranker.RerankerAPI.AuthToken)
 	assert.Equal(t, "<reranker_url>", config.Recommend.Ranker.RerankerAPI.URL)
 	assert.Equal(t, "<reranker_model>", config.Recommend.Ranker.RerankerAPI.Model)
+	assert.Equal(t, "<decision_auth_token>", config.Recommend.Ranker.DecisionAPI.AuthToken)
+	assert.Equal(t, "<decision_url>", config.Recommend.Ranker.DecisionAPI.URL)
+	assert.Equal(t, "<decision_model>", config.Recommend.Ranker.DecisionAPI.Model)
 	assert.Equal(t, 9, config.Quota.MaxUsersCount)
 	assert.Equal(t, 10, config.Quota.MaxItemsCount)
 	assert.Equal(t, 11, config.Quota.MaxLabelsSize)
@@ -555,6 +641,16 @@ func (s *ValidateTestSuite) TestSearchColumns() {
 
 	s.Recommend.Search.Columns = []string{"item.Labels."}
 	s.Error(s.Validate())
+}
+
+func TestDecisionAPIRequiredConfig(t *testing.T) {
+	config := GetDefaultConfig()
+	config.Recommend.Ranker.Type = "decision"
+	assert.EqualError(t, config.Validate(), "recommend.ranker.decision_api.url must not be empty")
+	config.Recommend.Ranker.DecisionAPI.URL = "http://localhost/decisions"
+	assert.EqualError(t, config.Validate(), "recommend.ranker.decision_api.model must not be empty")
+	config.Recommend.Ranker.DecisionAPI.Model = "test-model"
+	assert.NoError(t, config.Validate())
 }
 
 func TestValidate(t *testing.T) {

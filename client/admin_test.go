@@ -15,9 +15,12 @@
 package client_test
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -50,6 +53,8 @@ func (suite *AdminClientTestSuite) SetupSuite() {
 	cfg.Master.HttpHost = "127.0.0.1"
 	cfg.Master.HttpPort = 18088
 	cfg.Master.AdminAPIKey = "secret"
+	cfg.Master.DashboardUserName = "admin"
+	cfg.Master.DashboardPassword = "pass"
 	cfg.OpenAI.AuthToken = "test"
 
 	suite.master = master.NewMaster(cfg, tempDir, true, "")
@@ -61,6 +66,85 @@ func (suite *AdminClientTestSuite) SetupSuite() {
 
 func (suite *AdminClientTestSuite) TearDownSuite() {
 	suite.master.Shutdown()
+}
+
+func (suite *AdminClientTestSuite) TearDownTest() {
+	suite.NoError(suite.master.DataClient.Purge())
+	suite.NoError(suite.master.CacheClient.Purge())
+}
+
+func (suite *AdminClientTestSuite) TestImportExportUsers() {
+	input := `{"UserId":"bulk-user","Labels":{"role":"reader"},"Comment":"用户"}
+`
+	result, err := suite.client.ImportUsers(strings.NewReader(input))
+	suite.Require().NoError(err)
+	suite.Equal(1, result.RowAffected)
+	var output bytes.Buffer
+	suite.Require().NoError(suite.client.ExportUsers(&output))
+	var user client.User
+	suite.Require().NoError(json.Unmarshal(bytes.TrimSpace(output.Bytes()), &user))
+	suite.Equal(client.User{UserId: "bulk-user", Labels: map[string]any{"role": "reader"}, Comment: "用户"}, user)
+	suite.Require().NoError(suite.master.DataClient.Purge())
+	result, err = suite.client.ImportUsers(&output)
+	suite.Require().NoError(err)
+	suite.Equal(1, result.RowAffected)
+	stored, err := suite.master.DataClient.GetUser(suite.T().Context(), "bulk-user")
+	suite.Require().NoError(err)
+	suite.Equal(user.Labels, stored.Labels)
+	suite.Equal(user.Comment, stored.Comment)
+}
+
+func (suite *AdminClientTestSuite) TestImportExportItems() {
+	input := `{"ItemId":"bulk-item","IsHidden":true,"Categories":["news","tech"],"Timestamp":"2026-01-02T03:04:05Z","Labels":{"embedding":[0.1,0.2]},"Comment":"物品"}
+`
+	result, err := suite.client.ImportItems(strings.NewReader(input))
+	suite.Require().NoError(err)
+	suite.Equal(1, result.RowAffected)
+	var output bytes.Buffer
+	suite.Require().NoError(suite.client.ExportItems(&output))
+	var item client.Item
+	suite.Require().NoError(json.Unmarshal(bytes.TrimSpace(output.Bytes()), &item))
+	suite.Equal(client.Item{ItemId: "bulk-item", IsHidden: true, Categories: []string{"news", "tech"},
+		Timestamp: time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC), Labels: map[string]any{"embedding": []any{0.1, 0.2}}, Comment: "物品"}, item)
+	suite.Require().NoError(suite.master.DataClient.Purge())
+	result, err = suite.client.ImportItems(&output)
+	suite.Require().NoError(err)
+	suite.Equal(1, result.RowAffected)
+	stored, err := suite.master.DataClient.GetItem(suite.T().Context(), "bulk-item")
+	suite.Require().NoError(err)
+	suite.Equal(item.IsHidden, stored.IsHidden)
+	suite.Equal(item.Categories, stored.Categories)
+	suite.Equal(item.Timestamp, stored.Timestamp)
+	suite.Equal(item.Labels, stored.Labels)
+	suite.Equal(item.Comment, stored.Comment)
+}
+
+func (suite *AdminClientTestSuite) TestImportExportFeedback() {
+	input := `{"FeedbackType":"click","UserId":"bulk-user","ItemId":"bulk-item","Value":0,"Timestamp":"2026-01-02T03:04:05Z","Labels":{"source":"web"},"Comment":"反馈"}
+`
+	result, err := suite.client.ImportFeedback(strings.NewReader(input))
+	suite.Require().NoError(err)
+	suite.Equal(1, result.RowAffected)
+	var output bytes.Buffer
+	suite.Require().NoError(suite.client.ExportFeedback(&output))
+	var feedback client.Feedback
+	suite.Require().NoError(json.Unmarshal(bytes.TrimSpace(output.Bytes()), &feedback))
+	suite.Equal("click", feedback.FeedbackType)
+	suite.Equal("bulk-user", feedback.UserId)
+	suite.Equal("bulk-item", feedback.ItemId)
+	suite.Zero(feedback.Value)
+	suite.Equal(time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC), feedback.Timestamp)
+	suite.Equal(map[string]any{"source": "web"}, feedback.Labels)
+	suite.Equal("反馈", feedback.Comment)
+	suite.Require().NoError(suite.master.DataClient.Purge())
+	result, err = suite.client.ImportFeedback(&output)
+	suite.Require().NoError(err)
+	suite.Equal(1, result.RowAffected)
+	stored, err := suite.master.DataClient.GetUserItemFeedback(suite.T().Context(), "bulk-user", "bulk-item")
+	suite.Require().NoError(err)
+	suite.Require().Len(stored, 1)
+	suite.Equal(feedback.Labels, stored[0].Labels)
+	suite.Equal(feedback.Comment, stored[0].Comment)
 }
 
 func (suite *AdminClientTestSuite) TestGetCategories() {

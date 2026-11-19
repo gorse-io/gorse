@@ -116,10 +116,16 @@ services:
     build:
       context: .
       dockerfile: cmd/gorse-worker/Dockerfile
+      args:
+        VERSION: ${GORSE_VERSION}
+        GIT_COMMIT: ${GORSE_GIT_COMMIT}
+        BUILD_TIME: ${GORSE_BUILD_TIME}
       cache_from:
-        - type=gha
+        - type=registry,ref=ghcr.io/gorse-io/gorse-buildcache:worker
+      {% if ready_only | default('true') == 'false' %}
       cache_to:
-        - type=gha,mode=max
+        - type=registry,ref=ghcr.io/gorse-io/gorse-buildcache:worker,mode=max
+      {% endif %}
     restart: unless-stopped
     ports:
       - 8089:8089
@@ -135,10 +141,16 @@ services:
     build:
       context: .
       dockerfile: cmd/gorse-server/Dockerfile
+      args:
+        VERSION: ${GORSE_VERSION}
+        GIT_COMMIT: ${GORSE_GIT_COMMIT}
+        BUILD_TIME: ${GORSE_BUILD_TIME}
       cache_from:
-        - type=gha
+        - type=registry,ref=ghcr.io/gorse-io/gorse-buildcache:server
+      {% if ready_only | default('true') == 'false' %}
       cache_to:
-        - type=gha,mode=max
+        - type=registry,ref=ghcr.io/gorse-io/gorse-buildcache:server,mode=max
+      {% endif %}
     restart: unless-stopped
     ports:
       - 8087:8087
@@ -154,10 +166,16 @@ services:
     build:
       context: .
       dockerfile: cmd/gorse-master/Dockerfile
+      args:
+        VERSION: ${GORSE_VERSION}
+        GIT_COMMIT: ${GORSE_GIT_COMMIT}
+        BUILD_TIME: ${GORSE_BUILD_TIME}
       cache_from:
-        - type=gha
+        - type=registry,ref=ghcr.io/gorse-io/gorse-buildcache:master
+      {% if ready_only | default('true') == 'false' %}
       cache_to:
-        - type=gha,mode=max
+        - type=registry,ref=ghcr.io/gorse-io/gorse-buildcache:master,mode=max
+      {% endif %}
     restart: unless-stopped
     ports:
       - 8086:8086

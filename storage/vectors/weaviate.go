@@ -27,6 +27,7 @@ import (
 	"github.com/gorse-io/gorse/storage"
 	"github.com/pkg/errors"
 	"github.com/weaviate/weaviate-go-client/v4/weaviate"
+	"github.com/weaviate/weaviate-go-client/v4/weaviate/auth"
 	"github.com/weaviate/weaviate-go-client/v4/weaviate/fault"
 	"github.com/weaviate/weaviate-go-client/v4/weaviate/filters"
 	"github.com/weaviate/weaviate-go-client/v4/weaviate/graphql"
@@ -42,24 +43,48 @@ const (
 func init() {
 	Register([]string{storage.WeaviatePrefix, storage.WeaviatesPrefix}, func(path, tablePrefix string, opts ...storage.Option) (Database, error) {
 		database := new(Weaviate)
-		u, err := url.Parse(path)
+		cfg, err := weaviateConfig(path)
 		if err != nil {
-			return nil, errors.WithStack(err)
+			return nil, err
 		}
-		scheme := "http"
-		if strings.HasPrefix(path, storage.WeaviatesPrefix) {
-			scheme = "https"
-		}
-		cfg := weaviate.Config{
-			Host:   u.Host,
-			Scheme: scheme,
-		}
-		database.client, err = weaviate.NewClient(cfg)
+		database.client, err = weaviate.NewClient(*cfg)
 		if err != nil {
 			return nil, errors.WithStack(err)
 		}
 		return database, nil
 	})
+}
+
+func weaviateConfig(path string) (*weaviate.Config, error) {
+	u, err := url.Parse(path)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	query, err := url.ParseQuery(u.RawQuery)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	scheme := "http"
+	if strings.HasPrefix(path, storage.WeaviatesPrefix) {
+		scheme = "https"
+	}
+	config := &weaviate.Config{Host: u.Host, Scheme: scheme}
+	if apiKey := query.Get("apiKey"); apiKey != "" {
+		config.AuthConfig = auth.ApiKey{Value: apiKey}
+	}
+	for key, target := range map[string]*time.Duration{
+		"timeout":        &config.Timeout,
+		"startupTimeout": &config.StartupTimeout,
+	} {
+		if query.Has(key) {
+			value, err := time.ParseDuration(query.Get(key))
+			if err != nil {
+				return nil, errors.Wrap(err, key)
+			}
+			*target = value
+		}
+	}
+	return config, nil
 }
 
 type Weaviate struct {

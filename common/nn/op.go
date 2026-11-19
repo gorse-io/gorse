@@ -116,8 +116,8 @@ func (a *add) backward(dy *Tensor) []*Tensor {
 	for i := range gx1.shape {
 		wSize *= gx1.shape[i]
 	}
-	for i := range dy.data {
-		gx1.data[i%wSize] += dy.data[i]
+	for i := range dy.Data[float32]() {
+		gx1.Data[float32]()[i%wSize] += dy.Data[float32]()[i]
 	}
 	return []*Tensor{gx0, gx1}
 }
@@ -143,8 +143,8 @@ func (s *sub) backward(dy *Tensor) []*Tensor {
 	for i := range gx1.shape {
 		wSize *= gx1.shape[i]
 	}
-	for i := range dy.data {
-		gx1.data[i%wSize] -= dy.data[i]
+	for i := range dy.Data[float32]() {
+		gx1.Data[float32]()[i%wSize] -= dy.Data[float32]()[i]
 	}
 	return []*Tensor{gx0, gx1}
 }
@@ -171,8 +171,8 @@ func (m *mul) backward(dy *Tensor) []*Tensor {
 	for i := range gx1.shape {
 		wSize *= gx1.shape[i]
 	}
-	for i := range dy.data {
-		gx1.data[i%wSize] += dy.data[i] * m.inputs[0].data[i]
+	for i := range dy.Data[float32]() {
+		gx1.Data[float32]()[i%wSize] += dy.Data[float32]()[i] * m.inputs[0].Data[float32]()[i]
 	}
 	return []*Tensor{gx0, gx1}
 }
@@ -197,12 +197,12 @@ func (d *div) backward(dy *Tensor) []*Tensor {
 		wSize *= d.inputs[1].shape[i]
 	}
 	gx0 := Zeros(d.inputs[0].shape...)
-	for i := range dy.data {
-		gx0.data[i] = dy.data[i] / d.inputs[1].data[i%wSize]
+	for i := range dy.Data[float32]() {
+		gx0.Data[float32]()[i] = dy.Data[float32]()[i] / d.inputs[1].Data[float32]()[i%wSize]
 	}
 	gx1 := Zeros(d.inputs[1].shape...)
-	for i := range dy.data {
-		gx1.data[i%wSize] -= dy.data[i] * d.inputs[0].data[i] / d.inputs[1].data[i%wSize] / d.inputs[1].data[i%wSize]
+	for i := range dy.Data[float32]() {
+		gx1.Data[float32]()[i%wSize] -= dy.Data[float32]()[i] * d.inputs[0].Data[float32]()[i] / d.inputs[1].Data[float32]()[i%wSize] / d.inputs[1].Data[float32]()[i%wSize]
 	}
 	return []*Tensor{gx0, gx1}
 }
@@ -266,8 +266,8 @@ func (s *square) forward(inputs ...*Tensor) *Tensor {
 
 func (s *square) backward(dy *Tensor) []*Tensor {
 	dx := s.inputs[0].clone()
-	floats.MulTo(dx.data, dy.data, dx.data)
-	floats.MulConst(dx.data, 2)
+	floats.MulTo(dx.Data[float32](), dy.Data[float32](), dx.Data[float32]())
+	floats.MulConst(dx.Data[float32](), 2)
 	return []*Tensor{dx}
 }
 
@@ -296,8 +296,8 @@ func (p *pow) backward(dy *Tensor) []*Tensor {
 		wSize *= p.inputs[1].shape[i]
 	}
 	dx1 := Zeros(p.inputs[1].shape...)
-	for i := range dy.data {
-		dx1.data[i%wSize] += dy.data[i] * p.output.Value().data[i] * math32.Log(p.inputs[0].data[i])
+	for i := range dy.Data[float32]() {
+		dx1.Data[float32]()[i%wSize] += dy.Data[float32]()[i] * p.output.Value().Data[float32]()[i] * math32.Log(p.inputs[0].Data[float32]()[i])
 	}
 	return []*Tensor{dx0, dx1}
 }
@@ -353,9 +353,9 @@ func (a *abs) String() string {
 
 func (a *abs) forward(inputs ...*Tensor) *Tensor {
 	y := inputs[0].clone()
-	for i := range y.data {
-		if y.data[i] < 0 {
-			y.data[i] = -y.data[i]
+	for i := range y.Data[float32]() {
+		if y.Data[float32]()[i] < 0 {
+			y.Data[float32]()[i] = -y.Data[float32]()[i]
 		}
 	}
 	return y
@@ -363,9 +363,9 @@ func (a *abs) forward(inputs ...*Tensor) *Tensor {
 
 func (a *abs) backward(dy *Tensor) []*Tensor {
 	dx := dy.clone()
-	for i := range dx.data {
-		if a.inputs[0].data[i] < 0 {
-			dx.data[i] = -dx.data[i]
+	for i := range dx.Data[float32]() {
+		if a.inputs[0].Data[float32]()[i] < 0 {
+			dx.Data[float32]()[i] = -dx.Data[float32]()[i]
 		}
 	}
 	return []*Tensor{dx}
@@ -382,16 +382,16 @@ func (s *sum) String() string {
 func (s *sum) forward(inputs ...*Tensor) *Tensor {
 	x := inputs[0]
 	y := NewTensor([]float32{0})
-	for i := range x.data {
-		y.data[0] += x.data[i]
+	for i := range x.Data[float32]() {
+		y.Data[float32]()[0] += x.Data[float32]()[i]
 	}
 	return y
 }
 
 func (s *sum) backward(dy *Tensor) []*Tensor {
 	dx := Zeros(s.inputs[0].shape...)
-	for i := range dx.data {
-		dx.data[i] = dy.data[0]
+	for i := range dx.Data[float32]() {
+		dx.Data[float32]()[i] = dy.Data[float32]()[0]
 	}
 	return []*Tensor{dx}
 }
@@ -431,7 +431,7 @@ func (p *partialSum) forward(inputs ...*Tensor) *Tensor {
 	for i := 0; i < s1; i++ {
 		for j := 0; j < s2; j++ {
 			for k := 0; k < s3; k++ {
-				y.data[i*s3+k] += x.data[i*s2*s3+j*s3+k]
+				y.Data[float32]()[i*s3+k] += x.Data[float32]()[i*s2*s3+j*s3+k]
 			}
 		}
 	}
@@ -456,7 +456,7 @@ func (p *partialSum) backward(dy *Tensor) []*Tensor {
 	for i := 0; i < s1; i++ {
 		for j := 0; j < s2; j++ {
 			for k := 0; k < s3; k++ {
-				dx.data[i*s2*s3+j*s3+k] = dy.data[i*s3+k]
+				dx.Data[float32]()[i*s2*s3+j*s3+k] = dy.Data[float32]()[i*s3+k]
 			}
 		}
 	}
@@ -474,17 +474,17 @@ func (m *mean) String() string {
 func (m *mean) forward(inputs ...*Tensor) *Tensor {
 	x := inputs[0]
 	y := NewTensor([]float32{0})
-	for i := range x.data {
-		y.data[0] += x.data[i]
+	for i := range x.Data[float32]() {
+		y.Data[float32]()[0] += x.Data[float32]()[i]
 	}
-	y.data[0] /= float32(len(x.data))
+	y.Data[float32]()[0] /= float32(len(x.Data[float32]()))
 	return y
 }
 
 func (m *mean) backward(dy *Tensor) []*Tensor {
 	dx := Zeros(m.inputs[0].shape...)
-	for i := range dx.data {
-		dx.data[i] = dy.data[0] / float32(len(dx.data))
+	for i := range dx.Data[float32]() {
+		dx.Data[float32]()[i] = dy.Data[float32]()[0] / float32(len(dx.Data[float32]()))
 	}
 	return []*Tensor{dx}
 }
@@ -596,9 +596,9 @@ func (b *broadcast) forward(inputs ...*Tensor) *Tensor {
 	for i := range b.shape {
 		wSize *= b.shape[i]
 	}
-	for i := range x.data {
+	for i := range x.Data[float32]() {
 		for j := i * wSize; j < (i+1)*wSize; j++ {
-			y.data[j] = x.data[i]
+			y.Data[float32]()[j] = x.Data[float32]()[i]
 		}
 	}
 	return y
@@ -610,9 +610,9 @@ func (b *broadcast) backward(dy *Tensor) []*Tensor {
 	for i := range b.shape {
 		wSize *= b.shape[i]
 	}
-	for i := range gx.data {
+	for i := range gx.Data[float32]() {
 		for j := i * wSize; j < (i+1)*wSize; j++ {
-			gx.data[i] += dy.data[j]
+			gx.Data[float32]()[i] += dy.Data[float32]()[j]
 		}
 	}
 	return []*Tensor{gx}
@@ -627,11 +627,11 @@ func (f *flatten) String() string {
 }
 
 func (f *flatten) forward(inputs ...*Tensor) *Tensor {
-	return NewTensor(inputs[0].data, len(inputs[0].data))
+	return NewTensor(inputs[0].Data[float32](), len(inputs[0].Data[float32]()))
 }
 
 func (f *flatten) backward(dy *Tensor) []*Tensor {
-	return []*Tensor{NewTensor(dy.data, f.inputs[0].shape...)}
+	return []*Tensor{NewTensor(dy.Data[float32](), f.inputs[0].shape...)}
 }
 
 type reshape struct {
@@ -644,11 +644,11 @@ func (r *reshape) String() string {
 }
 
 func (r *reshape) forward(inputs ...*Tensor) *Tensor {
-	return NewTensor(inputs[0].data, r.shape...)
+	return NewTensor(inputs[0].Data[float32](), r.shape...)
 }
 
 func (r *reshape) backward(dy *Tensor) []*Tensor {
-	return []*Tensor{NewTensor(dy.data, r.inputs[0].shape...)}
+	return []*Tensor{NewTensor(dy.Data[float32](), r.inputs[0].shape...)}
 }
 
 type embedding struct {
@@ -677,9 +677,9 @@ func (e *embedding) forward(inputs ...*Tensor) *Tensor {
 	}
 	// Create output tensor
 	data := make([]float32, size)
-	for i := 0; i < len(x.data); i++ {
-		index := int(x.data[i])
-		copy(data[i*dim:(i+1)*dim], w.data[index*dim:(index+1)*dim])
+	for i := 0; i < len(x.Data[float32]()); i++ {
+		index := int(x.Data[float32]()[i])
+		copy(data[i*dim:(i+1)*dim], w.Data[float32]()[index*dim:(index+1)*dim])
 	}
 	return NewTensor(data, shape...)
 }
@@ -691,10 +691,10 @@ func (e *embedding) backward(dy *Tensor) []*Tensor {
 		dim *= w.shape[i]
 	}
 	dw := Zeros(w.shape...)
-	for i := 0; i < len(x.data); i++ {
-		index := int(x.data[i])
+	for i := 0; i < len(x.Data[float32]()); i++ {
+		index := int(x.Data[float32]()[i])
 		for j := 0; j < dim; j++ {
-			dw.data[index*dim+j] += dy.data[i*dim+j]
+			dw.Data[float32]()[index*dim+j] += dy.Data[float32]()[i*dim+j]
 		}
 	}
 	return []*Tensor{dw}
@@ -794,17 +794,17 @@ func (c *softmaxCrossEntropy) forward(inputs ...*Tensor) *Tensor {
 	m.add(s)                  // m + log(sum(exp(x - m)))
 	logP := x.clone().bSub(m) // x - (m + log(sum(exp(x - m))))
 	var crossEntropy float32
-	for i := 0; i < len(t.data); i++ {
-		crossEntropy -= logP.Get(i, int(t.data[i]))
+	for i := 0; i < len(t.Data[float32]()); i++ {
+		crossEntropy -= logP.Get(i, int(t.Data[float32]()[i]))
 	}
-	crossEntropy /= float32(len(t.data))
+	crossEntropy /= float32(len(t.Data[float32]()))
 	return NewScalar(crossEntropy)
 }
 
 func (c *softmaxCrossEntropy) backward(dy *Tensor) []*Tensor {
 	x, t := c.inputs[0], c.inputs[1]
 	// gy *= 1/N
-	gy := dy.clone().mul(NewScalar(1 / float32(len(t.data))))
+	gy := dy.clone().mul(NewScalar(1 / float32(len(t.Data[float32]()))))
 	// y = softmax(x)
 	y := x.clone()
 	y.bSub(x.max(1, true))
@@ -812,8 +812,8 @@ func (c *softmaxCrossEntropy) backward(dy *Tensor) []*Tensor {
 	y.bDiv(y.sum(1, true))
 	// convert to one-hot
 	oneHot := Zeros(x.shape...)
-	for i := 0; i < len(t.data); i++ {
-		oneHot.data[i*x.shape[1]+int(t.data[i])] = 1
+	for i := 0; i < len(t.Data[float32]()); i++ {
+		oneHot.Data[float32]()[i*x.shape[1]+int(t.Data[float32]()[i])] = 1
 	}
 	// y = (y - t_onehot) * gy
 	y = y.sub(oneHot).mul(gy)

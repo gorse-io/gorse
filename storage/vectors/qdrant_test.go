@@ -19,6 +19,7 @@ import (
 	"net"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/storage"
@@ -150,4 +151,22 @@ func TestQdrantQueryScores(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestQdrantURL(t *testing.T) {
+	config, err := qdrantConfig("qdrant://localhost:6333")
+	require.NoError(t, err)
+	require.Equal(t, "localhost", config.Host)
+	require.Equal(t, 6333, config.Port)
+	require.Empty(t, config.APIKey)
+	require.False(t, config.UseTLS)
+
+	// Query options use the Qdrant client's camelCase field names.
+	config, err = qdrantConfig("qdrant://xyz.cloud.qdrant.io:6334?apiKey=a%2Bb%26c&useTLS=true&skipCompatibilityCheck=true&poolSize=5&keepAliveTime=30&keepAliveTimeout=4&versionCheckTimeout=5s")
+	require.NoError(t, err)
+	require.Equal(t, &qdrant.Config{
+		Host: "xyz.cloud.qdrant.io", Port: 6334, APIKey: "a+b&c", UseTLS: true,
+		SkipCompatibilityCheck: true, PoolSize: 5, KeepAliveTime: 30,
+		KeepAliveTimeout: 4, VersionCheckTimeout: 5 * time.Second,
+	}, config)
 }

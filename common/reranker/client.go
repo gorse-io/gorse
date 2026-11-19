@@ -62,6 +62,16 @@ type Usage struct {
 	TotalTokens int `json:"total_tokens"`
 }
 
+// APIError reports an unsuccessful HTTP response from the rerank API.
+type APIError struct {
+	StatusCode int
+	Body       []byte
+}
+
+func (e *APIError) Error() string {
+	return fmt.Sprintf("rerank request failed with status: %d, body: %s", e.StatusCode, string(e.Body))
+}
+
 func (c *Client) Rerank(ctx context.Context, req RerankRequest) (*RerankResponse, error) {
 	var body []byte
 	var err error
@@ -92,7 +102,7 @@ func (c *Client) Rerank(ctx context.Context, req RerankRequest) (*RerankResponse
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("rerank request failed with status: %d, body: %s", resp.StatusCode, string(respBody))
+		return nil, &APIError{StatusCode: resp.StatusCode, Body: respBody}
 	}
 
 	var rerankResp RerankResponse

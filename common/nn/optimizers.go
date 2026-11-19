@@ -58,7 +58,7 @@ type SGD struct {
 func NewSGD(params []*Tensor, lr float32) Optimizer {
 	bufSize := 0
 	for _, p := range params {
-		bufSize = max(bufSize, len(p.data))
+		bufSize = max(bufSize, len(p.Data[float32]()))
 	}
 	return &SGD{
 		params: params,
@@ -69,14 +69,14 @@ func NewSGD(params []*Tensor, lr float32) Optimizer {
 
 func (s *SGD) Step() {
 	for _, p := range s.params {
-		b := s.b[:len(p.data)]
-		parts := partitionAligned(len(p.data), s.jobs, 32)
+		b := s.b[:len(p.Data[float32]())]
+		parts := partitionAligned(len(p.Data[float32]()), s.jobs, 32)
 		var wg sync.WaitGroup
 		for _, part := range parts {
 			i, j := part.A, part.B
 			wg.Go(func() {
-				floats.MulConstAddTo(p.data[i:j], s.wd, p.grad.data[i:j], b[i:j])
-				floats.MulConstAdd(b[i:j], -s.lr, p.data[i:j])
+				floats.MulConstAddTo(p.Data[float32]()[i:j], s.wd, p.grad.Data[float32]()[i:j], b[i:j])
+				floats.MulConstAdd(b[i:j], -s.lr, p.Data[float32]()[i:j])
 			})
 		}
 		wg.Wait()
@@ -100,7 +100,7 @@ type Adam struct {
 func NewAdam(params []*Tensor, alpha float32) Optimizer {
 	bufSize := 0
 	for _, p := range params {
-		bufSize = max(bufSize, len(p.data))
+		bufSize = max(bufSize, len(p.Data[float32]()))
 	}
 	return &Adam{
 		params: params,
@@ -128,27 +128,27 @@ func (a *Adam) Step() {
 			a.vs[p] = Zeros(p.shape...)
 		}
 		m, v := a.ms[p], a.vs[p]
-		b1, b2 := a.b1[:len(p.data)], a.b2[:len(p.data)]
+		b1, b2 := a.b1[:len(p.Data[float32]())], a.b2[:len(p.Data[float32]())]
 
-		parts := partitionAligned(len(p.data), a.jobs, 32)
+		parts := partitionAligned(len(p.Data[float32]()), a.jobs, 32)
 		var wg sync.WaitGroup
 		for _, part := range parts {
 			i, j := part.A, part.B
 			wg.Go(func() {
 				// grad = grad + wd * param.data
-				floats.MulConstAddTo(p.data[i:j], a.wd, p.grad.data[i:j], b1[i:j])
+				floats.MulConstAddTo(p.Data[float32]()[i:j], a.wd, p.grad.Data[float32]()[i:j], b1[i:j])
 				// m += (1 - beta1) * (grad - m)
-				floats.SubTo(b1[i:j], m.data[i:j], b2[i:j])
-				floats.MulConstAdd(b2[i:j], 1-a.beta1, m.data[i:j])
+				floats.SubTo(b1[i:j], m.Data[float32]()[i:j], b2[i:j])
+				floats.MulConstAdd(b2[i:j], 1-a.beta1, m.Data[float32]()[i:j])
 				// v += (1 - beta2) * (grad * grad - v)
 				floats.MulTo(b1[i:j], b1[i:j], b2[i:j])
-				floats.Sub(b2[i:j], v.data[i:j])
-				floats.MulConstAdd(b2[i:j], 1-a.beta2, v.data[i:j])
+				floats.Sub(b2[i:j], v.Data[float32]()[i:j])
+				floats.MulConstAdd(b2[i:j], 1-a.beta2, v.Data[float32]()[i:j])
 				// param.data -= self.lr * m / (xp.sqrt(v) + eps)
-				floats.SqrtTo(v.data[i:j], b2[i:j])
+				floats.SqrtTo(v.Data[float32]()[i:j], b2[i:j])
 				floats.AddConst(b2[i:j], a.eps)
-				floats.DivTo(m.data[i:j], b2[i:j], b1[i:j])
-				floats.MulConstAdd(b1[i:j], -lr, p.data[i:j])
+				floats.DivTo(m.Data[float32]()[i:j], b2[i:j], b1[i:j])
+				floats.MulConstAdd(b1[i:j], -lr, p.Data[float32]()[i:j])
 			})
 		}
 		wg.Wait()
