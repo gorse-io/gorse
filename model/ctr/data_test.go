@@ -16,6 +16,9 @@ package ctr
 import (
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -24,6 +27,18 @@ import (
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
 )
+
+func TestLoadLibFMFileRejectsMalformedFeature(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "malformed.libfm")
+	if err := os.WriteFile(path, []byte("1 2:0.5\n0 3\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	_, _, _, err := LoadLibFMFile(path)
+	if err == nil || !strings.Contains(err.Error(), `invalid libFM feature "3" on line 2`) {
+		t.Fatalf("expected a line-specific validation error, got %v", err)
+	}
+}
 
 func TestConvertLabels(t *testing.T) {
 	features := ConvertLabels(nil)
