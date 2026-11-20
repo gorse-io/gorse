@@ -18,7 +18,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -26,17 +25,33 @@ import (
 	"github.com/gorse-io/gorse/dataset"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func TestLoadLibFMFileRejectsMalformedFeature(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "malformed.libfm")
-	if err := os.WriteFile(path, []byte("1 2:0.5\n0 3\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
+func TestLoadMalformedLibFMFile(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		content string
+		err     string
+	}{
+		{
+			name:    "malformed feature",
+			content: "1 2:0.5\n0 3\n",
+			err:     `invalid libFM feature "3" on line 2`,
+		},
+		{
+			name:    "empty line",
+			content: "1 2:0.5\n\n",
+			err:     "empty libFM row on line 2",
+		},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "malformed.libfm")
+			require.NoError(t, os.WriteFile(path, []byte(test.content), 0o600))
 
-	_, _, _, err := LoadLibFMFile(path)
-	if err == nil || !strings.Contains(err.Error(), `invalid libFM feature "3" on line 2`) {
-		t.Fatalf("expected a line-specific validation error, got %v", err)
+			_, _, _, err := LoadLibFMFile(path)
+			assert.ErrorContains(t, err, test.err)
+		})
 	}
 }
 
