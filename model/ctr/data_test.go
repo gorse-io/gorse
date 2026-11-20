@@ -25,34 +25,17 @@ import (
 	"github.com/gorse-io/gorse/dataset"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func TestLoadMalformedLibFMFile(t *testing.T) {
-	for _, test := range []struct {
-		name    string
-		content string
-		err     string
-	}{
-		{
-			name:    "malformed feature",
-			content: "1 2:0.5\n0 3\n",
-			err:     `invalid libFM feature "3" on line 2`,
-		},
-		{
-			name:    "empty line",
-			content: "1 2:0.5\n\n",
-			err:     "empty libFM row on line 2",
-		},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			path := filepath.Join(t.TempDir(), "malformed.libfm")
-			require.NoError(t, os.WriteFile(path, []byte(test.content), 0o600))
+	path := filepath.Join(t.TempDir(), "malformed.libfm")
+	assert.NoError(t, os.WriteFile(path, []byte("1 2:0.5\n0 3\n"), 0o600))
+	_, _, _, err := LoadLibFMFile(path)
+	assert.ErrorContains(t, err, `invalid libFM feature "3" on line 2`)
 
-			_, _, _, err := LoadLibFMFile(path)
-			assert.ErrorContains(t, err, test.err)
-		})
-	}
+	assert.NoError(t, os.WriteFile(path, []byte("1 2:0.5\n\n"), 0o600))
+	_, _, _, err = LoadLibFMFile(path)
+	assert.ErrorContains(t, err, "empty libFM row on line 2")
 }
 
 func TestConvertLabels(t *testing.T) {
