@@ -293,9 +293,12 @@ func LoadLibFMFile(path string) (features [][]lo.Tuple2[int32, float32], targets
 	defer file.Close()
 	// read lines
 	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
+	for lineNumber := 1; scanner.Scan(); lineNumber++ {
 		line := scanner.Text()
-		fields := strings.Split(line, " ")
+		fields := strings.Fields(line)
+		if len(fields) == 0 {
+			return nil, []float32{}, 0, errors.Errorf("empty libFM row on line %d", lineNumber)
+		}
 		// fetch target
 		target, err := strconv.ParseFloat(fields[0], 32)
 		if err != nil {
@@ -306,8 +309,10 @@ func LoadLibFMFile(path string) (features [][]lo.Tuple2[int32, float32], targets
 		lineFeatures := make([]lo.Tuple2[int32, float32], 0, len(fields[1:]))
 		for _, field := range fields[1:] {
 			if len(strings.TrimSpace(field)) > 0 {
-				kv := strings.Split(field, ":")
-				k, v := kv[0], kv[1]
+				k, v, ok := strings.Cut(field, ":")
+				if !ok || k == "" || v == "" {
+					return nil, []float32{}, 0, errors.Errorf("invalid libFM feature %q on line %d: expected index:value", field, lineNumber)
+				}
 				// append feature
 				feature, err := strconv.Atoi(k)
 				if err != nil {

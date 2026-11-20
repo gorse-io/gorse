@@ -16,6 +16,8 @@ package ctr
 import (
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -24,6 +26,17 @@ import (
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
 )
+
+func TestLoadMalformedLibFMFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "malformed.libfm")
+	assert.NoError(t, os.WriteFile(path, []byte("1 2:0.5\n0 3\n"), 0o600))
+	_, _, _, err := LoadLibFMFile(path)
+	assert.ErrorContains(t, err, `invalid libFM feature "3" on line 2`)
+
+	assert.NoError(t, os.WriteFile(path, []byte("1 2:0.5\n\n"), 0o600))
+	_, _, _, err = LoadLibFMFile(path)
+	assert.ErrorContains(t, err, "empty libFM row on line 2")
+}
 
 func TestConvertLabels(t *testing.T) {
 	features := ConvertLabels(nil)
