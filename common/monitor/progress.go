@@ -158,6 +158,14 @@ func (s *Span) Progress() Progress {
 		}
 		parentCount += childTotal * child.Count / child.Total
 	}
+	// Clamp parentCount to parentTotal. The "zero-total child is complete"
+	// fallback above can otherwise push parentCount beyond parentTotal when
+	// the parent has already consumed its own count and a running child is
+	// reporting no work units, which would surface as >100% progress in the
+	// dashboard.
+	if parentCount > parentTotal {
+		parentCount = parentTotal
+	}
 	return Progress{
 		Name:       s.name,
 		Status:     s.status,
