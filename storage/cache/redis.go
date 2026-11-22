@@ -17,7 +17,10 @@ package cache
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	"math"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -172,6 +175,9 @@ func (r *Redis) Purge() error {
 }
 
 func (r *Redis) purge(ctx context.Context, client redis.UniversalClient, isCluster bool) error {
+	if err := r.purgeGeoIndexes(ctx, client); err != nil {
+		return errors.WithStack(err)
+	}
 	var (
 		result []string
 		cursor uint64
@@ -578,4 +584,255 @@ func escape(s string) string {
 		"+", "\\+",
 	)
 	return r.Replace(s)
+}
+
+const redisGeoBatchSize = 512
+
+// Redis GEO uses a Mercator latitude range. Polar points remain fully indexed
+// by the shared 52-bit Morton cell (exactly representable as a Search NUMERIC).
+const redisGeoLatitudeLimit = 85.05112878
+
+func (r *Redis) geoKeyPrefix() string {
+	return "gorse_geo_" + geoNameDigest(string(r.TablePrefix)) + ":"
+}
+
+// Encode untrusted names/IDs and put a nonempty hash tag before them. All point
+// hashes belonging to an index share a Cluster slot, independent of raw braces.
+func (r *Redis) geoIndex(name string) string {
+	return r.geoKeyPrefix() + "{" + geoNameDigest(string(r.TablePrefix), name) + "}:" +
+		base64.RawURLEncoding.EncodeToString([]byte(name))
+}
+
+func (r *Redis) geoPointKey(name, id string) string {
+	return r.geoIndex(name) + ":" + base64.RawURLEncoding.EncodeToString([]byte(id))
+}
+
+func redisGeoError(name string, err error) error {
+	if err == nil {
+		return nil
+	}
+	message := strings.ToLower(err.Error())
+	if strings.Contains(message, "unknown index name") || strings.Contains(message, "no such index") ||
+		strings.Contains(message, "search_index_not_found") {
+		return fmt.Errorf("geo index %q %w", name, storage.ErrNotFound)
+	}
+	if strings.Contains(message, "index already exists") {
+		return fmt.Errorf("geo index %q %w", name, storage.ErrAlreadyExists)
+	}
+	return fmt.Errorf("geo index %q %w", name, err)
+}
+
+// AddGeoIndex creates an empty Search index, whose existence does not depend on
+// point count. Callers must coordinate drop/recreate/purge against point operations,
+// including operations through the same client.
+func (r *Redis) AddGeoIndex(ctx context.Context, name string) error {
+	if err := validateGeoName(name); err != nil {
+		return err
+	}
+	index := r.geoIndex(name)
+	return redisGeoError(name, r.client.FTCreate(ctx, index,
+		&redis.FTCreateOptions{OnHash: true, Prefix: []any{index + ":"}},
+		&redis.FieldSchema{FieldName: "location", FieldType: redis.SearchFieldTypeGeo},
+		&redis.FieldSchema{FieldName: "latitude", FieldType: redis.SearchFieldTypeNumeric},
+		&redis.FieldSchema{FieldName: "cell", FieldType: redis.SearchFieldTypeNumeric},
+		&redis.FieldSchema{FieldName: "categories", FieldType: redis.SearchFieldTypeTag, Separator: ";"},
+		&redis.FieldSchema{FieldName: "timestamp", FieldType: redis.SearchFieldTypeNumeric},
+	).Err())
+}
+
+// ListGeoIndex discovers only this namespace's indexes, including empty ones.
+func (r *Redis) ListGeoIndex(ctx context.Context) ([]string, error) {
+	indexes, err := r.client.FT_List(ctx).Result()
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	names := make([]string, 0)
+	for _, index := range indexes {
+		if !strings.HasPrefix(index, r.geoKeyPrefix()) {
+			continue
+		}
+		_, encoded, ok := strings.Cut(strings.TrimPrefix(index, r.geoKeyPrefix()), "}:")
+		if !ok {
+			continue
+		}
+		decoded, err := base64.RawURLEncoding.DecodeString(encoded)
+		if err != nil || validateGeoName(string(decoded)) != nil || r.geoIndex(string(decoded)) != index {
+			continue
+		}
+		names = append(names, string(decoded))
+	}
+	sort.Strings(names)
+	return names, nil
+}
+
+func (r *Redis) checkGeoIndex(ctx context.Context, name string) error {
+	return redisGeoError(name, r.client.Do(ctx, "FT.INFO", r.geoIndex(name)).Err())
+}
+
+// AddGeoPoints validates the complete batch before writing. Each transaction
+// updates the exact payload and indexed fields together, including removing an
+// obsolete GEO field when a point moves outside Redis's supported latitudes.
+func (r *Redis) AddGeoPoints(ctx context.Context, name string, points []GeoPoint) error {
+	records, err := prepareGeoPoints(name, points)
+	if err != nil {
+		return err
+	}
+	if err = r.checkGeoIndex(ctx, name); err != nil {
+		return err
+	}
+	for start := 0; start < len(records); start += redisGeoBatchSize {
+		pipeline := r.client.TxPipeline()
+		for _, record := range records[start:min(start+redisGeoBatchSize, len(records))] {
+			payload, err := json.Marshal(record)
+			if err != nil {
+				return errors.WithStack(err)
+			}
+			key := r.geoPointKey(name, record.Id)
+			fields := []any{"payload", string(payload), "cell", record.Cell, "latitude", record.Latitude,
+				"categories", encodeCategories(record.Categories), "timestamp", record.Timestamp.UnixMicro()}
+			if math.Abs(record.Latitude) <= redisGeoLatitudeLimit {
+				fields = append(fields, "location", fmt.Sprintf("%.17g,%.17g", record.Longitude, record.Latitude))
+			} else {
+				pipeline.HDel(ctx, key, "location")
+			}
+			pipeline.HSet(ctx, key, fields...)
+		}
+		if _, err = pipeline.Exec(ctx); err != nil {
+			return redisGeoError(name, err)
+		}
+	}
+	return nil
+}
+
+// SearchGeoPoints uses Search NUMERIC cell ranges for complete spherical
+// coverage, including poles and unlimited nearest-neighbor queries. For bounded
+// queries inside Redis's latitude range, GEO additionally prunes normal points;
+// the OR branch retains polar points. The generous outward radius guard covers
+// Redis's different Earth radius and sub-meter GEO quantization. Only the shared
+// exact distance/ID ordering decides inclusion and top N, never native distance.
+func (r *Redis) SearchGeoPoints(ctx context.Context, name string, query GeoQuery) ([]Score, error) {
+	query, err := normalizeGeoQuery(name, query)
+	if err != nil {
+		return nil, err
+	}
+	if err = r.checkGeoIndex(ctx, name); err != nil {
+		return nil, err
+	}
+	return searchGeoPoints(ctx, query, func(ctx context.Context, ranges []geoRange, yield func(geoRecord) error) error {
+		var builder strings.Builder
+		builder.WriteByte('(')
+		for i, interval := range ranges {
+			if i > 0 {
+				builder.WriteString(" | ")
+			}
+			fmt.Fprintf(&builder, "@cell:[%d %d]", interval.Min, interval.Max)
+		}
+		builder.WriteByte(')')
+		if query.MaxDistance > 0 && query.MaxDistance < math.Pi*geoEarthRadius && math.Abs(query.Latitude) <= redisGeoLatitudeLimit {
+			fmt.Fprintf(&builder, " (@location:[%.17g %.17g %.17g m] | @latitude:[-90 (-%.17g] | @latitude:[(%.17g 90])",
+				query.Longitude, query.Latitude, query.MaxDistance*1.01+1, redisGeoLatitudeLimit, redisGeoLatitudeLimit)
+		}
+		return r.scanGeoPoints(ctx, name, builder.String(), yield)
+	})
+}
+
+// Cursors avoid offset/result ceilings and exhaust every candidate before the
+// shared bounded heap selects top N. LOAD returns the original float64 JSON,
+// not Redis GEO's quantized coordinates. No concurrent-write snapshot is promised.
+func (r *Redis) scanGeoPoints(ctx context.Context, name, query string, yield func(geoRecord) error) error {
+	index := r.geoIndex(name)
+	var cursor int64
+	defer func() {
+		if cursor != 0 {
+			cleanup, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			r.client.Do(cleanup, "FT.CURSOR", "DEL", index, cursor)
+		}
+	}()
+	args := []any{"FT.AGGREGATE", index, query, "LOAD", 1, "@payload", "TIMEOUT", 0,
+		"WITHCURSOR", "COUNT", redisGeoBatchSize, "DIALECT", 2}
+	for {
+		page, err := r.client.Do(ctx, args...).Slice()
+		if err != nil {
+			return redisGeoError(name, err)
+		}
+		if len(page) != 2 {
+			return fmt.Errorf("geo index %q invalid cursor response", name)
+		}
+		rows, rowsOK := page[0].([]any)
+		var cursorOK bool
+		cursor, cursorOK = page[1].(int64)
+		if !rowsOK || !cursorOK || len(rows) == 0 {
+			return fmt.Errorf("geo index %q invalid cursor page", name)
+		}
+		for _, row := range rows[1:] {
+			fields, ok := row.([]any)
+			if !ok || len(fields) != 2 || fields[0] != "payload" {
+				return fmt.Errorf("geo index %q invalid point response", name)
+			}
+			payload, ok := fields[1].(string)
+			if !ok {
+				return fmt.Errorf("geo index %q missing point payload", name)
+			}
+			var record geoRecord
+			if err = json.Unmarshal([]byte(payload), &record); err != nil {
+				return errors.WithStack(err)
+			}
+			if err = yield(record); err != nil {
+				return err
+			}
+		}
+		if cursor == 0 {
+			return nil
+		}
+		args = []any{"FT.CURSOR", "READ", index, cursor, "COUNT", redisGeoBatchSize}
+	}
+}
+
+func (r *Redis) DeleteGeoPoints(ctx context.Context, name string, ids ...string) error {
+	ids, err := prepareGeoIDs(name, ids)
+	if err != nil {
+		return err
+	}
+	if err = r.checkGeoIndex(ctx, name); err != nil {
+		return err
+	}
+	for start := 0; start < len(ids); start += redisGeoBatchSize {
+		pipeline := r.client.Pipeline()
+		for _, id := range ids[start:min(start+redisGeoBatchSize, len(ids))] {
+			pipeline.Del(ctx, r.geoPointKey(name, id))
+		}
+		if _, err = pipeline.Exec(ctx); err != nil {
+			return redisGeoError(name, err)
+		}
+	}
+	return nil
+}
+
+// DeleteGeoIndex drops the Search index and its per-point hashes; absence is OK.
+func (r *Redis) DeleteGeoIndex(ctx context.Context, name string) error {
+	if err := validateGeoName(name); err != nil {
+		return err
+	}
+	err := redisGeoError(name, r.client.FTDropIndexWithArgs(ctx, r.geoIndex(name), &redis.FTDropIndexOptions{DeleteDocs: true}).Err())
+	if errors.Is(err, storage.ErrNotFound) {
+		return nil
+	}
+	return err
+}
+
+func (r *Redis) purgeGeoIndexes(ctx context.Context, client redis.UniversalClient) error {
+	indexes, err := client.FT_List(ctx).Result()
+	if err != nil {
+		return err
+	}
+	for _, index := range indexes {
+		if strings.HasPrefix(index, r.geoKeyPrefix()) {
+			err = redisGeoError(index, client.FTDropIndexWithArgs(ctx, index, &redis.FTDropIndexOptions{DeleteDocs: true}).Err())
+			if err != nil && !errors.Is(err, storage.ErrNotFound) {
+				return err
+			}
+		}
+	}
+	return nil
 }

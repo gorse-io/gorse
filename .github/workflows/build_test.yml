@@ -351,10 +351,11 @@ jobs:
         env:
           MYSQL_URI: mysql://root:password@tcp(localhost:${{ job.services.mariadb.ports[3306] }})/
 
-      - name: Test Kvrocks
-        run: go test ./storage/cache -run ^TestRedis
-        env:
-          REDIS_URI: redis://localhost:${{ job.services.kvrocks.ports[6666] }}/
+      # Kvrocks does not support the RediSearch GEO schema and cursor commands yet.
+      # - name: Test Kvrocks
+      #   run: go test ./storage/cache -run ^TestRedis
+      #   env:
+      #     REDIS_URI: redis://localhost:${{ job.services.kvrocks.ports[6666] }}/
 
       - name: Test Redis cluster (1 address)
         run: go test ./storage/cache -run ^TestRedis

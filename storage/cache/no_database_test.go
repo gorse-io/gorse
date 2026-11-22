@@ -57,6 +57,21 @@ func TestNoDatabase(t *testing.T) {
 	err = database.ScanScores(ctx, nil)
 	assert.ErrorIs(t, err, storage.ErrNoDatabase)
 
+	err = database.AddGeoIndex(ctx, "")
+	assert.ErrorIs(t, err, storage.ErrNoDatabase)
+	_, err = database.ListGeoIndex(ctx)
+	assert.ErrorIs(t, err, storage.ErrNoDatabase)
+	err = database.AddGeoPoints(ctx, "", nil)
+	assert.ErrorIs(t, err, storage.ErrNoDatabase)
+	var points []Score
+	points, err = database.SearchGeoPoints(ctx, "", GeoQuery{})
+	assert.Nil(t, points)
+	assert.ErrorIs(t, err, storage.ErrNoDatabase)
+	err = database.DeleteGeoPoints(ctx, "")
+	assert.ErrorIs(t, err, storage.ErrNoDatabase)
+	err = database.DeleteGeoIndex(ctx, "")
+	assert.ErrorIs(t, err, storage.ErrNoDatabase)
+
 	err = database.AddTimeSeriesPoints(ctx, nil)
 	assert.ErrorIs(t, err, storage.ErrNoDatabase)
 	_, err = database.GetTimeSeriesPoints(ctx, "", time.Time{}, time.Time{}, 0)
