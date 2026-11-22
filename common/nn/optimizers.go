@@ -58,6 +58,9 @@ type SGD struct {
 func NewSGD(params []*Tensor, lr float32) Optimizer {
 	bufSize := 0
 	for _, p := range params {
+		if p.dtype != Float32 {
+			panic("optimizers only support FP32 parameters")
+		}
 		bufSize = max(bufSize, len(p.Data[float32]()))
 	}
 	return &SGD{
@@ -100,6 +103,9 @@ type Adam struct {
 func NewAdam(params []*Tensor, alpha float32) Optimizer {
 	bufSize := 0
 	for _, p := range params {
+		if p.dtype != Float32 {
+			panic("optimizers only support FP32 parameters")
+		}
 		bufSize = max(bufSize, len(p.Data[float32]()))
 	}
 	return &Adam{
