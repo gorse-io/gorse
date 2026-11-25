@@ -65,6 +65,7 @@ require (
 	github.com/steinfletcher/apitest v1.6.0
 	github.com/stretchr/testify v1.11.1
 	github.com/swaggest/swgui v1.8.5
+	github.com/tinylib/msgp v1.6.1
 	github.com/weaviate/weaviate v1.27.0
 	github.com/weaviate/weaviate-go-client/v4 v4.16.1
 	github.com/x448/float16 v0.8.4
@@ -265,7 +266,6 @@ require (
 	github.com/tidwall/gjson v1.17.1 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.0 // indirect
-	github.com/tinylib/msgp v1.6.1 // indirect
 	github.com/tklauser/go-sysconf v0.3.16 // indirect
 	github.com/tklauser/numcpus v0.11.0 // indirect
 	github.com/tmc/grpc-websocket-proxy v0.0.0-20201229170055-e5319fda7802 // indirect

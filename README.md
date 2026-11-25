@@ -55,6 +55,9 @@ Then, fetch 10 recommended items from Gorse. We can find that LLM-related reposi
 curl http://127.0.0.1:8088/api/recommend/bob?n=10
 ```
 
+The REST API returns JSON by default. To receive MessagePack instead, send `Accept: application/msgpack`.
+To submit a MessagePack body, set `Content-Type: application/msgpack` and send the encoded bytes (for example, with `curl --data-binary @feedback.msgpack`). The request and response formats can be selected independently.
+
 For more information：
 
 - Read [official documents](https://gorse.io/docs/)
