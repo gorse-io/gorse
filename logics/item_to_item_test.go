@@ -15,6 +15,7 @@
 package logics
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"testing"
@@ -112,6 +113,39 @@ func (suite *ItemToItemTestSuite) TestColumnFunc() {
 	count, err = suite.vectorClient.CountVectors(ctx, collection)
 	suite.NoError(err)
 	suite.Equal(int64(2), count)
+}
+
+func (s *ItemToItemTestSuite) TestRefreshItemEmbeddings() {
+	ctx := s.T().Context()
+	cfg := config.ItemToItemConfig{Name: "incremental", Type: "embedding", Column: `item.Comment == "skip" ? nil : item.Labels.v`}
+	coll := vectors.ItemToItemCollection(cfg.Name)
+	refresh := func(ids []string, items map[string]data.Item) error {
+		return RefreshItemEmbeddings(ctx, s.vectorClient, cfg, vectors.VectorConfig{}, ids, items, time.Now())
+	}
+	s.Require().NoError(refresh([]string{"absent"}, nil))
+	collections, err := s.vectorClient.ListCollections(ctx)
+	s.Require().NoError(err)
+	s.Empty(collections)
+	ids := []string{"changed", "gone", "wrong", "filtered", "keep"}
+	items := map[string]data.Item{}
+	for _, id := range ids {
+		items[id] = data.Item{ItemId: id, Labels: map[string]any{"v": []float32{1, 2}}}
+	}
+	s.Require().NoError(refresh(ids, items))
+	items["changed"] = data.Item{ItemId: "changed", IsHidden: true, Categories: []string{"new"}, Labels: map[string]any{"v": []float32{3, 4}}}
+	items["wrong"] = data.Item{ItemId: "wrong", Labels: map[string]any{"v": []float32{3}}}
+	items["filtered"] = data.Item{ItemId: "filtered", Comment: "skip", Labels: items["keep"].Labels}
+	delete(items, "gone")
+	delete(items, "keep")
+	s.Require().NoError(refresh(ids[:4], items))
+	got, err := s.vectorClient.GetVectors(ctx, coll, ids)
+	s.Require().NoError(err)
+	s.Require().Len(got, 2)
+	s.Equal("changed", got[0].Id)
+	s.True(got[0].IsHidden)
+	s.Equal([]string{"new"}, got[0].Categories)
+	s.Equal([]float32{3, 4}, got[0].Float32Values())
+	s.Equal("keep", got[1].Id)
 }
 
 func (suite *ItemToItemTestSuite) TestEmbedding() {
@@ -312,6 +346,44 @@ func (suite *ItemToItemTestSuite) TestAuto() {
 	suite.Len(scores1, 10)
 	for i := 1; i <= 10; i++ {
 		suite.Equal(strconv.Itoa(i*2+1), scores1[i-1].Id)
+	}
+}
+
+// Override only the backend's description; real writes and deletes go to xvec.
+type describedCollection struct {
+	vectors.Database
+	info vectors.CollectionInfo
+}
+
+func (db describedCollection) DescribeCollection(context.Context, string) (*vectors.CollectionInfo, error) {
+	return &db.info, nil
+}
+
+func (s *ItemToItemTestSuite) TestReuseCollection() {
+	ctx := s.T().Context()
+	for _, tc := range []struct {
+		name      string
+		dimension int
+		kind      vectors.QuantizationType
+		bits      int
+	}{
+		{"legacy_empty", -1, vectors.QuantizationNone, 0}, {"sq_default", 2, vectors.QuantizationSQ, 8}, {"pq_default", 2, vectors.QuantizationPQ, 8},
+	} {
+		s.Run(tc.name, func() {
+			cfg := config.ItemToItemConfig{Name: tc.name, Type: "embedding", Column: "item.Labels.v"}
+			name := vectors.ItemToItemCollection(cfg.Name)
+			now := time.Now().UTC()
+			s.Require().NoError(s.vectorClient.AddCollection(ctx, name, 2, vectors.Euclidean, vectors.VectorConfig{}))
+			db := describedCollection{s.vectorClient, vectors.CollectionInfo{Dimension: tc.dimension, Distance: vectors.Euclidean, VectorConfig: vectors.VectorConfig{Type: tc.kind, Bits: tc.bits}}}
+			vc := vectors.VectorConfig{Type: tc.kind}
+			item := data.Item{ItemId: "incremental", Labels: map[string]any{"v": []float32{1, 2}}}
+			s.Require().NoError(RefreshItemEmbeddings(ctx, db, cfg, vc, []string{item.ItemId}, map[string]data.Item{item.ItemId: item}, now))
+			writer := newSimilarityVectorWriter(ctx, db, name, vectors.Euclidean, vc, now, 1, false)
+			s.Require().NoError(writer.Add(vectors.Vector{Id: "full", Values: []float32{3, 4}, Timestamp: now}))
+			got, err := db.GetVectors(ctx, name, []string{"incremental", "full"})
+			s.Require().NoError(err)
+			s.Len(got, 2)
+		})
 	}
 }
 

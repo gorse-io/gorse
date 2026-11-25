@@ -83,6 +83,18 @@ type VectorConfig struct {
 	Bits int
 }
 
+// Matches reports whether a backend-reported configuration satisfies the request.
+func (reported VectorConfig) Matches(request VectorConfig) bool {
+	if request.Bits == 0 && reported.Bits == 8 && (request.Type == QuantizationSQ || request.Type == QuantizationPQ) {
+		request.Bits = 8
+	}
+	return reported == request
+}
+
+// UnknownDenseDimension denotes an empty legacy dense collection without width metadata.
+// Zero is reserved for sparse collections.
+const UnknownDenseDimension = -1
+
 // CollectionInfo describes a vector collection.
 type CollectionInfo struct {
 	Name      string
@@ -155,8 +167,11 @@ type Database interface {
 	AddCollection(ctx context.Context, name string, dimensions int, distance Distance, config VectorConfig) error
 	DeleteCollection(ctx context.Context, name string) error
 	CountVectors(ctx context.Context, collection string) (int64, error)
+	// AddVectors inserts or replaces vectors by ID, including their metadata.
 	AddVectors(ctx context.Context, collection string, vectors []Vector) error
 	GetVectors(ctx context.Context, collection string, ids []string) ([]Vector, error)
+	// DeleteVectorsByID removes the named vectors, ignoring missing IDs.
+	DeleteVectorsByID(ctx context.Context, collection string, ids []string) error
 	DeleteVectors(ctx context.Context, collection string, timestamp time.Time) error
 	QueryVectors(ctx context.Context, collection string, q Vector, categories []string, topK int) ([]ScoredVector, error)
 }

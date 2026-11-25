@@ -153,6 +153,13 @@ func (p *ProxyServer) GetVectors(ctx context.Context, request *protocol.GetVecto
 	return &protocol.GetVectorsResponse{Vectors: pbVectors}, nil
 }
 
+func (p *ProxyServer) DeleteVectorsByID(ctx context.Context, request *protocol.DeleteVectorsByIDRequest) (*protocol.DeleteVectorsByIDResponse, error) {
+	if err := p.database.DeleteVectorsByID(ctx, request.GetCollection(), request.GetIds()); err != nil {
+		return nil, err
+	}
+	return &protocol.DeleteVectorsByIDResponse{}, nil
+}
+
 func (p *ProxyServer) DeleteVectors(ctx context.Context, request *protocol.DeleteVectorsRequest) (*protocol.DeleteVectorsResponse, error) {
 	timestamp := time.Time{}
 	if request.GetTimestamp() != nil {
@@ -319,6 +326,11 @@ func (p ProxyClient) GetVectors(ctx context.Context, collection string, ids []st
 		}
 	}
 	return vectors, nil
+}
+
+func (p ProxyClient) DeleteVectorsByID(ctx context.Context, collection string, ids []string) error {
+	_, err := p.VectorStoreClient.DeleteVectorsByID(ctx, &protocol.DeleteVectorsByIDRequest{Collection: collection, Ids: ids})
+	return err
 }
 
 func (p ProxyClient) DeleteVectors(ctx context.Context, collection string, timestamp time.Time) error {

@@ -61,6 +61,7 @@ func TestNoDatabase(t *testing.T) {
 		vectors, err := database.GetVectors(ctx, "test", []string{"a"})
 		assert.ErrorIs(t, err, storage.ErrNoDatabase)
 		assert.Nil(t, vectors)
+		assert.ErrorIs(t, database.DeleteVectorsByID(ctx, "test", []string{"a"}), storage.ErrNoDatabase)
 		assert.ErrorIs(t, database.DeleteVectors(ctx, "test", time.Now()), storage.ErrNoDatabase)
 		assert.ErrorIs(t, database.DeleteVectors(ctx, "missing", time.Time{}), storage.ErrNoDatabase)
 

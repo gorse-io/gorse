@@ -94,6 +94,12 @@ func NewServer(
 	return s
 }
 
+func (s *Server) loadMetaConfig(raw []byte) error {
+	s.ConfigMutex.Lock()
+	defer s.ConfigMutex.Unlock()
+	return json.Unmarshal(raw, &s.Config)
+}
+
 // Serve starts a server node.
 func (s *Server) Serve() {
 	rand.Seed(time.Now().UTC().UnixNano())
@@ -194,7 +200,7 @@ func (s *Server) Sync() {
 		}
 
 		// load master config
-		err = json.Unmarshal([]byte(meta.Config), &s.Config)
+		err = s.loadMetaConfig([]byte(meta.Config))
 		if err != nil {
 			log.Logger().Error("failed to parse master config", zap.Error(err))
 			goto sleep

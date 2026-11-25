@@ -245,9 +245,24 @@ func (m *Master) loadDataset(parent context.Context) (datasets Datasets, err err
 	return
 }
 
+// loadAndIndexItems excludes incremental consumption from snapshot acquisition
+// through its final write/sweep. Producers can still enqueue throughout.
+func (m *Master) loadAndIndexItems(ctx context.Context) (Datasets, error) {
+	m.itemEmbeddingMu.Lock()
+	defer m.itemEmbeddingMu.Unlock()
+	datasets, err := m.loadDataset(ctx)
+	if err != nil {
+		return Datasets{}, err
+	}
+	if err = m.updateItemToItem(ctx, datasets.rankingDataset); err != nil {
+		log.Logger().Error("failed to update item-to-item recommendation", zap.Error(err))
+	}
+	return datasets, nil
+}
+
 // runLoadDatasetTask loads dataset.
 func (m *Master) runLoadDatasetTask(ctx context.Context) error {
-	datasets, err := m.loadDataset(ctx)
+	datasets, err := m.loadAndIndexItems(ctx)
 	if err != nil {
 		return errors.WithStack(err)
 	}
@@ -255,9 +270,6 @@ func (m *Master) runLoadDatasetTask(ctx context.Context) error {
 	useClickThroughRateTasks := strings.EqualFold(m.Config.Recommend.Ranker.Type, "fm")
 	if err = m.updateUserToUser(ctx, datasets.rankingDataset); err != nil {
 		log.Logger().Error("failed to update user-to-user recommendation", zap.Error(err))
-	}
-	if err = m.updateItemToItem(ctx, datasets.rankingDataset); err != nil {
-		log.Logger().Error("failed to update item-to-item recommendation", zap.Error(err))
 	}
 	if useCollaborativeFilteringTasks {
 		if err = m.trainCollaborativeFiltering(ctx, datasets.rankingTrainSet, datasets.rankingTestSet); err != nil {

@@ -131,6 +131,18 @@ func (suite *SQLiteTestSuite) TearDownSuite() {
 	suite.NoError(suite.Database.Close())
 }
 
+func TestSQLiteBatchGetItemsTerminalError(t *testing.T) {
+	db, err := Open("sqlite://"+t.TempDir()+"/test.db", "")
+	require.NoError(t, err)
+	defer db.Close()
+	// The first row matches; evaluating the second row raises an iterator error.
+	err = db.(*SQLDatabase).gormDB.Exec(`CREATE VIEW items AS SELECT 'a' AS item_id UNION ALL SELECT json('invalid')`).Error
+	require.NoError(t, err)
+	items, err := db.BatchGetItems(t.Context(), []string{"a", "b"}, GetOptions{ReturnId: true})
+	require.ErrorContains(t, err, "malformed JSON")
+	require.Nil(t, items)
+}
+
 func TestSQLite(t *testing.T) {
 	suite.Run(t, new(SQLiteTestSuite))
 }

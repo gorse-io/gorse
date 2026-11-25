@@ -47,6 +47,10 @@ func (NoDatabase) AddVectors(_ context.Context, _ string, _ []Vector) error {
 func (NoDatabase) GetVectors(_ context.Context, _ string, _ []string) ([]Vector, error) {
 	return nil, storage.ErrNoDatabase
 }
+func (NoDatabase) DeleteVectorsByID(_ context.Context, _ string, _ []string) error {
+	return storage.ErrNoDatabase
+}
+
 func (NoDatabase) DeleteVectors(_ context.Context, _ string, _ time.Time) error {
 	return storage.ErrNoDatabase
 }
