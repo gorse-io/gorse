@@ -74,13 +74,14 @@ type Master struct {
 	server.RestServer
 	grpcServer *grpc.Server
 
-	tracer         *monitor.Monitor
-	remoteProgress sync.Map
-	cachePath      string
-	configPath     string
-	standalone     bool
-	openAIClient   *openai.Client
-	ConfigMutex    sync.RWMutex
+	tracer             *monitor.Monitor
+	remoteProgress     sync.Map
+	cachePath          string
+	configPath         string
+	standalone         bool
+	openAIClient       *openai.Client
+	ConfigMutex        sync.RWMutex
+	itemEmbeddingScans map[itemEmbeddingScanKey]time.Time
 
 	// cluster meta cache
 	metaStore  meta.Database

@@ -787,7 +787,16 @@ func (m *Master) LoadDataFromDatabase(
 	return ctrDataset, dataSet, nil
 }
 
+type itemEmbeddingScanKey struct {
+	config.ItemToItemConfig
+	vectors.VectorConfig
+	itemTTL uint // A wider window can admit items older than the checkpoint.
+}
+
 func (m *Master) updateItemToItem(parent context.Context, dataset *dataset.Dataset) error {
+	// A failed scan may have replaced or partially overwritten a collection.
+	previous := m.itemEmbeddingScans
+	m.itemEmbeddingScans = nil
 	if len(m.Config.Recommend.ItemToItem) == 0 {
 		return nil
 	}
@@ -800,14 +809,21 @@ func (m *Master) updateItemToItem(parent context.Context, dataset *dataset.Datas
 		Bits: m.Config.Database.Vector.QuantizationBits,
 	}
 	itemToItemRecommenders := make([]logics.ItemToItem, 0, len(m.Config.Recommend.ItemToItem))
+	next := make(map[itemEmbeddingScanKey]time.Time)
 	for _, cfg := range m.Config.Recommend.ItemToItem {
+		key := itemEmbeddingScanKey{cfg, vectorConfig, m.Config.Recommend.DataSource.ItemTTL}
+		if cfg.Type == "embedding" {
+			// MongoDB stores write times at millisecond precision.
+			next[key] = dataset.GetTimestamp().Truncate(time.Millisecond)
+		}
 		recommender, err := logics.NewItemToItem(cfg, dataset.GetTimestamp(), &logics.ItemToItemOptions{
-			Context:      ctx,
-			VectorClient: m.VectorClient,
-			VectorConfig: vectorConfig,
-			BatchSize:    batchSize,
-			TagsIDF:      dataset.GetItemColumnValuesIDF(),
-			UsersIDF:     dataset.GetUserIDF(),
+			PreviousScanStart: previous[key],
+			Context:           ctx,
+			VectorClient:      m.VectorClient,
+			VectorConfig:      vectorConfig,
+			BatchSize:         batchSize,
+			TagsIDF:           dataset.GetItemColumnValuesIDF(),
+			UsersIDF:          dataset.GetUserIDF(),
 		})
 		if err != nil {
 			return errors.WithStack(err)
@@ -816,15 +832,23 @@ func (m *Master) updateItemToItem(parent context.Context, dataset *dataset.Datas
 	}
 
 	// Add items to item-to-item recommenders
-	if err := parallel.ForEach(ctx, dataset.GetItems(), m.Config.Master.NumJobs, func(i int, item data.Item) {
-		for _, recommender := range itemToItemRecommenders {
+	scanCtx, cancel := context.WithCancelCause(ctx)
+	defer cancel(nil)
+	if err := parallel.ForEach(scanCtx, dataset.GetItems(), m.Config.Master.NumJobs, func(i int, item data.Item) {
+		for j, recommender := range itemToItemRecommenders {
 			if err := recommender.Add(&item, dataset.GetItemFeedback()[i]); err != nil {
+				if m.Config.Recommend.ItemToItem[j].Type == "embedding" {
+					cancel(err)
+					return
+				}
 				log.Logger().Error("failed to add item to item-to-item recommender",
 					zap.String("item_id", item.ItemId), zap.Error(err))
 			}
 			span.Add(1)
 		}
 	}); err != nil {
+		err = context.Cause(scanCtx)
+		span.Fail(err)
 		return errors.WithStack(err)
 	}
 	for _, recommender := range itemToItemRecommenders {
@@ -833,6 +857,7 @@ func (m *Master) updateItemToItem(parent context.Context, dataset *dataset.Datas
 			return errors.WithStack(err)
 		}
 	}
+	m.itemEmbeddingScans = next
 	return nil
 }
 
