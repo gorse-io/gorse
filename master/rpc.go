@@ -19,7 +19,6 @@ import (
 	"encoding/json/v2"
 	"time"
 
-	"github.com/gorse-io/gorse/common/jsonutil"
 	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/protocol"
 	"github.com/gorse-io/gorse/storage/meta"
@@ -41,7 +40,7 @@ func (m *Master) GetMeta(ctx context.Context, nodeInfo *protocol.NodeInfo) (*pro
 	}
 	// marshall config
 	m.ConfigMutex.RLock()
-	s, err := json.Marshal(m.Config, jsonutil.DurationAsNano)
+	s, err := json.Marshal(m.Config)
 	m.ConfigMutex.RUnlock()
 	if err != nil {
 		return nil, err

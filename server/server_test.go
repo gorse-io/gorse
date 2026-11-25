@@ -21,7 +21,6 @@ import (
 	"net"
 	"testing"
 
-	"github.com/gorse-io/gorse/common/jsonutil"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/protocol"
 	"github.com/gorse-io/gorse/storage/cache"
@@ -44,7 +43,7 @@ func newMockMaster(t *testing.T) *mockMaster {
 	cfg := config.GetDefaultConfig()
 	cfg.Database.DataStore = fmt.Sprintf("sqlite://%s/data.db", t.TempDir())
 	cfg.Database.CacheStore = fmt.Sprintf("sqlite://%s/cache.db", t.TempDir())
-	bytes, err := json.Marshal(cfg, jsonutil.DurationAsNano)
+	bytes, err := json.Marshal(cfg)
 	assert.NoError(t, err)
 	return &mockMaster{
 		addr:          make(chan string),

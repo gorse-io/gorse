@@ -20,12 +20,28 @@ import (
 	"time"
 )
 
-// DurationAsNano represents time.Duration as an integer count of nanoseconds.
-var DurationAsNano = json.JoinOptions(
-	json.WithMarshalers(json.MarshalToFunc(func(e *jsontext.Encoder, d time.Duration) error {
-		return e.WriteToken(jsontext.Int(int64(d)))
-	})),
-	json.WithUnmarshalers(json.UnmarshalFromFunc(func(d *jsontext.Decoder, v *time.Duration) error {
-		return json.UnmarshalDecode(d, (*int64)(v))
-	})),
-)
+// MarshalDurationFields encodes durations as Go duration strings within v only.
+func MarshalDurationFields(enc *jsontext.Encoder, v any) error {
+	return json.MarshalEncode(enc, v, json.WithMarshalers(durationMarshaler))
+}
+
+var durationMarshaler = json.MarshalToFunc(func(enc *jsontext.Encoder, d time.Duration) error {
+	return enc.WriteToken(jsontext.String(d.String()))
+})
+
+// UnmarshalDurationFields accepts duration strings, not integer nanoseconds.
+func UnmarshalDurationFields(dec *jsontext.Decoder, v any) error {
+	return json.UnmarshalDecode(dec, v, json.WithUnmarshalers(durationUnmarshaler))
+}
+
+var durationUnmarshaler = json.UnmarshalFromFunc(func(dec *jsontext.Decoder, d *time.Duration) error {
+	var s string
+	if err := json.UnmarshalDecode(dec, &s); err != nil {
+		return err
+	}
+	parsed, err := time.ParseDuration(s)
+	if err == nil {
+		*d = parsed
+	}
+	return err
+})

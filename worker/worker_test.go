@@ -31,7 +31,6 @@ import (
 
 	"github.com/c-bata/goptuna"
 	"github.com/gorse-io/gorse/common/expression"
-	"github.com/gorse-io/gorse/common/jsonutil"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/common/reranker"
@@ -617,7 +616,7 @@ func (suite *WorkerTestSuite) TestRecommendRankerNone() {
 }
 
 func marshal(t *testing.T, v any) string {
-	s, err := json.Marshal(v, jsonutil.DurationAsNano)
+	s, err := json.Marshal(v)
 	assert.NoError(t, err)
 	return string(s)
 }

@@ -20,6 +20,7 @@ import (
 	"encoding/json/v2"
 	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -176,6 +177,26 @@ func (suite *AdminClientTestSuite) TestGetUser() {
 	user, err := suite.client.GetUser(suite.T().Context(), "alice")
 	suite.NoError(err)
 	suite.Equal("alice", user.UserId)
+}
+
+func TestRestoreDuration(t *testing.T) {
+	for _, wire := range []string{`"1.000000007s"`, `1000000007`} {
+		t.Run(wire, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				fmt.Fprintf(w, `{"Users":3,"Duration":%s}`, wire)
+			}))
+			defer srv.Close()
+			stats, err := client.NewAdminClient(srv.URL, "").Restore(strings.NewReader("dump"))
+			if wire[0] != '"' {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, time.Second+7, stats.Duration)
+			require.Equal(t, 3, stats.Users)
+		})
+	}
 }
 
 func TestAdminClient(t *testing.T) {

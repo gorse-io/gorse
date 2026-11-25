@@ -32,7 +32,6 @@ import (
 	"github.com/emicklei/go-restful/v3"
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/gorse-io/gorse/common/expression"
-	"github.com/gorse-io/gorse/common/jsonutil"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/common/mock"
 	"github.com/gorse-io/gorse/config"
@@ -870,7 +869,12 @@ func (suite *MasterAPITestSuite) TestConfig() {
 	suite.Config.Blob.Azure.ConnectionString = "azure-connection-string-secret"
 	redactedConfig, err := suite.Config.Redacted()
 	suite.NoError(err)
-	redactedConfigJSON := marshal(suite.T(), formatConfig(convertToMapStructure(suite.T(), redactedConfig)))
+	redactedConfigMap := formatConfig(convertToMapStructure(suite.T(), redactedConfig))
+	redactedConfigJSON := marshal(suite.T(), redactedConfigMap)
+	redactedConfigMap["recommend"].(map[string]any)["cache_expire"] = 1000000007
+	apitest.New().Handler(suite.handler).Post("/api/dashboard/config").
+		Header("Cookie", suite.cookie).Header("Content-Type", "application/json").
+		Body(marshal(suite.T(), redactedConfigMap)).Expect(suite.T()).Status(http.StatusBadRequest).End()
 	apitest.New().
 		Handler(suite.handler).
 		Get("/api/dashboard/config").
@@ -922,7 +926,7 @@ func (suite *MasterAPITestSuite) TestConfig() {
 		End()
 	suite.Equal("reranker", suite.Config.Recommend.Ranker.Type)
 
-	configBytes, err := json.Marshal(suite.Config.Recommend, jsonutil.DurationAsNano)
+	configBytes, err := json.Marshal(suite.Config.Recommend)
 	suite.NoError(err)
 	err = suite.metaStore.Put(meta.RECOMMEND_CONFIG, string(configBytes))
 	suite.NoError(err)
@@ -1109,6 +1113,10 @@ func (suite *MasterAPITestSuite) TestDumpAndRestore() {
 	w = httptest.NewRecorder()
 	suite.restore(w, req)
 	suite.Equal(http.StatusOK, w.Code)
+	var stats struct{ Duration string }
+	suite.Require().NoError(json.Unmarshal(w.Body.Bytes(), &stats))
+	_, err = time.ParseDuration(stats.Duration)
+	suite.NoError(err)
 
 	// check data
 	_, returnUsers, err := suite.DataClient.GetUsers(ctx, "", len(users))

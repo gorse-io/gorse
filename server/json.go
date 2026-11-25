@@ -38,5 +38,5 @@ func (jsonEntity) Write(resp *restful.Response, status int, v any) error {
 	}
 	resp.Header().Set("Content-Type", restful.MIME_JSON)
 	resp.WriteHeader(status)
-	return json.MarshalWrite(resp, v, jsonutil.DurationAsNano)
+	return json.MarshalWrite(resp, v)
 }

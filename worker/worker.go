@@ -30,7 +30,6 @@ import (
 	"time"
 
 	"github.com/gorse-io/gorse/cmd/version"
-	"github.com/gorse-io/gorse/common/jsonutil"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/common/util"
@@ -159,7 +158,7 @@ func (w *Worker) Sync() {
 		}
 
 		// load master config
-		err = json.Unmarshal([]byte(meta.Config), &w.Config, jsonutil.DurationAsNano, json.MatchCaseInsensitiveNames(true))
+		err = json.Unmarshal([]byte(meta.Config), &w.Config, json.MatchCaseInsensitiveNames(true))
 		if err != nil {
 			log.Logger().Error("failed to parse master config", zap.Error(err))
 			goto sleep

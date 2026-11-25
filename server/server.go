@@ -29,7 +29,6 @@ import (
 
 	"github.com/emicklei/go-restful/v3"
 	"github.com/gorse-io/gorse/cmd/version"
-	"github.com/gorse-io/gorse/common/jsonutil"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/common/util"
 	"github.com/gorse-io/gorse/config"
@@ -195,7 +194,7 @@ func (s *Server) Sync() {
 		}
 
 		// load master config
-		err = json.Unmarshal([]byte(meta.Config), &s.Config, jsonutil.DurationAsNano, json.MatchCaseInsensitiveNames(true))
+		err = json.Unmarshal([]byte(meta.Config), &s.Config, json.MatchCaseInsensitiveNames(true))
 		if err != nil {
 			log.Logger().Error("failed to parse master config", zap.Error(err))
 			goto sleep

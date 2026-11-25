@@ -25,6 +25,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"reflect"
 	"sort"
 	"strings"
 	"time"
@@ -549,7 +550,16 @@ func (m *Master) postConfig(request *restful.Request, response *restful.Response
 	var newConfig config.Config
 	decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
 		DecodeHook: mapstructure.ComposeDecodeHookFunc(
-			mapstructure.StringToTimeDurationHookFunc(),
+			func(_, to reflect.Type, value any) (any, error) {
+				if to != reflect.TypeFor[time.Duration]() {
+					return value, nil
+				}
+				s, ok := value.(string)
+				if !ok {
+					return nil, fmt.Errorf("expected duration string, got %T", value)
+				}
+				return time.ParseDuration(s)
+			},
 			config.StringToFeedbackTypeHookFunc(),
 		),
 		Result: &newConfig,
@@ -574,7 +584,7 @@ func (m *Master) postConfig(request *restful.Request, response *restful.Response
 		server.BadRequest(response, err)
 		return
 	}
-	recommendConfigBytes, err := json.Marshal(newConfig.Recommend, jsonutil.DurationAsNano)
+	recommendConfigBytes, err := json.Marshal(newConfig.Recommend)
 	if err != nil {
 		server.InternalServerError(response, err)
 		return
@@ -1794,6 +1804,16 @@ type DumpStats struct {
 	Items    int
 	Feedback int
 	Duration time.Duration
+}
+
+func (v DumpStats) MarshalJSONTo(enc *jsontext.Encoder) error {
+	type wire DumpStats
+	return jsonutil.MarshalDurationFields(enc, (*wire)(&v))
+}
+
+func (v *DumpStats) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
+	type wire DumpStats
+	return jsonutil.UnmarshalDurationFields(dec, (*wire)(v))
 }
 
 func writeDump[T proto.Message](w io.Writer, data T) error {
