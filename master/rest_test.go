@@ -17,6 +17,7 @@ package master
 import (
 	"bytes"
 	"encoding/base64"
+	jsonv1 "encoding/json"
 	"encoding/json/jsontext"
 	"encoding/json/v2"
 	"fmt"
@@ -1288,17 +1289,15 @@ func (suite *MasterAPITestSuite) TestChatCompletions() {
 	suite.chatCompletions(w, req)
 	suite.Equal(http.StatusOK, w.Code, w.Body.String())
 
-	var chatResponse struct {
-		Choices []openai.ChatCompletionChoice `json:"choices"`
-	}
-	suite.NoError(json.UnmarshalRead(w.Body, &chatResponse))
+	var chatResponse openai.ChatCompletionResponse
+	suite.NoError(json.UnmarshalRead(w.Body, &chatResponse, jsonv1.ReportErrorsWithLegacySemantics(true)))
 	if suite.Len(chatResponse.Choices, 1) {
 		suite.Equal(content, chatResponse.Choices[0].Message.Content)
 	}
 }
 
 func (suite *MasterAPITestSuite) TestChatCompletionsStream() {
-	content := "streaming chat completion proxy"
+	content := "1234567你🙂好 streaming chat completion proxy"
 	buf := bytes.NewBuffer(nil)
 	suite.NoError(json.MarshalWrite(buf, openai.ChatCompletionRequest{
 		Model:  "gpt-test",

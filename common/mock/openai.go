@@ -17,7 +17,7 @@ package mock
 import (
 	"bytes"
 	"crypto/md5"
-	"encoding/json/jsontext"
+	jsonv1 "encoding/json"
 	"encoding/json/v2"
 	"fmt"
 	"net"
@@ -95,27 +95,29 @@ func (s *OpenAIServer) chatCompletion(req *restful.Request, resp *restful.Respon
 		content = "<think>To be or not to be, that is the question.</think>" + content
 	}
 	if r.Stream {
-		for i := 0; i < len(content); i += 8 {
+		runes := []rune(content)
+		for i := 0; i < len(runes); i += 8 {
 			buf := bytes.NewBuffer(nil)
 			buf.WriteString("data: ")
 			_ = json.MarshalWrite(buf, openai.ChatCompletionStreamResponse{
 				Choices: []openai.ChatCompletionStreamChoice{{
 					Delta: openai.ChatCompletionStreamChoiceDelta{
-						Content: content[i:min(i+8, len(content))],
+						Content: string(runes[i:min(i+8, len(runes))]),
 					},
 				}},
-			}, jsontext.AllowInvalidUTF8(true))
+			})
 			buf.WriteString("\n\n")
 			_, _ = resp.Write(buf.Bytes())
 		}
 	} else {
-		_ = resp.WriteEntity(map[string]any{
-			"choices": []openai.ChatCompletionChoice{{
+		resp.Header().Set("Content-Type", restful.MIME_JSON)
+		_ = json.MarshalWrite(resp, openai.ChatCompletionResponse{
+			Choices: []openai.ChatCompletionChoice{{
 				Message: openai.ChatCompletionMessage{
 					Content: content,
 				},
 			}},
-		})
+		}, jsonv1.ReportErrorsWithLegacySemantics(true))
 	}
 }
 

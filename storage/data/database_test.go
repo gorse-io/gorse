@@ -16,6 +16,7 @@ package data
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"strconv"
@@ -1127,18 +1128,18 @@ func TestSortFeedbacks(t *testing.T) {
 
 func TestValidateLabels(t *testing.T) {
 	assert.NoError(t, ValidateLabels(nil))
-	assert.NoError(t, ValidateLabels(jsonutil.Number("1")))
+	assert.NoError(t, ValidateLabels(json.Number("1")))
 	assert.NoError(t, ValidateLabels("label"))
-	assert.NoError(t, ValidateLabels([]any{jsonutil.Number("1"), jsonutil.Number("2"), jsonutil.Number("3")}))
+	assert.NoError(t, ValidateLabels([]any{json.Number("1"), json.Number("2"), json.Number("3")}))
 	assert.NoError(t, ValidateLabels([]any{"1", "2", "3"}))
-	assert.NoError(t, ValidateLabels(map[string]any{"city": jsonutil.Number("1"), "tags": []any{jsonutil.Number("1"), jsonutil.Number("2"), jsonutil.Number("3")}}))
+	assert.NoError(t, ValidateLabels(map[string]any{"city": json.Number("1"), "tags": []any{json.Number("1"), json.Number("2"), json.Number("3")}}))
 	assert.NoError(t, ValidateLabels(map[string]any{"city": "wenzhou", "tags": []any{"1", "2", "3"}}))
-	assert.NoError(t, ValidateLabels(map[string]any{"address": map[string]any{"province": jsonutil.Number("1"), "city": jsonutil.Number("2")}}))
+	assert.NoError(t, ValidateLabels(map[string]any{"address": map[string]any{"province": json.Number("1"), "city": json.Number("2")}}))
 	assert.NoError(t, ValidateLabels(map[string]any{"address": map[string]any{"province": "zhejiang", "city": "wenzhou"}}))
 
-	assert.Error(t, ValidateLabels(map[string]any{"price": 100, "tags": []any{jsonutil.Number("1"), "2", "3"}}))
-	assert.Error(t, ValidateLabels(map[string]any{"city": "wenzhou", "tags": []any{"1", jsonutil.Number("2"), "3"}}))
-	assert.Error(t, ValidateLabels(map[string]any{"city": "wenzhou", "tags": []any{"1", "2", jsonutil.Number("3")}}))
+	assert.Error(t, ValidateLabels(map[string]any{"price": 100, "tags": []any{json.Number("1"), "2", "3"}}))
+	assert.Error(t, ValidateLabels(map[string]any{"city": "wenzhou", "tags": []any{"1", json.Number("2"), "3"}}))
+	assert.Error(t, ValidateLabels(map[string]any{"city": "wenzhou", "tags": []any{"1", "2", json.Number("3")}}))
 }
 
 func benchmarkCountItems(b *testing.B, db Database) {

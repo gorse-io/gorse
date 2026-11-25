@@ -16,6 +16,7 @@ package data
 
 import (
 	"context"
+	"encoding/json"
 	"reflect"
 	"sort"
 	"strings"
@@ -48,9 +49,9 @@ func ValidateLabels(o any) error {
 					return errors.Errorf("unsupported labels: %v", jsonutil.MustMarshal(labels))
 				}
 			}
-		case jsonutil.Number:
+		case json.Number:
 			for _, val := range labels {
-				if _, ok := val.(jsonutil.Number); !ok {
+				if _, ok := val.(json.Number); !ok {
 					return errors.Errorf("unsupported labels: %v", jsonutil.MustMarshal(labels))
 				}
 			}
@@ -65,7 +66,7 @@ func ValidateLabels(o any) error {
 			}
 		}
 		return nil
-	case string, jsonutil.Number:
+	case string, json.Number:
 		return nil
 	default:
 		return errors.Errorf("unsupported type in labels: %v", reflect.TypeOf(labels))

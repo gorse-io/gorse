@@ -16,6 +16,7 @@ package client_test
 
 import (
 	"bytes"
+	jsonv1 "encoding/json"
 	"encoding/json/v2"
 	"fmt"
 	"net/http"
@@ -25,7 +26,6 @@ import (
 	"time"
 
 	"github.com/gorse-io/gorse/client"
-	"github.com/gorse-io/gorse/common/jsonutil"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/master"
@@ -116,7 +116,7 @@ func (suite *AdminClientTestSuite) TestImportExportItems() {
 	suite.Equal(item.IsHidden, stored.IsHidden)
 	suite.Equal(item.Categories, stored.Categories)
 	suite.Equal(item.Timestamp, stored.Timestamp)
-	suite.Equal(map[string]any{"embedding": []any{jsonutil.Number("0.1"), jsonutil.Number("0.2")}}, stored.Labels)
+	suite.Equal(map[string]any{"embedding": []any{jsonv1.Number("0.1"), jsonv1.Number("0.2")}}, stored.Labels)
 	suite.Equal(item.Comment, stored.Comment)
 }
 

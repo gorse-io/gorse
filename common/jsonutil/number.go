@@ -21,14 +21,10 @@ import (
 	"errors"
 )
 
-// Number preserves the original number literal in untyped labels and parameters.
-// Keep the standard type so callers using encoding/json.Number remain compatible.
-type Number = jsonv1.Number
-
 // ExactNumbers decodes numbers in interface values without a float64 round trip.
 var ExactNumbers = json.WithUnmarshalers(json.UnmarshalFromFunc(func(d *jsontext.Decoder, v *any) error {
 	if d.PeekKind() == '0' {
-		*v = Number("")
+		*v = jsonv1.Number("")
 	}
 	return errors.ErrUnsupported
 }))

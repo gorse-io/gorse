@@ -14,6 +14,7 @@
 package ctr
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -21,7 +22,6 @@ import (
 	"time"
 
 	"github.com/gorse-io/gorse/common/floats"
-	"github.com/gorse-io/gorse/common/jsonutil"
 	"github.com/gorse-io/gorse/dataset"
 	"github.com/samber/lo"
 	"github.com/stretchr/testify/assert"
@@ -65,9 +65,9 @@ func TestConvertLabels(t *testing.T) {
 	}, features)
 
 	// numerical features
-	features = ConvertLabels(jsonutil.Number("1"))
+	features = ConvertLabels(json.Number("1"))
 	assert.Equal(t, []Label{{Name: "", Value: 1}}, features)
-	features = ConvertLabels(map[string]any{"city": "wenzhou", "tags": jsonutil.Number("0.5")})
+	features = ConvertLabels(map[string]any{"city": "wenzhou", "tags": json.Number("0.5")})
 	assert.ElementsMatch(t, []Label{
 		{Name: "city.wenzhou", Value: 1},
 		{Name: "tags.", Value: 0.5},
@@ -84,7 +84,7 @@ func TestConvertEmbeddings(t *testing.T) {
 	embeddings := ConvertEmbeddings(nil)
 	assert.Nil(t, embeddings)
 
-	embeddings = ConvertEmbeddings([]any{jsonutil.Number("1.25"), jsonutil.Number("-2e0")})
+	embeddings = ConvertEmbeddings([]any{json.Number("1.25"), json.Number("-2e0")})
 	assert.Equal(t, []Embedding{{Value: floats.FromFloat32([]float32{1.25, -2})}}, embeddings)
 
 	embeddings = ConvertEmbeddings([]float32{1, 2, 3})

@@ -15,11 +15,11 @@
 package model
 
 import (
+	"encoding/json"
 	"maps"
 	"reflect"
 	"strconv"
 
-	"github.com/gorse-io/gorse/common/jsonutil"
 	"github.com/gorse-io/gorse/common/log"
 	"go.uber.org/zap"
 )
@@ -88,7 +88,7 @@ func (parameters Params) GetBool(name ParamName, _default bool) bool {
 func (parameters Params) GetInt(name ParamName, _default int) int {
 	if val, exist := parameters[name]; exist {
 		switch val := val.(type) {
-		case jsonutil.Number:
+		case json.Number:
 			n, err := strconv.Atoi(val.String())
 			if err == nil {
 				return n
@@ -109,7 +109,7 @@ func (parameters Params) GetInt(name ParamName, _default int) int {
 func (parameters Params) GetInt64(name ParamName, _default int64) int64 {
 	if val, exist := parameters[name]; exist {
 		switch val := val.(type) {
-		case jsonutil.Number:
+		case json.Number:
 			n, err := val.Int64()
 			if err == nil {
 				return n
@@ -130,7 +130,7 @@ func (parameters Params) GetInt64(name ParamName, _default int64) int64 {
 func (parameters Params) GetFloat32(name ParamName, _default float32) float32 {
 	if val, exist := parameters[name]; exist {
 		switch val := val.(type) {
-		case jsonutil.Number:
+		case json.Number:
 			n, err := strconv.ParseFloat(val.String(), 32)
 			if err == nil {
 				return float32(n)
