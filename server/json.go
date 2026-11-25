@@ -48,5 +48,6 @@ func (jsonEntity) Write(resp *restful.Response, status int, v any) error {
 	}
 	resp.Header().Set("Content-Type", restful.MIME_JSON)
 	resp.WriteHeader(status)
-	return json.MarshalWrite(resp, v, jsonv1.FormatDurationAsNano(true))
+	// Some SDK response types embed unexported transport metadata. Ignore it as before.
+	return json.MarshalWrite(resp, v, jsonv1.FormatDurationAsNano(true), jsonv1.ReportErrorsWithLegacySemantics(true))
 }

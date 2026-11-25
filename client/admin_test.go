@@ -16,6 +16,7 @@ package client_test
 
 import (
 	"bytes"
+	jsonv1 "encoding/json"
 	"encoding/json/v2"
 	"fmt"
 	"net/http"
@@ -115,7 +116,7 @@ func (suite *AdminClientTestSuite) TestImportExportItems() {
 	suite.Equal(item.IsHidden, stored.IsHidden)
 	suite.Equal(item.Categories, stored.Categories)
 	suite.Equal(item.Timestamp, stored.Timestamp)
-	suite.Equal(item.Labels, stored.Labels)
+	suite.Equal(map[string]any{"embedding": []any{jsonv1.Number("0.1"), jsonv1.Number("0.2")}}, stored.Labels)
 	suite.Equal(item.Comment, stored.Comment)
 }
 

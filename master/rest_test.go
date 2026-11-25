@@ -64,7 +64,7 @@ func marshalJSONLines[T any](t *testing.T, v []T) string {
 	var buf bytes.Buffer
 	encoder := jsontext.NewEncoder(&buf)
 	for _, item := range v {
-		err := json.MarshalEncode(encoder, item, json.Deterministic(true))
+		err := json.MarshalEncode(encoder, item, json.Deterministic(true), json.FormatNilSliceAsNull(true))
 		assert.NoError(t, err)
 	}
 	return buf.String()
@@ -1285,7 +1285,7 @@ func (suite *MasterAPITestSuite) TestChatCompletions() {
 	suite.Equal(http.StatusOK, w.Code, w.Body.String())
 
 	var chatResponse openai.ChatCompletionResponse
-	suite.NoError(json.UnmarshalRead(w.Body, &chatResponse))
+	suite.NoError(json.UnmarshalRead(w.Body, &chatResponse, jsonv1.ReportErrorsWithLegacySemantics(true)))
 	if suite.Len(chatResponse.Choices, 1) {
 		suite.Equal(content, chatResponse.Choices[0].Message.Content)
 	}

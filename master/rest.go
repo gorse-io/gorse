@@ -1402,7 +1402,7 @@ func (m *Master) importExportUsers(response http.ResponseWriter, request *http.R
 		userStream, errChan := m.DataClient.GetUserStream(ctx, batchSize)
 		for users := range userStream {
 			for _, user := range users {
-				if err = json.MarshalEncode(encoder, user, json.Deterministic(true)); err != nil {
+				if err = json.MarshalEncode(encoder, user, json.Deterministic(true), json.FormatNilSliceAsNull(true)); err != nil {
 					server.InternalServerError(restful.NewResponse(response), err)
 					return
 				}
@@ -1500,7 +1500,7 @@ func (m *Master) importExportItems(response http.ResponseWriter, request *http.R
 		itemStream, errChan := m.DataClient.GetItemStream(ctx, batchSize, nil)
 		for items := range itemStream {
 			for _, item := range items {
-				if err = json.MarshalEncode(encoder, item, json.Deterministic(true)); err != nil {
+				if err = json.MarshalEncode(encoder, item, json.Deterministic(true), json.FormatNilSliceAsNull(true)); err != nil {
 					server.InternalServerError(restful.NewResponse(response), err)
 					return
 				}
@@ -1618,7 +1618,7 @@ func (m *Master) importExportFeedback(response http.ResponseWriter, request *htt
 		feedbackStream, errChan := m.DataClient.GetFeedbackStream(ctx, batchSize, data.WithEndTime(*m.Config.Now()))
 		for feedback := range feedbackStream {
 			for _, v := range feedback {
-				if err = json.MarshalEncode(encoder, v, json.Deterministic(true)); err != nil {
+				if err = json.MarshalEncode(encoder, v, json.Deterministic(true), json.FormatNilSliceAsNull(true)); err != nil {
 					server.InternalServerError(restful.NewResponse(response), err)
 					return
 				}
@@ -2170,7 +2170,7 @@ func (m *Master) chatCompletions(response http.ResponseWriter, request *http.Req
 			return
 		}
 		response.Header().Set("Content-Type", restful.MIME_JSON)
-		if err := json.MarshalWrite(response, chatResponse); err != nil {
+		if err := json.MarshalWrite(response, chatResponse, jsonv1.ReportErrorsWithLegacySemantics(true)); err != nil {
 			log.Logger().Error("failed to write response", zap.Error(err))
 		}
 		return
