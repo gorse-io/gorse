@@ -17,7 +17,6 @@ package cache
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"fmt"
 	"math"
 	"strings"
@@ -28,6 +27,7 @@ import (
 	mapset "github.com/deckarep/golang-set/v2"
 	"github.com/go-sql-driver/mysql"
 	"github.com/gorse-io/gorse/storage"
+	"github.com/gorse-io/gorse/storage/internal/jsoncodec"
 	"github.com/lib/pq"
 	"github.com/pkg/errors"
 	"github.com/samber/lo"
@@ -357,7 +357,7 @@ func (db *SQLDatabase) SearchScores(ctx context.Context, collection, subset stri
 		case Postgres:
 			tx.Where("categories @> ?", pq.StringArray(query))
 		case SQLite, MySQL:
-			q, err := json.Marshal(query)
+			q, err := jsoncodec.Marshal(query)
 			if err != nil {
 				return nil, errors.WithStack(err)
 			}
@@ -424,7 +424,7 @@ func (db *SQLDatabase) UpdateScores(ctx context.Context, collections []string, s
 		case Postgres:
 			tx.Update("categories", pq.StringArray(patch.Categories))
 		case SQLite, MySQL:
-			q, err := json.Marshal(patch.Categories)
+			q, err := jsoncodec.Marshal(patch.Categories)
 			if err != nil {
 				return errors.WithStack(err)
 			}

@@ -16,7 +16,8 @@ package server
 
 import (
 	"context"
-	"encoding/json"
+	jsonv1 "encoding/json"
+	"encoding/json/v2"
 	"fmt"
 	"net"
 	"testing"
@@ -43,7 +44,7 @@ func newMockMaster(t *testing.T) *mockMaster {
 	cfg := config.GetDefaultConfig()
 	cfg.Database.DataStore = fmt.Sprintf("sqlite://%s/data.db", t.TempDir())
 	cfg.Database.CacheStore = fmt.Sprintf("sqlite://%s/cache.db", t.TempDir())
-	bytes, err := json.Marshal(cfg)
+	bytes, err := json.Marshal(cfg, jsonv1.DefaultOptionsV1())
 	assert.NoError(t, err)
 	return &mockMaster{
 		addr:          make(chan string),

@@ -37,6 +37,12 @@ func TestMarshal(t *testing.T) {
 	assert.Equal(t, "null", string(data))
 }
 
+func TestMarshalNilSlice(t *testing.T) {
+	var ids []string
+	assert.Equal(t, `[]`, MustMarshal(ids))
+	assert.Equal(t, `{"Ids":[]}`, MustMarshal(struct{ Ids []string }{ids}))
+}
+
 func TestMustMarshal(t *testing.T) {
 	assert.Panics(t, func() {
 		MustMarshal(make(chan int))

@@ -16,7 +16,8 @@ package master
 
 import (
 	"context"
-	"encoding/json"
+	jsonv1 "encoding/json"
+	"encoding/json/v2"
 	"fmt"
 	"math"
 	"math/rand"
@@ -169,7 +170,7 @@ func (m *Master) applyRecommendOverride(cfg *config.Config) error {
 	if metaStr == nil {
 		return nil
 	}
-	if err = json.Unmarshal([]byte(*metaStr), &cfg.Recommend); err != nil {
+	if err = json.Unmarshal([]byte(*metaStr), &cfg.Recommend, jsonv1.DefaultOptionsV1()); err != nil {
 		return errors.WithStack(err)
 	}
 	return nil

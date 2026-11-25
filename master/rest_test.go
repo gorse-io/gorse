@@ -17,7 +17,9 @@ package master
 import (
 	"bytes"
 	"encoding/base64"
-	"encoding/json"
+	jsonv1 "encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 	"mime/multipart"
 	"net/http"
@@ -60,9 +62,9 @@ func marshal(t *testing.T, v any) string {
 
 func marshalJSONLines[T any](t *testing.T, v []T) string {
 	var buf bytes.Buffer
-	encoder := json.NewEncoder(&buf)
+	encoder := jsontext.NewEncoder(&buf)
 	for _, item := range v {
-		err := encoder.Encode(item)
+		err := json.MarshalEncode(encoder, item, json.Deterministic(true))
 		assert.NoError(t, err)
 	}
 	return buf.String()
@@ -154,6 +156,12 @@ func (suite *MasterAPITestSuite) TearDownTest() {
 	suite.NoError(err)
 	err = suite.openAIServer.Close()
 	suite.NoError(err)
+}
+
+func (suite *MasterAPITestSuite) TestEmptyClusterJSON() {
+	apitest.New().Handler(suite.handler).Get("/api/dashboard/cluster").
+		Header("Cookie", suite.cookie).Expect(suite.T()).Status(http.StatusOK).
+		Header("Content-Type", restful.MIME_JSON).Body(`[]`).End()
 }
 
 func (suite *MasterAPITestSuite) TestExportUsers() {
@@ -913,7 +921,7 @@ func (suite *MasterAPITestSuite) TestConfig() {
 		End()
 	suite.Equal("reranker", suite.Config.Recommend.Ranker.Type)
 
-	configBytes, err := json.Marshal(suite.Config.Recommend)
+	configBytes, err := json.Marshal(suite.Config.Recommend, jsonv1.DefaultOptionsV1())
 	suite.NoError(err)
 	err = suite.metaStore.Put(meta.RECOMMEND_CONFIG, string(configBytes))
 	suite.NoError(err)
@@ -1264,7 +1272,7 @@ func (suite *MasterAPITestSuite) TestChatCompletions() {
 		" my mind ever since. \"Whenever you feel like criticizing any one,\" he told me, \" just remember that all " +
 		"the people in this world haven't had the advantages that you've had.\""
 	buf := bytes.NewBuffer(nil)
-	suite.NoError(json.NewEncoder(buf).Encode(openai.ChatCompletionRequest{
+	suite.NoError(json.MarshalWrite(buf, openai.ChatCompletionRequest{
 		Model: "gpt-test",
 		Messages: []openai.ChatCompletionMessage{
 			{Role: openai.ChatMessageRoleUser, Content: content},
@@ -1277,7 +1285,7 @@ func (suite *MasterAPITestSuite) TestChatCompletions() {
 	suite.Equal(http.StatusOK, w.Code, w.Body.String())
 
 	var chatResponse openai.ChatCompletionResponse
-	suite.NoError(json.NewDecoder(w.Body).Decode(&chatResponse))
+	suite.NoError(json.UnmarshalRead(w.Body, &chatResponse))
 	if suite.Len(chatResponse.Choices, 1) {
 		suite.Equal(content, chatResponse.Choices[0].Message.Content)
 	}
@@ -1286,7 +1294,7 @@ func (suite *MasterAPITestSuite) TestChatCompletions() {
 func (suite *MasterAPITestSuite) TestChatCompletionsStream() {
 	content := "streaming chat completion proxy"
 	buf := bytes.NewBuffer(nil)
-	suite.NoError(json.NewEncoder(buf).Encode(openai.ChatCompletionRequest{
+	suite.NoError(json.MarshalWrite(buf, openai.ChatCompletionRequest{
 		Model:  "gpt-test",
 		Stream: true,
 		Messages: []openai.ChatCompletionMessage{

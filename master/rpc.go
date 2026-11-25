@@ -16,7 +16,8 @@ package master
 
 import (
 	"context"
-	"encoding/json"
+	jsonv1 "encoding/json"
+	"encoding/json/v2"
 	"time"
 
 	"github.com/gorse-io/gorse/common/monitor"
@@ -40,7 +41,7 @@ func (m *Master) GetMeta(ctx context.Context, nodeInfo *protocol.NodeInfo) (*pro
 	}
 	// marshall config
 	m.ConfigMutex.RLock()
-	s, err := json.Marshal(m.Config)
+	s, err := json.Marshal(m.Config, jsonv1.DefaultOptionsV1())
 	m.ConfigMutex.RUnlock()
 	if err != nil {
 		return nil, err

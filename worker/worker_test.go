@@ -17,7 +17,9 @@ package worker
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+	jsonv1 "encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 	"io"
 	"math/rand"
@@ -616,7 +618,7 @@ func (suite *WorkerTestSuite) TestRecommendRankerNone() {
 }
 
 func marshal(t *testing.T, v any) string {
-	s, err := json.Marshal(v)
+	s, err := json.Marshal(v, jsonv1.DefaultOptionsV1())
 	assert.NoError(t, err)
 	return string(s)
 }
@@ -849,10 +851,10 @@ func (suite *WorkerTestSuite) TestRankByDecision() {
 	suite.Config.Recommend.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{expression.MustParseFeedbackTypeExpression("like")}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var request struct {
-			State     string                     `json:"state"`
-			Questions map[string]json.RawMessage `json:"questions"`
+			State     string                    `json:"state"`
+			Questions map[string]jsontext.Value `json:"questions"`
 		}
-		suite.Require().NoError(json.NewDecoder(r.Body).Decode(&request))
+		suite.Require().NoError(json.UnmarshalRead(r.Body, &request))
 		suite.Equal("u1: 5", request.State)
 		suite.Len(request.Questions, 2)
 		_, _ = w.Write([]byte(`{"answers":{"1":{"type":"noul","noul":0.15},"2":{"type":"noul","noul":0.85}}}`))

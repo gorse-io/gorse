@@ -16,7 +16,8 @@ package server
 
 import (
 	"context"
-	"encoding/json"
+	jsonv1 "encoding/json"
+	"encoding/json/v2"
 	"fmt"
 	"io"
 	"net/http"
@@ -2116,6 +2117,12 @@ type HealthStatus struct {
 	CacheStoreConnected bool
 }
 
+// MarshalJSON preserves the health endpoint's representation of opaque database errors.
+func (h HealthStatus) MarshalJSON() ([]byte, error) {
+	type healthStatus HealthStatus
+	return json.Marshal(healthStatus(h), jsonv1.DefaultOptionsV1())
+}
+
 func (s *RestServer) checkHealth() HealthStatus {
 	healthStatus := HealthStatus{}
 	healthStatus.DataStoreError = s.DataClient.Ping()
@@ -2183,7 +2190,7 @@ func PageNotFound(response *restful.Response, err error) {
 // Ok sends the content as JSON to the client.
 func Ok(response *restful.Response, content any) {
 	response.AddHeader("Access-Control-Allow-Origin", "*")
-	if err := response.WriteAsJson(content); err != nil {
+	if err := (jsonEntity{}).Write(response, http.StatusOK, content); err != nil {
 		log.ResponseLogger(response).Error("failed to write json", zap.Error(err))
 	}
 }

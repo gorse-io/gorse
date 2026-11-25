@@ -18,7 +18,8 @@ import (
 	"context"
 	"crypto/md5"
 	"encoding/hex"
-	"encoding/json"
+	jsonv1 "encoding/json"
+	"encoding/json/v2"
 	"fmt"
 	"math/rand"
 	"net"
@@ -158,7 +159,7 @@ func (w *Worker) Sync() {
 		}
 
 		// load master config
-		err = json.Unmarshal([]byte(meta.Config), &w.Config)
+		err = json.Unmarshal([]byte(meta.Config), &w.Config, jsonv1.DefaultOptionsV1())
 		if err != nil {
 			log.Logger().Error("failed to parse master config", zap.Error(err))
 			goto sleep
@@ -368,7 +369,7 @@ func (w *Worker) close() {
 
 func writeJSON(w http.ResponseWriter, content any) {
 	w.WriteHeader(http.StatusOK)
-	bytes, err := json.Marshal(content)
+	bytes, err := json.Marshal(content, jsonv1.DefaultOptionsV1())
 	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 	}
@@ -528,7 +529,7 @@ func (w *Worker) checkReady(writer http.ResponseWriter, _ *http.Request) {
 	if healthStatus.Ready {
 		writeJSON(writer, healthStatus)
 	} else {
-		errReason, err := json.Marshal(healthStatus)
+		errReason, err := json.Marshal(healthStatus, jsonv1.DefaultOptionsV1())
 		if err != nil {
 			writeError(writer, err.Error(), http.StatusInternalServerError)
 		} else {

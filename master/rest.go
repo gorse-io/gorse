@@ -18,7 +18,9 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/binary"
-	"encoding/json"
+	jsonv1 "encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 	"io"
 	"net/http"
@@ -571,7 +573,7 @@ func (m *Master) postConfig(request *restful.Request, response *restful.Response
 		server.BadRequest(response, err)
 		return
 	}
-	recommendConfigBytes, err := json.Marshal(newConfig.Recommend)
+	recommendConfigBytes, err := json.Marshal(newConfig.Recommend, jsonv1.DefaultOptionsV1())
 	if err != nil {
 		server.InternalServerError(response, err)
 		return
@@ -1396,11 +1398,11 @@ func (m *Master) importExportUsers(response http.ResponseWriter, request *http.R
 		var err error
 		response.Header().Set("Content-Type", "application/jsonl")
 		response.Header().Set("Content-Disposition", "attachment;filename=users.jsonl")
-		encoder := json.NewEncoder(response)
+		encoder := jsontext.NewEncoder(response)
 		userStream, errChan := m.DataClient.GetUserStream(ctx, batchSize)
 		for users := range userStream {
 			for _, user := range users {
-				if err = encoder.Encode(user); err != nil {
+				if err = json.MarshalEncode(encoder, user, json.Deterministic(true)); err != nil {
 					server.InternalServerError(restful.NewResponse(response), err)
 					return
 				}
@@ -1419,14 +1421,14 @@ func (m *Master) importExportUsers(response http.ResponseWriter, request *http.R
 		}
 		defer file.Close()
 		// parse and import users
-		decoder := json.NewDecoder(file)
+		decoder := jsontext.NewDecoder(file)
 		lineCount := 0
 		timeStart := time.Now()
 		users := make([]data.User, 0, batchSize)
 		for {
 			// parse line
 			var user data.User
-			if err = decoder.Decode(&user); err != nil {
+			if err = json.UnmarshalDecode(decoder, &user); err != nil {
 				if errors.Is(err, io.EOF) {
 					break
 				}
@@ -1494,11 +1496,11 @@ func (m *Master) importExportItems(response http.ResponseWriter, request *http.R
 		var err error
 		response.Header().Set("Content-Type", "application/jsonl")
 		response.Header().Set("Content-Disposition", "attachment;filename=items.jsonl")
-		encoder := json.NewEncoder(response)
+		encoder := jsontext.NewEncoder(response)
 		itemStream, errChan := m.DataClient.GetItemStream(ctx, batchSize, nil)
 		for items := range itemStream {
 			for _, item := range items {
-				if err = encoder.Encode(item); err != nil {
+				if err = json.MarshalEncode(encoder, item, json.Deterministic(true)); err != nil {
 					server.InternalServerError(restful.NewResponse(response), err)
 					return
 				}
@@ -1517,14 +1519,14 @@ func (m *Master) importExportItems(response http.ResponseWriter, request *http.R
 		}
 		defer file.Close()
 		// parse and import items
-		decoder := json.NewDecoder(file)
+		decoder := jsontext.NewDecoder(file)
 		lineCount := 0
 		timeStart := time.Now()
 		items := make([]data.Item, 0, batchSize)
 		for {
 			// parse line
 			var item server.Item
-			if err = decoder.Decode(&item); err != nil {
+			if err = json.UnmarshalDecode(decoder, &item); err != nil {
 				if errors.Is(err, io.EOF) {
 					break
 				}
@@ -1612,11 +1614,11 @@ func (m *Master) importExportFeedback(response http.ResponseWriter, request *htt
 		var err error
 		response.Header().Set("Content-Type", "application/jsonl")
 		response.Header().Set("Content-Disposition", "attachment;filename=feedback.jsonl")
-		encoder := json.NewEncoder(response)
+		encoder := jsontext.NewEncoder(response)
 		feedbackStream, errChan := m.DataClient.GetFeedbackStream(ctx, batchSize, data.WithEndTime(*m.Config.Now()))
 		for feedback := range feedbackStream {
 			for _, v := range feedback {
-				if err = encoder.Encode(v); err != nil {
+				if err = json.MarshalEncode(encoder, v, json.Deterministic(true)); err != nil {
 					server.InternalServerError(restful.NewResponse(response), err)
 					return
 				}
@@ -1635,14 +1637,14 @@ func (m *Master) importExportFeedback(response http.ResponseWriter, request *htt
 		}
 		defer file.Close()
 		// parse and import feedback
-		decoder := json.NewDecoder(file)
+		decoder := jsontext.NewDecoder(file)
 		lineCount := 0
 		timeStart := time.Now()
 		feedbacks := make([]data.Feedback, 0, batchSize)
 		for {
 			// parse line
 			var feedback server.Feedback
-			if err = decoder.Decode(&feedback); err != nil {
+			if err = json.UnmarshalDecode(decoder, &feedback); err != nil {
 				if errors.Is(err, io.EOF) {
 					break
 				}
@@ -2149,7 +2151,7 @@ func (m *Master) chatCompletions(response http.ResponseWriter, request *http.Req
 	}
 
 	var chatRequest openai.ChatCompletionRequest
-	if err := json.NewDecoder(request.Body).Decode(&chatRequest); err != nil {
+	if err := json.UnmarshalRead(request.Body, &chatRequest); err != nil {
 		writeError(response, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -2168,7 +2170,7 @@ func (m *Master) chatCompletions(response http.ResponseWriter, request *http.Req
 			return
 		}
 		response.Header().Set("Content-Type", restful.MIME_JSON)
-		if err := json.NewEncoder(response).Encode(chatResponse); err != nil {
+		if err := json.MarshalWrite(response, chatResponse); err != nil {
 			log.Logger().Error("failed to write response", zap.Error(err))
 		}
 		return
@@ -2208,11 +2210,11 @@ func (m *Master) chatCompletions(response http.ResponseWriter, request *http.Req
 			log.Logger().Error("failed to write response", zap.Error(err))
 			return
 		}
-		if err = json.NewEncoder(response).Encode(resp); err != nil {
+		if err = json.MarshalWrite(response, resp); err != nil {
 			log.Logger().Error("failed to write response", zap.Error(err))
 			return
 		}
-		if _, err = response.Write([]byte("\n")); err != nil {
+		if _, err = response.Write([]byte("\n\n")); err != nil {
 			log.Logger().Error("failed to write response", zap.Error(err))
 			return
 		}

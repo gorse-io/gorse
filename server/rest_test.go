@@ -14,7 +14,8 @@
 package server
 
 import (
-	"encoding/json"
+	jsonv1 "encoding/json"
+	"encoding/json/v2"
 	"fmt"
 	"io"
 	"net/http"
@@ -866,12 +867,12 @@ func (suite *ServerTestSuite) TestSearchEmbedding() {
 			Model      string `json:"model"`
 			Dimensions int    `json:"dimensions"`
 		}
-		suite.NoError(json.NewDecoder(r.Body).Decode(&request))
+		suite.NoError(json.UnmarshalRead(r.Body, &request))
 		suite.Equal(query, request.Input)
 		suite.Equal("test-embedding-model", request.Model)
 		suite.Equal(len(embedding), request.Dimensions)
 		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(map[string]any{
+		_ = json.MarshalWrite(w, map[string]any{
 			"data": []map[string]any{{"embedding": embedding}},
 		})
 	}))
@@ -921,7 +922,7 @@ func (suite *ServerTestSuite) TestFeedback() {
 	feedback := []data.Feedback{
 		{FeedbackType: "click", UserId: "0", ItemId: "0", Value: 1.0},
 		{FeedbackType: "click", UserId: "1", ItemId: "2", Value: 1.0, Labels: []any{"positive", "mobile"}},
-		{FeedbackType: "click", UserId: "2", ItemId: "4", Value: 1.0, Labels: map[string]any{"source": "rest", "rank": json.Number("2")}},
+		{FeedbackType: "click", UserId: "2", ItemId: "4", Value: 1.0, Labels: map[string]any{"source": "rest", "rank": jsonv1.Number("2")}},
 		{FeedbackType: "click", UserId: "3", ItemId: "6", Value: 1.0},
 		{FeedbackType: "click", UserId: "4", ItemId: "8", Value: 1.0},
 	}
@@ -1946,7 +1947,8 @@ func (suite *ServerTestSuite) TestSessionRecommend() {
 		JSON(feedback).
 		Expect(suite.T()).
 		Status(http.StatusOK).
-		Body(suite.marshal([]cache.Score(nil))).
+		Header("Content-Type", restful.MIME_JSON).
+		Body(`[]`).
 		End()
 	suite.Config.Recommend.Fallback.Recommenders = []string{"item_based"}
 	apitest.New().

@@ -15,7 +15,7 @@
 package logics
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -84,7 +84,7 @@ func TestDecision(t *testing.T) {
 				Criteria     []string `json:"criteria"`
 			} `json:"questions"`
 		}
-		require.NoError(t, json.NewDecoder(r.Body).Decode(&request))
+		require.NoError(t, json.UnmarshalRead(r.Body, &request))
 		require.Equal(t, "test-model", request.Model)
 		require.Equal(t, "u1: history", request.State)
 		require.Len(t, request.Questions, 2)

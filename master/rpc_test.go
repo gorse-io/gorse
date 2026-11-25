@@ -15,7 +15,8 @@
 package master
 
 import (
-	"encoding/json"
+	jsonv1 "encoding/json"
+	"encoding/json/v2"
 	"fmt"
 	"net"
 	"os"
@@ -153,7 +154,7 @@ func TestRPC(t *testing.T) {
 	assert.Equal(t, []string{"server1"}, metaResp.Servers)
 	assert.Equal(t, []string{"worker1"}, metaResp.Workers)
 	var cfg config.Config
-	err = json.Unmarshal([]byte(metaResp.Config), &cfg)
+	err = json.Unmarshal([]byte(metaResp.Config), &cfg, jsonv1.DefaultOptionsV1())
 	assert.NoError(t, err)
 	assert.Equal(t, rpcServer.Config, &cfg)
 
@@ -186,7 +187,7 @@ func TestReloadConfig(t *testing.T) {
 	})
 	assert.NoError(t, err)
 	var cfg config.Config
-	assert.NoError(t, json.Unmarshal([]byte(metaResp.Config), &cfg))
+	assert.NoError(t, json.Unmarshal([]byte(metaResp.Config), &cfg, jsonv1.DefaultOptionsV1()))
 	assert.Equal(t, 42, cfg.Server.DefaultN)
 }
 

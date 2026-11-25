@@ -27,10 +27,10 @@ import (
 	mapset "github.com/deckarep/golang-set/v2"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/gorse-io/gorse/common/expression"
-	"github.com/gorse-io/gorse/common/jsonutil"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/storage"
+	"github.com/gorse-io/gorse/storage/internal/jsoncodec"
 	_ "github.com/lib/pq"
 	"github.com/pkg/errors"
 	"github.com/samber/lo"
@@ -151,11 +151,11 @@ func NewSQLItem(item Item) (sqlItem SQLItem) {
 	var buf []byte
 	sqlItem.ItemId = item.ItemId
 	sqlItem.IsHidden = item.IsHidden
-	buf, _ = jsonutil.Marshal(item.Categories)
+	buf, _ = jsoncodec.Marshal(item.Categories)
 	sqlItem.Categories = string(buf)
 	sqlItem.Timestamp = item.Timestamp
 	sqlItem.UpdateAt = item.UpdateAt
-	buf, _ = jsonutil.Marshal(item.Labels)
+	buf, _ = jsoncodec.Marshal(item.Labels)
 	sqlItem.Labels = string(buf)
 	sqlItem.Comment = item.Comment
 	return
@@ -172,7 +172,7 @@ func NewSQLUser(user User) (sqlUser SQLUser) {
 	var buf []byte
 	sqlUser.UserId = user.UserId
 	sqlUser.UpdateAt = user.UpdateAt
-	buf, _ = jsonutil.Marshal(user.Labels)
+	buf, _ = jsoncodec.Marshal(user.Labels)
 	sqlUser.Labels = string(buf)
 	sqlUser.Comment = user.Comment
 	return
@@ -702,7 +702,7 @@ func (d *SQLDatabase) BatchGetItems(ctx context.Context, itemIds []string, opts 
 		Where("item_id IN ?", itemIds)
 	// Add category filter if specified (using JSON functions for portability)
 	if len(opts.Categories) > 0 {
-		q, err := jsonutil.Marshal(opts.Categories)
+		q, err := jsoncodec.Marshal(opts.Categories)
 		if err != nil {
 			return nil, errors.WithStack(err)
 		}
@@ -847,14 +847,14 @@ func (d *SQLDatabase) ModifyItem(ctx context.Context, itemId string, patch ItemP
 		}
 	}
 	if patch.Categories != nil {
-		text, _ := jsonutil.Marshal(patch.Categories)
+		text, _ := jsoncodec.Marshal(patch.Categories)
 		attributes["categories"] = string(text)
 	}
 	if patch.Comment != nil {
 		attributes["comment"] = *patch.Comment
 	}
 	if patch.Labels != nil {
-		text, _ := jsonutil.Marshal(patch.Labels)
+		text, _ := jsoncodec.Marshal(patch.Labels)
 		attributes["labels"] = string(text)
 	}
 	if patch.Timestamp != nil {
@@ -907,7 +907,7 @@ func (d *SQLDatabase) GetLatestItems(ctx context.Context, n int, categories []st
 		Select("item_id, is_hidden, categories, time_stamp, labels, comment, update_at").
 		Where("is_hidden = ?", false)
 	if len(categories) > 0 {
-		q, err := jsonutil.Marshal(categories)
+		q, err := jsoncodec.Marshal(categories)
 		if err != nil {
 			return nil, errors.WithStack(err)
 		}
@@ -1079,7 +1079,7 @@ func (d *SQLDatabase) ModifyUser(ctx context.Context, userId string, patch UserP
 		attributes["comment"] = *patch.Comment
 	}
 	if patch.Labels != nil {
-		text, _ := jsonutil.Marshal(patch.Labels)
+		text, _ := jsoncodec.Marshal(patch.Labels)
 		attributes["labels"] = string(text)
 	}
 	err := d.gormDB.WithContext(ctx).Model(&SQLUser{UserId: userId}).Updates(attributes).Error
@@ -1320,7 +1320,7 @@ func (d *SQLDatabase) GetFeedback(ctx context.Context, cursor string, n int, beg
 	tx := d.gormDB.WithContext(ctx).Table(d.FeedbackTable()).Select("feedback_type, user_id, item_id, value, time_stamp, updated, labels, comment")
 	if len(buf) > 0 {
 		var cursorKey FeedbackKey
-		if err := jsonutil.Unmarshal(buf, &cursorKey); err != nil {
+		if err := jsoncodec.Unmarshal(buf, &cursorKey); err != nil {
 			return "", nil, err
 		}
 		tx.Where("(feedback_type, user_id, item_id) >= (?,?,?)", cursorKey.FeedbackType, cursorKey.UserId, cursorKey.ItemId)
@@ -1354,7 +1354,7 @@ func (d *SQLDatabase) GetFeedback(ctx context.Context, cursor string, n int, beg
 	}
 	if len(feedbacks) == n+1 {
 		nextCursorKey := feedbacks[len(feedbacks)-1].FeedbackKey
-		nextCursor, err := jsonutil.Marshal(nextCursorKey)
+		nextCursor, err := jsoncodec.Marshal(nextCursorKey)
 		if err != nil {
 			return "", nil, errors.WithStack(err)
 		}

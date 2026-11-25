@@ -15,6 +15,7 @@
 package data
 
 import (
+	jsonv1 "encoding/json"
 	"fmt"
 	"net"
 	"testing"
@@ -80,6 +81,15 @@ func (suite *ProxyTestSuite) TestInit() {
 
 func (suite *ProxyTestSuite) TestPurge() {
 	suite.T().Skip()
+}
+
+func (suite *ProxyTestSuite) TestNumericLabelRoundTrip() {
+	ctx := suite.T().Context()
+	labels := map[string]any{"ids": []any{jsonv1.Number("9007199254740993"), jsonv1.Number("1.2300")}}
+	suite.Require().NoError(suite.Database.BatchInsertUsers(ctx, []User{{UserId: "precision", Labels: labels}}))
+	user, err := suite.Database.GetUser(ctx, "precision")
+	suite.Require().NoError(err)
+	suite.Equal(labels, user.Labels)
 }
 
 func TestProxy(t *testing.T) {

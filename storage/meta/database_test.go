@@ -140,3 +140,15 @@ func TestModel_Equal(t *testing.T) {
 	assert.False(t, a.Equal(b))
 	a.Params["param2"] = "value2"
 }
+
+func TestModelStoredParameters(t *testing.T) {
+	const record = `{"ID":12,"Type":"cf","Params":{"Lr":0.01230,"NEpochs":17,"RandomState":9007199254740993},"Score":null}`
+	var m Model[[]float32]
+	if !assert.NoError(t, m.FromJSON(record)) {
+		return
+	}
+	assert.Equal(t, record, m.ToJSON())
+	assert.Equal(t, 17, m.Params.GetInt(model.NEpochs, 0))
+	assert.Equal(t, int64(9007199254740993), m.Params.GetInt64(model.RandomState, 0))
+	assert.Equal(t, float32(0.01230), m.Params.GetFloat32(model.Lr, 0))
+}
