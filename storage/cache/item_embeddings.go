@@ -2,6 +2,8 @@ package cache
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"slices"
 	"time"
@@ -26,7 +28,11 @@ func EnqueueItemEmbeddings(ctx context.Context, db Database, ids []string) error
 			if err != nil {
 				return err
 			}
-			deliveries = append(deliveries, Score{Id: key.String(), Categories: []string{id}, Timestamp: now, Score: -float64(now.UnixMicro())})
+			// Store ASCII even when an existing cache table uses a legacy charset.
+			payload := base64.RawStdEncoding.EncodeToString([]byte(id))
+			// Kvrocks tag queries need a nonnumeric token for acknowledgement.
+			deliveryID := "d" + hex.EncodeToString(key[:])
+			deliveries = append(deliveries, Score{Id: deliveryID, Categories: []string{payload}, Timestamp: now, Score: -float64(now.UnixMicro())})
 		}
 		if err := db.AddScores(ctx, itemEmbeddingQueue, "", deliveries); err != nil {
 			return err
@@ -51,7 +57,11 @@ func ProcessItemEmbeddings(ctx context.Context, db Database, limit int, apply fu
 		if len(d.Categories) != 1 {
 			return fmt.Errorf("invalid item embedding delivery %q", d.Id)
 		}
-		ids = append(ids, d.Categories[0])
+		id, err := base64.RawStdEncoding.DecodeString(d.Categories[0])
+		if err != nil {
+			return fmt.Errorf("invalid item embedding delivery %q: %w", d.Id, err)
+		}
+		ids = append(ids, string(id))
 	}
 	if err := apply(lo.Uniq(ids)); err != nil {
 		return err

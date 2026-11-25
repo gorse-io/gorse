@@ -138,7 +138,7 @@ func (w *VectorWriter) ensureCollectionLocked() error {
 		return errors.WithStack(err)
 	}
 	dimension := *w.dimension
-	if info != nil && ((info.Dimension != dimension && !(dimension > 0 && info.Dimension == vectors.UnknownDenseDimension)) || info.Distance != w.distance || !info.VectorConfig.Matches(w.vectorConfig)) {
+	if info != nil && ((info.Dimension != dimension && (dimension <= 0 || info.Dimension != vectors.UnknownDenseDimension)) || info.Distance != w.distance || !info.VectorConfig.Matches(w.vectorConfig)) {
 		log.Logger().Warn("recreating similarity vector collection",
 			zap.String("collection", w.collection),
 			zap.Int("dimension", dimension),

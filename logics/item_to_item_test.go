@@ -115,37 +115,37 @@ func (suite *ItemToItemTestSuite) TestColumnFunc() {
 	suite.Equal(int64(2), count)
 }
 
-func (s *ItemToItemTestSuite) TestRefreshItemEmbeddings() {
-	ctx := s.T().Context()
+func (suite *ItemToItemTestSuite) TestRefreshItemEmbeddings() {
+	ctx := suite.T().Context()
 	cfg := config.ItemToItemConfig{Name: "incremental", Type: "embedding", Column: `item.Comment == "skip" ? nil : item.Labels.v`}
 	coll := vectors.ItemToItemCollection(cfg.Name)
 	refresh := func(ids []string, items map[string]data.Item) error {
-		return RefreshItemEmbeddings(ctx, s.vectorClient, cfg, vectors.VectorConfig{}, ids, items, time.Now())
+		return RefreshItemEmbeddings(ctx, suite.vectorClient, cfg, vectors.VectorConfig{}, ids, items, time.Now())
 	}
-	s.Require().NoError(refresh([]string{"absent"}, nil))
-	collections, err := s.vectorClient.ListCollections(ctx)
-	s.Require().NoError(err)
-	s.Empty(collections)
+	suite.Require().NoError(refresh([]string{"absent"}, nil))
+	collections, err := suite.vectorClient.ListCollections(ctx)
+	suite.Require().NoError(err)
+	suite.Empty(collections)
 	ids := []string{"changed", "gone", "wrong", "filtered", "keep"}
 	items := map[string]data.Item{}
 	for _, id := range ids {
 		items[id] = data.Item{ItemId: id, Labels: map[string]any{"v": []float32{1, 2}}}
 	}
-	s.Require().NoError(refresh(ids, items))
+	suite.Require().NoError(refresh(ids, items))
 	items["changed"] = data.Item{ItemId: "changed", IsHidden: true, Categories: []string{"new"}, Labels: map[string]any{"v": []float32{3, 4}}}
 	items["wrong"] = data.Item{ItemId: "wrong", Labels: map[string]any{"v": []float32{3}}}
 	items["filtered"] = data.Item{ItemId: "filtered", Comment: "skip", Labels: items["keep"].Labels}
 	delete(items, "gone")
 	delete(items, "keep")
-	s.Require().NoError(refresh(ids[:4], items))
-	got, err := s.vectorClient.GetVectors(ctx, coll, ids)
-	s.Require().NoError(err)
-	s.Require().Len(got, 2)
-	s.Equal("changed", got[0].Id)
-	s.True(got[0].IsHidden)
-	s.Equal([]string{"new"}, got[0].Categories)
-	s.Equal([]float32{3, 4}, got[0].Float32Values())
-	s.Equal("keep", got[1].Id)
+	suite.Require().NoError(refresh(ids[:4], items))
+	got, err := suite.vectorClient.GetVectors(ctx, coll, ids)
+	suite.Require().NoError(err)
+	suite.Require().Len(got, 2)
+	suite.Equal("changed", got[0].Id)
+	suite.True(got[0].IsHidden)
+	suite.Equal([]string{"new"}, got[0].Categories)
+	suite.Equal([]float32{3, 4}, got[0].Float32Values())
+	suite.Equal("keep", got[1].Id)
 }
 
 func (suite *ItemToItemTestSuite) TestEmbedding() {
@@ -359,8 +359,8 @@ func (db describedCollection) DescribeCollection(context.Context, string) (*vect
 	return &db.info, nil
 }
 
-func (s *ItemToItemTestSuite) TestReuseCollection() {
-	ctx := s.T().Context()
+func (suite *ItemToItemTestSuite) TestReuseCollection() {
+	ctx := suite.T().Context()
 	for _, tc := range []struct {
 		name      string
 		dimension int
@@ -372,20 +372,20 @@ func (s *ItemToItemTestSuite) TestReuseCollection() {
 		{"pq_default", 2, vectors.QuantizationPQ, 8},
 		{"rq_default", 2, vectors.QuantizationRQ, 8},
 	} {
-		s.Run(tc.name, func() {
+		suite.Run(tc.name, func() {
 			cfg := config.ItemToItemConfig{Name: tc.name, Type: "embedding", Column: "item.Labels.v"}
 			name := vectors.ItemToItemCollection(cfg.Name)
 			now := time.Now().UTC()
-			s.Require().NoError(s.vectorClient.AddCollection(ctx, name, 2, vectors.Euclidean, vectors.VectorConfig{}))
-			db := describedCollection{s.vectorClient, vectors.CollectionInfo{Dimension: tc.dimension, Distance: vectors.Euclidean, VectorConfig: vectors.VectorConfig{Type: tc.kind, Bits: tc.bits}}}
+			suite.Require().NoError(suite.vectorClient.AddCollection(ctx, name, 2, vectors.Euclidean, vectors.VectorConfig{}))
+			db := describedCollection{suite.vectorClient, vectors.CollectionInfo{Dimension: tc.dimension, Distance: vectors.Euclidean, VectorConfig: vectors.VectorConfig{Type: tc.kind, Bits: tc.bits}}}
 			vc := vectors.VectorConfig{Type: tc.kind}
 			item := data.Item{ItemId: "incremental", Labels: map[string]any{"v": []float32{1, 2}}}
-			s.Require().NoError(RefreshItemEmbeddings(ctx, db, cfg, vc, []string{item.ItemId}, map[string]data.Item{item.ItemId: item}, now))
+			suite.Require().NoError(RefreshItemEmbeddings(ctx, db, cfg, vc, []string{item.ItemId}, map[string]data.Item{item.ItemId: item}, now))
 			writer := newSimilarityVectorWriter(ctx, db, name, vectors.Euclidean, vc, now, 1, false)
-			s.Require().NoError(writer.Add(vectors.Vector{Id: "full", Values: []float32{3, 4}, Timestamp: now}))
+			suite.Require().NoError(writer.Add(vectors.Vector{Id: "full", Values: []float32{3, 4}, Timestamp: now}))
 			got, err := db.GetVectors(ctx, name, []string{"incremental", "full"})
-			s.Require().NoError(err)
-			s.Len(got, 2)
+			suite.Require().NoError(err)
+			suite.Len(got, 2)
 		})
 	}
 }
