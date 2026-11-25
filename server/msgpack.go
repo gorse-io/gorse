@@ -18,11 +18,17 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
+	"math"
+	"reflect"
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/emicklei/go-restful/v3"
-	"github.com/tinylib/msgp/msgp"
+	"github.com/gorse-io/gorse/storage/data"
+	"github.com/vmihailenco/msgpack/v5"
 )
 
 const (
@@ -33,87 +39,145 @@ const (
 type msgpackAccessor string
 
 func init() {
+	// REST timestamps use RFC3339 text rather than MessagePack extensions.
+	msgpack.Register(time.Time{}, func(enc *msgpack.Encoder, v reflect.Value) error {
+		text, err := v.Interface().(time.Time).MarshalText()
+		if err != nil {
+			return err
+		}
+		return enc.EncodeString(string(text))
+	}, func(dec *msgpack.Decoder, v reflect.Value) error {
+		text, err := dec.DecodeString()
+		if err != nil {
+			return err
+		}
+		return v.Addr().Interface().(*time.Time).UnmarshalText([]byte(text))
+	})
+	msgpack.Register(json.Number(""), encodeMsgpackNumber, nil)
 	for _, mime := range []string{mimeMsgpack, mimeXMsgpack} {
 		restful.RegisterEntityAccessor(mime, msgpackAccessor(mime))
 	}
 }
 
-// Use the same JSON mapping as the public DTOs rather than maintaining a
-// parallel set of tags, timestamp encodings and custom marshalers.
-func (msgpackAccessor) Read(req *restful.Request, dst any) error {
-	body, err := io.ReadAll(req.Request.Body)
+func encodeMsgpackNumber(enc *msgpack.Encoder, v reflect.Value) error {
+	n := v.String()
+	if n == "" {
+		return enc.EncodeInt(0)
+	} // json.Number's zero value
+	if !json.Valid([]byte(n)) {
+		return fmt.Errorf("invalid number %q", n)
+	}
+	if i, err := strconv.ParseInt(n, 10, 64); err == nil {
+		return enc.EncodeInt(i)
+	}
+	if u, err := strconv.ParseUint(n, 10, 64); err == nil {
+		return enc.EncodeUint(u)
+	}
+	if !strings.ContainsAny(n, ".eE") {
+		return fmt.Errorf("integer outside MessagePack range: %s", n)
+	}
+	f, err := strconv.ParseFloat(n, 64)
 	if err != nil {
 		return err
 	}
-	var buf bytes.Buffer
-	if _, err := msgp.UnmarshalAsJSON(&buf, body); err != nil {
-		return err
-	}
-	dec := json.NewDecoder(&buf)
-	dec.UseNumber() // data.ValidateLabels expects json.Number, including in arrays.
+	return enc.EncodeFloat64(f)
+}
+
+func (msgpackAccessor) Read(req *restful.Request, dst any) error {
+	dec := msgpack.NewDecoder(req.Request.Body)
+	dec.SetCustomStructTag("json")
+	dec.UseLooseInterfaceDecoding(true)
 	if err := dec.Decode(dst); err != nil {
 		return err
 	}
-	if _, err := dec.Token(); err != io.EOF {
+	if _, err := dec.PeekCode(); err != io.EOF {
+		if err != nil {
+			return err
+		}
 		return errors.New("expected one MessagePack entity")
+	}
+	return normalizeMsgpackLabels(dst)
+}
+
+// Only dynamically typed labels need conversion: validation and storage use
+// json.Number for numbers in both scalar labels and nested vectors.
+func normalizeMsgpackLabels(dst any) error {
+	var labels *any
+	switch v := dst.(type) {
+	case *data.User:
+		labels = &v.Labels
+	case *data.UserPatch:
+		labels = &v.Labels
+	case *Item:
+		labels = &v.Labels
+	case *data.ItemPatch:
+		labels = &v.Labels
+	case *Feedback:
+		labels = &v.Labels
+	case *[]data.User:
+		return normalizeMsgpackBatch(*v)
+	case *[]Item:
+		return normalizeMsgpackBatch(*v)
+	case *[]Feedback:
+		return normalizeMsgpackBatch(*v)
+	default:
+		return nil
+	}
+	var err error
+	*labels, err = labelNumbers(*labels)
+	return err
+}
+
+func normalizeMsgpackBatch[T any](batch []T) error {
+	for i := range batch {
+		if err := normalizeMsgpackLabels(&batch[i]); err != nil {
+			return err
+		}
 	}
 	return nil
 }
 
-func (mime msgpackAccessor) Write(resp *restful.Response, status int, v any) error {
-	if v == nil { // Match go-restful's empty entity response.
-		resp.WriteHeader(status)
-		return nil
-	}
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-	dec := json.NewDecoder(bytes.NewReader(b))
-	dec.UseNumber()
-	var wire any
-	if err := dec.Decode(&wire); err != nil {
-		return err
-	}
-	wire, err = msgpackNumbers(wire)
-	if err != nil {
-		return err
-	}
-	body, err := msgp.AppendIntf(nil, wire)
-	if err != nil {
-		return err
-	}
-	resp.Header().Set("Content-Type", string(mime))
-	resp.WriteHeader(status)
-	_, err = resp.Write(body)
-	return err
-}
-
-// JSON numbers must become MessagePack numbers, not strings. Try both
-// integer ranges before floating point to preserve large IDs and labels.
-func msgpackNumbers(v any) (any, error) {
+func labelNumbers(v any) (any, error) {
 	var err error
 	switch x := v.(type) {
-	case json.Number:
-		if i, err := x.Int64(); err == nil {
-			return i, nil
+	case int64:
+		return json.Number(strconv.FormatInt(x, 10)), nil
+	case uint64:
+		return json.Number(strconv.FormatUint(x, 10)), nil
+	case float64:
+		if math.IsNaN(x) || math.IsInf(x, 0) {
+			return nil, fmt.Errorf("invalid label number %v", x)
 		}
-		if u, err := strconv.ParseUint(string(x), 10, 64); err == nil {
-			return u, nil
-		}
-		return x.Float64()
+		return json.Number(strconv.FormatFloat(x, 'g', -1, 64)), nil
 	case []any:
 		for i := range x {
-			if x[i], err = msgpackNumbers(x[i]); err != nil {
+			if x[i], err = labelNumbers(x[i]); err != nil {
 				return nil, err
 			}
 		}
 	case map[string]any:
 		for k := range x {
-			if x[k], err = msgpackNumbers(x[k]); err != nil {
+			if x[k], err = labelNumbers(x[k]); err != nil {
 				return nil, err
 			}
 		}
 	}
 	return v, nil
+}
+
+func (mime msgpackAccessor) Write(resp *restful.Response, status int, v any) error {
+	if v == nil {
+		resp.WriteHeader(status)
+		return nil
+	}
+	var body bytes.Buffer
+	enc := msgpack.NewEncoder(&body)
+	enc.SetCustomStructTag("json")
+	if err := enc.EncodeValue(reflect.ValueOf(v)); err != nil {
+		return err
+	}
+	resp.Header().Set("Content-Type", string(mime))
+	resp.WriteHeader(status)
+	_, err := resp.Write(body.Bytes())
+	return err
 }
