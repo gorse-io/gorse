@@ -367,7 +367,10 @@ func (s *ItemToItemTestSuite) TestReuseCollection() {
 		kind      vectors.QuantizationType
 		bits      int
 	}{
-		{"legacy_empty", -1, vectors.QuantizationNone, 0}, {"sq_default", 2, vectors.QuantizationSQ, 8}, {"pq_default", 2, vectors.QuantizationPQ, 8},
+		{"legacy_empty", -1, vectors.QuantizationNone, 0},
+		{"sq_default", 2, vectors.QuantizationSQ, 8},
+		{"pq_default", 2, vectors.QuantizationPQ, 8},
+		{"rq_default", 2, vectors.QuantizationRQ, 8},
 	} {
 		s.Run(tc.name, func() {
 			cfg := config.ItemToItemConfig{Name: tc.name, Type: "embedding", Column: "item.Labels.v"}

@@ -85,8 +85,11 @@ type VectorConfig struct {
 
 // Matches reports whether a backend-reported configuration satisfies the request.
 func (reported VectorConfig) Matches(request VectorConfig) bool {
-	if request.Bits == 0 && reported.Bits == 8 && (request.Type == QuantizationSQ || request.Type == QuantizationPQ) {
-		request.Bits = 8
+	if request.Bits == 0 && reported.Bits == 8 {
+		switch request.Type {
+		case QuantizationSQ, QuantizationPQ, QuantizationRQ:
+			request.Bits = 8
+		}
 	}
 	return reported == request
 }
