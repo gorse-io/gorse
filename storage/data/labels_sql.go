@@ -16,7 +16,8 @@ package data
 
 import (
 	"context"
-	"github.com/gorse-io/gorse/storage/internal/jsoncodec"
+	"encoding/json/v2"
+	"github.com/gorse-io/gorse/common/jsonutil"
 	"gorm.io/gorm/schema"
 	"reflect"
 )
@@ -36,14 +37,14 @@ func (labelSerializer) Scan(ctx context.Context, field *schema.Field, dst reflec
 		raw = []byte(v)
 	default:
 		var err error
-		raw, err = jsoncodec.Marshal(v)
+		raw, err = json.Marshal(v)
 		if err != nil {
 			return err
 		}
 	}
 	var labels any
 	if len(raw) != 0 {
-		if err := jsoncodec.Unmarshal(raw, &labels); err != nil {
+		if err := json.Unmarshal(raw, &labels, jsonutil.ExactNumbers); err != nil {
 			return err
 		}
 	}
@@ -51,7 +52,7 @@ func (labelSerializer) Scan(ctx context.Context, field *schema.Field, dst reflec
 }
 
 func (labelSerializer) Value(ctx context.Context, field *schema.Field, dst reflect.Value, value any) (any, error) {
-	b, err := jsoncodec.Marshal(value)
+	b, err := json.Marshal(value)
 	if err != nil || string(b) == "null" {
 		return nil, err
 	}

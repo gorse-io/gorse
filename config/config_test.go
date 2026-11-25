@@ -16,6 +16,7 @@ package config
 
 import (
 	"bytes"
+	"encoding/json/v2"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -24,12 +25,30 @@ import (
 	"time"
 
 	"github.com/gorse-io/gorse/common/expression"
+	"github.com/gorse-io/gorse/common/jsonutil"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/sclevine/yj/convert"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 )
+
+func TestConfigJSONWire(t *testing.T) {
+	cfg := Config{Master: MasterConfig{MetaTimeout: time.Second + 7, HttpCorsMethods: []string{}}}
+	cfg.Recommend.Ranker.FitPeriod = 23 * time.Nanosecond
+	b, err := json.Marshal(&cfg, jsonutil.DurationAsNano)
+	if !assert.NoError(t, err) {
+		return
+	}
+	for _, field := range []string{`"MetaTimeout":1000000007`, `"FitPeriod":23`, `"HttpCorsDomains":[]`, `"HttpCorsMethods":[]`, `"ItemToItem":[]`} {
+		assert.Contains(t, string(b), field)
+	}
+	var decoded Config
+	if assert.NoError(t, json.Unmarshal(b, &decoded, jsonutil.DurationAsNano)) {
+		assert.Equal(t, cfg.Master.MetaTimeout, decoded.Master.MetaTimeout)
+		assert.Equal(t, cfg.Recommend.Ranker.FitPeriod, decoded.Recommend.Ranker.FitPeriod)
+	}
+}
 
 func TestRedacted(t *testing.T) {
 	conf := &Config{

@@ -15,12 +15,10 @@
 package server
 
 import (
-	jsonv1 "encoding/json"
-	"encoding/json/jsontext"
 	"encoding/json/v2"
-	"errors"
 
 	"github.com/emicklei/go-restful/v3"
+	"github.com/gorse-io/gorse/common/jsonutil"
 )
 
 type jsonEntity struct{}
@@ -29,16 +27,8 @@ func init() {
 	restful.RegisterEntityAccessor(restful.MIME_JSON, jsonEntity{})
 }
 
-// Preserve go-restful's UseNumber behavior for untyped values such as labels.
-var exactNumbers = json.WithUnmarshalers(json.UnmarshalFromFunc(func(d *jsontext.Decoder, v *any) error {
-	if d.PeekKind() == '0' {
-		*v = jsonv1.Number("")
-	}
-	return errors.ErrUnsupported
-}))
-
 func (jsonEntity) Read(req *restful.Request, v any) error {
-	return json.UnmarshalRead(req.Request.Body, v, exactNumbers, json.MatchCaseInsensitiveNames(true))
+	return json.UnmarshalRead(req.Request.Body, v, jsonutil.ExactNumbers, json.MatchCaseInsensitiveNames(true))
 }
 
 func (jsonEntity) Write(resp *restful.Response, status int, v any) error {
@@ -48,6 +38,5 @@ func (jsonEntity) Write(resp *restful.Response, status int, v any) error {
 	}
 	resp.Header().Set("Content-Type", restful.MIME_JSON)
 	resp.WriteHeader(status)
-	// Some SDK response types embed unexported transport metadata. Ignore it as before.
-	return json.MarshalWrite(resp, v, jsonv1.FormatDurationAsNano(true), jsonv1.ReportErrorsWithLegacySemantics(true))
+	return json.MarshalWrite(resp, v, jsonutil.DurationAsNano)
 }

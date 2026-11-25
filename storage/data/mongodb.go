@@ -17,6 +17,7 @@ package data
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json/v2"
 	"fmt"
 	"sort"
 	"time"
@@ -25,7 +26,6 @@ import (
 	"github.com/gorse-io/gorse/common/expression"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/storage"
-	"github.com/gorse-io/gorse/storage/internal/jsoncodec"
 	"github.com/pkg/errors"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -59,12 +59,12 @@ func init() {
 
 func feedbackKeyFromString(s string) (*FeedbackKey, error) {
 	var feedbackKey FeedbackKey
-	err := jsoncodec.Unmarshal([]byte(s), &feedbackKey)
+	err := json.Unmarshal([]byte(s), &feedbackKey)
 	return &feedbackKey, err
 }
 
 func (k *FeedbackKey) toString() (string, error) {
-	b, err := jsoncodec.Marshal(k)
+	b, err := json.Marshal(k)
 	return string(b), err
 }
 

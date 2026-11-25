@@ -15,11 +15,11 @@
 package data
 
 import (
-	jsonv1 "encoding/json"
 	"fmt"
 	"net"
 	"testing"
 
+	"github.com/gorse-io/gorse/common/jsonutil"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/stretchr/testify/suite"
 	"google.golang.org/grpc"
@@ -85,7 +85,7 @@ func (suite *ProxyTestSuite) TestPurge() {
 
 func (suite *ProxyTestSuite) TestNumericLabelRoundTrip() {
 	ctx := suite.T().Context()
-	labels := map[string]any{"ids": []any{jsonv1.Number("9007199254740993"), jsonv1.Number("1.2300")}}
+	labels := map[string]any{"ids": []any{jsonutil.Number("9007199254740993"), jsonutil.Number("1.2300")}}
 	suite.Require().NoError(suite.Database.BatchInsertUsers(ctx, []User{{UserId: "precision", Labels: labels}}))
 	user, err := suite.Database.GetUser(ctx, "precision")
 	suite.Require().NoError(err)

@@ -109,8 +109,8 @@ func (s *OpenAIServer) chatCompletion(req *restful.Request, resp *restful.Respon
 			_, _ = resp.Write(buf.Bytes())
 		}
 	} else {
-		_ = resp.WriteEntity(openai.ChatCompletionResponse{
-			Choices: []openai.ChatCompletionChoice{{
+		_ = resp.WriteEntity(map[string]any{
+			"choices": []openai.ChatCompletionChoice{{
 				Message: openai.ChatCompletionMessage{
 					Content: content,
 				},
@@ -134,8 +134,8 @@ func (s *OpenAIServer) embeddings(req *restful.Request, resp *restful.Response) 
 	}
 
 	// write response
-	_ = resp.WriteEntity(openai.EmbeddingResponse{
-		Data: []openai.Embedding{{
+	_ = resp.WriteEntity(map[string]any{
+		"data": []openai.Embedding{{
 			Embedding: Hash(input),
 		}},
 	})

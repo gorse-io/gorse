@@ -15,13 +15,14 @@
 package meta
 
 import (
+	"encoding/json/v2"
 	"strings"
 	"time"
 
 	"github.com/XSAM/otelsql"
+	"github.com/gorse-io/gorse/common/jsonutil"
 	"github.com/gorse-io/gorse/model"
 	"github.com/gorse-io/gorse/storage"
-	"github.com/gorse-io/gorse/storage/internal/jsoncodec"
 	"github.com/pkg/errors"
 	"github.com/samber/lo"
 	semconv "go.opentelemetry.io/otel/semconv/v1.12.0"
@@ -42,11 +43,11 @@ type Model[T any] struct {
 }
 
 func (m *Model[T]) ToJSON() string {
-	return string(lo.Must1(jsoncodec.Marshal(m)))
+	return string(lo.Must1(json.Marshal(m)))
 }
 
 func (m *Model[T]) FromJSON(data string) error {
-	return jsoncodec.Unmarshal([]byte(data), m)
+	return json.Unmarshal([]byte(data), m, jsonutil.ExactNumbers)
 }
 
 // Equal checks if two models have the same type and parameters.

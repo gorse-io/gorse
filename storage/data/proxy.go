@@ -16,16 +16,17 @@ package data
 
 import (
 	"context"
+	"encoding/json/v2"
 	"fmt"
 	"io"
 	"net"
 	"time"
 
 	"github.com/gorse-io/gorse/common/expression"
+	"github.com/gorse-io/gorse/common/jsonutil"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/protocol"
 	"github.com/gorse-io/gorse/storage"
-	"github.com/gorse-io/gorse/storage/internal/jsoncodec"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -66,7 +67,7 @@ func timeFromPB(timestamp *timestamppb.Timestamp) time.Time {
 func feedbackToPB(feedback []Feedback) ([]*protocol.Feedback, error) {
 	pbFeedback := make([]*protocol.Feedback, len(feedback))
 	for i, f := range feedback {
-		labels, err := jsoncodec.Marshal(f.Labels)
+		labels, err := json.Marshal(f.Labels)
 		if err != nil {
 			return nil, err
 		}
@@ -89,7 +90,7 @@ func feedbackFromPB(pbFeedback []*protocol.Feedback) ([]Feedback, error) {
 	for i, f := range pbFeedback {
 		var labels any
 		if len(f.Labels) > 0 {
-			if err := jsoncodec.Unmarshal(f.Labels, &labels); err != nil {
+			if err := json.Unmarshal(f.Labels, &labels, jsonutil.ExactNumbers); err != nil {
 				return nil, err
 			}
 		}
@@ -116,7 +117,7 @@ func (p *ProxyServer) BatchInsertItems(ctx context.Context, in *protocol.BatchIn
 	items := make([]Item, len(in.Items))
 	for i, item := range in.Items {
 		var labels any
-		err := jsoncodec.Unmarshal(item.Labels, &labels)
+		err := json.Unmarshal(item.Labels, &labels, jsonutil.ExactNumbers)
 		if err != nil {
 			return nil, err
 		}
@@ -150,7 +151,7 @@ func (p *ProxyServer) BatchGetItems(ctx context.Context, in *protocol.BatchGetIt
 	}
 	pbItems := make([]*protocol.Item, len(items))
 	for i, item := range items {
-		labels, err := jsoncodec.Marshal(item.Labels)
+		labels, err := json.Marshal(item.Labels)
 		if err != nil {
 			return nil, err
 		}
@@ -180,7 +181,7 @@ func (p *ProxyServer) GetItem(ctx context.Context, in *protocol.GetItemRequest) 
 		}
 		return nil, err
 	}
-	labels, err := jsoncodec.Marshal(item.Labels)
+	labels, err := json.Marshal(item.Labels)
 	if err != nil {
 		return nil, err
 	}
@@ -204,7 +205,7 @@ func (p *ProxyServer) SearchItems(ctx context.Context, in *protocol.SearchItemsR
 	}
 	pbItems := make([]*protocol.ScoredItem, len(items))
 	for i, item := range items {
-		labels, err := jsoncodec.Marshal(item.Labels)
+		labels, err := json.Marshal(item.Labels)
 		if err != nil {
 			return nil, err
 		}
@@ -227,7 +228,7 @@ func (p *ProxyServer) SearchItems(ctx context.Context, in *protocol.SearchItemsR
 func (p *ProxyServer) ModifyItem(ctx context.Context, in *protocol.ModifyItemRequest) (*protocol.ModifyItemResponse, error) {
 	var labels any
 	if in.Patch.Labels != nil {
-		err := jsoncodec.Unmarshal(in.Patch.Labels, &labels)
+		err := json.Unmarshal(in.Patch.Labels, &labels, jsonutil.ExactNumbers)
 		if err != nil {
 			return nil, err
 		}
@@ -257,7 +258,7 @@ func (p *ProxyServer) GetItems(ctx context.Context, in *protocol.GetItemsRequest
 	}
 	pbItems := make([]*protocol.Item, len(items))
 	for i, item := range items {
-		labels, err := jsoncodec.Marshal(item.Labels)
+		labels, err := json.Marshal(item.Labels)
 		if err != nil {
 			return nil, err
 		}
@@ -294,7 +295,7 @@ func (p *ProxyServer) BatchInsertUsers(ctx context.Context, in *protocol.BatchIn
 	users := make([]User, len(in.Users))
 	for i, user := range in.Users {
 		var labels any
-		err := jsoncodec.Unmarshal(user.Labels, &labels)
+		err := json.Unmarshal(user.Labels, &labels, jsonutil.ExactNumbers)
 		if err != nil {
 			return nil, err
 		}
@@ -321,7 +322,7 @@ func (p *ProxyServer) GetUser(ctx context.Context, in *protocol.GetUserRequest) 
 		}
 		return nil, err
 	}
-	labels, err := jsoncodec.Marshal(user.Labels)
+	labels, err := json.Marshal(user.Labels)
 	if err != nil {
 		return nil, err
 	}
@@ -338,7 +339,7 @@ func (p *ProxyServer) GetUser(ctx context.Context, in *protocol.GetUserRequest) 
 func (p *ProxyServer) ModifyUser(ctx context.Context, in *protocol.ModifyUserRequest) (*protocol.ModifyUserResponse, error) {
 	var labels any
 	if in.Patch.Labels != nil {
-		err := jsoncodec.Unmarshal(in.Patch.Labels, &labels)
+		err := json.Unmarshal(in.Patch.Labels, &labels, jsonutil.ExactNumbers)
 		if err != nil {
 			return nil, err
 		}
@@ -357,7 +358,7 @@ func (p *ProxyServer) GetUsers(ctx context.Context, in *protocol.GetUsersRequest
 	}
 	pbUsers := make([]*protocol.User, len(users))
 	for i, user := range users {
-		labels, err := jsoncodec.Marshal(user.Labels)
+		labels, err := json.Marshal(user.Labels)
 		if err != nil {
 			return nil, err
 		}
@@ -449,7 +450,7 @@ func (p *ProxyServer) GetUserStream(in *protocol.GetUserStreamRequest, stream gr
 	for users := range usersChan {
 		pbUsers := make([]*protocol.User, len(users))
 		for i, user := range users {
-			labels, err := jsoncodec.Marshal(user.Labels)
+			labels, err := json.Marshal(user.Labels)
 			if err != nil {
 				return err
 			}
@@ -477,7 +478,7 @@ func (p *ProxyServer) GetItemStream(in *protocol.GetItemStreamRequest, stream gr
 	for items := range itemsChan {
 		pbItems := make([]*protocol.Item, len(items))
 		for i, item := range items {
-			labels, err := jsoncodec.Marshal(item.Labels)
+			labels, err := json.Marshal(item.Labels)
 			if err != nil {
 				return err
 			}
@@ -570,7 +571,7 @@ func (p *ProxyServer) GetLatestItems(ctx context.Context, in *protocol.GetLatest
 	}
 	pbItems := make([]*protocol.Item, len(items))
 	for i, item := range items {
-		labels, err := jsoncodec.Marshal(item.Labels)
+		labels, err := json.Marshal(item.Labels)
 		if err != nil {
 			return nil, err
 		}
@@ -626,7 +627,7 @@ func (p ProxyClient) Purge() error {
 func (p ProxyClient) BatchInsertItems(ctx context.Context, items []Item) error {
 	pbItems := make([]*protocol.Item, len(items))
 	for i, item := range items {
-		labels, err := jsoncodec.Marshal(item.Labels)
+		labels, err := json.Marshal(item.Labels)
 		if err != nil {
 			return err
 		}
@@ -663,7 +664,7 @@ func (p ProxyClient) BatchGetItems(ctx context.Context, itemIds []string, opts G
 	items := make([]Item, len(resp.Items))
 	for i, item := range resp.Items {
 		var labels any
-		err = jsoncodec.Unmarshal(item.Labels, &labels)
+		err = json.Unmarshal(item.Labels, &labels, jsonutil.ExactNumbers)
 		if err != nil {
 			return nil, err
 		}
@@ -694,7 +695,7 @@ func (p ProxyClient) GetItem(ctx context.Context, itemId string) (Item, error) {
 		return Item{}, fmt.Errorf("item %s %w", itemId, storage.ErrNotFound)
 	}
 	var labels any
-	if err = jsoncodec.Unmarshal(resp.Item.Labels, &labels); err != nil {
+	if err = json.Unmarshal(resp.Item.Labels, &labels, jsonutil.ExactNumbers); err != nil {
 		return Item{}, err
 	}
 	return Item{
@@ -716,7 +717,7 @@ func (p ProxyClient) SearchItems(ctx context.Context, query string, n int) ([]Sc
 	items := make([]ScoredItem, len(resp.Items))
 	for i, item := range resp.Items {
 		var labels any
-		if err = jsoncodec.Unmarshal(item.Item.Labels, &labels); err != nil {
+		if err = json.Unmarshal(item.Item.Labels, &labels, jsonutil.ExactNumbers); err != nil {
 			return nil, err
 		}
 		items[i] = ScoredItem{
@@ -745,7 +746,7 @@ func (p ProxyClient) GetLatestItems(ctx context.Context, n int, categories []str
 	items := make([]Item, len(resp.Items))
 	for i, item := range resp.Items {
 		var labels any
-		if err = jsoncodec.Unmarshal(item.Labels, &labels); err != nil {
+		if err = json.Unmarshal(item.Labels, &labels, jsonutil.ExactNumbers); err != nil {
 			return nil, err
 		}
 		items[i] = Item{
@@ -765,7 +766,7 @@ func (p ProxyClient) ModifyItem(ctx context.Context, itemId string, patch ItemPa
 	var labels []byte
 	if patch.Labels != nil {
 		var err error
-		labels, err = jsoncodec.Marshal(patch.Labels)
+		labels, err = json.Marshal(patch.Labels)
 		if err != nil {
 			return err
 		}
@@ -799,7 +800,7 @@ func (p ProxyClient) GetItems(ctx context.Context, cursor string, n int, beginTi
 	items := make([]Item, len(resp.Items))
 	for i, item := range resp.Items {
 		var labels any
-		err = jsoncodec.Unmarshal(item.Labels, &labels)
+		err = json.Unmarshal(item.Labels, &labels, jsonutil.ExactNumbers)
 		if err != nil {
 			return "", nil, err
 		}
@@ -838,7 +839,7 @@ func (p ProxyClient) GetItemFeedback(ctx context.Context, itemId string, feedbac
 func (p ProxyClient) BatchInsertUsers(ctx context.Context, users []User) error {
 	pbUsers := make([]*protocol.User, len(users))
 	for i, user := range users {
-		labels, err := jsoncodec.Marshal(user.Labels)
+		labels, err := json.Marshal(user.Labels)
 		if err != nil {
 			return err
 		}
@@ -866,7 +867,7 @@ func (p ProxyClient) GetUser(ctx context.Context, userId string) (User, error) {
 		return User{}, fmt.Errorf("user %s %w", userId, storage.ErrNotFound)
 	}
 	var labels any
-	if err = jsoncodec.Unmarshal(resp.User.Labels, &labels); err != nil {
+	if err = json.Unmarshal(resp.User.Labels, &labels, jsonutil.ExactNumbers); err != nil {
 		return User{}, err
 	}
 	return User{
@@ -881,7 +882,7 @@ func (p ProxyClient) ModifyUser(ctx context.Context, userId string, patch UserPa
 	var labels []byte
 	if patch.Labels != nil {
 		var err error
-		labels, err = jsoncodec.Marshal(patch.Labels)
+		labels, err = json.Marshal(patch.Labels)
 		if err != nil {
 			return err
 		}
@@ -904,7 +905,7 @@ func (p ProxyClient) GetUsers(ctx context.Context, cursor string, n int) (string
 	users := make([]User, len(resp.Users))
 	for i, user := range resp.Users {
 		var labels any
-		err = jsoncodec.Unmarshal(user.Labels, &labels)
+		err = json.Unmarshal(user.Labels, &labels, jsonutil.ExactNumbers)
 		if err != nil {
 			return "", nil, err
 		}
@@ -1039,7 +1040,7 @@ func (p ProxyClient) GetUserStream(ctx context.Context, batchSize int) (chan []U
 			users := make([]User, len(resp.Users))
 			for i, user := range resp.Users {
 				var labels any
-				if err = jsoncodec.Unmarshal(user.Labels, &labels); err != nil {
+				if err = json.Unmarshal(user.Labels, &labels, jsonutil.ExactNumbers); err != nil {
 					errChan <- err
 					return
 				}
@@ -1079,7 +1080,7 @@ func (p ProxyClient) GetItemStream(ctx context.Context, batchSize int, timeLimit
 			items := make([]Item, len(resp.Items))
 			for i, item := range resp.Items {
 				var labels any
-				if err = jsoncodec.Unmarshal(item.Labels, &labels); err != nil {
+				if err = json.Unmarshal(item.Labels, &labels, jsonutil.ExactNumbers); err != nil {
 					errChan <- err
 					return
 				}

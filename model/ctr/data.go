@@ -16,7 +16,6 @@ package ctr
 
 import (
 	"bufio"
-	jsonv1 "encoding/json"
 	"os"
 	"sort"
 	"strconv"
@@ -74,7 +73,7 @@ func convertLabels(result []Label, prefix string, o any) []Label {
 			Name:  prefix + labels,
 			Value: 1,
 		})
-	case jsonv1.Number:
+	case jsonutil.Number:
 		value, _ := labels.Float64()
 		result = append(result, Label{
 			Name:  prefix,
@@ -129,7 +128,7 @@ func convertEmbeddings(result []Embedding, prefix string, o any) []Embedding {
 				value = append(value, v)
 			case int:
 				value = append(value, float32(v))
-			case jsonv1.Number:
+			case jsonutil.Number:
 				n, err := strconv.ParseFloat(v.String(), 32)
 				if err != nil {
 					return result

@@ -16,7 +16,6 @@ package master
 
 import (
 	"context"
-	jsonv1 "encoding/json"
 	"encoding/json/v2"
 	"fmt"
 	"math"
@@ -32,6 +31,7 @@ import (
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/emicklei/go-restful/v3"
 	"github.com/fsnotify/fsnotify"
+	"github.com/gorse-io/gorse/common/jsonutil"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/common/parallel"
@@ -170,7 +170,7 @@ func (m *Master) applyRecommendOverride(cfg *config.Config) error {
 	if metaStr == nil {
 		return nil
 	}
-	if err = json.Unmarshal([]byte(*metaStr), &cfg.Recommend, jsonv1.DefaultOptionsV1()); err != nil {
+	if err = json.Unmarshal([]byte(*metaStr), &cfg.Recommend, jsonutil.DurationAsNano, json.MatchCaseInsensitiveNames(true)); err != nil {
 		return errors.WithStack(err)
 	}
 	return nil

@@ -18,7 +18,6 @@ import (
 	"context"
 	"crypto/md5"
 	"encoding/hex"
-	jsonv1 "encoding/json"
 	"encoding/json/v2"
 	"fmt"
 	"math/rand"
@@ -31,6 +30,7 @@ import (
 	"time"
 
 	"github.com/gorse-io/gorse/cmd/version"
+	"github.com/gorse-io/gorse/common/jsonutil"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/common/util"
@@ -159,7 +159,7 @@ func (w *Worker) Sync() {
 		}
 
 		// load master config
-		err = json.Unmarshal([]byte(meta.Config), &w.Config, jsonv1.DefaultOptionsV1())
+		err = json.Unmarshal([]byte(meta.Config), &w.Config, jsonutil.DurationAsNano, json.MatchCaseInsensitiveNames(true))
 		if err != nil {
 			log.Logger().Error("failed to parse master config", zap.Error(err))
 			goto sleep
@@ -369,7 +369,7 @@ func (w *Worker) close() {
 
 func writeJSON(w http.ResponseWriter, content any) {
 	w.WriteHeader(http.StatusOK)
-	bytes, err := json.Marshal(content, jsonv1.DefaultOptionsV1())
+	bytes, err := json.Marshal(content)
 	if err != nil {
 		writeError(w, err.Error(), http.StatusInternalServerError)
 	}
@@ -501,13 +501,7 @@ func (w *Worker) pullUsers(peers []string, me string) ([]data.User, error) {
 	return users, nil
 }
 
-type HealthStatus struct {
-	Ready               bool
-	DataStoreError      error
-	CacheStoreError     error
-	DataStoreConnected  bool
-	CacheStoreConnected bool
-}
+type HealthStatus = monitor.HealthStatus
 
 func (w *Worker) checkHealth() HealthStatus {
 	healthStatus := HealthStatus{}
@@ -529,7 +523,7 @@ func (w *Worker) checkReady(writer http.ResponseWriter, _ *http.Request) {
 	if healthStatus.Ready {
 		writeJSON(writer, healthStatus)
 	} else {
-		errReason, err := json.Marshal(healthStatus, jsonv1.DefaultOptionsV1())
+		errReason, err := json.Marshal(healthStatus)
 		if err != nil {
 			writeError(writer, err.Error(), http.StatusInternalServerError)
 		} else {

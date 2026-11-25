@@ -38,6 +38,7 @@ import (
 	_ "github.com/gorse-io/dashboard"
 	"github.com/gorse-io/gorse/cmd/version"
 	"github.com/gorse-io/gorse/common/expression"
+	"github.com/gorse-io/gorse/common/jsonutil"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/common/util"
@@ -573,7 +574,7 @@ func (m *Master) postConfig(request *restful.Request, response *restful.Response
 		server.BadRequest(response, err)
 		return
 	}
-	recommendConfigBytes, err := json.Marshal(newConfig.Recommend, jsonv1.DefaultOptionsV1())
+	recommendConfigBytes, err := json.Marshal(newConfig.Recommend, jsonutil.DurationAsNano)
 	if err != nil {
 		server.InternalServerError(response, err)
 		return
@@ -1402,7 +1403,7 @@ func (m *Master) importExportUsers(response http.ResponseWriter, request *http.R
 		userStream, errChan := m.DataClient.GetUserStream(ctx, batchSize)
 		for users := range userStream {
 			for _, user := range users {
-				if err = json.MarshalEncode(encoder, user, json.Deterministic(true), json.FormatNilSliceAsNull(true)); err != nil {
+				if err = json.MarshalEncode(encoder, user, json.Deterministic(true)); err != nil {
 					server.InternalServerError(restful.NewResponse(response), err)
 					return
 				}
@@ -1500,7 +1501,7 @@ func (m *Master) importExportItems(response http.ResponseWriter, request *http.R
 		itemStream, errChan := m.DataClient.GetItemStream(ctx, batchSize, nil)
 		for items := range itemStream {
 			for _, item := range items {
-				if err = json.MarshalEncode(encoder, item, json.Deterministic(true), json.FormatNilSliceAsNull(true)); err != nil {
+				if err = json.MarshalEncode(encoder, item, json.Deterministic(true)); err != nil {
 					server.InternalServerError(restful.NewResponse(response), err)
 					return
 				}
@@ -1618,7 +1619,7 @@ func (m *Master) importExportFeedback(response http.ResponseWriter, request *htt
 		feedbackStream, errChan := m.DataClient.GetFeedbackStream(ctx, batchSize, data.WithEndTime(*m.Config.Now()))
 		for feedback := range feedbackStream {
 			for _, v := range feedback {
-				if err = json.MarshalEncode(encoder, v, json.Deterministic(true), json.FormatNilSliceAsNull(true)); err != nil {
+				if err = json.MarshalEncode(encoder, v, json.Deterministic(true)); err != nil {
 					server.InternalServerError(restful.NewResponse(response), err)
 					return
 				}

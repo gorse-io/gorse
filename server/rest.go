@@ -16,7 +16,6 @@ package server
 
 import (
 	"context"
-	jsonv1 "encoding/json"
 	"encoding/json/v2"
 	"fmt"
 	"io"
@@ -35,6 +34,7 @@ import (
 	"github.com/gorse-io/gorse/common/heap"
 	"github.com/gorse-io/gorse/common/jsonutil"
 	"github.com/gorse-io/gorse/common/log"
+	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/logics"
 	"github.com/gorse-io/gorse/storage"
@@ -2109,19 +2109,7 @@ func (s *RestServer) deleteTypedUserItemFeedback(request *restful.Request, respo
 	}
 }
 
-type HealthStatus struct {
-	Ready               bool
-	DataStoreError      error
-	CacheStoreError     error
-	DataStoreConnected  bool
-	CacheStoreConnected bool
-}
-
-// MarshalJSON preserves the health endpoint's representation of opaque database errors.
-func (h HealthStatus) MarshalJSON() ([]byte, error) {
-	type healthStatus HealthStatus
-	return json.Marshal(healthStatus(h), jsonv1.DefaultOptionsV1())
-}
+type HealthStatus = monitor.HealthStatus
 
 func (s *RestServer) checkHealth() HealthStatus {
 	healthStatus := HealthStatus{}

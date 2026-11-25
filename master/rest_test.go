@@ -17,7 +17,6 @@ package master
 import (
 	"bytes"
 	"encoding/base64"
-	jsonv1 "encoding/json"
 	"encoding/json/jsontext"
 	"encoding/json/v2"
 	"fmt"
@@ -32,6 +31,7 @@ import (
 	"github.com/emicklei/go-restful/v3"
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/gorse-io/gorse/common/expression"
+	"github.com/gorse-io/gorse/common/jsonutil"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/common/mock"
 	"github.com/gorse-io/gorse/config"
@@ -64,7 +64,7 @@ func marshalJSONLines[T any](t *testing.T, v []T) string {
 	var buf bytes.Buffer
 	encoder := jsontext.NewEncoder(&buf)
 	for _, item := range v {
-		err := json.MarshalEncode(encoder, item, json.Deterministic(true), json.FormatNilSliceAsNull(true))
+		err := json.MarshalEncode(encoder, item, json.Deterministic(true))
 		assert.NoError(t, err)
 	}
 	return buf.String()
@@ -208,7 +208,7 @@ func (suite *MasterAPITestSuite) TestExportItems() {
 		{
 			ItemId:     "3",
 			IsHidden:   true,
-			Categories: nil,
+			Categories: []string{},
 			Timestamp:  time.Date(2022, 1, 1, 1, 1, 1, 1, time.UTC),
 			Labels:     nil,
 			Comment:    "\"three\"",
@@ -329,7 +329,7 @@ func (suite *MasterAPITestSuite) TestImportItems() {
 		{
 			ItemId:     "3",
 			IsHidden:   true,
-			Categories: nil,
+			Categories: []string{},
 			Timestamp:  time.Date(2022, 1, 1, 1, 1, 1, 1, time.UTC),
 			Labels:     nil,
 			Comment:    "three",
@@ -921,7 +921,7 @@ func (suite *MasterAPITestSuite) TestConfig() {
 		End()
 	suite.Equal("reranker", suite.Config.Recommend.Ranker.Type)
 
-	configBytes, err := json.Marshal(suite.Config.Recommend, jsonv1.DefaultOptionsV1())
+	configBytes, err := json.Marshal(suite.Config.Recommend, jsonutil.DurationAsNano)
 	suite.NoError(err)
 	err = suite.metaStore.Put(meta.RECOMMEND_CONFIG, string(configBytes))
 	suite.NoError(err)
@@ -1125,6 +1125,7 @@ func (suite *MasterAPITestSuite) TestDumpAndRestore() {
 		for i := range items {
 			suite.False(returnItems[i].UpdateAt.IsZero())
 			returnItems[i].UpdateAt = time.Time{}
+			items[i].Categories = []string{}
 		}
 		suite.Equal(items, returnItems)
 	}
@@ -1185,6 +1186,8 @@ func (suite *MasterAPITestSuite) TestExportAndImport() {
 	suite.importExportItems(w, req)
 	suite.Equal(http.StatusOK, w.Code)
 	itemsData := w.Body.Bytes()
+	firstItem, _, _ := bytes.Cut(itemsData, []byte("\n"))
+	suite.Contains(string(firstItem), `"Categories":[]`)
 	// export feedback
 	req = httptest.NewRequest("GET", "https://example.com/", nil)
 	req.Header.Set("Cookie", suite.cookie)
@@ -1257,6 +1260,7 @@ func (suite *MasterAPITestSuite) TestExportAndImport() {
 		for i := range items {
 			suite.False(returnItems[i].UpdateAt.IsZero())
 			returnItems[i].UpdateAt = time.Time{}
+			items[i].Categories = []string{}
 		}
 		suite.Equal(items, returnItems)
 	}
@@ -1284,8 +1288,10 @@ func (suite *MasterAPITestSuite) TestChatCompletions() {
 	suite.chatCompletions(w, req)
 	suite.Equal(http.StatusOK, w.Code, w.Body.String())
 
-	var chatResponse openai.ChatCompletionResponse
-	suite.NoError(json.UnmarshalRead(w.Body, &chatResponse, jsonv1.ReportErrorsWithLegacySemantics(true)))
+	var chatResponse struct {
+		Choices []openai.ChatCompletionChoice `json:"choices"`
+	}
+	suite.NoError(json.UnmarshalRead(w.Body, &chatResponse))
 	if suite.Len(chatResponse.Choices, 1) {
 		suite.Equal(content, chatResponse.Choices[0].Message.Content)
 	}

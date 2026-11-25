@@ -76,7 +76,7 @@ func (c *Client) Rerank(ctx context.Context, req RerankRequest) (*RerankResponse
 	var body []byte
 	var err error
 
-	body, err = json.Marshal(req, json.FormatNilSliceAsNull(true))
+	body, err = json.Marshal(req)
 
 	if err != nil {
 		return nil, err

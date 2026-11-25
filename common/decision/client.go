@@ -49,7 +49,7 @@ func (q NoulQuestion) MarshalJSON() ([]byte, error) {
 		Type:         "noul",
 		Instructions: q.Instructions,
 		Criteria:     q.Criteria,
-	}, json.FormatNilSliceAsNull(true), json.FormatNilMapAsNull(true))
+	})
 }
 
 // Answer contains the probability returned by a Noul question.
@@ -110,7 +110,7 @@ func (c *Client) Evaluate(ctx context.Context, state any, questions Questions) (
 		Model:     c.model,
 		State:     state,
 		Questions: questions,
-	}, json.FormatNilSliceAsNull(true), json.FormatNilMapAsNull(true))
+	})
 	if err != nil {
 		return nil, err
 	}

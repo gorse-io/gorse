@@ -15,7 +15,6 @@
 package master
 
 import (
-	jsonv1 "encoding/json"
 	"encoding/json/v2"
 	"fmt"
 	"net"
@@ -24,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gorse-io/gorse/common/jsonutil"
 	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/common/util"
 	"github.com/gorse-io/gorse/config"
@@ -154,9 +154,12 @@ func TestRPC(t *testing.T) {
 	assert.Equal(t, []string{"server1"}, metaResp.Servers)
 	assert.Equal(t, []string{"worker1"}, metaResp.Workers)
 	var cfg config.Config
-	err = json.Unmarshal([]byte(metaResp.Config), &cfg, jsonv1.DefaultOptionsV1())
+	err = json.Unmarshal([]byte(metaResp.Config), &cfg, jsonutil.DurationAsNano, json.MatchCaseInsensitiveNames(true))
 	assert.NoError(t, err)
-	assert.Equal(t, rpcServer.Config, &cfg)
+	want, err := json.Marshal(rpcServer.Config, jsonutil.DurationAsNano)
+	assert.NoError(t, err)
+	assert.JSONEq(t, string(want), metaResp.Config)
+	assert.NotNil(t, cfg.Recommend.ItemToItem)
 
 	time.Sleep(time.Second * 2)
 	metaResp, err = client.GetMeta(ctx,
@@ -187,7 +190,7 @@ func TestReloadConfig(t *testing.T) {
 	})
 	assert.NoError(t, err)
 	var cfg config.Config
-	assert.NoError(t, json.Unmarshal([]byte(metaResp.Config), &cfg, jsonv1.DefaultOptionsV1()))
+	assert.NoError(t, json.Unmarshal([]byte(metaResp.Config), &cfg, jsonutil.DurationAsNano, json.MatchCaseInsensitiveNames(true)))
 	assert.Equal(t, 42, cfg.Server.DefaultN)
 }
 
