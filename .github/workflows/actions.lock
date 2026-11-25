@@ -27,7 +27,7 @@ workflows:
         - 'docker/login-action@v3'
         - 'docker/setup-buildx-action@v3'
         - 'golangci/golangci-lint-action@v9'
-        - 'gorse-io/redis-cluster@fix/redis-8-cluster-bus'
+        - 'gorse-io/redis-cluster@main'
         - 'msys2/setup-msys2@v2'
         - 'potatoqualitee/azuright@v1'
     '.github/workflows/dockerhub-description.yml':
@@ -116,9 +116,9 @@ dependencies:
         commit: 'sha1-a4f02ab5355a589de60d917a659ce617ed19b3de'
         owner_id: 24697112
         repo_id: 209873006
-    'gorse-io/redis-cluster@fix/redis-8-cluster-bus':
-        ref: 'fix/redis-8-cluster-bus'
-        commit: 'sha1-eb1d5b2d45e0a6495abca84ccbcfbe1a8be5edf5'
+    'gorse-io/redis-cluster@main':
+        ref: 'main'
+        commit: 'sha1-a2aa074c3da18dde7e50a572c4294a6e5602a305'
         owner_id: 74893108
         repo_id: 913961121
     'msys2/setup-msys2@v2':
