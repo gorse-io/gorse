@@ -15,7 +15,6 @@
 package expression
 
 import (
-	"encoding/json/jsontext"
 	"encoding/json/v2"
 	"errors"
 	"fmt"
@@ -104,7 +103,7 @@ func (f *FeedbackTypeExpression) FromString(data string) error {
 }
 
 func (f *FeedbackTypeExpression) MarshalJSON() ([]byte, error) {
-	return json.Marshal(f.String(), jsontext.EscapeForHTML(true), jsontext.EscapeForJS(true))
+	return json.Marshal(f.String())
 }
 
 func (f *FeedbackTypeExpression) UnmarshalJSON(data []byte) error {
