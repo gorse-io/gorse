@@ -20,22 +20,22 @@ import (
 	"github.com/gorse-io/gorse/common/jsonutil"
 )
 
-func (v Config) MarshalJSONTo(enc *jsontext.Encoder) error {
+func (config Config) MarshalJSONTo(enc *jsontext.Encoder) error {
 	type wire Config
-	return jsonutil.MarshalDurationFields(enc, (*wire)(&v))
+	return jsonutil.MarshalDurationFields(enc, (*wire)(&config))
 }
 
-func (v *Config) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
+func (config *Config) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
 	type wire Config
-	return jsonutil.UnmarshalDurationFields(dec, (*wire)(v))
+	return jsonutil.UnmarshalDurationFields(dec, (*wire)(config))
 }
 
-func (v RecommendConfig) MarshalJSONTo(enc *jsontext.Encoder) error {
+func (r RecommendConfig) MarshalJSONTo(enc *jsontext.Encoder) error {
 	type wire RecommendConfig
-	return jsonutil.MarshalDurationFields(enc, (*wire)(&v))
+	return jsonutil.MarshalDurationFields(enc, (*wire)(&r))
 }
 
-func (v *RecommendConfig) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
+func (r *RecommendConfig) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
 	type wire RecommendConfig
-	return jsonutil.UnmarshalDurationFields(dec, (*wire)(v))
+	return jsonutil.UnmarshalDurationFields(dec, (*wire)(r))
 }

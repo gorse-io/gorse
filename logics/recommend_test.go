@@ -379,8 +379,8 @@ func (suite *RecommenderTestSuite) TestUserToUser() {
 	suite.NoError(err)
 	suite.Equal(userToUserConfig.Hash(&recommendConfig), digest)
 	suite.ElementsMatch([]cache.Score{
-		{Id: "item_20", Score: 0.5},
-		{Id: "item_21", Score: 0.5},
+		{Id: "item_20", Score: 0.5, Categories: []string{}},
+		{Id: "item_21", Score: 0.5, Categories: []string{}},
 	}, scores)
 }
 
