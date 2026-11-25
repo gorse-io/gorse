@@ -17,7 +17,7 @@ package reranker
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"fmt"
 	"io"
 	"net"
@@ -43,7 +43,7 @@ func NewClient(apiKey, endpoint string) *Client {
 type RerankRequest struct {
 	Model     string   `json:"model"`
 	Query     string   `json:"query"`
-	TopN      int      `json:"top_n,omitempty"`
+	TopN      int      `json:"top_n,omitzero"`
 	Documents []string `json:"documents"`
 }
 

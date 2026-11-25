@@ -18,7 +18,7 @@ package decision
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"fmt"
 	"io"
 	"net/http"
@@ -30,21 +30,21 @@ type Questions map[string]NoulQuestion
 
 // NoulCriteria describes the yes and no outcomes of a Noul question.
 type NoulCriteria struct {
-	True  any `json:"true,omitempty"`
-	False any `json:"false,omitempty"`
+	True  any `json:"true,omitzero"`
+	False any `json:"false,omitzero"`
 }
 
 // NoulQuestion asks a yes/no question and returns the probability of yes.
 type NoulQuestion struct {
 	Instructions any           `json:"instructions"`
-	Criteria     *NoulCriteria `json:"criteria,omitempty"`
+	Criteria     *NoulCriteria `json:"criteria,omitzero"`
 }
 
 func (q NoulQuestion) MarshalJSON() ([]byte, error) {
 	return json.Marshal(struct {
 		Type         string        `json:"type"`
 		Instructions any           `json:"instructions"`
-		Criteria     *NoulCriteria `json:"criteria,omitempty"`
+		Criteria     *NoulCriteria `json:"criteria,omitzero"`
 	}{
 		Type:         "noul",
 		Instructions: q.Instructions,
@@ -62,7 +62,7 @@ type Answer struct {
 type Usage struct {
 	InputTokens  int     `json:"input_tokens"`
 	OutputTokens int     `json:"output_tokens"`
-	Cost         float64 `json:"cost,omitempty"`
+	Cost         float64 `json:"cost,omitzero"`
 }
 
 // Response is a Jev decisions response.
@@ -70,8 +70,8 @@ type Response struct {
 	Model    string            `json:"model"`
 	Answers  map[string]Answer `json:"answers"`
 	Usage    Usage             `json:"usage"`
-	ID       string            `json:"id,omitempty"`
-	Provider string            `json:"provider,omitempty"`
+	ID       string            `json:"id,omitzero"`
+	Provider string            `json:"provider,omitzero"`
 }
 
 // APIError reports a non-successful HTTP response from the Jev API.

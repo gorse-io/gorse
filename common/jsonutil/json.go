@@ -14,7 +14,7 @@
 
 package jsonutil
 
-import "encoding/json"
+import "encoding/json/v2"
 
 // Marshal returns the JSON encoding of v.
 func Marshal(v any) ([]byte, error) {

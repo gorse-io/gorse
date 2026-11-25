@@ -16,13 +16,14 @@ package data
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"fmt"
 	"io"
 	"net"
 	"time"
 
 	"github.com/gorse-io/gorse/common/expression"
+	"github.com/gorse-io/gorse/common/jsonutil"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/protocol"
 	"github.com/gorse-io/gorse/storage"
@@ -89,7 +90,7 @@ func feedbackFromPB(pbFeedback []*protocol.Feedback) ([]Feedback, error) {
 	for i, f := range pbFeedback {
 		var labels any
 		if len(f.Labels) > 0 {
-			if err := json.Unmarshal(f.Labels, &labels); err != nil {
+			if err := json.Unmarshal(f.Labels, &labels, jsonutil.ExactNumbers); err != nil {
 				return nil, err
 			}
 		}
@@ -116,7 +117,7 @@ func (p *ProxyServer) BatchInsertItems(ctx context.Context, in *protocol.BatchIn
 	items := make([]Item, len(in.Items))
 	for i, item := range in.Items {
 		var labels any
-		err := json.Unmarshal(item.Labels, &labels)
+		err := json.Unmarshal(item.Labels, &labels, jsonutil.ExactNumbers)
 		if err != nil {
 			return nil, err
 		}
@@ -227,7 +228,7 @@ func (p *ProxyServer) SearchItems(ctx context.Context, in *protocol.SearchItemsR
 func (p *ProxyServer) ModifyItem(ctx context.Context, in *protocol.ModifyItemRequest) (*protocol.ModifyItemResponse, error) {
 	var labels any
 	if in.Patch.Labels != nil {
-		err := json.Unmarshal(in.Patch.Labels, &labels)
+		err := json.Unmarshal(in.Patch.Labels, &labels, jsonutil.ExactNumbers)
 		if err != nil {
 			return nil, err
 		}
@@ -294,7 +295,7 @@ func (p *ProxyServer) BatchInsertUsers(ctx context.Context, in *protocol.BatchIn
 	users := make([]User, len(in.Users))
 	for i, user := range in.Users {
 		var labels any
-		err := json.Unmarshal(user.Labels, &labels)
+		err := json.Unmarshal(user.Labels, &labels, jsonutil.ExactNumbers)
 		if err != nil {
 			return nil, err
 		}
@@ -338,7 +339,7 @@ func (p *ProxyServer) GetUser(ctx context.Context, in *protocol.GetUserRequest) 
 func (p *ProxyServer) ModifyUser(ctx context.Context, in *protocol.ModifyUserRequest) (*protocol.ModifyUserResponse, error) {
 	var labels any
 	if in.Patch.Labels != nil {
-		err := json.Unmarshal(in.Patch.Labels, &labels)
+		err := json.Unmarshal(in.Patch.Labels, &labels, jsonutil.ExactNumbers)
 		if err != nil {
 			return nil, err
 		}
@@ -663,7 +664,7 @@ func (p ProxyClient) BatchGetItems(ctx context.Context, itemIds []string, opts G
 	items := make([]Item, len(resp.Items))
 	for i, item := range resp.Items {
 		var labels any
-		err = json.Unmarshal(item.Labels, &labels)
+		err = json.Unmarshal(item.Labels, &labels, jsonutil.ExactNumbers)
 		if err != nil {
 			return nil, err
 		}
@@ -694,7 +695,7 @@ func (p ProxyClient) GetItem(ctx context.Context, itemId string) (Item, error) {
 		return Item{}, fmt.Errorf("item %s %w", itemId, storage.ErrNotFound)
 	}
 	var labels any
-	if err = json.Unmarshal(resp.Item.Labels, &labels); err != nil {
+	if err = json.Unmarshal(resp.Item.Labels, &labels, jsonutil.ExactNumbers); err != nil {
 		return Item{}, err
 	}
 	return Item{
@@ -716,7 +717,7 @@ func (p ProxyClient) SearchItems(ctx context.Context, query string, n int) ([]Sc
 	items := make([]ScoredItem, len(resp.Items))
 	for i, item := range resp.Items {
 		var labels any
-		if err = json.Unmarshal(item.Item.Labels, &labels); err != nil {
+		if err = json.Unmarshal(item.Item.Labels, &labels, jsonutil.ExactNumbers); err != nil {
 			return nil, err
 		}
 		items[i] = ScoredItem{
@@ -745,7 +746,7 @@ func (p ProxyClient) GetLatestItems(ctx context.Context, n int, categories []str
 	items := make([]Item, len(resp.Items))
 	for i, item := range resp.Items {
 		var labels any
-		if err = json.Unmarshal(item.Labels, &labels); err != nil {
+		if err = json.Unmarshal(item.Labels, &labels, jsonutil.ExactNumbers); err != nil {
 			return nil, err
 		}
 		items[i] = Item{
@@ -799,7 +800,7 @@ func (p ProxyClient) GetItems(ctx context.Context, cursor string, n int, beginTi
 	items := make([]Item, len(resp.Items))
 	for i, item := range resp.Items {
 		var labels any
-		err = json.Unmarshal(item.Labels, &labels)
+		err = json.Unmarshal(item.Labels, &labels, jsonutil.ExactNumbers)
 		if err != nil {
 			return "", nil, err
 		}
@@ -866,7 +867,7 @@ func (p ProxyClient) GetUser(ctx context.Context, userId string) (User, error) {
 		return User{}, fmt.Errorf("user %s %w", userId, storage.ErrNotFound)
 	}
 	var labels any
-	if err = json.Unmarshal(resp.User.Labels, &labels); err != nil {
+	if err = json.Unmarshal(resp.User.Labels, &labels, jsonutil.ExactNumbers); err != nil {
 		return User{}, err
 	}
 	return User{
@@ -904,7 +905,7 @@ func (p ProxyClient) GetUsers(ctx context.Context, cursor string, n int) (string
 	users := make([]User, len(resp.Users))
 	for i, user := range resp.Users {
 		var labels any
-		err = json.Unmarshal(user.Labels, &labels)
+		err = json.Unmarshal(user.Labels, &labels, jsonutil.ExactNumbers)
 		if err != nil {
 			return "", nil, err
 		}
@@ -1039,7 +1040,7 @@ func (p ProxyClient) GetUserStream(ctx context.Context, batchSize int) (chan []U
 			users := make([]User, len(resp.Users))
 			for i, user := range resp.Users {
 				var labels any
-				if err = json.Unmarshal(user.Labels, &labels); err != nil {
+				if err = json.Unmarshal(user.Labels, &labels, jsonutil.ExactNumbers); err != nil {
 					errChan <- err
 					return
 				}
@@ -1079,7 +1080,7 @@ func (p ProxyClient) GetItemStream(ctx context.Context, batchSize int, timeLimit
 			items := make([]Item, len(resp.Items))
 			for i, item := range resp.Items {
 				var labels any
-				if err = json.Unmarshal(item.Labels, &labels); err != nil {
+				if err = json.Unmarshal(item.Labels, &labels, jsonutil.ExactNumbers); err != nil {
 					errChan <- err
 					return
 				}

@@ -84,6 +84,9 @@ func TestConvertEmbeddings(t *testing.T) {
 	embeddings := ConvertEmbeddings(nil)
 	assert.Nil(t, embeddings)
 
+	embeddings = ConvertEmbeddings([]any{json.Number("1.25"), json.Number("-2e0")})
+	assert.Equal(t, []Embedding{{Value: floats.FromFloat32([]float32{1.25, -2})}}, embeddings)
+
 	embeddings = ConvertEmbeddings([]float32{1, 2, 3})
 	if assert.Len(t, embeddings, 1) {
 		assert.Equal(t, "", embeddings[0].Name)

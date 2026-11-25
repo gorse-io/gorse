@@ -130,6 +130,11 @@ func convertEmbeddings(result []Embedding, prefix string, o any) []Embedding {
 			case int:
 				value = append(value, float32(v))
 			case json.Number:
+				n, err := strconv.ParseFloat(v.String(), 32)
+				if err != nil {
+					return result
+				}
+				value = append(value, float32(n))
 			default:
 				return result
 			}

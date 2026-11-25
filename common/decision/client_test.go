@@ -16,7 +16,8 @@ package decision
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -31,11 +32,11 @@ func TestClientEvaluate(t *testing.T) {
 		require.Equal(t, "application/json", r.Header.Get("Content-Type"))
 
 		var request struct {
-			Model     string                     `json:"model"`
-			State     map[string]any             `json:"state"`
-			Questions map[string]json.RawMessage `json:"questions"`
+			Model     string                    `json:"model"`
+			State     map[string]any            `json:"state"`
+			Questions map[string]jsontext.Value `json:"questions"`
 		}
-		require.NoError(t, json.NewDecoder(r.Body).Decode(&request))
+		require.NoError(t, json.UnmarshalRead(r.Body, &request))
 		require.Equal(t, "test-model", request.Model)
 		require.Equal(t, "Help! My payouts have been failing for 3 days.", request.State["message"])
 		require.JSONEq(t, `{
@@ -84,7 +85,7 @@ func TestClientEvaluateWithModel(t *testing.T) {
 		var request struct {
 			Model string `json:"model"`
 		}
-		require.NoError(t, json.NewDecoder(r.Body).Decode(&request))
+		require.NoError(t, json.UnmarshalRead(r.Body, &request))
 		require.Equal(t, "jev-1.13.0", request.Model)
 		_, err := w.Write([]byte(`{"model":"jev-1.13.0","answers":{},"usage":{}}`))
 		require.NoError(t, err)

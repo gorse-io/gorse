@@ -16,6 +16,7 @@ package config
 
 import (
 	"bytes"
+	"encoding/json/v2"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -30,6 +31,24 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 )
+
+func TestConfigJSONWire(t *testing.T) {
+	cfg := Config{Master: MasterConfig{MetaTimeout: time.Second + 7, HttpCorsMethods: []string{}}}
+	cfg.Recommend.Ranker.FitPeriod = 23 * time.Nanosecond
+	b, err := json.Marshal(&cfg)
+	if !assert.NoError(t, err) {
+		return
+	}
+	for _, field := range []string{`"MetaTimeout":"1.000000007s"`, `"FitPeriod":"23ns"`, `"HttpCorsDomains":[]`, `"HttpCorsMethods":[]`, `"ItemToItem":[]`} {
+		assert.Contains(t, string(b), field)
+	}
+	var decoded Config
+	assert.Error(t, json.Unmarshal([]byte(`{"Master":{"MetaTimeout":1000000007}}`), &decoded))
+	if assert.NoError(t, json.Unmarshal(b, &decoded)) {
+		assert.Equal(t, cfg.Master.MetaTimeout, decoded.Master.MetaTimeout)
+		assert.Equal(t, cfg.Recommend.Ranker.FitPeriod, decoded.Recommend.Ranker.FitPeriod)
+	}
+}
 
 func TestRedacted(t *testing.T) {
 	conf := &Config{

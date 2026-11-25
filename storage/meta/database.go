@@ -15,11 +15,12 @@
 package meta
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"strings"
 	"time"
 
 	"github.com/XSAM/otelsql"
+	"github.com/gorse-io/gorse/common/jsonutil"
 	"github.com/gorse-io/gorse/model"
 	"github.com/gorse-io/gorse/storage"
 	"github.com/pkg/errors"
@@ -46,7 +47,7 @@ func (m *Model[T]) ToJSON() string {
 }
 
 func (m *Model[T]) FromJSON(data string) error {
-	return json.Unmarshal([]byte(data), m)
+	return json.Unmarshal([]byte(data), m, jsonutil.ExactNumbers)
 }
 
 // Equal checks if two models have the same type and parameters.

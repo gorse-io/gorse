@@ -18,7 +18,7 @@ import (
 	"context"
 	"crypto/md5"
 	"encoding/hex"
-	"encoding/json"
+	"encoding/json/v2"
 	"math/rand"
 	"net"
 	"os"
@@ -194,7 +194,7 @@ func (s *Server) Sync() {
 		}
 
 		// load master config
-		err = json.Unmarshal([]byte(meta.Config), &s.Config)
+		err = json.Unmarshal([]byte(meta.Config), &s.Config, json.MatchCaseInsensitiveNames(true))
 		if err != nil {
 			log.Logger().Error("failed to parse master config", zap.Error(err))
 			goto sleep

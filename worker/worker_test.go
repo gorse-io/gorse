@@ -17,7 +17,8 @@ package worker
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 	"io"
 	"math/rand"
@@ -41,7 +42,6 @@ import (
 	"github.com/gorse-io/gorse/model/cf"
 	"github.com/gorse-io/gorse/model/ctr"
 	"github.com/gorse-io/gorse/protocol"
-	"github.com/gorse-io/gorse/storage"
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
 	"github.com/gorse-io/gorse/storage/vectors"
@@ -399,9 +399,9 @@ func (suite *WorkerTestSuite) TestRecommendLatest() {
 	recommends, err := suite.CacheClient.SearchScores(ctx, cache.Recommend, "0", nil, 0, 3)
 	suite.NoError(err)
 	suite.Equal([]cache.Score{
-		{Id: "20", Score: 20, Timestamp: recommendTime},
-		{Id: "19", Score: 19, Timestamp: recommendTime},
-		{Id: "18", Score: 18, Timestamp: recommendTime},
+		{Id: "20", Score: 20, Categories: []string{}, Timestamp: recommendTime},
+		{Id: "19", Score: 19, Categories: []string{}, Timestamp: recommendTime},
+		{Id: "18", Score: 18, Categories: []string{}, Timestamp: recommendTime},
 	}, recommends)
 	recommends, err = suite.CacheClient.SearchScores(ctx, cache.Recommend, "0", []string{"*"}, 0, -1)
 	suite.NoError(err)
@@ -536,10 +536,10 @@ func (suite *WorkerTestSuite) TestRecommend() {
 	suite.NoError(err)
 	suite.Equal([]cache.Score{
 		{Id: "5", Score: 5, Timestamp: recommendTime, Categories: []string{"a"}},
-		{Id: "4", Score: 4, Timestamp: recommendTime},
-		{Id: "3", Score: 3, Timestamp: recommendTime},
-		{Id: "2", Score: 2, Timestamp: recommendTime},
-		{Id: "1", Score: 1, Timestamp: recommendTime},
+		{Id: "4", Score: 4, Categories: []string{}, Timestamp: recommendTime},
+		{Id: "3", Score: 3, Categories: []string{}, Timestamp: recommendTime},
+		{Id: "2", Score: 2, Categories: []string{}, Timestamp: recommendTime},
+		{Id: "1", Score: 1, Categories: []string{}, Timestamp: recommendTime},
 	}, recommends)
 }
 
@@ -849,10 +849,10 @@ func (suite *WorkerTestSuite) TestRankByDecision() {
 	suite.Config.Recommend.DataSource.PositiveFeedbackTypes = []expression.FeedbackTypeExpression{expression.MustParseFeedbackTypeExpression("like")}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var request struct {
-			State     string                     `json:"state"`
-			Questions map[string]json.RawMessage `json:"questions"`
+			State     string                    `json:"state"`
+			Questions map[string]jsontext.Value `json:"questions"`
 		}
-		suite.Require().NoError(json.NewDecoder(r.Body).Decode(&request))
+		suite.Require().NoError(json.UnmarshalRead(r.Body, &request))
 		suite.Equal("u1: 5", request.State)
 		suite.Len(request.Questions, 2)
 		_, _ = w.Write([]byte(`{"answers":{"1":{"type":"noul","noul":0.15},"2":{"type":"noul","noul":0.85}}}`))
@@ -912,8 +912,8 @@ func (suite *WorkerTestSuite) TestReplacement() {
 	recommends, err := suite.CacheClient.SearchScores(ctx, cache.Recommend, "0", nil, 0, 3)
 	suite.NoError(err)
 	suite.Equal([]cache.Score{
-		{Id: "10", Score: 8, Timestamp: recommendTime},
-		{Id: "9", Score: 6.3, Timestamp: recommendTime},
+		{Id: "10", Score: 8, Categories: []string{}, Timestamp: recommendTime},
+		{Id: "9", Score: 6.3, Categories: []string{}, Timestamp: recommendTime},
 	}, recommends)
 
 	// 2. Insert historical items into non-empty recommendation.
@@ -927,9 +927,9 @@ func (suite *WorkerTestSuite) TestReplacement() {
 	recommends, err = suite.CacheClient.SearchScores(ctx, cache.Recommend, "0", nil, 0, 3)
 	suite.NoError(err)
 	suite.Equal([]cache.Score{
-		{Id: "10", Score: 8, Timestamp: recommendTime},
-		{Id: "7", Score: 7, Timestamp: recommendTime},
-		{Id: "9", Score: 6.3, Timestamp: recommendTime},
+		{Id: "10", Score: 8, Categories: []string{}, Timestamp: recommendTime},
+		{Id: "7", Score: 7, Categories: []string{}, Timestamp: recommendTime},
+		{Id: "9", Score: 6.3, Categories: []string{}, Timestamp: recommendTime},
 	}, recommends)
 }
 
@@ -979,37 +979,19 @@ func (suite *WorkerTestSuite) TestHealth() {
 	w := httptest.NewRecorder()
 	suite.checkLive(w, req)
 	suite.Equal(http.StatusOK, w.Code)
-	suite.Equal(marshal(suite.T(), HealthStatus{
-		Ready:               true,
-		DataStoreError:      nil,
-		CacheStoreError:     nil,
-		DataStoreConnected:  true,
-		CacheStoreConnected: true,
-	}), w.Body.String())
+	suite.JSONEq(`{"Ready":true,"DataStoreError":null,"CacheStoreError":null,"DataStoreConnected":true,"CacheStoreConnected":true}`, w.Body.String())
 
 	w = httptest.NewRecorder()
 	suite.checkReady(w, req)
 	suite.Equal(http.StatusOK, w.Code)
-	suite.Equal(marshal(suite.T(), HealthStatus{
-		Ready:               true,
-		DataStoreError:      nil,
-		CacheStoreError:     nil,
-		DataStoreConnected:  true,
-		CacheStoreConnected: true,
-	}), w.Body.String())
+	suite.JSONEq(`{"Ready":true,"DataStoreError":null,"CacheStoreError":null,"DataStoreConnected":true,"CacheStoreConnected":true}`, w.Body.String())
 
 	dataClient, cacheClient := suite.DataClient, suite.CacheClient
 	suite.DataClient, suite.CacheClient = data.NoDatabase{}, cache.NoDatabase{}
 	w = httptest.NewRecorder()
 	suite.checkLive(w, req)
 	suite.Equal(http.StatusOK, w.Code)
-	suite.Equal(marshal(suite.T(), HealthStatus{
-		Ready:               false,
-		DataStoreError:      storage.ErrNoDatabase,
-		CacheStoreError:     storage.ErrNoDatabase,
-		DataStoreConnected:  false,
-		CacheStoreConnected: false,
-	}), w.Body.String())
+	suite.JSONEq(`{"Ready":false,"DataStoreError":{},"CacheStoreError":{},"DataStoreConnected":false,"CacheStoreConnected":false}`, w.Body.String())
 
 	w = httptest.NewRecorder()
 	suite.checkReady(w, req)

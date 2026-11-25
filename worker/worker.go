@@ -18,7 +18,7 @@ import (
 	"context"
 	"crypto/md5"
 	"encoding/hex"
-	"encoding/json"
+	"encoding/json/v2"
 	"fmt"
 	"math/rand"
 	"net"
@@ -158,7 +158,7 @@ func (w *Worker) Sync() {
 		}
 
 		// load master config
-		err = json.Unmarshal([]byte(meta.Config), &w.Config)
+		err = json.Unmarshal([]byte(meta.Config), &w.Config, json.MatchCaseInsensitiveNames(true))
 		if err != nil {
 			log.Logger().Error("failed to parse master config", zap.Error(err))
 			goto sleep
@@ -500,13 +500,7 @@ func (w *Worker) pullUsers(peers []string, me string) ([]data.User, error) {
 	return users, nil
 }
 
-type HealthStatus struct {
-	Ready               bool
-	DataStoreError      error
-	CacheStoreError     error
-	DataStoreConnected  bool
-	CacheStoreConnected bool
-}
+type HealthStatus = monitor.HealthStatus
 
 func (w *Worker) checkHealth() HealthStatus {
 	healthStatus := HealthStatus{}

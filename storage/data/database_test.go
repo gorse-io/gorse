@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/gorse-io/gorse/common/expression"
+	"github.com/gorse-io/gorse/common/jsonutil"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/storage"
@@ -259,7 +260,7 @@ func (suite *baseTestSuite) TestFeedback() {
 	err := suite.Database.BatchInsertUsers(ctx, []User{{UserId: "0", Labels: []string{"a"}, Comment: "comment"}})
 	suite.NoError(err)
 	// items that already exists
-	err = suite.Database.BatchInsertItems(ctx, []Item{{ItemId: "0", Labels: []string{"b"}, Timestamp: time.Date(1996, 4, 8, 10, 0, 0, 0, time.UTC)}})
+	err = suite.Database.BatchInsertItems(ctx, []Item{{ItemId: "0", Categories: []string{}, Labels: []string{"b"}, Timestamp: time.Date(1996, 4, 8, 10, 0, 0, 0, time.UTC)}})
 	suite.NoError(err)
 	// insert feedbacks
 	timestamp := time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC)
@@ -366,7 +367,8 @@ func (suite *baseTestSuite) TestFeedback() {
 	suite.NoError(err)
 	suite.False(item.UpdateAt.IsZero())
 	item.UpdateAt = time.Time{}
-	suite.Equal(Item{ItemId: "0", Labels: []any{"b"}, Timestamp: time.Date(1996, 4, 8, 10, 0, 0, 0, time.UTC)}, item)
+	suite.Empty(item.Categories)
+	suite.Equal(Item{ItemId: "0", Categories: item.Categories, Labels: []any{"b"}, Timestamp: time.Date(1996, 4, 8, 10, 0, 0, 0, time.UTC)}, item)
 	// Get typed feedback by user
 	ret, err = suite.Database.GetUserFeedback(ctx, "2", new(time.Now()),
 		expression.MustParseFeedbackTypeExpression(positiveFeedbackType1),
@@ -826,34 +828,39 @@ func (suite *baseTestSuite) TestTimeLimit() {
 	// insert items
 	items := []Item{
 		{
-			ItemId:    "0",
-			Timestamp: time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
-			Labels:    []any{"a"},
-			Comment:   "comment 0",
+			ItemId:     "0",
+			Categories: []string{},
+			Timestamp:  time.Date(1996, 3, 15, 0, 0, 0, 0, time.UTC),
+			Labels:     []any{"a"},
+			Comment:    "comment 0",
 		},
 		{
-			ItemId:    "2",
-			Timestamp: time.Date(1997, 3, 15, 0, 0, 0, 0, time.UTC),
-			Labels:    []any{"a"},
-			Comment:   "comment 2",
+			ItemId:     "2",
+			Categories: []string{},
+			Timestamp:  time.Date(1997, 3, 15, 0, 0, 0, 0, time.UTC),
+			Labels:     []any{"a"},
+			Comment:    "comment 2",
 		},
 		{
-			ItemId:    "4",
-			Timestamp: time.Date(1998, 3, 15, 0, 0, 0, 0, time.UTC),
-			Labels:    []any{"a", "b"},
-			Comment:   "comment 4",
+			ItemId:     "4",
+			Categories: []string{},
+			Timestamp:  time.Date(1998, 3, 15, 0, 0, 0, 0, time.UTC),
+			Labels:     []any{"a", "b"},
+			Comment:    "comment 4",
 		},
 		{
-			ItemId:    "6",
-			Timestamp: time.Date(1999, 3, 15, 0, 0, 0, 0, time.UTC),
-			Labels:    []any{"b"},
-			Comment:   "comment 6",
+			ItemId:     "6",
+			Categories: []string{},
+			Timestamp:  time.Date(1999, 3, 15, 0, 0, 0, 0, time.UTC),
+			Labels:     []any{"b"},
+			Comment:    "comment 6",
 		},
 		{
-			ItemId:    "8",
-			Timestamp: time.Date(2000, 3, 15, 0, 0, 0, 0, time.UTC),
-			Labels:    []any{"b"},
-			Comment:   "comment 8",
+			ItemId:     "8",
+			Categories: []string{},
+			Timestamp:  time.Date(2000, 3, 15, 0, 0, 0, 0, time.UTC),
+			Labels:     []any{"b"},
+			Comment:    "comment 8",
 		},
 	}
 	err := suite.Database.BatchInsertItems(ctx, items)
@@ -865,7 +872,7 @@ func (suite *baseTestSuite) TestTimeLimit() {
 		suite.False(ret[i].UpdateAt.IsZero())
 		ret[i].UpdateAt = time.Time{}
 	}
-	suite.Equal([]Item{items[2], items[3], items[4]}, ret)
+	suite.JSONEq(jsonutil.MustMarshal([]Item{items[2], items[3], items[4]}), jsonutil.MustMarshal(ret))
 
 	// insert feedback
 	feedbacks := []Feedback{

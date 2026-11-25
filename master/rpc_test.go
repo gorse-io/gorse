@@ -15,7 +15,7 @@
 package master
 
 import (
-	"encoding/json"
+	"encoding/json/v2"
 	"fmt"
 	"net"
 	"os"
@@ -153,9 +153,13 @@ func TestRPC(t *testing.T) {
 	assert.Equal(t, []string{"server1"}, metaResp.Servers)
 	assert.Equal(t, []string{"worker1"}, metaResp.Workers)
 	var cfg config.Config
-	err = json.Unmarshal([]byte(metaResp.Config), &cfg)
+	err = json.Unmarshal([]byte(metaResp.Config), &cfg, json.MatchCaseInsensitiveNames(true))
 	assert.NoError(t, err)
-	assert.Equal(t, rpcServer.Config, &cfg)
+	want, err := json.Marshal(rpcServer.Config)
+	assert.NoError(t, err)
+	assert.JSONEq(t, string(want), metaResp.Config)
+	assert.Contains(t, metaResp.Config, `"MetaTimeout":"`+rpcServer.Config.Master.MetaTimeout.String()+`"`)
+	assert.NotNil(t, cfg.Recommend.ItemToItem)
 
 	time.Sleep(time.Second * 2)
 	metaResp, err = client.GetMeta(ctx,
@@ -186,7 +190,7 @@ func TestReloadConfig(t *testing.T) {
 	})
 	assert.NoError(t, err)
 	var cfg config.Config
-	assert.NoError(t, json.Unmarshal([]byte(metaResp.Config), &cfg))
+	assert.NoError(t, json.Unmarshal([]byte(metaResp.Config), &cfg, json.MatchCaseInsensitiveNames(true)))
 	assert.Equal(t, 42, cfg.Server.DefaultN)
 }
 

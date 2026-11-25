@@ -81,7 +81,7 @@ type Item struct {
 	Timestamp  time.Time `gorm:"column:time_stamp" mapstructure:"timestamp"`
 	// UpdateAt is the latest database write time, assigned by storage, not callers.
 	UpdateAt time.Time `gorm:"column:update_at" mapstructure:"-" json:"-"`
-	Labels   any       `gorm:"serializer:json" mapstructure:"labels"`
+	Labels   any       `gorm:"serializer:gorse_labels" mapstructure:"labels"`
 	Comment  string    `mapstructure:"comment"`
 }
 
@@ -103,7 +103,7 @@ type ItemPatch struct {
 // User stores meta data about user.
 type User struct {
 	UserId  string `gorm:"primaryKey" mapstructure:"user_id"`
-	Labels  any    `gorm:"serializer:json" mapstructure:"labels"`
+	Labels  any    `gorm:"serializer:gorse_labels" mapstructure:"labels"`
 	Comment string `mapstructure:"comment"`
 	// UpdateAt is the latest database write time, assigned by storage, not callers.
 	UpdateAt time.Time `gorm:"column:update_at" mapstructure:"-" json:"-"`
@@ -128,7 +128,7 @@ type Feedback struct {
 	Value       float64   `gorm:"column:value" mapstructure:"value"`
 	Timestamp   time.Time `gorm:"column:time_stamp" mapstructure:"timestamp"`
 	Updated     time.Time `gorm:"column:updated" mapstructure:"updated"`
-	Labels      any       `gorm:"serializer:json" mapstructure:"labels"`
+	Labels      any       `gorm:"serializer:gorse_labels" mapstructure:"labels"`
 	Comment     string    `gorm:"column:comment" mapstructure:"comment"`
 }
 

@@ -16,7 +16,7 @@ package server
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"fmt"
 	"io"
 	"net/http"
@@ -34,6 +34,7 @@ import (
 	"github.com/gorse-io/gorse/common/heap"
 	"github.com/gorse-io/gorse/common/jsonutil"
 	"github.com/gorse-io/gorse/common/log"
+	"github.com/gorse-io/gorse/common/monitor"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/logics"
 	"github.com/gorse-io/gorse/storage"
@@ -2108,13 +2109,7 @@ func (s *RestServer) deleteTypedUserItemFeedback(request *restful.Request, respo
 	}
 }
 
-type HealthStatus struct {
-	Ready               bool
-	DataStoreError      error
-	CacheStoreError     error
-	DataStoreConnected  bool
-	CacheStoreConnected bool
-}
+type HealthStatus = monitor.HealthStatus
 
 func (s *RestServer) checkHealth() HealthStatus {
 	healthStatus := HealthStatus{}
@@ -2183,7 +2178,7 @@ func PageNotFound(response *restful.Response, err error) {
 // Ok sends the content as JSON to the client.
 func Ok(response *restful.Response, content any) {
 	response.AddHeader("Access-Control-Allow-Origin", "*")
-	if err := response.WriteAsJson(content); err != nil {
+	if err := (jsonEntity{}).Write(response, http.StatusOK, content); err != nil {
 		log.ResponseLogger(response).Error("failed to write json", zap.Error(err))
 	}
 }

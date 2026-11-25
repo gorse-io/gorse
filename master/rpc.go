@@ -16,7 +16,7 @@ package master
 
 import (
 	"context"
-	"encoding/json"
+	"encoding/json/v2"
 	"time"
 
 	"github.com/gorse-io/gorse/common/monitor"

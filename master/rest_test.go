@@ -17,7 +17,9 @@ package master
 import (
 	"bytes"
 	"encoding/base64"
-	"encoding/json"
+	jsonv1 "encoding/json"
+	"encoding/json/jsontext"
+	"encoding/json/v2"
 	"fmt"
 	"mime/multipart"
 	"net/http"
@@ -60,9 +62,9 @@ func marshal(t *testing.T, v any) string {
 
 func marshalJSONLines[T any](t *testing.T, v []T) string {
 	var buf bytes.Buffer
-	encoder := json.NewEncoder(&buf)
+	encoder := jsontext.NewEncoder(&buf)
 	for _, item := range v {
-		err := encoder.Encode(item)
+		err := json.MarshalEncode(encoder, item, json.Deterministic(true))
 		assert.NoError(t, err)
 	}
 	return buf.String()
@@ -156,6 +158,12 @@ func (suite *MasterAPITestSuite) TearDownTest() {
 	suite.NoError(err)
 }
 
+func (suite *MasterAPITestSuite) TestEmptyClusterJSON() {
+	apitest.New().Handler(suite.handler).Get("/api/dashboard/cluster").
+		Header("Cookie", suite.cookie).Expect(suite.T()).Status(http.StatusOK).
+		Header("Content-Type", restful.MIME_JSON).Body(`[]`).End()
+}
+
 func (suite *MasterAPITestSuite) TestExportUsers() {
 	ctx := suite.T().Context()
 	// insert users
@@ -200,7 +208,7 @@ func (suite *MasterAPITestSuite) TestExportItems() {
 		{
 			ItemId:     "3",
 			IsHidden:   true,
-			Categories: nil,
+			Categories: []string{},
 			Timestamp:  time.Date(2022, 1, 1, 1, 1, 1, 1, time.UTC),
 			Labels:     nil,
 			Comment:    "\"three\"",
@@ -321,7 +329,7 @@ func (suite *MasterAPITestSuite) TestImportItems() {
 		{
 			ItemId:     "3",
 			IsHidden:   true,
-			Categories: nil,
+			Categories: []string{},
 			Timestamp:  time.Date(2022, 1, 1, 1, 1, 1, 1, time.UTC),
 			Labels:     nil,
 			Comment:    "three",
@@ -861,7 +869,12 @@ func (suite *MasterAPITestSuite) TestConfig() {
 	suite.Config.Blob.Azure.ConnectionString = "azure-connection-string-secret"
 	redactedConfig, err := suite.Config.Redacted()
 	suite.NoError(err)
-	redactedConfigJSON := marshal(suite.T(), formatConfig(convertToMapStructure(suite.T(), redactedConfig)))
+	redactedConfigMap := formatConfig(convertToMapStructure(suite.T(), redactedConfig))
+	redactedConfigJSON := marshal(suite.T(), redactedConfigMap)
+	redactedConfigMap["recommend"].(map[string]any)["cache_expire"] = 1000000007
+	apitest.New().Handler(suite.handler).Post("/api/dashboard/config").
+		Header("Cookie", suite.cookie).Header("Content-Type", "application/json").
+		Body(marshal(suite.T(), redactedConfigMap)).Expect(suite.T()).Status(http.StatusBadRequest).End()
 	apitest.New().
 		Handler(suite.handler).
 		Get("/api/dashboard/config").
@@ -1100,6 +1113,10 @@ func (suite *MasterAPITestSuite) TestDumpAndRestore() {
 	w = httptest.NewRecorder()
 	suite.restore(w, req)
 	suite.Equal(http.StatusOK, w.Code)
+	var stats struct{ Duration string }
+	suite.Require().NoError(json.Unmarshal(w.Body.Bytes(), &stats))
+	_, err = time.ParseDuration(stats.Duration)
+	suite.NoError(err)
 
 	// check data
 	_, returnUsers, err := suite.DataClient.GetUsers(ctx, "", len(users))
@@ -1117,6 +1134,7 @@ func (suite *MasterAPITestSuite) TestDumpAndRestore() {
 		for i := range items {
 			suite.False(returnItems[i].UpdateAt.IsZero())
 			returnItems[i].UpdateAt = time.Time{}
+			items[i].Categories = []string{}
 		}
 		suite.Equal(items, returnItems)
 	}
@@ -1177,6 +1195,8 @@ func (suite *MasterAPITestSuite) TestExportAndImport() {
 	suite.importExportItems(w, req)
 	suite.Equal(http.StatusOK, w.Code)
 	itemsData := w.Body.Bytes()
+	firstItem, _, _ := bytes.Cut(itemsData, []byte("\n"))
+	suite.Contains(string(firstItem), `"Categories":[]`)
 	// export feedback
 	req = httptest.NewRequest("GET", "https://example.com/", nil)
 	req.Header.Set("Cookie", suite.cookie)
@@ -1249,6 +1269,7 @@ func (suite *MasterAPITestSuite) TestExportAndImport() {
 		for i := range items {
 			suite.False(returnItems[i].UpdateAt.IsZero())
 			returnItems[i].UpdateAt = time.Time{}
+			items[i].Categories = []string{}
 		}
 		suite.Equal(items, returnItems)
 	}
@@ -1264,7 +1285,7 @@ func (suite *MasterAPITestSuite) TestChatCompletions() {
 		" my mind ever since. \"Whenever you feel like criticizing any one,\" he told me, \" just remember that all " +
 		"the people in this world haven't had the advantages that you've had.\""
 	buf := bytes.NewBuffer(nil)
-	suite.NoError(json.NewEncoder(buf).Encode(openai.ChatCompletionRequest{
+	suite.NoError(json.MarshalWrite(buf, openai.ChatCompletionRequest{
 		Model: "gpt-test",
 		Messages: []openai.ChatCompletionMessage{
 			{Role: openai.ChatMessageRoleUser, Content: content},
@@ -1277,16 +1298,16 @@ func (suite *MasterAPITestSuite) TestChatCompletions() {
 	suite.Equal(http.StatusOK, w.Code, w.Body.String())
 
 	var chatResponse openai.ChatCompletionResponse
-	suite.NoError(json.NewDecoder(w.Body).Decode(&chatResponse))
+	suite.NoError(json.UnmarshalRead(w.Body, &chatResponse, jsonv1.ReportErrorsWithLegacySemantics(true)))
 	if suite.Len(chatResponse.Choices, 1) {
 		suite.Equal(content, chatResponse.Choices[0].Message.Content)
 	}
 }
 
 func (suite *MasterAPITestSuite) TestChatCompletionsStream() {
-	content := "streaming chat completion proxy"
+	content := "1234567你🙂好 streaming chat completion proxy"
 	buf := bytes.NewBuffer(nil)
-	suite.NoError(json.NewEncoder(buf).Encode(openai.ChatCompletionRequest{
+	suite.NoError(json.MarshalWrite(buf, openai.ChatCompletionRequest{
 		Model:  "gpt-test",
 		Stream: true,
 		Messages: []openai.ChatCompletionMessage{

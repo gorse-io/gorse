@@ -15,6 +15,7 @@
 package client
 
 import (
+	"encoding/json/jsontext"
 	"fmt"
 	"io"
 	"net/url"
@@ -23,6 +24,7 @@ import (
 
 	"github.com/go-resty/resty/v2"
 	client "github.com/gorse-io/gorse-go"
+	"github.com/gorse-io/gorse/common/jsonutil"
 )
 
 // AdminClient is a client for the Gorse admin API.
@@ -119,6 +121,16 @@ type DumpStats struct {
 	Items    int
 	Feedback int
 	Duration time.Duration
+}
+
+func (v DumpStats) MarshalJSONTo(enc *jsontext.Encoder) error {
+	type wire DumpStats
+	return jsonutil.MarshalDurationFields(enc, (*wire)(&v))
+}
+
+func (v *DumpStats) UnmarshalJSONFrom(dec *jsontext.Decoder) error {
+	type wire DumpStats
+	return jsonutil.UnmarshalDurationFields(dec, (*wire)(v))
 }
 
 type TimeSeriesPoint struct {
