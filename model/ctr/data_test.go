@@ -67,7 +67,7 @@ func TestConvertLabels(t *testing.T) {
 	// numerical features
 	features = ConvertLabels(json.Number("1"))
 	assert.Equal(t, []Label{{Name: "", Value: 1}}, features)
-	features = ConvertLabels(map[string]any{"city": "wenzhou", "tags": json.Number("0.5")})
+	features = ConvertLabels(map[string]any{"city": "wenzhou", "tags": 0.5})
 	assert.ElementsMatch(t, []Label{
 		{Name: "city.wenzhou", Value: 1},
 		{Name: "tags.", Value: 0.5},

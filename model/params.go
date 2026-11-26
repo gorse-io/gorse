@@ -17,6 +17,7 @@ package model
 import (
 	"encoding/json"
 	"maps"
+	"math"
 	"reflect"
 	"strconv"
 
@@ -88,6 +89,10 @@ func (parameters Params) GetBool(name ParamName, _default bool) bool {
 func (parameters Params) GetInt(name ParamName, _default int) int {
 	if val, exist := parameters[name]; exist {
 		switch val := val.(type) {
+		case float64:
+			if val == math.Trunc(val) && val >= math.MinInt && val < -math.MinInt {
+				return int(val)
+			}
 		case json.Number:
 			n, err := strconv.Atoi(val.String())
 			if err == nil {
@@ -109,6 +114,10 @@ func (parameters Params) GetInt(name ParamName, _default int) int {
 func (parameters Params) GetInt64(name ParamName, _default int64) int64 {
 	if val, exist := parameters[name]; exist {
 		switch val := val.(type) {
+		case float64:
+			if val == math.Trunc(val) && val >= math.MinInt64 && val < -math.MinInt64 {
+				return int64(val)
+			}
 		case json.Number:
 			n, err := val.Int64()
 			if err == nil {

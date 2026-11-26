@@ -74,6 +74,8 @@ func convertLabels(result []Label, prefix string, o any) []Label {
 			Name:  prefix + labels,
 			Value: 1,
 		})
+	case float64:
+		result = append(result, Label{Name: prefix, Value: float32(labels)})
 	case json.Number:
 		value, _ := labels.Float64()
 		result = append(result, Label{

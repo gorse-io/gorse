@@ -16,9 +16,9 @@ package server
 
 import (
 	"encoding/json/v2"
+	"net/http"
 
 	"github.com/emicklei/go-restful/v3"
-	"github.com/gorse-io/gorse/common/jsonutil"
 )
 
 type jsonEntity struct{}
@@ -28,10 +28,14 @@ func init() {
 }
 
 func (jsonEntity) Read(req *restful.Request, v any) error {
-	return json.UnmarshalRead(req.Request.Body, v, jsonutil.ExactNumbers, json.MatchCaseInsensitiveNames(true))
+	return json.UnmarshalRead(req.Request.Body, v)
 }
 
 func (jsonEntity) Write(resp *restful.Response, status int, v any) error {
+	return writeJSON(resp, status, v)
+}
+
+func writeJSON(resp http.ResponseWriter, status int, v any) error {
 	if v == nil {
 		resp.WriteHeader(status)
 		return nil

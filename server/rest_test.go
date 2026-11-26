@@ -14,7 +14,6 @@
 package server
 
 import (
-	jsonv1 "encoding/json"
 	"encoding/json/v2"
 	"fmt"
 	"io"
@@ -922,7 +921,7 @@ func (suite *ServerTestSuite) TestFeedback() {
 	feedback := []data.Feedback{
 		{FeedbackType: "click", UserId: "0", ItemId: "0", Value: 1.0},
 		{FeedbackType: "click", UserId: "1", ItemId: "2", Value: 1.0, Labels: []any{"positive", "mobile"}},
-		{FeedbackType: "click", UserId: "2", ItemId: "4", Value: 1.0, Labels: map[string]any{"source": "rest", "rank": jsonv1.Number("2")}},
+		{FeedbackType: "click", UserId: "2", ItemId: "4", Value: 1.0, Labels: map[string]any{"source": "rest", "rank": 2.0}},
 		{FeedbackType: "click", UserId: "3", ItemId: "6", Value: 1.0},
 		{FeedbackType: "click", UserId: "4", ItemId: "8", Value: 1.0},
 	}

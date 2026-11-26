@@ -1128,6 +1128,7 @@ func TestSortFeedbacks(t *testing.T) {
 
 func TestValidateLabels(t *testing.T) {
 	assert.NoError(t, ValidateLabels(nil))
+	assert.NoError(t, ValidateLabels(map[string]any{"score": 0.5, "embedding": []any{1.0, 2.0}}))
 	assert.NoError(t, ValidateLabels(json.Number("1")))
 	assert.NoError(t, ValidateLabels("label"))
 	assert.NoError(t, ValidateLabels([]any{json.Number("1"), json.Number("2"), json.Number("3")}))

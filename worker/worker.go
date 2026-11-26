@@ -158,7 +158,7 @@ func (w *Worker) Sync() {
 		}
 
 		// load master config
-		err = json.Unmarshal([]byte(meta.Config), &w.Config, json.MatchCaseInsensitiveNames(true))
+		err = json.Unmarshal([]byte(meta.Config), &w.Config)
 		if err != nil {
 			log.Logger().Error("failed to parse master config", zap.Error(err))
 			goto sleep

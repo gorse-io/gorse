@@ -169,7 +169,7 @@ func (m *Master) applyRecommendOverride(cfg *config.Config) error {
 	if metaStr == nil {
 		return nil
 	}
-	if err = json.Unmarshal([]byte(*metaStr), &cfg.Recommend, json.MatchCaseInsensitiveNames(true)); err != nil {
+	if err = json.Unmarshal([]byte(*metaStr), &cfg.Recommend); err != nil {
 		return errors.WithStack(err)
 	}
 	return nil

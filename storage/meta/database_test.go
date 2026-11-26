@@ -148,10 +148,9 @@ func TestModelStoredParameters(t *testing.T) {
 		return
 	}
 	encoded := m.ToJSON()
-	assert.JSONEq(t, `{"ID":12,"Type":"cf","Params":{"Lr":0.01230,"NEpochs":17,"RandomState":9007199254740993},"Score":[]}`, encoded)
-	assert.Contains(t, encoded, `9007199254740993`)
-	assert.Contains(t, encoded, `0.01230`)
+	assert.JSONEq(t, `{"ID":12,"Type":"cf","Params":{"Lr":0.0123,"NEpochs":17,"RandomState":9007199254740992},"Score":[]}`, encoded)
+	assert.Equal(t, 9007199254740992.0, m.Params[model.RandomState])
 	assert.Equal(t, 17, m.Params.GetInt(model.NEpochs, 0))
-	assert.Equal(t, int64(9007199254740993), m.Params.GetInt64(model.RandomState, 0))
+	assert.Equal(t, int64(9007199254740992), m.Params.GetInt64(model.RandomState, 0))
 	assert.Equal(t, float32(0.01230), m.Params.GetFloat32(model.Lr, 0))
 }

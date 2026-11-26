@@ -15,7 +15,6 @@
 package data
 
 import (
-	"encoding/json"
 	"fmt"
 	"net"
 	"testing"
@@ -85,11 +84,11 @@ func (suite *ProxyTestSuite) TestPurge() {
 
 func (suite *ProxyTestSuite) TestNumericLabelRoundTrip() {
 	ctx := suite.T().Context()
-	labels := map[string]any{"ids": []any{json.Number("9007199254740993"), json.Number("1.2300")}}
+	labels := map[string]any{"ids": []any{int64(9007199254740993), 1.23}}
 	suite.Require().NoError(suite.Database.BatchInsertUsers(ctx, []User{{UserId: "precision", Labels: labels}}))
 	user, err := suite.Database.GetUser(ctx, "precision")
 	suite.Require().NoError(err)
-	suite.Equal(labels, user.Labels)
+	suite.Equal(map[string]any{"ids": []any{9007199254740992.0, 1.23}}, user.Labels)
 }
 
 func TestProxy(t *testing.T) {

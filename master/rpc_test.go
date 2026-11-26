@@ -153,7 +153,7 @@ func TestRPC(t *testing.T) {
 	assert.Equal(t, []string{"server1"}, metaResp.Servers)
 	assert.Equal(t, []string{"worker1"}, metaResp.Workers)
 	var cfg config.Config
-	err = json.Unmarshal([]byte(metaResp.Config), &cfg, json.MatchCaseInsensitiveNames(true))
+	err = json.Unmarshal([]byte(metaResp.Config), &cfg)
 	assert.NoError(t, err)
 	want, err := json.Marshal(rpcServer.Config)
 	assert.NoError(t, err)
@@ -190,7 +190,7 @@ func TestReloadConfig(t *testing.T) {
 	})
 	assert.NoError(t, err)
 	var cfg config.Config
-	assert.NoError(t, json.Unmarshal([]byte(metaResp.Config), &cfg, json.MatchCaseInsensitiveNames(true)))
+	assert.NoError(t, json.Unmarshal([]byte(metaResp.Config), &cfg))
 	assert.Equal(t, 42, cfg.Server.DefaultN)
 }
 

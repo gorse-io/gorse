@@ -17,14 +17,13 @@ package data
 import (
 	"context"
 	"encoding/json/v2"
-	"github.com/gorse-io/gorse/common/jsonutil"
-	"gorm.io/gorm/schema"
 	"reflect"
+
+	"gorm.io/gorm/schema"
 )
 
 func init() { schema.RegisterSerializer("gorse_labels", labelSerializer{}) }
 
-// GORM's default JSON scanner converts all numbers in an interface to float64.
 type labelSerializer struct{}
 
 func (labelSerializer) Scan(ctx context.Context, field *schema.Field, dst reflect.Value, dbValue any) error {
@@ -44,7 +43,7 @@ func (labelSerializer) Scan(ctx context.Context, field *schema.Field, dst reflec
 	}
 	var labels any
 	if len(raw) != 0 {
-		if err := json.Unmarshal(raw, &labels, jsonutil.ExactNumbers); err != nil {
+		if err := json.Unmarshal(raw, &labels); err != nil {
 			return err
 		}
 	}
