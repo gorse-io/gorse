@@ -16,7 +16,7 @@ package cache
 import (
 	"context"
 	"math"
-	"math/rand"
+	"math/rand/v2"
 	"os"
 	"strconv"
 	"testing"
@@ -603,7 +603,7 @@ func benchmarkSearchDocuments(b *testing.B, database Database) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		// select a random prime
-		p := primeTable[rand.Intn(len(primeTable))]
+		p := primeTable[rand.IntN(len(primeTable))]
 		// search documents
 		r, err := database.SearchScores(ctx, "a", "", []string{strconv.Itoa(p)}, 0, 10)
 		assert.NoError(b, err)
@@ -616,7 +616,7 @@ func benchmarkUpdateDocuments(b *testing.B, database Database) {
 	b.ResetTimer()
 	for i := 1; i <= b.N; i++ {
 		// select a random number
-		n := rand.Intn(benchmarkDataSize) + 1
+		n := rand.IntN(benchmarkDataSize) + 1
 		// update documents
 		err := database.UpdateScores(ctx, []string{"a"}, nil, strconv.Itoa(n), ScorePatch{
 			Score: new(float64(n)),

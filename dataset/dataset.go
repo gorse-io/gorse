@@ -267,9 +267,9 @@ func (d *Dataset) SplitCF(numTestUsers int, seed int64) (CFSplit, CFSplit) {
 	trainSet.itemDict, testSet.itemDict = d.itemDict, d.itemDict
 	rng := util.NewRandomGenerator(seed)
 	if numTestUsers >= d.CountUsers() || numTestUsers <= 0 {
-		for userIndex := int32(0); userIndex < int32(d.CountUsers()); userIndex++ {
+		for userIndex := range int32(d.CountUsers()) {
 			if len(d.userFeedback[userIndex]) > 0 {
-				k := rng.Intn(len(d.userFeedback[userIndex]))
+				k := rng.IntN(len(d.userFeedback[userIndex]))
 				testSet.userFeedback[userIndex] = append(testSet.userFeedback[userIndex], d.userFeedback[userIndex][k])
 				testSet.itemFeedback[d.userFeedback[userIndex][k]] = append(testSet.itemFeedback[d.userFeedback[userIndex][k]], userIndex)
 				testSet.timestamps[userIndex] = append(testSet.timestamps[userIndex], d.timestamps[userIndex][k])
@@ -288,7 +288,7 @@ func (d *Dataset) SplitCF(numTestUsers int, seed int64) (CFSplit, CFSplit) {
 		testUsers := rng.SampleInt32(0, int32(d.CountUsers()), numTestUsers)
 		for _, userIndex := range testUsers {
 			if len(d.userFeedback[userIndex]) > 0 {
-				k := rng.Intn(len(d.userFeedback[userIndex]))
+				k := rng.IntN(len(d.userFeedback[userIndex]))
 				testSet.userFeedback[userIndex] = append(testSet.userFeedback[userIndex], d.userFeedback[userIndex][k])
 				testSet.itemFeedback[d.userFeedback[userIndex][k]] = append(testSet.itemFeedback[d.userFeedback[userIndex][k]], userIndex)
 				testSet.timestamps[userIndex] = append(testSet.timestamps[userIndex], d.timestamps[userIndex][k])
@@ -304,7 +304,7 @@ func (d *Dataset) SplitCF(numTestUsers int, seed int64) (CFSplit, CFSplit) {
 			}
 		}
 		testUserSet := mapset.NewSet(testUsers...)
-		for userIndex := int32(0); userIndex < int32(d.CountUsers()); userIndex++ {
+		for userIndex := range int32(d.CountUsers()) {
 			if !testUserSet.Contains(userIndex) {
 				for idx, itemIndex := range d.userFeedback[userIndex] {
 					trainSet.userFeedback[userIndex] = append(trainSet.userFeedback[userIndex], itemIndex)
@@ -328,7 +328,7 @@ func (d *Dataset) SplitLatest(shots int) (CFSplit, CFSplit) {
 	trainSet.timestamps, testSet.timestamps = make([][]time.Time, d.CountUsers()), make([][]time.Time, d.CountUsers())
 	trainSet.userDict, testSet.userDict = d.userDict, d.userDict
 	trainSet.itemDict, testSet.itemDict = d.itemDict, d.itemDict
-	for userIndex := int32(0); userIndex < int32(d.CountUsers()); userIndex++ {
+	for userIndex := range int32(d.CountUsers()) {
 		if len(d.userFeedback[userIndex]) == 0 {
 			continue
 		}
