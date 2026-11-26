@@ -20,9 +20,11 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"runtime"
+	"runtime/trace"
 	"strconv"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -35,6 +37,55 @@ func TestAMX(t *testing.T) {
 		t.Skip("AMX is only supported on macOS ARM64")
 	}
 	suite.Run(t, &SIMDTestSuite{Feature: AMX})
+}
+
+func TestFlightRecorder(t *testing.T) {
+	fr := trace.NewFlightRecorder(trace.FlightRecorderConfig{})
+	assert.NoError(t, fr.Start())
+	defer fr.Stop()
+
+	var feat Feature
+	a := make([]float32, 64)
+	b := make([]float32, 64)
+	c := make([]float32, 64)
+	dst := make([]float32, 64)
+	u16 := make([]uint16, 64)
+	for i := range a {
+		a[i] = float32(i + 1)
+		b[i] = float32(i + 2)
+		c[i] = float32(i + 3)
+	}
+
+	feat.fromFloat32(a, u16)
+	runtime.GC()
+	feat.toFloat32(u16, dst)
+	runtime.GC()
+	feat.mulConstAddTo(a, 2, c, dst)
+	runtime.GC()
+	feat.mulConstAdd(a, 2, c)
+	runtime.GC()
+	feat.mulConstTo(a, 2, dst)
+	runtime.GC()
+	feat.mulConst(a, 2)
+	runtime.GC()
+	feat.addConst(a, 2)
+	runtime.GC()
+	feat.subTo(a, b, dst)
+	runtime.GC()
+	feat.sub(a, b)
+	runtime.GC()
+	feat.mulTo(a, b, dst)
+	runtime.GC()
+	feat.divTo(a, b, dst)
+	runtime.GC()
+	feat.sqrtTo(a, dst)
+	runtime.GC()
+	_ = feat.dot(a, b)
+	runtime.GC()
+	_ = feat.euclidean(a, b)
+	runtime.GC()
+	feat.mm(false, false, 8, 8, 8, a, 8, b, 8, dst, 8)
+	runtime.GC()
 }
 
 func initializeFloat32Array(n int) []float32 {

@@ -721,7 +721,7 @@ LBB12_10:
 	FMOVS F0, result+24(FP)
 	RET
 
-TEXT ·veuclidean(SB), $0-28
+TEXT ·veuclidean(SB), $16-28
 	MOVD a+0(FP), R0
 	MOVD b+8(FP), R1
 	MOVD n+16(FP), R2
