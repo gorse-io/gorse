@@ -226,7 +226,8 @@ func (s *RestServer) CreateWebService() {
 	// Create a server
 	ws := s.WebService
 	ws.Path("/api/").
-		Produces(restful.MIME_JSON).
+		Consumes(restful.MIME_JSON, mimeMsgpack, mimeXMsgpack).
+		Produces(restful.MIME_JSON, mimeMsgpack, mimeXMsgpack).
 		Filter(s.LogFilter).
 		Filter(s.AuthFilter).
 		Filter(s.MetricsFilter).
@@ -349,6 +350,7 @@ func (s *RestServer) CreateWebService() {
 		Writes(Success{}))
 	// Insert category
 	ws.Route(ws.PUT("/item/{item-id}/category/{category}").To(s.insertItemCategory).
+		AllowedMethodsWithoutContentType([]string{http.MethodPut}).
 		Doc("Insert a category for a item.").
 		Metadata(restfulspec.KeyOpenAPITags, []string{ItemsAPITag}).
 		Param(ws.HeaderParameter("X-API-Key", "API key").DataType("string")).
@@ -2086,7 +2088,7 @@ func (s *RestServer) getTypedUserItemFeedback(request *restful.Request, response
 	if feedback, err := s.DataClient.GetUserItemFeedback(ctx, userId, itemId, feedbackType); err != nil {
 		InternalServerError(response, err)
 	} else if len(feedback) == 0 {
-		Text(response, "{}")
+		Ok(response, struct{}{})
 	} else {
 		Ok(response, feedback[0])
 	}
@@ -2180,11 +2182,17 @@ func PageNotFound(response *restful.Response, err error) {
 	}
 }
 
-// Ok sends the content as JSON to the client.
+// Ok sends a successful entity in the negotiated representation.
 func Ok(response *restful.Response, content any) {
 	response.AddHeader("Access-Control-Allow-Origin", "*")
-	if err := response.WriteAsJson(content); err != nil {
-		log.ResponseLogger(response).Error("failed to write json", zap.Error(err))
+	response.Header().Add("Vary", "Accept")
+	writer, ok := response.EntityWriter()
+	if !ok {
+		// Standalone responses (without a selected route) historically use JSON.
+		writer = restful.NewEntityAccessorJSON(restful.MIME_JSON)
+	}
+	if err := writer.Write(response, http.StatusOK, content); err != nil {
+		InternalServerError(response, err)
 	}
 }
 
