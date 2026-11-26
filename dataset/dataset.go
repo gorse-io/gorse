@@ -433,7 +433,7 @@ func loadTrain(path string) (*Dataset, error) {
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		line := scanner.Text()
-		fields := strings.Split(line, "	")
+		fields := strings.Split(line, "\t")
 		// add users
 		userId, err := util.ParseInt[int32](fields[0])
 		if err != nil {
@@ -468,7 +468,7 @@ func loadTest(dataset *Dataset, path string) error {
 	for scanner.Scan() {
 		line := scanner.Text()
 		// parse line
-		fields := strings.Split(line, "	")
+		fields := strings.Split(line, "\t")
 		positive, negatives := fields[0], fields[1:]
 		if positive[0] != '(' || positive[len(positive)-1] != ')' {
 			return fmt.Errorf("wrong foramt: %v", line)
