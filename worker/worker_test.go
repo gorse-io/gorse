@@ -20,7 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"math/rand"
+	"math/rand/v2"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -100,7 +100,7 @@ func (suite *WorkerTestSuite) SetupTest() {
 	suite.Jobs = 1
 	suite.dontskipColdStartUsers = true
 	// reset random generator
-	suite.randGenerator = rand.New(rand.NewSource(0))
+	suite.randGenerator = rand.New(rand.NewPCG(0, 0))
 	// reset models and vectors
 	suite.MatrixFactorizationUsers = nil
 	suite.MatrixFactorizationId = 1

@@ -15,7 +15,7 @@
 package util
 
 import (
-	"math/rand"
+	"math/rand/v2"
 	"sync"
 
 	mapset "github.com/deckarep/golang-set/v2"
@@ -28,7 +28,7 @@ type RandomGenerator struct {
 
 // NewRandomGenerator creates a RandomGenerator.
 func NewRandomGenerator(seed int64) RandomGenerator {
-	return RandomGenerator{rand.New(rand.NewSource(seed))}
+	return RandomGenerator{rand.New(rand.NewPCG(uint64(seed), 0))}
 }
 
 // UniformVector makes a vec filled with uniform random floats,
@@ -94,7 +94,7 @@ func (rng RandomGenerator) Sample(low, high, n int, exclude ...mapset.Set[int]) 
 		}
 	} else {
 		for len(sampled) < n {
-			v := rng.Intn(intervalLength) + low
+			v := rng.IntN(intervalLength) + low
 			if !excludeSet.Contains(v) {
 				sampled = append(sampled, v)
 				excludeSet.Add(v)
@@ -121,7 +121,7 @@ func (rng RandomGenerator) SampleInt32(low, high int32, n int, exclude ...mapset
 		}
 	} else {
 		for len(sampled) < n {
-			v := rng.Int31n(intervalLength) + low
+			v := rng.Int32N(intervalLength) + low
 			if !excludeSet.Contains(v) {
 				sampled = append(sampled, v)
 				excludeSet.Add(v)
@@ -132,7 +132,6 @@ func (rng RandomGenerator) SampleInt32(low, high int32, n int, exclude ...mapset
 }
 
 // lockedSource allows a random number generator to be used by multiple goroutines concurrently.
-// The code is very similar to math/rand.lockedSource, which is unfortunately not exposed.
 type lockedSource struct {
 	mut sync.Mutex
 	src rand.Source
@@ -140,18 +139,12 @@ type lockedSource struct {
 
 // NewRand returns a rand.Rand that is threadsafe.
 func NewRand(seed int64) *rand.Rand {
-	return rand.New(&lockedSource{src: rand.NewSource(seed)})
+	return rand.New(&lockedSource{src: rand.NewPCG(uint64(seed), 0)})
 }
 
-func (r *lockedSource) Int63() (n int64) {
+func (r *lockedSource) Uint64() (n uint64) {
 	r.mut.Lock()
-	n = r.src.Int63()
+	n = r.src.Uint64()
 	r.mut.Unlock()
 	return
-}
-
-func (r *lockedSource) Seed(seed int64) {
-	r.mut.Lock()
-	r.src.Seed(seed)
-	r.mut.Unlock()
 }

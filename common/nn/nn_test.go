@@ -19,7 +19,7 @@ import (
 	"bytes"
 	"encoding/csv"
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -65,7 +65,7 @@ func TestLinearRegression(t *testing.T) {
 }
 
 func TestNeuralNetwork(t *testing.T) {
-	rng := rand.New(rand.NewSource(0))
+	rng := rand.New(rand.NewPCG(0, 0))
 	x := Rand(rng, 100, 1)
 	y := Add(Rand(rng, 100, 1), Sin(Mul(x, NewScalar(2*math32.Pi))))
 

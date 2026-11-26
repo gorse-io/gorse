@@ -19,7 +19,6 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
-	"math/rand"
 	"net"
 	"os"
 	"strconv"
@@ -96,7 +95,6 @@ func NewServer(
 
 // Serve starts a server node.
 func (s *Server) Serve() {
-	rand.Seed(time.Now().UTC().UnixNano())
 	var err error
 	s.serverName, err = s.ServerName()
 	if err != nil {

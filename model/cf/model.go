@@ -418,8 +418,8 @@ func (bpr *BPR) Fit(ctx context.Context, trainSet, valSet dataset.CFSplit, confi
 	positiveItemFactor := util.NewMatrix32(config.Jobs, bpr.nFactors)
 	negativeItemFactor := util.NewMatrix32(config.Jobs, bpr.nFactors)
 	rng := make([]util.RandomGenerator, config.Jobs)
-	for i := 0; i < config.Jobs; i++ {
-		rng[i] = util.NewRandomGenerator(bpr.GetRandomGenerator().Int63())
+	for i := range rng {
+		rng[i] = util.NewRandomGenerator(bpr.GetRandomGenerator().Int64())
 	}
 	// Convert array to hashmap
 	userFeedback := make([]mapset.Set[int32], trainSet.CountUsers())
@@ -450,17 +450,17 @@ func (bpr *BPR) Fit(ctx context.Context, trainSet, valSet dataset.CFSplit, confi
 			var userIndex int32
 			var ratingCount int
 			for {
-				userIndex = rng[workerId].Int31n(int32(trainSet.CountUsers()))
+				userIndex = rng[workerId].Int32N(int32(trainSet.CountUsers()))
 				ratingCount = len(trainSet.GetUserFeedback()[userIndex])
 				if ratingCount > 0 {
 					break
 				}
 			}
-			posIndex := trainSet.GetUserFeedback()[userIndex][rng[workerId].Intn(ratingCount)]
+			posIndex := trainSet.GetUserFeedback()[userIndex][rng[workerId].IntN(ratingCount)]
 			// Select a negative sample
 			negIndex := int32(-1)
 			for {
-				temp := rng[workerId].Int31n(int32(trainSet.CountItems()))
+				temp := rng[workerId].Int32N(int32(trainSet.CountItems()))
 				if !userFeedback[userIndex].Contains(temp) {
 					negIndex = temp
 					break

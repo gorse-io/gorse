@@ -19,7 +19,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
-	"math/rand"
 	"net"
 	"os"
 	"path/filepath"
@@ -116,7 +115,6 @@ type Master struct {
 
 // NewMaster creates a master node.
 func NewMaster(cfg *config.Config, cacheFolder string, standalone bool, configPath string) *Master {
-	rand.Seed(time.Now().UnixNano())
 	backgroundContext, backgroundCancel := context.WithCancel(context.Background())
 
 	// setup trace provider

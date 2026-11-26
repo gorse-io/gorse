@@ -18,7 +18,7 @@ package floats
 
 import (
 	"fmt"
-	"math/rand"
+	"math/rand/v2"
 	"runtime"
 	"strconv"
 	"testing"
