@@ -435,25 +435,11 @@ func (db *Qdrant) GetVectors(ctx context.Context, collection string, ids []strin
 	return orderVectors(ids, vectors), nil
 }
 
-func (db *Qdrant) DeleteVectorsByID(ctx context.Context, collection string, ids []string) error {
+func (db *Qdrant) DeleteVectors(ctx context.Context, collection string, ids []string) error {
 	if len(ids) == 0 {
 		return nil
 	}
 	_, err := db.client.Delete(ctx, &qdrant.DeletePoints{CollectionName: collection, Wait: new(true), Points: qdrant.NewPointsSelectorIDs(qdrantPointIDs(ids))})
-	return errors.WithStack(err)
-}
-
-func (db *Qdrant) DeleteVectors(ctx context.Context, collection string, timestamp time.Time) error {
-	lt := float64(timestamp.UnixMilli())
-	_, err := db.client.Delete(ctx, &qdrant.DeletePoints{
-		CollectionName: collection,
-		Wait:           new(true),
-		Points: qdrant.NewPointsSelectorFilter(&qdrant.Filter{
-			Must: []*qdrant.Condition{
-				qdrant.NewRange(qdrantPayloadTimestampKey, &qdrant.Range{Lt: &lt}),
-			},
-		}),
-	})
 	return errors.WithStack(err)
 }
 

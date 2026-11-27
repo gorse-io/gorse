@@ -116,12 +116,11 @@ func (w *VectorWriter) Clean() error {
 	if err := w.flushLocked(); err != nil {
 		return err
 	}
-	if err := w.client.DeleteVectors(w.ctx, w.collection, w.timestamp); errors.Is(err, storage.ErrNotFound) {
+	err := w.client.Optimize(w.ctx, w.collection)
+	if errors.Is(err, storage.ErrNotFound) {
 		return nil
-	} else if err != nil {
-		return errors.WithStack(err)
 	}
-	return errors.WithStack(w.client.Optimize(w.ctx, w.collection))
+	return errors.WithStack(err)
 }
 
 func (w *VectorWriter) ensureCollectionLocked() error {

@@ -389,7 +389,7 @@ func (db *Xvec) GetVectors(ctx context.Context, name string, ids []string) ([]Ve
 	return orderVectors(ids, vectors), nil
 }
 
-func (db *Xvec) DeleteVectorsByID(ctx context.Context, collection string, ids []string) error {
+func (db *Xvec) DeleteVectors(ctx context.Context, collection string, ids []string) error {
 	if len(ids) == 0 {
 		return nil
 	}
@@ -402,21 +402,12 @@ func (db *Xvec) DeleteVectorsByID(ctx context.Context, collection string, ids []
 	if !errors.As(err, &batchErr) {
 		return errors.WithStack(err)
 	}
-	// A batch can contain both missing keys and unrelated failures.
 	for _, result := range results {
 		if result.Err != nil && !errors.Is(result.Err, xvec.ErrNotFound) {
 			return errors.WithStack(result.Err)
 		}
 	}
 	return nil
-}
-
-func (db *Xvec) DeleteVectors(ctx context.Context, name string, timestamp time.Time) error {
-	collection, err := db.collection(name)
-	if err != nil {
-		return err
-	}
-	return errors.WithStack(collection.DeleteByFilter(ctx, fmt.Sprintf("%s < %d", xvecTimestampField, timestamp.UnixMilli())))
 }
 
 func (db *Xvec) QueryVectors(ctx context.Context, name string, q Vector, categories []string, topK int) ([]ScoredVector, error) {

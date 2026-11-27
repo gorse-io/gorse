@@ -47,7 +47,6 @@ func (m *Master) processItemEmbeddings(ctx context.Context) error {
 		return nil
 	}
 	defer m.itemEmbeddingMu.Unlock()
-	// Snapshot configuration without holding a configuration lock across I/O.
 	m.ConfigMutex.RLock()
 	configs := m.Config.Recommend.ItemToItem
 	ttl := m.Config.Recommend.DataSource.ItemTTL

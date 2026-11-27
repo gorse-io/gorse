@@ -1497,8 +1497,6 @@ type Item struct {
 	Comment    string
 }
 
-// Queue refreshes after the authoritative write. A queue outage should not
-// undo or report failure for that write; the full rebuild remains the fallback.
 func (s *RestServer) enqueueItemEmbeddings(ctx context.Context, ids []string) {
 	if !s.itemEmbeddingsEnabled() {
 		return

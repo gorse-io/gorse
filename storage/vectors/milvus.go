@@ -330,7 +330,6 @@ func (db *Milvus) AddVectors(ctx context.Context, collection string, vectors []V
 	return errors.WithStack(err)
 }
 
-// The SDK ID helpers interpolate strings without escaping embedded quotes.
 func milvusIDsExpr(ids []string) string {
 	quoted := make([]string, len(ids))
 	for i, id := range ids {
@@ -420,16 +419,11 @@ func milvusVectors(collection string, ids []string, result milvusclient.ResultSe
 	return orderVectors(ids, vectors), nil
 }
 
-func (db *Milvus) DeleteVectorsByID(ctx context.Context, collection string, ids []string) error {
+func (db *Milvus) DeleteVectors(ctx context.Context, collection string, ids []string) error {
 	if len(ids) == 0 {
 		return nil
 	}
 	_, err := db.client.Delete(ctx, milvusclient.NewDeleteOption(collection).WithExpr(milvusIDsExpr(ids)))
-	return errors.WithStack(err)
-}
-
-func (db *Milvus) DeleteVectors(ctx context.Context, collection string, timestamp time.Time) error {
-	_, err := db.client.Delete(ctx, milvusclient.NewDeleteOption(collection).WithExpr(fmt.Sprintf("%s < %d", milvusTimestampField, timestamp.UnixMilli())))
 	return errors.WithStack(err)
 }
 

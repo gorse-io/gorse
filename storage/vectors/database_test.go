@@ -273,7 +273,7 @@ func (suite *vectorsTestSuite) TestSparse() {
 	suite.Require().Len(results, 2)
 	suite.Equal("match", results[0].Id)
 
-	err = suite.Database.DeleteVectors(ctx, "test_sparse", cutoff)
+	err = suite.Database.DeleteVectors(ctx, "test_sparse", []string{"old"})
 	suite.Require().NoError(err)
 	count, err = suite.Database.CountVectors(ctx, "test_sparse")
 	suite.Require().NoError(err)
@@ -337,7 +337,7 @@ func (suite *vectorsTestSuite) TestDot() {
 	suite.Greater(results[0].Score, results[1].Score)
 }
 
-func (suite *vectorsTestSuite) TestDeleteVectorsByID() {
+func (suite *vectorsTestSuite) TestDeleteVectors() {
 	ctx := suite.T().Context()
 	must := suite.Require()
 	must.NoError(suite.AddCollection(ctx, "test", 4, Dot, VectorConfig{}))
@@ -345,13 +345,13 @@ func (suite *vectorsTestSuite) TestDeleteVectorsByID() {
 	a, b := keep, keep
 	a.Id, b.Id = `a"b`, "b"
 	must.NoError(suite.AddVectors(ctx, "test", []Vector{keep, a, b}))
-	must.NoError(suite.DeleteVectorsByID(ctx, "test", nil))
+	must.NoError(suite.DeleteVectors(ctx, "test", nil))
 	count, err := suite.CountVectors(ctx, "test")
 	must.NoError(err)
 	must.EqualValues(3, count)
 	ids := []string{a.Id, "missing", b.Id, a.Id}
-	must.NoError(suite.DeleteVectorsByID(ctx, "test", ids))
-	must.NoError(suite.DeleteVectorsByID(ctx, "test", ids))
+	must.NoError(suite.DeleteVectors(ctx, "test", ids))
+	must.NoError(suite.DeleteVectors(ctx, "test", ids))
 	got, err := suite.GetVectors(ctx, "test", []string{a.Id, b.Id, keep.Id})
 	must.NoError(err)
 	must.Equal([]Vector{keep}, got)
@@ -373,7 +373,7 @@ func (suite *vectorsTestSuite) TestUpsertVector() {
 	must.Equal([]Vector{vec}, got)
 }
 
-func (suite *vectorsTestSuite) TestDeleteVectors() {
+func (suite *vectorsTestSuite) TestQueryAfterDeleteVectors() {
 	ctx := suite.T().Context()
 	err := suite.Database.AddCollection(ctx, "test", defaultVectorSize, Cosine, VectorConfig{})
 	suite.NoError(err)
@@ -401,7 +401,7 @@ func (suite *vectorsTestSuite) TestDeleteVectors() {
 	})
 	suite.NoError(err)
 
-	err = suite.Database.DeleteVectors(ctx, "test", cutoff)
+	err = suite.Database.DeleteVectors(ctx, "test", []string{"old"})
 	suite.NoError(err)
 	count, err := suite.Database.CountVectors(ctx, "test")
 	suite.NoError(err)

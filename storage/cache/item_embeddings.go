@@ -17,8 +17,6 @@ const (
 	itemEmbeddingBatchSize = 128
 )
 
-// EnqueueItemEmbeddings records refresh requests independently of earlier writes
-// for the same item. Each score ID identifies a delivery, not the item.
 func EnqueueItemEmbeddings(ctx context.Context, db Database, ids []string) error {
 	for chunk := range slices.Chunk(ids, itemEmbeddingBatchSize) {
 		now := time.Now()
@@ -28,9 +26,7 @@ func EnqueueItemEmbeddings(ctx context.Context, db Database, ids []string) error
 			if err != nil {
 				return err
 			}
-			// Store ASCII even when an existing cache table uses a legacy charset.
 			payload := base64.RawStdEncoding.EncodeToString([]byte(id))
-			// Kvrocks tag queries need a nonnumeric token for acknowledgement.
 			deliveryID := "d" + hex.EncodeToString(key[:])
 			deliveries = append(deliveries, Score{Id: deliveryID, Categories: []string{payload}, Timestamp: now, Score: -float64(now.UnixMicro())})
 		}
@@ -41,9 +37,6 @@ func EnqueueItemEmbeddings(ctx context.Context, db Database, ids []string) error
 	return nil
 }
 
-// ProcessItemEmbeddings processes at most limit deliveries (capped at 128).
-// Use a single consumer and an idempotent apply: failed or unacknowledged
-// deliveries may be retried. An empty queue does not invoke apply.
 func ProcessItemEmbeddings(ctx context.Context, db Database, limit int, apply func([]string) error) error {
 	if limit <= 0 || apply == nil {
 		return fmt.Errorf("item embedding queue requires a positive limit and an apply callback")

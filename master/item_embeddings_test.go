@@ -24,7 +24,6 @@ import (
 	"github.com/gorse-io/gorse/storage/vectors"
 )
 
-// Run a mutation after the scan has captured the old item, before publishing it.
 type capturedItemStream struct {
 	data.Database
 	afterScan func()

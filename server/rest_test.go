@@ -284,8 +284,6 @@ func (suite *ServerTestSuite) TestUsers() {
 		End()
 }
 
-// Exercise metadata decoding concurrently with the enqueue decision. Both
-// configurations disable the queue, so no cache client should be needed.
 func TestEnqueueDuringMetadataReload(t *testing.T) {
 	s := &Server{Config: config.GetDefaultConfig()}
 	raw := []byte(`{"Recommend":{"ItemToItem":[{"Type":"tags"}]}}`)

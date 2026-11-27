@@ -160,8 +160,6 @@ func itemEmbeddingVector(item *data.Item, column *vm.Program, timestamp time.Tim
 	}, true
 }
 
-// RefreshItemEmbeddings reconciles only the requested IDs against current items.
-// Only a full rebuild may replace an incompatible collection or sweep old rows.
 func RefreshItemEmbeddings(ctx context.Context, db vectors.Database, cfg config.ItemToItemConfig, vc vectors.VectorConfig, ids []string, items map[string]data.Item, now time.Time) error {
 	if len(ids) == 0 {
 		return nil
@@ -219,7 +217,7 @@ func RefreshItemEmbeddings(ctx context.Context, db vectors.Database, cfg config.
 		}
 	}
 	if len(removed) > 0 {
-		return db.DeleteVectorsByID(ctx, collection, removed)
+		return db.DeleteVectors(ctx, collection, removed)
 	}
 	return nil
 }

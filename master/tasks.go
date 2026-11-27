@@ -245,8 +245,6 @@ func (m *Master) loadDataset(parent context.Context) (datasets Datasets, err err
 	return
 }
 
-// loadAndIndexItems excludes incremental consumption from snapshot acquisition
-// through its final write/sweep. Producers can still enqueue throughout.
 func (m *Master) loadAndIndexItems(ctx context.Context) (Datasets, error) {
 	m.itemEmbeddingMu.Lock()
 	defer m.itemEmbeddingMu.Unlock()

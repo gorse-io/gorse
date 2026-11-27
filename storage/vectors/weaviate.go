@@ -152,7 +152,6 @@ func (db *Weaviate) DescribeCollection(ctx context.Context, name string) (*Colle
 			return nil, errors.Errorf("invalid dimension metadata for collection %s: %q", name, value)
 		}
 	} else {
-		// Older classes do not declare their width. Read one vector without modifying the schema.
 		objects, err := db.client.Data().ObjectsGetter().WithClassName(class.Class).WithVector().WithLimit(1).Do(ctx)
 		if err != nil {
 			return nil, errors.WithStack(err)
@@ -445,7 +444,7 @@ func (db *Weaviate) GetVectors(ctx context.Context, collection string, ids []str
 	return orderVectors(ids, vectors), nil
 }
 
-func (db *Weaviate) DeleteVectorsByID(ctx context.Context, collection string, ids []string) error {
+func (db *Weaviate) DeleteVectors(ctx context.Context, collection string, ids []string) error {
 	if len(ids) == 0 {
 		return nil
 	}
@@ -461,17 +460,6 @@ func (db *Weaviate) DeleteVectorsByID(ctx context.Context, collection string, id
 		}
 	}
 	return nil
-}
-
-func (db *Weaviate) DeleteVectors(ctx context.Context, collection string, timestamp time.Time) error {
-	_, err := db.client.Batch().ObjectsBatchDeleter().
-		WithClassName(capitalize(collection)).
-		WithWhere(filters.Where().
-			WithPath([]string{weaviatePayloadTimestampKey}).
-			WithOperator(filters.LessThan).
-			WithValueDate(timestamp)).
-		Do(ctx)
-	return errors.WithStack(err)
 }
 
 func (db *Weaviate) QueryVectors(ctx context.Context, collection string, q Vector, categories []string, topK int) ([]ScoredVector, error) {

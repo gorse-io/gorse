@@ -29,7 +29,6 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
-// Feed a deterministic SCAN page and its subsequent HGETALL replies to go-redis.
 type scanReplyHook struct{ row map[string]string }
 
 func (h scanReplyHook) DialHook(next redis.DialHook) redis.DialHook { return next }
