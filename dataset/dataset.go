@@ -217,6 +217,7 @@ func (d *Dataset) AddItem(item data.Item) {
 		IsHidden:   item.IsHidden,
 		Categories: item.Categories,
 		Timestamp:  item.Timestamp,
+		UpdateAt:   item.UpdateAt,
 		Labels:     d.itemLabels.processLabels(item.Labels, ""),
 		Comment:    item.Comment,
 	})

@@ -39,19 +39,21 @@ const (
 // VectorWriter owns collection validation and batched vector writes
 // for item-to-item and user-to-user recommenders.
 type VectorWriter struct {
-	ctx          context.Context
-	client       vectors.Database
-	collection   string
-	distance     vectors.Distance
-	vectorConfig vectors.VectorConfig
-	timestamp    time.Time
-	batchSize    int
-	sparse       bool
+	ctx               context.Context
+	client            vectors.Database
+	collection        string
+	distance          vectors.Distance
+	vectorConfig      vectors.VectorConfig
+	timestamp         time.Time
+	batchSize         int
+	sparse            bool
+	previousScanStart time.Time
 
-	mu               sync.Mutex
-	dimension        *int
-	collectionExists bool
-	buffer           []vectors.Vector
+	mu                sync.Mutex
+	dimension         *int
+	collectionExists  bool
+	collectionCreated bool
+	buffer            []vectors.Vector
 }
 
 func newSimilarityVectorWriter(
@@ -116,6 +118,13 @@ func (w *VectorWriter) Clean() error {
 	if err := w.flushLocked(); err != nil {
 		return err
 	}
+	if !w.previousScanStart.IsZero() {
+		// Unchanged vectors still carry an earlier scan timestamp.
+		if !w.collectionExists {
+			return nil
+		}
+		return errors.WithStack(w.client.Optimize(w.ctx, w.collection))
+	}
 	if err := w.client.DeleteVectors(w.ctx, w.collection, w.timestamp); errors.Is(err, storage.ErrNotFound) {
 		return nil
 	} else if err != nil {
@@ -152,6 +161,7 @@ func (w *VectorWriter) ensureCollectionLocked() error {
 		if err = w.client.AddCollection(w.ctx, w.collection, dimension, w.distance, w.vectorConfig); err != nil {
 			return errors.WithStack(err)
 		}
+		w.collectionCreated = true
 	}
 	w.collectionExists = true
 	return nil
@@ -193,6 +203,22 @@ func (w *VectorWriter) flushLocked() error {
 	}
 	if err := w.ensureCollectionLocked(); err != nil {
 		return err
+	}
+	if !w.previousScanStart.IsZero() {
+		// Validate the schema with the full batch before filtering: a new or
+		// recreated collection needs even the unchanged embeddings.
+		changed := w.buffer[:0]
+		for _, v := range w.buffer {
+			if !w.collectionCreated && !v.Timestamp.IsZero() && v.Timestamp.Before(w.previousScanStart) {
+				continue
+			}
+			v.Timestamp = w.timestamp
+			changed = append(changed, v)
+		}
+		w.buffer = changed
+		if len(w.buffer) == 0 {
+			return nil
+		}
 	}
 	if err := w.client.AddVectors(w.ctx, w.collection, w.buffer); err != nil {
 		return errors.WithStack(err)

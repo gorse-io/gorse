@@ -24,6 +24,7 @@ import (
 	"github.com/gorse-io/gorse/common/expression"
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/config"
+	"github.com/gorse-io/gorse/dataset"
 	"github.com/gorse-io/gorse/logics"
 	"github.com/gorse-io/gorse/model/cf"
 	"github.com/gorse-io/gorse/model/ctr"
@@ -237,6 +238,73 @@ func (s *MasterTestSuite) TestFindItemToItem() {
 	similar, err = logics.QueryItemToItem(ctx, s.VectorClient, s.Config.Recommend.ItemToItem[0], "9", nil, s.Config.Recommend.CacheSize)
 	s.NoError(err)
 	s.Equal([]string{"7", "5", "3"}, cache.ConvertDocumentsToValues(similar))
+}
+
+type recordingItemVectors struct {
+	vectors.Database
+	ids  []string
+	fail bool
+}
+
+func (d *recordingItemVectors) AddVectors(ctx context.Context, name string, batch []vectors.Vector) error {
+	for _, v := range batch {
+		d.ids = append(d.ids, v.Id)
+	}
+	if d.fail {
+		d.fail = false
+		return fmt.Errorf("injected write failure")
+	}
+	return d.Database.AddVectors(ctx, name, batch)
+}
+
+func (s *MasterTestSuite) TestIncrementalItemEmbedding() {
+	ctx := s.T().Context()
+	db := &recordingItemVectors{Database: s.VectorClient}
+	s.VectorClient = db
+	cfg := config.ItemToItemConfig{Name: "incremental", Type: "embedding", Column: "item.Labels.a"}
+	s.Config.Recommend.ItemToItem = []config.ItemToItemConfig{cfg}
+	start := time.Unix(1000, 0)
+	scan := func(n int, changed time.Time) error {
+		db.ids = nil
+		d := dataset.NewDataset(start.Add(time.Duration(n)*time.Hour), 0, 3)
+		for id, updated := range map[string]time.Time{"old": start.Add(-time.Hour), "changed": changed, "unknown": {}} {
+			d.AddItem(data.Item{ItemId: id, UpdateAt: updated, Labels: map[string]any{"a": []any{1.0, 2.0}, "b": []any{2.0, 1.0}}})
+		}
+		return s.updateItemToItem(ctx, d)
+	}
+	s.Require().NoError(scan(0, start))
+	s.ElementsMatch([]string{"old", "changed", "unknown"}, db.ids)
+	s.Require().NoError(scan(1, start))
+	s.ElementsMatch([]string{"changed", "unknown"}, db.ids)
+	name := vectors.ItemToItemCollection(cfg.Name)
+	stored, err := db.GetVectors(ctx, name, []string{"old"})
+	s.Require().NoError(err)
+	s.Len(stored, 1)
+	db.fail = true
+	s.Error(scan(2, start.Add(time.Hour)))
+	s.Require().NoError(scan(3, start.Add(time.Hour)))
+	s.Contains(db.ids, "changed")
+	s.Config.Recommend.ItemToItem[0].Column = "item.Labels.b"
+	s.Require().NoError(scan(4, start))
+	s.ElementsMatch([]string{"old", "changed", "unknown"}, db.ids)
+	s.Require().NoError(db.DeleteCollection(ctx, name))
+	s.Require().NoError(scan(5, start))
+	s.ElementsMatch([]string{"old", "changed", "unknown"}, db.ids)
+}
+
+func (s *MasterTestSuite) TestItemEmbeddingBatchWriteFailure() {
+	ctx := s.T().Context()
+	db := &recordingItemVectors{Database: s.VectorClient, fail: true}
+	s.VectorClient = db
+	s.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Name: "batch", Type: "embedding", Column: "item.Labels.a"}}
+	d := dataset.NewDataset(time.Now(), 0, batchSize)
+	for i := range batchSize {
+		d.AddItem(data.Item{ItemId: strconv.Itoa(i), Labels: map[string]any{"a": []any{1.0, 2.0}}})
+	}
+	// The error occurs during Add, not Clean. A later successful flush must
+	// not hide it and publish a checkpoint for this scan.
+	s.Require().ErrorContains(s.updateItemToItem(ctx, d), "injected write failure")
+	s.Len(db.ids, batchSize)
 }
 
 func (s *MasterTestSuite) TestUserToUser() {

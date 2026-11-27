@@ -34,12 +34,13 @@ import (
 )
 
 type ItemToItemOptions struct {
-	Context      context.Context
-	VectorClient vectors.Database
-	VectorConfig vectors.VectorConfig
-	BatchSize    int
-	TagsIDF      []float32
-	UsersIDF     []float32
+	PreviousScanStart time.Time // Direct embeddings only; zero requests a full scan.
+	Context           context.Context
+	VectorClient      vectors.Database
+	VectorConfig      vectors.VectorConfig
+	BatchSize         int
+	TagsIDF           []float32
+	UsersIDF          []float32
 }
 
 type ItemToItem interface {
@@ -131,8 +132,10 @@ func newEmbeddingItemToItem(cfg config.ItemToItemConfig, timestamp time.Time, op
 	if err != nil {
 		return nil, err
 	}
+	writer := newItemToItemVectorWriter(cfg, timestamp, opts, false)
+	writer.previousScanStart = opts.PreviousScanStart
 	return &embeddingItemToItem{
-		VectorWriter: newItemToItemVectorWriter(cfg, timestamp, opts, false),
+		VectorWriter: writer,
 		columnFunc:   columnFunc,
 	}, nil
 }
@@ -142,12 +145,16 @@ func (e *embeddingItemToItem) Add(item *data.Item, _ []int32) error {
 	if !ok || len(embedding) == 0 {
 		return nil
 	}
+	timestamp := e.timestamp
+	if !e.previousScanStart.IsZero() {
+		timestamp = item.UpdateAt
+	}
 	return e.VectorWriter.Add(vectors.Vector{
 		Id:         item.ItemId,
 		HValues:    embedding,
 		IsHidden:   item.IsHidden,
 		Categories: item.Categories,
-		Timestamp:  e.timestamp,
+		Timestamp:  timestamp,
 	})
 }
 
