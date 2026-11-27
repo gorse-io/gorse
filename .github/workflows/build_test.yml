@@ -100,6 +100,8 @@ jobs:
         unzip ~/.gorse/download/mnist.zip -d ~/.gorse/dataset
 
     - uses: actions/checkout@v2
+      with:
+        persist-credentials: false
     - uses: actions/setup-go@v5
       with:
         go-version-file: ./go.mod
@@ -173,6 +175,8 @@ jobs:
         unzip ~/.gorse/download/mnist.zip -d ~/.gorse/dataset
 
     - uses: actions/checkout@v2
+      with:
+        persist-credentials: false
     - uses: actions/setup-go@v5
       with:
         go-version-file: ./go.mod
@@ -213,6 +217,8 @@ jobs:
         Expand-Archive ~/.gorse/download/mnist.zip -DestinationPath ~/.gorse/dataset
 
     - uses: actions/checkout@v2
+      with:
+        persist-credentials: false
     - uses: actions/setup-go@v5
       with:
         go-version-file: ./go.mod
@@ -332,6 +338,8 @@ jobs:
         uses: gorse-io/redis-cluster@v1.0.1
 
       - uses: actions/checkout@v2
+        with:
+          persist-credentials: false
       - uses: actions/setup-go@v5
         with:
           go-version-file: ./go.mod
@@ -373,6 +381,7 @@ jobs:
       - uses: actions/checkout@v2
         with:
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Setup environment variables
         run: |
@@ -397,6 +406,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
+        with:
+          persist-credentials: false
       - uses: actions/setup-go@v5
         with:
           go-version-file: ./go.mod

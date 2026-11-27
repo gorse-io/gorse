@@ -9,6 +9,8 @@ jobs:
   translate-isssues:
     name: translate issues
     runs-on: ubuntu-latest
+    # The translator comments with its own bot account, the job token is not used
+    permissions: {}
     steps:
       - name: Issues Translator
         uses: tomsun28/issues-translate-action@v2.5

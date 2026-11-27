@@ -1,0 +1,22 @@
+# Plumber configuration, read by .github/workflows/plumber.yml.
+# Every check keeps its default, with the one change below.
+extends: plumber:default
+
+github:
+  controls:
+    githubActionMustComeFromAuthorizedSources:
+      includePlumberDefaults: true
+      # Third-party actions the workflows use, on top of the default trust list
+      trustedGithubActions:
+        # Caches the APT packages of the compatibility tests (build_test.yml)
+        - awalsh128/cache-apt-pkgs-action
+        # Reads the version from the release tag for the image tags (build_release.yml)
+        - battila7/get-version-action
+        # Renders the docker-compose file of the integration tests (build_test.yml)
+        - cuchi/jinja2-action
+        # Starts Azurite for the Azure Blob tests (build_test.yml)
+        - potatoqualitee/azuright
+        # Uploads the darwin binaries to the release (build_release.yml)
+        - svenstaro/upload-release-action
+        # Translates issues and comments to English (translate_issues.yml)
+        - tomsun28/issues-translate-action

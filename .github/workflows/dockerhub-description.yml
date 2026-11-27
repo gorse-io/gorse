@@ -11,11 +11,15 @@ jobs:
   dockerhub_description:
     name: dockerHub description
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     strategy:
       matrix:
         image: [gorse-master, gorse-server, gorse-worker, gorse-in-one]
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
 
       - name: Resolve Images on Description
         run: |
