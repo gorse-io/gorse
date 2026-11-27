@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -35,6 +36,7 @@ import (
 )
 
 const (
+	weaviateDimensionPrefix      = "gorse:dimension="
 	weaviatePayloadCategoriesKey = "categories"
 	weaviatePayloadHiddenKey     = "hidden"
 	weaviatePayloadTimestampKey  = "timestamp"
@@ -143,7 +145,27 @@ func (db *Weaviate) DescribeCollection(ctx context.Context, name string) (*Colle
 	if err != nil {
 		return nil, errors.WithStack(err)
 	}
+	var dimension int
+	if value, marked := strings.CutPrefix(class.Description, weaviateDimensionPrefix); marked {
+		dimension, err = strconv.Atoi(value)
+		if err != nil || dimension <= 0 {
+			return nil, errors.Errorf("invalid dimension metadata for collection %s: %q", name, value)
+		}
+	} else {
+		objects, err := db.client.Data().ObjectsGetter().WithClassName(class.Class).WithVector().WithLimit(1).Do(ctx)
+		if err != nil {
+			return nil, errors.WithStack(err)
+		}
+		dimension = UnknownDenseDimension
+		if len(objects) > 0 {
+			if objects[0] == nil || len(objects[0].Vector) == 0 {
+				return nil, errors.Errorf("missing vector in collection %s", name)
+			}
+			dimension = len(objects[0].Vector)
+		}
+	}
 	return &CollectionInfo{
+		Dimension:    dimension,
 		Name:         name,
 		Distance:     distance,
 		VectorConfig: config,
@@ -151,6 +173,9 @@ func (db *Weaviate) DescribeCollection(ctx context.Context, name string) (*Colle
 }
 
 func (db *Weaviate) AddCollection(ctx context.Context, name string, dimensions int, distance Distance, config VectorConfig) error {
+	if dimensions <= 0 {
+		return fmt.Errorf("non-positive dimensions for Weaviate %w", storage.ErrNotSupported)
+	}
 	var weaviateDistance string
 	switch distance {
 	case Cosine:
@@ -172,8 +197,9 @@ func (db *Weaviate) AddCollection(ctx context.Context, name string, dimensions i
 	}
 
 	class := &models.Class{
-		Class:      capitalize(name),
-		Vectorizer: "none",
+		Class:       capitalize(name),
+		Description: weaviateDimensionPrefix + strconv.Itoa(dimensions),
+		Vectorizer:  "none",
 		Properties: []*models.Property{
 			{
 				Name:     "originalId",
@@ -318,8 +344,27 @@ func (db *Weaviate) AddVectors(ctx context.Context, collection string, vectors [
 			Vector: models.C11yVector(vector.Float32Values()),
 		})
 	}
-	_, err := db.client.Batch().ObjectsBatcher().WithObjects(objects...).Do(ctx)
-	return errors.WithStack(err)
+	results, err := db.client.Batch().ObjectsBatcher().WithObjects(objects...).Do(ctx)
+	if err != nil {
+		return errors.WithStack(err)
+	}
+	if len(results) != len(objects) {
+		return errors.Errorf("expected %d Weaviate write results, got %d", len(objects), len(results))
+	}
+	for _, object := range results {
+		result := object.Result
+		if result != nil && result.Errors != nil {
+			for _, detail := range result.Errors.Error {
+				if detail != nil {
+					return errors.Errorf("upsert Weaviate object %s: %s", object.ID, detail.Message)
+				}
+			}
+		}
+		if result == nil || result.Status == nil || *result.Status != models.ObjectsGetResponseAO2ResultStatusSUCCESS {
+			return errors.Errorf("upsert Weaviate object %s did not succeed", object.ID)
+		}
+	}
+	return nil
 }
 
 func (db *Weaviate) GetVectors(ctx context.Context, collection string, ids []string) ([]Vector, error) {
@@ -399,15 +444,22 @@ func (db *Weaviate) GetVectors(ctx context.Context, collection string, ids []str
 	return orderVectors(ids, vectors), nil
 }
 
-func (db *Weaviate) DeleteVectors(ctx context.Context, collection string, timestamp time.Time) error {
-	_, err := db.client.Batch().ObjectsBatchDeleter().
-		WithClassName(capitalize(collection)).
-		WithWhere(filters.Where().
-			WithPath([]string{weaviatePayloadTimestampKey}).
-			WithOperator(filters.LessThan).
-			WithValueDate(timestamp)).
-		Do(ctx)
-	return errors.WithStack(err)
+func (db *Weaviate) DeleteVectors(ctx context.Context, collection string, ids []string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	for _, id := range ids {
+		objectID := uuid.NewMD5(uuid.NameSpaceURL, []byte(id)).String()
+		err := db.client.Data().Deleter().WithClassName(capitalize(collection)).WithID(objectID).Do(ctx)
+		if err != nil {
+			var clientErr *fault.WeaviateClientError
+			if errors.As(err, &clientErr) && clientErr.StatusCode == http.StatusNotFound {
+				continue
+			}
+			return errors.WithStack(err)
+		}
+	}
+	return nil
 }
 
 func (db *Weaviate) QueryVectors(ctx context.Context, collection string, q Vector, categories []string, topK int) ([]ScoredVector, error) {

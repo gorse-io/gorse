@@ -81,9 +81,7 @@ func (suite *vectorsTestSuite) TestCollections() {
 	info, err := suite.Database.DescribeCollection(ctx, "test")
 	suite.NoError(err)
 	suite.Equal("test", info.Name)
-	if info.Dimension > 0 {
-		suite.Equal(defaultVectorSize, info.Dimension)
-	}
+	suite.Equal(defaultVectorSize, info.Dimension)
 	suite.Equal(Cosine, info.Distance)
 	suite.Equal(QuantizationNone, info.Type)
 	suite.Zero(info.Bits)
@@ -275,7 +273,7 @@ func (suite *vectorsTestSuite) TestSparse() {
 	suite.Require().Len(results, 2)
 	suite.Equal("match", results[0].Id)
 
-	err = suite.Database.DeleteVectors(ctx, "test_sparse", cutoff)
+	err = suite.Database.DeleteVectors(ctx, "test_sparse", []string{"old"})
 	suite.Require().NoError(err)
 	count, err = suite.Database.CountVectors(ctx, "test_sparse")
 	suite.Require().NoError(err)
@@ -341,6 +339,42 @@ func (suite *vectorsTestSuite) TestDot() {
 
 func (suite *vectorsTestSuite) TestDeleteVectors() {
 	ctx := suite.T().Context()
+	must := suite.Require()
+	must.NoError(suite.AddCollection(ctx, "test", 4, Dot, VectorConfig{}))
+	keep := Vector{Id: "keep", Values: []float32{1, 0, 0, 0}, Categories: []string{"keep"}, Timestamp: time.Now().UTC().Truncate(time.Millisecond)}
+	a, b := keep, keep
+	a.Id, b.Id = `a"b`, "b"
+	must.NoError(suite.AddVectors(ctx, "test", []Vector{keep, a, b}))
+	must.NoError(suite.DeleteVectors(ctx, "test", nil))
+	count, err := suite.CountVectors(ctx, "test")
+	must.NoError(err)
+	must.EqualValues(3, count)
+	ids := []string{a.Id, "missing", b.Id, a.Id}
+	must.NoError(suite.DeleteVectors(ctx, "test", ids))
+	must.NoError(suite.DeleteVectors(ctx, "test", ids))
+	got, err := suite.GetVectors(ctx, "test", []string{a.Id, b.Id, keep.Id})
+	must.NoError(err)
+	must.Equal([]Vector{keep}, got)
+}
+
+func (suite *vectorsTestSuite) TestUpsertVector() {
+	ctx := suite.T().Context()
+	must := suite.Require()
+	must.NoError(suite.AddCollection(ctx, "test", 4, Dot, VectorConfig{}))
+	vec := Vector{Id: "key", Values: []float32{1, 0, 0, 0}, Categories: []string{"old"}, Timestamp: time.Now().UTC().Truncate(time.Millisecond)}
+	must.NoError(suite.AddVectors(ctx, "test", []Vector{vec}))
+	vec.Values, vec.Categories, vec.IsHidden, vec.Timestamp = []float32{0, 1, 0, 0}, []string{"new"}, true, vec.Timestamp.Add(time.Hour)
+	must.NoError(suite.AddVectors(ctx, "test", []Vector{vec}))
+	count, err := suite.CountVectors(ctx, "test")
+	must.NoError(err)
+	must.EqualValues(1, count)
+	got, err := suite.GetVectors(ctx, "test", []string{vec.Id})
+	must.NoError(err)
+	must.Equal([]Vector{vec}, got)
+}
+
+func (suite *vectorsTestSuite) TestQueryAfterDeleteVectors() {
+	ctx := suite.T().Context()
 	err := suite.Database.AddCollection(ctx, "test", defaultVectorSize, Cosine, VectorConfig{})
 	suite.NoError(err)
 
@@ -367,7 +401,7 @@ func (suite *vectorsTestSuite) TestDeleteVectors() {
 	})
 	suite.NoError(err)
 
-	err = suite.Database.DeleteVectors(ctx, "test", cutoff)
+	err = suite.Database.DeleteVectors(ctx, "test", []string{"old"})
 	suite.NoError(err)
 	count, err := suite.Database.CountVectors(ctx, "test")
 	suite.NoError(err)
@@ -392,6 +426,9 @@ func (suite *vectorsTestSuite) testQuantization(quantization QuantizationType, b
 	cfg, err := suite.Database.DescribeCollection(ctx, "test_quantization")
 	suite.NoError(err)
 	suite.Equal(quantization, cfg.Type)
+	if quantization == QuantizationSQ || quantization == QuantizationPQ {
+		suite.True(cfg.VectorConfig.Matches(VectorConfig{Type: quantization, Bits: bits}))
+	}
 	if bits > 0 {
 		suite.Equal(bits, cfg.Bits)
 	}

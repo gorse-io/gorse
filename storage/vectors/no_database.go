@@ -16,7 +16,6 @@ package vectors
 
 import (
 	"context"
-	"time"
 
 	"github.com/gorse-io/gorse/storage"
 )
@@ -47,9 +46,10 @@ func (NoDatabase) AddVectors(_ context.Context, _ string, _ []Vector) error {
 func (NoDatabase) GetVectors(_ context.Context, _ string, _ []string) ([]Vector, error) {
 	return nil, storage.ErrNoDatabase
 }
-func (NoDatabase) DeleteVectors(_ context.Context, _ string, _ time.Time) error {
+func (NoDatabase) DeleteVectors(_ context.Context, _ string, _ []string) error {
 	return storage.ErrNoDatabase
 }
+
 func (NoDatabase) QueryVectors(_ context.Context, _ string, _ Vector, _ []string, _ int) ([]ScoredVector, error) {
 	return nil, storage.ErrNoDatabase
 }

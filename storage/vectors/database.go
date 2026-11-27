@@ -83,6 +83,18 @@ type VectorConfig struct {
 	Bits int
 }
 
+func (reported VectorConfig) Matches(request VectorConfig) bool {
+	if request.Bits == 0 && reported.Bits == 8 {
+		switch request.Type {
+		case QuantizationSQ, QuantizationPQ, QuantizationRQ:
+			request.Bits = 8
+		}
+	}
+	return reported == request
+}
+
+const UnknownDenseDimension = -1
+
 // CollectionInfo describes a vector collection.
 type CollectionInfo struct {
 	Name      string
@@ -157,7 +169,7 @@ type Database interface {
 	CountVectors(ctx context.Context, collection string) (int64, error)
 	AddVectors(ctx context.Context, collection string, vectors []Vector) error
 	GetVectors(ctx context.Context, collection string, ids []string) ([]Vector, error)
-	DeleteVectors(ctx context.Context, collection string, timestamp time.Time) error
+	DeleteVectors(ctx context.Context, collection string, ids []string) error
 	QueryVectors(ctx context.Context, collection string, q Vector, categories []string, topK int) ([]ScoredVector, error)
 }
 

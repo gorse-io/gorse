@@ -20,6 +20,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -281,6 +282,50 @@ func (suite *ServerTestSuite) TestUsers() {
 		Expect(t).
 		Status(http.StatusBadRequest).
 		End()
+}
+
+func TestEnqueueDuringMetadataReload(t *testing.T) {
+	s := &Server{Config: config.GetDefaultConfig()}
+	raw := []byte(`{"Recommend":{"ItemToItem":[{"Type":"tags"}]}}`)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for range 1000 {
+			s.enqueueItemEmbeddings(t.Context(), []string{"a"})
+		}
+	}()
+	for range 1000 {
+		if err := s.loadMetaConfig(raw); err != nil {
+			t.Error(err)
+			break
+		}
+	}
+	<-done
+}
+
+func (suite *ServerTestSuite) TestItemEmbeddingMutations() {
+	ctx := suite.T().Context()
+	check := func(method, path, body string, expected ...string) {
+		suite.T().Helper()
+		r := httptest.NewRequest(method, path, strings.NewReader(body))
+		r.Header.Set("Content-Type", "application/json")
+		r.Header.Set("X-API-Key", apiKey)
+		w := httptest.NewRecorder()
+		suite.handler.ServeHTTP(w, r)
+		suite.Require().Equal(http.StatusOK, w.Code, w.Body.String())
+		var got []string
+		suite.Require().NoError(cache.ProcessItemEmbeddings(ctx, suite.CacheClient, 10, func(ids []string) error { got = ids; return nil }))
+		suite.Require().ElementsMatch(expected, got)
+	}
+	suite.Config.Recommend.ItemToItem = []config.ItemToItemConfig{{Type: "tags"}}
+	check("POST", "/api/item", `{"ItemId":"a"}`)
+	suite.Config.Recommend.ItemToItem = append(suite.Config.Recommend.ItemToItem, config.ItemToItemConfig{Type: "embedding", Column: "item.Labels.vector"})
+	check("POST", "/api/item", `{"ItemId":"a"}`, "a")
+	check("POST", "/api/items", `[{"ItemId":"a"},{"ItemId":"b"}]`, "a", "b")
+	check("PATCH", "/api/item/a", `{"IsHidden":true}`, "a")
+	check("PUT", "/api/item/a/category/news", "", "a")
+	check("DELETE", "/api/item/a/category/news", "", "a")
+	check("DELETE", "/api/item/a", "", "a")
 }
 
 func (suite *ServerTestSuite) TestItems() {

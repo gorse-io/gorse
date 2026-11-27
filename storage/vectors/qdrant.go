@@ -399,17 +399,21 @@ func (db *Qdrant) AddVectors(ctx context.Context, collection string, vectors []V
 	return errors.WithStack(err)
 }
 
-func (db *Qdrant) GetVectors(ctx context.Context, collection string, ids []string) ([]Vector, error) {
-	if len(ids) == 0 {
-		return []Vector{}, nil
-	}
+func qdrantPointIDs(ids []string) []*qdrant.PointId {
 	pointIDs := make([]*qdrant.PointId, len(ids))
 	for i, id := range ids {
 		pointIDs[i] = qdrant.NewID(uuid.NewMD5(uuid.NameSpaceURL, []byte(id)).String())
 	}
+	return pointIDs
+}
+
+func (db *Qdrant) GetVectors(ctx context.Context, collection string, ids []string) ([]Vector, error) {
+	if len(ids) == 0 {
+		return []Vector{}, nil
+	}
 	points, err := db.client.Get(ctx, &qdrant.GetPoints{
 		CollectionName: collection,
-		Ids:            pointIDs,
+		Ids:            qdrantPointIDs(ids),
 		WithPayload:    qdrant.NewWithPayloadEnable(true),
 		WithVectors:    qdrant.NewWithVectorsInclude(qdrantVectorName),
 	})
@@ -431,17 +435,11 @@ func (db *Qdrant) GetVectors(ctx context.Context, collection string, ids []strin
 	return orderVectors(ids, vectors), nil
 }
 
-func (db *Qdrant) DeleteVectors(ctx context.Context, collection string, timestamp time.Time) error {
-	lt := float64(timestamp.UnixMilli())
-	_, err := db.client.Delete(ctx, &qdrant.DeletePoints{
-		CollectionName: collection,
-		Wait:           new(true),
-		Points: qdrant.NewPointsSelectorFilter(&qdrant.Filter{
-			Must: []*qdrant.Condition{
-				qdrant.NewRange(qdrantPayloadTimestampKey, &qdrant.Range{Lt: &lt}),
-			},
-		}),
-	})
+func (db *Qdrant) DeleteVectors(ctx context.Context, collection string, ids []string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	_, err := db.client.Delete(ctx, &qdrant.DeletePoints{CollectionName: collection, Wait: new(true), Points: qdrant.NewPointsSelectorIDs(qdrantPointIDs(ids))})
 	return errors.WithStack(err)
 }
 

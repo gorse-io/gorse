@@ -374,6 +374,9 @@ func (db *MongoDB) BatchGetItems(ctx context.Context, itemIds []string, opts Get
 		item.Labels = unpack(item.Labels)
 		items = append(items, item)
 	}
+	if err := r.Err(); err != nil {
+		return nil, errors.WithStack(err)
+	}
 	return items, nil
 }
 

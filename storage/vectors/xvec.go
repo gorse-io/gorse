@@ -389,12 +389,25 @@ func (db *Xvec) GetVectors(ctx context.Context, name string, ids []string) ([]Ve
 	return orderVectors(ids, vectors), nil
 }
 
-func (db *Xvec) DeleteVectors(ctx context.Context, name string, timestamp time.Time) error {
-	collection, err := db.collection(name)
+func (db *Xvec) DeleteVectors(ctx context.Context, collection string, ids []string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	coll, err := db.collection(collection)
 	if err != nil {
 		return err
 	}
-	return errors.WithStack(collection.DeleteByFilter(ctx, fmt.Sprintf("%s < %d", xvecTimestampField, timestamp.UnixMilli())))
+	results, err := coll.Delete(ctx, ids)
+	var batchErr *xvec.BatchWriteError
+	if !errors.As(err, &batchErr) {
+		return errors.WithStack(err)
+	}
+	for _, result := range results {
+		if result.Err != nil && !errors.Is(result.Err, xvec.ErrNotFound) {
+			return errors.WithStack(result.Err)
+		}
+	}
+	return nil
 }
 
 func (db *Xvec) QueryVectors(ctx context.Context, name string, q Vector, categories []string, topK int) ([]ScoredVector, error) {

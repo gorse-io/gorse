@@ -29,6 +29,52 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
+type scanReplyHook struct{ row map[string]string }
+
+func (h scanReplyHook) DialHook(next redis.DialHook) redis.DialHook { return next }
+func (h scanReplyHook) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
+	return func(ctx context.Context, cmd redis.Cmder) error {
+		cmd.(*redis.ScanCmd).SetVal([]string{"first", "second"}, 0)
+		return nil
+	}
+}
+func (h scanReplyHook) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.ProcessPipelineHook {
+	return func(ctx context.Context, cmds []redis.Cmder) error {
+		cmds[0].(*redis.MapStringStringCmd).SetVal(h.row)
+		cmds[1].(*redis.MapStringStringCmd).SetVal(map[string]string{"timestamp": "1", "id": "survivor"})
+		return nil
+	}
+}
+func TestRedisScanScoresVanishedHash(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		row     map[string]string
+		wantErr bool
+	}{
+		{"vanished", map[string]string{}, false},
+		{"missing timestamp", map[string]string{"id": "broken"}, true},
+		{"invalid timestamp", map[string]string{"timestamp": "bad"}, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client := redis.NewClient(&redis.Options{})
+			defer client.Close()
+			client.AddHook(scanReplyHook{tc.row})
+			var seen []string
+			err := (&Redis{client: client}).ScanScores(t.Context(), func(_, id, _ string, _ time.Time) error {
+				seen = append(seen, id)
+				return nil
+			})
+			if tc.wantErr {
+				assert.Error(t, err)
+				assert.Empty(t, seen)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, []string{"survivor"}, seen)
+			}
+		})
+	}
+}
+
 var (
 	redisDSN string
 )

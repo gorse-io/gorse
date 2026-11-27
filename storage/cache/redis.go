@@ -481,6 +481,9 @@ func (r *Redis) scanScores(ctx context.Context, client redis.UniversalClient, ca
 					}
 					return errors.WithStack(err)
 				}
+				if len(row) == 0 {
+					continue
+				}
 				var usec int64
 				usec, err = util.ParseInt[int64](row["timestamp"])
 				if err != nil {

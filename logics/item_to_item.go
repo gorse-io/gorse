@@ -26,6 +26,7 @@ import (
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/config"
 	"github.com/gorse-io/gorse/dataset"
+	"github.com/gorse-io/gorse/storage"
 	"github.com/gorse-io/gorse/storage/cache"
 	"github.com/gorse-io/gorse/storage/data"
 	"github.com/gorse-io/gorse/storage/vectors"
@@ -138,17 +139,87 @@ func newEmbeddingItemToItem(cfg config.ItemToItemConfig, timestamp time.Time, op
 }
 
 func (e *embeddingItemToItem) Add(item *data.Item, _ []int32) error {
-	embedding, ok := ExtractItemEmbedding(item, e.columnFunc)
-	if !ok || len(embedding) == 0 {
+	v, ok := itemEmbeddingVector(item, e.columnFunc, e.timestamp)
+	if !ok {
 		return nil
 	}
-	return e.VectorWriter.Add(vectors.Vector{
+	return e.VectorWriter.Add(v)
+}
+
+func itemEmbeddingVector(item *data.Item, column *vm.Program, timestamp time.Time) (vectors.Vector, bool) {
+	embedding, ok := ExtractItemEmbedding(item, column)
+	if !ok || len(embedding) == 0 {
+		return vectors.Vector{}, false
+	}
+	return vectors.Vector{
 		Id:         item.ItemId,
 		HValues:    embedding,
 		IsHidden:   item.IsHidden,
 		Categories: item.Categories,
-		Timestamp:  e.timestamp,
-	})
+		Timestamp:  timestamp,
+	}, true
+}
+
+func RefreshItemEmbeddings(ctx context.Context, db vectors.Database, cfg config.ItemToItemConfig, vc vectors.VectorConfig, ids []string, items map[string]data.Item, now time.Time) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	column, err := expr.Compile(cfg.Column, expr.Env(map[string]any{"item": data.Item{}}))
+	if err != nil {
+		return err
+	}
+	collection := vectors.ItemToItemCollection(cfg.Name)
+	info, err := db.DescribeCollection(ctx, collection)
+	if errors.Is(err, storage.ErrNotFound) {
+		info = nil
+	} else if err != nil {
+		return err
+	}
+	if info != nil && (info.Distance != vectors.Euclidean || !info.VectorConfig.Matches(vc) || info.Dimension == 0) {
+		return errors.Errorf("collection %s requires full rebuild", collection)
+	}
+	var upserts []vectors.Vector
+	var removed []string
+	for _, id := range ids {
+		if item, ok := items[id]; ok {
+			if v, ok := itemEmbeddingVector(&item, column, now); ok {
+				upserts = append(upserts, v)
+				continue
+			}
+		}
+		removed = append(removed, id)
+	}
+	if info == nil {
+		if len(upserts) == 0 {
+			return nil
+		}
+		dim := preferredDimension(upserts)
+		if err := db.AddCollection(ctx, collection, dim, vectors.Euclidean, vc); err != nil {
+			return err
+		}
+		info = &vectors.CollectionInfo{Dimension: dim}
+	}
+	dimension := info.Dimension
+	if dimension == vectors.UnknownDenseDimension && len(upserts) > 0 {
+		dimension = preferredDimension(upserts)
+	}
+	valid := upserts[:0]
+	for _, v := range upserts {
+		if v.Len() != dimension {
+			removed = append(removed, v.Id)
+		} else {
+			valid = append(valid, v)
+		}
+	}
+	if len(valid) > 0 {
+		if err := db.AddVectors(ctx, collection, valid); err != nil {
+			return err
+		}
+	}
+	if len(removed) > 0 {
+		return db.DeleteVectors(ctx, collection, removed)
+	}
+	return nil
 }
 
 func ExtractItemEmbedding(item *data.Item, columnFunc *vm.Program) ([]uint16, bool) {

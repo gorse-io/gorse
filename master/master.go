@@ -79,7 +79,6 @@ type Master struct {
 	configPath     string
 	standalone     bool
 	openAIClient   *openai.Client
-	ConfigMutex    sync.RWMutex
 
 	// cluster meta cache
 	metaStore  meta.Database
@@ -111,6 +110,7 @@ type Master struct {
 	backgroundCancel    context.CancelFunc
 	backgroundWaitGroup sync.WaitGroup
 	reconciling         atomic.Bool
+	itemEmbeddingMu     sync.Mutex
 }
 
 // NewMaster creates a master node.
@@ -315,7 +315,7 @@ func (m *Master) Serve() {
 	// open vector store
 	log.Logger().Info("opening vector store", zap.String("path", m.Config.Database.VectorStore))
 	m.VectorClient, err = vectors.Open(m.Config.Database.VectorStore, m.Config.Database.VectorTablePrefix,
-		storage.WithNumJobs(m.Config.Master.NumJobs), storage.WithSkipUnindexedSegments(true))
+		storage.WithNumJobs(m.Config.Master.NumJobs))
 	if err != nil {
 		log.Logger().Fatal("failed to connect vector store", zap.Error(err))
 	}
@@ -363,6 +363,7 @@ func (m *Master) Serve() {
 	m.backgroundWaitGroup.Go(func() {
 		m.RunTasksLoop()
 	})
+	m.backgroundWaitGroup.Go(func() { m.runItemEmbeddingLoop(m.backgroundContext) })
 
 	// start rpc server
 	go func() {

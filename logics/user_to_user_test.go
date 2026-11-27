@@ -88,9 +88,10 @@ func (suite *UserToUserTestSuite) TestClean() {
 
 	stored, err := suite.vectorClient.GetVectors(ctx, collection, []string{"stale", "current", "new"})
 	suite.NoError(err)
-	suite.Require().Len(stored, 2)
-	suite.Equal("current", stored[0].Id)
-	suite.Equal("new", stored[1].Id)
+	suite.Require().Len(stored, 3)
+	suite.Equal("stale", stored[0].Id)
+	suite.Equal("current", stored[1].Id)
+	suite.Equal("new", stored[2].Id)
 }
 
 func (suite *UserToUserTestSuite) TestTags() {

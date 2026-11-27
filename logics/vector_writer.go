@@ -116,12 +116,11 @@ func (w *VectorWriter) Clean() error {
 	if err := w.flushLocked(); err != nil {
 		return err
 	}
-	if err := w.client.DeleteVectors(w.ctx, w.collection, w.timestamp); errors.Is(err, storage.ErrNotFound) {
+	err := w.client.Optimize(w.ctx, w.collection)
+	if errors.Is(err, storage.ErrNotFound) {
 		return nil
-	} else if err != nil {
-		return errors.WithStack(err)
 	}
-	return errors.WithStack(w.client.Optimize(w.ctx, w.collection))
+	return errors.WithStack(err)
 }
 
 func (w *VectorWriter) ensureCollectionLocked() error {
@@ -138,7 +137,7 @@ func (w *VectorWriter) ensureCollectionLocked() error {
 		return errors.WithStack(err)
 	}
 	dimension := *w.dimension
-	if info != nil && (info.Dimension != dimension || info.Distance != w.distance || info.Type != w.vectorConfig.Type || info.Bits != w.vectorConfig.Bits) {
+	if info != nil && ((info.Dimension != dimension && (dimension <= 0 || info.Dimension != vectors.UnknownDenseDimension)) || info.Distance != w.distance || !info.VectorConfig.Matches(w.vectorConfig)) {
 		log.Logger().Warn("recreating similarity vector collection",
 			zap.String("collection", w.collection),
 			zap.Int("dimension", dimension),
@@ -157,23 +156,28 @@ func (w *VectorWriter) ensureCollectionLocked() error {
 	return nil
 }
 
+func preferredDimension(batch []vectors.Vector) int {
+	counts := make(map[int]int)
+	for _, vector := range batch {
+		counts[vector.Len()]++
+	}
+	dimension := batch[0].Len()
+	for _, vector := range batch {
+		candidate := vector.Len()
+		if counts[candidate] > counts[dimension] {
+			dimension = candidate
+		}
+	}
+	return dimension
+}
+
 func (w *VectorWriter) flushLocked() error {
 	if len(w.buffer) == 0 {
 		return nil
 	}
 	if !w.sparse {
 		if w.dimension == nil {
-			counts := make(map[int]int)
-			for _, vector := range w.buffer {
-				counts[vector.Len()]++
-			}
-			dimension := w.buffer[0].Len()
-			for _, vector := range w.buffer {
-				candidate := vector.Len()
-				if counts[candidate] > counts[dimension] {
-					dimension = candidate
-				}
-			}
+			dimension := preferredDimension(w.buffer)
 			w.dimension = &dimension
 		}
 		dimension := *w.dimension

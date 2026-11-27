@@ -23,6 +23,7 @@ import (
 	"net/http/pprof"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"uuid"
 
@@ -62,6 +63,7 @@ const (
 
 // RestServer implements a REST-ful API server.
 type RestServer struct {
+	ConfigMutex  sync.RWMutex
 	Config       *config.Config
 	CacheClient  cache.Database
 	DataClient   data.Database
@@ -1495,6 +1497,26 @@ type Item struct {
 	Comment    string
 }
 
+func (s *RestServer) enqueueItemEmbeddings(ctx context.Context, ids []string) {
+	if !s.itemEmbeddingsEnabled() {
+		return
+	}
+	if err := cache.EnqueueItemEmbeddings(ctx, s.CacheClient, ids); err != nil {
+		log.Logger().Warn("failed to enqueue item embedding refresh", zap.Int("items", len(ids)), zap.Error(err))
+	}
+}
+
+func (s *RestServer) itemEmbeddingsEnabled() bool {
+	s.ConfigMutex.RLock()
+	defer s.ConfigMutex.RUnlock()
+	for _, cfg := range s.Config.Recommend.ItemToItem {
+		if cfg.Type == "embedding" {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *RestServer) batchInsertItems(ctx context.Context, response *restful.Response, temp []Item) {
 	var (
 		count                int
@@ -1506,9 +1528,10 @@ func (s *RestServer) batchInsertItems(ctx context.Context, response *restful.Res
 	)
 	// load existed items
 	start := time.Now()
-	existedItems, err := s.DataClient.BatchGetItems(ctx, lo.Map(temp, func(t Item, i int) string {
+	ids := lo.Map(temp, func(t Item, i int) string {
 		return t.ItemId
-	}), data.GetOptions{})
+	})
+	existedItems, err := s.DataClient.BatchGetItems(ctx, ids, data.GetOptions{})
 	if err != nil {
 		InternalServerError(response, err)
 		return
@@ -1517,9 +1540,7 @@ func (s *RestServer) batchInsertItems(ctx context.Context, response *restful.Res
 	for _, item := range existedItems {
 		existedItemsSet[item.ItemId] = item
 	}
-	if err = s.checkItemCountLimit(ctx, lo.Map(temp, func(item Item, index int) string {
-		return item.ItemId
-	})); err != nil {
+	if err = s.checkItemCountLimit(ctx, ids); err != nil {
 		TooManyRequests(response, err)
 		return
 	}
@@ -1568,6 +1589,7 @@ func (s *RestServer) batchInsertItems(ctx context.Context, response *restful.Res
 		return
 	}
 	insertItemsTime = time.Since(start)
+	s.enqueueItemEmbeddings(ctx, ids)
 
 	// insert modify timestamp
 	start = time.Now()
@@ -1680,6 +1702,7 @@ func (s *RestServer) modifyItem(request *restful.Request, response *restful.Resp
 		InternalServerError(response, err)
 		return
 	}
+	s.enqueueItemEmbeddings(ctx, []string{itemId})
 	// insert modify timestamp
 	if err := s.CacheClient.Set(ctx, cache.Time(cache.Key(cache.LastModifyItemTime, itemId), time.Now())); err != nil {
 		return
@@ -1822,6 +1845,7 @@ func (s *RestServer) deleteItem(request *restful.Request, response *restful.Resp
 		InternalServerError(response, err)
 		return
 	}
+	s.enqueueItemEmbeddings(ctx, []string{itemId})
 	// delete item from cache
 	if err := s.CacheClient.DeleteScores(ctx, cache.ItemCache, cache.ScoreCondition{Id: &itemId}); err != nil {
 		InternalServerError(response, err)
@@ -1856,6 +1880,7 @@ func (s *RestServer) insertItemCategory(request *restful.Request, response *rest
 		InternalServerError(response, err)
 		return
 	}
+	s.enqueueItemEmbeddings(ctx, []string{itemId})
 	// insert category to cache
 	if err = s.CacheClient.UpdateScores(ctx, cache.ItemCache, nil, itemId, cache.ScorePatch{Categories: withWildCard(item.Categories)}); err != nil {
 		InternalServerError(response, err)
@@ -1895,6 +1920,7 @@ func (s *RestServer) deleteItemCategory(request *restful.Request, response *rest
 		InternalServerError(response, err)
 		return
 	}
+	s.enqueueItemEmbeddings(ctx, []string{itemId})
 	Ok(response, Success{RowAffected: 1})
 }
 

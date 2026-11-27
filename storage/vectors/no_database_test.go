@@ -16,7 +16,6 @@ package vectors
 
 import (
 	"testing"
-	"time"
 
 	"github.com/gorse-io/gorse/storage"
 	"github.com/stretchr/testify/assert"
@@ -61,8 +60,8 @@ func TestNoDatabase(t *testing.T) {
 		vectors, err := database.GetVectors(ctx, "test", []string{"a"})
 		assert.ErrorIs(t, err, storage.ErrNoDatabase)
 		assert.Nil(t, vectors)
-		assert.ErrorIs(t, database.DeleteVectors(ctx, "test", time.Now()), storage.ErrNoDatabase)
-		assert.ErrorIs(t, database.DeleteVectors(ctx, "missing", time.Time{}), storage.ErrNoDatabase)
+		assert.ErrorIs(t, database.DeleteVectors(ctx, "test", []string{"a"}), storage.ErrNoDatabase)
+		assert.ErrorIs(t, database.DeleteVectors(ctx, "missing", nil), storage.ErrNoDatabase)
 
 		results, err := database.QueryVectors(ctx, "test", Vector{Values: []float32{1, 0, 0, 0}}, []string{"cat-a"}, 10)
 		assert.ErrorIs(t, err, storage.ErrNoDatabase)

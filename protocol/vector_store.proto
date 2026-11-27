@@ -83,7 +83,7 @@ message AddVectorsResponse {}
 
 message DeleteVectorsRequest {
   string collection = 1;
-  google.protobuf.Timestamp timestamp = 2;
+  repeated string ids = 2;
 }
 
 message DeleteVectorsResponse {}
