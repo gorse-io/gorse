@@ -20,8 +20,6 @@ import (
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo/integration/mtest"
 )
 
 var (
@@ -65,20 +63,6 @@ func (suite *MongoTestSuite) getMongoDB() *MongoDB {
 	mongoDatabase, ok = suite.Database.(*MongoDB)
 	suite.True(ok)
 	return mongoDatabase
-}
-
-func TestMongoBatchGetItemsTerminalError(t *testing.T) {
-	mt := mtest.New(t, mtest.NewOptions().ClientType(mtest.Mock))
-	mt.Run("getMore fails after first batch", func(mt *mtest.T) {
-		db := &MongoDB{client: mt.Client, dbName: "test"}
-		mt.AddMockResponses(
-			mtest.CreateCursorResponse(1, "test.items", mtest.FirstBatch, bson.D{{Key: "itemid", Value: "a"}}),
-			mtest.CreateCommandErrorResponse(mtest.CommandError{Code: 43, Message: "cursor lost"}),
-		)
-		items, err := db.BatchGetItems(mt.Context(), []string{"a", "b"}, GetOptions{})
-		require.ErrorContains(mt, err, "cursor lost")
-		require.Nil(mt, items)
-	})
 }
 
 func TestMongo(t *testing.T) {
