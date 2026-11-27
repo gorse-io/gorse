@@ -75,8 +75,24 @@ func (p *ProxyServer) Delete(ctx context.Context, request *protocol.DeleteReques
 	return &protocol.DeleteResponse{}, p.database.Delete(ctx, request.GetName())
 }
 
-func (p *ProxyServer) AddEvent(ctx context.Context, request *protocol.AddEventRequest) (*protocol.AddEventResponse, error) {
-	return &protocol.AddEventResponse{}, p.database.AddEvent(ctx, request.GetKey(), request.GetMember(), time.UnixMilli(request.GetTimestampMillis()))
+func (p *ProxyServer) AddEvent(ctx context.Context, request *protocol.Event) (*protocol.AddEventResponse, error) {
+	return &protocol.AddEventResponse{}, p.database.AddEvent(ctx, request.GetType(), request.GetName(), time.UnixMilli(request.GetTimestamp()).UTC())
+}
+
+func (p *ProxyServer) DeleteEvent(ctx context.Context, request *protocol.DeleteEventRequest) (*protocol.DeleteEventResponse, error) {
+	return &protocol.DeleteEventResponse{}, p.database.DeleteEvent(ctx, request.GetType(), request.GetName())
+}
+
+func (p *ProxyServer) ListEvents(ctx context.Context, request *protocol.ListEventsRequest) (*protocol.ListEventsResponse, error) {
+	events, err := p.database.ListEvents(ctx, request.GetType())
+	if err != nil {
+		return nil, err
+	}
+	response := &protocol.ListEventsResponse{Events: make([]*protocol.Event, len(events))}
+	for i, event := range events {
+		response.Events[i] = &protocol.Event{Type: event.Type, Name: event.Name, Timestamp: event.Timestamp.UnixMilli()}
+	}
+	return response, nil
 }
 
 func (p *ProxyServer) AddScores(ctx context.Context, request *protocol.AddScoresRequest) (*protocol.AddScoresResponse, error) {
@@ -233,13 +249,30 @@ func (p ProxyClient) Delete(ctx context.Context, name string) error {
 	return err
 }
 
-func (p ProxyClient) AddEvent(ctx context.Context, key, member string, timestamp time.Time) error {
-	_, err := p.CacheStoreClient.AddEvent(ctx, &protocol.AddEventRequest{
-		Key:             key,
-		Member:          member,
-		TimestampMillis: timestamp.UnixMilli(),
+func (p ProxyClient) AddEvent(ctx context.Context, eventType, name string, timestamp time.Time) error {
+	_, err := p.CacheStoreClient.AddEvent(ctx, &protocol.Event{
+		Type:      eventType,
+		Name:      name,
+		Timestamp: timestamp.UnixMilli(),
 	})
 	return err
+}
+
+func (p ProxyClient) DeleteEvent(ctx context.Context, eventType, name string) error {
+	_, err := p.CacheStoreClient.DeleteEvent(ctx, &protocol.DeleteEventRequest{Type: eventType, Name: name})
+	return err
+}
+
+func (p ProxyClient) ListEvents(ctx context.Context, eventType string) ([]Event, error) {
+	response, err := p.CacheStoreClient.ListEvents(ctx, &protocol.ListEventsRequest{Type: eventType})
+	if err != nil {
+		return nil, err
+	}
+	events := make([]Event, len(response.Events))
+	for i, event := range response.Events {
+		events[i] = Event{Type: event.Type, Name: event.Name, Timestamp: time.UnixMilli(event.Timestamp).UTC()}
+	}
+	return events, nil
 }
 
 func (p ProxyClient) AddScores(ctx context.Context, collection, subset string, documents []Score) error {

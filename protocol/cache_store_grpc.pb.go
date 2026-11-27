@@ -45,6 +45,8 @@ const (
 	CacheStore_AddTimeSeriesPoints_FullMethodName = "/protocol.CacheStore/AddTimeSeriesPoints"
 	CacheStore_GetTimeSeriesPoints_FullMethodName = "/protocol.CacheStore/GetTimeSeriesPoints"
 	CacheStore_AddEvent_FullMethodName            = "/protocol.CacheStore/AddEvent"
+	CacheStore_DeleteEvent_FullMethodName         = "/protocol.CacheStore/DeleteEvent"
+	CacheStore_ListEvents_FullMethodName          = "/protocol.CacheStore/ListEvents"
 )
 
 // CacheStoreClient is the client API for CacheStore service.
@@ -62,7 +64,9 @@ type CacheStoreClient interface {
 	ScanScores(ctx context.Context, in *ScanScoresRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ScanScoresResponse], error)
 	AddTimeSeriesPoints(ctx context.Context, in *AddTimeSeriesPointsRequest, opts ...grpc.CallOption) (*AddTimeSeriesPointsResponse, error)
 	GetTimeSeriesPoints(ctx context.Context, in *GetTimeSeriesPointsRequest, opts ...grpc.CallOption) (*GetTimeSeriesPointsResponse, error)
-	AddEvent(ctx context.Context, in *AddEventRequest, opts ...grpc.CallOption) (*AddEventResponse, error)
+	AddEvent(ctx context.Context, in *Event, opts ...grpc.CallOption) (*AddEventResponse, error)
+	DeleteEvent(ctx context.Context, in *DeleteEventRequest, opts ...grpc.CallOption) (*DeleteEventResponse, error)
+	ListEvents(ctx context.Context, in *ListEventsRequest, opts ...grpc.CallOption) (*ListEventsResponse, error)
 }
 
 type cacheStoreClient struct {
@@ -192,10 +196,30 @@ func (c *cacheStoreClient) GetTimeSeriesPoints(ctx context.Context, in *GetTimeS
 	return out, nil
 }
 
-func (c *cacheStoreClient) AddEvent(ctx context.Context, in *AddEventRequest, opts ...grpc.CallOption) (*AddEventResponse, error) {
+func (c *cacheStoreClient) AddEvent(ctx context.Context, in *Event, opts ...grpc.CallOption) (*AddEventResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(AddEventResponse)
 	err := c.cc.Invoke(ctx, CacheStore_AddEvent_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *cacheStoreClient) DeleteEvent(ctx context.Context, in *DeleteEventRequest, opts ...grpc.CallOption) (*DeleteEventResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteEventResponse)
+	err := c.cc.Invoke(ctx, CacheStore_DeleteEvent_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *cacheStoreClient) ListEvents(ctx context.Context, in *ListEventsRequest, opts ...grpc.CallOption) (*ListEventsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListEventsResponse)
+	err := c.cc.Invoke(ctx, CacheStore_ListEvents_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -217,7 +241,9 @@ type CacheStoreServer interface {
 	ScanScores(*ScanScoresRequest, grpc.ServerStreamingServer[ScanScoresResponse]) error
 	AddTimeSeriesPoints(context.Context, *AddTimeSeriesPointsRequest) (*AddTimeSeriesPointsResponse, error)
 	GetTimeSeriesPoints(context.Context, *GetTimeSeriesPointsRequest) (*GetTimeSeriesPointsResponse, error)
-	AddEvent(context.Context, *AddEventRequest) (*AddEventResponse, error)
+	AddEvent(context.Context, *Event) (*AddEventResponse, error)
+	DeleteEvent(context.Context, *DeleteEventRequest) (*DeleteEventResponse, error)
+	ListEvents(context.Context, *ListEventsRequest) (*ListEventsResponse, error)
 	mustEmbedUnimplementedCacheStoreServer()
 }
 
@@ -261,8 +287,14 @@ func (UnimplementedCacheStoreServer) AddTimeSeriesPoints(context.Context, *AddTi
 func (UnimplementedCacheStoreServer) GetTimeSeriesPoints(context.Context, *GetTimeSeriesPointsRequest) (*GetTimeSeriesPointsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetTimeSeriesPoints not implemented")
 }
-func (UnimplementedCacheStoreServer) AddEvent(context.Context, *AddEventRequest) (*AddEventResponse, error) {
+func (UnimplementedCacheStoreServer) AddEvent(context.Context, *Event) (*AddEventResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AddEvent not implemented")
+}
+func (UnimplementedCacheStoreServer) DeleteEvent(context.Context, *DeleteEventRequest) (*DeleteEventResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteEvent not implemented")
+}
+func (UnimplementedCacheStoreServer) ListEvents(context.Context, *ListEventsRequest) (*ListEventsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListEvents not implemented")
 }
 func (UnimplementedCacheStoreServer) mustEmbedUnimplementedCacheStoreServer() {}
 func (UnimplementedCacheStoreServer) testEmbeddedByValue()                    {}
@@ -477,7 +509,7 @@ func _CacheStore_GetTimeSeriesPoints_Handler(srv interface{}, ctx context.Contex
 }
 
 func _CacheStore_AddEvent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(AddEventRequest)
+	in := new(Event)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -489,7 +521,43 @@ func _CacheStore_AddEvent_Handler(srv interface{}, ctx context.Context, dec func
 		FullMethod: CacheStore_AddEvent_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(CacheStoreServer).AddEvent(ctx, req.(*AddEventRequest))
+		return srv.(CacheStoreServer).AddEvent(ctx, req.(*Event))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CacheStore_DeleteEvent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteEventRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CacheStoreServer).DeleteEvent(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CacheStore_DeleteEvent_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CacheStoreServer).DeleteEvent(ctx, req.(*DeleteEventRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CacheStore_ListEvents_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListEventsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CacheStoreServer).ListEvents(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CacheStore_ListEvents_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CacheStoreServer).ListEvents(ctx, req.(*ListEventsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -544,6 +612,14 @@ var CacheStore_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "AddEvent",
 			Handler:    _CacheStore_AddEvent_Handler,
+		},
+		{
+			MethodName: "DeleteEvent",
+			Handler:    _CacheStore_DeleteEvent_Handler,
+		},
+		{
+			MethodName: "ListEvents",
+			Handler:    _CacheStore_ListEvents_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

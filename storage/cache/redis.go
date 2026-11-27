@@ -209,6 +209,22 @@ func (r *Redis) AddEvent(ctx context.Context, key, member string, timestamp time
 	return errors.WithStack(r.client.ZAdd(ctx, r.Key(key), redis.Z{Score: float64(timestamp.UnixMilli()), Member: member}).Err())
 }
 
+func (r *Redis) DeleteEvent(ctx context.Context, eventType, name string) error {
+	return errors.WithStack(r.client.ZRem(ctx, r.Key(eventType), name).Err())
+}
+
+func (r *Redis) ListEvents(ctx context.Context, eventType string) ([]Event, error) {
+	rows, err := r.client.ZRangeWithScores(ctx, r.Key(eventType), 0, -1).Result()
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	events := make([]Event, len(rows))
+	for i, row := range rows {
+		events[i] = Event{Type: eventType, Name: row.Member.(string), Timestamp: time.UnixMilli(int64(row.Score)).UTC()}
+	}
+	return events, nil
+}
+
 func (r *Redis) Set(ctx context.Context, values ...Value) error {
 	p := r.client.Pipeline()
 	for _, v := range values {

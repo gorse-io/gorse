@@ -162,6 +162,38 @@ func (m MongoDB) AddEvent(ctx context.Context, key, member string, timestamp tim
 	return errors.WithStack(err)
 }
 
+func (m MongoDB) DeleteEvent(ctx context.Context, eventType, name string) error {
+	c := m.client.Database(m.dbName).Collection(m.EventsTable())
+	id := bson.D{{Key: "key", Value: eventType}, {Key: "member", Value: name}}
+	_, err := c.DeleteOne(ctx, bson.M{"_id": id})
+	return errors.WithStack(err)
+}
+
+func (m MongoDB) ListEvents(ctx context.Context, eventType string) ([]Event, error) {
+	c := m.client.Database(m.dbName).Collection(m.EventsTable())
+	order := bson.D{{Key: "score", Value: 1}, {Key: "_id.member", Value: 1}}
+	cursor, err := c.Find(ctx, bson.M{"_id.key": eventType}, options.Find().SetSort(order))
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	defer cursor.Close(ctx)
+	events := make([]Event, 0)
+	for cursor.Next(ctx) {
+		var row struct {
+			ID    struct{ Member string } `bson:"_id"`
+			Score int64
+		}
+		if err := cursor.Decode(&row); err != nil {
+			return nil, errors.WithStack(err)
+		}
+		events = append(events, Event{Type: eventType, Name: row.ID.Member, Timestamp: time.UnixMilli(row.Score).UTC()})
+	}
+	if err := cursor.Err(); err != nil {
+		return nil, errors.WithStack(err)
+	}
+	return events, nil
+}
+
 func (m MongoDB) Set(ctx context.Context, values ...Value) error {
 	if len(values) == 0 {
 		return nil

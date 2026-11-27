@@ -229,6 +229,13 @@ type TimeSeriesPoint struct {
 	Value     float64
 }
 
+// Event identifies a named cache event and when it occurred.
+type Event struct {
+	Type      string
+	Name      string
+	Timestamp time.Time
+}
+
 // Database is the common interface for cache store.
 type Database interface {
 	Close() error
@@ -239,7 +246,12 @@ type Database interface {
 
 	// AddEvent records a member with its Unix millisecond timestamp as the score.
 	// Recording the same key and member again replaces its score.
-	AddEvent(ctx context.Context, key, member string, timestamp time.Time) error
+	AddEvent(ctx context.Context, eventType, name string, timestamp time.Time) error
+	// DeleteEvent removes the named event, if present.
+	DeleteEvent(ctx context.Context, eventType, name string) error
+	// ListEvents lists one type in ascending timestamp order, breaking ties by name.
+	ListEvents(ctx context.Context, eventType string) ([]Event, error)
+
 	Set(ctx context.Context, values ...Value) error
 	Get(ctx context.Context, name string) *ReturnValue
 	Delete(ctx context.Context, name string) error

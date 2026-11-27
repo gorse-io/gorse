@@ -90,19 +90,34 @@ func (suite *ProxyTestSuite) TestScan() {
 	suite.T().Skip()
 }
 
-func (suite *ProxyTestSuite) TestAddEvent() {
+func (suite *ProxyTestSuite) TestEventRPCs() {
 	ctx := suite.T().Context()
 	timestamp := time.Unix(1_700_000_000, 123_456_789)
-	suite.Require().NoError(suite.Database.AddEvent(ctx, DeleteItems, "item-id", timestamp))
-
-	db := suite.sqlite.(*SQLDatabase)
-	var events []SQLEvent
-	suite.Require().NoError(db.gormDB.Table(db.EventsTable()).Find(&events).Error)
-	suite.Equal([]SQLEvent{{Key: DeleteItems, Member: "item-id", Score: timestamp.UnixMilli()}}, events)
+	wantTime := timestamp.UTC().Truncate(time.Millisecond)
+	for _, typ := range []string{DeleteItems, "other"} {
+		suite.Require().NoError(suite.Database.AddEvent(ctx, typ, "item-id", timestamp))
+	}
+	suite.Require().NoError(suite.Database.AddEvent(ctx, DeleteItems, "second", timestamp.Add(time.Second)))
+	events, err := suite.Database.ListEvents(ctx, DeleteItems)
+	suite.Require().NoError(err)
+	suite.ElementsMatch([]Event{
+		{Type: DeleteItems, Name: "item-id", Timestamp: wantTime},
+		{Type: DeleteItems, Name: "second", Timestamp: wantTime.Add(time.Second)},
+	}, events)
+	suite.Require().NoError(suite.Database.DeleteEvent(ctx, DeleteItems, "item-id"))
+	events, err = suite.Database.ListEvents(ctx, DeleteItems)
+	suite.Require().NoError(err)
+	suite.Equal([]Event{{Type: DeleteItems, Name: "second", Timestamp: wantTime.Add(time.Second)}}, events)
+	events, err = suite.Database.ListEvents(ctx, "other")
+	suite.Require().NoError(err)
+	suite.Equal([]Event{{Type: "other", Name: "item-id", Timestamp: wantTime}}, events)
 
 	ctx, cancel := context.WithCancel(ctx)
 	cancel()
 	suite.Equal(codes.Canceled, status.Code(suite.Database.AddEvent(ctx, DeleteItems, "another-item", timestamp)))
+	suite.Equal(codes.Canceled, status.Code(suite.Database.DeleteEvent(ctx, DeleteItems, "second")))
+	_, err = suite.Database.ListEvents(ctx, DeleteItems)
+	suite.Equal(codes.Canceled, status.Code(err))
 }
 
 func TestProxy(t *testing.T) {

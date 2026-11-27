@@ -50,6 +50,14 @@ func (NoDatabase) AddEvent(_ context.Context, _, _ string, _ time.Time) error {
 	return storage.ErrNoDatabase
 }
 
+func (NoDatabase) DeleteEvent(_ context.Context, _, _ string) error {
+	return storage.ErrNoDatabase
+}
+
+func (NoDatabase) ListEvents(_ context.Context, _ string) ([]Event, error) {
+	return nil, storage.ErrNoDatabase
+}
+
 func (NoDatabase) Set(_ context.Context, _ ...Value) error {
 	return storage.ErrNoDatabase
 }

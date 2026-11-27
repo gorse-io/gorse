@@ -290,6 +290,24 @@ func (db *SQLDatabase) AddEvent(ctx context.Context, key, member string, timesta
 	return errors.WithStack(err)
 }
 
+func (db *SQLDatabase) DeleteEvent(ctx context.Context, eventType, name string) error {
+	err := db.gormDB.WithContext(ctx).Where(map[string]any{"key": eventType, "member": name}).Delete(&SQLEvent{}).Error
+	return errors.WithStack(err)
+}
+
+func (db *SQLDatabase) ListEvents(ctx context.Context, eventType string) ([]Event, error) {
+	var rows []SQLEvent
+	err := db.gormDB.WithContext(ctx).Where(map[string]any{"key": eventType}).Order("score ASC, member ASC").Find(&rows).Error
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	events := make([]Event, len(rows))
+	for i, row := range rows {
+		events[i] = Event{Type: row.Key, Name: row.Member, Timestamp: time.UnixMilli(row.Score).UTC()}
+	}
+	return events, nil
+}
+
 func (db *SQLDatabase) Set(ctx context.Context, values ...Value) error {
 	if len(values) == 0 {
 		return nil

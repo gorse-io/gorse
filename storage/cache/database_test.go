@@ -60,6 +60,37 @@ func (suite *baseTestSuite) TestInit() {
 	suite.NoError(err)
 }
 
+func (suite *baseTestSuite) TestListDeleteEvents() {
+	ctx := suite.T().Context()
+	db := suite.Database
+	ts := time.Date(2025, 1, 2, 3, 4, 5, 123456789, time.FixedZone("offset", 3600))
+	wantTime := ts.UTC().Truncate(time.Millisecond)
+	for _, name := range []string{"z", "b", "a"} {
+		suite.Require().NoError(db.AddEvent(ctx, "view", name, ts))
+	}
+	suite.Require().NoError(db.AddEvent(ctx, "view", "z", ts.Add(-time.Millisecond)))
+	suite.Require().NoError(db.AddEvent(ctx, "click", "a", ts))
+	want := []Event{
+		{Type: "view", Name: "z", Timestamp: wantTime.Add(-time.Millisecond)},
+		{Type: "view", Name: "a", Timestamp: wantTime},
+		{Type: "view", Name: "b", Timestamp: wantTime},
+	}
+	got, err := db.ListEvents(ctx, "view")
+	suite.Require().NoError(err)
+	suite.Equal(want, got)
+	suite.Require().NoError(db.DeleteEvent(ctx, "view", "a"))
+	suite.Require().NoError(db.DeleteEvent(ctx, "view", "a"))
+	got, err = db.ListEvents(ctx, "view")
+	suite.Require().NoError(err)
+	suite.Equal([]Event{want[0], want[2]}, got)
+	got, err = db.ListEvents(ctx, "click")
+	suite.Require().NoError(err)
+	suite.Equal([]Event{{Type: "click", Name: "a", Timestamp: wantTime}}, got)
+	got, err = db.ListEvents(ctx, "missing")
+	suite.Require().NoError(err)
+	suite.Empty(got)
+}
+
 func (suite *baseTestSuite) TestMeta() {
 	ctx := suite.T().Context()
 	// Set meta string
