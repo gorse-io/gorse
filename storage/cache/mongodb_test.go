@@ -17,10 +17,12 @@ package cache
 import (
 	"os"
 	"testing"
+	"time"
 
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
+	"go.mongodb.org/mongo-driver/bson"
 )
 
 var (
@@ -57,6 +59,29 @@ func (suite *MongoTestSuite) SetupSuite() {
 	suite.NoError(err)
 	err = suite.Database.Init()
 	suite.NoError(err)
+}
+
+func (suite *MongoTestSuite) TestAddEvent() {
+	ctx := suite.T().Context()
+	db := suite.getMongoDB()
+	ts := time.Unix(1700000000, 123456789)
+	suite.Require().NoError(db.AddEvent(ctx, "first", "item", ts))
+	suite.Require().NoError(db.AddEvent(ctx, "first", "Item", ts))
+	suite.Require().NoError(db.AddEvent(ctx, "second", "item", ts))
+	suite.Require().NoError(db.AddEvent(ctx, "first", "item", ts.Add(-time.Second)))
+	events := db.client.Database(db.dbName).Collection("gorse_events")
+	for _, want := range []struct {
+		key, member string
+		score       int64
+	}{{"first", "item", 1699999999123}, {"first", "Item", 1700000000123}, {"second", "item", 1700000000123}} {
+		n, err := events.CountDocuments(ctx, bson.M{"_id.key": want.key, "_id.member": want.member, "score": want.score})
+		suite.Require().NoError(err)
+		suite.EqualValues(1, n)
+	}
+	suite.Require().NoError(db.Purge())
+	n, err := events.CountDocuments(ctx, bson.M{})
+	suite.Require().NoError(err)
+	suite.Zero(n)
 }
 
 func (suite *MongoTestSuite) getMongoDB() *MongoDB {

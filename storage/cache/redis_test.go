@@ -64,6 +64,25 @@ func (suite *RedisTestSuite) SetupSuite() {
 	suite.NoError(err)
 }
 
+func (suite *RedisTestSuite) TestAddEvent() {
+	ctx := suite.T().Context()
+	db := suite.Database.(*Redis)
+	ts := time.Unix(1700000000, 123456789)
+	suite.Require().NoError(db.AddEvent(ctx, "first", "item", ts))
+	suite.Require().NoError(db.AddEvent(ctx, "first", "Item", ts))
+	suite.Require().NoError(db.AddEvent(ctx, "second", "item", ts))
+	suite.Require().NoError(db.AddEvent(ctx, "first", "item", ts.Add(-time.Second)))
+	for key, want := range map[string][]redis.Z{"first": {{Member: "item", Score: 1699999999123}, {Member: "Item", Score: 1700000000123}}, "second": {{Member: "item", Score: 1700000000123}}} {
+		members, err := db.client.ZRangeWithScores(ctx, db.Key(key), 0, -1).Result()
+		suite.Require().NoError(err)
+		suite.ElementsMatch(want, members)
+	}
+	suite.Require().NoError(db.Purge())
+	n, err := db.client.Exists(ctx, db.Key("first")).Result()
+	suite.Require().NoError(err)
+	suite.Zero(n)
+}
+
 func (suite *RedisTestSuite) TestEscapeCharacters() {
 	ts := time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)
 	ctx := suite.T().Context()

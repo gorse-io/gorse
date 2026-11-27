@@ -205,6 +205,10 @@ func (r *Redis) purge(ctx context.Context, client redis.UniversalClient, isClust
 	}
 }
 
+func (r *Redis) AddEvent(ctx context.Context, key, member string, timestamp time.Time) error {
+	return errors.WithStack(r.client.ZAdd(ctx, r.Key(key), redis.Z{Score: float64(timestamp.UnixMilli()), Member: member}).Err())
+}
+
 func (r *Redis) Set(ctx context.Context, values ...Value) error {
 	p := r.client.Pipeline()
 	for _, v := range values {

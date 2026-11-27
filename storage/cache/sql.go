@@ -145,6 +145,12 @@ type PostgresDocument struct {
 	Timestamp  time.Time
 }
 
+type SQLEvent struct {
+	Key    string `gorm:"size:256;primaryKey"`
+	Member string `gorm:"size:256;primaryKey"`
+	Score  int64  `gorm:"not null"`
+}
+
 type SQLDocument struct {
 	Collection string `gorm:"primaryKey"`
 	Subset     string `gorm:"primaryKey"`
@@ -173,6 +179,14 @@ func (db *SQLDatabase) Ping() error {
 func (db *SQLDatabase) Init() error {
 	err := db.gormDB.AutoMigrate(&SQLValue{}, &TimeSeriesPoint{})
 	if err != nil {
+		return errors.WithStack(err)
+	}
+	events := db.gormDB
+	if db.driver == MySQL {
+		// Compare event keys and members byte-for-byte regardless of the database collation.
+		events = events.Set("gorm:table_options", "CHARACTER SET binary")
+	}
+	if err = events.AutoMigrate(&SQLEvent{}); err != nil {
 		return errors.WithStack(err)
 	}
 	switch db.driver {
@@ -258,7 +272,7 @@ func (db *SQLDatabase) Scan(work func(string) error) error {
 }
 
 func (db *SQLDatabase) Purge() error {
-	tables := []any{SQLValue{}, SQLDocument{}}
+	tables := []any{SQLValue{}, SQLDocument{}, SQLEvent{}}
 	for _, table := range tables {
 		err := db.gormDB.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&table).Error
 		if err != nil {
@@ -266,6 +280,14 @@ func (db *SQLDatabase) Purge() error {
 		}
 	}
 	return nil
+}
+
+func (db *SQLDatabase) AddEvent(ctx context.Context, key, member string, timestamp time.Time) error {
+	err := db.gormDB.WithContext(ctx).Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "key"}, {Name: "member"}},
+		DoUpdates: clause.AssignmentColumns([]string{"score"}),
+	}).Create(&SQLEvent{Key: key, Member: member, Score: timestamp.UnixMilli()}).Error
+	return errors.WithStack(err)
 }
 
 func (db *SQLDatabase) Set(ctx context.Context, values ...Value) error {

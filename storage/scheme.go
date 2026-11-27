@@ -142,6 +142,10 @@ func (tp TablePrefix) ValuesTable() string {
 	return string(tp) + "values"
 }
 
+func (tp TablePrefix) EventsTable() string {
+	return string(tp) + "events"
+}
+
 func (tp TablePrefix) SetsTable() string {
 	return string(tp) + "sets"
 }
@@ -180,6 +184,7 @@ func NewGORMConfig(tablePrefix string) *gorm.Config {
 			SingularTable: true,
 			NameReplacer: strings.NewReplacer(
 				"SQLValue", "Values",
+				"SQLEvent", "Events",
 				"SQLSet", "Sets",
 				"SQLUser", "Users",
 				"SQLItem", "Items",

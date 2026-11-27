@@ -75,6 +75,10 @@ func (p *ProxyServer) Delete(ctx context.Context, request *protocol.DeleteReques
 	return &protocol.DeleteResponse{}, p.database.Delete(ctx, request.GetName())
 }
 
+func (p *ProxyServer) AddEvent(ctx context.Context, request *protocol.AddEventRequest) (*protocol.AddEventResponse, error) {
+	return &protocol.AddEventResponse{}, p.database.AddEvent(ctx, request.GetKey(), request.GetMember(), time.UnixMilli(request.GetTimestampMillis()))
+}
+
 func (p *ProxyServer) AddScores(ctx context.Context, request *protocol.AddScoresRequest) (*protocol.AddScoresResponse, error) {
 	scores := make([]Score, len(request.Documents))
 	for i, doc := range request.Documents {
@@ -225,6 +229,15 @@ func (p ProxyClient) Get(ctx context.Context, name string) *ReturnValue {
 func (p ProxyClient) Delete(ctx context.Context, name string) error {
 	_, err := p.CacheStoreClient.Delete(ctx, &protocol.DeleteRequest{
 		Name: name,
+	})
+	return err
+}
+
+func (p ProxyClient) AddEvent(ctx context.Context, key, member string, timestamp time.Time) error {
+	_, err := p.CacheStoreClient.AddEvent(ctx, &protocol.AddEventRequest{
+		Key:             key,
+		Member:          member,
+		TimestampMillis: timestamp.UnixMilli(),
 	})
 	return err
 }

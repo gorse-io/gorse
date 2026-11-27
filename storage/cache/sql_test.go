@@ -20,6 +20,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gorse-io/gorse/common/log"
 	"github.com/gorse-io/gorse/storage"
@@ -130,6 +131,34 @@ func (suite *SQLiteTestSuite) SetupSuite() {
 
 func (suite *SQLiteTestSuite) TearDownSuite() {
 	suite.NoError(suite.Database.Close())
+}
+
+func (suite *SQLiteTestSuite) TestAddEvent() { testSQLAddEvent(&suite.baseTestSuite) }
+
+func (suite *MySQLTestSuite) TestAddEvent() { testSQLAddEvent(&suite.baseTestSuite) }
+
+func (suite *PostgresTestSuite) TestAddEvent() { testSQLAddEvent(&suite.baseTestSuite) }
+
+func testSQLAddEvent(suite *baseTestSuite) {
+	ctx := suite.T().Context()
+	db := suite.Database.(*SQLDatabase)
+	ts := time.Unix(1700000000, 123456789)
+	suite.Require().NoError(db.AddEvent(ctx, "first", "item", ts))
+	suite.Require().NoError(db.AddEvent(ctx, "first", "Item", ts))
+	suite.Require().NoError(db.AddEvent(ctx, "second", "item", ts))
+	suite.Require().NoError(db.AddEvent(ctx, "first", "item", ts.Add(-time.Second)))
+	type row struct {
+		Key, Member string
+		Score       int64
+	}
+	var rows []row
+	events := db.gormDB.Table("gorse_events")
+	suite.Require().NoError(events.Find(&rows).Error)
+	suite.ElementsMatch([]row{{"first", "item", 1699999999123}, {"first", "Item", 1700000000123}, {"second", "item", 1700000000123}}, rows)
+	suite.Require().NoError(db.Purge())
+	var n int64
+	suite.Require().NoError(events.Count(&n).Error)
+	suite.Zero(n)
 }
 
 func TestSQLite(t *testing.T) {

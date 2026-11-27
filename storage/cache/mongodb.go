@@ -144,7 +144,7 @@ func (m MongoDB) Scan(work func(string) error) error {
 }
 
 func (m MongoDB) Purge() error {
-	tables := []string{m.ValuesTable(), m.DocumentTable()}
+	tables := []string{m.ValuesTable(), m.DocumentTable(), m.EventsTable()}
 	for _, tableName := range tables {
 		c := m.client.Database(m.dbName).Collection(tableName)
 		_, err := c.DeleteMany(context.Background(), bson.D{})
@@ -153,6 +153,13 @@ func (m MongoDB) Purge() error {
 		}
 	}
 	return nil
+}
+
+func (m MongoDB) AddEvent(ctx context.Context, key, member string, timestamp time.Time) error {
+	events := m.client.Database(m.dbName).Collection(m.EventsTable())
+	id := bson.D{{Key: "key", Value: key}, {Key: "member", Value: member}}
+	_, err := events.UpdateOne(ctx, bson.M{"_id": id}, bson.M{"$set": bson.M{"score": timestamp.UnixMilli()}}, options.Update().SetUpsert(true))
+	return errors.WithStack(err)
 }
 
 func (m MongoDB) Set(ctx context.Context, values ...Value) error {

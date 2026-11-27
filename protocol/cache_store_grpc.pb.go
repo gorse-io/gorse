@@ -44,6 +44,7 @@ const (
 	CacheStore_ScanScores_FullMethodName          = "/protocol.CacheStore/ScanScores"
 	CacheStore_AddTimeSeriesPoints_FullMethodName = "/protocol.CacheStore/AddTimeSeriesPoints"
 	CacheStore_GetTimeSeriesPoints_FullMethodName = "/protocol.CacheStore/GetTimeSeriesPoints"
+	CacheStore_AddEvent_FullMethodName            = "/protocol.CacheStore/AddEvent"
 )
 
 // CacheStoreClient is the client API for CacheStore service.
@@ -61,6 +62,7 @@ type CacheStoreClient interface {
 	ScanScores(ctx context.Context, in *ScanScoresRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ScanScoresResponse], error)
 	AddTimeSeriesPoints(ctx context.Context, in *AddTimeSeriesPointsRequest, opts ...grpc.CallOption) (*AddTimeSeriesPointsResponse, error)
 	GetTimeSeriesPoints(ctx context.Context, in *GetTimeSeriesPointsRequest, opts ...grpc.CallOption) (*GetTimeSeriesPointsResponse, error)
+	AddEvent(ctx context.Context, in *AddEventRequest, opts ...grpc.CallOption) (*AddEventResponse, error)
 }
 
 type cacheStoreClient struct {
@@ -190,6 +192,16 @@ func (c *cacheStoreClient) GetTimeSeriesPoints(ctx context.Context, in *GetTimeS
 	return out, nil
 }
 
+func (c *cacheStoreClient) AddEvent(ctx context.Context, in *AddEventRequest, opts ...grpc.CallOption) (*AddEventResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AddEventResponse)
+	err := c.cc.Invoke(ctx, CacheStore_AddEvent_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // CacheStoreServer is the server API for CacheStore service.
 // All implementations must embed UnimplementedCacheStoreServer
 // for forward compatibility.
@@ -205,6 +217,7 @@ type CacheStoreServer interface {
 	ScanScores(*ScanScoresRequest, grpc.ServerStreamingServer[ScanScoresResponse]) error
 	AddTimeSeriesPoints(context.Context, *AddTimeSeriesPointsRequest) (*AddTimeSeriesPointsResponse, error)
 	GetTimeSeriesPoints(context.Context, *GetTimeSeriesPointsRequest) (*GetTimeSeriesPointsResponse, error)
+	AddEvent(context.Context, *AddEventRequest) (*AddEventResponse, error)
 	mustEmbedUnimplementedCacheStoreServer()
 }
 
@@ -247,6 +260,9 @@ func (UnimplementedCacheStoreServer) AddTimeSeriesPoints(context.Context, *AddTi
 }
 func (UnimplementedCacheStoreServer) GetTimeSeriesPoints(context.Context, *GetTimeSeriesPointsRequest) (*GetTimeSeriesPointsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetTimeSeriesPoints not implemented")
+}
+func (UnimplementedCacheStoreServer) AddEvent(context.Context, *AddEventRequest) (*AddEventResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AddEvent not implemented")
 }
 func (UnimplementedCacheStoreServer) mustEmbedUnimplementedCacheStoreServer() {}
 func (UnimplementedCacheStoreServer) testEmbeddedByValue()                    {}
@@ -460,6 +476,24 @@ func _CacheStore_GetTimeSeriesPoints_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _CacheStore_AddEvent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AddEventRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CacheStoreServer).AddEvent(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CacheStore_AddEvent_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CacheStoreServer).AddEvent(ctx, req.(*AddEventRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // CacheStore_ServiceDesc is the grpc.ServiceDesc for CacheStore service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -506,6 +540,10 @@ var CacheStore_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetTimeSeriesPoints",
 			Handler:    _CacheStore_GetTimeSeriesPoints_Handler,
+		},
+		{
+			MethodName: "AddEvent",
+			Handler:    _CacheStore_AddEvent_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

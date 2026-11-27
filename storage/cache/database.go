@@ -44,6 +44,9 @@ const (
 	RecommendDigest                  = "recommend_digest"
 	RecommendUpdateTime              = "recommend_update_time"
 
+	// DeleteItems is the event set of deleted item IDs.
+	DeleteItems = "delete_items"
+
 	// ItemCategories is the set of item categories. The format of key:
 	//	Global item categories - item_categories
 	ItemCategories = "item_categories"
@@ -234,6 +237,9 @@ type Database interface {
 	Scan(work func(string) error) error
 	Purge() error
 
+	// AddEvent records a member with its Unix millisecond timestamp as the score.
+	// Recording the same key and member again replaces its score.
+	AddEvent(ctx context.Context, key, member string, timestamp time.Time) error
 	Set(ctx context.Context, values ...Value) error
 	Get(ctx context.Context, name string) *ReturnValue
 	Delete(ctx context.Context, name string) error

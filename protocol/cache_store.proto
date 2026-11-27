@@ -122,6 +122,14 @@ message GetTimeSeriesPointsRequest {
 
 message GetTimeSeriesPointsResponse { repeated TimeSeriesPoint points = 1; }
 
+message AddEventRequest {
+  string key = 1;
+  string member = 2;
+  int64 timestamp_millis = 3;
+}
+
+message AddEventResponse {}
+
 service CacheStore {
   rpc Ping(PingRequest) returns (PingResponse) {}
   rpc Get(GetRequest) returns (GetResponse) {}
@@ -136,4 +144,5 @@ service CacheStore {
       returns (AddTimeSeriesPointsResponse) {}
   rpc GetTimeSeriesPoints(GetTimeSeriesPointsRequest)
       returns (GetTimeSeriesPointsResponse) {}
+  rpc AddEvent(AddEventRequest) returns (AddEventResponse) {}
 }

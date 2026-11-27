@@ -35,6 +35,8 @@ func TestNoDatabase(t *testing.T) {
 	assert.ErrorIs(t, err, storage.ErrNoDatabase)
 	err = database.Purge()
 	assert.ErrorIs(t, err, storage.ErrNoDatabase)
+	err = database.AddEvent(ctx, DeleteItems, "item-id", time.UnixMilli(1234))
+	assert.ErrorIs(t, err, storage.ErrNoDatabase)
 	err = database.Set(ctx)
 	assert.ErrorIs(t, err, storage.ErrNoDatabase)
 	_, err = database.Get(ctx, Key("", "")).String()
