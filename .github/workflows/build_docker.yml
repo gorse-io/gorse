@@ -9,6 +9,8 @@ jobs:
   windows_images:
     name: docker images (windows)
     runs-on: windows-latest
+    permissions:
+      contents: read
     steps:
       - name: Pull source
         uses: actions/checkout@v5
