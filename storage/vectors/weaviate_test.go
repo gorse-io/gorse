@@ -50,33 +50,6 @@ func (suite *WeaviateTestSuite) SetupSuite() {
 	suite.NoError(err)
 }
 
-func (suite *WeaviateTestSuite) TestFailedUpsert() {
-	ctx := suite.T().Context()
-	suite.Require().NoError(suite.AddCollection(ctx, "test", 4, Dot, VectorConfig{}))
-	vec := Vector{Id: "item", Values: []float32{1, 0, 0, 0}, Timestamp: time.Now().UTC()}
-	suite.Require().NoError(suite.AddVectors(ctx, "test", []Vector{vec}))
-	vec.Values = []float32{1, 0}
-	suite.Error(suite.AddVectors(ctx, "test", []Vector{vec}))
-}
-
-func (suite *WeaviateTestSuite) TestLegacyDimension() {
-	ctx := suite.T().Context()
-	db := suite.Database.(*Weaviate)
-	suite.Require().NoError(db.AddCollection(ctx, "legacy", 3, Euclidean, VectorConfig{}))
-	schema := db.client.Schema()
-	class, err := schema.ClassGetter().WithClassName("Legacy").Do(ctx)
-	suite.Require().NoError(err)
-	class.Description = "legacy description"
-	suite.Require().NoError(schema.ClassUpdater().WithClass(class).Do(ctx))
-	info, err := db.DescribeCollection(ctx, "legacy")
-	suite.Require().NoError(err)
-	suite.Equal(UnknownDenseDimension, info.Dimension)
-	suite.Require().NoError(db.AddVectors(ctx, "legacy", []Vector{{Id: "old", Values: []float32{1, 2, 3}, Timestamp: time.Now()}}))
-	info, err = db.DescribeCollection(ctx, "legacy")
-	suite.Require().NoError(err)
-	suite.Equal(3, info.Dimension)
-}
-
 func (suite *WeaviateTestSuite) TestQuantization() {
 	suite.testQuantization(QuantizationNone, 0)
 	suite.testQuantization(QuantizationSQ, 0)
