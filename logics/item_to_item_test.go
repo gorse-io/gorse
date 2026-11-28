@@ -15,6 +15,7 @@
 package logics
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"testing"
@@ -25,8 +26,38 @@ import (
 	"github.com/gorse-io/gorse/dataset"
 	"github.com/gorse-io/gorse/storage/data"
 	"github.com/gorse-io/gorse/storage/vectors"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
+
+// embeddingScoreDatabase supplies normalized distances for item and user score tests.
+type embeddingScoreDatabase struct {
+	vectors.Database
+}
+
+func (embeddingScoreDatabase) GetVectors(context.Context, string, []string) ([]vectors.Vector, error) {
+	return []vectors.Vector{{Id: "query", Values: []float32{0, 0, 0, 0}}}, nil
+}
+
+func (embeddingScoreDatabase) QueryVectors(context.Context, string, vectors.Vector, []string, int) ([]vectors.ScoredVector, error) {
+	return []vectors.ScoredVector{
+		{Id: "query", Score: 0},
+		{Id: "near", Score: -0.5},
+		{Id: "unit", Score: -1},
+		{Id: "far", Score: -2},
+	}, nil
+}
+
+func TestQueryItemToItemEmbeddingScores(t *testing.T) {
+	cfg := config.ItemToItemConfig{Name: "embedding", Type: "embedding"}
+	scores, err := QueryItemToItem(t.Context(), embeddingScoreDatabase{}, cfg, "query", nil, 3)
+	require.NoError(t, err)
+	require.Len(t, scores, 3)
+	for i, id := range []string{"near", "unit", "far"} {
+		require.Equal(t, id, scores[i].Id)
+		require.InDelta(t, []float64{2.0 / 3, 0.5, 1.0 / 3}[i], scores[i].Score, 1e-6)
+	}
+}
 
 type ItemToItemTestSuite struct {
 	suite.Suite
